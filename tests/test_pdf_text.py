@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from caracole.chordpro import to_chordpro
-from caracole.pdf_text import pdf_text
+from caracole.pdf_text import column_height, layout, line_heights, pdf_text
 from caracole.viewer import build_viewer
 from caracole.viewer.page import key_line_text, viewer_key
 from caracole.viewer.sheet import parse_sheet
@@ -295,12 +295,12 @@ def test_chord_names_alone_or_a_sheet_with_no_key_print_as_before():
 
 # --- two columns that end level ---------------------------------------------------------------
 
-def song(sections, *, line="[C]Made up [G]words to sing {n}.{i}", headings=True):
-    """A synthetic .cho of len(sections) sections, each that many lines of ``line``, a blank line
-    between two; with ``headings``, each under a {comment} heading."""
+def song(sections, *, line="[C]Made up [G]words to sing {n}.{i}", headings=True, gap=1):
+    """A synthetic .cho of len(sections) sections, each that many lines of ``line``, ``gap`` blank
+    lines before each; with ``headings``, each under a {comment} heading."""
     out = ["{title: Level}", "{artist: The Placeholders}"]
     for n, count in enumerate(sections, 1):
-        out += [""] + ([f"{{comment: Part {n}}}"] if headings else [])
+        out += [""] * gap + ([f"{{comment: Part {n}}}"] if headings else [])
         out += [line.format(n=n, i=i) for i in range(count)]
     return "\n".join(out) + "\n"
 
@@ -387,3 +387,31 @@ def test_long_lines_that_wrap_count_for_the_lines_they_take():
 
 def test_one_column_has_no_break():
     assert "{column_break}" not in printed(song([4, 4, 4, 8, 5]), columns=1)
+
+
+def test_the_blank_lines_before_the_break_are_in_neither_columns_share():
+    # 22 lines, six blank ones, then 10: the first column holds the 22, the blank lines end it.
+    lines = printed(song([22, 10], gap=6))
+    assert sections_after_the_break(lines) == ["{comment: PART 2}"]
+
+
+def test_a_numerals_chart_draws_no_diagrams_so_its_columns_have_the_whole_page():
+    shape = layout()
+    page = shape.height - shape.top - shape.bottom
+    assert column_height(printed(song([4, 4]), names="numerals"), shape) == page
+    assert column_height(printed(song([4, 4])), shape) == page - shape.diagram_row  # C and G
+
+
+def test_a_numbered_songs_legend_counts_in_its_columns():
+    # The song alone fits a column; its legend after it doesn't, so a break levels the two.
+    assert sections_after_the_break(printed(song([8, 8, 10]))) is None
+    assert sections_after_the_break(printed(song([8, 8, 10]), names="numerals")) is not None
+
+
+def test_a_chord_wraps_by_the_name_chordpro_displays():
+    # "D" fits where its words end; "D · vi7 of V/V" doesn't, and starts the line's next part.
+    define = '{define: D base-fret 1 frets x x 0 2 3 2 display "D · vi7 of V/V"}'
+    line = "[C]placeholder placeholder placeholder placehold[D]s"
+    shape = layout()
+    assert line_heights([line], shape) == [shape.chords + shape.lyrics]
+    assert line_heights([define, line], shape) == [0.0, 2 * (shape.chords + shape.lyrics)]

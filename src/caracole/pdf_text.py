@@ -31,7 +31,8 @@ private copy it renders (``render._render_into``). It is the .cho with:
   column of a song a little longer than one held a single line now and then. Where that is comes
   from how tall chordpro prints each line in caracole's style (``layout``, ``line_heights``,
   ``column_height``, read from STYLE_FILE's sizes and spacings and pinned to the real chordpro's
-  pages by test_render.py).
+  pages by test_render.py). With ``names``, the legend is part of the song it levels, each chord as
+  wide as the name chordpro displays for it ("D · V/V"), and a numerals chart has no diagrams' rows.
 
 Each PDF's record (render.py) keeps the SHA-256 of this text, so a PDF is made again whenever it
 would print otherwise (a key heard anew, a newer viewer's theory or shapes), and ``PDF_TEXT_VERSION``:
@@ -329,20 +330,27 @@ def _blanks_before(lines: list[str], at: int) -> range:
 # --- how tall chordpro prints it ----------------------------------------------------------------
 
 # Helvetica's advance widths, in thousandths of the size, for " " to "~" (Adobe's core-font metrics):
-# the lyrics' font, and the bold one the chords are in. ``_width`` adds every other letter it meets.
+# the lyrics' font, and the bold one the chords are in, with the "·" a chord's numeral is named after
+# (WinAnsi's, "D · V/V"). ``_letter`` gives every other letter's.
 _HELVETICA = dict(zip(map(chr, range(32, 127)), map(int, """
 278 278 355 556 556 889 667 222 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 278 278
 584 584 584 556 1015 667 667 722 722 667 611 778 722 278 500 667 556 833 722 778 667 778 722 667 611 722 667 944
 667 667 611 278 278 278 469 556 222 556 556 500 556 556 278 556 556 222 222 500 222 833 556 556 556 556 333 500
-278 556 500 722 500 500 500 334 260 334 584""".split()), strict=True))
+278 556 500 722 500 500 500 334 260 334 584""".split()), strict=True)) | {"\u00b7": 278}
 _HELVETICA_BOLD = dict(zip(map(chr, range(32, 127)), map(int, """
 278 333 474 556 556 889 722 278 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 333 333
 584 584 584 611 975 722 722 722 722 667 611 778 722 278 556 722 611 833 722 778 667 778 722 667 611 722 667 944
 667 667 611 333 278 333 584 556 278 556 611 556 611 556 333 611 611 278 278 556 278 889 611 611 611 611 389 556
-333 611 556 778 556 556 500 389 280 389 584""".split()), strict=True))
+333 611 556 778 556 556 500 389 280 389 584""".split()), strict=True)) | {"\u00b7": 278}
 _TOKEN = re.compile(r"\[([^\]]*)\]")
 _BREAKS = re.compile(r"(.+)([-_,.:;\s])(.+)", re.DOTALL)  # where chordpro may wrap a line, its last place
 _STRINGS = 6  # a guitar's, for the width of a chord diagram
+_DISPLAY = re.compile(r'\bdisplay\s+"([^"]*)"')  # what a {define} has chordpro print for its chord
+_BOX = frozenset({"comment_box", "cb"})
+_ITALIC = frozenset({"comment_italic", "ci"})
+# The size of chordpro's own fonts for the headings caracole's style leaves as they are (its
+# comment_italic and comment_box).
+_CHORDPRO_SIZE = 12
 
 
 @dataclass(frozen=True)
@@ -350,7 +358,9 @@ class Layout:
     """What caracole's style (STYLE_FILE) makes of a page, in points, as chordpro lays it out: the paper,
     its margins, two columns and the space between them, and how tall each kind of line is (a font's
     size times its spacing). ``diagram_row`` is a row of chord diagrams above the song, ``per_row`` how
-    many a row holds; ``wrap_indent`` is how far a wrapped line's next part is indented (an "x")."""
+    many a row holds; ``wrap_indent`` is how far a wrapped line's next part is indented (an "x"). A
+    heading is its font's size times ``heading_spacing``: a {comment}'s (``comment``), a
+    {comment_italic}'s or a {comment_box}'s (``italic_size``, ``box_size``)."""
 
     width: float
     height: float
@@ -363,6 +373,9 @@ class Layout:
     chord_size: float
     annotation_size: float
     comment_size: float
+    italic_size: float
+    box_size: float
+    heading_spacing: float
     lyrics: float
     chords: float
     comment: float
@@ -402,6 +415,8 @@ def layout() -> Layout:
         bottom=pdf["marginbottom"], column_space=pdf["columnspace"], text_size=fonts["text"]["size"],
         chord_size=fonts["chord"]["size"], annotation_size=fonts["annotation"]["size"],
         comment_size=fonts["comment"]["size"],
+        italic_size=fonts.get("comment_italic", {}).get("size", _CHORDPRO_SIZE),
+        box_size=fonts.get("comment_box", {}).get("size", _CHORDPRO_SIZE), heading_spacing=spacing["lyrics"],
         lyrics=fonts["text"]["size"] * spacing["lyrics"], chords=fonts["chord"]["size"] * spacing["chords"],
         comment=fonts["comment"]["size"] * spacing["lyrics"], tab=fonts["tab"]["size"] * spacing["tab"],
         empty=fonts["text"]["size"] * spacing["empty"],  # an empty line's font is the text's
@@ -411,11 +426,12 @@ def layout() -> Layout:
 
 def column_height(lines: list[str], shape: Layout) -> float:
     """How tall the columns of the first page of the song ``lines`` are: the page less its margins and
-    the rows of chord diagrams above the song. A chord gets a diagram from chordpro when the text
-    defines it or chordpro knows its shape; chordpro knows no chord over another bass ("C/E"), so
-    every other chord counts (one chordpro lacks only makes the estimate short of room)."""
+    the rows of chord diagrams above the song, none with ``{diagrams: off}`` (a numerals chart). A
+    chord gets a diagram from chordpro when the text defines it or chordpro knows its shape; chordpro
+    knows no chord over another bass ("C/E"), so every other chord counts (one chordpro lacks only
+    makes the estimate short of room)."""
     played: dict[str, None] = {}  # the chords sung, each once, in order (as parse_sheet's)
-    defined, tab = set(), False
+    defined, tab, diagrams = set(), False, True
     for line in lines:
         found = _directive(line)
         if tab:
@@ -424,22 +440,27 @@ def column_height(lines: list[str], shape: Layout) -> float:
             tab = found[0] in ("start_of_tab", "sot")
             if found[0] in ("define", "chord") and found[1].split():
                 defined.add(found[1].split()[0])
+            elif found[0] == "diagrams":
+                diagrams = found[1].strip().lower() not in ("off", "false")
         elif not line.startswith("#"):
             played.update(dict.fromkeys(name.strip() for name in _TOKEN.findall(line) if not name.startswith("*")))
     drawn = [name for name in played if name and (name in defined or "/" not in name)]
-    rows = -(-len(drawn) // shape.per_row)
+    rows = -(-len(drawn) // shape.per_row) if diagrams else 0
     return shape.height - shape.top - shape.bottom - rows * shape.diagram_row
 
 
 def line_heights(lines: list[str], shape: Layout) -> list[float]:
     """How tall chordpro prints each of ``lines`` (a ChordPro text's), in caracole's style ``shape``:
     a chord row and a lyric row for a line of chords over words, either alone for a line with only one
-    of them; a heading's row ({comment}, as caracole writes a section); a tab's line, an empty line
-    (none before the song's first line); nothing for any other directive. A line too wide for its
-    column takes the rows chordpro wraps it onto, as its ``wrap`` does: on the lyrics' widths alone,
-    and a chord that doesn't fit where its words end starts the next part."""
+    of them; a heading's row ({comment}, as caracole writes a section, and a chorus recalled, which
+    chordpro heads "Chorus" or by its label); a tab's line, an empty line (none before the song's first
+    line); nothing for any other directive. A line too wide for its column takes the rows chordpro
+    wraps it onto, as its ``wrap`` does: on the lyrics' widths alone, and a chord that doesn't fit
+    where its words end, by the name chordpro prints for it (a {define}'s ``display``), starts the
+    next part."""
     out: list[float] = []
     tab = started = False
+    displays: dict[str, str] = {}
     for line in lines:
         found = _directive(line)
         height = 0.0
@@ -448,30 +469,43 @@ def line_heights(lines: list[str], shape: Layout) -> list[float]:
             height = shape.tab if tab else 0.0
         elif found is not None:
             tab = found[0] in ("start_of_tab", "sot")
-            if found[0] in COMMENTS and found[1]:
-                height = shape.comment * _wrapped(found[1], shape.comment_size, shape, _HELVETICA_BOLD)
+            text = found[1] or ("Chorus" if found[0] == "chorus" else "")
+            if found[0] in ("define", "chord") and (shown := _DISPLAY.search(found[1])) and found[1].split():
+                displays[found[1].split()[0]] = shown.group(1)
+            elif (found[0] in COMMENTS or found[0] == "chorus") and text:
+                size, widths = ((shape.box_size, _HELVETICA) if found[0] in _BOX
+                                else (shape.italic_size, _HELVETICA) if found[0] in _ITALIC
+                                else (shape.comment_size, _HELVETICA_BOLD))
+                height = size * shape.heading_spacing * _wrapped(text, size, shape, widths)
         elif line.startswith("#"):
             pass
         elif not line.strip():
             height = shape.empty if started else 0.0
         else:
             height = sum((shape.chords if chords else 0.0) + (shape.lyrics if words else 0.0)
-                         for chords, words in _parts(line, shape))
+                         for chords, words in _parts(line, shape, displays))
         started = started or (height > 0 and bool(line.strip()))
         out.append(height)
     return out
 
 
 def _width(text: str, size: float, widths: dict[str, int] = _HELVETICA) -> float:
-    """The width of ``text`` in Helvetica (``widths``) at ``size``: a wide East Asian letter is a square,
-    an accented one its letter's width, any other the width of a digit."""
+    """The width of ``text`` in Helvetica (``widths``) at ``size``, a letter the table lacks as
+    ``_letter`` says."""
     try:
         return sum(map(widths.__getitem__, text)) * size / 1000
     except KeyError:
-        for ch in set(text) - widths.keys():
-            wide = unicodedata.east_asian_width(ch) in "WF"
-            widths[ch] = 1000 if wide else widths.get(unicodedata.normalize("NFKD", ch)[:1], 556)
-        return sum(map(widths.__getitem__, text)) * size / 1000
+        bold = widths is _HELVETICA_BOLD
+        return sum(widths[ch] if ch in widths else _letter(ch, bold) for ch in text) * size / 1000
+
+
+@lru_cache(maxsize=4096)
+def _letter(ch: str, bold: bool) -> int:
+    """The width of a letter the Helvetica tables lack: a wide East Asian letter is a square, an
+    accented one its letter's width, any other the width of a digit."""
+    if unicodedata.east_asian_width(ch) in "WF":
+        return 1000
+    return (_HELVETICA_BOLD if bold else _HELVETICA).get(unicodedata.normalize("NFKD", ch)[:1], 556)
 
 
 def _fit(text: str, room: float, size: float, widths: dict[str, int] = _HELVETICA) -> tuple[str, str]:
@@ -499,12 +533,14 @@ def _wrapped(text: str, size: float, shape: Layout, widths: dict[str, int] = _HE
         count, room = count + 1, shape.column_width - shape.wrap_indent
 
 
-def _parts(line: str, shape: Layout) -> list[tuple[bool, bool]]:
+def _parts(line: str, shape: Layout, displays: dict[str, str] | None = None) -> list[tuple[bool, bool]]:
     """The parts chordpro's ``wrap`` draws a line of chords and words in, each as (whether it has a chord,
-    whether it has words): the words fill the column, a chord placed where its words would start."""
+    whether it has words): the words fill the column, a chord placed where its words would start, as
+    wide as the name chordpro prints for it (``displays``: a chord's, by a {define})."""
+    shown = displays or {}
     pieces = _TOKEN.split(line)
     names, sung = pieces[1::2], "".join(pieces[0::2])
-    widest = max(map(len, names), default=0) * shape.chord_size  # no letter is wider than its size
+    widest = max((len(shown.get(name, name)) for name in names), default=0) * shape.chord_size  # no letter is wider than its size
     if _width(sung, shape.text_size) + widest <= shape.column_width:  # nothing to wrap: one part
         return [(any(name.strip() for name in names), bool(sung.strip()))]
     pairs = ([("", pieces[0])] if pieces[0] else []) + list(zip(pieces[1::2], pieces[2::2]))
@@ -516,7 +552,8 @@ def _parts(line: str, shape: Layout) -> list[tuple[bool, bool]]:
         if placed and chord:
             mark = chord.startswith("*")  # a repeat mark, in the annotations' font
             size = shape.annotation_size if mark else shape.chord_size
-            if _width(chord[1:] if mark else chord, size, _HELVETICA if mark else _HELVETICA_BOLD) > shape.column_width - x:
+            printed = chord[1:] if mark else shown.get(chord, chord)
+            if _width(printed, size, _HELVETICA if mark else _HELVETICA_BOLD) > shape.column_width - x:
                 rest = phrase
         if not rest:
             head, rest = _fit(phrase, shape.column_width - x, shape.text_size)

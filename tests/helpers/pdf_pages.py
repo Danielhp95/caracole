@@ -1,14 +1,18 @@
 """Where a ChordPro PDF draws its text: each page's strings, with their places on the page.
 
-Just enough PDF for chordpro's own output (as test_render.py's ``pdf_runs``): Flate streams, a
-page's content streams in order, ``Tm`` for where a string starts, the built-in fonts' strings read
-as WinAnsi and a TrueType font's (Identity-H) through its ToUnicode map::
+Just enough PDF for chordpro's own output: Flate streams, a page's content streams in order, ``Tm``
+for where a string starts, the built-in fonts' strings read as WinAnsi and a TrueType font's
+(Identity-H) through its ToUnicode map::
 
     from helpers.pdf_pages import pdf_pages
 
     pages = pdf_pages(pdf)              # one list a page, in page order
     for x, y, text in pages[0]:         # in points from the page's bottom left, in drawing order
         ...
+
+The parts it is made of serve a reader of other things (test_render.py's ``pdf_runs``: the fonts'
+programs, the glyphs drawn): ``pdf_objects`` (each object's dictionary and its stream, inflated),
+``to_unicode`` (a ToUnicode map) and ``decode`` (a string drawn, as text).
 """
 
 from __future__ import annotations
@@ -30,22 +34,13 @@ _ESCAPES = {b"n": b"\n", b"r": b"\r", b"t": b"\t", b"b": b"\b", b"f": b"\f"}
 
 def pdf_pages(path: Path) -> list[list[tuple[float, float, str]]]:
     """Each page's strings as (x, y, text), in page order."""
-    data = Path(path).read_bytes()
-    objects: dict[int, tuple[bytes, bytes | None]] = {}
-    for m in _OBJECT.finditer(data):
-        head, _, rest = m.group(2).partition(b"stream")
-        stream = None
-        if rest:
-            stream = rest.lstrip(b"\r\n").rpartition(b"endstream")[0]
-            if b"/FlateDecode" in head:
-                stream = zlib.decompress(stream)
-        objects[int(m.group(1))] = (head, stream)
+    objects = pdf_objects(Path(path).read_bytes())
     maps: dict[str, dict[int, str] | None] = {}
     for head, _ in objects.values():
         name = re.search(rb"/Name /(\S+)", head)
         if b"/Type /Font" in head and name:
-            to_unicode = re.search(rb"/ToUnicode (\d+) 0 R", head)
-            maps[name.group(1).decode()] = _cmap(objects[int(to_unicode.group(1))][1] or b"") if to_unicode else None
+            cmap = re.search(rb"/ToUnicode (\d+) 0 R", head)
+            maps[name.group(1).decode()] = to_unicode(objects[int(cmap.group(1))][1] or b"") if cmap else None
     pages = []
     for _, (head, _) in sorted(objects.items()):
         contents = re.search(rb"/Contents (\[[^\]]*\]|\d+ 0 R)", head)
@@ -59,12 +54,27 @@ def pdf_pages(path: Path) -> list[list[tuple[float, float, str]]]:
             elif m.group(2):
                 x, y = float(m.group(2)), float(m.group(3))
             else:
-                shown.append((x, y, "".join(_decode(p, cmap) for p in _PART.findall(m.group(4) or m.group(5)))))
+                shown.append((x, y, "".join(decode(p, cmap) for p in _PART.findall(m.group(4) or m.group(5)))))
         pages.append(shown)
     return pages
 
 
-def _cmap(text: bytes) -> dict[int, str]:
+def pdf_objects(data: bytes) -> dict[int, tuple[bytes, bytes | None]]:
+    """Each object of the PDF ``data`` by its number: its dictionary, and its stream (inflated), if any."""
+    objects: dict[int, tuple[bytes, bytes | None]] = {}
+    for m in _OBJECT.finditer(data):
+        head, _, rest = m.group(2).partition(b"stream")
+        stream = None
+        if rest:
+            stream = rest.lstrip(b"\r\n").rpartition(b"endstream")[0]
+            if b"/FlateDecode" in head:
+                stream = zlib.decompress(stream)
+        objects[int(m.group(1))] = (head, stream)
+    return objects
+
+
+def to_unicode(text: bytes) -> dict[int, str]:
+    """A ToUnicode CMap's ranges: each code's text."""
     cmap: dict[int, str] = {}
     for lo, hi, dst in re.findall(rb"<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>", text):
         for i, code in enumerate(range(int(lo, 16), int(hi, 16) + 1)):
@@ -72,7 +82,8 @@ def _cmap(text: bytes) -> dict[int, str]:
     return cmap
 
 
-def _decode(part: bytes, cmap: dict[int, str] | None) -> str:
+def decode(part: bytes, cmap: dict[int, str] | None) -> str:
+    """A string drawn, ``(…)`` or ``<…>``: through its font's ToUnicode ``cmap``, else as WinAnsi."""
     if part.startswith(b"<"):
         raw = bytes.fromhex(part[1:-1].decode())
         if cmap is not None:
