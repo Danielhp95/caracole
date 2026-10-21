@@ -6,6 +6,8 @@
     caracole songbook add NAME SONG...           songs at its end
     caracole songbook remove NAME SONG...        songs out of it
     caracole songbook move NAME SONG POSITION    a song to a place, 1 the first
+    caracole songbook set NAME SONG [--key K] [--mode M] [--capo N] | --clear
+                                                 where it plays a song: its key, mode and capo
     caracole songbook rename NAME NEW            another name, and its files to its new folder
     caracole songbook delete NAME                the songbook, and the files caracole made of it
     caracole songbook render [NAME] [--force]    its files (every songbook's), when they need it
@@ -93,8 +95,10 @@ def register(app: typer.Typer) -> None:
 
     @book.command("show")
     def show_cmd(ctx: typer.Context, name: str = typer.Argument(..., help="The songbook's name.")) -> None:
-        """A songbook's songs, in order, and where its files are."""
-        from caracole.songbook import FOLDER, songbook_entries
+        """A songbook's songs, in order, where it plays those with a setting or a version of their own, and where
+        its files are."""
+        from caracole.songbook import FOLDER, plays_in, songbook_entries
+        from caracole.viewer.version import Version
 
         cfg = load_cfg(ctx)
         b = _book(_books(cfg), name)
@@ -104,8 +108,9 @@ def register(app: typer.Typer) -> None:
         typer.echo(f"{b.name}: {_count(len(entries))}")
         for n, e in enumerate(entries, start=1):
             shown = e.song.display if e.song is not None else e.text
-            shift = f" (transposed {e.transpose:+d})" if e.transpose else ""
-            typer.echo(f"  {n}. {shown}{shift}" + (f" (missing: {e.missing})" if e.missing else ""))
+            where = plays_in(e) if e.setting or e.version != Version() else None
+            typer.echo(f"  {n}. {shown}" + (f" ({where})" if where else "")
+                       + (f" (missing: {e.missing})" if e.missing else ""))
         folder = cfg.library_dir / FOLDER / b.folder
         files = _files(cfg, b.folder)
         if files:
@@ -174,24 +179,30 @@ def register(app: typer.Typer) -> None:
                 capo: int | None = typer.Option(None, "--capo", min=0, max=11, help="The fret of its capo."),
                 clear: bool = typer.Option(False, "--clear", help="Take its setting off: the sheet's own.")) -> None:
         """Set the key, mode or capo a song is played in within a songbook (the parts you give change; the
-        others stay), or --clear its setting."""
-        from caracole.songbook import Setting, set_song_setting, songbook_entries
+        others stay), or --clear its setting. A key or a mode with no capo keeps the capo it plays at now."""
+        from caracole.songbook import Setting, check_setting, plays_in, set_song_setting, with_capo
 
         given = key is not None or mode is not None or capo is not None
         if clear == given:
             fail("Give --key, --mode or --capo to set, or --clear to take the setting off.", 2)
         cfg = load_cfg(ctx)
         with exclusive(cfg, "songbook set", interactive=True), closing(open_db(cfg)) as conn:
+            overrides = load_ovr(cfg)
             b = _book(_books(cfg), name)
             entry = _entry_for(conn, b, song)
             old = next((s.setting for s in b.songs if s.text == entry), None) or Setting()
-            new = None if clear else Setting(key[:1].upper() + key[1:] if key else old.key,
-                                             mode.lower() if mode else old.mode,
-                                             old.capo if capo is None else capo)
+            new = None
+            if not clear:
+                given_setting = _do(lambda: check_setting(key[:1].upper() + key[1:] if key else old.key,
+                                                          mode.lower() if mode else old.mode,
+                                                          old.capo if capo is None else capo))
+                new = with_capo(_played(conn, cfg, overrides, b, entry, None), given_setting, overrides)
             _do(lambda: set_song_setting(_file(cfg), b.name, entry, new))
-            shown = next((e.song.display for e in songbook_entries(conn, cfg.library_dir, load_ovr(cfg), b)
-                          if e.text == entry and e.song is not None), entry)
+            played = _played(conn, cfg, overrides, b, entry, new)
+            shown = played.song.display if played.song is not None else entry
             typer.echo(f"{shown}: " + (_setting_line(new) if new else "the sheet's own setting"))
+            if (where := plays_in(played)) is not None:
+                typer.echo(f"In the songbook: {where}")
             _render(cfg, conn, b.name)
 
     @book.command("rename")
@@ -309,6 +320,16 @@ def _entry_for(conn: sqlite3.Connection, book, text: str) -> str:
     if found is not None:
         return next((e for e in book.texts if same_entry(e, found.song.display)), found.song.display)
     return text
+
+
+def _played(conn: sqlite3.Connection, cfg: Config, overrides, book, entry: str, setting):
+    """The songbook's song ``entry`` as its files play it with ``setting`` (``songbook.Entry``)."""
+    from dataclasses import replace
+
+    from caracole.songbook import SongbookSong, songbook_entries
+
+    (played,) = songbook_entries(conn, cfg.library_dir, overrides, replace(book, songs=(SongbookSong(entry, setting),)))
+    return played
 
 
 def _say_found(texts: list[str], found: list[Found]) -> None:

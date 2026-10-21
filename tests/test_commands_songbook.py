@@ -323,15 +323,17 @@ def test_every_change_holds_caracoles_lock(setup, monkeypatch):
 
     monkeypatch.setattr(songbook, "render_songbooks", spy)
     for args in (("make", "Campfire", "Muse - Hysteria"), ("add", "Campfire", "Soda Stereo - De Música Ligera"),
-                 ("move", "Campfire", "Muse - Hysteria", "2"), ("remove", "Campfire", "Muse - Hysteria"),
-                 ("rename", "Campfire", "Picnic"), ("render",), ("delete", "Picnic")):
+                 ("move", "Campfire", "Muse - Hysteria", "2"), ("set", "Campfire", "Muse - Hysteria", "--capo", "2"),
+                 ("remove", "Campfire", "Muse - Hysteria"), ("rename", "Campfire", "Picnic"), ("render",),
+                 ("delete", "Picnic")):
         assert run(setup, *args).exit_code == 0, args
-    assert held == [True] * 7
+    assert held == [True] * 8
 
 
 CHANGES = [("make", "Picnic", "Muse - Hysteria"), ("add", "Campfire", "Soda Stereo - De Música Ligera"),
-           ("move", "Campfire", "Muse - Hysteria", "1"), ("remove", "Campfire", "Muse - Hysteria"),
-           ("rename", "Campfire", "Picnic"), ("delete", "Campfire"), ("render", "Campfire"), ("render",)]
+           ("move", "Campfire", "Muse - Hysteria", "1"), ("set", "Campfire", "Muse - Hysteria", "--capo", "2"),
+           ("remove", "Campfire", "Muse - Hysteria"), ("rename", "Campfire", "Picnic"), ("delete", "Campfire"),
+           ("render", "Campfire"), ("render",)]
 
 
 @pytest.mark.slow
@@ -528,10 +530,13 @@ def test_cli_songbook_set_and_clear(setup):
     assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera", "Muse - Hysteria").exit_code == 0
     out = run(setup, "set", "Gig", "soda stereo musica ligera", "--key", "g", "--mode", "Dorian")
     assert out.exit_code == 0, out.output
-    assert "key G, dorian" in out.output
-    assert books(setup)[0].songs[0].setting == Setting("G", "dorian")
+    lines = out.output.splitlines()
+    assert "Soda Stereo - De Música Ligera: key G, dorian, capo 0" in lines  # the capo it plays at now, kept
+    assert "In the songbook: G Dorian, capo 0" in lines  # where it plays, as its set list says
+    assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 0)
     out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--capo", "2")  # the other parts stay
     assert out.exit_code == 0, out.output
+    assert "In the songbook: G Dorian, capo 2" in out.output.splitlines()  # the same shapes, up two frets
     assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 2)
     assert books(setup)[0].songs[1].setting is None
     text = (setup[1].library_dir / FILE_NAME).read_text(encoding="utf-8")
@@ -542,5 +547,35 @@ def test_cli_songbook_set_and_clear(setup):
         assert run(setup, *args).exit_code == 2, args
     out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--clear")
     assert out.exit_code == 0, out.output
+    assert "In the songbook: A Minor, capo 0" in out.output.splitlines()  # its own version: as written
     assert books(setup)[0].songs[0].setting is None
+    out = run(setup, "set", "Gig", "Muse - Hysteria", "--key", "E")
+    assert out.exit_code == 0, out.output
+    assert books(setup)[0].songs[1].setting == Setting("E")  # no sheet, no capo it plays at yet
+    assert "In the songbook" not in out.output  # nowhere yet: it has no sheet
     assert run(setup, "set", "Gig", "Oasis - Wonderwall", "--key", "G").exit_code == 1  # not in it
+
+
+@pytest.mark.slow
+def test_show_says_where_the_songbook_plays_a_song_with_a_setting_or_a_version_of_its_own(setup):
+    _, cfg, conn = setup
+    keyless = add_song(conn, "Placeholder Band", "Keyless Song")  # no chord caracole can read: no key
+    keep_sheet(conn, cfg, keyless, "[Verse]\n[tab][ch]N.C.[/ch]       [ch]Hm[/ch]\nPalabras sin acordes[/tab]\n",
+               tab_id=7, tonality="")
+    render_sheets(conn, cfg)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[transpose]\n"宋冬野 - 斑马，斑马" = 2\n', encoding="utf-8")
+    assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera", "宋冬野 - 斑马，斑马",
+               "Placeholder Band - Keyless Song", "Muse - Hysteria").exit_code == 0
+    assert run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--mode", "dorian").exit_code == 0
+    out = run(setup, "set", "Gig", "Placeholder Band - Keyless Song", "--key", "G")
+    assert out.exit_code == 0, out.output
+    assert "In the songbook: key unknown, as written" in out.output.splitlines()  # a key its sheet can't take
+    shown = run(setup, "show", "Gig")
+    assert shown.exit_code == 0, shown.output
+    assert shown.output.splitlines()[1:5] == [
+        "  1. Soda Stereo - De Música Ligera (A Dorian, capo 0)",  # a mode alone, its key and capo the sheet's
+        "  2. 宋冬野 - 斑马，斑马 (B Minor, capo 0)",  # its own version: [transpose] 2
+        "  3. Placeholder Band - Keyless Song (key unknown, as written)",
+        "  4. Muse - Hysteria (missing: no sheet yet)",
+    ]

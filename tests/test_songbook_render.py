@@ -31,6 +31,7 @@ from caracole.songbook import (
     render_songbooks,
     set_song_setting,
     songbooks_file,
+    with_capo,
     written_page,
 )
 from caracole.viewer.version import Version
@@ -275,6 +276,62 @@ def test_replacing_a_songs_sheet_keeps_the_songbooks_key(conn, cfg, two):
     (_, entry) = entries_of(conn, cfg)
     assert entry.version.t == 5 and plays_in(entry) == "G Dorian, capo 0"  # D up to G, where A went down
     assert page_data(cfg, 2)["start"] == "t=5&mode=dorian&capo=0"
+
+
+IN_E_MINOR = (  # Wonderwall in E minor shapes, as a sheet with capo 2 writes it
+    "[Verse 1]\n"
+    "[tab][ch]Em[/ch]          [ch]G[/ch]\n"
+    "Una canción de prueba[/tab]\n"
+    "[tab][ch]D[/ch]              [ch]A[/ch]\n"
+    "solo para el analizador[/tab]\n"
+)
+IN_F_SHARP_MINOR = (  # the same song in another version, the shapes it sounds in, no capo
+    "[Verse 1]\n"
+    "[tab][ch]F#m[/ch]          [ch]A[/ch]\n"
+    "Otra letra de prueba[/tab]\n"
+    "[tab][ch]E[/ch]              [ch]B[/ch]\n"
+    "solo para el analizador[/tab]\n"
+)
+WONDERWALL = "Oasis - Wonderwall"
+
+
+def test_a_key_set_with_no_capo_takes_the_capo_the_song_plays_at_now(conn, cfg):
+    # A setting's key is the key of the shapes played: without its capo, a sheet in place of this one with
+    # another capo would play those shapes at that capo, in another key for the singer. caracole songbook set
+    # gives it the capo it plays at now (with_capo), so the key it sounds in stays.
+    song = add_song(conn, "Oasis", "Wonderwall")
+    keep_sheet(conn, cfg, song, IN_E_MINOR, tab_id=5, tonality="Em", capo=2)
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", WONDERWALL)
+    ovr = overrides(cfg, "")
+    (entry,) = entries_of(conn, cfg, ovr)
+    assert with_capo(entry, Setting("E"), ovr) == Setting("E", capo=2)  # Em shapes at capo 2: F#m sounds
+    assert with_capo(entry, Setting(mode="dorian"), ovr) == Setting(mode="dorian", capo=2)
+    assert with_capo(entry, Setting("E", capo=0), ovr) == Setting("E", capo=0)  # a capo of its own stays
+    assert with_capo(entry, Setting(capo=4), ovr) == Setting(capo=4)
+    own = overrides(cfg, f'[version]\n"{WONDERWALL}" = "capo=3"\n')
+    assert with_capo(entry, Setting("E"), own) == Setting("E", capo=3)  # its own version's capo, where it plays
+
+    set_setting(cfg, WONDERWALL, with_capo(entry, Setting("E"), ovr))
+    keep_sheet(conn, cfg, song, IN_F_SHARP_MINOR, tab_id=6, tonality="F#m")  # the nightly run's better version
+    render_sheets(conn, cfg)
+    (entry,) = entries_of(conn, cfg, ovr)
+    assert plays_in(entry) == "E Minor, capo 2"  # the same shapes at the same capo: F#m, as before
+    fake = FakeChordPro()
+    render(conn, cfg, ovr, runner=fake)
+    (text,) = inputs(fake, pdf_call(fake))
+    assert "Otra letra" in text and sung(text) == ["Em", "G", "D", "A"]
+    set_setting(cfg, WONDERWALL, Setting("E"))  # a key alone, as one may write it by hand
+    (entry,) = entries_of(conn, cfg, ovr)
+    assert plays_in(entry) == "E Minor, capo 0"  # the new sheet's capo: Em sounds, two semitones down
+
+
+def test_a_song_without_a_sheet_keeps_a_setting_as_given(conn, cfg):
+    add_song(conn, "Muse", "Hysteria")
+    make(cfg, "Campfire", "Muse - Hysteria")
+    ovr = overrides(cfg, "")
+    (entry,) = entries_of(conn, cfg, ovr)
+    assert with_capo(entry, Setting("G"), ovr) == Setting("G")  # no capo to keep: its first sheet's
 
 
 def test_a_song_whose_key_is_unknown_stays_as_written(conn, cfg):

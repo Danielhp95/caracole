@@ -2696,9 +2696,12 @@ songbook's files stay as they are, and everything else goes on.
   A name another songbook has is refused too.
 - **`caracole songbook list`** shows every songbook, how many songs it has and
   how many have no sheet, and its files.
-- **`caracole songbook show NAME`** lists its songs in order, each one's
-  transposition, the missing ones marked (`(missing: no sheet yet)`,
-  `(missing: not in the library)`), and where its files are.
+- **`caracole songbook show NAME`** lists its songs in order, the missing ones
+  marked (`(missing: no sheet yet)`, `(missing: not in the library)`), and
+  where its files are. A song with a setting in the songbook, or a version of
+  its own, says where the songbook plays it, as its set list does:
+  `3. Soda Stereo - De Música Ligera (G Dorian, capo 0)`, or
+  `(key unknown, as written)` for a key or a mode its sheet can't take.
 - **`caracole songbook add NAME "ARTIST - TITLE"...`** adds songs at the end;
   one it has already stays where it is.
 - **`caracole songbook remove NAME "ARTIST - TITLE"...`** takes songs out. A
@@ -2708,7 +2711,10 @@ songbook's files stay as they are, and everything else goes on.
 - **`caracole songbook set NAME "ARTIST - TITLE" [--key K] [--mode M] [--capo N]`**
   gives a song its own setting in the songbook: the key it is played in
   (`G`, `F#`, `Bb`), its mode (`ionian`, `dorian`, ... `locrian`) and its capo
-  (0 to 11). The parts you give change; the others stay. `--clear` takes the
+  (0 to 11). The parts you give change; the others stay. A key or a mode
+  given with no capo keeps the capo the song plays at now, and the setting
+  names it. It says where the songbook plays the song now:
+  `In the songbook: G Dorian, capo 0`. `--clear` takes the
   whole setting off, and the song is in its own version again. In songbooks.toml a
   song with a setting is a table in place of the string, and one without stays
   a string: `songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música
@@ -2719,7 +2725,11 @@ songbook's files stay as they are, and everything else goes on.
   dorian shapes, no capo; with `--capo 2` they sound in A dorian), and what the
   setting leaves out is the song's own version's (`--capo 2` alone keeps its
   sound and plays it from other shapes). The key is a key, not a move:
-  replacing the song's sheet with one in another key keeps it. A song whose
+  replacing the song's sheet with one in another key keeps it, and with the
+  setting's capo, the key it sounds in too. A setting with no capo (a song
+  that had no sheet yet when you set it, or one written by hand) takes the
+  capo of the song's own version, else its sheet's: a sheet in its place with
+  another capo then sounds in another key, so give `--capo` too. A song whose
   sheet has no key (no chord caracole can read, none to estimate one from)
   can't take a key or a mode, so it stays as written.
 - **`caracole songbook rename NAME NEW`** renames it; its files move to the

@@ -130,7 +130,8 @@ class SongbookFileError(SongbookError):
 class Setting:
     """How a songbook plays one song, each part None where it says nothing (the song's own version's): ``key``,
     the tonic of the shapes played, as written ("G", "F#", "Bb"); ``mode``, one of ``theory.MODES``; ``capo``,
-    a fret up to 11. ``in_setting`` makes it a version."""
+    a fret up to 11. ``in_setting`` makes it a version. ``caracole songbook set`` gives a key or a mode the capo
+    it plays at (``with_capo``), so that a sheet in place of the song's keeps the key it sounds in."""
 
     key: str | None = None
     mode: str | None = None
@@ -748,6 +749,23 @@ def in_setting(own: Version, setting: Setting | None, shapes: Key | None, capo_s
 def _places(setting: Setting | None) -> bool:
     """Whether the setting names a key or a mode, which only a sheet with a key can take."""
     return setting is not None and (setting.key is not None or setting.mode is not None)
+
+
+def with_capo(entry: Entry, setting: Setting, overrides: Overrides) -> Setting:
+    """``setting`` for the song of ``entry`` with the capo it plays at now on its sheet, where the setting names
+    a key or a mode and no capo (``caracole songbook set``): a setting's key is the key of the shapes played, so
+    without its capo a sheet in place of this one, with another capo, would play them at that capo, in another
+    key for the singer. As given for a song without a sheet, or one the viewer's code can't read (a bug, logged
+    with its traceback), or a setting naming its capo."""
+    if setting.capo is not None or not _places(setting) or entry.cho is None or entry.song is None:
+        return setting
+    try:
+        version = _played_in(entry.text, entry.cho, entry.key, own_version(overrides, entry.song), setting)
+        _, capo = played_key(version, viewer_key(entry.cho, entry.key), parse_sheet(entry.cho).capo)
+    except Exception:
+        log.warning("%s: cannot say at which capo its songbook plays it", entry.text, exc_info=True)
+        return setting
+    return replace(setting, capo=capo) if capo <= CAPO_MAX else setting
 
 
 KEY_UNKNOWN = "key unknown, as written"  # what plays_in says of a setting a sheet with no key can't take
