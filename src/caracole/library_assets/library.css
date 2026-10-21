@@ -8,7 +8,8 @@
 }
 @keyframes drawn { to { visibility: visible; } }
 .summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
-/* The library's header: caracole and the pages on one line, the title with its numbers beside it on the next. */
+/* The library's header: caracole and, served, the Requests link on one line, the title with its numbers beside it
+   on the next. */
 .masthead.lib { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "app links" "title title";
   align-items: center; gap: 2px 12px; padding: 10px 0 6px; }
 .masthead.lib .app { grid-area: app; margin: 0; }

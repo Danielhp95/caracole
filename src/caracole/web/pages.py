@@ -107,8 +107,7 @@ def page(title: str, body: str, *, head: str = "") -> str:
         '<div class="page">\n<header class="masthead">\n  <div>\n'
         '    <p class="app"><a href="/">caracole</a></p>\n'
         f"    <h1>{escape(title)}</h1>\n  </div>\n"
-        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a>'
-        '<a class="navlink" href="/lookup">Look up</a></nav>\n</header>\n'
+        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a></nav>\n</header>\n'
         f"{body}\n</div>\n</body>\n</html>\n"
     )
 

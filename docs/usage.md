@@ -1672,8 +1672,8 @@ songbooks from their next render); caracole serve answers a browser's own
 your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
 the address remembers which (`#tab=songbooks`). Its header is short, so that on
 a phone the first song starts well within the first screen: the library's
-numbers beside its title, the pages on the line above, the tabs, the search box,
-then one row of
+numbers beside its title (served, the Requests link on the line above), the
+tabs, the search box, then one row of
 buttons and menus (the status buttons, then Select, Key and Sort), which
 scrolls sideways on a phone, fading at an end where more of it is out of
 sight. The search box stays at the top as the page scrolls under it, with an
@@ -2432,14 +2432,21 @@ with it. A KEY that is no key exits with status 2.
   [caracole remove](#caracole-remove)), then its lookup. It is never what
   Enter acts on.
 
-  `/lookup`, the lookup page, still answers: the same search of your library
+  `/lookup`, the lookup page, still answers, though no page's header links to
+  it any more (the requests page's has Library alone): the same search of your library
   and the Ultimate Guitar and LaCuerda indexes, whose Get it (or a song's name,
   which does the same) reads the sheet on the page as it arrives, stage by
   stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
   nothing), or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
-  that search, and a lookup posted without JavaScript lands there.
+  that search, and a lookup posted without JavaScript lands there. It alone
+  looks a song you already have up again: on the library page the index's
+  rows of a song of yours are folded into your song's own line, which has
+  neither Get it again nor a version to pick, while here your song keeps its
+  own row, with Fetch again, and each site's row of it its own: Ultimate
+  Guitar's Get it again, with a version of theirs to pick under "⋯", and
+  LaCuerda's, which keeps that LaCuerda sheet.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" takes an artist, a title and, optionally, the album and the length,
   filled in from what you searched ("Muse - Hysteria"; an artist's name alone
