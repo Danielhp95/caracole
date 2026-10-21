@@ -2179,24 +2179,32 @@ A word of an artist's name finds them too: an artist whose name holds every
 word of the query as words of its own, among others, is an artist line, after
 an artist whose whole name the query is (`caracole search eagles` also lists
 Eagles of Death Metal), the most songs first, weighed by how much of the name
-the query is (`horse`: Horse the Band before Horse Jumper of Love, as many
-songs, a longer name). Accents are folded (`sabina` finds LaCuerda's Joaquín Sabina) and
+the query is (`horse`: An Horse, 18 songs, before Horse the Band, 30, whose
+longer name "horse" is less of). One with 50 songs or more and over four times
+the songs of an artist whose whole name (or a name near it) the query is comes
+before them: `dylan` lists Bob Dylan (638 songs) before Dylan (27), `swift`
+Taylor Swift before Swift, `clapton` Eric Clapton before Claptone, while
+`prince` keeps Prince before Prince Royce. Accents are folded (`sabina` finds LaCuerda's Joaquín Sabina) and
 Chinese is read as pinyin, as whole words (伍佰 finds Wu Bai & China Blue);
 never letters inside a word (`horse` finds no Seahorses), a word half typed
 (`lynyr`), a word of fewer than three letters, or a word in more than 300
 artists' names ("the", "band", "john": on a full index, about seventy such
 words), which names only an artist whose whole name it is (`band`: The Band).
 Such an artist leads when their songs are most of the songs the query
-matches, or when they have 50 songs or more and one of them is tabbed more
-than any song titled like the query: `caracole search skynyrd` leads with
-Lynyrd Skynyrd, and still lists Sam Grow's song "Skynyrd" after their most
-tabbed songs; `zeppelin` leads with Led Zeppelin, while `imagine` leads with
-John Lennon's Imagine, Imagine Dragons an artist line after it. `--artist`
-still takes a whole name: `--artist lynyrd` names no one.
+matches and they have five songs or more (one song of La Naranja Metalica's
+leads nothing for `metalica`), or when they have 50 songs or more and one of
+them is tabbed more than the first song titled like the query: `caracole
+search skynyrd` leads with Lynyrd Skynyrd, and still lists Sam Grow's song
+"Skynyrd" after their most tabbed songs; `zeppelin` leads with Led Zeppelin,
+`young` with Neil Young, Hollywood Undead's "Young" listed after, while
+`imagine` leads with John Lennon's Imagine, Imagine Dragons an artist line
+after it. `--artist` still takes a whole name: `--artist lynyrd` names no one.
 
-A query nothing matches well (no artist whose whole name it is, no song by its
-title, here or on another site's index) whose words are spelled close to an
-artist's name ends with that artist, and the line that lists their songs:
+A query nothing matches well (no artist whose whole name it is, no song whose
+whole title it is, here or on another site's index; a title that only begins
+with it, The Who's "Eminence Front" for `eminen`, leaves room for Eminem) whose
+words are spelled close to an artist's name ends with that artist, and the line
+that lists their songs:
 
     $ caracole search lynrd
     …
@@ -2205,7 +2213,9 @@ artist's name ends with that artist, and the line that lists their songs:
 
 Up to three, from Ultimate Guitar's index and LaCuerda's (`metalica` is
 Metallica, `beatels` The Beatles, `sabinna` LaCuerda's Joaquín Sabina), the
-most songs first: each word of the query is close to a word of the name (a
+most songs first, weighed by how much of the name the query is, both indexes'
+together, and none with a tenth of the first one's weight (`metalika`:
+Metallica, and no Malika Ayane): each word of the query is close to a word of the name (a
 word of fewer than four letters must be the name's own), of the same first
 letter, so a typo in a name's first letter suggests nothing, and Chinese never
 does. An artist a word of the query names may be shown already (`metalica`:
@@ -2395,7 +2405,11 @@ with it. A KEY that is no key exits with status 2.
   has, "como camaron", gets no offer. Once a page is read, a search finds their
   songs at once. When LaCuerda alone has the artist the query names, and
   Ultimate Guitar's index nothing that matches well ("andres calamaro": only
-  Javier Calamaro's songs), LaCuerda's artist comes first) and **gtptabs.com**
+  Javier Calamaro's songs; "antonio josé", beside Ultimate Guitar's José
+  Antonio Méndez, one song, whose name holds those words), or LaCuerda's artist
+  a word names has 50 songs or more and more than any artist the word names on
+  Ultimate Guitar ("calamaro": Andrés Calamaro's 325 before Javier Calamaro's 25;
+  "paez": Fito Paez), LaCuerda's artist comes first) and **gtptabs.com**
   (five songs with a Guitar Pro file there). A song the sites have under the
   same artist and title is one line, with each site's mark and what each has
   of it ("chords ×9 · LaCuerda ×3 · Guitar Pro file": Ultimate Guitar's tabs

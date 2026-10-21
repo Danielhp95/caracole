@@ -58,7 +58,9 @@ that letter offers to read the page of that name (``lacuerda_unlisted``), never
 a page LaCuerda's own songs or artists already name. Once such a read is over,
 the answers kept are dropped, so a search finds their songs at once. LaCuerda's
 group leads (``lacuerda_leads``) when it has the artist the query names and
-Ultimate Guitar's index has nothing strong.
+Ultimate Guitar's index has nothing strong; an Ultimate Guitar artist a word of
+the query names then leads nothing (``lead`` is "song"), so Enter opens
+LaCuerda's.
 """
 
 from __future__ import annotations
@@ -273,6 +275,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     from caracole.songs import list_songs
 
     mine = search_library(conn, q, LIBRARY_HITS)
+    # A song of yours by its title matches well: nothing to suggest, and no close spelling looked for.
+    yours = any(h.score >= STRONG and h.via != "artist" for h in mine)
     removed = search_removed(conn, q, LIBRARY_HITS)
     skipped, partial = _skipped(app, conn)
     left_out = {s["source"] for s in skipped}
@@ -286,13 +290,18 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
         musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
         lc_artists, lacuerda = (search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out
                                 else ([], []))
-        close = suggestions(conn, q, index_found, [*lc_artists, *lacuerda, *gtptabs, *musescore],
-                            lacuerda="lacuerda" not in left_out)
+        close = None  # looked for below, once a song of yours doesn't make it moot
         app._found[q] = (time.monotonic(), index_found, index, artists, hint, gtptabs, musescore, lc_artists,
                          lacuerda, close)
         while len(app._found) > CACHE_SIZE:
             app._found.popitem(last=False)
+    if close is None and not yours:
+        close = suggestions(conn, q, index_found, [*lc_artists, *lacuerda, *gtptabs, *musescore],
+                            lacuerda="lacuerda" not in left_out)
+        if q in app._found:
+            app._found[q] = (*app._found[q][:-1], close)
     answer = found(mine, index_found)
+    leads = lacuerda_leads(index_found, lc_artists)
     songs = list_songs(conn)
     # The artists' most tabbed songs are the index's songs too, drawn as they are: each with its song of yours.
     tops = [t for a in artists for t in a["top"]]
@@ -301,9 +310,12 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     artists = [{**a, "top": [next(owned) for _ in a["top"]], "gtptabs": _gtptabs_songs(app, conn, a["artist"])}
                for a in artists]
     best = answer.best
+    # LaCuerda's group leads: Ultimate Guitar's artist a word names (Javier Calamaro, beside LaCuerda's Andrés
+    # Calamaro) is no lead, and Enter opens LaCuerda's artist.
+    lead = "song" if leads and answer.lead == "artist" else answer.lead
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
-    return {"query": q, "library": library, "index": hits, "artists": artists, "lead": answer.lead,
+    return {"query": q, "library": library, "index": hits, "artists": artists, "lead": lead,
             "best": pick, "hint": hint,
             "removed": [{"artist": h.artist, "title": h.title, "key": h.key, "removed_at": h.removed_at,
                          **_key_parts(h.key)} for h in removed],
@@ -314,11 +326,9 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "lacuerda_artists": [{**_lacuerda_artist_json(app, conn, a, songs),
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
-            "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
-            # A song of yours by its title matches well: nothing to suggest.
-            "suggest": [] if any(h.score >= STRONG and h.via != "artist" for h in mine) else [
-                {"source": s.source, "artist": s.artist, ("artist_key" if s.source == "ug" else "slug"): s.key,
-                 "songs": s.songs, "group_key": _group_key(s.artist)} for s in close],
+            "lacuerda_leads": leads,
+            "suggest": [{"source": s.source, "artist": s.artist, ("artist_key" if s.source == "ug" else "slug"): s.key,
+                         "songs": s.songs, "group_key": _group_key(s.artist)} for s in (() if yours else close or ())],
             "skipped": skipped, "partial": partial}
 
 

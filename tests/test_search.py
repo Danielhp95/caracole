@@ -1750,7 +1750,8 @@ def test_a_chinese_artist_is_found_by_one_word_of_their_name_in_pinyin(conn):
     found = find_index(conn, "伍佰")
     [wubai] = found.artists
     assert (wubai.artist_key, wubai.part, wubai.songs) == ("wu-bai-china-blue", True, 2)
-    assert found.lead == "artist"
+    # Two songs are too few for a word of the name to take Enter (MOST_SONGS): a row, and no lead.
+    assert (found.lead, found.best) == ("song", None)
     # In pinyin, as whole words alone: 斑马 (ban ma) is no word of anyone here.
     assert find_index(conn, "斑马").artists == ()
 
@@ -1823,6 +1824,7 @@ def test_suggestions_come_for_a_query_nothing_matches_well_and_beat_every_artist
     # "metalica" is a word of La Naranja Metalica's name: shown, and Metallica, with more songs, suggested.
     metalica = find_index(conn, "metalica")
     assert [(a.artist_key, a.part) for a in metalica.artists] == [("la-naranja-metalica", True)]
+    assert (metalica.lead, metalica.best) == ("song", None)  # one song: Enter opens no one
     assert [s.artist for s in suggestions(conn, "metalica", metalica)] == ["Metallica"]
     # The artist shown is the biggest one, or a song by the query's title is: no suggestion.
     assert suggestions(conn, "lynyrd", find_index(conn, "lynyrd")) == []
@@ -1841,3 +1843,184 @@ def test_cli_an_artist_by_a_word_of_their_name_leads_and_a_close_spelling_says_d
             'caracole search --artist "Lynyrd Skynyrd"') in close.output
     # --artist takes a whole name: a word of one names no one there.
     assert "No artist named lynyrd in the offline index" in run(tmp_path, "search", "--artist", "lynyrd").output
+
+
+def songs_of(artist_key, n, first_id, top_tabs=1):
+    """``n`` songs of an artist, a chords tab each, the first with ``top_tabs`` tabs in all."""
+    rows = [(first_id + i, artist_key, f"song-{i}", "chords") for i in range(n)]
+    return rows + [(first_id + n + i, artist_key, "song-0", "tabs") for i in range(top_tabs - 1)]
+
+
+def test_a_well_known_artist_a_word_names_goes_before_a_small_one_whose_whole_name_it_is(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    # "dylan": Bob Dylan, well known, beside Dylan (three songs), Dylan Scott and Deyaz's song "Dylan".
+    index(conn, songs_of("bob-dylan", search.WELL_KNOWN, 50000, top_tabs=5) + songs_of("dylan", 3, 51000)
+          + songs_of("dylan-scott", 4, 52000) + [(53000, "deyaz", "dylan", "chords"), (53001, "deyaz", "dylan", "tabs")])
+    found = find_index(conn, "dylan")
+    assert [(a.artist_key, a.part) for a in found.artists] == [
+        ("bob-dylan", True), ("dylan", False), ("dylan-scott", True)]
+    assert (found.lead, found.best) == ("artist", None)  # Enter opens Bob Dylan's songs
+    assert ("deyaz", "dylan") in keys(found.songs)  # the song titled so still shows
+    # With room for one artist, the well-known one has it.
+    assert [a.artist_key for a in find_index(conn, "dylan", artists=1).artists] == ["bob-dylan"]
+
+
+def test_a_well_known_artist_a_word_names_goes_before_a_small_one_whose_name_is_near_it(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    index(conn, songs_of("eric-clapton", search.WELL_KNOWN, 50000, top_tabs=3) + songs_of("claptone", 2, 51000))
+    found = find_index(conn, "clapton")
+    assert [(a.artist_key, a.part) for a in found.artists] == [("eric-clapton", True), ("claptone", False)]
+    assert found.lead == "artist"
+
+
+def test_an_artist_whose_whole_name_it_is_stays_first_beside_one_not_much_better_known(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    # Prince Royce has more songs than Prince, but not OUTWEIGHS times as many: the whole name stays first.
+    index(conn, songs_of("prince", search.WELL_KNOWN // 2, 50000, top_tabs=4)
+          + songs_of("prince-royce", search.WELL_KNOWN, 51000))
+    assert [(a.artist_key, a.part) for a in find_index(conn, "prince").artists] == [
+        ("prince", False), ("prince-royce", True)]
+
+
+def test_an_artist_a_word_names_with_too_few_songs_never_leads(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    index(conn, songs_of("daniel-paez", search.MOST_SONGS - 1, 50000))
+    found = find_index(conn, "paez")
+    assert [a.artist_key for a in found.artists] == ["daniel-paez"]
+    assert (found.lead, found.best) == ("song", None)  # their songs are every song matched, but too few
+    index(conn, [(51000, "daniel-paez", "one-more", "chords")])
+    assert find_index(conn, "paez").lead == "artist"
+
+
+def lc_artists(conn, *artists):
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist(slug, name, n) for slug, name, n in artists])
+
+
+def test_lacuerda_leads_with_its_artist_whose_whole_name_it_is_beside_a_small_ultimate_guitar_one_in_part(conn):
+    from caracole.search import find_index, lacuerda_leads, search_lacuerda
+
+    index(conn, [(50000, "jose-antonio-mendez", "un-bolero", "chords")])
+    lc_artists(conn, ("antonio_jose", "Antonio José", 44))
+    ug = find_index(conn, "antonio josé")
+    assert [(a.artist_key, a.part) for a in ug.artists] == [("jose-antonio-mendez", True)]
+    assert lacuerda_leads(ug, search_lacuerda(conn, "antonio josé")[0]) is True
+
+
+def test_lacuerda_leads_with_a_well_known_artist_a_word_names_beside_ultimate_guitars_smaller_one(conn):
+    from caracole import search
+    from caracole.search import find_index, lacuerda_leads, search_lacuerda
+
+    # "calamaro": Javier Calamaro on Ultimate Guitar, Andrés Calamaro, with many more songs, on LaCuerda.
+    index(conn, songs_of("javier-calamaro", search.MOST_SONGS, 50000))
+    lc_artists(conn, ("andres_calamaro", "Andrés Calamaro", 325))
+    ug = find_index(conn, "calamaro")
+    lc = search_lacuerda(conn, "calamaro")[0]
+    assert [(a.artist, a.part) for a in lc] == [("Andrés Calamaro", True)]
+    assert ug.lead == "artist" and lacuerda_leads(ug, lc) is True
+    # A LaCuerda artist a word names, with few songs, leads nothing.
+    lc_artists(conn, ("andres_calamaro", "Andrés Calamaro", search.WELL_KNOWN - 1))
+    assert lacuerda_leads(ug, search_lacuerda(conn, "calamaro")[0]) is False
+
+
+def test_a_well_known_ultimate_guitar_artist_a_word_names_leads_before_a_small_lacuerda_one_named_so(conn):
+    from caracole import search
+    from caracole.search import find_index, lacuerda_leads, search_lacuerda
+
+    index(conn, songs_of("bob-dylan", search.WELL_KNOWN, 50000, top_tabs=3))
+    lc_artists(conn, ("dylan", "Dylan", 3))
+    ug = find_index(conn, "dylan")
+    assert ug.lead == "artist" and lacuerda_leads(ug, search_lacuerda(conn, "dylan")[0]) is False
+
+
+def test_a_word_in_many_of_lacuerdas_artists_names_orders_them_by_their_songs_alone(conn):
+    from caracole import lacuerda_index as li
+    from caracole.search import search_lacuerda
+
+    many = [(f"grupo_{i}_band", f"Grupo {i} Band", 5 + i) for i in range(li.WORD_ARTISTS + 1)]
+    lc_artists(conn, *many, ("banda_el_limon", "Banda el Limón", 184), ("banda_ms", "Banda MS", 107))
+    found = search_lacuerda(conn, "band")[0]
+    assert [a.artist for a in found][:2] == ["Banda el Limón", "Banda MS"]
+    assert not any(a.part for a in found)
+    # A word in few names keeps them first among names it is only inside a word of.
+    lc_artists(conn, ("andres_calamaro", "Andrés Calamaro", 25), ("andresito", "Andresito", 40))
+    assert [a.artist for a in search_lacuerda(conn, "andres")[0]][:1] == ["Andrés Calamaro"]
+
+
+def test_suggestions_from_both_indexes_are_ranked_together(conn):
+    from caracole.search import suggest_artists
+
+    # "beyonse": LaCuerda's Beyonce, a whole name close to it, before two longer names on Ultimate Guitar.
+    index(conn, songs_of("burst-of-bonse", 4, 50000) + songs_of("julien-bense", 2, 51000))
+    lc_artists(conn, ("beyonce", "Beyonce", 3))
+    assert [s.artist for s in suggest_artists(conn, "beyonse")][:1] == ["Beyonce"]
+
+
+def test_a_suggestion_far_less_known_than_the_first_is_left_out(conn):
+    from caracole.search import suggest_artists
+
+    index(conn, songs_of("metallica", 40, 50000) + songs_of("malika-ayane", 2, 51000))
+    assert [s.artist for s in suggest_artists(conn, "metalika")] == ["Metallica"]
+
+
+def test_a_title_that_only_begins_with_the_query_leaves_room_for_a_suggestion(conn):
+    from caracole.search import find_index, suggestions
+
+    # "eminen": The Who's "Eminence Front" begins with it; Eminem is spelled close to it.
+    index(conn, songs_of("eminem", 20, 50000) + [(51000, "the-who", "eminence-front", "chords"),
+                                                 (51001, "the-who", "eminence-front", "tabs")])
+    found = find_index(conn, "eminen")
+    assert [s.artist for s in suggestions(conn, "eminen", found)] == ["Eminem"]
+    # A title the query is whole still says nothing more is meant.
+    index(conn, [(52000, "red-vox", "eminen", "chords")])
+    assert suggestions(conn, "eminen", find_index(conn, "eminen")) == []
+
+
+def test_well_known_artists_a_word_names_leave_room_for_the_one_whose_whole_name_it_is(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    # "nelson": three well-known Nelsons, and Nelson, whose whole name it is, with few songs.
+    index(conn, songs_of("willie-nelson", search.WELL_KNOWN + 30, 50000, top_tabs=5)
+          + songs_of("ricky-nelson", search.WELL_KNOWN + 20, 51000) + songs_of("hawk-nelson", search.WELL_KNOWN, 52000)
+          + songs_of("nelson", 3, 53000))
+    assert [a.artist_key for a in find_index(conn, "nelson").artists] == ["willie-nelson", "ricky-nelson", "nelson"]
+
+
+def test_a_well_known_artist_a_word_names_is_weighed_against_the_first_song_titled_so(conn):
+    from caracole import search
+    from caracole.search import find_index
+
+    # "jones": George Jones, among other Joneses (none has most of the songs), and a song titled Jones with one
+    # tab; a more tabbed song only holds the word among others in its title.
+    index(conn, songs_of("george-jones", search.WELL_KNOWN + 10, 50000, top_tabs=3)
+          + songs_of("tom-jones", 40, 51000) + songs_of("norah-jones", search.WELL_KNOWN - 1, 52000)
+          + [(53000, "brian-mcfadden", "jones", "chords")]
+          + [(53010 + i, "duke-ellington", "pirates-of-the-caribbean-davy-jones", "tabs") for i in range(5)])
+    found = find_index(conn, "jones")
+    assert [h.song_key for h in found.songs[:2]] == ["jones", "pirates-of-the-caribbean-davy-jones"]
+    assert found.artists[0].artist_key == "george-jones" and found.lead == "artist"
+
+
+def test_a_lacuerda_name_the_query_is_only_inside_of_leaves_room_for_a_suggestion(conn):
+    from caracole.search import find_index, search_lacuerda, suggestions
+
+    # "adelle": LaCuerda's La Banda del Lechuga holds its letters, across words of its own; Adele is spelled close.
+    index(conn, songs_of("adele", 20, 50000))
+    lc_artists(conn, ("la_banda_del_lechuga", "La Banda del Lechuga", 5))
+    lc = search_lacuerda(conn, "adelle")[0]
+    assert [(a.artist, a.score, a.part) for a in lc] == [("La Banda del Lechuga", 90, False)]
+    assert [s.artist for s in suggestions(conn, "adelle", find_index(conn, "adelle"), lc)] == ["Adele"]
+    # LaCuerda's whole name is the query: nothing to suggest.
+    lc_artists(conn, ("adelle", "Adelle", 3))
+    assert suggestions(conn, "adelle", find_index(conn, "adelle"), search_lacuerda(conn, "adelle")[0]) == []

@@ -703,7 +703,8 @@ def test_enter_moves_to_the_first_result_and_never_requests_a_song(cfg, live, br
 
 
 SKYNYRD = [("lynyrd-skynyrd", "free-bird", 4), ("lynyrd-skynyrd", "sweet-home-alabama", 3),
-           ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1), ("sam-grow", "skynyrd", 1)]
+           ("lynyrd-skynyrd", "simple-man", 2), ("lynyrd-skynyrd", "tuesdays-gone", 1),
+           ("lynyrd-skynyrd", "that-smell", 1), ("sam-grow", "skynyrd", 1)]
 DID_YOU_MEAN = "(document.querySelector('#results .did-you-mean') || {}).textContent"
 
 
@@ -713,9 +714,9 @@ def test_a_word_of_an_artists_name_puts_their_header_first_and_enter_asks_for_no
     browser.open(base)
     search(browser, "skynyrd")
     assert browser.wait("document.getElementById('found').dataset.query === 'skynyrd'")
-    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4", "Sam Grow"]  # the artist first, the song titled so after
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 5", "Sam Grow"]  # the artist first, the song titled so after
     assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Skynyrd"]
-    assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 1 more by Lynyrd Skynyrd"
+    assert browser.js("document.querySelector('#results .more-by').textContent") == "+ 2 more by Lynyrd Skynyrd"
     assert browser.js(DID_YOU_MEAN) is None
     browser.press("Enter")
     assert browser.wait("document.activeElement.matches('#results article.hit')")
@@ -734,9 +735,9 @@ def test_a_close_spelling_says_did_you_mean_above_the_notes_and_the_name_opens_t
     assert browser.js(HITS) == 0
     searched = len(asked)
     browser.click("#results .did-you-mean button")
-    assert browser.wait(f"{HITS} === 4")
-    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 4"]
-    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "Tuesdays Gone"]
+    assert browser.wait(f"{HITS} === 5")
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 5"]
+    assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "That Smell", "Tuesdays Gone"]
     assert browser.js("document.activeElement.matches('#results section.artist')")
     assert len(asked) == searched and queue.snapshot() == []  # their songs came from /api/artist: no search, no site
 
