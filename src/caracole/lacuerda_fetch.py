@@ -79,6 +79,7 @@ from caracole.ug.page import strip_markup
 from caracole.versions import (
     SHEET_KINDS,
     VersionRow,
+    complete,
     get_version,
     replaces_sheet,
     set_coverage,
@@ -417,7 +418,7 @@ def _retire_auto_sheet(
 
 
 def _complete(value: float | None, rank: RankPolicy) -> bool:
-    return value is not None and value >= rank.coverage_threshold
+    return complete(value, rank.coverage_threshold)
 
 
 def _utc(dt: datetime) -> datetime:
