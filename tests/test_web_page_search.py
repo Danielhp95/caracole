@@ -895,8 +895,11 @@ def test_a_query_with_results_says_where_caracole_looked_in_one_muted_line(cfg, 
     assert len({browser.js(colour.replace("STATE", state)) for state in ("done", "partial", "blocked")}) == 3
 
 
-LYNYRD = [{"artist": "Lynyrd Skynyrd", "songs": 2, "source": "ug", "key": "lynyrd-skynyrd"},
-          {"artist": "Lynn Anderson", "songs": 1, "source": "ug", "key": "lynn-anderson"}]
+# The artists a typo may mean, as /api/search's ``suggest`` gives them (the artist-search lane's shape).
+LYNYRD = [{"source": "ug", "artist": "Lynyrd Skynyrd", "artist_key": "lynyrd-skynyrd", "songs": 2,
+           "group_key": "lynyrd-skynyrd"},
+          {"source": "ug", "artist": "Lynn Anderson", "artist_key": "lynn-anderson", "songs": 1,
+           "group_key": "lynn-anderson"}]
 
 
 def test_a_typo_shows_did_you_mean_first_and_their_songs_opens_that_artist(cfg, live, browser):

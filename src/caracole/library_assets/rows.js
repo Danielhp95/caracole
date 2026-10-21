@@ -577,9 +577,9 @@ const caracoleRows = (icons) => {
     return why;
   };
   // --- what a search says beside its results (/api/search) ------------------------------------------------------
-  // The closest artists' names the offline indexes have (``suggest``: each { source, artist, key, songs }), most
-  // likely first, for a query that may be a typo: a line each, "Lynyrd Skynyrd · artist · 212 songs on UG", whose
-  // Their songs is ``open(s, button)``. None for none: null.
+  // The closest artists' names the offline indexes have (``suggest``: each { source, artist, songs, and artist_key
+  // or slug }), most likely first, for a query that may be a typo: a line each, "Lynyrd Skynyrd · artist · 212 songs
+  // on UG", whose Their songs is ``open(s, button)``. None for none: null.
   const SITE_NAMES = { ug: "UG", lacuerda: "LaCuerda", gtptabs: "gtptabs.com", musescore: "MuseScore" };
   const didYouMean = (suggest, open) => {
     const names = listOf(suggest).filter((s) => s && typeof s === "object" && s.artist);

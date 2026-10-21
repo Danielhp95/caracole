@@ -238,11 +238,11 @@ function byNameFrom(text) {
   (f.artist.value ? f.title : f.artist).focus({preventScroll: true});
 }
 
-// A name Did you mean offers: their songs, as their row's Songs lists them, by the suggestion's ``key`` (Ultimate
-// Guitar's artist key, or the slug of their LaCuerda page); else the name searched, as typing it would.
+// A name Did you mean offers: their songs, as their row's Songs lists them, by Ultimate Guitar's ``artist_key`` or
+// the ``slug`` of their LaCuerda page; else the name searched, as typing it would.
 function openSuggested(s) {
-  if (s.source === "ug" && s.key) { openArtist({artist: String(s.artist), artist_key: String(s.key)}, true); return; }
-  if (s.source === "lacuerda" && s.key) { openSiteArtist({artist: String(s.artist), slug: String(s.key)}, true); return; }
+  if (s.source === "ug" && s.artist_key) { openArtist({artist: String(s.artist), artist_key: String(s.artist_key)}, true); return; }
+  if (s.source === "lacuerda" && s.slug) { openSiteArtist({artist: String(s.artist), slug: String(s.slug)}, true); return; }
   q.value = String(s.artist || "");
   search();
   q.focus();
