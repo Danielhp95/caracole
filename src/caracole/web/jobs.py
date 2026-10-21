@@ -305,6 +305,11 @@ class JobQueue:
         with self._lock:
             return sum(job.active for job in self._jobs)
 
+    def room(self) -> int:
+        """How many more jobs the queue takes now: ``limit``, less those waiting or running."""
+        with self._lock:
+            return max(0, self._limit - sum(job.active for job in self._jobs))
+
     def fetching_keys(self) -> set[str]:
         """The songs a waiting or running job will fetch."""
         with self._lock:

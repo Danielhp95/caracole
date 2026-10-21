@@ -2204,6 +2204,20 @@ with it. A KEY that is no key exits with status 2.
   runs: the card, or the Select bar, says why, and the bar keeps your ticks.
   Without JavaScript, each sends you to its line on `/jobs`.
 
+  A songbook with songs of yours that have no sheet yet ("missing: no sheet
+  yet") has **Get the 2 missing songs now** beside its files: it looks each
+  of them up now, one `caracole get` after the other in the songbook's order,
+  as Fetch now does on its card, each song's line under its name in the
+  songbook (and on its card) saying how its lookup goes, then runs
+  `caracole songbook render NAME`, which makes the songbook again with the
+  sheets they got: its line says "Queued behind 2 requests…" while they
+  run, then "Making the songbook…" and "Made · Open songbook". A song "not
+  in the library", or one overrides.toml ignores, isn't looked up. With
+  less room in the queue than songs, it gets the first ones, and the button
+  offers the rest once they are done. The songbook keeps its height as its
+  songs' "missing" notes go, until your next click or key, so nothing on the
+  screen moves; the lookups stay out of the list of requests in the corner.
+
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes
 caracole's lock, keeps the pause after the last request any caracole sent, and

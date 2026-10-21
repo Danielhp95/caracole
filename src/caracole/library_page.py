@@ -128,8 +128,13 @@ card at the section's end, which opens on it; once the change is over the
 section is drawn again from the server's own HTML (``songbooks_section``,
 which ``/jobs.json`` gives with the job: the script's ``drawSongbooks`` reads
 it with DOMParser, which runs no script, and keeps each card that shows a line
-where it is, so that its line goes on being read out). On the served page the
-section is there even before the first songbook, hidden.
+where it is, so that its line goes on being read out, and the height it had while
+it is taller than what it holds, until the next click or key). On the served page the
+section is there even before the first songbook, hidden. A songbook with songs
+of yours that have no sheet yet has Get the N missing songs now (each such
+song's ``<li>`` marked ``data-get``; every song's names its id, ``data-song``):
+one lookup per song, each one's line under its name there and on its card, then
+the songbook made again, on its own line.
 
 A song in review carries its candidates (``review_choices``), numbered as
 ``caracole review`` numbers them, and its card a picker (the script's
@@ -2951,11 +2956,12 @@ _SCRIPT = r"""
   const traySum = byId("tray-sum");
   const trayToggle = byId("tray-toggle");
   const trayItems = new Map();  // job id -> its line in the list of requests
+  const quiet = new Set();  // the lookups of a songbook's missing songs: its card says how they go
   let trayClosed = false;
   // The list of requests, once there are two or more: one line each, not read out (the cards' lines are). A
   // songbook's change, or a removal, is left out: its card, where it was asked for, says how it goes.
   const trayShow = (view) => {
-    if (!tray || view.kind === "songbook" || view.kind === "remove") return;
+    if (!tray || view.kind === "songbook" || view.kind === "remove" || quiet.has(Number(view.id))) return;
     const id = Number(view.id);
     let item = trayItems.get(id);
     if (!item) {
@@ -3051,7 +3057,20 @@ _SCRIPT = r"""
         }
       }
     }
+    if (i !== undefined && view.kind === "song") bookSongs(song, view);
     trayShow(view);
+  };
+  // A song's line in the songbooks that hold it too (each song of a songbook names its id, data-song), under its
+  // name: Get the missing songs now's lookups show there. Not read out: its songbook's own line says how it goes.
+  const bookSongLine = (li, view) => {
+    const names = li.querySelector(".sb-names");
+    if (!names) return;
+    const line = names.querySelector(".progress") || names.appendChild(el("span", "progress"));
+    const said = view.line && typeof view.line === "object" ? view.line : {};
+    showLine(line, { line: Object.assign({}, said, { details: null }) });
+  };
+  const bookSongs = (song, view) => {
+    for (const li of document.querySelectorAll('#songbooks li[data-song="' + Number(song) + '"]')) bookSongLine(li, view);
   };
   const requestsCount = (n) => {
     const nav = document.querySelector('.navlink[href="/jobs"]');
@@ -3119,7 +3138,7 @@ _SCRIPT = r"""
   // it, so that its line goes on being read out to the last. The section is in the served page even with
   // no songbook, hidden, for the first one. Without JavaScript the forms post as forms, and the server
   // answers with the requests page.
-  const SONGBOOK_FORM = /^\/songbook\/(make|add|move|remove|rename|delete)$/;
+  const SONGBOOK_FORM = /^\/songbook\/(make|add|move|remove|rename|delete|get)$/;
   // job id -> {book: the songbook it changes, card: its card, focus: the button sent, reveal: from the Select bar}
   const bookJobs = new Map();
   const shelf = () => {
@@ -3186,6 +3205,21 @@ _SCRIPT = r"""
     bookJobs.set(Number(view.id), { book, card, focus: focus || "" });
     return card;
   };
+  // A card keeps the height ``tall`` while it is taller than what it holds, until your next click or key, when what
+  // moves under it moves for you; measured before a frame is drawn, so nothing moves meanwhile.
+  const holdHeight = (card, tall) => {
+    const was = card.style.minHeight;
+    card.style.minHeight = "";
+    if (!tall || card.getBoundingClientRect().height >= tall - 0.5) return;
+    card.style.minHeight = Math.max(tall, parseFloat(was) || 0) + "px";
+    const release = () => {
+      document.removeEventListener("click", release, true);
+      document.removeEventListener("keydown", release, true);
+      if (!card.classList.contains("sb-gone")) card.style.minHeight = "";
+    };
+    document.addEventListener("click", release, true);
+    document.addEventListener("keydown", release, true);
+  };
   const drawSongbooks = (view) => {
     const at = shelf();
     if (!at) return;
@@ -3207,6 +3241,7 @@ _SCRIPT = r"""
     if (job && job.book.action === "rename" && view.state === "done") job.card.dataset.songbook = String(job.book.after);
     const old = Array.from(at.list.children);
     const kept = old.filter((c) => c.querySelector(".progress"));  // a change's line: read out to the last
+    const tall = new Map(kept.map((c) => [c, c.isConnected ? c.getBoundingClientRect().height : 0]));
     const order = (fresh ? Array.from(fresh.querySelectorAll(":scope > .sb-list > .sb-card")) : []).map((f) => {
       const card = document.importNode(f, true);
       const was = kept.find((c) => c.dataset.songbook === card.dataset.songbook);
@@ -3227,6 +3262,18 @@ _SCRIPT = r"""
       before = card;
     }
     at.section.hidden = !order.length && !at.details.querySelector(".sb-error");
+    // Drawn again, its songs' lines are back under their names, and a card that showed a change keeps the height it
+    // had while it is taller than what it holds now (its songs' "missing" notes gone, say), until your next click
+    // or key: nothing under it moves seconds after your tap (a songbook from the Select bar is stretched, below).
+    for (const [song, id] of songJob) {
+      const shown = views.get(id);
+      if (shown && shown.kind === "song") bookSongs(song, shown);
+    }
+    for (const card of kept) {
+      if (card.isConnected && !card.classList.contains("sb-gone") && !(job && job.reveal && card === job.card)) {
+        holdHeight(card, tall.get(card));
+      }
+    }
     for (const [id, other] of bookJobs) {  // the songbooks of changes still on their way wait
       if (id !== Number(view.id) && other.card.isConnected && views.has(id) && isActive(views.get(id))) {
         lockBook(other.card, true);
@@ -3249,22 +3296,9 @@ _SCRIPT = r"""
     // A card stretched while its change ran keeps that height while it is taller than what it holds now, until
     // your next click or key, when what moves under it moves for you.
     if (job && job.reveal && !isActive(view) && job.card.style.minHeight) {
-      const card = job.card;
-      const stretched = card.style.minHeight;
-      card.style.minHeight = "";
-      const holds = card.getBoundingClientRect().height;  // no frame drawn in between: nothing moves
-      card.style.minHeight = stretched;
-      if (holds >= parseFloat(stretched)) {
-        card.style.minHeight = "";
-      } else {
-        const release = () => {
-          document.removeEventListener("click", release, true);
-          document.removeEventListener("keydown", release, true);
-          if (!card.classList.contains("sb-gone")) card.style.minHeight = "";
-        };
-        document.addEventListener("click", release, true);
-        document.addEventListener("keydown", release, true);
-      }
+      const stretched = parseFloat(job.card.style.minHeight);
+      job.card.style.minHeight = "";
+      holdHeight(job.card, stretched);  // no frame drawn in between: nothing moves
     }
     // The Select bar's menu of songbooks follows.
     document.dispatchEvent(new CustomEvent("caracole:songbooks", { detail: { books: listOf(view.songbooks.books) } }));
@@ -3527,6 +3561,11 @@ _SCRIPT = r"""
       const sending = send(form);  // the form read as it is, before its fields wait
       if (card) {
         showLine(bookLine(card), { line: { tone: "queued", text: "Sending…" } });
+        if (/\/get$/.test(form.getAttribute("action") || "")) {  // each song it looks up, at once, under its name
+          for (const li of card.querySelectorAll("li[data-get]")) {
+            bookSongLine(li, { line: { tone: "queued", text: "Sending…" } });
+          }
+        }
         lockBook(card, true);
       }
       const answered = (view, refusal) => {
@@ -3559,6 +3598,12 @@ _SCRIPT = r"""
       sending.then((answer) => {
         const view = answer.ok && answer.body && answer.body.job;
         answered(view && view.songbook ? view : null, failure(answer).line.text);
+        // Get the missing songs now: each song's lookup, on its card, its row and its line in the songbook.
+        for (const each of view && view.songbook ? listOf(answer.body.jobs) : []) {
+          if (!each || typeof each !== "object") continue;
+          quiet.add(Number(each.id));
+          track(each);
+        }
       }, () => answered(null, UNREACHABLE.line.text));
     });
     schedule();
@@ -3613,6 +3658,8 @@ _SONGBOOK_STYLE = """
 .sb-names .t { font-weight: 600; }
 .sb-names .a, .sb-names .why { color: var(--muted); font-size: .88rem; }
 .sb-songs .missing .t { color: var(--muted); font-weight: 500; }
+/* A lookup of the song: how it goes, on one line whatever it says, so that the songbook keeps its height. */
+.sb-names .progress { display: block; overflow: hidden; font-size: .8rem; white-space: nowrap; text-overflow: ellipsis; }
 .sb-names .why { display: block; font-size: .8rem; font-style: italic; }
 .sb-tools { flex: none; display: flex; gap: 4px; }
 .sb-tools form, .sb-more form { margin: 0; }
@@ -4230,7 +4277,7 @@ _SONGBOOK_FILES = (("songbook.html", "Songbook for the phone"), ("songbook.pdf",
 
 def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any,
                    controls: WebControls | None) -> str:
-    from caracole.songbook import FOLDER, songbook_entries
+    from caracole.songbook import FOLDER, songbook_entries, songs_to_get
 
     esc = html_text.escape
     entries = songbook_entries(conn, cfg.library_dir, overrides, book)
@@ -4242,14 +4289,28 @@ def _songbook_card(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, 
     base = f"{FOLDER}/{quote(book.folder, safe='')}"
     links = [f'<a class="btn{" primary" if n == 0 else ""}" href="{base}/{quote(name)}">{label}</a>'
              for n, (name, label) in enumerate(f for f in _SONGBOOK_FILES if f[0] in names)]
-    files = (f'<div class="actions">{"".join(links)}</div>\n' if links
-             else '<p class="hint">Not made yet: caracole render, or caracole songbook render, makes its files.</p>\n')
+    # On caracole serve, its songs without a sheet looked up now, one lookup each, then the songbook made again.
+    getting = {song.id for song in songs_to_get(entries, overrides)} if controls is not None else set()
+    to_get = len(getting)
+    get_form = _songbook_form(
+        "get", book.name, controls,
+        '<button class="btn" type="submit" title="Looks each one up now, as caracole get does, then makes the '
+        f'songbook again">{"Get the missing song now" if to_get == 1 else f"Get the {to_get} missing songs now"}'
+        "</button>") if to_get and controls is not None else ""
+    if links:
+        files = f'<div class="actions">{"".join(links)}{get_form}</div>\n'
+    else:
+        files = ('<p class="hint">Not made yet: caracole render, or caracole songbook render, makes its files.</p>\n'
+                 + (f'<div class="actions">{get_form}</div>\n' if get_form else ""))
     rows = []
     for n, entry in enumerate(entries, start=1):
         title, artist = esc(entry.title), esc(entry.artist)
         why = f'<span class="why">missing: {esc(entry.missing)}</span>' if entry.missing else ""
         tools = _songbook_tools(book.name, entry.text, entry.title, n, len(entries), controls) if controls else ""
-        rows.append(f'<li{" class=\"missing\"" if entry.missing else ""}><span class="sb-n">{n}</span>'
+        song = f' data-song="{entry.song.id}"' if controls is not None and entry.song is not None else ""
+        if entry.song is not None and entry.song.id in getting:  # Get the missing songs now looks it up
+            song += " data-get"
+        rows.append(f'<li{" class=\"missing\"" if entry.missing else ""}{song}><span class="sb-n">{n}</span>'
                     f'<span class="sb-names"><span class="t">{title}</span> <span class="a">{artist}</span>{why}</span>'
                     f"{tools}</li>")
     if controls is not None:

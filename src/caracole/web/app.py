@@ -23,9 +23,9 @@
     POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued, and
                           back to the library, at the song's card (to the page's script: what it takes,
                           as data, then the job)
-    POST /songbook/…      make a songbook, add to it, move or take out a song, rename it, delete it
-                          (songbooks.py); a songbook's page, _songbooks/<folder>/songbook.html, is
-                          one of the ``written_pages``
+    POST /songbook/…      make a songbook, add to it, move or take out a song, rename it, delete it,
+                          or get its songs without a sheet now (songbooks.py); a songbook's page,
+                          _songbooks/<folder>/songbook.html, is one of the ``written_pages``
     GET, POST /login      the sign-in page, with an access token
 
 Every request must name the server by a name it answers to (421 otherwise).
@@ -638,8 +638,10 @@ class WebApp:
 
     def _songbook_form(self, path: str) -> Callable[[dict[str, str]], Response] | None:
         """The handler of a songbook form (songbooks.py): it queues its caracole songbook command."""
-        from caracole.web.songbooks import ROUTES
+        from caracole.web.songbooks import GET_MISSING, ROUTES
 
+        if path == GET_MISSING:
+            return self._songbook_get
         if path not in ROUTES:
             return None
 
@@ -659,6 +661,47 @@ class WebApp:
             return self._queued(queued, f"/jobs#job-{queued.id}")  # its songbook's card says how it goes
 
         return handle
+
+    def _songbook_get(self, form: dict[str, str]) -> Response:
+        """A songbook's songs without a sheet, looked up now: one ``caracole get`` each, as a card's Fetch now
+        queues it, in the songbook's order, then ``caracole songbook render NAME`` after them, which makes the
+        songbook again with what they got (songbooks.py). To the page's script, the songbook's job, with each
+        lookup's (``jobs``) and how many songs wait for another tap, the queue being full (``left``)."""
+        from caracole.overrides import OverridesError, load_overrides
+        from caracole.web.songbooks import FormRefused, missing_songs, render_job
+
+        try:
+            overrides = load_overrides(self.cfg.overrides_file)
+        except OverridesError as e:
+            return _message(503, "overrides.toml can't be read", f"overrides.toml can't be read: {e}.")
+        try:
+            name, songs = missing_songs(form, library_dir=self.cfg.library_dir, connect=self._connect,
+                                        overrides=overrides)
+        except FormRefused as e:
+            return _message(e.status, e.title, e.message)
+        except (sqlite3.Error, OSError) as e:
+            return _message(503, "The database can't be read", f"The database can't be read: {e}")
+        full = _message(503, "The queue is full", "The queue is full: try again once it empties.")
+        lookups: list[Job] = []
+        for song in songs[: max(0, self.queue.room() - 1)]:  # room for the songbook after them
+            try:
+                job, _ = self.queue.submit(f"Fetch {song.display}", song.key, lookup_steps(song.artist, song.title),
+                                           fetching=True, display=song.display)
+            except QueueFull:
+                break
+            lookups.append(job)
+        if not lookups:
+            return full
+        book = render_job(name, max(job.id for job in lookups))
+        try:
+            made, _ = self.queue.submit(book.title, book.key, book.steps)
+        except QueueFull:  # the lookups run all the same: the nightly run makes the songbook
+            return full
+        response = self._queued(made, f"/jobs#job-{made.id}")  # its songbook's card says how it goes
+        assert response.data is not None
+        response.data["jobs"] = [self._job_view(job) for job in lookups]  # each on its song's card
+        response.data["left"] = len(songs) - len(lookups)
+        return response
 
     def _wanted_line(self, form: dict[str, str]) -> tuple[Any, str] | tuple[int, str, str]:
         """The form's song written to wanted.txt, as ``caracole add`` writes it, with a note of where;

@@ -104,7 +104,9 @@ songs.py's, in the `removed` table).
   `name_forms`), under its own names and writes no wanted.txt line for it;
   `written_pages`, each kind of page caracole writes into the library by file name, with
   its record and its CSP: the sheet viewers and songbook.html), songbooks.py (the songbook
-  forms, each queued as its `caracole songbook` command; `songbook_of` reads a job's key back,
+  forms, each queued as its `caracole songbook` command; Get the missing songs now,
+  `missing_songs`, a `caracole get` per song `songbook.songs_to_get` names, then
+  `render_job`, `caracole songbook render NAME`, after them; `songbook_of` reads a job's key back,
   the songbook it changes, and once it is over `/jobs.json` gives the Songbooks section drawn
   again, which the page puts in place of its own), lookup_page.py (the lookup page:
   its script, `createElement` and `textContent` only, allowed by hash, connects to the

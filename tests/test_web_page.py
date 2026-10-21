@@ -66,11 +66,12 @@ class FakeCaracole:
     once; a songbook named in ``fail`` fails its command with that error.
     """
 
-    def __init__(self, cfg, *, fail=None, slow_add=False, down=0):
+    def __init__(self, cfg, *, fail=None, slow_add=False, down=0, sheets=False):
         self.cfg = cfg
         self.fail = fail or {}
         self.slow_add = slow_add
         self.down = down
+        self.sheets = sheets  # a lookup keeps a sheet and renders it, as caracole get does, for the songbooks
         self.polls = Polls()
         self.calls: list[list[str]] = []  # the commands run, in order
         self.posted: list[tuple[float, str, bytes]] = []  # each POST the page sent: when, where, its form
@@ -137,6 +138,17 @@ class FakeCaracole:
             songbook.remove_from_songbook(toml, name, rest)
         elif action == "rename":
             songbook.rename_songbook(toml, name, rest[0])
+        elif action == "render":  # its files, made again from the sheets the songs have now
+            from helpers.songbooks import FakeChordPro
+
+            from caracole.overrides import load_overrides
+
+            conn = db.connect(self.cfg.db_path)
+            try:
+                songbook.render_songbooks(conn, self.cfg, load_overrides(self.cfg.overrides_file),
+                                          runner=FakeChordPro(), only=name)
+            finally:
+                conn.close()
         else:
             songbook.delete_songbook(toml, name)
         emit(f"ran songbook {action}")
@@ -161,9 +173,15 @@ class FakeCaracole:
             emit(f"error: {self.fail[display]}")
             return 1
         song = find_song(conn, override_key(display))
-        folder = song_dir(self.cfg.library_dir, song)
-        folder.mkdir(parents=True, exist_ok=True)
-        (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
+        if self.sheets:
+            from helpers.songbooks import keep_sheet, render_sheets
+
+            keep_sheet(conn, self.cfg, song, tab_id=700 + song.id)
+            render_sheets(conn, self.cfg)
+        else:
+            folder = song_dir(self.cfg.library_dir, song)
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
         update_song(conn, song.id, status="found", ug_dirty=False)
         stage("sheet", "done", "tab 1 from Ultimate Guitar")
         emit("ran get")
@@ -1020,6 +1038,68 @@ def test_a_songbook_change_on_its_way_when_the_page_loads_shows_on_its_songbook(
     assert songs_of(shown) == ["Creep", "De Música Ligera", "Hysteria"] and ">Moved<" in shown
     assert re.search(r'<section[^>]*id="requested"[^>]*hidden', dom)  # not a song just requested
     assert attribute(dom, "data-books") == {"same": True, "locked": True, "running": True}
+
+
+@pytest.mark.parametrize("size,media", [("390,844", "light"), ("1280,800", "dark")])
+def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve, cfg, conn, tmp_path, size, media):
+    # The songbook's songs without a sheet, looked up now, one after the other, in its order, each line under the
+    # song's name in the songbook (and on its card); then the songbook made again with their sheets: Made · Open
+    # songbook. A song not in the library is no one's to look up. The page stays where it is.
+    from helpers.songbooks import FakeChordPro, keep_sheet, render_sheets
+
+    from caracole.overrides import Overrides
+    from caracole.songbook import make_songbook, render_songbooks, songbooks_file
+
+    creep = add_song(conn, "Radiohead", "Creep")
+    keep_sheet(conn, cfg, creep, tab_id=2)
+    render_sheets(conn, cfg)
+    for title in ("Hysteria", "Uprising"):
+        add_song(conn, "Muse", title)
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire",
+                  ["Muse - Hysteria", "Pixies - Debaser", "Radiohead - Creep", "Muse - Uprising"])
+    render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
+    runner = FakeCaracole(cfg, sheets=True)
+    url = serve(runner, "(() => {})();\n")
+    book = '#songbooks .sb-card[data-songbook="Campfire"]'
+    line = f"(() => {{ const p = document.querySelector('{book} > .progress'); return p ? p.textContent : ''; }})()"
+    songs = f"""Array.from(document.querySelectorAll('{book} li')).map((li) => [li.querySelector('.t').textContent,
+        (li.querySelector('.progress') || {{}}).textContent || '', (li.querySelector('.why') || {{}}).textContent || ''])"""
+    seen = f"""(() => {{ window.seen = window.seen || []; const note = () => {{
+        for (const p of document.querySelectorAll('{book} .progress')) if (!window.seen.includes(p.textContent))
+          window.seen.push(p.textContent); }};
+      new MutationObserver(note).observe(document.body, {{ subtree: true, childList: true, characterData: true }});
+      return true; }})()"""
+    width, height = (int(n) for n in size.split(","))
+    with browser.Browser(tmp_path / "chrome", width=width, height=height, mobile=width < 500) as page:
+        page.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": media}])
+        page.open(url)
+        page.click("#songbooks > details > summary")
+        get_it = f"{book} form[action='/songbook/get'] button"
+        assert page.js(f"document.querySelector({json.dumps(get_it)}).textContent") == "Get the 2 missing songs now"
+        assert page.js(seen) and page.js(SHIFTS)
+        page.click(get_it)
+        assert page.wait(f"{line}.startsWith('Made')", timeout=30), (page.js(line), page.js(songs))
+        page.js("new Promise((done) => setTimeout(done, 600))")  # the last frames, and any shift in them
+        done = {"line": page.js(line), "songs": page.js(songs), "seen": page.js("window.seen"),
+                "get": page.js(f"document.querySelector({json.dumps(get_it)}) === null"),
+                "path": page.js("location.pathname"),
+                "wide": page.js("document.documentElement.scrollWidth <= innerWidth"),
+                "open": page.js(f"document.querySelector('{book} > .progress a').getAttribute('href')"),
+                "tray": page.js("document.getElementById('tray').hidden"),
+                "shifts": page.js("window.shifts")}
+    assert [c[1:] for c in runner.calls] == [["--progress", "--", "Muse", "Hysteria"],
+                                             ["--progress", "--", "Muse", "Uprising"], ["render", "--", "Campfire"]]
+    assert done["line"] == "Made·Open songbook" and done["open"] == "_songbooks/Campfire/songbook.html"
+    # Each lookup said how it went under its song's name, to the last; Debaser, not in the library, waits.
+    assert done["songs"] == [["Hysteria", "Ready·Open sheet", ""], ["Debaser", "", "missing: not in the library"],
+                             ["Creep", "", ""], ["Uprising", "Ready·Open sheet", ""]], done["songs"]
+    assert any(text.startswith("Queued behind") for text in done["seen"]), done["seen"]  # the songbook waited
+    assert any("Ultimate Guitar" in text for text in done["seen"]), done["seen"]  # each song's lookup, as it ran
+    assert done["get"] and done["path"] == "/" and done["wide"]  # nothing left to get: Debaser isn't in the library
+    # Nothing on the screen moves as they go, nor once the songbook is made (its songs' "missing" notes gone, it
+    # keeps its height until your next click). (The masthead's Requests counts what runs, as on every page.)
+    assert [s for s in done["shifts"] if s["value"] > 0 and s["moved"] != ["links"]] == [], done["shifts"]
+    assert done["tray"] is True  # the songbook's card says how they go: no list of requests in the corner
 
 
 # Notes every layout shift that no input brought about since the page loaded (buffered): how much, and what
