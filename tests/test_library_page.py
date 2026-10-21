@@ -160,6 +160,22 @@ def test_each_song_has_its_jump_letters_by_artist_and_by_title(conn, cfg):
     assert not {"monogram", "hue"} & set(songs[soda.display])  # the cards' badges went with them
 
 
+def test_each_song_carries_its_progressions_and_the_page_the_catalogues_names(conn, cfg):
+    from caracole.db import kv_set_json
+    from caracole.progressions import KV, sheet_progressions
+
+    pop = add_song(conn, "Placeholder Band", "Synthetic Song")
+    kv_set_json(conn, f"{KV}{pop.id}", sheet_progressions(PROGRESSIONS["pop"], None))
+    plain = add_song(conn, "Radiohead", "Creep")
+    data = data_of(page(conn, cfg))
+    songs = {s["display"]: s for s in data["songs"]}
+    # Each once, as its first section plays it; a section held on one chord is none.
+    assert songs[pop.display]["progressions"] == [{"key": "I V vi IV", "plays": "vi–IV–I–V"},
+                                                  {"key": "I IV V", "plays": "IV–V–I"}]
+    assert songs[plain.display]["progressions"] == []
+    assert data["catalogue"]["I V vi IV"] == data["catalogue"]["i ♭VI ♭III ♭VII"] == "the pop progression"
+
+
 def test_each_song_names_its_identity_which_the_served_search_groups_and_merges_by(conn, cfg):
     # Typed into the served page's bar, a song of yours and the sites' rows of its artist share a header: the
     # artist part of its identity key is their rows' artist key (/api/search).
@@ -1158,6 +1174,107 @@ def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(co
     shown = listing(dump_dom(plain, tmp_path, "#artist=queen&q=dancing"))
     assert "No songs of Queen match “dancing”" in shown and "every artist" in shown
     assert "caracole search" not in shown
+
+
+# Sheets for the progressions: in C, a verse vi IV I V, a bridge IV V I and an outro on one chord; the same
+# verse read in A minor; a blues I IV V; and one with none.
+PROGRESSIONS = {
+    "pop": ("{title: Synthetic Song}\n{key: C}\n{comment: Verse}\n[Am]a [F]b [C]c [G]d\n[Am]a [F]b [C]c [G]d\n"
+            "{comment: Bridge}\n[F]e [G]f [C]g\n{comment: Outro}\n[C]end\n"),
+    "minor": "{title: In A Minor}\n{key: Am}\n{comment: Verse}\n[Am]a [F]b [C]c [G]d\n",
+    "blues": "{title: Blues}\n{key: C}\n{comment: Verse}\n[C]a [F]b [G]c\n",
+}
+
+
+def progression_library(conn, cfg):
+    """Four songs, three with progressions recorded as a render records them, and the page."""
+    from caracole.db import kv_set_json
+    from caracole.progressions import KV, sheet_progressions
+
+    for (artist, title), sheet in ((("Placeholder Band", "Synthetic Song"), "pop"),
+                                   (("Another Band", "In A Minor"), "minor"), (("Third Band", "Blues"), "blues")):
+        song = add_song(conn, artist, title)
+        kv_set_json(conn, f"{KV}{song.id}", sheet_progressions(PROGRESSIONS[sheet], None))
+    add_song(conn, "Radiohead", "Creep")
+
+
+def prog_line(dom: str) -> str:
+    """The line that says which progression the list shows, as text."""
+    import html as html_module
+
+    found = re.search(r'<p class="prog-filter" id="prog"([^>]*)>(.*?)</p>', dom, re.S)
+    assert found, dom[-2000:]
+    return "" if "hidden" in found.group(1) else html_module.unescape(re.sub(r"<[^>]+>", "", found.group(2)))
+
+
+@in_chromium
+def test_the_address_shows_the_songs_with_a_progression_in_any_of_its_readings(conn, cfg, tmp_path):
+    progression_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    assert prog_line(dump_dom(path, tmp_path)) == ""
+    # The pop progression read in C major, and in A minor: both are it.
+    dom = dump_dom(path, tmp_path, "#prog=" + quote("I V vi IV"))
+    assert sorted(titles_in(listing(dom))) == ["In A Minor", "Synthetic Song"]
+    assert prog_line(dom) == "Songs with I–V–vi–IV, the pop progression · Show all"
+    dom = dump_dom(path, tmp_path, "#prog=" + quote("I IV V"))  # a progression named by its numerals
+    assert sorted(titles_in(listing(dom))) == ["Blues", "Synthetic Song"] and prog_line(dom) == "Songs with I–IV–V · Show all"
+    dom = dump_dom(path, tmp_path, "#prog=" + quote("ii V I"))
+    assert "No songs of yours play ii–V–I." in listing(dom) and prog_line(dom) == "Songs with ii–V–I · Show all"
+    # The search and the other filters go with it.
+    dom = dump_dom(path, tmp_path, "#q=minor&prog=" + quote("I V vi IV"))
+    assert titles_in(listing(dom)) == ["In A Minor"]
+
+
+# Shows a progression from a song's "⋯", then every song again with the line's Show all.
+PROG_CLICK = """
+(() => {
+  const line = Array.from(document.querySelectorAll("#list article")).find((a) =>
+    a.querySelector("h3").textContent === "Synthetic Song");
+  const go = Array.from(line.querySelectorAll(".progressions button")).map((b) => b.textContent);
+  line.querySelector(".progressions button").click();
+  const titles = () => Array.from(document.querySelectorAll("#list article h3")).map((h) => h.textContent).sort();
+  const after = {buttons: go, titles: titles(), hash: location.hash, line: document.getElementById("prog").textContent};
+  document.querySelector("#prog button").click();
+  after.cleared = titles().length;
+  after.hidden = document.getElementById("prog").hidden;
+  after.clearedHash = location.hash;
+  document.body.setAttribute("data-after", JSON.stringify(after));
+})();
+"""
+
+
+@in_chromium
+def test_a_songs_progressions_show_the_songs_that_play_them_and_show_all_takes_that_off(conn, cfg, tmp_path):
+    import html as html_module
+
+    progression_library(conn, cfg)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), PROG_CLICK))
+    dom = dump_dom(path, tmp_path)
+    after = json.loads(html_module.unescape(re.search(r'data-after="([^"]*)"', dom).group(1)))
+    assert after["buttons"] == ["vi–IV–I–V", "IV–V–I"]  # as the song plays them
+    assert after["titles"] == ["In A Minor", "Synthetic Song"]
+    assert "prog=I+V+vi+IV" in after["hash"] and after["line"].startswith("Songs with I–V–vi–IV")
+    assert after["cleared"] == 4 and after["hidden"] is True and "prog=" not in after["clearedHash"]
+
+
+
+@in_chromium
+@pytest.mark.parametrize("dark", [False, True])
+def test_the_progression_line_and_a_songs_progressions_fit_a_touch_phone(conn, cfg, tmp_path, dark):
+    from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
+
+    progression_library(conn, cfg)
+    script = (UNFOLD + noting("data-short", small_targets()) + noting("data-weak", weak_edges("#q"))
+              + noting("data-wide", "[document.documentElement.scrollWidth, innerWidth]"))
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), script))
+    media = {"prefers-color-scheme": "dark"} if dark else None
+    dom = dump_dom(path, tmp_path, "#prog=" + quote("I V vi IV"), size="390,844", touch=True, media=media)
+    assert prog_line(dom).startswith("Songs with I–V–vi–IV")
+    assert 'class="row-group progressions"' in listing(dom)  # a line's "⋯", unfolded, is measured too
+    short, weak = noted(dom, "data-short"), noted(dom, "data-weak")
+    assert short == [] and weak == [], (short, weak)
+    wide, page_width = noted(dom, "data-wide")
+    assert wide <= page_width
 
 
 # --- the picker: a song in review's candidates, in a real browser -------------------------------

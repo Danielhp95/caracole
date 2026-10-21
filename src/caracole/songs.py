@@ -64,8 +64,8 @@ _PRECEDENCE = (_WANTED, "spotify")
 # gtptabs_fetch.py, youtube_fetch.py), as "<prefix><song id>" or "<prefix><song id>:<more>"
 # ("render:7:auto"). It goes with a song merged into another or removed (delete_song_kv): SQLite
 # may give that id to the next new song.
-_PER_SONG_KV = ("render:", "render:files:", "render:export:", "ug:artist_page_checked:", "autochords:failed:", "gtptabs:checked:",
-                "ug:blocked:", "youtube:")
+_PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressions:", "ug:artist_page_checked:",
+                "autochords:failed:", "gtptabs:checked:", "ug:blocked:", "youtube:")
 
 
 def utc_now_iso() -> str:

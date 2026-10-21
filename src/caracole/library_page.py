@@ -183,6 +183,15 @@ it was until your next click or key, so that nothing moves meanwhile). Select's
 Make songbook (or Add to) lands in the tab, on the songbook, its songs there at
 once.
 
+**Progressions.** Each song carries its sheet's progressions as its last render read them
+(``progressions.library_progressions``: each cycle's key, the same in every key and rotation, and how
+the song plays it), and the page the catalogue's names by key (``catalogue``). A song's "⋯" lists them,
+each a button that shows the songs that play it alone, and so does ``#prog=<key>`` in the address (a
+viewer's Harmony panel links there), under a line that says which ("Songs with I–V–vi–IV, the pop
+progression · Show all"); a named progression stands for every progression of its name, so the pop
+progression read in A minor is there too. Served, a progression typed or named in the bar
+(``/api/search``'s ``progression``) says how many of your songs play it, with Show them.
+
 A song in review carries its candidates (``review_choices``), numbered as
 ``caracole review`` numbers them, and its line a picker under its "⋯" (the script's
 ``makePicker``): a disclosure that lists them, each with its UG names, its
@@ -223,6 +232,7 @@ from caracole.library_assets import read as read_asset
 from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
+from caracole.progressions import catalogue, library_progressions
 from caracole.songbook_section import songbooks_data
 from caracole.songs import Song, is_export, list_songs
 from caracole.todo import search_links, songs_to_buy
@@ -321,6 +331,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         "fold": {c: fold(c) for c in _TRANSLITERATED},
         "songs": songs,
         "icons": page_icons(cfg.cache_dir),  # each source's name, badge and inlined icon (icons.py)
+        "catalogue": catalogue(),  # the progressions with a name, by key: #prog= finds each name's every reading
     }
     if controls is not None:
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
@@ -368,6 +379,9 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}))
              for s in library]
     _add_picks(conn, library, cards)
+    played = library_progressions(conn)  # each song's, as its last render read its sheet
+    for song, card in zip(library, cards, strict=True):
+        card["progressions"] = played.get(song.id, [])
     return cards
 
 

@@ -19,6 +19,7 @@
   const jump = byId("jump");
   const chips = Array.from(document.querySelectorAll(".chip[data-show]"));
   const artistChip = byId("artist");
+  const progLine = byId("prog");
   const JUMP_FROM = 40;  // songs shown before the A-Z strip is worth its room: fewer, and a thumb scrolls
 
   let data;
@@ -121,6 +122,23 @@
     query.keys.every((k) => songKeys[i] === k) &&
     query.either.every((e) => songKeys[i] === e.key || (e.word && hay[i].indexOf(e.word) >= 0)) &&
     query.words.every((w) => hay[i].indexOf(w) >= 0 || (w.length > 1 && inits[i] === w));
+  // Each song's progressions (progressions.py: a section's cycle in numerals, its key the same in every key and
+  // rotation, "I V vi IV"), and the catalogue's names by key: a progression the catalogue names stands for every
+  // progression of that name (the pop progression read in C major, and in A minor), as caracole search reads it.
+  const CATALOGUE = data.catalogue && typeof data.catalogue === "object" ? data.catalogue : {};
+  const progName = (key) => (own.call(CATALOGUE, key) ? String(CATALOGUE[key]) : "");
+  const progsOf = (s) => listOf(s && s.progressions).filter((p) => p && typeof p.key === "string" && p.key);
+  const playsProg = (s, key) => {
+    const name = progName(key);
+    return progsOf(s).some((p) => p.key === key || (name !== "" && progName(p.key) === name));
+  };
+  const progLabel = (key) => String(key).trim().split(/\s+/).join("–");
+  // "I–V–vi–IV, the pop progression"; "I–IV–V", whose name is its numerals.
+  const progSaid = (key) => {
+    const said = progLabel(key);
+    const name = progName(key);
+    return name && name !== said ? said + ", " + name : said;
+  };
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   // The Key menu: one entry per key the library has, its spellings together ("F# / Gb minor"), with how
@@ -665,6 +683,38 @@
   };
 
   let setArtist = () => {};
+  let setProg = () => {};
+  // The line over the list while it shows a progression's songs alone: "Songs with I–V–vi–IV, the pop progression ·
+  // Show all".
+  const drawProg = () => {
+    progLine.hidden = !state.prog;
+    if (progLine.dataset.prog === state.prog) return;
+    progLine.dataset.prog = state.prog;
+    progLine.replaceChildren();
+    if (!state.prog) return;
+    progLine.append("Songs with " + progSaid(state.prog) + " · ", button("Show all", "small", () => {
+      state.prog = "";
+      render();
+      save();
+      input.focus();
+    }, "Show every song, not only those with " + progLabel(state.prog)));
+  };
+  // Under a line's "⋯": the song's progressions, as it plays them; each shows the songs that play it too.
+  const progressionsOf = (s) => {
+    const found = progsOf(s);
+    if (!found.length) return null;
+    const box = el("div", "row-group progressions");
+    box.appendChild(el("p", "subhead", "Progressions"));
+    const row = el("div", "actions");
+    for (const p of found) {
+      const go = button(String(p.plays || progLabel(p.key)), "small", () => setProg(p.key),
+        "Songs with " + progSaid(p.key));
+      go.title = "Your songs with " + progSaid(p.key);
+      row.appendChild(go);
+    }
+    box.appendChild(row);
+    return box;
+  };
 
   // Lines: a song a line (resultRow's dense form, from ROWS_SCRIPT: the seam the module docstring describes), in
   // its artist's group. A line is an article titled by its h3; the A-Z strip moves the focus to its group.
@@ -745,6 +795,8 @@
     const more = [];
     const facts = factsOf(s);
     if (facts) more.push(facts);
+    const progs = progressionsOf(s);
+    if (progs) more.push(progs);
     // The picker, or the note that says why there is none.
     const picker = SHOWS.review(s) && listOf(s.candidates).length > 0 ? makePicker(s) : null;
     if (picker) {
@@ -860,7 +912,9 @@
   // ("Queen" also finds "Dancing Queen").
   // all: the search of the sites under the bar: served, as you type (searchesAsYouType); on the file, the line that
   // searches them, on Enter.
-  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", all: false };
+  // prog: the songs that play a progression alone, by its key (#prog=, from a song's "⋯", a viewer's Harmony panel or
+  // the served search).
+  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
@@ -872,6 +926,7 @@
     if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
     if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
     if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
+    state.prog = String(params.get("prog") || "").trim().split(/\s+/).join(" ").slice(0, 200);
     state.all = params.get("all") === "1" && sitesCan(state.q) && (!server || typedEnough(state.q));
   } catch (err) {
     // A malformed address: start from the defaults.
@@ -897,6 +952,7 @@
     if (state.sort !== "artist") params.set("sort", state.sort);
     if (state.artist) params.set("artist", state.artist);
     if (state.key) params.set("key", state.key);
+    if (state.prog) params.set("prog", state.prog);
     if (state.all) params.set("all", "1");
     try {
       history.replaceState(null, "", "#" + params.toString());
@@ -973,7 +1029,7 @@
     const fits = typedMatch(query);
     const matching = ORDERS[state.sort].filter((i) =>
       (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
-      (!inKey || songKeys[i] === inKey) && fits(i));
+      (!inKey || songKeys[i] === inKey) && (!state.prog || playsProg(songs[i], state.prog)) && fits(i));
     matchingNow = matching;
     tallyChips();
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
@@ -983,6 +1039,7 @@
     artistChip.hidden = !state.artist;
     artistChip.textContent = state.artist ? artistName(state.artist) + " ×" : "";
     artistChip.setAttribute("aria-label", state.artist ? "Show every artist, not only " + artistName(state.artist) : "");
+    drawProg();
     // Searching the sites, served: the results take the list's place, its tools with it, until Escape.
     const searchingAll = Boolean(server) && state.all;
     document.body.classList.toggle("searching-all", searchingAll);
@@ -1091,6 +1148,10 @@
         save();
       });
       list.appendChild(any);
+    } else if (!shown.length && state.prog) {
+      // The progression hides them: the line above says which, with Show all.
+      list.appendChild(el("p", "empty", state.q ? "No songs with " + progLabel(state.prog) + " match “" + state.q + "”."
+        : "No songs of yours play " + progLabel(state.prog) + "."));
     } else if (!shown.length && state.q) {
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       if (!query.keys.length && server) {  // the offline indexes have no keys
@@ -1136,6 +1197,11 @@
     render();
     save();
   });
+  setProg = (key) => {
+    state.prog = key;
+    setQuery("");
+    window.scrollTo(0, 0);
+  };
   // The bar kept at the top gets its edge once the page scrolls under it.
   const edge = byId("bar-edge");
   const bar = document.querySelector(".searchbar");
@@ -1445,25 +1511,50 @@
   // (the sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which
   // hides the buttons: "Your songs here: wanted · by Soda Stereo · in A minor", or nothing when they show every song.
   const kept = (i) => (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
-    (!state.key || songKeys[i] === keyId(state.key)) && SHOWS[state.show](songs[i]);
+    (!state.key || songKeys[i] === keyId(state.key)) && (!state.prog || playsProg(songs[i], state.prog)) &&
+    SHOWS[state.show](songs[i]);
   const SHOW_WORD = { found: "found", wanted: "wanted", review: "needing review" };
   const keptSaid = () => {
     const parts = [label(SHOW_WORD, state.show), state.artist ? "by " + artistName(state.artist) : "",
-      state.key && keyGroup(state.key) ? "in " + keyGroup(state.key).name : ""].filter(Boolean);
+      state.key && keyGroup(state.key) ? "in " + keyGroup(state.key).name : "",
+      state.prog ? "with " + progLabel(state.prog) : ""].filter(Boolean);
     return parts.length ? "Your songs here: " + parts.join(" · ") : "";
   };
-  // Show all of yours: every status, every key, every artist, here and in the list; the focus to the box, as the
+  // Show all of yours: every status, key, artist and progression, here and in the list; the focus to the box, as the
   // button goes with its note.
   const keptNote = el("p", "filtered");
   keptNote.append(el("span"), button("Show all of yours", "small", () => {
     state.show = "all";
     state.artist = "";
     state.key = "";
+    state.prog = "";
     render();
     save();
     input.focus();
-  }, "Show all of yours: every status, key and artist"));
+  }, "Show all of yours: every status, key, artist and progression"));
   keptNote.hidden = true;
+  // A progression typed or named (/api/search's ``progression``: "vi IV I V", "andalusian"): how many of your songs
+  // play it, and Show them, the list of those songs alone (#prog=). The first few are among the results already.
+  const progNote = el("p", "filtered prog-found");
+  progNote.hidden = true;
+  const drawProgFound = () => {
+    const p = answer && answer.q === normal(state.q) && answer.data.progression &&
+      typeof answer.data.progression === "object" ? answer.data.progression : null;
+    const key = p && typeof p.key === "string" ? p.key : "";
+    const said = key ? String(p.label || progLabel(key)) + (p.name && p.name !== p.label ? ", " + String(p.name) : "") : "";
+    progNote.hidden = !key;
+    if (progNote.dataset.said === said + "|" + String(p && p.songs)) return;
+    progNote.dataset.said = said + "|" + String(p && p.songs);
+    progNote.replaceChildren();
+    if (!key) return;
+    const n = Number(p.songs) || 0;
+    if (!n) {
+      progNote.append("None of your songs play " + said + " yet");
+      return;
+    }
+    progNote.append(el("span", null, "Your songs with " + said + ": " + n),
+      button("Show them", "small", () => setProg(key), "Show your " + plural(n, "song") + " with " + said));
+  };
 
   // What the results show now: your songs that match what is typed and that the buttons show (not one removed since
   // the page loaded: the answer has it as removed, with Add again), then the server's close matches the filter missed
@@ -1535,6 +1626,7 @@
     const said = keptSaid();
     if (keptNote.firstChild.textContent !== said) keptNote.firstChild.textContent = said;
     keptNote.hidden = !said;
+    drawProgFound();
     notesBox.replaceChildren(...(model ? notesOf(model) : []));
   };
   // Under the groups: a name LaCuerda's index has no artist by, under a letter its listings aren't read to yet (their
@@ -1766,7 +1858,7 @@
     head.appendChild(button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)"));
     head.appendChild(keptNote);
     allMine.hidden = true;
-    found.append(head, allMine, groupsBox, notesBox);
+    found.append(head, progNote, allMine, groupsBox, notesBox);
   }
   // A key that ends an input method's word (pinyin, kana) is still typing, never a command.
   const composing = (e) => e.isComposing || e.keyCode === 229;

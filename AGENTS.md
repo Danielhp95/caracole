@@ -69,6 +69,7 @@ Shared by the steps and the commands:
 | keys.py | a song's musical key and where it came from |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
+| progressions.py | each song's progressions, read by render.py as it renders the song's sheet (its human one, else its auto one) into kv `render:progressions:<song id>` (`record`; harmony.py's `progressions` and `progression_key`), so that index.html's data (each song's `progressions`, the page's `catalogue`), `#prog=`, `/api/search`'s `progression` and `caracole search --progression` read one row a song, never a sheet; `read_progression`, numerals or a catalogue name typed; a named progression stands for every reading of its name (the pop progression in a major key and in its relative minor) |
 
 Rules a change there keeps (the Invariants below are the others):
 
@@ -125,7 +126,8 @@ Rules a change there keeps (the Invariants below are the others):
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
   and in `/api/search`'s `removed`, which the library page shows with Add again), and
   `gtptabs_songs` counts an artist's songs on gtptabs.com (an artist row's `gtptabs` in `/api/search`, the
-  "Guitar Pro 12" of their header). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
+  "Guitar Pro 12" of their header); `--progression` reads progressions.py's records alone, your songs
+  only (`songs_with`). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram
   index), which must find exactly what a `LIKE` scan of `ug_index` finds
   (`test_search.py::test_the_prefilter_finds_through_the_key_index_what_a_scan_of_every_row_finds`),
   except that a pattern in more than `KEYS_PER_PATTERN` keys (a common word) brings in its

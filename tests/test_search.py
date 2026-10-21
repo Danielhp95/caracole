@@ -943,6 +943,71 @@ def test_cli_search_needs_words_or_a_key(tmp_path):
     assert "nothing to search for" in result.output
 
 
+# --- caracole search --progression ----------------------------------------------------
+
+
+def seed_progressions(tmp_path):
+    """Three songs whose last render read their progressions: the pop progression in C and in A minor, and a
+    blues; and Creep, whose sheet was never read."""
+    from caracole.db import kv_set_json
+    from caracole.progressions import KV, sheet_progressions
+
+    conn = seed(tmp_path)
+    for artist, title, sheet, key in (
+            ("Placeholder Band", "Synthetic Song", "{comment: Verse}\n[Am]a [F]b [C]c [G]d\n{comment: Chorus}\n"
+             "[C]e [G]f [Am]g [F]h\n", "C"),
+            ("Another Band", "Minor Song", "[Am]a [F]b [C]c [G]d\n", "Am"),
+            ("Third Band", "Blues", "{comment: Verse}\n[C]a [F]b [G]c\n", "C")):
+        song = add_song(conn, artist, title)
+        kv_set_json(conn, f"{KV}{song.id}", sheet_progressions("{title: X}\n" + sheet, key))
+    return conn
+
+
+def test_cli_search_by_progression_lists_your_songs_that_play_it_in_any_key(tmp_path):
+    seed_progressions(tmp_path)
+    for typed in ("vi IV I V", "I–V–vi–IV", "pop progression"):
+        result = run(tmp_path, "search", "--progression", typed)
+        assert result.exit_code == 0, result.output
+        lines = result.output.splitlines()
+        assert lines[0] == ("Your songs with I–V–vi–IV, the pop progression" if typed != "pop progression"
+                            else "Your songs with the pop progression"), typed
+        assert lines[1].startswith("  Another Band - Minor Song · wanted, no sheet yet · untitled section · in A minor · ")
+        assert lines[2].startswith("  Placeholder Band - Synthetic Song · wanted, no sheet yet · Verse, Chorus · "
+                                   "in C major · ")
+        assert len(lines) == 3 and "Ultimate Guitar" not in result.output  # the offline indexes know no chords
+    result = run(tmp_path, "search", "--progression", "andalusian")
+    assert result.exit_code == 0, result.output
+    assert result.output == "Your songs with the Andalusian cadence\n  none\n"
+
+
+def test_cli_search_by_progression_says_when_limit_cuts_the_list(tmp_path):
+    seed_progressions(tmp_path)
+    result = run(tmp_path, "search", "--progression", "vi IV I V", "--limit", "1")
+    assert result.exit_code == 0, result.output
+    assert "Minor Song" in result.output and "Synthetic Song" not in result.output
+    assert "  … and 1 more: see them with --limit 2" in result.output
+
+
+def test_cli_search_by_progression_before_any_sheet_was_read_says_how_they_come(tmp_path):
+    seed(tmp_path)
+    result = run(tmp_path, "search", "--progression", "I IV V")
+    assert result.exit_code == 0, result.output
+    assert "Your songs with I–IV–V\n  none yet: caracole reads a sheet's progressions as it renders it" in result.output
+    assert "caracole render" in result.output
+
+
+@pytest.mark.parametrize("args", [["--progression", "hello there"], ["--progression", "I"],
+                                  ["creep", "--progression", "I IV V"], ["--progression", "I IV V", "--key", "G"],
+                                  ["--progression", "I IV V", "--artist", "Radiohead"],
+                                  ["--progression", "I IV V", "--add", "1"]])
+def test_cli_search_progression_that_is_none_or_with_other_searches_is_a_usage_error(tmp_path, args):
+    seed_progressions(tmp_path)
+    result = run(tmp_path, "search", *args)
+    assert result.exit_code == 2, result.output
+    assert "--progression" in result.output
+    assert not (tmp_path / "lib" / "wanted.txt").exists()
+
+
 # --- names that aren't quite UG's ------------------------------------------------------------
 
 EPIC = (4742072, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you", "chords")

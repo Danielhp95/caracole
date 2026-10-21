@@ -51,7 +51,9 @@ could not be rendered too. Each viewer takes its own sheet's musical key as
 from the tab or its chords, the auto sheet's heard in the audio. It is an extra: one that
 can't be built (a bug) or written (a link in its place) is logged as "no
 viewer for", with the traceback of a bug, and counts the song as failed, but
-never costs it a PDF. kv ``render:files:<song id>`` keeps the SHA-256 and the
+never costs it a PDF. Its progressions are read then too, for finding the song by them
+(progressions.py, kv ``render:progressions:<song id>``: the human sheet's, else the auto
+sheet's; an extra, as the viewer is). kv ``render:files:<song id>`` keeps the SHA-256 and the
 length of each .cho and viewer written (``written_file``), PDF or no PDF: a
 server serves a viewer only while it is still those bytes.
 
@@ -118,6 +120,7 @@ from pathlib import Path
 from typing import Any, Literal
 from urllib.parse import parse_qsl
 
+from caracole import progressions
 from caracole.autochords.merge import AUTO_MARKER
 from caracole.chordpro import to_chordpro
 from caracole.config import Config
@@ -569,7 +572,8 @@ def _render_song(
         mine = (found.key, found.source) if found is not None else (None, None)
         done.append(_render_sheet(conn, cfg, song, folder, kept, sheet, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
-                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=export))
+                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=export,
+                                  primary=not sheet.auto or human is None))
 
     if human is not None:
         render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id), version)
@@ -580,6 +584,8 @@ def _render_song(
             _forget_written(conn, song.id, AUTO_OUTPUTS)
     else:
         _drop_human_outputs(conn, cfg.library_dir, song, folder)
+        if auto is None:
+            progressions.forget(conn, song.id)
     if auto is not None:
         beside = human is not None
         # Beside the human sheet, the version's shapes and swaps are that sheet's chords', by their places, and
@@ -811,12 +817,14 @@ def _render_sheet(
     force: bool,
     key: tuple[str | None, str | None] = (None, None),
     export: bool = True,
+    primary: bool = False,
 ) -> _Done:
     """Write one sheet's .cho, render its PDF in ``version`` unless kv ``state_key`` says it is up to date,
     then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
     waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
     song's own version as the viewer's address writes it, where the viewer starts, or None for none;
-    ``export``, whether the viewer offers an export (``export_viewer``).
+    ``export``, whether the viewer offers an export (``export_viewer``); ``primary``, whether this is the
+    song's sheet the library finds it by (its human one, else its auto one: ``_note_progressions``).
 
     The PDF, the viewer and the record of the .cho are made from the text written, never read
     back: a synced device may write there a moment later."""
@@ -827,6 +835,8 @@ def _render_sheet(
     data = text.encode("utf-8")
     _write_if_changed(cho, data)
     _note_written(conn, song.id, cho.name, data)
+    if primary:
+        _note_progressions(conn, song, text, key[0])
     pdf = folder / f"{stem}.pdf"
 
     def viewer() -> bool:
@@ -843,6 +853,17 @@ def _render_sheet(
         viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
         raise
     return done if viewer() else replace(done, viewer_failed=True)
+
+
+def _note_progressions(conn: sqlite3.Connection, song: Song, text: str, key: str | None) -> None:
+    """Record what the sheet ``text`` plays, for finding the song by its progressions
+    (``progressions.record``). An extra, as the viewer is: a sheet its code can't read leaves no
+    record, logged with its traceback, and costs the song nothing else."""
+    try:
+        progressions.record(conn, song.id, text, key)
+    except Exception:  # a bug in the theory must never cost the PDFs
+        log.warning("no progressions for %s", song.display, exc_info=True)
+        progressions.forget(conn, song.id)
 
 
 def _render_sheet_pdf(
