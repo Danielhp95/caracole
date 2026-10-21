@@ -32,7 +32,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Protocol
 
-from caracole.logs import PROVIDER_NAMES as PROVIDER_NAMES  # the log's names, which the report shares
 from caracole.logs import priority, provider_name
 from caracole.normalize import clean_title
 

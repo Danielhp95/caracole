@@ -252,7 +252,7 @@ def connect(path: Path) -> sqlite3.Connection:
     than this caracole, say after a NixOS rollback, raises DatabaseTooNew.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, isolation_level=None, timeout=30)
+    conn = sqlite3.connect(path, isolation_level=None, timeout=30)  # SQLite's busy timeout: 30 s
     try:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON")
@@ -260,7 +260,6 @@ def connect(path: Path) -> sqlite3.Connection:
         # No fsync on each commit: a crash of the machine may lose the last commits, never the
         # database (WAL), and the owner chose the speed.
         conn.execute("PRAGMA synchronous = NORMAL")
-        conn.execute("PRAGMA busy_timeout = 30000")
         _migrate(conn, path)
     except BaseException:
         conn.close()

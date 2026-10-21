@@ -21,6 +21,7 @@ import secrets
 import sqlite3
 import stat
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -121,6 +122,28 @@ def read_regular(path: Path, *, dir_fd: int | None = None) -> bytes:
     never read through a link (``open_regular``)."""
     with open(open_regular(path, dir_fd=dir_fd), "rb") as f:
         return f.read()
+
+
+def read_text(path: Path, error: Callable[[str], Exception]) -> str | None:
+    """The text of the regular file at ``path``, None when there is none (``read_regular``).
+
+    Anything else is ``error`` with a message that names the file, for every caller to report:
+    a link or no regular file (refused unread), a file it can't read, or one that isn't UTF-8.
+    overrides.toml and songbooks.toml are read this way.
+    """
+    try:
+        data = read_regular(path)
+    except FileNotFoundError:
+        return None
+    except NotRegularFile as e:
+        raise error(f"{path}: {e.strerror}; put the file itself there") from e
+    except OSError as e:  # no permission to read it, say
+        raise error(f"{path}: can't read it: {e.strerror or e}") from e
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError as e:
+        line = data[: e.start].count(b"\n") + 1
+        raise error(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
 
 
 def read_json(path: Path) -> Any:

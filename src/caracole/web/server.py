@@ -17,6 +17,7 @@ from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from caracole.web.app import MAX_BODY, Request, Response, WebApp
+from caracole.web.security import WILDCARDS
 
 log = logging.getLogger(__name__)
 
@@ -90,7 +91,7 @@ def make_server(app: WebApp, address: str, port: int) -> ThreadingHTTPServer:
 
 def url_for(address: str, port: int) -> str:
     host = address.strip("[]")
-    if host in ("", "0.0.0.0", "::"):
+    if host in WILDCARDS:
         host = socket.gethostname()
     return f"http://[{host}]:{port}/" if ":" in host else f"http://{host}:{port}/"
 

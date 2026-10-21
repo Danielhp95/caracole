@@ -35,13 +35,8 @@ from pathlib import Path, PurePosixPath
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.library import song_dir
-from caracole.songs import SOURCE_FIELDS_KV, Song, delete_song_kv, list_songs, mark_removed
+from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, list_songs, mark_removed
 
-# What caracole makes from a kept sheet: its ChordPro, its PDF, and the page beside the PDF.
-_OUTPUTS = {
-    "sheet.txt": ("sheet.cho", "sheet.pdf", "sheet.html"),
-    "sheet (auto).txt": ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html"),
-}
 _LYRICS = ("lyrics.txt", "lyrics.lrc")
 _INFO = "info.json"
 # What a write caracole didn't finish leaves beside a file (library.write_atomic, lyrics.py).
@@ -318,7 +313,7 @@ def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set
     ``lyrics.txt`` of yours, in a folder caracole made none in, isn't one.
     """
     ours = set(kept_here) | {_INFO}
-    for sheet, outputs in _OUTPUTS.items():
+    for sheet, outputs in SHEET_OUTPUTS.items():  # its ChordPro, its PDF and its viewer
         if sheet in kept_here:
             ours.update(outputs)
     for key in (f"render:{song.id}", f"render:{song.id}:auto"):

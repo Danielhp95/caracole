@@ -428,10 +428,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **The library is synced**: Syncthing and every device can write to it. Read a file there
   with `library.read_regular` (or `open_regular`: no symbolic link followed, regular files
   only; `dir_fd=` for a name in a folder opened without following a link, as inbox.py reads
-  `_inbox/`; `read_json` for its JSON, where whatever a device wrote is a ValueError at worst,
-  never the RecursionError that would stop a pass over every song, as it is an `OverridesError`
-  or a `SongbookFileError` in overrides.toml or songbooks.toml), and write one with
-  `library.write_atomic`: a random temporary name opened
+  `_inbox/`; `read_text` for its text, any failure the caller's error naming the file, as
+  overrides.py and songbook.py read theirs; `read_json` for its JSON, where whatever a device
+  wrote is a ValueError at worst, never the RecursionError that would stop a pass over every
+  song, as it is an `OverridesError` or a `SongbookFileError` in overrides.toml or
+  songbooks.toml), and write one with `library.write_atomic`: a random temporary name opened
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
   Nothing private or bulky goes there: the database, the Spotify token, the lock, the HTTP
   cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in

@@ -183,8 +183,8 @@ def test_cf_mitigated_header_is_a_block(tmp_path):
 def test_normal_page_with_cloudflare_script_is_not_a_block(tmp_path):
     client, _ = make_client(tmp_path, ok(NORMAL_PAGE))
     assert client.get("https://tabs.ultimate-guitar.com/tab/1").status == 200
-    assert not is_challenge(200, {}, NORMAL_PAGE)
-    assert is_challenge(200, {}, CHALLENGE)
+    assert not is_challenge({}, NORMAL_PAGE)
+    assert is_challenge({}, CHALLENGE)
 
 
 def test_after_a_block_no_more_requests_this_run(tmp_path):

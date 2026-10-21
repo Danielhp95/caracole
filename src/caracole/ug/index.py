@@ -139,8 +139,10 @@ class IndexStats:
     names them, in order), and ``sitemaps_unchanged`` those that answered 304
     for the copy already indexed. ``rows`` counts the index rows read from the
     parsed sitemaps, and ``new_tab_ids`` the tabs the index didn't have
-    before, in the order seen. ``completed``: this call made the index
-    complete (``index_state``).
+    before, in the order seen. ``songs_marked`` holds the ids of the accepted
+    and pinned songs those new tabs belong to, flagged to fetch again as each
+    sitemap was stored (``mark_dirty_for_new``). ``completed``: this call made
+    the index complete (``index_state``).
     """
 
     sitemaps_fetched: int = 0
@@ -148,14 +150,15 @@ class IndexStats:
     rows: int = 0
     new_tab_ids: tuple[int, ...] = ()
     parsed: tuple[str, ...] = ()
+    songs_marked: frozenset[int] = frozenset()
     completed: bool = False
 
     def summary(self, refetch: int | None = None) -> str:
         """One line for ``caracole index refresh`` and the nightly run's index step:
         "1 of 2 sitemaps changed (sitemap_last.xml): +259 tabs, 2 songs to refetch".
 
-        ``refetch`` is how many songs the new tabs mark to fetch again
-        (``mark_dirty_for_new``), when the caller knows.
+        ``refetch`` is how many songs the new tabs marked to fetch again
+        (``len(songs_marked)``), when the caller knows.
         """
         checked = self.sitemaps_fetched + self.sitemaps_unchanged
         if not self.sitemaps_fetched:
@@ -300,8 +303,8 @@ def upsert_rows(conn: sqlite3.Connection, rows: Iterable[IndexRow | Sequence[Any
     return new
 
 
-def mark_dirty_for_new(conn: sqlite3.Connection, tab_ids: Iterable[int]) -> int:
-    """Flag accepted and pinned songs that new tabs belong to; return how many there are.
+def mark_dirty_for_new(conn: sqlite3.Connection, tab_ids: Iterable[int]) -> set[int]:
+    """Flag accepted and pinned songs that new tabs belong to; return their ids.
 
     A song covers a tab when the tab is listed under the song's matched keys,
     or under a variant of its title (``creep-intro`` for ``creep``), exactly
@@ -310,16 +313,16 @@ def mark_dirty_for_new(conn: sqlite3.Connection, tab_ids: Iterable[int]) -> int:
     """
     new = set(tab_ids)
     if not new:
-        return 0
+        return set()
     songs = conn.execute(
         "SELECT id, match_artist_key, match_song_key FROM songs WHERE match_decision IN ('accept', 'pinned') "
         "AND status != 'ignored' AND match_artist_key IS NOT NULL AND match_song_key IS NOT NULL"
     ).fetchall()
-    marked = 0
+    marked: set[int] = set()
     for s in songs:
         if any(t.tab_id in new for t in song_tabs(conn, s["match_artist_key"], s["match_song_key"])):
             update_song(conn, s["id"], ug_dirty=True)
-            marked += 1
+            marked.add(s["id"])
     return marked
 
 
@@ -417,15 +420,18 @@ def _indexed(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
 
 
 def _store(conn: sqlite3.Connection, name: str, rows: list[IndexRow], tabs: TabCounts,
-           validators: Mapping[str, str | None], now: datetime) -> list[int]:
-    """Index one sitemap's rows, flag the songs its new tabs belong to, and record it, atomically."""
+           validators: Mapping[str, str | None], now: datetime) -> tuple[list[int], set[int]]:
+    """Index one sitemap's rows, flag the songs its new tabs belong to, and record it, atomically.
+
+    Returns the new tabs' ids and the flagged songs' ids.
+    """
     with savepoint(conn, "ug_sitemap"):
         new = upsert_rows(conn, rows, name, now)
-        mark_dirty_for_new(conn, new)
+        marked = mark_dirty_for_new(conn, new)
         indexed = _indexed(conn)
         indexed[name] = {**validators, "indexed_at": _iso(now), "rows": len(rows), "tabs": tabs.as_json()}
         kv_set_json(conn, _SITEMAPS_KEY, indexed)
-    return new
+    return new, marked
 
 
 def _tab_sitemap_urls(conn: sqlite3.Connection, client: Client) -> list[str]:
@@ -455,6 +461,7 @@ def _index_sitemaps(conn: sqlite3.Connection, client: Client, urls: list[str], n
                     progress: Progress | None) -> IndexStats:
     unchanged = count = 0
     new: list[int] = []
+    songs: set[int] = set()
     parsed: list[str] = []
     for position, url in enumerate(urls, 1):
         name = sitemap_name(url)
@@ -466,14 +473,15 @@ def _index_sitemaps(conn: sqlite3.Connection, client: Client, urls: list[str], n
             _tell(progress, SitemapRead(position, len(urls), name, sitemap_label(name), unchanged=True))
             continue
         rows, tabs = _rows(resp.content, url, resp.status)
-        added = _store(conn, name, rows, tabs, validators, now)
+        added, marked = _store(conn, name, rows, tabs, validators, now)
         new += added
+        songs |= marked
         parsed.append(name)
         count += len(rows)
         _tell(progress, SitemapRead(position, len(urls), name, sitemap_label(name), from_cache=resp.status == 304,
                                     tabs=tabs, new_tab_ids=tuple(added)))
     return IndexStats(sitemaps_fetched=len(parsed), sitemaps_unchanged=unchanged, rows=count,
-                      new_tab_ids=tuple(new), parsed=tuple(parsed))
+                      new_tab_ids=tuple(new), parsed=tuple(parsed), songs_marked=frozenset(songs))
 
 
 def _sitemap_files(directory: Path) -> list[tuple[str, Path]]:
@@ -492,18 +500,21 @@ def _index_files(conn: sqlite3.Connection, files: list[tuple[str, Path]], now: d
                  progress: Progress | None) -> IndexStats:
     count = 0
     new: list[int] = []
+    songs: set[int] = set()
     parsed: list[str] = []
     for position, (name, path) in enumerate(files, 1):
         try:
             rows, tabs = _rows(path.read_bytes(), str(path))
         except ProviderError as e:
             raise ValueError(f"{path}: {e.message}") from e
-        added = _store(conn, name, rows, tabs, _NO_VALIDATORS, now)
+        added, marked = _store(conn, name, rows, tabs, _NO_VALIDATORS, now)
         new += added
+        songs |= marked
         parsed.append(name)
         count += len(rows)
         _tell(progress, SitemapRead(position, len(files), name, path.name, tabs=tabs, new_tab_ids=tuple(added)))
-    return IndexStats(sitemaps_fetched=len(parsed), rows=count, new_tab_ids=tuple(new), parsed=tuple(parsed))
+    return IndexStats(sitemaps_fetched=len(parsed), rows=count, new_tab_ids=tuple(new), parsed=tuple(parsed),
+                      songs_marked=frozenset(songs))
 
 
 def _refresh_names(listed: Sequence[str], indexed: Collection[str]) -> list[str]:

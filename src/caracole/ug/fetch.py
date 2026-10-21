@@ -76,7 +76,7 @@ from caracole.match import REVIEW_ONLY_STEPS
 from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
-from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
+from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
 from caracole.ug.lookup import (
     IndexTab,
@@ -120,9 +120,8 @@ GUITAR_PRO_KINDS = ("guitar-pro", "power")
 TAB_KINDS = ("tabs",)
 _GROUPS = (CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
-SHEET_FILES = ("sheet.txt", "sheet.json")
+SHEET_FILES = (HUMAN_SHEET, "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
-AUTO_SHEET = "sheet (auto).txt"
 _TAB_HOST = urlsplit(TAB_BASE_URL).netloc
 
 # The artist-page route (A6).

@@ -118,7 +118,7 @@ def _build(cfg: Config, from_dir: Path | None) -> None:
 
 
 def _refresh(cfg: Config) -> None:
-    from caracole.ug.index import index_count, mark_dirty_for_new, refresh_index
+    from caracole.ug.index import index_count, refresh_index
 
     with exclusive(cfg, "index refresh"), closing(open_db(cfg)) as conn:
         now = utcnow()
@@ -130,7 +130,7 @@ def _refresh(cfg: Config) -> None:
             report = _Report(out, refresh=True, delay=policy.delay, budget=policy.budget)
             outcome = _interruptible(conn, report, lambda: _with_ug(
                 conn, cfg, now, policy, report, lambda client: refresh_index(conn, client, now, progress=report)))
-            dirty = mark_dirty_for_new(conn, outcome.stats.new_tab_ids) if outcome.stats is not None else None
+            dirty = len(outcome.stats.songs_marked) if outcome.stats is not None else None
             report.finish(conn, stats=outcome.stats, refetch=dirty)
             if outcome.failure is not None:
                 fail(outcome.failure)

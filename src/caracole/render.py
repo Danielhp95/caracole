@@ -121,17 +121,24 @@ from caracole.library import (
 from caracole.keys import sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
-from caracole.songs import Song, ensure_current_keys, get_song, list_songs
+from caracole.songs import (
+    AUTO_SHEET,
+    HUMAN_SHEET,
+    SHEET_OUTPUTS,
+    Song,
+    ensure_current_keys,
+    get_song,
+    list_songs,
+)
 from caracole.ug.page import json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
 
 log = logging.getLogger(__name__)
 
-HUMAN_SHEET = "sheet.txt"  # rendered to the HUMAN_OUTPUTS
-HUMAN_OUTPUTS = ("sheet.cho", "sheet.pdf", "sheet.html")
-AUTO_SHEET = "sheet (auto).txt"  # rendered to the AUTO_OUTPUTS
-AUTO_OUTPUTS = ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html")
+# Each kept sheet's .cho, .pdf and .html, named in songs.SHEET_OUTPUTS.
+HUMAN_OUTPUTS = SHEET_OUTPUTS[HUMAN_SHEET]
+AUTO_OUTPUTS = SHEET_OUTPUTS[AUTO_SHEET]
 STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
 FILES_KEY = "render:files:"  # kv, then the song's id: each .cho and viewer written (written_file)
 FONT_HINT = "set cjk_font or CARACOLE_CJK_FONT"
@@ -234,9 +241,16 @@ def write_chordpro(
     old file is read only to compare, but never through a link (``read_regular``).
     """
     path = Path(cho_path)
-    text = _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
+    text = _chordpro_text(markup, title=title, artist=artist, key=key, capo=capo, auto=auto)
     _write_if_changed(path, text.encode("utf-8"))
     return path
+
+
+def _chordpro_text(markup: str, *, title: str, artist: str, key: str | None = None,
+                   capo: int | str | None = None, auto: bool = False) -> str:
+    """The .cho text of a sheet: its UG markup in ChordPro (``to_chordpro``), then its stray
+    look-alike letters written in Latin (``_as_latin``)."""
+    return _as_latin(to_chordpro(markup, title=title, artist=artist, key=key, capo=capo, auto=auto))
 
 
 def _write_if_changed(path: Path, data: bytes) -> None:
@@ -559,19 +573,17 @@ def _render_sheet(
 ) -> _Done:
     """Write one sheet's .cho, render its PDF unless kv ``state_key`` says it is up to date,
     then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a sheet
-    waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``)."""
+    waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``).
+
+    The PDF, the viewer and the record of the .cho are made from the text written, never read
+    back: a synced device may write there a moment later."""
     stem = Path(kept.name).stem
-    cho = write_chordpro(
-        sheet.markup,
-        folder / f"{stem}.cho",
-        title=clean_title(song.title),
-        artist=song.artist,
-        key=sheet.key,
-        capo=sheet.capo,
-        auto=sheet.auto,
-    )
-    text = _read_text(cho)
-    _note_written(conn, song.id, cho.name, text.encode("utf-8"))
+    cho = folder / f"{stem}.cho"
+    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
+                          key=sheet.key, capo=sheet.capo, auto=sheet.auto)
+    data = text.encode("utf-8")
+    _write_if_changed(cho, data)
+    _note_written(conn, song.id, cho.name, data)
     pdf = folder / f"{stem}.pdf"
     transpose = overrides.transpose.get(song.key, 0)
 

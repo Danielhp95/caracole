@@ -31,10 +31,6 @@ class Notifier:
         self._transport = transport
         self._timeout = timeout
 
-    @property
-    def enabled(self) -> bool:
-        return bool(self.url)
-
     def send(self, title: str, message: str, *, priority: str | None = None, tags: Sequence[str] = ()) -> bool:
         """POST one message to the ntfy topic URL; True if ntfy accepted it."""
         if not self.url:

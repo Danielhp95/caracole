@@ -51,7 +51,7 @@ from caracole.health import get_state, is_cooling
 from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
 from caracole.lyrics import song_lyrics
 from caracole.overrides import Overrides
-from caracole.songs import Song, get_song, list_songs, update_song
+from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, update_song
 from caracole.youtube import PROVIDER, Video, VideoUnavailable, YtDlp, choose, search_query
 
 log = logging.getLogger(__name__)
@@ -64,7 +64,6 @@ GIVE_UP_AFTER = 3  # downloads of one video that failed, the network aside, befo
 _NETWORK = re.compile(r"\[Errno|Temporary failure|timed out|Connection (?:reset|refused|aborted)|Network is unreachable"
                       r"|Remote end closed|HTTP Error 5\d\d", re.IGNORECASE)
 _PART_PREFIX = ".part-"  # a download's own folder, until its file is in place
-HUMAN_SHEET, AUTO_SHEET = "sheet.txt", "sheet (auto).txt"
 
 # Where a song without a human sheet stands, for the to-do page and index.html.
 QUEUED = "queued"  # due: the next run looks for it, within its budget

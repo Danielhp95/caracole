@@ -195,7 +195,7 @@ _CHALLENGE_MARKERS = (
 )
 
 
-def is_challenge(status: int, headers: Mapping[str, str], body: bytes) -> bool:
+def is_challenge(headers: Mapping[str, str], body: bytes) -> bool:
     """Whether a response is a bot challenge (which counts as a block)."""
     if str(_header(headers, "cf-mitigated")).lower() == "challenge":
         return True
@@ -532,8 +532,9 @@ class PoliteClient:
                           seconds=perf_counter() - sent)
 
         status, body = resp.status_code, resp.content
-        if status in (403, 429) or is_challenge(status, resp.headers, body):
-            reason = "challenge page" if is_challenge(status, resp.headers, body) else f"HTTP {status}"
+        challenge = is_challenge(resp.headers, body)
+        if status in (403, 429) or challenge:
+            reason = "challenge page" if challenge else f"HTTP {status}"
             self._blocked = ProviderBlocked(self.provider, url, status, reason)
             self._event(url, status, "blocked", reason)
             raise self._blocked

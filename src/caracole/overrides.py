@@ -44,7 +44,7 @@ from urllib.parse import urlsplit
 import tomlkit
 from tomlkit.exceptions import TOMLKitError
 
-from caracole.library import NotRegularFile, read_regular, write_atomic
+from caracole.library import read_text, write_atomic
 from caracole.normalize import compact, identity_key, name_forms, slug_key, ug_slug_key
 from caracole.youtube_urls import video_id_from_url, watch_url
 
@@ -235,26 +235,6 @@ def _only_key(t: Mapping[str, Any], name: str, key: str, shape: str) -> None:
         raise OverridesError(f"unknown key(s) in [{name}]: {listed}; expected {key} = {shape}")
 
 
-def _read(path: Path) -> str | None:
-    """The file's text, None when there is none; anything but a regular file is refused unread.
-
-    A file that can't be read, or isn't UTF-8, is an OverridesError too: every caller reports one.
-    """
-    try:
-        data = read_regular(path)
-    except FileNotFoundError:
-        return None
-    except NotRegularFile as e:
-        raise OverridesError(f"{path}: {e.strerror}; put the file itself there") from e
-    except OSError as e:  # no permission to read it, say
-        raise OverridesError(f"{path}: can't read it: {e.strerror or e}") from e
-    try:
-        return data.decode("utf-8")
-    except UnicodeDecodeError as e:
-        line = data[: e.start].count(b"\n") + 1
-        raise OverridesError(f"{path}: line {line} is not valid UTF-8 (save the file as UTF-8)") from e
-
-
 def _declared_twice(e: tomllib.TOMLDecodeError) -> str:
     """What to do about a table declared twice, as pasting two blocks with the same header makes one."""
     m = _TWICE.match(str(e))
@@ -270,7 +250,7 @@ TOO_DEEP = "nested too deep for the TOML parser"  # tomllib and tomlkit raise Re
 
 def load_overrides(path: Path) -> Overrides:
     """Read overrides.toml; a missing file means no overrides. Every error names the file."""
-    text = _read(path)
+    text = read_text(path, OverridesError)
     if text is None:
         return Overrides()
     try:
@@ -368,7 +348,7 @@ def _video(value: Any, where: str) -> str | None:
 
 
 def _edit(path: Path, change) -> None:
-    old = _read(path)
+    old = read_text(path, OverridesError)
     try:
         doc = tomlkit.document() if old is None else tomlkit.parse(old)
     except TOMLKitError as e:
@@ -386,6 +366,14 @@ def _table_of(doc, name: str):
     if name not in doc:
         doc[name] = tomlkit.table()
     return doc[name]
+
+
+def _names_song(key: Any, wanted: str) -> bool:
+    """Whether an entry's key (or ``[ignore]``'s value) is the song whose key is ``wanted``, as it is read."""
+    try:
+        return override_key(str(key)) == wanted
+    except OverridesError:
+        return False
 
 
 def add_alias(path: Path, source_artist: str, ug_artist: str) -> None:
@@ -428,15 +416,9 @@ def add_reject(path: Path, display: str, ug_refs: Sequence[str]) -> None:
     wanted = override_key(display)
     refs = {_ug_ref(r, f"[reject] {display!r}"): r for r in ug_refs}
 
-    def same_song(key: str) -> bool:
-        try:
-            return override_key(key) == wanted
-        except OverridesError:
-            return False
-
     def change(doc) -> None:
         t = _table_of(doc, "reject")
-        key = next((k for k in reversed(list(t)) if same_song(k)), None)
+        key = next((k for k in reversed(list(t)) if _names_song(k, wanted)), None)  # the last one counts
         if key is None:
             t[display] = list(refs.values())
             return
@@ -463,15 +445,9 @@ def add_youtube(path: Path, display: str, url: str) -> None:
     video = _video(url, f"[youtube] {display!r}")
     value = NO_VIDEO if video is None else watch_url(video)
 
-    def same_song(key: str) -> bool:
-        try:
-            return override_key(key) == wanted
-        except OverridesError:
-            return False
-
     def change(doc) -> None:
         t = _table_of(doc, "youtube")
-        key = next((k for k in reversed(list(t)) if same_song(k)), None)
+        key = next((k for k in reversed(list(t)) if _names_song(k, wanted)), None)  # the last one counts
         if key is None:
             t[display] = value
         elif _video(t[key], f"[youtube] {key!r}") != video:
@@ -504,14 +480,7 @@ def _append_unique(doc, table: str, key: str, value: Any, same) -> None:
 
 def add_ignore(path: Path, display: str) -> None:
     wanted = override_key(display)
-
-    def same(existing: Any, _value: Any) -> bool:
-        try:
-            return override_key(str(existing)) == wanted
-        except OverridesError:
-            return False
-
-    _edit(path, lambda doc: _append_unique(doc, "ignore", "songs", display, same))
+    _edit(path, lambda doc: _append_unique(doc, "ignore", "songs", display, lambda s, _: _names_song(s, wanted)))
 
 
 def add_block(path: Path, tab_id: int) -> None:

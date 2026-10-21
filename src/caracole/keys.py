@@ -49,16 +49,14 @@ from typing import Any
 from caracole.chordpro import is_chord_line, normalize_chord
 from caracole.db import kv_get_json, kv_set_json
 from caracole.library import KeptFile, kept_files, read_json, read_regular, write_info
-from caracole.songs import Song, list_songs
+from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, list_songs
 from caracole.versions import get_version
 
 log = logging.getLogger(__name__)
 
 INFO_VERSION = 1  # what refresh_info_keys last brought every info.json up to
 INFO_VERSION_KEY = "keys:info_version"  # kv
-HUMAN_SHEET = "sheet.txt"
 SHEET_DOC = "sheet.json"  # the human sheet's markup, beside it
-AUTO_SHEET = "sheet (auto).txt"
 SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
 
 _LETTERS = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
