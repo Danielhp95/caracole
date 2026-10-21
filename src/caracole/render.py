@@ -121,17 +121,23 @@ from caracole.library import (
 from caracole.keys import sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
-from caracole.songs import Song, ensure_current_keys, get_song, list_songs
+from caracole.songs import (
+    AUTO_SHEET,
+    HUMAN_SHEET,
+    SHEET_OUTPUTS,
+    Song,
+    ensure_current_keys,
+    get_song,
+    list_songs,
+)
 from caracole.ug.page import json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
 
 log = logging.getLogger(__name__)
 
-HUMAN_SHEET = "sheet.txt"  # rendered to the HUMAN_OUTPUTS
-HUMAN_OUTPUTS = ("sheet.cho", "sheet.pdf", "sheet.html")
-AUTO_SHEET = "sheet (auto).txt"  # rendered to the AUTO_OUTPUTS
-AUTO_OUTPUTS = ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html")
+HUMAN_OUTPUTS = SHEET_OUTPUTS[HUMAN_SHEET]  # ("sheet.cho", "sheet.pdf", "sheet.html")
+AUTO_OUTPUTS = SHEET_OUTPUTS[AUTO_SHEET]  # ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html")
 STATUS_KEY = "render:status"  # kv: the last pass, for the to-do page
 FILES_KEY = "render:files:"  # kv, then the song's id: each .cho and viewer written (written_file)
 FONT_HINT = "set cjk_font or CARACOLE_CJK_FONT"

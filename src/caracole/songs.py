@@ -35,7 +35,14 @@ from caracole.normalize import KEY_VERSION, display_key, identity_key, title_var
 
 _JSON_COLUMNS = {"artists", "source_ids", "match_candidates"}
 _BOOL_COLUMNS = {"review", "ug_dirty"}
-SHEET_FILE_NAMES = ("sheet.txt", "sheet (auto).txt")
+SHEET_FILE_NAMES = ("sheet.txt", "sheet (auto).txt")  # a song's sheets, the human one first
+HUMAN_SHEET, AUTO_SHEET = SHEET_FILE_NAMES
+# What render.py makes from each kept sheet: its ChordPro, its PDF and its viewer. caracole
+# remove (removal.py) and the icons (icons.py) read the same names.
+SHEET_OUTPUTS = {
+    HUMAN_SHEET: ("sheet.cho", "sheet.pdf", "sheet.html"),
+    AUTO_SHEET: ("sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html"),
+}
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
 # What each source id last said of its song's album, duration, ISRC and variant (_remember),
 # as JSON under this prefix + "<source>:<source id>", e.g. "songs:fields:spotify:<track id>".

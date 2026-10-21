@@ -50,6 +50,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from caracole.library import open_regular, write_atomic
+from caracole.songs import AUTO_SHEET, SHEET_FILE_NAMES, SHEET_OUTPUTS
 
 if TYPE_CHECKING:
     from caracole.http import Client
@@ -110,11 +111,9 @@ SOURCES: Mapping[str, Source] = {
 
 
 # Files caracole makes from another it kept, which come from where that one came from.
-_MADE_FROM = {"sheet.pdf": "sheet.txt", "sheet.cho": "sheet.txt", "sheet.html": "sheet.txt",
-              "sheet (auto).pdf": "sheet (auto).txt", "sheet (auto).cho": "sheet (auto).txt",
-              "sheet (auto).html": "sheet (auto).txt"}
+_MADE_FROM = {output: sheet for sheet, outputs in SHEET_OUTPUTS.items() for output in outputs}
 _LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
-SHEETS = ("sheet.txt", "sheet (auto).txt")  # a song's sheet, the human one first
+SHEETS = SHEET_FILE_NAMES  # a song's sheet, the human one first
 
 
 def kept_sources(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
@@ -142,7 +141,7 @@ def source_of(name: str, kept: Mapping[str, str]) -> str | None:
     base = _MADE_FROM.get(name, name)
     if base in kept:
         return kept[base]
-    return AUTO if base == "sheet (auto).txt" else None
+    return AUTO if base == AUTO_SHEET else None
 
 
 def sheet_source(kept: Mapping[str, str]) -> str | None:

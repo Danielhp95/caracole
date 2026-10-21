@@ -63,15 +63,13 @@ from caracole.library import keep_file, kept_files, write_info
 from caracole.lyrics import Lyrics, song_lyrics
 from caracole.music import read_audio
 from caracole.overrides import Overrides, load_overrides
-from caracole.songs import Song, get_song, list_songs, refresh_status, update_song
+from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.versions import get_version, upsert_version
 from caracole.youtube import Video
 from caracole.youtube_fetch import youtube_audio
 
 log = logging.getLogger(__name__)
 
-AUTO_SHEET = "sheet (auto).txt"
-HUMAN_SHEET = "sheet.txt"
 PROVIDER = "auto"
 MODEL = "btc_large_voca"
 SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
