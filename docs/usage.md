@@ -110,8 +110,9 @@ keep_guitar_pro = 2               # Guitar Pro or Power Tab pages picked per son
 device = "cpu"                    # where the models run
 ```
 
-Caracole keeps one sheet and one text tab per song; only the number of Guitar
-Pro picks is a setting. Scores and thresholds can't be negative, scores stop
+Caracole keeps one sheet and one text tab per song, and beside the sheet the
+other Ultimate Guitar versions it scored (`scored_sheets`); only the number of
+Guitar Pro picks is a setting of its own. Scores and thresholds can't be negative, scores stop
 at 100, and `scored_sheets` and `keep_guitar_pro` are whole numbers.
 
 **Folders.** With `data_dir`, everything is in one folder: `library_dir`,
@@ -496,7 +497,7 @@ say), nothing is removed and it exits 1.
 - **What goes.** The song's lines in wanted.txt, every line that names it,
   the rest of the file kept byte for byte, comments included. The files
   caracole wrote in the song's folder: the sheets, tabs and Guitar Pro files
-  it keeps (`sheet.txt`, `sheet.json`, `tab.txt`, `guitar-1.gp5`, the scores
+  it keeps (`sheet.txt`, `sheet.json`, `version-<tab>.txt`, `tab.txt`, `guitar-1.gp5`, the scores
   it filed from `_inbox/`…), the `.cho` files and PDFs it made from them (the
   `sheet (G Dorian, capo 0).pdf` exports of `caracole render --version` too),
   `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
@@ -996,7 +997,16 @@ and cache.
   matches, songs with new tabs or a changed `[block]`, songs a run left
   half-done, and songs whose kept sheet or tab the library lost (see
   [the library folder](#the-library-folder)). A song whose UG match was
-  undone (by `[reject]`, say) loses the sheet and the tab that match kept.
+  undone (by `[reject]`, say) loses the sheet, the tab and the versions that
+  match kept. The other versions a fetch scores for the sheet are kept beside
+  it, with no request more: `version-<tab>.txt` and `version-<tab>.json` (see
+  [the library folder](#the-library-folder)). They follow the ranking: a
+  version that leaves the top `scored_sheets` loses its files at the song's
+  next fetch, as does one UG took down or one you `[block]`, and one that
+  enters is written from the page that fetch scored. A version whose page
+  can't be read keeps its files until it can. A pinned sheet keeps the top
+  versions by rating beside it, read from the cache alone. A version whose
+  text is the sheet's very text gets no files: the sheet stands for it.
   Songs the index can't settle are looked up on their artist's UG page, when
   it is known, at most once in 30 days: songs not found, songs reviewed on
   their title alone (only other artists' songs of it) or on names that
@@ -3111,6 +3121,8 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
       sheet.json            the same version as the source gave it
+      version-39144.txt     another Ultimate Guitar version caracole scored for the sheet,
+      version-39144.json    kept beside it (by its tab id): the runners-up
       sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
       sheet.html            the sheet viewer, for the phone
       lyrics.txt            the lyrics, from LRCLIB
@@ -3160,7 +3172,8 @@ one, never an empty one.
 
 **The files caracole keeps are its own.** One that is no longer as caracole wrote
 it, deleted (on the laptop, say), cut short or edited, is written again, and
-only it: `sheet.txt`, `sheet.json`, `tab.txt` and `tab.json` at the next
+only it: `sheet.txt`, `sheet.json`, `version-<tab>.txt`, `version-<tab>.json`,
+`tab.txt` and `tab.json` at the next
 `caracole run` or `caracole fetch` (a LaCuerda sheet at the next LaCuerda pass),
 from the cache, usually with no request; the `.cho` files, the PDFs and the
 viewers at the next render. So is a link in the place of one of them, except a
