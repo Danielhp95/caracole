@@ -230,7 +230,7 @@ def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cf
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
     page = get(app, versions_url("", "clear"))
-    assert 'action="/versions/clear"' in text(page) and ">Go back to caracole's pick<" in text(page)
+    assert 'action="/versions/clear"' in text(page) and ">Back to caracole's pick<" in text(page)
     where = header(post(app, "/versions/clear", {"sheet": SHEET}), "location")
     queue.run_pending()
     assert recorder.calls == [["versions", "--clear", "--progress", "--", *NAMES]]
@@ -377,7 +377,7 @@ def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, r
 
 def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):
     # caracole versions --progress writes caracole get's lines: Keep it's stages (the song, the version, its page,
-    # the library page) and Go back to caracole's pick's, a lookup's, are the job's, and stay out of its output.
+    # the library page) and Back to caracole's pick's, a lookup's, are the job's, and stay out of its output.
     from caracole.get import progress_line
     from caracole.web.jobs import JobQueue
     from caracole.web.status import job_line

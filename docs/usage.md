@@ -1822,10 +1822,9 @@ offering to buy it; its **Sheet versions**, the Ultimate Guitar versions
 caracole keeps beside its sheet (the runners-up of the three it scores, and a
 version you kept), in rank order, each with UG's version number, its rating and
 votes (`Ver 3 · 4.86★ (408) · the one`), each opening its own viewer page,
-`version-<tab>.html`, or its text, `version-<tab>.txt`, until render has
-written the page (caracole serve doesn't serve version pages yet: on its page
-such a link answers Not found, and the file on disk opens it), the
-one its title opens marked "the one" (when that is LaCuerda's sheet or the auto
+`version-<tab>.html` (served by caracole serve as a sheet viewer is, while it
+holds what caracole wrote), or its text, `version-<tab>.txt`, until render has
+written the page, the one its title opens marked "the one" (when that is LaCuerda's sheet or the auto
 sheet, it leads the list by that name: `The one: LaCuerda's sheet`); its PDF
 exports, the sheet's PDFs in other versions, each
 by its version (`G Dorian, capo 0`: see `caracole render --version` and Export
@@ -2976,7 +2975,7 @@ is no progression exits with status 2.
   there, back to `/jobs`).
 - **A sheet's versions.** The sheet viewer's Make this the one and Keep it
   open `/versions?sheet=…&tab=…&do=choose|keep` in the same tab (the viewer
-  runs in a sandbox, with no way to send a form), and `do=clear` is Go back to
+  runs in a sandbox, with no way to send a form), and `do=clear` is Back to
   caracole's pick:
   a page of the server's own naming the song and the version ("Ver 2 of 13 ·
   4.85★ (12,629)", with the tabber's note) and what the song's sheet is now
@@ -2991,7 +2990,7 @@ is no progression exits with status 2.
   lookup pace, kept beside the sheet with a viewer of its own. A runner-up
   caracole keeps by itself is kept already there (sent anyway: 409), and
   stays only while caracole's ranking keeps it among the runners-up; `caracole
-  versions SONG --keep TAB` on it makes it yours, kept whatever the ranking. **Go back to caracole's pick**, on a song with a
+  versions SONG --keep TAB` on it makes it yours, kept whatever the ranking. **Back to caracole's pick**, on a song with a
   `[pin]` that chooses its sheet (a Guitar Pro or tab pin stays, as `--clear`
   leaves it), queues `caracole versions SONG --clear`. Each is the song's
   request, as a lookup is: its card says how it goes, stage by stage, the same

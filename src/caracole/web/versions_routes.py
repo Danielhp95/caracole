@@ -8,7 +8,7 @@ title opens, kept beside the sheet, or the song taken back to caracole's pick.
                           --tab`` with the tab's own page, recorded under ``[pin]``), and back to the versions page
     POST /versions/keep    Keep it: ``caracole versions --keep --progress`` queued (one tab page, at the lookup
                           pace)
-    POST /versions/clear   Go back to caracole's pick: ``caracole versions --clear --progress`` queued, for a
+    POST /versions/clear   Back to caracole's pick: ``caracole versions --clear --progress`` queued, for a
                           song with a ``[pin]`` that chooses its sheet
 
 A sheet viewer served from the library runs in a sandbox, with no way to post a form to the server, so its
@@ -28,7 +28,7 @@ version's page that went once that version became the one still names its song, 
 sheet.html), a tab
 that isn't a number (400) or isn't one of the song's chords versions on Ultimate Guitar (404), and, posted, what
 can't be done (409): Make this the one on the one, Keep it on a version kept already, either on a version UG no
-longer has or one under ``[block]`` (as ``caracole versions`` refuses it), Go back to caracole's pick on a song
+longer has or one under ``[block]`` (as ``caracole versions`` refuses it), Back to caracole's pick on a song
 with no ``[pin]`` of its sheet (a Guitar Pro or tab pin stays, as ``caracole versions --clear`` leaves it), and an
 ignored song. The page itself says
 so for those, and offers no form.
@@ -68,7 +68,7 @@ _SOURCES = {"lacuerda": "LaCuerda's sheet", "auto": "the auto-chords sheet"}
 @dataclass(frozen=True)
 class _Asked:
     """What a versions page or post names: the song, the viewer it came from (its library path) and its folder (as
-    a quoted address), the version (None for Go back to caracole's pick), every version, what the song's sheet is
+    a quoted address), the version (None for Back to caracole's pick), every version, what the song's sheet is
     now, in words, the song's ``[pin]`` tabs that choose its sheet (``caracole versions --clear`` takes out those
     alone, never a Guitar Pro or tab pin) and every one it has, the tabs under ``[block]``, and the viewer Back to
     the sheet opens."""
@@ -97,7 +97,7 @@ def versions_page(app: WebApp, target: str) -> Response:
         raise _NOT_AN_ADDRESS from None
     do = params.get("do", "")
     if do not in DOINGS:
-        raise Refused(400, "Not a version", "Make this the one, Keep it or Go back to caracole's pick? The address "
+        raise Refused(400, "Not a version", "Make this the one, Keep it or Back to caracole's pick? The address "
                                             "names none.")
     job_id = params.get("job")
     if job_id is not None and not (job_id.isascii() and job_id.isdigit() and len(job_id) < 12):
@@ -236,7 +236,7 @@ def _line(v: SheetVersion, total: int | None = None) -> str:
     return " · ".join(said)
 
 
-_LABELS = {"choose": "Make this the one", "keep": "Keep it", "clear": "Go back to caracole's pick"}
+_LABELS = {"choose": "Make this the one", "keep": "Keep it", "clear": "Back to caracole's pick"}
 _TELLS = {
     "choose": ("It becomes the song's sheet: the title opens it, and its PDF and its songbooks use it. caracole looks "
                "the song up with this tab (<code>caracole versions --choose</code>, as <code>caracole get --tab</code> "
