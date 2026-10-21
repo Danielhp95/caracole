@@ -637,6 +637,51 @@ def test_a_song_picked_on_lacuerda_says_tonights_run_gets_that_sheet_not_that_it
     assert card["lacuerda"] is None and card["notFound"] is True
 
 
+def lacuerda_version(conn, song, tab_id, url, *, coverage=None, gone=False):
+    from caracole.versions import set_coverage
+
+    vid = upsert_version(conn, provider="lacuerda", tab_id=tab_id, song_id=song.id, slot="sheet", kind="acordes",
+                         rating=0, votes=0, version=1, label=None, url=url, raw={}, now="x")
+    if coverage is not None:
+        set_coverage(conn, vid, coverage)
+    if gone:
+        conn.execute("UPDATE versions SET gone = 1 WHERE id = ?", (vid,))
+    return vid
+
+
+def test_a_songs_card_names_the_lacuerda_sheet_it_could_be_looked_up_with(conn, cfg):
+    # The served line's "Use LaCuerda's sheet" posts it: your pick on LaCuerda, else the best LaCuerda sheet caracole
+    # met for the song and didn't keep; none once the sheet kept is LaCuerda's, and none for an ignored song.
+    from caracole.overrides import LaCuerdaPick
+
+    picked = add_song(conn, "Andrés Calamaro", "Flaca")
+    met = add_song(conn, "Estopa", "Como Camarón")
+    lacuerda_version(conn, met, "estopa/como_camaron-2", "https://acordes.lacuerda.net/estopa/como_camaron-2.shtml",
+                     coverage=0.4)
+    lacuerda_version(conn, met, "estopa/como_camaron", "https://acordes.lacuerda.net/estopa/como_camaron.shtml",
+                     coverage=0.6)
+    lacuerda_version(conn, met, "estopa/como_camaron-3", "https://acordes.lacuerda.net/estopa/como_camaron-3.shtml",
+                     coverage=0.9, gone=True)
+    kept = add_song(conn, "Soda Stereo", "Persiana Americana")
+    vid = lacuerda_version(conn, kept, "soda_stereo/persiana_americana",
+                           "https://acordes.lacuerda.net/soda_stereo/persiana_americana.shtml", coverage=0.9)
+    keep_file(conn, cfg.library_dir, song=kept, version_id=vid, name="sheet.txt", data=b"sheet", rank=1)
+    ignored = add_song(conn, "Mecano", "Hijo de la Luna")
+    plain = add_song(conn, "Radiohead", "Creep")
+    for s in (picked, met, kept, plain):
+        update_song(conn, s.id, status="found")
+    update_song(conn, ignored.id, status="ignored")
+    picks = {s.key: LaCuerdaPick(slug, song) for s, slug, song in (
+        (picked, "andres_calamaro", "flaca"), (kept, "soda_stereo", "persiana_americana"),
+        (ignored, "mecano", "hijo_de_la_luna"))}
+    cards = songs_of(page(conn, cfg, Overrides(lacuerda=picks)))
+    assert cards[picked.display]["lacuerdaSheet"] == "https://acordes.lacuerda.net/andres_calamaro/flaca"
+    assert cards[met.display]["lacuerdaSheet"] == "https://acordes.lacuerda.net/estopa/como_camaron.shtml"
+    assert cards[kept.display]["lacuerdaSheet"] is None
+    assert cards[ignored.display]["lacuerdaSheet"] is None
+    assert cards[plain.display]["lacuerdaSheet"] is None
+
+
 def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)
@@ -1070,6 +1115,49 @@ def test_the_served_page_offers_a_remove_on_every_line(conn, cfg, tmp_path):
     # The page on disk has no server to remove anything.
     path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
     assert "/remove" not in listing(dump_dom(path, tmp_path))
+
+
+@in_chromium
+def test_a_found_songs_menu_looks_it_up_again_served_and_never_on_the_file(conn, cfg, tmp_path):
+    # Served, a song you have gets Fetch again and, when LaCuerda has a sheet of it, Use LaCuerda's sheet: each a
+    # POST /lookup of the song, as the lookup page sends it (tests/test_web_page_again.py drives them). A wanted
+    # song has its Fetch now, an ignored one neither, one being removed nothing; the file, which can ask nothing,
+    # never has them.
+    from caracole.library_page import WebControls
+    from caracole.overrides import LaCuerdaPick
+
+    found = add_song(conn, "Estopa", "Como Camarón")
+    plain = add_song(conn, "Radiohead", "Creep")
+    for s in (found, plain):
+        update_song(conn, s.id, status="found")
+        put(cfg, s, "sheet.pdf")
+    wanted = add_song(conn, "Andrés Calamaro", "Flaca")
+    ignored = add_song(conn, "Mecano", "Hijo de la Luna")
+    update_song(conn, ignored.id, status="ignored")
+    going = add_song(conn, "Oasis", "Wonderwall")
+    update_song(conn, going.id, status="found")
+    picks = Overrides(lacuerda={s.key: LaCuerdaPick(a, b) for s, a, b in (
+        (found, "estopa", "como_camaron"), (wanted, "andres_calamaro", "flaca"), (ignored, "mecano", "hijo"),
+        (going, "oasis", "wonderwall"))})
+    controls = WebControls(csrf="tok", removing=frozenset({going.id}))
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, build_library_page(
+        conn, cfg, picks, NOW, controls=controls)), tmp_path))
+    forms = {title: re.findall(r'<form[^>]*class="again"[^>]*action="/lookup"[^>]*>(.*?)</form>',
+                               panel_of(line_of(shown, title)), re.S)
+             for title in ("Como Camarón", "Creep", "Flaca", "Hijo de la Luna", "Wonderwall")}
+    camaron = forms["Como Camarón"]
+    assert [re.search(r">([^<]+)</button>", f).group(1) for f in camaron] == ["Fetch again", "Use LaCuerda's sheet"]
+    assert all('name="csrf" value="tok"' in f and f'name="song" value="{found.id}"' in f for f in camaron)
+    assert 'name="lacuerda"' not in camaron[0]
+    assert 'name="lacuerda" value="https://acordes.lacuerda.net/estopa/como_camaron"' in camaron[1]
+    assert 'aria-label="Fetch Como Camarón by Estopa again"' in camaron[0]
+    assert len(forms["Creep"]) == 1 and "Fetch again" in forms["Creep"][0]  # LaCuerda has none of it that we know
+    assert [re.search(r">([^<]+)</button>", f).group(1) for f in forms["Flaca"]] == ["Use LaCuerda's sheet"]
+    assert forms["Hijo de la Luna"] == [] and forms["Wonderwall"] == []
+    # The page on disk has no server to look anything up.
+    on_file = listing(dump_dom(write_library_page(cfg.library_dir, build_library_page(conn, cfg, picks, NOW)),
+                               tmp_path))
+    assert "/lookup" not in on_file and "Fetch again" not in on_file and "LaCuerda's sheet" not in on_file
 
 
 # Notes how a line's Removing… and a line's Fetching… look.

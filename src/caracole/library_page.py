@@ -39,7 +39,9 @@ and where it came from, the transposition, the lyrics, when it came), its
 review's picker, where its audio comes from, its versions (the sheet's PDFs
 in other versions, each file's ``version``), its other files, the Guitar Pro
 versions to download from UG, its MuseScore pages, its search and buy links, Add
-to a songbook… (the Select mode, the song picked) and, served, Remove…. An
+to a songbook… (the Select mode, the song picked) and, served, Fetch again and Use
+LaCuerda's sheet (``lacuerdaSheet``, or the search's LaCuerda row of it: each the
+``POST /lookup`` the lookup page sends for the song) and Remove…. An
 artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows that
 artist's songs alone. An A-Z strip jumps to the first group (or line) of a letter
 once more than 40 songs show. On a phone the header is short (the numbers beside
@@ -364,9 +366,11 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if youtube:
         to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
     musescore = cfg.provider("musescore").enabled
+    met = _lacuerda_met(conn)
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
-                   _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}))
+                   _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
+                   lacuerda_met=met.get(s.id))
              for s in library]
     _add_picks(conn, library, cards)
     return cards
@@ -480,6 +484,31 @@ def _lacuerda_pick(song: Song, overrides: Overrides, status: str) -> dict[str, s
     return {"label": "the sheet you picked on LaCuerda", "href": pick.url}
 
 
+def _lacuerda_met(conn: sqlite3.Connection) -> dict[int, str]:
+    """The best LaCuerda sheet caracole met for each song (lacuerda_fetch.py records each, kept or not): the one
+    that covers the most of its lyrics, of those LaCuerda still has; its page, by song id."""
+    rows = conn.execute(
+        "SELECT song_id, url FROM versions WHERE provider = 'lacuerda' AND slot = 'sheet' AND gone = 0 "
+        "ORDER BY song_id, coverage IS NULL, coverage DESC, id"
+    )
+    met: dict[int, str] = {}
+    for song_id, url in rows:
+        met.setdefault(song_id, url)
+    return met
+
+
+def _lacuerda_sheet(song: Song, overrides: Overrides, status: str, origins: Mapping[str, str],
+                    met: str | None) -> str | None:
+    """The LaCuerda sheet a song of yours could be looked up with now (its served line's "Use LaCuerda's sheet",
+    ``POST /lookup`` with it, as ``caracole get --lacuerda`` takes it): your pick on LaCuerda, else the best one
+    caracole met for it (``_lacuerda_met``); None when its kept sheet is LaCuerda's already, or the song is ignored."""
+    if status == "ignored" or origins.get("sheet.txt") == "lacuerda":
+        return None
+    pick = overrides.lacuerda.get(song.key)
+    url = pick.url if pick is not None else met
+    return url if url and url.startswith("https://") else None
+
+
 def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
     """What a song's line says of it on the YouTube route, and the video its audio came from."""
     if state is None or state.state not in _YOUTUBE_NOTES:
@@ -493,7 +522,8 @@ def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
-          origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None) -> dict[str, Any]:
+          origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
+          lacuerda_met: str | None = None) -> dict[str, Any]:
     """One song's data; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
     the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
@@ -501,7 +531,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     ``key`` and ``key_source`` are the song's key and where it came from, as in its info.json.
     ``origins`` is where each of its kept files came from (``icons.kept_sources``): each file gets
     its ``source``, and the song its primary file's. ``exports``: the PDFs caracole made of its sheet in
-    other versions, by file name, each with its version's label (``_exports``).
+    other versions, by file name, each with its version's label (``_exports``). ``lacuerda_met``: the best LaCuerda
+    sheet caracole met for it (``_lacuerda_met``), for ``lacuerdaSheet`` (``_lacuerda_sheet``).
     """
     from caracole.render import own_version
 
@@ -541,6 +572,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "buy": buy,
         "youtube": youtube if status != "ignored" else None,
         "lacuerda": _lacuerda_pick(song, overrides, status),
+        "lacuerdaSheet": _lacuerda_sheet(song, overrides, status, origins or {}, lacuerda_met),
         # Its identity key (normalize.identity_key): the served search puts it, and the sites' rows of its artist and
         # of it, under one header by the artist's part, as /api/search keys its rows.
         "identity": song.key,

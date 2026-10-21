@@ -88,7 +88,9 @@ Rules a change there keeps (the Invariants below are the others):
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
-  rows.js's `indexLine`; a removed song's line asks for it again as the request form does. A hit's
+  rows.js's `indexLine`; a removed song's line asks for it again as the request form does, and a song of
+  yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of it) posts
+  `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py). A hit's
   name there and on the lookup page presses its Get it (or Add again), disabled while that button is
   (rows.js `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it. Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
