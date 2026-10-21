@@ -13,10 +13,14 @@ Tables:
   tab id (``pin``) and the address you pasted (``pin_urls``): UG serves a
   slugged tab only at its slugged URL.
 - ``[transpose]``: "Artist - Title" → semitones, applied when sheets are rendered.
-- ``[version]``: "Artist - Title" → where you play the song, as its viewer's address writes it
-  (``t=2&mode=dorian&capo=0&at=3.1``: its key, mode, capo, shapes and swaps; viewer/version.py),
-  as "Make this my version" saves it (``add_version``): its PDF, its viewer and its songbooks
-  start there (render.py ``own_version``). It wins over the song's ``[transpose]``.
+- ``[version]``: "Artist - Title" → where you play the song, as "Make this my version" saves it
+  (``add_version``): the key it plays in, as the sheet reads its chords, a mode chosen and its capo,
+  and the chords played instead and the shapes chosen, by their names
+  (``key=Gm&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.x-x-5-7-8-6``,
+  viewer/version.py ``KeyVersion``), so that a sheet in another key in its sheet's place plays
+  there too; or, as caracole wrote it before, the viewer's address (``t=2&mode=dorian&capo=0``),
+  a move from the sheet. Its PDF, its viewer and its songbooks start there (render.py
+  ``own_version``). It wins over the song's ``[transpose]``.
 - ``[ignore] songs``: songs to skip.
 - ``[block] tab_ids``: tabs never to use.
 - ``[reject]``: "Artist - Title" → "ug-artist/ug-song"s that are not the song
@@ -96,8 +100,8 @@ class Overrides:
     """overrides.toml, canonicalized. ``pin_urls`` holds each pin's address, in ``pin``'s order;
     ``reject`` holds each song's rejected (artist key, song key) pairs, every entry of the song's;
     ``artist_url_names`` the name each ``[artist_url]`` entry is written under, by its key;
-    ``youtube`` each song's video id, or None for "none"; ``version`` each song's own version, as its
-    viewer's address writes it (without a "#")."""
+    ``youtube`` each song's video id, or None for "none"; ``version`` each song's own version, as the
+    entry writes it (without a "#"): kept by its key, or a viewer's address."""
 
     alias: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     match: Mapping[str, tuple[str, str]] = field(default_factory=dict)
@@ -434,8 +438,11 @@ def _video(value: Any, where: str) -> str | None:
 
 
 def _version(value: Any, where: str) -> str:
-    """A ``[version]`` value: a viewer's address after its "#" (or a "?"), which viewer/version.py reads as its
-    viewer does (``version_from_query``): text, with no control character or escape that isn't UTF-8."""
+    """A ``[version]`` value: text, with no control character or escape that isn't UTF-8. Either a version kept
+    by the key it plays in, as Make this my version writes it (``key=Gm&mode=dorian&capo=0``, read by
+    viewer/version.py's ``key_version``, which refuses a key, a mode or a capo that can't be one), or a viewer's
+    address after its "#" (or a "?"), as caracole wrote one before, which viewer/version.py reads as its viewer
+    does (``version_from_query``): a move from the sheet."""
     text = value.strip() if isinstance(value, str) else None
     if text is not None and text[:1] in ("#", "?"):
         text = text[1:]
@@ -448,6 +455,13 @@ def _version(value: Any, where: str) -> str:
     if not readable:
         raise OverridesError(f"{where}: expected a version as the sheet's viewer writes it in its address "
                              f"(\"{VERSION_SHAPE}\"), got {value!r}")
+    if any(part.partition("=")[0] == "key" for part in text.split("&")):
+        from caracole.viewer.version import key_version  # the viewer's theory, for an entry kept by its key alone
+
+        try:
+            key_version(text)
+        except ValueError as e:
+            raise OverridesError(f"{where}: {e}") from e
     return text
 
 

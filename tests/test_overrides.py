@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 import pytest
@@ -488,6 +489,32 @@ def test_version_names_where_a_song_is_played_as_its_viewers_address(tmp_path):
 def test_a_version_that_is_no_viewers_address_names_its_entry(tmp_path, value):
     with pytest.raises(OverridesError, match=r"\[version\] 'Radiohead - Creep': expected .*t=2&mode=dorian"):
         load_overrides(write(tmp_path, f'[version]\n"Radiohead - Creep" = {value}\n'))
+
+
+def test_a_version_may_keep_the_key_it_plays_in(tmp_path):
+    # As Make this my version writes it now: a key, its mode and its capo, and chords by their names
+    o = load_overrides(write(tmp_path, '''
+[version]
+"Soda Stereo - De Música Ligera" = "key=Gm&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.x-x-5-7-8-6"
+"Radiohead - Creep" = "key=F#"
+"Placeholder Band - Synthetic Song" = "key=A dorian&capo=2"
+'''))
+    assert o.version == {"soda-stereo/de-musica-ligera": "key=Gm&mode=dorian&capo=0&alt=F.Fmaj7&at=Gm.x-x-5-7-8-6",
+                         "radiohead/creep": "key=F#", "placeholder-band/synthetic-song": "key=A dorian&capo=2"}
+
+
+@pytest.mark.parametrize(("value", "why"), [
+    ("key=H", 'key must be a key as a sheet names it, such as "G", "F#m" or "Bb dorian", got \'H\''),
+    ("key=Gmin", 'key must be a key as a sheet names it, such as "G", "F#m" or "Bb dorian", got \'Gmin\''),
+    ("key=G&mode=dorien", "mode must be one of ionian, dorian"),
+    ("key=G&capo=12", "capo must be a fret from 0 to 11, got 12"),
+    ("t=2&key=G", "a key or a t, not both"),
+])
+def test_a_version_with_a_key_that_cant_be_one_names_its_entry(tmp_path, value, why):
+    with pytest.raises(OverridesError, match=re.escape(f"[version] 'Radiohead - Creep': {why}")):
+        load_overrides(write(tmp_path, f'[version]\n"Radiohead - Creep" = "{value}"\n'))
+    with pytest.raises(OverridesError, match=re.escape(why)):
+        add_version(write(tmp_path, ""), "Radiohead - Creep", value)
 
 
 def test_add_version_writes_and_clears_the_table_keeping_comments(tmp_path):

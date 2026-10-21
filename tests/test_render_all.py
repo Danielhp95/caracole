@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import os
 import re
 import shutil
@@ -34,6 +35,7 @@ from caracole.ug.page import strip_markup
 from caracole.versions import set_coverage, upsert_version
 
 from conftest import add_song
+from helpers.browser import in_chromium
 from helpers.ug_pages import version_dict
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
@@ -1808,10 +1810,10 @@ GM_SHEET = (
 
 
 def export(conn, cfg, song, query, ovr=None, runner=None):
-    from caracole.render import export_version, render_version
+    from caracole.render import export_sheet, export_version, render_version
 
     ovr = ovr or Overrides()
-    v = export_version(query, ovr, song)
+    v = export_version(query, export_sheet(conn, cfg, song).own(ovr))
     run = runner or FakeChordPro()
     return render_version(conn, cfg, ovr, song, v, runner=run), run
 
@@ -1966,14 +1968,15 @@ def test_an_export_without_a_sheet_is_a_render_error(conn, cfg):
 
 
 def test_a_query_without_a_t_key_starts_at_the_songs_transpose_even_with_at_or_alt(conn, cfg):
-    from caracole.render import export_version
+    from caracole.render import export_sheet, export_version
 
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
-    ovr = Overrides(transpose={song.key: 3})
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    own = export_sheet(conn, cfg, song).own(Overrides(transpose={song.key: 3}))
     for query in ("", "at=0.1.2", "alt=0.0.0.m.0"):
-        assert export_version(query, ovr, song).t == 3, query
-    assert export_version("t=1&at=0.1.2", ovr, song).t == 1
-    assert export_version("at=0.1.2&t=0", ovr, song).t == 0
+        assert export_version(query, own).t == 3, query
+    assert export_version("t=1&at=0.1.2", own).t == 1
+    assert export_version("at=0.1.2&t=0", own).t == 0
 
 
 # --- a song's own version ([version], "Make this my version") ----------------------------------
@@ -2013,17 +2016,22 @@ def test_a_songs_version_makes_its_main_pdf(conn, cfg):
 
 
 def test_an_export_from_an_address_naming_no_version_is_the_songs_own(conn, cfg):
-    from caracole.render import export_version
-    from caracole.viewer.version import version_from_query
+    from caracole.render import export_sheet, export_version
+    from caracole.viewer.version import Version, version_from_query
 
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
-    ovr = overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = -2\n\n' + MINE)
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    own = export_sheet(conn, cfg, song).own(overrides(cfg, '[transpose]\n"Soda Stereo - De Música Ligera" = -2\n\n' + MINE))
     mine = version_from_query("t=2&mode=dorian&capo=0")
+    assert own == mine
     for query in ("", "#", "fs=20&speed=8"):  # the viewer starts in it when its address names none
-        assert export_version(query, ovr, song) == mine, query
+        assert export_version(query, own) == mine, query
     # An address naming some of it is the version it names, its t the version's where it names none
-    assert export_version("mode=lydian", ovr, song) == version_from_query("t=2&mode=lydian")
-    assert export_version("t=0", ovr, song) == version_from_query("t=0")
+    assert export_version("mode=lydian", own) == version_from_query("t=2&mode=lydian")
+    assert export_version("t=0", own) == version_from_query("t=0")
+    # Kept by its key, it is that key on the sheet: A minor, played dorian, two up from G minor
+    assert export_sheet(conn, cfg, song).own(
+        overrides(cfg, '[version]\n"Soda Stereo - De Música Ligera" = "key=Am&mode=dorian"\n')) == Version(t=2, mode="dorian")
 
 
 def test_an_auto_sheet_beside_the_human_one_takes_the_songs_version_but_its_shapes_and_swaps(conn, cfg):
@@ -2037,3 +2045,129 @@ def test_an_auto_sheet_beside_the_human_one_takes_the_songs_version_but_its_shap
     assert human["start"] == "t=2&capo=0&alt=ionian.0.9.m.&at=0.1"
     assert auto["start"] == "t=2&capo=0"  # its chords are another sheet's: the positions and swaps are not its
     assert "[D]" in pdf_of(cfg, song, "sheet (auto).pdf").read_bytes().decode("utf-8")  # its C, up 2
+
+
+DM_SHEET = (  # De Música Ligera's sheet a fourth up, as another tabber writes it, with a capo on the 3rd fret
+    "[Verse 1]\r\n"
+    "[tab][ch]Dm[/ch]             [ch]Bb[/ch]\r\n"
+    "Una canción de prueba[/tab]\r\n"
+    "[tab][ch]F[/ch]                 [ch]C[/ch]\r\n"
+    "solo para el analizador[/tab]\r\n"
+)
+G_DORIAN = '[version]\n"Soda Stereo - De Música Ligera" = "key=Gm&mode=dorian&capo=0"\n'
+
+
+def in_g_dorian(conn, cfg):
+    """De Música Ligera, its version of its own G dorian with no capo, rendered on an A minor sheet, then on a
+    D minor sheet with a capo on the 3rd fret that took its place."""
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, AM_SHEET, tonality="Am")
+    mine = overrides(cfg, G_DORIAN)
+    render(conn, cfg, mine)
+    assert "[Gm]Una canción de [Edim]prueba" in pdf_of(cfg, song).read_bytes().decode("utf-8")
+    human_sheet(conn, cfg, song, DM_SHEET, tonality="Dm", meta={"capo": 3}, tab_id=95053)
+    return song, mine
+
+
+def test_my_version_keeps_its_key_when_a_sheet_in_another_key_and_capo_takes_its_place(conn, cfg):
+    song, mine = in_g_dorian(conn, cfg)
+    run = FakeChordPro()
+    assert render(conn, cfg, mine, runner=run).rendered == 1
+    printed = run.printed[-1].decode("utf-8")
+    assert "[Gm]Una canción de [Edim]prueba" in printed and "[Bb]solo para el anali[F]zador" in printed
+    assert "{subtitle: Soda Stereo · Key G dorian}" in printed.splitlines()  # no capo, as the version has none
+    assert info_json(cfg, song)["render"] == {"transpose": 2, "pdf": "sheet.pdf"}  # D shapes at capo 3 up to G
+    data = viewer_data(viewer_of(cfg, song))
+    assert data["start"] == "t=2&mode=dorian&capo=0" and data["transpose"] == 2 and data["capoSheet"] == 3
+    assert "[Dm]Una canción de [Bb]prueba" in (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(
+        encoding="utf-8")  # the sheet as written beside it, the viewer's input
+
+
+@in_chromium
+def test_my_versions_viewer_opens_in_its_key_on_the_new_sheet(conn, cfg, tmp_path):
+    from test_viewer import chord_texts, dump_dom
+
+    song, mine = in_g_dorian(conn, cfg)
+    render(conn, cfg, mine)
+    assert chord_texts(dump_dom(viewer_of(cfg, song), tmp_path)) == {"0": "Gm", "1": "Edim", "2": "Bb", "3": "F"}
+
+
+def test_an_older_version_with_a_t_stays_a_move_from_the_sheet(conn, cfg):
+    # As caracole wrote [version] before it kept a key: two up from whichever sheet the song has
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    mine = overrides(cfg, MINE)
+    render(conn, cfg, mine)
+    assert "[Am]Una canción de [F#dim]prueba" in pdf_of(cfg, song).read_bytes().decode("utf-8")
+    human_sheet(conn, cfg, song, AM_SHEET, tonality="Am", tab_id=95053)
+    render(conn, cfg, mine)
+    assert "[Bm]Una canción de [G#dim]prueba" in pdf_of(cfg, song).read_bytes().decode("utf-8")
+    assert viewer_data(viewer_of(cfg, song))["start"] == "t=2&mode=dorian&capo=0"
+    assert cfg.overrides_file.read_text(encoding="utf-8") == MINE  # never written on read
+
+
+def test_my_version_on_a_sheet_with_no_key_is_the_sheet_as_written(conn, cfg, caplog):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, "[tab][ch]N.C.[/ch]       [ch]Hm[/ch]\nPalabras sin acordes[/tab]\n", tonality="")
+    run = FakeChordPro()
+    with caplog.at_level(logging.WARNING, logger="caracole.render"):
+        assert render(conn, cfg, overrides(cfg, G_DORIAN), runner=run).rendered == 1
+    printed = run.printed[-1].decode("utf-8")
+    assert "[N.C.]" in printed and "[Hm]" in printed and "{key" not in printed
+    assert info_json(cfg, song)["render"]["transpose"] == 0
+    assert viewer_data(viewer_of(cfg, song))["start"] == "t=0"
+    # and says so, once the PDF is made: not each night it is up to date
+    said = ("Soda Stereo - De Música Ligera: sheet.pdf is as written, not in your version (G Dorian, capo 0): "
+            "its sheet has no key caracole can read")
+    assert said in caplog.text
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="caracole.render"):
+        assert render(conn, cfg, overrides(cfg, G_DORIAN)).skipped == 1
+    assert said not in caplog.text
+
+
+def test_my_version_plays_its_chords_on_a_sheet_that_reads_them_in_the_relative_key(conn, cfg):
+    # B minor, two up from an A minor sheet; the sheet that takes its place names C major for the same chords:
+    # the same notes, so the same chords, as a t=2 played them
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, AM_SHEET, tonality="Am")
+    mine = overrides(cfg, '[version]\n"Soda Stereo - De Música Ligera" = "key=Bm&capo=0"\n')
+    render(conn, cfg, mine)
+    assert "[Bm]Una canción de [G]prueba" in pdf_of(cfg, song).read_bytes().decode("utf-8")
+    human_sheet(conn, cfg, song, AM_SHEET, tonality="C", tab_id=95053)
+    run = FakeChordPro()
+    assert render(conn, cfg, mine, runner=run).rendered == 1
+    printed = run.printed[-1].decode("utf-8")
+    assert "[Bm]Una canción de [G]prueba" in printed and "[D]solo" in printed
+    assert viewer_data(viewer_of(cfg, song))["start"] == "t=2&capo=0"
+
+
+def test_my_version_on_an_auto_sheet_beside_a_human_one_that_hears_the_relative_key(conn, cfg):
+    # The human sheet reads its chords in A minor, the auto sheet heard C major in the audio: B minor is two up on
+    # each, its C and G a D and an A, as its version's notes are D major's
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, song, key="C")
+    set_coverage(conn, human_sheet(conn, cfg, song, AM_SHEET, tonality="Am"), 0.3)
+    render(conn, cfg, overrides(cfg, '[version]\n"Placeholder Band - Synthetic Song" = "key=Bm&capo=0"\n'))
+    assert "[Bm]Una canción de [G]prueba" in pdf_of(cfg, song).read_bytes().decode("utf-8")
+    auto = pdf_of(cfg, song, "sheet (auto).pdf").read_bytes().decode("utf-8")
+    assert "[D]" in auto and "[A]" in auto and "[B" not in auto and "[F#" not in auto
+    assert viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["start"] == "t=2&capo=0"
+
+
+def test_a_bug_placing_my_version_on_a_sheet_leaves_it_as_written_and_says_why(conn, cfg, caplog, monkeypatch):
+    # As a songbook's setting: the viewer's code can't place it (a bug), so the sheet is as written, and the log
+    # says why, with the traceback; nothing else of the song's stops
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, AM_SHEET, tonality="Am")
+
+    def broken(*args, **kwargs):
+        raise ValueError("a bug in the viewer's theory")
+
+    monkeypatch.setattr(render_module, "in_key", broken)
+    run = FakeChordPro()
+    assert render(conn, cfg, overrides(cfg, G_DORIAN), runner=run) == RenderStats(rendered=1)
+    assert "[Am]Una canción de [F]prueba" in run.printed[-1].decode("utf-8")
+    assert viewer_data(viewer_of(cfg, song))["start"] == "t=0"
+    assert "Soda Stereo - De Música Ligera: cannot place it in its own version" in caplog.text
+    assert "Traceback" in caplog.text and "a bug in the viewer's theory" in caplog.text

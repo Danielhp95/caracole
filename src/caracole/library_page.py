@@ -350,6 +350,8 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     each file with where it came from. ``youtube``: where each song stands on the YouTube route
     (``song_states``; empty with the route off), when the caller has it already, else asked of these
     songs alone."""
+    from caracole.render import pdf_transpose
+
     pages = _guitar_pro_pages(conn)
     sources = _downloaded(conn)
     origins = kept_sources(conn)
@@ -366,7 +368,8 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     musescore = cfg.provider("musescore").enabled
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
-                   _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}))
+                   _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
+                   transpose=pdf_transpose(conn, overrides, s))
              for s in library]
     _add_picks(conn, library, cards)
     return cards
@@ -493,7 +496,8 @@ def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
           guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
-          origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None) -> dict[str, Any]:
+          origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
+          transpose: int = 0) -> dict[str, Any]:
     """One song's data; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
     the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
@@ -501,10 +505,9 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     ``key`` and ``key_source`` are the song's key and where it came from, as in its info.json.
     ``origins`` is where each of its kept files came from (``icons.kept_sources``): each file gets
     its ``source``, and the song its primary file's. ``exports``: the PDFs caracole made of its sheet in
-    other versions, by file name, each with its version's label (``_exports``).
+    other versions, by file name, each with its version's label (``_exports``); ``transpose``, how many semitones
+    its PDF is moved by (``render.pdf_transpose``).
     """
-    from caracole.render import own_version
-
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
     names = _file_names(song_dir(library_dir, song))
@@ -530,7 +533,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "added": song.added_at,
         "key": key.key if key else None,
         "key_source": key.source if key else None,
-        "transpose": own_version(overrides, song).t,  # what its PDF is moved by: [version] wins over [transpose]
+        "transpose": transpose,  # what its PDF is moved by (render.pdf_transpose): [version] wins over [transpose]
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
         "files": files,

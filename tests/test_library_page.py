@@ -108,6 +108,20 @@ def test_a_songs_own_version_is_the_transposition_its_line_shows(conn, cfg):
     assert songs_of(page(conn, cfg, o))["Soda Stereo - De Música Ligera"]["transpose"] == 3
 
 
+def test_a_version_kept_by_its_key_shows_what_its_pdf_is_moved_by(conn, cfg):
+    # Its key moves each sheet by its own: the line says what the PDF was made in, once it was
+    from helpers.rendered import fake_chordpro
+
+    from caracole.render import render_all
+
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet_json(conn, cfg, s, AM_F_C_G)  # A minor
+    o = Overrides(transpose={s.key: 3}, version={s.key: "key=Gm&mode=dorian&capo=0"})
+    assert songs_of(page(conn, cfg, o))[s.display]["transpose"] == 0  # no PDF yet
+    assert render_all(conn, cfg, o, runner=fake_chordpro).rendered == 1
+    assert songs_of(page(conn, cfg, o))[s.display]["transpose"] == -2  # down to G, its [transpose] left out
+
+
 def keep_sheet_json(conn, cfg, song, content, *, raw=None, tab_id=1):
     v = version(conn, song, tab_id, raw=raw)
     doc = json.dumps({"content": content}).encode()
