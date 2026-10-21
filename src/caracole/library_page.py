@@ -27,15 +27,17 @@ by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
 The songs are dense lines (``resultRow``'s ``dense`` form, ROWS_SCRIPT's), a
 song a line on a laptop, about thirty to its screen, two lines a song on a
 phone. By artist, the order the page opens in, they are grouped under their
-artist's name, artists A to Z, each group's header saying how many of the songs
-listed are yours ("Soda Stereo · you have 2"); by title or by when they came,
+artist's name, artists A to Z, each group's header saying how many of their
+songs you have, whatever the search or a filter leaves out ("Soda Stereo · you
+have 2"); by title or by when they came,
 they stand alone, each with its artist. A line holds the song's title, which
 opens its sheet (its viewer, else its PDF, else its text), its status (Found,
 Wanted, Needs review, Not found), its key, the marks of where its sheet and its
 files came from and its main action: Open, or, served, Fetch now or Pick the
 match. Everything else a song has is under its "⋯": its facts (the key in words
 and where it came from, the transposition, the lyrics, when it came), its
-review's picker, where its audio comes from, its other files, the Guitar Pro
+review's picker, where its audio comes from, its versions (the sheet's PDFs
+in other versions, each file's ``version``), its other files, the Guitar Pro
 versions to download from UG, its MuseScore pages, its search and buy links, Add
 to a songbook… (the Select mode, the song picked) and, served, Remove…. An
 artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows that
@@ -533,7 +535,8 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     """Links to the kept files that exist, as paths relative to index.html, percent-encoded. The
     primary one is the sheet's PDF, else its text: never a score, whatever its format. Each says
     where it came from (``icons.source_of``). ``exports`` (``_exports``) are listed after the sheets' viewers
-    and PDFs, by their labels, those still in the folder alone."""
+    and PDFs, by their labels, those still in the folder alone, each with its ``version`` ("G Dorian, capo 0"),
+    which its line's "⋯" lists it by, under Versions."""
     guitar = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
                     for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
@@ -547,9 +550,11 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     primary = next((n for n in ordered if n in ("sheet.html", "sheet (auto).html", "sheet.pdf", "sheet (auto).pdf")),
                    None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
+    versions = {n: label for label, n in made}
     return [
         {"name": n, "label": labels.get(n) or _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}",
-         "primary": n == primary, "source": source_of(n, origins or {})}
+         "primary": n == primary, "source": source_of(n, origins or {}),
+         **({"version": versions[n]} if n in versions else {})}
         for n in ordered
     ]
 

@@ -43,7 +43,7 @@ section says where things are, and the rules a change there keeps.
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
 | youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step) |
-| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed among the song's files on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml) |
+| render | chordpro.py (UG markup to ChordPro), render.py (PDFs; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, listed under Versions in its line's ⋯ on index.html; `own_version`, the song's own, overrides.toml's `[version]`), pdf_text.py (each PDF's own text), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python), songbook.py (songbooks.toml) |
 | todo | todo.py (`_todo.md`), library_page.py (`index.html`), library_assets/, songbook_section.py |
 
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
@@ -486,7 +486,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time
   (web/jobs.py), since the lock is re-entrant within a process and its threads would share it:
-  a removal too, `caracole remove --yes`, once the card's five seconds with Undo are over
+  a removal too, `caracole remove --yes`, once the line's five seconds with Undo are over
   (the library page's script; without it, a page of its own), having asked what goes
   (`removal.plan_removal`, which only reads, and `removal.brief`); its job's song key is
   `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.

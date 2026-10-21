@@ -726,7 +726,8 @@
   };
   // A song's line: its title (which opens its sheet), its status, its key and the marks of where its sheet and
   // files came from, its main action; and under its "⋯" its facts, its picker or what to do about its match, where
-  // its audio comes from, its other files, the links to find or buy it, Add to a songbook… and Remove….
+  // its audio comes from, its sheet's versions, its other files, the links to find or buy it, Add to a songbook…
+  // and Remove….
   const lineFor = (s) => {
     const id = Number(s.id);
     const files = listOf(s.files);
@@ -760,7 +761,11 @@
     const control = serverAction(s, picker);
     const action = control.held ? control.action : primary ? openButton(s, primary) : null;
     const listed = control.held ? files : files.filter((f) => f !== primary);
-    more.push({ heading: "Files", links: listed.map((f) => elsewhere(s, f)) },
+    // The sheet's PDFs in other versions (Export PDF of this version), by their versions, before the other files.
+    const isVersion = (f) => f && typeof f.version === "string" && f.version;
+    const versions = listed.filter(isVersion).map((f) => Object.assign({}, elsewhere(s, f), { label: f.version }));
+    more.push({ heading: "Versions", links: versions },
+      { heading: "Files", links: listed.filter((f) => !isVersion(f)).map((f) => elsewhere(s, f)) },
       { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
@@ -804,8 +809,9 @@
     if (!lines.has(i)) lines.set(i, lineFor(songs[i]));
     return lines.get(i);
   };
-  // An artist's group: a header that names them and counts their songs listed, "Soda Stereo · you have 2"
-  // (``counts.mine``), then their lines. The name, once you have songs of theirs, shows those alone.
+  // An artist's group: a header that names them and counts the songs of theirs you have, "Soda Stereo · you have
+  // 2" (``counts.mine``: all of them, whatever the search or a filter leaves out), then their lines. The name,
+  // once you have songs of theirs, shows those alone.
   let groupSerial = 0;
   const artistGroup = (artist, items, counts) => {
     const a = artist && typeof artist === "object" ? artist : { name: artist };
@@ -977,10 +983,16 @@
         if (!runs.length || runs[runs.length - 1].key !== key) runs.push({ key, items: [] });
         runs[runs.length - 1].items.push(i);
       }
+      // How many songs of each artist you have, the songs the search or a filter leaves out too.
+      const yours = new Map();
+      for (const s of songs.concat(Array.from(arrived.values())).filter(counted)) {
+        const key = String(s.sortArtist || "");
+        yours.set(key, (yours.get(key) || 0) + 1);
+      }
       const groups = el("div", "groups");
       for (const { key, items } of runs) {
         const group = artistGroup({ key, name: String(songs[items[0]].artist) }, items.map(lineOf),
-          { mine: items.filter((i) => counted(songs[i])).length });
+          { mine: yours.get(key) || 0 });
         first(String(songs[items[0]].artistLetter || "#"), group);
         groups.appendChild(group);
       }

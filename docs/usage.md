@@ -1181,8 +1181,9 @@ and cache.
   `caracole remove` deletes them. One a new sheet names otherwise (a sheet in
   another key or capo took the old one's place, an auto sheet's key was heard
   again) is made under its new name, and the PDF under the old one goes, while
-  it is still as caracole wrote it. The library page lists them among the
-  song's files, after its sheet's PDF (`Sheet PDF, G Dorian, capo 0`). An
+  it is still as caracole wrote it. The library page lists them under the
+  song's line's "⋯", as its Versions, each by its version (`G Dorian, capo
+  0`), before its other files. An
   export is made from the song's human sheet, else its auto sheet; it needs one
   of them to be kept, and exits 1 with the reason when it can't be made.
 
@@ -1659,8 +1660,9 @@ edge to show it.
 
 It shows your songs as dense lines, grouped by artist: each artist's name over
 their songs, artists A to Z ("The Beatles" under B, Chinese names by their
-pinyin), with how many of the songs listed are yours ("Soda Stereo · you have
-2"), and their songs A to Z under it. A line is a song: about thirty to a
+pinyin), with how many of their songs you have ("Soda Stereo · you have 2",
+all of them, whatever the search or a filter leaves out), and their songs A to
+Z under it. A line is a song: about thirty to a
 laptop's screen, one line each; on a phone two lines a song, the title and its
 button, then the rest under the title. A line has the song's title, which
 opens its sheet (the sheet viewer, see [The sheet viewer](#the-sheet-viewer),
@@ -1684,9 +1686,10 @@ YouTube route, when caracole takes the audio of songs with no human sheet from
 YouTube ("No human sheet yet: caracole takes the audio from YouTube next",
 "Audio from YouTube: auto-chords works out the chords next", "Auto sheet from
 YouTube audio"), with a link to the video once there is one, instead of
-offering to buy it; its other files (the PDF, its exports in other versions
-(`Sheet PDF, G Dorian, capo 0`: see `caracole render --version`), the text,
-the ChordPro file, the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the
+offering to buy it; its versions, the sheet's PDFs in other versions, each
+by its version (`G Dorian, capo 0`: see `caracole render --version` and Export
+PDF of this version); its other files (the PDF, the text, the ChordPro file,
+the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the
 Guitar Pro versions to download from Ultimate Guitar; its MuseScore pages,
 each a possible match, as on the to-do page; for a song without a sheet, its
 search and buy links; **Add to a songbook…** (see Songbooks, below); and,

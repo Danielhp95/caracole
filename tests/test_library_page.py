@@ -101,7 +101,7 @@ def test_key_comes_from_the_kept_sheets_version_and_transpose_from_overrides(con
     assert plain.key not in o.transpose
 
 
-def test_a_songs_own_version_is_the_transposition_its_card_shows(conn, cfg):
+def test_a_songs_own_version_is_the_transposition_its_line_shows(conn, cfg):
     # [version] wins over [transpose]: its PDF is moved by the version's t
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     o = Overrides(transpose={s.key: -2}, version={s.key: "t=3&mode=dorian"})
@@ -340,6 +340,8 @@ def test_a_songs_exports_are_listed_after_its_sheets_pdfs_by_their_versions(conn
         ("sheet (B Minor, capo 2).pdf", "Sheet PDF, B Minor, capo 2", False),
         ("sheet (G Dorian, capo 0).pdf", "Sheet PDF, G Dorian, capo 0", False),
         ("sheet.txt", "Sheet text", False), ("lyrics.txt", "Lyrics", False)]
+    # Each export says its version, which its line's "⋯" lists it by (under Versions); no other file has one.
+    assert [f.get("version") for f in files] == [None, None, "B Minor, capo 2", "G Dorian, capo 0", None, None]
     export = next(f for f in files if f["name"] == "sheet (G Dorian, capo 0).pdf")
     assert export["href"] == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"
     assert export["source"] == "ug"  # made from the sheet: where it came from
@@ -1597,6 +1599,37 @@ def test_a_line_opens_its_sheet_from_one_button_and_its_other_files_wait_under_i
 
 
 @in_chromium
+def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, tmp_path):
+    # The PDFs caracole made of the sheet in other versions (Export PDF of this version) are the song's versions:
+    # under its "⋯", by their versions, before its other files, which no longer list them.
+    from caracole.render import EXPORT_KV
+
+    s = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet_json(conn, cfg, s, "Words\n", raw={"tonality_name": "E"})
+    update_song(conn, s.id, status="found")
+    put(cfg, s, "sheet.html", "sheet.pdf", "sheet (G Dorian, capo 0).pdf", "sheet (B Minor, capo 2).pdf")
+    db.kv_set_json(conn, f"{EXPORT_KV}{s.id}", {
+        "G Dorian, capo 0": {"pdf": "sheet (G Dorian, capo 0).pdf", "query": "t=0&mode=dorian"},
+        "B Minor, capo 2": {"pdf": "sheet (B Minor, capo 2).pdf", "query": "t=4&capo=2"},
+    })
+    plain = add_song(conn, "Radiohead", "Creep")
+    keep_sheet_json(conn, cfg, plain, "Words\n", raw={"tonality_name": "G"}, tab_id=2)
+    update_song(conn, plain.id, status="found")
+    put(cfg, plain, "sheet.html", "sheet.pdf")
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+
+    soda = line_of(shown, "De Música Ligera")
+    assert link_texts(soda.split('class="line-panel"', 1)[0]) == ["Open"]
+    groups = re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>', panel_of(soda), re.S)
+    assert [(heading, link_texts(links)) for heading, links in groups][:2] == [
+        ("Versions", ["B Minor, capo 2", "G Dorian, capo 0"]), ("Files", ["Sheet PDF", "Sheet text"])], groups
+    versions = dict(groups)["Versions"]
+    assert 'href="Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"' in versions
+    # A song with no export has no Versions.
+    assert '<p class="subhead">Versions</p>' not in line_of(shown, "Creep")
+
+
+@in_chromium
 def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_skips_the_title(conn, cfg, tmp_path):
     from helpers.browser import Browser, BrowserError
 
@@ -2586,6 +2619,14 @@ def test_filters_key_sort_and_letters_work_on_the_lines(conn, cfg, tmp_path):
     assert re.search(r'<button class="artist line-by"[^>]*><span class="artist-name">ABBA</span>',
                      line_of(by_title, "Dancing Queen"))
     assert titles_in(shown("#sort=recent")) == ["Creep", "Dancing Queen", "Don't Stop Me Now", "Bohemian Rhapsody"]
+    # Whatever the search or a filter leaves out, an artist's header counts every song of theirs you have.
+    for fragment, heads, titles in (("#q=bohemian", ["Queen · you have 2"], ["Bohemian Rhapsody"]),
+                                    ("#key=F", ["Queen · you have 2"], ["Don't Stop Me Now"]),
+                                    ("#q=queen", ["ABBA · you have 1", "Queen · you have 2"],
+                                     ["Dancing Queen", "Bohemian Rhapsody", "Don't Stop Me Now"])):
+        found = shown(fragment)
+        assert ([re.sub(r"<[^>]+>", "", h) for h in re.findall(r"<h2[^>]*>(.*?)</h2>", found, re.S)],
+                titles_in(found)) == (heads, titles), fragment
     # The letters jump to an artist's group by artist, to a title's first line by title, once 40 songs show.
     for n in range(36):
         add_song(conn, "Radiohead", f"Song {n:02d}")
