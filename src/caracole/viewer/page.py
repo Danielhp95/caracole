@@ -50,6 +50,7 @@ from urllib.parse import quote
 
 from caracole.inline import json_block, sha256_source
 from caracole.normalize import has_han
+from caracole.page_icon import LINK as PAGE_ICON
 from caracole.viewer.sheet import (
     Blank,
     ChordRow,
@@ -106,6 +107,7 @@ BUILD_FILES = (
                                "version.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "normalize.py",  # has_han
+    HERE.parent / "page_icon.py",  # the icon in the page's head
     HERE.parent / "autochords" / "merge.py",  # AUTO_MARKER, which sheet.py reads
 )
 
@@ -196,19 +198,21 @@ _NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
 def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str, ...]) -> str:
-    """A whole page, sheet.html or songbook.html: its head (``title``, the stylesheets, and the policy
-    that allows exactly them and the scripts, and nothing to load, no form to send, no base to
-    change), ``body``, then the scripts, which run once the page is read, in their order."""
+    """A whole page, sheet.html or songbook.html: its head (``title``, the icon, the stylesheets, and the
+    policy that allows exactly them and the scripts, an image from a data: URI, the icon, and nothing to
+    load, no form to send, no base to change), ``body``, then the scripts, which run once the page is
+    read, in their order."""
     policy = (
         f"default-src 'none'; script-src {' '.join(map(sha256_source, scripts))}; "
-        f"style-src {' '.join(map(sha256_source, styles))}; base-uri 'none'; form-action 'none'"
+        f"style-src {' '.join(map(sha256_source, styles))}; img-src data:; base-uri 'none'; form-action 'none'"
     )
     # One join, so the page is copied once: its script and stylesheet alone are some 66 kB.
     return "".join((
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
-        f'<meta http-equiv="Content-Security-Policy" content="{policy}">\n'
+        f'<meta http-equiv="Content-Security-Policy" content="{policy}">\n',
+        PAGE_ICON,
         f"<title>{escape(title)}</title>\n",
         *(f"<style>{style}</style>\n" for style in styles),
         "</head>\n<body>\n",

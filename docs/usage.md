@@ -1664,7 +1664,11 @@ as another spelling.
 overrides.toml can't be read: built without it, the page would lose your
 transpositions and ignored songs, so it stays as it was. Open it from the
 synced folder, in a browser on the laptop or the phone. It needs no server and
-loads nothing from the network. It has two tabs under its header: **Library**,
+loads nothing from the network. Its browser tab shows caracole's mark, an
+inverted question mark (¿) on its rust-red square, drawn inside the page itself,
+as every page caracole writes or serves shows it (the sheet viewers and the
+songbooks from their next render); caracole serve answers a browser's own
+`/favicon.ico` with it too. It has two tabs under its header: **Library**,
 your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
 the address remembers which (`#tab=songbooks`). Its header is short, so that on
 a phone the first song starts well within the first screen: the library's

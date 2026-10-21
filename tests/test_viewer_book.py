@@ -224,8 +224,11 @@ def test_the_policy_allows_exactly_its_scripts_and_styles():
 
 
 def test_the_page_loads_nothing_and_credits_the_fingerings():
+    from caracole.page_icon import LINK
+
     html = page()
-    shell = re.sub(r'<script type="application/json".*?</script>', "", html, flags=re.DOTALL)
+    assert html.count(LINK) == 1  # its icon, inline: a data: URI loads nothing
+    shell = re.sub(r'<script type="application/json".*?</script>', "", html.replace(LINK, ""), flags=re.DOTALL)
     assert not re.search(r"<(link|img|iframe|object|embed)\b|\bsrc=|@import|url\(", shell, re.IGNORECASE)
     hrefs = re.findall(r'href="([^"]*)"', shell)
     assert [h for h in hrefs if "://" in h] == ["https://github.com/tombatossals/chords-db"]

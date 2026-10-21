@@ -61,6 +61,7 @@ Shared by the steps and the commands:
 | health.py | cooldowns, `events` |
 | normalize.py | keys, pinyin, `name_forms`; `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`, Chinese in pinyin only as whole words, for search.py and lacuerda_index.py |
 | inline.py | what a page holds inline: a script or a style by its hash, a JSON data block; the standard library alone |
+| page_icon.py | the mark in every page's tab, "¿" drawn in SVG (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`); the standard library alone |
 | overrides.py | overrides.toml |
 | library.py | song folders, safe file access in the synced library |
 | notify.py | ntfy |
@@ -75,7 +76,8 @@ Rules a change there keeps (the Invariants below are the others):
 - **The pages caracole writes and serves** (index.html, sheet.html, songbook.html, caracole
   serve's own) load nothing from the network: a Content-Security-Policy allows each inline
   script and stylesheet by the hash of the very text inlined (inline.py `sha256_source`), and a
-  page's data is a JSON block with each `<` escaped (`inline.json_block`). Their scripts build
+  page's data is a JSON block with each `<` escaped (`inline.json_block`). Each carries
+  `page_icon.LINK` in its head, which its policy allows with `img-src data:` (test_page_icon.py). Their scripts build
   every element with `createElement` and `textContent`, never `innerHTML`, and connect to
   nothing but caracole serve. A page caracole writes into the library is served only through
   `app.written_pages` (a new kind goes there, with its record and its policy), and only while it

@@ -3,6 +3,7 @@
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
     POST /request         a song for wanted.txt; with ``fetch``, looked up now too
     POST /fetch           look a song of the library up now, unless it needs review first
+    GET  /favicon.ico     the pages' icon (page_icon.py), for a browser that asks for it by this name
 
 A request is written to wanted.txt at once, with ``wanted.append_wanted``, the
 function ``caracole add`` writes it with, and before the database: the line is
@@ -40,6 +41,7 @@ ROUTES = (
     Route("GET", "/index.html", lambda app, asked: library(app)),
     Route("POST", "/request", lambda app, asked, form: request(app, form)),
     Route("POST", "/fetch", lambda app, asked, form: fetch(app, form)),
+    Route("GET", "/favicon.ico", lambda app, asked: icon()),
 )
 
 
@@ -66,6 +68,15 @@ def library(app: WebApp) -> Response:
                                   controls=controls)
     # The page's own CSP is in its meta tag; a header CSP would apply on top of it.
     return html_response(200, html, csp=FRAMES)
+
+
+def icon() -> Response:
+    """The mark every page carries inline, for a browser that asks for /favicon.ico anyway: an SVG, which,
+    opened as a page of its own, may load and run nothing."""
+    from caracole.page_icon import SVG
+
+    return Response(200, SVG.encode("utf-8"), [("Content-Type", "image/svg+xml"),
+                                                ("Content-Security-Policy", f"default-src 'none'; {FRAMES}")])
 
 
 def request(app: WebApp, form: dict[str, str]) -> Response:

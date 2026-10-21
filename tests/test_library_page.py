@@ -697,9 +697,12 @@ def test_no_external_resources_and_no_urls_outside_the_data(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马，斑马")
     v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
     set_picks(conn, s.id, ["guitar-pro"], [v])
+    from caracole.page_icon import LINK
+
     html = page(conn, cfg)
+    assert html.count(LINK) == 1  # its icon, inline: a data: URI loads nothing
     # The CSP's hashes are base64, which may hold "//" before a letter: they are no addresses.
-    shell = re.sub(r"'sha256-[A-Za-z0-9+/]+=*'", "'sha256'", JSON_BLOCK.sub("", html))
+    shell = re.sub(r"'sha256-[A-Za-z0-9+/]+=*'", "'sha256'", JSON_BLOCK.sub("", html.replace(LINK, "")))
     assert not re.search(r"https?://|//[a-z]", shell, re.I)  # no CDN, fonts, images, fetches
     assert not re.search(r"<(link|img|iframe|object|embed)\b|\bsrc=|@import|url\(", shell, re.I)
     allowed = set(search_links("宋冬野", "斑马，斑马").values()) | {"https://tabs.ultimate-guitar.com/tab/555890"}

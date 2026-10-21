@@ -52,6 +52,7 @@ from typing import Any
 
 from caracole.inline import json_block, sha256_source
 from caracole.library_assets import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE
+from caracole.page_icon import LINK as PAGE_ICON
 
 STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
@@ -636,7 +637,7 @@ def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
-        f"<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
+        f"{PAGE_ICON}<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
         + _BODY.replace("__CSRF__", token)
         + json_block("icons", dict(icons or {}))
         + f"<script>{ROWS_SCRIPT}</script>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"
