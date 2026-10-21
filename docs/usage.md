@@ -1071,8 +1071,8 @@ and cache.
   spent budget or an error (`Not read: LaCuerda failed (…); nothing changed:
   try again later.`), all of which exit 0, nothing changed. It can't go with
   `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
-  runs it, and so does Read LaCuerda's page for a name its listings haven't
-  reached yet.
+  runs it, and so does Ask LaCuerda (1 request) for a name its listings
+  haven't reached yet.
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
   song that has no Guitar Pro or Power Tab file, newest songs first. It reads
   gtptabs.com's sitemaps into a local index when it never has, or last did 30
@@ -2342,8 +2342,9 @@ with it. A KEY that is no key exits with status 2.
   page, which queues `caracole lacuerda --artist` (one request, at the lookup
   pace) and lists them in the group once it has run; and for a query it has no
   artist by, while the nightly run hasn't read the listing of its letter whole,
-  the results say so under the groups and offer Read LaCuerda's page for
-  “estopa”, which queues `caracole lacuerda --artist estopa` (a request for
+  the results offer Ask LaCuerda for “estopa” (1 request) under the groups
+  (the button's tooltip says the letter its listings don't reach yet), which
+  queues `caracole lacuerda --artist estopa` (a request for
   each spelling of the name tried, usually one), then lists their songs in a
   group of their own, first, or says what LaCuerda answered: `Not found:
   LaCuerda has no artist page for estopa.`, or, for a cooldown, a block, a
@@ -2372,14 +2373,29 @@ with it. A KEY that is no key exits with status 2.
   forever" never a page titled Oasis or Forever), each a possible match. The
   results follow what you type; a search typed over stops at once, and only
   the newest query's answer is shown, the older one staying until then. The
-  line under the box says "Searching the sites…", then how many each site has,
-  and the results end with the sites left out and why: one turned off in
-  caracole.toml, or one whose index the nightly run hasn't read yet
-  (MuseScore's while it blocks caracole, LaCuerda's before its first
-  listings); and those searched in part: LaCuerda's, while the nightly run
-  still reads its listings ("Searched in part: LaCuerda (its index is still
-  being read: 2,957 artists so far, with #, A–C read whole; the nightly run
-  reads the rest)."). Searching asks no site anything: it reads the indexes
+  line under the box says "Searching the sites…", then how many each site has.
+  Under the results, one muted line says where caracole looked when a site
+  wasn't searched whole, a chip a site: green searched whole (UG ✓,
+  gtptabs.com ✓), amber in part (LaCuerda: up to C, while the nightly run
+  still reads its listings: the letters read whole run up to C), red empty or
+  blocked (MuseScore blocked, gtptabs.com: empty, before the nightly run read
+  its index), grey turned off in caracole.toml (MuseScore: off); each chip's
+  tooltip says why in one line ("LaCuerda's index is still being read: 2,957
+  artists so far, with #, A–C read whole; the nightly run reads the rest.").
+
+  When a query finds nothing, the results are one card instead. First, when
+  the indexes have artists whose names are spelled close to it, "Did you
+  mean": a line each ("Lynyrd Skynyrd · artist · 212 songs on UG"), whose
+  Their songs searches that name, asking no site, and moves to its first
+  result. Then the card, headed "Not it?" under them, else "No song or artist
+  matches “lynrd”": Request “lynrd” by name, which opens the request form
+  below, filled in from the query; Ask LaCuerda (1 request), only while
+  LaCuerda's listings don't reach the name's letter; the chips of where
+  caracole looked; and "Why can't caracole find it?", folded: Ultimate
+  Guitar's sitemaps name some artists only by a number (Joaquín Sabina, Maná,
+  宋冬野), so caracole can't see their tabs, with the `[artist_url]` lines to
+  paste into overrides.toml for the query as that artist's name, and, for a
+  title, `caracole add ARTIST "lynrd"`. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
   common words), takes no lock and spends no budget, and so does "+ N more".
   **Enter never spends a request**, however clear the best result: it moves to
@@ -2446,7 +2462,10 @@ with it. A KEY that is no key exits with status 2.
   stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
-  nothing), or nothing when nothing stands out. `/lookup?q=WORDS` opens it with
+  nothing), or nothing when nothing stands out. A query that finds nothing
+  shows the same "Did you mean" and card, whose first button is Look “…” up by
+  name (the form under the results, filled in), and whose Their songs lists
+  that artist's songs, as their row's Songs does. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there. It alone
   looks a song you already have up again: on the library page the index's
   rows of a song of yours are folded into your song's own line, which has

@@ -329,7 +329,7 @@ def test_on_a_phone_the_sheet_you_picked_is_on_the_screen_once_it_arrives(cfg, l
     phone.open(base + "/lookup")
     phone.type("creep")
     assert phone.wait(f"{HITS} >= 10")
-    phone.click("#results .hits:last-of-type .hit button.primary")
+    phone.click("#results .hits:nth-last-child(1 of .hits) .hit button.primary")  # the last list, whatever follows
     assert phone.wait(SHEET_TOP + " !== null")
     time.sleep(0.8)  # any smooth scroll ends
     top, bar, height = phone.js(SHEET_TOP)

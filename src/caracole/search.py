@@ -764,10 +764,8 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
     (``overrides.artist_url_entry``): the hint says so instead. The address may
     be the artist's page or one of their tab pages.
     """
-    strong = any(h.score >= STRONG for h in hits)
-    if strong and not any(c.isalpha() and not c.isascii() for c in query):
-        return None
-    if any(h.score >= STRONG and h.page for h in hits):  # an artist page caracole read answers it: it sees them
+    strong = _unseen(query, hits)
+    if strong is None:
         return None
     lead = (
         "UG's sitemaps list artists with accented or non-Latin names only by bare ids." if strong else
@@ -805,6 +803,31 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
     if not artist:  # the query may be the song's title: no site is asked for its artist
         hint += f"\n\nIf {shown} is a title, caracole needs its artist too: `caracole add ARTIST {_shell(shown)}`."
     return hint
+
+
+def _unseen(query: str, hits: Sequence[IndexHit | ArtistHit]) -> bool | None:
+    """Whether the query may name an artist the index can't see (``bare_id_hint``): None when not, else whether
+    something matched it strongly all the same."""
+    strong = any(h.score >= STRONG for h in hits)
+    if strong and not any(c.isalpha() and not c.isascii() for c in query):
+        return None
+    if any(h.score >= STRONG and h.page for h in hits):  # an artist page caracole read answers it: it sees them
+        return None
+    return strong
+
+
+def bare_id_unseen(query: str, hits: Sequence[IndexHit | ArtistHit]) -> dict[str, object] | None:
+    """``bare_id_hint``'s case as facts, for the pages' "Why can't caracole find it?", which word it themselves:
+    ``strong`` (something matched well all the same), the ``[artist_url]`` lines to paste into overrides.toml for
+    the query as the artist's name (``entry``), and the line that adds a song by its title (``add``). None when
+    there is no hint. Like ``caracole serve``'s hint, it reads no overrides.toml."""
+    strong = _unseen(query, hits)
+    if strong is None:
+        return None
+    shown = " ".join(query.split())
+    name = shown.replace("\\", "\\\\").replace('"', '\\"')
+    return {"strong": strong, "entry": f'[artist_url]\n"{name}" = "{ARTIST_PAGE_SHAPE}"',
+            "add": f"caracole add ARTIST {_shell(shown)}"}
 
 
 # --- words, pinyin and scores -----------------------------------------------------------

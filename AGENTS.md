@@ -85,6 +85,9 @@ Rules a change there keeps (the Invariants below are the others):
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
   opens the leading artist's songs), and on the library page, whose served bar searches
   `/api/search` as you type (which asks no site), it only moves the focus to the first result.
+  What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
+  `suggest`), `nothingFound` (one card for a query that found nothing: the request by name first, Ask LaCuerda,
+  the chips of `looked`, `unseen` folded) and `lookedLine` (the chips in one muted line under results).
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line

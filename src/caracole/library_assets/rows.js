@@ -529,18 +529,6 @@ const caracoleRows = (icons) => {
       "Read the page of " + name + " on LaCuerda"));
     return [el("h2", "group", "LaCuerda"), box];
   };
-  // A query LaCuerda's index has no artist by, under a letter its listings aren't read to yet (/api/search's
-  // lacuerda_unlisted): the index can't tell whether LaCuerda has them, their page can (``read(button, box)``).
-  const siteUnlisted = (u, read) => {
-    const x = u && typeof u === "object" ? u : {};
-    const name = String(x.name || "");
-    const box = el("div", "read-page unlisted");
-    box.appendChild(el("p", null, "LaCuerda hasn't listed " + String(x.letter || "") + " yet, so caracole can't " +
-      "tell whether it has “" + name + "”. Reading the page of that name is a request to LaCuerda (one per " +
-      "spelling of it tried, usually one), at a lookup's pace."));
-    box.appendChild(button("Read LaCuerda's page for “" + name + "”", "small primary", (e) => read(e.currentTarget, box)));
-    return [el("h2", "group", "LaCuerda"), box];
-  };
   // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
   // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), then follow the job until it
   // is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
@@ -588,14 +576,125 @@ const caracoleRows = (icons) => {
     }
     return why;
   };
-  // A paragraph of the server's, its commands in backticks as the terminal prints them: those as code.
-  const prose = (cls, text) => {
-    const p = el("p", cls);
-    const parts = String(text).split("`");
-    if (parts.length % 2 === 0) p.textContent = String(text);  // a backtick unpaired: as it is
-    else parts.forEach((part, i) => { if (part) p.appendChild(i % 2 ? el("code", null, part) : document.createTextNode(part)); });
-    return p;
+  // --- what a search says beside its results (/api/search) ------------------------------------------------------
+  // The closest artists' names the offline indexes have (``suggest``: each { source, artist, key, songs }), most
+  // likely first, for a query that may be a typo: a line each, "Lynyrd Skynyrd · artist · 212 songs on UG", whose
+  // Their songs is ``open(s, button)``. None for none: null.
+  const SITE_NAMES = { ug: "UG", lacuerda: "LaCuerda", gtptabs: "gtptabs.com", musescore: "MuseScore" };
+  const didYouMean = (suggest, open) => {
+    const names = listOf(suggest).filter((s) => s && typeof s === "object" && s.artist);
+    if (!names.length) return null;
+    const box = el("section", "did-you-mean");
+    rowSerial += 1;
+    const head = el("h2", "nothing-head", "Did you mean");
+    head.id = "did-you-mean-" + rowSerial;
+    box.setAttribute("aria-labelledby", head.id);
+    const list = el("ul", "suggestions");
+    for (const s of names) {
+      const name = String(s.artist);
+      const item = el("li", "suggestion");
+      const said = el("span", "suggest-said");
+      said.appendChild(el("span", "suggest-name", name));
+      const where = own.call(SITE_NAMES, s.source) ? " on " + SITE_NAMES[s.source] : "";
+      said.appendChild(el("span", "suggest-facts", "artist" + (Number(s.songs) ? " · " + many(s.songs, "song") + where : "")));
+      item.appendChild(said);
+      item.appendChild(button("Their songs", "small their-songs", (e) => open(s, e.currentTarget), "Songs by " + name));
+      list.appendChild(item);
+    }
+    box.append(head, list);
+    return box;
+  };
+  // Where caracole looked (``looked``: a site each, its ``state``, ``label`` and one line of ``detail``), as chips:
+  // green searched whole, amber in part, red empty or blocked, grey turned off. A chip is no control: its detail is
+  // its tooltip and its description.
+  const lookedChips = (looked) => {
+    const list = el("ul", "looked");
+    list.setAttribute("aria-label", "Where caracole looked");
+    for (const s of listOf(looked).filter((x) => x && typeof x === "object")) {
+      const state = ["done", "partial", "empty", "blocked", "off"].indexOf(s.state) >= 0 ? s.state : "off";
+      const chip = el("li", "site-chip", String(s.label || s.name || ""));
+      chip.dataset.state = state;
+      chip.dataset.source = String(s.source || "");
+      if (s.detail) {
+        chip.title = String(s.detail);
+        chip.setAttribute("aria-description", String(s.detail));
+      }
+      list.appendChild(chip);
+    }
+    return list;
+  };
+  // Why the query may name an artist the Ultimate Guitar index can't see (``unseen``), folded: what to paste into
+  // overrides.toml, and the line that adds a song by its title.
+  const whyUnseen = (unseen, query) => {
+    const u = unseen && typeof unseen === "object" ? unseen : null;
+    if (!u) return null;
+    const fold = el("details", "why-unseen");
+    fold.appendChild(el("summary", null, "Why can't caracole find it?"));
+    fold.appendChild(el("p", null, "Ultimate Guitar's sitemaps name some artists only by a number, mostly those with " +
+      "accents or non-Latin letters (Joaquín Sabina, Maná, 宋冬野), so caracole can't see their tabs. If “" + query +
+      "” is such an artist, find their page on ultimate-guitar.com and paste its address into overrides.toml:"));
+    const entry = el("pre");
+    entry.appendChild(el("code", null, String(u.entry || "")));
+    fold.appendChild(entry);
+    fold.appendChild(el("p", null, "The nightly run then looks there for the songs you add by them."));
+    if (u.add) {
+      const title = el("p", null, "If it's a title, caracole needs its artist too: ");
+      title.appendChild(el("code", null, String(u.add)));
+      title.appendChild(document.createTextNode("."));
+      fold.appendChild(title);
+    }
+    return fold;
+  };
+  // The read of a name LaCuerda's listings don't reach yet (``lacuerda_unlisted``: { name, letter }), one request:
+  // ``ask(button, box)``; ``named``, the button says the name (beside results, which may name others).
+  const askLaCuerda = (unlisted, ask, box, named) => {
+    const u = unlisted && typeof unlisted === "object" ? unlisted : null;
+    if (!u) return null;
+    const name = String(u.name || "");
+    const go = button(named ? "Ask LaCuerda for “" + name + "” (1 request)" : "Ask LaCuerda (1 request)",
+      "small ask-lacuerda", (e) => ask(e.currentTarget, box),
+      "Ask LaCuerda for “" + name + "”: one request");
+    go.title = "LaCuerda's list doesn't reach " + String(u.letter || "") + " yet: caracole reads its page for “" +
+      name + "”, one request at a lookup's pace.";
+    return go;
+  };
+  // A search that found nothing (``data``, for ``query``): one card, "Not it?" under the artists it may have meant
+  // (didYouMean, drawn above it), else "No song or artist matches “query”": its actions, the request by name first
+  // (``does.request``, labelled ``does.requestLabel``) and, while LaCuerda's listings don't reach the name, Ask
+  // LaCuerda (``does.ask(button, card)``); where caracole looked; and why it may not see an artist, folded.
+  const nothingFound = (data, query, does) => {
+    const d = data && typeof data === "object" ? data : {};
+    const meant = listOf(d.suggest).some((s) => s && typeof s === "object" && s.artist);
+    const card = el("section", "nothing");
+    rowSerial += 1;
+    const head = el("h2", "nothing-head", meant ? "Not it?" : "No song or artist matches “" + query + "”");
+    head.id = "nothing-" + rowSerial;
+    card.setAttribute("aria-labelledby", head.id);
+    const actions = el("div", "nothing-actions");
+    actions.appendChild(button(String(does.requestLabel || "Request “" + query + "” by name"), "small primary",
+      () => does.request()));
+    const ask = d.lacuerda_unlisted && does.ask ? askLaCuerda(d.lacuerda_unlisted, does.ask, card) : null;
+    if (ask) actions.appendChild(ask);
+    card.append(head, actions, lookedChips(d.looked));
+    const why = whyUnseen(d.unseen, query);
+    if (why) card.appendChild(why);
+    return card;
+  };
+  // Under results: where caracole looked, in one muted line, when a site wasn't searched whole; Ask LaCuerda while its
+  // listings don't reach the name; the fold for an artist the index may not see. None when all went well: null.
+  const lookedLine = (data, query, does) => {
+    const d = data && typeof data === "object" ? data : {};
+    const looked = listOf(d.looked).filter((x) => x && typeof x === "object");
+    const ask = Boolean(d.lacuerda_unlisted && does.ask);
+    if (!ask && !d.unseen && looked.every((s) => s.state === "done")) return null;
+    const line = el("div", "looked-line");
+    line.appendChild(lookedChips(looked));
+    if (ask) line.appendChild(askLaCuerda(d.lacuerda_unlisted, does.ask, line, true));
+    const why = whyUnseen(d.unseen, query);
+    if (why) line.appendChild(why);
+    return line;
   };
   return { resultRow, sourceMark, link, titleLink, artistFilter, button, many, counts, opener, ugHit, artistHit,
-    siteHit, siteArtist, siteArtistSongs, siteUnlisted, readArtistPage, readOutcome, prose, indexLine, titleLine };
+    siteHit, siteArtist, siteArtistSongs, readArtistPage, readOutcome, indexLine, titleLine,
+    didYouMean, lookedChips, nothingFound, lookedLine };
 };

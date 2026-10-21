@@ -9,6 +9,7 @@ request: it adds the song from wanted.txt and keeps a sheet.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import threading
 import time
@@ -75,6 +76,7 @@ class Asked(list):
         self.held: threading.Event | None = None
         self.only: str | None = None
         self.lookups_held: threading.Event | None = None
+        self.suggest: list[dict] | None = None
 
     def queries(self) -> list[str]:
         return [parse_qs(urlsplit(target).query).get("q", [""])[0] for target in self]
@@ -97,6 +99,10 @@ def live(cfg):
             if held is not None and (asked.only is None or q == asked.only):
                 held.wait(10)
         response = answer(request)
+        if asked.suggest is not None and request.target.startswith("/api/search") and response.status == 200:
+            data = json.loads(response.body)  # the artists a typo may mean, as the search would suggest them
+            if not data.get("short") and not data.get("superseded"):
+                response = dataclasses.replace(response, body=json.dumps({**data, "suggest": asked.suggest}).encode())
         if request.method == "POST" and request.target.startswith("/lookup"):
             held = asked.lookups_held
             if held is not None:
@@ -212,6 +218,8 @@ WONDERWALL = dict(ug=[("oasis", "wonderwall", 9), ("ryan-adams", "wonderwall", 3
                   gtptabs=["https://gtptabs.com/tabs/15/oasis/wonderwall.html"],
                   musescore=["https://musescore.com/song/wonderwall-1524"])
 RYAN = "#results .hit[data-ug='ryan-adams/wonderwall']"
+# The chips of where caracole looked, under SCOPE: each one's label and state.
+CHIPS = "[...document.querySelectorAll('SCOPE .looked li')].map((c) => [c.textContent, c.dataset.state])"
 BUSY = "(document.getElementById('found').getAttribute('aria-busy') === 'true')"
 
 
@@ -234,7 +242,10 @@ def test_typing_lists_your_songs_and_the_indexes_without_enter(cfg, live, browse
     assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
     assert browser.js(LINES) == [["Oasis", [["Wonderwall", "ug+gtptabs"]]], ["Ryan Adams", [["Wonderwall", "ug"]]],
                                  ["MuseScore", [["Wonderwall", "musescore"]]]]
-    assert "LaCuerda" in browser.js("document.querySelector('#results .skipped').textContent")
+    # Where caracole looked, in one muted line under the results: LaCuerda's index is empty, the rest searched whole.
+    assert browser.js(CHIPS.replace("SCOPE", "#results .looked-line")) == [
+        ["UG ✓", "done"], ["gtptabs.com ✓", "done"], ["LaCuerda: empty", "empty"], ["MuseScore ✓", "done"]]
+    assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing').length") == 0
     link = browser.js("(() => { const a = document.querySelector('#results .hit[data-source=\"musescore\"] .line-action a');"
                       " return [a.href, a.target, a.rel]; })()")
     assert link == ["https://musescore.com/song/wonderwall-1524", "_blank", "noopener noreferrer"]  # a link alone
@@ -771,15 +782,178 @@ def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, l
                         "document.querySelector('#requested article h3').textContent === 'Hysteria'")
 
 
-def test_the_line_for_an_artist_the_index_cant_see_shows_its_commands_as_code(cfg, live, browser):
+def test_the_fold_for_an_artist_the_index_cant_see_shows_its_commands_as_code(cfg, live, browser):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
-    for url, hint in ((base + "#q=" + quote("宋冬野") + "&all=1", "#results .index-hint"),
-                      (base + "lookup?q=" + quote("宋冬野"), "#results .hint")):
+    fold = "#results .nothing details.why-unseen"
+    for url in (base + "#q=" + quote("宋冬野") + "&all=1", base + "lookup?q=" + quote("宋冬野")):
         browser.open(url)
-        assert browser.wait(f"!!document.querySelector('{hint}')"), url
-        assert "`" not in browser.js(f"document.querySelector('{hint}').textContent")
-        assert "caracole add" in browser.js(f"[...document.querySelectorAll('{hint} code')].map((c) => c.textContent)")
+        assert browser.wait(f"!!document.querySelector('{fold}')"), url
+        assert browser.js(f"document.querySelector('{fold}').open") is False  # folded
+        assert "`" not in browser.js(f"document.querySelector('{fold}').textContent")
+        assert browser.js(f"[...document.querySelectorAll('{fold} code')].map((c) => c.textContent)") == [
+            '[artist_url]\n"宋冬野" = "https://www.ultimate-guitar.com/artist/…"', 'caracole add ARTIST "宋冬野"']
+
+
+def read_to(cfg, letters):
+    """LaCuerda's listings read whole for ``letters`` alone (an artist in the last one), the rest not yet."""
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set_json
+    from caracole.lacuerda import LCArtist
+
+    conn = db.connect(cfg.db_path)
+    li.store_artists(conn, f"tabs/{letters[-1]}/index0.html", [LCArtist("calle_13", "Calle 13", 80)])
+    kv_set_json(conn, li.PAGES_KEY, {f"tabs/{x}/index0.html": {"pages": ["index0.html"]} for x in letters})
+    conn.commit()
+    conn.close()
+
+
+def blocking(cfg, source):
+    """``source`` blocked caracole once, as a 403 would."""
+    from caracole.health import record_block
+
+    conn = db.connect(cfg.db_path)
+    record_block(conn, source, datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
+    conn.commit()
+    conn.close()
+
+
+NOTHING = "#results .nothing"
+CARD = ("(() => { const c = document.querySelector('#results .nothing'); const f = c.querySelector('details.why-unseen');"
+        " return { head: c.querySelector('h2').textContent, buttons: [...c.querySelectorAll('.nothing-actions button')]"
+        ".map((b) => b.textContent), folded: f ? !f.open : null, code: f ? [...f.querySelectorAll('code')]"
+        ".map((x) => x.textContent) : [] }; })()")
+OLD_NOTES = "document.querySelectorAll('#results .skipped, #results .index-hint, #results .read-page.unlisted').length"
+
+
+def test_a_query_that_finds_nothing_shows_one_card_its_request_first_then_where_caracole_looked(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    read_to(cfg, ("_num", "a", "b", "c"))
+    blocking(cfg, "musescore")
+    browser.open(base)
+    search(browser, "lynrd")
+    assert browser.wait(f"!!document.querySelector('{NOTHING}')")
+    assert browser.js(CARD) == {
+        "head": "No song or artist matches “lynrd”",
+        "buttons": ["Request “lynrd” by name", "Ask LaCuerda (1 request)"],  # LaCuerda's listings stop at C: L unread
+        "folded": True,
+        "code": ['[artist_url]\n"lynrd" = "https://www.ultimate-guitar.com/artist/…"', 'caracole add ARTIST "lynrd"']}
+    assert browser.js(CHIPS.replace("SCOPE", NOTHING)) == [
+        ["UG ✓", "done"], ["gtptabs.com: empty", "empty"], ["LaCuerda: up to C", "partial"],
+        ["MuseScore blocked", "blocked"]]
+    # Each chip's detail is its tooltip, one line: today's sentence.
+    titles = browser.js(f"[...document.querySelectorAll('{NOTHING} .looked li')].map((c) => c.title)")
+    assert "still being read: 1 artist so far, with #, A–C read whole" in titles[2]
+    assert titles[3] == "MuseScore is blocking caracole, so its index is empty."
+    assert browser.js(f"document.querySelector('{NOTHING} .ask-lacuerda').title").startswith(
+        "LaCuerda's list doesn't reach L yet")
+    assert browser.js(OLD_NOTES) == 0 and browser.js("document.querySelector('#results .did-you-mean')") is None
+    assert browser.js(STATUS) == "Nothing on the sites: request it by name below"
+    # Enter spends nothing: there is no result to move to, and no request is made.
+    browser.press("Enter")
+    time.sleep(0.6)
+    assert queue.snapshot() == []
+    # The request: the form, filled in from the query, open and in view, the focus on the artist it lacks.
+    browser.click(f"{NOTHING} .nothing-actions .primary")
+    assert browser.wait("document.getElementById('request-box').open")
+    fields = browser.js("['artist', 'title'].map((n) => document.querySelector(`form.request-form [name=${n}]`).value)")
+    assert fields == ["", "lynrd"]
+    assert browser.wait("document.activeElement === document.querySelector('form.request-form [name=artist]')")
+    assert browser.wait("(() => { const r = document.getElementById('request-box').getBoundingClientRect(); "
+                        "return r.top >= 0 && r.top < innerHeight; })()")
+    assert queue.snapshot() == []  # opening the form asks nothing
+
+
+def test_ask_lacuerda_is_offered_only_for_a_name_under_a_letter_its_listings_dont_reach(cfg, live, browser):
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    read_to(cfg, ("_num", "a", "b", "c"))
+    browser.open(base)
+    search(browser, "camilo sesto")  # C is read whole: LaCuerda has no Camilo Sesto
+    assert browser.wait(f"!!document.querySelector('{NOTHING}') && "
+                        "document.getElementById('found').dataset.query === 'camilo sesto'")
+    assert browser.js(CARD)["buttons"] == ["Request “camilo sesto” by name"]
+
+
+def test_a_query_with_results_says_where_caracole_looked_in_one_muted_line(cfg, live, browser):
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    read_to(cfg, ("_num", "a", "b", "c"))
+    blocking(cfg, "musescore")
+    browser.open(base)
+    search(browser, "radiohead")
+    assert browser.wait(f"{HITS} >= 1 && !!document.querySelector('#results .looked-line')")
+    assert browser.js(CHIPS.replace("SCOPE", "#results .looked-line")) == [
+        ["UG ✓", "done"], ["gtptabs.com: empty", "empty"], ["LaCuerda: up to C", "partial"],
+        ["MuseScore blocked", "blocked"]]
+    assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing, #results .did-you-mean').length") == 0
+    assert browser.js(OLD_NOTES) == 0
+    line = browser.js("document.querySelector('#results .looked-line').getBoundingClientRect().height")
+    assert line < 44, line  # one line: the chips, and Ask LaCuerda (R is unread)
+    colour = "getComputedStyle(document.querySelector('#results .looked li[data-state=\"STATE\"]')).color"
+    assert len({browser.js(colour.replace("STATE", state)) for state in ("done", "partial", "blocked")}) == 3
+
+
+LYNYRD = [{"artist": "Lynyrd Skynyrd", "songs": 2, "source": "ug", "key": "lynyrd-skynyrd"},
+          {"artist": "Lynn Anderson", "songs": 1, "source": "ug", "key": "lynn-anderson"}]
+
+
+def test_a_typo_shows_did_you_mean_first_and_their_songs_opens_that_artist(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=[("lynyrd-skynyrd", "sweet-home-alabama", 9), ("lynyrd-skynyrd", "free-bird", 4),
+                   ("lynn-anderson", "rose-garden", 2)])
+    asked.suggest = LYNYRD
+    browser.open(base)
+    search(browser, "lynrd")
+    assert browser.wait("!!document.querySelector('#results .did-you-mean')")
+    names = browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => "
+                       "[s.querySelector('.suggest-name').textContent, s.querySelector('.suggest-facts').textContent, "
+                       "s.querySelector('button').textContent])")
+    assert names == [["Lynyrd Skynyrd", "artist · 2 songs on UG", "Their songs"],
+                     ["Lynn Anderson", "artist · 1 song on UG", "Their songs"]]
+    # First: above the card, which is headed "Not it?" now; the name in the artist's accent, as a header's.
+    order = browser.js("[...document.querySelectorAll('#results .did-you-mean, #results .nothing')].map((n) => n.className)")
+    assert order == ["did-you-mean", "nothing"] and browser.js(CARD)["head"] == "Not it?"
+    accent = browser.js("(() => { const p = document.createElement('p'); p.style.color = 'var(--artist)'; "
+                        "document.body.append(p); const c = getComputedStyle(p).color; p.remove(); return c; })()")
+    assert browser.js("getComputedStyle(document.querySelector('#results .suggest-name')).color") == accent
+    asked.suggest = None
+    browser.click("#results .suggestion .their-songs")
+    assert browser.wait("document.getElementById('found').dataset.query === 'Lynyrd Skynyrd' && "
+                        f"{HITS} === 2")
+    assert browser.js(GROUPS) == ["Lynyrd Skynyrd · UG 2"]
+    assert browser.js(TITLES) == ["Sweet Home Alabama", "Free Bird"]
+    assert browser.wait("document.activeElement.matches('#results article.hit')")  # on to their first song
+    assert browser.js("document.querySelector('#results .did-you-mean')") is None
+    assert queue.snapshot() == []  # it asked no site
+
+
+def test_the_lookup_page_shows_the_same_card_and_did_you_mean(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=[("lynyrd-skynyrd", "sweet-home-alabama", 9), ("lynyrd-skynyrd", "free-bird", 4),
+                   ("lynn-anderson", "rose-garden", 2)])
+    browser.open(base + "lookup?q=lynrd")
+    assert browser.wait(f"!!document.querySelector('{NOTHING}')")
+    card = browser.js(CARD)
+    assert card["head"] == "No song or artist matches “lynrd”"
+    assert card["buttons"] == ["Look “lynrd” up by name", "Ask LaCuerda (1 request)"]  # LaCuerda's listings: none read
+    assert browser.js(CHIPS.replace("SCOPE", NOTHING))[0] == ["UG ✓", "done"]
+    browser.click(f"{NOTHING} .nothing-actions .primary")  # its form by name, filled in, open, the focus in it
+    assert browser.wait("document.getElementById('by-name-box').open")
+    assert browser.js("[document.querySelector('#by-name [name=artist]').value, "
+                      "document.querySelector('#by-name [name=title]').value]") == ["", "lynrd"]
+    assert browser.js("document.activeElement.name") == "artist"
+    asked.suggest = LYNYRD
+    browser.open(base + "lookup?q=lynrd")
+    assert browser.wait("!!document.querySelector('#results .did-you-mean')")
+    assert browser.js(CARD)["head"] == "Not it?"
+    browser.click("#results .suggestion .their-songs")  # their songs, as their row's Songs lists them
+    assert browser.wait("!!document.querySelector('#results .artist-head')")
+    assert browser.js("document.querySelector('#results .artist-head h2').textContent") == "Lynyrd Skynyrd"
+    assert browser.js("[...document.querySelectorAll('#results .hit .row-title')].map((h) => h.textContent)") == [
+        "Sweet Home Alabama", "Free Bird"]
+    assert queue.snapshot() == []
 
 
 NO_SIDEWAYS = "document.documentElement.scrollWidth <= innerWidth"
@@ -808,6 +982,35 @@ def test_the_bar_and_its_results_fit_a_phone(cfg, live, phone):
     search(phone, "estopa")  # an artist: their group, and its "+ 3 more by Estopa"
     assert phone.wait("!!document.querySelector('#results .more-by')")
     assert phone.js(NO_SIDEWAYS) and phone.js(small_targets()) == []
+
+
+@pytest.mark.parametrize("dark", [False, True])
+def test_the_card_and_did_you_mean_fit_a_phone_in_light_and_dark(cfg, live, tmp_path, dark):
+    base, _, asked = live
+    sites(cfg, ug=[("lynyrd-skynyrd", "sweet-home-alabama", 9)])
+    read_to(cfg, ("_num", "a", "b", "c"))
+    blocking(cfg, "musescore")
+    asked.suggest = [*LYNYRD, {"artist": "Los Lobos Del Norte De Sinaloa Y Sus Amigos Del Rancho", "songs": 1234,
+                               "source": "lacuerda"}]
+    phone = driven(tmp_path, width=390, height=844, mobile=True)
+    try:
+        if dark:
+            phone.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": "dark"}])
+        phone.open(base)
+        search(phone, "lynrd")
+        assert phone.wait(f"!!document.querySelector('{NOTHING}') && !!document.querySelector('#results .did-you-mean')")
+        assert phone.js(NO_SIDEWAYS)
+        assert phone.js(small_targets()) == []  # Their songs, the buttons, the fold's summary: a thumb's each
+        phone.click(f"{NOTHING} details.why-unseen > summary")
+        assert phone.wait(f"document.querySelector('{NOTHING} details.why-unseen').open")
+        assert phone.js(NO_SIDEWAYS) and phone.js(small_targets()) == []
+        colours = phone.js("(() => { const s = (q) => getComputedStyle(document.querySelector(q)); return ["
+                           "s('body').backgroundColor, s('#results .nothing').backgroundColor, "
+                           "s('#results .nothing h2').color]; })()")
+        assert colours[0] != colours[1] and colours[1] != colours[2], colours
+        assert (sum(int(n) for n in colours[1][4:-1].split(",")[:3]) > 384) is not dark, colours  # its own mode
+    finally:
+        phone.close()
 
 
 FOOTER = "(() => { const f = document.querySelector('.footer'); return f.getClientRects().length ? " \

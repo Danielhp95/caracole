@@ -153,3 +153,38 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   button.artist { min-width: 44px; min-height: 44px; }
   .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
+/* What a search says beside its results (rows.js nothingFound, lookedLine): for a query that found nothing, the
+   artists it may have meant, their names in the artist's accent, then one card: its actions, primary first, where
+   caracole looked as chips, and why it may not see an artist, folded; under results, the chips in one muted line. */
+.did-you-mean, .nothing { margin: 10px 0 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); }
+.nothing-head { margin: 0 0 4px; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
+.suggestions { margin: 0; padding: 0; list-style: none; }
+.suggestion { display: flex; align-items: center; gap: 4px 12px; padding: 6px 0; border-top: 1px solid var(--border); }
+.suggestion:first-child { border-top: 0; }
+.suggest-said { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: baseline; gap: 0 10px; min-width: 0; }
+.suggest-name { color: var(--artist); font-weight: 700; overflow-wrap: anywhere; }
+.suggest-facts { color: var(--muted); font-size: .85rem; }
+.suggestion .their-songs { flex: none; }
+.nothing-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 0; }
+.nothing .read-outcome { margin: 8px 0 0; }
+.looked { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.site-chip { padding: 2px 9px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: .78rem;
+  font-weight: 650; white-space: nowrap; cursor: default; }
+.site-chip[data-state="done"] { color: var(--found); background: var(--found-bg); }
+.site-chip[data-state="partial"] { color: var(--wanted); background: var(--wanted-bg); }
+.site-chip[data-state="empty"], .site-chip[data-state="blocked"] { color: var(--failed); background: var(--failed-bg); }
+.site-chip[data-state="off"] { color: var(--ignored); background: var(--ignored-bg); }
+.why-unseen { margin: 10px 0 0; color: var(--muted); font-size: .85rem; }
+.why-unseen summary { width: fit-content; color: var(--text); font-weight: 600; cursor: pointer; }
+.why-unseen p { max-width: 72ch; margin: 6px 0 0; }
+.why-unseen pre { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--raised); white-space: pre-wrap; }
+.why-unseen pre code { padding: 0; background: none; }
+.looked-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 14px 0 0; }
+.looked-line .looked { margin: 0; }
+.looked-line .why-unseen { flex: 1 1 100%; margin: 0; }
+.looked-line .read-outcome { flex: 1 1 100%; margin: 0; }
+@media (pointer: coarse) {
+  .nothing .btn, .did-you-mean .btn, .looked-line .btn { min-height: 44px; }
+  .why-unseen summary { min-height: 44px; padding: 12px 0 0; }
+}

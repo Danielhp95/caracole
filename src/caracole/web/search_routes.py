@@ -5,7 +5,9 @@
                           songs you removed (``removed``), the artists the query names, the UG
                           index's songs, which comes first and the row Enter may act on; LaCuerda's
                           artists and songs, gtptabs.com's and MuseScore's pages, and the sites not
-                          searched, or not whole, with why. Each song's row has the two parts of its
+                          searched, or not whole, with why (``skipped``, ``partial``), and where it
+                          looked, a chip a site (``looked``); for a query the index may not see the
+                          artist of, what to paste (``unseen``). Each song's row has the two parts of its
                           identity key (``artist_key``, ``title_key``), and an artist's the first
                           (``group_key``): the library page puts what shares them on one line, and
                           under one header, which counts an artist's songs on each site (an artist's
@@ -47,6 +49,10 @@ their listings and sitemaps filled (``search.search_lacuerda``,
 site out (``skipped``): turned off, its index still empty, or MuseScore blocking
 caracole; and why it searched one only in part (``partial``): LaCuerda's index
 while the nightly run still reads its listings, with the letters read so far.
+``looked`` says the same of every site, Ultimate Guitar's index too, as the
+pages' chips show it (``_looked``: a state, a short label, a line of detail), and
+``unseen`` (``search.bare_id_unseen``) what ``hint`` says of an artist UG's
+sitemaps may list only by a bare id, as facts the pages word themselves.
 LaCuerda's index holds every artist it has read, but the songs only of the
 artists whose page caracole has read: an artist's Songs offers to read it
 (``POST /lacuerda/artist``), a job like the others; and while the nightly run
@@ -93,6 +99,7 @@ ARTIST_PAGE = 50  # an artist's songs /api/artist gives at a time
 LACUERDA_SONGS = 1000  # a LaCuerda artist's songs /api/artist gives: all of them, the index holds no more
 CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
 _SLUG = re.compile(r"[a-z0-9_]{1,200}")  # the slug of a LaCuerda artist's page
+UG_EMPTY = "The offline Ultimate Guitar index is empty: run caracole index build once (about 10 minutes)."
 SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
 
 
@@ -274,15 +281,15 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     _after_reads(app)
     cached = app._found.get(q)
     if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
-        index_found, index, artists, hint, gtptabs, musescore, lc_artists, lacuerda = cached[1:]
+        index_found, index, artists, hint, unseen, gtptabs, musescore, lc_artists, lacuerda = cached[1:]
     else:
-        index_found, index, artists, hint = _index_hits(conn, q)
+        index_found, index, artists, hint, unseen = _index_hits(conn, q)
         gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
         musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
         lc_artists, lacuerda = (search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out
                                 else ([], []))
-        app._found[q] = (time.monotonic(), index_found, index, artists, hint, gtptabs, musescore, lc_artists,
-                         lacuerda)
+        app._found[q] = (time.monotonic(), index_found, index, artists, hint, unseen, gtptabs, musescore,
+                         lc_artists, lacuerda)
         while len(app._found) > CACHE_SIZE:
             app._found.popitem(last=False)
     answer = found(mine, index_found)
@@ -297,7 +304,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": answer.lead,
-            "best": pick, "hint": hint,
+            "best": pick, "hint": hint, "unseen": unseen,
             "removed": [{"artist": h.artist, "title": h.title, "key": h.key, "removed_at": h.removed_at,
                          **_key_parts(h.key)} for h in removed],
             "gtptabs": _gtptabs_rows(app, conn, gtptabs if "gtptabs" not in left_out else [], songs),
@@ -308,7 +315,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
             "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
-            "skipped": skipped, "partial": partial}
+            "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
 
 
 def _gtptabs_songs(app: WebApp, conn: sqlite3.Connection, artist: str) -> int:
@@ -407,6 +414,46 @@ def _skipped(app: WebApp, conn: sqlite3.Connection) -> tuple[list[dict[str, str]
     return left, partial
 
 
+def _looked(conn: sqlite3.Connection, skipped: list[dict[str, str]],
+            partial: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Where the search looked, a site a chip on the pages: Ultimate Guitar's index, gtptabs.com's, LaCuerda's and
+    MuseScore's, each with its ``state`` (``done``: searched whole; ``partial``: LaCuerda's while its listings are
+    read; ``empty``, ``blocked``: MuseScore's, while it blocks caracole; ``off``: turned off in caracole.toml), its
+    ``label`` ("UG ✓", "LaCuerda: up to C": the letters read whole run from the first to C) and its ``detail``, one
+    line: what ``skipped`` and ``partial`` say of it."""
+    from caracole.lacuerda import LETTERS
+    from caracole.lacuerda_index import letters_read, letters_text
+
+    said = {s["source"]: s for s in [*skipped, *partial]}
+    looked = []
+    ug_empty = conn.execute("SELECT 1 FROM ug_index LIMIT 1").fetchone() is None
+    looked.append({"source": "ug", "name": "Ultimate Guitar", "state": "empty" if ug_empty else "done",
+                   "label": "UG: empty" if ug_empty else "UG ✓",
+                   "detail": UG_EMPTY if ug_empty else "Ultimate Guitar: caracole's copy of its index, searched whole."})
+    for source, name in (("gtptabs", "gtptabs.com"), ("lacuerda", "LaCuerda"), ("musescore", "MuseScore")):
+        s = said.get(source)
+        why = str(s["why"]) if s else ""
+        if s is None:
+            state, label, detail = "done", f"{name} ✓", f"{name}: caracole's copy of its index, searched whole."
+        elif why.startswith("turned off"):
+            state, label, detail = "off", f"{name}: off", f"{name} is turned off in caracole.toml."
+        elif "blocking" in why:
+            state, label, detail = "blocked", f"{name} blocked", why[:1].upper() + why[1:] + "."
+        elif s in partial:
+            read = letters_read(conn)
+            run = 0
+            while run < len(read) and read[run] == LETTERS[run]:
+                run += 1
+            state = "partial"
+            label = (f"{name}: up to {letters_text(read[run - 1:run])}" if run == len(read) and run else
+                     f"{name}: {letters_text(read)} only" if read else f"{name}: in part")
+            detail = f"{name}'s {why.removeprefix('its ')}."
+        else:
+            state, label, detail = "empty", f"{name}: empty", f"{name}'s {why.removeprefix('its ')}."
+        looked.append({"source": source, "name": name, "state": state, "label": label, "detail": detail})
+    return looked
+
+
 def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], index: list[dict[str, Any]],
           songs: list[Song] | None = None) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Your songs and the index's, as the page draws them. A song of your library comes as its card
@@ -434,13 +481,12 @@ def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], ind
 
 
 def _index_hits(conn: sqlite3.Connection, q: str) -> tuple[IndexFound, list[dict[str, Any]],
-                                                           list[dict[str, Any]], str | None]:
-    from caracole.search import IndexFound, bare_id_hint, find_index
+                                                           list[dict[str, Any]], str | None, dict[str, Any] | None]:
+    from caracole.search import IndexFound, bare_id_hint, bare_id_unseen, find_index
     from caracole.ug.index import index_count
 
     if index_count(conn) == 0:
-        return (IndexFound(), [], [],
-                "The offline Ultimate Guitar index is empty: run caracole index build once (about 10 minutes).")
+        return IndexFound(), [], [], UG_EMPTY, None
     answer = find_index(conn, q, songs=INDEX_HITS)
     # An artist with their most tabbed songs, each as the index's songs are (``_hit_json``), and the group the
     # library page puts them in (``group_key``); ``artist_key`` is UG's, which /api/artist takes.
@@ -448,7 +494,8 @@ def _index_hits(conn: sqlite3.Connection, q: str) -> tuple[IndexFound, list[dict
                 "group_key": _group_key(a.artist), "top": [_hit_json(conn, h) for h in a.top]}
                for a in answer.artists]
     index = [_hit_json(conn, h) for h in answer.songs]
-    return answer, index, artists, bare_id_hint(q, [*answer.songs, *answer.artists])
+    hits = [*answer.songs, *answer.artists]
+    return answer, index, artists, bare_id_hint(q, hits), bare_id_unseen(q, hits)
 
 
 def _hit_json(conn: sqlite3.Connection, h: IndexHit) -> dict[str, Any]:

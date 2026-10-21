@@ -73,8 +73,6 @@
   color: var(--accent); font-size: .85rem; font-weight: 650; }
 .btn.more-by:hover { border-color: var(--border); background: var(--raised); }
 .badge.removed { color: var(--ignored); background: var(--ignored-bg); }
-.skipped { margin: 16px 0 0; color: var(--muted); font-size: .85rem; }
-.index-hint { max-width: 72ch; margin-top: 10px; white-space: pre-wrap; }
 .results .request { margin-top: 20px; }
 .file-answer { display: grid; gap: 8px; max-width: 72ch; margin: 6px 0 12px; padding: 12px 14px;
   border: 1px solid var(--border); border-radius: 14px; background: var(--surface); font-size: .92rem; }
