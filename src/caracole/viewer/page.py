@@ -589,7 +589,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="diagram" id="diagram"></div>
 <button type="button" class="round" id="next" aria-label="Next shape">›</button></div>
 <p class="hint center" id="shape-note"></p>
-<h3 class="sub" id="alts-title">Instead, in the key</h3>
+<h3 class="sub" id="alts-title">Chord alternatives</h3>
 <div class="chips" id="alts"></div>
 <div class="actions"><button type="button" class="btn primary" id="use" hidden></button></div>
 </section>
