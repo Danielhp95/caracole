@@ -596,9 +596,9 @@ in
           # The polite pauses alone come to about 40 minutes, under an hour at
           # most: 60 UG, 30 LaCuerda, 20 gtptabs.com and 10 MuseScore requests
           # 10-20 s apart, 200 LRCLIB ones 1-2 s apart, 6 yt-dlp runs 15-30 s
-          # apart. The answers, yt-dlp's downloads, the PDFs and the lookups the
-          # run hands its lock to come on top; a hung run must not hold the next
-          # night's.
+          # apart. The answers, yt-dlp's downloads (up to about 50 minutes more at
+          # their time limits), the PDFs and the lookups the run hands its lock to
+          # come on top; a hung run must not hold the next night's.
           TimeoutStartSec = "3h";
         };
     };

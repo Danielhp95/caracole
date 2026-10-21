@@ -122,7 +122,7 @@ def test_todo_in_a_library_caracole_cant_write_says_so(tmp_path, broken, code):
         lib.chmod(0o755)
     assert result.exit_code == code, result.output
     assert not isinstance(result.exception, OSError)
-    assert f"can't write {lib / '_todo.md'}: Permission denied" in result.output
+    assert f"error: can't write {lib / '_todo.md'}: Permission denied" in result.output
     assert ("overrides:" in result.output) == broken
 
 

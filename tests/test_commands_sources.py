@@ -465,7 +465,7 @@ def test_add_warns_when_the_artist_is_a_placeholder(tmp_path, artist):
     assert result.exit_code == 0, result.output
     assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith(f"\n{artist} - 斑马\n")  # still added
     out = " ".join(result.output.split())
-    assert f'"{artist}" is no one\'s name' in out and 'caracole search "斑马"' in out
+    assert f'warning: "{artist}" is no one\'s name' in out and 'caracole search "斑马"' in out
     assert "no one's name" not in run(tmp_path, "add", "Oasis", "Wonderwall").output
 
 
@@ -621,7 +621,7 @@ def test_sync_when_the_spotify_client_cannot_be_made(tmp_path, monkeypatch):
     wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
     result = run(tmp_path, "sync", config=spotify_config(tmp_path))
     assert result.exit_code == 0, result.output
-    assert "Spotify unavailable: RuntimeError: the token cache is unreadable" in result.output
+    assert "warning: Spotify unavailable: RuntimeError: the token cache is unreadable" in result.output
     assert len(songs(tmp_path)) == 2
 
 

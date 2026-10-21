@@ -97,7 +97,7 @@ def test_a_host_name_that_isnt_one_exits_2(tmp_path, started):
 def test_listening_beyond_this_machine_without_a_token_warns(tmp_path, started):
     result = invoke(tmp_path, "--address", "0.0.0.0")
     assert result.exit_code == 0
-    assert "anyone who can reach" in result.output
+    assert "warning: Listening on 0.0.0.0: anyone who can reach" in result.output
 
 
 def test_an_address_it_cant_listen_on_exits_1(tmp_path, monkeypatch):

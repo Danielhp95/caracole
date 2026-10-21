@@ -26,6 +26,7 @@ from caracole.health import get_state
 from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, SCORE_KIND
 from caracole.lacuerda_fetch import may_ask
 from caracole.library import safe_name, write_atomic
+from caracole.logs import plural
 from caracole.musescore import song_pages
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
@@ -814,7 +815,7 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     out = [
         "# caracole to-do",
         "",
-        f"_Updated {_fmt(now)} · {n} song{'s' if n != 1 else ''}: {counts['found']} found, "
+        f"_Updated {_fmt(now)} · {plural(n, 'song')}: {counts['found']} found, "
         f"{counts['wanted']} wanted, {counts['ignored']} ignored_",
         "",
         "Browse or search every song: [index.html](index.html)",
