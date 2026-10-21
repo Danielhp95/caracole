@@ -1275,9 +1275,9 @@ and cache.
 - **`caracole review`** settles uncertain matches, one prompt per song (see
   [Review](#review)).
 - **`caracole search [QUERY]... [--limit N] [--add N] [--key KEY] [--artist NAME]
-  [--title TITLE]`** searches your library and the offline UG index, by an
-  artist, a title or both; `--key` finds your songs in one key (see
-  [caracole search](#caracole-search)).
+  [--title TITLE] [--progression NUMERALS]`** searches your library and the offline UG index, by an
+  artist, a title or both; `--key` finds your songs in one key, `--progression` those that play a
+  progression (see [caracole search](#caracole-search)).
 - **`caracole autochords`** writes `sheet (auto).txt` from audio you bought, for
   songs with no human sheet (see [the worked example](#a-worked-example)), then
   rewrites `_todo.md` and `index.html`. It needs the flake's
@@ -1737,7 +1737,8 @@ PDF of this version); its other files (the PDF, the text, the ChordPro file,
 the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the
 Guitar Pro versions to download from Ultimate Guitar; its MuseScore pages,
 each a possible match, as on the to-do page; for a song without a sheet, its
-search and buy links; **Add to a songbook…** (see Songbooks, below), for a
+search and buy links; its progressions, as it plays them ("vi–IV–I–V"), each a
+button that shows your songs with that progression (below); **Add to a songbook…** (see Songbooks, below), for a
 song the page had when it was loaded (one that Get it or a request brought
 since has it once the page is loaded again); and, served, Look in the index
 and Remove…. When Fetch now has the line's button,
@@ -1755,6 +1756,21 @@ the song's, a line of its own. The search, the status buttons, the Key menu,
 the sort and the letters all work on the lines, and the address remembers
 them, as it does the rest: a bookmark opens the page as you left it. (An
 address from before, with `#view=rows` in it, opens the lines.)
+
+**Songs by progression.** caracole reads each sheet's progressions as it
+renders it: each section's chords as Roman numerals in the key the viewer
+reads the sheet in, one cycle, with its name when it has one ("the pop
+progression", "the Andalusian cadence"). A progression's button under a song's
+"⋯", or `#prog=` in the address (`index.html#prog=I%20V%20vi%20IV`, as a
+sheet viewer's Harmony panel links to it; written by hand, `#prog=vi–IV–I–V` is
+the same progression), shows only your songs that play it,
+in any key and starting on any of its chords, under a line that says which,
+with Show all: "Songs with I–V–vi–IV, the pop progression · Show all". A
+progression with a name finds every reading of it: the pop progression is
+I–V–vi–IV in C major and i–♭VI–♭III–♭VII in A minor, so a song whose key
+caracole read as A minor rather than C major is there too. A section held on
+one chord is no progression. A library rendered by an older caracole has its
+progressions after its next render (the nightly run's).
 
 A song that needs review lists its candidates under its "⋯", under "3
 candidates", numbered as `caracole review` numbers them. Each is the UG song as UG names it
@@ -2149,7 +2165,7 @@ old, with no request.
 ### caracole search
 
 `caracole search [QUERY]... [--limit N] [--add N] [--key KEY] [--artist NAME]
-[--title TITLE]` looks in three places, and sends no request: your library, the
+[--title TITLE] [--progression NUMERALS]` looks in three places, and sends no request: your library, the
 offline Ultimate Guitar index and LaCuerda's (see below):
 
     $ caracole search creep
@@ -2400,6 +2416,30 @@ the same key matches (`Gbm` finds F# minor). The
 offline indexes know no keys, so `--key` leaves them out, and `--add` can't go
 with it. A KEY that is no key exits with status 2.
 
+`--progression NUMERALS` lists your songs that play a progression, in any key
+and starting on any of its chords, as caracole read their sheets when it last
+rendered them (see Songs by progression, under
+[Library/index.html](#libraryindexhtml)): each with its status, the sections that play it,
+the key its sheet was read in and its folder, up to `--limit` of them.
+NUMERALS are Roman numerals, two chords or more, upper case for major and
+lower case for minor, written against the tonic's major scale (`"vi IV I V"`,
+`"vi–IV–I–V"`, `"i bVII bVI V"` with b or ♭ for a flat; a chord's quality and
+extensions are left aside, so `"Imaj7 vi7 ii7 V7"` is I–vi–ii–V), or the name
+of a progression or words of it (`andalusian`, `"the pop progression"`,
+`blues`, `"royal road"`; words of fewer than five letters, `"the road"`, name
+none unless "progression" or "cadence" is among them, and `minor` alone names
+none). A progression with a name finds every reading of
+it, the pop progression in a major key and in the relative minor:
+
+    $ caracole search --progression "vi IV I V"
+    Your songs with I–V–vi–IV, the pop progression
+      [UG] Another Band - Minor Song · found · untitled section · in A minor · /home/you/Tabs/Another Band/Minor Song
+      [UG] Placeholder Band - Synthetic Song · found · Verse, Chorus · in C major · /home/you/Tabs/Placeholder Band/Synthetic Song
+
+The offline indexes have no chords, so they aren't searched; `--progression`
+goes with no QUERY, `--key`, `--artist`, `--title` or `--add`, and a text that
+is no progression exits with status 2.
+
 ### caracole serve
 
 `caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
@@ -2414,7 +2454,13 @@ with it. A KEY that is no key exits with status 2.
   an artist's name you pressed, which the results' head says ("Your songs
   here: wanted · by Soda Stereo · in A minor"), with Show all of yours, which
   lets every song of yours show, there and in the list; the sites' songs are
-  what the sites have, whatever the buttons show. The results come under the
+  what the sites have, whatever the buttons show. A progression typed as
+  numerals ("vi IV I V", "i bVII bVI V") or named ("andalusian", "the pop
+  progression", "blues"; words of fewer than five letters, "pop" or "the road",
+  are words, as "minor" alone is) finds your songs
+  that play it too, the first among the results, and the results' head says how
+  many play it ("Your songs with I–V–vi–IV, the pop progression: 12"), with
+  Show them, the list of those alone (`#prog=`, above). The results come under the
   same artist headers as the list's, each header counting the songs
   of theirs you have and, for an artist the query names, the songs Ultimate
   Guitar's, LaCuerda's and gtptabs.com's indexes list of theirs ("Estopa · you

@@ -80,8 +80,18 @@ def register(app: typer.Typer) -> None:
         title: str | None = typer.Option(
             None, "--title", metavar="TITLE", help="Only songs of this title, by any artist."
         ),
+        progression: str | None = typer.Option(
+            None, "--progression", metavar="NUMERALS",
+            help='Only your songs that play this progression, in any key: its numerals ("vi IV I V") or its '
+                 'name ("andalusian"). The offline indexes have no chords, so they aren\'t searched.',
+        ),
     ) -> None:
         """Search your library and the offline Ultimate Guitar and LaCuerda indexes (no network)."""
+        if progression is not None:
+            _by_progression(ctx, progression, limit, others={"QUERY": bool(query), "--add": add is not None,
+                                                             "--key": key is not None, "--artist": artist is not None,
+                                                             "--title": title is not None})
+            return
         ask = _ask(" ".join(" ".join(query or []).split()), artist, title, key)
         in_key = None if key is None else _wanted_key(key, add)
         cfg = load_cfg(ctx)
@@ -148,6 +158,47 @@ def _wanted_key(key: str, add: int | None) -> str:
         fail("--add adds a hit of the offline indexes, and they have no keys: "
              "search without --key to add one", 2)
     return found
+
+
+def _by_progression(ctx: typer.Context, text: str, limit: int, *, others: Mapping[str, bool]) -> None:
+    """``--progression``: your songs that play it (``progressions.songs_with``), by name, each with its
+    status, the sections that play it, the key its sheet was read in and its folder. It reads, and never
+    waits for another caracole."""
+    from caracole.icons import kept_sources
+    from caracole.library import song_dir
+    from caracole.progressions import any_recorded, read_progression, songs_with
+
+    named = [name for name, given in others.items() if given]
+    if named:
+        fail(f"--progression searches your songs by what they play: it can't go with {' or '.join(named)}", 2)
+    wanted = read_progression(text)
+    if wanted is None:
+        fail(f'--progression: {text!r} is no progression: write its numerals ("vi IV I V", "i bVII bVI V"), '
+             'two chords or more, or its name ("andalusian", "the pop progression")', 2)
+    cfg = load_cfg(ctx)
+    with closing(open_db(cfg)) as conn:
+        said = wanted.label if wanted.name in (None, wanted.label) else f"{wanted.label}, {wanted.name}"
+        typer.echo(f"Your songs with {said}")
+        playing = songs_with(conn, wanted)
+        kept = kept_sources(conn)
+        for p in playing[:limit]:
+            folder = song_dir(cfg.library_dir, p.song)
+            where = str(folder) if folder.is_dir() else "no folder yet"
+            key = f" · in {p.key}" if p.key else ""
+            typer.echo(f"  {_tag(_sheet_source(kept.get(p.song.id, {})))}{p.song.display} · {_status(p.song)} · "
+                       f"{', '.join(p.sections)}{key} · {where}")
+        if not playing:
+            typer.echo("  none" if any_recorded(conn) else
+                       "  none yet: caracole reads a sheet's progressions as it renders it, so the next "
+                       "`caracole run` (or `caracole render`) reads every sheet's")
+        elif len(playing) > limit:
+            typer.echo(f"  … and {len(playing) - limit} more: see them with --limit {len(playing)}")
+
+
+def _sheet_source(kept: Mapping[str, str]) -> str | None:
+    from caracole.icons import sheet_source
+
+    return sheet_source(kept)
 
 
 def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: str | None = None) -> None:

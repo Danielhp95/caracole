@@ -220,3 +220,74 @@ def test_key_line_text_matches_the_viewers_facts(cho, label):
     facts = re.search(r'<p class="facts" id="facts">(.*?)</p>', build_viewer(cho), re.S).group(1)
     said = unescape(re.sub(r"<[^>]+>", "", re.sub(r'(?: · )?<span class="from">.*?</span>', "", facts))).strip()
     assert key_line_text(viewer_key(cho), parse_sheet(cho).capo) == said == label
+
+
+# --- chord names: numerals beside the chords, or in their place ------------------------------------------
+
+C_MAJOR = Key(0, "ionian")
+# In C: D goes to G first (V/V), then to C (C Lydian's II); a chord caracole can't read stays as written.
+SONG = ("{title: Numbered}\n{artist: The Placeholders}\n{key: C}\n\n{comment: Verse}\n"
+        "[C]Words [Am]to [F]sing [G]here\n[D]more [G]words [D]and [C]home\n[N.C.]hey\n")
+
+
+def legend(text: str) -> list[str]:
+    lines = text.splitlines()
+    return lines[lines.index("{comment: THE NUMERALS, IN C MAJOR}") + 1:]
+
+
+def test_a_numerals_chart_has_numerals_in_the_chords_place_its_key_under_the_title_and_no_diagrams():
+    lines = pdf_text(SONG, key=C_MAJOR, capo=None, names="numerals").splitlines()
+    # Each chord's numeral in its place, a chord chordpro knows no shape of.
+    assert "[I]Words [vi]to [IV]sing [V]here" in lines and "[V/V]more [V]words [II]and [I]home" in lines
+    assert [line for line in lines if line.startswith("{define")] == [
+        "{define: I}", "{define: vi}", "{define: IV}", "{define: V}", "{define: V/V}", "{define: II}"]
+    assert "[N.C.]hey" in lines  # shown as written
+    assert "{subtitle: The Placeholders · Key C · numerals in C major}" in lines
+    assert "{diagrams: off}" in lines
+
+
+def test_each_chord_is_read_with_the_next_chord_on_another_root():
+    # D D7 G: both D chords go to G, so both are V of V; the last D goes to C, the key's II.
+    sheet = "{title: X}\n{key: C}\n[D]one [D7]two [G]three [D]four [C]home\n"
+    lines = pdf_text(sheet, key=C_MAJOR, capo=None, names="numerals").splitlines()
+    assert "[V/V]one [V7/V]two [V]three [II]four [I]home" in lines
+
+
+def test_both_names_each_chord_and_its_numeral_with_the_viewers_shape():
+    text = pdf_text(SONG, key=C_MAJOR, capo=None, names="both")
+    lines = text.splitlines()
+    # A chord that plays two roles is two chords for chordpro, each named for its own.
+    assert "[C]Words [Am]to [F]sing [G]here" in lines and "[D]more [G]words [D~1]and [C]home" in lines
+    assert "[N.C.]hey" in lines
+    shown = {line.split(" ", 2)[1]: line for line in lines if line.startswith("{define")}
+    assert shown["C"] == '{define: C base-fret 1 frets x 3 2 0 1 0 fingers 0 3 2 0 1 0 display "C · I"}'
+    assert shown["D"].endswith(' display "D · V/V"}') and shown["D~1"].endswith(' display "D · II"}')
+    assert shown["D"].split(" display")[0].split(" ", 2)[2] == shown["D~1"].split(" display")[0].split(" ", 2)[2]
+    assert "N.C." not in shown
+    assert "{subtitle: The Placeholders · Key C · numerals in C major}" in lines and "{diagrams: off}" not in lines
+
+
+def test_both_keeps_the_shape_the_sheet_gives_a_chord():
+    sheet = SONG.replace("{key: C}\n", "{key: C}\n{define: G base-fret 3 frets 1 3 3 2 1 1 fingers 1 3 4 2 1 1}\n")
+    shown = [line for line in pdf_text(sheet, key=C_MAJOR, capo=None, names="both").splitlines()
+             if line.startswith("{define: G ")]
+    assert shown == ['{define: G base-fret 3 frets 1 3 3 2 1 1 fingers 1 3 4 2 1 1 display "G · V"}']
+
+
+@pytest.mark.parametrize("names", ["both", "numerals"])
+def test_numerals_end_with_a_legend_of_the_symbols_the_song_uses(names):
+    found = legend(pdf_text(SONG, key=C_MAJOR, capo=None, names=names))
+    assert found[0].startswith("I–VII: Roman numerals: the chord's root counted up the scale of C major")
+    assert any(line.startswith("i: lower case: a minor chord (Am = vi)") for line in found)
+    assert any(line.startswith("V/x: ") for line in found)
+    assert not any(line.startswith(("♭", "°", "ø", "+")) for line in found)  # symbols the song doesn't use
+
+
+def test_chord_names_alone_or_a_sheet_with_no_key_print_as_before():
+    plain = pdf_text(SONG, key=C_MAJOR, capo=None)
+    assert pdf_text(SONG, key=C_MAJOR, capo=None, names="chords") == plain
+    assert "numerals" not in plain and "display" not in plain
+    nokey = "{title: X}\n{artist: A}\n[N.C.]words alone\n"
+    assert pdf_text(nokey, key=None, capo=None, names="numerals") == pdf_text(nokey, key=None, capo=None)
+    with pytest.raises(ValueError):
+        pdf_text(SONG, key=C_MAJOR, capo=None, names="roman")

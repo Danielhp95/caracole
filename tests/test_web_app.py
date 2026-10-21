@@ -1464,6 +1464,31 @@ def test_the_search_answers_json_from_your_library_and_the_offline_index(app, co
     assert (second["ug"], second["song"]) == ("stone-temple-pilots/creep", None)
 
 
+def test_the_search_finds_your_songs_by_a_progression_typed_or_named(app, conn):
+    from caracole.db import kv_set_json
+    from caracole.progressions import KV, sheet_progressions
+
+    verse = "{title: X}\n{comment: Verse}\n[Am]a [F]b [C]c [G]d\n"
+    played = {}
+    for title, key in (("In C", "C"), ("In A Minor", "Am"), ("Andalusian", "Am")):
+        song = played[title] = add_song(conn, "Placeholder Band", title)
+        sheet = verse if title != "Andalusian" else "{title: X}\n{comment: Verse}\n[Am]a [G]b [F]c [E]d\n"
+        kv_set_json(conn, f"{KV}{song.id}", sheet_progressions(sheet, key))
+    add_song(conn, "Radiohead", "Creep")
+    data = as_json(get(app, "/api/search?q=" + quote("vi IV I V")))
+    assert data["progression"] == {"key": "I V vi IV", "label": "I–V–vi–IV", "name": "the pop progression", "songs": 2}
+    # Your songs that play it come as your songs do, read by their progression; never the row Enter acts on.
+    assert {(h["id"], h["via"]) for h in data["library"]} == {(played["In C"].id, "progression"),
+                                                             (played["In A Minor"].id, "progression")}
+    assert data["best"] is None
+    named = as_json(get(app, "/api/search?q=andalusian"))
+    assert named["progression"]["name"] == named["progression"]["label"] == "the Andalusian cadence"
+    assert [h["id"] for h in named["library"]] == [played["Andalusian"].id]
+    assert as_json(get(app, "/api/search?q=creep"))["progression"] is None
+    none = as_json(get(app, "/api/search?q=" + quote("ii V I")))
+    assert none["progression"]["songs"] == 0 and none["library"] == []
+
+
 def test_a_library_song_found_comes_as_its_card_has_it_its_viewer_first(app, cfg, conn):
     # The lookup page draws it as index.html's row does: its viewer opens it, and every file says where it
     # came from. Its links are the card's, relative to the library, as the server serves them.

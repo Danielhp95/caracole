@@ -1,8 +1,9 @@
 """caracole serve's lookup and search: the lookup page, search as you type, and a song looked up now.
 
     GET  /lookup          look a song up as you type (lookup_page.py), and read its sheet
-    GET  /api/search?q=   your library and the offline indexes, as JSON (search.py): your songs, the
-                          songs you removed (``removed``), the artists the query names, the UG
+    GET  /api/search?q=   your library and the offline indexes, as JSON (search.py): your songs (and
+                          those that play the progression the query types or names: ``progression``,
+                          progressions.py), the songs you removed (``removed``), the artists the query names, the UG
                           index's songs, which comes first and the row Enter may act on; LaCuerda's
                           artists and songs, gtptabs.com's and MuseScore's pages, and the sites not
                           searched, or not whole, with why. Each song's row has the two parts of its
@@ -287,9 +288,10 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             app._found.popitem(last=False)
     answer = found(mine, index_found)
     songs = list_songs(conn)
+    progression, playing = _progression(conn, q, {h.song.id for h in mine})
     # The artists' most tabbed songs are the index's songs too, drawn as they are: each with its song of yours.
     tops = [t for a in artists for t in a["top"]]
-    library, hits = _rows(app, conn, mine, [*index, *tops], songs)
+    library, hits = _rows(app, conn, [*mine, *playing], [*index, *tops], songs)
     hits, owned = hits[:len(index)], iter(hits[len(index):])
     artists = [{**a, "top": [next(owned) for _ in a["top"]], "gtptabs": _gtptabs_songs(app, conn, a["artist"])}
                for a in artists]
@@ -297,7 +299,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": answer.lead,
-            "best": pick, "hint": hint,
+            "best": pick, "hint": hint, "progression": progression,
             "removed": [{"artist": h.artist, "title": h.title, "key": h.key, "removed_at": h.removed_at,
                          **_key_parts(h.key)} for h in removed],
             "gtptabs": _gtptabs_rows(app, conn, gtptabs if "gtptabs" not in left_out else [], songs),
@@ -309,6 +311,22 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
             "lacuerda_leads": lacuerda_leads(index_found, lc_artists),
             "skipped": skipped, "partial": partial}
+
+
+def _progression(conn: sqlite3.Connection, q: str, mine: set[int]) -> tuple[dict[str, Any] | None, list[LibraryHit]]:
+    """The progression the query types or names (``progressions.read_progression``), as the answer's
+    ``progression`` says it (its key, how it is said, its catalogue name, how many of your songs play it),
+    and those songs the words didn't find already, the first ``LIBRARY_HITS``, as your songs read by it
+    (``via`` "progression"); None and none for a query that is no progression."""
+    from caracole.progressions import read_progression, songs_with
+    from caracole.search import LibraryHit
+
+    wanted = read_progression(q)
+    if wanted is None:
+        return None, []
+    playing = songs_with(conn, wanted)
+    said = {"key": wanted.key, "label": wanted.label, "name": wanted.name, "songs": len(playing)}
+    return said, [LibraryHit(p.song, 100.0, "progression") for p in playing if p.song.id not in mine][:LIBRARY_HITS]
 
 
 def _gtptabs_songs(app: WebApp, conn: sqlite3.Connection, artist: str) -> int:

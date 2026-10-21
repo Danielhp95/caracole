@@ -720,6 +720,49 @@ def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
     assert browser.wait(f"{GRID}.length === 2")
 
 
+def played(cfg, *songs):
+    """Songs of yours whose last render read a progression in their sheets: (artist, title, chords, key)."""
+    from caracole.db import kv_set_json
+    from caracole.progressions import KV, sheet_progressions
+
+    conn = db.connect(cfg.db_path)
+    for artist, title, chords, key in songs:
+        song = add_song(conn, artist, title)
+        sheet = "{title: X}\n{comment: Verse}\n" + " ".join(f"[{c}]la" for c in chords.split()) + "\n"
+        kv_set_json(conn, f"{KV}{song.id}", sheet_progressions(sheet, key))
+    conn.commit()
+    conn.close()
+
+
+PROG_NOTE = "document.querySelector('#results .prog-found:not([hidden])')"
+
+
+def test_a_progression_typed_or_named_finds_your_songs_that_play_it(cfg, live, browser):
+    base, queue, asked = live
+    played(cfg, ("Placeholder Band", "Synthetic Song", "Am F C G", "C"),
+           ("Another Band", "Minor Song", "Am F C G", "Am"), ("Third Band", "Spanish Song", "Am G F E", "Am"))
+    library(cfg, ("Radiohead", "Creep"))
+    browser.open(base)
+    search(browser, "vi IV I V")
+    assert browser.wait(f"{PROG_NOTE} !== null")
+    assert browser.js(f"{PROG_NOTE}.textContent") == "Your songs with I–V–vi–IV, the pop progression: 2Show them"
+    # Your songs that play it are among the results, as your songs are: under their artists.
+    assert browser.wait(same("[...document.querySelectorAll('#results article.line[data-id] h3')]"
+                             ".map((h) => h.textContent).sort()", ["Minor Song", "Synthetic Song"]))
+    browser.click("#results .prog-found button")  # Show them: the list, of those songs alone
+    assert browser.wait("document.getElementById('results').hidden")
+    assert browser.wait(same(f"{GRID}.sort()", ["Minor Song", "Synthetic Song"]))
+    assert browser.js("document.getElementById('prog').textContent") == (
+        "Songs with I–V–vi–IV, the pop progression · Show all")
+    assert browser.js("location.hash.includes('prog=I+V+vi+IV')") and browser.js("document.getElementById('q').value") == ""
+    browser.click("#prog button")
+    assert browser.wait(f"{GRID}.length === 4")
+    search(browser, "andalusian")  # a name from the catalogue
+    assert browser.wait(f"{PROG_NOTE} !== null && {PROG_NOTE}.textContent.includes('Andalusian')")
+    assert browser.js(f"{PROG_NOTE}.textContent") == "Your songs with the Andalusian cadence: 1Show them"
+    assert queue.snapshot() == []
+
+
 def same(expression, value):
     """A JavaScript condition: the expression's value, as JSON, is ``value``'s."""
     return f"JSON.stringify({expression}) === {json.dumps(json.dumps(value, separators=(',', ':'), ensure_ascii=False))}"

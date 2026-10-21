@@ -613,3 +613,53 @@ def test_render_real_paths_with_chinese_names(tmp_path):
     cho = write_chordpro("[ch]G[/ch]\nHello", song / "sheet.cho", title="斑马斑马", artist="宋冬野")
     render_pdf(cho, song / "sheet.pdf", chordpro_bin=CHORDPRO)
     assert sorted(p.name for p in song.iterdir()) == ["sheet.cho", "sheet.pdf"]
+
+
+# The theory edition's chord names, printed by the real chordpro: a chord and its numeral, or the numerals alone.
+NUMBERED = ("{title: Numbered}\n{artist: The Placeholders}\n{key: C}\n\n{comment: Verse}\n"
+            "[C]Words [Am]to [F]sing [G]here\n[D]more [G]words [D]and [C]home\n")
+
+
+def numbered_pdf(tmp_path: Path, names: str, sheet: str = NUMBERED) -> list[tuple[str, str]]:
+    cho = tmp_path / f"{names}.cho"
+    cho.write_text(printed_text(sheet, key=Key(0, "ionian"), capo=None, names=names), encoding="utf-8")
+    pdf = tmp_path / f"{names}.pdf"
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO)
+    return pdf_strings(pdf)
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_prints_each_chord_with_its_numeral_and_draws_its_diagram(tmp_path):
+    drawn = numbered_pdf(tmp_path, "both")
+    texts = [text.strip() for _, text in drawn]
+    for shown in ("C · I", "Am · vi", "D · V/V", "D · II"):
+        assert texts.count(shown) >= 2, (shown, texts)  # over the words, and over its diagram
+    assert "Words" in texts and "THE NUMERALS, IN C MAJOR" in texts
+    assert any(t.startswith("The Placeholders · Key C · numerals in C major") for t in texts)
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_numerals_chart_says_its_key_and_draws_no_diagrams(tmp_path):
+    plain = numbered_pdf(tmp_path, "chords")
+    chart = numbered_pdf(tmp_path, "numerals")
+    texts = [text.strip() for _, text in chart]
+    for numeral in ("I", "vi", "IV", "V", "V/V", "II"):  # in the chords' style
+        assert ("Helvetica-Bold", numeral) in [(font, text.strip()) for font, text in chart], (numeral, chart)
+    assert not {"C", "Am", "F", "G", "D"} & set(texts)  # no chord, over the words or as a diagram's name
+    assert any(t.startswith("The Placeholders · Key C · numerals in C major") for t in texts)
+    # The same song by its chords names each chord over its words and over its diagram: the chart, neither.
+    named = [text.strip() for _, text in plain]
+    assert all(named.count(chord) >= 2 for chord in ("C", "Am", "F", "G")), named
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_numerals_chart_draws_not_even_the_diagram_of_a_chord_the_sheet_defines(tmp_path):
+    # Hm is no chord caracole reads: it stays as written, with the sheet's own {define}, which chordpro
+    # would draw as a diagram named Hm but for the chart's {diagrams: off}.
+    sheet = NUMBERED.replace("{key: C}\n", "{key: C}\n{define: Hm base-fret 1 frets x 2 4 4 3 2}\n").replace(
+        "[G]here", "[Hm]here")
+    texts = [text.strip() for _, text in numbered_pdf(tmp_path, "numerals", sheet)]
+    assert texts.count("Hm") == 1, texts  # over its words alone
