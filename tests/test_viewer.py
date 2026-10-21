@@ -159,7 +159,11 @@ def test_a_page_without_a_policy_to_send_runs_nothing(written):
 
 
 def test_the_page_loads_nothing_and_links_only_beside_itself():
-    html = build_viewer(UG_CHO, pdf="sheet.pdf")
+    from caracole.page_icon import LINK
+
+    page = build_viewer(UG_CHO, pdf="sheet.pdf")
+    assert page.count(LINK) == 1  # its icon, inline: a data: URI loads nothing
+    html = page.replace(LINK, "")
     assert "<link" not in html and "@import" not in html and "url(" not in html
     assert not re.search(r"\ssrc=", html)
     hrefs = re.findall(r'href="([^"]*)"', html)

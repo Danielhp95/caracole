@@ -223,6 +223,7 @@ from caracole.library_assets import read as read_asset
 from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
+from caracole.page_icon import LINK as PAGE_ICON
 from caracole.songbook_section import songbooks_data
 from caracole.songs import Song, is_export, list_songs
 from caracole.todo import search_links, songs_to_buy
@@ -334,7 +335,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'") if controls is not None
            else _CSP.replace("__FORMS__", "'none'"))
     return (
-        _HEAD.replace("__CSP__", csp).replace("__STYLE__", _PAGE_STYLE)
+        _HEAD.replace("__CSP__", csp).replace("__ICON__", PAGE_ICON).replace("__STYLE__", _PAGE_STYLE)
         + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
         .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)
