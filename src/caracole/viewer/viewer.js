@@ -126,7 +126,42 @@
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
       }
     } catch (err) { /* an address the page can't change */ }
+    exportLink();
   };
+
+  // Export PDF of this version: served, a link to the server's export page for this very address, followed in
+  // this tab (the sandbox has no popups); from a file, the command that makes it, with Copy.
+  const exportLink = () => {
+    const link = $("export");
+    const cmd = $("export-cmd");
+    if (!link || !cmd) return;
+    const version = new URLSearchParams(location.hash.slice(1));
+    if (location.protocol === "file:") {
+      const title = (document.querySelector("h1") || {}).textContent || "";
+      const artist = (document.querySelector(".artist") || {}).textContent || "";
+      const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
+      for (const name of ["fs", "speed"]) version.delete(name);
+      cmd.textContent = "caracole render --song " + quoted(artist ? artist + " - " + title : title)
+        + " --version " + quoted(version.toString().replace(/%2C/g, ","));
+      link.hidden = true;
+      cmd.hidden = false;
+      $("export-copy").hidden = false;
+      $("export-hint").textContent = "Run this where caracole is installed; the PDF is written beside the sheet.";
+      return;
+    }
+    const query = new URLSearchParams();
+    query.set("sheet", decodeURIComponent(location.pathname.slice(1)));
+    version.forEach((value, name) => query.append(name, value));
+    link.setAttribute("href", "/export?" + query.toString());
+  };
+  if ($("export-copy")) {
+    $("export-copy").addEventListener("click", () => {
+      const done = () => { $("export-copy").textContent = "Copied"; };
+      try {
+        navigator.clipboard.writeText($("export-cmd").textContent).then(done, () => {});
+      } catch (err) { /* no clipboard: the command is selectable */ }
+    });
+  }
 
   // --- naming chords -------------------------------------------------------------------------
   const modeNow = () => (key ? state.mode || key.mode : "");

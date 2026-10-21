@@ -24,6 +24,7 @@
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
     POST /review          a song in review's answer, as ``caracole review --song`` writes it
+    GET, POST /export     a sheet's PDF in the version its viewer was left in (export_routes.py)
     POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued, and
                           back to the library, at the song's card (to the page's script: what it takes,
                           as data, then the job)
@@ -300,6 +301,10 @@ class WebApp:
                 from caracole.web.lookup_page import LOOKUP_CSP, lookup_page
 
                 return _html(200, lookup_page(self.csrf, page_icons(self.cfg.cache_dir)), csp=LOOKUP_CSP)
+            if path == "/export":
+                from caracole.web.export_routes import export_page
+
+                return export_page(self, request.target)
             if path == "/jobs":
                 return self._jobs_page(parse_qs(urlsplit(request.target).query))
             if path == "/jobs.json":
@@ -336,6 +341,10 @@ class WebApp:
                 handler = lambda form: self._lookup(form, wants_json=data)  # noqa: E731
             if path == "/lacuerda/artist":
                 handler = lambda form: self._lacuerda_read(form, wants_json=data)  # noqa: E731
+            if path == "/export":
+                from caracole.web.export_routes import export_post
+
+                handler = lambda form: export_post(self, form)  # noqa: E731
             if handler is None and path.startswith("/songbook/"):
                 handler = self._songbook_form(path)
             if handler is None:

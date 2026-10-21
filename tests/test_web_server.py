@@ -289,3 +289,37 @@ def test_a_served_viewers_links_open_once_signed_in(cfg, conn, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+@in_chromium
+def test_the_served_viewer_links_to_its_export_in_the_same_tab(cfg, conn, tmp_path):
+    # The viewer is sandboxed (no popups), so its Export PDF link is a plain link: this tab goes to the
+    # server's export page, which names the version the address holds.
+    rendered_song(conn, cfg)
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    root = f"http://127.0.0.1:{server.server_address[1]}/"
+    url = root + quote("Soda Stereo/De Música Ligera/sheet.html") + "#t=2&capo=2&fs=20"
+    link = "document.querySelector('#export')"
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")
+            tab.click("#more")
+            assert tab.eval(f"{link}.hidden") is False and tab.eval(f"{link}.target") == ""
+            assert tab.eval(f"{link}.textContent") == "Export PDF of this version"
+            assert tab.eval(f"{link}.getAttribute('href')") == (
+                "/export?" + urlencode({"sheet": "Soda Stereo/De Música Ligera/sheet.html"}) + "&t=2&capo=2&fs=20")
+            tab.eval("document.querySelector('#t-up').click()")  # the link follows the address
+            assert tab.eval(f"{link}.getAttribute('href')").endswith("&t=3&capo=2&fs=20")
+            tab.eval(f"{link}.scrollIntoView({{block: 'center'}})")
+            tab.click("#export")
+            tab.wait_for("document.title.startsWith('Export ')")
+            assert tab.eval("location.pathname") == "/export"
+            assert "capo 2" in tab.eval("document.body.innerText")  # the version, in words
+            tab.eval("document.querySelector(\"a[href*='sheet.html']\").scrollIntoView()")
+            tab.click("a[href*='sheet.html']")  # Back to the sheet: the same hash
+            tab.wait_for("document.documentElement.dataset.ready === '1'")
+            assert tab.eval("location.hash") == "#t=3&capo=2&fs=20"
+    finally:
+        server.shutdown()
+        server.server_close()

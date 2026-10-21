@@ -254,6 +254,10 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .chip small { display: block; font-size: .7rem; opacity: .75; }
 .link { min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--accent); font: inherit;
   font-weight: 600; cursor: pointer; }
+a.link { display: inline-flex; align-items: center; text-decoration: none; }
+a.link[hidden] { display: none; }
+.cmd { flex: 1 1 100%; min-width: 0; padding: 8px 10px; border-radius: 8px; background: var(--raised); font-size: .8rem;
+  overflow-wrap: anywhere; user-select: all; }
 .hint { flex-basis: 100%; margin: 2px 0 0; color: var(--muted); font-size: .82rem; }
 .hint:empty { display: none; }
 .center { text-align: center; }

@@ -560,6 +560,9 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
+<div class="row" id="export-row"><a class="link" id="export" href="/export">Export PDF of this version</a>
+<p class="hint" id="export-hint"></p>
+<code class="cmd" id="export-cmd" hidden></code><button type="button" class="chip" id="export-copy" hidden>Copy</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>

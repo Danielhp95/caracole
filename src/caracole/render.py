@@ -591,10 +591,37 @@ def export_version(query: str, overrides: Overrides, song: Song) -> Version:
     return replace(version, t=overrides.transpose.get(song.key, 0))
 
 
-def _export_query(v: Version) -> str:
+def export_query(v: Version) -> str:
     """The version as an address that always says its ``t``, so reading it back needs no song."""
     rest = [part for part in version_query(v).split("&") if part and not part.startswith("t=")]
     return "&".join([f"t={v.t}", *rest])
+
+
+def _export_source(conn: sqlite3.Connection, cfg: Config, song: Song):
+    """The sheet an export is made from (the human one, else the auto one), its ChordPro text and its key.
+    Raises RenderError when the song keeps no sheet."""
+    files = {f.name: f for f in kept_files(conn, song.id)}
+    if (kept := files.get(HUMAN_SHEET)) is not None:
+        sheet = _human_sheet(conn, cfg.library_dir, kept)
+    elif (kept := files.get(AUTO_SHEET)) is not None:
+        sheet = _auto_sheet(cfg.library_dir, kept)
+    else:
+        raise RenderError(f"{song.display} keeps no sheet to export")
+    found = sheet_keys(conn, cfg.library_dir, song)[1 if sheet.auto else 0]
+    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
+                          key=sheet.key, capo=sheet.capo, auto=sheet.auto)
+    return sheet, text, found
+
+
+def export_label(conn: sqlite3.Connection, cfg: Config, song: Song, v: Version) -> str:
+    """The name of the version ``v`` of the song's sheet ("G Dorian, capo 0"), as its export is recorded
+    under. Raises RenderError: no sheet kept, or a sheet the viewer's code can't read."""
+    _, text, found = _export_source(conn, cfg, song)
+    try:
+        shapes = viewer_key(text, found.key if found is not None else None)
+        return version_label(v, shapes, parse_sheet(text).capo)
+    except Exception as e:
+        raise RenderError(f"cannot read the sheet: {type(e).__name__}: {e}") from e
 
 
 def render_version(
@@ -618,16 +645,7 @@ def render_version(
     Raises RenderError: no sheet kept, a sheet that can't be read or made, a CJK font needed and missing, or
     chordpro failing.
     """
-    files = {f.name: f for f in kept_files(conn, song.id)}
-    if (kept := files.get(HUMAN_SHEET)) is not None:
-        sheet = _human_sheet(conn, cfg.library_dir, kept)
-    elif (kept := files.get(AUTO_SHEET)) is not None:
-        sheet = _auto_sheet(cfg.library_dir, kept)
-    else:
-        raise RenderError(f"{song.display} keeps no sheet to export")
-    found = sheet_keys(conn, cfg.library_dir, song)[1 if sheet.auto else 0]
-    text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
-                          key=sheet.key, capo=sheet.capo, auto=sheet.auto)
+    sheet, text, found = _export_source(conn, cfg, song)
     folder = song_dir(cfg.library_dir, song)
     try:
         shapes = viewer_key(text, found.key if found is not None else None)
@@ -646,7 +664,7 @@ def render_version(
         raise RenderError(f"{pdf.name} needs a CJK font: {FONT_HINT}")
     state = {
         "pdf": pdf.name,
-        "query": _export_query(v),
+        "query": export_query(v),
         "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "style": _style(),
         "pdf_text": PDF_TEXT_VERSION,

@@ -1174,6 +1174,11 @@ and cache.
   the PDF's text changes (and says nothing when they are up to date), and
   `caracole remove` deletes them. Needs the song's sheet to be kept; exits 1
   with the reason when it can't be made.
+  In the sheet viewer, ⋯ has **Export PDF of this version**. On `caracole
+  serve` it opens `/export` in the same tab: the version in words ("G Dorian,
+  capo 0"), Make PDF (this command, queued like any request), the job's line,
+  then Open the PDF and Back to the sheet, which keeps the viewer's address.
+  Opened from a file, the viewer shows the command to run instead, with Copy.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
   replaces the old one in one rename, so a failed render leaves the last good
   PDF in place. It exits 1 when a sheet couldn't be rendered, and the log

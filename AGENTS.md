@@ -142,7 +142,9 @@ tombstones it leaves are songs.py's, in the `removed` table).
   `ROWS_STYLE` through its row builders, `ugHit` and `artistHit` too, and a song you have opens its viewer;
   Enter acts on `/api/search`'s `best`, or opens the leading artist's songs (LaCuerda's when
   `lacuerda_leads`), and never spends a request without one),
-  pages.py, server.py (`http.server`). The library page is
+  export_routes.py (`GET`/`POST /export`: a sheet's PDF in the version its viewer's address holds, queued as
+  `caracole render --song --version`; the served viewer's Export PDF link goes there in the same tab, a file's
+  shows the command), pages.py, server.py (`http.server`). The library page is
   library_page.py's, with `WebControls`; its script posts the forms with fetch() and asks
   /jobs.json how they go. Its one bar filters your songs as you type and, on Enter or Search
   all, lists `/api/search`'s answer under them (served; the file shows the `caracole search`
