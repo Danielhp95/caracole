@@ -703,3 +703,68 @@ def test_a_clean_song_whose_lookup_ug_cut_short_is_owed_a_fetch_by_the_nightly_r
 
     assert progress.states()["sheet"] in ("skipped", "failed")
     assert get_song(conn, creep.id).ug_dirty is True
+
+
+# --- a song a search found on an artist page ------------------------------------------------------
+
+
+def serve_song_dongye(sites: Sites, conn, cfg) -> None:
+    """宋冬野 on UG, listed only by bare ids: their artist page (pasted under [artist_url]), its chords and tabs
+    lists, and the sheets of 斑马斑马 and 董小姐; LRCLIB's lyrics of both. The index has another artist."""
+    from helpers.ug_pages import (BANMA_TRADITIONAL_LINES, BANMA_UG, DONG_XIAOJIE_LINES, SONG_DONGYE_URL,
+                                  song_dongye_chords, song_dongye_page_html, song_dongye_sheet, song_dongye_tab)
+
+    from caracole.ug.artist import artist_page_url
+
+    sites.pages[artist_page_url(SONG_DONGYE_URL, kind="chords")] = (200, song_dongye_page_html(song_dongye_chords(
+        t4180894=(4.8, 120), t4689017=(4.6, 40), t3016223=(4.7, 90), t3204647=(4.1, 9))))
+    sites.pages[artist_page_url(SONG_DONGYE_URL, kind="tabs")] = (200, song_dongye_page_html(
+        [song_dongye_tab(5000001, "安和桥 Anhe Bridge", type="Tabs")]))
+    for tab_id, title, lines in ((4180894, BANMA_UG, BANMA_TRADITIONAL_LINES), (4689017, BANMA_UG, BANMA_TRADITIONAL_LINES),
+                                 (3016223, "董小姐", DONG_XIAOJIE_LINES), (3204647, "董小姐", DONG_XIAOJIE_LINES)):
+        sites.pages[f"{TAB}{tab_id}"] = (200, make_tab_page_html(song_dongye_tab(tab_id, title), [],
+                                                                 content=song_dongye_sheet(lines),
+                                                                 artist_url=SONG_DONGYE_URL))
+    sites.lyrics[("宋冬野", "斑马斑马")] = "\n".join(BANMA_TRADITIONAL_LINES)
+    sites.lyrics[("宋冬野", "董小姐")] = "\n".join(DONG_XIAOJIE_LINES)
+    upsert_rows(conn, [(1, "radiohead", "creep", "chords", "radiohead/creep-chords-1")], "1", NOW)
+    mark_built(conn, NOW)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[artist_url]\n"宋冬野" = "{SONG_DONGYE_URL}"\n', encoding="utf-8")
+
+
+def test_a_song_a_search_found_on_an_artist_page_is_looked_up_there_from_the_learned_address(cfg, conn, sites):
+    from caracole.search import find_index
+
+    serve_song_dongye(sites, conn, cfg)
+    look_up(cfg, sites=sites, artist="宋冬野", title="斑马斑马")
+    cfg.overrides_file.write_text("", encoding="utf-8")  # the page is known now only as caracole learned it
+
+    hit = find_index(conn, "董小姐").songs[0]
+    assert (hit.artist, hit.title, hit.url) == ("宋冬野", "董小姐", f"{TAB}3016223")
+    before = len(sites.ug())
+    result, progress = look_up(cfg, sites=sites, artist=hit.artist, title=hit.title)
+
+    song = find_song(conn, "宋冬野/董小姐")
+    assert (song.status, song.match_step) == ("found", "artist_page") and result.sheet is not None
+    # The artist page's lists come from the cache, and no tab page is read to learn where the page is.
+    assert sites.ug()[before:] and set(sites.ug()[before:]) <= {f"{TAB}3016223", f"{TAB}3204647"}
+
+
+def test_a_lookup_fills_the_artist_pages_tabs_from_the_cache_once_with_no_request(cfg, conn, sites):
+    # A database from before those tabs were kept: the cache holds the lists, and any lookup reads them.
+    from caracole.db import kv_delete
+    from caracole.search import find_index
+    from caracole.ug.artist_tabs import BACKFILL_KEY
+
+    serve_song_dongye(sites, conn, cfg)
+    look_up(cfg, sites=sites, artist="宋冬野", title="斑马斑马")
+    conn.execute("DELETE FROM ug_artist_tabs")
+    kv_delete(conn, BACKFILL_KEY)
+    record_block(conn, "ug", NOW, "HTTP 429")  # even while Ultimate Guitar cools down
+    before = len(sites.ug())
+
+    look_up(cfg, sites=sites, artist="Nobody", title="Nothing")
+
+    assert sites.ug()[before:] == []
+    assert find_index(conn, "董小姐").songs[0].url == f"{TAB}3016223"

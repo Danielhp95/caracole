@@ -77,6 +77,7 @@ from caracole.normalize import clean_title, compact, listing_forms, name_forms, 
 from caracole.overrides import Overrides, artist_page_address, artist_url_entry, pasted_tab_id
 from caracole.rank import Candidate, is_complete, rank_by_rating, rank_guitar, rank_sheets
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
+from caracole.ug import artist_tabs as listed_tabs  # ug.lookup.artist_tabs is another thing
 from caracole.ug.artist import WWW, UGArtistPage, artist_page_url, parse_artist_page
 from caracole.ug.lookup import (
     IndexTab,
@@ -291,6 +292,19 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
     PoliteClient serves one only once the budget is spent, so this stops as
     the next request would have (``BudgetExhausted``).
     """
+    page, resp = _read_page(client, url, parse, max_age=max_age, now=now)
+    return page, not resp.from_cache
+
+
+def _read_page[P: (UGTabPage, UGArtistPage)](
+    client: Client,
+    url: str,
+    parse: Callable[..., P],
+    *,
+    max_age: timedelta | None = None,
+    now: datetime | None = None,
+) -> tuple[P | None, Response]:
+    """``_get_page``, with the answer the page was read from (its ``from_cache``, its ``fetched_at``)."""
 
     def parsed(resp: Response) -> P | None:
         return None if resp.status == 404 else parse(resp.content, url=url)
@@ -299,12 +313,13 @@ def _get_page[P: (UGTabPage, UGArtistPage)](
     if max_age is not None and now is not None and stale(resp, now, max_age):
         raise BudgetExhausted(PROVIDER)
     try:
-        return parsed(resp), not resp.from_cache
+        return parsed(resp), resp
     except PageParseError:
         if not resp.from_cache:
             raise
+    again = client.get(url, accept=_PAGE_ACCEPT, cache=False)
     try:
-        return parsed(client.get(url, accept=_PAGE_ACCEPT, cache=False)), True
+        return parsed(again), again
     except PageParseError as e:
         raise UnreadablePage(e.provider, e.url, e.status, e.message) from e
 
@@ -995,11 +1010,18 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
     consecutive: reading stops once they end, and goes on to the next page
     only when they reach the end of this one. A page robots.txt closes, or
     redirects to where it does, ends the list, unread.
+
+    Every page read is kept for searches (ug/artist_tabs.py ``store``), and a
+    list read to its end, an empty one (404) included, is every tab of its kind
+    the artist's page has (``keep_only``): one UG took down goes.
     """
     ctx = run.ctx
     hits: list[_Hit] = []
     first: UGArtistPage | None = None
     fetched, number, last = 0, 1, 1
+    kept: list[int] = []
+    oldest: str | None = None  # the earliest of the pages' reads
+    whole = False
     while number <= last:
         if fetched >= ctx.artist_pages_per_kind:
             return hits, False, first
@@ -1007,22 +1029,32 @@ def _read_list(run: _SongRun, base: str, kind: str, forms: list[str]) -> tuple[l
         if _closed(url):
             break
         try:
-            page, fresh = _get_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age,
+            page, resp = _read_page(ctx.client, url, parse_artist_page, max_age=ctx.artist_page_max_age,
                                     now=ctx.now)
         except RobotsClosed:
             break
+        fresh = not resp.from_cache
         fetched += fresh
+        read_at = resp.fetched_at or _iso(ctx.now)
+        oldest = min(oldest or read_at, read_at)
         if page is None:
+            whole = number == 1  # an empty list may answer 404
             break
         first = first or page
         last = max(last, page.pages)
         listed = [t for t in page.tabs if t.kind == kind]
         _check_links(run, listed, url)
+        kept += listed_tabs.store(run.conn, base, page.name, listed, read_at=read_at)
         found = [h for t in listed if (h := _title_hit(t, forms, fresh)) is not None]
         hits += found
         if hits and not (found and found[-1].tab is listed[-1]):
+            whole = number >= last
             break
         number += 1
+    else:
+        whole = True
+    if whole and oldest is not None:
+        listed_tabs.keep_only(run.conn, base, kind, kept, read_at=oldest)
     return hits, True, first
 
 
@@ -1033,12 +1065,14 @@ def _offered_kinds(run: _SongRun, base: str) -> set[str] | None:
     if _closed(url):
         return set()
     try:
-        page, _ = _get_page(run.ctx.client, url, parse_artist_page,
-                            max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
+        page, resp = _read_page(run.ctx.client, url, parse_artist_page,
+                                max_age=run.ctx.artist_page_max_age, now=run.ctx.now)
     except RobotsClosed:
         return set()
     if page is None:
         return None
+    # Every kind, mixed: kept for searches, and never all of a kind's tabs (a filtered list is).
+    listed_tabs.store(run.conn, base, page.name, page.tabs, read_at=resp.fetched_at or _iso(run.ctx.now))
     return set(page.filters) or set(ARTIST_PAGE_KINDS)
 
 
@@ -1098,6 +1132,7 @@ def _forget_learned(run: _SongRun, keys: list[str], base: str) -> None:
 def _artist_page_gone(run: _SongRun, keys: list[str], base: str) -> None:
     log.warning("UG artist page %s answered 404; check [artist_url] for %s", base, run.song.artist)
     _forget_learned(run, keys, base)
+    listed_tabs.forget(run.conn, base)  # a search no longer finds what it listed
 
 
 def _listed_keys(run: _SongRun, tab: UGVersion, artist_name: str) -> tuple[str, str]:

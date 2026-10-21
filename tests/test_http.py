@@ -591,6 +591,27 @@ def test_has_cached_is_false_when_the_body_is_gone_as_get_would_download_it(tmp_
     assert "if-none-match" not in rec.requests[-1].headers  # no copy to revalidate: a plain GET
 
 
+def test_cached_reads_a_cached_answer_alone_and_sends_nothing(tmp_path):
+    # The artist pages a search reads (ug/artist_tabs.py) come from the cache alone, even while UG cools down.
+    def handler(request):
+        return httpx.Response(404 if request.url.path == "/gone" else 200, content=b"<html>page</html>")
+
+    client, rec = make_client(tmp_path, handler)
+    page, gone = "https://www.ultimate-guitar.com/artist/634073", "https://www.ultimate-guitar.com/gone"
+    assert client.cached(page) is None
+    client.get(page)
+    client.get(gone, accept=(200, 404))
+    answer = client.cached(page)
+    assert (answer.status, answer.content, answer.from_cache) == (200, b"<html>page</html>", True)
+    assert answer.fetched_at
+    assert client.cached(gone) is None and client.cached(gone, accept=(200, 404)).status == 404
+    assert client.cached("https://www.ultimate-guitar.com/artist/1") is None
+    for body in (tmp_path / "cache").rglob("*.body"):
+        body.write_bytes(b"not gzip")
+    assert client.cached(page) is None  # a copy that can't be read is none
+    assert len(rec.requests) == 2 and client.requests_made == 2
+
+
 def test_consecutive_errors_make_provider_unavailable(tmp_path):
     client, rec = make_client(tmp_path, ok(b"boom", status=502), max_consecutive_errors=3)
     for i in range(3):

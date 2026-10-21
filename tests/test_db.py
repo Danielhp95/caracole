@@ -215,7 +215,7 @@ def test_a_version_5_database_gains_the_lacuerda_index_and_keeps_its_ug_keys(tmp
     old.close()
 
     c = db.connect(path)
-    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW == 6
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
     c.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, page) "
               "VALUES ('estopa/', 'estopa', 'Estopa', 'estopa', 'tabs/e/index0.html')")
     row = c.execute("SELECT title, title_key, songs, versions, acordes, popular FROM lacuerda_index").fetchone()
@@ -227,6 +227,38 @@ def test_a_version_5_database_gains_the_lacuerda_index_and_keeps_its_ug_keys(tmp
     assert cols == ["path", "artist_slug", "artist", "artist_key", "title", "title_key", "songs", "versions",
                     "acordes", "popular", "page"]
     assert columns(path.with_name("caracole.sqlite.v5.bak"), "lacuerda_index") == ([], 5)
+
+
+def test_a_version_6_database_gains_the_artist_pages_tabs_and_keeps_every_row(tmp_path):
+    # As the LaCuerda-index caracole left it: schema 6, with a row in each table that holds the user's state.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 7)) + "\nPRAGMA user_version = 6;")
+    old.execute("INSERT INTO ug_index VALUES (1, 'oasis', 'wonderwall', 'chords', '1', 'x', 'oasis/wonderwall-chords-1')")
+    old.execute(
+        "INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at) "
+        "VALUES ('宋冬野/董小姐', '宋冬野', '董小姐', '[\"宋冬野\"]', 'x', 'x', 'x')"
+    )
+    old.execute("INSERT INTO removed VALUES ('宋冬野/斑马斑马', '宋冬野', '斑马斑马', '{}', '2026-10-20T00:00:00Z')")
+    old.execute("INSERT INTO lacuerda_index (path, artist_slug, artist, artist_key, page) "
+                "VALUES ('estopa/', 'estopa', 'Estopa', 'estopa', 'tabs/e/index0.html')")
+    old.execute("INSERT INTO kv VALUES ('ug:artist_url:宋冬野', 'https://www.ultimate-guitar.com/artist/634073')")
+    old.commit()
+    tables = {t: old.execute(f"SELECT * FROM {t} ORDER BY 1").fetchall()
+              for t in ("songs", "ug_index", "ug_keys", "removed", "lacuerda_index", "kv")}
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW == 7
+    for table, rows in tables.items():
+        assert [tuple(r) for r in c.execute(f"SELECT * FROM {table} ORDER BY 1")] == rows, table
+    assert c.execute("SELECT COUNT(*) FROM ug_artist_tabs").fetchone()[0] == 0
+    c.close()
+    cols, _ = columns(path, "ug_artist_tabs")
+    assert cols == ["page", "tab_id", "type", "artist", "title", "label", "rating", "votes", "url", "artist_key",
+                    "song_key", "artist_forms", "title_forms", "forms", "read_at"]
+    assert columns(path.with_name("caracole.sqlite.v6.bak"), "ug_artist_tabs") == ([], 6)
 
 
 def test_the_journal_trades_the_last_writes_before_a_power_cut_for_speed(conn):

@@ -12,6 +12,8 @@ Tables (plan §5, plus ``kv``):
   substring search (schema 5, ug/key_search.py).
 - ``lacuerda_index``: LaCuerda's artists, from its listings, and the songs of the artist
   pages caracole has read (schema 6, lacuerda_index.py).
+- ``ug_artist_tabs``: the tabs UG's artist pages listed when caracole read them, bare ids
+  with their names, for searches (schema 7, ug/artist_tabs.py).
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
@@ -28,7 +30,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -231,9 +233,43 @@ CREATE INDEX IF NOT EXISTS lacuerda_index_slug ON lacuerda_index(artist_slug);
 CREATE INDEX IF NOT EXISTS lacuerda_index_page ON lacuerda_index(page);
 """
 
+# The tabs UG's artist pages listed when caracole last read them (ug/artist_tabs.py), for searches: the
+# sitemaps list bare-id tabs without names. A row per tab of each artist page, under the page's address
+# (page: "https://www.ultimate-guitar.com/artist/634073"), with the names UG writes ("Song Dongye (宋冬野)",
+# "斑马 斑马 Banma Banma Zebra Zebra"), caracole's kind (type, as ug_index has it), its part or "acoustic"
+# (label), its rating, votes and page (url). artist_key and song_key file it under ug_index's keys where
+# ug_index lists a tab of the page or of the song, else under the names' slug keys; artist_forms and
+# title_forms are the names' forms (normalize.name_forms, Chinese in pinyin too), space-separated, for the
+# scores, and forms every one of them hyphenated and written together, for the prefilter's LIKE; forms
+# are for comparing, never a song's key. All five are made again from the names when caracole's keys change. read_at: when UG gave the list (a cached
+# copy's own time).
+_SCHEMA_V7 = """
+CREATE TABLE IF NOT EXISTS ug_artist_tabs (
+  page TEXT NOT NULL,
+  tab_id INTEGER NOT NULL,
+  type TEXT NOT NULL,
+  artist TEXT NOT NULL,
+  title TEXT NOT NULL,
+  label TEXT,
+  rating REAL NOT NULL DEFAULT 0,
+  votes INTEGER NOT NULL DEFAULT 0,
+  url TEXT NOT NULL,
+  artist_key TEXT NOT NULL,
+  song_key TEXT NOT NULL,
+  artist_forms TEXT NOT NULL,
+  title_forms TEXT NOT NULL,
+  forms TEXT NOT NULL,
+  read_at TEXT NOT NULL,
+  PRIMARY KEY (page, tab_id)
+);
+CREATE INDEX IF NOT EXISTS ug_artist_tabs_song ON ug_artist_tabs(artist_key, song_key);
+CREATE INDEX IF NOT EXISTS ug_artist_tabs_tab ON ug_artist_tabs(tab_id);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
-_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6}
+_MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
+               7: _SCHEMA_V7}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

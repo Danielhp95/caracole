@@ -614,6 +614,8 @@ def _index_lines(n: int, hit: IndexHit, known: set[tuple[str, str]],
     counts = " ".join(f"{kind}×{count}" for kind, count in hit.counts.items())
     if hit.labels:
         counts += f" (incl. {', '.join(hit.labels)})"
+    if hit.rating is not None:  # an artist page caracole read rates its tabs: the page's best one
+        counts += f" · rated {hit.rating:.1f} ({_count(hit.votes, 'vote')})"
     in_library = (hit.artist_key, hit.song_key) in known or tuple(
         identity_key(hit.artist, hit.title).split("/", 1)
     ) in known

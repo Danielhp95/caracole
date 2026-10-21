@@ -370,6 +370,14 @@ def name_forms(name: str) -> tuple[str, ...]:
     return tuple(f for f in dict.fromkeys(forms) if f)
 
 
+def original_part(name: str) -> str:
+    """The part of a name UG writes in two scripts that is in the original one (``name_forms``' parts):
+    宋冬野 of "Song Dongye (宋冬野)", "斑马 斑马" of "斑马 斑马 Banma Banma Zebra Zebra"; a name in one script
+    as it is, without the artists it features ("Ma Di" of "Ma Di (feat. 宋冬野)")."""
+    core = without_featuring(name)
+    return next((p.strip() for p in _parts(core) if any(_foreign(c) for c in p)), core)
+
+
 # A bracketed group, in any width, as a listing in Latin letters alone holds a translation (listing_forms).
 _BRACKETED = re.compile(r"[(\[（［【][^)\]）］】]*[)\]）］】]")
 
