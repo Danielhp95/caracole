@@ -340,7 +340,7 @@ a.link[hidden] { display: none; }
 }
 
 /* A chord's neck: its positions as dots in four colours (--p1 to --p4), the chosen one bolder, the tab's
-   own ringed. Open strings are rings at the nut. */
+   own ringed. Open strings are rings at the nut. A note several positions play is a smaller dot each. */
 .neck { display: block; width: 100%; height: auto; color: var(--muted); }
 .nk-string, .nk-fret { stroke: currentColor; stroke-width: .7; opacity: .8; }  /* 3:1 at least, light and dark */
 .nk-nut { fill: currentColor; }
@@ -358,6 +358,8 @@ a.link[hidden] { display: none; }
 .nk-dot.tabs { stroke: var(--text); stroke-width: 1.4; }
 .nk-dot.chosen, .nk-open.chosen { stroke-width: 2; }
 .nk-dot.chosen { stroke: var(--text); }
+.nk-dot.few, .nk-open.few { stroke-width: .6; }  /* three or more on one note, smaller (viewer.js neck) */
+.nk-dot.few.chosen, .nk-open.few.chosen { stroke-width: 1.2; }
 
 /* From 1200 px wide: the rail of necks on the left (viewer.js shows it, and says so in data-necks), which the
    song and the bar move over for, as they do for the settings' rail on the right. It scrolls on its own, and

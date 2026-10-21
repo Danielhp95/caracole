@@ -335,13 +335,46 @@
   // at absolute frets (a position's fret n is n + base - 1 up the neck), in its own colour (p0 to p3,
   // round again after four; the first ``mine`` are the tab's own, marked), open strings as rings at the nut, muted strings nothing. ``chosen``
   // is drawn bolder, last. Every dot carries its position (data-p) and fret (data-fret).
+  // A note several positions play is a smaller dot for each, side by side along the string in the order of
+  // the positions (the first on the left), so none hides another and each is its own to click: inside its
+  // fret's cell, shrunk to fit for three or more, their outlines thinner (few); at the nut, left of it, the neck
+  // widened to the left for them, and drawn that much wider, so its frets stay under the other necks' frets.
   const neck = (positions, opts) => {
     const frets = opts.frets || 15;
     const left = 14, top = 9, cell = 19, gap = 9;
+    const notes = positions.map(([shape, , base]) => {
+      const up = (Number(base) || 1) - 1, out = [];
+      for (let s = 0; s < 6; s++) if (shape[s] !== "x") out.push([s, shape[s] === "0" ? 0 : Number(shape[s]) + up]);
+      return out;
+    });
+    const sharing = new Map();  // "string.fret": the positions that play it, in order
+    notes.forEach((list, p) => list.forEach(([s, fret]) => {
+      const k = s + "." + fret;
+      if (!sharing.has(k)) sharing.set(k, []);
+      sharing.get(k).push(p);
+    }));
+    // n dots on one note: 6.4 apart, 2.9 across (3.6 the chosen one); for more than two, smaller and outlined
+    // thinner (viewer.css: half the chosen's outline, 1 or 0.6, beyond its radius), so the outermost stays 8
+    // from the middle: inside the cell, clear of the nut.
+    const sizes = (n) => {
+      const few = n > 2, out = few ? 0.6 : 1, k = Math.min(1, (8 - out) / (3.2 * (n - 1) + 3.6));
+      return { step: 6.4 * k, r: 2.9 * k, bold: 3.6 * k, out, few };
+    };
+    const openRight = left - 2;  // where shared open strings end, short of the nut
+    let margin = 0;  // the room shared open strings take left of the picture
+    for (const [k, ps] of sharing) {
+      if (ps.length < 2 || !k.endsWith(".0")) continue;
+      const z = sizes(ps.length);
+      margin = Math.max(margin, Math.ceil(1 + (z.bold + z.out) * 2 + z.step * (ps.length - 1) - openRight));
+    }
     const width = left + cell * frets + 4, height = top * 2 + gap * 5;
     const label = (positions.length === 1 ? "1 position" : positions.length + " positions");
-    const root = svg("svg", { class: "neck", viewBox: "0 0 " + width + " " + height, role: "img",
+    const root = svg("svg", { class: "neck", viewBox: -margin + " 0 " + (width + margin) + " " + height, role: "img",
       "aria-label": (opts.name || "") + ": " + label });
+    if (margin) {
+      root.style.width = "calc(100% * " + (width + margin) / width + ")";
+      root.style.marginLeft = "calc(-100% * " + margin / width + ")";
+    }
     for (let s = 0; s < 6; s++) {
       svg("line", { class: "nk-string", x1: left, y1: top + s * gap, x2: left + cell * frets, y2: top + s * gap }, root);
     }
@@ -360,16 +393,18 @@
     const order = positions.map((_, p) => p).filter((p) => p !== opts.chosen);
     if (opts.chosen >= 0 && opts.chosen < positions.length) order.push(opts.chosen);
     for (const p of order) {
-      const [shape, , base] = positions[p];
-      const up = (Number(base) || 1) - 1;
       const bold = p === opts.chosen;
-      for (let s = 0; s < 6; s++) {
-        const c = shape[s];
-        if (c === "x") continue;
-        const fret = c === "0" ? 0 : Number(c) + up;
-        const attrs = { class: (c === "0" ? "nk-open" : "nk-dot") + " p" + (p % 4) + (bold ? " chosen" : "") + (p < (opts.mine || 0) ? " tabs" : ""),
+      for (const [s, fret] of notes[p]) {
+        const attrs = { class: (fret === 0 ? "nk-open" : "nk-dot") + " p" + (p % 4) + (bold ? " chosen" : "") + (p < (opts.mine || 0) ? " tabs" : ""),
           cy: top + (5 - s) * gap, r: bold ? 4.2 : 3.2, "data-p": p, "data-fret": fret };
         attrs.cx = fret === 0 ? left - 7 : left + (fret - 0.5) * cell;
+        const ps = sharing.get(s + "." + fret), n = ps.length, i = ps.indexOf(p);
+        if (n > 1) {
+          const z = sizes(n);
+          attrs.r = bold ? z.bold : z.r;
+          if (z.few) attrs.class += " few";
+          attrs.cx = fret === 0 ? openRight - (z.bold + z.out) - (n - 1 - i) * z.step : attrs.cx + (i - (n - 1) / 2) * z.step;
+        }
         svg("circle", attrs, root);
       }
     }

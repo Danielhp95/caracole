@@ -72,15 +72,47 @@ DIAGRAM = """((svg) => svg && {
   open: [...svg.querySelectorAll('.dg-open')].map((c) => Math.round((c.getAttribute('cx') - 16) / 10)),
   fret: svg.querySelector('.dg-fret') ? svg.querySelector('.dg-fret').textContent : null,
 })(document.querySelector(%r))"""
-# The middle of a dot of chord group ``g``'s position ``p`` that no other position has there.
+# The middle of a dot of chord group ``g``'s position ``p`` at a note (a string and a fret) no other position plays.
 LONE_DOT = """(() => {
   const svg = document.querySelectorAll('#necks .nk')[%d].querySelector('svg.neck');
   const all = [...svg.querySelectorAll('circle.nk-dot')];
-  const at = (c) => c.getAttribute('cx') + ',' + c.getAttribute('cy');
+  const at = (c) => c.getAttribute('cy') + ',' + c.dataset.fret;
   const lone = all.find((c) => Number(c.dataset.p) === %d && all.filter((o) => at(o) === at(c)).length === 1);
   const r = lone.getBoundingClientRect();
   return [r.left + r.width / 2, r.top + r.height / 2];
 })()"""
+
+
+# Chords whose positions share notes: G's five (with the tab's own) three at a time on its low and high 3rd
+# frets, two on its open D and G strings; F's two at fret 1, by the nut; Am/E's four on its open low E and on
+# the D string's 2nd fret; Em7's three open ones on its open strings.
+SHARED = ("{title: Shared Notes}\n{artist: Synthetic}\n{comment: Verse}\n{define: G base-fret 1 frets 3 2 0 0 3 3}\n"
+          "[G]made [F]up [Am/E]words [Em7]here\n")
+# Every dot of every neck, as drawn: its position, string (0 the low E), fret, centre, radius, outline's
+# width and classes; each neck's frets' x (0 the nut's right edge), the nut's left edge and the viewBox's left.
+NECK_DOTS = """[...document.querySelectorAll('#necks .nk')].map((g) => {
+  const svg = g.querySelector('svg.neck'), n = (el, a) => Number(el.getAttribute(a));
+  const nut = svg.querySelector('.nk-nut');
+  return {name: g.querySelector('.nk-name').textContent,
+    box: svg.getAttribute('viewBox').split(' ').map(Number),
+    nut: [n(nut, 'x'), n(nut, 'x') + n(nut, 'width')],
+    frets: [...svg.querySelectorAll('.nk-fret')].map((l) => n(l, 'x1')),
+    fretWidth: parseFloat(getComputedStyle(svg.querySelector('.nk-fret')).strokeWidth),
+    dots: [...svg.querySelectorAll('circle[data-p]')].map((c) => {
+      const r = c.getBoundingClientRect();
+      return {p: Number(c.dataset.p), fret: Number(c.dataset.fret), string: 5 - Math.round((n(c, 'cy') - 9) / 9),
+        cx: n(c, 'cx'), cy: n(c, 'cy'), r: n(c, 'r'), stroke: parseFloat(getComputedStyle(c).strokeWidth),
+        open: c.classList.contains('nk-open'), chosen: c.classList.contains('chosen'), tabs: c.classList.contains('tabs'),
+        // the element at the dot's middle on the screen: none other covers it
+        top: c.classList.contains('nk-dot') && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === c};
+    })};
+})"""
+
+
+def notes(position) -> list[tuple[int, int]]:
+    """The notes a position plays, (string, absolute fret), the low E first: 0 for an open string."""
+    frets, base = position[0], position[2]
+    return [(s, 0 if f == "0" else int(f) + base - 1) for s, f in enumerate(frets) if f != "x"]
 
 
 def absolute(position) -> set[tuple[int, str]]:
@@ -257,6 +289,90 @@ def test_every_legend_names_its_shapes_apart(tmp_path):
                        ["1 · open", "2 · open", "3 · fret 5", "4 · fret 7"]]
     assert heard == legends  # the names a screen reader gives them: the words shown
     assert all(len(set(names)) == len(names) for names in heard)
+
+
+# --- notes several positions share ------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("at", ["", "#at=0.2"], ids=["first-chosen", "third-chosen"])
+def test_a_note_several_positions_share_is_a_dot_for_each_side_by_side_inside_its_fret(tmp_path, at):
+    with open_viewer(tmp_path, written(tmp_path, SHARED) + at, **DESKTOP) as b:
+        necks = b.js(NECK_DOTS)
+    assert [n["name"] for n in necks] == ["G", "F", "Am/E", "Em7"]
+    expected = {"G": G_POSITIONS, "F": DB[""][5], "Am/E": DB["m/7"][9]}
+    shared_seen = {}
+    for neck in necks:
+        dots, nut, frets = neck["dots"], neck["nut"], neck["frets"]
+        half_line = neck["fretWidth"] / 2
+        if neck["name"] in expected:  # every position's every note, a dot of its own
+            for p, position in enumerate(expected[neck["name"]]):
+                assert sorted((d["string"], d["fret"]) for d in dots if d["p"] == p) == sorted(notes(position)), (
+                    neck["name"], p)
+        assert all(d["tabs"] == (neck["name"] == "G" and d["p"] == 0) for d in dots)  # the tab's own, ringed
+        for i, d in enumerate(dots):  # no dot's middle under another's
+            for e in dots[i + 1:]:
+                assert ((d["cx"] - e["cx"]) ** 2 + (d["cy"] - e["cy"]) ** 2) ** 0.5 >= max(d["r"], e["r"]), (d, e)
+        assert all(d["top"] for d in dots if not d["open"]), neck["name"]
+        by_note = {}
+        for d in dots:
+            by_note.setdefault((d["string"], d["fret"]), []).append(d)
+        for (string, fret), here in by_note.items():
+            here.sort(key=lambda d: d["p"])
+            assert [d["cx"] for d in here] == sorted(d["cx"] for d in here)  # position 1 leftmost
+            assert len({d["cy"] for d in here}) == 1  # along the string
+            reach = [(d["cx"] - d["r"] - d["stroke"] / 2, d["cx"] + d["r"] + d["stroke"] / 2) for d in here]
+            if fret == 0:  # left of the nut, inside the neck's picture
+                assert min(lo for lo, _ in reach) >= neck["box"][0] and max(hi for _, hi in reach) <= nut[0]
+            else:  # inside the fret's cell: past the nut or the fret line before, short of the one after
+                lo = nut[1] if fret == 1 else frets[fret - 2] + half_line
+                assert min(a for a, _ in reach) >= lo and max(z for _, z in reach) <= frets[fret - 1] - half_line
+            if len(here) == 1:  # a note one position plays: as it always was
+                d = here[0]
+                assert d["cx"] == (7 if fret == 0 else 14 + (fret - 0.5) * 19) and d["r"] == (4.2 if d["chosen"] else 3.2)
+            else:
+                shared_seen.setdefault(neck["name"], set()).add((len(here), fret == 0))
+                assert len({d["r"] for d in here if not d["chosen"]}) == 1
+                if len(here) == 2:  # the size the owner picked: 6.4 apart, 2.9 or 3.6 for the chosen
+                    assert here[1]["cx"] - here[0]["cx"] == pytest.approx(6.4)
+                    assert all(d["r"] == pytest.approx(3.6 if d["chosen"] else 2.9) for d in here)
+    assert shared_seen["G"] == {(2, False), (3, False), (2, True)}
+    assert (2, False) in shared_seen["F"]
+    assert {(4, False), (4, True)} <= shared_seen["Am/E"]
+    assert (3, True) in shared_seen["Em7"]
+    widened = {n["name"]: n["box"][0] < 0 for n in necks}
+    assert widened == {"G": True, "F": False, "Am/E": True, "Em7": True}  # only for open strings shared
+
+
+def test_a_neck_widened_for_shared_open_strings_keeps_its_frets_under_the_others(tmp_path):
+    lines = """[...document.querySelectorAll('#necks svg.neck')].map((svg) => {
+      const x = (el) => el.getBoundingClientRect();
+      return [svg.getAttribute('viewBox').startsWith('-'), x(svg.querySelector('.nk-nut')).left,
+              x([...svg.querySelectorAll('.nk-fret')].pop()).right, x(svg).left - x(svg.closest('#necks')).left];
+    })"""
+    with open_viewer(tmp_path, written(tmp_path, SHARED), **DESKTOP) as b:
+        necks = b.js(lines)
+        seen = b.js(RAIL)
+    assert [wide for wide, *_ in necks] == [True, False, True, True]  # G, F, Am/E, Em7
+    plain = necks[1]
+    for wide, nut, last, at in necks:
+        assert nut == pytest.approx(plain[1], abs=0.5) and last == pytest.approx(plain[2], abs=0.5)
+        assert at >= 0  # inside the rail, in its padding at most
+    assert not seen["sideways"] and seen["rail"]["width"] == 300
+
+
+def test_each_dot_of_a_shared_note_plays_its_own_position(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, SHARED), **DESKTOP) as b:
+        for g, note in ((0, (5, 3)), (2, (3, 2))):  # G's high e at fret 3 (three shapes), Am/E's D string at fret 2 (four)
+            dots = [d for d in b.js(NECK_DOTS)[g]["dots"] if (d["string"], d["fret"]) == note]
+            assert len(dots) >= 3
+            for d in sorted(dots, key=lambda d: -d["p"]):
+                middle = b.js(f"""(() => {{ const c = [...document.querySelectorAll('#necks .nk')[{g}]
+                  .querySelectorAll('circle[data-p="{d["p"]}"][data-fret="{note[1]}"]')]
+                  .find((c) => Number(c.getAttribute('cy')) === {d["cy"]});
+                  const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }})()""")
+                click_at(b, *middle)
+                assert b.wait(f"document.querySelectorAll('#necks .nk')[{g}].querySelector('[aria-checked=true]')"
+                              f".dataset.p === '{d['p']}'"), (g, d)
 
 
 # --- picking a position --------------------------------------------------------------------------------

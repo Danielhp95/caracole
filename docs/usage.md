@@ -1889,7 +1889,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
   left lists each chord of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
-  a colour of its own, the tab's own ringed, and a legend under it that
+  a colour of its own, the tab's own ringed (a note several shapes play is a
+  smaller dot for each, side by side in the fret, the first shape leftmost,
+  and an open string several play a ring for each left of the nut, so none
+  hides another and a click on one plays its shape), and a legend under it that
   numbers them as the card counts them ("2 of 5") and names them: "1 · the
   tab's", "2 · open", "3 · fret 3", so two shapes at one fret ("1 · fret 1",
   "2 · fret 1") have names of their own. Click a shape, on the neck or in the
