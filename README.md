@@ -78,6 +78,7 @@ enabled = false` turns it off; see
 
     nix develop
     pytest
+    caracole --help    # the checkout's own code, no install or rebuild
 
 ## License
 

@@ -22,6 +22,16 @@
       caracoleAutochords = caracole.override { withAutochords = true; };
       # The font the packages render Chinese sheets with, so the CJK test runs here too.
       fontEnv.CARACOLE_CJK_FONT = caracole.cjkFont;
+      # `caracole` in a dev shell runs the checkout's src/ (the worktree the shell was
+      # entered in), so an edit shows at once, with no rebuild.
+      devCaracole = py: pkgs.writeShellScriptBin "caracole" ''
+        exec ${py}/bin/python -m caracole "$@"
+      '';
+      devShellHook = ''
+        root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+        export PYTHONPATH="$root/src''${PYTHONPATH:+:$PYTHONPATH}"
+        unset root
+      '';
     in {
       packages.${system} = {
         default = caracole;
@@ -56,11 +66,15 @@
       };
 
       devShells.${system} = {
-        default = pkgs.mkShell ({ packages = [ devPython ] ++ devTools; } // fontEnv);
+        default = pkgs.mkShell ({
+          packages = [ devPython (devCaracole devPython) ] ++ devTools;
+          shellHook = devShellHook;
+        } // fontEnv);
         # `pytest -m autochords` here runs the model tests on the packaged model files,
         # and `caracole youtube` finds yt-dlp, as the auto-chords package's wrapper does.
         autochords = pkgs.mkShell ({
-          packages = [ devPythonAutochords pkgs.yt-dlp ] ++ devTools;
+          packages = [ devPythonAutochords (devCaracole devPythonAutochords) pkgs.yt-dlp ] ++ devTools;
+          shellHook = devShellHook;
           CARACOLE_BTC_WEIGHTS = caracoleAutochords.btcWeights;
           CARACOLE_BEAT_CHECKPOINT = caracoleAutochords.beatCheckpoint;
         } // fontEnv);

@@ -173,6 +173,7 @@ develop`: its pytest has pytest-xdist, which spreads the suite over the cores; a
 without it runs the whole suite in one process, for minutes.
 
     nix develop        # Python 3.14 with the dependencies, pytest, pytest-xdist, chordpro, ruff, sqlite3
+    caracole --help    # in either shell: the checkout's src/ (PYTHONPATH), no rebuild after an edit
     pytest -q                         # the whole suite, from the repo root, on up to 12 cores
     pytest -q -m "not slow"           # the quick loop, a few seconds
     pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first failure
