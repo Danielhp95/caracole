@@ -20,16 +20,20 @@ from caracole.db import kv_get_json, kv_set_json
 from caracole.overrides import load_overrides
 from caracole.render import STYLE_FILE
 from caracole.songbook import (
+    Setting,
     SongbookStats,
     delete_songbook,
     make_songbook,
     move_in_songbook,
     pages_written,
+    plays_in,
     rename_songbook,
     render_songbooks,
+    set_song_setting,
     songbooks_file,
     written_page,
 )
+from caracole.viewer.version import Version
 
 CHORDPRO = os.environ.get("CARACOLE_CHORDPRO_BIN") or shutil.which("chordpro")
 CJK_FONT = os.environ.get("CARACOLE_CJK_FONT")
@@ -62,6 +66,36 @@ def pdf_call(fake: FakeChordPro) -> list[str]:
 def inputs(fake: FakeChordPro, call) -> list[str]:
     """The songs a chordpro run read, in order."""
     return [fake.text(p) for p in fake.inputs(call)]
+
+
+def cho_inputs(fake: FakeChordPro) -> list[str]:
+    """The songs songbook.cho's chordpro run read, in order."""
+    (call,) = [c for c in fake.calls if output_of(c).suffix == ".cho"]
+    return inputs(fake, call)
+
+
+def sung(text: str) -> list[str]:
+    """The chords a song's ChordPro sings, in order: those over its words, not its directives."""
+    return re.findall(r"\[([^\]]+)\]", "\n".join(line for line in text.splitlines() if not line.startswith("{")))
+
+
+def page_data(cfg, n: int, name: str = "Campfire") -> dict:
+    """The data block of song ``n`` of the songbook's phone page."""
+    html = (folder(cfg, name) / "songbook.html").read_text(encoding="utf-8")
+    found = re.search(rf'<script type="application/json" id="data-{n}">(.*?)</script>', html, re.DOTALL)
+    assert found, f"no data for song {n}"
+    return json.loads(found.group(1))
+
+
+def entries_of(conn, cfg, ovr=None, name: str = "Campfire"):
+    from caracole.songbook import find_songbook, load_songbooks, songbook_entries
+
+    book = find_songbook(load_songbooks(songbooks_file(cfg.library_dir)), name)
+    return songbook_entries(conn, cfg.library_dir, ovr or overrides(cfg, ""), book)
+
+
+def set_setting(cfg, song: str, setting, name: str = "Campfire") -> None:
+    set_song_setting(songbooks_file(cfg.library_dir), name, song, setting)
 
 
 @pytest.fixture
@@ -136,11 +170,16 @@ def test_each_song_is_in_its_transposition(conn, cfg, two):
     fake = FakeChordPro()
     render(conn, cfg, overrides(cfg, '[transpose]\n"Radiohead - Creep" = 2\n'), runner=fake)
     creep, soda = inputs(fake, pdf_call(fake))
-    assert creep.startswith("{transpose: 2}\n{title: Creep}")  # before {key}, so the key moves too
-    assert soda.startswith("{title: De Música Ligera}")
     cho_call = next(c for c in fake.calls if output_of(c).suffix == ".cho")
-    assert inputs(fake, cho_call)[0].startswith("{transpose: 2}\n")
+    creep_cho, soda_cho = inputs(fake, cho_call)
+    for text in (creep, creep_cho):  # moved by caracole, as the viewer names the chords: chordpro moves nothing
+        assert text.startswith("{title: Creep}") and "{transpose" not in text
+        assert sung(text) == ["Bm", "G", "D", "A"]  # Am, F, C, G, up 2
+    assert "{key: A}" in creep_cho  # G, up 2
+    for text in (soda, soda_cho):
+        assert text.startswith("{title: De Música Ligera}") and sung(text) == ["Am", "F", "C", "G"]
     assert "--diagrams=none" in cho_call  # no chord definitions in the file for an app to choke on
+    assert "{define" not in creep_cho
 
 
 def test_a_songs_own_version_is_its_default_in_a_songbook(conn, cfg, two):
@@ -152,6 +191,117 @@ def test_a_songs_own_version_is_its_default_in_a_songbook(conn, cfg, two):
     creep, soda = songbook_entries(conn, cfg.library_dir, ovr, book)
     assert creep.version == version_from_query("t=2&mode=dorian") and creep.transpose == 2  # [version] wins
     assert soda.version == Version() and soda.transpose == 0
+
+
+# --- each song in its setting ---------------------------------------------------------------------
+
+SODA = "Soda Stereo - De Música Ligera"
+IN_D_MINOR = (  # De Música Ligera's sheet replaced by one a fourth up: Dm, Bb, F, C
+    "[Verse 1]\n"
+    "[tab][ch]Dm[/ch]          [ch]Bb[/ch]\n"
+    "Otra letra de prueba[/tab]\n"
+    "[tab][ch]F[/ch]              [ch]C[/ch]\n"
+    "solo para el analizador[/tab]\n"
+)
+NO_KEY = (  # no chord caracole can read, so no key, none estimated
+    "[Verse]\n"
+    "[tab][ch]N.C.[/ch]       [ch]Hm[/ch]\n"
+    "Palabras sin acordes[/tab]\n"
+)
+
+
+def test_a_song_in_g_dorian_is_written_in_g_dorian(conn, cfg, two):
+    set_setting(cfg, SODA, Setting("G", "dorian", 0))
+    fake = FakeChordPro()
+    assert render(conn, cfg, runner=fake).rendered == 1
+    creep, soda = inputs(fake, pdf_call(fake))
+    creep_cho, soda_cho = cho_inputs(fake)
+    for text in (soda, soda_cho):  # the chords themselves, as the viewer names them: chordpro moves nothing
+        assert "{transpose" not in text
+        assert sung(text) == ["Gm", "Edim", "Bb", "F"]  # Am, F, C, G in A dorian, then down to G
+    assert "{subtitle: Soda Stereo · Key G dorian}" in soda.splitlines()
+    assert "{define: Edim base-fret 1 frets x x 2 3 x 3 fingers 0 0 1 2 0 3}" in soda  # the viewer's shape
+    assert "{key: Gm}" in soda_cho and "{define" not in soda_cho  # for an app: its key, no chord definitions
+    assert sung(creep) == sung(creep_cho) == ["Am", "F", "C", "G"]  # a song without a setting stays as it was
+    assert page_data(cfg, 2)["start"] == "t=-2&mode=dorian&capo=0"  # the phone page opens it there too
+    assert page_data(cfg, 1)["start"] is None
+    creep_entry, soda_entry = entries_of(conn, cfg)
+    assert plays_in(soda_entry) == "G Dorian, capo 0"  # the set list's chip
+    assert plays_in(creep_entry) == "G Major, capo 0"  # Creep's key, from its tab
+    assert render(conn, cfg).skipped == 1
+
+
+def test_a_song_without_a_setting_follows_its_own_version(conn, cfg, two):
+    ovr = overrides(cfg, f'[version]\n"{SODA}" = "t=2&mode=dorian"\n')
+    fake = FakeChordPro()
+    render(conn, cfg, ovr, runner=fake)
+    _, soda = inputs(fake, pdf_call(fake))
+    assert "{transpose" not in soda and sung(soda) == ["Bm", "G#dim", "D", "A"]  # in B dorian
+    assert sung(cho_inputs(fake)[1]) == ["Bm", "G#dim", "D", "A"]
+    assert page_data(cfg, 2)["start"] == "t=2&mode=dorian"
+    # Its version changed: the songbook follows
+    ovr = overrides(cfg, f'[version]\n"{SODA}" = "t=-2&mode=dorian"\n')
+    fake = FakeChordPro()
+    assert render(conn, cfg, ovr, runner=fake).rendered == 1
+    assert sung(inputs(fake, pdf_call(fake))[1]) == ["Gm", "Edim", "Bb", "F"]
+    assert plays_in(entries_of(conn, cfg, ovr)[1]) == "G Dorian, capo 0"
+
+
+def test_what_a_setting_leaves_out_follows_the_songs_own_version(conn, cfg, two):
+    ovr = overrides(cfg, f'[version]\n"{SODA}" = "t=2&mode=dorian&capo=3&at=0.1"\n')
+    set_setting(cfg, SODA, Setting(key="C"))  # in C, in its own version's mode and capo
+    fake = FakeChordPro()
+    render(conn, cfg, ovr, runner=fake)
+    _, soda = inputs(fake, pdf_call(fake))
+    assert sung(soda) == ["Cm", "Adim", "Eb", "Bb"]  # C dorian shapes, capo 3
+    (_, entry) = entries_of(conn, cfg, ovr)
+    assert plays_in(entry) == "C Dorian, capo 3"
+    assert entry.version.at == {}  # a shape chosen for its own version's chords, not for these
+    set_setting(cfg, SODA, Setting(capo=5))  # the capo alone: the same sound, other shapes
+    (_, entry) = entries_of(conn, cfg, ovr)
+    assert plays_in(entry) == "F# Dorian, capo 5"  # B dorian sounds, as in its own version, from F# shapes
+
+
+def test_replacing_a_songs_sheet_keeps_the_songbooks_key(conn, cfg, two):
+    _, soda = two
+    set_setting(cfg, SODA, Setting("G", "dorian", 0))
+    render(conn, cfg)
+    keep_sheet(conn, cfg, soda, IN_D_MINOR, tab_id=4, tonality="Dm")  # another sheet, in another key
+    render_sheets(conn, cfg)
+    fake = FakeChordPro()
+    assert render(conn, cfg, runner=fake).rendered == 1
+    _, text = inputs(fake, pdf_call(fake))
+    assert "Otra letra" in text and sung(text) == ["Gm", "Edim", "Bb", "F"]  # still in G dorian
+    (_, entry) = entries_of(conn, cfg)
+    assert entry.version.t == 5 and plays_in(entry) == "G Dorian, capo 0"  # D up to G, where A went down
+    assert page_data(cfg, 2)["start"] == "t=5&mode=dorian&capo=0"
+
+
+def test_a_song_whose_key_is_unknown_stays_as_written(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Keyless Song")
+    keep_sheet(conn, cfg, song, NO_KEY, tonality="")
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", "Placeholder Band - Keyless Song")
+    set_setting(cfg, "Placeholder Band - Keyless Song", Setting("G", "dorian"))
+    fake = FakeChordPro()
+    stats = render(conn, cfg, runner=fake)
+    assert stats.failed == [] and stats.rendered == 1
+    (text,) = inputs(fake, pdf_call(fake))
+    (cho,) = cho_inputs(fake)
+    for written in (text, cho):
+        assert sung(written) == ["N.C.", "Hm"] and "{key" not in written and "{transpose" not in written
+    assert "{subtitle: Placeholder Band}" in text.splitlines()  # no key it isn't in
+    (entry,) = entries_of(conn, cfg)
+    assert entry.version == Version() and plays_in(entry) == "key unknown, as written"
+    assert page_data(cfg, 1)["start"] is None  # the phone page opens it as written
+
+
+def test_a_song_without_a_sheet_plays_nowhere(conn, cfg):
+    add_song(conn, "Muse", "Hysteria")
+    make(cfg, "Campfire", "Muse - Hysteria")
+    set_setting(cfg, "Muse - Hysteria", Setting("G"))
+    (entry,) = entries_of(conn, cfg)
+    assert entry.missing == "no sheet yet" and plays_in(entry) is None
 
 
 def test_songs_without_a_sheet_are_named_missing(conn, cfg, two):
@@ -252,7 +402,8 @@ def test_force_renders_it_again(conn, cfg, two):
     assert len(fake.calls) == 2
 
 
-@pytest.mark.parametrize("change", ["order", "sheet", "transpose", "style", "removed", "pdf gone", "pdf changed"])
+@pytest.mark.parametrize("change", ["order", "sheet", "transpose", "setting", "style", "removed", "pdf gone",
+                                    "pdf changed"])
 def test_a_change_renders_it_again(conn, cfg, two, change):
     creep, _ = two
     render(conn, cfg)
@@ -264,6 +415,8 @@ def test_a_change_renders_it_again(conn, cfg, two, change):
         render_sheets(conn, cfg)
     elif change == "transpose":
         ovr = overrides(cfg, '[transpose]\n"Radiohead - Creep" = -3\n')
+    elif change == "setting":
+        set_setting(cfg, "Radiohead - Creep", Setting(capo=2))
     elif change == "style":
         key = "songbook:Campfire"
         record = kv_get_json(conn, key)
@@ -589,6 +742,20 @@ def test_the_real_chordpro_file_holds_every_song_in_its_key(conn, cfg, two):
 
 
 @real_chordpro
+@pytest.mark.chordpro
+def test_the_real_files_play_a_song_in_its_setting(conn, cfg, two):
+    cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=None)
+    set_setting(cfg, SODA, Setting("G", "dorian", 0))
+    stats = render_songbooks(conn, cfg, overrides(cfg, ""))
+    assert stats.failed == [], stats
+    strings = drawn(folder(cfg) / "songbook.pdf")
+    for text in ("Gm", "Edim", "Bb", "Soda Stereo · Key G dorian"):
+        assert text in strings, strings
+    second = (folder(cfg) / "songbook.cho").read_text(encoding="utf-8").split("{new_song}\n")[1]
+    assert "{key: Gm}" in second and "[Edim]" in second and "[Am]" not in second and "{define" not in second
+
+
+@real_chordpro
 @pytest.mark.skipif(not (CJK_FONT and Path(CJK_FONT).is_file()), reason="set CARACOLE_CJK_FONT")
 @pytest.mark.chordpro
 def test_the_real_pdf_of_a_chinese_songbook_embeds_the_font(conn, cfg):
@@ -607,7 +774,7 @@ def test_each_song_goes_in_as_its_pdf_text(conn, cfg, two):
     fake = FakeChordPro()
     render(conn, cfg, overrides(cfg, '[transpose]\n"Radiohead - Creep" = 2\n'), runner=fake)
     creep, soda = inputs(fake, pdf_call(fake))
-    assert creep.startswith("{transpose: 2}\n{title: Creep}")
+    assert creep.startswith("{title: Creep}") and "{transpose" not in creep
     for text in (creep, soda):
         assert "{columns: 2}" in text and "{subtitle:" in text
     assert "Radiohead · Key A" in creep  # the key G, two semitones up: the line says what the chords play

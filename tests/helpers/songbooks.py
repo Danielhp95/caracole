@@ -54,7 +54,7 @@ def output_of(cmd) -> Path:
 class FakeChordPro:
     """Stands in for subprocess.run: records each command, and writes its output by name, as chordpro
     does: a PDF holding the options and every input file in order, or a ChordPro file of the inputs
-    joined by {new_song} (chordpro's own ChordPro backend), with each song's {transpose} kept.
+    joined by {new_song} (chordpro's own ChordPro backend), each as caracole wrote it.
 
     ``fail`` holds words that make a run fail when an input holds one.
     """

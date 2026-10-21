@@ -23,7 +23,11 @@ its mode (one of ``theory.MODES``) and its capo, each left out where it says not
 
     songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música Ligera", key = "G", mode = "dorian", capo = 0 }]
 
-A song with no setting stays a plain string, in the file and after any change to it.
+A song with no setting stays a plain string, in the file and after any change to it. The songbook's files
+play each song in its setting (``in_setting``): its key is the key of the shapes played, as an export's name
+gives one ("G Dorian, capo 0"), so a sheet in another key in its place plays there too; what the setting
+leaves out is the song's own version's (``render.own_version``), and a song with no setting is in its own
+version, as its sheet's PDF is.
 
 Two songs are the same when their identity keys are (``same_entry``): accents, case,
 Traditional or Simplified characters and a version suffix don't count. A name is a
@@ -44,7 +48,7 @@ import tomllib
 import unicodedata
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -81,14 +85,16 @@ from caracole.render import (
     _first_lost_letter,
     _font_need,
     _font_options,
-    _printed,
+    _sheet_text,
     _style,
+    export_query,
     own_version,
     written_file,
 )
-from caracole.viewer.sheet import parse_sheet
-from caracole.viewer.theory import MODES
-from caracole.viewer.version import Version
+from caracole.viewer.page import viewer_key
+from caracole.viewer.sheet import directive, parse_sheet
+from caracole.viewer.theory import MODES, Key, note_pc
+from caracole.viewer.version import Version, apply_version, played_key, version_label
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -122,8 +128,9 @@ class SongbookFileError(SongbookError):
 
 @dataclass(frozen=True)
 class Setting:
-    """How a songbook plays one song, each part None where it says nothing (the sheet's own): ``key``, a
-    tonic as written ("G", "F#", "Bb"); ``mode``, one of ``theory.MODES``; ``capo``, a fret up to 11."""
+    """How a songbook plays one song, each part None where it says nothing (the song's own version's): ``key``,
+    the tonic of the shapes played, as written ("G", "F#", "Bb"); ``mode``, one of ``theory.MODES``; ``capo``,
+    a fret up to 11. ``in_setting`` makes it a version."""
 
     key: str | None = None
     mode: str | None = None
@@ -626,9 +633,10 @@ BOOK_FONT_ELEMENTS = ("text", "title", "toc")
 @dataclass(frozen=True)
 class Entry:
     """One song of a songbook as it is rendered: its sheet's ChordPro (``cho``), as caracole wrote it
-    beside the song's PDF, or why it has none (``missing``). ``version`` is where the song plays in it by
-    default: the song's own (``render.own_version``: its ``[version]``, else its ``[transpose]``), and
-    ``transpose`` that version's ``t``."""
+    beside the song's PDF, or why it has none (``missing``). ``setting`` is the songbook's for it, if any, and
+    ``version`` where the songbook plays it: in that setting (``in_setting``), else in the song's own version
+    (``render.own_version``: its ``[version]``, else its ``[transpose]``); ``transpose`` is that version's
+    ``t``. ``plays_in(entry)`` says where, in words."""
 
     text: str  # as songbooks.toml writes it
     title: str
@@ -640,6 +648,7 @@ class Entry:
     version: Version = field(default_factory=Version)
     key: str | None = None
     key_source: str | None = None
+    setting: Setting | None = None
 
 
 @dataclass
@@ -662,7 +671,7 @@ def songbook_entries(conn: sqlite3.Connection, library_dir: Path, overrides: Ove
     """The songbook's songs, in order, each with its sheet or why it has none: a song the library
     hasn't got (removed since, say) or one without a sheet is missing, never an error. Each is
     found by its "Artist - Title" alone (``find_entry_song``), never by a search."""
-    return [_entry_of(conn, library_dir, overrides, text) for text in book.texts]
+    return [_entry_of(conn, library_dir, overrides, song) for song in book.songs]
 
 
 def songs_to_get(entries: Iterable[Entry], overrides: Overrides) -> list[Song]:
@@ -678,21 +687,87 @@ def songs_to_get(entries: Iterable[Entry], overrides: Overrides) -> list[Song]:
     return list(songs.values())
 
 
-def _entry_of(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides, text: str) -> Entry:
+def _entry_of(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides, entry: SongbookSong) -> Entry:
+    text, setting = entry.text, entry.setting
     song = find_entry_song(conn, text)
     if song is None:
         artist, _, title = text.partition(" - ")
-        return Entry(text, title.strip() or text, artist.strip(), missing=MISSING_SONG)
+        return Entry(text, title.strip() or text, artist.strip(), missing=MISSING_SONG, setting=setting)
     title = clean_title(song.title)
     sheet = _sheet_of(conn, library_dir, song)
     if sheet is None:
-        return Entry(text, title, song.artist, song, missing=MISSING_SHEET)
+        return Entry(text, title, song.artist, song, missing=MISSING_SHEET, setting=setting)
     name, cho = sheet
     human, auto = sheet_keys(conn, library_dir, song)
-    key = auto if name == AUTO_OUTPUTS[0] else human
-    version = own_version(overrides, song)
-    return Entry(text, title, song.artist, song, cho=cho, transpose=version.t, version=version,
-                 key=key.key if key else None, key_source=key.source if key else None)
+    found = auto if name == AUTO_OUTPUTS[0] else human
+    key = found.key if found else None
+    version = _played_in(text, cho, key, own_version(overrides, song), setting)
+    return Entry(text, title, song.artist, song, cho=cho, transpose=version.t, version=version, key=key,
+                 key_source=found.source if found else None, setting=setting)
+
+
+def _played_in(text: str, cho: str, key: str | None, own: Version, setting: Setting | None) -> Version:
+    """Where the songbook plays the song (``in_setting``), ``key`` being its sheet's (``keys.sheet_keys``). A
+    sheet the viewer's code can't read (a bug, logged with its traceback) is in its own version here, and never
+    stops the songbook's entries: its files run that code too, and fail as for any song."""
+    if not setting:
+        return own
+    try:
+        return in_setting(own, setting, viewer_key(cho, key), parse_sheet(cho).capo)
+    except Exception:
+        log.warning("%s: cannot place it in its songbook setting", text, exc_info=True)
+        return own
+
+
+def in_setting(own: Version, setting: Setting | None, shapes: Key | None, capo_sheet: int | None) -> Version:
+    """The version a songbook plays a song in: its ``setting`` there, the key of the shapes played (as
+    ``version_label`` names a version, "G Dorian, capo 0"), the mode and the capo, and for what it leaves out
+    the song's own version's (``own``). ``shapes`` and ``capo_sheet`` are the sheet's, as its viewer reads them
+    (``page.viewer_key``, its ``{capo}``): the key is the setting's, whatever key and capo the sheet has.
+
+    With the capo where the sheet has it, ``t`` is the setting's tonic less the sheet's shapes' (to within six
+    semitones), and another capo moves the shapes, as on a guitar. A setting with a key or a mode is the sheet
+    as written (``Version()``) for a sheet with no key (no chord caracole can read): nothing places it there.
+    Shapes chosen in the song's own version (``at``) are for the chords that plays, so they go when the setting
+    plays others; its chords played instead (``alt``) are kept by mode, as the viewer keeps them."""
+    if not setting:
+        return own
+    if _places(setting) and shapes is None:
+        return Version()
+    mode = own.mode if setting.mode is None else setting.mode
+    capo = own.capo if setting.capo is None else setting.capo
+    t = own.t
+    if setting.key is not None:
+        unmoved, _ = played_key(Version(mode=mode, capo=capo), shapes, capo_sheet)  # its shapes at t = 0
+        t = (note_pc(setting.key[0], setting.key[1:]) - unmoved.tonic + 5) % 12 - 5
+    if (t, mode, capo) == (own.t, own.mode, own.capo):
+        return own
+    return replace(own, t=t, mode=mode, capo=capo, at={})
+
+
+def _places(setting: Setting | None) -> bool:
+    """Whether the setting names a key or a mode, which only a sheet with a key can take."""
+    return setting is not None and (setting.key is not None or setting.mode is not None)
+
+
+KEY_UNKNOWN = "key unknown, as written"  # what plays_in says of a setting a sheet with no key can't take
+
+
+def plays_in(entry: Entry) -> str | None:
+    """Where the songbook plays the song, in words, for its set list: its version's ``version_label`` ("G
+    Dorian, capo 0", "E Minor, capo 2"; "Transposed +2, capo 0" for a sheet with no key), or ``KEY_UNKNOWN`` for
+    a setting with a key or a mode its sheet, which has no key, can't take; None for a song without a sheet, or
+    one the viewer's code can't read (a bug, logged with its traceback)."""
+    if entry.cho is None:
+        return None
+    try:
+        shapes = viewer_key(entry.cho, entry.key)
+        if shapes is None and _places(entry.setting):
+            return KEY_UNKNOWN
+        return version_label(entry.version, shapes, parse_sheet(entry.cho).capo)
+    except Exception:
+        log.warning("%s: cannot say where its songbook plays it", entry.text, exc_info=True)
+        return None
 
 
 def _sheet_of(conn: sqlite3.Connection, library_dir: Path, song: Song) -> tuple[str, str] | None:
@@ -810,11 +885,17 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
         files[name] = {"sha256": hashlib.sha256(data).hexdigest(), "size": len(data)}
         made[name] = digest
 
-    songs = [(e.title, e.artist, e.cho, e.transpose) for e in playable]
-    make(CHO_NAME, {"songs": songs, "v": 1}, lambda: _chordpro_file(cfg, playable, runner) if playable else None)
+    # What chordpro reads and prints of each song: made from more than its .cho (its key, its version, the
+    # viewer's theory and shapes), so the files' inputs hold these texts; the PDF's font is the one they need
+    try:
+        texts = [_song_file(e) for e in playable]
+    except RenderError as e:
+        log.warning("songbook %s: no %s: %s", book.name, CHO_NAME, e)
+        done.failed = True
+        texts = None
+    if texts is not None:
+        make(CHO_NAME, {"songs": texts, "v": 4}, lambda: _chordpro_file(cfg, texts, runner) if texts else None)
 
-    # What chordpro prints of each song: made from more than its .cho (its key, the viewer's theory and
-    # shapes), so the PDF's inputs hold these texts, and the font is the one they need
     try:
         printed = [_song_file(e, pdf=True) for e in entries]
     except RenderError as e:
@@ -830,7 +911,7 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
         else:
             pdf_inputs = {
                 "name": book.name, "songs": printed, "style": _style(), "book": BOOK_CONFIG,
-                "font": str(pdf_font) if pdf_font else None, "v": 4,
+                "font": str(pdf_font) if pdf_font else None, "v": 5,
             }
             make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, printed, runner, font=pdf_font)
                  if playable else None)
@@ -838,8 +919,8 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
     from caracole.viewer.book import BookSong, assets_version, build_songbook
 
     present = {name for name in (PDF_NAME, CHO_NAME) if _holds(folder / name, record["files"].get(name))}
-    book_songs = [BookSong(e.title, e.artist, cho=e.cho, key=e.key, key_source=e.key_source,
-                           transpose=e.transpose, missing=e.missing, id=_song_id(e)) for e in entries]
+    book_songs = [BookSong(e.title, e.artist, cho=e.cho, key=e.key, key_source=e.key_source, transpose=e.transpose,
+                           missing=e.missing, id=_song_id(e), start=_start(e.version)) for e in entries]
     page_inputs = {"name": book.name, "songs": [list(vars(s).values()) for s in book_songs],
                    "files": sorted(present), "assets": assets_version()}
 
@@ -853,6 +934,12 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
         return html.encode("utf-8")
 
     make(HTML_NAME, page_inputs, page)
+
+
+def _start(version: Version) -> str | None:
+    """The version as the viewer's address writes it, where the phone page starts the song (``export_query``);
+    None for one that only moves it, where its ``transpose`` starts it."""
+    return None if version == Version(t=version.t) else export_query(version)
 
 
 def _song_id(entry: Entry) -> str:
@@ -982,24 +1069,35 @@ def _like_prefix(prefix: str) -> str:
 
 
 def _song_file(entry: Entry, *, pdf: bool = False) -> str:
-    """One song for chordpro: its sheet in its transposition ({transpose} before {key}, so the key moves
-    too; for the PDF the sheet's PDF text, ``render._printed``, whose key line is moved by hand), or a
-    page naming it as missing, which the contents then name too. A PDF text that can't be made (a bug
-    in the viewer's code it runs) is a RenderError, logged with its traceback."""
+    """One song for chordpro: its sheet where the songbook plays it (``Entry.version``), each chord named as its
+    viewer names it there (``apply_version``: chordpro moves nothing, and its A# would be the viewer's Bb); for
+    the PDF, that sheet's PDF text (``render._sheet_text``), with the viewer's shapes as its diagrams; for
+    songbook.cho, without the chord definitions an app may not read. Or a page naming it as missing, which the
+    contents then name too. A text that can't be made (a bug in the viewer's code it runs) is a RenderError,
+    logged with its traceback: it costs the files it is in, and no more."""
     if entry.cho is not None:
-        text = entry.cho
-        if pdf:
-            try:
-                text = _printed(text, key=entry.key, capo=parse_sheet(text).capo, transpose=entry.transpose)
-            except Exception as e:  # a sheet the viewer's code can't read costs the PDFs it is in, and no more
-                log.warning("%s: cannot make its text for the songbook PDF", entry.text, exc_info=True)
-                raise RenderError(f"cannot make the text of {entry.text}: {type(e).__name__}: {e}") from e
-        return (f"{{transpose: {entry.transpose}}}\n" if entry.transpose else "") + text
+        try:
+            return _sheet_text(entry.cho, key=entry.key, version=entry.version) if pdf else _app_text(entry)
+        except Exception as e:
+            log.warning("%s: cannot make its text for the songbook %s", entry.text, "PDF" if pdf else "ChordPro file",
+                        exc_info=True)
+            raise RenderError(f"cannot make the text of {entry.text}: {type(e).__name__}: {e}") from e
     why = ("caracole has no sheet for this song yet." if entry.missing == MISSING_SHEET
            else "This song isn't in the library.")
     who = f"{entry.artist} · missing: {entry.missing}" if entry.artist else f"missing: {entry.missing}"
     return (f"{{title: {directive_text(entry.title)}}}\n{{artist: {directive_text(who)}}}\n"
             f"{{subtitle: {directive_text(who)}}}\n{{comment: {directive_text(why)}}}\n")
+
+
+def _app_text(entry: Entry) -> str:
+    """The song's sheet for songbook.cho: as written, or in its version (``apply_version``) without the
+    ``{define}`` of each chord's shape that gives the PDF its diagrams."""
+    if entry.version == Version():
+        return entry.cho
+    moved = apply_version(entry.cho, entry.version, key=viewer_key(entry.cho, entry.key),
+                          capo_sheet=parse_sheet(entry.cho).capo)
+    return "".join(line for line in moved.splitlines(keepends=True)
+                   if (found := directive(line)) is None or found[0] != "define")
 
 
 def _contents_file(book: Songbook, entries: Sequence[Entry]) -> str:
@@ -1042,11 +1140,12 @@ def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], printed: Sequenc
         return out.read_bytes()
 
 
-def _chordpro_file(cfg: Config, entries: Sequence[Entry], runner: Runner) -> bytes:
-    """songbook.cho: the sheets, each in its key, as chordpro's own ChordPro backend writes them, split
-    by {new_song}, without the chord definitions an app may not read (--diagrams=none)."""
+def _chordpro_file(cfg: Config, texts: Sequence[str], runner: Runner) -> bytes:
+    """songbook.cho: the sheets (``texts``: each one's ``_song_file``), each in its key, as chordpro's own
+    ChordPro backend writes them, split by {new_song}, without the chord definitions an app may not read
+    (--diagrams=none)."""
     with _workspace(cfg) as tmp:
-        files = _write_songs(tmp, [_song_file(e) for e in entries])
+        files = _write_songs(tmp, texts)
         out = tmp / CHO_NAME
         _run([cfg.chordpro_bin, "--nodefaultconfigs", "--diagrams=none", f"--output={out}", *map(str, files)],
              runner, len(files), cfg.chordpro_bin)
