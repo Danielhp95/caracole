@@ -52,7 +52,8 @@ def library(app: WebApp) -> Response:
         # LaCuerda artist page's read is no song's: the result row it was asked from follows it.
         active = tuple(views(app, conn, overrides, jobs, only=[
             j for j in jobs if j.active and not j.song_key.startswith(LACUERDA_ARTIST)]))
-        controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active)
+        controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
+                               timers=app.timers)
         html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
                                   controls=controls)
     # The page's own CSP is in its meta tag; a header CSP would apply on top of it.

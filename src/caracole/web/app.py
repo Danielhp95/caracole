@@ -211,11 +211,12 @@ class WebApp:
     routes keep between two requests."""
 
     def __init__(self, cfg: Config, queue: JobQueue, *, allowed: frozenset[str], csrf: str | None = None,
-                 access_token: str | None = None):
+                 access_token: str | None = None, timers: Mapping[str, int] | None = None):
         self.cfg = cfg
         self.queue = queue
         self.allowed = allowed
         self.csrf = csrf or secrets.token_urlsafe(32)
+        self.timers = timers  # the library page script's, for the tests alone (``WebControls.timers``)
         self._session = session_value(access_token) if access_token else None
         self._wanted = threading.Lock()  # one append to wanted.txt at a time, of the server's threads
         self._ended: dict[int, tuple[int | None, SongFacts | None]] = {}  # job id -> its song's id and facts

@@ -39,6 +39,11 @@
   const server = data.server && typeof data.server === "object" ? data.server : null;
   const busy = new Set(listOf(server && server.busy).map(Number));
   const removing = new Set(listOf(server && server.removing).map(Number));
+  // A timer of the page's, in ms: its own, unless the tests that drive it on real time set it (WebControls.timers).
+  const paced = (name, ms) => {
+    const set = server && server.timers && typeof server.timers === "object" ? Number(server.timers[name]) : NaN;
+    return set > 0 && set < Infinity ? set : ms;
+  };
 
   // The same folding as caracole's normalize.fold: NFKD, no accents, a few letters spelled out, lowercase.
   const fold = (text) => {
@@ -258,6 +263,7 @@
   // page. Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose
   // answers go back to the library as you left it (`back`: the address after #, its search, filters and view).
   const REMOVE_WAIT = 5;  // seconds
+  const REMOVE_SECOND = paced("undo", REMOVE_WAIT * 1000) / REMOVE_WAIT;  // ms each of them lasts
   const removals = new Map();  // song id -> its removal counting down (startRemoval)
   const removeForm = (s) => {
     const form = songForm("remove", "/remove", s);
@@ -361,12 +367,12 @@
       r.left -= 1;
       if (r.left > 0) {
         eachLine(id, r, ".left", String(r.left));
-        r.timer = setTimeout(tick, 1000);
+        r.timer = setTimeout(tick, REMOVE_SECOND);
       } else {
         sendRemoval(id, r);
       }
     };
-    r.timer = setTimeout(tick, 1000);
+    r.timer = setTimeout(tick, REMOVE_SECOND);
   };
   // The seconds are over: the removal, sent with the song's key (an id the library gave another song since
   // removes nothing); its line follows the job from here, as tall as it was, so that nothing under it moves.
@@ -400,7 +406,7 @@
   // request goes. /jobs.json gives each request's line, and a request's card once it is over; the page asks
   // it every POLL ms while one it shows waits or runs. Without JavaScript the forms post as forms, and the
   // server sends the browser to the request on /jobs.
-  const POLL = 1500;
+  const POLL = paced("poll", 1500);
   const BACKGROUND_POLL = 6000;  // a page in a background tab asks less often
   const UNREACHABLE = { line: { tone: "failed", text: "caracole serve can't be reached: is it running?" } };
   const UNREACHABLE_NOW = "caracole serve can't be reached; trying again…";

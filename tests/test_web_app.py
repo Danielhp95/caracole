@@ -139,6 +139,17 @@ def test_the_busy_songs_and_the_queue_show_on_the_page(app, conn, queue):
     assert [(j["id"], j["songId"], j["line"]["text"]) for j in server["jobs"]] == [(1, creep.id, "Queued…")]
 
 
+def test_the_page_keeps_its_own_timers_unless_a_test_sets_them(app, cfg, conn, queue):
+    # The page's script asks /jobs.json every 1.5 s and counts Remove's five seconds (library.js); the tests that
+    # drive it on real time shorten both (``WebApp(timers=...)``), which caracole serve never sets
+    # (test_commands_serve.py), so the page users get carries none.
+    add_song(conn, "Radiohead", "Creep")
+    assert "timers" not in json.loads(JSON_BLOCK.search(text(get(app, "/"))).group(1))["server"]
+    quick = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok", timers={"poll": 100, "undo": 1000})
+    server = json.loads(JSON_BLOCK.search(text(get(quick, "/"))).group(1))["server"]
+    assert server["timers"] == {"poll": 100, "undo": 1000}
+
+
 def test_a_name_the_server_doesnt_answer_to_is_refused(app, conn):
     # DNS rebinding: another site's name pointed at 127.0.0.1.
     for host in ("evil.example", "evil.example:8737", "", "localhost:8737/x"):

@@ -171,6 +171,7 @@ import hashlib
 import html as html_text
 import re
 import sqlite3
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -256,7 +257,11 @@ class WebControls:
     say so instead of offering Remove; ``jobs`` are the requests queued or
     running, as ``/jobs.json`` gives them, so their cards show their progress
     from the start: a song's, a removal's on its song's card, and a songbook's
-    change on its songbook's (``kind``).
+    change on its songbook's (``kind``). ``timers``, which only the tests that
+    drive the page on real time set (``WebApp(timers=...)``), are the script's
+    timers in milliseconds in place of its own: ``poll``, between two asks of
+    ``/jobs.json`` (1500), and ``undo``, Remove's countdown (5000); the page
+    users get carries none.
     """
 
     csrf: str
@@ -265,6 +270,7 @@ class WebControls:
     held: frozenset[int] = frozenset()
     removing: frozenset[int] = frozenset()
     jobs: tuple[dict[str, Any], ...] = ()
+    timers: Mapping[str, int] | None = None
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -283,6 +289,8 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     if controls is not None:
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
                           "removing": sorted(controls.removing), "jobs": list(controls.jobs)}
+        if controls.timers is not None:
+            data["server"]["timers"] = dict(controls.timers)
         for song in songs:
             song["fetchable"] = song["id"] not in controls.held
     books, data["songbooks"] = songbooks_section(conn, cfg, overrides, controls)
