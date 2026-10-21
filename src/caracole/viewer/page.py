@@ -33,7 +33,12 @@ written ``\\u003c``:
 - ``shapes``: the fingerings the sheet gives its chords (its chord legend, its ``{define}``),
   first, before chords-db's (``voicings.sheet_shapes``: ``{"mine": how many are the sheet's,
   "list": positions}``), by the chord as shown: the script shows them for that very chord
-  alone, not once it is transposed into another.
+  alone, not once it is transposed into another;
+- what each chord is in the key, by mode (``numerals``, ``families``, ``relations``, ``explains``,
+  ``places``, ``glossary``, ``altNumerals``), each chord's notes (``tones``) and its scale for a solo
+  (``solo``, ``altSolo``, ``scaleWords``, ``scales``), the key's scale (``keyScale``, ``pentatonic``) and
+  each section's progression (``progressions``): harmony_tables.py says how;
+- ``library``: the library's index.html, relative to the page.
 """
 
 from __future__ import annotations
@@ -50,6 +55,7 @@ from urllib.parse import quote
 
 from caracole.inline import json_block, sha256_source
 from caracole.normalize import has_han
+from caracole.viewer import harmony_tables
 from caracole.viewer.sheet import (
     Blank,
     ChordRow,
@@ -102,8 +108,8 @@ _SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio
 # What a page is made from besides its song: this module, those it imports and the files they read.
 # A module the viewer comes to import goes here too (test_viewer_book.py checks).
 BUILD_FILES = (
-    *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "voicings.py",
-                               "voicings.json", "version.py", "viewer.js", "viewer.css",
+    *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "harmony_tables.py",
+                               "voicings.py", "voicings.json", "version.py", "viewer.js", "viewer.css",
                                "LICENSE-chords-db")),
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "normalize.py",  # has_han
@@ -261,14 +267,7 @@ def _origin(source: str | None) -> str:
 
 def _played(sheet: Sheet) -> list[int]:
     """The sheet's chords in the order they are played, repeats and all."""
-    order: list[int] = []
-    for section in sheet.sections:
-        for line in section.lines:
-            if isinstance(line, Lyrics):
-                order += [c for c, _ in line.parts if isinstance(c, int)]
-            elif isinstance(line, ChordRow):
-                order += [c for c in line.items if isinstance(c, int)]
-    return order
+    return [c for section in sheet.sections for c in _chords_in(section)]
 
 
 def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str | None,
@@ -297,15 +296,17 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
         "capo": {},
         "qualities": DISPLAY,
     }
+    mapped_by_mode: dict[str, list[Chord | None]] = {}
+    alts_by_mode: dict[str, list[list[Chord]]] = {}
     if key is not None:
         data["modes"] = list(MODES)
         data["names"] = {}
         for mode in MODES:
             in_mode = Key(key.tonic, mode)
-            mapped = [None if c is None else map_chord(c, key, mode) for c in chords]
+            mapped = mapped_by_mode[mode] = [None if c is None else map_chord(c, key, mode) for c in chords]
+            alts_by_mode[mode] = [[] if c is None else alternatives(c, in_mode) for c in mapped]
             data["mapped"][mode] = [rep(c) for c in mapped]
-            data["alts"][mode] = [[] if c is None else [rep(a) for a in alternatives(c, in_mode)]
-                                  for c in mapped]
+            data["alts"][mode] = [[rep(a) for a in options] for options in alts_by_mode[mode]]
             data["names"][mode] = [" ".join(spelling(Key(t, mode))) for t in range(12)]
             data["keyNames"][mode] = [key_name(Key(t, mode)) for t in range(12)]
             data["capo"][mode] = [
@@ -315,7 +316,43 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
             ]
     data["voicings"] = page_voicings(needed)
     data["shapes"] = shapes_of(sheet)
+    data.update(harmony_tables.tables(chords, key, _places(sheet), mapped_by_mode, alts_by_mode))
+    data["library"] = LIBRARY_PAGE
     return data
+
+
+def _shown(sheet: Sheet) -> tuple[Section | None, list[Section]]:
+    """The sheet as its page shows it: the notes before the song (``preamble_section``), or None, and the
+    song's sections, each a ``section.sec`` on the page (what follows the notes in their section, a riff
+    and on, stays a section of the song)."""
+    sections = list(sheet.sections)
+    pre = preamble_section(sheet)
+    if pre is not None:
+        rest = sections[0].lines[len(pre.lines):]
+        while rest and isinstance(rest[0], Blank):
+            rest = rest[1:]
+        sections[:1] = [Section(None, lines=rest)] if rest else []
+    return pre, sections
+
+
+def _chords_in(section: Section) -> list[int]:
+    order: list[int] = []
+    for line in section.lines:
+        if isinstance(line, Lyrics):
+            order += [c for c, _ in line.parts if isinstance(c, int)]
+        elif isinstance(line, ChordRow):
+            order += [c for c in line.items if isinstance(c, int)]
+    return order
+
+
+def _places(sheet: Sheet) -> list[tuple[int, int]]:
+    """Each chord's place on the page, in the page's order (the script's ``#sheet .c``): (its index, its
+    section among the song's ``section.sec``, -1 in the notes before the song)."""
+    pre, sections = _shown(sheet)
+    places = [(c, -1) for c in _chords_in(pre)] if pre else []
+    for n, section in enumerate(sections):
+        places += [(c, n) for c in _chords_in(section)]
+    return places
 
 
 def shapes_of(sheet: Sheet) -> dict[str, dict[str, Any]]:
@@ -435,13 +472,7 @@ def _texts(sheet: Sheet) -> list[str]:
 
 
 def _sheet_html(sheet: Sheet) -> str:
-    sections = list(sheet.sections)
-    pre = preamble_section(sheet)
-    if pre is not None:  # what follows it in its section, a riff and on, stays a section of the song
-        rest = sections[0].lines[len(pre.lines):]
-        while rest and isinstance(rest[0], Blank):
-            rest = rest[1:]
-        sections[:1] = [Section(None, lines=rest)] if rest else []
+    pre, sections = _shown(sheet)
     return ((_preamble_html(pre, sheet.chords) if pre else "")
             + "".join(_section_html(s, sheet.chords) for s in sections))
 
@@ -575,6 +606,12 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <span class="chips" id="capo"></span></div>
 <div class="row" id="mode-row" hidden><span class="lab">Mode</span><span class="chips" id="modes"></span>
 <p class="hint" id="mode-hint"></p></div>
+<div class="row" id="names-row"><span class="lab">Chord names</span><span class="chips" id="names"></span>
+<button type="button" class="chip" id="roles" aria-pressed="true">Role colours</button>
+<p class="hint" id="names-hint"></p>
+<details class="gloss" id="gloss" hidden><summary>What do the numerals mean?</summary><div id="gloss-body"></div>
+<p class="gloss-roles"><span class="nm r-h">home</span> chords at rest, <span class="nm r-a">away</span> chords moving away, <span class="nm r-p">pull</span> chords pulling home; <span class="nm out">underlined</span>, a chord from outside the key: the colours are a help, and each numeral's line says the same.</p>
+<p class="gloss-all">The whole notation: upper case for a major chord, lower case for a minor one; ♭ or ♯ before it, a root a half step below or above that degree of the major scale; ° diminished, ø half-diminished, + augmented; then the chord's extension (7, maj7, sus4, add9…). A number after a slash is the bass note, as its degree above the chord's root (I/3); a numeral after one, the chord of the key it leads to (V/V, vii°/vi).</p></details></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
@@ -590,6 +627,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="chips" id="alts"></div>
 <div class="actions"><button type="button" class="btn primary" id="use" hidden></button></div>
 </section>
+<div class="tip" id="tip" role="tooltip" hidden><p id="tip-line"></p><p class="tip-key" id="tip-key"></p>
+<button type="button" class="chip" id="tip-card"></button></div>
 <noscript><p class="noscript">Turn on JavaScript to transpose, change the mode and see chord shapes.</p></noscript>
 """
 

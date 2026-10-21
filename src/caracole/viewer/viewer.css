@@ -16,6 +16,9 @@
   --p2: #1f6feb;
   --p3: #2a8a4a;
   --p4: #8a4fc7;
+  --home: #1c7a3c;
+  --away: #1b5fc1;
+  --pull: #973b9d;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -34,6 +37,9 @@
     --p2: #6ea8fe;
     --p3: #5fcf85;
     --p4: #c79bf2;
+    --home: #6fd08f;
+    --away: #8ab8ff;
+    --pull: #e5a3ef;
   }
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -90,6 +96,42 @@ a { color: inherit; }
 .c:hover { background: var(--accent-soft); }
 .c.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 .c.changed { text-decoration: underline dotted; text-underline-offset: 3px; }
+/* Numerals (viewer.js): after the chord's name, smaller, in the colour of its family (home, away, pull), or in
+   its place (data-nm="numerals"), as large as a chord's name; a chord from outside the key underlined. With the
+   colours off (data-roles), muted beside a name, the chords' own colour in its place. A numeral's target for a
+   finger reaches round it, over the chord's own on its side (above the chord's ::after, which comes later). */
+.c .nm { position: relative; z-index: 1; margin-left: .3em; font-size: .8em; font-weight: 650; color: var(--muted); }
+html[data-nm="numerals"] .c .nm { margin-left: 0; font-size: 1em; font-weight: 700; }
+.nm.r-h { color: var(--home); }
+.nm.r-a { color: var(--away); }
+.nm.r-p { color: var(--pull); }
+html[data-roles="off"] .c .nm { color: var(--muted); }
+html[data-roles="off"][data-nm="numerals"] .c .nm { color: var(--accent); }
+.nm.out { text-decoration: underline dotted; text-decoration-thickness: 1.5px; text-underline-offset: 3px; }
+.nm-x, .nm-b { font-size: .86em; }
+.c .nm::after { content: ""; position: absolute; inset: -10px -8px -10px -3px; }
+html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
+/* A numeral's line, by it (placed in the page by the script: --tip-top, --tip-left). */
+.tip { position: absolute; z-index: 9; top: var(--tip-top, 0px); left: var(--tip-left, 0px); width: max-content;
+  max-width: min(320px, calc(100vw - 16px)); padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--text); box-shadow: 0 6px 22px rgb(0 0 0 / .18); font-size: .9rem;
+  line-height: 1.35; }
+.tip p { margin: 0; }
+.tip .tip-key { margin-top: 4px; color: var(--muted); font-size: .8rem; }
+.tip .chip { margin-top: 8px; }
+/* What do the numerals mean? In the settings, folded: the key they are read in, the song's symbols, each with
+   one of its chords, the colours and the whole notation. */
+.gloss { flex-basis: 100%; }
+.gloss summary { display: flex; align-items: center; min-height: 44px; color: var(--accent); font-weight: 600;
+  cursor: pointer; }
+.gloss dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 8px 0 0;
+  font-size: .88rem; }
+.gloss dt { font-weight: 700; }
+.gloss dd { margin: 0; }
+.gloss .ex { display: block; color: var(--muted); font-size: .8rem; }
+.gloss p { margin: 10px 0 0; color: var(--muted); font-size: .85rem; }
+.gloss .gloss-key { color: var(--text); }
+.gloss-roles .nm { font-weight: 700; }
 /* With the script, a chord may reach over the words after it (.tight); the script widens
    a column only where two chords would touch. */
 .tight .s { position: relative; padding-top: 1.25em; }
@@ -332,7 +374,7 @@ a.link[hidden] { display: none; }
   .card #alts { flex-wrap: wrap; margin: 0; padding: 0; overflow: visible; }
 }
 @media print {
-  .bar, .pill, .sheet-ui, .back, .necks, .strip, .foot, .noscript { display: none !important; }
+  .bar, .pill, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript { display: none !important; }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
   .c { color: #b4441e; }

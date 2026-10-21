@@ -1954,6 +1954,35 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
   the key, such as the G major chord's B in C minor, stays where it is.
+- **Chord names**: Chords, Chords + numerals or Numerals only. A numeral says
+  what the chord is in the key, as a Roman numeral counted up the key's scale
+  from its tonic: in C major, C F G Am are I IV V vi; in A minor, Am G F E7
+  are i ♭VII ♭VI V7 (numerals are written against the tonic's major scale, so
+  a degree the key lowers gets a ♭). Upper case is a major chord, lower case a
+  minor one; ° diminished, ø half-diminished, + augmented, then the chord's
+  extension (V7, Imaj7, IVsus4); a number after a slash is the bass note's
+  degree (C/E is I/3, C/D is I/2), a numeral after one the chord of the key a
+  secondary chord leads to (D7 going to G in C is V7/V). With both, the
+  numeral follows the chord's name, smaller, and the chord stays over its
+  syllable; with numerals only it takes the name's place (a chord caracole
+  can't read, N.C., stays as written). The mode re-labels them with the mapped
+  chords; the key, the capo and the transposition leave them as they are (a I
+  is a I in every key). Each is in the colour of its family: home (I, iii, vi;
+  i, ♭III, ♭VI in minor) green, moving away (IV, ii) blue, pulling home (V,
+  vii°, and a minor key's ♭VII) purple; a chord from outside the key
+  (borrowed, as B♭ in C from C minor; a secondary dominant; or plainly
+  outside) is underlined with dots. **Role colours** turns the colours off.
+  Hover over a numeral with the mouse, or tap it, for its line: "vi: the 6th
+  chord of C major, minor (lower case)", "♭VII: built on the lowered 7th
+  degree of C major, major (upper case); borrowed from C minor", with the key
+  it is read in and where that key came from (an estimated key read wrong
+  gives every numeral another meaning), and a button to the chord's shapes;
+  Escape, a tap elsewhere or the mouse moving away closes it. With numerals
+  only, a tap anywhere on the numeral shows its line; with both, a tap on the
+  chord's name opens its card, which names the numeral too ("Bb · ♭VII").
+  **What do the numerals mean?** under it explains the notation with the
+  song's own chords as examples, in the key shown. A song whose key caracole
+  can't tell offers chords alone, and says so.
 - Every chord's shape in a strip above the song (Show all, in the
   settings): the shapes alone, large enough to read at a glance; tap one for
   its card, with the fingers. Reset everything, at the foot of the settings,
@@ -1981,8 +2010,8 @@ The viewer remembers its settings for each song in the browser, the scroll
 speed, the text size and the shape chosen for each chord among them: a chord
 named otherwise when the page opens (an address with another key, mode or
 capo) starts at its first shape. It keeps the transposition, the mode, the
-capo, the text size and the scroll speed in its address too
-(`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), and so the shape chosen for a
+capo, the chord names (`nm=both`, `nm=numerals`), the text size and the scroll
+speed in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8`), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or

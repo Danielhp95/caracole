@@ -35,8 +35,10 @@
   // --- the state: where the song is played, kept per page ------------------------------------
   // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
   // through a transposition, as on a guitar: the shapes move instead.
+  // nm: the chord names as numerals beside them ("both") or in their place ("numerals"), null for the
+  // chords alone; roles: the numerals in their families' colours.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
-    speed: SPEED.start };
+    speed: SPEED.start, nm: null, roles: true };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -47,6 +49,7 @@
     : Math.min(CAPO_MAX, Math.round(Number(v))));
   const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
   const speedOf = (v) => (Number(v) >= SPEED.min && Number(v) <= SPEED.max ? Math.round(Number(v)) : null);
+  const nmOf = (v) => (v === "both" || v === "numerals" ? v : null);
   // The address spells the chords swapped as alt=<mode>.<i>.<root>.<suffix>.<bass>,… (suffix
   // URL-encoded, bass empty for none) and the shapes chosen as at=<i>.<n>,….
   const swapsOf = (text) => {
@@ -85,6 +88,7 @@
     if (params.has("t")) state.t = clampT(params.get("t"));
     if (validMode(params.get("mode"))) state.mode = params.get("mode");
     if (params.has("capo")) state.capo = fretOf(params.get("capo"));
+    if (params.has("nm")) state.nm = nmOf(params.get("nm"));
   };
   // The song's own version (overrides.toml's [version], "Make this my version"), which its PDF is in: the page
   // starts there when its address names no version of its own, and Reset everything goes back there.
@@ -107,7 +111,9 @@
           keptAt = { at: saved.at, signs: saved.atSigns };
         }
         state.capo = fretOf(saved.capo);
+        state.nm = nmOf(saved.nm);
       }
+      if (saved.roles === false) state.roles = false;
       if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
       if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
       state.strip = saved.strip === true;
@@ -134,6 +140,7 @@
       keep("t", state.t, Boolean(data.start) || state.t !== (Number(data.transpose) || 0));
       keep("mode", state.mode, state.mode !== null);
       keep("capo", state.capo, state.capo !== null);
+      keep("nm", state.nm, state.nm !== null);
       keep("alt", swapsText(state.alt), swapsText(state.alt) !== "");
       keep("at", Object.keys(state.at).map((i) => i + "." + state.at[i]).join(","), Object.keys(state.at).length > 0);
       keep("fs", state.fs, state.fs !== FS.start);
@@ -259,6 +266,74 @@
     const [what, rest] = keyUnder;
     line.textContent = (what ? [what] : []).concat(rest).join(" · ");
     if (what && rest.length && line.scrollWidth > line.clientWidth) line.textContent = rest.join(" · ");
+  };
+
+  // --- numerals: what each chord is in the key ---------------------------------------------------
+  // page.py's tables (harmony_tables.py), by mode: a chord's reading is its index, or the one ``places``
+  // names for its place on the sheet (its index among the sheet's chords, k); a chord chosen instead of
+  // another has its numeral and its role alone. A text that names notes names them in the key shown.
+  const numbered = () => Boolean(key) && Boolean(data.numerals) && state.nm !== null;
+  const table = (name) => (data[name] && data[name][modeNow()]) || null;
+  const textOf = (text) => {
+    if (typeof text === "string") return text;
+    if (Array.isArray(text)) {
+      const n = names(shift());
+      return text.map((part) => (typeof part === "number" ? n[mod12(part + shift())] : part)).join("");
+    }
+    return text && Array.isArray(text.by) ? String(text.by[mod12(shift())] || "") : "";
+  };
+  // {text, parts, role, line}: role is the family's first letter (h, a, p) or the relation's (b, s, l, o).
+  // ``j``: the chord among its alternatives (-1: the chord itself), by default the one played.
+  const reading = (i, k, j = choice(i)) => {
+    if (!key || !data.numerals) return null;
+    if (j >= 0) {
+      const code = ((table("altNumerals") || [])[i] || [])[j];
+      return code ? { text: code.slice(1), parts: null, role: code[0], line: null } : null;
+    }
+    const places = table("places") || {};
+    const r = k !== undefined && k !== null && own.call(places, String(k)) ? places[String(k)] : Number(i);
+    const n = (table("numerals") || [])[r];
+    if (!n) return null;
+    const family = table("families")[r];
+    return { text: n[0], parts: n, role: family ? family[0] : String(table("relations")[r] || "o")[0],
+      line: table("explains")[r] };
+  };
+  // A numeral as the sheet shows it: its degree and quality, then its extension and what follows a slash,
+  // each in a class of its own; in its family's colour (r-h, r-a, r-p), or marked from outside the key (out).
+  const numeralEl = (found) => {
+    const span = document.createElement("span");
+    span.className = "nm r-" + found.role + ("hap".indexOf(found.role) < 0 ? " out" : "");
+    const parts = found.parts;
+    if (!parts) {
+      span.textContent = found.text;
+      return span;
+    }
+    const head = parts[1] + parts[2] + parts[3];
+    span.appendChild(document.createTextNode(head));
+    const rest = [[parts[4], "nm-x"], [found.text.slice(head.length + parts[4].length), "nm-b"]];
+    for (const [text, cls] of rest) {
+      if (!text) continue;
+      const part = span.appendChild(document.createElement("span"));
+      part.className = cls;
+      part.textContent = text;
+    }
+    return span;
+  };
+  // A chord on the sheet, as the chord names setting shows it: its name, its name and numeral, or its
+  // numeral (a chord with none, N.C., as written). A screen reader hears both.
+  const drawChord = (el, k) => {
+    const i = el.dataset.c;
+    const name = label(i, current(i));
+    const found = numbered() ? reading(i, k) : null;
+    if (!found) {
+      el.textContent = name;
+      el.removeAttribute("aria-label");
+      return;
+    }
+    el.textContent = "";
+    if (state.nm === "both") el.appendChild(document.createTextNode(name));
+    el.appendChild(numeralEl(found));
+    el.setAttribute("aria-label", name + ", " + found.text);
   };
 
   // --- chord diagrams --------------------------------------------------------------------------
@@ -456,11 +531,15 @@
   const render = () => {
     if (state.capo === sheetCapo) state.capo = null;  // the sheet's own again
     keepPositions();
-    for (const el of chordEls) {
-      const i = el.dataset.c;
-      el.textContent = label(i, current(i));
-      el.classList.toggle("changed", choice(i) >= 0);
-    }
+    hideTip();
+    if (numbered()) doc.dataset.nm = state.nm;
+    else delete doc.dataset.nm;
+    if (state.roles) delete doc.dataset.roles;
+    else doc.dataset.roles = "off";
+    chordEls.forEach((el, k) => {
+      drawChord(el, k);
+      el.classList.toggle("changed", choice(el.dataset.c) >= 0);
+    });
     doc.style.setProperty("--fs", state.fs + "px");
     $("fs-now").textContent = state.fs + " px";
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
@@ -515,6 +594,7 @@
         (asWritten() ? "" : " Each chord moves to the same degree of the new scale.");
     }
 
+    drawNames();
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
     drawSpeed();
@@ -590,6 +670,7 @@
       layout();
       fitKey();
       place();
+      placeTip();
       dock();
     });
   });
@@ -785,7 +866,8 @@
     if (shown.pick >= list.length) shown.pick = -1;
     const rep = shown.pick >= 0 ? list[shown.pick] : base(i);
     const name = label(i, rep);
-    $("card-name").textContent = name;
+    const found = numbered() ? reading(i, chordEls.indexOf(shown.el), shown.pick) : null;
+    $("card-name").textContent = found ? name + " · " + found.text : name;
     const shapes = shapesOf(rep, shift());
     const box = $("diagram");
     box.textContent = "";
@@ -958,6 +1040,10 @@
   for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", () => close(x.closest(".sheet-ui")));
   document.addEventListener("keydown", (e) => {
     if (e.key !== "Escape") return;
+    if (!tip.hidden) {
+      hideTip();
+      return;
+    }
     if (!sizes.hidden) {
       // The size box first, and the focus back to Aa when it was in there.
       const inside = $("size-box").contains(document.activeElement);
@@ -990,6 +1076,110 @@
     to.focus();
   });
 
+  // --- the chord names setting, a numeral's line and the glossary ------------------------------------
+  const NAMES = [[null, "Chords"], ["both", "Chords + numerals"], ["numerals", "Numerals only"]];
+  const keyWords = () => "the key of " + keyName(shift()) + (key && key.from ? " (" + key.from + ")" : "");
+  function drawNames() {
+    const can = Boolean(key) && Boolean(data.numerals);
+    refill($("names"), (can ? NAMES : NAMES.slice(0, 1)).map(([nm, words]) => button(words, (can ? state.nm : null) === nm,
+      () => {
+        state.nm = nm;
+        render();
+      })));
+    $("roles").hidden = !can;
+    $("roles").setAttribute("aria-pressed", state.roles ? "true" : "false");
+    $("names-hint").textContent = can ? "" : "caracole can't tell this song's key, so it can't number its chords.";
+    $("gloss").hidden = !can;
+    if (can) drawGlossary();
+  }
+  $("roles").addEventListener("click", () => {
+    state.roles = !state.roles;
+    render();
+  });
+  // "What do the numerals mean?": the key they are read in, then each symbol the song's numerals use, with
+  // the first of its chords that shows it, in the key shown.
+  const drawGlossary = () => {
+    const body = $("gloss-body");
+    body.textContent = "";
+    const intro = body.appendChild(document.createElement("p"));
+    intro.className = "gloss-key";
+    intro.textContent = "Read in " + keyWords() + ": in another key, every numeral would name other chords.";
+    const list = body.appendChild(document.createElement("dl"));
+    for (const [symbol, meaning, example] of table("glossary") || []) {
+      list.appendChild(document.createElement("dt")).textContent = textOf(symbol);
+      const dd = list.appendChild(document.createElement("dd"));
+      dd.appendChild(document.createTextNode(textOf(meaning)));
+      const ex = dd.appendChild(document.createElement("span"));
+      ex.className = "ex";
+      ex.textContent = textOf(example);
+    }
+  };
+
+  // A numeral's line, by it: on a finger's tap, or while the mouse is over it. Escape, a tap anywhere else,
+  // or the mouse moving away closes it; it goes with the page as it scrolls, and opens the chord's card.
+  const tip = $("tip");
+  let tipOf = null, leaving = 0;
+  function hideTip() {
+    clearTimeout(leaving);
+    if (tip.hidden) return;
+    tip.hidden = true;
+    if (tipOf) tipOf.removeAttribute("aria-describedby");
+    tipOf = null;
+  }
+  const placeTip = () => {
+    if (!tipOf || tip.hidden) return;
+    const a = (tipOf.querySelector(".nm") || tipOf).getBoundingClientRect();
+    const width = tip.offsetWidth, height = tip.offsetHeight, gap = 8;
+    const floor = bar.hidden || bar.classList.contains("away") ? window.innerHeight : bar.getBoundingClientRect().top;
+    let top = a.bottom + gap;
+    if (top + height > floor - gap && a.top - gap - height >= gap) top = a.top - gap - height;
+    const left = Math.max(gap, Math.min(a.left - 12, doc.clientWidth - gap - width));
+    tip.style.setProperty("--tip-top", Math.round(top + window.scrollY) + "px");
+    tip.style.setProperty("--tip-left", Math.round(left + window.scrollX) + "px");
+  };
+  function showTip(el) {
+    const i = el.dataset.c;
+    const found = reading(i, chordEls.indexOf(el));
+    if (!found) return;
+    clearTimeout(leaving);
+    if (tipOf && tipOf !== el) tipOf.removeAttribute("aria-describedby");
+    $("tip-line").textContent = found.line ? textOf(found.line)
+      : found.text + ": the chord you chose in place of " + label(i, base(i)) + ".";
+    $("tip-key").textContent = "In " + keyWords() + ".";
+    $("tip-card").textContent = label(i, current(i)) + ": shapes";
+    tip.hidden = false;
+    tipOf = el;
+    el.setAttribute("aria-describedby", "tip");
+    placeTip();
+  }
+  $("tip-card").addEventListener("click", () => {
+    const el = tipOf;
+    hideTip();
+    if (el) openCard(el.dataset.c, el);
+  });
+  document.addEventListener("pointerdown", (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (!tip.hidden && !(target && (tip.contains(target) || (tipOf && tipOf.contains(target))))) hideTip();
+  }, true);
+  const leave = (e) => {
+    if (e.pointerType !== "mouse" || tip.hidden) return;
+    const to = e.relatedTarget instanceof Element ? e.relatedTarget : null;
+    if (to && (tip.contains(to) || (tipOf && tipOf.contains(to) && to.closest(".nm")))) return;
+    clearTimeout(leaving);
+    leaving = setTimeout(hideTip, 300);
+  };
+  $("sheet").addEventListener("pointerover", (e) => {
+    const nm = e.pointerType === "mouse" && e.target instanceof Element ? e.target.closest(".nm") : null;
+    if (!nm) return;
+    clearTimeout(leaving);
+    if (tipOf !== nm.closest(".c")) showTip(nm.closest(".c"));
+  });
+  $("sheet").addEventListener("pointerout", (e) => {
+    if (e.target instanceof Element && e.target.closest(".nm")) leave(e);
+  });
+  tip.addEventListener("pointerover", () => clearTimeout(leaving));
+  tip.addEventListener("pointerout", leave);
+
   // --- Aa: the text size, in a box beside the song -------------------------------------------------
   // Not a dialog: the song stays in view and within reach, and the box closes on Escape, on a tap
   // anywhere else, or when the focus leaves it.
@@ -1006,9 +1196,18 @@
   });
 
   const sheet = $("sheet");
+  // A finger on a numeral shows its line (with numerals only, on any part of the chord), as the mouse over
+  // one does; the chord's name, or a click, opens its card.
+  let pointer = "mouse";
+  document.addEventListener("pointerdown", (e) => { pointer = e.pointerType || "mouse"; }, true);
   sheet.addEventListener("click", (e) => {
     const el = e.target.closest(".c");
-    if (el) openCard(el.dataset.c, el);
+    if (!el) return;
+    if (pointer !== "mouse" && el.querySelector(".nm") && (state.nm === "numerals" || e.target.closest(".nm"))) {
+      showTip(el);
+      return;
+    }
+    openCard(el.dataset.c, el);
   });
   sheet.addEventListener("keydown", (e) => {
     const el = e.target.closest(".c");
@@ -1038,7 +1237,7 @@
   $("bigger").addEventListener("click", () => { state.fs = Math.min(FS.max, state.fs + FS.step); render(); });
   $("strip-toggle").addEventListener("click", () => { state.strip = !state.strip; render(); });
   $("reset-all").addEventListener("click", () => {
-    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null });
+    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
     adopt(start);  // the song's own version, if it has one
     render();
