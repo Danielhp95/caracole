@@ -167,7 +167,7 @@ def test_every_source_has_a_name_a_tag_and_a_badge():
     assert all(s.site.startswith("https://") for s in icons.SOURCES.values() if s.site)
 
 
-def test_an_unknown_source_still_has_a_tag():
+def test_a_source_has_a_tag_known_or_not():
     assert icons.tag("songsterr") == "songsterr"
     assert icons.tag("ug") == "UG"
 
