@@ -24,7 +24,8 @@ from caracole.library import keep_file
 from caracole.overrides import Overrides
 from caracole.songs import get_song, update_song
 from caracole.versions import upsert_version
-from caracole.youtube import Video, YtDlp, watch_url
+from caracole.youtube import Video, YtDlp
+from caracole.youtube_urls import watch_url
 
 NOW = datetime(2026, 10, 19, 3, 50, tzinfo=UTC)
 TOPIC = "XFkzRNyygfk"
