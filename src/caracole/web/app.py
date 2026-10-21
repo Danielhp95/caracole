@@ -1,42 +1,14 @@
 """The routes of ``caracole serve``, as one function from a request to a response: the router, the shapes
-of its answers, what every route shares and the checks every request passes. Each area's routes are a
-module of their own, which says how they answer:
+of its answers, what every route shares and the checks every request passes.
 
-library_routes.py
-    GET  /, /index.html   the library page, with its forms (library_page, WebControls)
-    POST /request         a song for wanted.txt; with ``fetch``, looked up now too
-    POST /fetch           look a song of the library up now, unless it needs review first
-review_routes.py
-    GET  /review?song=ID  a song in review's picker, on a page of its own
-    POST /review          a song in review's answer, as ``caracole review --song`` writes it
-jobs_routes.py
-    GET  /jobs            the requests, a line each, and what each command printed
-                          (?job=N: its output open; ?refresh=0: no reloading)
-    GET  /jobs.json       the requests, a line each, for the page's script (?jobs=N,M: only those
-                          jobs, each with its song's card once it is over)
-    GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
-search_routes.py
-    GET  /lookup          look a song up as you type (lookup_page.py), and read its sheet
-    GET  /api/search?q=   your library and the offline indexes, as JSON (search.py): your songs, the
-                          artists the query names, the UG index's songs, which comes first and the
-                          row Enter may act on; LaCuerda's artists and songs, gtptabs.com's and
-                          MuseScore's pages, and the sites not searched, or not whole, with why
-    GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
-                          ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
-                          a LaCuerda artist's songs the index holds, and whether caracole read their page
-    POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), or the LaCuerda
-                          song (``lacuerda``), you picked
-    POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
-                          ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
-remove_routes.py
-    POST /remove          what removing a song takes; with ``confirm``, ``caracole remove`` queued, and
-                          back to the library, at the song's card (to the page's script: what it takes,
-                          as data, then the job)
-songbook_routes.py
-    POST /songbook/…      make a songbook, add to it, move or take out a song, rename it, delete it,
-                          or get its songs without a sheet now (songbooks.py); a songbook's page,
-                          _songbooks/<folder>/songbook.html, is one of the ``written_pages``
-this module
+Each area's routes are a module of its own, a ``*_routes.py`` of caracole.web, whose ``ROUTES`` (each a
+``Route``: a method, an address and what answers it) the router gathers from every such module, and whose
+docstring lists them and says how they answer: library_routes.py (the library page, a song requested,
+Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, /jobs.json, /api/jobs),
+search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
+read), remove_routes.py (Remove) and songbook_routes.py (the songbook forms). A new route, or a new
+module of them, changes nothing here. This module answers the rest:
+
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
                           a sheet viewer, while it is as written (``written_pages``), in a sandbox
     GET, POST /login      the sign-in page, with an access token
@@ -63,8 +35,10 @@ the search's answers kept).
 
 from __future__ import annotations
 
+import importlib
 import itertools
 import json
+import pkgutil
 import secrets
 import sqlite3
 import threading
@@ -72,7 +46,7 @@ from collections import OrderedDict
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
-from functools import partial
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import parse_qs, unquote, urlsplit
@@ -134,7 +108,47 @@ class Response:
     data: dict[str, Any] | None = None
 
 
-PostHandler = Callable[["WebApp", dict[str, str]], Response]  # a form's route: the app and the form's fields
+@dataclass(frozen=True)
+class Route:
+    """An address one of the route modules answers (its ``ROUTES``), and what answers it: ``answer(app,
+    request)`` a GET or HEAD; ``answer(app, request, form)`` a POST, once the form passed every check
+    (``page``: what a refusal of the form calls the page it came from). ``under``: every address that
+    starts with ``path`` too. ``script_only``: a read the page's own script alone makes, checked as a write
+    is (/jobs.json)."""
+
+    method: str  # "GET" (which answers HEAD too) or "POST"
+    path: str
+    answer: Callable[..., Response]
+    page: str = "the library"
+    under: bool = False
+    script_only: bool = False
+
+
+@cache
+def routes() -> dict[tuple[str, str], Route]:
+    """Every route of every ``*_routes.py`` of caracole.web, by its method and address: one each."""
+    from caracole import web
+
+    found: dict[tuple[str, str], Route] = {}
+    for module in sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes")):
+        for route in importlib.import_module(f"caracole.web.{module}").ROUTES:
+            if (route.method, route.path) in found:
+                raise RuntimeError(f"{route.method} {route.path} is answered twice ({module})")
+            found[route.method, route.path] = route
+    return found
+
+
+def route_for(method: str, path: str) -> Route | None:
+    """The route that answers ``method`` at ``path``: its own, else the one ``under`` which it is."""
+    every = routes()
+    if (method, path) in every:
+        return every[method, path]
+    return next((r for (m, _), r in every.items() if m == method and r.under and path.startswith(r.path)), None)
+
+
+def address(request: Request) -> str:
+    """The request's address, decoded (the router has read it already, and refused one it couldn't)."""
+    return unquote(urlsplit(request.target).path, errors="strict")
 
 
 # --- the answers ------------------------------------------------------------------------------
@@ -275,57 +289,21 @@ class WebApp:
             refused = message_response(401, "Sign in first", "Sign in with the access token first.")
             refused.data = {**(refused.data or {}), "reload": True}
             return refused
-        from caracole.web import (
-            jobs_routes,
-            library_routes,
-            remove_routes,
-            review_routes,
-            search_routes,
-            songbook_routes,
-        )
-
         if method in ("GET", "HEAD"):
-            if path in ("/", "/index.html"):
-                return library_routes.library(self)
-            if path == "/lookup":
-                return search_routes.lookup_page(self)
-            if path == "/jobs":
-                return jobs_routes.jobs_page(self, query(request))
-            if path == "/jobs.json":
-                return self._script_read_refused(request) or jobs_routes.jobs_json(self, query(request))
-            if path == "/review":
-                return review_routes.picker(self, query(request).get("song", [""])[0])
             if path.startswith("/api/") and not own_page_read(request.headers):
                 return json_response(403, {"error": "This came from another site, so caracole refused it."})
-            if path == "/api/search":
-                return search_routes.api_search(self, query(request).get("q", [""])[0])
-            if path == "/api/artist":
-                asked = query(request)
-                if "lacuerda" in asked or "lacuerda_name" in asked:
-                    return search_routes.api_lacuerda_artist(
-                        self, asked.get("lacuerda", [""])[0].strip(),
-                        name=" ".join(asked.get("lacuerda_name", [""])[0].split()))
-                return search_routes.api_artist(self, asked.get("key", [""])[0].strip(),
-                                                asked.get("offset", ["0"])[0].strip())
-            if path == "/api/jobs":
-                return jobs_routes.api_jobs(self)
-            if path.startswith("/api/jobs/"):
-                return jobs_routes.api_job(self, path[len("/api/jobs/"):])
+            route = route_for("GET", path)
+            if route is not None:
+                return (route.script_only and self._script_read_refused(request)) or route.answer(self, request)
             if path == "/login":
                 return redirect("/")
             return self._file(path)
         if method == "POST":
-            script = wants_json(request)  # the lookup page's script: it follows the job's address
-            handler: PostHandler | None = {
-                "/request": library_routes.request, "/fetch": library_routes.fetch, "/review": review_routes.review,
-                "/remove": remove_routes.remove, "/lookup": partial(search_routes.lookup, wants_json=script),
-                "/lacuerda/artist": partial(search_routes.lacuerda_read, wants_json=script)}.get(path)
-            if handler is None and path.startswith("/songbook/"):
-                handler = songbook_routes.handler(path)
-            if handler is None:
+            route = route_for("POST", path)
+            if route is None:
                 return message_response(404, "Not here", "There's nothing to send to at this address.")
-            form = self._form(request, page="the page" if path in ("/lookup", "/lacuerda/artist") else "the library")
-            return form if isinstance(form, Response) else handler(self, form)
+            form = self._form(request, page=route.page)
+            return form if isinstance(form, Response) else route.answer(self, request, form)
         return Response(405, b"", [("Allow", "GET, HEAD, POST")])
 
     def _script_read_refused(self, request: Request) -> Response | None:

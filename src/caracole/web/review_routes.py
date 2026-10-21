@@ -19,13 +19,19 @@ from contextlib import closing
 from typing import TYPE_CHECKING
 
 from caracole.web import pages
-from caracole.web.app import Response, WebApp, html_response, no_such_song, not_ignored, song_id
+from caracole.web.app import Response, Route, WebApp, html_response, no_such_song, not_ignored, query, song_id
 from caracole.web.jobs import Job, fetch_steps, review_steps
 from caracole.web.pages import Refused
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
     from caracole.songs import Song
+
+
+ROUTES = (
+    Route("GET", "/review", lambda app, asked: picker(app, query(asked).get("song", [""])[0])),
+    Route("POST", "/review", lambda app, asked, form: review(app, form)),
+)
 
 
 def picker(app: WebApp, song_field: str) -> Response:

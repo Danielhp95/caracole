@@ -21,12 +21,14 @@ from __future__ import annotations
 import re
 
 from caracole.web import pages
-from caracole.web.app import Response, WebApp, html_response, no_such_song, song_id
+from caracole.web.app import Response, Route, WebApp, html_response, no_such_song, song_id
 from caracole.web.jobs import REMOVING, remove_steps
 from caracole.web.pages import Refused
 
 # The library page's own address after #, as its script writes it (URLSearchParams' characters alone).
 _BACK = re.compile(r"[A-Za-z0-9%*._~+=&-]{0,512}")
+
+ROUTES = (Route("POST", "/remove", lambda app, asked, form: remove(app, form)),)
 
 
 def remove(app: WebApp, form: dict[str, str]) -> Response:

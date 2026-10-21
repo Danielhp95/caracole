@@ -57,7 +57,18 @@ from collections.abc import Sequence
 from contextlib import closing
 from typing import TYPE_CHECKING, Any
 
-from caracole.web.app import Response, WebApp, html_response, json_response, no_such_song, redirect
+from caracole.web.app import (
+    Request,
+    Response,
+    Route,
+    WebApp,
+    html_response,
+    json_response,
+    no_such_song,
+    query,
+    redirect,
+    wants_json,
+)
 from caracole.web.jobs import LACUERDA_ARTIST, lacuerda_artist_steps, lookup_steps
 from caracole.web.library_routes import LIMITS, PICK_LIMITS, lacuerda_field, wanted_line
 from caracole.web.pages import Refused
@@ -73,6 +84,26 @@ LACUERDA_SONGS = 1000  # a LaCuerda artist's songs /api/artist gives: all of the
 CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
 _SLUG = re.compile(r"[a-z0-9_]{1,200}")  # the slug of a LaCuerda artist's page
 SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
+
+
+def _artist(app: WebApp, request: Request) -> Response:
+    asked = query(request)
+    if "lacuerda" in asked or "lacuerda_name" in asked:
+        return api_lacuerda_artist(app, asked.get("lacuerda", [""])[0].strip(),
+                                   name=" ".join(asked.get("lacuerda_name", [""])[0].split()))
+    return api_artist(app, asked.get("key", [""])[0].strip(), asked.get("offset", ["0"])[0].strip())
+
+
+# The lookup page's script follows the job's address (wants_json).
+ROUTES = (
+    Route("GET", "/lookup", lambda app, asked: lookup_page(app)),
+    Route("GET", "/api/search", lambda app, asked: api_search(app, query(asked).get("q", [""])[0])),
+    Route("GET", "/api/artist", _artist),
+    Route("POST", "/lookup", lambda app, asked, form: lookup(app, form, wants_json=wants_json(asked)),
+          page="the page"),
+    Route("POST", "/lacuerda/artist", lambda app, asked, form: lacuerda_read(app, form, wants_json=wants_json(asked)),
+          page="the page"),
+)
 
 
 def lookup_page(app: WebApp) -> Response:

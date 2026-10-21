@@ -16,22 +16,18 @@ jobs_routes.py), which the page puts in place of its own.
 from __future__ import annotations
 
 import sqlite3
-from functools import partial
 
-from caracole.web.app import QUEUE_FULL, PostHandler, Response, WebApp, unreadable
+from caracole.web import songbooks
+from caracole.web.app import QUEUE_FULL, Response, Route, WebApp, unreadable
 from caracole.web.jobs import Job, QueueFull, lookup_steps
 from caracole.web.pages import Refused
 
-
-def handler(path: str) -> PostHandler | None:
-    """The route of a songbook form's address; None for an address that is no songbook form's."""
-    from caracole.web.songbooks import GET_MISSING, ROUTES
-
-    if path == GET_MISSING:
-        return get_missing
-    if path not in ROUTES:
-        return None
-    return partial(change, route=path)
+# Each songbook form's address (songbooks.ROUTES), and Get the missing songs now's.
+ROUTES = (
+    *(Route("POST", path, lambda app, asked, form, path=path: change(app, form, route=path))
+      for path in songbooks.ROUTES),
+    Route("POST", songbooks.GET_MISSING, lambda app, asked, form: get_missing(app, form)),
+)
 
 
 def change(app: WebApp, form: dict[str, str], *, route: str) -> Response:

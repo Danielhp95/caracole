@@ -22,7 +22,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from caracole.web import pages
-from caracole.web.app import Response, WebApp, html_response, json_response, overrides_or_none
+from caracole.web.app import Response, Route, WebApp, address, html_response, json_response, overrides_or_none, query
 from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import SongFacts, details_href, job_line
@@ -32,6 +32,14 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
+
+
+ROUTES = (
+    Route("GET", "/jobs", lambda app, asked: jobs_page(app, query(asked))),
+    Route("GET", "/jobs.json", lambda app, asked: jobs_json(app, query(asked)), script_only=True),
+    Route("GET", "/api/jobs", lambda app, asked: api_jobs(app)),
+    Route("GET", "/api/jobs/", lambda app, asked: api_job(app, address(asked)[len("/api/jobs/"):]), under=True),
+)
 
 
 def jobs_page(app: WebApp, asked: dict[str, list[str]]) -> Response:

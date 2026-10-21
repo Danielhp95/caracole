@@ -103,11 +103,12 @@ Rules a change there keeps (the Invariants below are the others):
   shortest keys and those every pattern is in
   (`::test_a_common_word_brings_in_its_shortest_keys_and_those_every_word_is_in`).
 - `web/`: `caracole serve` (commands/serve.py). web/__init__.py names its parts, and web/app.py's
-  docstring lists every route, by the module that answers it, and the checks every request
-  passes. app.py is the router and what every route shares (`Request`, `Response`, the answers'
-  shapes, `WebApp.db()`, `.overrides()`, `.submit()`, `.queued()`); a route lives in its area's
-  `*_routes.py`, its handler taking the `WebApp`, and is listed in that module's docstring and in
-  app.py's. A route refuses with `pages.Refused`, which `WebApp.handle` answers as the message
+  docstring the modules of routes and the checks every request passes. app.py is the router and
+  what every route shares (`Request`, `Response`, the answers' shapes, `WebApp.db()`,
+  `.overrides()`, `.submit()`, `.queued()`); a route lives in its area's `*_routes.py`, as a
+  `Route` in its `ROUTES`, which the router gathers from every such module, and a line of its
+  docstring (test_web_app.py checks both): neither a new route nor a new module of them changes
+  app.py. A route refuses with `pages.Refused`, which `WebApp.handle` answers as the message
   page, or to the page's script as JSON: every refusal as data. Every `/api/` read is refused to
   another site's fetch (`security.own_page_read`), and every write passes security.py's
   cross-origin check and carries the form token. Beyond a wanted.txt line, every change runs as a

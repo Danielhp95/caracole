@@ -22,7 +22,7 @@ import sqlite3
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from caracole.web.app import FRAMES, Response, WebApp, html_response, no_such_song, not_ignored, song_id
+from caracole.web.app import FRAMES, Response, Route, WebApp, html_response, no_such_song, not_ignored, song_id
 from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, add_steps, lookup_steps
 from caracole.web.jobs_routes import views
 from caracole.web.pages import Refused
@@ -33,6 +33,14 @@ if TYPE_CHECKING:
 
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
 PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600}
+
+
+ROUTES = (
+    Route("GET", "/", lambda app, asked: library(app)),
+    Route("GET", "/index.html", lambda app, asked: library(app)),
+    Route("POST", "/request", lambda app, asked, form: request(app, form)),
+    Route("POST", "/fetch", lambda app, asked, form: fetch(app, form)),
+)
 
 
 def library(app: WebApp) -> Response:
