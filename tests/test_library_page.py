@@ -2595,3 +2595,29 @@ def test_the_bar_kept_at_the_top_has_an_edge_and_covers_the_page_side_to_side(co
     assert at_top["stuck"] and at_top["shadow"] != "none" and at_top["top"] == 0
     for size, bar in bars.items():
         assert bar["left"] <= 0 and bar["right"] >= bar["page"], (size, bar)  # nothing shows beside it
+
+
+@in_chromium
+def test_the_page_waits_unseen_for_its_scripts_and_shows_without_them_all_the_same(conn, cfg, tmp_path):
+    # Until its scripts have drawn it, the page is unseen (nothing on it then can move once they have); should
+    # they never get there, it shows two seconds on; with no script at all, at once.
+    add_song(conn, "Radiohead", "Creep")
+    html = build_library_page(conn, cfg, Overrides(), NOW)
+    assert html.count('<body class="drawing">') == 1
+    pages = {}
+    for name, text in (("index.html", html),
+                       ("stuck.html", html.replace("<script>", '<script type="text/plain">'))):  # no script runs
+        pages[name] = tmp_path / name
+        pages[name].write_text(text, encoding="utf-8")
+    shown = "getComputedStyle(document.querySelector('.page')).visibility === 'visible'"
+    with browser.Browser(tmp_path / "chrome") as b:
+        b.open(pages["index.html"].as_uri())
+        assert b.js(shown) and not b.js("document.body.classList.contains('drawing')")
+        b.open(pages["stuck.html"].as_uri())
+        assert b.js(f"!({shown})")  # waiting for scripts that never come
+        assert b.wait(shown, 6)
+        assert b.js("performance.now()") >= 1900  # two seconds after the page began
+    with browser.Browser(tmp_path / "chrome-noscript") as b:
+        b.send("Emulation.setScriptExecutionDisabled", value=True)
+        b.open(pages["index.html"].as_uri())
+        assert b.js(shown) and b.js("performance.now()") < 1900  # no script at all: at once
