@@ -266,6 +266,60 @@
     return root;
   };
 
+  // A chord's positions along the neck, frets 0 to ``frets``, the high e on top: each position's dots
+  // at absolute frets (a position's fret n is n + base - 1 up the neck), in its own colour (p0 to p3,
+  // round again after four; the first ``mine`` are the tab's own, marked), open strings as rings at the nut, muted strings nothing. ``chosen``
+  // is drawn bolder, last. Every dot carries its position (data-p) and fret (data-fret).
+  const neck = (positions, opts) => {
+    const frets = opts.frets || 15;
+    const left = 14, top = 9, cell = 19, gap = 9;
+    const width = left + cell * frets + 4, height = top * 2 + gap * 5;
+    const label = (positions.length === 1 ? "1 position" : positions.length + " positions");
+    const root = svg("svg", { class: "neck", viewBox: "0 0 " + width + " " + height, role: "img",
+      "aria-label": (opts.name || "") + ": " + label });
+    for (let s = 0; s < 6; s++) {
+      svg("line", { class: "nk-string", x1: left, y1: top + s * gap, x2: left + cell * frets, y2: top + s * gap }, root);
+    }
+    for (let f = 1; f <= frets; f++) {
+      svg("line", { class: "nk-fret", x1: left + f * cell, y1: top, x2: left + f * cell, y2: top + gap * 5 }, root);
+    }
+    svg("rect", { class: "nk-nut", x: left - 1.5, y: top - 1, width: 3, height: gap * 5 + 2 }, root);
+    for (const f of [3, 5, 7, 9, 12, 15]) {
+      if (f > frets) continue;
+      const x = left + (f - 0.5) * cell, mid = top + gap * 2.5;
+      if (f === 12) {
+        svg("circle", { class: "nk-inlay", cx: x, cy: mid - gap * 1.5, r: 1.8 }, root);
+        svg("circle", { class: "nk-inlay", cx: x, cy: mid + gap * 1.5, r: 1.8 }, root);
+      } else svg("circle", { class: "nk-inlay", cx: x, cy: mid, r: 1.8 }, root);
+    }
+    const order = positions.map((_, p) => p).filter((p) => p !== opts.chosen);
+    if (opts.chosen >= 0 && opts.chosen < positions.length) order.push(opts.chosen);
+    for (const p of order) {
+      const [shape, , base] = positions[p];
+      const up = (Number(base) || 1) - 1;
+      const bold = p === opts.chosen;
+      for (let s = 0; s < 6; s++) {
+        const c = shape[s];
+        if (c === "x") continue;
+        const fret = c === "0" ? 0 : Number(c) + up;
+        const attrs = { class: (c === "0" ? "nk-open" : "nk-dot") + " p" + (p % 4) + (bold ? " chosen" : "") + (p < (opts.mine || 0) ? " tabs" : ""),
+          cy: top + (5 - s) * gap, r: bold ? 4.2 : 3.2, "data-p": p, "data-fret": fret };
+        attrs.cx = fret === 0 ? left - 7 : left + (fret - 0.5) * cell;
+        svg("circle", attrs, root);
+      }
+    }
+    return root;
+  };
+  // What each position is called in the neck's legend: "the tab's" for the first ``mine`` of them,
+  // "open" for one with open strings at the nut, else the fret its lowest finger is on.
+  const neckLabels = (positions, mine) => positions.map((position, p) => {
+    if (p < mine) return "the tab's";
+    const up = (Number(position[2]) || 1) - 1;
+    const fretted = Array.from(position[0]).filter((c) => c !== "x" && c !== "0").map((c) => Number(c) + up);
+    return up === 0 && position[0].includes("0") ? "open" : "fret " + Math.min(...fretted);
+  });
+  window.caracole = { neck, neckLabels };
+
   // --- drawing the page --------------------------------------------------------------------------
   const bar = $("bar"), panel = $("panel"), card = $("card"), pill = $("pill"), go = $("go");
   const more = $("more"), sizes = $("sizes"), sizeButton = $("size");

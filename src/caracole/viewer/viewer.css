@@ -12,6 +12,10 @@
   --focus: #1f6feb;
   --mark: #fbe3c4;
   --fs: 18px;
+  --p1: #b4441e;
+  --p2: #1f6feb;
+  --p3: #2a8a4a;
+  --p4: #8a4fc7;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -26,6 +30,10 @@
     --on-accent: #1b0e07;
     --focus: #6ea8fe;
     --mark: #4d3416;
+    --p1: #f0895c;
+    --p2: #6ea8fe;
+    --p3: #5fcf85;
+    --p4: #c79bf2;
   }
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -326,3 +334,23 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   .c { color: #b4441e; }
   .tab { background: none; padding: 0; }
 }
+
+/* A chord's neck: its positions as dots in four colours (--p1 to --p4), the chosen one bolder, the tab's
+   own ringed. Open strings are rings at the nut. */
+.neck { display: block; width: 100%; height: auto; color: var(--muted); }
+.nk-string, .nk-fret { stroke: currentColor; stroke-width: .7; opacity: .6; }
+.nk-nut { fill: currentColor; }
+.nk-inlay { fill: currentColor; opacity: .35; }
+.nk-dot, .nk-open { stroke: var(--surface); stroke-width: 1; }
+.nk-open { fill: none; stroke-width: 1.4; }
+.nk-dot.p0 { fill: var(--p1); }
+.nk-dot.p1 { fill: var(--p2); }
+.nk-dot.p2 { fill: var(--p3); }
+.nk-dot.p3 { fill: var(--p4); }
+.nk-open.p0 { stroke: var(--p1); }
+.nk-open.p1 { stroke: var(--p2); }
+.nk-open.p2 { stroke: var(--p3); }
+.nk-open.p3 { stroke: var(--p4); }
+.nk-dot.tabs { stroke: var(--text); stroke-width: 1.4; }
+.nk-dot.chosen, .nk-open.chosen { stroke-width: 2; }
+.nk-dot.chosen { stroke: var(--text); }
