@@ -77,7 +77,7 @@ def parse_artist_page(html: str | bytes, *, url: str | None = None) -> UGArtistP
     tabs = read_versions(data, "other_tabs", url=url)
     pagination = _mapping(data.get("pagination"))
     page_entries = _entries(pagination.get("pages"))
-
+    filter_entries = _entries(_mapping(data.get("filters")).get("types"))
     page = json_int(pagination.get("current")) or json_int(data.get("current_page")) or 1
     listed = [json_int(e.get("page")) for e in page_entries]
     return UGArtistPage(
@@ -86,7 +86,7 @@ def parse_artist_page(html: str | bytes, *, url: str | None = None) -> UGArtistP
         tabs=tabs,
         page=page,
         pages=max([page, *(n for n in listed if n)]),
-        filters=_filters(_entries(_mapping(data.get("filters")).get("types"))),
+        filters=_filters(filter_entries),
     )
 
 
