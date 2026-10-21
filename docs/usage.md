@@ -2254,11 +2254,12 @@ with it. A KEY that is no key exits with status 2.
   (or "Queued behind 2 requests…"), then what runs: for a request without
   Fetch it now, "Adding to the library…"; for one looked up now, its stage
   ("Finding the song…", "Looking it up…", "Fetching from Ultimate Guitar…",
-  "Rendering the sheet…", "Fetching the lyrics from LRCLIB…", "Fetching from
-  LaCuerda…", "Fetching from gtptabs.com…", "Writing the library page…"), or
-  "Waiting for another caracole…" while a nightly run holds the lock until
-  its next pause; then how it ended (a lookup that stopped says why, in its
-  stage's words):
+  or "Fetching from LaCuerda…" while the sheet comes from LaCuerda, the one
+  you picked there or LaCuerda's when Ultimate Guitar has none, "Rendering the
+  sheet…", "Fetching the lyrics from LRCLIB…", "Fetching from LaCuerda…",
+  "Fetching from gtptabs.com…", "Writing the library page…"), or "Waiting for
+  another caracole…" while a nightly run holds the lock until its next pause;
+  then how it ended (a lookup that stopped says why, in its stage's words):
   - **Ready · Open sheet**, and the card shows the song's files;
   - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the

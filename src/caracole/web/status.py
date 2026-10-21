@@ -8,8 +8,10 @@ ran. So a job of other commands reads the same way:
 - **Running**: its running step's label, as "Adding to the library…". A
   step's label is written to be this line. A lookup, one ``caracole get``,
   says its running stage's line instead (``STAGE_LINES``), as "Fetching from
-  Ultimate Guitar…", or "Waiting for another caracole…" while its lock is
-  held by a nightly run that lets it go first at its next pause.
+  Ultimate Guitar…" ("Fetching from LaCuerda…" while its sheet stage says it
+  asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for another caracole…"
+  while its lock is held by a nightly run that lets it go first at its next
+  pause.
 - **Failed**: the error its failing command gave, in one short sentence (the
   log's last ``error:`` line, its first sentence; a lookup's, its failed
   stage's words). A command that printed no error is named by its step. A fetch that fails on a song with no sheet that
@@ -43,6 +45,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from caracole.get import SHEET_FROM
 from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, songbook_of
 
@@ -63,6 +66,7 @@ STAGE_LINES = {
     "pages": "Writing the library page",
 }
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
+_SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` ends, by what LaCuerda answered, and the tone of the line it makes.
 _READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting"}
 
@@ -186,6 +190,8 @@ def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
         return "Waiting for another caracole…"
     if stage.name == "song" and new:
         return "Adding to the library…"
+    if stage.state == "running" and stage.name == "sheet" and stage.detail in _SHEET_LINES:
+        return f"{_SHEET_LINES[stage.detail]}…"
     return f"{STAGE_LINES.get(stage.name, stage.label)}…"
 
 

@@ -20,7 +20,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   rating, and the best rated is kept (two requests at most; one when the first
   page read is the best). Without one, LaCuerda's, for a song LaCuerda would
   be asked about tonight. The sheet is readable from here on
-  (``Progress.readable``).
+  (``Progress.readable``). Once it asks LaCuerda, the stage says, running,
+  which site it asks (``SHEET_FROM``), for caracole serve's line.
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
   writes one, for this song alone (``render_all``'s ``song_ids``): another
   song's failure, or its wait for a CJK font, is not this one's.
@@ -82,6 +83,9 @@ PROGRESS_PREFIX = "caracole-progress: "  # a JSON line of `caracole get --progre
 _FIRST_PAGES = 1  # versions pages read before the first sheet is kept: the first lists them all
 _FIRST_SCORED = 1  # sheets fetched for it: the best rated
 SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: what follows one spends the rest
+# A running sheet stage's detail, once LaCuerda is one of the sites it asks: the site it asks now, which caracole
+# serve's line follows (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's.
+SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
 
 
 @dataclass(frozen=True)
@@ -200,6 +204,8 @@ class _Lookup:
         self.kept_for_sheets: set[str] = set()  # sites whose client a stage after the sheet holds to SHEETS_SHARE
         self.lacuerda_asked = False
         self.lacuerda_said: tuple[str, str] = ("done", "")  # what LaCuerda's first ask came to
+        self.running: str | None = None  # the stage running
+        self.sheet_from: str | None = None  # the site the sheet stage said it asks (SHEET_FROM), if it said one
         self.conn = None
         self.overrides = None
         self.song = None
@@ -216,6 +222,7 @@ class _Lookup:
     def stage(self, name: str, run: Callable[[], tuple[str, str] | str | None]) -> None:
         """Run one stage; what it returns is its end, ``(state, detail)`` or a detail of ``done``."""
         self._report(name, "running")
+        self.running = name
         try:
             out = run()
         except _Stop:
@@ -226,6 +233,8 @@ class _Lookup:
             self.result.bug = self.result.bug or f"{name}: {type(e).__name__}: {e}"
             self._report(name, "failed", f"a bug in caracole: {type(e).__name__}: {e}")
             return
+        finally:
+            self.running = None
         state, detail = out if isinstance(out, tuple) else ("done", out or "")
         self._report(name, state, detail)
         self._check_readable()
@@ -485,6 +494,15 @@ class _Lookup:
         version = get_version(self.conn, kept.version_id)
         return version.provider == "lacuerda" and pick.holds(version.tab_id)
 
+    def _sheet_from(self, provider: str) -> None:
+        """Say which site the running sheet stage asks now, once LaCuerda is one of them (``SHEET_FROM``):
+        caracole serve's line then says LaCuerda, and Ultimate Guitar again after it. A sheet Ultimate Guitar
+        alone is asked for says nothing more."""
+        if self.running != "sheet" or self.sheet_from == provider or (provider == "ug" and self.sheet_from is None):
+            return
+        self.sheet_from = provider
+        self._report("sheet", "running", SHEET_FROM[provider])
+
     def sheet(self) -> tuple[str, str] | str:
         if self._picked() is None:
             return self._sheet_from_ug()
@@ -506,6 +524,7 @@ class _Lookup:
         ug: tuple[str, str] | str
         if why is None:
             def first(client) -> str:
+                self._sheet_from("ug")
                 out = process_song(self._fetch_context(client, first=True), self.song, guitar=False)
                 return (f"tab {out.sheet} from Ultimate Guitar" if out.sheet is not None
                         else "Ultimate Guitar has no sheet to keep")
@@ -588,6 +607,7 @@ class _Lookup:
         self.lacuerda_asked = True
 
         def ask(client) -> tuple[str, str] | str:
+            self._sheet_from("lacuerda")  # for the sheet stage alone
             s = lacuerda_sheets(self.conn, client, self.cfg.library_dir, self.cfg.rank, self.now,
                                 overrides=self.overrides, only={self.song.id})
             if s.budget_exhausted:

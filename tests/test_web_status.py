@@ -212,6 +212,18 @@ def test_a_running_lookup_says_its_running_stage_as_a_steps_label_would():
     assert job_line(lyrics, None).text == "Fetching the lyrics from LRCLIB…"  # between two: the one about to run
 
 
+def test_a_lookups_sheet_stage_says_lacuerda_while_it_asks_lacuerda_for_the_sheet():
+    # The sheet you picked on LaCuerda, or LaCuerda's when Ultimate Guitar has none, comes from LaCuerda: the line
+    # says so (get.py's SHEET_FROM), and Ultimate Guitar's again once the stage turns to it.
+    from caracole.get import SHEET_FROM
+
+    before = {"song": ("done", "in the library"), "match": ("done", "matched to radiohead/creep")}
+    lacuerda = lookup_job(stages={**before, "sheet": ("running", SHEET_FROM["lacuerda"])})
+    assert job_line(lacuerda, None) == Line("running", "Fetching from LaCuerda…")
+    back = lookup_job(stages={**before, "sheet": ("running", SHEET_FROM["ug"])})
+    assert job_line(back, None) == Line("running", "Fetching from Ultimate Guitar…")
+
+
 def test_a_lookup_waiting_for_the_lock_says_so():
     waiting = lookup_job(stages={"song": ("running", "waiting for another caracole (pid 42: run), which lets "
                                                      "a lookup go first at its next pause, or between two songs")})

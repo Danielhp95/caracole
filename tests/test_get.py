@@ -120,10 +120,12 @@ class Progress:
     def __init__(self, sites: Sites | None = None):
         self.sites = sites
         self.events: list[tuple] = []
+        self.said: list[tuple[str, str, str]] = []  # every stage event with its detail
         self.readable_after: int | None = None
 
     def stage(self, name, state, detail=""):
         self.events.append(("stage", name, state))
+        self.said.append((name, state, detail))
 
     def readable(self, files, seconds):
         self.events.append(("readable", dict(files)))
@@ -572,6 +574,23 @@ def test_a_lacuerda_pick_that_fails_says_so_where_the_sheet_ultimate_guitar_gave
     assert sheet_said.startswith("LaCuerda failed (") and sheet_said.endswith("tab 201 from Ultimate Guitar")
     assert progress.states()["lacuerda"] == "failed" and "LaCuerda failed (" in result.details["lacuerda"]
     assert find_song(conn, "estopa/como-camaron").lacuerda_checked_at is None and result.ok  # no miss
+
+
+def test_the_sheet_stage_says_which_site_it_asks_once_lacuerda_is_one(cfg, conn, sites):
+    # caracole serve's line follows it (status.py): LaCuerda, for the pick, then Ultimate Guitar, which LaCuerda's
+    # failure leaves the sheet to. A sheet Ultimate Guitar alone is asked for says nothing more.
+    from caracole.get import SHEET_FROM
+
+    serve_como_camaron(sites, conn)
+    sites.pages[CAMARON_2] = (500, "<html>down</html>")
+
+    result, progress = look_up(cfg, sites=sites, artist="Estopa", title="Como Camarón", lacuerda=CAMARON_2)
+
+    running = [detail for name, state, detail in progress.said if name == "sheet" and state == "running"]
+    assert running == ["", SHEET_FROM["lacuerda"], SHEET_FROM["ug"]] and result.ok
+    serve_creep(sites, conn)
+    _, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    assert [detail for name, state, detail in progress.said if name == "sheet" and state == "running"] == [""]
 
 
 def test_a_tab_you_pinned_on_ultimate_guitar_is_said_to_be_kept_over_a_lacuerda_pick(cfg, conn, sites):
