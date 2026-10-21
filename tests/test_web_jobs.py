@@ -39,6 +39,11 @@ class FakeRunner:
         self.terminated = True
 
 
+def test_a_lookup_can_leave_its_songbooks_to_a_later_job():
+    assert lookup_steps("Radiohead", "Creep", songbooks=False) == [
+        ("Look it up now", ("get", "--progress", "--no-songbooks", "--", "Radiohead", "Creep"))]
+
+
 def test_a_request_is_caracole_add_and_a_fetch_is_match_fetch_render():
     # Each label is what the song's card says while the step runs: "Fetching from Ultimate Guitar…".
     assert add_steps("Radiohead", "Creep") == [("Adding to the library", ("add", "--", "Radiohead", "Creep"))]

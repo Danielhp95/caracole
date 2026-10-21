@@ -117,6 +117,20 @@ def test_get_progress_writes_a_json_line_per_stage_for_caracole_serve(config, si
 
 
 @pytest.mark.slow
+def test_get_no_songbooks_leaves_the_songbooks_alone(config, sites, conn, tmp_path):
+    from caracole.songbook import make_songbook, songbooks_file
+
+    serve_creep(sites, conn)
+    make_songbook(songbooks_file(tmp_path / "library"), "Campfire", ["Radiohead - Creep"])
+    result = get(config, "--progress", "--no-songbooks", "Radiohead - Creep")
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / "library" / "_songbooks").exists()
+    plain = get(config, "--progress", "Radiohead - Creep")
+    assert plain.exit_code == 0, plain.output
+    assert (tmp_path / "library" / "_songbooks" / "Campfire" / "songbook.html").is_file()
+
+
+@pytest.mark.slow
 def test_get_records_the_ug_song_and_the_tab_you_pick(config, sites, conn, tmp_path):
     serve_creep(sites, conn)
     result = get(config, "--ug", "radiohead/creep", "--tab", f"{TAB}radiohead/creep-chords-103", "Radiohead - Creep")

@@ -46,7 +46,7 @@ def change(app: WebApp, form: dict[str, str], *, route: str) -> Response:
 
 def get_missing(app: WebApp, form: dict[str, str]) -> Response:
     """A songbook's songs without a sheet (with ``song``, a set list's Get it: that one), looked up now: one
-    ``caracole get`` each, as a song's Fetch now queues it, in the songbook's order, then ``caracole songbook
+    ``caracole get --no-songbooks`` each, as a song's Fetch now queues it, in the songbook's order, then ``caracole songbook
     render NAME`` after them, which makes the songbook again with what they got (songbooks.py). To the page's
     script, the songbook's job, with each lookup's (``jobs``) and how many songs wait for another tap, the queue
     being full (``left``)."""
@@ -61,7 +61,7 @@ def get_missing(app: WebApp, form: dict[str, str]) -> Response:
     lookups: list[Job] = []
     for song in songs[: max(0, app.queue.room() - 1)]:  # room for the songbook after them
         try:
-            job, _ = app.queue.submit(f"Fetch {song.display}", song.key, lookup_steps(song.artist, song.title),
+            job, _ = app.queue.submit(f"Fetch {song.display}", song.key, lookup_steps(song.artist, song.title, songbooks=False),
                                       fetching=True, display=song.display)
         except QueueFull:
             break

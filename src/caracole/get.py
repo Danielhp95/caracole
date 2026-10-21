@@ -96,7 +96,7 @@ SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
 
 @dataclass(frozen=True)
 class LookupRequest:
-    """A song to look up now, by name; ``ug`` ("artist-key/song-key") is the Ultimate Guitar song you
+    """A song to look up now, by name; ``songbooks`` False leaves the stage that makes its songbooks again; ``ug`` ("artist-key/song-key") is the Ultimate Guitar song you
     picked, ``tab`` the tab (its page's address, or its id), ``lacuerda`` the LaCuerda song or version
     (its page's address)."""
 
@@ -107,6 +107,7 @@ class LookupRequest:
     ug: str | None = None
     tab: str | None = None
     lacuerda: str | None = None
+    songbooks: bool = True  # False: leave the songbooks to a job that makes them once (Get the missing songs)
 
     @property
     def display(self) -> str:
@@ -694,6 +695,8 @@ class _Lookup:
             books = load_songbooks(songbooks_file(self.cfg.library_dir))
         except SongbookError as e:
             return "skipped", f"songbooks.toml can't be read ({e}); no songbook was made again"
+        if not self.request.songbooks:
+            return "skipped", "left to the job that makes the songbook after the lookups"
         mine = songbooks_listing(self.conn, books, self.song)
         if not mine:
             return "skipped", "no songbook lists it"

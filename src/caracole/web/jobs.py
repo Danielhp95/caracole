@@ -171,11 +171,13 @@ LOOKUP = "get"  # the command of a lookup
 
 def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_ms: int | None = None,
                  ug: str | None = None, tab: str | None = None,
-                 lacuerda: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
+                 lacuerda: str | None = None, songbooks: bool = True) -> list[tuple[str, tuple[str, ...]]]:
     """Look one song up now: ``caracole get --progress``, one process for every stage (get.py)."""
     from caracole.wanted import format_duration
 
     args = [LOOKUP, "--progress"]
+    if not songbooks:  # Get the missing songs makes the songbook once, after all its lookups
+        args.append("--no-songbooks")
     if album:
         args.append(f"--album={album}")
     if duration_ms is not None:

@@ -53,6 +53,9 @@ def register(app: typer.Typer) -> None:
                                                  "to keep the sheet of; recorded under \\[lacuerda] in overrides.toml."),
         show: bool = typer.Option(False, "--print", help="Print the sheet itself as soon as it is kept."),
         progress: bool = typer.Option(False, "--progress", help="A JSON line per stage too, for caracole serve."),
+        songbooks: bool = typer.Option(True, "--songbooks/--no-songbooks",
+                                       help="Make the songbooks that list the song again (the default); "
+                                            "--no-songbooks leaves them, for a job that makes them once."),
     ) -> None:
         """Look one song up now: its sheet first, in seconds, then its lyrics, PDF and the rest."""
         if len(song) == 1 and " - " not in song[0] and any(c.isalnum() for c in song[0]):
@@ -62,7 +65,8 @@ def register(app: typer.Typer) -> None:
         artist, title = _artist_title(song)
         _check_pick(ug, tab, lacuerda)
         duration_ms = _duration(duration)
-        _get(load_cfg(ctx), artist, title, album, duration_ms, ug, tab, lacuerda, show=show, progress=progress)
+        _get(load_cfg(ctx), artist, title, album, duration_ms, ug, tab, lacuerda, show=show, progress=progress,
+             songbooks=songbooks)
 
 
 def _artist_title(words: list[str]) -> tuple[str, str]:
@@ -111,10 +115,12 @@ def _duration(text: str | None) -> int | None:
 
 
 def _get(cfg: Config, artist: str, title: str, album: str | None, duration_ms: int | None, ug: str | None,
-         tab: str | None, lacuerda: str | None = None, *, show: bool, progress: bool) -> None:
+         tab: str | None, lacuerda: str | None = None, *, show: bool, progress: bool,
+         songbooks: bool = True) -> None:
     from caracole.get import LookupRequest, look_up
 
-    request = LookupRequest(artist, title, album=album, duration_ms=duration_ms, ug=ug, tab=tab, lacuerda=lacuerda)
+    request = LookupRequest(artist, title, album=album, duration_ms=duration_ms, ug=ug, tab=tab, lacuerda=lacuerda,
+                            songbooks=songbooks)
     reporter = _Lines(cfg.library_dir, show=show, json_lines=progress)
     result = look_up(cfg, request, reporter)
     reporter.flush()
