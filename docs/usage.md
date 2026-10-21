@@ -1779,7 +1779,10 @@ YouTube audio"), with a link to the video once there is one, instead of
 offering to buy it; its **Sheet versions**, the Ultimate Guitar versions
 caracole keeps beside its sheet (the runners-up of the three it scores, and a
 version you kept), in rank order, each with UG's version number, its rating and
-votes (`Ver 3 · 4.86★ (408) · the one`), each opening its own viewer page, the
+votes (`Ver 3 · 4.86★ (408) · the one`), each opening its own viewer page,
+`version-<tab>.html`, or its text, `version-<tab>.txt`, until render has
+written the page (caracole serve doesn't serve version pages yet: on its page
+such a link answers Not found, and the file on disk opens it), the
 one its title opens marked "the one" (when that is LaCuerda's sheet or the auto
 sheet, it leads the list by that name: `The one: LaCuerda's sheet`); its PDF
 exports, the sheet's PDFs in other versions, each

@@ -682,6 +682,22 @@ def test_a_songs_card_names_the_lacuerda_sheet_it_could_be_looked_up_with(conn, 
     assert cards[plain.display]["lacuerdaSheet"] is None
 
 
+def test_a_one_song_card_reads_the_lacuerda_sheets_and_kept_versions_of_that_song_alone(conn, cfg):
+    # /jobs.json's card of a song asks of that song alone, as its YouTube state is asked (above).
+    from caracole.library_page import _lacuerda_met, song_cards
+    from caracole.songs import get_song
+
+    asked = add_song(conn, "Estopa", "Como Camarón")
+    other = add_song(conn, "Estopa", "Tu Calorro")
+    for s, slug in ((asked, "como_camaron"), (other, "tu_calorro")):
+        update_song(conn, s.id, status="found")
+        lacuerda_version(conn, s, f"estopa/{slug}", f"https://acordes.lacuerda.net/estopa/{slug}.shtml", coverage=0.5)
+    assert _lacuerda_met(conn, {asked.id}) == {asked.id: "https://acordes.lacuerda.net/estopa/como_camaron.shtml"}
+    assert set(_lacuerda_met(conn)) == {asked.id, other.id}  # every song's, for the whole page
+    [card] = song_cards(conn, cfg, Overrides(), NOW, [get_song(conn, asked.id)])
+    assert card["lacuerdaSheet"] == "https://acordes.lacuerda.net/estopa/como_camaron.shtml"
+
+
 def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)
@@ -1908,6 +1924,16 @@ def test_a_songs_kept_versions_are_its_datas_in_rank_order_each_with_its_page(co
     assert not any(f["name"].startswith("version-") for f in cards[s.display]["files"])
     # A song with no version kept beside its sheet has none to list.
     assert cards[plain.display]["versions"] is None
+
+
+def test_the_one_whose_text_and_page_are_gone_from_the_folder_opens_its_pdf(conn, cfg):
+    # A device took sheet.txt away, and render never wrote sheet.html: the one opens what is left of it, its PDF,
+    # as its title does, still marked the one.
+    s = wonderwall(conn, cfg, pages=())
+    (song_dir(cfg.library_dir, s) / "sheet.txt").unlink()
+    card = songs_of(page(conn, cfg))[s.display]
+    one = card["versions"]["list"][0]
+    assert (one["tab"], one["chosen"], one["href"]) == ("1064463", True, "Oasis/Wonderwall/sheet.pdf")
 
 
 @in_chromium

@@ -1413,14 +1413,27 @@
     return item;
   };
   // A LaCuerda row of a song of yours, with chords: its line offers that sheet (Use LaCuerda's sheet), drawn again
-  // now if it is drawn already and had none.
+  // now if it is drawn already and had none. Its "⋯" open, it stays open, and the focus on its button stays there.
   const offerLaCuerda = (i, row) => {
     const id = Number(songs[i].id);
     const https = (url) => /^https:[/][/]/i.test(String(url || ""));
     if (lacuerdaFound.has(id) || !https(row.sheet) || !https(row.url)) return;
     const before = lacuerdaOf(songs[i]);
     lacuerdaFound.set(id, String(row.url));
-    if (lines.has(i) && lacuerdaOf(songs[i]) !== before) lines.set(i, refill(lines.get(i), lineFor(songs[i])));
+    if (!lines.has(i) || lacuerdaOf(songs[i]) === before) return;
+    const old = lines.get(i);
+    const more = old.querySelector(":scope > .line-more");
+    const open = Boolean(more && more.getAttribute("aria-expanded") === "true");
+    const focused = Boolean(more && more === document.activeElement);
+    const drawn = refill(old, lineFor(songs[i]));
+    lines.set(i, drawn);
+    const fresh = drawn.querySelector(":scope > .line-more");
+    const panel = drawn.querySelector(":scope > .line-panel");
+    if (open && fresh && panel) {
+      fresh.setAttribute("aria-expanded", "true");
+      panel.hidden = false;
+    }
+    if (focused && fresh && fresh.isConnected) fresh.focus();
   };
   const lineOfItem = (model, item) => {
     if (!model.lines.has(item.key)) model.lines.set(item.key, indexLine(item, { get: getIt, later, again: addAgain }));

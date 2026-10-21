@@ -41,6 +41,8 @@ class FakeLookup:
 
     def __init__(self):
         self.ran: list[tuple[str, ...]] = []
+        self.hold = threading.Event()  # cleared, its sheet stage runs until a test sets it
+        self.hold.set()
 
     def __call__(self, args, emit):
         self.ran.append(tuple(args))
@@ -52,6 +54,7 @@ class FakeLookup:
         stage("song", "done", "in the library")
         stage("sheet", "running")
         time.sleep(0.5)  # long enough for the page to show it
+        self.hold.wait(30)
         stage("sheet", "done", "tab 1 from Ultimate Guitar")
         return 0
 
@@ -69,8 +72,13 @@ class Posted(list):
 
 
 @pytest.fixture
-def live(cfg):
-    queue = JobQueue(FakeLookup())
+def lookup():
+    return FakeLookup()
+
+
+@pytest.fixture
+def live(cfg, lookup):
+    queue = JobQueue(lookup)
     queue.start()
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
     posted = Posted()
@@ -139,11 +147,20 @@ def press_in_menu(browser, song, label: str) -> None:
     browser.click(line(song) + " .line-panel button[data-press-me]")
 
 
+# The tones of a lookup's line that went as asked: queued, running, then kept (status.py); never "failed", which a
+# refusal, or an answer the page couldn't read, would say on the line too.
+ASKED = ("queued", "running", "ready", "added")
+
+
 def shows_its_request(browser, song) -> bool:
-    """Whether the song's line shows its lookup's line: past Sending…, as the server said it."""
+    """Whether the song's line shows its lookup's line: past Sending…, as the server said it, the lookup's own."""
     progress = json.dumps(line(song) + " .progress")
-    return browser.wait(f"(() => {{ const p = document.querySelector({progress}); "
-                        "return Boolean(p && p.textContent && p.textContent !== 'Sending…' && p.dataset.tone); })()")
+    shown = browser.wait(f"(() => {{ const p = document.querySelector({progress}); "
+                         "return Boolean(p && p.textContent && p.textContent !== 'Sending…' "
+                         f"&& {json.dumps(ASKED)}.includes(p.dataset.tone)); }})()")
+    assert shown, browser.js(f"(() => {{ const p = document.querySelector({progress}); "
+                             "return p && [p.dataset.tone, p.textContent]; })()")
+    return shown
 
 
 def lookup_page_presses(browser, base, query: str, aria: str) -> None:
@@ -166,6 +183,25 @@ def test_fetch_again_posts_what_the_lookup_pages_fetch_again_posts_and_shows_its
     # The lookup page's Fetch again, for the same song, posts the very same form.
     lookup_page_presses(browser, base, "como camaron", "Fetch Estopa - Como Camarón again")
     assert posted.next(1) == body
+
+
+def test_fetch_again_and_use_lacuerdas_sheet_are_gone_while_the_songs_lookup_runs(cfg, live, lookup, browser):
+    # Asked for already, the song's line shows how it goes, and offers neither again until it is over.
+    base, posted = live
+    song = camaron(cfg)
+    add_lacuerda(cfg.overrides_file, song.display, LC + "estopa/como_camaron")
+    lookup.hold.clear()
+    browser.open(base)
+    press_in_menu(browser, song, "Fetch again")
+    posted.next(0)
+    assert browser.wait(f"(() => {{ const p = document.querySelector({json.dumps(line(song) + ' .progress')}); "
+                        "return Boolean(p && p.dataset.tone === 'running'); })()")
+    assert browser.js(f"document.querySelector({json.dumps(line(song) + ' .actions.again')})") is None
+    assert browser.js(menu_button(song, "Fetch again")) is None
+    assert browser.js(menu_button(song, USE)) is None
+    lookup.hold.set()
+    # Once it is over, the line is drawn again, with both.
+    assert browser.wait(f"({menu_button(song, 'Fetch again')}) !== null && ({menu_button(song, USE)}) !== null")
 
 
 def test_use_lacuerdas_sheet_posts_your_pick_as_the_lookup_pages_lacuerda_row_does(cfg, live, browser):
@@ -195,11 +231,19 @@ def test_the_bars_search_finding_lacuerdas_sheet_of_a_song_offers_it_under_its_m
     # Nothing tells the page LaCuerda has it, yet.
     assert browser.js(menu_button(song, USE)) is None
     assert browser.js(f"({menu_button(song, 'Fetch again')}) !== null")
+    # Its "⋯" open, the search begins.
+    browser.click(line(song) + " .line-more")
     browser.js("document.getElementById('q').focus()")
     browser.type("como camaron")
-    # The search's LaCuerda row of it is folded into your song's line, which offers that sheet now.
+    # The search's LaCuerda row of it is folded into your song's line, which offers that sheet now, its "⋯" still
+    # open under your hand.
     assert browser.wait(f"({menu_button(song, USE)}) !== null")
-    press_in_menu(browser, song, USE)
+    panel = json.dumps(line(song) + " .line-panel")
+    more = json.dumps(line(song) + " .line-more")
+    assert browser.js(f"document.querySelector({panel}).hidden") is False
+    assert browser.js(f"document.querySelector({more}).getAttribute('aria-expanded')") == "true"
+    browser.js(f"({menu_button(song, USE)}).dataset.pressMe = '1'")
+    browser.click(line(song) + " .line-panel button[data-press-me]")
     body = posted.next(0)
     assert parse_qs(body.decode()) == {"csrf": ["tok"], "song": [str(song.id)],
                                        "lacuerda": [LC + "estopa/como_camaron"]}

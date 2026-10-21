@@ -371,7 +371,8 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if youtube:
         to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
     musescore = cfg.provider("musescore").enabled
-    met = _lacuerda_met(conn)
+    asked = None if songs is None else {s.id for s in songs}  # a card or a few: their rows alone
+    met = _lacuerda_met(conn, asked)
     kept = _kept_versions(conn, cfg, {s.id for s in library})
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
@@ -505,8 +506,11 @@ def _kept_versions(conn: sqlite3.Connection, cfg: Config, ids: set[int]) -> dict
 def _versions_data(versions: list[SheetVersion] | None, names: set[str], base: str) -> dict[str, Any] | None:
     """A song's kept versions as its line's "⋯" lists them, under Sheet versions: ``as_data``'s, the kept ones alone,
     in rank order, each with the link that opens it (its viewer page, else its text while render hasn't written
-    the page) and where it came from (Ultimate Guitar); ``total``, every chords version UG has. None for a song
-    with none kept beside its sheet."""
+    the page; the one, else its PDF, as its title opens it) and where it came from (Ultimate Guitar); ``total``,
+    every chords version UG has. None for a song with none kept beside its sheet.
+
+    Not ``as_data``'s shape, which the viewer pages' ``versions`` is (every version, gone ones too): the library
+    page's lists what its folder holds, for library.js alone."""
     from caracole.sheet_versions import as_data, version_names
 
     if not versions:
@@ -516,7 +520,7 @@ def _versions_data(versions: list[SheetVersion] | None, names: set[str], base: s
     for entry in data["list"]:
         if not entry["kept"]:
             continue
-        opens = ((entry["page"], "sheet.txt") if entry["chosen"]
+        opens = ((entry["page"], "sheet.txt", "sheet.pdf") if entry["chosen"]
                  else (entry["page"], version_names(entry["tab"])[0]))
         name = next((n for n in opens if n in names), None)
         if name is not None:
@@ -524,12 +528,15 @@ def _versions_data(versions: list[SheetVersion] | None, names: set[str], base: s
     return {"total": data["total"], "list": listed}
 
 
-def _lacuerda_met(conn: sqlite3.Connection) -> dict[int, str]:
+def _lacuerda_met(conn: sqlite3.Connection, ids: set[int] | None = None) -> dict[int, str]:
     """The best LaCuerda sheet caracole met for each song (lacuerda_fetch.py records each, kept or not): the one
-    that covers the most of its lyrics, of those LaCuerda still has; its page, by song id."""
+    that covers the most of its lyrics, of those LaCuerda still has; its page, by song id. ``ids``: of these songs
+    alone, else of every song."""
+    only = "" if ids is None else " AND song_id IN (SELECT value FROM json_each(?))"
     rows = conn.execute(
-        "SELECT song_id, url FROM versions WHERE provider = 'lacuerda' AND slot = 'sheet' AND gone = 0 "
-        "ORDER BY song_id, coverage IS NULL, coverage DESC, id"
+        "SELECT song_id, url FROM versions WHERE provider = 'lacuerda' AND slot = 'sheet' AND gone = 0"
+        + only + " ORDER BY song_id, coverage IS NULL, coverage DESC, id",
+        () if ids is None else (json.dumps(sorted(ids)),),
     )
     met: dict[int, str] = {}
     for song_id, url in rows:
