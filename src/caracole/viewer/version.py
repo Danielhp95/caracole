@@ -224,12 +224,26 @@ def version_label(v: Version, key: Key | None, capo_sheet: int | None) -> str:
     """The version in words: the key of the shapes it plays, in the viewer's names of the modes, and its capo
     ("G Dorian, capo 0", "E Minor, capo 2"). A sheet with no key says how far it moved ("Transposed +2, capo 0",
     "As written, capo 3"). ``key`` is the key of the sheet's shapes, ``capo_sheet`` its capo, as for
-    ``apply_version``."""
+    ``apply_version``. An export is named and recorded by it (``render.render_version``)."""
+    return _label(v, key, capo_sheet, no_capo=True)
+
+
+def played_label(v: Version, key: Key | None, capo_sheet: int | None) -> str:
+    """Where the version plays, in words, as a songbook's set list says it (``songbook.plays_in``):
+    ``version_label``'s words, with nothing of a capo it plays without ("G Dorian", "E Minor, capo 2";
+    "Transposed +2", "As written, capo 3")."""
+    return _label(v, key, capo_sheet, no_capo=False)
+
+
+def _label(v: Version, key: Key | None, capo_sheet: int | None, *, no_capo: bool) -> str:
+    """``version_label``'s words, and its capo when it plays with one or ``no_capo`` names none ("capo 0")."""
     played = _played(v, key, capo_sheet)
     if key is None or played.mode is None:
-        return f"{f'Transposed {v.t:+d}' if v.t else 'As written'}, capo {played.capo}"
-    shapes = Key((key.tonic + played.shift) % 12, played.mode)
-    return f"{spelling(shapes)[shapes.tonic]} {MODE_NAMES[shapes.mode]}, capo {played.capo}"
+        words = f"Transposed {v.t:+d}" if v.t else "As written"
+    else:
+        shapes = Key((key.tonic + played.shift) % 12, played.mode)
+        words = f"{spelling(shapes)[shapes.tonic]} {MODE_NAMES[shapes.mode]}"
+    return f"{words}, capo {played.capo}" if played.capo or no_capo else words
 
 
 # --- where a setting plays it: by the key of its shapes ------------------------------------------

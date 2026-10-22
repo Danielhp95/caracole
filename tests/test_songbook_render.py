@@ -228,8 +228,8 @@ def test_a_song_in_g_dorian_is_written_in_g_dorian(conn, cfg, two):
     assert page_data(cfg, 2)["start"] == "t=-2&mode=dorian&capo=0"  # the phone page opens it there too
     assert page_data(cfg, 1)["start"] is None
     creep_entry, soda_entry = entries_of(conn, cfg)
-    assert plays_in(soda_entry) == "G Dorian, capo 0"  # the set list's chip
-    assert plays_in(creep_entry) == "G Major, capo 0"  # Creep's key, from its tab
+    assert plays_in(soda_entry) == "G Dorian"  # the set list's chip
+    assert plays_in(creep_entry) == "G Major"  # Creep's key, from its tab
     assert render(conn, cfg).skipped == 1
 
 
@@ -246,7 +246,7 @@ def test_a_song_without_a_setting_follows_its_own_version(conn, cfg, two):
     fake = FakeChordPro()
     assert render(conn, cfg, ovr, runner=fake).rendered == 1
     assert sung(inputs(fake, pdf_call(fake))[1]) == ["Gm", "Edim", "Bb", "F"]
-    assert plays_in(entries_of(conn, cfg, ovr)[1]) == "G Dorian, capo 0"
+    assert plays_in(entries_of(conn, cfg, ovr)[1]) == "G Dorian"
 
 
 def test_a_song_without_a_setting_keeps_its_own_versions_key_on_a_new_sheet(conn, cfg, two):
@@ -261,7 +261,7 @@ def test_a_song_without_a_setting_keeps_its_own_versions_key_on_a_new_sheet(conn
     assert "Otra letra" in text and sung(text) == ["Gm", "Edim", "Bb", "F"]  # D minor shapes, capo 3, up to G
     assert sung(cho_inputs(fake)[1]) == ["Gm", "Edim", "Bb", "F"]
     (_, entry) = entries_of(conn, cfg, ovr)
-    assert entry.version.t == 2 and plays_in(entry) == "G Dorian, capo 0"
+    assert entry.version.t == 2 and plays_in(entry) == "G Dorian"
     assert page_data(cfg, 2)["start"] == "t=2&mode=dorian&capo=0"
     set_setting(cfg, SODA, Setting(capo=5))  # what a setting leaves out is its own version's: G dorian's sound
     assert plays_in(entries_of(conn, cfg, ovr)[1]) == "D Dorian, capo 5"
@@ -279,14 +279,14 @@ def test_a_setting_with_a_key_and_no_mode_takes_no_mode_from_an_own_version_that
     fake = FakeChordPro()
     assert render(conn, cfg, ovr, runner=fake).rendered == 1
     assert sung(inputs(fake, pdf_call(fake))[1]) == ["Bm", "G", "D", "A"]
-    assert plays_in(entries_of(conn, cfg, ovr)[1]) == "D Major, capo 0"
+    assert plays_in(entries_of(conn, cfg, ovr)[1]) == "D Major"
     for own in ("key=Bm&capo=0", "t=2"):
         ovr = overrides(cfg, f'[version]\n"{SODA}" = "{own}"\n')
         set_setting(cfg, SODA, Setting(key="B"))
         fake = FakeChordPro()
         assert render(conn, cfg, ovr, runner=fake, force=True).rendered == 1, own
         assert sung(inputs(fake, pdf_call(fake))[1]) == ["G#m", "E", "B", "F#"], own
-        assert plays_in(entries_of(conn, cfg, ovr)[1]) == "B Major, capo 0", own
+        assert plays_in(entries_of(conn, cfg, ovr)[1]) == "B Major", own
         set_setting(cfg, SODA, None)
 
 
@@ -331,7 +331,7 @@ def test_replacing_a_songs_sheet_keeps_the_songbooks_key(conn, cfg, two):
     _, text = inputs(fake, pdf_call(fake))
     assert "Otra letra" in text and sung(text) == ["Gm", "Edim", "Bb", "F"]  # still in G dorian
     (_, entry) = entries_of(conn, cfg)
-    assert entry.version.t == 5 and plays_in(entry) == "G Dorian, capo 0"  # D up to G, where A went down
+    assert entry.version.t == 5 and plays_in(entry) == "G Dorian"  # D up to G, where A went down
     assert page_data(cfg, 2)["start"] == "t=5&mode=dorian&capo=0"
 
 
@@ -380,7 +380,7 @@ def test_a_key_set_with_no_capo_takes_the_capo_the_song_plays_at_now(conn, cfg):
     assert "Otra letra" in text and sung(text) == ["Em", "G", "D", "A"]
     set_setting(cfg, WONDERWALL, Setting("E"))  # a key alone, as one may write it by hand
     (entry,) = entries_of(conn, cfg, ovr)
-    assert plays_in(entry) == "E Minor, capo 0"  # the new sheet's capo: Em sounds, two semitones down
+    assert plays_in(entry) == "E Minor"  # the new sheet's capo: Em sounds, two semitones down
 
 
 def test_a_key_estimated_from_the_chords_is_the_key_of_the_shapes_a_songbook_plays(conn, cfg):
@@ -407,9 +407,17 @@ def test_a_key_estimated_from_the_chords_is_the_key_of_the_shapes_a_songbook_pla
     (text,) = inputs(fake, pdf_call(fake))
     assert sung(text) == ["Am", "C", "G", "D"] * 3
     assert "{subtitle: Soda Stereo · Am shapes · capo 5 · sounds Dm}" in text.splitlines()
+    assert "{capo: 5}" in cho_inputs(fake)[0].splitlines()  # for an app, the capo it plays at
     set_setting(cfg, "Soda Stereo - De Música Ligera", Setting(capo=0))
     (entry,) = entries_of(conn, cfg)
-    assert plays_in(entry) == "D Minor, capo 0"
+    assert plays_in(entry) == "D Minor"
+    fake = FakeChordPro()
+    render(conn, cfg, runner=fake)
+    (text,) = inputs(fake, pdf_call(fake))
+    (cho,) = cho_inputs(fake)
+    assert sung(text) == sung(cho) == ["Dm", "F", "C", "G"] * 3
+    assert "{subtitle: Soda Stereo · Key Dm}" in text.splitlines()  # no capo said: none is played
+    assert "capo" not in text.lower() and "capo" not in cho.lower()
 
 
 def test_a_song_without_a_sheet_keeps_a_setting_as_given(conn, cfg):

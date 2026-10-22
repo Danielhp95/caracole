@@ -230,6 +230,24 @@ def test_a_version_is_named_by_the_key_of_its_shapes_and_its_capo():
     assert dict(re.findall(r'(\w+): \["([^"]+)"', block)) == version.MODE_NAMES
 
 
+def test_where_a_songbook_plays_a_version_says_nothing_of_a_capo_it_plays_without():
+    # a songbook's set list: "G Dorian", never "G Dorian, capo 0"; an export's name keeps it (version_label)
+    assert version.played_label(Version(mode="dorian", capo=0), Key(7, "ionian"), 0) == "G Dorian"
+    assert version.played_label(Version(t=-1, mode="ionian"), Key(1, "ionian"), None) == "C Major"
+    assert version.played_label(Version(capo=0), Key(4, "aeolian"), 2) == "F# Minor"  # the sheet's capo taken off
+    assert version.played_label(Version(t=2, capo=0), None, 3) == "Transposed +2"
+    assert version.played_label(Version(), None, None) == "As written"
+    # a capo it plays with is said, as an export's name says it
+    assert version.played_label(Version(), Key(7, "ionian"), 2) == "G Major, capo 2"
+    assert version.played_label(Version(t=3, capo=3), Key(7, "ionian"), 2) == "A Major, capo 3"
+    assert version.played_label(Version(), None, 3) == "As written, capo 3"
+    assert version.played_label(Version(t=-4, capo=1), None, None) == "Transposed -4, capo 1"
+    for v, key, capo in ((Version(mode="dorian", capo=0), Key(7, "ionian"), 0), (Version(t=2), Key(0, "ionian"), 3),
+                         (Version(t=2, capo=0), None, 3), (Version(), None, 3)):
+        label = version_label(v, key, capo)
+        assert version.played_label(v, key, capo) == label.removesuffix(", capo 0"), label
+
+
 # --- the viewer and Python agree -----------------------------------------------------------------
 
 # Every chord's label, in turn, and the address the viewer keeps once it read it (its save()).

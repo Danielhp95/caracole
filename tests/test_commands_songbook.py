@@ -534,11 +534,12 @@ def test_cli_songbook_set_and_clear(setup):
     out = run(setup, "set", "Gig", "soda stereo musica ligera", "--key", "g", "--mode", "Dorian")
     assert out.exit_code == 0, out.output
     lines = out.output.splitlines()
-    assert "Soda Stereo - De Música Ligera: key G, dorian, capo 0" in lines  # the capo it plays at now, kept
-    assert "In the songbook: G Dorian, capo 0" in lines  # where it plays, as its set list says
+    assert "Soda Stereo - De Música Ligera: key G, dorian, no capo" in lines  # the capo it plays at now, kept
+    assert "In the songbook: G Dorian" in lines  # where it plays, as its set list says: no capo, none said
     assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 0)
     out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--capo", "2")  # the other parts stay
     assert out.exit_code == 0, out.output
+    assert "Soda Stereo - De Música Ligera: key G, dorian, capo 2" in out.output.splitlines()
     assert "In the songbook: G Dorian, capo 2" in out.output.splitlines()  # the same shapes, up two frets
     assert books(setup)[0].songs[0].setting == Setting("G", "dorian", 2)
     assert books(setup)[0].songs[1].setting is None
@@ -550,7 +551,7 @@ def test_cli_songbook_set_and_clear(setup):
         assert run(setup, *args).exit_code == 2, args
     out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--clear")
     assert out.exit_code == 0, out.output
-    assert "In the songbook: A Minor, capo 0" in out.output.splitlines()  # its own version: as written
+    assert "In the songbook: A Minor" in out.output.splitlines()  # its own version: as written
     assert books(setup)[0].songs[0].setting is None
     out = run(setup, "set", "Gig", "Muse - Hysteria", "--key", "E")
     assert out.exit_code == 0, out.output
@@ -577,11 +578,14 @@ def test_show_says_where_the_songbook_plays_a_song_with_a_setting_or_a_version_o
     shown = run(setup, "show", "Gig")
     assert shown.exit_code == 0, shown.output
     assert shown.output.splitlines()[1:5] == [
-        "  1. Soda Stereo - De Música Ligera (A Dorian, capo 0)",  # a mode alone, its key and capo the sheet's
-        "  2. 宋冬野 - 斑马，斑马 (B Minor, capo 0)",  # its own version: [transpose] 2
+        "  1. Soda Stereo - De Música Ligera (A Dorian)",  # a mode alone, its key and capo (none) the sheet's
+        "  2. 宋冬野 - 斑马，斑马 (B Minor)",  # its own version: [transpose] 2
         "  3. Placeholder Band - Keyless Song (key unknown, as written)",
         "  4. Muse - Hysteria (missing: no sheet yet)",
     ]
+    assert run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--capo", "2").exit_code == 0
+    shown = run(setup, "show", "Gig")
+    assert shown.output.splitlines()[1] == "  1. Soda Stereo - De Música Ligera (G Dorian, capo 2)"  # a capo, said
 
 
 @pytest.mark.slow
@@ -597,5 +601,5 @@ def test_show_says_where_a_songs_own_key_plays_it_and_when_its_sheet_has_none(se
     assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera", "Placeholder Band - Keyless Song").exit_code == 0
     shown = run(setup, "show", "Gig")
     assert shown.exit_code == 0, shown.output
-    assert shown.output.splitlines()[1:3] == ["  1. Soda Stereo - De Música Ligera (G Dorian, capo 0)",
+    assert shown.output.splitlines()[1:3] == ["  1. Soda Stereo - De Música Ligera (G Dorian)",
                                               "  2. Placeholder Band - Keyless Song (key unknown, as written)"]

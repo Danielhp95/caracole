@@ -340,8 +340,10 @@ def _say_found(texts: list[str], found: list[Found]) -> None:
 
 
 def _setting_line(setting) -> str:
-    parts = [p for p in (f"key {setting.key}" if setting.key else "", setting.mode or "",
-                         f"capo {setting.capo}" if setting.capo is not None else "") if p]
+    """The setting as songbooks.toml holds it, in words: "key G, dorian, capo 2"; "no capo" for a capo of 0, a
+    setting's choice, as its menu names it (where it plays then says nothing of a capo: ``songbook.plays_in``)."""
+    capo = "" if setting.capo is None else "no capo" if setting.capo == 0 else f"capo {setting.capo}"
+    parts = [p for p in (f"key {setting.key}" if setting.key else "", setting.mode or "", capo) if p]
     return ", ".join(parts) or "the sheet's own setting"
 
 

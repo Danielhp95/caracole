@@ -2042,11 +2042,13 @@ changed 2026-10-20`). Open one and it shows as a set list, beside the list
 from 900 pixels wide, in its place on a phone (**‹ Songbooks** goes back):
 each song a line, as dense as the library's with a mouse, with its place, its
 title (which opens its sheet), its artist and where the songbook plays it, its
-chip: "G Dorian, capo 0" for a song with a setting of its own there, its own
-version's key ("A Minor, capo 0") for one without, or why it has no sheet ("No
-sheet yet", "Not in the library"). Its files come first: **PDF**, **Phone
-page** (`songbook.html`) and **ChordPro**, each opened in the same tab. The
-address remembers the songbook open (`#tab=songbooks&book=Campfire`).
+chip: "G Dorian" for a song with a setting of its own there, its own
+version's key ("A Minor") for one without, or why it has no sheet ("No
+sheet yet", "Not in the library"). A capo is named only when the song is
+played with one ("E Minor, capo 2"), never as "capo 0". Its files come first:
+**PDF**, **Phone page** (`songbook.html`) and **ChordPro**, each opened in the
+same tab. The address remembers the songbook open
+(`#tab=songbooks&book=Campfire`).
 **+ New songbook** turns Select on, in the library, its bar ready for the name:
 tick its songs and make it.
 
@@ -3263,7 +3265,7 @@ is no progression exits with status 2.
   - a song's **grip** (⠿) drags it to its place; on the keyboard, ↑ and ↓ on
     the grip move it, and the move is sent a moment after the last key, so
     ↑ ↑ ↑ is one `caracole songbook move`;
-  - its **chip** ("A Minor, capo 0") opens its key, mode and capo there:
+  - its **chip** ("A Minor") opens its key, mode and capo there:
     **Play it here** runs `caracole songbook set NAME SONG --key K --mode M
     --capo N`, the capo always sent with the key and the mode, so a sheet that
     takes the song's place later still sounds in that key; **Its own version**
@@ -3542,7 +3544,8 @@ song's chip sets where it plays.
   marked (`(missing: no sheet yet)`, `(missing: not in the library)`), and
   where its files are. A song with a setting in the songbook, or a version of
   its own, says where the songbook plays it, as its set list does:
-  `3. Soda Stereo - De Música Ligera (G Dorian, capo 0)`, or
+  `3. Soda Stereo - De Música Ligera (G Dorian)`, its capo only when it
+  plays with one (`(E Minor, capo 2)`), or
   `(key unknown, as written)` for a key or a mode its sheet can't take, the
   key of its own version's too.
 - **`caracole songbook add NAME "ARTIST - TITLE"...`** adds songs at the end;
@@ -3556,8 +3559,9 @@ song's chip sets where it plays.
   (`G`, `F#`, `Bb`), its mode (`ionian`, `dorian`, ... `locrian`) and its capo
   (0 to 11). The parts you give change; the others stay. A key or a mode
   given with no capo keeps the capo the song plays at now, and the setting
-  names it. It says where the songbook plays the song now:
-  `In the songbook: G Dorian, capo 0`. `--clear` takes the
+  names it (`key G, dorian, no capo`). It says where the songbook plays the
+  song now, as its set list does: `In the songbook: G Dorian`, or
+  `In the songbook: G Dorian, capo 2` with a capo. `--clear` takes the
   whole setting off, and the song is in its own version again. In songbooks.toml a
   song with a setting is a table in place of the string, and one without stays
   a string: `songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música

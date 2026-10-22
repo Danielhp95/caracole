@@ -17,7 +17,7 @@ Every text is data, which the script puts in the page with ``textContent``.
   forms name it by), its identity ``key`` (its song's, else its entry's: what the page knows a search's
   result in it by), its ``title`` and ``artist``, its song's ``id`` (None for one not in the library),
   ``missing`` (why it has no sheet in it, else None), ``get`` (a lookup could get its sheet now:
-  ``songbook.songs_to_get``), ``plays`` (where the songbook plays it, in words, "G Dorian, capo 0"; None
+  ``songbook.songs_to_get``), ``plays`` (where the songbook plays it, in words, "G Dorian", "E Minor, capo 2"; None
   without a sheet), ``own`` (no setting of its own here: it follows the song's own version), ``at`` (where
   it plays, for the setting's menus: the key's ``tonic`` as a pitch class, its ``mode``, both None for a
   sheet with no key caracole can read, and its ``capo``; None without a sheet) and ``href`` (its sheet, as
