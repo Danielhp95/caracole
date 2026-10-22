@@ -88,15 +88,23 @@
     if (current) book.y = Math.round(window.scrollY);
     keep();
   };
-  // The rail of necks is the screen's choice, not a song's: where there is no storage (caracole serve's sandbox),
-  // the address the viewer keeps it in ("necks=0") goes on with every step, to the next song or the contents.
-  const carryNecks = (from) => {
+  // The rail of necks and the pinyin are the screen's choices, not a song's: where there is no storage (caracole
+  // serve's sandbox), the address the viewer keeps them in ("necks=0", "py=1") goes on with every step, to the
+  // next song or the contents.
+  const SCREEN = [["necks", "0"], ["py", "1"]];
+  const carryScreen = (from) => {
     const at = String(from || "").indexOf("#");
-    const hidden = at >= 0 && new URLSearchParams(from.slice(at + 1)).get("necks") === "0";
+    const was = new URLSearchParams(at >= 0 ? from.slice(at + 1) : "");
     const to = new URLSearchParams(location.hash.slice(1));
-    if ((to.get("necks") === "0") === hidden) return;
-    if (hidden) to.set("necks", "0");
-    else to.delete("necks");
+    let changed = false;
+    for (const [name, value] of SCREEN) {
+      const kept = was.get(name) === value;
+      if ((to.get(name) === value) === kept) continue;
+      if (kept) to.set(name, value);
+      else to.delete(name);
+      changed = true;
+    }
+    if (!changed) return;
     try {
       history.replaceState(null, "", "#" + to.toString());
     } catch (err) { /* an address the page can't change */ }
@@ -104,7 +112,7 @@
   // Each step loads the page again, so the viewer starts afresh on the song it shows.
   window.addEventListener("hashchange", (e) => {
     save();
-    carryNecks(e.oldURL);
+    carryScreen(e.oldURL);
     location.reload();
   });
   window.addEventListener("pagehide", save);

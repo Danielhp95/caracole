@@ -174,9 +174,16 @@ Rules a change there keeps (the Invariants below are the others):
   (test_viewer_versions.py); the songbook has none. The rail of necks (from 1200 px) is sized by
   viewer.css's `--nk` (1.15: the owner's 15 % over the first 300 px), its width, padding, text and
   targets alike; whether it shows (`state.necks`) is the one setting kept for every page at once
-  (localStorage `caracole-viewer-necks`, and `necks=0` in the address, which book.js's `carryNecks`
+  (localStorage `caracole-viewer-necks`, and `necks=0` in the address, which book.js's `carryScreen`
   takes on to a songbook's next address, for its sandbox with no storage), with its Hide, the bar's
-  button and the settings' row in step (test_viewer_necks.py).
+  button and the settings' row in step (test_viewer_necks.py). So is the settings' Pinyin (`state.py`,
+  off at first: localStorage `caracole-viewer-pinyin`, `py=1` in the address, which `carryScreen` takes
+  on too), each Chinese character's reading over it, between its chord and it: pinyin.py reads them at
+  render time (pypinyin in context, a Traditional sheet in Simplified characters through normalize.py's
+  table, its 著 as 着 but in a word Simplified writes with 著) into the data's `pinyin`, a reading per
+  character of each `section.sec > p.l`, and viewer.js draws each as a `<ruby>`, its row of the line
+  kept by every column, so a chord stays over its character's column, on or off, at 390 px too
+  (test_viewer_pinyin.py).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it
@@ -385,6 +392,8 @@ Traps:
   music.py imports mutagen in `read_audio` alone, and lyrics.py (`expected_seconds`) in `_matches`:
   inbox.py, which the pages import, scores names with its `Names`
   (`test_music.py::test_the_pages_load_no_tag_reader`, `::test_the_inbox_loads_no_http_client`).
+  viewer/pinyin.py imports pypinyin in `_read` alone: a page of a sheet with no Chinese loads none
+  (`test_viewer_pinyin.py::test_pypinyin_is_loaded_only_for_a_sheet_with_chinese`).
 - Branch from `caracole-v1`, the default branch; `main` takes it by merge, when the owner asks.
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:

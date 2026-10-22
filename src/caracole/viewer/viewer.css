@@ -170,6 +170,19 @@ html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
    a column only where two chords would touch. */
 .tight .s { position: relative; padding-top: 1.25em; }
 .tight .s > .c, .tight .s > .m { position: absolute; top: 0; left: 0; padding-right: 0; }
+/* Pinyin (viewer.js, the settings' Pinyin): each Chinese character's reading over it, between its chord and it,
+   muted and smaller. A character and its reading are one column, as wide as the wider of the two, each centred
+   on the other, so a chord at its column's left stays over its character. In a sung line (.l.py) every column
+   keeps the readings' room whether it has a reading or not (.84em: the reading's .6em at a line height of 1.4),
+   and a reading takes that room rather than more, so the chords of a row stay at one height. A line of text
+   grows by its readings where it has some. Printed, as on the screen. */
+.sheet ruby.py { display: inline-flex; flex-direction: column-reverse; align-items: center; vertical-align: bottom;
+  white-space: nowrap; }
+.sheet ruby.py > rt { display: block; padding: 0 .2em; color: var(--muted); font-size: .6em; font-weight: 400;
+  line-height: 1.4; text-align: center; -webkit-user-select: none; user-select: none; }
+.l.py > .w { padding-top: calc(1.25em + .84em); }
+.l.py > .s > .y { padding-top: .84em; }
+.l.py > .w > ruby.py, .l.py > .s > .y > ruby.py { margin-top: -.84em; }
 .l.chords { line-height: 1.6; }
 .l.chords .c { font-size: .92em; margin-right: .55em; }
 .m { color: var(--muted); font-style: italic; font-weight: 400; }
@@ -464,6 +477,7 @@ a.ver-main .ver-name { color: var(--accent); }
   body { background: #fff; color: #000; }
   .page { max-width: none; padding: 0; }
   .c { color: #b4441e; }
+  .sheet ruby.py > rt { color: #645f57; }
   .tab { background: none; padding: 0; }
 }
 

@@ -6,6 +6,7 @@
   (numerals, relations, progressions, scales); voicings.py holds the fingerings (chords-db, MIT);
 - version.py applies a version of the page (its key, capo, mode, shapes and swaps) to the
   sheet in Python, for a PDF of what the page shows;
+- pinyin.py reads each Chinese character's pinyin in context, for the page's Pinyin;
 - viewer.js and viewer.css are the page's script and stylesheet, inlined; strum.js, inlined before
   viewer.js, strums the shape a chord's card shows in Web Audio (``window.caracoleSound``: a chord,
   or a progression at a tempo), only on a tap;

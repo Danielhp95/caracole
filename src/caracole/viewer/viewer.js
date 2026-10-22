@@ -45,9 +45,9 @@
   // through a transposition, as on a guitar: the shapes move instead.
   // nm: the chord names as numerals beside them ("both") or in their place ("numerals"), null for the
   // chords alone; roles: the numerals in their families' colours; necks: the rail of necks shown, on a screen
-  // wide enough for it.
+  // wide enough for it; py: each Chinese character's reading over it (pinyin), on a sheet with Chinese.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
-    speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true };
+    speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true, py: false };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -144,6 +144,18 @@
       localStorage.setItem(NECKS, state.necks ? "shown" : "hidden");
     } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
   };
+  // So is pinyin over the Chinese (the settings' Pinyin): the reader's, kept once for every page, and in the
+  // address while it is on (py=1, as it starts off).
+  const PINYIN = "caracole-viewer-pinyin";
+  try {
+    if (localStorage.getItem(PINYIN) === "shown") state.py = true;
+  } catch (err) { /* no storage: off, unless the address says otherwise */ }
+  if (hash.get("py") === "1") state.py = true;
+  const keepPinyin = () => {
+    try {
+      localStorage.setItem(PINYIN, state.py ? "shown" : "hidden");
+    } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
+  };
   adopt(hash);
   if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
   if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
@@ -173,6 +185,7 @@
       keep("speed", state.speed, state.speed !== SPEED.start);
       keep("vol", state.vol, state.vol !== VOL);
       keep("necks", "0", !state.necks);
+      keep("py", "1", state.py);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -191,7 +204,7 @@
     const version = new URLSearchParams(location.hash.slice(1));
     if (location.protocol === "file:") {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol", "necks"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -738,6 +751,7 @@
     drawSpeed();
     drawStrip();
     drawNecks();  // before layout(), which measures the song beside the rail
+    drawPinyin();  // and the words with their readings
     layout();  // fit() too
     drawHeadings();
     if (!harmony.hidden) drawHarmony();
@@ -1074,6 +1088,82 @@
       if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
       layout();
       place();
+    });
+  }
+
+  // --- pinyin: each Chinese character's reading over it ------------------------------------------------
+  // data.pinyin (page.py, pinyin.py: read in context at render time): for each line of the song's sections, in
+  // the page's order, each of its characters' reading, "" for a letter, a space or punctuation, or null for a
+  // line with no Chinese; none for a sheet with none, which has no Pinyin row. Shown (state.py: the settings'
+  // Pinyin), each character with a reading is a ruby, the reading over it, between its chord and it
+  // (viewer.css: a chord stays over its character's column); hidden, the words are again as the page wrote them.
+  const pyLines = Array.isArray(data.pinyin) ? data.pinyin : [];
+  const pyCan = pyLines.some((line) => Array.isArray(line));
+  const pyChip = $("pinyin-chip");
+  const pyWritten = new Map();  // each element drawn with readings: its text as the page wrote it
+  let pyDrawn = false;
+  const ruby = (character, reading) => {
+    const out = document.createElement("ruby");
+    out.className = "py";
+    out.appendChild(document.createTextNode(character));
+    const rt = out.appendChild(document.createElement("rt"));
+    rt.textContent = reading;
+    rt.lang = "zh-Latn-pinyin";
+    rt.setAttribute("aria-hidden", "true");  // a screen reader reads the characters themselves
+    return out;
+  };
+  // One line's words (a sung line's columns, or a line of text whole) with their characters' readings.
+  const withReadings = (line, readings) => {
+    const words = line.querySelector(".y, .w") ? Array.from(line.querySelectorAll(".y, .w")) : [line];
+    const texts = words.map((word) => Array.from(word.textContent));
+    if (texts.reduce((n, chars) => n + chars.length, 0) !== readings.length) return;  // not this page's lines
+    let at = 0;
+    words.forEach((word, k) => {
+      const parts = [];
+      let plain = "";
+      for (const character of texts[k]) {
+        const reading = readings[at++];
+        if (typeof reading === "string" && reading) {
+          if (plain) parts.push(document.createTextNode(plain));
+          plain = "";
+          parts.push(ruby(character, reading));
+        } else {
+          plain += character;
+        }
+      }
+      if (plain) parts.push(document.createTextNode(plain));
+      if (!parts.some((part) => part.nodeName === "RUBY")) return;
+      pyWritten.set(word, word.textContent);
+      word.textContent = "";
+      for (const part of parts) word.appendChild(part);
+    });
+    line.classList.add("py");  // its columns keep the readings' room (viewer.css)
+  };
+  function drawPinyin() {
+    if (pyChip) {
+      $("pinyin-row").hidden = !pyCan;
+      pyChip.setAttribute("aria-pressed", state.py ? "true" : "false");
+      pyChip.textContent = state.py ? "Hide" : "Show";
+    }
+    const on = pyCan && state.py;
+    if (on === pyDrawn) return;
+    pyDrawn = on;
+    if (on) {
+      sheetEl.querySelectorAll(":scope > section.sec > p.l").forEach((line, n) => {
+        if (Array.isArray(pyLines[n])) withReadings(line, pyLines[n]);
+      });
+      return;
+    }
+    pyWritten.forEach((text, word) => { word.textContent = text; });
+    pyWritten.clear();
+    for (const line of sheetEl.querySelectorAll(".l.py")) line.classList.remove("py");
+  }
+  if (pyChip) {
+    pyChip.addEventListener("click", () => {
+      state.py = !state.py;
+      keepPinyin();
+      render();
+      place();  // an open card goes with its chord
     });
   }
 
@@ -1748,6 +1838,7 @@
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
     if (!state.necks) params.set("necks", "0");  // the rail hidden there too
+    if (state.py) params.set("py", "1");  // and the pinyin shown
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };
@@ -1956,10 +2047,11 @@
   });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
-      necks: true });
+      necks: true, py: false });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
     adopt(start);  // the song's own version, if it has one
     keepNecks();  // the rail of necks back, on every sheet
+    keepPinyin();  // and the pinyin off
     render();
     place();
   });
