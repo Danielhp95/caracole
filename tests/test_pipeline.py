@@ -869,6 +869,40 @@ def test_fetch_summary_counts_settled_sheets(conn, cfg, monkeypatch):
                                                          ["ug"])
 
 
+def shared_folder(conn):
+    """What keep_file raises for the second of two songs whose names make one folder."""
+    from conftest import add_song
+
+    from caracole.library import SharedFolder
+
+    return SharedFolder(add_song(conn, "Rodrigo", "Concierto, part two"), add_song(conn, "Rodrigo", "Concierto, part one"),
+                        "sheet.txt")
+
+
+SHARED = ("Rodrigo - Concierto, part two's sheet.txt isn't kept: its folder is Rodrigo - Concierto, part one's too "
+          "(their names make one folder), whose sheet.txt is there. Nothing is written over it, and the song waits "
+          "until the folder is its own: remove one of the two (caracole remove), and ask for it again under a "
+          "shorter title.")
+
+
+def test_the_fetch_and_lacuerda_steps_say_which_song_waits_for_a_folder_another_songs_name_makes(
+        conn, cfg, monkeypatch):
+    import caracole.lacuerda_fetch as lf
+    import caracole.ug.fetch as fetch
+    from caracole.overrides import Overrides
+    from caracole.pipeline import StepContext, _fetch
+
+    shared = shared_folder(conn)
+    monkeypatch.setattr(fetch, "songs_to_fetch", lambda *a, **k: [])
+    monkeypatch.setattr(fetch, "rescore_kept_sheets", lambda *a, **k: 0)
+    monkeypatch.setattr(fetch, "fetch_songs", lambda *a, **k: fetch.FetchStats(songs_done=1, shared=[shared]))
+    ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
+                      report=RunReport(run_id="r", started="r"))
+    assert [p.text for p in _fetch(ctx).problems] == [SHARED]
+    result, _ = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(tried=1, shared=[shared]), li.IndexStats())
+    assert [p.text for p in result.problems] == [SHARED]
+
+
 def test_the_default_steps_say_in_the_summary_what_they_did_and_leave_out_the_zeros(conn, cfg):
     from conftest import add_song
 

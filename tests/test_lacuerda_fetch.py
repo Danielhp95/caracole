@@ -22,7 +22,7 @@ from conftest import add_song
 from caracole.config import ProviderPolicy, RankPolicy
 from caracole.http import PoliteClient, ProviderBlocked
 from caracole.lacuerda_fetch import LaCuerdaStats, lacuerda_sheets
-from caracole.library import keep_file, kept_files
+from caracole.library import keep_file, kept_files, song_dir
 from caracole.lyrics import Lyrics
 from caracole.overrides import Overrides
 from caracole.songs import get_song, refresh_status, update_song
@@ -391,6 +391,34 @@ def keep_ug_sheet(conn, tmp_path, song, value, *, lib=None):
     set_picks(conn, song.id, ("chords",), [vid])
     refresh_status(conn, song.id, ignored=False)
     return vid
+
+
+LIVE = ("Persiana Americana, en vivo en el estadio de River Plate para la gira de despedida del grupo en 2007, con "
+        "orquesta y coros, toma")
+
+
+def test_a_song_whose_sheet_goes_where_another_songs_is_waits_and_the_others_are_kept(conn, tmp_path):
+    # Two takes whose titles agree for longer than a folder's name keeps: one folder, where the first keeps its sheet.
+    take_one = spanish_song(conn, title=f"{LIVE} uno", added_at="2026-10-03T00:00:00Z")
+    keep_ug_sheet(conn, tmp_path, take_one, 1.0)
+    take_two = spanish_song(conn, title=f"{LIVE} dos", added_at="2026-10-02T00:00:00Z")
+    dml = spanish_song(conn, added_at="2026-10-01T00:00:00Z")
+    folder = song_dir(tmp_path / "lib", take_one)
+    assert take_one.key != take_two.key and song_dir(tmp_path / "lib", take_two) == folder
+    before = {p.name: p.read_bytes() for p in folder.iterdir()}
+    page = artist_page("Soda Stereo", "soda_stereo", ("persiana_dos", f"{LIVE} dos", "R-1"),
+                       ("de_musica_ligera", "De Música Ligera", "RHRTTTDTB-314865972"))
+    site = FakeLaCuerda({SODA: (200, page), f"{BASE}/soda_stereo/persiana_dos.shtml": (200, fixture("version.html")),
+                         DML_3: (200, fixture("version.html"))})
+
+    stats = run(site, conn, tmp_path)
+
+    assert (stats.tried, stats.kept, stats.errors) == (2, 1, 0)
+    [shared] = stats.shared
+    assert (shared.song.id, shared.other.id, shared.name) == (take_two.id, take_one.id, "sheet.json")
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == before  # nothing written over
+    assert kept_files(conn, take_two.id) == [] and get_song(conn, take_two.id).lacuerda_checked_at is None
+    assert set(files_of(conn, dml)) == {"sheet.txt", "sheet.json"}
 
 
 def assert_not_tried(site, conn, tmp_path, song):

@@ -736,6 +736,37 @@ def test_a_song_an_error_left_is_named_with_its_error(conn, tmp_path):
     assert (failed.id, error.provider, error.status) == (song.id, "ug", 500)
 
 
+RODRIGO = ("Concierto de Aranjuez para guitarra y orquesta, segundo movimiento, arreglo para guitarra sola de Narciso "
+           "Yepes, grabado en Madrid")
+
+
+def rodrigo(conn, ug, tab_id, part):
+    """A part of a long work with its sheet on UG: the parts' titles agree for longer than a folder's name keeps."""
+    slug = f"concierto-de-aranjuez-{part}"
+    song = accepted(conn, "Joaquín Rodrigo", f"{RODRIGO}, part {part}", "joaquin-rodrigo", slug)
+    index(conn, (tab_id, "joaquin-rodrigo", slug, "chords"))
+    ug.tab(version_dict(tab_id, song=f"Concierto de Aranjuez part {part}", artist="Joaquín Rodrigo",
+                        tab_url=slugged(tab_id, artist="joaquin-rodrigo", song=slug)),
+           content=sheet(f"sheet of part {part}", LINES))
+    return song
+
+
+def test_a_song_whose_sheet_goes_where_another_songs_is_waits_and_the_others_are_fetched(conn, tmp_path):
+    ug = FakeUG()
+    one, two = rodrigo(conn, ug, 501, "one"), rodrigo(conn, ug, 502, "two")
+    assert one.key != two.key and song_dir(tmp_path / "lib", one) == song_dir(tmp_path / "lib", two)
+    other = signos(conn, ug)
+
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [one, two, other])
+
+    assert (stats.sheets_done, stats.songs_done, stats.songs_failed, stats.failures) == (2, 2, 0, [])
+    [shared] = stats.shared
+    assert (shared.song.id, shared.other.id, shared.name) == (two.id, one.id, "sheet.txt")
+    assert "sheet of part one" in read(tmp_path, one, "sheet.txt")  # never written over
+    assert kept_files(conn, two.id) == [] and get_song(conn, two.id).ug_dirty  # it waits, as after an error
+    assert get_song(conn, other.id).status == "found"
+
+
 def test_block_is_reraised_and_leaves_the_song_dirty(conn, tmp_path):
     song = accepted(conn)
     index(conn, (101, "soda-stereo", "persiana-americana", "chords"))

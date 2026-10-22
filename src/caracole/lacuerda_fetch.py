@@ -52,7 +52,7 @@ import logging
 import re
 import sqlite3
 from collections.abc import Callable, Collection, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -85,7 +85,7 @@ from caracole.lacuerda import (
     version_url,
 )
 from caracole.lacuerda_index import artist_slugs, complete_at, store_artist_page, store_songs
-from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, write_info
+from caracole.library import SharedFolder, drop_file, holds, keep_file, kept_already, kept_files, write_info
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title
 from caracole.overrides import LaCuerdaPick, Overrides, OverridesError
@@ -117,10 +117,13 @@ _SLUG = re.compile(r"[a-z0-9_]+")  # an artist's name written as LaCuerda's slug
 @dataclass
 class LaCuerdaStats(PassStats):
     """What one ``lacuerda_sheets`` pass did: ``tried`` (misses and errors too), ``errors`` and
-    ``failures`` as every pass counts them (provider_pass.py), the sheets kept and the misses."""
+    ``failures`` as every pass counts them (provider_pass.py), the sheets kept and the misses, and
+    ``shared``: the songs that wait, as their sheet would go where another song, whose name makes
+    the same folder, keeps one (``library.SharedFolder``)."""
 
     kept: int = 0
     missing: int = 0
+    shared: list[SharedFolder] = field(default_factory=list, compare=False, repr=False)
 
 
 def lacuerda_sheets(
@@ -155,7 +158,8 @@ def lacuerda_sheets(
     ``BudgetExhausted`` ends the pass (``budget_exhausted``), and so does a client
     that gives up on LaCuerda for this run (``ProviderUnavailable``). Any other
     ``ProviderError``, parse errors included, counts in ``errors`` and leaves the
-    song for the next run.
+    song for the next run. So does a sheet that would go where another song keeps
+    one (``shared``): nothing is written over it.
     """
     stats = LaCuerdaStats()
     stamp = stamps.stamp(now)
@@ -199,8 +203,13 @@ def lacuerda_sheets(
         if sheet is None:
             stats.missing += 1
             update_song(conn, song.id, lacuerda_checked_at=stamp)
-        elif _record(conn, library_dir, rank, song, sheet, stamp, picked=pick is not None):
-            stats.kept += 1
+            continue
+        try:
+            if _record(conn, library_dir, rank, song, sheet, stamp, picked=pick is not None):
+                stats.kept += 1
+        except SharedFolder as e:  # nothing written over the other song's sheet: this one waits for the next run
+            log.info("%s", e)  # the run's summary and caracole lacuerda say it
+            stats.shared.append(e)
     return stats
 
 

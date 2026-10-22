@@ -72,7 +72,16 @@ from caracole.http import (
     robots_disallows,
     stale,
 )
-from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, read_json, write_info
+from caracole.library import (
+    SharedFolder,
+    drop_file,
+    holds,
+    keep_file,
+    kept_already,
+    kept_files,
+    read_json,
+    write_info,
+)
 from caracole.lyrics import song_lyrics
 from caracole.match import ARTIST_PAGE, REVIEW_ONLY_STEPS
 from caracole.normalize import clean_title, compact, listing_forms, name_forms, slug_key, without_featuring
@@ -206,8 +215,8 @@ class SongFetchOutcome:
 
 @dataclass
 class FetchStats:
-    """A fetch run: sheets settled, songs finished, songs skipped after a provider error, and
-    whether the budget ran out."""
+    """A fetch run: sheets settled, songs finished, songs skipped after a provider error or for a
+    folder another song's name makes too, and whether the budget ran out."""
 
     songs_done: int = 0
     songs_failed: int = 0
@@ -215,6 +224,8 @@ class FetchStats:
     sheets_done: int = 0
     # The songs counted in songs_failed, each with its error, for the run's summary.
     failures: list[tuple[Song, ProviderError]] = field(default_factory=list, compare=False, repr=False)
+    # The songs that wait, as a file of theirs goes where another song keeps one (library.SharedFolder).
+    shared: list[SharedFolder] = field(default_factory=list, compare=False, repr=False)
 
 
 @dataclass
@@ -1855,7 +1866,9 @@ def fetch_songs(
 
     A block is re-raised (the caller cools the provider down). Any other
     provider error, a page that can't be parsed included, skips that song: it
-    stays dirty and is never marked not found.
+    stays dirty and is never marked not found. So does a file of the song's
+    that would go where another song, whose name makes the same folder, keeps
+    one (``shared``): nothing is written over it.
 
     Once the client hands caracole's lock to a lookup in one of its pauses,
     each song is read again before its turn (``_Handoffs``).
@@ -1894,7 +1907,8 @@ def _fetch_turn(
     """One song's turn in one pass of ``fetch_songs``: the song and what it did, or None when there is
     nothing to count (a handoff left it nothing to do, the budget ran out, or UG failed for it).
 
-    A block is re-raised; any other provider error skips the song, which stays dirty."""
+    A block is re-raised; any other provider error skips the song, which stays dirty, and so does a file
+    of the song's that would go where another song keeps one (``library.SharedFolder``)."""
     if guitar:  # as the sheet pass left it
         try:
             listed = get_song(ctx.conn, listed.id)
@@ -1915,6 +1929,10 @@ def _fetch_turn(
         log.debug("UG fetch failed for %s: %s", song.display, e)
         stats.songs_failed += 1
         stats.failures.append((song, e))
+        return None
+    except SharedFolder as e:  # nothing written over the other song's file: this one waits, as after an error
+        log.info("%s", e)  # the run's summary and caracole fetch say it
+        stats.shared.append(e)
         return None
     handed.after(song, before)
     return song, outcome

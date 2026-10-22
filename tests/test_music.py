@@ -98,6 +98,25 @@ def test_missing_file_clears_audio_path(conn, tmp_path):
     assert get_song(conn, s.id).audio_path is None
 
 
+def test_a_file_gone_while_the_scan_reads_tags_is_skipped(conn, tmp_path, monkeypatch):
+    import mutagen
+
+    s = add_song(conn, "Radiohead", "Creep", duration_ms=None)
+    make_wav(tmp_path / "music" / "a.wav", artist="Radiohead", title="Creep")
+    gone = make_wav(tmp_path / "music" / "b.wav", artist="Blur", title="Song 2")
+    real = mutagen.File
+
+    def a_synced_device_deletes_it_meanwhile(path, *args, **kwargs):
+        if Path(path) == gone:
+            gone.unlink()  # after the scan listed the folder
+        return real(path, *args, **kwargs)
+
+    monkeypatch.setattr(mutagen, "File", a_synced_device_deletes_it_meanwhile)
+    stats = scan_music(conn, tmp_path / "music")
+    assert (stats.seen, stats.matched, stats.unmatched) == (1, 1, [])
+    assert get_song(conn, s.id).audio_path == str(tmp_path / "music" / "a.wav")
+
+
 def test_missing_music_dir_is_fine(conn, tmp_path):
     stats = scan_music(conn, tmp_path / "nope")
     assert (stats.seen, stats.matched) == (0, 0)

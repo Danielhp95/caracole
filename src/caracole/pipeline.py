@@ -60,6 +60,7 @@ from caracole.report import (
     plural,
     provider_name,
     sentence,
+    shared_folder,
     spotify_auth,
     spotify_setup,
     step_error,
@@ -311,7 +312,7 @@ def _fetch(ctx: StepContext) -> StepResult:
     s = fetch_songs(fctx, songs_to_fetch(ctx.conn, ctx.overrides, ctx.now))
     scored = f", {plural(rescored, 'kept sheet')} rescored" if rescored else ""
     sheets = f"{plural(s.sheets_done, 'sheet')} settled, " if s.sheets_done else ""
-    return _provider_result(
+    result = _provider_result(
         ctx, "ug", errors=s.songs_failed, error=f"{plural(s.songs_failed, 'song')} failed this run",
         spent=s.budget_exhausted,
         status=f"{sheets}{plural(s.songs_done, 'song')} done, {s.songs_failed} failed{scored}",
@@ -320,6 +321,8 @@ def _fetch(ctx: StepContext) -> StepResult:
                       _n(rescored, "kept sheet", "rescored")),
         retry="{songs} will be looked for on Ultimate Guitar again on the next run",
     )
+    result.problems += [shared_folder(e) for e in s.shared]
+    return result
 
 
 def _lacuerda(ctx: StepContext) -> StepResult:
@@ -352,6 +355,7 @@ def _lacuerda(ctx: StepContext) -> StepResult:
                       _n(pop.read, "popular artist page", "read")),
         retry="{songs} will be looked for on LaCuerda again on the next run",
     )
+    result.problems += [shared_folder(e) for e in s.shared]
     if ix.errors:
         record_error(ctx.conn, "lacuerda", ctx.now, "its artist listings couldn't be read this run")
         result.problems.append(Problem("LaCuerda's artist listings couldn't be read this run; they are asked for "

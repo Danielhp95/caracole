@@ -199,6 +199,21 @@ def test_move_puts_a_song_at_a_position_counted_from_one(tmp_path, position, ord
     assert [s.removeprefix("X - ") for s in find_songbook(load_songbooks(path), "Book").texts] == order
 
 
+def test_a_moved_song_takes_its_comment_and_its_setting_with_it(tmp_path):
+    path = write(tmp_path, '["Campfire"]\nsongs = [\n  # the opener\n  "Oasis - Wonderwall",\n'
+                           '  "Radiohead - Creep", # capo 3, slow\n'
+                           '  { song = "Blur - Song 2", key = "G" },  # loud\n]\n')
+    move_in_songbook(path, "Campfire", "Radiohead - Creep", 1)
+    move_in_songbook(path, "Campfire", "Blur - Song 2", 1)
+    move_in_songbook(path, "Campfire", "Oasis - Wonderwall", 1)
+    assert path.read_text(encoding="utf-8") == (
+        '["Campfire"]\nsongs = [\n  # the opener\n  "Oasis - Wonderwall",\n'
+        '  { song = "Blur - Song 2", key = "G" },  # loud\n'
+        '  "Radiohead - Creep", # capo 3, slow\n]\n')
+    move_in_songbook(path, "Campfire", "Radiohead - Creep", 9)  # last already: nothing is written
+    assert [s.setting for s in load_songbooks(path)[0].songs] == [None, Setting("G"), None]
+
+
 def test_move_refuses_a_song_the_songbook_lacks_and_a_position_below_one(tmp_path):
     path = write(tmp_path, HAND_WRITTEN)
     with pytest.raises(SongbookError, match="isn't in"):

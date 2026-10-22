@@ -229,6 +229,27 @@ def kept_already(
     )
 
 
+class SharedFolder(Exception):
+    """A file ``keep_file`` won't write: another song keeps a file at its place, as two songs whose names
+    make one folder may (titles that agree up to ``MAX_NAME_BYTES``, where a folder's name is cut, or
+    apart only by a character no file name holds). Nothing is written or recorded: the ``other`` song's
+    file stays as it is, and the ``song`` waits for the folder."""
+
+    def __init__(self, song: Song, other: Song, name: str):
+        super().__init__(f"{song.display}'s {name} isn't kept: its folder is {other.display}'s too (their names "
+                         f"make one folder), whose {name} is there")
+        self.song, self.other, self.name = song, other, name
+
+
+def keeper_of(conn: sqlite3.Connection, library_dir: Path, song: Song, name: str) -> Song | None:
+    """The other song that keeps a file where ``name`` goes in the song's folder, if any (``SharedFolder``)."""
+    from caracole.songs import get_song
+
+    rel = (song_dir(library_dir, song) / safe_name(name)).relative_to(library_dir).as_posix()
+    row = conn.execute("SELECT song_id FROM files WHERE path = ? AND song_id != ?", (rel, song.id)).fetchone()
+    return get_song(conn, row[0]) if row is not None else None
+
+
 def keep_file(
     conn: sqlite3.Connection,
     library_dir: Path,
@@ -242,7 +263,9 @@ def keep_file(
     """Write a file into the song's folder and record it; False if identical bytes are kept already.
 
     A file with the same name is replaced. The same content under another name
-    in the same song is a duplicate and isn't written again.
+    in the same song is a duplicate and isn't written again. A file another song
+    keeps at that place (``keeper_of``) is never replaced: SharedFolder, with
+    nothing written.
     """
     sha = hashlib.sha256(data).hexdigest()
     dup = conn.execute(
@@ -250,6 +273,9 @@ def keep_file(
     ).fetchone()
     if dup:
         return False
+    other = keeper_of(conn, library_dir, song, name)
+    if other is not None:
+        raise SharedFolder(song, other, name)
     path = song_dir(library_dir, song) / safe_name(name)
     write_atomic(path, data)
     rel = path.relative_to(library_dir).as_posix()

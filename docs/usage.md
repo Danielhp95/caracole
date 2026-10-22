@@ -1247,8 +1247,10 @@ and cache.
   renders itself. A name UG writes in two scripts meets yours by any of its
   parts, the bracketed original included: the file of 周杰伦's 晴天 may be
   named `Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5`. A file the library
-  already has is removed from the inbox; a file it can't place stays there,
-  and so does a symbolic link, which is never read:
+  already has is removed from the inbox, and one it had and lost (deleted on a
+  device, say), told by its bytes, is put back in its place; a file it can't
+  place stays there, as does one whose place in the song's folder holds another
+  file now, and so does a symbolic link, which is never read:
   `Inbox: 0 filed, 0 duplicates, 0 left, 1 symbolic link refused`. If
   `_inbox` is a link itself, it is refused the same way, and nothing in the
   folder it points at is read, filed or deleted. The nightly run's scan line
@@ -3844,7 +3846,17 @@ yourself costs only downloads, and only for songs that have no auto sheet yet:
 the next run, or `caracole youtube`, downloads their videos again.
 
 Folder names keep their accents and scripts, but never contain a path
-separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
+separator or a character file systems reserve: `AC/DC` becomes `AC-DC`. An
+artist has one folder: a new song by an artist the library has already,
+written in another case alone (`oasis` beside `Oasis`), takes the library's
+spelling, as a phone's file system may not tell two folders apart by case.
+A folder's name keeps 120 bytes at most, so two songs whose titles agree that
+far make one folder, and share it. A file one of them keeps there (a sheet, a
+Guitar Pro file) is never written over by the other's: that song waits, and
+the run's summary, `caracole fetch`, `caracole lacuerda` and a lookup say so
+(`caracole autochords` in its log, before it runs the models), until the
+folder is its own: remove one of the two (`caracole remove`), and ask for it
+again under a shorter title.
 
 **The `.cho` files** are the sheet in ChordPro, a plain-text format that puts
 each chord in brackets before the syllable it falls on (`[Am]Yesterday`).
@@ -3882,7 +3894,8 @@ name: caracole leaves alone the files it doesn't track. A lost
 a Guitar Pro file: a song that has had one, filed from `_inbox/` or
 downloaded from gtptabs.com, gets no other from gtptabs.com, even after you
 delete it. Nor is a score, which caracole never downloads. Put one you lost
-back in the song's folder under its name.
+back in the song's folder under its name, or drop it into `_inbox/` again:
+the next scan puts it back in its place.
 
 Deleting a song's folder yourself doesn't remove the song: caracole writes its
 files again. [`caracole remove`](#caracole-remove) does, and deletes only the

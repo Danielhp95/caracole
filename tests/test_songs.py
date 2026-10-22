@@ -92,6 +92,23 @@ def test_variant_kept_from_source_title(conn):
     assert s.key == "radiohead/creep"
 
 
+def test_a_new_song_takes_the_spelling_of_an_artist_the_library_writes_in_another_case(conn, tmp_path):
+    from caracole.library import song_dir
+    from caracole.normalize import identity_key
+
+    oasis = add_song(conn, "Oasis", "Wonderwall", source="spotify", source_id="t1")  # liked on Spotify
+    typed = add_song(conn, "oasis", "champagne supernova", artists=["oasis", "Noel Gallagher"])  # typed on a phone
+    assert (typed.artist, typed.artists, typed.title) == ("Oasis", ["Oasis", "Noel Gallagher"], "champagne supernova")
+    assert typed.key == identity_key("oasis", "champagne supernova")
+    # One folder for the artist, which a phone's file system, blind to case, can hold.
+    assert song_dir(tmp_path, typed).parent == song_dir(tmp_path, oasis).parent == tmp_path / "Oasis"
+    # A name that differs in more than case is the artist as written; so is one a folder of its own has already.
+    assert add_song(conn, "Oasis Tribute", "Wonderwall").artist == "Oasis Tribute"
+    conn.execute("UPDATE songs SET artist = 'OASIS' WHERE id = ?", (typed.id,))  # a library from before
+    assert add_song(conn, "OASIS", "Live Forever").artist == "OASIS"
+    assert add_song(conn, "oAsis", "Slide Away").artist == "Oasis"  # the oldest song's spelling
+
+
 def test_list_songs_newest_first_and_status_filter(conn):
     add_song(conn, "A", "One", added_at="2026-01-01T00:00:00Z")
     add_song(conn, "B", "Two", added_at="2026-03-01T00:00:00Z")

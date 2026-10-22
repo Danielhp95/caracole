@@ -289,6 +289,27 @@ def test_an_auto_sheet_of_no_chords_keeps_no_key(conn, cfg, tmp_path):
     assert (info["key"], info["key_source"]) == (None, None)
 
 
+ARANJUEZ = ("Concierto de Aranjuez para guitarra y orquesta, segundo movimiento, arreglo para guitarra sola de "
+            "Narciso Yepes, grabado en Madrid")
+
+
+def test_a_song_whose_auto_sheet_goes_where_another_songs_is_waits_without_running_the_models(
+        conn, cfg, tmp_path, caplog):
+    # Two parts whose titles agree for longer than a folder's name keeps: one folder, where the first keeps its sheet.
+    one = with_audio(conn, tmp_path, add_song(conn, "Joaquín Rodrigo", f"{ARANJUEZ}, part one",
+                                              added_at="2026-10-02T00:00:00Z"))
+    two = with_audio(conn, tmp_path, add_song(conn, "Joaquín Rodrigo", f"{ARANJUEZ}, part two"))
+    assert one.key != two.key and song_dir(cfg.library_dir, one) == song_dir(cfg.library_dir, two)
+    rec = FakeRecognizer()
+    with caplog.at_level(logging.WARNING, logger="caracole.autochords.run"):
+        stats = run(conn, cfg, rec)
+    assert rec.calls == [Path(one.audio_path)]  # no minutes of the models for a sheet that can't be kept
+    assert (stats.generated, stats.skipped, stats.failed, stats.errors, stats.failures) == (1, 1, 0, [], [])
+    assert "part one" in auto_sheet(cfg, conn, one)
+    assert kept_files(conn, two.id) == [] and get_song(conn, two.id).autochords_mtime is None
+    assert f"part two's {AUTO_SHEET} isn't kept: its folder is" in caplog.text
+
+
 def test_pending_selects_only_songs_without_human_sheet(conn, cfg, tmp_path):
     new = with_audio(conn, tmp_path, add_song(conn, "A", "New Purchase"))
     human = with_audio(conn, tmp_path, add_song(conn, "A", "Has A Human Sheet"))

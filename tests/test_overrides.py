@@ -653,6 +653,15 @@ def test_add_alias_keeps_the_artists_other_aliases(tmp_path):
     assert o.alias["bob-marley-the-wailers"] == ("bob-marley", "bob-marley-the-wailers", "wailers")
 
 
+def test_add_ignore_turns_a_single_song_into_a_list_and_keeps_your_comments(tmp_path):
+    p = write(tmp_path, '[ignore]\nsongs = "Soda Stereo - Persiana Americana"  # a live take\n')
+    add_ignore(p, "soda stereo - persiana americana")  # ignored already, written another way: nothing is written
+    assert p.read_text(encoding="utf-8") == '[ignore]\nsongs = "Soda Stereo - Persiana Americana"  # a live take\n'
+    add_ignore(p, "Oasis - Wonderwall")  # a single song becomes a list
+    assert "# a live take" in p.read_text(encoding="utf-8")
+    assert load_overrides(p).ignore == frozenset({"soda-stereo/persiana-americana", "oasis/wonderwall"})
+
+
 def test_writer_creates_missing_file(tmp_path):
     p = tmp_path / "sub" / "overrides.toml"
     add_ignore(p, "A - B")
