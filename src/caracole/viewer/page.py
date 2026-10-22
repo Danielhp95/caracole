@@ -49,7 +49,11 @@ written ``\\u003c``:
   (render.py, ``inbox.guitar_files``), for the settings' Guitar Pro row (``_GUITAR_ROW``): served, each a link to
   caracole serve's Guitar Pro page; or none, and no row. ``guitarDownload``, beside it: the name each saves under,
   from a file (``download_names.download_name``, the title clean as caracole serve names it: "Eagles - Hotel California
-  (2).gp5"), its link's ``download``.
+  (2).gp5"), its link's ``download``;
+- ``pinyin``, for a sheet whose song holds Chinese: each line of its sections as the page draws it (``#sheet
+  section.sec > p.l``, in order: ``_drawn_lines``), the reading of each of its characters (pinyin.py: "" for a
+  letter, a space or punctuation), or null for a line with none, for the settings' Pinyin row, which the script
+  shows for such a sheet alone; a sheet with none has none.
 """
 
 from __future__ import annotations
@@ -68,7 +72,7 @@ from caracole.download_names import download_name
 from caracole.inline import json_block, sha256_source
 from caracole.normalize import clean_title, has_han
 from caracole.page_icon import LINK as PAGE_ICON
-from caracole.viewer import harmony_tables
+from caracole.viewer import harmony_tables, pinyin
 from caracole.viewer.sheet import (
     Blank,
     ChordRow,
@@ -126,8 +130,8 @@ _OF_THE_SHAPES = frozenset({"chords", "audio"})
 # A module the viewer comes to import goes here too (test_viewer_book.py checks).
 BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "harmony_tables.py",
-                               "voicings.py", "voicings.json", "version.py", "viewer.js", "viewer.css",
-                               "LICENSE-chords-db")),
+                               "voicings.py", "voicings.json", "version.py", "pinyin.py", "viewer.js",
+                               "viewer.css", "LICENSE-chords-db")),
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "download_names.py",  # download_name, a Guitar Pro link's download attribute
@@ -141,12 +145,24 @@ BUILD_FILES = (
 def build_version() -> str:
     """What this caracole's viewer is, as a SHA-256 of the Python running it (``sys.version``:
     unicodedata, html.escape and json.dumps go with it) and of every file in ``BUILD_FILES``, in
-    their order. An upgrade that could change a page changes it: a page made with another one is
-    made again (songbook.html, through ``book.assets_version``)."""
+    their order, and of pypinyin's version, whose dictionaries read a Chinese sheet's pinyin. An upgrade
+    that could change a page changes it: a page made with another one is made again (songbook.html, through
+    ``book.assets_version``)."""
     digest = hashlib.sha256(sys.version.encode("utf-8"))
     for path in BUILD_FILES:
         digest.update(hashlib.sha256(path.read_bytes()).digest())
+    digest.update(_pypinyin_version().encode("utf-8"))
     return digest.hexdigest()
+
+
+def _pypinyin_version() -> str:
+    """pypinyin's version, read from its metadata without importing it (pinyin.py imports it to read)."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        return version("pypinyin")
+    except PackageNotFoundError:
+        return ""
 
 
 @lru_cache(maxsize=1)
@@ -360,7 +376,25 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
     data["shapes"] = shapes_of(sheet)
     data.update(harmony_tables.tables(chords, key, _places(sheet), mapped_by_mode, alts_by_mode))
     data["library"] = LIBRARY_PAGE
+    if (readings := pinyin.readings(_drawn_lines(sheet))) is not None:
+        data["pinyin"] = readings
     return data
+
+
+def _drawn_lines(sheet: Sheet) -> list[str]:
+    """The text of each line of the song's sections as the page draws one (a ``p.l``: a sung line's words, none
+    for a line of chords alone, a line of text's), in the page's order: the lines the data's ``pinyin`` reads.
+    The notes before the song are none of them."""
+    out = []
+    for section in _shown(sheet)[1]:
+        for line in section.lines:
+            if isinstance(line, Lyrics):
+                out.append("".join(text for _, text in line.parts))
+            elif isinstance(line, ChordRow):
+                out.append("")
+            elif isinstance(line, Text):
+                out.append(line.text)
+    return out
 
 
 def _shown(sheet: Sheet) -> tuple[Section | None, list[Section]]:
@@ -672,6 +706,9 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
 <div class="row" id="necks-row" hidden><span class="lab">Chord necks</span>
 <button type="button" class="chip" id="necks-chip" aria-pressed="true" aria-controls="necks">Hide</button></div>
+<div class="row" id="pinyin-row" hidden><span class="lab">Pinyin</span>
+<button type="button" class="chip" id="pinyin-chip" aria-pressed="false" aria-controls="sheet">Show</button>
+<p class="hint">Each Chinese character's reading, over it.</p></div>
 <div class="row" id="sound-row" hidden><span class="lab">Sound</span><span class="chips" id="volumes"></span>
 <p class="hint">Tap a chord, or its shape on its card, to hear it strummed.</p></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>

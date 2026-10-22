@@ -2356,7 +2356,30 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset everything, at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
-  the viewer starts them, and shows the rail of necks again.
+  the viewer starts them, shows the rail of necks again and hides the pinyin.
+- **Pinyin**, in the settings of a sheet with Chinese lyrics: **Show** puts
+  each Chinese character's reading over it, in pinyin with its tone marks
+  (zhǐ), smaller and muted, between its chord and it; **Hide** takes the
+  readings away again, as the viewer starts. Each is read in context when the
+  page is made (by pypinyin, word by word: 长 is cháng in 长城 and zhǎng in 成长,
+  不要 is bú yào), and a sheet in Traditional characters is read as in
+  Simplified ones, its 著 as 着 (睡著, shuì zháo) but in a word of its own (顯著,
+  xiǎn zhù). Letters, digits and punctuation get none, and a sheet with
+  Japanese kana has no Pinyin row: its kanji are no Mandarin. A character and
+  its reading make one column, as wide as the wider of the two, so a chord
+  stays over its character, and a long line wraps between columns, never
+  between a chord, a reading and its character. Transposing, the capo, the
+  mode and the chord names change the chords alone. The choice is the
+  reader's, not a song's, as the rail of necks' is: the browser keeps it once
+  for every sheet and songbook, and the address keeps `py=1` while it is on,
+  for a page served by `caracole serve`, where the browser keeps nothing: ‹
+  and › to another version keep it, and in a songbook so does every step to
+  another song (served, a sheet opened afresh from the library page starts
+  without it, as with the rail). Printed from the browser, the page prints
+  what it shows, readings and all; the PDFs (the sheet's, an export's, a
+  songbook's) have none. Copied, the lyrics leave the readings out. A sheet
+  without chords has no settings, so no Pinyin row, but shows the readings
+  when another page turned them on.
 - **Guitar Pro**, in the settings of a song with a Guitar Pro file (not a
   Power Tab one): served by caracole serve, **Guitar Pro tab** opens the file
   drawn and played in the browser (see
@@ -2386,7 +2409,7 @@ named otherwise when the page opens (an address with another key, mode or
 capo) starts at its first shape. It keeps the transposition, the mode, the
 capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
-(`necks=0`; the browser keeps that once for every page), and so the shape chosen for a
+(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or
