@@ -3,11 +3,12 @@ played in the browser by alphaTab (alphatab.py).
 
 At its top, the song's title and artist, the file it shows, and links: back to the song in the library
 (``/#song=<id>``), its sheet viewer when it has one, and the file itself as a download. Under them a bar that
-stays at the top while the score scrolls: Play (Pause while it plays) and Stop, the tempo (50 to 125 %, alphaTab's
-``playbackSpeed``), the track picker (each of the score's tracks, the one shown ticked; none for a score of one
-track) and Tab only or Score and tab (tab only from the start on a screen under 600 px wide, where the tab is drawn
-at 0.8 of its size: three or four bars a line on a phone). Then the score, in the page's light or dark colours.
-Every target is 44 px each way at the least.
+stays at the top while the score scrolls: on one row Play (Pause while it plays) and Stop, the tempo (50 to 125 %,
+alphaTab's ``playbackSpeed``) and Tab only or Score and tab ("Tab" and "Score" on a phone; tab only from the start on
+a screen under 600 px wide, where the tab is drawn at 0.8 of its size: three or four bars a line on a phone); under
+it the score's tracks, laid out (guitar.js: none for a score of one track), each a button that shows it, pressed while
+it is shown, with a speaker on it that mutes it; they wrap on a wide screen and scroll sideways in their own row on a
+phone. Then the score, in the page's light or dark colours. Every target is 44 px each way at the least.
 
 The page holds the file's bytes (base64, in a ``<script type="application/octet-stream">`` block, which nothing
 runs), its stylesheet (base.css, then guitar.css) and its script (guitar.js), and loads one thing: alphaTab's
@@ -93,15 +94,16 @@ def build_page(*, title: str, artist: str, song_id: int, path: str, label: str, 
     ))
 
 
-_BAR = """<div class="gp-bar" id="gp-bar" role="toolbar" aria-label="Playback">
+_BAR = """<div class="gp-bar" id="gp-bar">
+<div class="gp-play" role="toolbar" aria-label="Playback">
 <button type="button" class="btn primary" id="play" aria-pressed="false" disabled>Play</button>
 <button type="button" class="btn" id="stop" disabled>Stop</button>
-<label class="tempo" for="tempo">Tempo <input type="range" id="tempo" min="50" max="125" step="5" value="100">
+<label class="tempo" for="tempo"><span class="word">Tempo</span> <input type="range" id="tempo" min="50" max="125" step="5" value="100">
 <output id="tempo-now" for="tempo">100%</output></label>
-<details class="tracks" id="tracks" hidden><summary class="btn"><span class="visually-hidden">Track: </span><span class="name" id="track-name">Track</span></summary>
-<fieldset class="track-list" id="track-list"><legend class="visually-hidden">Track</legend></fieldset></details>
 <fieldset class="view" id="view"><legend class="visually-hidden">Show</legend>
-<label><input type="radio" name="view" value="tab"><span>Tab only</span></label>
-<label><input type="radio" name="view" value="score"><span>Score and tab</span></label></fieldset>
+<label><input type="radio" name="view" value="tab"><span>Tab<span class="long"> only</span></span></label>
+<label><input type="radio" name="view" value="score"><span><span class="long">Score and tab</span><span class="short">Score</span></span></label></fieldset>
+</div>
+<div class="gp-tracks" id="tracks" role="group" aria-label="Tracks" hidden></div>
 </div>
 """

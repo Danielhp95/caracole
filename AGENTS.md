@@ -173,7 +173,10 @@ Rules a change there keeps (the Invariants below are the others):
   shortest keys and those every pattern is in
   (`::test_a_common_word_brings_in_its_shortest_keys_and_those_every_word_is_in`).
 - `web/`: `caracole serve` (commands/serve.py). guitar_routes.py is the Guitar Pro page and alphaTab's bundle
-  (alphatab.py; the page guitar_page.py, guitar.js, guitar.css); a song's kept Guitar Pro files are
+  (alphatab.py; the page guitar_page.py, guitar.js, guitar.css: the tracks laid out, each muted on its own with
+  `changeTrackMute`; guitar.js `mend` patches alphaTab 1.8.4's canvas, which drew a part black when it began in the
+  colour the last part ended in and cut the header's first line, so an alphaTab upgrade re-checks it:
+  test_web_guitar_browser.py reads the header's pixels); a song's kept Guitar Pro files are
   `inbox.guitar_files`, which library_page.py (`guitarPage`) and render.py (the viewer's `guitar`) read too. web/__init__.py names its parts, and web/app.py's
   docstring the modules of routes and the checks every request passes. app.py is the router and
   what every route shares (`Request`, `Response`, the answers' shapes, `WebApp.db()`,
