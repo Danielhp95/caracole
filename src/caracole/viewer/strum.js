@@ -18,7 +18,8 @@
   // before: never two chords crammed together, never one out of its order. Stopped (stop(), its handle's,
   // another strum or progression, the volume off, the page hidden or left), nothing scheduled sounds: a
   // note not begun never begins, one ringing fades out (at once where the page is hidden), and no timer of
-  // it is left. A sound still waiting for the context to resume plays only if nothing was asked after it.
+  // it is left, though the notes cut tell they ended late. A sound still waiting for the context to resume
+  // plays only if nothing was asked after it; a context woken for nothing goes back to sleep.
   //
   // window.caracoleSound:
   //   notes(position, capo)        the MIDI notes a position sounds, low string first: a position as the
@@ -151,8 +152,9 @@
       out.connect(tone);
       tone.connect(context.destination);
     }
-    if (context.state !== "running") {
+    if (context.state !== "running" || asleep) {
       if (!tapped() || document.visibilityState === "hidden") return null;
+      asleep = false;
       try {
         context.resume().catch(() => {});
       } catch (err) { /* it stays as it is */ }
@@ -163,13 +165,15 @@
   // to resume plays only if nothing was asked after it.
   let turn = 0;
   // Once the context runs (at once, or once a resume asked for has done), unless the page was hidden or
-  // something else was asked since.
+  // something else was asked since: then, awake for nothing, it goes back to sleep (at once out of sight).
   const whenRunning = (go) => {
     const mine = turn;
     if (context.state === "running") go();
     else {
       context.resume().then(() => {
         if (mine === turn && document.visibilityState !== "hidden") go();
+        else if (document.visibilityState === "hidden") sleep();
+        else rest();
       }, () => {});
     }
   };
@@ -179,18 +183,23 @@
   // sources and the time each begins (``times``), ``at``, the time it begins, and ``ends``, the time it is
   // silent by (Infinity: it rings out), on the context's clock.
   // Once nothing has played for IDLE seconds, the context is suspended, so the device's audio can sleep;
-  // the next tap resumes it (ready).
+  // the next tap resumes it (ready). The timer is set only while the context runs and isn't put to sleep
+  // already (``asleep``, until a tap resumes it; a browser may tell the state late): the notes cut as the
+  // page was hidden may tell they ended after it was.
   const live = new Set();
-  let idle = 0;
+  let idle = 0, asleep = false;
   const sleep = () => {
     clearTimeout(idle);
     idle = 0;
-    if (context && context.state === "running") context.suspend().catch(() => {});
+    if (context && context.state === "running") {
+      asleep = true;
+      context.suspend().catch(() => {});
+    }
   };
   const rest = () => {
     clearTimeout(idle);
     idle = 0;
-    if (!context || live.size || progression) return;
+    if (!context || asleep || context.state !== "running" || live.size || progression) return;
     idle = setTimeout(() => {
       idle = 0;
       if (!live.size && !progression) sleep();

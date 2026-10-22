@@ -146,8 +146,10 @@ Rules a change there keeps (the Invariants below are the others):
   documents it; the Harmony panel's ▶ does), never another synthesis (test_viewer_sound.py,
   test_viewer_panels.py). It times a progression on the context's clock alone (a strum it comes to
   late moves the rest on, never two crammed together), and every stop (■, another ▶ or strum, the
-  panel closed, the page hidden or left) leaves no note to begin and no timer of it: test_viewer_sound.py's
-  `SCHEDULE` records each note and timer the page makes. A sheet viewer's data `versions` (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) draws its switcher
+  panel closed, the page hidden or left) leaves no note to begin and no timer of it, even when the notes
+  cut tell they ended late; a sound asked while the context wakes plays only if nothing was asked after
+  it, and a context woken for nothing sleeps again: test_viewer_sound.py's `SCHEDULE` records each note
+  and timer the page makes, and plays a slow device on demand (a resume held, `ended` events late). A sheet viewer's data `versions` (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) draws its switcher
   under the key line and the list it opens, a rail like the settings and never beside them
   (test_viewer_versions.py); the songbook has none. The rail of necks (from 1200 px) is sized by
   viewer.css's `--nk` (1.15: the owner's 15 % over the first 300 px), its width, padding, text and
