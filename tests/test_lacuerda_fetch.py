@@ -1036,6 +1036,53 @@ def test_a_tab_a_lookup_pinned_while_the_pass_let_it_go_first_is_never_replaced(
     assert get_song(conn, newer.id).lacuerda_checked_at == STAMP
 
 
+def test_a_tab_a_lookup_pinned_during_the_songs_own_turn_is_never_replaced(conn, tmp_path):
+    # The pass had read Soda Stereo's page for De Música Ligera when, in the pause before its version's page, the
+    # run let `caracole get --tab` go first, which pinned the partial UG sheet the song keeps: what LaCuerda
+    # answers after it is not kept in its place.
+    song = spanish_song(conn)
+    ug_vid = keep_ug_sheet(conn, tmp_path, song, 0.5)
+    pin = Overrides(pin={song.key: (85053,)})
+    site = FakeLaCuerda()
+    client = HandingOver(site.client(tmp_path / "cache"), DML_3, lambda: None)
+
+    stats = lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, overrides=Overrides(),
+                            reload_overrides=lambda: pin)
+
+    assert stats == LaCuerdaStats(tried=1) and site.requests == [SODA, DML_3]
+    assert files_of(conn, song) == {"sheet.txt": ug_vid, "sheet.json": ug_vid}
+    assert lacuerda_versions(conn, song) == [] and get_song(conn, song.id).lacuerda_checked_at is None
+
+
+def test_a_lacuerda_sheet_a_lookup_picked_during_the_songs_own_turn_stays_the_one_kept(conn, tmp_path):
+    # In the pause before De Música Ligera's best version (3, which covers every line), the run let
+    # `caracole get --lacuerda` go first, which picked version 2 (six lines of eight) and kept it: version 3 does
+    # not replace your pick, nor is the song left for 30 days with it.
+    from caracole.overrides import LaCuerdaPick
+
+    song = spanish_song(conn)
+    dml_2 = f"{BASE}/soda_stereo/de_musica_ligera-2.shtml"
+    site = FakeLaCuerda()
+    site.pages[dml_2] = (200, fixture("version.html").replace("Baila la lluvia", "Llueve en la plaza")
+                         .replace("suena la radio", "cantan los grillos"))
+    pick = Overrides(lacuerda={song.key: LaCuerdaPick("soda_stereo", "de_musica_ligera", 2)})
+
+    def lookup():
+        lookups = site.client(tmp_path / "cache-lookup")
+        assert lacuerda_sheets(conn, lookups, tmp_path / "lib", RANK, NOW, overrides=pick,
+                               only={song.id}) == LaCuerdaStats(tried=1, kept=1)
+
+    client = HandingOver(site.client(tmp_path / "cache"), DML_3, lookup)
+
+    stats = lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, overrides=Overrides(),
+                            reload_overrides=lambda: pick)
+
+    assert stats == LaCuerdaStats(tried=1) and site.requests == [SODA, dml_2, DML_3]
+    (kept,) = {v.id for v in lacuerda_versions(conn, song) if v.tab_id.endswith("-2")}
+    assert files_of(conn, song) == {"sheet.txt": kept, "sheet.json": kept}
+    assert "cantan los grillos" in (song_folder(tmp_path) / "sheet.txt").read_text(encoding="utf-8")
+
+
 def test_an_artists_page_is_read_by_its_slug_or_their_name_for_the_index(conn, tmp_path):
     from caracole.lacuerda import LCArtist
     from caracole.lacuerda_fetch import read_artist_page

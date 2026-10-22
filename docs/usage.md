@@ -1481,8 +1481,11 @@ asked: its next request to Ultimate Guitar waits UG's 10–20 seconds after the
 lookup's last one, even when the lookup went first in a pause of LRCLIB's. The
 run then reads each song again before its turn, and overrides.toml too, in that
 step and in every step after it, so a song the lookup fetched isn't fetched
-twice, and a tab it pinned is the one kept: LaCuerda's sheet doesn't take its
-place. Work that sends no request lets a lookup go first between two songs:
+twice, and a tab it pinned, or a LaCuerda sheet it picked, is the one kept:
+another LaCuerda sheet doesn't take its place, even when the run was asking
+LaCuerda about that very song as the lookup went first (what LaCuerda answered
+then waits in the cache, and the song stays as the lookup left it). Work that
+sends no request lets a lookup go first between two songs:
 `caracole autochords` (a song takes minutes, and the unit runs for hours), and
 the PDF pass of the run and of `caracole render`, which reads each song and
 overrides.toml again after it, and makes the songbooks and the pages from

@@ -639,7 +639,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   holding state across a handoff re-reads it after one: ug/fetch.py `fetch_songs` reads each
   song and overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn is fetched
   again next run), lacuerda_fetch.py `lacuerda_sheets` reads each song and overrides.toml again
-  and passes over a song no longer to try, gtptabs_fetch.py checks a song still has no file
+  and passes over a song no longer to try (`_Lookups`; after a handoff within a song's turn, it
+  records what LaCuerda answered only for a song still to try with the pick the turn asked for:
+  `test_lacuerda_fetch.py::test_a_tab_a_lookup_pinned_during_the_songs_own_turn_is_never_replaced`),
+  gtptabs_fetch.py checks a song still has no file
   before its turn, and `autochords_pending` and `render_all` read each song after and
   overrides.toml again; what comes after (the run's next steps, `StepContext.read_overrides_again`;
   the songbooks and pages of `caracole render` and `autochords`) reads overrides.toml again too
