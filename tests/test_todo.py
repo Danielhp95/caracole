@@ -725,6 +725,22 @@ def test_artist_lines_for_a_file_with_the_table_already_leave_its_header_out(con
     assert set(load_overrides(cfg.overrides_file).artist_url) == {"mana", "宋冬野"}
 
 
+def test_artist_lines_for_a_file_with_the_table_and_no_entry_leave_its_header_out(conn, cfg):
+    # The table's only line commented out, or the header kept from the docs' sample: the file has the table, with no
+    # entry in it. A second [artist_url] header pasted after it would make overrides.toml unreadable.
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text('[artist_url]\n# "Maná" = "https://www.ultimate-guitar.com/artist/1"\n',
+                                  encoding="utf-8")
+    s = add_song(conn, "Maná", "Rayando el Sol")
+    update_song(conn, s.id, match_decision="not_found")
+    section = section_of(todo(conn, cfg, load_overrides(cfg.overrides_file)), "Artists to find")
+    lines = "".join(toml_blocks(section)).replace("…", "634073")
+    assert "[artist_url]" not in lines and "under the `[artist_url]` table" in section
+    text = cfg.overrides_file.read_text(encoding="utf-8").replace("[artist_url]\n", "[artist_url]\n" + lines, 1)
+    cfg.overrides_file.write_text(text, encoding="utf-8")
+    assert set(load_overrides(cfg.overrides_file).artist_url) == {"mana"}
+
+
 def test_review_lines_paste_under_the_tables_caracole_review_wrote(conn, cfg):
     from caracole.overrides import add_alias, add_match
 

@@ -332,7 +332,7 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
         # One block for every artist, with the table's header only when the file has no such table:
         # a table declared twice makes overrides.toml unreadable, and the nightly run stops.
         lines = [f"{_toml_str(a)} = {_toml_str(ARTIST_PAGE_SHAPE)}" for a in new]
-        if overrides.artist_url:
+        if overrides.has_table("artist_url"):
             how = ("Then add these lines under the `[artist_url]` table your overrides.toml already has (a second "
                    "`[artist_url]` header would make the file unreadable)")
         else:

@@ -102,7 +102,8 @@ class Overrides:
     ``reject`` holds each song's rejected (artist key, song key) pairs, every entry of the song's;
     ``artist_url_names`` the name each ``[artist_url]`` entry is written under, by its key;
     ``youtube`` each song's video id, or None for "none"; ``version`` each song's own version, as the
-    entry writes it (without a "#"): kept by its key, or a viewer's address."""
+    entry writes it (without a "#"): kept by its key, or a viewer's address; ``tables`` every table the file
+    declares, even one with no entry left in it (``has_table``)."""
 
     alias: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     match: Mapping[str, tuple[str, str]] = field(default_factory=dict)
@@ -117,6 +118,13 @@ class Overrides:
     youtube: Mapping[str, str | None] = field(default_factory=dict)
     lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
     version: Mapping[str, str] = field(default_factory=dict)
+    tables: frozenset[str] = frozenset()
+
+    def has_table(self, name: str) -> bool:
+        """Whether the file has the table ``name``, with entries or none (its only line commented out, or the
+        header kept from the docs' sample): lines to paste then come without its header, as a table declared
+        twice makes the whole file unreadable."""
+        return name in self.tables or bool(getattr(self, name, None))
 
 
 @dataclass(frozen=True)
@@ -424,6 +432,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
         artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, version=version,
+        tables=frozenset(data),
     )
 
 

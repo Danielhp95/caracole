@@ -1629,8 +1629,8 @@ when it has something in it:
   ```
 
   The block has the `[artist_url]` header only while overrides.toml has no
-  `[artist_url]` entries; after that the page gives the lines alone, to add
-  under the table. The artist page lists all of the artist's tabs, bare ids
+  `[artist_url]` table; once it has one, even with no entry left in it, the
+  page gives the lines alone, to add under the table. The artist page lists all of the artist's tabs, bare ids
   included. The next run reads it, finds your songs on it by title, and
   fetches them like any matched song. That's once per artist, not per song.
   From then on `caracole search` finds every tab the page lists, with UG's
@@ -2585,7 +2585,7 @@ non-Latin letters, the command also explains bare ids, unless a strong hit comes
 caracole has read (caracole sees that artist's tabs), and prints the
 `[artist_url]` line to paste, for the artist's page or one of their tab pages,
 with the table's header only while overrides.toml has no `[artist_url]`
-entries. The line is keyed by the artist of a song of yours the query finds,
+table (one with no entry left in it counts). The line is keyed by the artist of a song of yours the query finds,
 never by a placeholder such as "misc" (a line `misc - 斑马` in wanted.txt),
 else by the query itself; a query may be a title, so the hint then adds that
 caracole needs the song's artist too (`caracole add ARTIST "斑马"`): nothing
