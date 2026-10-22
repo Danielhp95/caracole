@@ -2141,10 +2141,15 @@
       }
     }
   });
+  // A field you type in keeps its keys: a "/" there is the text's ("AC/DC" as a request's artist, "Either/Or").
+  const UNTYPED = /^(checkbox|radio|button|submit|reset|range|color|file|image|hidden)$/;
+  const typedIn = (el) => el instanceof HTMLElement && (el.isContentEditable || el.tagName === "TEXTAREA"
+    || el.tagName === "SELECT" || (el.tagName === "INPUT" && !UNTYPED.test(el.type)));
   document.addEventListener("keydown", (e) => {
     if (composing(e)) return;
     const typing = document.activeElement === input;
-    if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !input.closest("[hidden]")) {
+    if (e.key === "/" && !typing && !typedIn(e.target) && !e.ctrlKey && !e.metaKey && !e.altKey
+        && !input.closest("[hidden]")) {
       e.preventDefault();
       input.focus();
       input.select();
