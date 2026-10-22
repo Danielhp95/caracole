@@ -547,9 +547,6 @@ def test_the_file_page_shows_the_songbooks_read_only_with_their_commands(conn, c
         assert page.js("document.documentElement.scrollWidth <= innerWidth")
 
 
-# --- touch, contrast, dark mode ---------------------------------------------------------------------------------
-
-
 def test_the_file_pages_commands_run_for_names_that_start_with_a_dash(conn, cfg, tmp_path):
     # The songbook "-M- nights" of a song by -M-, a French artist: each line, run as shown, reaches its command with
     # those names, none taken for an option ("No such option: -M").
@@ -574,6 +571,9 @@ def test_the_file_pages_commands_run_for_names_that_start_with_a_dash(conn, cfg,
         (("songbook", "remove"), {"name": name, "songs": (song,)}),
         (("songbook", "rename"), {"name": name, "new": "NEW NAME"}),
         (("songbook", "delete"), {"name": name})], commands
+
+
+# --- touch, contrast, dark mode ---------------------------------------------------------------------------------
 
 
 @pytest.mark.parametrize("size,dark", [((390, 844), False), ((390, 844), True), ((1280, 800), False),

@@ -19,7 +19,6 @@
     return;
   }
   if (!panel || !libraryView || !tabLibrary || !tabBooks) return;
-  const own = Object.prototype.hasOwnProperty;
   const listOf = (value) => (Array.isArray(value) ? value : []);
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
