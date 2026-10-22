@@ -97,6 +97,22 @@ def record_ok(conn: sqlite3.Connection, provider: str, now: datetime) -> Provide
     return _save(conn, replace(s, strikes=0, cooldown_until=None, last_ok=now))
 
 
+def answered_any(conn: sqlite3.Connection, run_id: str, provider: str, requests: int) -> bool:
+    """Whether the provider answered at least one of the ``requests`` a run sent it: a nightly run's,
+    a command's or a lookup's, by its run id in ``events``. Only then did the run go well
+    (``record_ok``): one whose every request failed (UG answering 502, say) is no success.
+
+    Every request a client sends is logged to ``events`` as answered (``ok``,
+    ``not_modified``), an ``error`` or a ``blocked``; a client that logs nothing counts
+    as answered.
+    """
+    failed = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE run = ? AND provider = ? AND decision IN ('error', 'blocked')",
+        (run_id, provider),
+    ).fetchone()[0]
+    return requests > failed
+
+
 def record_error(conn: sqlite3.Connection, provider: str, now: datetime, message: str) -> ProviderState:
     """Remember a non-block error for the to-do page; it doesn't start a cooldown."""
     return _save(conn, replace(get_state(conn, provider), last_error=message, last_error_at=now))

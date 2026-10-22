@@ -727,7 +727,7 @@ class _Lookup:
     def run(self) -> LookupResult:
         from caracole import db
         from caracole.commands._common import exclusive
-        from caracole.health import record_ok
+        from caracole.health import answered_any, record_ok
         from caracole.overrides import OverridesError, load_overrides
         from caracole.songs import ensure_current_keys
         from caracole.ug.fetch import note_looked_up
@@ -757,8 +757,9 @@ class _Lookup:
                                        ("songbooks", self.songbooks)):
                         self.stage(name, work)
                     note_looked_up(conn, self.song.id)
-                    for provider, client in self.clients.items():
-                        if client.requests_made and provider not in self.blocked:
+                    for provider, client in self.clients.items():  # a site that answered: a good run
+                        if provider not in self.blocked and answered_any(conn, self.run_id, provider,
+                                                                         client.requests_made):
                             record_ok(conn, provider, self.now)
                 finally:
                     for provider, client in self.clients.items():

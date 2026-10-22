@@ -65,7 +65,7 @@ def register(app: typer.Typer) -> None:
 
 
 def _fetch(cfg: Config, display: str | None) -> None:
-    from caracole.health import get_state, is_cooling, record_block, record_ok
+    from caracole.health import answered_any, get_state, is_cooling, record_block, record_ok
     from caracole.http import ProviderBlocked
     from caracole.overrides import load_overrides
     from caracole.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
@@ -98,7 +98,8 @@ def _fetch(cfg: Config, display: str | None) -> None:
             if rescored:  # a partial sheet it found shows at once
                 write_pages(conn, cfg, overrides, utcnow())
             return
-        client = make_client(cfg, conn, PROVIDER, run_id_for(now))
+        run_id = run_id_for(now)
+        client = make_client(cfg, conn, PROVIDER, run_id)
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank,
                            library_dir=cfg.library_dir, now=now,
                            reload_overrides=lambda: load_overrides(cfg.overrides_file))
@@ -121,7 +122,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
             return
         finally:
             client.close()
-        if client.requests_made:
+        if answered_any(conn, run_id, PROVIDER, client.requests_made):  # UG answered: a good run, as a night's
             record_ok(conn, PROVIDER, now)
         unfinished = asked is not None and not stats.songs_done
         due = _send_back(conn, asked, overrides, now) if unfinished else True

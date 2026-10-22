@@ -281,6 +281,26 @@ def test_a_pass_that_went_well_clears_old_strikes(tmp_path, sites):
         conn.close()
 
 
+@pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
+def test_a_pass_the_site_answered_with_nothing_but_errors_leaves_the_strikes(tmp_path, sites, command, provider):
+    # As a nightly run of nothing but errors: no sign that the site answers again.
+    getattr(sites, provider).status = 500
+    spanish_song(tmp_path)
+    conn = open_db(tmp_path)
+    try:
+        update_song(conn, 1, lyrics_status="pending")
+        record_block(conn, provider, datetime.now(UTC) - timedelta(days=2), f"{provider}: 429: HTTP 429")
+    finally:
+        conn.close()
+    assert run(tmp_path, command).exit_code == 0
+    assert getattr(sites, provider).requests
+    conn = open_db(tmp_path)
+    try:
+        assert (get_state(conn, provider).strikes, get_state(conn, provider).last_ok) == (1, None)
+    finally:
+        conn.close()
+
+
 def test_a_pass_that_asked_nothing_leaves_the_strikes(tmp_path, sites):
     # Nothing was waiting, so nothing shows LRCLIB answers again.
     conn = open_db(tmp_path)

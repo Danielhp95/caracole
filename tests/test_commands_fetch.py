@@ -211,6 +211,24 @@ def test_a_page_ug_cannot_serve_fails_that_song_only(tmp_path, ug):
     assert get_song(conn, persiana).ug_dirty is True and get_song(conn, signos).status == "found"
 
 
+def test_a_fetch_ug_answered_nothing_but_errors_keeps_its_strikes(tmp_path, ug):
+    # Two blocks in a row, the second's cooldown over: a fetch UG answers with nothing but errors is no good
+    # run, as a nightly run of nothing but errors isn't, so the next block still cools UG down for 98 hours.
+    from caracole.commands._common import utcnow
+
+    conn, _, _ = two_songs(tmp_path, ug)
+    record_block(conn, "ug", utcnow() - timedelta(days=10), "HTTP 403")
+    record_block(conn, "ug", utcnow() - timedelta(days=7), "HTTP 403")
+    ug.pages[PERSIANA] = ug.pages[SIGNOS] = (500, "<html><body>Server error</body></html>")
+
+    result = run(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    assert ug.requests == [PERSIANA, SIGNOS]
+    state = get_state(conn, "ug")
+    assert (state.strikes, state.last_ok) == (2, None)
+
+
 def kept_sheet_coverage(conn, song_id):
     return conn.execute(
         "SELECT v.coverage FROM files f JOIN versions v ON v.id = f.version_id WHERE f.song_id = ? AND f.name = ?",

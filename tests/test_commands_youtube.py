@@ -323,6 +323,23 @@ def test_a_block_cools_youtube_down_alerts_once_and_exits_0(tmp_path, ntfy, fake
 
 
 @pytest.mark.slow
+def test_runs_that_all_failed_leave_youtubes_strikes(tmp_path, ntfy, fake, conn):
+    # Two blocks in a row, the second's cooldown over: yt-dlp runs that all failed are no good run, as a
+    # nightly run of nothing but errors isn't, so the next block still cools YouTube down for 98 hours.
+    from datetime import timedelta
+
+    record_block(conn, "youtube", _common.utcnow() - timedelta(days=10), "youtube: bot check")
+    record_block(conn, "youtube", _common.utcnow() - timedelta(days=7), "youtube: bot check")
+    to_buy(conn)
+    fake.search("Radiohead Creep", stderr="ERROR: [youtube] Unable to extract initial data", exit=1)
+    result = invoke(write_config(tmp_path, fake))
+    assert result.exit_code == 0, result.output
+    assert len(fake.argvs()) == 1
+    state = get_state(conn, "youtube")
+    assert (state.strikes, state.last_ok) == (2, None)
+
+
+@pytest.mark.slow
 def test_a_download_that_fails_the_same_way_every_time_gives_way_to_another_pick(tmp_path, ntfy, fake, conn):
     to_buy(conn)
     creep(fake)

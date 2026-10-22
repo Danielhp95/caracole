@@ -84,7 +84,7 @@ def register(app: typer.Typer) -> None:
 
 
 def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> None:
-    from caracole.health import get_state, is_cooling, record_block, record_ok
+    from caracole.health import answered_any, get_state, is_cooling, record_block, record_ok
     from caracole.http import ProviderBlocked
     from caracole.overrides import OverridesError, add_youtube
     from caracole.youtube_fetch import route_problem, songs_for_youtube, tidy, youtube_pass
@@ -125,7 +125,8 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
             if tidied:  # audio let go of: the pages say so
                 write_pages(conn, cfg, overrides, utcnow())
             return
-        runner = make_youtube(cfg, conn, run_id_for(now))
+        run_id = run_id_for(now)
+        runner = make_youtube(cfg, conn, run_id)
         try:
             stats = youtube_pass(conn, runner, cfg, now, overrides=overrides, songs=songs,
                                  on_song=lambda s, outcome, record: typer.echo(_line(s, outcome, record)))
@@ -139,7 +140,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
             return
         finally:
             runner.close()
-        if runner.requests_made:
+        if answered_any(conn, run_id, PROVIDER, runner.requests_made):  # runs that all failed are no good run
             record_ok(conn, PROVIDER, now)
         write_pages(conn, cfg, overrides, utcnow())
     typer.echo(_totals(stats, runner.requests_made, cfg.provider(PROVIDER).budget))

@@ -491,6 +491,23 @@ def test_a_server_error_leaves_the_song_for_the_night(cfg, conn, sites):
     assert sites.ug() == [f"{TAB}radiohead/creep-chords-101"] and progress.states()["ug"] == "skipped"
 
 
+def test_a_lookup_ug_answered_nothing_but_errors_keeps_its_strikes(cfg, conn, sites):
+    # Two blocks in a row, the second's cooldown over: the next block cools UG down for 98 hours. A lookup
+    # UG answers with nothing but errors is no good run, as a nightly run of nothing but errors isn't.
+    from datetime import timedelta
+
+    record_block(conn, "ug", NOW - timedelta(days=10), "403")
+    record_block(conn, "ug", NOW - timedelta(days=7), "403")
+    serve_creep(sites, conn)
+    sites.pages[f"{TAB}radiohead/creep-chords-101"] = (500, "oops")
+
+    look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    state = get_state(conn, "ug")
+    assert (state.strikes, state.last_ok) == (2, None)
+    assert get_state(conn, "lrclib").last_ok == NOW  # LRCLIB answered the lookup: a good run of its own
+
+
 # --- the other sites -------------------------------------------------------------------------------------
 
 

@@ -39,7 +39,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 from caracole.config import DEFAULT_PROVIDERS, Config
 from caracole.db import kv_get_json, kv_set_json
-from caracole.health import get_state, is_cooling, record_block, record_error, record_ok
+from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
 from caracole.notify import Notifier
 from caracole.overrides import Overrides, OverridesError, load_overrides
@@ -553,27 +553,13 @@ def _budgets(services: Services) -> dict[str, int]:
     return budgets
 
 
-def _answered(conn: sqlite3.Connection, run_id: str, provider: str, requests: int) -> bool:
-    """Whether the provider answered at least one of this run's requests.
-
-    Every request a PoliteClient sends is logged to ``events`` as answered
-    (``ok``, ``not_modified``), an ``error`` or a ``blocked``; a client that
-    logs nothing counts as answered.
-    """
-    failed = conn.execute(
-        "SELECT COUNT(*) FROM events WHERE run = ? AND provider = ? AND decision IN ('error', 'blocked')",
-        (run_id, provider),
-    ).fetchone()[0]
-    return requests > failed
-
-
 def _record_ok(conn: sqlite3.Connection, report: RunReport, now: datetime) -> None:
     """A provider that answered this run without a block had a good run: clear its cooldown, note the time.
 
     A run whose every request failed (UG answering 502, say) is no success.
     """
     for p, n in report.requests.items():
-        if n and p not in report.blocked and _answered(conn, report.run_id, p, n):
+        if n and p not in report.blocked and answered_any(conn, report.run_id, p, n):
             record_ok(conn, p, now)
 
 
