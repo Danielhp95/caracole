@@ -679,11 +679,18 @@ def remove_pin(path: Path, display: str, tabs: Collection[int] | None = None) ->
 
 
 def _append_unique(doc, table: str, key: str, value: Any, same) -> None:
+    """Add ``value`` to the list at ``table.key`` unless one there is the ``same``; a single value written as
+    a string (``[ignore] songs = "A - B"``, which the reader takes) becomes a list of it and ``value``."""
     t = _table_of(doc, table)
     if key not in t:
         t[key] = tomlkit.array()
-    if not any(same(existing, value) for existing in t[key]):
-        t[key].append(value)
+    current = t[key]
+    if any(same(existing, value) for existing in ([current] if isinstance(current, str) else current)):
+        return
+    if isinstance(current, str):
+        t[key] = [str(current), value]
+    else:
+        current.append(value)
 
 
 def add_ignore(path: Path, display: str) -> None:
