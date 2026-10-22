@@ -1116,7 +1116,7 @@ def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: st
                 "there for the songs you add by them.")
     name = shown.replace("\\", "\\\\").replace('"', '\\"')
     line = f'"{name}" = "{ARTIST_PAGE_SHAPE}"'
-    if overrides is not None and overrides.artist_url:
+    if overrides is not None and overrides.has_table("artist_url"):
         where = (", under the [artist_url] table it has already (a second [artist_url] header would make "
                  "the file unreadable)")
         block = f"    {line}"

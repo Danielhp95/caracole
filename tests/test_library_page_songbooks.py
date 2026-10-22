@@ -223,6 +223,24 @@ def test_the_command_to_copy_quotes_each_word_so_no_shell_expands_it(conn, cfg, 
 
 
 @in_chromium
+@pytest.mark.parametrize("name,artist", [("Camp", "-M-"), ("-30- live", "Radiohead")])
+def test_the_command_to_copy_runs_for_a_name_that_starts_with_a_dash(conn, cfg, tmp_path, name, artist):
+    # -M- is a French artist: run as shown, a name that starts with "-" must not be taken for an option ("No such
+    # option: -M"), as caracole serve's own command lines have it.
+    from helpers.cli_lines import parsed
+
+    add_song(conn, artist, "Je dis aime")
+    out = run_in_page(page(conn, cfg), cfg, tmp_path, f"""
+      q(".pick-toggle").click();
+      qa("#list article")[0].querySelector(".pick input").click();
+      q(".pick-name").value = {json.dumps(name)};
+      q(".pickbar-form button[type=submit]").click();
+      out = q(".pick-command code").textContent;
+    """)
+    assert parsed(out) == (("songbook", "make"), {"name": name, "songs": (f"{artist} - Je dis aime",)}), out
+
+
+@in_chromium
 def test_select_mode_can_add_to_a_songbook_there_is(library, tmp_path):
     conn, cfg = library
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + """

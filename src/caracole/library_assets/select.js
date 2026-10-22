@@ -23,6 +23,10 @@
   };
   // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+  // The names a command takes, each quoted, after "--" when one starts with "-" (-M-, an artist): caracole would
+  // take it for an option ("No such option: -M"). caracole serve's own command lines always have it.
+  const shellNames = (...names) => (names.some((n) => String(n).startsWith("-")) ? "-- " : "") +
+    names.map(shellQuote).join(" ");
   const picked = [];  // song ids, in the order they were picked: the songbook's order
   let sending = false;  // on caracole serve, until the server answers the bar's form
 
@@ -242,6 +246,28 @@
     intoLabel.hidden = !now.length;
     paintAll();
   });
+  // A songbook made from here whose make failed once it ran (songbooks.js): its ticks back, its name and why, so that
+  // making it again is one tap; unless songs were picked anew since, which stay.
+  document.addEventListener("caracole:unmade", (e) => {
+    const detail = e.detail && typeof e.detail === "object" ? e.detail : {};
+    if (picked.length) return;
+    for (const id of Array.isArray(detail.songs) ? detail.songs : []) {
+      if (songs.has(String(id)) && picked.indexOf(String(id)) < 0) picked.push(String(id));
+    }
+    into.value = "";
+    nameInput.value = String(detail.name || "");
+    paintAll();
+    error.textContent = String(detail.error || "");
+  });
+  // A song gone from the library, removed on the page or elsewhere (library.js): no more to pick, nor to send, as its
+  // id may come back with the next song added (songs.id has no AUTOINCREMENT).
+  document.addEventListener("caracole:gone", (e) => {
+    const id = String(e.detail && e.detail.id);
+    if (!songs.delete(id)) return;
+    const at = picked.indexOf(id);
+    if (at >= 0) picked.splice(at, 1);
+    paintAll();
+  });
   // The server's answer to the bar's form: on its way, the picks go and the mode ends (the page shows the
   // songbook in its tab, songbooks.js); refused, the bar says why, and the picks stay.
   form.addEventListener("caracole:sent", (e) => {
@@ -296,9 +322,8 @@
       return;  // the Songbooks tab's script posts it, and its songbook says how it goes
     }
     e.preventDefault();
-    const words = ["caracole songbook", existing ? "add" : "make", shellQuote(name)];
-    for (const id of picked) words.push(shellQuote(songs.get(id).display));
-    commandText.textContent = words.join(" ");
+    const names = shellNames(name, ...picked.map((id) => songs.get(id).display));
+    commandText.textContent = "caracole songbook " + (existing ? "add " : "make ") + names;
     commandFold.open = false;
     command.hidden = false;
     copy.textContent = "Copy";

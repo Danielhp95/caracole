@@ -217,8 +217,37 @@ def _alias_line(artist: str, akey: str, overrides: Overrides) -> list[str]:
     return [f"{_toml_str(artist)} = [{listed}]  # in place of the artist's line under [alias]"]
 
 
+def _alias_above(artist: str, akey: str, overrides: Overrides, song: str, given: list[str]) -> str:
+    """What a candidate says of its ``[alias]`` line when the item of ``song``, above, gives the artist one
+    already (for ``given``, its candidates' UG names): pasted for both songs, the artist's key would be in
+    ``[alias]`` twice, which makes overrides.toml unreadable, so the page gives an artist's line once.
+
+    That item's candidates are alternatives, each with its line, of which one at most goes in (none, when
+    none is the song): for each, what this candidate's UG name needs, and its own line should none go in."""
+    own = _code(_alias_line(artist, akey, overrides)[0])
+    have = overrides.alias.get(slug_key(artist), ())
+
+    def both(other: str) -> str:  # the artist's line with the other's UG name and this one's
+        return _code(f"{_toml_str(artist)} = [{', '.join(_toml_str(a) for a in dict.fromkeys((*have, other, akey)))}]")
+
+    if given == [akey]:
+        return (f"{md(artist)}'s `[alias]` line for `{akey}` is the one under **{md(song)}** above: it goes in "
+                f"once, for every song of theirs. Without it, this candidate's is {own}.")
+    if len(given) == 1:
+        return (f"{md(artist)} takes one line under `[alias]`, and the one under **{md(song)}** above gives them "
+                f"`{given[0]}`: to add `{akey}` too, put this in its place: {both(given[0])}. "
+                f"Without it, this candidate's is {own}.")
+    ways = "; ".join(f"`{g}`'s serves this song too (it goes in once)" if g == akey
+                     else f"in place of `{g}`'s, put {both(g)}" for g in given)
+    return (f"{md(artist)} takes one line under `[alias]`, and **{md(song)}** above gives one for each of its "
+            f"candidates' UG names, of which one at most goes in: {ways}. Without any, this candidate's is {own}.")
+
+
 def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, now: datetime) -> list[str]:
     items: list[str] = []
+    # The [alias] lines given so far, by the artist's key: the song whose item gives them, and their UG names.
+    # A song's candidates are alternatives, each with its line; a later song's say where the artist's line is.
+    given: dict[str, tuple[str, list[str]]] = {}
     for s in songs:
         if not s.review or s.status == "ignored":
             continue
@@ -227,6 +256,7 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
         if note:
             items += [note, ""]
         refs: list[str] = []
+        ours: list[str] = []  # the UG names this song's [alias] lines give its artist
         for cand in (s.match_candidates or [])[:5]:
             akey, skey = cand.get("artist_key"), cand.get("song_key")
             if not akey or not skey:
@@ -242,9 +272,20 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
             # No table headers: overrides.toml may hold [match] and [alias] already (`caracole review`
             # writes them), and a table declared twice makes the whole file unreadable.
             lines = [f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}  # under [match]"]
+            above = None
             if step not in NO_ALIAS_STEPS and slug_key(s.artist) != akey:
-                lines += _alias_line(s.artist, akey, overrides)
+                alias = _alias_line(s.artist, akey, overrides)
+                if alias and slug_key(s.artist) in given:
+                    above = _alias_above(s.artist, akey, overrides, *given[slug_key(s.artist)])
+                elif alias:
+                    lines += alias
+                    if akey not in ours:  # two of its candidates under one UG name: one line, either way
+                        ours.append(akey)
             items += _paste(lines)
+            if above:
+                items += [above, ""]
+        if ours:
+            given.setdefault(slug_key(s.artist), (s.display, ours))
         if refs:
             items += _dismissal(s, refs, overrides)
         items.append("")
@@ -305,7 +346,7 @@ def _artists_to_find(conn: sqlite3.Connection, songs: list[Song], overrides: Ove
         # One block for every artist, with the table's header only when the file has no such table:
         # a table declared twice makes overrides.toml unreadable, and the nightly run stops.
         lines = [f"{_toml_str(a)} = {_toml_str(ARTIST_PAGE_SHAPE)}" for a in new]
-        if overrides.artist_url:
+        if overrides.has_table("artist_url"):
             how = ("Then add these lines under the `[artist_url]` table your overrides.toml already has (a second "
                    "`[artist_url]` header would make the file unreadable)")
         else:
@@ -643,21 +684,32 @@ def _inbox(cfg: Config) -> list[str]:
     items = []
     for name, link, regular in entries:
         suffix = Path(name).suffix
+        shown = _file_name(name)
         if link:
-            items.append(f"- {_code(name)}: a symbolic link; caracole files only regular files. Put the file "
+            items.append(f"- {shown}: a symbolic link; caracole files only regular files. Put the file "
                          "itself there.")
         elif not regular:
             continue
         elif suffix.lower() in GP_EXTENSIONS:
-            items.append(f"- {_code(name)}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
+            items.append(f"- {shown}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
                          "to click names the song and the version")
         elif suffix.lower() in SCORE_EXTENSIONS:
-            items.append(f"- {_code(name)}: a score? Rename it \"Artist - Title{suffix}\", the song as caracole "
+            items.append(f"- {shown}: a score? Rename it \"Artist - Title{suffix}\", the song as caracole "
                          f"names it, as {SCORES_TITLE} does")
         else:
-            items.append(f"- {_code(name)}: not a Guitar Pro, Power Tab or score file "
+            items.append(f"- {shown}: not a Guitar Pro, Power Tab or score file "
                          f"({', '.join(GP_EXTENSIONS + SCORE_EXTENSIONS)}), so caracole leaves it there")
     return items
+
+
+def _file_name(name: str) -> str:
+    """A file's name as the page shows it, in code. A name that isn't UTF-8 (an old zip's, unzipped on the host:
+    Latin-1 or CP437) comes from the file system with each byte UTF-8 can't read as a lone surrogate, which no
+    page can hold: it is shown with that byte as ``\\xNN``, and says so."""
+    shown = os.fsencode(name).decode("utf-8", "backslashreplace")
+    if shown == name:
+        return _code(name)
+    return f"{_code(shown)} (its name isn't UTF-8: each \\xNN is a byte of it)"
 
 
 def _suggestions(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:

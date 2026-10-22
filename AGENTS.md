@@ -121,14 +121,20 @@ Rules a change there keeps (the Invariants below are the others):
   beside it (rows.js `artistOnly`) shows your songs of theirs alone; from a file the name is the funnel's
   (`artistFilter`). Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
-  do. select.js knows only the songs the page was loaded with: a line offers Add to a songbook…
-  for those alone. The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
+  do. select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a
+  songbook… for those alone. songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id;
+  library.js knows a song gone by its removal done on the page, or by a view or a card of `/jobs.json` that names
+  another song's identity under its id (the view's `identity`, `jobs_routes.view`): removed elsewhere, its line
+  says Removed, the song that has the id now is new to the page, and select.js and songbooks.js let it go
+  (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity alone). The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
   data's `songbooks` (songbook_section.py: each songbook's set list, where it plays each song as
   `songbook.plays_in` says it, and the setting's menus' names, the theory's), which `/jobs.json`
   gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the
   songbooks its song is in again, or a removal; a LaCuerda artist's read changes none). library.js lends it `window.caracoleLibrary`
-  (`track`, `showLine`, `focusOn`) and tells it every job's view (`caracole:job`) and the songbooks
-  (`caracole:songbooks`); it posts the Select bar's songbook too. A song's chip sends the capo with
+  (`track`, `showLine`, `focusOn`, and `fold`, the search's normalize.fold, for Add a song) and tells it every job's view (`caracole:job`) and the songbooks
+  (`caracole:songbooks`); it posts the Select bar's songbook too, and gives the bar its ticks back when
+  that make fails (`caracole:unmade`; the songbook stays on the tab until it is made, under its name or with
+  those ticks under another, or its Forget it is pressed: songbooks.js `letGo`). A song's chip sends the capo with
   the key and the mode (`/songbook/set`, as `caracole songbook set` keeps it), and Add a song looks
   a song the library hasn't got up first (`/songbook/add-song`: `search_routes.lookup_request`, then
   `caracole songbook add`, both or neither: `JobQueue.submit_all`). A change that ends seconds after its tap moves nothing on the screen:

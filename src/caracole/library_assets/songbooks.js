@@ -19,7 +19,6 @@
     return;
   }
   if (!panel || !libraryView || !tabLibrary || !tabBooks) return;
-  const own = Object.prototype.hasOwnProperty;
   const listOf = (value) => (Array.isArray(value) ? value : []);
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -40,9 +39,23 @@
   const isActive = (view) => Boolean(view) && (view.state === "queued" || view.state === "running");
   const plural = (n, word) => n + " " + word + (Number(n) === 1 ? "" : "s");
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+  // The names a command takes, each quoted, after "--" when one starts with "-" (-M-, an artist): caracole would
+  // take it for an option ("No such option: -M"). caracole serve's own command lines always have it.
+  const shellNames = (...names) => (names.some((n) => String(n).startsWith("-")) ? "-- " : "") +
+    names.map(shellQuote).join(" ");
   const shelfOf = (value) => (value && typeof value === "object" ? value : {});
   let shelf = shelfOf(data.songbooks);
   const books = () => listOf(shelf.books).filter((b) => b && typeof b === "object");
+  // A songbook Select was making whose make failed where it ran: songbooks.toml hasn't got it, and nothing deleted it.
+  // It stays as it would have been, its line saying it couldn't be made and its status line why, until it is made
+  // (under its name, or with the picks it gave back under another) or forgotten (``letGo``).
+  const unmade = new Map();  // its name -> its book
+  const withUnmade = (given) => {
+    const named = new Set(listOf(given.books).map((b) => String(b && b.name)));
+    for (const name of Array.from(unmade.keys())) if (named.has(name)) unmade.delete(name);
+    return unmade.size ? Object.assign({}, given, { books: listOf(given.books).concat(Array.from(unmade.values())) })
+      : given;
+  };
   const songs = listOf(data.songs);
 
   // --- the tab, and the address ---------------------------------------------------------------------------
@@ -100,6 +113,11 @@
   const newest = new Map();  // a songbook's name -> the newest view of a change of it
   const lookupViews = new Map();  // job id -> the newest view of a lookup that a song added here waits for
   const songViews = new Map();  // song id -> the newest view of its lookup
+  // The set list's lines of a lookup's song: by its id, and by its identity key where both have one, which an id
+  // given again never shares (songs.id has no AUTOINCREMENT: once the newest song is removed, in another tab or by
+  // caracole remove, the next one added gets its id, while a set list drawn before still has the removed one's).
+  const songLines = (root, view) => Array.from(root.querySelectorAll('.set-line[data-song="' + Number(view.songId) +
+    '"]')).filter((li) => !view.identity || !li.dataset.key || li.dataset.key === String(view.identity));
   const changes = new Map();  // job id -> the newest view of a songbook's change
   const placed = new Map();  // job id -> the line that shows it (a song added, before the songbook has it)
   const namesOf = (view) => {
@@ -161,7 +179,8 @@
   };
   const metaOf = (b) => [plural(Number(b.songs) || 0, "song"),
     Number(b.missing) ? b.missing + " without a sheet" : "",
-    b.changed ? "changed " + b.changed : b.pending ? "on its way" : "not made yet"].filter(Boolean).join(" · ");
+    b.changed ? "changed " + b.changed : b.failed ? "couldn't be made" : b.pending ? "on its way" : "not made yet"]
+    .filter(Boolean).join(" · ");
   const gone = new Set();  // what a change left on the page, until your next click or key: nothing moves meanwhile
   const sweep = () => {
     if (!gone.size) return;
@@ -231,7 +250,8 @@
     if (!book || book.classList.contains("sb-busy") === on) return;
     book.classList.toggle("sb-busy", on);
     for (const control of book.querySelectorAll("button, input, select")) {
-      if (!control.closest(".add-song") && !control.classList.contains("book-back")) control.disabled = on;
+      if (!control.closest(".add-song") && !control.classList.contains("book-back")
+          && !control.classList.contains("book-forget")) control.disabled = on;
     }
   };
   const lineOf = (ev) => ev.currentTarget.closest(".set-line");  // a line drawn again keeps its element
@@ -366,25 +386,27 @@
     }
     for (const li of before) if (gone.has(li) && final.indexOf(li) < 0) final.splice(before.indexOf(li), 0, li);
     list.replaceChildren(...final);
-    for (const [song, view] of songViews) {  // a lookup's line, on its song's line
-      for (const li of list.querySelectorAll('.set-line[data-song="' + Number(song) + '"]')) showLine(lineIn(li), view);
+    for (const view of songViews.values()) {  // a lookup's line, on its song's line
+      for (const li of songLines(list, view)) showLine(lineIn(li), view);
     }
     renumber();
   };
   const fileCommands = (b) => {
     const first = listOf(b.set)[0];
     const song = first ? String(first.entry) : "ARTIST - TITLE";
-    const name = shellQuote(b.name);
+    const setting = "--key G --mode dorian --capo 0";  // before "--", when the names need it
+    const names = shellNames(b.name, song);
     const box = el("div", "book-commands");
     box.appendChild(el("p", "hint", "This page changes nothing: where caracole runs, these do (or edit songbooks.toml):"));
     const list = el("ul", "commands");
     for (const [what, command] of [
-      ["Add a song", "caracole songbook add " + name + " 'ARTIST - TITLE'"],
-      ["Move a song", "caracole songbook move " + name + " " + shellQuote(song) + " 2"],
-      ["Play it elsewhere", "caracole songbook set " + name + " " + shellQuote(song) + " --key G --mode dorian --capo 0"],
-      ["Take it out", "caracole songbook remove " + name + " " + shellQuote(song)],
-      ["Rename it", "caracole songbook rename " + name + " 'NEW NAME'"],
-      ["Delete it", "caracole songbook delete " + name],
+      ["Add a song", "caracole songbook add " + shellNames(b.name, "ARTIST - TITLE")],
+      ["Move a song", "caracole songbook move " + names + " 2"],
+      ["Play it elsewhere", "caracole songbook set " +
+        (names.startsWith("--") ? setting + " " + names : names + " " + setting)],
+      ["Take it out", "caracole songbook remove " + names],
+      ["Rename it", "caracole songbook rename " + shellNames(b.name, "NEW NAME")],
+      ["Delete it", "caracole songbook delete " + shellNames(b.name)],
     ]) {
       const item = el("li");
       item.append(el("span", "command-what", what), el("code", null, command));
@@ -401,8 +423,23 @@
       return a;
     });
     const parts = links.length ? links
-      : [el("p", "hint", b.pending ? "Its files come once it is made." : "Not made yet: caracole render, or caracole " +
-        "songbook render, makes its files.")];
+      : [el("p", "hint", b.failed ? "Not made: Select can make it again." : b.pending ? "Its files come once it is made."
+        : "Not made yet: caracole render, or caracole songbook render, makes its files.")];
+    if (b.failed && !links.length) {
+      const name = b.name;
+      parts.push(button("Forget it", "btn small book-forget", () => {
+        letGo(name);
+        const li = Array.from(lines.children).find((x) => x.dataset.book === name);
+        if (li) li.remove();  // gone at your tap: nothing says so where it was
+        if (state.book === name) {
+          state.book = "";
+          save();
+        }
+        draw();
+        const line = lines.querySelector("button.book-line");
+        (line || newBook).focus({ preventScroll: true });
+      }, "Forget " + name + ": take it off the page"));
+    }
     const toGet = listOf(b.set).filter((e) => e && e.get).length;
     const was = row.querySelector("form.get-missing");
     if (!toGet && was && !gone.has(was)) {  // nothing left to get: its room kept until your next click or key
@@ -509,15 +546,19 @@
       bookName = b.name;
       const view = newest.get(b.name);
       if (view) showLine(status, view);
-      lockBook(busyFor(b.name));
+      lockBook(locked(b.name));
     }
     bookName = b.name;
     book.dataset.songbook = b.name;
     const h2 = book.querySelector("h2");
     if (h2.textContent !== b.name) h2.textContent = b.name;
-    book.querySelector(".book-meta").textContent = metaOf(b).replace(/ · changed .*| · not made yet| · on its way/, "");
+    book.querySelector(".book-meta").textContent = metaOf(b)
+      .replace(/ · changed .*| · not made yet| · on its way| · couldn't be made/, "");
     drawFiles(b, readOnly);
     if (!moving) drawSet(b, readOnly);
+    const adder = book.querySelector(".add-song");
+    if (adder) adder.hidden = Boolean(b.failed);
+    if (b.failed) lockBook(true);
     const rename = book.querySelector(".book-rename input[name=new]");
     if (rename && document.activeElement !== rename) rename.value = b.name;
     const del = book.querySelector(".book-delete button");
@@ -530,6 +571,16 @@
   // A rename or a deletion waits: the songbook's controls wait with it (a form sent meanwhile would name it wrong).
   const busyFor = (name) => Array.from(changes.values()).some((v) => isActive(v) && namesOf(v).indexOf(name) >= 0 &&
     v.songbook && (v.songbook.action === "rename" || v.songbook.action === "delete"));
+  const locked = (name) => busyFor(name) || unmade.has(name);  // or never made: nothing in it to change
+  // A songbook whose make failed, off the page: made again, or forgotten (its Forget it).
+  const letGo = (name) => {
+    if (!unmade.delete(name)) return;
+    shelf = Object.assign({}, shelf, { books: books().filter((x) => x.name !== name) });
+    if (book && bookName === name) {
+      book.remove();
+      book = null;
+    }
+  };
 
   // --- the songbook's changes -------------------------------------------------------------------------------------
   // A change posted; ``spot``, a line it shows on as well (a set list's song, an Add a song result).
@@ -569,7 +620,7 @@
       const names = namesOf(view);
       for (const n of names) if (n) newest.set(n, view);
       if (book && status && names.indexOf(bookName) >= 0) showLine(status, view);
-      if (book && names.indexOf(bookName) >= 0) lockBook(busyFor(bookName));
+      if (book && names.indexOf(bookName) >= 0) lockBook(locked(bookName));
       const spot = placed.get(Number(view.id));
       // A song new to the library has its lookup's line there until that is over, then the songbook's change's.
       const lookup = spot ? lookupViews.get(Number(spot.dataset.lookup)) : null;
@@ -583,11 +634,7 @@
       }
       if (view.songId !== null && view.songId !== undefined) {
         songViews.set(Number(view.songId), view);
-        if (book) {
-          for (const li of book.querySelectorAll('.set-line[data-song="' + Number(view.songId) + '"]')) {
-            showLine(lineIn(li), view);
-          }
-        }
+        if (book) for (const li of songLines(book, view)) showLine(lineIn(li), view);
       }
       if (spot && spot.isConnected) showLine(lineIn(spot), view);
     }
@@ -596,11 +643,29 @@
     const view = e.detail;
     if (view && typeof view === "object") shown(view);
   });
+  // A song gone from the library, removed on the page or elsewhere (library.js): Add a song offers it no more, as its
+  // id may come back with the next song added (songs.id has no AUTOINCREMENT).
+  document.addEventListener("caracole:gone", (e) => {
+    const s = songs.find((x) => x && Number(x.id) === Number(e.detail && e.detail.id));
+    if (s) s.status = "removed";
+  });
   document.addEventListener("caracole:songbooks", (e) => {
     const detail = e.detail && typeof e.detail === "object" ? e.detail : {};
+    const before = books();
     shelf = shelfOf(detail.songbooks);
     const view = detail.view && typeof detail.view === "object" ? detail.view : null;
     const [was, after] = view ? namesOf(view) : ["", ""];
+    if (view && view.state === "failed" && view.songbook && view.songbook.action === "make") {
+      const b = before.find((x) => x.name === was && x.pending);
+      if (b && !books().some((x) => x.name === was)) {  // never made, not deleted; the Select bar gets its ticks back
+        unmade.set(was, Object.assign(b, { failed: true }));
+        const why = String(view.line && view.line.text || "");
+        document.dispatchEvent(new CustomEvent("caracole:unmade", { detail: {
+          name: was, songs: listOf(b.set).map((x) => x && x.id).filter((id) => id !== null && id !== undefined),
+          error: "“" + was + "” wasn't made" + (why ? ": " + why : ".") } }));
+      }
+    }
+    shelf = withUnmade(shelf);
     if (view && view.state === "done" && view.songbook) {
       if (view.songbook.action === "rename") {  // its line in the list, where it was, under its new name
         const li = Array.from(lines.children).find((x) => x.dataset.book === was);
@@ -756,6 +821,15 @@
         detail: { ok: Boolean(view && view.songbook), error: view ? "" : failure(reply) } }));
       if (!view || !view.songbook) return;
       const after = String(view.songbook.after || name);
+      // One whose make failed, made again (under its name, or with the picks it gave back under another): off the
+      // page, its article too; the one sent comes as new, its line where that one's was.
+      const sent = ids.join(",");
+      for (const [was, b] of Array.from(unmade)) {
+        if (was !== after && !(sent && listOf(b.set).map((x) => Number(x && x.id)).join(",") === sent)) continue;
+        const li = Array.from(lines.children).find((x) => x.dataset.book === was);
+        if (li && !books().some((x) => x.name === after)) li.dataset.book = after;
+        letGo(was);
+      }
       // Until it is done, the songbook as it will be: its songs as the library names them, at its end.
       let b = books().find((x) => x.name === after);
       if (!b) {
@@ -876,12 +950,7 @@
   });
 
   // --- Add a song: your songs and the indexes', as you type -------------------------------------------------------
-  const table = data.fold && typeof data.fold === "object" ? data.fold : {};
-  const fold = (text) => {
-    let out = "";
-    for (const ch of String(text).normalize("NFKD").replace(/\p{Mn}/gu, "")) out += own.call(table, ch) ? table[ch] : ch;
-    return out.toLowerCase();
-  };
+  const fold = lib ? lib.fold : (text) => String(text).toLowerCase();  // the library's search's, as it reads songs
   const words = (text) => fold(text).split(/\s+/).map((w) => w.replace(/['’‘`´ʼ]/g, "")
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")).filter(Boolean);
   const HAN = /\p{Script=Han}/u;

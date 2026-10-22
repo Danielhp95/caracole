@@ -15,7 +15,8 @@ it finished and its next step (Open, Pick the match, Get it from there, Request 
 from its line and its song (``song_of``: for a song a fetch left without a sheet, what the local indexes
 have elsewhere, ``outcome.elsewhere``).
 
-Each job is shown as the page's script reads it (``views``): its song, its line (status.py) and, once
+Each job is shown as the page's script reads it (``views``): its song (its id, and its identity key, which
+an id songs.id gives again once the newest song is removed never shares), its line (status.py) and, once
 it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, and the
 songbooks as its Songbooks tab has them now, which the page draws again: a songbook's change, a lookup
 (``caracole get`` makes the songbooks its song is in again) and a removal each change them. A job says
@@ -224,7 +225,10 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
     ("song"), a song's removal ("remove"), an export of a song's sheet ("export", which is no song's line: its
     ``songId`` is None), or a songbook ("songbook", which ``songbook`` names), whose ``songbook_page`` its line
-    links once it is done."""
+    links once it is done. A song's job names it by its id (``songId``) and its identity key (``identity``, the
+    job's key: ``song_of`` finds the song by it): songs.id has no AUTOINCREMENT, so once the newest song is
+    removed the next one added gets its id again, and a page that knew the one by that id tells the other by its
+    identity."""
     from caracole.web.songbooks import songbook_of
 
     songbook = songbook_of(job.song_key)
@@ -233,6 +237,8 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
     seen = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
             "state": job.state, "fetching": job.fetching, "line": line.as_json(), "details": details_href(job.id)}
+    if song_id is not None and songbook is None:
+        seen["identity"] = job.song_key.removeprefix(REMOVING)
     if songbook is not None:
         seen["songbook"] = songbook
     return seen

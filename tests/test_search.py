@@ -233,6 +233,19 @@ def test_hint_leaves_the_header_out_when_overrides_has_the_table(conn, query, hi
     assert "    [artist_url]\n" in bare_id_hint(query, hits)
 
 
+def test_hint_leaves_the_header_out_when_overrides_has_the_table_with_no_entry(tmp_path):
+    # Its one line commented out: the file has the table still, and a second header would make it unreadable.
+    from caracole.overrides import load_overrides
+
+    path = tmp_path / "overrides.toml"
+    path.write_text('[artist_url]\n# "Maná" = "https://www.ultimate-guitar.com/artist/mana_98"\n', encoding="utf-8")
+    hint = bare_id_hint("Joaquín Sabina", [], overrides=load_overrides(path))
+    assert "    [artist_url]\n" not in hint and "under the [artist_url] table it has already" in hint
+    line = hint.split("\n\n")[1].strip().replace("…", "joaquin_sabina_1")
+    path.write_text(path.read_text(encoding="utf-8") + line + "\n", encoding="utf-8")  # as the hint says
+    assert set(load_overrides(path).artist_url) == {"joaquin-sabina"}
+
+
 def test_empty_query_finds_nothing(conn):
     index(conn, ROWS)
     assert search_index(conn, " — ") == []

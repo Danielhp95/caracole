@@ -876,6 +876,37 @@ def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, l
                         "document.querySelector('#requested article h3').textContent === 'Hysteria'")
 
 
+def keyed(page, text):
+    """``text`` typed with real keys, each pressed and let go: a key the page's script takes is never typed."""
+    for character in text:
+        page.send("Input.dispatchKeyEvent", type="keyDown", key=character, text=character)
+        page.send("Input.dispatchKeyEvent", type="keyUp", key=character)
+
+
+def test_a_slash_typed_in_the_request_form_is_the_fields(cfg, live, browser):
+    # "/" elsewhere on the page goes to the search box; in a field of the form, "AC/DC" or "Either/Or" is typed.
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    browser.open(base)
+    search(browser, "Muse - Hysteria")
+    assert browser.wait("document.getElementById('request-box').getClientRects().length > 0")
+    browser.click("#request-box > summary")
+    for name, text in (("artist", "AC/DC"), ("title", "Either/Or")):
+        browser.js(f"(() => {{ const f = document.querySelector('form.request-form [name={name}]'); f.focus(); "
+                   "f.select(); })()")
+        keyed(browser, text)
+        field = f"document.querySelector('form.request-form [name={name}]')"
+        assert browser.wait(f"{field}.value === {json.dumps(text)}"), browser.js(f"{field}.value")
+        assert browser.js(f"document.activeElement === {field}")
+    assert browser.js("document.getElementById('q').value") == "Muse - Hysteria"
+    assert browser.js("document.getElementById('request-box').getClientRects().length > 0")
+    # Anywhere else, "/" still goes to the search box, its text selected, and types nothing.
+    browser.js("document.activeElement.blur()")
+    keyed(browser, "/")
+    assert browser.wait("document.activeElement === document.getElementById('q')")
+    assert browser.js("document.getElementById('q').value") == "Muse - Hysteria"
+
+
 def test_the_fold_for_an_artist_the_index_cant_see_shows_its_commands_as_code(cfg, live, browser):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])

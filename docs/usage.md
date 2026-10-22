@@ -1608,7 +1608,13 @@ when it has something in it:
   another UG name for the artist also gets an `[alias]` line, unless
   overrides.toml has that alias already; for an artist with aliases, the
   line is the artist's whole list with the new one, marked
-  `# in place of the artist's line under [alias]`. After the candidates
+  `# in place of the artist's line under [alias]`. An artist's line is given
+  once on the page, since the same key twice under `[alias]` makes the file
+  unreadable: a later song of theirs gets its `[match]` line alone, and says
+  which item above has the artist's line (for another UG name, the line that
+  holds both, to put in its place; for an item whose candidates give the
+  artist several, of which one at most goes in, what to do with each), and
+  its own line, should none of those go in. After the candidates
   comes the `[reject]` line that dismisses them all; for a song with a
   `[reject]` line already, the whole line to put in its place (see
   [Review](#review)). When the candidates come only from the steps that never
@@ -1653,8 +1659,8 @@ when it has something in it:
   ```
 
   The block has the `[artist_url]` header only while overrides.toml has no
-  `[artist_url]` entries; after that the page gives the lines alone, to add
-  under the table. The artist page lists all of the artist's tabs, bare ids
+  `[artist_url]` table; once it has one, even with no entry left in it, the
+  page gives the lines alone, to add under the table. The artist page lists all of the artist's tabs, bare ids
   included. The next run reads it, finds your songs on it by title, and
   fetches them like any matched song. That's once per artist, not per song.
   From then on `caracole search` finds every tab the page lists, with UG's
@@ -1737,7 +1743,9 @@ when it has something in it:
   and the version, or a score "Artist - Title.ext", the song as caracole names
   it, and the next run files it. Don't move it into the song's
   folder yourself: caracole wouldn't know it is there. A symbolic link in
-  `_inbox/` is listed too: caracole files only regular files. If `_inbox` is a
+  `_inbox/` is listed too: caracole files only regular files. A name that
+  isn't UTF-8 (an old zip's, in Latin-1 or CP437) shows each byte it can't read
+  as `\xNN`, and says so. If `_inbox` is a
   link itself, the page lists nothing from it, and says to make it a folder;
   until then the scan files nothing.
 - **Missing lyrics.** LRCLIB has none for these yet; caracole asks again after
@@ -1984,7 +1992,8 @@ shows that line at once. A key typed as a key ("a minor", "F# major") filters
 your songs alone: the sites' indexes know no keys, so the line under the box
 says so, and Enter waits for a search without one. The page puts each word of a line to run in single quotes
 (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote in
-it. `caracole serve` serves the same page, where typing searches what the
+it, and the names after `--` when one starts with "-" (the artist -M-), so that
+caracole takes none for an option. `caracole serve` serves the same page, where typing searches what the
 sites have too, under the same artist headers, with Get it, and a form to
 request a song by name (see below).
 
@@ -2018,7 +2027,8 @@ can't write anything, Make songbook gives the command to run where caracole
 runs, folded under "The command to run", with Copy beside it:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote
-in a name.
+in a name (and the names after `--` when one starts with "-": `caracole
+songbook make -- 'Camp' '-M- - Je dis aime'`).
 On `caracole serve`, the button makes the songbook, and the page opens the
 Songbooks tab on it (see below).
 
@@ -2612,7 +2622,7 @@ non-Latin letters, the command also explains bare ids, unless a strong hit comes
 caracole has read (caracole sees that artist's tabs), and prints the
 `[artist_url]` line to paste, for the artist's page or one of their tab pages,
 with the table's header only while overrides.toml has no `[artist_url]`
-entries. The line is keyed by the artist of a song of yours the query finds,
+table (one with no entry left in it counts). The line is keyed by the artist of a song of yours the query finds,
 never by a placeholder such as "misc" (a line `misc - 斑马` in wanted.txt),
 else by the query itself; a query may be a title, so the hint then adds that
 caracole needs the song's artist too (`caracole add ARTIST "斑马"`): nothing
@@ -3055,7 +3065,12 @@ is no progression exits with status 2.
   then on the song counts nowhere: the numbers at the top, the buttons'
   counts and the count over the list leave it out. A page older than a
   change to the library (the song merged into another since, say) removes
-  nothing, and the line says to reload the library. Without JavaScript,
+  nothing, and the line says to reload the library. A song removed elsewhere
+  while the page is open (in another tab, on another device, by `caracole
+  remove`) stays on it as it was, until a request of the page's comes back
+  with another song under its number in the library, which the next song
+  added may get: then its line says "Removed" too, and the new song comes
+  under the search box, as any song new to the library does. Without JavaScript,
   Remove… opens a page that says what goes and what stays; Remove it queues
   the removal and goes back to the library as you left it (its search,
   filters and sort), the song's line in view, and Keep it goes back there
@@ -3282,7 +3297,12 @@ is no progression exits with status 2.
   as a name another songbook has, a song no longer in the library or a
   songbook deleted since the page was made, is refused at once, and nothing
   runs: the songbook's status line, or the Select bar, says why, and the bar
-  keeps your ticks.
+  keeps your ticks. A make that fails once it runs (songbooks.toml can't be
+  written, say) leaves the songbook on the tab as it would have been, its line
+  saying it couldn't be made and its status line why, with nothing in it to
+  change, and gives the Select bar back its ticks, the name and why: making it
+  again is one tap. Made again with those ticks under another name, the new
+  songbook takes its line; its Forget it takes it off the tab.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

@@ -44,10 +44,23 @@
   };
 
   // The same folding as caracole's normalize.fold: NFKD, no accents, a few letters spelled out, lowercase.
+  // An accent is a mark with a canonical combining class (unicodedata.combining), not every \p{Mn}: a Devanagari
+  // vowel sign ("ु") has none, and stays, and a few \p{Mc} have one. JavaScript can't read the class, but canonical
+  // ordering shows it: a mark with one goes before U+0301 (class 230) when its class is lower, or after U+0334 (1)
+  // when it is higher, and one without moves nowhere.
+  const classed = new Map();
+  const accent = (ch) => {
+    if (!classed.has(ch)) {
+      const before = "x\u0301" + ch;
+      const after = "x" + ch + "\u0334";
+      classed.set(ch, /\p{M}/u.test(ch) && (before.normalize("NFD") !== before || after.normalize("NFD") !== after));
+    }
+    return classed.get(ch);
+  };
   const fold = (text) => {
     let out = "";
-    for (const ch of String(text).normalize("NFKD").replace(/\p{Mn}/gu, "")) {
-      out += own.call(table, ch) ? table[ch] : ch;
+    for (const ch of String(text).normalize("NFKD")) {
+      if (!accent(ch)) out += own.call(table, ch) ? table[ch] : ch;
     }
     return out.toLowerCase();
   };
@@ -59,6 +72,10 @@
   const terms = (folded) => folded.split(/\s+/).map(term).filter(Boolean);
   // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+  // The names a command takes, each quoted, after "--" when one starts with "-" (-M-, an artist): caracole would
+  // take it for an option ("No such option: -M"). caracole serve's own command lines always have it.
+  const shellNames = (...names) => (names.some((n) => String(n).startsWith("-")) ? "-- " : "") +
+    names.map(shellQuote).join(" ");
   const hay = songs.map((s) => String(s.search || ""));
   const inits = songs.map((s) => String(s.initials || ""));  // a title's initials: "wywh" finds Wish You Were Here
 
@@ -69,7 +86,8 @@
     all: () => true,
     found: (s) => s.status === "found",
     wanted: (s) => s.status === "wanted",
-    review: (s) => Boolean(s.review) && s.status !== "ignored",
+    // Not a song removed since the page loaded, which counts nowhere (counted, below), as found and wanted have it.
+    review: (s) => Boolean(s.review) && s.status !== "ignored" && s.status !== "removed",
   };
   const CHIP_TEXT = { found: "found songs", wanted: "wanted songs", review: "songs that need review" };
   const SORTS = ["artist", "title", "recent"];
@@ -1466,7 +1484,7 @@
     box.appendChild(el("p", null, "Searching Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore needs caracole serve. " +
       "Where caracole runs, this searches its copies of Ultimate Guitar's and LaCuerda's indexes:"));
     const line = el("div", "command");
-    const code = el("code", null, "caracole search " + shellQuote(q));
+    const code = el("code", null, "caracole search " + shellNames(q));
     const copy = button("Copy", "small", () => copyText(code, copy), "Copy the line");
     line.appendChild(code);
     line.appendChild(copy);
@@ -2144,10 +2162,15 @@
       }
     }
   });
+  // A field you type in keeps its keys: a "/" there is the text's ("AC/DC" as a request's artist, "Either/Or").
+  const UNTYPED = /^(checkbox|radio|button|submit|reset|range|color|file|image|hidden)$/;
+  const typedIn = (el) => el instanceof HTMLElement && (el.isContentEditable || el.tagName === "TEXTAREA"
+    || el.tagName === "SELECT" || (el.tagName === "INPUT" && !UNTYPED.test(el.type)));
   document.addEventListener("keydown", (e) => {
     if (composing(e)) return;
     const typing = document.activeElement === input;
-    if (e.key === "/" && !typing && !e.ctrlKey && !e.metaKey && !e.altKey && !input.closest("[hidden]")) {
+    if (e.key === "/" && !typing && !typedIn(e.target) && !e.ctrlKey && !e.metaKey && !e.altKey
+        && !input.closest("[hidden]")) {
       e.preventDefault();
       input.focus();
       input.select();
@@ -2206,6 +2229,7 @@
     if (view.kind === "songbook") return;
     const data = view.card && typeof view.card === "object" ? view.card : null;
     if (!data) return;
+    lostTo(Number(data.id), data.identity);
     const i = byIndex.get(Number(data.id));
     if (i !== undefined) {
       songs[i] = data;
@@ -2229,6 +2253,7 @@
     const id = Number(view.id);
     views.set(id, view);
     const song = songOf(view);
+    if (song !== null) lostTo(song, view.identity);  // before anything shows the view on the line of another song
     if (song !== null) {
       if (!songJob.has(song) || songJob.get(song) <= id) songJob.set(song, id);
       if (!isActive(view)) busy.delete(song);
@@ -2238,6 +2263,9 @@
       redraw(view);
     }
     paint(view);
+    // A removal done, its line saying so: the id names that song no more.
+    if (view.kind === "remove" && view.state === "done" && song !== null && byIndex.has(song)
+        && songs[byIndex.get(song)].status === "removed") forget(song);
   };
   // The job's line on the song's line, and wherever else it shows (a result's row, #requested), and in the list
   // of requests.
@@ -2325,6 +2353,29 @@
     tallyChips();
     tell();
   };
+  // A song of the page's gone from the library: its id names it no more, nor does what the page knew of it by that id
+  // (fetched or removed when the page loaded). songs.id has no AUTOINCREMENT, so the next song added may get the id
+  // again, and comes as a song new to the page (``arrived``), never in the gone one's line; select.js and
+  // songbooks.js, which know the page's songs by id too, let it go ("caracole:gone").
+  const forget = (id) => {
+    if (!byIndex.has(id)) return;
+    byIndex.delete(id);
+    busy.delete(id);
+    removing.delete(id);
+    document.dispatchEvent(new CustomEvent("caracole:gone", { detail: { id } }));
+  };
+  // A view or a card that names by ``identity`` another song than the one the page knows by its id ``id``: that song
+  // left the library where the page never saw it (removed in another tab, on another device or by caracole remove;
+  // merged into another), and the newest song since got its id. Its line says Removed, as one removed here does.
+  const REMOVED = { line: { tone: "removed", text: "Removed" } };
+  const lostTo = (id, identity) => {
+    const i = byIndex.get(id);
+    if (i === undefined || !identity || String(songs[i].identity || "") === String(identity)) return;
+    stopRemoval(id, REMOVED, false);  // counting down to its removal: nothing left to remove
+    removed(id);
+    showLine(progressIn(lines.get(i)), REMOVED);
+    forget(id);
+  };
 
   let timer = 0;
   let misses = 0;
@@ -2386,7 +2437,7 @@
   };
   // The Songbooks tab's seam (songbooks.js, which runs after this script): a job it asked for, followed as this
   // page's own are (``quiet``: its set list says how a lookup goes, so the list of requests leaves it out), each of
-  // its views told back ("caracole:job"), and a request's line, written as this page writes them.
+  // its views told back ("caracole:job"), a request's line, written as this page writes them, and the search's fold.
   window.caracoleLibrary = Object.freeze({
     track: (view, options) => {
       if (options && options.quiet) quiet.add(Number(view.id));
@@ -2394,6 +2445,7 @@
     },
     showLine,
     focusOn,
+    fold,
   });
 
   if (server) {
