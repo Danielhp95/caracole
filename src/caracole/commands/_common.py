@@ -474,13 +474,14 @@ def _locked_client() -> type[PoliteClient]:
         """
 
         def __init__(self, *args, lock: Path, cfg: Config | None = None,
-                     conn: sqlite3.Connection | None = None, yields: bool = False, **kwargs):
+                     conn: sqlite3.Connection | None = None, yields: bool = False, seen: int | None = None,
+                     **kwargs):
             super().__init__(*args, **kwargs)
             self._lock: Path | None = lock
             self._cfg = cfg
             self._conn = conn
             self._yields = yields and cfg is not None
-            self._seen = _handoffs  # the handoffs this client has looked at
+            self._seen = _handoffs if seen is None else seen  # the handoffs this client has looked at
 
         @property
         def handoffs(self) -> int:
@@ -631,6 +632,7 @@ def make_client(
     lock = _acquire(cfg, f"{provider} requests", interactive=interactive)
     try:
         policy = policy or (lookup_policy(cfg, conn, provider) if interactive else cfg.provider(provider))
+        seen = _handoffs  # a lookup let go first in the pause before its first request counts too
         _pause_after_last_request(conn, provider, policy.delay, cfg=None if interactive else cfg)
         log = EventLog(conn, run_id)
 
@@ -653,6 +655,7 @@ def make_client(
             cfg=cfg,
             conn=conn,
             yields=not interactive,
+            seen=seen,
         )
     except BaseException:
         _release(lock)

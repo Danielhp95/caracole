@@ -494,6 +494,23 @@ def test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_
     assert get_state(conn, "ug").strikes == 1
 
 
+def test_a_block_a_lookup_met_in_a_new_clients_first_pause_stops_its_first_request(cfg, conn, site, pauses,
+                                                                                   monkeypatch):
+    # `caracole fetch`, started 3 s after another caracole's UG request, waits out UG's pause before its first
+    # one, and lets a lookup go first meanwhile, which UG blocks: the fetch sends UG nothing.
+    from caracole.http import ProviderBlocked
+
+    log_request(conn, "ug", ago=3)
+    turns = a_lookup_in_a_pause(conn, monkeypatch, blocked=True)
+    client = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    try:
+        with pytest.raises(ProviderBlocked):
+            client.get("https://tabs.ultimate-guitar.com/tab/1")
+    finally:
+        client.close()
+    assert turns and site.requests == []
+
+
 def test_after_a_lookup_bulk_work_keeps_the_long_pause_after_the_lookups_request_to_a_site(cfg, conn, site, pauses,
                                                                                          monkeypatch):
     # The run makes every client at its start. In a pause of its LRCLIB client it let a lookup go first, which
