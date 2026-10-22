@@ -32,6 +32,13 @@ pinned on Ultimate Guitar (``[pin]``), and a miss waits 30 days as any does.
 ``read_artist_page`` reads one artist's page into the index, for caracole serve's
 Songs of a LaCuerda artist (``caracole lacuerda --artist``).
 
+**The most popular artists.** Once LaCuerda's listings are read whole, what the
+sheets and the listings leave of the night's budget (LaCuerda's 30 requests)
+reads the pages of the artists the listings count most songs of, a page not
+read in 30 days, ``POPULAR_PAGES`` (10) a night at most (``popular_pages``), so
+that their songs are in the index for searches; one the cache holds, younger,
+is read from the cache.
+
 Errors are never misses: a page that doesn't parse, or any other provider
 error, leaves the song to be tried again next run. A cached page that doesn't
 parse (a maintenance notice served with HTTP 200, say) is fetched once more
@@ -51,7 +58,16 @@ from pathlib import Path
 
 from caracole import coverage, stamps
 from caracole.config import RankPolicy
-from caracole.http import BudgetExhausted, Client, Response, read_once_more, stale
+from caracole.http import (
+    BudgetExhausted,
+    Client,
+    ProviderBlocked,
+    ProviderError,
+    ProviderUnavailable,
+    Response,
+    read_once_more,
+    stale,
+)
 from caracole.lacuerda import (
     PROVIDER,
     LaCuerdaParseError,
@@ -68,7 +84,7 @@ from caracole.lacuerda import (
     parse_version_page,
     version_url,
 )
-from caracole.lacuerda_index import artist_slugs, store_songs
+from caracole.lacuerda_index import artist_slugs, complete_at, store_artist_page, store_songs
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, write_info
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title
@@ -91,6 +107,8 @@ log = logging.getLogger(__name__)
 
 ARTIST_PAGE_MAX_AGE = timedelta(days=30)
 RECHECK_AFTER = timedelta(days=30)
+POPULAR_PAGES = 10  # the most popular artists' pages a night reads, of what the sheets and listings leave
+POPULAR_SCAN = 2000  # the most popular artists it looks among for a page not read in 30 days
 _ACCEPT = (200, 404)  # a 404 is an answer: no such artist, or no such version
 SHEET_DOCS = ("sheet.json", HUMAN_SHEET)  # what keeping a sheet writes, in that order
 _SLUG = re.compile(r"[a-z0-9_]+")  # an artist's name written as LaCuerda's slug of their page
@@ -157,6 +175,59 @@ def read_artist_page(conn: sqlite3.Connection, client: Client, artist: str, now:
     The page is cached for 30 days, as the step's are. Provider errors propagate."""
     found = _artist_songs(conn, client, artist, now, set(), first=[artist] if _SLUG.fullmatch(artist) else [])
     return (found[0], len({s.slug for s in found[1]})) if found is not None else None
+
+
+@dataclass
+class PopularStats:
+    """What one ``popular_pages`` pass did: the artist pages it asked LaCuerda for, the errors among them, and
+    whether it stopped at the budget."""
+
+    read: int = 0
+    errors: int = 0
+    budget_exhausted: bool = False
+
+
+def popular_pages(conn: sqlite3.Connection, client: Client, now: datetime, *,
+                  limit: int = POPULAR_PAGES) -> PopularStats:
+    """The pages of the most popular artists, by the songs LaCuerda's listings count, into the index, once the
+    listings are read whole: each one not read in 30 days, up to ``limit`` requests, with what the budget leaves;
+    one the cache holds, read within 30 days and not in the index, from the cache alone.
+
+    ``ProviderBlocked`` propagates. A spent budget ends the pass (``budget_exhausted``), and so does a client that
+    gives up on LaCuerda for the run; any other provider error, a page that won't parse included, counts in
+    ``errors`` and the pass goes on."""
+    stats = PopularStats()
+    if complete_at(conn) is None or limit <= 0:
+        return stats
+    cached = getattr(client, "cached", None)  # a PoliteClient's; a test's fake client may have none
+    fetched: set[str] = set()
+    slugs = [r[0] for r in conn.execute("SELECT artist_slug FROM lacuerda_index WHERE title = '' "
+                                        "ORDER BY songs DESC, artist_slug LIMIT ?", (POPULAR_SCAN,))]
+    for slug in slugs:
+        if stats.read >= limit:
+            break
+        url = artist_url(slug)
+        copy = cached(url, accept=_ACCEPT) if cached is not None else None
+        if copy is not None and not stale(copy, now, ARTIST_PAGE_MAX_AGE):
+            if copy.status == 200 and conn.execute("SELECT 1 FROM lacuerda_index WHERE page = ? AND title != '' "
+                                                   "LIMIT 1", (f"{slug}/",)).fetchone() is None:
+                store_artist_page(conn, slug, copy.text)
+            continue
+        try:
+            _artist_page(conn, client, slug, now, fetched)
+        except ProviderBlocked:
+            raise
+        except BudgetExhausted:
+            stats.budget_exhausted = True
+            break
+        except ProviderUnavailable as e:
+            log.warning("LaCuerda is unavailable for the rest of this run: %s", e)
+            break
+        except ProviderError as e:
+            stats.errors += 1
+            log.warning("LaCuerda's page of %s: %s", slug, e)
+        stats.read += 1
+    return stats
 
 
 # --- which songs ---------------------------------------------------------------------

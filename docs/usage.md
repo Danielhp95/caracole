@@ -916,7 +916,11 @@ configuration it would take, and why it waits.
    then read LaCuerda's listings of every artist into a local index, for
    searches, with what the sheets left of its budget (once the library has a
    song: an empty one asks no site). The artist pages caracole's HTTP cache
-   holds go into that index first, with no request.
+   holds go into that index first, with no request. Once the listings are read
+   whole, what is left of the budget reads the pages of LaCuerda's most popular
+   artists (the most songs its listings count first) not read in 30 days, 10 a
+   night at most, so that a search finds their songs; the summary says how many
+   (`4 popular artist pages read, 0 errors`).
 8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
 9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is

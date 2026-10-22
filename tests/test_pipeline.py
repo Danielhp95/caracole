@@ -724,8 +724,8 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
     assert get_state(conn, "lacuerda").last_error is not None
 
 
-def lacuerda_step(conn, cfg, monkeypatch, sheets, index, *, songs=True):
-    """The default lacuerda step with its two passes faked, for a library with a song (or none): what it
+def lacuerda_step(conn, cfg, monkeypatch, sheets, index, *, songs=True, popular=None):
+    """The default lacuerda step with its three passes faked, for a library with a song (or none): what it
     returns, and the passes it made."""
     from conftest import add_song
 
@@ -744,8 +744,14 @@ def lacuerda_step(conn, cfg, monkeypatch, sheets, index, *, songs=True):
         assert (client, now) == (ctx.services.client("lacuerda"), NOW)  # the sheets' client: one budget
         return index
 
+    def fake_popular(conn_, client, now):
+        made.append("popular")
+        assert (client, now) == (ctx.services.client("lacuerda"), NOW)  # the same client: one budget
+        return popular or lf.PopularStats()
+
     monkeypatch.setattr(lf, "lacuerda_sheets", fake_sheets)
     monkeypatch.setattr(li, "index_pass", fake_index)
+    monkeypatch.setattr(lf, "popular_pages", fake_popular)
     if songs:
         add_song(conn, "Radiohead", "Creep")
     ctx = StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=services(Outbox()),
@@ -758,7 +764,7 @@ def test_the_lacuerda_step_reads_the_artist_listings_with_what_the_sheets_left_o
 
     li.store_artists(conn, "tabs/e/index0.html", [LCArtist("estopa", "Estopa", 159)])
     result, made = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(tried=1, kept=1), li.IndexStats(pages=3))
-    assert made == ["sheets", "index"]
+    assert made == ["sheets", "index", "popular"]
     assert result.done == ["1 sheet kept", "3 pages of artists read"]
     assert result.status == ("1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors; "
                              "artist index: 3 pages read, 1 artist, 0 songs")
@@ -773,6 +779,20 @@ def test_the_lacuerda_step_leaves_the_listings_when_the_sheets_spent_the_budget(
     assert made == ["sheets"]
     assert result.spent == ["lacuerda"]
     assert result.status.endswith("artist index: 0 pages read, 0 artists, 0 songs (budget spent)")
+
+
+def test_the_lacuerda_step_reads_popular_artists_pages_with_what_the_sheets_and_listings_left(conn, cfg, monkeypatch):
+    import caracole.lacuerda_fetch as lf
+
+    result, made = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(tried=1), li.IndexStats(),
+                                 popular=lf.PopularStats(read=4, errors=1))
+    assert made == ["sheets", "index", "popular"]
+    assert result.done == ["4 popular artist pages read"]
+    assert result.status.endswith("artist index: 0 pages read, 0 artists, 0 songs; 4 popular artist pages read, "
+                                  "1 error")
+    # The listings spent the budget: no popular page tonight.
+    _, made = lacuerda_step(conn, cfg, monkeypatch, lf.LaCuerdaStats(), li.IndexStats(budget_exhausted=True))
+    assert made == ["sheets", "index"]
 
 
 def test_the_lacuerda_step_reads_no_listing_for_an_empty_library(conn, cfg, monkeypatch):
