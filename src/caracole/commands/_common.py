@@ -19,7 +19,9 @@ pauses, hands the lock over during a pause (``hand_over``), takes it back once
 the lookup is done, and then waits a whole pause again before its next request.
 Bulk work that sends no request (auto-chords, a pass of PDFs) hands it over
 between two songs. The lookup touches its announcement while it waits, so one
-a killed lookup left soon stops counting.
+a killed lookup left soon stops counting. Only lookups take it in a handoff:
+another caracole waiting meanwhile takes it once the bulk work is done
+(``_take_outside_handoffs``).
 """
 
 from __future__ import annotations
@@ -54,6 +56,7 @@ if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_
 
 LOCK_NAME = "caracole.lock"  # in the state directory
 WAITING_DIR = "caracole.lock.waiting"  # in the state directory: a file per lookup waiting for the lock
+HANDOFF_NAME = "caracole.lock.handoff"  # in the state directory: flocked while bulk work hands the lock over
 LOOKUP_RUN = "lookup:"  # how an interactive lookup's run id starts, in events
 HANDOFF_SLICE = 0.25  # seconds of a bulk pause between two looks for a waiting lookup
 HANDOFF_TAKE = 10.0  # seconds a lookup has to take the lock once it is handed over
@@ -174,19 +177,18 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
             raise
         fail(f"can't open {path}: {_reason(e)}")
     try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            holder = _holder(fd)
-            if on_wait is not None:
-                on_wait(holder)
-            if interactive:
+        if interactive:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                holder = _holder(fd)
+                if on_wait is not None:
+                    on_wait(holder)
                 warn(f"Another caracole is running ({holder}); it lets a lookup go first at its next pause, "
                      "or between two songs.")
                 _wait_announced(cfg, what, fd)
-            else:
-                warn(f"Another caracole is running ({holder}); waiting for it to finish.")
-                fcntl.flock(fd, fcntl.LOCK_EX)
+        else:
+            _take_outside_handoffs(cfg, fd, fatal=fatal, on_wait=on_wait)
         os.ftruncate(fd, 0)
         os.pwrite(fd, f"{os.getpid()} {what}\n".encode(), 0)
     except BaseException:
@@ -194,6 +196,50 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
         raise
     _held[path] = (fd, 1)
     return path
+
+
+def _take_outside_handoffs(cfg: Config, fd: int, *, fatal: bool,
+                           on_wait: Callable[[str], None] | None) -> None:
+    """Take caracole's lock (``fd``) as a caracole that isn't a lookup: once the one that holds it is done,
+    and never while bulk work has let go of it for a lookup (``hand_over``, which holds the flock of
+    ``HANDOFF_NAME`` meanwhile). A lock taken then is let go at once, and taken again once the handoff is
+    over: a `caracole-admin` command waiting for the nightly run takes it after the whole run, never in the
+    middle of one of its steps, and never ahead of the lookup."""
+    path = cfg.state_dir / HANDOFF_NAME
+    try:
+        gate = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as e:
+        if not fatal:
+            raise
+        fail(f"can't open {path}: {_reason(e)}")
+    said = False
+
+    def say() -> bool:
+        holder = _holder(fd)
+        if on_wait is not None:
+            on_wait(holder)
+        warn(f"Another caracole is running ({holder}); waiting for it to finish.")
+        return True
+
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                said = said or say()
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                fcntl.flock(gate, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:  # let go for a lookup: the lookup's now, then the bulk work's again
+                fcntl.flock(fd, fcntl.LOCK_UN)
+                said = said or say()
+                fcntl.flock(gate, fcntl.LOCK_SH)  # until the bulk work holds it again
+                fcntl.flock(gate, fcntl.LOCK_UN)
+                continue
+            fcntl.flock(gate, fcntl.LOCK_UN)
+            return
+    finally:
+        os.close(gate)
 
 
 def _announce(cfg: Config, what: str) -> Path:
@@ -295,7 +341,10 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     the lock and ``conn`` is in no transaction (the lookup must be able to write).
     The lock is let go, each waiting lookup takes it in turn (each has
     ``HANDOFF_TAKE`` seconds to), and this process waits until it is free again.
-    Its record (which caracole holds it) is written back.
+    Its record (which caracole holds it) is written back. Meanwhile it holds the
+    flock of ``HANDOFF_NAME``, so that a caracole waiting for the lock that isn't a
+    lookup (a `caracole-admin` command) leaves it to the lookups and this process
+    (``_take_outside_handoffs``); without that file, nothing is handed over.
     """
     global _handoffs
     path = cfg.state_dir / LOCK_NAME
@@ -303,17 +352,26 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     if held is None or (conn is not None and conn.in_transaction) or not lookups_waiting(cfg):
         return False
     fd, _ = held
-    record = os.pread(fd, 256, 0)
-    fcntl.flock(fd, fcntl.LOCK_UN)
     try:
-        for _ in range(int(HANDOFF_TAKE / 0.05)):
-            if not lookups_waiting(cfg):
-                break
-            _handoff_sleep(0.05)
+        gate = os.open(cfg.state_dir / HANDOFF_NAME, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as e:
+        logging.getLogger(__name__).info("No lookup goes first: %s can't be opened: %s.", HANDOFF_NAME, _reason(e))
+        return False
+    try:
+        fcntl.flock(gate, fcntl.LOCK_EX)
+        record = os.pread(fd, 256, 0)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        try:
+            for _ in range(int(HANDOFF_TAKE / 0.05)):
+                if not lookups_waiting(cfg):
+                    break
+                _handoff_sleep(0.05)
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            os.ftruncate(fd, 0)
+            os.pwrite(fd, record, 0)
     finally:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        os.ftruncate(fd, 0)
-        os.pwrite(fd, record, 0)
+        os.close(gate)  # and with it its flock
     _handoffs += 1
     logging.getLogger(__name__).info("Handed caracole's lock to a lookup, and took it back.")
     return True

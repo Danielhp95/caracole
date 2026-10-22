@@ -1895,7 +1895,12 @@ def _fetch_turn(
     nothing to count (a handoff left it nothing to do, the budget ran out, or UG failed for it).
 
     A block is re-raised; any other provider error skips the song, which stays dirty."""
-    song = handed.current(get_song(ctx.conn, listed.id) if guitar else listed)
+    if guitar:  # as the sheet pass left it
+        try:
+            listed = get_song(ctx.conn, listed.id)
+        except KeyError:  # merged into another song since, by a lookup the run let go first
+            return None
+    song = handed.current(listed)
     if song is None:
         return None
     before = handed.count()

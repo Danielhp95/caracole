@@ -624,7 +624,12 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
   Bulk work hands the lock over
   (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it back
-  once the lookup is done, and goes on. It does so in two places. Its clients, and the
+  once the lookup is done, and goes on. It hands it to lookups alone: meanwhile it holds the
+  flock of `state_dir/caracole.lock.handoff`, and a caracole that isn't a lookup lets go of a
+  lock it took during a handoff and waits for it to end (`_common._take_outside_handoffs`), so a
+  `caracole-admin` command waiting for the run takes the lock after it, never in its middle
+  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_alone_never_to_another_command_waiting`).
+  It does so in two places. Its clients, and the
   yt-dlp runner of `make_youtube` between two runs, spend each pause looking for a waiting
   lookup (every `HANDOFF_SLICE` s), then pause a whole `delay` again
   (`test_commands_common.py::test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too`).

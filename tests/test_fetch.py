@@ -3205,6 +3205,25 @@ def test_a_song_a_lookup_fetched_meanwhile_is_not_fetched_again(conn, tmp_path):
     assert stats.songs_done == 1 and "sheet 101" in read(tmp_path, persiana, "sheet.txt")
 
 
+def test_a_song_gone_while_the_run_let_a_lookup_go_first_is_passed_over_in_the_guitar_pass(conn, tmp_path):
+    # In the pause before Persiana's guitar tab, a lookup that the run let go first merged Signos into another song:
+    # Signos' guitar turn passes it over, as its sheet turn would, and the fetch goes on.
+    ug = FakeUG()
+    persiana = accepted(conn, added_at="2026-10-10T00:00:00Z")
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (401, "soda-stereo", "persiana-americana", "tabs"))
+    ug.tab(v(101), content=sheet("sheet 101", LINES))
+    ug.tab(v(401, "tabs"), content=riff("tab 401"))
+    older = signos(conn, ug)
+    client = HandingOver(ug.client(tmp_path / "cache"), slugged(401, "tabs"),
+                         lambda: conn.execute("DELETE FROM songs WHERE id = ?", (older.id,)))
+
+    stats = fetch_songs(context(conn, client, tmp_path), [persiana, older])
+
+    assert slugged(401, "tabs") in ug.requests and (stats.songs_done, stats.songs_failed) == (1, 0)
+    assert "tab 401" in read(tmp_path, persiana, "tab.txt")
+
+
 def test_after_a_handoff_the_fetch_reads_overrides_toml_again(conn, tmp_path):
     # The lookup's pick, recorded as a [pin] while the run waited, is the song's sheet.
     ug = FakeUG()

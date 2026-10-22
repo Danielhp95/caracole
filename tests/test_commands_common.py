@@ -654,6 +654,59 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, c
     assert int(handoffs) == 1
 
 
+WAITER = r"""
+import sys, time
+from pathlib import Path
+from caracole.commands import _common
+from caracole.config import load_config
+
+cfg = load_config(Path(sys.argv[1]))
+out = open(sys.argv[2], "w", buffering=1)
+with _common.exclusive(cfg, "remove Radiohead - Creep --yes"):
+    out.write(f"got {time.time()}\n")
+"""
+
+
+@pytest.mark.slow
+def test_the_nightly_run_hands_the_lock_to_a_lookup_alone_never_to_another_command_waiting(tmp_path, cfg):
+    # During the run's pause, a `caracole-admin remove` waits for the run to finish (deploy.md), then a lookup
+    # comes: the lookup goes first in the pause, and the removal still waits for the whole run, never its middle.
+    import subprocess
+    import sys
+    import time
+
+    from conftest import subprocess_pythonpath
+
+    pause = 3.0  # the run's, between two requests to UG
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\n[providers.ug]\ndelay = [{pause}, {pause}]\n',
+                      encoding="utf-8")
+    run_log, removal_log = tmp_path / "holder.log", tmp_path / "waiter.log"
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
+    holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(config), str(run_log)], env=env)
+    removal = None
+    try:
+        deadline = time.time() + 20
+        while "first" not in (run_log.read_text() if run_log.exists() else "") and time.time() < deadline:
+            time.sleep(0.05)
+        removal = subprocess.Popen([sys.executable, "-c", WAITER, str(config), str(removal_log)], env=env,
+                                   stderr=subprocess.DEVNULL)
+        assert waiting_for(lock_path(cfg), lambda: removal.poll() is None, timeout=10)
+        with exclusive(cfg, "get Oasis - Wonderwall", interactive=True):
+            took = time.time()
+        assert holder.wait(30) == 0 and removal.wait(30) == 0
+    finally:
+        holder.kill()
+        if removal is not None:
+            removal.kill()
+    _, second = run_log.read_text().splitlines()
+    _, sent, handoffs = second.split()
+    _, got = removal_log.read_text().split()
+    assert int(handoffs) == 1 and took < float(sent)  # the lookup went first, in the run's pause
+    assert float(got) > float(sent)  # the removal only once the run was done
+
+
 @pytest.mark.slow
 def test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too(cfg, conn, tmp_path, monkeypatch):
     # The nightly run's youtube step holds caracole's lock for minutes, 15 to 30 seconds between two yt-dlp

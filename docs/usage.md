@@ -1489,7 +1489,10 @@ overrides.toml again after it, and makes the songbooks and the pages from
 overrides.toml as the lookup left it. The waiting lookup announces itself with a file
 in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
-longer waited for after five seconds.
+longer waited for after five seconds. The run lets lookups alone go first: a
+command that isn't one (`caracole fetch`, `remove`, `add`, …) still waits for
+the whole run, even when it started before the lookup came, and the run holds
+`caracole.lock.handoff` in the state folder while a lookup has the lock.
 A songbook change, asked for now as a lookup is, waits the same way and says
 the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on
