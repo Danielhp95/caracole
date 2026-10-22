@@ -1906,6 +1906,35 @@ def test_a_key_estimated_from_the_chords_names_the_shapes_in_the_pdf_viewer_expo
     assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Dm}"
 
 
+SLASH_SHEET = (
+    "[Verse 1]\r\n"
+    "[tab][ch]Am[/ch]      [ch]Am7/G[/ch]      [ch]D7/F#[/ch]\r\n"
+    "Una canción de prueba[/tab]\r\n"
+    "[tab][ch]E7/G#[/ch]      [ch]C/G[/ch]      [ch]D/F#[/ch]\r\n"
+    "solo para el analizador[/tab]\r\n"
+)
+
+
+@pytest.mark.parametrize("query", ["t=2", "mode=dorian", "at=1.1", "t=2&at=1.2"])
+def test_a_versions_pdf_draws_the_shape_its_viewer_shows_for_a_slash_chord_too(conn, cfg, query):
+    # Am7/G has no shape of its own in chords-db: the viewer shows Am7's, to play with G in the bass, and the
+    # version's {define} of it gives that shape, or the one chosen (apply_version). Its PDF draws it as it draws
+    # every other chord's, never only the shapes with the slash's bass lowest.
+    from caracole.viewer.page import viewer_key
+    from caracole.viewer.version import apply_version, version_from_query
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, SLASH_SHEET, tonality="Am")
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    moved = apply_version(cho, version_from_query(query), key=viewer_key(cho, "A minor", "tab"), capo_sheet=None)
+    shown = [line for line in moved.splitlines() if line.startswith("{define: ")]
+    assert len(shown) == 6  # every chord the version plays, Am7/G's in Am7's shape
+    _, run = export(conn, cfg, song, query)
+    drawn = [line for line in run.printed[-1].decode("utf-8").splitlines() if line.startswith("{define: ")]
+    assert drawn == shown
+
+
 def test_the_same_export_again_replaces_it(conn, cfg):
     from caracole.render import EXPORT_KV
 

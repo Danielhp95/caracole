@@ -9,7 +9,10 @@ private copy it renders (``render._render_into``). It is the .cho with:
   viewer's: for each chord the song plays that the sheet gives a shape for (its chord legend,
   wherever it is, or a ``{define}``), the first shape its viewer shows for it (``page.shapes_of``),
   under the name the song writes it by. The sheet's own ``{define}``s that the viewer reads go:
-  chordpro draws a chord's last one;
+  chordpro draws a chord's last one. A version's text (``apply_version``: ``defined``) defines each chord
+  in the shape its viewer shows, or the one chosen, and each of those is drawn as it is: a slash chord's
+  too, whose shape may be its chord's alone, with the bass to add (``voicings.plays`` would leave it out
+  of a sheet's own);
 - ``{subtitle}`` under the title: the artist, the viewer's key line (``page.key_line_text``), a
   capo the notes name for a sheet with no capo of its own, where its chords are played where the
   sheet writes them (``notes_capo``: a version that moves them or the capo plays them elsewhere), and
@@ -78,12 +81,13 @@ _NAMEABLE = re.compile(r"[^\s{}\[\]\"~]+")  # a chord name a {define} can carry,
 
 
 def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, names: str = "chords",
-             notes_capo: bool = True) -> str:
+             notes_capo: bool = True, defined: bool = False) -> str:
     """The text of the PDF of the .cho ``cho`` (see the module's docstring). ``key`` is the key of
     its shapes and ``capo`` its capo, None for none, as the viewer reads them (``page.viewer_key``);
     ``columns`` the song's columns, one for none; ``names``, one of ``NAMES``; ``notes_capo``, whether a
     capo the notes name is the one the chords are played at: not in a version of the sheet that moves
-    them or the capo (``render._version_text``)."""
+    them or the capo (``render._version_text``); ``defined``, whether ``cho``'s ``{define}``s are the
+    shapes its viewer shows, a version's (``apply_version``), each drawn as it is."""
     if names not in NAMES:
         raise ValueError(f"names: {names!r} is none of {', '.join(NAMES)}")
     lines = cho.splitlines()
@@ -93,7 +97,10 @@ def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, n
         head += 1
     body = _song(lines[max(head, pre.end):])
     numbered = key if names != "chords" else None
-    shapes = shapes_of(parse_sheet(cho))
+    sheet = parse_sheet(cho)
+    shapes = shapes_of(sheet)
+    if defined:
+        shapes |= _defined(sheet.defines)
     if numbered is not None:
         body, shown, played = _numbered(body, numbered, names, shapes)
     out = lines[:head]
@@ -229,6 +236,18 @@ def _defines(shapes: dict[str, dict[str, Any]], names: list[str]) -> list[str]:
         if entry is not None and entry["mine"]:
             frets, fingers, base, _ = entry["list"][0]
             out.append(f"{{define: {name} base-fret {base} frets {' '.join(frets)} fingers {' '.join(fingers)}}}")
+    return out
+
+
+def _defined(defines: list[str]) -> dict[str, dict[str, Any]]:
+    """The shape each ``{define}`` (``defines``, their values) gives its chord, as it is, filed as ``page.shapes_of``
+    files the shapes the viewer shows: a version's, each the one its viewer shows for that chord (``apply_version``),
+    a slash chord in its chord's shape too."""
+    out: dict[str, dict[str, Any]] = {}
+    for value in defines:
+        if (found := parse_define(value)) is not None:
+            chord, position = found
+            out.setdefault(shape_key(chord), {"mine": 1, "list": [position]})
     return out
 
 
