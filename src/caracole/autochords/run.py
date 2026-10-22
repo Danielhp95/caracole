@@ -12,7 +12,10 @@ with linked audio is due when:
 - it is not ignored;
 - its audio changed since its last auto sheet, or that sheet was made before
   the song's lyrics arrived;
-- that file hasn't already failed.
+- that file hasn't already failed;
+- no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
+  whose names make one folder, ``library.SharedFolder``): such a song is skipped,
+  with a warning, before any model runs, and waits.
 
 For each song due, BTC recognizes the chords, beat_this finds the beats, and
 ``merge.build_sheet`` lays the chords out over LRCLIB's lyrics: the synced ones
@@ -59,7 +62,7 @@ from caracole.autochords.merge import NO_CHORD, ChordSegment, build_sheet
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
 from caracole.keys import estimate_key
-from caracole.library import keep_file, kept_files, write_info
+from caracole.library import SharedFolder, keep_file, keeper_of, kept_files, write_info
 from caracole.lyrics import Lyrics, song_lyrics
 from caracole.music import read_audio
 from caracole.overrides import Overrides, load_overrides
@@ -196,6 +199,11 @@ def autochords_pending(
             )
             stats.failed += 1
             stats.failures.append(failure)
+            continue
+        other = keeper_of(conn, cfg.library_dir, song, AUTO_SHEET)
+        if other is not None:  # its sheet would go where another song keeps one: no model is run for it
+            log.warning("%s", SharedFolder(song, other, AUTO_SHEET))
+            stats.skipped += 1
             continue
         if models is None and not unavailable:
             try:

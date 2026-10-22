@@ -491,6 +491,37 @@ def test_a_server_error_leaves_the_song_for_the_night(cfg, conn, sites):
     assert sites.ug() == [f"{TAB}radiohead/creep-chords-101"] and progress.states()["ug"] == "skipped"
 
 
+PINKPOP = ("Creep, live at the Pinkpop festival in Landgraaf, the Netherlands, on the fifth of June nineteen ninety six, "
+           "in the encore, take")
+
+
+def test_a_sheet_that_would_go_where_another_songs_is_says_so_and_waits(cfg, conn, sites):
+    # Two takes whose titles agree for longer than a folder's name keeps: one folder, where the first keeps its sheet.
+    from conftest import add_song
+
+    from caracole.library import keep_file, song_dir
+    from caracole.normalize import clean_title, slug_key
+    from caracole.versions import upsert_version
+
+    one = add_song(conn, "Radiohead", f"{PINKPOP} one")
+    vid = upsert_version(conn, provider="ug", tab_id="1", song_id=one.id, slot="sheet", kind="chords", rating=5,
+                         votes=1, version=1, label=None, url=f"{TAB}1", raw={}, now="2026-10-01T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=one, version_id=vid, name="sheet.txt", data=b"take one", rank=1)
+    song = slug_key(clean_title(f"{PINKPOP} two"))
+    tab = version_dict(301, song=f"{PINKPOP} two", artist="Radiohead", tab_url=f"{TAB}radiohead/{song}-chords-301")
+    sites.pages[tab["tab_url"]] = (200, make_tab_page_html(tab, [], content=sheet("take two", LINES)))
+    upsert_rows(conn, [(301, "radiohead", song, "chords", tab["tab_url"].removeprefix(TAB))], "1", NOW)
+    mark_built(conn, NOW)
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title=f"{PINKPOP} two")
+
+    two = next(s for s in list_songs(conn) if s.title.endswith("take two"))
+    assert song_dir(cfg.library_dir, two) == song_dir(cfg.library_dir, one) and two.id != one.id
+    assert result.ok and progress.states()["sheet"] == "failed"  # no bug: it waits, as after a site's error
+    assert "sheet.txt isn't kept: its folder is" in result.details["sheet"]
+    assert (song_dir(cfg.library_dir, one) / "sheet.txt").read_bytes() == b"take one"
+
+
 # --- the other sites -------------------------------------------------------------------------------------
 
 

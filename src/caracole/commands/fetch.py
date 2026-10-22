@@ -68,6 +68,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
     from caracole.health import get_state, is_cooling, record_block, record_ok
     from caracole.http import ProviderBlocked
     from caracole.overrides import load_overrides
+    from caracole.report import shared_folder
     from caracole.ug.fetch import FetchContext, fetch_songs, rescore_kept_sheets, songs_to_fetch
 
     overrides = load_ovr(cfg)
@@ -133,6 +134,8 @@ def _fetch(cfg: Config, display: str | None) -> None:
             typer.echo(_not_done(songs[0], stats, budget, due=due))
         return
     typer.echo(_totals(stats, client.requests_made))
+    for shared in stats.shared:
+        typer.echo(shared_folder(shared).text)
     if stats.budget_exhausted:
         typer.echo(f"The UG budget of {plural(budget, 'request')} is spent; the rest waits for the next run.")
 
@@ -203,9 +206,14 @@ def _line(song: Song, outcome: SongFetchOutcome, *, requests: bool = True) -> st
 
 
 def _not_done(song: Song, stats: FetchStats, budget: int, *, due: bool = True) -> str:
-    """Why ``--song``'s song got no line of its own: an error, or the budget, before it was done.
-    Neither is a miss, so it waits for the next run (``due``, as ``_send_back`` makes a matched song),
-    or for you to ask again; a sheet the first pass kept stays."""
+    """Why ``--song``'s song got no line of its own: an error, the budget, or a file of its that would go
+    where another song keeps one (``library.SharedFolder``), before it was done. None is a miss, so it
+    waits for the next run (``due``, as ``_send_back`` makes a matched song), or for you to ask again; a
+    sheet the first pass kept stays."""
+    from caracole.report import shared_folder
+
+    if stats.shared:
+        return shared_folder(stats.shared[0]).text
     spent = f"the UG budget of {plural(budget, 'request')} is spent"
     if stats.sheets_done:
         if stats.failures:

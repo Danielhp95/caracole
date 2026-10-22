@@ -243,6 +243,12 @@ def step_error(error: Any, step: str) -> Problem:
                    "tried again on the next run.")
 
 
+def shared_folder(error: object) -> Problem:
+    """A song that waits, as a file of its would go where another song keeps one (``library.SharedFolder``)."""
+    return Problem(f"{error}. Nothing is written over it, and the song waits until the folder is its own: remove "
+                   "one of the two (caracole remove), and ask for it again under a shorter title.")
+
+
 def bug(error: BaseException, step: str) -> Problem:
     return Problem(f"The {step} step failed: {type(error).__name__}: {error}. That's a bug in caracole: its "
                    "traceback is in the log, and the run exits 1.", ERROR)

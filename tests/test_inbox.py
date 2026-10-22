@@ -147,6 +147,23 @@ def test_ptb_prefers_power_pick(conn, cfg):
     assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-2.ptb", pt)]
 
 
+def test_a_number_another_song_keeps_in_the_folder_their_names_make_is_not_taken(conn, cfg):
+    # Two parts whose titles agree for longer than a folder's name keeps: one folder, two songs.
+    long = ("Concierto de Aranjuez para guitarra y orquesta, segundo movimiento, arreglo para guitarra sola de Narciso "
+            "Yepes, grabado en Madrid, part")
+    one, two = add_song(conn, "Joaquín Rodrigo", f"{long} one"), add_song(conn, "Joaquín Rodrigo", f"{long} two")
+    folder = song_dir(cfg.library_dir, one)
+    assert one.key != two.key and song_dir(cfg.library_dir, two) == folder
+    keep_file(conn, cfg.library_dir, song=one, version_id=pick(conn, one, 1), name="guitar-1.gp5", data=b"ONE", rank=1)
+    (folder / "guitar-1.gp5").unlink()  # lost on a synced device: the first song keeps its number all the same
+    v = pick(conn, two, 2)
+    set_picks(conn, two.id, ["guitar-pro", "power"], [v])
+    src = drop(cfg, f"Joaquín Rodrigo - {long} two.gp5", b"TWO")
+    stats = file_inbox(conn, cfg.library_dir)
+    assert stats.filed == [folder / "guitar-2.gp5"] and not src.exists()
+    assert [(f.name, f.version_id) for f in kept_files(conn, two.id)] == [("guitar-2.gp5", v)]
+
+
 def test_duplicate_removed(conn, cfg):
     s = add_song(conn)
     a, b = pick(conn, s, 1), pick(conn, s, 2)

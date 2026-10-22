@@ -396,6 +396,19 @@ def test_lacuerda_follows_overrides(tmp_path, sites):
     assert sites.lacuerda.requests == []
 
 
+def test_lacuerda_says_which_song_waits_for_a_folder_another_songs_name_makes(tmp_path, sites, monkeypatch):
+    import caracole.lacuerda_fetch as lf
+    from caracole.library import SharedFolder
+
+    two, one = seed(tmp_path, ("Rodrigo", "Concierto, part two"), ("Rodrigo", "Concierto, part one"))
+    shared = SharedFolder(song(tmp_path, two), song(tmp_path, one), "sheet.json")
+    monkeypatch.setattr(lf, "lacuerda_sheets", lambda *a, **k: lf.LaCuerdaStats(tried=1, shared=[shared]))
+    result = run(tmp_path, "lacuerda")
+    assert result.exit_code == 0, result.output
+    assert ("LaCuerda: 1 tried, 0 sheets kept, 0 missing, 0 errors\nRodrigo - Concierto, part two's sheet.json isn't "
+            "kept: its folder is Rodrigo - Concierto, part one's too") in result.stdout
+
+
 def test_lacuerda_with_nothing_to_try(tmp_path, sites):
     seed(tmp_path, ("Radiohead", "Creep"))
     result = run(tmp_path, "lacuerda")

@@ -155,6 +155,7 @@ def _lyrics(cfg: Config) -> None:
 def _lacuerda(cfg: Config) -> None:
     """Try LaCuerda for the Spanish songs that need a sheet, then print the counts."""
     from caracole.lacuerda_fetch import lacuerda_sheets
+    from caracole.report import shared_folder
     from caracole.ug.fetch import rescore_kept_sheets
 
     overrides = load_ovr(cfg)
@@ -178,6 +179,8 @@ def _lacuerda(cfg: Config) -> None:
         return
     counts = f"{s.tried} tried, {plural(s.kept, 'sheet')} kept, {s.missing} missing"
     typer.echo(f"LaCuerda: {counts}, {plural(s.errors, 'error')}")
+    for shared in s.shared:
+        typer.echo(shared_folder(shared).text)
     if s.errors:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:

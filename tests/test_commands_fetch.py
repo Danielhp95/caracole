@@ -286,6 +286,29 @@ def test_song_option_says_when_the_budget_ran_out_first(tmp_path, ug):
                              "so it waits for the next run.\n")
 
 
+LIVE = ("Persiana Americana, en vivo en el estadio de River Plate para la gira de despedida del grupo en 2007, con "
+        "orquesta y coros, toma")
+
+
+def test_a_song_whose_sheet_goes_where_another_songs_is_says_so_and_waits(tmp_path, ug):
+    # Two takes whose titles agree for longer than a folder's name keeps: one folder, where the first keeps its sheet.
+    conn = connect(tmp_path)
+    for tab_id, take, added_at in ((301, "uno", "2026-10-02T00:00:00Z"), (302, "dos", "2026-10-01T00:00:00Z")):
+        key = f"persiana-americana-toma-{take}"
+        accepted(conn, f"{LIVE} {take}", key, tab_id, added_at=added_at)
+        url = f"{TAB}soda-stereo/{key}-chords-{tab_id}"
+        ug.pages[url] = tab_page(tab_id, f"{LIVE} {take}", url)
+    said = (f"Soda Stereo - {LIVE} dos's sheet.txt isn't kept: its folder is Soda Stereo - {LIVE} uno's too (their "
+            "names make one folder), whose sheet.txt is there. Nothing is written over it, and the song waits")
+
+    result = run(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    assert f"1 song done, 0 failed, 2 UG requests.\n{said}" in result.output
+    result = run(tmp_path, "--song", f"Soda Stereo - {LIVE} dos")
+    assert result.exit_code == 0 and result.output.startswith(said), result.output
+
+
 def cut_short(how, tmp_path, ug, conn):
     """Stop ``--song``'s fetch of Signos before it is done: ``how`` is error, budget, block or cooldown."""
     budget = 60

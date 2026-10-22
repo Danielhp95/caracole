@@ -27,7 +27,7 @@ import os
 import re
 import sqlite3
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from caracole.library import KeptFile, NotRegularFile, holds, keep_file, read_regular, safe_name, song_dir
 from caracole.music import Names
@@ -191,10 +191,16 @@ def score_number(conn: sqlite3.Connection, library_dir: Path, song: Song, ext: s
 
 
 def _names_taken(conn: sqlite3.Connection, library_dir: Path, song: Song) -> set[str]:
-    """The names of the song's files: every kept one's, and every one in its folder."""
+    """The names of the song's files: every kept one's, every one in its folder, and every one another
+    song keeps there (two songs whose names make one folder: ``library.SharedFolder``), lost or not."""
+    folder = song_dir(library_dir, song)
     names = {r[0] for r in conn.execute("SELECT name FROM files WHERE song_id = ?", (song.id,))}
+    # The paths in the folder: its own, then "/" (and "0" is the character after "/").
+    at = folder.relative_to(library_dir).as_posix()
+    names.update(PurePosixPath(r[0]).name for r in conn.execute(
+        "SELECT path FROM files WHERE path >= ? AND path < ?", (f"{at}/", f"{at}0")))
     try:
-        names.update(os.listdir(song_dir(library_dir, song)))
+        names.update(os.listdir(folder))
     except FileNotFoundError:
         pass
     return names

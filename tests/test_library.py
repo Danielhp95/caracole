@@ -5,8 +5,10 @@ import re
 import pytest
 
 from caracole.library import (
+    SharedFolder,
     drop_file,
     keep_file,
+    keeper_of,
     kept_files,
     safe_name,
     song_dir,
@@ -282,6 +284,34 @@ def test_keep_file_replaces_and_dedupes(conn, tmp_path):
     assert not (song_dir(lib, s) / "tab.txt").exists()
     drop_file(conn, lib, song=s, name="sheet.txt")
     assert not path.exists() and kept_files(conn, s.id) == []
+
+
+LONG = "Concierto de Aranjuez para guitarra y orquesta, segundo movimiento: Adagio, arreglo para guitarra sola de Narciso"
+
+
+def two_songs_of_one_folder(conn, lib):
+    """Two songs whose titles agree for longer than a folder's name keeps: one folder, two keys."""
+    a = add_song(conn, "Joaquín Rodrigo", LONG + ", part one")
+    b = add_song(conn, "Joaquín Rodrigo", LONG + ", part two")
+    assert a.key != b.key and song_dir(lib, a) == song_dir(lib, b)
+    return a, b
+
+
+def test_keep_file_writes_nothing_over_a_file_another_song_keeps_in_the_folder_they_share(conn, tmp_path):
+    lib = tmp_path / "Library"
+    a, b = two_songs_of_one_folder(conn, lib)
+    assert keep_file(conn, lib, song=a, version_id=_version(conn, a, 1), name="sheet.txt", data=b"A's", rank=1)
+    assert keeper_of(conn, lib, b, "sheet.txt").id == a.id and keeper_of(conn, lib, a, "sheet.txt") is None
+    with pytest.raises(SharedFolder, match="part one") as raised:
+        keep_file(conn, lib, song=b, version_id=_version(conn, b, 2), name="sheet.txt", data=b"B's", rank=1)
+    assert (raised.value.song.id, raised.value.other.id) == (b.id, a.id)
+    folder = song_dir(lib, a)
+    assert (folder / "sheet.txt").read_bytes() == b"A's" and os.listdir(folder) == ["sheet.txt"]
+    rows = conn.execute("SELECT song_id, name, path FROM files").fetchall()
+    assert [tuple(r) for r in rows] == [(a.id, "sheet.txt", (folder / "sheet.txt").relative_to(lib).as_posix())]
+    # A name no other song keeps there is the song's to keep.
+    assert keep_file(conn, lib, song=b, version_id=_version(conn, b, 3), name="guitar-2.gp5", data=b"GP", rank=1)
+    assert [f.name for f in kept_files(conn, b.id)] == ["guitar-2.gp5"]
 
 
 def test_write_info_lists_kept_versions(conn, tmp_path):

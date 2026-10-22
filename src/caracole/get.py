@@ -46,7 +46,10 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 
 A block cools its site down and ends that site's stages; a spent budget (the
 lookup's or the hour's) and a provider's error leave the song to the nightly
-run; neither is a failure, and neither makes a song not found. The lookup holds
+run; neither is a failure, and neither makes a song not found. Nor is a file
+that would go where another song, whose name makes the same folder, keeps one
+(``library.SharedFolder``): the stage fails, saying so, and nothing is written
+over it. The lookup holds
 caracole's lock throughout, and a nightly run that holds it lets the lookup go
 first at its next pause, or between two songs for work that sends no request
 (auto-chords, the PDF pass; ``_common.hand_over``).
@@ -279,6 +282,8 @@ class _Lookup:
         """Ask a site, the way every stage does: a block, a spent budget or an error ends it as it ends a
         nightly step, without a miss."""
         from caracole.health import record_block, record_error
+        from caracole.library import SharedFolder
+        from caracole.report import shared_folder
 
         why = self._usable(provider)
         if why is not None:
@@ -309,6 +314,8 @@ class _Lookup:
             record_error(self.conn, e.provider, self.now, str(e))
             self.failed.add(e.provider)  # as in a nightly step: an error ends the site's part for this lookup
             return "failed", f"{NAMES.get(e.provider, e.provider)} failed ({e}); the nightly run tries again"
+        except SharedFolder as e:  # nothing written over the other song's file: this one waits, as in the run
+            return "failed", shared_folder(e).text
 
     def _owed(self, provider: str) -> None:
         """A song whose Ultimate Guitar part a cooldown, a block, a spent budget or an error cut short is

@@ -3832,6 +3832,13 @@ separator or a character file systems reserve: `AC/DC` becomes `AC-DC`. An
 artist has one folder: a new song by an artist the library has already,
 written in another case alone (`oasis` beside `Oasis`), takes the library's
 spelling, as a phone's file system may not tell two folders apart by case.
+A folder's name keeps 120 bytes at most, so two songs whose titles agree that
+far make one folder, and share it. A file one of them keeps there (a sheet, a
+Guitar Pro file) is never written over by the other's: that song waits, and
+the run's summary, `caracole fetch`, `caracole lacuerda` and a lookup say so
+(`caracole autochords` in its log, before it runs the models), until the
+folder is its own: remove one of the two (`caracole remove`), and ask for it
+again under a shorter title.
 
 **The `.cho` files** are the sheet in ChordPro, a plain-text format that puts
 each chord in brackets before the syllable it falls on (`[Am]Yesterday`).
