@@ -510,18 +510,21 @@ def test_a_songs_setting_is_queued_as_caracole_songbook_set_with_its_capo(app, s
                                            "mode": "dorian", "capo": "0"}, accept=JSON)
     view = json.loads(response.body)["job"]
     assert view["kind"] == "songbook" and view["songbook"] == {"action": "set", "name": "Campfire", "after": "Campfire"}
-    assert view["display"] == 'Play Radiohead - Creep in G dorian, capo 0, in "Campfire"'
+    assert view["display"] == 'Play Radiohead - Creep in G dorian, no capo, in "Campfire"'  # never "capo 0"
     assert steps(queue) == [[("songbook", "set", "--key", "G", "--mode", "dorian", "--capo", "0", "--", "Campfire",
                               "Radiohead - Creep")]]
     post(app, "/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "clear": "1"})
     assert steps(queue)[1] == [("songbook", "set", "--clear", "--", "Campfire", "Radiohead - Creep")]
     assert queue.snapshot()[0].title == 'Play Radiohead - Creep in its own version in "Campfire"'
+    post(app, "/songbook/set", {"name": "Campfire", "song": "Muse - Hysteria", "capo": "0"})  # a capo alone
+    assert queue.snapshot()[0].title == 'Play Muse - Hysteria with no capo, in "Campfire"'
 
 
 @pytest.mark.slow
 def test_the_setting_queued_is_written_in_songbooks_toml(app, setup, queue, campfire):
     post(app, "/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "key": "G", "mode": "dorian",
                                 "capo": "2"})
+    assert queue.snapshot()[0].title == 'Play Radiohead - Creep in G dorian, capo 2, in "Campfire"'
     queue.run_pending()
     assert queue.snapshot()[0].state == "done", queue.snapshot()[0].steps[0].output
     from caracole.songbook import Setting
@@ -538,6 +541,7 @@ def test_a_setting_change_says_what_runs_then_what_it_did(setup, campfire):
     app = WebApp(setup[1], JobQueue(lambda args, emit: 0), allowed=ALLOWED, csrf="tok")
     post(app, "/songbook/set", {"name": "Campfire", "song": "Muse - Hysteria", "capo": "3"})
     job = app.queue.snapshot()[0]
+    assert job.title == 'Play Muse - Hysteria with capo 3, in "Campfire"'  # a capo it plays with, said
     job.state, job.steps[0].state = "running", "running"
     assert job_line(job, None).text == "Changing where it plays…"
     job.state, job.steps[0].state = "done", "done"

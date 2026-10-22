@@ -210,11 +210,13 @@ def _setting_job(name: str, entry: str, form: Mapping[str, str]) -> SongbookJob:
                                                    ("--capo", setting.capo)) if value is not None]
         options = tuple(str(word) for pair in named for word in pair)
         where = " ".join(str(v) for v in (setting.key, setting.mode) if v)
-        said = ", ".join(p for p in (where, f"capo {setting.capo}" if setting.capo is not None else "") if p)
+        capo_said = "" if setting.capo is None else "no capo" if setting.capo == 0 else f"capo {setting.capo}"
+        said = ", ".join(p for p in (where, capo_said) if p)
+        said = f"in {said}" if where else f"with {said}"  # "in G dorian, no capo"; "with capo 3", a capo alone
         parts = tuple("" if v is None else str(v) for v in (setting.key, setting.mode, setting.capo))
     command = ("songbook", "set", *options, "--", name, entry)
     title = f'Play {entry} in its own version in "{name}"' if parts == ("clear",) else \
-        f'Play {entry} in {said}, in "{name}"'
+        f'Play {entry} {said}, in "{name}"'
     return SongbookJob(title, KEY + "\x1f".join(("songbook", "set", "--", name, entry, *parts)),
                        [("Changing where it plays", command)])
 

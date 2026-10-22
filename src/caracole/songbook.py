@@ -103,8 +103,8 @@ from caracole.viewer.version import (
     in_setting,
     places,
     played_key,
+    played_label,
     setting_problem,
-    version_label,
 )
 
 if TYPE_CHECKING:
@@ -749,11 +749,11 @@ KEY_UNKNOWN = "key unknown, as written"  # what plays_in says of a setting or a 
 
 
 def plays_in(entry: Entry) -> str | None:
-    """Where the songbook plays the song, in words, for its set list: its version's ``version_label`` ("G
-    Dorian, capo 0", "E Minor, capo 2"; "Transposed +2, capo 0" for a sheet with no key), or ``KEY_UNKNOWN`` for
-    a setting with a key or a mode, or an own version kept by its key, that its sheet, which has no key, can't
-    take; None for a song without a sheet, or one the viewer's code can't read (a bug, logged with its
-    traceback)."""
+    """Where the songbook plays the song, in words, for its set list: its version's ``played_label`` ("G
+    Dorian", "E Minor, capo 2", nothing of a capo it plays without; "Transposed +2" for a sheet with no key), or
+    ``KEY_UNKNOWN`` for a setting with a key or a mode, or an own version kept by its key, that its sheet, which
+    has no key, can't take; None for a song without a sheet, or one the viewer's code can't read (a bug, logged
+    with its traceback)."""
     return where_played(entry)[0]
 
 
@@ -769,7 +769,7 @@ def where_played(entry: Entry) -> tuple[str | None, tuple[Key | None, int] | Non
         played = played_key(entry.version, shapes, capo)
         if shapes is None and (places(entry.setting) or entry.keeps_key):
             return KEY_UNKNOWN, played
-        return version_label(entry.version, shapes, capo), played
+        return played_label(entry.version, shapes, capo), played
     except Exception:
         log.warning("%s: cannot say where its songbook plays it", entry.text, exc_info=True)
         return None, None

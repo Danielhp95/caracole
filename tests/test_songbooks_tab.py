@@ -291,14 +291,14 @@ def test_opening_a_songbook_shows_its_set_list_with_each_songs_setting(serve, cf
             page.click("#songbooks .book-back")
             assert page.js(f"{SHOWN}('#songbooks .book-list')") and not page.js(f"{SHOWN}('#songbooks .book')")
         page.click('#songbooks .book-line[data-book="Campfire"]')
-        assert page.js(SET) == [["1", "Creep", "Radiohead", "G Dorian, capo 0"],
+        assert page.js(SET) == [["1", "Creep", "Radiohead", "G Dorian"],
                                 ["2", "Hysteria", "Muse", "No sheet yet"],
-                                ["3", "De Música Ligera", "Soda Stereo", "A Minor, capo 0"]]
+                                ["3", "De Música Ligera", "Soda Stereo", "A Minor"]]
         # Creep plays where the songbook says; De Música Ligera as its own version: its chip says so to a reader.
         said = page.js("Array.from(document.querySelectorAll('#songbooks .set-line .plays'))"
                        ".map((c) => c.getAttribute('aria-label'))")
-        assert said == ["Creep plays in G Dorian, capo 0 here: change it",
-                        "De Música Ligera plays in A Minor, capo 0, its own version: change it"], said
+        assert said == ["Creep plays in G Dorian here: change it",
+                        "De Música Ligera plays in A Minor, its own version: change it"], said
         assert page.js("document.querySelector('#songbooks .set-line .set-title').getAttribute('href')") == \
             "Radiohead/Creep/sheet.html"  # its title opens its sheet
         assert "book=Campfire" in page.js("location.hash")
@@ -390,7 +390,7 @@ def test_a_settings_chip_changes_that_songs_key_mode_and_capo(serve, cfg, librar
     with opened(tmp_path, *size) as page:
         page.open(url + CAMPFIRE)
         assert page.js(SHIFTS)
-        assert page.js(chip) == "A Minor, capo 0"
+        assert page.js(chip) == "A Minor"
         page.click(f"{creep} .plays")
         # The menus start where it plays now: A, minor, no capo.
         assert page.js(f"""Array.from(document.querySelectorAll('{creep} .set-edit select'))
@@ -399,17 +399,22 @@ def test_a_settings_chip_changes_that_songs_key_mode_and_capo(serve, cfg, librar
             form.elements.key.value = 'G'; form.elements.mode.value = 'dorian'; form.elements.capo.value = '0'; }})()""")
         page.click(f"{creep} .set-edit button[type=submit]")
         assert page.js(f"document.activeElement === document.querySelector('{creep} .plays')")  # the keyboard stays
-        assert page.wait(f"{chip}.startsWith('G Dorian')", timeout=20), page.js(chip)
-        assert page.js(chip) == "G Dorian, capo 0"
+        assert page.wait(f"{chip} === 'G Dorian'", timeout=20), page.js(chip)  # no capo: none said
         assert ("/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "key": "G", "mode": "dorian",
                                   "capo": "0"}) in posted
         assert books_toml(cfg)[0].songs[0].setting == Setting("G", "dorian", 0)
         assert not page.js(f"{SHOWN}('{creep} .set-edit')")  # put away once sent
+        # A capo it plays with is said.
+        page.click(f"{creep} .plays")
+        page.js(f"document.querySelector('{creep} .set-edit').elements.capo.value = '2'")
+        page.click(f"{creep} .set-edit button[type=submit]")
+        assert page.wait(f"{chip} === 'G Dorian, capo 2'", timeout=20), page.js(chip)
+        assert books_toml(cfg)[0].songs[0].setting == Setting("G", "dorian", 2)
         # Back to its own version: the setting goes.
         page.click(f"{creep} .plays")
         page.click(f"{creep} .set-edit .as-own")
         assert page.js(f"document.activeElement === document.querySelector('{creep} .plays')")
-        assert page.wait(f"{chip} === 'A Minor, capo 0'", timeout=20), page.js(chip)
+        assert page.wait(f"{chip} === 'A Minor'", timeout=20), page.js(chip)
         assert ("/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "clear": "1"}) in posted
         assert books_toml(cfg)[0].songs[0].setting is None
         page.js(STILL)
@@ -462,7 +467,7 @@ def test_add_a_song_searches_everything_and_a_site_song_is_looked_up_then_added(
                                                   "ug": "oasis/wonderwall"})]
         assert [c[0] for c in runner.calls] == ["get", "songbook"]  # looked up, then put in the songbook
         assert runner.calls[1][:2] == ["songbook", "add"]
-        assert page.wait(f"{SET}[3][3] === 'A Minor, capo 0'", timeout=10), page.js(SET)
+        assert page.wait(f"{SET}[3][3] === 'A Minor'", timeout=10), page.js(SET)
         assert page.js(SET)[3][:3] == ["4", "Wonderwall", "Oasis"]
         assert books_toml(cfg)[0].texts[-1] == "Oasis - Wonderwall"
         page.js(STILL)
@@ -524,9 +529,9 @@ def test_the_file_page_shows_the_songbooks_read_only_with_their_commands(conn, c
     path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
     with opened(tmp_path, *size) as page:
         page.open(path.as_uri() + CAMPFIRE)
-        assert page.js(SET) == [["1", "Creep", "Radiohead", "A Minor, capo 0"],
+        assert page.js(SET) == [["1", "Creep", "Radiohead", "A Minor"],
                                 ["2", "Hysteria", "Muse", "No sheet yet"],
-                                ["3", "De Música Ligera", "Soda Stereo", "A Minor, capo 0"]]
+                                ["3", "De Música Ligera", "Soda Stereo", "A Minor"]]
         # Nothing on it changes anything: no grip, chip to edit, ×, Get it, search to add, nor any form.
         assert page.js("document.querySelectorAll('#songbooks form, #songbooks .grip, #songbooks button.plays, "
                        "#songbooks .set-out, #songbooks .set-get, #songbooks .add-song').length") == 0
@@ -653,7 +658,7 @@ def test_select_adds_to_a_songbook_there_is_and_the_tab_opens_on_it(serve, cfg, 
                          "'Road trip'", timeout=5)
         assert page.js(TITLES) == ["De Música Ligera", "Creep"]  # at its end, at once
         assert page.wait(f"{STATUS} === 'Added·Open songbook'", timeout=20), page.js(STATUS)
-        assert page.js(SET)[1] == ["2", "Creep", "Radiohead", "A Minor, capo 0"]
+        assert page.js(SET)[1] == ["2", "Creep", "Radiohead", "A Minor"]
         assert posted == [("/songbook/add", {"name": "Road trip", "songs": str(library["Creep"].id)})]
         page.js(STILL)
         assert page.js(MOVED) == [], page.js("window.shifts")
@@ -861,7 +866,7 @@ def test_get_the_missing_songs_looks_each_up_then_makes_the_songbook_again(serve
         shown = page.js(lines)
         assert [s[0] for s in shown] == ["Creep", "Hysteria", "De Música Ligera", "Debaser", "Uprising"]
         assert shown[1][1].startswith("Ready") and shown[4][1].startswith("Ready"), shown
-        assert shown[1][2] == "A Minor, capo 0" and shown[3][2] == "Not in the library", shown
+        assert shown[1][2] == "A Minor" and shown[3][2] == "Not in the library", shown
         # Nothing left to get: its button goes (its room kept until your next click, so nothing moves).
         assert page.js(f"((b) => !b || getComputedStyle(b).visibility === 'hidden')(document.querySelector("
                        f"{json.dumps(get)}))")
@@ -890,7 +895,7 @@ def test_a_song_fetched_from_the_library_shows_with_its_sheet_in_its_songbooks(s
         page.click(f"{line} form.fetch button")
         assert page.wait(f"document.querySelector('{line} .progress').textContent.startsWith('Ready')", timeout=30)
         page.click("#tab-songbooks")
-        assert page.js(SET)[1] == ["2", "Hysteria", "Muse", "A Minor, capo 0"], page.js(SET)
+        assert page.js(SET)[1] == ["2", "Hysteria", "Muse", "A Minor"], page.js(SET)
         assert page.js(f"document.querySelector('{hysteria} .set-get') === null")
         assert page.js(f"((b) => !b || getComputedStyle(b).visibility === 'hidden')(document.querySelector("
                        f"{json.dumps(get)}))")
