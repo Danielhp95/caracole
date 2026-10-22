@@ -51,7 +51,7 @@ import json
 import logging
 import re
 import sqlite3
-from collections.abc import Collection
+from collections.abc import Callable, Collection, Iterator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -88,7 +88,7 @@ from caracole.lacuerda_index import artist_slugs, complete_at, store_artist_page
 from caracole.library import drop_file, holds, keep_file, kept_already, kept_files, write_info
 from caracole.lyrics import song_lyrics
 from caracole.normalize import clean_title
-from caracole.overrides import LaCuerdaPick, Overrides
+from caracole.overrides import LaCuerdaPick, Overrides, OverridesError
 from caracole.provider_pass import PassStats, each_song
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, get_song, list_songs, refresh_status, update_song
 from caracole.ug.page import strip_markup
@@ -131,6 +131,7 @@ def lacuerda_sheets(
     now: datetime,
     *,
     overrides: Overrides | None = None,
+    reload_overrides: Callable[[], Overrides] | None = None,
     only: Collection[int] | None = None,
 ) -> LaCuerdaStats:
     """Ask LaCuerda for the songs that need a sheet, newest first, and keep what helps.
@@ -139,6 +140,12 @@ def lacuerda_sheets(
     With ``overrides``, songs ignored there since the last match are skipped too,
     and a sheet you pinned is never replaced. ``only``: the ids of the songs that
     may be tried (a lookup's one song), when the rules above would try them.
+
+    The nightly run's client hands caracole's lock to a waiting lookup in its pauses
+    (``handoffs``, commands/_common.py), and the lookup may pin a tab, pick a LaCuerda
+    sheet or keep one: after a handoff, overrides.toml is read again
+    (``reload_overrides``; the copy read before when it can't be), and each song is
+    read again before its turn and passed over when it is no longer one to try.
 
     Errors are never misses (provider_pass.py): ``ProviderBlocked`` propagates.
     ``BudgetExhausted`` ends the pass (``budget_exhausted``), and so does a client
@@ -157,8 +164,32 @@ def lacuerda_sheets(
             return _picked_sheet(conn, client, pick, song, now, fetched)
         return _find_sheet(conn, client, song.artists[0], song.title, now, fetched)
 
-    songs = (s for s in _songs_to_try(conn, library_dir, rank, now, overrides) if only is None or s.id in only)
-    for song, sheet in each_song(songs, stats, turn, site="LaCuerda"):
+    def songs() -> Iterator[Song]:
+        """The songs to try, each just before its turn, as it is then after a handoff."""
+        nonlocal overrides, picks
+        seen, handed = _handoffs(client), False
+        for song in _songs_to_try(conn, library_dir, rank, now, overrides):
+            if only is not None and song.id not in only:
+                continue
+            if _handoffs(client) != seen:
+                seen, handed = _handoffs(client), True
+                if reload_overrides is not None:
+                    try:
+                        overrides = reload_overrides()
+                    except OverridesError as e:
+                        log.info("overrides.toml couldn't be read again (%s); LaCuerda goes on with what it read.",
+                                 e)
+                    picks = overrides.lacuerda if overrides is not None else {}
+            if handed:
+                try:
+                    song = get_song(conn, song.id)
+                except KeyError:  # merged into another song, or removed, meanwhile
+                    continue
+                if not _to_try(conn, library_dir, rank, now, overrides, song):
+                    continue
+            yield song
+
+    for song, sheet in each_song(songs(), stats, turn, site="LaCuerda"):
         if sheet is None:
             stats.missing += 1
             update_song(conn, song.id, lacuerda_checked_at=stamp)
@@ -243,31 +274,33 @@ def _songs_to_try(
     LaCuerda sheet the library lost (``_lost``) is asked about whatever its sheet and
     the date, so that the sheet is written again.
     """
+    return [song for song in list_songs(conn) if _to_try(conn, library_dir, rank, now, overrides, song)]
+
+
+def _to_try(
+    conn: sqlite3.Connection, library_dir: Path, rank: RankPolicy, now: datetime, overrides: Overrides | None,
+    song: Song,
+) -> bool:
+    """Whether LaCuerda is worth asking about the song now (``_songs_to_try``)."""
     cutoff = stamps.utc(now) - RECHECK_AFTER
     ignored = overrides.ignore if overrides is not None else frozenset()
     picks = overrides.lacuerda if overrides is not None else {}
-    songs = []
-    for song in list_songs(conn):
-        if song.status == "ignored" or song.key in ignored:
-            continue
-        kept = _kept_sheet(conn, song.id)
-        pick = picks.get(song.key)
-        if pick is not None:  # your pick: until its sheet is the one kept, unless you pinned a UG sheet
-            lost = kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)
-            if kept is not None and not lost and (
-                    _pinned(overrides, song, kept) or (kept.provider == PROVIDER and pick.holds(kept.tab_id))):
-                continue
-            if lost or stamps.before(song.lacuerda_checked_at, cutoff):
-                songs.append(song)
-            continue
-        if not (kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)):
-            if not stamps.before(song.lacuerda_checked_at, cutoff):  # asked about in the last 30 days
-                continue
-            if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
-                continue
-        if may_ask(song):
-            songs.append(song)
-    return songs
+    if song.status == "ignored" or song.key in ignored:
+        return False
+    kept = _kept_sheet(conn, song.id)
+    pick = picks.get(song.key)
+    if pick is not None:  # your pick: until its sheet is the one kept, unless you pinned a UG sheet
+        lost = kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)
+        if kept is not None and not lost and (
+                _pinned(overrides, song, kept) or (kept.provider == PROVIDER and pick.holds(kept.tab_id))):
+            return False
+        return lost or stamps.before(song.lacuerda_checked_at, cutoff)
+    if not (kept is not None and kept.provider == PROVIDER and _lost(conn, library_dir, song.id)):
+        if not stamps.before(song.lacuerda_checked_at, cutoff):  # asked about in the last 30 days
+            return False
+        if kept is not None and (_complete(kept.coverage, rank) or _pinned(overrides, song, kept)):
+            return False
+    return may_ask(song)
 
 
 def asked_lately(song: Song, now: datetime) -> bool:
@@ -303,6 +336,12 @@ def _lost(conn: sqlite3.Connection, library_dir: Path, song_id: int) -> bool:
         and not holds(library_dir / f.path, f.sha256)
         for f in kept_files(conn, song_id)
     )
+
+
+def _handoffs(client: Client) -> int:
+    """How many times the client's process has handed caracole's lock to a lookup (commands/_common.py's
+    clients; another client, none)."""
+    return int(getattr(client, "handoffs", 0) or 0)
 
 
 def _pinned(overrides: Overrides | None, song: Song, kept: VersionRow) -> bool:

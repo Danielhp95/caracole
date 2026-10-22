@@ -736,6 +736,49 @@ def test_the_nightly_render_and_caracole_render_hand_the_lock_over_between_songs
     assert handed == [True, True] and passes == [False, False]
 
 
+def test_after_a_lookup_went_between_two_songs_the_songbooks_and_the_pages_read_overrides_toml_again(
+        cfg, monkeypatch, tmp_path):
+    # The lookup the PDF pass let go first pinned a tab (`caracole get --tab`): the songbooks and the pages made
+    # after the pass go by overrides.toml as the lookup left it, in the run's render step and in caracole render.
+    import caracole.commands.render as render_cmd
+    import caracole.render
+    import caracole.songbook
+    from caracole import db
+    from caracole.commands import _common
+    from caracole.pipeline import StepContext, _render
+    from caracole.songbook import SongbookStats
+
+    pin = '[pin]\n"Soda Stereo - Persiana Americana" = ["https://tabs.ultimate-guitar.com/tab/2"]\n'
+    seen = []
+
+    def render_all(conn, cfg, overrides, **kwargs):  # a lookup had the lock between two songs, and pinned a tab
+        cfg.overrides_file.write_text(pin, encoding="utf-8")
+        monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return RenderStats()
+
+    def render_songbooks(conn, cfg, overrides, **kwargs):
+        seen.append(("songbooks", [*overrides.pin.values()]))
+        return SongbookStats()
+
+    monkeypatch.setattr(caracole.render, "render_all", render_all)
+    monkeypatch.setattr(caracole.songbook, "render_songbooks", render_songbooks)
+    monkeypatch.setattr(render_cmd, "write_pages", lambda conn, cfg, o, now: seen.append(("pages", [*o.pin.values()])))
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text("", encoding="utf-8")
+    conn = db.connect(cfg.db_path)
+    _render(StepContext(cfg=cfg, conn=conn, overrides=Overrides(), now=NOW, run_id="r", services=None,
+                        report=None))
+    conn.close()
+    assert seen == [("songbooks", [(2,)])]
+    cfg.overrides_file.write_text("", encoding="utf-8")
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\n', encoding="utf-8")
+    result = CliRunner().invoke(build_app(), ["--config", str(config), "render"])
+    assert result.exit_code == 0, result.output
+    assert seen[1:] == [("songbooks", [(2,)]), ("pages", [(2,)])]
+
+
 # --- when a PDF is rendered again ------------------------------------------------------------
 
 

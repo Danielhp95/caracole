@@ -725,7 +725,7 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
 
     seen = {}
 
-    def fake(conn_, client, library_dir, rank, now, *, overrides=None):
+    def fake(conn_, client, library_dir, rank, now, *, overrides=None, reload_overrides=None):
         seen["overrides"] = overrides
         return lf.LaCuerdaStats(tried=2, kept=1, missing=0, errors=1, budget_exhausted=False)
 

@@ -627,9 +627,14 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   commands/render.py). A bulk caller
   holding state across a handoff re-reads it after one: ug/fetch.py `fetch_songs` reads each
   song and overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn is fetched
-  again next run), gtptabs_fetch.py checks a song still has no file before its turn, and
-  `autochords_pending` and `render_all` read each song after and overrides.toml again
-  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`,
+  again next run), lacuerda_fetch.py `lacuerda_sheets` reads each song and overrides.toml again
+  and passes over a song no longer to try, gtptabs_fetch.py checks a song still has no file
+  before its turn, and `autochords_pending` and `render_all` read each song after and
+  overrides.toml again; what comes after (the run's next steps, `StepContext.read_overrides_again`;
+  the songbooks and pages of `caracole render` and `autochords`) reads overrides.toml again too
+  (`_common.overrides_since`;
+  `test_lacuerda_fetch.py::test_a_tab_a_lookup_pinned_during_an_earlier_step_is_never_replaced_by_lacuerda`,
+  `test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`,
   `test_autochords_run.py::test_a_lookup_waiting_for_the_lock_takes_it_between_two_songs`).
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time

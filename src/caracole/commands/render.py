@@ -75,8 +75,10 @@ def register(app: typer.Typer) -> None:
                 overrides = load_ovr(cfg)
             song_ids = {song_named(conn, song, overrides).id} if song else None
             # A waiting lookup goes between two songs: --force renders every PDF, minutes of work.
+            handed = _common.handoffs()
             stats = render_all(conn, cfg, overrides, force=force, between=lambda: _common.hand_over(cfg, conn),
                                song_ids=song_ids)
+            overrides = _common.overrides_since(cfg, overrides, handed)  # what such a lookup changed
             # After the sheets, which they hold; --force --song forces that song's PDFs alone.
             books = render_songbooks(conn, cfg, overrides, force=force and not song)
             write_pages(conn, cfg, overrides, utcnow())

@@ -273,6 +273,21 @@ def handoffs() -> int:
     return _handoffs
 
 
+def overrides_since(cfg: Config, overrides: Overrides, handed: int) -> Overrides:
+    """``overrides``, read when this process had handed caracole's lock over ``handed`` times (``handoffs()``
+    then), as bulk work holds them now: overrides.toml read again when it has handed the lock to a lookup since,
+    as the lookup may have pinned a tab or picked a LaCuerda sheet that what the work does next keeps to. The
+    copy read before stays when the file can't be read now."""
+    if handoffs() == handed:
+        return overrides
+    try:
+        return load_overrides(cfg.overrides_file)
+    except OverridesError as e:
+        logging.getLogger(__name__).info("overrides.toml couldn't be read again (%s); going on with what was "
+                                         "read before.", e)
+        return overrides
+
+
 def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     """Let a waiting lookup have caracole's lock now, and take it back once it is done; True when it did.
 
