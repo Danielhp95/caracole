@@ -85,7 +85,8 @@ since the index holds every artist but the songs only of the artists whose page 
 has read. ``lacuerda_artist`` and ``lacuerda_songs`` give one of its artists and the songs
 the index holds of theirs. While its listings aren't read whole, ``lacuerda_unlisted`` names the
 page that may tell whether LaCuerda has an artist it doesn't list, and ``lacuerda_leads`` says when
-its group comes first. LaCuerda has no search caracole uses: nothing here asks it.
+its group comes first. Nothing here asks LaCuerda: its own search is lacuerda_search.py's, a lookup
+of its own, whose answers go into that index.
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
@@ -321,8 +322,9 @@ class SiteArtist:
 
     ``artist`` is the name the site writes, ``slug`` its own name for their page,
     ``url`` the page; ``songs`` counts their songs as the site's listing does, and
-    ``known`` how many of them the index holds, 0 until caracole has read their
-    page; ``top`` holds the most popular with chords. ``score`` and ``via`` are as
+    ``known`` how many of them the index holds from their page, 0 until caracole has
+    read it (the songs LaCuerda's search brought alone leave it 0); ``top`` holds the
+    most popular with chords. ``score`` and ``via`` are as
     ``IndexHit``'s, and ``part`` as ``ArtistHit``'s (``LaCuerdaHit.part``).
     """
 
@@ -1018,8 +1020,9 @@ def _lacuerda_song(h: LaCuerdaHit) -> SiteHit:
 
 
 def _lacuerda_artist(conn: sqlite3.Connection, a: LaCuerdaHit) -> SiteArtist:
-    known = conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE artist_slug = ? AND title != ''",
-                         (a.artist_slug,)).fetchone()[0]
+    # Their songs from their own page: those LaCuerda's search brought alone leave it to be read.
+    known = conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE artist_slug = ? AND title != '' AND page = ?",
+                         (a.artist_slug, f"{a.artist_slug}/")).fetchone()[0]
     return SiteArtist("lacuerda", a.artist, a.artist_slug, a.url, a.score, max(a.songs, known), known, a.via,
                       tuple(_lacuerda_song(t) for t in a.top), a.part)
 

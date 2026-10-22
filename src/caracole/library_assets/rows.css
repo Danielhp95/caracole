@@ -191,7 +191,10 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .looked-line .looked { margin: 0; }
 .looked-line .why-unseen { flex: 1 1 100%; margin: 0; }
 .looked-line .read-outcome { flex: 1 1 100%; margin: 0; }
+/* LaCuerda's own search, a line under the results: what it does now, or its button. */
+.lacuerda-search { margin: 14px 0 0; }
+.lacuerda-search .hint { margin: 0; }
 @media (pointer: coarse) {
-  .nothing .btn, .did-you-mean .btn, .looked-line .btn { min-height: 44px; }
+  .nothing .btn, .did-you-mean .btn, .looked-line .btn, .lacuerda-search .btn { min-height: 44px; }
   .why-unseen summary { min-height: 44px; padding: 12px 0 0; }
 }

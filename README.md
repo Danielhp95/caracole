@@ -40,9 +40,9 @@ server.
     caracole remove "Oasis - Wonderwall"   # gone for good, until you add it again
 
 Then open `~/Tabs/_todo.md`, or `~/Tabs/index.html` to browse. `caracole serve`
-serves that page at `http://127.0.0.1:8737/`, where Enter in its search box
-also lists what Ultimate Guitar, gtptabs.com and MuseScore have (from
-caracole's offline indexes) with a Get it on each, a form to request a song by
+serves that page at `http://127.0.0.1:8737/`, where its search box also
+lists what Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore have (from
+caracole's offline indexes, and LaCuerda's own search) with a Get it on each, a form to request a song by
 name, and a button on each song to remove it; the song's card, or the result's
 row, says how a request goes, on one line. Settings go in
 `~/.config/caracole/caracole.toml`, and none are needed to start. Commands,
@@ -55,8 +55,10 @@ caracole is gentle with the sites it reads. It makes about 60 requests a night
 to Ultimate Guitar, one at a time and 10 to 20 seconds apart. A song you look
 up now (`caracole get`) costs a few requests, about a second apart, and every
 lookup of an hour shares a budget of 60 requests a site. It follows
-robots.txt, never uses a site's search, never logs in, and stops for at least a
-day when a site pushes back. It downloads Guitar Pro files only where
+robots.txt, never logs in, and stops for at least a day when a site pushes
+back. It uses no site's search but LaCuerda's, whose robots.txt is empty: one
+request for a query you typed and left in the served page's search box, once
+in 30 days a query, at most 20 an hour, within that hour's 60. It downloads Guitar Pro files only where
 robots.txt allows it: from gtptabs.com, with at most 20 requests a night, one
 file for each song that has none. Ultimate Guitar's robots.txt closes its
 downloads to bots, so its Guitar Pro pages are yours to click. From MuseScore it

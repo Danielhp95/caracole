@@ -32,7 +32,10 @@ ran. So a job of other commands reads the same way:
   beside its line); never a song's "Added"; and a LaCuerda artist page's read
   (``jobs.LACUERDA_ARTIST``), no song's, what LaCuerda answered, in the words
   ``caracole lacuerda --artist`` ends with ("Read: …", "Not found: …", or "Not
-  read: …" for a cooldown, a block, a spent budget or an error). An add of a
+  read: …" for a cooldown, a block, a spent budget or an error), and a query
+  of LaCuerda's search (``jobs.LACUERDA_SEARCH``) in the words ``caracole
+  lacuerda --search`` ends with ("Searched: …", "Nothing found: …", or "Not
+  searched: …"); while it runs, "Searching LaCuerda…". An add of a
   song whose sheet you picked on LaCuerda says that tonight's run gets that sheet.
 
 A line that ends in a failure or a wait also links to the job's output on
@@ -49,7 +52,7 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step
+from caracole.web.jobs import LACUERDA_READS, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -69,11 +72,13 @@ STAGE_LINES = {
     "gtptabs": "Fetching from gtptabs.com",
     "pages": "Writing the library page",
     "songbooks": "Remaking its songbooks",
+    "search": "Searching LaCuerda",  # caracole lacuerda --search's (jobs.SEARCH_STAGES)
 }
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
-# How ``caracole lacuerda --artist`` ends, by what LaCuerda answered, and the tone of the line it makes.
-_READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting"}
+# How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.
+_READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting",
+               "Searched: ": "added", "Nothing found: ": "missing", "Not searched: ": "waiting"}
 
 
 @dataclass(frozen=True)
@@ -155,7 +160,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
             return Line("removed", DONE[action])
         opens = songbook_page if action in OPENS else None  # moved, set or renamed: its set list is right there
         return Line("ready", DONE[action], ("Open songbook", opens) if opens else None)
-    if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: its command's last word says what LaCuerda answered
+    if job.song_key.startswith(LACUERDA_READS):  # no song's: its command's last word says what LaCuerda answered
         return _artist_read(job.steps, details)
     if song is not None and song.sheet:
         return Line("ready", "Ready", ("Open sheet", song.sheet))
@@ -173,10 +178,11 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
 
 
 def _artist_read(steps: list[Step], details: str) -> Line:
-    """A LaCuerda artist page's read, over: the sentence ``caracole lacuerda --artist`` ends with
-    (commands/lyrics.py), up to its first "; " or bracket. "Read: …" is done, "Not found: …"
-    LaCuerda's answer that it has no such page, and "Not read: …" a cooldown, a block, a spent budget or an
-    error, each a wait; any other ending, "Done"."""
+    """A LaCuerda artist page's read, or a query of its search, over: the sentence ``caracole lacuerda --artist``
+    (or ``--search``) ends with (commands/lyrics.py), up to its first "; " or bracket. "Read: …" and "Searched: …"
+    are done, "Not found: …" and "Nothing found: …" LaCuerda's answer that it has no such page or song, and "Not
+    read: …" and "Not searched: …" a cooldown, a block, a spent budget or an error, each a wait; any other
+    ending, "Done"."""
     said = next((line.strip() for step in reversed(steps) for line in reversed(step.output)
                  if line.startswith(tuple(_READ_TONES))), None)
     if said is None:

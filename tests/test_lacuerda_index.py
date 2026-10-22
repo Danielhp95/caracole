@@ -466,6 +466,66 @@ def test_a_partial_match_in_pinyin_is_no_strong_hit(banma):
     assert li.find(banma, "宋冬野 斑马斑马").songs[0].score == 100
 
 
+# --- what LaCuerda's search answers ------------------------------------------------------------
+
+
+def search_answer():
+    from helpers.lacuerda_site import search_page
+
+    from caracole.lacuerda import parse_search
+
+    return parse_search(search_page(
+        ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]),
+        ("soda_stereo", "Soda Stereo", [("de_musica_ligera", "De Música Ligera", "TR-21")])))
+
+
+def test_a_search_answer_puts_its_songs_in_the_index_beside_their_artists_page(conn):
+    li.store_artist_page(conn, "soda_stereo", fixture("artist.html"))
+    li.store_artists(conn, "tabs/s/index0.html", [LCArtist("soda_stereo", "Soda Stereo", 89)])
+    before = conn.execute("SELECT popular, page FROM lacuerda_index WHERE path = 'soda_stereo/de_musica_ligera'").fetchone()
+
+    assert li.store_search(conn, search_answer()) == 2
+
+    # A song as an artist page's would be: its versions, its best Letra y Acordes version.
+    row = conn.execute("SELECT artist, artist_key, title, title_key, versions, acordes, popular, page "
+                       "FROM lacuerda_index WHERE path = 'imaginarios/corazon_de_tiza'").fetchone()
+    assert tuple(row) == ("Los Imaginarios", "imaginarios", "Corazón de Tiza", "corazon-de-tiza", "RT", 1, None,
+                          li.SEARCH_PAGE)
+    # Their artist, whom no listing read names yet, has a row of their own, for searches and the slugs.
+    assert artists(conn)["imaginarios"] == ("Los Imaginarios", "imaginarios", 0, li.SEARCH_PAGE)
+    assert li.artist_slugs(conn, "Los Imaginarios") == ["imaginarios"]
+    # A song their page gave keeps its place in their popularity, and a listing's row its count.
+    after = conn.execute("SELECT popular, page, versions, acordes FROM lacuerda_index "
+                         "WHERE path = 'soda_stereo/de_musica_ligera'").fetchone()
+    assert tuple(after[:2]) == tuple(before) and tuple(after[2:]) == ("TR", 2)
+    assert artists(conn)["soda_stereo"] == ("Soda Stereo", "soda-stereo", 89, "tabs/s/index0.html")
+    assert len(songs_of(conn, "soda_stereo")) == 14
+    # A search finds them at once.
+    assert [(h.artist, h.title) for h in li.find(conn, "corazon de tiza").songs] == [("Los Imaginarios", "Corazón de Tiza")]
+    # Their page, read later, is what the index holds of them; the listing's row replaces the search's.
+    li.store_artist_page(conn, "imaginarios", artist_page("Los Imaginarios", "imaginarios",
+                                                         ("corazon_de_tiza", "Corazón de Tiza", "RT-12"),
+                                                         ("otra", "Otra", "R-1")))
+    assert conn.execute("SELECT page FROM lacuerda_index WHERE path = 'imaginarios/corazon_de_tiza'").fetchone()[0] == \
+        "imaginarios/"
+    li.store_artists(conn, "tabs/i/index0.html", [LCArtist("imaginarios", "Los Imaginarios", 40)])
+    assert artists(conn)["imaginarios"] == ("Los Imaginarios", "imaginarios", 40, "tabs/i/index0.html")
+
+
+def test_a_search_answer_that_lists_artists_names_them_until_a_listing_does(conn):
+    from helpers.lacuerda_site import artists_search_page
+
+    from caracole.lacuerda import parse_search
+
+    li.store_artists(conn, "tabs/g/index0.html", [LCArtist("gaviota", "Gaviota", 12)])
+    answer = parse_search(artists_search_page([("bragas_de_la_gaviota", "Las Bragas de la Gaviota", 1),
+                                               ("gaviota", "Gaviota", 30)]))
+    assert li.store_search(conn, answer) == 2
+    assert artists(conn)["bragas_de_la_gaviota"] == ("Las Bragas de la Gaviota", "bragas-de-la-gaviota", 1,
+                                                     li.SEARCH_PAGE)
+    assert artists(conn)["gaviota"] == ("Gaviota", "gaviota", 12, "tabs/g/index0.html")  # the listing's, kept
+
+
 # --- letters inside words, and a word of a name inside a longer query ---------------------------
 
 

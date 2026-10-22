@@ -1,10 +1,12 @@
 """Helpers shared by command modules: config, database, the run lock, clients, pages, clock.
 
 Two paces (``config.ProviderPolicy``). Bulk work, every command but ``caracole
-get`` and ``caracole lacuerda --artist``, keeps a provider's ``delay`` (10-20 s
-for UG) between any two requests to it, whichever caracole sent them, and its
-``budget`` a run. An interactive lookup (``caracole get``: one song asked for
-just now; ``caracole lacuerda --artist``: one LaCuerda artist's page) takes
+get``, ``caracole lacuerda --artist`` and ``caracole lacuerda --search``, keeps
+a provider's ``delay`` (10-20 s for UG) between any two requests to it,
+whichever caracole sent them, and its ``budget`` a run. An interactive lookup
+(``caracole get``: one song asked for just now; ``caracole lacuerda
+--artist``: one LaCuerda artist's page; ``caracole lacuerda --search``: one
+query of LaCuerda's search) takes
 ``make_client(..., interactive=True)``: ``lookup_delay`` (about a second)
 between two requests, ``lookup_requests`` for the song, and ``lookup_per_hour``
 for every lookup of the last hour together, counted from ``events`` (runs named
@@ -480,13 +482,15 @@ def _pause_after_last_request(
         _patient_sleep(cfg, conn, remaining, lambda: random.uniform(*delay), lambda s: sleep(s))
 
 
-def lookup_requests_used(conn: sqlite3.Connection, provider: str, now: datetime | None = None) -> int:
-    """How many requests every lookup of the last hour sent the provider, this one's so far included."""
+def lookup_requests_used(conn: sqlite3.Connection, provider: str, now: datetime | None = None, *,
+                         run: str = LOOKUP_RUN) -> int:
+    """How many requests every lookup of the last hour sent the provider, this one's so far included; with
+    ``run``, those of the lookups whose run is named so (``lookup:lacuerda-search:``, LaCuerda's searches)."""
     since = ((now or datetime.now(UTC)) - timedelta(hours=1)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     sent = ",".join("?" * len(_SENT))
     return conn.execute(
         f"SELECT COUNT(*) FROM events WHERE provider = ? AND run LIKE ? AND at >= ? AND decision IN ({sent})",
-        (provider, LOOKUP_RUN + "%", since, *_SENT),
+        (provider, run + "%", since, *_SENT),
     ).fetchone()[0]
 
 

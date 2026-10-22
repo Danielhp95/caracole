@@ -611,6 +611,165 @@ def test_lacuerda_artist_block_cooldown_error_and_spent_lookup_budget_exit_0(tmp
 def test_lacuerda_artist_and_index_together_is_a_usage_error(tmp_path, sites):
     result = run(tmp_path, "lacuerda", "--index", "--artist", "estopa")
     assert result.exit_code == 2 and sites.lacuerda.requests == []
+    for other in (("--index",), ("--artist", "estopa")):
+        result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", *other)
+        assert result.exit_code == 2 and sites.lacuerda.requests == []
+
+
+# --- caracole lacuerda --search ----------------------------------------------------------------
+
+SEARCH_URL = "https://acordes.lacuerda.net/busca.php?exp=corazon+tiza&canc=1&ord=0&ini=0"
+
+
+def tiza_answer() -> str:
+    from helpers.lacuerda_site import search_page
+
+    return search_page(("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]),
+                       ("marea_baja", "Marea Baja", [("corazon_de_tiza", "Corazón de Tiza", "T-1")]))
+
+
+def searched(result) -> str:
+    """What caracole serve's request line says of a search that printed this (web/status.py reads its last word)."""
+    from caracole.web.jobs import LACUERDA_SEARCH, Job, Step
+    from caracole.web.status import job_line
+
+    step = Step("Searching LaCuerda", ("lacuerda", "--search=x"), state="done", output=result.output.splitlines())
+    return job_line(Job(1, "Search", LACUERDA_SEARCH + "x", [step], state="done"), None).text
+
+
+def lookup_events(tmp_path, run_name: str, n: int) -> None:
+    """``n`` requests to LaCuerda in the last hour, under a run named ``run_name``."""
+    conn = open_db(tmp_path)
+    try:
+        conn.executemany("INSERT INTO events (run, at, provider, url, decision) VALUES (?, ?, 'lacuerda', 'x', 'ok')",
+                         [(run_name, datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))] * n)
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_lacuerda_search_asks_once_and_puts_what_it_answers_in_the_index(tmp_path, sites, quick):
+    from caracole import lacuerda_index as li
+
+    sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
+    result = run(tmp_path, "lacuerda", "--search", "Corazón de tiza")
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "Searched: LaCuerda has 2 songs for “Corazón de tiza”, in the index now.\n"
+    assert searched(result) == "Searched: LaCuerda has 2 songs for “Corazón de tiza”, in the index now."
+    assert sites.lacuerda.requests == [SEARCH_URL]  # one request, of the songs: "de" is no word to LaCuerda
+    conn = open_db(tmp_path)
+    try:
+        assert [(h.artist, h.title) for h in li.find(conn, "corazon de tiza").songs] == [
+            ("Los Imaginarios", "Corazón de Tiza"), ("Marea Baja", "Corazón de Tiza")]
+        # A lookup's request, in the hour's lookups and in their share of them that searches take.
+        [run_name] = [r[0] for r in conn.execute("SELECT run FROM events WHERE provider = 'lacuerda'")]
+        assert run_name.startswith("lookup:lacuerda-search:")
+        said = db.kv_get_json(conn, "lacuerda:search:corazon-tiza")
+        assert (said["songs"], said["artists"]) == (2, 0) and said["at"]
+    finally:
+        conn.close()
+    # Asked within 30 days: no request, under any spelling LaCuerda reads the same.
+    again = run(tmp_path, "lacuerda", "--search", "corazon tiza")
+    assert again.exit_code == 0 and again.stdout.startswith("Searched: LaCuerda was asked for “corazon tiza” on ")
+    assert again.stdout.endswith(": 2 songs, in the index.\n")
+    assert sites.lacuerda.requests == [SEARCH_URL]
+
+
+def test_lacuerda_search_asks_again_after_30_days(tmp_path, sites, quick):
+    import gzip  # noqa: F401 (the cache's bodies are gzipped; only their meta is aged here)
+    import hashlib
+
+    sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
+    assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").exit_code == 0
+    month = (datetime.now(UTC) - timedelta(days=31)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn = open_db(tmp_path)
+    try:
+        db.kv_set_json(conn, "lacuerda:search:corazon-tiza", {"at": month, "songs": 2, "artists": 0, "stated": 2})
+        conn.commit()
+    finally:
+        conn.close()
+    key = hashlib.sha256(SEARCH_URL.encode()).hexdigest()
+    meta = tmp_path / "cache" / "http" / "lacuerda" / key[:2] / f"{key}.json"
+    meta.write_text(json.dumps({**json.loads(meta.read_text()), "fetched_at": month}))
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
+    assert result.stdout.startswith("Searched: LaCuerda has 2 songs") and sites.lacuerda.requests == [SEARCH_URL] * 2
+
+
+def test_lacuerda_search_that_finds_nothing_says_so_and_a_query_it_cant_read_asks_nothing(tmp_path, sites, quick):
+    from helpers.lacuerda_site import fixture
+
+    html = fixture("search.html").replace(". 3 resultados.", ". 0 resultados.")
+    start, end = html.index("<table id=s_main"), html.index("</script>", html.index("var NMAX")) + len("</script>")
+    sites.lacuerda.pages[SEARCH_URL] = html[:start] + html[end:]
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
+    assert result.exit_code == 0 and result.stdout == "Nothing found: LaCuerda has no song for “corazon de tiza”.\n"
+    assert searched(result) == "Nothing found: LaCuerda has no song for “corazon de tiza”."
+    # Its answer counts: asked again, within 30 days, it asks nothing.
+    assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").stdout.startswith("Searched: LaCuerda was asked")
+    result = run(tmp_path, "lacuerda", "--search", "el sol y tu")
+    assert result.exit_code == 0 and result.stdout == (
+        "Not searched: LaCuerda's search reads only words of 4 letters or more, and “el sol y tu” has none.\n")
+    assert sites.lacuerda.requests == [SEARCH_URL]
+
+
+def test_lacuerda_search_keeps_to_its_share_of_the_hours_lookups_unless_asked_by_hand(tmp_path, sites, quick):
+    sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
+    lookup_events(tmp_path, "lookup:lacuerda-search:x", 20)
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", "--auto")
+    assert result.exit_code == 0 and sites.lacuerda.requests == []
+    assert result.stdout.startswith("Not searched: this hour's 20 searches of LaCuerda the page sends by itself "
+                                    "are spent")
+    assert searched(result) == "Not searched: this hour's 20 searches of LaCuerda the page sends by itself are spent."
+    # Asked by hand (the page's button, or a terminal), within the hour's lookups.
+    assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").stdout.startswith("Searched: LaCuerda has 2")
+    assert sites.lacuerda.requests == [SEARCH_URL]
+    sites.lacuerda.pages[SEARCH_URL.replace("tiza", "papel")] = tiza_answer()
+    lookup_events(tmp_path, "lookup:x", 39)  # with the 21 searches, the hour's 60 lookup requests
+    result = run(tmp_path, "lacuerda", "--search", "corazon de papel")
+    assert result.exit_code == 0 and sites.lacuerda.requests == [SEARCH_URL]
+    assert searched(result) == "Not searched: this hour's 60 lookup requests to LaCuerda are spent."
+
+
+def test_lacuerda_search_block_cooldown_and_error_exit_0_and_mark_nothing_asked(tmp_path, sites, quick):
+    sites.lacuerda.status = 500
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
+    assert result.exit_code == 0 and "LaCuerda failed" in result.stdout
+    assert searched(result) == "Not searched: LaCuerda failed."
+    sites.lacuerda.status = 403
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
+    assert result.exit_code == 0 and searched(result) == "Not searched: LaCuerda blocked caracole."
+    asked = len(sites.lacuerda.requests)
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
+    assert searched(result).startswith("Not searched: LaCuerda is cooling down after a block until ")
+    assert len(sites.lacuerda.requests) == asked
+    conn = open_db(tmp_path)
+    try:
+        assert is_cooling(conn, "lacuerda", datetime.now(UTC))
+        assert db.kv_get(conn, "lacuerda:search:corazon-tiza") is None  # an error is never an answer
+    finally:
+        conn.close()
+
+
+def test_lacuerda_search_asks_once_more_for_a_cached_answer_cut_short(tmp_path, sites, quick):
+    from helpers.lacuerda_site import fixture
+
+    sites.lacuerda.pages[SEARCH_URL] = fixture("search_cut.html")
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
+    assert result.exit_code == 0 and "LaCuerda failed" in result.stdout and "cut short" in result.stdout
+    sites.lacuerda.pages[SEARCH_URL] = tiza_answer()  # the cache holds the page cut short
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza")
+    assert result.stdout.startswith("Searched: LaCuerda has 2 songs") and sites.lacuerda.requests == [SEARCH_URL] * 2
+
+
+def test_lacuerda_search_progress_says_how_it_goes_for_the_job_page(tmp_path, sites, quick):
+    from caracole.get import read_progress_line
+
+    sites.lacuerda.pages[SEARCH_URL] = tiza_answer()
+    result = run(tmp_path, "lacuerda", "--search", "corazon de tiza", "--progress")
+    events = [e for e in map(read_progress_line, result.stdout.splitlines()) if e is not None]
+    assert [(e["stage"], e["state"]) for e in events] == [("search", "running"), ("search", "done")]
+    assert events[-1]["detail"] == "Searched: LaCuerda has 2 songs for “corazon de tiza”, in the index now."
+    assert result.stdout.splitlines()[-1] == events[-1]["detail"]
 
 
 # --- the pages -----------------------------------------------------------------------------
@@ -700,7 +859,8 @@ def test_registering_the_commands_imports_neither_pass(tmp_path):
     # Every command module is imported on every start; the passes wait for their command.
     src = Path(__file__).resolve().parents[1] / "src"
     passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch", "caracole.lacuerda_index",
-              "caracole.gtptabs", "caracole.gtptabs_fetch", "caracole.musescore", "caracole.musescore_fetch")
+              "caracole.lacuerda_search", "caracole.gtptabs", "caracole.gtptabs_fetch", "caracole.musescore",
+              "caracole.musescore_fetch")
     code = (
         "import sys, typer\n"
         "from caracole.commands import lyrics\n"
@@ -714,3 +874,8 @@ def test_registering_the_commands_imports_neither_pass(tmp_path):
     )
     assert result.returncode == 0, result.stderr[-2000:]
     assert result.stdout.strip() == "[]"
+    # The help's share of the hour's lookups, written there so that registering imports no pass, is the pass's.
+    from caracole import lacuerda_search
+    from caracole.commands.lyrics import LACUERDA_SEARCHES_PER_HOUR
+
+    assert LACUERDA_SEARCHES_PER_HOUR == lacuerda_search.SEARCHES_PER_HOUR

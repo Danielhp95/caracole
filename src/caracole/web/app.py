@@ -7,7 +7,7 @@ docstring lists them and says how they answer: library_routes.py (the library pa
 Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, Cancel and Try again,
 /jobs.json, /api/jobs),
 search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
-read), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
+read, LaCuerda's own search), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
 sheet's PDF in the version its viewer was left in, and Make this my version), versions_routes.py
 (a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick) and guitar_routes.py
 (a song's Guitar Pro file in the browser, and alphaTab's bundle, answered before signing in: ``Route.public``). A new route, or a new
@@ -231,12 +231,16 @@ class WebApp:
     routes keep between two requests."""
 
     def __init__(self, cfg: Config, queue: JobQueue, *, allowed: frozenset[str], csrf: str | None = None,
-                 access_token: str | None = None, timers: Mapping[str, int] | None = None):
+                 access_token: str | None = None, timers: Mapping[str, int] | None = None,
+                 searches_lacuerda: bool = True):
         self.cfg = cfg
         self.queue = queue
         self.allowed = allowed
         self.csrf = csrf or secrets.token_urlsafe(32)
         self.timers = timers  # the library page script's, for the tests alone (``WebControls.timers``)
+        # Whether the pages may send LaCuerda's own search (search_routes.py): False for the tests alone that drive
+        # the pages for something else, whose queue it would join; caracole serve never sets it.
+        self.searches_lacuerda = searches_lacuerda
         self._session = session_value(access_token) if access_token else None
         self._wanted = threading.Lock()  # one append to wanted.txt at a time, of the server's threads
         self._ended: dict[int, tuple[int | None, SongFacts | None]] = {}  # job id -> its song's id and facts

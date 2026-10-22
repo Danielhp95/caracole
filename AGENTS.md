@@ -38,7 +38,7 @@ section says where things are, and the rules a change there keeps.
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
 | fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores, written by ug/fetch.py's `_keep_beside` with no request more, a pinned sheet's from the cache alone; `in_library`, the list as the library holds it; `as_data`, the pages' JSON) |
-| lacuerda | lacuerda.py (URLs, parsing), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page), lacuerda_index.py (its listings of every artist, for searches; `backfill_cached`, the artist pages the HTTP cache holds) |
+| lacuerda | lacuerda.py (URLs, parsing, its search's pages), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page), lacuerda_index.py (its listings of every artist, for searches; `backfill_cached`, the artist pages the HTTP cache holds; `store_search`, what its search answered), lacuerda_search.py (its own search, one query at the lookup pace, `caracole lacuerda --search`; `gate`, whether the pages may send it) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
@@ -95,6 +95,14 @@ Rules a change there keeps (the Invariants below are the others):
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
   opens the leading artist's songs), and on the library page, whose served bar searches
   `/api/search` as you type (which asks no site), it only moves the focus to the first result.
+  LaCuerda's own search is the one request a search may bring, and never on Enter: both pages
+  send it (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) only once the query
+  has settled, the box unchanged for 1.5 s, when `/api/search`'s `lacuerda_search` says `auto`, never
+  twice for a query in a page; Enter holds it back, and `button` (the hour's share of such searches
+  spent) offers it by hand, a line under the results (rows.js `lacuerdaSearcher`; its rows come with
+  the search asked again once the job is over: test_web_page_lacuerda_search.py). A test that drives
+  the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
+  does.
   What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
   `suggest`), `nothingFound` (one card for a query that found nothing: the request by name first, Ask LaCuerda,
   the chips of `looked`, `unseen` folded) and `lookedLine` (the chips in one muted line under results).
@@ -162,9 +170,10 @@ Rules a change there keeps (the Invariants below are the others):
   JSON line per event, for caracole serve), versions_cmd.py is `caracole versions` (a song's UG
   chords versions listed from sheet_versions.py with no request; `--keep`, one tab page at the
   lookup pace, `ug.fetch.keep_version`, noted as yours in `sheet_versions.kept_by_you`; `--choose`,
-  get's `--tab`; `--clear`, `overrides.remove_pin` then get), and review.py, search.py, removal.py
-  and songbook.py are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local indexes
-  alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
+  get's `--tab`; `--clear`, `overrides.remove_pin` then get), lacuerda_search.py is `caracole lacuerda
+  --search` (LaCuerda's own search, one query, one request at the lookup pace), and review.py, search.py,
+  removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local
+  indexes alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
   gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
   and in `/api/search`'s `removed`, which the library page shows with Add again), the words of the UG index's
@@ -373,8 +382,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **Politeness** (http.py, health.py, commands/_common.py), at two paces
   (`config.ProviderPolicy`; `_common.make_client` picks one).
   - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
-    and every command but `caracole get`, `caracole versions` and `caracole lacuerda --artist`.
-    Budgets per run:
+    and every command but `caracole get`, `caracole versions` and `caracole lacuerda --artist`
+    and `--search`. Budgets per run:
     `ug` 60, `lrclib` 200, `lacuerda` 30 (its sheets first, then its listings of every
     artist), `gtptabs` 20, `musescore` 10 requests, `youtube` 6 yt-dlp runs
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
@@ -383,8 +392,12 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     1–2 s for LRCLIB).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
     lookups run it), `caracole versions --keep`, one tab page asked for now (`--choose` and
-    `--clear` run get), and `caracole lacuerda --artist`, one artist's page (an artist's Songs).
-    Its clients are `make_client(..., interactive=True)`: a random gap from
+    `--clear` run get), `caracole lacuerda --artist`, one artist's page (an artist's Songs), and
+    `caracole lacuerda --search`, one query of LaCuerda's search (one request; a query at most once
+    in 30 days, kv `lacuerda:search:<key>`; those the pages send by themselves, `--auto`, at most
+    `lacuerda_search.SEARCHES_PER_HOUR` (20) in the last hour, counted in `events` under runs named
+    `lookup:lacuerda-search:…`, within `lookup_per_hour`). Its clients are
+    `make_client(..., interactive=True)`: a random gap from
     `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
     a budget of `lookup_requests` (6) requests to it for the song, and at most
     `lookup_per_hour` (60) for every lookup of the last hour together (`_common.lookup_policy`,
@@ -414,9 +427,16 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     archive), nor musescore.com's `/api/jmuse`, `/score/*/download/*`, `/sheetmusic?`
     (its search) or `/oembed/*`. A host's rules are the `User-agent: *` group of its live
     robots.txt (tests/fixtures/gtptabs/ and tests/fixtures/musescore/robots.txt). LaCuerda's
-    robots.txt is empty, and it has no search caracole uses: a search reads `lacuerda_index`
-    alone, and an artist's songs come from their page, read at most once in 30 days
-    (`test_web_app.py::test_a_search_asks_no_site_and_takes_no_lock`).
+    robots.txt is empty. A search (`caracole search`, `/api/search`) reads the local indexes
+    alone, `lacuerda_index` among them, asks no site and takes no lock
+    (`test_web_app.py::test_a_search_asks_no_site_and_takes_no_lock`); the one exception is
+    LaCuerda's own search (`/busca.php`, lacuerda_search.py), sent as a queued job at the lookup
+    pace (`caracole lacuerda --search`), one request, only when the query has settled and its gate
+    allows (`lacuerda_search.gate`, read with no request: a word of four letters, LaCuerda's index
+    not answering it well already, not asked within 30 days, no cooldown, the hour's lookups), never on Enter,
+    at most 20 an hour sent by the pages by themselves within `lookup_per_hour`, each query kept
+    30 days (kv and the HTTP cache). An artist's songs come from their page, read at most once in
+    30 days.
   - **The one exception is YouTube**, the owner's explicit choice for a handful of their
     own songs a night: its robots.txt closes `/results` and `/youtubei/` to crawlers, and
     yt-dlp uses both, against its terms too. Provider `youtube` (youtube.py) is the one
@@ -455,7 +475,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `test_youtube_fetch.py::test_an_error_is_no_miss_and_the_song_waits_for_the_next_run`); of
   LaCuerda's listings only a page that answers 404 loses its artists, never one that errs
   or won't parse
-  (`test_lacuerda_index.py::test_a_page_that_wont_parse_is_an_error_and_its_artists_stay`).
+  (`test_lacuerda_index.py::test_a_page_that_wont_parse_is_an_error_and_its_artists_stay`);
+  a page of LaCuerda's search its server cut short (its table or list not closed, its script's
+  arrays missing or disagreeing, fewer rows than it counts) is a `LaCuerdaParseError`, never "no
+  results", and records nothing asked
+  (`test_lacuerda.py::test_an_answer_cut_short_is_a_parse_error_never_no_results`).
   A block or a spent budget exits 0; a bug exits 1, which fires the unit's ntfy alert.
 - **Slugged tabs only at their slugged URL**, as UG answers 404 for them at `/tab/{id}`:
   the index keeps each tab's sitemap path (`ug_index.path`), from which ug/page.py

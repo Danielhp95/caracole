@@ -74,7 +74,7 @@ def live(cfg):
     runner = FakeCaracole(cfg)
     queue = JobQueue(runner)
     queue.start()
-    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     yield f"http://127.0.0.1:{server.server_address[1]}/", queue, runner

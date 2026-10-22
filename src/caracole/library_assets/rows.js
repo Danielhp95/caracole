@@ -568,20 +568,17 @@ const caracoleRows = (icons, does) => {
       "Read the page of " + name + " on LaCuerda"));
     return [el("h2", "group", "LaCuerda"), box];
   };
-  // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
-  // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), then follow the job until it
-  // is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
-  const readArtistPage = (csrf, who, said) => new Promise((resolve) => {
+  // A job of LaCuerda's index queued (POST ``address``, the form ``body``), then followed until it is over;
+  // ``said(text)`` hears how it goes, in ``words`` (``asking``, ``running``; ``failed``, a refusal without words).
+  // Resolves with the job, or with why there is none.
+  const queueAndFollow = (address, body, said, words) => new Promise((resolve) => {
     const gone = () => resolve({ error: "caracole serve can't be reached: is it still running?" });
-    const w = who && typeof who === "object" ? who : {};
-    const body = new URLSearchParams(w.slug ? { csrf: String(csrf || ""), slug: String(w.slug) }
-      : { csrf: String(csrf || ""), name: String(w.name || "") });
-    said("Asking for the page…");
-    fetch("lacuerda/artist", { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
+    said(words.asking);
+    fetch(address, { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
       .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         if (!ok || !data || typeof data.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(data.url)) {
-          resolve({ error: (data && data.error) || "caracole didn't read the page." });
+          resolve({ error: (data && data.error) || words.failed });
           return;
         }
         const follow = () => fetch(data.url, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } })
@@ -590,7 +587,7 @@ const caracoleRows = (icons, does) => {
             if (!job || typeof job !== "object") {
               resolve({ error: "That request is gone: caracole serve restarted, maybe." });
             } else if (job.active) {
-              said(job.state === "queued" ? "Waiting for the request before it…" : "Reading the page on LaCuerda…");
+              said(job.state === "queued" ? "Waiting for the request before it…" : words.running);
               setTimeout(follow, 700);
             } else {
               resolve({ job });
@@ -599,12 +596,140 @@ const caracoleRows = (icons, does) => {
         follow();
       }, gone);
   });
+  // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
+  // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), then follow the job until it
+  // is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
+  const readArtistPage = (csrf, who, said) => {
+    const w = who && typeof who === "object" ? who : {};
+    const body = new URLSearchParams(w.slug ? { csrf: String(csrf || ""), slug: String(w.slug) }
+      : { csrf: String(csrf || ""), name: String(w.name || "") });
+    return queueAndFollow("lacuerda/artist", body, said, { asking: "Asking for the page…",
+      running: "Reading the page on LaCuerda…", failed: "caracole didn't read the page." });
+  };
+  // LaCuerda's own search for a query, now (POST lacuerda/search: caracole lacuerda --search, a job in the queue),
+  // sent by the page by itself, or ``byHand`` (its button); then the job followed, as readArtistPage does.
+  const searchLaCuerda = (csrf, query, byHand, said) => {
+    const body = new URLSearchParams({ csrf: String(csrf || ""), q: String(query || "") });
+    if (byHand) body.set("by_hand", "1");
+    const searching = "Searching LaCuerda for “" + String(query || "") + "”…";
+    return queueAndFollow("lacuerda/search", body, said, { asking: searching, running: searching,
+      failed: "caracole didn't search LaCuerda." });
+  };
+  // LaCuerda's own search for the query a page shows the results of (/api/search's ``lacuerda_search``, the gate:
+  // its ``state``, the ``query`` and its ``key``), one line under the results. State "auto": sent by itself once
+  // the query has settled, the box unchanged for ``SETTLE`` ms (``typed()`` hears each key; a query is new to the
+  // box when its first answer is shown) and still what ``current()`` gives, its line then put under the results
+  // (``place(line)``); never on Enter (``enter(query)`` holds it back for that query, which then offers the
+  // button), never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
+  // LaCuerda for “…” (1 request)", by hand. While it runs the line says so ("Searching LaCuerda for “…”…"), then
+  // what LaCuerda answered, and ``done(query)`` asks the page's search again, whose answer the job's end left
+  // fresh: that query's line stays under its results. ``show(gate, query)`` gives the line to put under them, or
+  // null.
+  const SETTLE = 1500;
+  const lacuerdaSearcher = (csrf, current, done, place) => {
+    const lines = new Map();  // the line of each query's key, the same node from one draw to the next
+    const keys = new Map();  // each query's key, as its first gate gave it: a later answer may have none
+    const sent = new Set();
+    const held = new Set();
+    const firstShown = new Map();
+    let lastKey = 0;
+    let timer = 0;
+    let pending = null;  // { key, query, gate } the timer waits to send
+    const lineOf = (key) => {
+      if (!lines.has(key)) lines.set(key, el("div", "lacuerda-search"));
+      return lines.get(key);
+    };
+    const send = (gate, query, byHand) => {
+      const key = String(gate.key);
+      sent.add(key);
+      const line = lineOf(key);
+      const words = el("p", "hint lacuerda-search-said", "Searching LaCuerda for “" + query + "”…");
+      words.setAttribute("role", "status");
+      line.replaceChildren(words);
+      searchLaCuerda(csrf, query, byHand, (text) => { words.textContent = text; }).then((asked) => {
+        if (asked.error) {
+          words.textContent = asked.error;
+          return;
+        }
+        const job = asked.job && typeof asked.job === "object" ? asked.job : {};
+        const said = job.line && typeof job.line === "object" && typeof job.line.text === "string" ? job.line.text : "";
+        words.textContent = said || "LaCuerda's search is over.";
+        done(query);
+      });
+      return line;
+    };
+    const offer = (gate, query) => {
+      const line = lineOf(String(gate.key));
+      if (line.firstChild) return line;
+      const go = button("Search LaCuerda for “" + query + "” (1 request)", "small lacuerda-search-go", () => {
+        go.disabled = true;
+        send(gate, query, true);
+      }, "Search LaCuerda for “" + query + "”: one request");
+      go.title = "LaCuerda's own search, one request at a lookup's pace: its songs go into caracole's copy of its index.";
+      line.replaceChildren(go);
+      return line;
+    };
+    const fire = () => {
+      timer = 0;
+      const wait = pending;
+      if (!wait) return;
+      if (current() !== wait.query || sent.has(wait.key) || held.has(wait.key)) {  // typed on: the next answer says
+        pending = null;
+        return;
+      }
+      const settled = Math.max(lastKey, firstShown.get(wait.query) || 0) + SETTLE - performance.now();
+      if (settled > 0) {
+        timer = setTimeout(fire, settled);
+        return;
+      }
+      pending = null;
+      place(send(wait.gate, wait.query, false));
+    };
+    const show = (gate, query) => {
+      const g = gate && typeof gate === "object" && typeof gate.key === "string" && gate.key ? gate : null;
+      if (!firstShown.has(query)) firstShown.set(query, performance.now());
+      if (g && !keys.has(query)) keys.set(query, String(g.key));
+      const key = g ? String(g.key) : keys.get(query);
+      if (key && (sent.has(key) || (lines.has(key) && lines.get(key).firstChild))) return lineOf(key);
+      if (!g) return null;
+      if (g.state === "button" || (g.state === "auto" && held.has(key))) return offer(g, query);
+      if (g.state === "spent") {  // said afresh each time: in an hour, the same query may be sent
+        const line = el("div", "lacuerda-search");
+        line.appendChild(el("p", "hint lacuerda-search-said", "LaCuerda's search waits: it cools down after a " +
+          "block, or this hour's lookups to it are spent."));
+        return line;
+      }
+      if (g.state === "auto" && !(pending && pending.key === key && pending.query === query)) {
+        clearTimeout(timer);
+        pending = { key, query, gate: g };
+        timer = setTimeout(fire, SETTLE);
+      }
+      return null;
+    };
+    const typed = () => {
+      lastKey = performance.now();
+    };
+    // Enter acts on what is there: it never sends the search, and holds back the one the query waits to send.
+    const enter = (query) => {
+      if (pending && pending.query === query) {
+        held.add(pending.key);
+        clearTimeout(timer);
+        timer = 0;
+        const wait = pending;
+        pending = null;
+        return offer(wait.gate, query);
+      }
+      return null;
+    };
+    return { show, typed, enter };
+  };
   // A read that left no songs to list: what LaCuerda answered, as its request's line says it ("Not read: LaCuerda is
   // cooling down…", "Not found: …"), and its output on the requests page.
   const readOutcome = (job) => {
     const j = job && typeof job === "object" ? job : {};
     const line = j.line && typeof j.line === "object" && typeof j.line.text === "string" ? j.line.text : "";
-    const said = /^(Read|Not read|Not found): /.test(line) ? line + " " : "LaCuerda gave caracole no songs of theirs this time. ";
+    const said = /^(Read|Not read|Not found|Searched|Not searched|Nothing found): /.test(line) ? line + " "
+      : "LaCuerda gave caracole no songs of theirs this time. ";
     const why = el("p", "hint read-outcome", said);
     const id = Number(j.id);
     if (Number.isInteger(id) && id > 0) {
@@ -734,6 +859,6 @@ const caracoleRows = (icons, does) => {
     return line;
   };
   return { resultRow, sourceMark, link, titleLink, artistFilter, artistSearch, artistOnly, button, many, counts, opener, ugHit, artistHit,
-    siteHit, siteArtist, siteArtistSongs, readArtistPage, readOutcome, indexLine, titleLine,
+    siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
     didYouMean, lookedChips, nothingFound, lookedLine };
 };

@@ -4,7 +4,10 @@ The fixtures in tests/fixtures/lacuerda/, as captured on 20 October 2026: robots
 not_found.html, the 404 page /sitemap.xml answered; tabs.html, /tabs/ with its menu of
 initials; and letter_e.html, the first page of E's listing of every artist, cut down to 12 of
 its 100. ``listing_page`` makes other listing pages in that page's shape, and ``artist_page``
-artist pages in the shape of artist.html (18 October).
+artist pages in the shape of artist.html (18 October). Its search, as captured on 22 October:
+search.html, a whole answer of songs (made-up names), and search_cut.html, an answer its server
+ended early; ``search_page`` makes answers of songs in the first's shape, ``artists_search_page``
+an answer of artists as the second begins, whole.
 """
 
 from __future__ import annotations
@@ -57,6 +60,53 @@ def listing_page(artists: Sequence[tuple[str, str, int]], *, pages: int = 1, pag
     multipag = (f"<div class='multipag'><div class='first'>Indice:</div><ul>{links}"
                 f"<li class=last><font color=#000000>{counted}</font> Artistas</li></ul><br clear=all></div>")
     return _MULTIPAG.sub(lambda m: multipag, html)
+
+
+_SEARCH_ROWS = re.compile(r"<table id=s_main.*?</script>\n", re.DOTALL)
+_SEARCH_COUNT = re.compile(r"(<div class=s_res>Buscando <b>)\"[^\"]*\"(</b>\. )\d+ (resultados\.</div>)")
+_SEARCH_PAGES = re.compile(r"<li class='sel'>1</li><li class='last'><span>\d+</span> resultados</li>")
+
+
+def search_page(*rows: tuple[str, str, Sequence[tuple[str, str, str]]], query: str = "corazon de tiza",
+                stated: int | None = None, pages: int = 1) -> str:
+    """An answer of LaCuerda's search in the shape of search.html: ``(artist slug, artist, songs)`` per row of
+    table#s_main, each song ``(song slug, title, lcd)``, numbered r000… down the page with their slugs in the
+    script's arrays in reverse order, as LaCuerda writes them; ``stated`` results counted (by default the songs),
+    and ``pages`` pages of them linked."""
+    html = fixture("search.html")
+    songs = [(slug, song) for slug, _, listed in rows for song in listed]
+    n = 0
+    trs = []
+    for b, (slug, name, listed) in enumerate(rows):
+        items = []
+        for song_slug, title, lcd in listed:
+            items.append(f"<li id='r{n:03}' lcd='{lcd}'><a href=\"javascript:\">{title}</a></li>")
+            n += 1
+        trs.append(f"<tr><td>\n<a href=\"/{slug}/\">{name}</A></TD><td><ul class=b_main id=b_main{b}>\n"
+                   + "\n".join(items) + "\n</ul></td></tr>")
+    hds = ",".join(f"'{slug}'" for slug, _ in reversed(songs))
+    fns = ",".join(f"'{song[0]}'" for _, song in reversed(songs))
+    table = ("<table id=s_main onclick='chOpen(event)'><col width=25%><col width=75%>\n" + "\n".join(trs)
+             + f"</table>\n<script>\nbMfill({len(rows)})\nvar hds=[{hds}];\nvar fns=[{fns}];\n"
+             f"var NMAX={len(songs) - 1};\n</script>\n")
+    counted = len(songs) if stated is None else stated
+    links = "".join(f"<li onclick=\"sChg('ini',{p * 50})\">{p + 1}</li>" for p in range(1, pages))
+    html = _SEARCH_ROWS.sub(lambda m: table, html)
+    html = _SEARCH_COUNT.sub(lambda m: f'{m.group(1)}"{query}"{m.group(2)}{counted} {m.group(3)}', html)
+    return _SEARCH_PAGES.sub(lambda m: f"<li class='sel'>1</li>{links}<li class='last'><span>{counted}</span> "
+                                       "resultados</li>", html)
+
+
+def artists_search_page(artists: Sequence[tuple[str, str, int]], *, query: str = "la gaviota") -> str:
+    """An answer of LaCuerda's search that lists artists (a general search whose query names some), as
+    search_cut.html begins, its list whole: each ``(slug, name, songs)`` an item as the listings write them."""
+    html = fixture("search_cut.html").replace('"la gaviota"', f'"{query}"')
+    html = html.replace(". 1 resultados.", f". {len(artists)} resultados.").replace(
+        "<span>1</span> resultados", f"<span>{len(artists)}</span> resultados")
+    items = "\n".join(
+        f"<li onclick='w.location=\"/{slug}/\"'><a HREF=\"/{slug}/\"><em>Acordes de &nbsp;</em>{name}</a>"
+        f"<span>{songs}<em>&nbsp; canciones</em></span><br clear=all></li>" for slug, name, songs in artists)
+    return html + items + "\n</ul>\n</div></div>\n</div>\n<div id='mBot'></div>\n</body></html>\n"
 
 
 def artist_page(name: str, slug: str, *songs: tuple[str, str, str]) -> str:

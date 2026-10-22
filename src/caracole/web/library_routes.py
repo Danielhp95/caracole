@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from caracole.web.app import FRAMES, Response, Route, WebApp, html_response, no_such_song, not_ignored, song_id
-from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, add_steps, lookup_steps
+from caracole.web.jobs import LACUERDA_READS, REMOVING, add_steps, lookup_steps
 from caracole.web.jobs_routes import views
 from caracole.web.pages import Refused
 from caracole.web.review_routes import review_first
@@ -60,9 +60,9 @@ def library(app: WebApp) -> Response:
                                     if job.active and job.song_key.startswith(REMOVING)})
         # Every request on its way, which the page's script shows where it belongs (``kind``): a
         # song's on its card, a removal's on its song's, a songbook's change on its songbook's. A
-        # LaCuerda artist page's read is no song's: the result row it was asked from follows it.
+        # LaCuerda artist page's read, or a query of its search, is no song's: what asked for it follows it.
         active = tuple(views(app, conn, overrides, jobs, only=[
-            j for j in jobs if j.active and not j.song_key.startswith(LACUERDA_ARTIST)]))
+            j for j in jobs if j.active and not j.song_key.startswith(LACUERDA_READS)]))
         controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
                                timers=app.timers, guitar=available(app.cfg.alphatab_dir))
         html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),

@@ -6,7 +6,12 @@ two, its sheets and its listings of every artist, are ``caracole lacuerda`` and
 ``caracole lacuerda --index``, which reads the listings even for an empty library.
 ``caracole lacuerda --artist NAME`` reads one artist's page into that index now,
 at the lookup pace (as ``caracole get`` asks: a lookup's budgets, no ntfy alert):
-what caracole serve's Songs of a LaCuerda artist runs.
+what caracole serve's Songs of a LaCuerda artist runs. ``caracole lacuerda
+--search QUERY`` asks LaCuerda's search for the songs of a query, one request at
+the same pace (lacuerda_search.py), and puts what it answers into the index: what
+caracole serve's search bar sends once a query has settled (``--auto``, within its
+share of the hour's lookups), and its Search LaCuerda button (``--progress``, a
+JSON line per event for the request's stages).
 As in the run,
 a provider cooling down after a block is left alone, and a block starts (or
 extends) its cooldown and sends one ntfy alert. Neither is a failure, and
@@ -44,6 +49,7 @@ from caracole.commands._common import (
 )
 from caracole.health import get_state, is_cooling, record_block, record_ok
 from caracole.logs import plural, provider_name
+from caracole.stamps import parse as stamps_parse
 from caracole.stamps import shown
 
 if TYPE_CHECKING:
@@ -58,6 +64,7 @@ if TYPE_CHECKING:
 
 # Each provider's command, for the lock.
 _COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs", "musescore": "musescore"}
+LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the help, which imports no pass
 
 
 def register(app: typer.Typer) -> None:
@@ -78,12 +85,30 @@ def register(app: typer.Typer) -> None:
             help="Instead, read this artist's page into the index now (their name, or their page's slug), "
                  "at the lookup pace: their songs, for searches.",
         ),
+        search: str | None = typer.Option(
+            None, "--search", metavar="QUERY",
+            help="Instead, ask LaCuerda's search for the songs of QUERY now, one request at the lookup pace, at "
+                 "most once in 30 days a query, and put what it answers into the index.",
+        ),
+        auto: bool = typer.Option(
+            False, "--auto",
+            help="With --search: a search the page sent by itself, within its share of the hour's lookups "
+                 f"({LACUERDA_SEARCHES_PER_HOUR} searches).",
+        ),
+        progress: bool = typer.Option(
+            False, "--progress", help="With --search: a JSON line per event, for caracole serve's request page.",
+        ),
     ) -> None:
         """Look for LaCuerda chord sheets for Spanish songs without a complete one."""
         cfg = load_cfg(ctx)
-        if index and artist is not None:
-            _common.fail("--index reads every artist's listing and --artist one artist's page: give one of them", 2)
-        if artist is not None:
+        if sum((index, artist is not None, search is not None)) > 1:
+            _common.fail("--index reads every artist's listing, --artist one artist's page and --search one query "
+                         "of LaCuerda's search: give one of them", 2)
+        if (auto or progress) and search is None:
+            _common.fail("--auto and --progress go with --search", 2)
+        if search is not None:
+            _lacuerda_search(cfg, " ".join(search.split()), auto=auto, progress=progress)
+        elif artist is not None:
             _lacuerda_artist(cfg, " ".join(artist.split()))
         elif index:
             _lacuerda_index(cfg)
@@ -239,6 +264,92 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
         return
     typer.echo(f"Read: LaCuerda's page of {row[0] if row else artist} lists {plural(found[1], 'song')}, in the "
                "index now.")
+
+
+NOT_SEARCHED = "Not searched: "  # how a search that asked nothing, or got no answer, ends
+
+
+def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> None:
+    """Ask LaCuerda's search for the songs of ``query`` now, at the lookup pace, and say what it answered. A query
+    asked within 30 days, a cooldown, a block, a spent share or budget, or an error says so and exits 0.
+
+    Its last line starts with what LaCuerda answered, which caracole serve's request line shows (web/status.py):
+    "Searched: " (its songs, in the index now, or asked within 30 days), "Nothing found: " (no song) or "Not
+    searched: " (no word LaCuerda reads, a cooldown, a block, a spent share or budget, an error: nothing changed).
+    With ``progress``, that line is also the detail of its one stage's last JSON line (get.py's), "search"."""
+    from dataclasses import replace
+
+    from caracole.get import progress_line
+    from caracole.health import record_error
+    from caracole.http import BudgetExhausted, CachedAnswers, ProviderBlocked, ProviderError
+    from caracole.lacuerda_index import backfill_cached
+    from caracole.lacuerda_search import RUN, SEARCHES_PER_HOUR, asked, query_key, search, searches_used
+
+    def say(state: str, detail: str) -> None:
+        if progress:
+            typer.echo(progress_line({"stage": "search", "state": state, "detail": detail}))
+
+    def end(line: str, state: str = "skipped") -> None:
+        say(state, line)
+        typer.echo(line)
+
+    shown_query = f"“{query}”"
+    key = query_key(query)
+    if not key:
+        end(f"{NOT_SEARCHED}LaCuerda's search reads only words of 4 letters or more, and {shown_query} has none.")
+        return
+    say("running", "asking LaCuerda")
+    with exclusive(cfg, f"lacuerda --search {query}", interactive=True), closing(open_db(cfg)) as conn:
+        now = utcnow()
+        backfill_cached(conn, CachedAnswers("lacuerda", cfg.cache_dir))  # the artist pages it holds: no request
+        was = asked(conn, key, now)
+        if was is not None:
+            end(f"Searched: LaCuerda was asked for {shown_query} on {shown(stamps_parse(was.get('at')))}: "
+                f"{plural(int(was.get('songs') or 0), 'song')}, in the index.", "done")
+            return
+        p = cfg.provider("lacuerda")
+        if is_cooling(conn, "lacuerda", now):
+            end(f"{NOT_SEARCHED}LaCuerda is cooling down after a block until "
+                f"{shown(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
+            return
+        policy = _common.lookup_policy(cfg, conn, "lacuerda", now)
+        if policy.budget < 1:
+            end(f"{NOT_SEARCHED}this hour's {p.lookup_per_hour} lookup requests to LaCuerda are spent; ask again "
+                "later.")
+            return
+        if auto and searches_used(conn, now) >= SEARCHES_PER_HOUR:
+            end(f"{NOT_SEARCHED}this hour's {SEARCHES_PER_HOUR} searches of LaCuerda the page sends by itself are "
+                "spent; its Search LaCuerda button, or a terminal, asks anyway.")
+            return
+        client = make_client(cfg, conn, "lacuerda", _common.LOOKUP_RUN + RUN + run_id_for(now),
+                             policy=replace(policy, budget=1), interactive=True)
+        try:
+            answer = search(conn, client, query, now)
+        except ProviderBlocked as e:
+            state = record_block(conn, "lacuerda", now, str(e))
+            end(f"{NOT_SEARCHED}LaCuerda blocked caracole ({e}); no more requests to it until "
+                f"{shown(state.cooldown_until)}.")
+            return
+        except BudgetExhausted:
+            end(f"{NOT_SEARCHED}the search's one request to LaCuerda is spent; ask again later.")
+            return
+        except ProviderError as e:
+            record_error(conn, "lacuerda", now, str(e))
+            end(f"{NOT_SEARCHED}LaCuerda failed ({e}); nothing changed: try again later.")
+            return
+        finally:
+            client.close()
+        if client.requests_made:
+            record_ok(conn, "lacuerda", now)
+    if answer.songs:
+        some = (f"{plural(answer.stated, 'song')} for {shown_query}: the first {len(answer.songs)} are"
+                if answer.stated > len(answer.songs) else f"{plural(len(answer.songs), 'song')} for {shown_query},")
+        end(f"Searched: LaCuerda has {some} in the index now.", "done")
+    elif answer.artists:
+        end(f"Searched: LaCuerda names {plural(len(answer.artists), 'artist')} for {shown_query}, in the index now.",
+            "done")
+    else:
+        end(f"Nothing found: LaCuerda has no song for {shown_query}.", "done")
 
 
 def _gtptabs(cfg: Config) -> None:

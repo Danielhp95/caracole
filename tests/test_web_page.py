@@ -171,7 +171,8 @@ def serve(cfg, monkeypatch):
         real = library_page.build_library_page
         monkeypatch.setattr(library_page, "build_library_page", lambda *a, **k: with_script(real(*a, **k), script))
         queue = JobQueue(runner)
-        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers=timers)
+        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers=timers,
+                     searches_lacuerda=False)
         answer = app.handle
 
         def handle(request):

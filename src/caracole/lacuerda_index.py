@@ -8,7 +8,10 @@ request of their own: each page lacuerda_fetch.py reads (``store_artist_page``),
 listing page is read, the cached pages of its artists, and, each night, every artist page
 the HTTP cache holds that the index hasn't read (``backfill_cached``). A song's row has its
 title and key, its versions, its best Letra y Acordes version and its place in the artist's
-popularity.
+popularity. LaCuerda's own search (lacuerda_search.py) adds the songs it answers, in the same
+shape, and the artists it names that no listing read has yet (``store_search``): their page
+is ``SEARCH_PAGE``, so an artist's songs from their own page are told from those a search
+brought.
 
 **The refresh** (``refresh``) reads the listings when they never were all read, and again
 after 30 days, as site_index.py reads sitemaps: each letter's first page, which names the
@@ -76,6 +79,7 @@ from caracole.lacuerda import (
     LCArtist,
     LCSong,
     Listing,
+    SearchAnswer,
     artist_slug_candidates,
     artist_url,
     best_acordes_version,
@@ -114,6 +118,7 @@ PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
 NAMED = 80.0  # an artist's whole name among the query's other words: a possible match, below a strong hit
 WORD_NAMED = 75.0  # a word of an artist's name at the query's start or end, the rest a title: below NAMED
 INSIDE_SCALE = 0.85  # letters inside a word of a name ("mana" of Chumaña): at most 85, never a strong hit
+SEARCH_PAGE = "busca.php"  # the page of the rows LaCuerda's search answered (store_search)
 READINGS = ("title", "both", "artist")  # how a query may name a song; a tie goes to the first
 ARTIST_ROWS, SONG_ROWS, TOP_SONGS = 3, 5, 3  # what ``find`` gives by default
 WORD_ARTISTS, WORD_SHARE = 10, 500  # a word in more names than this, and in more than 1 in 500 listed, is common
@@ -195,6 +200,36 @@ def store_artist_page(conn: sqlite3.Connection, slug: str, html: str) -> bool:
     return True
 
 
+def store_search(conn: sqlite3.Connection, answer: SearchAnswer) -> int:
+    """The rows of an answer of LaCuerda's search into the index, beside what it holds; how many it stored.
+
+    Each song in the shape an artist page's has (its lcd letters, its best Letra y Acordes version), its page
+    ``SEARCH_PAGE``; a song the index has already keeps its page and its place in the artist's popularity, and
+    takes the answer's versions. Each artist of the answer that no listing read names yet gets a row of their own
+    (``SEARCH_PAGE``), for searches and for the slugs a sheet is looked for under, which their listing's row
+    replaces once it is read; a listing's row is never touched. In one transaction."""
+    ensure_current_keys(conn)
+    named: dict[str, tuple[str, int]] = {}
+    for a in answer.artists:
+        named[a.slug] = (a.name, a.songs)
+    for s in answer.songs:
+        named.setdefault(s.artist_slug, (s.artist, 0))
+    with savepoint(conn, "lacuerda_index_search"):
+        for s in answer.songs:
+            conn.execute(
+                f"INSERT INTO lacuerda_index ({', '.join(_COLUMNS)}) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, NULL, ?) "
+                "ON CONFLICT(path) DO UPDATE SET title = excluded.title, title_key = excluded.title_key, "
+                "versions = excluded.versions, acordes = excluded.acordes",
+                (f"{s.artist_slug}/{s.slug}", s.artist_slug, s.artist, name_key(s.artist), s.title, title_key(s.title),
+                 s.song.types, best_acordes_version(s.song) or 0, SEARCH_PAGE))
+        for slug, (name, songs) in named.items():
+            conn.execute(
+                f"INSERT INTO lacuerda_index ({', '.join(_COLUMNS)}) VALUES (?, ?, ?, ?, '', '', ?, '', 0, NULL, ?) "
+                "ON CONFLICT(path) DO UPDATE SET songs = max(songs, excluded.songs) WHERE page = excluded.page",
+                (f"{slug}/", slug, name, name_key(name), songs, SEARCH_PAGE))
+    return len(answer.songs) + len(answer.artists)
+
+
 _ARTIST_PAGE = re.compile(re.escape(BASE_URL) + r"/([a-z0-9_]+)/")
 
 
@@ -205,7 +240,8 @@ def backfill_cached(conn: sqlite3.Connection, client: Client) -> int:
     root = getattr(client, "cache_root", None)  # a PoliteClient's; a test's fake client may have none
     if root is None:
         return 0
-    read = {r[0] for r in conn.execute("SELECT DISTINCT page FROM lacuerda_index WHERE title != ''")}
+    read = {r[0] for r in conn.execute("SELECT DISTINCT page FROM lacuerda_index WHERE title != '' AND page != ?",
+                                       (SEARCH_PAGE,))}
     stored = 0
     try:
         metas = sorted(Path(root).glob("*/*.json"))

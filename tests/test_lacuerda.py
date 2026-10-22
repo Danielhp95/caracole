@@ -687,3 +687,125 @@ def test_parse_popularity_without_an_order_or_with_a_broken_one():
     assert parse_popularity(page) == {}
     assert parse_popularity(page + "<script>var popOrder = [1,7,0];</script>") == {"b": 0, "a": 2}
     assert parse_popularity(page + "<script>var popOrder = [x];</script>") == {}
+
+
+# --- the search ------------------------------------------------------------------------------
+
+
+def test_the_search_reads_words_of_four_letters_or_more_accents_folded():
+    from caracole.lacuerda import search_words
+
+    assert search_words("Corazón Espinado") == ["corazon", "espinado"]
+    assert search_words("la flaca") == ["flaca"]  # "la" is no word to LaCuerda's search
+    assert search_words("Fito & Fitipaldis: ¿Por la boca vive el pez?") == ["fito", "fitipaldis", "boca", "vive"]
+    assert search_words("19 días y 500 noches") == ["dias", "noches"]
+    assert search_words("Ñandú ñandú") == ["nandu"]  # each word once, "ñ" as its own script folds it
+    assert search_words("sol y luz") == search_words("宋冬野") == search_words("") == []
+
+
+def test_a_search_url_asks_for_songs_or_for_everything():
+    from caracole.lacuerda import search_url
+
+    assert search_url("Corazón espinado") == f"{BASE_URL}/busca.php?exp=corazon+espinado&canc=1&ord=0&ini=0"
+    assert search_url("la flaca", songs_only=False) == f"{BASE_URL}/busca.php?exp=flaca&canc=0&ord=0&ini=0"
+    with pytest.raises(ValueError):
+        search_url("el sol")
+
+
+def test_a_whole_search_answer_lists_each_song_with_its_artist_and_its_slug_from_the_reversed_arrays():
+    from caracole.lacuerda import parse_search
+
+    answer = parse_search(_fixture("search.html"))
+    assert answer.stated == 3 and answer.artists == ()
+    assert [(s.artist_slug, s.artist, s.title, s.slug, s.song.lcd) for s in answer.songs] == [
+        ("imaginarios", "Los Imaginarios", "Corazón de Tiza", "corazon_de_tiza", "RRTHBTTTD-123456789"),
+        ("marea_baja", "Marea Baja", "Corazón de Tiza (en vivo)", "corazon_de_tiza_en_vivo", "RTTTBBT-1234567"),
+        ("nina_de_la_lluvia", "Niña de la Lluvia", "Tiza", "tiza", "TB-12"),
+    ]
+    first, second, third = answer.songs
+    assert (first.song.types, first.song.ranking) == ("RRTHBTTTD", tuple(range(1, 10)))
+    # The page of its best Letra y Acordes version, as an artist page's song has it; none without one.
+    assert first.sheet_url == f"{BASE_URL}/imaginarios/corazon_de_tiza.shtml"
+    assert second.sheet_url == f"{BASE_URL}/marea_baja/corazon_de_tiza_en_vivo.shtml"
+    assert third.sheet_url is None
+    assert first.url == f"{BASE_URL}/imaginarios/corazon_de_tiza"
+
+
+def test_the_song_slugs_come_from_the_end_of_the_arrays_for_the_first_row():
+    from helpers.lacuerda_site import search_page
+
+    from caracole.lacuerda import parse_search
+
+    page = search_page(("uno", "Uno", [("primera", "Primera", "R-1"), ("segunda", "Segunda", "RR-21")]),
+                       ("dos", "Dos", [("tercera", "Tercera", "T-1")]))
+    assert "var fns=['tercera','segunda','primera'];" in page and "var NMAX=2;" in page
+    answer = parse_search(page)
+    assert [(s.artist_slug, s.slug, s.title) for s in answer.songs] == [
+        ("uno", "primera", "Primera"), ("uno", "segunda", "Segunda"), ("dos", "tercera", "Tercera")]
+    assert answer.songs[1].sheet_url == f"{BASE_URL}/uno/segunda-2.shtml"
+
+
+def test_no_results_is_an_answer():
+    from helpers.lacuerda_site import fixture
+
+    from caracole.lacuerda import parse_search
+
+    html = fixture("search.html").replace(". 3 resultados.", ". 0 resultados.")
+    start, end = html.index("<table id=s_main"), html.index("</script>", html.index("var NMAX")) + len("</script>")
+    answer = parse_search(html[:start] + html[end:])
+    assert (answer.songs, answer.artists, answer.stated) == ((), (), 0)
+
+
+def test_an_answer_that_lists_artists_lists_them_as_a_listing_does():
+    from helpers.lacuerda_site import artists_search_page
+
+    from caracole.lacuerda import parse_search
+
+    answer = parse_search(artists_search_page([("bragas_de_la_gaviota", "Las Bragas de la Gaviota", 1),
+                                               ("gaviota", "Gaviota", 12)]))
+    assert answer.songs == () and answer.stated == 2
+    assert answer.artists == (LCArtist("bragas_de_la_gaviota", "Las Bragas de la Gaviota", 1),
+                              LCArtist("gaviota", "Gaviota", 12))
+
+
+def test_an_answer_cut_short_is_a_parse_error_never_no_results():
+    from helpers.lacuerda_site import fixture, search_page
+
+    from caracole.lacuerda import parse_search
+
+    with pytest.raises(LaCuerdaParseError, match="isn't closed"):
+        parse_search(fixture("search_cut.html"))  # as LaCuerda's server ended it: one artist counted, no list
+    whole = fixture("search.html")
+    with pytest.raises(LaCuerdaParseError, match="isn't closed"):  # cut inside the table
+        parse_search(whole[:whole.index("<tr><td>\n<a href=\"/marea_baja/")])
+    with pytest.raises(LaCuerdaParseError, match="slugs"):  # cut between the table and its script
+        parse_search(whole[:whole.index("var hds")])
+    with pytest.raises(LaCuerdaParseError, match="count"):  # cut before the count
+        parse_search(whole[:whole.index("<div class=s_res>")])
+    # Fewer rows than it counts, on its only page of results.
+    with pytest.raises(LaCuerdaParseError, match="3 results"):
+        parse_search(search_page(("uno", "Uno", [("primera", "Primera", "R-1")]), stated=3))
+    # More results than a page holds: the rows of this page are what it lists.
+    answer = parse_search(search_page(("uno", "Uno", [("primera", "Primera", "R-1")]), stated=120, pages=3))
+    assert [s.slug for s in answer.songs] == ["primera"] and answer.stated == 120
+
+
+def test_arrays_that_disagree_with_the_rows_are_a_parse_error():
+    from helpers.lacuerda_site import fixture
+
+    from caracole.lacuerda import parse_search
+
+    whole = fixture("search.html")
+    for broken in (whole.replace("var fns=['tiza',", "var fns=["),  # a slug short
+                   whole.replace("var hds=['nina_de_la_lluvia',", "var hds=["),  # an artist short
+                   whole.replace("var NMAX=2;", "var NMAX=5;"),
+                   whole.replace("'corazon_de_tiza_en_vivo'", "'../../etc'"),  # no slug
+                   whole.replace("<li id='r002'", "<li id='r009'")):  # a number past the arrays
+        with pytest.raises(LaCuerdaParseError):
+            parse_search(broken)
+    with pytest.raises(LaCuerdaParseError, match="artist"):  # a row whose link is no artist page
+        parse_search(whole.replace('<a href="/marea_baja/">', '<a href="/ARCH/x.php?a=1">'))
+    with pytest.raises(LaCuerdaParseError):  # neither songs nor artists for the results it counts
+        parse_search(whole.replace("<table id=s_main", "<table id=other"))
+    with pytest.raises(LaCuerdaParseError):
+        parse_search("<html><body>Mantenimiento</body></html>")

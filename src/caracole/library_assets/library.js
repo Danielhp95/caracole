@@ -202,7 +202,7 @@
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares
   const { sourceMark, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine, titleLine,
-    readArtistPage, readOutcome, didYouMean, nothingFound, lookedLine } = caracoleRows(ICONS);
+    readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } = caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its line's says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -1390,6 +1390,7 @@
   input.addEventListener("input", () => {
     state.q = input.value;
     focusFirst = false;  // an Enter before: what it waited for is typed over
+    if (searcher) searcher.typed();
     // Served, typing searches the sites too, once there is enough to search; the file's Enter shows its line.
     const sites = server ? searchesAsYouType(state.q) : state.all && sitesCan(state.q);
     if (state.all && !sites) {  // nothing the sites can search: your songs again
@@ -1427,7 +1428,10 @@
   // match, then what caracole's offline indexes hold of Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore
   // (/api/search), under the same artist headers (mergeSites), the newest query's answer alone, the older one staying
   // until it comes. Enter moves the focus to the first result: it never spends a request, only a result's Get it
-  // does. On the file, which can ask nothing, Enter shows the line that searches the sites.
+  // does. LaCuerda's own search, which finds the songs of artists whose page caracole hasn't read, is one request:
+  // sent by itself once the query has settled, when /api/search says so (``lacuerda_search``), or offered as a
+  // button, a line under the results (rows.js lacuerdaSearcher, lcBox); its rows come in a new answer once it is
+  // over. On the file, which can ask nothing, Enter shows the line that searches the sites.
   const say = (text) => {
     if (barStatus.textContent === text) return;
     barStatus.textContent = text;
@@ -1479,6 +1483,7 @@
   const allMine = el("p", "all-mine");
   const meantBox = el("div", "meant");  // Did you mean, first
   const groupsBox = el("div", "groups");
+  const lcBox = el("div", "lacuerda-search-box");  // LaCuerda's own search, under the results
   const notesBox = el("div", "notes");
   let asking = null;  // the search of the sites on its way, to abort
   let asked = 0;  // the newest search sent: an older one's answer is dropped
@@ -1915,6 +1920,11 @@
     askSources(false);
   };
 
+  // LaCuerda's own search (rows.js): ``current()`` the query the box holds, ``done`` asks the sites again once it is
+  // over, for the rows it put into LaCuerda's index.
+  const searcher = server ? lacuerdaSearcher(server.csrf, () => normal(state.q), (q) => {
+    if (state.all && normal(state.q) === q) askSources(true);
+  }, (line) => lcBox.replaceChildren(line)) : null;
   const askSources = (now) => {
     const q = normal(state.q);
     if (!now && q === askedFor) return;
@@ -1975,6 +1985,9 @@
     }
     drawGroups();
     if (going.size) settleSpots(true);
+    let lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q) : null;
+    if (searcher && focusFirst && q === normal(state.q)) lcLine = searcher.enter(q) || lcLine;  // Enter came first
+    lcBox.replaceChildren(...(lcLine ? [lcLine] : []));
     if (data.short) {
       say("Type three letters or more to search the sites");
       return;
@@ -2102,7 +2115,7 @@
     head.appendChild(button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)"));
     head.appendChild(keptNote);
     allMine.hidden = true;
-    found.append(head, progNote, allMine, meantBox, groupsBox, notesBox);
+    found.append(head, progNote, allMine, meantBox, groupsBox, lcBox, notesBox);
   }
   // A key that ends an input method's word (pinyin, kana) is still typing, never a command.
   const composing = (e) => e.isComposing || e.keyCode === 229;
@@ -2113,6 +2126,8 @@
       if (!server || !state.all) {
         enterAll();
       } else if (answer && answer.q === normal(state.q)) {  // the query's answer is in: its first result
+        const held = searcher && searcher.enter(normal(state.q));  // and LaCuerda's search, a button now
+        if (held) lcBox.replaceChildren(held);
         toFirstResult();
       } else {  // on its way: its first result once it is drawn, the search sent now
         focusFirst = true;

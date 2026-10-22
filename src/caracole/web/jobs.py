@@ -15,7 +15,10 @@ fetch adds ``caracole fetch --song`` and ``caracole render --song`` (offline) af
 ``caracole review`` (``fetch_steps``). A LaCuerda song you pick goes to ``caracole
 get`` or ``caracole add`` with ``--lacuerda``, and a LaCuerda artist's page is read
 by ``caracole lacuerda --artist`` (``lacuerda_artist_steps``), a job of its own
-(``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace. A version of a song's sheet made the
+(``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace, and a
+query of LaCuerda's search is ``caracole lacuerda --search --progress``
+(``lacuerda_search_steps``), a job of its own too (``LACUERDA_SEARCH`` and the
+query's key), whose one stage is ``SEARCH_STAGES``. A version of a song's sheet made the
 one, kept, or its pin taken out, is ``caracole versions --progress`` (``version_steps``), a pick of the song's as a
 lookup's ``--tab`` is, so the song's jobs join it as they would that; its JSON lines are the job's stages too (Keep
 it's ``KEEP_STAGES``, and a lookup's for ``--choose`` and ``--clear``, which run one). Each command takes caracole's lock (a
@@ -243,9 +246,9 @@ def _looks_up(args: Sequence[str]) -> bool:
 
 
 def _reports(args: Sequence[str]) -> bool:
-    """Whether a step's command writes ``caracole get --progress`` lines: a lookup, or ``caracole versions
-    --progress``."""
-    return args[:1] == (LOOKUP,) or (args[:1] == (VERSIONS,) and "--progress" in _options(args))
+    """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
+    --progress``, or ``caracole lacuerda --search --progress``."""
+    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",)) and "--progress" in _options(args))
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
@@ -254,6 +257,22 @@ LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's
 def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
     """Read a LaCuerda artist's page into its index now: ``caracole lacuerda --artist``, one request."""
     return [(f"Reading LaCuerda's page for {name}", ("lacuerda", f"--artist={slug}"))]
+
+
+LACUERDA_SEARCH = "lacuerda-search:"  # a query of LaCuerda's search: its job's key, the query's key after it
+LACUERDA_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH)  # what LaCuerda's index reads: jobs of no song's
+SEARCH_STAGES = (("search", "Search LaCuerda"),)  # ``caracole lacuerda --search --progress``'s one stage
+
+
+def lacuerda_search_steps(query: str, *, auto: bool) -> list[tuple[str, tuple[str, ...]]]:
+    """Ask LaCuerda's search for a query's songs now: ``caracole lacuerda --search --progress``, one request;
+    ``auto``, sent by the page by itself, within its share of the hour's lookups (``--auto``)."""
+    return [("Searching LaCuerda", ("lacuerda", f"--search={query}", "--progress", *(("--auto",) if auto else ())))]
+
+
+def _searches(args: Sequence[str]) -> bool:
+    """Whether a step's command is a query of LaCuerda's search."""
+    return args[:1] == ("lacuerda",) and any(arg.startswith("--search=") for arg in args)
 
 
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
@@ -272,12 +291,14 @@ def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
 
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
-    it's it hasn't; none for other commands."""
+    it's it hasn't, and a search of LaCuerda's (``SEARCH_STAGES``); none for other commands."""
     from caracole.get import STAGES
 
     names: dict[str, str] = {}
     if any(_looks_up(step.args) for step in steps):
         names.update(STAGES)
+    if any(_searches(step.args) for step in steps):
+        names.update(SEARCH_STAGES)
     if any(step.args[:1] == (VERSIONS,) and not _looks_up(step.args) for step in steps):
         names.update((name, label) for name, label in KEEP_STAGES if name not in names)
     return [Stage(name, label) for name, label in names.items()]

@@ -1153,6 +1153,30 @@ and cache.
   `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
   runs it, and so does Ask LaCuerda (1 request) for a name its listings
   haven't reached yet.
+
+  **`caracole lacuerda --search QUERY`** asks LaCuerda's own search for the
+  songs of QUERY now, one request at the lookup pace, and puts every song it
+  answers into the index (as an artist page's would be, beside what the index
+  holds), with each artist no listing read names yet: the songs of an artist
+  whose page caracole hasn't read are then found locally. LaCuerda's search reads
+  only the words of 4 letters or more, accents folded (`la flaca` is `flaca`,
+  `19 días y 500 noches` is `dias noches`), and caracole asks it for songs alone
+  (`busca.php?exp=…&canc=1`): the artists are its listings'. A query is asked at
+  most once in 30 days (under any spelling LaCuerda reads the same); the HTTP
+  cache keeps the answer. Its last line starts with what LaCuerda answered, which
+  caracole serve's request line shows: `Searched: LaCuerda has 2 songs for
+  “corazon espinado”, in the index now.` (or, asked within 30 days, `Searched:
+  LaCuerda was asked for “…” on 2026-10-22 03:30 UTC: 2 songs, in the index.`),
+  `Nothing found: LaCuerda has no song for “…”.`, or `Not searched: …` for a
+  query with no word it reads, a cooldown, a block, the hour's lookups spent or
+  an error (`Not searched: LaCuerda failed (…); nothing changed: try again
+  later.`; a page its server cut short is such an error, never "no results"), all
+  of which exit 0. Its requests count in the hour's lookups (`lookup_per_hour`);
+  `--auto`, a search caracole serve's page sent by itself, keeps within 20 such
+  searches an hour too (`Not searched: this hour's 20 searches of LaCuerda the
+  page sends by itself are spent; …`). `--progress` prints a JSON line per event,
+  for caracole serve's request page. It goes with neither `--index` nor
+  `--artist` (exit 2).
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
   song that has no Guitar Pro or Power Tab file, newest songs first. It reads
   gtptabs.com's sitemaps into a local index when it never has, or last did 30
@@ -2605,8 +2629,9 @@ nightly run reads its listings of every artist`), and while the nightly run
 still reads its listings it ends with what it has: `LaCuerda's index is still
 being read: 2,957 artists so far, with #, A–C read whole; the nightly run reads
 the rest.` (the artists counted include those of a letter read in part).
-LaCuerda has no search caracole uses: everything listed comes from the local
-table, and nothing asks LaCuerda anything.
+`caracole search` asks LaCuerda nothing: everything listed comes from the local
+table, which also holds what LaCuerda's own search answered when it was asked
+(`caracole lacuerda --search`, or the search bar of `caracole serve`).
 
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
@@ -2759,6 +2784,26 @@ is no progression exits with status 2.
   title, `caracole add ARTIST "lynrd"`. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
   common words), takes no lock and spends no budget, and so does "+ N more".
+
+  **LaCuerda's own search** is the one request a search may bring. LaCuerda's
+  index holds every artist of its listings, but only the songs of the artist
+  pages caracole has read; LaCuerda's search finds the rest. Once a query has
+  settled, the box unchanged for 1.5 s, the page sends it by itself, one request
+  at a lookup's pace (`caracole lacuerda --search`, a request of its own on the
+  requests page), when the query has a word of 4 letters or more, LaCuerda's
+  index has no song that matches it well (letters inside a word never do:
+  "maná" is no "Mañana Clara"), nor the artist it names with their page read
+  (all their songs are there already), LaCuerda wasn't asked for it in the last 30
+  days, LaCuerda isn't cooling down after a block, and the hour leaves room: at
+  most 20 such searches an hour, within the hour's 60 lookup requests to
+  LaCuerda. A line under the results says "Searching LaCuerda for “…”…", then
+  what LaCuerda answered, and its songs arrive in their artists' groups as the
+  search is asked again. Typing on sends nothing, and neither does Enter: it
+  leaves the button instead. Once the hour's 20 are spent, the line offers
+  **Search LaCuerda for “…” (1 request)**, which asks by hand, within the hour's
+  lookups; when those are spent, or LaCuerda cools down, it says LaCuerda's search
+  waits. A query is sent once a page, and once in 30 days. The Look up page does
+  the same.
   **Enter never spends a request**, however clear the best result: it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Get it, or a click or a key on the name,

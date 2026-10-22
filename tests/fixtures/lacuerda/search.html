@@ -1,0 +1,81 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!-- caracole test fixture. The markup of a whole answer of LaCuerda's search,
+     https://acordes.lacuerda.net/busca.php?exp=…&canc=0&ord=0&ini=0, as captured on 2026-10-22, with the
+     ads, the tracking scripts and the menus removed. The query, the artists, their slugs and the titles
+     are made up; the shape is as captured: the count in div.s_res, a row of table#s_main per artist, each
+     song a li[lcd] numbered by its id, and the song slugs in the script's arrays in reverse order (song
+     r000 is fns[NMAX-0]), as lOpen reads them. -->
+<HTML lang='es'>
+<HEAD>
+<META HTTP-EQUIV="Content-Language" CONTENT="es">
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<META HTTP-EQUIV="Content-Script-Type" CONTENT="text/javascript">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<TITLE>LaCuerda: Buscando corazon de tiza (búsqueda general)</TITLE>
+<script src="//cdn.lacuerda.net/UTIL/mainJS.js"></script>
+<script src="/ARCH/arch.js?f2020"></script>
+<script>
+function lOpen(n,v) { fn=''+hds[NMAX-n]+'/'+fns[NMAX-n]; if (v==0) aOpen('/'+fn); else sOpen(fn,v); }</script>
+<LINK href="//acordes.lacuerda.net/UTIL/estilo.css" rel="stylesheet" type="text/css">
+</HEAD>
+
+<BODY onload="; bidStart();">
+<div id='mTopCont'></div>
+<div id='mMask' style='display:none'></div>
+<div id='mHead'>
+	<div class='mhTit' >LaCuerda.net: Buscando corazon de tiza (búsqueda general)</div>
+</div>
+<script>mShTop();</script>
+<div id='mCols'><div id='mLeft'>
+</div>
+
+<div class='mBody'>
+
+<div id=s_box>
+<form id='sform' method=get action=/busca.php>
+<input type=hidden name=exp value="corazon de tiza">
+<input type=hidden name=canc value="0">
+<input type=hidden name=ord value="0">
+<input type=hidden name=ini value=0>
+</form>
+<input id='sExp' tabindex=3 type=text name=exp onkeyup="sChk(event)" placeholder='Buscar Artista y/o Canción' value="corazon de tiza">
+<button tabindex=4 class='s_but s_bus' type=button onclick="sChg('canc',0)">Buscar</button>
+<button tabindex=6 id='s_artBut' class=s_but type=button onclick="sChg('canc',2)">en Artistas</button>
+<button tabindex=5 id='s_sngBut' class=s_but type=button onclick="sChg('canc',1)">en Canciones</button>
+<br clear=all></div>
+<div class=s_res>Buscando <b>"corazon de tiza"</b>. 3 resultados.</div>
+<div class=s_ord><b>Ordenar por:&nbsp;</b>
+<a href="javascript:sChg('ord',0)"  class=s_ordon>Pertinencia</a> &middot;
+ <a href="javascript:sChg('ord',1)" >Canción</a>
+ &middot; <a href="javascript:sChg('ord',2)" >Artista</a>
+</div>
+<div style='min-height:500px'><div class='multipag' style='width:100%'><div class='first'>Página:</div><ul>
+<li class='sel'>1</li><li class='last'><span>3</span> resultados</li></ul><br clear=all></div>
+
+<table id=s_main onclick='chOpen(event)'><col width=25%><col width=75%>
+<tr><td>
+<a href="/imaginarios/">Los Imaginarios</A></TD><td><ul class=b_main id=b_main0>
+<li id='r000' lcd='RRTHBTTTD-123456789'><a href="javascript:">Corazón de Tiza</a></li>
+</ul></td></tr>
+<tr><td>
+<a href="/marea_baja/">Marea Baja</A></TD><td><ul class=b_main id=b_main1>
+<li id='r001' lcd='RTTTBBT-1234567'><a href="javascript:">Corazón de Tiza (en vivo)</a></li>
+</ul></td></tr>
+<tr><td>
+<a href="/nina_de_la_lluvia/">Niña de la Lluvia</A></TD><td><ul class=b_main id=b_main2>
+<li id='r002' lcd='TB-12'><a href="javascript:">Tiza</a></li>
+</ul></td></tr></table>
+<script>
+bMfill(3)
+var hds=['nina_de_la_lluvia','marea_baja','imaginarios'];
+var fns=['tiza','corazon_de_tiza_en_vivo','corazon_de_tiza'];
+var NMAX=2;
+</script>
+<div class='multipag' style='width:100%'><div class='first'>Página:</div><ul>
+<li class='sel'>1</li><li class='last'><span>3</span> resultados</li></ul><br clear=all></div>
+
+</div></div>
+</div>
+<div id='mBot'>
+<b>&copy;</b> LaCuerda<font color=#a0a0a0>.net</font> &middot <a href=//lacuerda.net/Extras/legal.php>aviso legal</a> &middot; <a href=//lacuerda.net/Extras/privpol.php>privacidad</a> &middot; <a href=//lacuerda.net/Extras/contacto.php>contacto</a></div>
+</body></html>
