@@ -183,8 +183,10 @@ songbooks as lines, each with how many songs, how many still without a sheet and
 when caracole last made its files, and "+ New songbook" (Select, on the
 library); on the right, side by side from 900 px and one at a time on a phone,
 the songbook opened as a set list, each song with where the songbook plays it
-(``songbook.plays_in``) and its files: the PDF, the phone page, ChordPro. The
-file on disk shows it read-only, with the ``caracole songbook`` commands that
+(``songbook.plays_in``) and a guitar after its title when caracole found a Guitar
+Pro file for it (kept: solid, its Guitar Pro page served, else the file; picked on
+Ultimate Guitar: in outline, its page there), and its files: the PDF, the phone
+page, ChordPro. The file on disk shows it read-only, with the ``caracole songbook`` commands that
 change it. Served, a song's grip drags it to its place (or ↑ and ↓ move it, sent
 a moment after the last key), its chip changes where it plays (its key, mode and
 capo, ``POST /songbook/set``, the capo always sent with them, or its own
@@ -389,7 +391,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     songs alone."""
     from caracole.render import pdf_transpose
 
-    pages = _guitar_pro_pages(conn)
+    pages = guitar_pro_picks(conn)
     browsable = guitar_pages(conn)
     sources = _downloaded(conn)
     origins = kept_sources(conn)
@@ -783,8 +785,10 @@ def _downloaded(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     return found
 
 
-def _guitar_pro_pages(conn: sqlite3.Connection) -> dict[int, list[dict[str, str]]]:
-    """Guitar Pro and Power Tab picks still to download by hand (no file yet), by song."""
+def guitar_pro_picks(conn: sqlite3.Connection) -> dict[int, list[dict[str, str]]]:
+    """Guitar Pro and Power Tab picks still to download by hand (no file yet), by song: each its page on the site
+    (http or https alone), its words ("Guitar Pro ver 2 · 4.2★ · 5 votes") and its site. A song's line lists them
+    under its "⋯"; the Songbooks tab marks a song by its first (songbook_section.py)."""
     rows = conn.execute(
         "SELECT v.* FROM versions v WHERE v.kind IN ('guitar-pro', 'power') AND v.pick_rank IS NOT NULL "
         "AND v.gone = 0 AND NOT EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id) "

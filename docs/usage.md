@@ -2044,7 +2044,17 @@ each song a line, as dense as the library's with a mouse, with its place, its
 title (which opens its sheet), its artist and where the songbook plays it, its
 chip: "G Dorian, capo 0" for a song with a setting of its own there, its own
 version's key ("A Minor, capo 0") for one without, or why it has no sheet ("No
-sheet yet", "Not in the library"). Its files come first: **PDF**, **Phone
+sheet yet", "Not in the library"). A song caracole found a Guitar Pro file for
+has a small guitar after its title, so a set list tells you which songs you can
+play along to as tabs too: drawn solid, a Guitar Pro or Power Tab file the
+library keeps (filed from `_inbox/` or downloaded from gtptabs.com), which on
+`caracole serve` opens its Guitar Pro page (see [Guitar Pro files in the
+browser](#caracole-serve)), and otherwise (a Power Tab file, a server without
+alphaTab, the file on disk) downloads the file under the song's name
+("Radiohead - Creep.gp5"); drawn in outline, a version caracole picked on
+Ultimate Guitar for you to download, its page there in a new tab. A song with
+neither has none. The guitar is the tab's alone: the songbook's PDF, phone page
+and ChordPro file don't change. Its files come first: **PDF**, **Phone
 page** (`songbook.html`) and **ChordPro**, each opened in the same tab. The
 address remembers the songbook open (`#tab=songbooks&book=Campfire`).
 **+ New songbook** turns Select on, in the library, its bar ready for the name:
@@ -2057,8 +2067,8 @@ songbooks.toml. On `caracole serve` each song can be dragged to its place, set
 to play elsewhere, taken out or got now, and the songbook gets its missing
 songs, a song from your library or the indexes (**Add a song**), another name,
 or deleted (see [caracole serve](#caracole-serve) below). On a touch
-screen each grip, chip, button, ×, title and menu is a thumb's target, 44
-pixels at least.
+screen each grip, chip, button, ×, title, guitar and menu is a thumb's target,
+44 pixels at least.
 
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json, and
@@ -3378,7 +3388,9 @@ from `_inbox/` or downloaded from gtptabs.com) has a group of its own under its
 line's ⋯, named as the file is (`Guitar Pro 1 · gtptabs.com`): **Open in the
 browser**, and **Download** beside it. A sheet viewer the server sends offers
 the same as **Guitar Pro tab**, in its ⋯ settings, for a song with such a file
-(the viewer from the folder links the file itself). Open in the browser is
+(the viewer from the folder links the file itself), and so does the guitar after
+the song's title in a songbook's set list (see [The Songbooks
+tab](#the-songbooks-tab)). Open in the browser is
 `/guitar?file=<the file's path in the library>`, a page the server makes for
 each request, where [alphaTab](https://www.alphatab.net) draws and plays the
 file: the song's title and artist, links back to the song in the library, to

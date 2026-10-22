@@ -13,11 +13,13 @@ import json
 import re
 import threading
 import time
+from dataclasses import replace
 from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
+from helpers.guitar import SYNTHETIC, alphatab_dir, keep_guitar
 from helpers.songbooks import FakeChordPro, keep_sheet, render_sheets
 from helpers.targets import small_targets, weak_edges
 
@@ -39,6 +41,7 @@ from caracole.songbook import (
     songbooks_file,
 )
 from caracole.songs import find_song, update_song
+from caracole.versions import set_picks, upsert_version
 from caracole.web.app import WebApp
 from caracole.web.jobs import JobQueue
 from caracole.web.security import allowed_hosts
@@ -151,13 +154,14 @@ def library(conn, cfg):
 @pytest.fixture
 def serve(cfg):
     """``serve(runner)``: caracole serve on a free port, its queue running ``runner`` (``before(app)`` runs before
-    it starts); returns its address and the forms the page posted, each (its address, its fields)."""
+    it starts; with ``alphatab``, alphaTab's folder, it shows Guitar Pro files in the browser); returns its address
+    and the forms the page posted, each (its address, its fields)."""
     started = []
 
-    def start(runner, *, before=None):
+    def start(runner, *, before=None, alphatab=None):
         queue = JobQueue(runner)
-        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers=QUICK,
-                     searches_lacuerda=False)
+        app = WebApp(cfg if alphatab is None else replace(cfg, alphatab_dir=alphatab), queue,
+                     allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers=QUICK, searches_lacuerda=False)
         posted: list[tuple[str, dict[str, str]]] = []
         answer = app.handle
 
@@ -607,6 +611,92 @@ def test_the_tab_meets_touch_contrast_and_dark_mode(serve, cfg, library, tmp_pat
         lum = [sum(int(v) for v in c[c.index("(") + 1:c.index(")")].split(",")[:3]) / 3 for c in colours]
         assert (lum[0] < 60 and lum[1] > 180) if dark else (lum[0] > 200 and lum[1] < 80), colours
         assert page.js("document.documentElement.scrollWidth <= innerWidth")
+
+
+# --- a song's Guitar Pro mark -----------------------------------------------------------------------------------
+
+
+UG_PICK = "https://tabs.ultimate-guitar.com/tab/555890"
+
+
+@pytest.fixture
+def guitars(conn, cfg, library):
+    """Creep with a Guitar Pro file caracole keeps (gtptabs.com's), De Música Ligera with a version picked on
+    Ultimate Guitar for you to download, Hysteria with neither."""
+    keep_guitar(conn, cfg, library["Creep"], SYNTHETIC.read_bytes(), name="guitar-1.gp")
+    soda = library["De Música Ligera"]
+    vid = upsert_version(conn, provider="ug", tab_id="555890", song_id=soda.id, slot="guitar", kind="guitar-pro",
+                         rating=4.2, votes=5, version=2, label=None, url=UG_PICK, raw={}, now="x")
+    set_picks(conn, soda.id, ["guitar-pro"], [vid])
+    conn.commit()
+    return library
+
+
+# Each song of the set list: its title, then its mark's address, classes, name, download, target and rel, and how
+# its guitar is drawn (filled, or "none" for an outline); its title alone without one.
+MARKS = """Array.from(document.querySelectorAll('#songbooks .book .set-line:not(.gone)')).map((li) => {
+  const a = li.querySelector('.set-gp'), title = li.querySelector('h3').textContent;
+  return a ? [title, a.getAttribute('href'), a.className, a.getAttribute('aria-label'), a.getAttribute('download'),
+              a.target, a.rel, getComputedStyle(a.querySelector('svg path')).fill === 'none' ? 'outline' : 'solid']
+    : [title]; })"""
+ON_UG = ["De Música Ligera", UG_PICK, "set-gp on-ug",
+         "Guitar Pro on Ultimate Guitar: De Música Ligera, to download there, in a new tab", None, "_blank",
+         "noopener noreferrer", "outline"]
+
+
+@SIZES
+def test_a_songs_guitar_pro_mark_opens_its_page_served_and_its_pick_on_ultimate_guitar_there(serve, cfg, guitars,
+                                                                                              tmp_path, size):
+    url, _ = serve(Fake(cfg), alphatab=alphatab_dir())
+    with opened(tmp_path, *size) as page:
+        page.open(url + CAMPFIRE)
+        assert page.js(MARKS) == [
+            ["Creep", "guitar?file=Radiohead%2FCreep%2Fguitar-1.gp", "set-gp",
+             "Guitar Pro tab: Radiohead - Creep.gp, open it in the browser", None, "", "", "solid"],
+            ["Hysteria"], ON_UG]
+        assert page.js("document.querySelector('#songbooks .set-gp').title") == "Guitar Pro tab: open it in the browser"
+        assert page.js("document.querySelector('#songbooks .set-gp.on-ug').title") == (
+            "Guitar Pro on Ultimate Guitar, to download there: Guitar Pro ver 2 · 4.2★ · 5 votes")
+        assert page.js("fetch(document.querySelector('#songbooks .set-gp').href).then((r) => r.status)") == 200
+        # Next to its title, on its line, before what else the line holds; a key's reach (Tab) like any link.
+        beside = page.js("""Array.from(document.querySelectorAll('#songbooks .set-gp')).map((a) => {
+            const li = a.closest('.set-line'), box = a.getBoundingClientRect();
+            const title = li.querySelector('.set-title').getBoundingClientRect();
+            const after = li.querySelector('.set-act, .set-by').getBoundingClientRect();
+            return box.left >= title.right - 0.5 && box.top < title.bottom && box.bottom > title.top
+              && (after.top >= box.bottom - 0.5 || after.left >= box.right - 0.5); })""")
+        assert beside == [True, True], beside
+        assert page.js("document.querySelector('#songbooks .set-gp').tabIndex") == 0
+        if size[0] < 500:  # a touch screen: a thumb's target, and these titles still whole beside it
+            short = page.js(small_targets())
+            assert short == [], short
+            assert page.js("Array.from(document.querySelectorAll('#songbooks .set-line h3'))"
+                           ".filter((h) => h.scrollWidth > h.clientWidth).map((h) => h.textContent)") == []
+        else:  # a mouse: the set list's lines as dense as without it
+            tall = page.js("Array.from(document.querySelectorAll('#songbooks .set-line'))"
+                           ".map((l) => Math.round(l.getBoundingClientRect().height))")
+            assert max(tall) <= 26, tall
+        assert page.js("document.documentElement.scrollWidth <= innerWidth")
+        page.click("#songbooks .set-gp")
+        assert page.wait("location.pathname === '/guitar'")
+
+
+@pytest.mark.parametrize("where", ["file", "served without alphaTab"])
+def test_a_kept_guitar_pro_files_mark_downloads_it_where_no_page_shows_it(serve, conn, cfg, guitars, tmp_path, where):
+    if where == "file":
+        address = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW)).as_uri()
+    else:
+        address, _ = serve(Fake(cfg))
+    with opened(tmp_path) as page:
+        page.open(address + CAMPFIRE)
+        assert page.js(MARKS) == [
+            ["Creep", "Radiohead/Creep/guitar-1.gp", "set-gp", "Guitar Pro tab: Radiohead - Creep.gp, download it",
+             "Radiohead - Creep.gp", "", "", "solid"],
+            ["Hysteria"], ON_UG]
+        assert page.js("document.querySelector('#songbooks .set-gp').title") == \
+            "Guitar Pro tab: download Radiohead - Creep.gp"
+        if where != "file":  # the file itself, as the library's line links it
+            assert page.js("fetch(document.querySelector('#songbooks .set-gp').href).then((r) => r.status)") == 200
 
 
 # --- the songbooks' changes: where they come from, and how they end ---------------------------------------------

@@ -42,7 +42,9 @@ file, and none of it loads anything from the network.
 
 - head.html, body.html, request.html and requested.html: index.html's skeleton, whose
   ``__BLANKS__`` library_page.py fills in: the policy, the style, the masthead's links and, served,
-  the request form and the songs just requested.
+  the request form and the songs just requested. body.html also holds the guitar a set list marks a
+  song with a Guitar Pro file by (``#guitar-glyph``, an inline SVG in a template songbooks.js clones:
+  the HTML parser gives it its namespace, so no script names one, and the page holds no address).
 
 index.html inlines the stylesheets and the scripts in the order of ``library_page.STYLESHEETS`` and
 ``library_page.SCRIPTS``, and fills in the templates of ``library_page.TEMPLATES``.
