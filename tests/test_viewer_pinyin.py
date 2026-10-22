@@ -154,6 +154,13 @@ def test_a_songbooks_songs_each_carry_their_own_readings():
     assert 'id="pinyin-row"' in html
 
 
+def test_the_pinyin_in_an_address_is_no_part_of_a_version():
+    # An export or Make this my version reads the viewer's address: py=1 there plays the song no otherwise.
+    from caracole.viewer.version import version_from_query
+
+    assert version_from_query("#t=2&mode=dorian&capo=3&py=1") == version_from_query("#t=2&mode=dorian&capo=3")
+
+
 # --- what the pages are made from -------------------------------------------------------------------
 
 
