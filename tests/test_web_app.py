@@ -2435,6 +2435,70 @@ def test_a_search_typed_over_lets_go_of_the_database_at_once(app, conn, monkeypa
     assert "slow words" not in app._found  # an interrupted search is no answer to keep
 
 
+@pytest.mark.parametrize("boxes,typed_over", [(("a", "b"), False), (("a", "a"), True)])
+def test_a_search_is_typed_over_only_by_its_own_box_never_by_another_pages(app, conn, monkeypatch, boxes,
+                                                                             typed_over):
+    # Two people search at once, each on their phone (a box each: the id its page sends): the second waits for the
+    # first, which reads to its end, then reads; both are answered, and neither page has to ask again. A search
+    # typed on in the same box stops the older one there at once, as ever.
+    import itertools
+    import threading
+
+    import caracole.search
+
+    creep_index(conn)
+    started, second = threading.Event(), threading.Event()
+    real = caracole.search.find_index
+    tickets = itertools.count(1)
+
+    class Tickets:  # the server's: says when the second search has drawn its own
+        def __iter__(self):
+            return self
+
+        def __next__(self):
+            n = next(tickets)
+            if n == 2:
+                second.set()
+            return n
+
+    def find_index(c, query, **kwargs):
+        if query == "slow words":
+            started.set()
+            assert second.wait(10)
+            # Read on, SQLite looking for a newer search every few thousand steps: none of its own box comes.
+            c.execute("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 300000) "
+                      "SELECT count(*) FROM n").fetchone()
+        return real(c, query, **kwargs)
+
+    monkeypatch.setattr(app, "_tickets", Tickets())
+    monkeypatch.setattr(caracole.search, "find_index", find_index)
+    first: dict = {}
+    other: dict = {}
+    one = threading.Thread(target=lambda: first.update(as_json(get(app, f"/api/search?q=slow%20words&box={boxes[0]}"))),
+                           daemon=True)
+    one.start()
+    assert started.wait(10)
+    two = threading.Thread(target=lambda: other.update(as_json(get(app, f"/api/search?q=creep&box={boxes[1]}"))),
+                           daemon=True)
+    two.start()
+    one.join(10)
+    two.join(10)
+    assert not one.is_alive() and not two.is_alive()
+    assert other["index"][0]["ug"] == "radiohead/creep"
+    if typed_over:
+        assert first == {"query": "slow words", "superseded": True}
+    else:
+        assert "superseded" not in first and first["query"] == "slow words" and "index" in first
+
+
+def test_a_box_id_that_isnt_one_is_no_box():
+    from caracole.web.search_routes import search_box
+
+    assert search_box({"box": ["k3j9-x_Q"]}) == "k3j9-x_Q"
+    assert search_box({}) == search_box({"box": [""]}) == search_box({"box": ["a b"]}) == ""
+    assert search_box({"box": ["x" * 65]}) == "" and search_box({"box": ["é"]}) == ""
+
+
 # --- the library's files ----------------------------------------------------------------------
 
 

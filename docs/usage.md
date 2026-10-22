@@ -2811,7 +2811,10 @@ is no progression exits with status 2.
   library ("oasis wonderwall" finds the Wonderwall pages, and "oasis live
   forever" never a page titled Oasis or Forever), each a possible match. The
   results follow what you type; a search typed over stops at once, and only
-  the newest query's answer is shown, the older one staying until then. The
+  the newest query's answer is shown, the older one staying until then. Only
+  your own typing stops a search: two people searching at the same moment (on
+  two phones, or the library page and the lookup page) each wait their turn
+  and get their answer (`/api/search`'s `box`, an id each search box makes). The
   line under the box says "Searching the sites…", then how many each site has.
   Under the results, one muted line says where caracole looked when a site
   wasn't searched whole, a chip a site: green searched whole (UG ✓,

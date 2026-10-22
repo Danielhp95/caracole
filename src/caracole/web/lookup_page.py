@@ -154,6 +154,8 @@ let shownData = null;  // their answer: what Enter acts on (best) and what leads
 let artistOpen = null;  // the artist whose songs are listed in place of the results
 let enterFor = null;  // a query Enter was pressed for before its results came: acted on then
 let scrolled = false;  // the sheet was brought into view once already
+// The search box's id, sent with each search: one typed on stops this box's older ones alone, never another page's.
+const SEARCH_BOX = Math.random().toString(36).slice(2, 12) || "lookup";
 // The request the reader shows (openReader counts them): an answer of one before it, come late (a poll, its sheet, its
 // lookup's job), is dropped, and its fetches are aborted.
 let reading = 0, readingFetches = new AbortController();
@@ -192,7 +194,8 @@ function search() {
   if (inflight) inflight.abort();
   inflight = new AbortController();
   status.textContent = "Searching…";
-  fetch("/api/search?q=" + encodeURIComponent(text), {signal: inflight.signal, headers: {"Accept": "application/json"}})
+  fetch("/api/search?q=" + encodeURIComponent(text) + "&box=" + SEARCH_BOX,
+        {signal: inflight.signal, headers: {"Accept": "application/json"}})
     .then(r => r.json())
     .then(data => {
       if (mine !== typed) return;

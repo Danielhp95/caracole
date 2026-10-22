@@ -1,7 +1,8 @@
 """caracole serve's lookup and search: the lookup page, search as you type, and a song looked up now.
 
     GET  /lookup          look a song up as you type (lookup_page.py), and read its sheet
-    GET  /api/search?q=   your library and the offline indexes, as JSON (search.py): your songs (and
+    GET  /api/search?q=   your library and the offline indexes, as JSON (search.py), for a search box (``box``,
+                          the id its page made): your songs (and
                           those that play the progression the query types or names: ``progression``,
                           progressions.py), the songs you removed (``removed``), the artists the query names, the UG
                           index's songs, which comes first and the row Enter may act on; LaCuerda's
@@ -49,10 +50,13 @@ shows it with Add again, which asks for it again as a request does, with a line
 in wanted.txt.
 
 Searching reads, and sends no request (LaCuerda's search, below, is a job of
-its own): one search runs at a time, one asked
-for meanwhile wins over the older ones still waiting (``superseded``: the
-page asks again if it still wants it), and the offline indexes' answers are
-kept a few minutes. A query of fewer than three letters (two in Chinese)
+its own): one search runs at a time, and one asked for meanwhile in the same
+search box (``box``: an id each box's page makes, ``search_box``; a search
+naming none is of one box with every other such) wins over that box's older
+ones, running or waiting (``superseded``: the page asks again if it still
+wants it). A search of another box, another page or another person's phone,
+never stops one: it waits its turn, and both are answered. The offline
+indexes' answers are kept a few minutes. A query of fewer than three letters (two in Chinese)
 looks nowhere. Of LaCuerda, gtptabs.com and MuseScore it reads only the tables
 their listings and sitemaps filled (``search.search_lacuerda``,
 ``search.search_gtptabs``, ``search.search_musescore``), and says why it left a
@@ -137,6 +141,8 @@ CACHE_SIZE, CACHE_SECONDS = 128, 300.0  # the offline index's answers kept
 _SLUG = re.compile(r"[a-z0-9_]{1,200}")  # the slug of a LaCuerda artist's page
 UG_EMPTY = "The offline Ultimate Guitar index is empty: run caracole index build once (about 10 minutes)."
 SEARCH_CHECK_STEPS = 20_000  # SQLite steps between two looks for a newer search, a millisecond or so
+_BOX = re.compile(r"[A-Za-z0-9_-]{1,64}")  # a search box's id, as its page makes it
+BOXES = 256  # the search boxes whose newest search the server keeps: those that asked last
 
 
 def _artist(app: WebApp, request: Request) -> Response:
@@ -150,7 +156,8 @@ def _artist(app: WebApp, request: Request) -> Response:
 # The lookup page's script follows the job's address (wants_json).
 ROUTES = (
     Route("GET", "/lookup", lambda app, asked: lookup_page(app)),
-    Route("GET", "/api/search", lambda app, asked: api_search(app, query(asked).get("q", [""])[0])),
+    Route("GET", "/api/search", lambda app, asked: api_search(app, query(asked).get("q", [""])[0],
+                                                              box=search_box(query(asked)))),
     Route("GET", "/api/artist", _artist),
     Route("POST", "/lookup", lambda app, asked, form: lookup(app, form, wants_json=wants_json(asked)),
           page="the page"),
@@ -267,20 +274,32 @@ def _library_song(app: WebApp, form: dict[str, str], ug: tuple[str, str] | None)
 # --- search as you type ------------------------------------------------------------------------
 
 
-def api_search(app: WebApp, query: str) -> Response:
-    """Your library and the offline UG index, for a query typed into the lookup page."""
+def search_box(asked: dict[str, list[str]]) -> str:
+    """The search box a search comes from (``box``: the id its page made); "" for one that names none, or an id
+    that isn't one."""
+    box = asked.get("box", [""])[0]
+    return box if _BOX.fullmatch(box) else ""
+
+
+def api_search(app: WebApp, query: str, *, box: str = "") -> Response:
+    """Your library and the offline UG index, for a query typed into a search box (``box``, its id): a search
+    typed on in that box stops this one, never one of another box's."""
     from caracole.normalize import has_han
 
     q = " ".join(query.split())[:QUERY_LIMIT]
     letters = sum(c.isalnum() for c in q)
     if letters < (2 if has_han(q) else 3):
         return json_response(200, {"query": q, "library": [], "index": [], "short": True})
-    ticket = next(app._tickets)
-    app._newest = ticket
+    with app._newest_lock:
+        ticket = next(app._tickets)
+        app._newest[box] = ticket
+        app._newest.move_to_end(box)
+        while len(app._newest) > BOXES:
+            app._newest.popitem(last=False)
     superseded = {"query": q, "superseded": True}
 
     def typed_over() -> int:  # SQLite asks every few thousand steps: non-zero interrupts the query
-        return int(ticket != app._newest)
+        return int(app._newest.get(box, ticket) != ticket)  # a box forgotten (BOXES asked since): this is its newest
 
     with app._searching:
         if typed_over():  # typed on meanwhile: the newer query goes first

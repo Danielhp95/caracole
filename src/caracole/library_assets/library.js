@@ -1480,6 +1480,9 @@
 
   const MINE_SHOWN = 5;  // your songs in the results; the list has them all
   const SEARCH_PAUSE = 150;  // ms after the last key before the sites are searched
+  // The bar's id, sent with each search: a search typed on stops the older ones of this bar alone, never another
+  // page's (another person searching at once is answered too: web/search_routes.py).
+  const SEARCH_BOX = Math.random().toString(36).slice(2, 12) || "bar";
   const allMine = el("p", "all-mine");
   const meantBox = el("div", "meant");  // Did you mean, first
   const groupsBox = el("div", "groups");
@@ -1940,7 +1943,7 @@
     asking = new AbortController();
     say("Searching the sites…");
     found.setAttribute("aria-busy", "true");
-    fetch("api/search?q=" + encodeURIComponent(q), {
+    fetch("api/search?q=" + encodeURIComponent(q) + "&box=" + SEARCH_BOX, {
       signal: asking.signal, credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" },
     }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
       .then((reply) => {

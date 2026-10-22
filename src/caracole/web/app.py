@@ -247,7 +247,10 @@ class WebApp:
         self._ended_lock = threading.Lock()
         self._searching = threading.Lock()  # one search at a time
         self._tickets = itertools.count(1)
-        self._newest = 0  # the newest search asked for
+        # The newest search each search box asked for (search_routes.py: a box's id, "" for none), the last ones
+        # asked of, in order.
+        self._newest: OrderedDict[str, int] = OrderedDict()
+        self._newest_lock = threading.Lock()
         # A query's answer from the offline indexes, kept a while: (when, the answer, its songs and artists as
         # JSON, the hint, gtptabs.com's and MuseScore's pages, LaCuerda's artists and songs, the artists spelled
         # close to the query).
