@@ -201,8 +201,8 @@
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares
-  const { sourceMark, link, resultRow, artistFilter, button, many, indexLine, titleLine, readArtistPage, readOutcome,
-    didYouMean, nothingFound, lookedLine } = caracoleRows(ICONS);
+  const { sourceMark, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine, titleLine,
+    readArtistPage, readOutcome, didYouMean, nothingFound, lookedLine } = caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its line's says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -754,6 +754,7 @@
   };
 
   let setArtist = () => {};
+  let searchFor = () => {};
   let setProg = () => {};
   // The line over the list while it shows a progression's songs alone: "Songs with I–V–vi–IV, the pop progression ·
   // Show all".
@@ -937,7 +938,7 @@
     if (server && server.guitar) {
       for (const f of listed.filter(shownInBrowser)) {
         more.push({ heading: String(f.label || f.name), links: [{ label: "Open in the browser", href: f.guitarPage },
-          { label: "Download", href: f.href }] });
+          { label: "Download", href: f.href, download: f.download }] });
       }
     } else if (listed.some(shownInBrowser)) {
       more.push(el("p", "note", "caracole serve can show Guitar Pro files in the browser once it has alphaTab " +
@@ -969,6 +970,7 @@
         setArtist(String(s.sortArtist || ""));
         window.scrollTo(0, 0);
       },
+      onSearch: server ? () => searchFor(String(s.artist)) : null,  // served, the name searches; the funnel filters
     });
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
     // How the song's request goes, on a line of its own.
@@ -989,8 +991,10 @@
   // An artist's group: a header that names them and counts the songs of theirs you have, "Soda Stereo · you have
   // 2" (``counts.mine``: all of them, whatever the search or a filter leaves out), and, while the served page searches
   // the sites, the songs each site's index lists of theirs, "· UG 96 · LaCuerda 140 · Guitar Pro 12" (``counts.ug``,
-  // ``counts.lacuerda``, ``counts.gtptabs``: gtptabs.com's; ``counts.note``, any other words); then their lines. The name, once you have songs of theirs,
-  // shows those alone (``artist.filter``, their sortArtist, else ``artist.key``).
+  // ``counts.lacuerda``, ``counts.gtptabs``: gtptabs.com's; ``counts.note``, any other words); then their lines. Served,
+  // the name searches for them (searchFor; not a group that names no artist, ``artist.search`` false: MuseScore's), and,
+  // once you have songs of theirs, the funnel beside it shows those alone (``artist.filter``, their sortArtist, else
+  // ``artist.key``); from a file, which can't search the sites, the name is the funnel's.
   let groupSerial = 0;
   const artistGroup = (artist, items, counts) => {
     const a = artist && typeof artist === "object" ? artist : { name: artist };
@@ -1005,10 +1009,16 @@
     groupSerial += 1;
     heading.id = "artist-" + groupSerial;
     section.setAttribute("aria-labelledby", heading.id);
-    heading.appendChild(filter && mine ? artistFilter(name, name, () => {
+    const only = () => {
       setArtist(filter);
       window.scrollTo(0, 0);
-    }) : el("span", "artist-name", name));
+    };
+    if (server && name && a.search !== false) {
+      heading.appendChild(artistSearch(name, () => searchFor(name)));
+      if (filter && mine) heading.appendChild(artistOnly(name, only));
+    } else {
+      heading.appendChild(filter && mine ? artistFilter(name, name, only) : el("span", "artist-name", name));
+    }
     const said = [mine ? "you have " + mine : "", Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
       Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "",
       Number(c.gtptabs) ? "Guitar Pro " + Number(c.gtptabs).toLocaleString("en") : "", c.note ? String(c.note) : ""]
@@ -1034,18 +1044,24 @@
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
   };
-  try {
-    const params = new URLSearchParams(location.hash.slice(1));
-    state.q = params.get("q") || "";
-    if (artistName(params.get("artist") || "")) state.artist = params.get("artist");
-    if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
-    if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
-    if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
-    state.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
-    state.all = params.get("all") === "1" && sitesCan(state.q) && (!server || typedEnough(state.q));
-  } catch (err) {
-    // A malformed address: start from the defaults.
-  }
+  // What the address says of the list (save() writes it): what the page opens on, and what Back brings again.
+  const addressed = () => {
+    const at = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
+    try {
+      const params = new URLSearchParams(location.hash.slice(1));
+      at.q = params.get("q") || "";
+      if (artistName(params.get("artist") || "")) at.artist = params.get("artist");
+      if (own.call(SHOWS, params.get("show"))) at.show = params.get("show");
+      if (SORTS.indexOf(params.get("sort")) >= 0) at.sort = params.get("sort");
+      if (keyGroup(params.get("key"))) at.key = keyGroup(params.get("key")).value;  // any spelling of it
+      at.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
+      at.all = params.get("all") === "1" && sitesCan(at.q) && (!server || typedEnough(at.q));
+    } catch (err) {
+      // A malformed address: the defaults.
+    }
+    return at;
+  };
+  Object.assign(state, addressed());
   const keySelect = byId("key");
   for (const group of Array.from(keyGroups.values()).sort((a, b) => compare(a.name, b.name))) {
     const option = el("option", null, group.name + " · " + group.n);
@@ -1307,6 +1323,51 @@
     state.artist = key;
     setQuery("");
   };
+  // An artist's name pressed, served (a header's, a line's): the search for them, as typing their name runs it (your
+  // songs that match, then the sites', their group first, as /api/search leads with an artist it is given whole),
+  // sent at once, which asks no site: the indexes alone. The focus goes to the box, from which Enter goes on to the
+  // first result and Escape back to your songs; the query before it is a step back in the browser's history (Back).
+  searchFor = (name) => {
+    const q = String(name || "").trim();
+    if (!q) return;
+    if (q !== state.q) {
+      try {
+        history.pushState(null, "", location.href);  // save() makes it this search's
+      } catch (err) {
+        // A browser that refuses it: the search runs all the same, with no step back.
+      }
+    }
+    input.value = q;
+    state.q = q;
+    focusFirst = false;
+    const sites = searchesAsYouType(q);
+    if (state.all && !sites) {
+      leaveAll(false);
+    } else {
+      state.all = sites;
+      render();
+      save();
+      if (sites) askSources(true);
+    }
+    window.scrollTo(0, 0);
+    input.focus({ preventScroll: true });
+  };
+  // Back (or Forward) to a step of the list's: the list as the address has it, its query, its results, its artist,
+  // show, sort, key and progression; an address that changes none of them (the Songbooks tab's, say) moves nothing.
+  window.addEventListener("popstate", () => {
+    const at = addressed();
+    if (Object.keys(at).every((name) => at[name] === state[name])) return;
+    const all = at.all;
+    Object.assign(state, at, { all: state.all });
+    input.value = state.q;
+    focusFirst = false;
+    if (state.all && !all) {
+      leaveAll(false);
+    } else {
+      state.all = all;
+      render();
+    }
+  });
   artistChip.addEventListener("click", () => {
     state.artist = "";
     render();
@@ -1787,7 +1848,7 @@
     }
     if (model && model.titles.length) {  // MuseScore's pages: a title alone, no artist to put them under
       if (!model.titleLines) model.titleLines = model.titles.map(titleLine);
-      box.appendChild(artistGroup({ name: "MuseScore" }, model.titleLines,
+      box.appendChild(artistGroup({ name: "MuseScore", search: false }, model.titleLines,
         { note: many(model.titles.length, "page") + " by that title" }));
     }
     groupsBox.replaceChildren(box);

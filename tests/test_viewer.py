@@ -379,6 +379,25 @@ def test_the_bar_and_the_settings_say_what_the_key_line_says(tmp_path, cho, labe
     assert said == label and heading == label
 
 
+def test_the_guitar_pro_files_beside_the_page_are_named_for_the_song_they_download_as():
+    data = data_of(build_viewer(MINOR, guitar=("guitar-1.gp5", "guitar-3.gpx")))
+    assert data["guitar"] == ["guitar-1.gp5", "guitar-3.gpx"]
+    assert data["guitarDownload"] == ["Placeholders - Minor.gp5", "Placeholders - Minor (3).gpx"]
+    assert "guitarDownload" not in data_of(build_viewer(MINOR))
+    # Named as caracole serve's header names it: the title clean, as the library's line shows it.
+    remastered = to_chordpro("[ch]Am[/ch]\nwords", title="Minor - Remastered 2011", artist="Placeholders")
+    assert data_of(build_viewer(remastered, guitar=("guitar-1.gp5",)))["guitarDownload"] == ["Placeholders - Minor.gp5"]
+
+
+@in_chromium
+def test_from_a_file_a_guitar_pro_link_names_the_song_in_its_download_attribute(tmp_path):
+    # The attribute alone, which Chromium ignores on a page opened as a file (docs/usage.md says so).
+    dom = dump_dom(build_viewer(MINOR, guitar=("guitar-2.gp5",)), tmp_path)
+    links = re.findall(r'<a class="link" ([^>]*)>([^<]*)</a>', re.search(r'id="guitar-links"[^>]*>(.*?)</span>', dom,
+                                                                          re.S).group(1))
+    assert links == [('href="guitar-2.gp5" download="Placeholders - Minor (2).gp5"', "guitar-2.gp5")], links
+
+
 @in_chromium
 def test_the_page_works_served_in_a_sandbox(tmp_path):
     page = build_viewer(UG_CHO).encode("utf-8")

@@ -1855,9 +1855,12 @@ is never what a line opens, which is the sheet.
 
 An artist's name, over their songs and marked with a funnel, shows only that
 artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
-chip off. Sorted by title, or by when the songs were added, the lines stand
-alone, without the artists' names over them, each with its own (which filters
-the same). A request's line (see [caracole serve](#caracole-serve)) shows under
+chip off. On the page `caracole serve` serves, the name searches for the artist
+instead (see below), and the funnel is a button of its own beside it ("Only
+Queen's songs"), which shows their songs alone as the name does from the
+folder. Sorted by title, or by when the songs were added, the lines stand
+alone, without the artists' names over them, each with its own (which does the
+same). A request's line (see [caracole serve](#caracole-serve)) shows under
 the song's, a line of its own. The search, the status buttons, the Key menu,
 the sort and the letters all work on the lines, and the address remembers
 them, as it does the rest: a bookmark opens the page as you left it. (An
@@ -1918,7 +1921,7 @@ it. `caracole serve` serves the same page, where typing searches what the
 sites have too, under the same artist headers, with Get it, and a form to
 request a song by name (see below).
 
-On a touch screen every button, fold, chip, menu, letter and artist's name is
+On a touch screen every button, fold, chip, menu, letter, artist's name and funnel is
 at least 44 pixels each way, for a thumb, and so are each line's button and
 "⋯" (its title, beside them, is as tall): a phone shows about eleven songs to a
 screen. With a mouse they keep their compact sizes. Fields, menus and the
@@ -2768,9 +2771,16 @@ is no progression exits with status 2.
   "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
   and while that request is on its way the name, like the button, can't be
   pressed again. A removed song's name does what its Add again does (below). A
-  song of yours whose title opens its sheet keeps opening it; an artist's name
-  still shows that artist's songs; and on the file, with no caracole serve, no
-  name gets anything. A newer answer drawn while it goes (a search typed on)
+  song of yours whose title opens its sheet keeps opening it; and on the file,
+  with no caracole serve, no name gets anything. **An artist's name searches
+  for them**: a click on "C Tangana", over the results, over your songs in the
+  list, or beside a line's title, puts their name in the search box and
+  searches it as typing it would (their group first, with their songs, as a
+  name typed whole leads), which asks no site, only the offline indexes; the
+  focus goes to the box, Escape goes back to your songs, and the browser's Back
+  to the list as it was before it (its search, artist, Show, sort and key, as
+  its address had them). The funnel beside the name of an artist you have
+  songs of shows those alone. A newer answer drawn while it goes (a search typed on)
   keeps the line where it has the song, with its request line; one it hasn't
   moves the request under the box as its line ("Just requested"), its request
   line going on there. A song your library has already, under its own names
@@ -2806,7 +2816,8 @@ is no progression exits with status 2.
   nothing), or nothing when nothing stands out. A query that finds nothing
   shows the same "Did you mean" and card, whose first button is Look “…” up by
   name (the form under the results, filled in), and whose Their songs lists
-  that artist's songs, as their row's Songs does. `/lookup?q=WORDS` opens it with
+  that artist's songs, as their row's Songs does. A row's artist searches for
+  them, as typing their name would. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there. Here your
   song keeps its own row, with Fetch again, and each site's row of it its own:
   Ultimate Guitar's Get it again, with a version of theirs to pick under "⋯",
@@ -3119,8 +3130,19 @@ loses no song. A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the
 command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
-and Guitar Pro files as downloads, never through a symbolic link, never a
-hidden file, and never the database, the token or the cache. A songbook's page,
+and Guitar Pro, Power Tab and MuseScore's score files (`.mscz`, `.mxl`,
+`.musicxml`, `.mid`, `.midi`) as downloads, never through a symbolic link, never a
+hidden file, and never the database, the token or the cache. A download is
+named for its song, whatever it is called in the song's folder (where it stays
+`guitar-N` or `score-N`): `Eagles - Hotel California.gp3`, its second file
+`Eagles - Hotel California (2).gp5`, accents and Chinese as they are, and
+nothing a system refuses in a file's name (`AC/DC` saves as `AC_DC - …`), a very
+long name cut so that the title stays. That name comes from the server, so it
+holds only for a file caracole serve sends. The page opened from the folder,
+and a sheet viewer opened from the folder, put the same name in their links'
+`download` attribute, but Chromium-based browsers (Chrome, Edge, Brave) ignore
+it on a page opened as a file and save the file as `guitar-N` (or `score-N`),
+its name in the folder. A songbook's page,
 `_songbooks/<name>/songbook.html`, is sent only while it is the very page
 caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts

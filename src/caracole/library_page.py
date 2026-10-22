@@ -238,6 +238,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlencode
 
 from caracole.config import Config
+from caracole.download_names import download_name
 from caracole.icons import kept_sources, page_icons, source_of
 from caracole.inbox import SCORE_EXTENSIONS, guitar_files
 from caracole.inline import json_block, sha256_source
@@ -689,7 +690,9 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     which its line's "⋯" lists it by, under PDF exports. A version kept beside the sheet (``version-<tab>.*``) is
     none of them: the line lists it under Sheet versions (``_versions_data``). ``guitar`` (``guitar_pages``): each
     Guitar Pro file caracole serve shows in the browser gets that page's address, its ``guitarPage``, which the
-    page it serves offers as Open in the browser beside the file's Download."""
+    page it serves offers as Open in the browser beside the file's Download. A Guitar Pro or Power Tab file, and a
+    score but its PDF, gets the name it downloads under, its ``download`` ("Eagles - Hotel California (2).gp5":
+    download_names.py), its links' ``download`` attribute, as caracole serve's header names it."""
     pages = guitar or {}
     guitar_names = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
@@ -704,11 +707,14 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
                    None) or next(
         (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
     versions = {n: label for label, n in made}
+    downloads = {n: download_name(song.artist, clean_title(song.title), n) for n in ordered
+                 if _GUITAR.fullmatch(n) or (_SCORE.fullmatch(n) and not n.endswith(".pdf"))}
     return [
         {"name": n, "label": labels.get(n) or _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}",
          "primary": n == primary, "source": source_of(n, origins or {}),
          **({"version": versions[n]} if n in versions else {}),
-         **({"guitarPage": pages[n]} if n in pages else {})}
+         **({"guitarPage": pages[n]} if n in pages else {}),
+         **({"download": downloads[n]} if n in downloads else {})}
         for n in ordered
     ]
 

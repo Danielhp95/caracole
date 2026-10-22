@@ -9,7 +9,8 @@ for the last part alone).
 
 Only the kinds of file caracole keeps there are served: PDFs, text (sheets,
 ChordPro, lyrics, the to-do page), info.json, and Guitar Pro and Power Tab
-files, as downloads. Never HTML, SVG or anything a browser would run as the
+files and MuseScore's scores (MuseScore, MusicXML, MIDI), as downloads, each named
+for its song (web/app.py, download_names.py). Never HTML, SVG or anything a browser would run as the
 server's own page, never a hidden name (Syncthing's folders, caracole's
 temporary files), and never what is under ``hidden``: caracole's state and
 cache, should they be inside the library.
@@ -28,10 +29,12 @@ import stat
 from collections.abc import Callable, Iterable
 from pathlib import Path, PurePosixPath
 
-from caracole.inbox import GP_EXTENSIONS
+from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS
 
 MAX_BYTES = 64 * 1024 * 1024
 _TEXT = "text/plain; charset=utf-8"
+# Guitar Pro and Power Tab files, and the scores downloaded from MuseScore (a score's PDF is a PDF like any).
+DOWNLOADS = frozenset(GP_EXTENSIONS + tuple(ext for ext in SCORE_EXTENSIONS if ext != ".pdf"))
 TYPES = {
     ".pdf": "application/pdf",
     ".txt": _TEXT,
@@ -39,9 +42,8 @@ TYPES = {
     ".lrc": _TEXT,
     ".md": _TEXT,
     ".json": "application/json; charset=utf-8",
-    **{ext: "application/octet-stream" for ext in GP_EXTENSIONS},
+    **{ext: "application/octet-stream" for ext in sorted(DOWNLOADS)},
 }
-DOWNLOADS = frozenset(GP_EXTENSIONS)
 
 
 # The lookup of a kind of page caracole writes: given a path's parts, the SHA-256 and the length of

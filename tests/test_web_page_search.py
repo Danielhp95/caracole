@@ -815,10 +815,10 @@ def test_your_songs_among_the_results_keep_to_the_status_buttons_and_the_artist_
     every = [["Radiohead", [["Creep", "yours"]]], ["Stone Temple Pilots", [["Creep", "yours"]]]]
     assert browser.wait(same(LINES, every)), browser.js(LINES)
     assert browser.js(f"{note}.hidden") is True and "show=" not in browser.js("location.hash")
-    # An artist's name pressed in the list, then typed: their songs alone of yours, whatever the sites have.
+    # An artist's funnel pressed in the list, then a search typed: their songs alone of yours, whatever the sites have.
     browser.press("Escape")
     assert browser.wait("document.getElementById('results').hidden")
-    browser.click("#list section.artist button.artist")  # Radiohead
+    browser.click("#list section.artist button.artist-only")  # Radiohead
     search(browser, "creep")
     assert browser.wait(same(LINES, [["Radiohead", [["Creep", "yours"]]]])), browser.js(LINES)
     assert browser.js(f"{note}.firstChild.textContent") == "Your songs here: by Radiohead"
@@ -1099,3 +1099,94 @@ def test_the_results_read_in_light_and_dark_and_line_up_with_your_songs(cfg, liv
         assert page.js(NO_SIDEWAYS)
     finally:
         page.close()
+
+
+# --- an artist's name searches for them -------------------------------------------------------------------------
+
+C_TANGANA = [("c-tangana", "los-tontos", 3), ("c-tangana", "tu-me-dejaste-de-querer", 5),
+             ("c-tangana", "demasiadas-mujeres", 2), ("kase-o", "esto-no-para", 2)]
+FIRST_GROUP = "document.querySelector('#results section.artist .artist-title').textContent"
+
+
+def test_an_artists_name_in_the_results_searches_for_them_and_back_brings_the_query_again(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=C_TANGANA)
+    browser.open(base)
+    search(browser, "los tontos")
+    assert browser.wait(same(LINES, [["C Tangana", [["Los Tontos", "ug"]]]])), browser.js(LINES)
+    name = "#results section.artist h2 button.artist-search"
+    assert browser.js(f"document.querySelector({json.dumps(name)}).textContent") == "C Tangana"
+    browser.click(name)
+    # The box says their name, the search runs as typing it would: their group first, every song of theirs in it.
+    assert browser.wait("document.getElementById('found').dataset.query === 'C Tangana'")
+    assert browser.js("document.getElementById('q').value") == "C Tangana"
+    assert browser.wait(f"{FIRST_GROUP}.startsWith('C Tangana')"), browser.js(GROUPS)
+    assert sorted(t for t, _ in browser.js(LINES)[0][1]) == ["Demasiadas Mujeres", "Los Tontos",
+                                                             "Tu Me Dejaste De Querer"], browser.js(LINES)
+    assert browser.js("document.activeElement.id") == "q"
+    assert asked.queries()[-1] == "C Tangana" and queue.snapshot() == []  # the indexes alone: nothing looked up
+    # Back: the query before it, and its answer.
+    browser.js("history.back()")
+    assert browser.wait("document.getElementById('q').value === 'los tontos'")
+    assert browser.wait("document.getElementById('found').dataset.query === 'los tontos'")
+    assert browser.wait(same(LINES, [["C Tangana", [["Los Tontos", "ug"]]]])), browser.js(LINES)
+    assert queue.snapshot() == []
+
+
+def test_an_artists_name_in_your_list_searches_for_them_and_its_funnel_shows_their_songs_alone(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=C_TANGANA)
+    library(cfg, ("C Tangana", "Demasiadas Mujeres"), ("Radiohead", "Creep"))
+    browser.open(base)
+    head = "#list section.artist h2"  # C Tangana's, first
+    assert browser.js(f"document.querySelector('{head} .artist-name').textContent") == "C Tangana"
+    assert browser.js(f"document.querySelector('{head} .artist-only').getAttribute('aria-label')") == \
+        "Only C Tangana's songs"
+    browser.click(f"{head} button.artist-search")
+    assert browser.wait("document.getElementById('found').dataset.query === 'C Tangana'")
+    assert browser.js("document.getElementById('q').value") == "C Tangana"
+    assert browser.wait(f"{FIRST_GROUP} === 'C Tangana · you have 1 · UG 3'"), browser.js(GROUPS)
+    assert browser.js(LINES)[0][1][0] == ["Demasiadas Mujeres", "yours"]
+    assert browser.js("document.activeElement.id") == "q" and queue.snapshot() == []
+    # Escape: your songs again; there the funnel shows theirs alone, as the name did before.
+    browser.press("Escape")
+    assert browser.wait("document.getElementById('results').hidden")
+    browser.click("#list section.artist h2 button.artist-only")
+    assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\"]'"), browser.js(GRID)
+    assert browser.js("document.getElementById('q').value") == ""
+    assert browser.js("document.getElementById('artist').hidden") is False
+    assert asked.queries() == ["C Tangana"] and queue.snapshot() == []
+    # Sorted by title, a line names its artist: the name searches there too, the funnel beside it.
+    browser.js("document.getElementById('artist').click()")
+    browser.js("(() => { const s = document.getElementById('sort'); s.value = 'title';"
+               " s.dispatchEvent(new Event('change')); })()")
+    by = "#list article.line .line-by.artist-pair"
+    assert browser.wait(f"document.querySelectorAll('{by}').length === 2")
+    assert browser.js(f"[...document.querySelector('{by}').children].map((b) => b.className)") == [
+        "artist artist-search", "artist-only"]
+
+
+def test_back_after_an_artists_name_and_its_funnel_brings_the_whole_address_again(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=C_TANGANA)
+    library(cfg, ("C Tangana", "Demasiadas Mujeres"), ("Radiohead", "Creep"))
+    browser.open(base)
+    browser.click("#list section.artist h2 button.artist-search")  # C Tangana: the search for them
+    assert browser.wait("document.getElementById('found').dataset.query === 'C Tangana'")
+    funnel = "#results section.artist h2 button.artist-only"
+    assert browser.wait(f"document.querySelector({json.dumps(funnel)}) !== null")
+    browser.click(funnel)  # their songs of yours alone, the search left
+    assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\"]'"), browser.js(GRID)
+    assert "artist=c-tangana" in browser.js("location.hash")
+    # Back: the page as it was before the name, every song and no chip, as its address says.
+    browser.js("history.back()")
+    assert browser.wait("!location.hash.includes('artist=')")
+    assert browser.wait("document.getElementById('artist').hidden === true")
+    assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\",\"Creep\"]'"), browser.js(GRID)
+    assert browser.js("document.getElementById('q').value") == ""
+    assert browser.js("document.getElementById('results').hidden") is True
+    # Forward: the funnel's step again, its chip on.
+    browser.js("history.forward()")
+    assert browser.wait("document.getElementById('artist').hidden === false")
+    assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\"]'"), browser.js(GRID)
+    assert queue.snapshot() == []

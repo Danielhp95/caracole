@@ -177,7 +177,7 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 .selecting [data-picker] * { pointer-events: none; }
 .selecting [data-picker] .pick, .selecting [data-picker] .pick * { pointer-events: auto; }
 .selecting [data-picker] > .line-action, .selecting [data-picker] > .line-more,
-.selecting [data-picker] > .line-panel, .selecting [data-picker] .filter-mark,
+.selecting [data-picker] > .line-panel, .selecting [data-picker] .filter-mark, .selecting [data-picker] .artist-only,
 .selecting [data-picker] .progress a, .selecting [data-picker] .progress .dot { display: none; }
 .selecting [data-picker] button.artist { min-height: 0; }  /* no target of its own: the line is */
 /* A line's box comes first, beside its title and what is under it (both lines on a phone); its action and "⋯" wait. */
