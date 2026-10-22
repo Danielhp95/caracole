@@ -880,6 +880,78 @@ def test_an_artists_other_ug_name_in_another_review_goes_in_its_one_alias_line(c
     assert set(o.match) == {"other/song", "soda/persiana-americana", "soda/signos"}
 
 
+def test_a_later_songs_alias_line_says_what_to_do_with_each_alternative_above(conn, cfg):
+    # Persiana Americana's candidates, alternatives, are under UG's soda-stereo and soda-stereo-ar, each with its
+    # [alias] line; Signos' one is under soda-stereo-ar. Whichever of Persiana's is taken, Signos' item says how
+    # Soda's one line comes to hold soda-stereo-ar too: never "the line above" for a line that may not go in.
+    from caracole.overrides import add_alias, add_match
+
+    add_match(cfg.overrides_file, "Other - Song", "other/song")
+    add_alias(cfg.overrides_file, "Other", "other-band")
+    index(conn, [(1, "soda-stereo", "persiana-americana", "chords"), (2, "soda-stereo-ar", "persiana-americana",
+                  "chords"), (3, "soda-stereo-ar", "signos", "chords")])
+    signos = add_song(conn, "Soda", "Signos")
+    update_song(conn, signos.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo-ar", "song_key": "signos", "score": 82.0, "step": "fuzzy_artist"}])
+    persiana = add_song(conn, "Soda", "Persiana Americana")
+    update_song(conn, persiana.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "persiana-americana", "score": 82.0, "step": "fuzzy_artist"},
+        {"artist_key": "soda-stereo-ar", "song_key": "persiana-americana", "score": 80.0, "step": "fuzzy_artist"}])
+    text = todo(conn, cfg, load_overrides(cfg.overrides_file))
+    assert text.index("### Soda - Persiana Americana\n") < text.index("### Soda - Signos\n")
+    stereo, stereo_ar = toml_blocks(review_item(text, "Soda - Persiana Americana"))[:2]
+    item = review_item(text, "Soda - Signos")
+    [block] = toml_blocks(item)[:1]
+    assert "[alias]" not in block
+    both = '"Soda" = ["soda-stereo", "soda-stereo-ar"]'
+    assert ("Soda takes one line under `[alias]`, and **Soda - Persiana Americana** above gives one for each of its "
+            f"candidates' UG names, of which one at most goes in: in place of `soda-stereo`'s, put `{both}`; "
+            "`soda-stereo-ar`'s serves this song too (it goes in once). Without any, this candidate's is "
+            '`"Soda" = "soda-stereo-ar"  # under [alias]`.') in item
+    start = cfg.overrides_file.read_text(encoding="utf-8")
+    for taken, alias in ((stereo, ("soda-stereo", "soda-stereo-ar")), (stereo_ar, ("soda-stereo-ar",))):
+        file = paste_as_commented(paste_as_commented(start, taken), block)
+        if "soda-stereo/" in taken:  # in place of soda-stereo's line, as the item says
+            file = file.replace('"Soda" = "soda-stereo"  # under [alias]', both)
+        cfg.overrides_file.write_text(file, encoding="utf-8")
+        o = load_overrides(cfg.overrides_file)
+        assert o.alias["soda"] == alias
+        assert o.match["soda/signos"] == ("soda-stereo-ar", "signos")
+
+
+def test_a_later_songs_alias_line_is_its_own_should_the_one_above_not_go_in(conn, cfg):
+    # Persiana Americana's one candidate, under soda-stereo, isn't the song: its [alias] line never goes in, and
+    # Signos', under soda-stereo too, says which line Soda gets then.
+    blocks, text = soda_reviews(conn, cfg, {"Persiana Americana": ("soda-stereo", "persiana-americana"),
+                                            "Signos": ("soda-stereo", "signos")})
+    _, (second, other) = blocks
+    assert ('it goes in once, for every song of theirs. Without it, this candidate\'s is '
+            '`"Soda" = "soda-stereo"  # under [alias]`.') in review_item(text, f"Soda - {second}")
+    file = cfg.overrides_file.read_text(encoding="utf-8")
+    file = paste_as_commented(file, other + '"Soda" = "soda-stereo"  # under [alias]\n')  # as the item says
+    cfg.overrides_file.write_text(file, encoding="utf-8")
+    o = load_overrides(cfg.overrides_file)
+    assert o.alias["soda"] == ("soda-stereo",) and o.match[f"soda/{slug_key(second)}"] == ("soda-stereo",
+                                                                                         slug_key(second))
+
+
+def test_two_candidates_above_under_one_ug_name_give_the_artist_one_line(conn, cfg):
+    # Persiana Americana's two candidates are both under soda-stereo: whichever goes in, Soda's line is the same one.
+    index(conn, [(1, "soda-stereo", "persiana-americana", "chords"), (2, "soda-stereo", "persiana", "chords"),
+                 (3, "soda-stereo", "signos", "chords")])
+    signos = add_song(conn, "Soda", "Signos")
+    update_song(conn, signos.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "signos", "score": 82.0, "step": "fuzzy_artist"}])
+    persiana = add_song(conn, "Soda", "Persiana Americana")
+    update_song(conn, persiana.id, review=True, match_decision="review", match_candidates=[
+        {"artist_key": "soda-stereo", "song_key": "persiana-americana", "score": 82.0, "step": "fuzzy_artist"},
+        {"artist_key": "soda-stereo", "song_key": "persiana", "score": 80.0, "step": "fuzzy_artist"}])
+    text = todo(conn, cfg)
+    assert text.index("### Soda - Persiana Americana\n") < text.index("### Soda - Signos\n")
+    assert ("Soda's `[alias]` line for `soda-stereo` is the one under **Soda - Persiana Americana** above: it goes "
+            "in once, for every song of theirs.") in review_item(text, "Soda - Signos")
+
+
 def test_a_review_says_how_to_dismiss_every_candidate(conn, cfg):
     index(conn, [(1081460, "soda-stereo", "persiana-americana", "chords")])
     s = add_song(conn, "Soda", "Persiana Americana")

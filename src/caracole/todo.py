@@ -220,14 +220,27 @@ def _alias_line(artist: str, akey: str, overrides: Overrides) -> list[str]:
 def _alias_above(artist: str, akey: str, overrides: Overrides, song: str, given: list[str]) -> str:
     """What a candidate says of its ``[alias]`` line when the item of ``song``, above, gives the artist one
     already (for ``given``, its candidates' UG names): pasted for both songs, the artist's key would be in
-    ``[alias]`` twice, which makes overrides.toml unreadable, so the page gives an artist's line once."""
-    if akey in given:
+    ``[alias]`` twice, which makes overrides.toml unreadable, so the page gives an artist's line once.
+
+    That item's candidates are alternatives, each with its line, of which one at most goes in (none, when
+    none is the song): for each, what this candidate's UG name needs, and its own line should none go in."""
+    own = _code(_alias_line(artist, akey, overrides)[0])
+    have = overrides.alias.get(slug_key(artist), ())
+
+    def both(other: str) -> str:  # the artist's line with the other's UG name and this one's
+        return _code(f"{_toml_str(artist)} = [{', '.join(_toml_str(a) for a in dict.fromkeys((*have, other, akey)))}]")
+
+    if given == [akey]:
         return (f"{md(artist)}'s `[alias]` line for `{akey}` is the one under **{md(song)}** above: it goes in "
-                "once, for every song of theirs.")
-    both = ", ".join(_toml_str(a) for a in dict.fromkeys((*overrides.alias.get(slug_key(artist), ()), given[0], akey)))
-    return (f"{md(artist)} takes one line under `[alias]`, and the one under **{md(song)}** above gives them "
-            f"`{given[0]}`: to add `{akey}` too, put this in its place: {_code(f'{_toml_str(artist)} = [{both}]')}. "
-            f"Without it, this candidate's is {_code(_alias_line(artist, akey, overrides)[0])}.")
+                f"once, for every song of theirs. Without it, this candidate's is {own}.")
+    if len(given) == 1:
+        return (f"{md(artist)} takes one line under `[alias]`, and the one under **{md(song)}** above gives them "
+                f"`{given[0]}`: to add `{akey}` too, put this in its place: {both(given[0])}. "
+                f"Without it, this candidate's is {own}.")
+    ways = "; ".join(f"`{g}`'s serves this song too (it goes in once)" if g == akey
+                     else f"in place of `{g}`'s, put {both(g)}" for g in given)
+    return (f"{md(artist)} takes one line under `[alias]`, and **{md(song)}** above gives one for each of its "
+            f"candidates' UG names, of which one at most goes in: {ways}. Without any, this candidate's is {own}.")
 
 
 def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, now: datetime) -> list[str]:
@@ -266,7 +279,8 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
                     above = _alias_above(s.artist, akey, overrides, *given[slug_key(s.artist)])
                 elif alias:
                     lines += alias
-                    ours.append(akey)
+                    if akey not in ours:  # two of its candidates under one UG name: one line, either way
+                        ours.append(akey)
             items += _paste(lines)
             if above:
                 items += [above, ""]
