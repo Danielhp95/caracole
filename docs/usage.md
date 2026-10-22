@@ -3129,7 +3129,11 @@ is no progression exits with status 2.
     - a songbook's **Made** or **Added** · **Open songbook**; **Removed**,
       **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda
       artist page's **Read**, **Not found** or **Not read** (Try again), each
-      in a word and a sentence.
+      in a word and a sentence;
+    - an export's **PDF made** · **Open the PDF** (or **Failed**, no PDF was
+      found, with Try again), and Make this my version's **Your version now**
+      · **Open sheet**: never its song's request, whose line on the library
+      page stays its own.
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and

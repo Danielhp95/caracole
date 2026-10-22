@@ -39,15 +39,15 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from caracole.web import pages
 from caracole.web.app import Response, Route, WebApp, html_response, redirect
-from caracole.web.jobs import Job
+from caracole.web.jobs import EXPORTING, MINE, Job
 from caracole.web.pages import Refused
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from caracole.songs import Song
 
 MAX_QUERY = 2000  # characters: a version with every chord's shape and swap is a few hundred
-EXPORTING = "export:"  # a job's song_key, then the song's key and the version: never the song's own jobs'
-MINE = ":mine"  # after an export's song_key: making that version the song's own
 YOURS = "yours"  # the version is the song's own, as it is kept
 AS_A_MOVE = "as a move"  # the version is the song's own, kept as a move from the sheet (t=): it may be kept by its key
 
@@ -195,6 +195,26 @@ def _own_pdf(app: WebApp, song: Song, sheet: str) -> str | None:
 
     name = sheet.rsplit("/", 1)[-1].removesuffix(".html") + ".pdf"
     return name if (song_dir(app.cfg.library_dir, song) / name).is_file() else None
+
+
+def made_pdf(conn: sqlite3.Connection, library_dir: Path, song: Song, job: Job) -> str | None:
+    """The PDF an export's job made (the version its ``--version`` names, as render.py records it), as a link
+    relative to the library page, once it is in the song's folder; None for one that made none."""
+    from caracole.db import kv_get_json
+    from caracole.library import song_dir
+    from caracole.render import EXPORT_KV
+
+    asked = next((arg.removeprefix("--version=") for step in job.steps for arg in step.args
+                  if arg.startswith("--version=")), None)
+    record = kv_get_json(conn, f"{EXPORT_KV}{song.id}")
+    if asked is None or not isinstance(record, dict):
+        return None
+    name = next((entry["pdf"] for entry in record.values()
+                 if isinstance(entry, dict) and entry.get("query") == asked and isinstance(entry.get("pdf"), str)), None)
+    folder = song_dir(library_dir, song)
+    if name is None or not (folder / name).is_file():
+        return None
+    return "/".join(quote(part, safe="") for part in (*folder.relative_to(library_dir).parts, name))
 
 
 def _body(csrf: str, song: Song, sheet: str, shown: str, label: str, job: Job | None,

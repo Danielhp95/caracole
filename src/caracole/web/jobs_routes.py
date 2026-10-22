@@ -43,7 +43,7 @@ from caracole.web.app import (
     query,
     redirect,
 )
-from caracole.web.jobs import LACUERDA_READS, LACUERDA_SEARCH, REMOVING, Job, JobStarted
+from caracole.web.jobs import EXPORTING, LACUERDA_READS, LACUERDA_SEARCH, REMOVING, Job, JobStarted
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import SongFacts, details_href, job_line
@@ -210,12 +210,14 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
 def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None, *,
          songbook_page: str | None = None) -> dict[str, Any]:
     """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
-    ("song"), a song's removal ("remove"), or a songbook ("songbook", which ``songbook`` names), whose
-    ``songbook_page`` its line links once it is done."""
+    ("song"), a song's removal ("remove"), an export of a song's sheet ("export", which is no song's line: its
+    ``songId`` is None), or a songbook ("songbook", which ``songbook`` names), whose ``songbook_page`` its line
+    links once it is done."""
     from caracole.web.songbooks import songbook_of
 
     songbook = songbook_of(job.song_key)
-    kind = "remove" if job.song_key.startswith(REMOVING) else "songbook" if songbook is not None else "song"
+    kind = ("remove" if job.song_key.startswith(REMOVING) else "export" if job.song_key.startswith(EXPORTING)
+            else "songbook" if songbook is not None else "song")
     line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
     seen = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
             "state": job.state, "fetching": job.fetching, "line": line.as_json(), "details": details_href(job.id)}
@@ -243,8 +245,10 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     requests page, it says whether that fetch asked Ultimate Guitar at all
     (``asked_ug``: not for a song the offline index lacks whose artist's page isn't
     known) and what the local indexes have of the song elsewhere
-    (``outcome.elsewhere``). A job that is over doesn't change, so its answer is
-    worked out once (``app._ended``).
+    (``outcome.elsewhere``). An export (``jobs.EXPORTING``) is about the song its
+    job names (``Job.song_id``) and is none of its requests: no id, and, once it is
+    over, the PDF it made (``SongFacts.pdf``). A job that is over doesn't change, so
+    its answer is worked out once (``app._ended``).
     """
     over = not job.active
     if over:
@@ -256,7 +260,8 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     from caracole.songs import find_song
 
     removal = job.song_key.startswith(REMOVING)
-    song = find_song(conn, job.song_key.removeprefix(REMOVING))
+    export = job.song_key.startswith(EXPORTING)
+    song = _song_by_id(conn, job.song_id) if export else find_song(conn, job.song_key.removeprefix(REMOVING))
     facts = None
     if song is not None:
         ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)
@@ -278,15 +283,31 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
             from caracole.web.outcome import elsewhere as other_sites
 
             elsewhere = other_sites(conn, app.cfg, song, job, datetime.now(UTC))
+        pdf = None
+        if over and export:
+            from caracole.web.export_routes import made_pdf
+
+            pdf = made_pdf(conn, app.cfg.library_dir, song, job)
         facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
                           checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked,
-                          elsewhere=elsewhere, asked_ug=asked_ug)
+                          elsewhere=elsewhere, asked_ug=asked_ug, pdf=pdf)
     # A removal's song is gone once it is done: the job knows which it was.
-    answer = (song.id if song is not None else job.song_id if removal else None, facts)
+    answer = (None if export else song.id if song is not None else job.song_id if removal else None, facts)
     if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
         with app._ended_lock:
             app._ended[job.id] = answer
     return answer
+
+
+def _song_by_id(conn: sqlite3.Connection, song_id: int | None) -> Song | None:
+    from caracole.songs import get_song
+
+    if song_id is None:
+        return None
+    try:
+        return get_song(conn, song_id)
+    except KeyError:
+        return None
 
 
 def forget_ended(app: WebApp, jobs: list[Job]) -> None:
