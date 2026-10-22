@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
+from caracole.commands import _common
 from caracole.commands._common import (
     alert_block,
     exclusive,
@@ -99,6 +100,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
                 write_pages(conn, cfg, overrides, utcnow())
             return
         run_id = run_id_for(now)
+        handed = _common.handoffs()  # the client's first pause may let a lookup go first too
         client = make_client(cfg, conn, PROVIDER, run_id)
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank,
                            library_dir=cfg.library_dir, now=now,
@@ -111,6 +113,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
         try:
             stats = fetch_songs(ctx, songs, on_song=said)
         except ProviderBlocked as e:
+            overrides = _common.overrides_since(cfg, overrides, handed)  # as a lookup let go first left it
             state = record_block(conn, e.provider, now, str(e))
             if asked is not None:
                 _send_back(conn, asked, overrides, now)
@@ -122,6 +125,7 @@ def _fetch(cfg: Config, display: str | None) -> None:
             return
         finally:
             client.close()
+        overrides = _common.overrides_since(cfg, overrides, handed)  # as a lookup let go first left it
         if answered_any(conn, run_id, PROVIDER, client.requests_made):  # UG answered: a good run, as a night's
             record_ok(conn, PROVIDER, now)
         unfinished = asked is not None and not stats.songs_done

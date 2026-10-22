@@ -459,7 +459,8 @@ def _provider_pass[T](
     answered with nothing but errors doesn't (``health.answered_any``).
     It holds caracole's lock throughout, so the cooldown it reads is the one a
     caracole it waited for left. After a block, or a pass that did something
-    (``ran``), it rewrites _todo.md and index.html.
+    (``ran``), it rewrites _todo.md and index.html, by overrides.toml as a lookup
+    its client let go first in a pause left it (``_common.overrides_since``).
     """
     from caracole.http import ProviderBlocked
 
@@ -472,6 +473,7 @@ def _provider_pass[T](
                        "caracole won't ask it before then.")
             return None
         run_id = run_id_for(now)
+        handed = _common.handoffs()  # the client's first pause may let a lookup go first too
         client = make_client(cfg, conn, provider, run_id)
         try:
             result = run(conn, client, now)
@@ -483,14 +485,14 @@ def _provider_pass[T](
             )
             _common.alert_block(cfg, provider, message)
             typer.echo(f"{name} blocked caracole: {message}")
-            write_pages(conn, cfg, overrides, utcnow())  # with the cooldown
+            write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())  # with the cooldown
             return None
         finally:
             client.close()
         if answered_any(conn, run_id, provider, client.requests_made):
             record_ok(conn, provider, now)
         if ran(result):
-            write_pages(conn, cfg, overrides, utcnow())
+            write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
     return result
 
 

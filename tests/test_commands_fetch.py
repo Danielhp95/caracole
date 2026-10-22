@@ -535,6 +535,35 @@ def test_a_block_rewrites_the_pages_with_the_cooldown(tmp_path, ug):
     assert "| ug | cooling down until " in todo
 
 
+@pytest.mark.parametrize("blocked", [False, True])
+def test_the_pages_after_a_lookup_went_first_read_overrides_toml_again(tmp_path, ug, monkeypatch, blocked):
+    # In the pause before its first request, the fetch let `caracole get --tab` go first, which pinned a tab: the
+    # pages it writes at its end, after a block too, go by overrides.toml as the lookup left it.
+    import caracole.commands.fetch as cmd
+    from caracole.commands import _common
+
+    two_songs(tmp_path, ug)
+    overrides = tmp_path / "lib" / "overrides.toml"
+    answer = ug.handler
+
+    def lookup_first(request):
+        if not overrides.exists():
+            overrides.parent.mkdir(parents=True, exist_ok=True)
+            overrides.write_text('[pin]\n"Radiohead - Creep" = ["https://tabs.ultimate-guitar.com/tab/2"]\n',
+                                 encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return httpx.Response(403, text="<html><body>Forbidden</body></html>") if blocked else answer(request)
+
+    monkeypatch.setattr(ug, "handler", lookup_first)
+    seen = []
+    monkeypatch.setattr(cmd, "write_pages", lambda conn, cfg, o, now: seen.append([*o.pin.values()]))
+
+    result = run(tmp_path)
+
+    assert result.exit_code == 0, result.output
+    assert seen == [[(2,)]]
+
+
 def test_a_cooldown_leaves_the_pages_alone(tmp_path, ug):
     from caracole.commands._common import utcnow
 

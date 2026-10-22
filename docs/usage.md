@@ -1489,7 +1489,10 @@ sends no request lets a lookup go first between two songs:
 `caracole autochords` (a song takes minutes, and the unit runs for hours), and
 the PDF pass of the run and of `caracole render`, which reads each song and
 overrides.toml again after it, and makes the songbooks and the pages from
-overrides.toml as the lookup left it. The waiting lookup announces itself with a file
+overrides.toml as the lookup left it. `caracole fetch`, `lyrics`, `lacuerda`,
+`gtptabs`, `musescore`, `youtube` and `icons` let a lookup go first in their
+pauses as the run does, and make the pages they write at their end from
+overrides.toml as the lookup left it too. The waiting lookup announces itself with a file
 in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
 longer waited for after five seconds. The run lets lookups alone go first: a

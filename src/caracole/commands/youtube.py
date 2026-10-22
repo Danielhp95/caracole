@@ -126,6 +126,7 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
                 write_pages(conn, cfg, overrides, utcnow())
             return
         run_id = run_id_for(now)
+        handed = _common.handoffs()  # the runner's first pause may let a lookup go first too
         runner = make_youtube(cfg, conn, run_id)
         try:
             stats = youtube_pass(conn, runner, cfg, now, overrides=overrides, songs=songs,
@@ -136,13 +137,13 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
                        "Nothing was marked missing.")
             _common.alert_block(cfg, PROVIDER, message)
             typer.echo(f"YouTube blocked caracole: {message}")
-            write_pages(conn, cfg, overrides, utcnow())
+            write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
             return
         finally:
             runner.close()
         if answered_any(conn, run_id, PROVIDER, runner.requests_made):  # runs that all failed are no good run
             record_ok(conn, PROVIDER, now)
-        write_pages(conn, cfg, overrides, utcnow())
+        write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
     typer.echo(_totals(stats, runner.requests_made, cfg.provider(PROVIDER).budget))
     if stats.budget_exhausted:
         budget = cfg.provider(PROVIDER).budget

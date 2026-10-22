@@ -645,7 +645,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   gtptabs_fetch.py checks a song still has no file
   before its turn, and `autochords_pending` and `render_all` read each song after and
   overrides.toml again; what comes after (the run's next steps, `StepContext.read_overrides_again`;
-  the songbooks and pages of `caracole render` and `autochords`) reads overrides.toml again too
+  the songbooks and pages of `caracole render` and `autochords`; the pages of `caracole fetch`,
+  `youtube`, `icons` and commands/lyrics.py's `_provider_pass`) reads overrides.toml again too
   (`_common.overrides_since`;
   `test_lacuerda_fetch.py::test_a_tab_a_lookup_pinned_during_an_earlier_step_is_never_replaced_by_lacuerda`,
   `test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`,

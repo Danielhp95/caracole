@@ -962,6 +962,41 @@ def test_a_block_rewrites_the_pages_with_the_cooldown(tmp_path, sites, command, 
     assert f"| {provider} | cooling down until " in todo
 
 
+@pytest.mark.parametrize("blocked", [False, True])
+@pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
+def test_the_pages_after_a_lookup_went_first_read_overrides_toml_again(tmp_path, sites, monkeypatch, command,
+                                                                       provider, blocked):
+    # In the pause before its first request, the command let `caracole get --tab` go first, which pinned a tab:
+    # the pages it writes at its end, after a block too, go by overrides.toml as the lookup left it.
+    import caracole.commands.lyrics as cmd
+
+    sites.lacuerda.pages.update(soda_pages())
+    spanish_song(tmp_path)
+    conn = open_db(tmp_path)
+    try:
+        update_song(conn, 1, lyrics_status="pending")
+    finally:
+        conn.close()
+    overrides = tmp_path / "lib" / "overrides.toml"
+    site = getattr(sites, provider)
+    answer = site.handler
+
+    def lookup_first(request):
+        if not overrides.exists():
+            overrides.parent.mkdir(parents=True, exist_ok=True)
+            overrides.write_text('[pin]\n"Radiohead - Creep" = ["https://tabs.ultimate-guitar.com/tab/2"]\n',
+                                 encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return httpx.Response(429, text="nope") if blocked else answer(request)
+
+    monkeypatch.setattr(site, "handler", lookup_first)
+    seen = []
+    monkeypatch.setattr(cmd, "write_pages", lambda conn, cfg, o, now: seen.append([*o.pin.values()]))
+    result = run(tmp_path, command)
+    assert result.exit_code == 0, result.output
+    assert seen == [[(2,)]]
+
+
 @pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
 def test_a_cooldown_leaves_the_pages_alone(tmp_path, sites, command, provider):
     spanish_song(tmp_path)
