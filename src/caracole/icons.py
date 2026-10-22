@@ -405,7 +405,7 @@ class IconRun:
 
 def sources_in_use(conn: sqlite3.Connection) -> set[str]:
     """The sources the library has something from, which its pages show a mark for: a version
-    of theirs (a kept file, a Guitar Pro page to click), LRCLIB's lyrics, MuseScore's pages."""
+    of theirs (a kept file, a sheet or a tab picked), LRCLIB's lyrics, MuseScore's pages."""
     used = {row[0] for row in conn.execute("SELECT DISTINCT provider FROM versions")}
     if conn.execute("SELECT 1 FROM songs WHERE lyrics_status = 'found' LIMIT 1").fetchone():
         used.add(LYRICS)

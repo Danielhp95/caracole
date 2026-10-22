@@ -962,8 +962,7 @@
       more.push(el("p", "note", "caracole serve can show Guitar Pro files in the browser once it has alphaTab " +
         "(CARACOLE_ALPHATAB_DIR): until then they are downloads."));
     }
-    more.push({ heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
-      { heading: "Scores on MuseScore", links: listOf(s.museScore) },
+    more.push({ heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
       { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });
     const foot = el("div", "foot");

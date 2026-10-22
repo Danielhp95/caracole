@@ -18,8 +18,8 @@ song gets its key, and where the key came from.
         └── guitar-1.gp5        a Guitar Pro file, when there is one
 
 Sheets come from Ultimate Guitar and, for Spanish songs, LaCuerda. Lyrics come
-from LRCLIB. Guitar Pro files come from gtptabs.com, downloaded for you, and
-from the Ultimate Guitar pages the to-do page lists for you to click. A Spotify
+from LRCLIB. Guitar Pro files come from gtptabs.com, downloaded for you, or
+from wherever you get one: drop it into `_inbox/` and caracole files it. A Spotify
 playlist works as a song list too, but you don't need one. For a song nobody
 has charted, caracole works out the chords from the audio, with local models:
 a track you bought, or, by default, the song's audio, which it takes from
@@ -60,8 +60,9 @@ back. It uses no site's search but LaCuerda's, whose robots.txt is empty: one
 request for a query you typed and left in the served page's search box, once
 in 30 days a query, at most 20 an hour, within that hour's 60. It downloads Guitar Pro files only where
 robots.txt allows it: from gtptabs.com, with at most 20 requests a night, one
-file for each song that has none. Ultimate Guitar's robots.txt closes its
-downloads to bots, so its Guitar Pro pages are yours to click. From MuseScore it
+file for each song that has none. From Ultimate Guitar it takes chords and
+text tabs alone, never a Guitar Pro file: its robots.txt closes its downloads
+to bots. From MuseScore it
 reads only the song sitemaps its robots.txt lists, for links to its pages, and
 downloads nothing: a download there needs a login. A Cloudflare challenge, which
 is what MuseScore answered caracole with in October 2026, counts as a block.

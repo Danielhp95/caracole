@@ -136,7 +136,8 @@ def _listed(conn: sqlite3.Connection, cfg: Config, song: Song, tab: int) -> Shee
 
 
 def _chords_pins(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> list[int]:
-    """The song's pins that choose its sheet (``sheet_versions.sheet_pins``). A Guitar Pro or tab pin stays."""
+    """The song's pins that choose its sheet (``sheet_versions.sheet_pins``). Any other stays: a tab's, or a Guitar
+    Pro page's from before caracole stopped picking them (it pins nothing)."""
     from caracole.sheet_versions import sheet_pins
 
     return sheet_pins(conn, song.id, overrides.pin.get(song.key, ()))

@@ -39,8 +39,8 @@ and where it came from, the transposition, the lyrics, when it came), its
 review's picker, where its audio comes from, its Sheet versions (the Ultimate
 Guitar versions kept beside its sheet, sheet_versions.py's, each opening its
 viewer page, the one its title opens said so: ``versions``), its PDF exports (the
-sheet's PDFs in other versions, each file's ``version``), its other files, the Guitar Pro
-versions to download from UG, its MuseScore pages, its search and buy links, Add
+sheet's PDFs in other versions, each file's ``version``), its other files, its MuseScore
+pages, its search and buy links, Add
 to a songbook… (the Select mode, the song picked) and, served, Fetch again and Use
 LaCuerda's sheet (``lacuerdaSheet``, or the search's LaCuerda row of it: each the
 ``POST /lookup`` the lookup page sends for the song) and Remove…. Served, each Guitar Pro file caracole serve shows
@@ -183,9 +183,8 @@ songbooks as lines, each with how many songs, how many still without a sheet and
 when caracole last made its files, and "+ New songbook" (Select, on the
 library); on the right, side by side from 900 px and one at a time on a phone,
 the songbook opened as a set list, each song with where the songbook plays it
-(``songbook.plays_in``) and a guitar after its title when caracole found a Guitar
-Pro file for it (kept: solid, its Guitar Pro page served, else the file; picked on
-Ultimate Guitar: in outline, its page there), and its files: the PDF, the phone
+(``songbook.plays_in``) and a guitar after its title when caracole keeps a Guitar
+Pro file for it (its Guitar Pro page served, else the file), and its files: the PDF, the phone
 page, ChordPro. The file on disk shows it read-only, with the ``caracole songbook`` commands that
 change it. Served, a song's grip drags it to its place (or ↑ and ↓ move it, sent
 a moment after the last key), its chip changes where it plays (its key, mode and
@@ -307,7 +306,6 @@ _LABELS = {
 }
 _HUMAN_SHEETS = ("sheet.txt", "sheet.pdf")
 _AUTO_SHEETS = ("sheet (auto).txt", "sheet (auto).pdf")
-_KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab"}
 # Letters normalize.fold transliterates because NFKD can't decompose them; the page folds
 # typed queries with this table, so the values come from fold itself.
 _TRANSLITERATED = "øØæÆœŒßẞđĐłŁþÞðÐıħĦ"
@@ -391,7 +389,6 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     songs alone."""
     from caracole.render import pdf_transpose
 
-    pages = guitar_pro_picks(conn)
     browsable = guitar_pages(conn)
     sources = _downloaded(conn)
     origins = kept_sources(conn)
@@ -409,7 +406,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     asked = None if songs is None else {s.id for s in songs}  # a card or a few: their rows alone
     met = _lacuerda_met(conn, asked)
     kept = _kept_versions(conn, cfg, {s.id for s in library})
-    cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), pages.get(s.id, []), s.id in to_buy,
+    cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
                    transpose=pdf_transpose(conn, overrides, s), lacuerda_met=met.get(s.id),
@@ -486,7 +483,7 @@ def _add_picks(conn: sqlite3.Connection, library: list[Song], songs: list[dict[s
             card["notFound"] = True  # not for the sheet picked on LaCuerda, still to come: that is the song's
 
 
-_TAB_KINDS = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Guitar Pro", "power": "Power Tab"}
+_TAB_KINDS = {"chords": "Chords", "tabs": "Tabs"}
 
 
 def _tab_counts(counts: Any) -> str:
@@ -607,7 +604,7 @@ def _youtube_note(state: SongState | None) -> dict[str, Any] | None:
 
 
 def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | None,
-          guitar_pro: list[dict[str, str]], for_buying: bool, sources: dict[str, str],
+          for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
           origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
           transpose: int = 0, lacuerda_met: str | None = None,
@@ -656,7 +653,6 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "files": files,
         "versions": _versions_data(versions, names, _folder_href(library_dir, song)),  # its kept versions
         "source": next((f["source"] for f in files if f["primary"]), None),  # where its sheet came from
-        "guitarPro": guitar_pro,
         "museScore": musescore,
         "links": links,
         "buy": buy,
@@ -783,27 +779,6 @@ def _downloaded(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     for song_id, name in rows:
         found.setdefault(song_id, {})[name] = "gtptabs.com"
     return found
-
-
-def guitar_pro_picks(conn: sqlite3.Connection) -> dict[int, list[dict[str, str]]]:
-    """Guitar Pro and Power Tab picks still to download by hand (no file yet), by song: each its page on the site
-    (http or https alone), its words ("Guitar Pro ver 2 · 4.2★ · 5 votes") and its site. A song's line lists them
-    under its "⋯"; the Songbooks tab marks a song by its first (songbook_section.py)."""
-    rows = conn.execute(
-        "SELECT v.* FROM versions v WHERE v.kind IN ('guitar-pro', 'power') AND v.pick_rank IS NOT NULL "
-        "AND v.gone = 0 AND NOT EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id) "
-        "ORDER BY v.song_id, v.pick_rank"
-    )
-    pages: dict[int, list[dict[str, str]]] = {}
-    for v in rows:
-        url = (v["url"] or "").strip()
-        if not url.startswith(("https://", "http://")):
-            continue
-        label = f" ({v['label']})" if v["label"] else ""
-        votes = f"{v['votes']} vote{'s' if v['votes'] != 1 else ''}"
-        text = f"{_KIND_NAMES[v['kind']]} ver {v['version']}{label} · {v['rating']:.1f}★ · {votes}"
-        pages.setdefault(v["song_id"], []).append({"label": text, "href": url, "source": v["provider"]})
-    return pages
 
 
 def _sort_key(text: str) -> str:

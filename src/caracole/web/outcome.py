@@ -5,8 +5,9 @@ line and says it its own way, never from anything else than the job and what the
 song:
 
 - **Steps** (``steps``), for the request that runs: a lookup's stages (get.py's ``STAGES``) as a few
-  steps in plain words, Song, Match, Sheet, PDF, Lyrics, Guitar Pro (Ultimate Guitar's second pass,
-  LaCuerda's and gtptabs.com's, from the first to the last) and Songbooks; a request of other commands,
+  steps in plain words, Song, Match, Sheet, PDF, Lyrics, Guitar Pro (Ultimate Guitar's second pass, its
+  sheets scored and its tab, LaCuerda's and gtptabs.com's, from the first to the last) and Songbooks; a
+  request of other commands,
   its commands, each by what it does ("Sheet" for ``caracole fetch``), else by its step's label. A step
   is running while one of its stages runs, or once some ran and others wait; done once all are over,
   failed when one failed. A step the request doesn't use is not drawn: the songbooks of a lookup that
@@ -69,7 +70,7 @@ _OVER = ("done", "skipped", "failed")
 
 # What a stage leaves for tonight's run, when it ends in a wait or an error: its name, and its verb.
 _WHAT = {"sheet": ("the sheet", "waits"), "lyrics": ("the lyrics", "wait"),
-         "ug": ("its other versions and guitar parts", "wait"), "lacuerda": ("LaCuerda's sheet", "waits"),
+         "ug": ("its other versions and its tab", "wait"), "lacuerda": ("LaCuerda's sheet", "waits"),
          "gtptabs": ("the Guitar Pro file", "waits")}
 # How get.py words them (``_Lookup.asking``, ``_usable``).
 _FAILED = re.compile(r"^(?P<site>.+?) failed \((?P<why>.*)\); the nightly run tries again$")

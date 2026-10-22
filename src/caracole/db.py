@@ -17,7 +17,10 @@ Tables (plan §5, plus ``kv``):
 - ``ug_artists``, ``ug_artists_fts`` and ``ug_artist_words``: every artist key of ``ug_index``,
   indexed by its words, and those words with how many artists hold each, for searches by a
   word of an artist's name and by a close spelling of one (schema 8, search.py).
-- ``versions``: every sheet, tab or Guitar Pro version seen for a song.
+- ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
+  file or score it keeps (gtptabs.com's, your inbox's). Schema 9 took out the Guitar Pro and
+  Power Tab versions caracole picked on Ultimate Guitar, when it still did, but for one a file
+  was filed for.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
 - ``kv``: small state such as provider cooldowns, sitemap validators, learned
@@ -36,7 +39,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -311,10 +314,23 @@ END;
 INSERT OR IGNORE INTO ug_artists(artist_key) SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key;
 """
 
+# caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar any more (ug/fetch.py reads, rates and records
+# none, and no page lists one to download by hand): the versions it picked or saw go, so that none surfaces again
+# as a pick or a count, but for one a file was filed for, which stays as that file's record (files cascade with
+# their version), no pick. The artist pages' tabs of those kinds go too: searches no longer count them, and they
+# are no longer stored. ug_index keeps its Guitar Pro and Power Tab rows, which the matcher reads whole (a song
+# UG has only as a Guitar Pro file is still that song): ug/lookup.py's song_tabs reads a song's tabs without them.
+_SCHEMA_V9 = """
+DELETE FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power')
+  AND NOT EXISTS (SELECT 1 FROM files f WHERE f.version_id = versions.id);
+UPDATE versions SET pick_rank = NULL WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power');
+DELETE FROM ug_artist_tabs WHERE type IN ('guitar-pro', 'power');
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
-               7: _SCHEMA_V7, 8: _SCHEMA_V8}
+               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

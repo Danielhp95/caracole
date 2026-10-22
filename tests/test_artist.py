@@ -68,8 +68,8 @@ def test_kinds_and_labels():
         None,
         None,
         None,
-        "guitar-pro",
-        "power",
+        None,  # a Guitar Pro file: a type caracole doesn't use on Ultimate Guitar
+        None,  # a Power Tab file: neither
     ]
     assert [tabs[i].label for i in (4909726, 824731, 555890, 85042)] == [
         "intro",
@@ -85,21 +85,21 @@ def test_pagination():
 
 
 def test_filters_name_the_kinds_ug_offers_a_list_of():
-    # The fixture's bar also offers official, bass, drums, video and ukulele lists,
-    # none a kind caracole reads.
-    assert soda_page().filters == {"chords", "tabs", "guitar-pro", "power"}
+    # The fixture's bar also offers Guitar Pro, Power Tab, official, bass, drums, video and
+    # ukulele lists, none a kind caracole reads.
+    assert soda_page().filters == {"chords", "tabs"}
 
 
 def test_absolute_filter_links_name_kinds_as_relative_ones_do():
     types = [
         {"name": "Chords", "url": SODA + "?filter=chords"},
-        {"name": "Power", "url": "/artist/soda_stereo_2946?filter=power&page=2"},
+        {"name": "Tabs", "url": "/artist/soda_stereo_2946?filter=tabs&page=2"},
         {"name": "Bass", "url": SODA + "?filter=bass"},
         {"name": "All", "url": SODA},
     ]
     data = {"artist": {"id": 2946, "name": "Soda Stereo"}, "other_tabs": []}
     data["filters"] = {"types": types}
-    assert parse_artist_page(store_page_html(data)).filters == {"chords", "power"}
+    assert parse_artist_page(store_page_html(data)).filters == {"chords", "tabs"}
 
 
 def test_a_page_with_bare_number_links_and_no_stripped_name_still_parses():
@@ -129,9 +129,9 @@ def test_helper_artist_page_round_trip():
     assert (page.artist_id, page.name, page.page, page.pages) == (5, "宋冬野", 2, 3)
     assert [(t.tab_id, t.song_name, t.kind, t.label) for t in page.tabs] == [
         (1, "斑马斑马", "chords", None),
-        (2, "安和桥", "guitar-pro", "intro"),
+        (2, "安和桥", None, "intro"),  # a Guitar Pro file: no kind caracole uses
     ]
-    assert page.filters == {"chords", "guitar-pro"}
+    assert page.filters == {"chords"}
 
 
 def test_missing_store_is_parse_error():
@@ -159,8 +159,6 @@ def test_missing_other_tabs_is_parse_error():
         ("chords", 1, SODA + "?filter=chords"),
         ("chords", 2, SODA + "?filter=chords&page=2"),
         ("tabs", 1, SODA + "?filter=tabs"),
-        ("guitar-pro", 3, SODA + "?filter=guitar_pro&page=3"),
-        ("power", 1, SODA + "?filter=power"),
         (None, 4, SODA + "?page=4"),
     ],
 )
@@ -172,7 +170,7 @@ def test_artist_page_url_replaces_query_and_trailing_slash():
     assert artist_page_url(SODA + "/?filter=tabs&page=4", kind="chords") == SODA + "?filter=chords"
 
 
-@pytest.mark.parametrize("kind,page", [("bass", 1), ("chords", 0)])
+@pytest.mark.parametrize("kind,page", [("bass", 1), ("guitar-pro", 1), ("power", 1), ("chords", 0)])
 def test_artist_page_url_rejects_unknown_kind_and_page(kind, page):
     with pytest.raises(ValueError):
         artist_page_url(SODA, kind=kind, page=page)

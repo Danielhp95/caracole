@@ -1,9 +1,9 @@
-"""The ``versions`` table: every sheet, tab or Guitar Pro version seen for a song.
+"""The ``versions`` table: every sheet or tab version seen for a song, and each kept file's.
 
 A version belongs to a slot ("sheet" or "guitar") and has a kind (chords,
-acordes, auto; tabs, guitar-pro, power). ``pick_rank`` marks the versions
-currently chosen for a slot: 1 is the best. In assisted mode a Guitar Pro pick
-has no file until you download it into the inbox.
+acordes, auto; tabs; and guitar-pro, power or score for a file gtptabs.com gave
+or you filed from the inbox, never a pick). ``pick_rank`` marks the versions
+currently chosen for a slot: 1 is the best.
 
 The sheet slot keeps one sheet, whichever site it comes from, so the rule for
 replacing a kept sheet lives here too (``replaces_sheet``).

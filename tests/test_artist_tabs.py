@@ -288,11 +288,12 @@ def test_chinese_counts_as_pinyin_only_in_whole_words_of_a_pages_names(conn):
 def test_a_merged_song_keeps_the_index_sample_of_a_better_type_than_the_page_lists(conn):
     index_rows(conn, (1081460, "soda-stereo", "persiana-americana", "chords"))
     artist_tabs.store(conn, SODA, "Soda Stereo", [_version(version_dict(
-        3001, song="Persiana Americana", artist="Soda Stereo", type="Pro", rating=4.9))], read_at="2026-10-18T00:00:00Z")
+        3001, song="Persiana Americana", artist="Soda Stereo", type="Tabs", rating=4.9))],
+        read_at="2026-10-18T00:00:00Z")
 
     (hit,) = find_index(conn, "persiana americana").songs
     assert hit.url == f"{TAB}soda-stereo/persiana-americana-chords-1081460" and hit.rating is None
-    assert dict(hit.counts) == {"chords": 1, "guitar-pro": 1} and hit.page == SODA
+    assert dict(hit.counts) == {"chords": 1, "tabs": 1} and hit.page == SODA
 
 
 def test_the_pages_best_tab_is_the_best_rated_with_its_votes_weighed_as_a_fetch_weighs_them(conn):
@@ -327,9 +328,11 @@ def test_official_non_public_and_untracked_types_are_not_kept(conn):
         version_dict(2, song="Signos", artist="Soda Stereo", access="pro"),
         version_dict(3, song="Signos", artist="Soda Stereo", type="Ukulele Chords"),
         version_dict(4, song="Signos", artist="Soda Stereo", tab_url="https://www.ultimate-guitar.com/pro/4"),
-        version_dict(5, song="Signos", artist="Soda Stereo", type="Pro"),
+        version_dict(5, song="Signos", artist="Soda Stereo", type="Pro"),  # a Guitar Pro file: nothing to count
+        version_dict(6, song="Signos", artist="Soda Stereo", type="Power"),
+        version_dict(7, song="Signos", artist="Soda Stereo", type="Tabs"),
     )], read_at="2026-10-18T00:00:00Z")
-    assert [tuple(r) for r in conn.execute("SELECT tab_id, type FROM ug_artist_tabs")] == [(5, "guitar-pro")]
+    assert [tuple(r) for r in conn.execute("SELECT tab_id, type FROM ug_artist_tabs")] == [(7, "tabs")]
 
 
 def test_an_older_read_never_overwrites_a_newer_one(conn):

@@ -70,15 +70,12 @@ button.book-line:hover { background: var(--raised); }
   font-variant-numeric: tabular-nums; }
 .set-title { display: flex; align-items: center; min-width: 0; color: inherit; text-decoration: none; }
 a.set-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
-/* A song's Guitar Pro mark, after its title: a file caracole keeps, solid in the accent; a version to download on
-   Ultimate Guitar, in outline, muted. No taller than the line's other controls; a thumb's target on a touch screen. */
+/* A song's Guitar Pro mark, after its title: a file caracole keeps, solid in the accent. No taller than the line's
+   other controls; a thumb's target on a touch screen. */
 .set-gp { flex: none; display: grid; place-items: center; width: 24px; height: 24px; margin-left: -4px;
   border-radius: 6px; color: var(--accent); }
 .set-gp svg { width: 18px; height: 18px; fill: currentColor; }
-.set-gp.on-ug { color: var(--muted); }
-.set-gp.on-ug svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
 .set-gp:hover { background: var(--raised); }
-.set-gp.on-ug:hover { color: var(--text); }
 .set-gp:focus-visible { outline-offset: -1px; }  /* clear of the title */
 .set-line h3 { min-width: 0; margin: 0; overflow: hidden; font-size: .95rem; font-weight: 600; line-height: 1.3;
   white-space: nowrap; text-overflow: ellipsis; }

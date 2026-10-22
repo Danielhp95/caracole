@@ -255,38 +255,27 @@
     }
   };
   const lineOf = (ev) => ev.currentTarget.closest(".set-line");  // a line drawn again keeps its element
-  // A song's Guitar Pro mark, after its title (the data's ``guitar``): a set list is a playlist too. A file caracole
-  // keeps is a guitar drawn solid: served, it opens caracole serve's Guitar Pro page (with alphaTab there); else, and
-  // on the file on disk, it downloads the file under the song's name, as the library's line does. A version picked
-  // on Ultimate Guitar for you to download is the guitar drawn in outline, in the muted colour: its page there, in a
-  // new tab. The guitar is body.html's #guitar-glyph, an SVG the HTML parser made (a body, its sound hole and bridge,
-  // a neck and a headstock), cloned: no namespace to name, nothing parsed here.
+  // A song's Guitar Pro mark, after its title (the data's ``guitar``): a set list is a playlist too. A Guitar Pro or
+  // Power Tab file caracole keeps is a guitar drawn solid: served, it opens caracole serve's Guitar Pro page (with
+  // alphaTab there); else, and on the file on disk, it downloads the file under the song's name, as the library's line
+  // does. The guitar is body.html's #guitar-glyph, an SVG the HTML parser made (a body, its sound hole and bridge, a
+  // neck and a headstock), cloned: no namespace to name, nothing parsed here.
   const glyph = byId("guitar-glyph");
   const guitarGlyph = () => (glyph && glyph.content && glyph.content.firstElementChild
     ? glyph.content.firstElementChild.cloneNode(true) : el("span", null, "GP"));
   const relativeHref = (href) => (/^[a-z][a-z0-9+.-]*:/i.test(href) || href.startsWith("/") ? "#" : href);
   const guitarMark = (e) => {
     const g = e.guitar && typeof e.guitar === "object" ? e.guitar : null;
-    const href = g && typeof g.href === "string" ? g.href : "";
+    const href = g && g.kind === "file" && typeof g.href === "string" ? g.href : "";
     if (!href) return null;
     const song = String(e.title || "");
     const a = el("a", "set-gp");
-    if (g.kind === "ug") {
-      if (!/^https?:/i.test(href)) return null;  // a web page, as rows.js lets one through
-      a.href = href;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      a.classList.add("on-ug");
-      a.setAttribute("aria-label", "Guitar Pro on Ultimate Guitar: " + song + ", to download there, in a new tab");
-      a.title = "Guitar Pro on Ultimate Guitar, to download there" + (g.label ? ": " + String(g.label) : "");
-    } else {
-      const page = server && server.guitar && typeof g.page === "string" && g.page ? g.page : "";
-      const file = typeof g.download === "string" && g.download ? g.download : song;
-      a.href = relativeHref(page || href);
-      if (!page && typeof g.download === "string" && g.download) a.setAttribute("download", g.download);
-      a.setAttribute("aria-label", "Guitar Pro tab: " + file + (page ? ", open it in the browser" : ", download it"));
-      a.title = page ? "Guitar Pro tab: open it in the browser" : "Guitar Pro tab: download " + file;
-    }
+    const page = server && server.guitar && typeof g.page === "string" && g.page ? g.page : "";
+    const file = typeof g.download === "string" && g.download ? g.download : song;
+    a.href = relativeHref(page || href);
+    if (!page && typeof g.download === "string" && g.download) a.setAttribute("download", g.download);
+    a.setAttribute("aria-label", "Guitar Pro tab: " + file + (page ? ", open it in the browser" : ", download it"));
+    a.title = page ? "Guitar Pro tab: open it in the browser" : "Guitar Pro tab: download " + file;
     a.appendChild(guitarGlyph());
     return a;
   };

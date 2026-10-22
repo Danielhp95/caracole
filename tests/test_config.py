@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pytest
@@ -28,7 +29,7 @@ def test_defaults(tmp_path):
     assert cfg.match == MatchPolicy(accept=90, margin=8, review=75, artist_gate=90)
     assert cfg.rank == RankPolicy(
         coverage_threshold=0.8, line_match=85, prior_votes=10, scored_sheets=3,
-        label_penalty=0.5, variant_bonus=0.25, keep_guitar_pro=2,
+        label_penalty=0.5, variant_bonus=0.25,
     )
     assert cfg.spotify.redirect_uri == "http://127.0.0.1:8888/callback"
     assert cfg.spotify.client_id is None and not cfg.spotify.enabled
@@ -171,19 +172,64 @@ def test_unknown_top_level_key_is_config_error(tmp_path):
         load_config(p, env={"HOME": str(tmp_path)})
 
 
-def test_automatic_guitar_pro_mode_is_rejected(tmp_path):
-    # Ultimate Guitar stays assisted whatever the file says: its robots.txt closes /tab/download.
-    # Automatic downloads are gtptabs.com's, switched in its own table.
-    p = write(tmp_path, 'guitar_pro_mode = "automatic"\n')
-    with pytest.raises(ConfigError, match=r"only 'assisted'.*\[providers\.gtptabs\]"):
+OBSOLETE = ("delete guitar_pro_mode and keep_guitar_pro in [rank]: caracole picks no Guitar Pro or Power Tab file "
+            "on Ultimate Guitar any more, so they do nothing")
+
+
+@pytest.mark.parametrize("mode", ["assisted", "automatic", 3])
+def test_a_file_that_still_sets_ultimate_guitars_guitar_pro_keys_loads_with_one_warning(tmp_path, caplog, mode):
+    # caracole picks no Guitar Pro version on Ultimate Guitar any more: an older file loads (the generated one of a
+    # NixOS system that set them, say), each key ignored whatever it says, and one warning names them to delete.
+    toml = f"guitar_pro_mode = {mode!r}\n[rank]\nkeep_guitar_pro = 1.5\nscored_sheets = 2\n".replace("'", '"')
+    p = write(tmp_path, toml)
+    with caplog.at_level(logging.WARNING, logger="caracole.config"):
+        cfg = load_config(p, env={"HOME": str(tmp_path)})
+    assert cfg.rank == RankPolicy(scored_sheets=2) and cfg.provider("gtptabs").enabled
+    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [(logging.WARNING, f"{p}: {OBSOLETE}.")]
+
+
+def test_a_file_that_sets_one_of_them_is_told_that_one(tmp_path, caplog):
+    p = write(tmp_path, "[rank]\nkeep_guitar_pro = 2\n")
+    with caplog.at_level(logging.WARNING, logger="caracole.config"):
         load_config(p, env={"HOME": str(tmp_path)})
+    assert [r.getMessage() for r in caplog.records] == [
+        f"{p}: delete keep_guitar_pro in [rank]: caracole picks no Guitar Pro or Power Tab file on Ultimate Guitar "
+        "any more, so it does nothing."]
 
 
-def test_assisted_guitar_pro_mode_still_loads(tmp_path):
-    # Older files, and the example in docs/usage.md, set it; it names UG's mode, which is fixed.
-    p = write(tmp_path, 'guitar_pro_mode = "assisted"\n')
-    cfg = load_config(p, env={"HOME": str(tmp_path)})
-    assert cfg.provider("gtptabs").enabled
+def test_a_file_without_them_loads_with_no_warning(tmp_path, caplog):
+    with caplog.at_level(logging.WARNING, logger="caracole.config"):
+        load_config(write(tmp_path, "[rank]\nscored_sheets = 2\n"), env={"HOME": str(tmp_path)})
+        load_config(None, env={"HOME": str(tmp_path)})
+    assert caplog.records == []
+
+
+def test_a_command_says_once_on_stderr_what_to_delete(tmp_path, monkeypatch):
+    import sys
+    import types
+
+    import typer
+    from typer.testing import CliRunner
+
+    from caracole import cli
+    from caracole.commands._common import load_cfg
+
+    fake = types.ModuleType("caracole.commands.zz_config")
+
+    def register(app: typer.Typer) -> None:
+        @app.command("zz-config")
+        def loaded(ctx: typer.Context) -> None:
+            load_cfg(ctx)
+            typer.echo("loaded")
+
+    fake.register = register
+    monkeypatch.setitem(sys.modules, "caracole.commands.zz_config", fake)
+    p = write(tmp_path, 'guitar_pro_mode = "assisted"\n[rank]\nkeep_guitar_pro = 2\n')
+    result = CliRunner().invoke(cli.build_app(extra_modules=["caracole.commands.zz_config"]),
+                                ["--config", str(p), "zz-config"])
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "loaded\n"
+    assert result.stderr.splitlines() == [f"warning: {p}: {OBSOLETE}."]
 
 
 def test_gtptabs_downloads_are_on_by_default_with_a_small_budget(tmp_path):
@@ -383,7 +429,6 @@ def test_an_unknown_provider_is_a_config_error(tmp_path):
         ("[rank]\nscored_sheets = 2.5\n", "scored_sheets"),
         ("[rank]\nlabel_penalty = -0.5\n", "label_penalty"),
         ("[rank]\nvariant_bonus = false\n", "variant_bonus"),
-        ("[rank]\nkeep_guitar_pro = 1.5\n", "keep_guitar_pro"),
     ],
 )
 def test_match_and_rank_values_of_the_wrong_kind_are_config_errors(tmp_path, toml, named):
@@ -401,11 +446,11 @@ def test_match_and_rank_numbers_in_range_load(tmp_path):
     cfg = load(tmp_path, (
         "[match]\naccept = 92.5\nreview = 70\nmargin = 0\n"
         "[rank]\ncoverage_threshold = 0.75\nline_match = 80.5\n"
-        "scored_sheets = 2\nkeep_guitar_pro = 0\n"
+        "scored_sheets = 2\n"
     ))
     assert (cfg.match.accept, cfg.match.review, cfg.match.margin) == (92.5, 70, 0)
     assert (cfg.rank.coverage_threshold, cfg.rank.line_match) == (0.75, 80.5)
-    assert (cfg.rank.scored_sheets, cfg.rank.keep_guitar_pro) == (2, 0)
+    assert cfg.rank.scored_sheets == 2
 
 
 @pytest.mark.parametrize(

@@ -25,10 +25,8 @@ Every text is data, which the script puts in the page with ``textContent``.
   Guitar Pro or Power Tab file caracole keeps for the song (``inbox.guitar_files``, still in its folder),
   ``{"kind": "file", "href", "download", "page"}``, its link relative to index.html, percent-encoded, the name
   it downloads under (download_names.py) and caracole serve's Guitar Pro page of it (``library_page.guitar_pages``;
-  None for a Power Tab file, which alphaTab can't read), one the browser shows first; else the first version
-  caracole picked on Ultimate Guitar for you to download (``library_page.guitar_pro_picks``),
-  ``{"kind": "ug", "href", "label"}``, its page there and what it is ("Guitar Pro ver 2 · 4.2★ · 5 votes");
-  else None. The songbook's files never show it: it is the tab's, a set list's as a playlist's;
+  None for a Power Tab file, which alphaTab can't read), one the browser shows first; else None. The songbook's
+  files never show it: it is the tab's, a set list's as a playlist's;
 - ``error``: why songbooks.toml can't be read (then no songbooks), else None;
 - ``keys``, ``modes`` and ``capoMax``: what a setting's menus offer: each pitch class's name as chord sheets
   write it most (``theory.spelling``), the modes with the viewer's names ("Major", "Dorian"...), and the
@@ -76,7 +74,7 @@ def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) 
     except SongbookError as e:
         return {"books": [], "error": f"songbooks.toml can't be read: {e}. Fix it, and the songbooks are back; "
                                       "until then each keeps its files.", **shared}
-    guitar = _Guitar.read(conn) if books else _Guitar({}, {}, {})
+    guitar = _Guitar.read(conn) if books else _Guitar({}, {})
     return {"books": [_book(conn, cfg, overrides, book, guitar) for book in books], "error": None, **shared}
 
 
@@ -112,29 +110,26 @@ def _book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Any
 
 @dataclass(frozen=True)
 class _Guitar:
-    """What caracole found of Guitar Pro for the songs, read once for every songbook: the files it keeps
-    (``inbox.guitar_files``), by song, in their order; caracole serve's Guitar Pro page of each it shows, by song
-    and name (``library_page.guitar_pages``); and the versions picked on a site to download by hand
-    (``library_page.guitar_pro_picks``)."""
+    """What caracole keeps of Guitar Pro for the songs, read once for every songbook: the files
+    (``inbox.guitar_files``), by song, in their order, and caracole serve's Guitar Pro page of each it shows, by
+    song and name (``library_page.guitar_pages``)."""
 
     files: dict[int, list[GuitarFile]]
     pages: dict[int, dict[str, str]]
-    picks: dict[int, list[dict[str, str]]]
 
     @classmethod
     def read(cls, conn: sqlite3.Connection) -> _Guitar:
         from caracole.inbox import guitar_files
-        from caracole.library_page import guitar_pages, guitar_pro_picks
+        from caracole.library_page import guitar_pages
 
         files: dict[int, list[GuitarFile]] = {}
         for f in guitar_files(conn):
             files.setdefault(f.song_id, []).append(f)
-        return cls(files, guitar_pages(conn), guitar_pro_picks(conn))
+        return cls(files, guitar_pages(conn))
 
     def mark(self, library_dir: Path, song: Song) -> dict[str, Any] | None:
         """The song's Guitar Pro mark, as the module's docstring says: a file it keeps that is still in the library
-        (a regular file, no link followed), one caracole serve shows first; else its first pick on Ultimate
-        Guitar; else None."""
+        (a regular file, no link followed), one caracole serve shows first; else None."""
         from caracole.download_names import download_name
         from caracole.normalize import clean_title
 
@@ -144,8 +139,7 @@ class _Guitar:
             f = next((f for f in kept if f.name in shown), kept[0])
             download = download_name(song.artist, clean_title(song.title), f.name)
             return {"kind": "file", "href": quote(f.path), "download": download, "page": shown.get(f.name)}
-        pick = next((p for p in self.picks.get(song.id, []) if p.get("source") == "ug"), None)
-        return {"kind": "ug", "href": pick["href"], "label": pick["label"]} if pick is not None else None
+        return None
 
 
 def _regular(path: Path) -> bool:

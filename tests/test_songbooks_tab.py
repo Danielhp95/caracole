@@ -627,7 +627,7 @@ UG_PICK = "https://tabs.ultimate-guitar.com/tab/555890"
 @pytest.fixture
 def guitars(conn, cfg, library):
     """Creep with a Guitar Pro file caracole keeps (gtptabs.com's), De Música Ligera with a version picked on
-    Ultimate Guitar for you to download, Hysteria with neither."""
+    Ultimate Guitar when caracole still picked them there (schema 9 takes them out), Hysteria with neither."""
     keep_guitar(conn, cfg, library["Creep"], SYNTHETIC.read_bytes(), name="guitar-1.gp")
     soda = library["De Música Ligera"]
     vid = upsert_version(conn, provider="ug", tab_id="555890", song_id=soda.id, slot="guitar", kind="guitar-pro",
@@ -638,19 +638,18 @@ def guitars(conn, cfg, library):
 
 
 # Each song of the set list: its title, then its mark's address, classes, name, download, target and rel, and how
-# its guitar is drawn (filled, or "none" for an outline); its title alone without one.
+# its guitar is drawn (filled, or "none" for an outline); its title alone without one. A pick on Ultimate Guitar is
+# no mark: caracole offers no Guitar Pro file to download there.
 MARKS = """Array.from(document.querySelectorAll('#songbooks .book .set-line:not(.gone)')).map((li) => {
   const a = li.querySelector('.set-gp'), title = li.querySelector('h3').textContent;
   return a ? [title, a.getAttribute('href'), a.className, a.getAttribute('aria-label'), a.getAttribute('download'),
               a.target, a.rel, getComputedStyle(a.querySelector('svg path')).fill === 'none' ? 'outline' : 'solid']
     : [title]; })"""
-ON_UG = ["De Música Ligera", UG_PICK, "set-gp on-ug",
-         "Guitar Pro on Ultimate Guitar: De Música Ligera, to download there, in a new tab", None, "_blank",
-         "noopener noreferrer", "outline"]
+ON_UG = ["De Música Ligera"]
 
 
 @SIZES
-def test_a_songs_guitar_pro_mark_opens_its_page_served_and_its_pick_on_ultimate_guitar_there(serve, cfg, guitars,
+def test_a_songs_guitar_pro_mark_opens_its_page_served_and_a_pick_on_ultimate_guitar_is_none(serve, cfg, guitars,
                                                                                               tmp_path, size):
     url, _ = serve(Fake(cfg), alphatab=alphatab_dir())
     with opened(tmp_path, *size) as page:
@@ -660,8 +659,7 @@ def test_a_songs_guitar_pro_mark_opens_its_page_served_and_its_pick_on_ultimate_
              "Guitar Pro tab: Radiohead - Creep.gp, open it in the browser", None, "", "", "solid"],
             ["Hysteria"], ON_UG]
         assert page.js("document.querySelector('#songbooks .set-gp').title") == "Guitar Pro tab: open it in the browser"
-        assert page.js("document.querySelector('#songbooks .set-gp.on-ug').title") == (
-            "Guitar Pro on Ultimate Guitar, to download there: Guitar Pro ver 2 · 4.2★ · 5 votes")
+        assert page.js(f"document.querySelector('#songbooks a[href={json.dumps(UG_PICK)}]')") is None
         assert page.js("fetch(document.querySelector('#songbooks .set-gp').href).then((r) => r.status)") == 200
         # Next to its title, on its line, before what else the line holds; a key's reach (Tab) like any link.
         beside = page.js("""Array.from(document.querySelectorAll('#songbooks .set-gp')).map((a) => {
@@ -670,7 +668,7 @@ def test_a_songs_guitar_pro_mark_opens_its_page_served_and_its_pick_on_ultimate_
             const after = li.querySelector('.set-act, .set-by').getBoundingClientRect();
             return box.left >= title.right - 0.5 && box.top < title.bottom && box.bottom > title.top
               && (after.top >= box.bottom - 0.5 || after.left >= box.right - 0.5); })""")
-        assert beside == [True, True], beside
+        assert beside == [True], beside
         assert page.js("document.querySelector('#songbooks .set-gp').tabIndex") == 0
         if size[0] < 500:  # a touch screen: a thumb's target, and these titles still whole beside it
             short = page.js(small_targets())

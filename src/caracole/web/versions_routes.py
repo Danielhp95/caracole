@@ -29,7 +29,7 @@ sheet.html), a tab
 that isn't a number (400) or isn't one of the song's chords versions on Ultimate Guitar (404), and, posted, what
 can't be done (409): Make this the one on the one, Keep it on a version kept already, either on a version UG no
 longer has or one under ``[block]`` (as ``caracole versions`` refuses it), Back to caracole's pick on a song
-with no ``[pin]`` of its sheet (a Guitar Pro or tab pin stays, as ``caracole versions --clear`` leaves it), and an
+with no ``[pin]`` of its sheet (any other pin stays, a tab's, as ``caracole versions --clear`` leaves it), and an
 ignored song. The page itself says
 so for those, and offers no form.
 """
@@ -70,7 +70,7 @@ class _Asked:
     """What a versions page or post names: the song, the viewer it came from (its library path) and its folder (as
     a quoted address), the version (None for Back to caracole's pick), every version, what the song's sheet is
     now, in words, the song's ``[pin]`` tabs that choose its sheet (``caracole versions --clear`` takes out those
-    alone, never a Guitar Pro or tab pin) and every one it has, the tabs under ``[block]``, and the viewer Back to
+    alone, never another pin, a tab's) and every one it has, the tabs under ``[block]``, and the viewer Back to
     the sheet opens."""
 
     song: Song

@@ -48,7 +48,6 @@ music_dir = "~/Music"             # tracks you bought; read only, used only for 
 # overrides_file = "..."          # default: overrides.toml in library_dir
 # wanted_file = "..."             # default: wanted.txt in library_dir
 user_agent = "caracole/0.1 (personal tab library)"
-guitar_pro_mode = "assisted"      # UG's mode, the only one: you click its Guitar Pro pages
 chordpro_bin = "chordpro"         # the program that renders PDFs
 ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouTube"
 # pdf_fonts = "/path/to/folder"   # or $CARACOLE_PDF_FONTS; see "Fonts in the PDFs"
@@ -97,14 +96,13 @@ margin = 8                        # ...when the next different title is this far
 review = 75                       # from here up to an accept, ask you (at most accept)
 artist_gate = 90                  # how close another artist's name must be to be tried
 
-[rank]                            # which sheets and guitar parts are kept
+[rank]                            # which sheets and text tabs are kept
 coverage_threshold = 0.8          # a sheet is complete when it covers 80% of the lyric lines (0-1)
 line_match = 85                   # how close a lyric line must be to count as covered (0-100)
 prior_votes = 10                  # m in the Bayesian rating (v·R + m·C) / (v + m)
 scored_sheets = 3                 # sheets per song scored for coverage: the top 3 by rating
 label_penalty = 0.5               # off the rating of an intro, solo, outro, riff or lesson
 variant_bonus = 0.25              # onto an acoustic or live version, when your song is one
-keep_guitar_pro = 2               # Guitar Pro or Power Tab pages picked per song
 
 [autochords]                      # read only by `caracole autochords`
 # btc_weights = "/path/to/weights.pt"         # or $CARACOLE_BTC_WEIGHTS
@@ -113,9 +111,17 @@ device = "cpu"                    # where the models run
 ```
 
 Caracole keeps one sheet and one text tab per song, and beside the sheet the
-other Ultimate Guitar versions it scored (`scored_sheets`); only the number of
-Guitar Pro picks is a setting of its own. Scores and thresholds can't be negative, scores stop
-at 100, and `scored_sheets` and `keep_guitar_pro` are whole numbers.
+other Ultimate Guitar versions it scored (`scored_sheets`). Scores and
+thresholds can't be negative, scores stop at 100, and `scored_sheets` is a
+whole number.
+
+**Keys from an older caracole.** `guitar_pro_mode` and `keep_guitar_pro` under
+`[rank]` set how caracole picked Guitar Pro and Power Tab versions on Ultimate
+Guitar for you to download, which it no longer does. A file that still has
+them loads all the same, whatever they say, and every command warns once on
+stderr (`warning: /etc/caracole/caracole.toml: delete guitar_pro_mode and
+keep_guitar_pro in [rank]: …`): delete them, from
+`services.caracole.settings` on NixOS.
 
 **Folders.** With `data_dir`, everything is in one folder: `library_dir`,
 `music_dir`, `state_dir` and `cache_dir` default to its `library`, `music`,
@@ -179,7 +185,7 @@ after `lookup_requests` requests to a site; every lookup of the last hour
 shares `lookup_per_hour`, so a script or a stuck button can't turn lookups
 into a crawl. Half of that hour is kept for sheets: what follows a lookup's
 sheet, which the nightly run would do anyway (Ultimate Guitar's other sheets
-scored, guitar parts and the text tab; LaCuerda's for a song with a sheet
+scored and the text tab; LaCuerda's for a song with a sheet
 already), stops once the hour's lookups have spent half of `lookup_per_hour`,
 so an evening of songs looked up on the spot keeps getting sheets (about
 twenty to thirty an hour with the defaults). What a lookup leaves undone waits
@@ -196,12 +202,13 @@ YouTube is on only where caracole can make chords of what it downloads (see
 [Audio from YouTube](#audio-from-youtube)); its budget counts yt-dlp runs, not
 requests.
 
-**Guitar Pro files** come two ways. Ultimate Guitar's robots.txt closes its
-download endpoint to bots, so its Guitar Pro pages are yours to click:
-`guitar_pro_mode` is Ultimate Guitar's, and takes only `"assisted"` (any other
-value is an error). gtptabs.com's robots.txt leaves its downloads open, so
-caracole downloads a file there for each song that has none (`caracole gtptabs`,
-in [One step at a time](#one-step-at-a-time)).
+**Guitar Pro files** come two ways. gtptabs.com's robots.txt leaves its
+downloads open, so caracole downloads a file there for each song that has none
+(`caracole gtptabs`, in [One step at a time](#one-step-at-a-time)); and one you
+get anywhere yourself, dropped into `_inbox/` named as the song is, is filed
+under its song (`caracole scan`). caracole picks none on Ultimate Guitar, whose
+robots.txt closes its downloads to bots: from there it takes chords and text
+tabs alone.
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -395,7 +402,7 @@ at once, sheet first, and says where the sheet is the moment it is kept:
     PDF: made.
     PDF: /home/you/Tabs/Radiohead/Creep/sheet.pdf
     Lyrics: found.
-    Ultimate Guitar: sheet 4170 · Guitar Pro 4174 · tab 4172 · kept beside it: tab 4169, tab 4171.
+    Ultimate Guitar: sheet 4170 · tab 4172 · kept beside it: tab 4169, tab 4171.
     Sheet: a better one replaced it, in /home/you/Tabs/Radiohead/Creep/sheet.txt.
     LaCuerda: skipped: not a song for LaCuerda: not Spanish, a complete sheet already, or asked this month.
     gtptabs.com: Guitar Pro file downloaded.
@@ -424,8 +431,8 @@ In order:
 6. **Ultimate Guitar again**, as the nightly run would: the top sheets are
    scored against the lyrics, and a more complete one replaces the first;
    the others scored are kept beside it, said as `kept beside it: tab 4169,
-   tab 4171` (see [caracole versions](#caracole-versions)); then the guitar
-   parts and the text tab.
+   tab 4171` (see [caracole versions](#caracole-versions)); then the text
+   tab.
 7. **LaCuerda**, for a Spanish song without a complete sheet, and
    **gtptabs.com**, for a Guitar Pro file, from the index the nightly run
    keeps.
@@ -461,15 +468,19 @@ Options:
   under `[match]` in overrides.toml, so the matcher never asks you about it.
 - `--tab URL` is the tab to use, its page's address or its id: it is
   recorded under `[pin]`, in place of the song's pin of the same kind (a
-  chords sheet, a text tab, a Guitar Pro or Power Tab file, by the offline
-  index), and beside its pins of the other kinds: a Guitar Pro version picked
-  after a chords sheet keeps the sheet you chose.
+  chords sheet or a text tab, by the offline index), and beside its pins of
+  the other kind: a text tab picked after a chords sheet keeps the sheet you
+  chose. A pin of a Guitar Pro or Power Tab page, from when caracole still
+  picked them on Ultimate Guitar, pins nothing, and the tab you pick takes its
+  place. Such a page asked for as `--tab` (the offline index says what it is)
+  is refused before anything is added or recorded: caracole uses none on
+  Ultimate Guitar, and a Guitar Pro file you get yourself goes into `_inbox/`.
 - `--lacuerda URL` is the LaCuerda song to keep the sheet of, its page's
   address (its best Letra y Acordes version) or a version's
   (`https://acordes.lacuerda.net/estopa/como_camaron-2.shtml`): it is recorded
   under `[lacuerda]`, and kept as the sheet whatever the song's language or
   its coverage of the lyrics; Ultimate Guitar's sheets never replace it, and
-  the song gets Ultimate Guitar's guitar parts all the same. A `[pin]` of an
+  the song gets Ultimate Guitar's text tab all the same. A `[pin]` of an
   Ultimate Guitar sheet wins over it.
 - `--album ALBUM` and `--duration M:SS`, for a song new to the library, as in
   `caracole add`.
@@ -526,8 +537,8 @@ says so, and no version is the one.
   that version's page, so it is recorded under `[pin]` in overrides.toml, and
   the title, the PDF, the viewer and the songbooks use it. caracole's top
   versions stay kept beside it.
-- `--clear` takes the song's chords pins out of `[pin]` (a Guitar Pro or a
-  text tab pin stays), comments and the rest of the file kept, then looks the
+- `--clear` takes the song's chords pins out of `[pin]` (a text tab pin
+  stays), comments and the rest of the file kept, then looks the
   song up again: caracole's pick is the sheet once more, and a version you
   had chosen outside the top three leaves the folder. Without a pin it says
   so and changes nothing.
@@ -635,7 +646,7 @@ The same goes wherever caracole meets a name it didn't write: a song you
 wrote in two scripts against the index (UG's sitemaps write names in Latin
 letters only, so `DAOKO - 打上花火 (Uchiage Hanabi)` meets
 `daoko/uchiage-hanabi`), a purchase tagged that way, a Guitar Pro download
-UG named so, and a search of the artist pages caracole has read (斑马, Banma
+a site named so, and a search of the artist pages caracole has read (斑马, Banma
 and 宋冬野 all find "斑马 斑马 Banma Banma Zebra Zebra").
 
 UG also lists some of these titles in Latin letters alone, the romanization
@@ -724,7 +735,9 @@ With some songs listed:
 Caracole never searches Ultimate Guitar, whose robots.txt disallows its search
 page. It reads the sitemaps UG publishes for crawlers instead, and keeps a
 local index of every chords, tabs, Guitar Pro and Power Tab page: about 1.6
-million. `caracole index build` reads the sitemap index and its 41 tab sitemaps,
+million. Its Guitar Pro and Power Tab rows only tell the matcher a song is on
+UG (whose chords may then be on its artist's page): caracole reads, counts and
+offers none of those pages. `caracole index build` reads the sitemap index and its 41 tab sitemaps,
 one request at a time, 10–20 seconds apart: about 42 requests, 70 MB and 10
 minutes. Its budget is 100 requests, more than a night's, so one build is
 enough. A block or a spent budget keeps the sitemaps read so far, and the next
@@ -917,7 +930,7 @@ configuration it would take, and why it waits.
 3. **index**: refresh the index, and mark the songs that have new tabs.
 4. **match**: match every song again, locally.
 5. **lyrics**: ask LRCLIB for the songs that have no lyrics yet.
-6. **fetch**: rank and keep Ultimate Guitar sheets and guitar parts.
+6. **fetch**: rank and keep Ultimate Guitar sheets and text tabs.
 7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet,
    then read LaCuerda's listings of every artist into a local index, for
    searches, with what the sheets left of its budget (once the library has a
@@ -989,8 +1002,8 @@ shows its step as skipped.
 refresh included, 10–20 seconds apart and one at a time. It settles the sheet
 of every waiting song first, newest songs first: a few requests a song, for
 its versions pages and then up to three sheets scored against the lyrics. What
-is left goes to guitar parts, about a page per type (Guitar Pro, Power Tab,
-tabs) a song. Before sheets came first, a live run spent 8–12 requests a song.
+is left goes to text tabs, about a page a song. Before sheets came first, a
+live run spent 8–12 requests a song.
 A long list therefore fills in over a few nights, and a song the budget cut
 off half-way resumes from the cache the next night.
 
@@ -1102,7 +1115,7 @@ and cache.
   to its end replaces what that kind's list gave before (a tab UG took down
   goes), a list the page cap cut short only adds, and an artist page UG answers
   404 for loses its tabs. Per song it prints what it kept, as
-  `Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)`,
+  `Artist - Title: sheet 101 · tab 402 (3 requests)`,
   or `nothing kept`, then the totals. `--song` fetches that one song now, even
   when nothing about it changed; the song must be in the library and matched,
   or not found or reviewed on its title alone or on names that aren't quite
@@ -1719,17 +1732,10 @@ when it has something in it:
 - **New Guitar Pro files from gtptabs.com.** The files caracole downloaded in
   the last 7 days, one for each song that had none, each with a link to its
   page on gtptabs.com. Open each in Guitar Pro or TuxGuitar: if it isn't the
-  version you want, any Ultimate Guitar page below is still there to click.
-- **Guitar Pro pages to click.** The Guitar Pro and Power Tab versions caracole
-  picked for each song, best first, with version, rating and votes. Each is
-  labelled with its rank, as `guitar-1`: the name its file gets, unless a file
-  you downloaded earlier holds that number (then it gets the lowest free one).
-  Open each page, click its Download button, and drop the file into
-  `_inbox/`; the next run, or `caracole scan`, files it under its song. Caracole
-  never downloads these itself: UG's robots.txt closes its download endpoint
-  to bots. A song with a file from gtptabs.com says so, as
-  `(guitar-1.gpx came from gtptabs.com)`: its UG pages stay in case you want
-  another version.
+  version you want, drop the one you want into `_inbox/`, named as the song
+  is (`Artist - Title.gp5`), and caracole files it beside this one. caracole
+  lists no Guitar Pro page of Ultimate Guitar's to download: it picks none
+  there.
 - **Scores on MuseScore.** For each song with no score filed, up to three
   MuseScore song pages with its title, oldest first, each a possible match:
   MuseScore's sitemaps give titles only, never the artist. Open one, pick a
@@ -1743,7 +1749,7 @@ when it has something in it:
   alone, even when it has nothing to list: the pages listed then come from the
   sitemaps read before, and with none read, you can still find a score on
   musescore.com yourself and drop it into `_inbox/` named the same way.
-- **Guitar parts not found.** Songs UG has no guitar part for, and with no
+- **Guitar parts not found.** Songs UG has no text tab for, and with no
   Guitar Pro or Power Tab file kept (from `_inbox/` or gtptabs.com), with
   Songsterr and YouTube links.
 - **Inbox: files caracole couldn't place.** Rename such a file, a Guitar Pro
@@ -1919,8 +1925,7 @@ exports, the sheet's PDFs in other versions, each
 by its version (`G Dorian, capo 0`: see `caracole render --version` and Export
 PDF of this version); its other files (the PDF, the text, the ChordPro file,
 the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files, which
-caracole serve also opens in the browser: see [caracole serve](#caracole-serve)) and the
-Guitar Pro versions to download from Ultimate Guitar; its MuseScore pages,
+caracole serve also opens in the browser: see [caracole serve](#caracole-serve)); its MuseScore pages,
 each a possible match, as on the to-do page; for a song without a sheet, its
 search and buy links; its progressions, as it plays them ("vi–IV–I–V"), each a
 button that shows your songs with that progression (below); **Add to a songbook…** (see Songbooks, below), for a
@@ -2051,16 +2056,15 @@ title (which opens its sheet), its artist and where the songbook plays it, its
 chip: "G Dorian" for a song with a setting of its own there, its own
 version's key ("A Minor") for one without, or why it has no sheet ("No
 sheet yet", "Not in the library"). A capo is named only when the song is
-played with one ("E Minor, capo 2"), never as "capo 0". A song caracole found
-a Guitar Pro file for has a small guitar after its title, so a set list tells
+played with one ("E Minor, capo 2"), never as "capo 0". A song caracole
+keeps a Guitar Pro file for has a small guitar after its title, so a set list tells
 you which songs you can play along to as tabs too: drawn solid, a Guitar Pro or
 Power Tab file the library keeps (filed from `_inbox/` or downloaded from
 gtptabs.com), which on `caracole serve` opens its Guitar Pro page (see [Guitar
 Pro files in the browser](#caracole-serve)), and otherwise (a Power Tab file, a
 server without alphaTab, the file on disk) downloads the file under the song's
-name ("Radiohead - Creep.gp5"); drawn in outline, a version caracole picked on
-Ultimate Guitar for you to download, its page there in a new tab. A song with
-neither has none. The guitar is the tab's alone: the songbook's PDF, phone page
+name ("Radiohead - Creep.gp5"). A song without one has none. The guitar is the
+tab's alone: the songbook's PDF, phone page
 and ChordPro file don't change. Its files come first: **PDF**, **Phone
 page** (`songbook.html`) and **ChordPro**, each opened in the same tab. The
 address remembers the songbook open (`#tab=songbooks&book=Campfire`).
@@ -2445,7 +2449,7 @@ A site's mark is named for screen readers ("from Ultimate Guitar").
 
 A site's icon is its favicon. The nightly run's icons step asks each site for
 it once, from the first night the library has something from that site (a
-sheet, a Guitar Pro page to click, lyrics, MuseScore's pages), with that
+sheet, a tab, a file, lyrics, MuseScore's pages), with that
 site's own polite client: its robots.txt, budget, pauses and cooldown, and
 every answer cached forever. It asks for `/favicon.ico`
 first; when that gives no icon, the home page, for an `<link rel="icon">` or
@@ -2482,7 +2486,7 @@ offline Ultimate Guitar index and LaCuerda's (see below):
       Radiohead - Creep · wanted, no sheet yet · no folder yet
 
     On Ultimate Guitar (offline index)
-      1. [UG] Radiohead - Creep · chords×2 tabs×1 guitar-pro×1 (incl. acoustic)
+      1. [UG] Radiohead - Creep · chords×2 tabs×1 (incl. acoustic)
          https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169
          in your library
       2. [UG] Stone Temple Pilots - Creep · chords×1
@@ -2519,8 +2523,9 @@ offline Ultimate Guitar index and LaCuerda's (see below):
   `caracole add` brings it back, it is in your library and not in this group.
 
 - **On Ultimate Guitar**: numbered hits from the offline index, each tagged
-  `[UG]`, with its tabs per type, one of its pages, and the `caracole add`
-  line to paste. The UG artist pages caracole has read (see
+  `[UG]`, with its tabs per type (chords and text tabs: the index's Guitar Pro
+  and Power Tab pages count for nothing, and a song UG has only as those is no
+  hit), one of its pages, and the `caracole add` line to paste. The UG artist pages caracole has read (see
   [caracole fetch](#one-step-at-a-time)) are searched too: every tab each one
   listed, bare ids included, which UG's sitemaps list without names. Their
   names are compared in each script UG writes them in ("Song Dongye (宋冬野)"
@@ -2571,7 +2576,7 @@ numbered in one list:
     …
     On Ultimate Guitar (offline index)
       Oasis, an artist: 195 songs (1,193 tabs). The most tabbed:
-      1. [UG] Oasis - Dont Look Back In Anger · chords×10 tabs×12 guitar-pro×9 power×1
+      1. [UG] Oasis - Dont Look Back In Anger · chords×10 tabs×12
          https://tabs.ultimate-guitar.com/tab/oasis/dont-look-back-in-anger-chords-6097
          caracole add "Oasis" "Dont Look Back In Anger"
       …
@@ -3182,7 +3187,8 @@ is no progression exits with status 2.
     started ("started 12 s ago"), its line ("Rendering the sheet…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
     Song, Match, Sheet, PDF, Lyrics, Guitar Pro (Ultimate Guitar's second
-    pass, LaCuerda's and gtptabs.com's) and Songbooks, leaving out a step it
+    pass, its sheets scored and its tab, LaCuerda's and gtptabs.com's) and
+    Songbooks, leaving out a step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
     of a song with no sheet); for a request of other commands, its commands.
@@ -3281,8 +3287,8 @@ is no progression exits with status 2.
   caracole keeps by itself is kept already there (sent anyway: 409), and
   stays only while caracole's ranking keeps it among the runners-up; `caracole
   versions SONG --keep TAB` on it makes it yours, kept whatever the ranking. **Back to caracole's pick**, on a song with a
-  `[pin]` that chooses its sheet (a Guitar Pro or tab pin stays, as `--clear`
-  leaves it), queues `caracole versions SONG --clear`. Each is the song's
+  `[pin]` that chooses its sheet (a tab pin stays, as `--clear` leaves it),
+  queues `caracole versions SONG --clear`. Each is the song's
   request, as a lookup is: its card says how it goes, stage by stage, the same
   one asked twice is queued once, and Make this the one takes the place of the
   song's lookup still waiting. Keep it never looks the song up, so a lookup
@@ -3721,8 +3727,8 @@ tab_ids = [1601668]
   artist part of a tab's address, as in `/tab/bob-marley/...`.
 - **`[match]`** points one song at one UG song. Unlike a pin, it still picks
   up tabs added to that song later. Correct a `[match]` or a `[pin]`, and
-  what the old one brought goes: the next fetch takes the song's sheet, tab
-  and Guitar Pro picks from the new one. When the new one has no sheet, the
+  what the old one brought goes: the next fetch takes the song's sheet and tab
+  from the new one. When the new one has no sheet, the
   old sheet goes all the same, and the next render takes its `sheet.cho` and
   `sheet.pdf` along.
 - **`[artist_url]`** is keyed by the artist's name as your songs write it, or
@@ -3748,10 +3754,12 @@ tab_ids = [1601668]
   a query or a fragment included, without `https://` too, and from a language
   edition (`https://es.ultimate-guitar.com/tab/4180894` is
   `https://tabs.ultimate-guitar.com/tab/4180894`). Pinned tabs replace the
-  candidates of their kind (sheet, Guitar Pro, tab), in the order given. A pin
-  whose page is gone, is Official, or is closed to bots by robots.txt (UG's
-  `/tab/track/` pages), or redirects to such a page, pins nothing, and the
-  song's other versions compete for that kind. `caracole versions --clear`
+  candidates of their kind (sheet, tab), in the order given. A pin whose page
+  is gone, is Official, or is closed to bots by robots.txt (UG's `/tab/track/`
+  pages), or redirects to such a page, pins nothing, and the song's other
+  versions compete for that kind. Nor does a pin of a Guitar Pro or Power Tab
+  page, written when caracole still picked those on Ultimate Guitar: the index
+  says what it is, so its page isn't even asked for. `caracole versions --clear`
   takes a song's chords pins out again.
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.

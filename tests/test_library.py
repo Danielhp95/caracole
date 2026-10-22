@@ -179,19 +179,19 @@ def test_stale_versions_are_out_of_the_running_until_recorded_again(conn):
     # A corrected match: what UG listed under the old one is another song's, until the new one lists it.
     s = add_song(conn)
     sheet, gone = _version(conn, s, 1), _version(conn, s, 3)
-    gp = _version(conn, s, 2, slot="guitar", kind="guitar-pro")
+    tab = _version(conn, s, 2, slot="guitar", kind="tabs")
     lacuerda = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/signos-1", song_id=s.id, slot="sheet",
                               kind="acordes", rating=0, votes=0, version=1, label=None,
                               url="https://acordes.lacuerda.net/soda_stereo/signos.shtml", raw={},
                               now="2026-10-18T03:30:00Z")
-    set_picks(conn, s.id, ["guitar-pro"], [gp])
+    set_picks(conn, s.id, ["tabs"], [tab])
     mark_gone(conn, gone)
 
     assert mark_stale(conn, s.id, "ug") == 2
 
     assert [v.id for v in song_versions(conn, s.id)] == [lacuerda]
     rows = {v.id: (v.stale, v.gone, v.pick_rank) for v in song_versions(conn, s.id, include_gone=True)}
-    assert rows == {sheet: (True, False, None), gp: (True, False, None), gone: (False, True, None),
+    assert rows == {sheet: (True, False, None), tab: (True, False, None), gone: (False, True, None),
                     lacuerda: (False, False, None)}
     assert _version(conn, s, 1) == sheet  # listed again under the new match
     assert [v.id for v in song_versions(conn, s.id)] == [sheet, lacuerda]
@@ -206,15 +206,15 @@ def test_set_coverage(conn):
 
 def test_set_picks_ranks_and_clears(conn):
     s = add_song(conn)
-    a = _version(conn, s, 1, slot="guitar", kind="guitar-pro")
-    b = _version(conn, s, 2, slot="guitar", kind="power")
-    t = _version(conn, s, 3, slot="guitar", kind="tabs")
-    set_picks(conn, s.id, ["guitar-pro", "power"], [b, a])
-    set_picks(conn, s.id, ["tabs"], [t])
-    assert [v.id for v in picks(conn, s.id, ["guitar-pro", "power"])] == [b, a]
-    set_picks(conn, s.id, ["guitar-pro", "power"], [a])
-    assert [v.id for v in picks(conn, s.id, ["guitar-pro", "power"])] == [a]
-    assert [v.id for v in picks(conn, s.id, ["tabs"])] == [t]
+    a = _version(conn, s, 1, slot="guitar", kind="tabs")
+    b = _version(conn, s, 2, slot="guitar", kind="tabs")
+    c = _version(conn, s, 3)
+    set_picks(conn, s.id, ["tabs"], [b, a])
+    set_picks(conn, s.id, ["chords"], [c])
+    assert [v.id for v in picks(conn, s.id, ["tabs"])] == [b, a]
+    set_picks(conn, s.id, ["tabs"], [a])
+    assert [v.id for v in picks(conn, s.id, ["tabs"])] == [a]
+    assert [v.id for v in picks(conn, s.id, ["chords"])] == [c]
 
 
 def test_sheet_kinds_are_every_kind_the_sheet_slot_holds():

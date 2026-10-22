@@ -8,11 +8,15 @@ from ``$CREDENTIALS_DIRECTORY`` (systemd ``LoadCredential``), then a ``*_file``
 key, then an environment variable.
 Unknown keys are errors, and so are values of the wrong type or out of range,
 so a typo never silently falls back to a default or turns into another value.
+A key an older caracole read and this one doesn't (``_OBSOLETE``) is no error:
+the file loads, the key ignored whatever its value, and one warning names every
+such key to delete.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import tomllib
@@ -21,6 +25,8 @@ from pathlib import Path
 from typing import Any, Mapping
 
 DEFAULT_USER_AGENT = "caracole/0.1 (personal tab library)"
+
+log = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -97,7 +103,6 @@ class RankPolicy:
     scored_sheets: int = 3
     label_penalty: float = 0.5
     variant_bonus: float = 0.25
-    keep_guitar_pro: int = 2
 
 
 # What each [match] and [rank] value may be: (lowest, highest or None, whole numbers only).
@@ -114,7 +119,6 @@ _RANK_RANGES = {
     "scored_sheets": (1, None, True),
     "label_penalty": (0, None, False),
     "variant_bonus": (0, None, False),
-    "keep_guitar_pro": (0, None, True),
 }
 
 
@@ -167,7 +171,7 @@ class Config:
 _TOP_KEYS = {
     "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
     "wanted_file",
-    "user_agent", "guitar_pro_mode", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
+    "user_agent", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
     "spotify", "providers", "match", "rank", "ntfy", "autochords",
 }
 _SPOTIFY_KEYS = {
@@ -176,7 +180,28 @@ _SPOTIFY_KEYS = {
 }
 _PROVIDER_KEYS = {"budget", "delay", "lookup_delay", "lookup_requests", "lookup_per_hour"}
 _NTFY_KEYS = {"url", "token_file"}
+# The keys an older caracole read and this one doesn't, by table ("" for the top level), as a file may still set them
+# (a NixOS system's settings, say): the file loads, each ignored whatever its value, and ``load_config`` warns once,
+# naming every one it sets to delete, and why. Ultimate Guitar's Guitar Pro mode and how many of its Guitar Pro
+# versions to pick: caracole picks none there any more.
+_OBSOLETE: dict[str, tuple[str, ...]] = {"": ("guitar_pro_mode",), "rank": ("keep_guitar_pro",)}
+_OBSOLETE_WHY = "caracole picks no Guitar Pro or Power Tab file on Ultimate Guitar any more"
 _AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device"}
+
+
+def _without_obsolete(table: Mapping[str, Any], name: str, found: list[str]) -> Mapping[str, Any]:
+    """``table`` (``name``: "" for the top level) less its obsolete keys (``_OBSOLETE``), each it held added to
+    ``found`` as the file writes it ("guitar_pro_mode", "keep_guitar_pro in [rank]")."""
+    gone = [key for key in _OBSOLETE.get(name, ()) if key in table]
+    found += [f"{key} in [{name}]" if name else key for key in gone]
+    return {key: value for key, value in table.items() if key not in gone}
+
+
+def _warn_obsolete(path: Path | None, found: list[str]) -> None:
+    """The one warning a file that sets obsolete keys gets, naming them all."""
+    if found:
+        they = "they do" if len(found) > 1 else "it does"
+        log.warning("%s: delete %s: %s, so %s nothing.", path, " and ".join(found), _OBSOLETE_WHY, they)
 
 
 def _check_keys(table: Mapping[str, Any], allowed: set[str], where: str) -> None:
@@ -330,6 +355,8 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         except tomllib.TOMLDecodeError as e:
             raise ConfigError(f"{path}: {e}") from e
     paths = _Paths(env, path.parent if path is not None else None)
+    obsolete: list[str] = []
+    data = _without_obsolete(data, "", obsolete)
     _check_keys(data, _TOP_KEYS, "caracole.toml")
 
     def dir_value(key: str, default: Path) -> Path:
@@ -351,17 +378,6 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     cache_dir = dir_value("cache_dir", default_dir("cache", xdg_cache))
     overrides_file = dir_value("overrides_file", library_dir / "overrides.toml")
     wanted_file = dir_value("wanted_file", library_dir / "wanted.txt")
-
-    # Ultimate Guitar's mode, which its robots.txt fixes (it disallows /tab/download for bots):
-    # the key stays so that older files load. Downloads for you are gtptabs.com's, in its table.
-    mode = data.get("guitar_pro_mode", "assisted")
-    if mode != "assisted":
-        raise ConfigError(
-            f"guitar_pro_mode = {_shown(mode)} is not supported; only 'assisted' is: Ultimate Guitar's "
-            "robots.txt disallows /tab/download for bots, so its Guitar Pro pages are yours to click. "
-            "caracole downloads Guitar Pro files for you from gtptabs.com only, unless "
-            "[providers.gtptabs] says enabled = false"
-        )
 
     sp = _table(data, "spotify")
     _check_keys(sp, _SPOTIFY_KEYS, "[spotify]")
@@ -413,7 +429,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         raise ConfigError(
             f"[match].review ({match.review:g}) must not be above [match].accept ({match.accept:g})"
         )
-    rank = RankPolicy(**_numbers(_table(data, "rank"), _RANK_RANGES, "[rank]"))
+    rank = RankPolicy(**_numbers(_without_obsolete(_table(data, "rank"), "rank", obsolete), _RANK_RANGES, "[rank]"))
 
     ntfy_t = _table(data, "ntfy")
     _check_keys(ntfy_t, _NTFY_KEYS, "[ntfy]")
@@ -442,6 +458,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     pdf_fonts_value = _optional_string(data, "pdf_fonts", "pdf_fonts") or env.get("CARACOLE_PDF_FONTS")
     ytdlp_bin = _optional_string(data, "ytdlp_bin", "ytdlp_bin") or env.get("CARACOLE_YTDLP_BIN") or "yt-dlp"
     alphatab_value = env.get("CARACOLE_ALPHATAB_DIR")
+    _warn_obsolete(path, obsolete)
 
     return Config(
         library_dir=library_dir,

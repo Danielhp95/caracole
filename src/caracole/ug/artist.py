@@ -4,7 +4,7 @@ About a tenth of UG's tabs are listed in the sitemaps as a bare ``/tab/{id}``,
 including every tab by an artist whose name isn't ASCII, so the local index
 can't see them. The artist page lists them all with their ``song_name`` in the
 original script, 100 tabs per page, filterable by type
-(``?filter=chords|tabs|guitar_pro|power&page=N``).
+(``?filter=chords|tabs|…&page=N``): caracole reads the chords and tabs lists alone.
 
 The page keeps its data where tab pages do (``store.page.data``):
 ``data.artist`` (id, name, ``name_stripped``), ``data.other_tabs`` (tab dicts
@@ -25,8 +25,9 @@ from caracole.ug.page import PageParseError, UGVersion, json_int, read_page_data
 
 WWW = "https://www.ultimate-guitar.com"
 
-# caracole's kind → the value of the artist page's ``filter`` parameter.
-KIND_FILTERS = {"chords": "chords", "tabs": "tabs", "guitar-pro": "guitar_pro", "power": "power"}
+# caracole's kind (ug/page.py ``KINDS``) → the value of the artist page's ``filter`` parameter. UG's others
+# (guitar_pro, power…) name lists caracole never reads.
+KIND_FILTERS = {"chords": "chords", "tabs": "tabs"}
 _FILTER_KINDS = {value: kind for kind, value in KIND_FILTERS.items()}
 
 
@@ -36,8 +37,8 @@ class UGArtistPage:
 
     ``tabs`` are the tabs on this page, of every type; links to UG's paid app
     are left out. ``page`` is this page's number and ``pages`` the highest page
-    number UG links to. ``filters`` holds each kind UG offers a filtered list
-    of (chords, tabs, guitar-pro, power).
+    number UG links to. ``filters`` holds each of caracole's kinds UG offers a
+    filtered list of (chords, tabs).
     """
 
     artist_id: int

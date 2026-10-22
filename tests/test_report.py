@@ -138,7 +138,7 @@ def test_the_to_do_page_counts_the_items_of_its_counted_sections():
     page = ("# caracole to-do\n\n_Updated 2026-10-18 03:30 UTC · 3 songs_\n\n2 songs waiting for the nightly fetch.\n\n"
             "## Setup problems (1)\n\n- **The Ultimate Guitar index isn't built**\n\n"
             "## Review (2)\n\n### A - B\n\n- 90 · `a/b` (fuzzy) (3)\n\n"
-            "## Guitar Pro pages to click (4)\n\n- **A - B**: [x](u)\n\n"
+            "## Artists to find on Ultimate Guitar (4)\n\n- **A** (4 songs): [x](u)\n\n"
             "## PDFs\n\n- Last render never\n\n## Provider health\n\n| ug | OK |\n")
     assert todo_count(page) == 7
     assert todo_count("# caracole to-do\n\n## Sources\n") == 0

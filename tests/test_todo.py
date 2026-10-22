@@ -478,19 +478,17 @@ def test_one_songs_buy_verdict_lists_no_other_song(conn, monkeypatch):
     assert [b.id for b in buy] == [song.id] and waiting == 0
 
 
-def test_guitar_pro_pages_to_click(conn, cfg):
+def test_no_guitar_pro_page_of_ultimate_guitars_is_listed_to_click(conn, cfg):
+    # caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar for you to download any more: even a
+    # pick stored before (schema 9 takes them out) lists nothing, and the song has no guitar part yet.
     s = add_song(conn)
+    update_song(conn, s.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", rating=4.2, votes=5, ver=1)
     v2 = version(conn, s, 555891, slot="guitar", kind="power", rating=4.0, votes=2, ver=1)
     set_picks(conn, s.id, ["guitar-pro", "power"], [v1, v2])
     text = todo(conn, cfg)
-    assert "## Guitar Pro pages to click (2)" in text
-    assert "https://tabs.ultimate-guitar.com/tab/555890" in text
-    assert "_inbox" in text
-    # Once a file exists for a pick it's no longer listed.
-    keep_file(conn, cfg.library_dir, song=s, version_id=v1, name="guitar-1.gp5", data=b"gp", rank=1)
-    keep_file(conn, cfg.library_dir, song=s, version_id=v2, name="guitar-2.ptb", data=b"pt", rank=2)
-    assert "## Guitar Pro pages to click" not in todo(conn, cfg)
+    assert "Guitar Pro pages to click" not in text and "555890" not in text and "555891" not in text
+    assert "## Guitar parts not found (1)" in text
 
 
 def test_guitar_parts_not_found(conn, cfg):
@@ -529,14 +527,13 @@ def test_files_downloaded_from_gtptabs_this_week_are_listed_with_their_page(conn
     assert "New Guitar Pro files from gtptabs.com" not in week_later
 
 
-def test_guitar_pro_pages_to_click_say_which_songs_have_a_file_from_gtptabs(conn, cfg):
-    # UG's pages stay to click: one may be a better version. The line says the song has a file.
-    s = add_song(conn)
-    v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", rating=4.2, votes=5, ver=1)
-    set_picks(conn, s.id, ["guitar-pro"], [v1])
-    gtptabs_file(conn, cfg, s, 31, "guitar-1.gp4", page="tabs/19/soda-stereo/de-musica-ligera.html")
-    section = section_of(todo(conn, cfg), "Guitar Pro pages to click")
-    assert "- **Soda Stereo - De Música Ligera** (guitar-1.gp4 came from gtptabs.com): [guitar-1" in section
+def test_a_new_file_from_gtptabs_says_how_to_file_another_version_yourself(conn, cfg):
+    s = add_song(conn, "Blur", "Song 2")
+    gtptabs_file(conn, cfg, s, 12, "guitar-1.gpx")
+    text = todo(conn, cfg)
+    intro = section_of(text, "New Guitar Pro files from gtptabs.com")
+    assert "drop the one you want into `_inbox/`, named as the song is, `Artist - Title.gp5`" in intro
+    assert "Ultimate Guitar" not in intro
 
 
 def test_provider_health_has_gtptabs_and_says_when_it_is_off(conn, cfg):
@@ -1193,12 +1190,11 @@ def test_scores_on_musescore_lists_each_songs_pages_as_possible_matches(conn, cf
     assert "Persiana" not in section
 
 
-def test_scores_on_musescore_come_right_after_the_guitar_pro_pages(conn, cfg):
+def test_scores_on_musescore_come_right_after_the_new_files_from_gtptabs(conn, cfg):
     musescore_index(conn, "song/de_musica_ligera-680203")
     s = add_song(conn)
-    v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
-    set_picks(conn, s.id, ["guitar-pro"], [v])
-    after = todo(conn, cfg).split("## Guitar Pro pages to click", 1)[1]
+    gtptabs_file(conn, cfg, s, 31, "guitar-1.gp4", page="tabs/19/soda-stereo/de-musica-ligera.html")
+    after = todo(conn, cfg).split("## New Guitar Pro files from gtptabs.com", 1)[1]
     assert after.split("\n## ", 1)[1].startswith(SCORES)
 
 

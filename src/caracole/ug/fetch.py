@@ -1,4 +1,4 @@
-"""Per-song Ultimate Guitar fetch: rate every version, keep the best sheet, pick guitar parts.
+"""Per-song Ultimate Guitar fetch: rate every version, keep the best sheet and the best text tab.
 
 For each song (plan §3, Task 15, amendment A6):
 
@@ -11,27 +11,29 @@ For each song (plan §3, Task 15, amendment A6):
    one whose page UG redirects to such a URL (``caracole.http.RobotsClosed``),
    or one at a link that isn't a URL. A not-found song is looked up on its
    artist's UG page, which also lists the bare-id tabs the index can't see (A6).
+   Only UG's chords and text tabs are candidates (ug/page.py ``KINDS``): its
+   Guitar Pro and Power Tab files are never read, rated or picked (gtptabs.com's
+   are downloaded for you, gtptabs_fetch.py, and you file your own from the
+   inbox), and a ``[pin]`` of one pins nothing.
 2. **Ratings.** A tab page lists the other versions of its type and part, so
-   for each kind group (chords; Guitar Pro and Power Tab; tabs) caracole reads
+   for each kind group (chords; tabs) caracole reads
    the page of the lowest id it has no rating for, up to
    ``max_pages_per_group`` pages, recording the page's own tab and the
    versions it lists. Official, non-public and blocked versions are skipped.
 3. **Slots, one at a time,** so the sheet a singer needs most is settled
-   before the budget goes to guitar parts:
+   before the budget goes to the tab:
    - the sheet: the top ``scored_sheets`` chords versions by rating are
      scored for lyric coverage, ranked complete-first, and the best is kept
      as ``sheet.txt`` and ``sheet.json``, the others scored beside it as
      ``version-<tab>.txt`` and ``.json`` (sheet_versions.py; no request more);
      a complete one retires ``sheet (auto).txt``;
-   - Guitar Pro and Power Tab: the best are picked, never downloaded
-     (assisted mode: the to-do page lists them);
    - tabs: the best is kept as ``tab.txt`` and ``tab.json``.
 4. Only when every slot is done is the song marked checked and clean, so a
    song interrupted by the budget resumes from the HTTP cache next run.
 
 A run settles the sheet of every waiting song before it spends anything on
-guitar parts (``fetch_songs``), and rates each guitar group from one page:
-live, filling every slot song by song cost 8-12 requests a song.
+tabs (``fetch_songs``), and rates the tabs group from one page: live, filling
+every slot song by song cost 8-12 requests a song.
 
 A kept file is replaced only when another version outranks it, and is not
 rewritten when it wins again, unless the library lost it (deleted on a synced
@@ -140,9 +142,8 @@ log = logging.getLogger(__name__)
 PROVIDER = "ug"
 _PAGE_ACCEPT = (200, 404)
 CHORDS_KINDS = ("chords",)  # UG's kinds for the sheet slot, which holds every site's SHEET_KINDS
-GUITAR_PRO_KINDS = ("guitar-pro", "power")
 TAB_KINDS = ("tabs",)
-_GROUPS = (CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)
+_GROUPS = (CHORDS_KINDS, TAB_KINDS)  # every kind caracole uses (ug/page.py KINDS), by slot
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 SHEET_FILES = (HUMAN_SHEET, "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
@@ -153,7 +154,7 @@ _TAB_HOST = urlsplit(TAB_BASE_URL).netloc
 
 # The artist-page route (A6): a song found on it has the match step ``ARTIST_PAGE``.
 ARTIST_PAGE_MAX_AGE = timedelta(days=30)
-ARTIST_PAGE_KINDS = ("chords", "guitar-pro", "power", "tabs")  # the sheet's list first
+ARTIST_PAGE_KINDS = ("chords", "tabs")  # the sheet's list first; UG's Guitar Pro lists are never read
 TITLE_MATCH = 90  # rapidfuzz ratio of title keys, the matcher's accept score
 TITLE_MARGIN = 8  # a fuzzy title must lead the next different title by this much
 LEARN_TRIES = 3  # slugged tabs read at most to learn an artist's page
@@ -175,7 +176,7 @@ class FetchContext:
     ``artist_pages_per_kind`` caps the artist-page list pages one song may
     fetch from UG per kind per run; cached pages don't count, so a long list
     is read over several runs. ``max_pages_per_group`` caps the pages read to
-    rate the chords group, ``guitar_pages_per_group`` each guitar group.
+    rate the chords group, ``guitar_pages_per_group`` the tabs group.
     """
 
     conn: sqlite3.Connection
@@ -197,16 +198,15 @@ class FetchContext:
 
 @dataclass(frozen=True)
 class SongFetchOutcome:
-    """What one song's fetch kept: UG tab ids of the sheet, the Guitar Pro picks and the text tab.
+    """What one song's fetch kept: UG tab ids of the sheet and the text tab.
 
     ``requests`` counts the requests sent to UG for the song (cache hits are free).
-    ``settled`` says the sheet slot was decided (the guitar slots may still wait).
+    ``settled`` says the sheet slot was decided (the tab slot may still wait).
     ``kept_versions`` are the UG tab ids kept beside the sheet (``version-<tab>.txt``), in rank order.
     """
 
     song_id: int
     sheet: int | None
-    guitar_pro: tuple[int, ...]
     tab: int | None
     requests: int
     settled: bool = False
@@ -657,7 +657,9 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
     """Read every pinned page; return the pinned ids of each kind group, in pinned order.
 
     A pin's kind comes from its page. A pin whose page is gone, Official or not
-    public pins nothing, and so does one whose page robots.txt closes.
+    public pins nothing, and so does one whose page robots.txt closes, or one of
+    a kind caracole doesn't use (a Guitar Pro or Power Tab file's): unread when
+    its version or the index says so already.
     """
     groups: dict[tuple[str, ...], list[int]] = {}
     for tab_id, pasted in pins:
@@ -665,6 +667,8 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
         known = index_tab(run.conn, tab_id)
         url = _pinned_url(run, tab_id, pasted, row)
         kind = row.kind if row is not None else known.type if known is not None else None
+        if kind is not None and kind not in _GROUP_OF:
+            continue
         page = _page(run, tab_id, url, kind)
         if page is None or not _wanted(run, page.tab):  # read at a tab page, wherever its own link goes
             continue
@@ -1044,19 +1048,10 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
 
 
 def _ranked_guitar(run: _SongRun, rows: list[VersionRow], pinned: list[int] | None) -> list[Candidate]:
-    """A guitar slot's candidates: the pins in their order, else best rated first."""
+    """The tab slot's candidates: the pins in their order, else best rated first."""
     if pinned is not None:
         return [_candidate(r) for r in _in_order(rows, pinned)]
     return rank_guitar([_candidate(r) for r in rows], run.ctx.rank, variant=run.song.variant)
-
-
-def _guitar_pro_slot(run: _SongRun, pinned: list[int] | None) -> tuple[int, ...]:
-    """Pick the best Guitar Pro and Power Tab versions; nothing is downloaded (assisted mode)."""
-    policy = run.ctx.rank
-    ranked = _ranked_guitar(run, _rows(run, GUITAR_PRO_KINDS), pinned)
-    chosen = ranked[: policy.keep_guitar_pro]
-    set_picks(run.conn, run.song.id, GUITAR_PRO_KINDS, [c.version_id for c in chosen if c.version_id is not None])
-    return tuple(int(c.tab_id) for c in chosen)
 
 
 def _tab_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
@@ -1495,7 +1490,7 @@ def _matched_title_forms(song: Song) -> list[str]:
 
 
 def _learn_from_own_tabs(run: _SongRun, tabs: Sequence[IndexTab], keys: list[str]) -> str | None:
-    """Read the song's own slugged tabs, which its guitar slots need anyway, for the artist page."""
+    """Read the song's own slugged tabs, which its tab slot needs anyway, for the artist page."""
     for tab in tabs[:LEARN_TRIES]:
         page = _page(run, tab.tab_id, tab.url, tab.type)
         if page is not None and (url := _known_artist_page(run.conn, keys, run.ctx.overrides)):
@@ -1538,8 +1533,8 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
 
 
 def _song_index_tabs(conn: sqlite3.Connection, song: Song, block: frozenset[int]) -> list[IndexTab]:
-    """The song's tabs in the index, under its match's keys; blocked ones left out, and ones whose
-    page robots.txt closes."""
+    """The song's tabs in the index of the kinds caracole uses (``lookup.song_tabs``), under its match's
+    keys; blocked ones left out, and ones whose page robots.txt closes."""
     tabs = song_tabs(conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
     return [t for t in tabs if t.tab_id not in block and not _closed(t.url)]
 
@@ -1565,7 +1560,7 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
     versions; a song whose index tabs hold no chords (bare ids) has its sheet
     candidates read from its artist's chords list. Each kind group is rated and
     its slot filled before the next group is touched, so the sheet a singer
-    needs most is settled before the budget goes to guitar parts. Any other
+    needs most is settled before the budget goes to the tab. Any other
     song without a match (a review of other UG songs) only loses what an
     undone match kept (``_drop_undone``), with no request.
     """
@@ -1573,7 +1568,7 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
     run = _SongRun(ctx, song)
 
     def unfinished() -> SongFetchOutcome:
-        return SongFetchOutcome(song.id, None, (), None, ctx.client.requests_made - start)
+        return SongFetchOutcome(song.id, None, None, ctx.client.requests_made - start)
 
     if needs_artist_page(song):
         if not _artist_page_route(run):
@@ -1590,7 +1585,7 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
     def rated(group: tuple[str, ...]) -> list[int] | None:
         if group not in pinned:
             pages = ctx.max_pages_per_group if group == CHORDS_KINDS else ctx.guitar_pages_per_group
-            for kind in group:  # UG lists versions per type: a Guitar Pro page never rates a Power Tab
+            for kind in group:  # UG lists versions per type
                 _rate_group(run, [t for t in tabs if t.type == kind], pages)
         return pinned.get(group)
 
@@ -1601,13 +1596,12 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
             return unfinished()
     sheet = _sheet_slot(run, sheet_pins)
     if not guitar:
-        # The sheet pass of fetch_songs: the song stays dirty until its guitar slots are done.
-        return SongFetchOutcome(song.id, sheet, (), None, ctx.client.requests_made - start, settled=True,
+        # The sheet pass of fetch_songs: the song stays dirty until its tab slot is done.
+        return SongFetchOutcome(song.id, sheet, None, ctx.client.requests_made - start, settled=True,
                                 kept_versions=run.kept_versions)
-    guitar_pro = _guitar_pro_slot(run, rated(GUITAR_PRO_KINDS))
     tab = _tab_slot(run, rated(TAB_KINDS))
     _finish(run)
-    return SongFetchOutcome(song.id, sheet, guitar_pro, tab, ctx.client.requests_made - start, settled=True,
+    return SongFetchOutcome(song.id, sheet, tab, ctx.client.requests_made - start, settled=True,
                             kept_versions=run.kept_versions)
 
 
@@ -1644,7 +1638,9 @@ def _left_out(run: _SongRun) -> list[int]:
     song = run.song
     ids = {
         int(r.tab_id) for r in song_versions(run.conn, song.id, include_gone=True)
-        if r.provider == PROVIDER and not r.stale  # an earlier match's: no candidate, blocked or not
+        # an earlier match's is no candidate, blocked or not; nor is a kind caracole doesn't use (a Guitar Pro
+        # file's version, kept for the file filed for it when caracole still picked them)
+        if r.provider == PROVIDER and not r.stale and r.kind in _GROUP_OF
     }
     ids |= {t.tab_id for t in _song_index_tabs(run.conn, song, frozenset())}
     ids |= set(run.ctx.overrides.pin.get(song.key, ()))
@@ -1860,9 +1856,9 @@ def fetch_songs(
     """Fetch songs in order until the budget is spent; ``on_song`` hears about each song done.
 
     Two passes: first the sheet of every song (what a singer needs most), then,
-    with what's left of the budget, the guitar slots of the songs whose sheet
-    was settled. The second pass re-reads the sheet pages from the HTTP cache,
-    so it pays only for guitar parts.
+    with what's left of the budget, the tab slot of the songs whose sheet was
+    settled. The second pass re-reads the sheet pages from the HTTP cache, so it
+    pays only for tabs.
 
     A block is re-raised (the caller cools the provider down). Any other
     provider error, a page that can't be parsed included, skips that song: it
@@ -2024,8 +2020,8 @@ def _send_back_lost(conn: sqlite3.Connection, library_dir: Path) -> None:
     device, cut short by a power cut, or a link in its place. The database alone
     would have the fetch skip it forever; this way the next fetch writes it
     again (``_keep``), from the cached page. Only a live version's file counts,
-    as only its page can give it back, and never a Guitar Pro file, which is
-    yours to download (assisted mode). Each file is hashed; the files table
+    as only its page can give it back, and never a Guitar Pro file, which
+    caracole never downloads from UG. Each file is hashed; the files table
     keeps no length to compare first.
     """
     rows = conn.execute(

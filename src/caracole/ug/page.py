@@ -6,10 +6,10 @@ Every page keeps its data in ``div.js-store[data-content]``, under
 - ``data.tab`` is the page's own tab;
 - ``data.tab_view.versions`` lists the song's other versions of the same type
   and part. The page's own tab is not among them; UG's Official version is;
-- ``data.tab_view.wiki_tab.content`` is the sheet in UG markup. Guitar Pro and
-  Power Tab pages have none;
-- ``data.tab_view.meta`` describes a Guitar Pro file (``fileExtension``,
-  ``duration`` in seconds, ``tuning``…). UG writes an empty one as ``[]``.
+- ``data.tab_view.wiki_tab.content`` is the sheet in UG markup. A page of a type
+  caracole doesn't use, a Guitar Pro or Power Tab file's, has none;
+- ``data.tab_view.meta`` is what UG says of the tab beside it (a sheet's capo, say).
+  UG writes an empty one as ``[]``.
 
 A page that can't be read raises ``PageParseError``, which is a provider
 error: callers must never take it to mean "this song has no versions".
@@ -32,11 +32,11 @@ from caracole.http import ProviderError
 
 TAB_BASE_URL = "https://tabs.ultimate-guitar.com/tab/"
 
-# UG's tab types that caracole uses. Everything else (Official, Bass Tabs,
-# Ukulele Chords, Drum Tabs, Video…) has no kind.
-_KINDS = {"chords": "chords", "tabs": "tabs", "pro": "guitar-pro", "power": "power"}
-# Kinds whose page must carry the sheet's text.
-_TEXT_KINDS = frozenset({"chords", "tabs"})
+# UG's tab types that caracole uses: its chords, for the sheet, and its text tabs. Everything else (Pro and
+# Power, a Guitar Pro or Power Tab file, which caracole never picks there; Official, Bass Tabs, Ukulele Chords,
+# Drum Tabs, Video…) has no kind, and every page of a kind carries its text.
+_KINDS = {"chords": "chords", "tabs": "tabs"}
+KINDS = tuple(_KINDS.values())  # caracole's kinds of UG's tabs: chords, tabs
 _MARKUP = re.compile(r"\[/?(?:ch|tab)\]")
 
 
@@ -47,9 +47,10 @@ class PageParseError(ProviderError):
 def kind_of(ug_type: str | None) -> str | None:
     """caracole's kind for a UG tab type.
 
-    Chords → chords, Tabs → tabs, Pro → guitar-pro, Power → power. UG's type
-    ``Pro`` is a public, user-submitted Guitar Pro file. Any other
-    type, ``Official`` included, has no kind (None).
+    Chords → chords, Tabs → tabs. Any other type has no kind (None): ``Official``,
+    and ``Pro`` and ``Power``, a Guitar Pro or Power Tab file, which caracole
+    doesn't use (gtptabs.com's files are downloaded for you, gtptabs_fetch.py, and
+    you file your own from the inbox, inbox.py).
     """
     if not isinstance(ug_type, str):
         return None
@@ -82,7 +83,7 @@ class UGVersion:
 
     @property
     def kind(self) -> str | None:
-        """chords, tabs, guitar-pro or power; None for every type caracole doesn't use."""
+        """chords or tabs; None for every type caracole doesn't use."""
         return kind_of(self.type)
 
     @property
@@ -98,8 +99,8 @@ class UGVersion:
 class UGTabPage:
     """A parsed tab page: its own tab, the other versions UG lists, and the sheet text.
 
-    ``content`` is ``wiki_tab.content`` in UG markup, or None on a Guitar Pro
-    or Power Tab page. ``meta`` is ``tab_view.meta`` ({} when empty). ``raw`` is
+    ``content`` is ``wiki_tab.content`` in UG markup, or None on the page of a
+    type caracole doesn't use. ``meta`` is ``tab_view.meta`` ({} when empty). ``raw`` is
     ``store.page.data``. ``artist_url`` is the artist page UG links the tab to.
     """
 
@@ -244,7 +245,7 @@ def parse_tab_page(html: str | bytes, *, url: str | None = None) -> UGTabPage:
     content = wiki.get("content") if isinstance(wiki, dict) else None
     if not isinstance(content, str):
         content = None
-        if tab.kind in _TEXT_KINDS:
+        if tab.kind is not None:
             raise PageParseError("ug", url, None, f"{tab.type} page without wiki_tab.content")
     else:
         # UG keeps the sheet text HTML-escaped inside its JSON ("&amp;"), on top of the
