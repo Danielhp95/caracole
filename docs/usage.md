@@ -3253,7 +3253,8 @@ is no progression exits with status 2.
   written, say) leaves the songbook on the tab as it would have been, its line
   saying it couldn't be made and its status line why, with nothing in it to
   change, and gives the Select bar back its ticks, the name and why: making it
-  again is one tap.
+  again is one tap. Made again with those ticks under another name, the new
+  songbook takes its line; its Forget it takes it off the tab.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

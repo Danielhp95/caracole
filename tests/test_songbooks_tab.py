@@ -723,6 +723,50 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
     assert [b.name for b in books_toml(cfg)] == ["Campfire", "Road trip", "Brand new"]
 
 
+@SIZES
+def test_a_songbook_that_couldnt_be_made_goes_once_made_under_another_name_or_forgotten(serve, cfg, library,
+                                                                                        tmp_path, size):
+    # Its picks given back, made under another name: the one that couldn't be made goes, the new one in its place.
+    # Another that couldn't be made, not made again: Forget it takes it off the tab, the list back.
+    why = "songbooks.toml can't be written: read-only file system."
+    runner = Fake(cfg, fail={"Brand new": why, "Other": why})
+    url, _ = serve(runner)
+
+    def make(name, *titles):
+        page.click("#tab-library")
+        page.click(".pick-toggle")
+        for title in titles:
+            page.click('#list [data-id="%d"] .pick' % library[title].id)
+        if size[0] < 900:
+            page.click(".pick-open")
+        page.js("document.querySelector('.pick-name').value = ''")
+        page.click(".pick-name")
+        page.type(name)
+        page.click(".pickbar-form button[type=submit]")
+        assert page.wait(f"{SHOWN}('#songbooks') && document.querySelector('#songbooks .book h2').textContent === "
+                         f"{json.dumps(name)}", timeout=5)
+
+    with opened(tmp_path, *size) as page:
+        page.open(url)
+        make("Brand new", "Hysteria", "Creep")
+        assert page.wait(f"{STATUS}.includes(\"songbooks.toml can't be written\")", timeout=20), page.js(STATUS)
+        make("Beach nights")  # the picks it gave back, under another name
+        assert page.wait(f"{STATUS} === 'Made·Open songbook'", timeout=20), page.js(STATUS)
+        assert page.js(TITLES) == ["Hysteria", "Creep"]
+        assert [b[0] for b in page.js(BOOKS)] == ["Campfire", "Road trip", "Beach nights"], page.js(BOOKS)
+        make("Other", "De Música Ligera")
+        assert page.wait(f"{STATUS}.includes(\"songbooks.toml can't be written\")", timeout=20), page.js(STATUS)
+        assert page.js(BOOKS)[3] == ["Other", "1 song · couldn't be made"], page.js(BOOKS)
+        page.click("#songbooks .book .book-forget")
+        open_now = "((document.querySelector('#songbooks .book h2') || {}).textContent || '')"
+        assert page.wait(f"{open_now} !== 'Other'", timeout=5)
+        assert page.js(open_now) == ("" if size[0] < 900 else "Campfire")  # the list; beside it, the first one
+        assert [b[0] for b in page.js(BOOKS)] == ["Campfire", "Road trip", "Beach nights"], page.js(BOOKS)
+        assert "book=" not in page.js("location.hash")
+        assert page.js("document.activeElement.closest('#songbooks') !== null")  # the focus stays on the tab
+    assert [b.name for b in books_toml(cfg)] == ["Campfire", "Road trip", "Beach nights"]
+
+
 def test_renaming_then_deleting_a_songbook_stay_on_the_tab(serve, cfg, library, tmp_path):
     url, _ = serve(Fake(cfg))
     with opened(tmp_path) as page:

@@ -47,7 +47,8 @@
   let shelf = shelfOf(data.songbooks);
   const books = () => listOf(shelf.books).filter((b) => b && typeof b === "object");
   // A songbook Select was making whose make failed where it ran: songbooks.toml hasn't got it, and nothing deleted it.
-  // It stays as it would have been, its line saying it couldn't be made and its status line why, until it is made.
+  // It stays as it would have been, its line saying it couldn't be made and its status line why, until it is made
+  // (under its name, or with the picks it gave back under another) or forgotten (``letGo``).
   const unmade = new Map();  // its name -> its book
   const withUnmade = (given) => {
     const named = new Set(listOf(given.books).map((b) => String(b && b.name)));
@@ -249,7 +250,8 @@
     if (!book || book.classList.contains("sb-busy") === on) return;
     book.classList.toggle("sb-busy", on);
     for (const control of book.querySelectorAll("button, input, select")) {
-      if (!control.closest(".add-song") && !control.classList.contains("book-back")) control.disabled = on;
+      if (!control.closest(".add-song") && !control.classList.contains("book-back")
+          && !control.classList.contains("book-forget")) control.disabled = on;
     }
   };
   const lineOf = (ev) => ev.currentTarget.closest(".set-line");  // a line drawn again keeps its element
@@ -423,6 +425,21 @@
     const parts = links.length ? links
       : [el("p", "hint", b.failed ? "Not made: Select can make it again." : b.pending ? "Its files come once it is made."
         : "Not made yet: caracole render, or caracole songbook render, makes its files.")];
+    if (b.failed && !links.length) {
+      const name = b.name;
+      parts.push(button("Forget it", "btn small book-forget", () => {
+        letGo(name);
+        const li = Array.from(lines.children).find((x) => x.dataset.book === name);
+        if (li) li.remove();  // gone at your tap: nothing says so where it was
+        if (state.book === name) {
+          state.book = "";
+          save();
+        }
+        draw();
+        const line = lines.querySelector("button.book-line");
+        (line || newBook).focus({ preventScroll: true });
+      }, "Forget " + name + ": take it off the page"));
+    }
     const toGet = listOf(b.set).filter((e) => e && e.get).length;
     const was = row.querySelector("form.get-missing");
     if (!toGet && was && !gone.has(was)) {  // nothing left to get: its room kept until your next click or key
@@ -555,6 +572,15 @@
   const busyFor = (name) => Array.from(changes.values()).some((v) => isActive(v) && namesOf(v).indexOf(name) >= 0 &&
     v.songbook && (v.songbook.action === "rename" || v.songbook.action === "delete"));
   const locked = (name) => busyFor(name) || unmade.has(name);  // or never made: nothing in it to change
+  // A songbook whose make failed, off the page: made again, or forgotten (its Forget it).
+  const letGo = (name) => {
+    if (!unmade.delete(name)) return;
+    shelf = Object.assign({}, shelf, { books: books().filter((x) => x.name !== name) });
+    if (book && bookName === name) {
+      book.remove();
+      book = null;
+    }
+  };
 
   // --- the songbook's changes -------------------------------------------------------------------------------------
   // A change posted; ``spot``, a line it shows on as well (a set list's song, an Add a song result).
@@ -795,12 +821,14 @@
         detail: { ok: Boolean(view && view.songbook), error: view ? "" : failure(reply) } }));
       if (!view || !view.songbook) return;
       const after = String(view.songbook.after || name);
-      if (unmade.delete(after)) {  // one whose make failed, made again: as new, its article too
-        shelf = Object.assign({}, shelf, { books: books().filter((x) => x.name !== after) });
-        if (book && bookName === after) {
-          book.remove();
-          book = null;
-        }
+      // One whose make failed, made again (under its name, or with the picks it gave back under another): off the
+      // page, its article too; the one sent comes as new, its line where that one's was.
+      const sent = ids.join(",");
+      for (const [was, b] of Array.from(unmade)) {
+        if (was !== after && !(sent && listOf(b.set).map((x) => Number(x && x.id)).join(",") === sent)) continue;
+        const li = Array.from(lines.children).find((x) => x.dataset.book === was);
+        if (li && !books().some((x) => x.name === after)) li.dataset.book = after;
+        letGo(was);
       }
       // Until it is done, the songbook as it will be: its songs as the library names them, at its end.
       let b = books().find((x) => x.name === after);
