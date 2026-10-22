@@ -621,15 +621,18 @@ const caracoleRows = (icons, does) => {
   // box when its first answer is shown) and still what ``current()`` gives, its line then put under the results
   // (``place(line)``); never on Enter (``enter(query)`` holds it back for that query, which then offers the
   // button), never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
-  // LaCuerda for “…” (1 request)", by hand. While it runs the line says so ("Searching LaCuerda for “…”…"), then
-  // what LaCuerda answered, and ``done(query)`` asks the page's search again, whose answer the job's end left
-  // fresh: that query's line stays under its results. ``show(gate, query)`` gives the line to put under them, or
+  // LaCuerda for “…” (1 request)", by hand; state "failed", its search failed lately (or three did): the gate's
+  // ``why``, and the button. While it runs the line says so ("Searching LaCuerda for “…”…"), then what LaCuerda
+  // answered, or why the search was refused, and ``done(query)`` asks the page's search again, whose answer the
+  // job's end left fresh: that query's line stays under its results, with the button when the gate offers it now
+  // (a search refused or failed: the words name it). ``show(gate, query)`` gives the line to put under them, or
   // null.
   const SETTLE = 1500;
   const lacuerdaSearcher = (csrf, current, done, place) => {
     const lines = new Map();  // the line of each query's key, the same node from one draw to the next
     const keys = new Map();  // each query's key, as its first gate gave it: a later answer may have none
     const sent = new Set();
+    const running = new Set();  // the keys whose search is on its way
     const held = new Set();
     const firstShown = new Map();
     let lastKey = 0;
@@ -642,31 +645,41 @@ const caracoleRows = (icons, does) => {
     const send = (gate, query, byHand) => {
       const key = String(gate.key);
       sent.add(key);
+      running.add(key);
       const line = lineOf(key);
       const words = el("p", "hint lacuerda-search-said", "Searching LaCuerda for “" + query + "”…");
       words.setAttribute("role", "status");
       line.replaceChildren(words);
       searchLaCuerda(csrf, query, byHand, (text) => { words.textContent = text; }).then((asked) => {
+        running.delete(key);
         if (asked.error) {
           words.textContent = asked.error;
-          return;
+        } else {
+          const job = asked.job && typeof asked.job === "object" ? asked.job : {};
+          const said = job.line && typeof job.line === "object" && typeof job.line.text === "string"
+            ? job.line.text : "";
+          words.textContent = said || "LaCuerda's search is over.";
         }
-        const job = asked.job && typeof asked.job === "object" ? asked.job : {};
-        const said = job.line && typeof job.line === "object" && typeof job.line.text === "string" ? job.line.text : "";
-        words.textContent = said || "LaCuerda's search is over.";
-        done(query);
+        done(query);  // its rows; or, refused or failed, what the gate says now
       });
       return line;
     };
+    // The button that sends it by hand, under what the line says: the gate's ``why``, or what the search this page
+    // sent said.
     const offer = (gate, query) => {
-      const line = lineOf(String(gate.key));
-      if (line.firstChild) return line;
+      const key = String(gate.key);
+      const line = lineOf(key);
+      if (line.querySelector(".lacuerda-search-go")) return line;
       const go = button("Search LaCuerda for “" + query + "” (1 request)", "small lacuerda-search-go", () => {
         go.disabled = true;
         send(gate, query, true);
       }, "Search LaCuerda for “" + query + "”: one request");
       go.title = "LaCuerda's own search, one request at a lookup's pace: its songs go into caracole's copy of its index.";
-      line.replaceChildren(go);
+      if (!sent.has(key)) {
+        const why = gate.state === "failed" && typeof gate.why === "string" ? gate.why : "";
+        line.replaceChildren(...(why ? [el("p", "hint lacuerda-search-said", why)] : []));
+      }
+      line.appendChild(go);
       return line;
     };
     const fire = () => {
@@ -690,9 +703,13 @@ const caracoleRows = (icons, does) => {
       if (!firstShown.has(query)) firstShown.set(query, performance.now());
       if (g && !keys.has(query)) keys.set(query, String(g.key));
       const key = g ? String(g.key) : keys.get(query);
-      if (key && (sent.has(key) || (lines.has(key) && lines.get(key).firstChild))) return lineOf(key);
+      const byHand = g && (g.state === "button" || g.state === "failed");
+      if (key && running.has(key)) return lineOf(key);
+      // Over: what it said, and the button when the gate still offers a search (refused, failed or cancelled).
+      if (key && sent.has(key)) return g && (byHand || g.state === "auto") ? offer(g, query) : lineOf(key);
+      if (key && lines.has(key) && lines.get(key).firstChild) return lineOf(key);  // offered already
       if (!g) return null;
-      if (g.state === "button" || (g.state === "auto" && held.has(key))) return offer(g, query);
+      if (byHand || (g.state === "auto" && held.has(key))) return offer(g, query);
       if (g.state === "spent") {  // said afresh each time: in an hour, the same query may be sent
         const line = el("div", "lacuerda-search");
         line.appendChild(el("p", "hint lacuerda-search-said", "LaCuerda's search waits: it cools down after a " +
@@ -728,7 +745,8 @@ const caracoleRows = (icons, does) => {
   const readOutcome = (job) => {
     const j = job && typeof job === "object" ? job : {};
     const line = j.line && typeof j.line === "object" && typeof j.line.text === "string" ? j.line.text : "";
-    const said = /^(Read|Not read|Not found|Searched|Not searched|Nothing found): /.test(line) ? line + " "
+    const said = /^(Read|Not read|Not found|Searched|Not searched|Nothing found|Found already): /.test(line)
+      ? line + " "
       : "LaCuerda gave caracole no songs of theirs this time. ";
     const why = el("p", "hint read-outcome", said);
     const id = Number(j.id);

@@ -99,8 +99,9 @@ Rules a change there keeps (the Invariants below are the others):
   send it (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) only once the query
   has settled, the box unchanged for 1.5 s, when `/api/search`'s `lacuerda_search` says `auto`, never
   twice for a query in a page; Enter holds it back, and `button` (the hour's share of such searches
-  spent) offers it by hand, a line under the results (rows.js `lacuerdaSearcher`; its rows come with
-  the search asked again once the job is over: test_web_page_lacuerda_search.py). A test that drives
+  spent) and `failed` (it failed within the hour, or three did) offer it by hand, a line under the
+  results (rows.js `lacuerdaSearcher`; its rows come with the search asked again once the job is over,
+  and a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). A test that drives
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
   does.
   What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
@@ -396,9 +397,13 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     lookups run it), `caracole versions --keep`, one tab page asked for now (`--choose` and
     `--clear` run get), `caracole lacuerda --artist`, one artist's page (an artist's Songs), and
     `caracole lacuerda --search`, one query of LaCuerda's search (one request; a query at most once
-    in 30 days, kv `lacuerda:search:<key>`; those the pages send by themselves, `--auto`, at most
+    in 30 days, kv `lacuerda:search:<key>`, its words' key in alphabetical order; none once your library or
+    LaCuerda's index answers it well, `lacuerda_search.answered`, checked again after the cached artist pages
+    are stored; those the pages send by themselves, `--auto`, at most
     `lacuerda_search.SEARCHES_PER_HOUR` (20) in the last hour, counted in `events` under runs named
-    `lookup:lacuerda-search:…`, within `lookup_per_hour`). Its clients are
+    `lookup:lacuerda-search:…`, within `lookup_per_hour`, and none of a query whose search failed within the
+    hour, nor any once three did, kv `lacuerda:search-failed`: an answer caracole can't read is never
+    asked again by every page that shows the query). Its clients are
     `make_client(..., interactive=True)`: a random gap from
     `lookup_delay` (default 0.5–1.5 s; `[0, 0]` allowed) between two requests to a provider,
     a budget of `lookup_requests` (6) requests to it for the song, and at most
@@ -434,11 +439,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     (`test_web_app.py::test_a_search_asks_no_site_and_takes_no_lock`); the one exception is
     LaCuerda's own search (`/busca.php`, lacuerda_search.py), sent as a queued job at the lookup
     pace (`caracole lacuerda --search`), one request, only when the query has settled and its gate
-    allows (`lacuerda_search.gate`, read with no request: a word of four letters, LaCuerda's index
-    not answering it well already, not asked within 30 days, no cooldown, the hour's lookups), never on Enter,
-    at most 20 an hour sent by the pages by themselves within `lookup_per_hour`, each query kept
-    30 days (kv and the HTTP cache). An artist's songs come from their page, read at most once in
-    30 days.
+    allows (`lacuerda_search.gate`, read with no request: a word of four letters, neither your library
+    nor LaCuerda's index answering it well already, not asked within 30 days, no cooldown, the hour's
+    lookups, no failure within the hour), never on Enter, at most 20 an hour sent by the pages by
+    themselves within `lookup_per_hour`, each query kept 30 days (kv and the HTTP cache). An artist's
+    songs come from their page, read at most once in 30 days.
   - **The one exception is YouTube**, the owner's explicit choice for a handful of their
     own songs a night: its robots.txt closes `/results` and `/youtubei/` to crawlers, and
     yt-dlp uses both, against its terms too. Provider `youtube` (youtube.py) is the one
@@ -481,7 +486,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   a page of LaCuerda's search its server cut short (its table or list not closed, its script's
   arrays missing or disagreeing, fewer rows than it counts) is a `LaCuerdaParseError`, never "no
   results", and records nothing asked
-  (`test_lacuerda.py::test_an_answer_cut_short_is_a_parse_error_never_no_results`).
+  (`test_lacuerda.py::test_an_answer_cut_short_is_a_parse_error_never_no_results`), only the failure that
+  keeps the pages from sending it by themselves for an hour
+  (`test_commands_lyrics.py::test_lacuerda_search_that_failed_isnt_sent_by_the_page_again_within_the_hour_but_by_hand_it_is`).
   A block or a spent budget exits 0; a bug exits 1, which fires the unit's ntfy alert.
 - **Slugged tabs only at their slugged URL**, as UG answers 404 for them at `/tab/{id}`:
   the index keeps each tab's sitemap path (`ug_index.path`), from which ug/page.py

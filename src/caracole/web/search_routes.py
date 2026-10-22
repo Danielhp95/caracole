@@ -83,8 +83,11 @@ strong song, or the artist the query names, whose page caracole has read);
 else its ``state``, ``auto`` (the library page and the lookup page send it by
 themselves once the query has settled), ``button`` (the share of the hour's
 lookups such searches have is spent: the page offers Search LaCuerda, which
-asks by hand), ``asked`` (within 30 days) or ``spent`` (a cooldown, or the
-hour's lookups to LaCuerda), with the ``query`` and its ``key``. ``POST
+asks by hand), ``failed`` (its search failed within the hour, or three did:
+the page says ``why`` and offers the button), ``asked`` (within 30 days) or
+``spent`` (a cooldown, or the hour's lookups to LaCuerda), with the ``query``
+and its ``key``. A strong song of your library makes it None too: you are
+looking through your songs. ``POST
 /lacuerda/search`` queues it (``LACUERDA_SEARCH`` and the key, so asking again
 joins it), refusing what that gate refuses, and its end drops the answers
 kept, as a read's does.
@@ -367,8 +370,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
             "lacuerda_leads": leads,
-            "lacuerda_search": (_lacuerda_search_gate(app, conn, q, lc_artists, lacuerda) if app.searches_lacuerda
-                                else None),
+            "lacuerda_search": (_lacuerda_search_gate(app, conn, q, lc_artists, lacuerda, mine)
+                                if app.searches_lacuerda else None),
             "suggest": [{"source": s.source, "artist": s.artist, ("artist_key" if s.source == "ug" else "slug"): s.key,
                          "songs": s.songs, "group_key": _group_key(s.artist)} for s in (() if yours else close or ())],
             "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
@@ -665,31 +668,32 @@ def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Res
 
 
 def _lacuerda_search_gate(app: WebApp, conn: sqlite3.Connection, q: str, lc_artists: Sequence[SiteArtist],
-                          lc_songs: Sequence[SiteHit]) -> dict[str, str] | None:
+                          lc_songs: Sequence[SiteHit], mine: Sequence[LibraryHit]) -> dict[str, str] | None:
     """What sending LaCuerda's search for ``q`` would be (lacuerda_search.py's ``gate``), with no request: None, or
-    its ``state``, the ``query`` and its ``key``. ``lc_artists``, ``lc_songs``: LaCuerda's index's answer for it,
-    which makes it none when it answers well already: a strong song, or an artist the query names, whole, whose
-    page caracole has read (``known``: their songs, all of them)."""
+    its ``state``, the ``query`` and its ``key``, and, ``failed``, why the page doesn't send it by itself (``why``).
+    ``lc_artists``, ``lc_songs``: LaCuerda's index's answer for it, and ``mine`` your library's, which make it none
+    when they answer well already (``lacuerda_search.answers_well``): a strong song, an artist the query names,
+    whole, whose page caracole has read, or a strong song of yours."""
     from datetime import UTC, datetime
 
-    from caracole.lacuerda_search import gate
-    from caracole.search import STRONG
+    from caracole.lacuerda_search import answers_well, gate
 
-    held = any(h.score >= STRONG for h in lc_songs) or any(
-        a.score >= STRONG and not a.part and a.known > 0 for a in lc_artists)
-    said = gate(app.cfg, conn, q, strong=held, now=datetime.now(UTC))
-    return None if said is None else {"state": said.state, "query": q, "key": said.key}
+    said = gate(app.cfg, conn, q, strong=answers_well(lc_artists, lc_songs, mine), now=datetime.now(UTC))
+    if said is None:
+        return None
+    why = {"why": said.failure.said(f"“{q}”") + "."} if said.failure is not None else {}
+    return {"state": said.state, "query": q, "key": said.key, **why}
 
 
 def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
     """LaCuerda's search for a query (``q``), its rows read into the index: ``caracole lacuerda --search --progress``
     queued, a job of its own (one request, at the lookup pace), ``--auto`` unless asked ``by_hand`` (the button);
     asked again while it waits or runs, under any spelling LaCuerda reads the same, that job. Refused as its gate
-    refuses it (``_lacuerda_search_gate``): no word LaCuerda reads (400), LaCuerda's index has the song or the
-    query was asked within 30 days (409), a cooldown or the hour's lookups spent, or the page's share of them
-    without ``by_hand`` (429)."""
+    refuses it (``_lacuerda_search_gate``): no word LaCuerda reads (400), LaCuerda's index or your library has the
+    song or the query was asked within 30 days (409), a cooldown or the hour's lookups spent, or, without
+    ``by_hand``, the page's share of them spent or a search that failed lately (429)."""
     from caracole.lacuerda_search import SEARCHES_PER_HOUR, query_key
-    from caracole.search import search_lacuerda
+    from caracole.search import search_lacuerda, search_library
 
     q = " ".join(form.get("q", "").split())
     by_hand = form.get("by_hand", "") == "1"
@@ -699,15 +703,19 @@ def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> R
         raise Refused(400, "Not a query", f"LaCuerda's search reads only words of 4 letters or more: “{q}” has none.")
     with app.db() as conn:
         artists, songs = search_lacuerda(conn, q, songs=SITE_HITS)
-        said = _lacuerda_search_gate(app, conn, q, artists, songs) if app.searches_lacuerda else None
+        mine = search_library(conn, q, LIBRARY_HITS)
+        said = _lacuerda_search_gate(app, conn, q, artists, songs, mine) if app.searches_lacuerda else None
     if said is None:
-        raise Refused(409, "Found already", f"LaCuerda's index has “{q}” already: no search needed.")
+        raise Refused(409, "Found already", f"Your library or LaCuerda's index has “{q}” already: no search "
+                                            "needed.")
     if said["state"] == "asked":
         raise Refused(409, "Searched already", f"LaCuerda was asked for “{q}” within 30 days: what it answered is "
                                                "in its index.")
     if said["state"] == "spent":
         raise Refused(429, "Not now", "LaCuerda is cooling down after a block, or this hour's lookups to it are "
                                       "spent: ask again later.")
+    if said["state"] == "failed" and not by_hand:
+        raise Refused(429, "Not by itself", f"{said['why'].removesuffix('.')}: press Search LaCuerda to ask anyway.")
     if said["state"] == "button" and not by_hand:
         raise Refused(429, "Not by itself", f"This hour's {SEARCHES_PER_HOUR} searches the page sends by itself are "
                                             "spent: press Search LaCuerda to ask anyway.")

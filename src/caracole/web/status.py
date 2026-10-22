@@ -34,8 +34,8 @@ ran. So a job of other commands reads the same way:
   ``caracole lacuerda --artist`` ends with ("Read: …", "Not found: …", or "Not
   read: …" for a cooldown, a block, a spent budget or an error), and a query
   of LaCuerda's search (``jobs.LACUERDA_SEARCH``) in the words ``caracole
-  lacuerda --search`` ends with ("Searched: …", "Nothing found: …", or "Not
-  searched: …"); while it runs, "Searching LaCuerda…". An add of a
+  lacuerda --search`` ends with ("Searched: …", "Found already: …", "Nothing
+  found: …", or "Not searched: …"); while it runs, "Searching LaCuerda…". An add of a
   song whose sheet you picked on LaCuerda says that tonight's run gets that sheet.
 
 A line that ends in a failure or a wait also links to the job's output on
@@ -78,7 +78,8 @@ _WAITING = "waiting for another caracole"  # how get.py's song stage begins whil
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.
 _READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting",
-               "Searched: ": "added", "Nothing found: ": "missing", "Not searched: ": "waiting"}
+               "Searched: ": "added", "Found already: ": "added", "Nothing found: ": "missing",
+               "Not searched: ": "waiting"}
 
 
 @dataclass(frozen=True)
@@ -179,10 +180,10 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
 
 def _artist_read(steps: list[Step], details: str) -> Line:
     """A LaCuerda artist page's read, or a query of its search, over: the sentence ``caracole lacuerda --artist``
-    (or ``--search``) ends with (commands/lyrics.py), up to its first "; " or bracket. "Read: …" and "Searched: …"
-    are done, "Not found: …" and "Nothing found: …" LaCuerda's answer that it has no such page or song, and "Not
-    read: …" and "Not searched: …" a cooldown, a block, a spent budget or an error, each a wait; any other
-    ending, "Done"."""
+    (or ``--search``) ends with (commands/lyrics.py), up to its first "; " or bracket. "Read: …", "Searched: …" and
+    "Found already: …" are done, "Not found: …" and "Nothing found: …" LaCuerda's answer that it has no such page or
+    song, and "Not read: …" and "Not searched: …" a cooldown, a block, a spent budget or an error, each a wait; any
+    other ending, "Done"."""
     said = next((line.strip() for step in reversed(steps) for line in reversed(step.output)
                  if line.startswith(tuple(_READ_TONES))), None)
     if said is None:

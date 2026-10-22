@@ -1166,19 +1166,26 @@ and cache.
   only the words of 4 letters or more, accents folded (`la flaca` is `flaca`,
   `19 días y 500 noches` is `dias noches`), and caracole asks it for songs alone
   (`busca.php?exp=…&canc=1`): the artists are its listings'. A query is asked at
-  most once in 30 days (under any spelling LaCuerda reads the same); the HTTP
-  cache keeps the answer. Its last line starts with what LaCuerda answered, which
-  caracole serve's request line shows: `Searched: LaCuerda has 2 songs for
-  “corazon espinado”, in the index now.` (or, asked within 30 days, `Searched:
-  LaCuerda was asked for “…” on 2026-10-22 03:30 UTC: 2 songs, in the index.`),
-  `Nothing found: LaCuerda has no song for “…”.`, or `Not searched: …` for a
-  query with no word it reads, a cooldown, a block, the hour's lookups spent or
-  an error (`Not searched: LaCuerda failed (…); nothing changed: try again
-  later.`; a page its server cut short is such an error, never "no results"), all
-  of which exit 0. Its requests count in the hour's lookups (`lookup_per_hour`);
-  `--auto`, a search caracole serve's page sent by itself, keeps within 20 such
-  searches an hour too (`Not searched: this hour's 20 searches of LaCuerda the
-  page sends by itself are spent; …`). `--progress` prints a JSON line per event,
+  most once in 30 days (under any spelling LaCuerda reads the same, its words in
+  any order); the HTTP cache keeps the answer. It first puts the artist pages the
+  HTTP cache holds into the index, and asks nothing when your library or the index
+  then answers the query well (`Found already: caracole has “…” already, in your
+  library or its copy of LaCuerda's index; no request sent.`). Its last line starts
+  with what LaCuerda answered, which caracole serve's request line shows:
+  `Searched: LaCuerda has 2 songs for “corazon espinado”, in the index now.` (or,
+  asked within 30 days, `Searched: LaCuerda was asked for “…” on 2026-10-22 03:30
+  UTC: 2 songs, in the index.`), `Nothing found: LaCuerda has no song for “…”.`,
+  or `Not searched: …` for a query with no word it reads, a cooldown, a block,
+  the hour's lookups spent or an error (`Not searched: LaCuerda failed (…);
+  nothing changed: try again later.`; a page its server cut short is such an
+  error, never "no results"), all of which exit 0. Its requests count in the
+  hour's lookups (`lookup_per_hour`); `--auto`, a search caracole serve's page
+  sent by itself, keeps within 20 such searches an hour too (`Not searched: this
+  hour's 20 searches of LaCuerda the page sends by itself are spent; …`), and
+  isn't sent for an hour after its query's search failed, nor at all while three
+  searches failed in the last hour (`Not searched: LaCuerda's search for “…”
+  failed less than an hour ago (…), so the page won't send it by itself before
+  …`); by hand, it asks. `--progress` prints a JSON line per event,
   for caracole serve's request page. It goes with neither `--index` nor
   `--artist` (exit 2).
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
@@ -2797,17 +2804,22 @@ is no progression exits with status 2.
   requests page), when the query has a word of 4 letters or more, LaCuerda's
   index has no song that matches it well (letters inside a word never do:
   "maná" is no "Mañana Clara"), nor the artist it names with their page read
-  (all their songs are there already), LaCuerda wasn't asked for it in the last 30
-  days, LaCuerda isn't cooling down after a block, and the hour leaves room: at
-  most 20 such searches an hour, within the hour's 60 lookup requests to
-  LaCuerda. A line under the results says "Searching LaCuerda for “…”…", then
-  what LaCuerda answered, and its songs arrive in their artists' groups as the
-  search is asked again. Typing on sends nothing, and neither does Enter: it
-  leaves the button instead. Once the hour's 20 are spent, the line offers
-  **Search LaCuerda for “…” (1 request)**, which asks by hand, within the hour's
-  lookups; when those are spent, or LaCuerda cools down, it says LaCuerda's search
-  waits. A query is sent once a page, and once in 30 days. The Look up page does
-  the same.
+  (all their songs are there already), nor has your library (a song of yours
+  by its title or its artist: you are looking through your songs), LaCuerda
+  wasn't asked for it in the last 30 days (its words in any order), LaCuerda
+  isn't cooling down after a block, and the hour leaves room: at most 20 such
+  searches an hour, within the hour's 60 lookup requests to LaCuerda. A line
+  under the results says "Searching LaCuerda for “…”…", then what LaCuerda
+  answered, and its songs arrive in their artists' groups as the search is
+  asked again. Typing on sends nothing, and neither does Enter: it leaves the
+  button instead. Once the hour's 20 are spent, the line offers **Search
+  LaCuerda for “…” (1 request)**, which asks by hand, within the hour's lookups;
+  when those are spent, or LaCuerda cools down, it says LaCuerda's search waits.
+  A search that failed (LaCuerda erred, or answered a page caracole can't read)
+  isn't sent by itself again for an hour, and none is while three failed in the
+  last hour: the line says so, with the button. A search refused or failed has
+  the button under what it said. A query is sent once a page, and once in 30
+  days. The Look up page does the same.
   **Enter never spends a request**, however clear the best result: it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Get it, or a click or a key on the name,

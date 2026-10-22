@@ -2844,6 +2844,57 @@ def test_lacuerdas_search_route_refuses_what_its_gates_refuse(app, conn, queue):
     assert refused({"q": "corazon de cristal", "by_hand": "1"})[0] == 429
 
 
+def test_a_search_that_failed_lately_is_offered_by_hand_and_never_sent_by_the_page(app, conn, queue):
+    from datetime import timedelta
+
+    from caracole.lacuerda_search import record_failure
+
+    lacuerda_index(conn)
+    now = datetime.now(UTC)
+    record_failure(conn, "corazon-tiza", now - timedelta(minutes=3), "LaCuerda failed: HTTP 500")
+    conn.commit()
+
+    def said(q):
+        return as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_search"]
+
+    # Its words in any order are one query, as LaCuerda's search reads them.
+    tiza = said("tiza corazón")
+    assert (tiza["state"], tiza["key"], tiza["query"]) == ("failed", "corazon-tiza", "tiza corazón")
+    assert tiza["why"].startswith("LaCuerda's search for “tiza corazón” failed less than an hour ago "
+                                  "(LaCuerda failed: HTTP 500), so the page won't send it by itself before ")
+    response = post(app, "/lacuerda/search", {"q": "corazon de tiza"}, accept="application/json")
+    assert response.status == 429 and "press Search LaCuerda" in as_json(response)["error"]
+    assert queue.snapshot() == []
+    response = post(app, "/lacuerda/search", {"q": "corazon de tiza", "by_hand": "1"}, accept="application/json")
+    assert response.status == 202  # by hand: a person asks
+    # Three failed in the last hour: the page sends no query by itself, and offers each by hand.
+    record_failure(conn, "corazon-papel", now - timedelta(minutes=2), "LaCuerda failed: HTTP 502")
+    record_failure(conn, "cristal", now - timedelta(minutes=1), "LaCuerda failed: cut short")
+    conn.commit()
+    miel = said("luna de miel")
+    assert miel["state"] == "failed" and miel["why"].startswith(
+        "3 searches of LaCuerda failed in the last hour (the last: LaCuerda failed: cut short), so the page sends "
+        "none by itself before ")
+    # An hour on, they are forgotten.
+    from caracole.db import kv_get_json, kv_set_json
+
+    old = (now - timedelta(minutes=61)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    kv_set_json(conn, "lacuerda:search-failed", {k: {**v, "at": old}
+                                                 for k, v in kv_get_json(conn, "lacuerda:search-failed").items()})
+    conn.commit()
+    assert said("luna de miel") == {"state": "auto", "query": "luna de miel", "key": "luna-miel"}
+
+
+def test_a_query_your_library_answers_well_sends_no_lacuerda_search(app, conn, queue):
+    lacuerda_index(conn)
+    add_song(conn, "Oasis", "Wonderwall")
+    for q in ("oasis", "oasis wonderwall", "wonderwall"):  # your songs, by their artist or their title
+        assert as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_search"] is None, q
+    response = post(app, "/lacuerda/search", {"q": "oasis", "by_hand": "1"}, accept="application/json")
+    assert response.status == 409 and queue.snapshot() == []
+    assert as_json(get(app, "/api/search?q=" + quote("oasis live forever")))["lacuerda_search"]["state"] == "auto"
+
+
 def test_an_artist_whose_songs_came_from_a_search_alone_still_offers_to_read_their_page(app, conn):
     from helpers.lacuerda_site import search_page
 

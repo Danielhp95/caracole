@@ -274,8 +274,11 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
     asked within 30 days, a cooldown, a block, a spent share or budget, or an error says so and exits 0.
 
     Its last line starts with what LaCuerda answered, which caracole serve's request line shows (web/status.py):
-    "Searched: " (its songs, in the index now, or asked within 30 days), "Nothing found: " (no song) or "Not
-    searched: " (no word LaCuerda reads, a cooldown, a block, a spent share or budget, an error: nothing changed).
+    "Searched: " (its songs, in the index now, or asked within 30 days), "Found already: " (your library or the
+    index answers it well, once the artist pages the HTTP cache holds are in the index: no request), "Nothing
+    found: " (no song) or "Not searched: " (no word LaCuerda reads, a cooldown, a block, a spent share or budget,
+    an error, or, ``auto``, a search that failed lately: nothing changed). An error is remembered for an hour
+    (``lacuerda_search.record_failure``), in which the page doesn't send the query by itself again.
     With ``progress``, that line is also the detail of its one stage's last JSON line (get.py's), "search"."""
     from dataclasses import replace
 
@@ -283,7 +286,17 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
     from caracole.health import record_error
     from caracole.http import BudgetExhausted, CachedAnswers, ProviderBlocked, ProviderError
     from caracole.lacuerda_index import backfill_cached
-    from caracole.lacuerda_search import RUN, SEARCHES_PER_HOUR, asked, query_key, search, searches_used
+    from caracole.lacuerda_search import (
+        RUN,
+        SEARCHES_PER_HOUR,
+        answered,
+        asked,
+        failed,
+        query_key,
+        record_failure,
+        search,
+        searches_used,
+    )
 
     def say(state: str, detail: str) -> None:
         if progress:
@@ -307,6 +320,10 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
             end(f"Searched: LaCuerda was asked for {shown_query} on {shown(stamps_parse(was.get('at')))}: "
                 f"{plural(int(was.get('songs') or 0), 'song')}, in the index.", "done")
             return
+        if answered(conn, query):  # what the page's gate saw may be older than what the cache just gave
+            end(f"Found already: caracole has {shown_query} already, in your library or its copy of LaCuerda's "
+                "index; no request sent.", "done")
+            return
         p = cfg.provider("lacuerda")
         if is_cooling(conn, "lacuerda", now):
             end(f"{NOT_SEARCHED}LaCuerda is cooling down after a block until "
@@ -316,6 +333,11 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
         if policy.budget < 1:
             end(f"{NOT_SEARCHED}this hour's {p.lookup_per_hour} lookup requests to LaCuerda are spent; ask again "
                 "later.")
+            return
+        failure = failed(conn, key, now) if auto else None
+        if failure is not None:
+            end(f"{NOT_SEARCHED}{failure.said(shown_query)}; its Search LaCuerda button, Try again or a terminal "
+                "asks now.")
             return
         if auto and searches_used(conn, now) >= SEARCHES_PER_HOUR:
             end(f"{NOT_SEARCHED}this hour's {SEARCHES_PER_HOUR} searches of LaCuerda the page sends by itself are "
@@ -335,6 +357,7 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
             return
         except ProviderError as e:
             record_error(conn, "lacuerda", now, str(e))
+            record_failure(conn, key, now, f"LaCuerda failed: {e}")  # not sent by the page by itself for an hour
             end(f"{NOT_SEARCHED}LaCuerda failed ({e}); nothing changed: try again later.")
             return
         finally:
