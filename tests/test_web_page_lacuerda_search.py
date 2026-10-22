@@ -7,7 +7,9 @@ whose song it lacks, "corazon de tiza", is LaCuerda's search's to answer: the pa
 query has settled (the box unchanged for 1.5 s), never while you type on, never twice; Enter sends it at once, by
 hand, as the button does, and nothing else (no lookup); or, once the hour's share of such searches is spent,
 offers it as a button (which Enter presses too), as it does under a search the route refused for that share, or
-one that failed (``FakeSearch.fails``), which no page sends by itself again within the hour.
+one that failed (``FakeSearch.fails``), which no page sends by itself again within the hour. How many searches a
+page sent is what the server heard (``heard``, ``searches``), not the queue's jobs: the route joins a search still
+running and refuses one asked already, which would hide a page sending it twice.
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ import json
 import threading
 import time
 from datetime import UTC, datetime
+from urllib.parse import parse_qs
 
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
@@ -26,6 +29,7 @@ from test_web_page_search import sites
 from caracole import db, stamps
 from caracole.db import kv_set_json
 from caracole.get import PROGRESS_PREFIX
+from caracole.health import record_block
 from caracole.lacuerda import parse_search
 from caracole.lacuerda_index import store_search
 from caracole.lacuerda_search import KV_PREFIX, query_key, record_failure
@@ -39,14 +43,20 @@ pytestmark = CHROMIUM_MARKS
 LINE = "((document.querySelector('.lacuerda-search') || {}).textContent || '')"
 GO = ".lacuerda-search button.lacuerda-search-go"
 BY_HAND = ("lacuerda", "--search=corazon de tiza", "--progress")  # the button's, and Enter's: no --auto
+AUTO = (*BY_HAND, "--auto")  # the page's own, once the query has settled
+SENT_BY_HAND = [("corazon de tiza", True)]  # what the server heard of it: one request, by hand
+SENT_BY_ITSELF = [("corazon de tiza", False)]
 ANSWERED = "document.getElementById('found').dataset.query === 'corazon de tiza'"
 LOOKUP_ANSWERED = ("document.getElementById('status').textContent === 'Nothing matches.' || "
                    "!!document.querySelector('#results .nothing')")
+# What LaCuerda's search answers, by query: a song of Los Imaginarios', else of the Eagles'.
+ANSWERS = {"eagles": ("eagles", "Eagles", [("tequila_sunrise", "Tequila Sunrise", "R-3")])}
+IMAGINARIOS = ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")])
 
 
 class FakeSearch:
-    """The queue's caracole: ``lacuerda --search`` takes a page of LaCuerda's answer into the index, as the command
-    does, with no request, its stage said as ``--progress`` says it."""
+    """The queue's caracole: ``lacuerda --search`` takes a page of LaCuerda's answer into the index (``ANSWERS``) and
+    records the query asked, as the command does, with no request, its stage said as ``--progress`` says it."""
 
     def __init__(self, cfg):
         self.cfg = cfg
@@ -70,24 +80,40 @@ class FakeSearch:
             emit(PROGRESS_PREFIX + json.dumps({"stage": "search", "state": "skipped", "detail": said}))
             emit(said)
             return 0
+        query = args[1].removeprefix("--search=")
         try:
-            store_search(conn, parse_search(search_page(
-                ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]))))
+            answer = parse_search(search_page(ANSWERS.get(query, IMAGINARIOS), query=query))
+            store_search(conn, answer)
+            kv_set_json(conn, KV_PREFIX + query_key(query), {
+                "at": stamps.stamp(datetime.now(UTC)), "songs": len(answer.songs), "artists": len(answer.artists)})
             conn.commit()
         finally:
             conn.close()
-        said = "Searched: LaCuerda has 1 song for “corazon de tiza”, in the index now."
+        said = f"Searched: LaCuerda has 1 song for “{query}”, in the index now."
         emit(PROGRESS_PREFIX + json.dumps({"stage": "search", "state": "done", "detail": said}))
         emit(said)
         return 0
 
 
 @pytest.fixture
-def live(cfg):
+def heard():
+    """What the server heard, in order: each request's method, target and form, as the pages sent it."""
+    return []
+
+
+@pytest.fixture
+def live(cfg, heard):
     runner = FakeSearch(cfg)
     queue = JobQueue(runner)
     queue.start()
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    answer = app.handle
+
+    def handle(request):
+        heard.append((request.method, request.target, parse_qs(request.body.decode("utf-8", "replace"))))
+        return answer(request)
+
+    app.handle = handle
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
     yield f"http://127.0.0.1:{server.server_address[1]}/", queue, runner
@@ -119,20 +145,42 @@ def jobs(queue) -> list[tuple[str, ...]]:
     return [job.steps[0].args for job in queue.snapshot()]
 
 
+def searches(heard) -> list[tuple[str, bool]]:
+    """The pages' requests for LaCuerda's search, as the server heard them: each one's query, and whether by hand."""
+    return [(form.get("q", [""])[0], form.get("by_hand") == ["1"]) for method, target, form in heard
+            if method == "POST" and target.split("?")[0] == "/lacuerda/search"]
+
+
 def type_into(browser, field, text):
     browser.js(f"document.getElementById('{field}').focus()")
     browser.type(text)
 
 
-def type_and_enter(browser, text):
-    """``text`` typed into the search box and Enter pressed in one go: before the query's answer, which the page
-    asks for only once its timer, after the last key, has run."""
+def type_and_enter(browser, text, *after):
+    """``text`` typed into the search box and Enter pressed in one go, then the keys ``after``: before the query's
+    answer, which the page asks for only once its timer, after the last key, has run."""
     browser.js("(() => { const q = document.getElementById('q'); q.focus(); q.value = " + json.dumps(text) + "; "
                "q.dispatchEvent(new Event('input', {bubbles: true})); "
-               "q.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', bubbles: true, cancelable: true})); })()")
+               "for (const key of " + json.dumps(["Enter", *after]) + ") "
+               "q.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true})); })()")
 
 
-def test_a_query_that_settles_sends_lacuerdas_search_once_and_its_songs_arrive(cfg, live, browser):
+def keys_once(browser, ready, keys, seen="null"):
+    """``keys`` (Enter, Escape) pressed in the search box by the page itself the moment ``ready`` holds, one after the
+    other with nothing between them: no gap a busy machine may stretch past the 1.5 s after which a settled query's
+    search goes by itself. Gives ``seen`` after each key."""
+    said = browser.js(
+        "new Promise((done) => { const q = document.getElementById('q'); const until = performance.now() + 10000; "
+        "const go = () => { if (!(" + ready + ")) { if (performance.now() > until) done(null); "
+        "else setTimeout(go, 5); return; } "
+        "done(" + json.dumps(list(keys)) + ".map((key) => { "
+        "q.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true})); "
+        "return " + seen + "; })); }; go(); })")
+    assert said is not None, f"never {ready}"
+    return said
+
+
+def test_a_query_that_settles_sends_lacuerdas_search_once_and_its_songs_arrive(cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     browser.open(base)
@@ -140,25 +188,25 @@ def test_a_query_that_settles_sends_lacuerdas_search_once_and_its_songs_arrive(c
     assert browser.wait("document.getElementById('found').dataset.query === 'corazon de tiza'")
     assert jobs(queue) == []  # the answer is in, and the query hasn't settled yet
     assert browser.wait(f"{LINE}.includes('Searching LaCuerda')", timeout=5)
-    assert jobs(queue) == [("lacuerda", "--search=corazon de tiza", "--progress", "--auto")]
     # Once it is over, the bar's search again: LaCuerda's song in its artist's group, and what LaCuerda answered.
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
+    assert jobs(queue) == [AUTO]  # once its job is over: the line says it searches before the request is in
     assert browser.wait(f"{LINE}.startsWith('Searched: LaCuerda has 1 song')")
     time.sleep(2)  # settled again, with LaCuerda's answer: never sent twice
-    assert len(jobs(queue)) == 1
+    assert len(jobs(queue)) == 1 and searches(heard) == SENT_BY_ITSELF
 
 
-def test_typing_on_sends_nothing_and_enter_sends_it_at_once_by_hand_and_once(cfg, live, browser):
-    base, queue, runner = live
+def test_typing_on_sends_nothing_and_enter_sends_it_at_once_by_hand_and_once(cfg, live, browser, heard):
+    base, queue, _ = live
     lacuerda(cfg)
     browser.open(base)
     type_into(browser, "q", "corazon")
     for more in (" d", "e t", "iza"):  # a word every ~0.6 s: the box never settles
         time.sleep(0.6)
         browser.type(more)
-    assert browser.wait(ANSWERED)
-    assert jobs(queue) == [] and runner.ran == []
-    browser.press("Enter")  # long before the query settles: sent now, by hand, as the button sends it
+    # Enter twice the moment the answer is in, long before the query settles: sent now, by hand, as the button sends
+    # it, and once.
+    keys_once(browser, ANSWERED, ["Enter", "Enter"])
     assert browser.wait(f"{LINE}.includes('Searching LaCuerda')", timeout=5)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
     assert jobs(queue) == [BY_HAND]
@@ -167,67 +215,94 @@ def test_typing_on_sends_nothing_and_enter_sends_it_at_once_by_hand_and_once(cfg
     browser.press("Enter")  # again, the same query: asked already
     time.sleep(2)  # long past the 1.5 s a settled query waits: the page's own sends nothing more
     assert jobs(queue) == [BY_HAND]
+    assert searches(heard) == SENT_BY_HAND  # nothing for the words typed on the way, one request for the query
 
 
 def test_enter_moves_to_the_first_result_looks_nothing_up_and_the_focus_stays_as_lacuerdas_songs_arrive(
-        cfg, live, browser):
+        cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     sites(cfg, ug=[("los-imaginarios", "corazon-de-tiza", 2)])  # Ultimate Guitar has it: LaCuerda's search still may
     browser.open(base)
     type_into(browser, "q", "corazon de tiza")
-    assert browser.wait(ANSWERED)
-    browser.press("Enter")
+    keys_once(browser, ANSWERED, ["Enter"])
     focused = "!!(document.activeElement && document.activeElement.closest('#found article'))"
     assert browser.wait(focused)
     assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
     assert browser.wait("!!document.querySelector('#found .line-sources .source[data-source=\"lacuerda\"]')")
     assert browser.js(focused)  # the answer drawn again: the focus on the line it was on
     assert jobs(queue) == [BY_HAND]  # LaCuerda's search alone: no song looked up
+    assert searches(heard) == SENT_BY_HAND
 
 
-def test_enter_before_the_answer_sends_it_with_the_answer_and_moves_to_the_first_result(cfg, live, browser):
+def test_enter_before_the_answer_sends_it_with_the_answer_and_moves_to_the_first_result(cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     sites(cfg, ug=[("los-imaginarios", "corazon-de-tiza", 2)])
     browser.open(base)
-    type_and_enter(browser, "corazon de tiza")
+    type_and_enter(browser, "corazon de tiza", "Enter")  # twice, before the answer
     assert browser.js("document.getElementById('found').dataset.query") != "corazon de tiza"  # on its way
     assert browser.wait("!!(document.activeElement && document.activeElement.closest('#found article'))")
     assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
     time.sleep(2)  # long past the 1.5 s a settled query waits
     assert jobs(queue) == [BY_HAND]  # by hand, once, and no song looked up
+    assert searches(heard) == SENT_BY_HAND
 
 
-def test_enter_back_into_the_results_sends_it_once_their_answer_is_in(cfg, live, browser):
+def test_enter_back_into_the_results_sends_it_once_their_answer_is_in(cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     browser.open(base)
     type_into(browser, "q", "corazon de tiza")
-    assert browser.wait(ANSWERED)
-    browser.press("Escape")  # back to your songs, the query kept
-    assert browser.wait("document.getElementById('results').hidden")
-    browser.press("Enter")  # the results again, and LaCuerda's search with their answer
+    # The moment the answer is in, Escape (back to your songs, the query kept), then Enter: the results again, and
+    # LaCuerda's search with their answer.
+    hidden = "document.getElementById('results').hidden"
+    assert keys_once(browser, ANSWERED, ["Escape", "Enter"], hidden) == [True, False]
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
     time.sleep(2)
     assert jobs(queue) == [BY_HAND]
+    assert searches(heard) == SENT_BY_HAND
 
 
-def test_with_the_hours_share_spent_enter_sends_it_by_hand(cfg, live, browser):
+@pytest.mark.parametrize("page, titles", [("", TITLES), ("lookup", LOOKUP_TITLES)], ids=["library", "lookup"])
+def test_with_the_hours_share_spent_enter_sends_it_by_hand(cfg, live, browser, heard, page, titles):
     base, queue, _ = live
     lacuerda(cfg)
     spend_the_share(cfg)
-    browser.open(base)
+    browser.open(base + page)
     type_into(browser, "q", "corazon de tiza")
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=5)
     assert jobs(queue) == []
     browser.press("Enter")  # a person asking, as the button is
-    assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
-    assert jobs(queue) == [BY_HAND]
+    assert browser.wait(f"{titles}.includes('Corazón de Tiza')", timeout=10)
+    assert jobs(queue) == [BY_HAND] and searches(heard) == SENT_BY_HAND
+
+
+@pytest.mark.parametrize("page", ["", "lookup"], ids=["library", "lookup"])
+@pytest.mark.parametrize("state", ["failed", "spent"])
+def test_enter_sends_nothing_once_its_search_failed_lately_or_while_lacuerdas_search_waits(
+        cfg, live, browser, heard, page, state):
+    base, queue, _ = live
+    lacuerda(cfg)
+    conn = db.connect(cfg.db_path)
+    if state == "failed":  # within the hour: its button alone asks again
+        record_failure(conn, query_key("corazon de tiza"), datetime.now(UTC), "LaCuerda failed: cut short")
+    else:  # LaCuerda cools down after a block
+        record_block(conn, "lacuerda", datetime.now(UTC), "LaCuerda blocked caracole")
+    conn.commit()
+    conn.close()
+    browser.open(base + page)
+    type_into(browser, "q", "corazon de tiza")
+    said = f"!!document.querySelector('{GO}')" if state == "failed" else f"{LINE}.includes('search waits')"
+    assert browser.wait(said, timeout=5)
+    browser.press("Enter")
+    time.sleep(2)
+    assert searches(heard) == [] and jobs(queue) == []
 
 
 @pytest.mark.parametrize("page", ["", "lookup"])
-def test_enter_sends_nothing_for_a_query_asked_lately_or_one_lacuerdas_index_answers(cfg, live, browser, page):
+def test_enter_sends_nothing_for_a_query_asked_lately_or_one_lacuerdas_index_answers(cfg, live, browser, heard,
+                                                                                      page):
     base, queue, _ = live
     lacuerda(cfg)
     conn = db.connect(cfg.db_path)
@@ -241,11 +316,11 @@ def test_enter_sends_nothing_for_a_query_asked_lately_or_one_lacuerdas_index_ans
         assert browser.wait(f"document.body.textContent.includes({json.dumps(shown)})")
         browser.press("Enter")
         time.sleep(2)
-        assert jobs(queue) == [], query
+        assert jobs(queue) == [] and searches(heard) == [], query
         assert browser.js("document.querySelector('.lacuerda-search-go')") is None
 
 
-def test_with_the_hours_share_spent_the_page_offers_the_button(cfg, live, browser):
+def test_with_the_hours_share_spent_the_page_offers_the_button(cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     spend_the_share(cfg)
@@ -253,13 +328,14 @@ def test_with_the_hours_share_spent_the_page_offers_the_button(cfg, live, browse
     type_into(browser, "q", "corazon de tiza")
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=5)
     time.sleep(2)
-    assert jobs(queue) == []
+    assert jobs(queue) == [] and searches(heard) == []
     browser.click(GO)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
-    assert jobs(queue) == [("lacuerda", "--search=corazon de tiza", "--progress")]
+    assert jobs(queue) == [BY_HAND] and searches(heard) == SENT_BY_HAND
 
 
-def test_a_search_the_route_refuses_for_the_spent_share_offers_the_button_its_refusal_names(cfg, live, browser):
+def test_a_search_the_route_refuses_for_the_spent_share_offers_the_button_its_refusal_names(cfg, live, browser,
+                                                                                            heard):
     base, queue, _ = live
     lacuerda(cfg)
     browser.open(base)
@@ -272,10 +348,11 @@ def test_a_search_the_route_refuses_for_the_spent_share_offers_the_button_its_re
     assert "press Search LaCuerda" in browser.js(LINE) and jobs(queue) == []
     browser.click(GO)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
-    assert jobs(queue) == [("lacuerda", "--search=corazon de tiza", "--progress")]
+    assert jobs(queue) == [BY_HAND]
+    assert searches(heard) == SENT_BY_ITSELF + SENT_BY_HAND  # the page's own, refused, then the button's
 
 
-def test_a_search_that_failed_offers_the_button_and_no_page_sends_it_again_by_itself(cfg, live, browser):
+def test_a_search_that_failed_offers_the_button_and_no_page_sends_it_again_by_itself(cfg, live, browser, heard):
     base, queue, runner = live
     runner.fails = True
     lacuerda(cfg)
@@ -289,10 +366,10 @@ def test_a_search_that_failed_offers_the_button_and_no_page_sends_it_again_by_it
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=5)
     assert browser.js(LINE).startswith("LaCuerda's search for “corazon de tiza” failed less than an hour ago")
     time.sleep(2)
-    assert len(jobs(queue)) == 1
+    assert len(jobs(queue)) == 1 and searches(heard) == SENT_BY_ITSELF
 
 
-def test_a_query_whose_song_lacuerdas_index_has_sends_nothing(cfg, live, browser):
+def test_a_query_whose_song_lacuerdas_index_has_sends_nothing(cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     browser.open(base)
@@ -300,57 +377,57 @@ def test_a_query_whose_song_lacuerdas_index_has_sends_nothing(cfg, live, browser
     assert browser.wait(f"{TITLES}.includes('Como Camarón')")
     time.sleep(2)
     assert jobs(queue) == [] and browser.js("document.querySelector('.lacuerda-search')") is None
+    assert searches(heard) == []
 
 
-def test_the_lookup_page_sends_lacuerdas_search_once_a_query_settles(cfg, live, browser):
-    base, queue, _ = live
-    lacuerda(cfg)
-    browser.open(base + "lookup")
-    type_into(browser, "q", "corazon de tiza")
-    assert browser.wait("document.getElementById('status').textContent === 'Nothing matches.' || "
-                        "!!document.querySelector('#results .nothing')")
-    assert jobs(queue) == []
-    assert browser.wait(f"{LOOKUP_TITLES}.includes('Corazón de Tiza')", timeout=10)
-    assert jobs(queue) == [("lacuerda", "--search=corazon de tiza", "--progress", "--auto")]
-    assert browser.wait(f"{LINE}.startsWith('Searched: ')")
-    assert LC_ROWS  # the lookup page's LaCuerda rows are rows too
-
-
-def test_enter_on_the_lookup_page_sends_lacuerdas_search_at_once_by_hand_and_looks_nothing_up(cfg, live, browser):
-    base, queue, _ = live
-    lacuerda(cfg)
-    browser.open(base + "lookup")
-    type_and_enter(browser, "corazon de tiza")  # before its answer: sent with it
-    assert browser.wait(f"{LOOKUP_TITLES}.includes('Corazón de Tiza')", timeout=10)
-    assert jobs(queue) == [BY_HAND]
-    browser.js("document.getElementById('q').focus()")
-    browser.press("Enter")  # its answer on the screen, asked already: nothing stands out, nothing asked
-    time.sleep(2)
-    assert jobs(queue) == [BY_HAND]
-
-
-def test_enter_on_the_lookup_page_with_its_answer_shown_sends_it_by_hand(cfg, live, browser):
+def test_the_lookup_page_sends_lacuerdas_search_once_a_query_settles(cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     browser.open(base + "lookup")
     type_into(browser, "q", "corazon de tiza")
     assert browser.wait(LOOKUP_ANSWERED)
     assert jobs(queue) == []
-    browser.press("Enter")
     assert browser.wait(f"{LOOKUP_TITLES}.includes('Corazón de Tiza')", timeout=10)
-    time.sleep(2)
+    assert jobs(queue) == [AUTO]
+    assert browser.wait(f"{LINE}.startsWith('Searched: ')")
+    assert LC_ROWS  # the lookup page's LaCuerda rows are rows too
+    time.sleep(2)  # settled again, with LaCuerda's answer: never sent twice
+    assert searches(heard) == SENT_BY_ITSELF
+
+
+def test_enter_on_the_lookup_page_sends_lacuerdas_search_at_once_by_hand_and_looks_nothing_up(cfg, live, browser,
+                                                                                               heard):
+    base, queue, _ = live
+    lacuerda(cfg)
+    browser.open(base + "lookup")
+    type_and_enter(browser, "corazon de tiza", "Enter")  # twice, before its answer: sent with it, once
+    assert browser.wait(f"{LOOKUP_TITLES}.includes('Corazón de Tiza')", timeout=10)
     assert jobs(queue) == [BY_HAND]
+    browser.js("document.getElementById('q').focus()")
+    browser.press("Enter")  # its answer on the screen, asked already: nothing stands out, nothing asked
+    time.sleep(2)
+    assert jobs(queue) == [BY_HAND] and searches(heard) == SENT_BY_HAND
+
+
+def test_enter_on_the_lookup_page_with_its_answer_shown_sends_it_by_hand(cfg, live, browser, heard):
+    base, queue, _ = live
+    lacuerda(cfg)
+    browser.open(base + "lookup")
+    type_into(browser, "q", "corazon de tiza")
+    keys_once(browser, LOOKUP_ANSWERED, ["Enter", "Enter"])  # twice, the moment the answer is in
+    assert browser.wait(f"{LOOKUP_TITLES}.includes('Corazón de Tiza')", timeout=10)
+    time.sleep(2)  # long past the 1.5 s a settled query waits: the page's own sends nothing more
+    assert jobs(queue) == [BY_HAND] and searches(heard) == SENT_BY_HAND
 
 
 def test_enter_on_the_lookup_page_opens_the_leading_artist_whose_songs_stay_once_lacuerdas_search_is_over(
-        cfg, live, browser):
+        cfg, live, browser, heard):
     base, queue, _ = live
     lacuerda(cfg)
     sites(cfg, ug=[("eagles", "hotel-california", 9), ("eagles", "desperado", 3)])
     browser.open(base + "lookup")
     type_into(browser, "q", "eagles")
-    assert browser.wait("!!document.querySelector('#results .artist-hit')")
-    browser.press("Enter")
+    keys_once(browser, "!!document.querySelector('#results .artist-hit')", ["Enter"])
     name = "(document.querySelector('#results .artist-head h2') || {}).textContent"
     assert browser.wait(f"{name} === 'Eagles'")
     deadline = time.monotonic() + 10
@@ -359,5 +436,8 @@ def test_enter_on_the_lookup_page_opens_the_leading_artist_whose_songs_stay_once
     assert jobs(queue) == [("lacuerda", "--search=eagles", "--progress")]  # by hand; no lookup
     time.sleep(2)  # the page heard it is over
     assert browser.js(name) == "Eagles"  # their songs stay
+    assert searches(heard) == [("eagles", True)]
+    assert browser.js(f"{LOOKUP_TITLES}.includes('Eagles')") is False  # LaCuerda's index hasn't them yet
     browser.click("#results .artist-head button")  # All results: asked again, with what LaCuerda's search put in
-    assert browser.wait("!!document.querySelector('#results .artist-hit')")
+    assert browser.wait(f"{LOOKUP_TITLES}.includes('Eagles')")  # their row on LaCuerda now, beside Ultimate Guitar's
+    assert browser.js("!!document.querySelector('#results .artist-hit')")
