@@ -270,7 +270,7 @@ def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str,
     return "".join((
         "<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n"
         '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">\n'
-        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
+        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
         f'<meta http-equiv="Content-Security-Policy" content="{policy}">\n',
         PAGE_ICON,
         f"<title>{escape(title)}</title>\n",

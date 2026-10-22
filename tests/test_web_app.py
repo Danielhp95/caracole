@@ -138,7 +138,9 @@ def test_every_answer_keeps_the_page_to_itself(app, conn):
         assert header(response, "x-content-type-options") == "nosniff"
         assert header(response, "x-frame-options") == "DENY"
         assert "frame-ancestors 'none'" in header(response, "content-security-policy")
-        assert header(response, "referrer-policy") == "no-referrer"
+        assert header(response, "referrer-policy") == "same-origin"
+        if header(response, "content-type").startswith("text/html"):  # and a page opened from a file says so too
+            assert '<meta name="referrer" content="same-origin">' in text(response)
         assert header(response, "cross-origin-resource-policy") == "same-origin"
         assert header(response, "cache-control") == "no-store"
 

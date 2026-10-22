@@ -728,7 +728,7 @@ def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
+        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
         f"{PAGE_ICON}<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
         + _BODY.replace("__CSRF__", token)
         + json_block("icons", dict(icons or {}))

@@ -84,7 +84,10 @@ TOKEN_HEADER = "x-caracole-form-token"  # /jobs.json's form token
 _COMMON_HEADERS = [
     ("X-Content-Type-Options", "nosniff"),
     ("X-Frame-Options", "DENY"),
-    ("Referrer-Policy", "no-referrer"),
+    # The page's origin to the server alone, never to another site: a form posted over plain HTTP to a LAN address
+    # (no Sec-Fetch-Site there) carries its Origin, which security.cross_origin_ok compares with Host; under
+    # no-referrer it said "null", and every form from a phone on the LAN was refused.
+    ("Referrer-Policy", "same-origin"),
     ("Cross-Origin-Resource-Policy", "same-origin"),
     ("Cross-Origin-Opener-Policy", "same-origin"),
     ("Cache-Control", "no-store"),
@@ -272,7 +275,7 @@ class WebApp:
 
     @staticmethod
     def finish(response: Response) -> Response:
-        """Add the headers every answer has: no framing, no sniffing, no referrer, no cache; each unless the answer
+        """Add the headers every answer has: no framing, no sniffing, no referrer to another site, no cache; each unless the answer
         has its own (alphaTab's bundle, kept for good and loaded by any origin: guitar_routes.py)."""
         if not any(name == "Content-Security-Policy" for name, _ in response.headers):
             response.headers.append(("Content-Security-Policy", FRAMES))

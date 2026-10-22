@@ -138,7 +138,7 @@ def page(title: str, body: str, *, head: str = "") -> str:
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n'
+        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
         f"{head}{PAGE_ICON}<title>{escape(title)} · caracole</title>\n<style>{PAGE_STYLE}</style>\n</head>\n<body>\n"
         '<div class="page">\n<header class="masthead">\n  <div>\n'
         '    <p class="app"><a href="/">caracole</a></p>\n'

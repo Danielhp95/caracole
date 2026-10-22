@@ -27,11 +27,12 @@ import select
 import shutil
 import subprocess
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
 import pytest
-from helpers.browser import NO_LOOKUPS, headless_env, require_in_chromium
+from helpers.browser import headless_env, no_lookups, require_in_chromium
 
 CHROMIUM = shutil.which("chromium") or shutil.which("chromium-browser") or shutil.which("google-chrome")
 TIMEOUT = 30  # seconds, for any one answer
@@ -40,7 +41,8 @@ TIMEOUT = 30  # seconds, for any one answer
 class Chromium:
     """A headless Chromium with a profile of its own, closed on leaving the ``with``."""
 
-    def __init__(self, profile: Path, *, size: str = "390,844"):
+    def __init__(self, profile: Path, *, size: str = "390,844", local: Iterable[str] = ()):
+        """``local``: names that resolve to this machine without being local to the browser (helpers.browser.no_lookups)."""
         require_in_chromium()
         if CHROMIUM is None:
             pytest.skip("chromium not found on PATH")
@@ -51,7 +53,7 @@ class Chromium:
         os.close(commands)
         os.close(answers)
         cmd = [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-               f"--user-data-dir={profile}", NO_LOOKUPS, f"--window-size={size}", "--remote-debugging-pipe",
+               f"--user-data-dir={profile}", no_lookups(local), f"--window-size={size}", "--remote-debugging-pipe",
                "about:blank"]
         script = f'exec "$@" 3<&{theirs[0]} 4>&{theirs[1]} {theirs[0]}<&- {theirs[1]}>&-'
         try:

@@ -29,6 +29,7 @@ import subprocess
 import tempfile
 import time
 from pathlib import Path
+from collections.abc import Iterable
 from typing import Any
 
 import pytest
@@ -43,6 +44,13 @@ TIMEOUT = 60.0  # seconds a page may take, as the tests gave chromium --dump-dom
 # starting at once kept it busy for seconds, and with it everything else that asks it for a user
 # or a host (chordpro does). No name resolves here, so no page reaches beyond this machine.
 NO_LOOKUPS = "--host-resolver-rules=MAP * ~NOTFOUND, EXCLUDE 127.0.0.1"
+
+
+def no_lookups(local: Iterable[str] = ()) -> str:
+    """NO_LOOKUPS, but each name of ``local`` resolves to 127.0.0.1: a server on this machine under a name no
+    browser trusts as local, so its pages are no secure context (no ``Sec-Fetch-*`` headers), as a phone sees
+    a server at a LAN or tailnet address over plain HTTP."""
+    return "--host-resolver-rules=" + "".join(f"MAP {name} 127.0.0.1, " for name in local) + NO_LOOKUPS.split("=", 1)[1]
 # Browser.wait's expression, evaluated as one step with the page's readiness: what it throws while the
 # document is still parsed is "not yet" (``loading``), what it throws once the page has loaded is thrown.
 WAIT_PROBE = """(async () => {

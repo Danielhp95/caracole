@@ -259,6 +259,31 @@ def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_pa
 
 
 @in_chromium
+def test_a_phone_on_the_lan_signs_in(cfg, conn, tmp_path):
+    # Over plain HTTP to a LAN or tailnet address a page is no secure context: the browser sends no
+    # Sec-Fetch-Site, and the server compares the form's Origin with Host. Under Referrer-Policy no-referrer a
+    # form posted from the server's own page says Origin "null", so the sign-in was refused; same-origin
+    # names the page's origin to its own server, and nothing to another site.
+    token = "a-long-random-access-token"
+    lan = "caracole.test"
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1", extra=[lan]), csrf="tok",
+                            access_token=token))
+    root = f"http://{lan}:{server.server_address[1]}/"
+    try:
+        with Chromium(tmp_path / "profile", local=[lan]) as browser:
+            tab = browser.open(root)
+            tab.wait_for("document.querySelector('input[name=token]') !== null")
+            assert tab.eval("window.isSecureContext") is False  # as a phone on the LAN sees it
+            tab.eval(f"document.querySelector('input[name=token]').value = {json.dumps(token)}")
+            tab.click("button[type=submit]")
+            tab.wait_for("document.readyState === 'complete' && !document.querySelector('input[name=token]')")
+            assert tab.eval("document.title") == "caracole library", tab.eval("document.body.innerText")
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@in_chromium
 def test_a_served_viewers_links_open_once_signed_in(cfg, conn, tmp_path):
     # The sandboxed viewer has an origin of its own, so following one of its links is a navigation
     # from another site: the sign-in cookie must go with it (SameSite=Lax, not Strict), or its PDF

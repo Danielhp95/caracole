@@ -72,7 +72,7 @@ def build_page(*, title: str, artist: str, song_id: int, path: str, label: str, 
     return "".join((
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
-        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="no-referrer">\n',
+        '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n',
         PAGE_ICON,
         f"<title>{escape(title)} · {escape(label)} · caracole</title>\n",
         f"<style>{style()}</style>\n",
