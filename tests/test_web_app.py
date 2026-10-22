@@ -1981,6 +1981,70 @@ def test_the_search_offers_no_page_lacuerdas_own_answer_already_names(app, conn)
     assert as_json(get(app, "/api/search?q=bunbury"))["lacuerda_unlisted"] == {"name": "Enrique Bunbury", "letter": "E"}
 
 
+def test_ask_lacuerda_offers_the_artist_part_of_a_query_never_a_name_ultimate_guitar_only_holds_its_words_of(app,
+                                                                                                          conn):
+    from caracole.ug.index import mark_built, upsert_rows
+
+    lacuerda_index(conn)  # E and J read whole
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3401, "till-lindemann", "entre-dos-tierras", "chords", "till-lindemann/entre-dos-tierras-3401"),
+                       (3402, "ana-gabriel", "rayando-el-sol", "chords", "ana-gabriel/rayando-el-sol-chords-3402"),
+                       (3403, "silvio-martinez-rodriguez", "la-era", "chords",
+                        "silvio-martinez-rodriguez/la-era-chords-3403"),
+                       (3404, "vic-ruggiero", "sabina", "chords", "vic-ruggiero/sabina-chords-3404")], "1", when)
+    mark_built(conn, when)
+    conn.commit()
+
+    def unlisted(q):
+        return as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_unlisted"]
+
+    # A title an index knows ends the query: the rest is the artist, as typed.
+    assert unlisted("héroes del silencio entre dos tierras") == {"name": "héroes del silencio", "letter": "H"}
+    assert unlisted("mana rayando el sol") == {"name": "mana", "letter": "M"}
+    # A title of one word is no proof: "sabina" is a title, and "joaquin sabina" a name all the same.
+    from caracole.db import kv_set_json
+    from caracole import lacuerda_index as li
+
+    kv_set_json(conn, li.PAGES_KEY, {"tabs/e/index0.html": {"pages": ["index0.html"]}})  # J no longer read whole
+    conn.commit()
+    assert unlisted("joaquin sabina") is None  # LaCuerda lists them: Joaquín Sabina's J read in part
+    li.store_artists(conn, "tabs/j/index0.html", [])
+    conn.commit()
+    assert unlisted("joaquín sabina") == {"name": "joaquín sabina", "letter": "J"}  # an answer not kept yet
+    # An artist on Ultimate Guitar whose name puts another word between the query's is someone else.
+    assert unlisted("silvio rodriguez") == {"name": "silvio rodriguez", "letter": "S"}
+
+
+def test_ask_lacuerda_never_offers_an_artist_lacuerda_lists_under_another_name(app, conn):
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+    from caracole.ug.index import mark_built, upsert_rows
+
+    lacuerda_index(conn)  # E and J read whole; F and M in part
+    li.store_artists(conn, "tabs/f/index0.html", [LCArtist("fito__fitipaldis", "Fito & Fitipaldis", 77)])
+    li.store_artists(conn, "tabs/c/index0.html", [LCArtist("chao", "Chao", 1)])
+    li.store_artists(conn, "tabs/e/index0.html", [LCArtist("estopa", "Estopa", 159),
+                                                  LCArtist("enanitos", "Enanitos Verdes", 151)])
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3501, "los-enanitos-verdes", "lamento-boliviano", "chords",
+                        "los-enanitos-verdes/lamento-boliviano-chords-3501"),
+                       (3502, "fito-fitipaldis", "por-la-boca-vive-el-pez", "chords",
+                        "fito-fitipaldis/por-la-boca-vive-el-pez-chords-3502"),
+                       (3503, "manu-chao", "me-gustas-tu", "chords", "manu-chao/me-gustas-tu-chords-3503")], "1", when)
+    mark_built(conn, when)
+    conn.commit()
+
+    def unlisted(q):
+        return as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_unlisted"]
+
+    # Ultimate Guitar's "Los Enanitos Verdes" and "Fito Fitipaldis" are LaCuerda's Enanitos Verdes and Fito &
+    # Fitipaldis, whom its listings name: no page to read under L, nor under F.
+    assert unlisted("enanitos verdes lamento boliviano") is None
+    assert unlisted("fito & fitipaldis por la boca vive el pez") is None
+    # LaCuerda's Chao is no Manu Chao: Ultimate Guitar's artist is still the name to read.
+    assert unlisted("manu chao me gustas tu") == {"name": "Manu Chao", "letter": "M"}
+
+
 def test_lacuerda_leads_with_the_artist_the_query_names_when_ultimate_guitar_has_nothing_strong(app, conn):
     # "andres calamaro": Ultimate Guitar's index has Javier Calamaro alone, LaCuerda's has Andrés Calamaro.
     from caracole import lacuerda_index as li
@@ -2097,7 +2161,9 @@ def test_add_for_tonights_run_on_a_lacuerda_song_records_the_pick_with_its_add(a
     assert post(app, "/request", {"artist": "Estopa", "title": "X", "lacuerda": "estopa"}).status == 400
 
 
-def test_a_search_asks_no_site_and_takes_no_lock(app, conn, monkeypatch):
+def test_a_search_asks_no_site_and_takes_no_lock(app, conn, queue, monkeypatch):
+    # /api/search reads the local indexes alone: it says whether LaCuerda's own search would be sent, and sends
+    # nothing; that search is a job of its own (POST /lacuerda/search), which the page sends once a query settles.
     from caracole.commands import _common
 
     def never(*args, **kwargs):
@@ -2110,9 +2176,11 @@ def test_a_search_asks_no_site_and_takes_no_lock(app, conn, monkeypatch):
                musescore=["https://musescore.com/song/creep-1"])
     response = get(app, "/api/search?q=creep")
     assert response.status == 200 and as_json(response)["gtptabs"] and as_json(response)["musescore"]
-    lacuerda_index(conn)  # LaCuerda has no search caracole uses: its index answers, and its artists' songs
-    assert as_json(get(app, "/api/search?q=estopa"))["lacuerda_artists"]
+    lacuerda_index(conn)  # LaCuerda's index answers, and its artists' songs
+    data = as_json(get(app, "/api/search?q=joaquin%20sabina"))
+    assert data["lacuerda_artists"] and data["lacuerda_search"]["state"] == "auto"
     assert as_json(get(app, "/api/artist?lacuerda=estopa"))["songs"]
+    assert queue.snapshot() == []  # nothing queued either: the page asks for the search, the route queues it
 
 
 def test_a_search_of_fewer_than_three_letters_looks_nowhere(app, conn):
@@ -2639,3 +2707,207 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     assert route_for("POST", "/songbook/make").page == "the library"
     assert route_for("POST", "/lookup").page == "the page" and route_for("GET", "/jobs.json").script_only
     assert route_for("POST", "/export").page == "the export page"
+
+
+# --- LaCuerda's own search -------------------------------------------------------------------------------
+
+
+def lacuerda_events(conn, run_name, n):
+    conn.executemany("INSERT INTO events (run, at, provider, url, decision) VALUES (?, ?, 'lacuerda', 'x', 'ok')",
+                     [(run_name, datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))] * n)
+    conn.commit()
+
+
+def test_the_search_says_whether_lacuerdas_search_would_be_sent(app, conn):
+    from caracole.db import kv_set_json
+    from caracole.health import record_block
+
+    lacuerda_index(conn)
+
+    def said(q):
+        return as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_search"]
+
+    # A query with a word LaCuerda's search reads, whose song its index lacks: the page sends it by itself.
+    assert said("Corazón de tiza") == {"state": "auto", "query": "Corazón de tiza", "key": "corazon-tiza"}
+    assert said("el sol y tu") is None  # no word of four letters: LaCuerda's search reads none
+    assert said("como camaron") is None  # LaCuerda's index has the song, strong
+    assert said("estopa") is None  # and the artist the query names, whose page caracole read: all their songs
+    assert said("joaquin sabina")["state"] == "auto"  # their page not read: the search brings some
+    # Letters inside a word are no strong song: "mana" of "Mañana Clara" leaves Maná to LaCuerda's search.
+    from helpers.lacuerda_site import artist_page
+
+    from caracole import lacuerda_index as li
+
+    li.store_artist_page(conn, "estopa", artist_page("Estopa", "estopa", ("manana_clara", "Mañana Clara", "R-1")))
+    conn.commit()
+    assert said("maná")["state"] == "auto"
+    # Asked within 30 days: it answered, and the index holds it.
+    kv_set_json(conn, "lacuerda:search:corazon-tiza", {"at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                                        "songs": 2, "artists": 0, "stated": 2})
+    conn.commit()
+    assert said("corazon tiza")["state"] == "asked"
+    # The page's own share of the hour's lookups spent: a button, which asks by hand, within the hour's lookups.
+    lacuerda_events(conn, "lookup:lacuerda-search:x", 20)
+    assert said("corazon de papel")["state"] == "button"
+    lacuerda_events(conn, "lookup:x", 40)  # the hour's 60 lookup requests to LaCuerda
+    assert said("corazon de papel")["state"] == "spent"
+    conn.execute("DELETE FROM events")
+    record_block(conn, "lacuerda", datetime.now(UTC), "HTTP 403")
+    conn.commit()
+    assert said("corazon de papel")["state"] == "spent"
+
+
+class Searcher:
+    """The queue's caracole: ``lacuerda --search`` as the command takes an answer in, with no request."""
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.calls = []
+
+    def __call__(self, args, emit):
+        from helpers.lacuerda_site import search_page
+
+        from caracole import db
+        from caracole.lacuerda import parse_search
+        from caracole.lacuerda_index import store_search
+
+        self.calls.append(tuple(args))
+        c = db.connect(self.cfg.db_path)
+        try:
+            store_search(c, parse_search(search_page(
+                ("imaginarios", "Los Imaginarios", [("corazon_de_tiza", "Corazón de Tiza", "RT-12")]))))
+            c.commit()
+        finally:
+            c.close()
+        emit("Searched: LaCuerda has 1 song for “corazon de tiza”, in the index now.")
+        return 0
+
+
+def test_lacuerdas_search_is_one_command_in_the_queue_and_its_rows_are_searched_at_once(cfg, conn):
+    lacuerda_index(conn)
+    runner = Searcher(cfg)
+    queue = JobQueue(runner)
+    app = WebApp(cfg, queue, allowed=ALLOWED, csrf="tok")
+    assert as_json(get(app, "/api/search?q=corazon%20de%20tiza"))["lacuerda"] == []  # an answer kept a few minutes
+    response = post(app, "/lacuerda/search", {"q": "  corazon de  tiza "}, accept="application/json")
+    assert response.status == 202
+    data = as_json(response)
+    assert data["url"] == f"/api/jobs/{data['job']}"
+    [job] = queue.snapshot()
+    assert [s.args for s in job.steps] == [("lacuerda", "--search=corazon de tiza", "--progress", "--auto")]
+    assert job.song_key == "lacuerda-search:corazon-tiza" and job.display == "“corazon de tiza” on LaCuerda"
+    assert [s.name for s in job.stages] == ["search"]
+    # Asked again, under any spelling LaCuerda reads the same, or by hand: that job.
+    for fields in ({"q": "corazon tiza"}, {"q": "corazón de tiza", "by_hand": "1"}):
+        assert as_json(post(app, "/lacuerda/search", fields, accept="application/json"))["job"] == data["job"]
+    assert len(queue.snapshot()) == 1
+    assert post(app, "/lacuerda/search", {"q": "corazon de tiza"}, csrf="old").status == 403
+    queue.run_pending()
+    after = as_json(get(app, "/api/search?q=corazon%20de%20tiza"))  # the search is over: no answer kept from before
+    assert [(h["artist"], h["title"]) for h in after["lacuerda"]] == [("Los Imaginarios", "Corazón de Tiza")]
+    assert as_json(get(app, data["url"]))["line"] == {
+        "tone": "added", "text": "Searched: LaCuerda has 1 song for “corazon de tiza”, in the index now.",
+        "link": None, "details": None}
+    line = as_json(get_json(app, "/jobs.json"))["jobs"][0]["line"]
+    assert line["text"].startswith("Searched: ")
+    # Try again on the requests page is asked by hand: past the share of the searches the page sends by itself.
+    assert post(app, "/jobs/again", {"job": str(data["job"])}).status == 303
+    assert queue.snapshot()[0].steps[0].args == ("lacuerda", "--search=corazon de tiza", "--progress")
+
+
+def test_lacuerdas_search_route_refuses_what_its_gates_refuse(app, conn, queue):
+    from caracole.db import kv_set_json
+
+    lacuerda_index(conn)
+
+    def refused(fields):
+        response = post(app, "/lacuerda/search", fields, accept="application/json")
+        return response.status, as_json(response).get("error", "")
+
+    assert refused({"q": "el sol"})[0] == 400  # no word LaCuerda reads
+    assert refused({"q": ""})[0] == 400 and refused({"q": "x" * 201})[0] == 400
+    assert refused({"q": "como camaron"})[0] == 409  # its index has the song
+    kv_set_json(conn, "lacuerda:search:corazon-tiza", {"at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                                        "songs": 2, "artists": 0, "stated": 2})
+    conn.commit()
+    status, error = refused({"q": "corazon de tiza"})
+    assert status == 409 and "within 30 days" in error
+    lacuerda_events(conn, "lookup:lacuerda-search:x", 20)
+    status, error = refused({"q": "corazon de papel"})  # the page's share spent: not by itself
+    assert status == 429 and "Search LaCuerda" in error
+    assert queue.snapshot() == []
+    response = post(app, "/lacuerda/search", {"q": "corazon de papel", "by_hand": "1"}, accept="application/json")
+    assert response.status == 202  # by hand, the button: within the hour's lookups
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("lacuerda", "--search=corazon de papel", "--progress")
+    lacuerda_events(conn, "lookup:x", 40)
+    assert refused({"q": "corazon de cristal", "by_hand": "1"})[0] == 429
+
+
+def test_a_search_that_failed_lately_is_offered_by_hand_and_never_sent_by_the_page(app, conn, queue):
+    from datetime import timedelta
+
+    from caracole.lacuerda_search import record_failure
+
+    lacuerda_index(conn)
+    now = datetime.now(UTC)
+    record_failure(conn, "corazon-tiza", now - timedelta(minutes=3), "LaCuerda failed: HTTP 500")
+    conn.commit()
+
+    def said(q):
+        return as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_search"]
+
+    # Its words in any order are one query, as LaCuerda's search reads them.
+    tiza = said("tiza corazón")
+    assert (tiza["state"], tiza["key"], tiza["query"]) == ("failed", "corazon-tiza", "tiza corazón")
+    assert tiza["why"].startswith("LaCuerda's search for “tiza corazón” failed less than an hour ago "
+                                  "(LaCuerda failed: HTTP 500), so the page won't send it by itself before ")
+    response = post(app, "/lacuerda/search", {"q": "corazon de tiza"}, accept="application/json")
+    assert response.status == 429 and "press Search LaCuerda" in as_json(response)["error"]
+    assert queue.snapshot() == []
+    response = post(app, "/lacuerda/search", {"q": "corazon de tiza", "by_hand": "1"}, accept="application/json")
+    assert response.status == 202  # by hand: a person asks
+    # Three failed in the last hour: the page sends no query by itself, and offers each by hand.
+    record_failure(conn, "corazon-papel", now - timedelta(minutes=2), "LaCuerda failed: HTTP 502")
+    record_failure(conn, "cristal", now - timedelta(minutes=1), "LaCuerda failed: cut short")
+    conn.commit()
+    miel = said("luna de miel")
+    assert miel["state"] == "failed" and miel["why"].startswith(
+        "3 searches of LaCuerda failed in the last hour (the last: LaCuerda failed: cut short), so the page sends "
+        "none by itself before ")
+    # An hour on, they are forgotten.
+    from caracole.db import kv_get_json, kv_set_json
+
+    old = (now - timedelta(minutes=61)).strftime("%Y-%m-%dT%H:%M:%SZ")
+    kv_set_json(conn, "lacuerda:search-failed", {k: {**v, "at": old}
+                                                 for k, v in kv_get_json(conn, "lacuerda:search-failed").items()})
+    conn.commit()
+    assert said("luna de miel") == {"state": "auto", "query": "luna de miel", "key": "luna-miel"}
+
+
+def test_a_query_your_library_answers_well_sends_no_lacuerda_search(app, conn, queue):
+    lacuerda_index(conn)
+    add_song(conn, "Oasis", "Wonderwall")
+    for q in ("oasis", "oasis wonderwall", "wonderwall"):  # your songs, by their artist or their title
+        assert as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_search"] is None, q
+    response = post(app, "/lacuerda/search", {"q": "oasis", "by_hand": "1"}, accept="application/json")
+    assert response.status == 409 and queue.snapshot() == []
+    assert as_json(get(app, "/api/search?q=" + quote("oasis live forever")))["lacuerda_search"]["state"] == "auto"
+
+
+def test_an_artist_whose_songs_came_from_a_search_alone_still_offers_to_read_their_page(app, conn):
+    from helpers.lacuerda_site import search_page
+
+    from caracole.lacuerda import parse_search
+    from caracole.lacuerda_index import store_search
+
+    lacuerda_index(conn)
+    store_search(conn, parse_search(search_page(
+        ("joaquin_sabina", "Joaquín Sabina", [("y_nos_dieron_las_diez", "Y Nos Dieron Las Diez", "R-1")]))))
+    conn.commit()
+    [sabina] = as_json(get(app, "/api/search?q=joaquin%20sabina"))["lacuerda_artists"]
+    assert (sabina["known"], [t["title"] for t in sabina["top"]]) == (0, ["Y Nos Dieron Las Diez"])
+    page = as_json(get(app, "/api/artist?lacuerda=joaquin_sabina"))
+    assert (page["read"], page["listed"], [h["title"] for h in page["songs"]]) == (False, 241, ["Y Nos Dieron Las Diez"])
+    [song] = as_json(get(app, "/api/search?q=y%20nos%20dieron%20las%20diez"))["lacuerda"]
+    assert (song["artist"], song["sheet"]) == ("Joaquín Sabina", LC + "joaquin_sabina/y_nos_dieron_las_diez.shtml")

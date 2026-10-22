@@ -2098,11 +2098,12 @@ def test_a_well_known_artist_a_word_names_is_weighed_against_the_first_song_titl
 def test_a_lacuerda_name_the_query_is_only_inside_of_leaves_room_for_a_suggestion(conn):
     from caracole.search import find_index, search_lacuerda, suggestions
 
-    # "adelle": LaCuerda's La Banda del Lechuga holds its letters, across words of its own; Adele is spelled close.
+    # "adelle": LaCuerda's La Banda del Lechuga holds its letters, across words of its own, which score below a
+    # strong hit (lacuerda_index.INSIDE_SCALE); Adele is spelled close.
     index(conn, songs_of("adele", 20, 50000))
     lc_artists(conn, ("la_banda_del_lechuga", "La Banda del Lechuga", 5))
     lc = search_lacuerda(conn, "adelle")[0]
-    assert [(a.artist, a.score, a.part) for a in lc] == [("La Banda del Lechuga", 90, False)]
+    assert [(a.artist, a.score, a.part) for a in lc] == [("La Banda del Lechuga", 85, False)]
     assert [s.artist for s in suggestions(conn, "adelle", find_index(conn, "adelle"), lc)] == ["Adele"]
     # LaCuerda's whole name is the query: nothing to suggest.
     lc_artists(conn, ("adelle", "Adelle", 3))

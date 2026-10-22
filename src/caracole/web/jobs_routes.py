@@ -43,7 +43,7 @@ from caracole.web.app import (
     query,
     redirect,
 )
-from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, JobStarted
+from caracole.web.jobs import LACUERDA_READS, LACUERDA_SEARCH, REMOVING, Job, JobStarted
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import SongFacts, details_href, job_line
@@ -116,8 +116,10 @@ def cancel(app: WebApp, form: dict[str, str]) -> Response:
 def again(app: WebApp, form: dict[str, str]) -> Response:
     """A request that is over, its steps queued again as a new request (Try again); back to the requests page.
     It is queued as any request is (``JobQueue.submit``): a song's request waiting or running is the answer. A
-    LaCuerda artist's read is one of ``app._reads``, as the search's Read is, so the answers the searches kept
-    go once it is over. A failed removal's Try again asks what goes first (outcome.py: ``POST /remove``)."""
+    LaCuerda artist's read, or a query of its search, is one of ``app._reads``, as the search's Read is, so the
+    answers the searches kept go once it is over; a search the page sent by itself is asked by hand now, past the
+    share of those (no ``--auto``). A failed removal's Try again asks what goes first (outcome.py: ``POST
+    /remove``)."""
     job_id = _form_job(form)
     job = app.queue.job(job_id)
     if job is None:
@@ -126,10 +128,12 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
     if job.active:
         raise Refused(409, "Not over yet", "That request is still queued or running.")
     steps = [(step.label, step.args) for step in job.steps]
+    if job.song_key.startswith(LACUERDA_SEARCH):  # you ask for it now: by hand
+        steps = [(label, tuple(arg for arg in args if arg != "--auto")) for label, args in steps]
     picked = any(step.args[:1] == ("review",) for step in job.steps)  # a pick comes after the song's own request
     queued, _ = app.submit(job.title, job.song_key, steps, fetching=job.fetching, note=job.note,
                            display=job.display, join=not picked, song_id=job.song_id)
-    if job.song_key.startswith(LACUERDA_ARTIST):  # once read, the searches' answers kept go, as a search's read's
+    if job.song_key.startswith(LACUERDA_READS):  # once read, the searches' answers kept go, as a first read's
         with app._searching:
             app._reads.add(queued.id)
     return app.queued(queued, "/jobs")
@@ -163,7 +167,7 @@ def api_job(app: WebApp, number: str) -> Response:
     job = app.queue.job(int(number)) if number.isascii() and number.isdigit() else None
     if job is None:
         return json_response(404, {"error": "no such request"})
-    if job.song_key.startswith(LACUERDA_ARTIST):  # no song's: its line says what LaCuerda answered
+    if job.song_key.startswith(LACUERDA_READS):  # no song's: its line says what LaCuerda answered
         return json_response(200, job.as_json() | {"line": job_line(job, None).as_json()})
     return json_response(200, job.as_json())
 
@@ -187,7 +191,7 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
         song_id, facts = song_of(app, conn, overrides, job)
         seen = view(job, jobs, song_id, facts, songbook_page=_songbook_page(conn, job))
         if (job.id in cards and not job.active and overrides is not None
-                and not job.song_key.startswith(LACUERDA_ARTIST)):
+                and not job.song_key.startswith(LACUERDA_READS)):
             section = section or _songbooks(app, conn, overrides)
             seen["songbooks"] = section
         if job.id in cards and not job.active and song_id is not None and overrides is not None:

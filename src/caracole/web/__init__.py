@@ -24,7 +24,7 @@ A small server from the standard library (``http.server``), in these parts:
   Each area's routes are a module: library_routes.py (the library page,
   requests, Fetch now), review_routes.py (the picker), jobs_routes.py (the
   requests page, its Cancel and Try again, /jobs.json, /api/jobs), search_routes.py (the lookup page,
-  search as you type, lookups), remove_routes.py, songbook_routes.py,
+  search as you type, lookups, LaCuerda's pages read and its own search), remove_routes.py, songbook_routes.py,
   export_routes.py (a sheet's PDF in the version its viewer was left in),
   versions_routes.py (one of Ultimate Guitar's versions of a song's sheet made
   the one, or kept beside it) and guitar_routes.py (a song's Guitar Pro file

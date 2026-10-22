@@ -15,7 +15,8 @@
                           ``songs`` on theirs, ``gtptabs`` gtptabs.com's); an artist the query names only
                           by a word of their name says so (``part``); and, for a query nothing matches
                           well, the artists spelled close to it (``suggest``: each one's site, name, songs,
-                          group, and their ``artist_key`` or LaCuerda ``slug``, for /api/artist)
+                          group, and their ``artist_key`` or LaCuerda ``slug``, for /api/artist); and
+                          whether LaCuerda's own search may be sent for the query (``lacuerda_search``)
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
@@ -25,6 +26,9 @@
                           from there: back there
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
+    POST /lacuerda/search ask LaCuerda's search for the songs of a query (``q``) and put them into its index:
+                          ``caracole lacuerda --search --progress`` queued, one request; ``by_hand``, the
+                          button's, past the share of the searches the page sends by itself
 
 A lookup is one ``caracole get --progress``. Without JavaScript, the answer
 sends the browser to the lookup page, which follows it; the lookup page's
@@ -44,7 +48,8 @@ A removed song (``search.search_removed``) is never ``best``: the library page
 shows it with Add again, which asks for it again as a request does, with a line
 in wanted.txt.
 
-Searching reads, and sends no request: one search runs at a time, one asked
+Searching reads, and sends no request (LaCuerda's search, below, is a job of
+its own): one search runs at a time, one asked
 for meanwhile wins over the older ones still waiting (``superseded``: the
 page asks again if it still wants it), and the offline indexes' answers are
 kept a few minutes. A query of fewer than three letters (two in Chinese)
@@ -69,6 +74,23 @@ group leads (``lacuerda_leads``) when it has the artist the query names and
 Ultimate Guitar's index has nothing strong; an Ultimate Guitar artist a word of
 the query names then leads nothing (``lead`` is "song"), so Enter opens
 LaCuerda's.
+
+LaCuerda's own search answers what its index can't: the songs of an artist
+whose page caracole hasn't read. ``lacuerda_search`` says, with no request and
+no lock, what sending it would be (lacuerda_search.py's ``gate``): None for a
+query LaCuerda reads no word of, or that LaCuerda's index answers well (a
+strong song, or the artist the query names, whose page caracole has read);
+else its ``state``, ``auto`` (the library page and the lookup page send it by
+themselves once the query has settled), ``button`` (the share of the hour's
+lookups such searches have is spent: the page offers Search LaCuerda, which
+asks by hand), ``failed`` (its search failed within the hour, or three did:
+the page says ``why`` and offers the button), ``asked`` (within 30 days) or
+``spent`` (a cooldown, or the hour's lookups to LaCuerda), with the ``query``
+and its ``key``. A strong song of your library makes it None too: you are
+looking through your songs. ``POST
+/lacuerda/search`` queues it (``LACUERDA_SEARCH`` and the key, so asking again
+joins it), refusing what that gate refuses, and its end drops the answers
+kept, as a read's does.
 """
 
 from __future__ import annotations
@@ -92,7 +114,14 @@ from caracole.web.app import (
     redirect,
     wants_json,
 )
-from caracole.web.jobs import LACUERDA_ARTIST, Job, lacuerda_artist_steps, lookup_steps
+from caracole.web.jobs import (
+    LACUERDA_ARTIST,
+    LACUERDA_SEARCH,
+    Job,
+    lacuerda_artist_steps,
+    lacuerda_search_steps,
+    lookup_steps,
+)
 from caracole.web.library_routes import LIMITS, PICK_LIMITS, lacuerda_field, wanted_line
 from caracole.web.pages import Refused
 
@@ -126,6 +155,8 @@ ROUTES = (
     Route("POST", "/lookup", lambda app, asked, form: lookup(app, form, wants_json=wants_json(asked)),
           page="the page"),
     Route("POST", "/lacuerda/artist", lambda app, asked, form: lacuerda_read(app, form, wants_json=wants_json(asked)),
+          page="the page"),
+    Route("POST", "/lacuerda/search", lambda app, asked, form: lacuerda_search(app, form, wants_json=wants_json(asked)),
           page="the page"),
 )
 
@@ -339,6 +370,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
             "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
             "lacuerda_leads": leads,
+            "lacuerda_search": (_lacuerda_search_gate(app, conn, q, lc_artists, lacuerda, mine)
+                                if app.searches_lacuerda else None),
             "suggest": [{"source": s.source, "artist": s.artist, ("artist_key" if s.source == "ug" else "slug"): s.key,
                          "songs": s.songs, "group_key": _group_key(s.artist)} for s in (() if yours else close or ())],
             "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
@@ -627,6 +660,67 @@ def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Res
         display, key, who = named.artist, LACUERDA_ARTIST + slug, slug
     job, _ = app.submit(f"Read the page of {display} on LaCuerda", key, lacuerda_artist_steps(who, display),
                         display=f"{display} on LaCuerda")
+    with app._searching:
+        app._reads.add(job.id)
+    if wants_json:
+        return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
+    return redirect(f"/jobs#job-{job.id}")
+
+
+def _lacuerda_search_gate(app: WebApp, conn: sqlite3.Connection, q: str, lc_artists: Sequence[SiteArtist],
+                          lc_songs: Sequence[SiteHit], mine: Sequence[LibraryHit]) -> dict[str, str] | None:
+    """What sending LaCuerda's search for ``q`` would be (lacuerda_search.py's ``gate``), with no request: None, or
+    its ``state``, the ``query`` and its ``key``, and, ``failed``, why the page doesn't send it by itself (``why``).
+    ``lc_artists``, ``lc_songs``: LaCuerda's index's answer for it, and ``mine`` your library's, which make it none
+    when they answer well already (``lacuerda_search.answers_well``): a strong song, an artist the query names,
+    whole, whose page caracole has read, or a strong song of yours."""
+    from datetime import UTC, datetime
+
+    from caracole.lacuerda_search import answers_well, gate
+
+    said = gate(app.cfg, conn, q, strong=answers_well(lc_artists, lc_songs, mine), now=datetime.now(UTC))
+    if said is None:
+        return None
+    why = {"why": said.failure.said(f"“{q}”") + "."} if said.failure is not None else {}
+    return {"state": said.state, "query": q, "key": said.key, **why}
+
+
+def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
+    """LaCuerda's search for a query (``q``), its rows read into the index: ``caracole lacuerda --search --progress``
+    queued, a job of its own (one request, at the lookup pace), ``--auto`` unless asked ``by_hand`` (the button);
+    asked again while it waits or runs, under any spelling LaCuerda reads the same, that job. Refused as its gate
+    refuses it (``_lacuerda_search_gate``): no word LaCuerda reads (400), LaCuerda's index or your library has the
+    song or the query was asked within 30 days (409), a cooldown or the hour's lookups spent, or, without
+    ``by_hand``, the page's share of them spent or a search that failed lately (429)."""
+    from caracole.lacuerda_search import SEARCHES_PER_HOUR, query_key
+    from caracole.search import search_lacuerda, search_library
+
+    q = " ".join(form.get("q", "").split())
+    by_hand = form.get("by_hand", "") == "1"
+    if not q or len(q) > QUERY_LIMIT:
+        raise Refused(400, "Not a query", f"Which query? A search is 1 to {QUERY_LIMIT} characters.")
+    if not query_key(q):
+        raise Refused(400, "Not a query", f"LaCuerda's search reads only words of 4 letters or more: “{q}” has none.")
+    with app.db() as conn:
+        artists, songs = search_lacuerda(conn, q, songs=SITE_HITS)
+        mine = search_library(conn, q, LIBRARY_HITS)
+        said = _lacuerda_search_gate(app, conn, q, artists, songs, mine) if app.searches_lacuerda else None
+    if said is None:
+        raise Refused(409, "Found already", f"Your library or LaCuerda's index has “{q}” already: no search "
+                                            "needed.")
+    if said["state"] == "asked":
+        raise Refused(409, "Searched already", f"LaCuerda was asked for “{q}” within 30 days: what it answered is "
+                                               "in its index.")
+    if said["state"] == "spent":
+        raise Refused(429, "Not now", "LaCuerda is cooling down after a block, or this hour's lookups to it are "
+                                      "spent: ask again later.")
+    if said["state"] == "failed" and not by_hand:
+        raise Refused(429, "Not by itself", f"{said['why'].removesuffix('.')}: press Search LaCuerda to ask anyway.")
+    if said["state"] == "button" and not by_hand:
+        raise Refused(429, "Not by itself", f"This hour's {SEARCHES_PER_HOUR} searches the page sends by itself are "
+                                            "spent: press Search LaCuerda to ask anyway.")
+    job, _ = app.submit(f"Search LaCuerda for “{q}”", LACUERDA_SEARCH + said["key"],
+                        lacuerda_search_steps(q, auto=not by_hand), display=f"“{q}” on LaCuerda")
     with app._searching:
         app._reads.add(job.id)
     if wants_json:

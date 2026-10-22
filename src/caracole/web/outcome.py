@@ -43,7 +43,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlencode
 
 from caracole.get import GTPTABS_KEPT
-from caracole.web.jobs import LACUERDA_ARTIST, LOOKUP, REMOVING, Job, Stage
+from caracole.web.jobs import LACUERDA_READS, LOOKUP, REMOVING, Job, Stage
 from caracole.web.status import Line, SongFacts
 
 if TYPE_CHECKING:
@@ -184,7 +184,7 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         action = Action("Pick the match", href=_href(picker)) if picker else _in_library(song_id)
         return Outcome("review", "Needs review", IN_REVIEW, action)
     word, _, rest = text.partition(": ")  # "Read: …", "Not read: …", "Added: the nightly run looks for it"
-    if job.song_key.startswith(LACUERDA_ARTIST):
+    if job.song_key.startswith(LACUERDA_READS):
         return Outcome(tone, word, _sentence(rest) if rest else "", again if tone == "waiting" else None)
     if tone == "missing":
         return _not_found(job, facts, song_id)

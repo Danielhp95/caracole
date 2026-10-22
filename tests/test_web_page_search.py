@@ -85,7 +85,7 @@ def live(cfg):
     """The library page on a socket, its queue running ``FakeGet``; ``asked`` lists the searches it got."""
     queue = JobQueue(FakeGet(cfg))
     queue.start()
-    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
     asked = Asked()
     answer = app.handle
 

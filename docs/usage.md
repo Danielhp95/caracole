@@ -915,7 +915,12 @@ configuration it would take, and why it waits.
 7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet,
    then read LaCuerda's listings of every artist into a local index, for
    searches, with what the sheets left of its budget (once the library has a
-   song: an empty one asks no site).
+   song: an empty one asks no site). The artist pages caracole's HTTP cache
+   holds go into that index first, with no request. Once the listings are read
+   whole, what is left of the budget reads the pages of LaCuerda's most popular
+   artists (the most songs its listings count first) not read in 30 days, 10 a
+   night at most, so that a search finds their songs; the summary says how many
+   (`4 popular artist pages read, 0 errors`).
 8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
 9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
@@ -1152,6 +1157,37 @@ and cache.
   `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
   runs it, and so does Ask LaCuerda (1 request) for a name its listings
   haven't reached yet.
+
+  **`caracole lacuerda --search QUERY`** asks LaCuerda's own search for the
+  songs of QUERY now, one request at the lookup pace, and puts every song it
+  answers into the index (as an artist page's would be, beside what the index
+  holds), with each artist no listing read names yet: the songs of an artist
+  whose page caracole hasn't read are then found locally. LaCuerda's search reads
+  only the words of 4 letters or more, accents folded (`la flaca` is `flaca`,
+  `19 días y 500 noches` is `dias noches`), and caracole asks it for songs alone
+  (`busca.php?exp=…&canc=1`): the artists are its listings'. A query is asked at
+  most once in 30 days (under any spelling LaCuerda reads the same, its words in
+  any order); the HTTP cache keeps the answer. It first puts the artist pages the
+  HTTP cache holds into the index, and asks nothing when your library or the index
+  then answers the query well (`Found already: caracole has “…” already, in your
+  library or its copy of LaCuerda's index; no request sent.`). Its last line starts
+  with what LaCuerda answered, which caracole serve's request line shows:
+  `Searched: LaCuerda has 2 songs for “corazon espinado”, in the index now.` (or,
+  asked within 30 days, `Searched: LaCuerda was asked for “…” on 2026-10-22 03:30
+  UTC: 2 songs, in the index.`), `Nothing found: LaCuerda has no song for “…”.`,
+  or `Not searched: …` for a query with no word it reads, a cooldown, a block,
+  the hour's lookups spent or an error (`Not searched: LaCuerda failed (…);
+  nothing changed: try again later.`; a page its server cut short is such an
+  error, never "no results"), all of which exit 0. Its requests count in the
+  hour's lookups (`lookup_per_hour`); `--auto`, a search caracole serve's page
+  sent by itself, keeps within 20 such searches an hour too (`Not searched: this
+  hour's 20 searches of LaCuerda the page sends by itself are spent; …`), and
+  isn't sent for an hour after its query's search failed, nor at all while three
+  searches failed in the last hour (`Not searched: LaCuerda's search for “…”
+  failed less than an hour ago (…), so the page won't send it by itself before
+  …`); by hand, it asks. `--progress` prints a JSON line per event,
+  for caracole serve's request page. It goes with neither `--index` nor
+  `--artist` (exit 2).
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
   song that has no Guitar Pro or Power Tab file, newest songs first. It reads
   gtptabs.com's sitemaps into a local index when it never has, or last did 30
@@ -2570,7 +2606,12 @@ holds every artist of LaCuerda's listings the nightly run has read, and the
 songs of the artists whose page caracole has read. Its names are compared as
 Ultimate Guitar's are, also with their words run together: "rockstar" finds
 Los Rock Star, and "banma" a song LaCuerda writes 斑马斑马, whose pinyin is
-`ban-ma-ban-ma`. An artist the query names
+`ban-ma-ban-ma`. Only whole words, or a name's start as typed so far ("joaquin
+sab"), match well: letters inside a word score below a strong hit (`maná` finds
+David Chumaña and Esta mañana weakly), and a word in many artists' names ranks
+them by their songs alone. A word of an artist's name at the query's start or
+end, the rest a title, names them too, below an artist whose whole name is there
+(`bunbury lady blue`: Enrique Bunbury). An artist the query names
 is a line of their own, with the songs LaCuerda's listing counts, then their
 most popular songs with chords the index holds; or, when caracole has never
 read their page, the line that reads it, one request:
@@ -2596,13 +2637,18 @@ index can't tell whether LaCuerda has an artist it doesn't list: for a query
 it has no artist by, under such a letter, the group ends with the line that
 reads the page of that name now. The name is the artist the query names on
 Ultimate Guitar, by their whole name or by part of it (`Enrique Bunbury` for
-"bunbury"), else an artist whose whole name starts or ends the query and whose
-songs Ultimate Guitar's index reads it as (`Estopa` for "estopa como camaron",
-while caracole hasn't read their page; never `Fito` for "fito paez"), else the
-query. A query LaCuerda's own index answers well gets no such line: a song by
-its title ("como camaron" is Estopa's Como Camarón), or by an artist it lists or
-holds the songs of ("estopa como camaron", once their page is read), and
-neither does a query Ultimate Guitar's index reads as a title ("creep"):
+"bunbury"; never a name that puts another word between the query's, `Silvio
+Martinez Rodriguez` for "silvio rodriguez"), else an artist whose whole name
+starts or ends the query and whose songs Ultimate Guitar's index reads it as
+(`Estopa` for "estopa como camaron", while caracole hasn't read their page;
+never `Fito` for "fito paez"), else the query less a title of two words or more
+that Ultimate Guitar's index or LaCuerda's knows at its end or start (`mana` for
+"mana rayando el sol"), else the query. A query LaCuerda's own index answers well
+gets no such line: a song by its title ("como camaron" is Estopa's Como Camarón),
+or by an artist it lists or holds the songs of ("estopa como camaron", once their
+page is read), and neither does a name its listings give under another spelling
+(Ultimate Guitar's `Los Enanitos Verdes` are its Enanitos Verdes) nor a query
+Ultimate Guitar's index reads as a title ("creep"):
 
     $ caracole search estopa
     …
@@ -2631,8 +2677,9 @@ nightly run reads its listings of every artist`), and while the nightly run
 still reads its listings it ends with what it has: `LaCuerda's index is still
 being read: 2,957 artists so far, with #, A–C read whole; the nightly run reads
 the rest.` (the artists counted include those of a letter read in part).
-LaCuerda has no search caracole uses: everything listed comes from the local
-table, and nothing asks LaCuerda anything.
+`caracole search` asks LaCuerda nothing: everything listed comes from the local
+table, which also holds what LaCuerda's own search answered when it was asked
+(`caracole lacuerda --search`, or the search bar of `caracole serve`).
 
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
@@ -2731,10 +2778,16 @@ is no progression exits with status 2.
   LaCuerda has no artist page for estopa.`, or, for a cooldown, a block, a
   spent hour's budget or an error, `Not read: …`, with a link to the request's
   output. The name is chosen as `caracole search` chooses it: the artist the
-  query names on Ultimate Guitar, else the one of theirs whose name starts or
-  ends it, else the query; a title there, "creep", or a song LaCuerda's index
-  has, "como camaron", gets no offer. Once a page is read, a search finds their
-  songs at once. When LaCuerda alone has the artist the query names, and
+  query names on Ultimate Guitar (never one whose name puts another word between
+  the query's: Silvio Martinez Rodriguez is no answer for "silvio rodriguez"),
+  else the one of theirs whose name starts or ends it, else the query less a
+  title of two words or more an index knows at its end or start ("mana" for
+  "mana rayando el sol", "héroes del silencio" for "héroes del silencio entre
+  dos tierras"), else the query; a title there, "creep", or a song LaCuerda's
+  index has, "como camaron", gets no offer, and neither does a name LaCuerda's
+  listings already give under another spelling (Ultimate Guitar's Los Enanitos
+  Verdes are its Enanitos Verdes, under E). Once a page is read, a search
+  finds their songs at once. When LaCuerda alone has the artist the query names, and
   Ultimate Guitar's index nothing that matches well ("andres calamaro": only
   Javier Calamaro's songs; "antonio josé", beside Ultimate Guitar's José
   Antonio Méndez, one song, whose name holds those words), or LaCuerda's artist
@@ -2785,6 +2838,31 @@ is no progression exits with status 2.
   title, `caracole add ARTIST "lynrd"`. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
   common words), takes no lock and spends no budget, and so does "+ N more".
+
+  **LaCuerda's own search** is the one request a search may bring. LaCuerda's
+  index holds every artist of its listings, but only the songs of the artist
+  pages caracole has read; LaCuerda's search finds the rest. Once a query has
+  settled, the box unchanged for 1.5 s, the page sends it by itself, one request
+  at a lookup's pace (`caracole lacuerda --search`, a request of its own on the
+  requests page), when the query has a word of 4 letters or more, LaCuerda's
+  index has no song that matches it well (letters inside a word never do:
+  "maná" is no "Mañana Clara"), nor the artist it names with their page read
+  (all their songs are there already), nor has your library (a song of yours
+  by its title or its artist: you are looking through your songs), LaCuerda
+  wasn't asked for it in the last 30 days (its words in any order), LaCuerda
+  isn't cooling down after a block, and the hour leaves room: at most 20 such
+  searches an hour, within the hour's 60 lookup requests to LaCuerda. A line
+  under the results says "Searching LaCuerda for “…”…", then what LaCuerda
+  answered, and its songs arrive in their artists' groups as the search is
+  asked again. Typing on sends nothing, and neither does Enter: it leaves the
+  button instead. Once the hour's 20 are spent, the line offers **Search
+  LaCuerda for “…” (1 request)**, which asks by hand, within the hour's lookups;
+  when those are spent, or LaCuerda cools down, it says LaCuerda's search waits.
+  A search that failed (LaCuerda erred, or answered a page caracole can't read)
+  isn't sent by itself again for an hour, and none is while three failed in the
+  last hour: the line says so, with the button. A search refused or failed has
+  the button under what it said. A query is sent once a page, and once in 30
+  days. The Look up page does the same.
   **Enter never spends a request**, however clear the best result: it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Get it, or a click or a key on the name,

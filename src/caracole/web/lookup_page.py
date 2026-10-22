@@ -8,7 +8,13 @@ Ultimate Guitar's, with LaCuerda's mark: a song's Get it keeps that LaCuerda
 sheet (``lacuerda``), and an artist's Songs lists those the index holds, or,
 while caracole hasn't read their page, offers to (``POST /lacuerda/artist``,
 one request, a job the page follows on ``/api/jobs``), as it does for a name
-under a letter LaCuerda's listings aren't read to yet. A query may be an
+under a letter LaCuerda's listings aren't read to yet. LaCuerda's own search,
+which finds the songs of an artist whose page caracole hasn't read, is one
+request too (``POST /lacuerda/search``): the page sends it by itself once the
+query has settled, the box unchanged for 1.5 s, when ``/api/search`` says so
+(``lacuerda_search``), never on Enter, never twice for a query, or offers it as
+a button, a line under the results (rows.js ``lacuerdaSearcher``); its rows come
+with the search asked again once it is over. A query may be an
 artist's name alone or a title alone, or a word of an artist's name
 ("skynyrd"): an artist it names is a row of its own, whose Songs lists all
 their songs (``GET /api/artist``), and comes first when it leads. A query
@@ -135,6 +141,10 @@ const ICONS = (() => {
   try { return JSON.parse(document.getElementById("icons").textContent || "{}") || {}; } catch (e) { return {}; }
 })();
 const rowKit = caracoleRows(ICONS, {searchArtist: (name) => searchArtist(name)});
+// LaCuerda's own search, sent by itself once the query settles or by its button (ROWS_SCRIPT's): once it is over,
+// the search again, for the rows it put into LaCuerda's index.
+const searcher = rowKit.lacuerdaSearcher(csrf, typedText, (asked) => { if (typedText() === asked) search(); },
+  (line) => { if (!line.isConnected) results.append(line); });
 window.caracole = Object.freeze({resultRow: rowKit.resultRow, sourceMark: rowKit.sourceMark, icons: ICONS});
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
 let shownFor = null;  // the query the results on the screen answer
@@ -225,6 +235,10 @@ function show(data, text) {
     const line = rowKit.lookedLine(data, text, does);
     if (line) results.append(line);
   }
+  // LaCuerda's own search, under the results: sent by itself once the query settles, held back by an Enter.
+  let lcLine = searcher.show(data.lacuerda_search, text);
+  if (enterFor === text) lcLine = searcher.enter(text) || lcLine;
+  if (lcLine) results.append(lcLine);
   shownFor = text;
   shownData = data;
   if (enterFor === text) { enterFor = null; pickBest(); }
@@ -448,6 +462,7 @@ function showSiteArtist(data, focus) {
 }
 
 q.addEventListener("input", () => {
+  searcher.typed();
   enterFor = null;
   expand();
   clearTimeout(timer);
@@ -458,7 +473,12 @@ q.addEventListener("keydown", e => {
   e.preventDefault();
   if (results.hidden) { expand(); return; }  // after a pick: the results again, not the pick again
   const text = typedText();
-  if (text === shownFor) { pickBest(); return; }
+  if (text === shownFor) {
+    const held = searcher.enter(text);  // Enter never sends LaCuerda's search: its button, now
+    if (held && !held.isConnected) results.append(held);
+    pickBest();
+    return;
+  }
   // The results on the screen answer an older query: search now, and act on its answer.
   enterFor = text;
   clearTimeout(timer);

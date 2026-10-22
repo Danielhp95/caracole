@@ -156,7 +156,8 @@ def serve(cfg):
 
     def start(runner, *, before=None):
         queue = JobQueue(runner)
-        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers=QUICK)
+        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers=QUICK,
+                     searches_lacuerda=False)
         posted: list[tuple[str, dict[str, str]]] = []
         answer = app.handle
 

@@ -1021,6 +1021,60 @@ def test_an_artists_page_is_read_by_its_slug_or_their_name_for_the_index(conn, t
     assert site.requests == [SODA, enanitos, f"{BASE}/nadie_conocido/"]
 
 
+def popular_index(conn, *, complete=True):
+    """LaCuerda's listings with five artists, read whole (or not), and the pages of four on the site."""
+    from caracole import lacuerda_index as li
+    from caracole.db import kv_set
+    from caracole.lacuerda import LCArtist
+
+    li.store_artists(conn, "tabs/a/index0.html", [
+        LCArtist("andres_calamaro", "Andrés Calamaro", 325), LCArtist("arjona", "Ricardo Arjona", 300),
+        LCArtist("aventura", "Aventura", 120), LCArtist("amaral", "Amaral", 119), LCArtist("abba", "Abba", 4)])
+    if complete:
+        kv_set(conn, li.COMPLETE_KEY, "2026-10-17T03:00:00Z")
+    return FakeLaCuerda({f"{BASE}/{slug}/": (200, artist_page(name, slug, (f"{slug}_1", f"{name} 1", "R-1")))
+                         for slug, name in (("andres_calamaro", "Andrés Calamaro"), ("arjona", "Ricardo Arjona"),
+                                            ("aventura", "Aventura"), ("amaral", "Amaral"))})
+
+
+def test_once_the_listings_are_read_whole_the_most_popular_artists_pages_are_read_within_a_share(conn, tmp_path):
+    from caracole.lacuerda_fetch import POPULAR_PAGES, popular_pages
+    from caracole.lacuerda_index import artist_songs
+
+    site = popular_index(conn)
+    client = site.client(tmp_path / "cache")
+    client.get(f"{BASE}/arjona/")  # read this month already: left alone
+    site.requests.clear()
+    stats = popular_pages(conn, client, NOW, limit=2)
+    # The most songs first, a page read within 30 days skipped (its songs from the cache), two at most.
+    assert site.requests == [f"{BASE}/andres_calamaro/", f"{BASE}/aventura/"]
+    assert (stats.read, stats.errors, stats.budget_exhausted) == (2, 0, False)
+    assert [h.title for h in artist_songs(conn, "aventura")] == ["Aventura 1"]
+    assert [h.title for h in artist_songs(conn, "arjona")] == ["Ricardo Arjona 1"]
+    # The next night goes on with the next most popular, within what the budget leaves.
+    stats = popular_pages(conn, site.client(tmp_path / "cache", budget=1), NOW + timedelta(days=1))
+    assert site.requests[2:] == [f"{BASE}/amaral/"] and (stats.read, stats.budget_exhausted) == (1, True)
+    assert POPULAR_PAGES <= 10
+
+
+def test_no_popular_page_is_read_before_the_listings_are_read_whole(conn, tmp_path):
+    from caracole.lacuerda_fetch import popular_pages
+
+    site = popular_index(conn, complete=False)
+    stats = popular_pages(conn, site.client(tmp_path / "cache"), NOW)
+    assert site.requests == [] and stats.read == 0
+
+
+def test_an_error_on_a_popular_page_is_counted_and_the_pass_goes_on(conn, tmp_path):
+    from caracole.lacuerda_fetch import popular_pages
+
+    site = popular_index(conn)
+    site.pages[f"{BASE}/andres_calamaro/"] = (200, "<html>Mantenimiento</html>")
+    stats = popular_pages(conn, site.client(tmp_path / "cache"), NOW, limit=2)
+    assert (stats.read, stats.errors) == (2, 1)
+    assert site.requests == [f"{BASE}/andres_calamaro/", f"{BASE}/arjona/"]
+
+
 # --- in the nightly run -----------------------------------------------------------------
 
 

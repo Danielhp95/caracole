@@ -80,7 +80,7 @@ def lookup():
 def live(cfg, lookup):
     queue = JobQueue(lookup)
     queue.start()
-    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
     posted = Posted()
     answer = app.handle
 

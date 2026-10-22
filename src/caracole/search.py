@@ -85,7 +85,8 @@ since the index holds every artist but the songs only of the artists whose page 
 has read. ``lacuerda_artist`` and ``lacuerda_songs`` give one of its artists and the songs
 the index holds of theirs. While its listings aren't read whole, ``lacuerda_unlisted`` names the
 page that may tell whether LaCuerda has an artist it doesn't list, and ``lacuerda_leads`` says when
-its group comes first. LaCuerda has no search caracole uses: nothing here asks it.
+its group comes first. Nothing here asks LaCuerda: its own search is lacuerda_search.py's, a lookup
+of its own, whose answers go into that index.
 
 UG's sitemaps list artists with accented or non-Latin names only by bare ids,
 so the index can't see their tabs; ``bare_id_hint`` says what to do then.
@@ -130,6 +131,7 @@ from caracole.normalize import (
     original_part,
     placeholder_artist,
     romanize,
+    slug_key,
     split_variant,
 )
 from caracole.overrides import ARTIST_PAGE_SHAPE, Overrides, artist_url_entry
@@ -320,8 +322,9 @@ class SiteArtist:
 
     ``artist`` is the name the site writes, ``slug`` its own name for their page,
     ``url`` the page; ``songs`` counts their songs as the site's listing does, and
-    ``known`` how many of them the index holds, 0 until caracole has read their
-    page; ``top`` holds the most popular with chords. ``score`` and ``via`` are as
+    ``known`` how many of them the index holds from their page, 0 until caracole has
+    read it (the songs LaCuerda's search brought alone leave it 0); ``top`` holds the
+    most popular with chords. ``score`` and ``via`` are as
     ``IndexHit``'s, and ``part`` as ``ArtistHit``'s (``LaCuerdaHit.part``).
     """
 
@@ -599,7 +602,7 @@ def suggestions(conn: sqlite3.Connection, query: str, index: IndexFound, sites: 
     Ultimate Guitar index (``index``, ``find_index``'s answer) or another site's (``sites``: LaCuerda's artists and
     songs, gtptabs.com's and MuseScore's pages) has an artist whose whole name the query is (or a name near it, at
     ``STRONG`` or more on Ultimate Guitar's, above ``PART`` on LaCuerda's, where a name the query is only inside of,
-    "adelle" of La Banda del Lechuga, scores 90 and leaves room for Adele), or a song whose title (or title and
+    "adelle" of La Banda del Lechuga, scores 85 and leaves room for Adele), or a song whose title (or title and
     artist) the query is whole, scored 100. A title that
     only begins with the query, or holds a word that does (scored 90), leaves room for one: "eminen" is the start
     of The Who's "Eminence Front", and Eminem is suggested. Any page of MuseScore's is a title someone wrote out
@@ -908,12 +911,16 @@ def lacuerda_unlisted(conn: sqlite3.Connection, query: str, artists: Sequence[Ar
     index's answer (``artists``, ``songs``, ``lead``, as ``find_index`` gives them): a song by its title alone
     that leads ("creep", beside the artist The Creep) is no name, so none; else the artist that leads, or the
     artist of a strong song by its artist and title, or by part of the artist's name ("Enrique Bunbury" for
-    "bunbury"). Else none when LaCuerda has an artist whose whole name is among the query's words (their row,
-    ``lacuerda_index.NAMED``, says it); else the artist of an Ultimate Guitar song read by both its names,
-    however weakly, whose whole name starts or ends the query (``_named_at_an_end``: "Estopa" for "estopa como
-    camaron", whose page may hold the title Ultimate Guitar lacks); else the query. With ``artist``
-    (``--artist NAME``) the query is the name."""
-    from caracole.lacuerda_index import letters_text, unread_letter
+    "bunbury"), never one whose name puts other words between the query's ("Silvio Martinez Rodriguez" is no
+    Silvio Rodríguez: ``_named_in_a_run``). Else none when LaCuerda has an artist whose whole name is among the
+    query's words (their row, ``lacuerda_index.NAMED``, says it); else the artist of an Ultimate Guitar song read
+    by both its names, however weakly, whose whole name starts or ends the query (``_named_at_an_end``: "Estopa"
+    for "estopa como camaron", whose page may hold the title Ultimate Guitar lacks); else the query less a title
+    an index knows at its end or its start (``_less_a_title``: "mana" for "mana rayando el sol"); else the query.
+    With ``artist`` (``--artist NAME``) the query is the name. A name LaCuerda's listings give, under any of its
+    spellings, is no page to read (``lacuerda_index.artist_slugs``: Ultimate Guitar's Los Enanitos Verdes are its
+    Enanitos Verdes)."""
+    from caracole.lacuerda_index import NAMED, artist_slugs, letters_text, unread_letter
 
     if any(h.score >= STRONG for h in lacuerda):
         return None
@@ -921,18 +928,53 @@ def lacuerda_unlisted(conn: sqlite3.Connection, query: str, artists: Sequence[Ar
     if not artist:
         strong = [h for h in songs if h.score >= STRONG]
         first = strong[0] if strong else None
-        if artists and (lead == "artist" or first is None or first.via != "title"):
-            name = artists[0].artist
+        named = [a for a in artists if not a.part or _named_in_a_run(query, a.artist_key)]
+        if named and (lead == "artist" or first is None or first.via != "title"):
+            name = named[0].artist
         elif first is not None and first.via != "title" and first.artist and not no_ones(first.artist_key):
             name = first.artist
         elif first is not None and first.via == "title":
             return None
-        elif any(isinstance(a, SiteArtist) and a.via == "both" for a in lacuerda):
+        elif any(isinstance(a, SiteArtist) and a.via == "both" and a.score >= NAMED for a in lacuerda):
             return None
         else:
-            name = _named_at_an_end(query, songs) or query
+            name = _named_at_an_end(query, songs) or _less_a_title(conn, query) or query
+    if artist_slugs(conn, name):  # LaCuerda lists them: their row says it, under the name it writes
+        return None
     letter = unread_letter(conn, name)
     return (name, letters_text([letter])) if letter is not None else None
+
+
+def _named_in_a_run(query: str, artist_key: str) -> bool:
+    """Whether the query's words are a run of an artist's name's words (Ultimate Guitar's key): "bunbury" of Enrique
+    Bunbury, never "silvio rodriguez" of Silvio Martinez Rodriguez, whose name puts a word between them."""
+    words, name = name_words(query), artist_key.split("-")
+    return bool(words) and any(name[i:i + len(words)] == words for i in range(len(name) - len(words) + 1))
+
+
+TITLE_WORDS = 2  # a title at a query's end that leaves the rest as its artist: two words at least, as one is no proof
+
+
+def _less_a_title(conn: sqlite3.Connection, query: str) -> str | None:
+    """The query less the longest run of its last (else first) words that is a title Ultimate Guitar's index or
+    LaCuerda's knows exactly, of ``TITLE_WORDS`` words or more, one of four letters, and fewer than all: the
+    words left, as typed, name the artist ("héroes del silencio" for "héroes del silencio entre dos tierras",
+    "mana" for "mana rayando el sol"). None for none. "joaquin sabina" is no artist "joaquin" and a title
+    "sabina": a title of one word is no proof. By the indexes' keys alone, no scan."""
+    from caracole.lacuerda_index import title_key
+
+    typed = query.split()
+    for n in range(len(typed) - 1, TITLE_WORDS - 1, -1):
+        for run, rest in ((typed[-n:], typed[:-n]), (typed[:n], typed[n:])):
+            words = name_words(" ".join(run))
+            if len(words) < TITLE_WORDS or not any(len(w) >= 4 for w in words) or not name_words(" ".join(rest)):
+                continue
+            text = " ".join(run)
+            if conn.execute("SELECT 1 FROM ug_index WHERE song_key = ? LIMIT 1", (slug_key(text),)).fetchone() or \
+                    conn.execute("SELECT 1 FROM lacuerda_index WHERE title_key = ? AND title != '' LIMIT 1",
+                                 (title_key(text),)).fetchone():
+                return " ".join(rest)
+    return None
 
 
 def _named_at_an_end(query: str, songs: Sequence[IndexHit]) -> str | None:
@@ -978,8 +1020,9 @@ def _lacuerda_song(h: LaCuerdaHit) -> SiteHit:
 
 
 def _lacuerda_artist(conn: sqlite3.Connection, a: LaCuerdaHit) -> SiteArtist:
-    known = conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE artist_slug = ? AND title != ''",
-                         (a.artist_slug,)).fetchone()[0]
+    # Their songs from their own page: those LaCuerda's search brought alone leave it to be read.
+    known = conn.execute("SELECT COUNT(*) FROM lacuerda_index WHERE artist_slug = ? AND title != '' AND page = ?",
+                         (a.artist_slug, f"{a.artist_slug}/")).fetchone()[0]
     return SiteArtist("lacuerda", a.artist, a.artist_slug, a.url, a.score, max(a.songs, known), known, a.via,
                       tuple(_lacuerda_song(t) for t in a.top), a.part)
 

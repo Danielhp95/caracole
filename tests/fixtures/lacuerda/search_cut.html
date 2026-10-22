@@ -1,0 +1,49 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<!-- caracole test fixture. An answer of LaCuerda's search that its server ended early, as captured on
+     2026-10-22 (https://acordes.lacuerda.net/busca.php?exp=…, a general search whose query named an
+     artist, so the answer lists artists, in ul#i_main): it counts one result, then stops right after the
+     list's opening tag, with HTTP 200 and nothing to say it was cut. The query is made up; the ads, the
+     tracking scripts and the menus are removed; the rest is as captured, the end included. -->
+<HTML lang='es'>
+<HEAD>
+<META HTTP-EQUIV="Content-Language" CONTENT="es">
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<META HTTP-EQUIV="Content-Script-Type" CONTENT="text/javascript">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<TITLE>LaCuerda: Buscando la gaviota (búsqueda general)</TITLE>
+<script src="//cdn.lacuerda.net/UTIL/mainJS.js"></script>
+<script src="/ARCH/arch.js?f2020"></script>
+<script>
+function lOpen(n,v) { fn=''+hds[n]+'/'+fns[NMAX-n]; if (v==0) aOpen('/'+fn); else sOpen(fn,v); }</script>
+<LINK href="//acordes.lacuerda.net/UTIL/estilo.css" rel="stylesheet" type="text/css">
+</HEAD>
+
+<BODY onload="; bidStart();">
+<div id='mTopCont'></div>
+<div id='mMask' style='display:none'></div>
+<div id='mHead'>
+	<div class='mhTit' >LaCuerda.net: Buscando la gaviota (búsqueda general)</div>
+</div>
+<script>mShTop();</script>
+<div id='mCols'><div id='mLeft'>
+</div>
+
+<div class='mBody'>
+
+<div id=s_box>
+<form id='sform' method=get action=/busca.php>
+<input type=hidden name=exp value="la gaviota">
+<input type=hidden name=canc value="0">
+<input type=hidden name=ord value="0">
+<input type=hidden name=ini value=0>
+</form>
+<input id='sExp' tabindex=3 type=text name=exp onkeyup="sChk(event)" placeholder='Buscar Artista y/o Canción' value="la gaviota">
+<button tabindex=4 class='s_but s_bus' type=button onclick="sChg('canc',0)">Buscar</button>
+<button tabindex=6 id='s_artBut' class=s_but type=button onclick="sChg('canc',2)">en Artistas</button>
+<button tabindex=5 id='s_sngBut' class=s_but type=button onclick="sChg('canc',1)">en Canciones</button>
+<br clear=all></div>
+<div class=s_res>Buscando <b>"la gaviota"</b>. 1 resultados.</div>
+<div style='min-height:500px'><div class='multipag' style='width:100%'><div class='first'>Página:</div><ul>
+<li class='sel'>1</li><li class='last'><span>1</span> resultados</li></ul><br clear=all></div>
+
+<ul id=i_main class=s_blist>

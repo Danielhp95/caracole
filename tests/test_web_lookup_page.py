@@ -68,7 +68,7 @@ class FakeGet:
 @pytest.fixture
 def served(cfg):
     queue = JobQueue(FakeGet(cfg))
-    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     yield server, queue
@@ -147,7 +147,7 @@ def test_why_a_stage_waits_or_was_left_is_written_out_not_only_in_a_tooltip(cfg,
 
     queue = JobQueue(runner)
     queue.start()
-    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     try:
@@ -193,7 +193,7 @@ def live(cfg):
     """The lookup page on a socket, its queue running the fake ``caracole get``."""
     queue = JobQueue(FakeGet(cfg))
     queue.start()
-    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     yield f"http://127.0.0.1:{server.server_address[1]}", queue
@@ -267,7 +267,7 @@ def test_enter_right_after_typing_looks_up_what_you_typed_not_the_results_before
 @in_chromium
 def test_a_page_left_open_across_a_restart_says_to_reload_it(cfg, browser):
     queue = JobQueue(FakeGet(cfg))
-    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
     server = make_server(app, "127.0.0.1", 0)
     threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()  # stops within 10 ms
     try:

@@ -303,26 +303,31 @@ def _fetch(ctx: StepContext) -> StepResult:
 
 
 def _lacuerda(ctx: StepContext) -> StepResult:
-    from caracole import lacuerda_index
-    from caracole.lacuerda_fetch import lacuerda_sheets
+    from caracole import lacuerda_fetch, lacuerda_index
 
     client = ctx.services.client("lacuerda")
-    s = lacuerda_sheets(ctx.conn, client, ctx.cfg.library_dir, ctx.cfg.rank, ctx.now, overrides=ctx.overrides)
+    s = lacuerda_fetch.lacuerda_sheets(ctx.conn, client, ctx.cfg.library_dir, ctx.cfg.rank, ctx.now,
+                                       overrides=ctx.overrides)
     # The artist listings, for searches to suggest LaCuerda's artists, get what the sheets left of the budget;
-    # as MuseScore's sitemaps, only once the library has a song, so that an empty one asks no site.
+    # as MuseScore's sitemaps, only once the library has a song, so that an empty one asks no site. Then, once
+    # they are read whole, the most popular artists' pages get what is left (lacuerda_fetch.popular_pages).
     wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
     ix = (lacuerda_index.index_pass(ctx.conn, client, ctx.now) if wanted and not s.budget_exhausted
           else lacuerda_index.IndexStats())
+    pop = (lacuerda_fetch.popular_pages(ctx.conn, client, ctx.now)
+           if wanted and not s.budget_exhausted and not ix.budget_exhausted else lacuerda_fetch.PopularStats())
+    popular = f"; {plural(pop.read, 'popular artist page')} read, {plural(pop.errors, 'error')}" if pop.read else ""
     artists, songs = lacuerda_index.index_size(ctx.conn)
     result = _provider_result(
         ctx, "lacuerda", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run",
         spent=s.budget_exhausted or ix.budget_exhausted,
         status=(f"{s.tried} tried, {plural(s.kept, 'sheet')} kept, {s.missing} not on LaCuerda, "
                 f"{plural(s.errors, 'error')}; artist index: {plural(ix.pages, 'page')} read, "
-                f"{plural(artists, 'artist')}, {plural(songs, 'song')}"),
+                f"{plural(artists, 'artist')}, {plural(songs, 'song')}{popular}"),
         failures=s.failures, title="LaCuerda",
         done=_counted(_n(s.kept, "sheet", "kept"), _n(s.missing, "song", "not there"),
-                      _n(ix.pages, "page", "of artists read")),
+                      _n(ix.pages, "page", "of artists read"),
+                      _n(pop.read, "popular artist page", "read")),
         retry="{songs} will be looked for on LaCuerda again on the next run",
     )
     if ix.errors:
