@@ -291,6 +291,8 @@ def _how_it_goes(app: WebApp, do: str, asked: _Asked, job: Job | None) -> tuple[
         last = next((line for step in job.steps for line in reversed(step.output) if line.strip()), "")
         details = f' <a href="/{details_href(job.id)}">Output</a>'
         return f'<p class="says failed">Failed{": " + escape(last) if last else "."}{details}</p>\n', ""
+    if job.state == "cancelled":  # taken out of the queue on the requests page: it never ran
+        return '<p class="says cancelled">Cancelled before it ran.</p>\n', ""
     if job.state != "done":
         state = "Queued: it runs after the requests before it." if job.state == "queued" else _RUNNING[do]
         return f'<p class="says {job.state}">{escape(state)}</p>\n', ""

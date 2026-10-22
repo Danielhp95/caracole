@@ -887,6 +887,8 @@
   const HAN = /\p{Script=Han}/u;
   const enough = (text) => (String(text).match(/[\p{L}\p{N}]/gu) || []).length >= (HAN.test(text) ? 2 : 3);
   const SEARCH_PAUSE = 250;
+  // Add a song's id, sent with each search: one typed on stops this box's older ones alone (web/search_routes.py).
+  const SEARCH_BOX = Math.random().toString(36).slice(2, 12) || "songbook";
   function addSong() {
     const box = el("div", "add-song");
     const label = el("label", "add-label", "Add a song");
@@ -984,7 +986,7 @@
       if (!enough(q)) return;
       timer = setTimeout(() => {
         asking = new AbortController();
-        fetch("api/search?q=" + encodeURIComponent(q.trim()), {
+        fetch("api/search?q=" + encodeURIComponent(q.trim()) + "&box=" + SEARCH_BOX, {
           signal: asking.signal, credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" },
         }).then((r) => r.json().catch(() => null)).then((body) => {
           if (mine !== asked || !body || typeof body !== "object") return;

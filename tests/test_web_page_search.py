@@ -363,6 +363,41 @@ def test_typing_fast_shows_only_the_newest_answer(cfg, live, browser):
                                  ["Radiohead", [["Karma Police", "ug"]]]]
 
 
+def test_two_people_searching_at_once_each_get_their_answer(cfg, live, browser, tmp_path, monkeypatch):
+    # A sing-along: one searches on the library page, another on the lookup page, at the same moment, and each search
+    # takes a while (common words, a slow host). Neither page's search stops the other's: each waits its turn and
+    # shows its answer, where they used to stop each other's, and both pages asked again for ever.
+    import caracole.search
+
+    base, _, asked = live
+    sites(cfg, ug=[("love", "night-song", 3), ("blue", "heart-song", 2)])
+    real = caracole.search.find_index
+
+    def slow(conn, query, **kwargs):  # long enough for the other page's search to come in while it reads
+        time.sleep(0.4)
+        conn.execute("WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 200000) "
+                     "SELECT count(*) FROM n").fetchone()  # SQLite looks for a newer search on the way
+        return real(conn, query, **kwargs)
+
+    monkeypatch.setattr(caracole.search, "find_index", slow)
+    lookup = driven(tmp_path / "other")
+    try:
+        browser.open(base)
+        lookup.open(base + "lookup")
+        typed = ("(() => {{ const q = document.getElementById('q'); q.focus(); q.value = {}; "
+                 "q.dispatchEvent(new Event('input', {{ bubbles: true }})); }})()")
+        browser.js(typed.format(json.dumps("love night")))
+        lookup.js(typed.format(json.dumps("blue heart")))
+        assert browser.wait(f"{TITLES}.join() === 'Night Song'", timeout=20), asked.queries()
+        assert lookup.wait("[...document.querySelectorAll('#results .hit .row-title')].some((t) => "
+                           "t.textContent === 'Heart Song')", timeout=20), asked.queries()
+    finally:
+        lookup.close()
+    boxes = {parse_qs(urlsplit(target).query).get("box", [""])[0] for target in asked}
+    assert len(boxes) == 2 and "" not in boxes, asked  # each page's box: an id of its own
+    assert len(asked) <= 6, asked  # an answer each, at most a search or two asked again while typing settled
+
+
 def test_typing_never_asks_a_music_site(cfg, live, browser):
     # The page asks its own server alone, and the server reads its indexes: typing looks nothing up.
     base, queue, asked = live

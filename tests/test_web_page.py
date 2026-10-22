@@ -28,7 +28,7 @@ from caracole.library import song_dir
 from caracole.overrides import override_key
 from caracole.songs import find_song, update_song
 from caracole.web.app import Request, Response, WebApp
-from caracole.web.jobs import JobQueue
+from caracole.web.jobs import JobQueue, lookup_steps
 from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
 
@@ -535,6 +535,52 @@ def test_asking_again_shows_on_the_same_line(serve, cfg, conn, tmp_path):
     assert attribute(dom, "data-again") == ["queued"]  # asked again: the same line says so
     assert len(re.findall(r"<article", requested)) == 1, requested
     assert "Simon &amp; Garfunkel" in requested and 'data-tone="ready"' in requested
+
+
+def test_a_request_cancelled_elsewhere_ends_on_the_line_and_its_fetch_now_comes_back(serve, cfg, conn, tmp_path):
+    # The page is open while Creep's lookup waits behind another, its Fetch now gone; the request is cancelled on
+    # the requests page, in another tab or on another device. The line says so, Fetch now is back, and the list of
+    # requests counts it as over, all without a reload.
+    import urllib.request
+
+    other = add_song(conn, "Oasis", "Wonderwall")
+    creep = add_song(conn, "Radiohead", "Creep")
+    for song, artist, title in ((other, "oasis", "wonderwall"), (creep, "radiohead", "creep")):
+        update_song(conn, song.id, match_decision="accept", match_artist_key=artist, match_song_key=title)
+    go = threading.Event()
+
+    class Held(FakeCaracole):  # the first lookup runs until the test lets it go: Creep's waits behind it
+        def __call__(self, args, emit):
+            go.wait(60)
+            return super().__call__(args, emit)
+
+    def before(app):
+        app.queue.submit("Fetch Oasis - Wonderwall", other.key, lookup_steps("Oasis", "Wonderwall"), fetching=True,
+                         display="Oasis - Wonderwall")
+        app.queue.submit("Fetch Radiohead - Creep", creep.key, lookup_steps("Radiohead", "Creep"), fetching=True,
+                         display="Radiohead - Creep")
+
+    url = serve(Held(cfg), "(() => {})();\n", before=before, timers=QUICK)
+    item = f'#list [data-id="{creep.id}"]'
+    line, fetch = f"document.querySelector('{item} .progress')", f"document.querySelector('{item} form.fetch')"
+    tray = "document.getElementById('tray-sum').textContent"
+    try:
+        with browser.Browser(tmp_path / "chrome") as page:
+            page.open(url)
+            assert page.wait(f"{line} !== null && {line}.textContent.startsWith('Queued') && {fetch} === null")
+            assert page.wait(f"{tray} === '2 requests · 2 to go'"), page.js(tray)
+            cancel = urllib.request.Request(url + "jobs/cancel", data=b"csrf=tok&job=2", headers={
+                "Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json",
+                "Origin": url.rstrip("/"), "Sec-Fetch-Site": "same-origin"})
+            assert json.loads(urllib.request.urlopen(cancel).read()) == {"cancelled": 2}
+            assert page.wait(f"{line} !== null && {line}.textContent === 'Cancelled'"), page.js(f"{line}.textContent")
+            assert page.wait(f"{fetch} !== null && !{fetch}.querySelector('button').disabled")
+            assert page.wait(f"{tray} === '2 requests · 1 to go'"), page.js(tray)
+            go.set()
+            assert page.wait(f"{tray} === '2 requests · all done'"), page.js(tray)
+            assert page.js(f"{line}.textContent") == "Cancelled"
+    finally:
+        go.set()
 
 
 # --- the picker on a line ---------------------------------------------------------------------------

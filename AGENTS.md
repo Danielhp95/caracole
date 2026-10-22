@@ -220,7 +220,7 @@ Rules a change there keeps (the Invariants below are the others):
   (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step; Cancel takes a request that hasn't started out of the
   queue (`JobQueue.cancel`, never one that runs, with the jobs `submit_all` queued `together` with
-  it), and Try again queues a finished one's steps again (a removal's asks its question again). A sandboxed
+  it), keeping it in the history as over ("cancelled"), so a page that follows it hears it ended, and Try again queues a finished one's steps again (a removal's asks its question again). A sandboxed
   viewer reaches a form only through a GET page of the server's own, whose form posts with the token:
   `/export` (export_routes.py) and `/versions` (versions_routes.py: Make this the one, Keep it and back
   to caracole's pick, `caracole versions --choose`, `--keep` and `--clear`, with `--progress`: the job's
@@ -570,8 +570,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `test_songs.py::test_no_spotify_track_added_before_a_songs_removal_brings_it_back`).
 - **Schema changes go through db.py**: bump `SCHEMA_VERSION` and add the script to
   `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
-  (`VACUUM INTO`), then runs each script in one `BEGIN IMMEDIATE` transaction with its
-  `PRAGMA user_version` (a script never begins or commits one itself). A newer database
+  (`VACUUM INTO`, under a name of its own, then renamed), then runs each script in one `BEGIN IMMEDIATE`
+  transaction with its `PRAGMA user_version` (a script never begins or commits one itself); one connection
+  migrates at a time, of every thread and process (an flock on `caracole.sqlite.migrating`, the version read
+  again under it: `test_db.py::test_connections_opened_at_once_migrate_once_and_each_opens_the_database`). A newer database
   raises `DatabaseTooNew`, and `_common.open_db` exits 2 (tests/test_db.py). Writes that
   apply whole or not at all go in `db.savepoint(conn, name)`, which nests in a caller's:
   the connection is in autocommit mode, where `with conn:` opens no transaction

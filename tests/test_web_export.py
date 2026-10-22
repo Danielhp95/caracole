@@ -6,6 +6,7 @@ from urllib.parse import quote
 
 import pytest
 
+from caracole.library_page import sheet_href
 from caracole.overrides import Overrides
 from caracole.render import render_version
 from caracole.songs import get_song
@@ -14,7 +15,7 @@ from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
 
 from helpers.rendered import fake_chordpro, rendered_song
-from test_web_app import ALLOWED, HOST, Recorder, get, header, post, text
+from test_web_app import ALLOWED, HOST, Recorder, answer, get, get_json, header, post, text
 
 SHEET = "Soda Stereo/De Música Ligera/sheet.html"
 QUERY = "t=2&capo=0"
@@ -72,6 +73,39 @@ def test_the_export_page_names_the_version_and_makes_its_pdf(app, queue, recorde
     assert get(app, "/" + quote("Soda Stereo/De Música Ligera/" + name)).status == 200
 
 
+def test_an_exports_request_says_what_it_made_never_that_a_song_was_added(app, queue, conn, cfg):
+    # An export's job has a key of its own, never the song's: its line, in the library page's list of requests and on
+    # the requests page, says what it made, and it is no song's request (no songId: the song's line stays its own).
+    song = rendered_song(conn, cfg)
+
+    def runner(args, emit):  # `caracole render --song --version`: this export alone makes its PDF here
+        if f"--version={QUERY}" in args and "--mine" not in args:
+            render_version(conn, cfg, Overrides(), get_song(conn, song.id), version_from_query(QUERY),
+                           runner=fake_chordpro)
+        return 0
+
+    queue._runner = runner
+    post(app, "/export", {"sheet": SHEET, "v": QUERY})
+    [queued] = answer(get_json(app, "/jobs.json"))["jobs"]
+    assert (queued["kind"], queued["songId"], queued["line"]["text"]) == ("export", None, "Queued…")
+    post(app, "/export", {"sheet": SHEET, "v": QUERY, "mine": "1"})
+    post(app, "/export", {"sheet": SHEET, "v": "t=4&capo=0"})
+    queue.run_pending()
+    views = {view["id"]: view for view in answer(get_json(app, "/jobs.json?jobs=1,2,3"))["jobs"]}
+    assert {(view["kind"], view["songId"]) for view in views.values()} == {("export", None)}
+    pdf = "/".join(quote(part, safe="") for part in ("Soda Stereo", "De Música Ligera", "sheet (A Major, capo 0).pdf"))
+    assert views[1]["line"] == {"tone": "ready", "text": "PDF made", "link": {"label": "Open the PDF", "href": pdf},
+                                "details": None}
+    sheet = sheet_href(cfg.library_dir, get_song(conn, song.id))
+    assert views[2]["line"] == {"tone": "ready", "text": "Your version now",
+                                "link": {"label": "Open sheet", "href": sheet}, "details": None}
+    assert views[3]["line"]["tone"] == "failed" and views[3]["line"]["text"] == "No PDF was found: make it again."
+    page = shown(get(app, "/jobs"))
+    assert "Added" not in page and "nightly run" not in page
+    assert "PDF made" in page and "Your version now" in page and "No PDF was found: make it again." in page
+    assert f'href="/{pdf}"' in text(get(app, "/jobs"))
+
+
 def test_a_failed_job_says_so_and_a_running_one_refreshes_the_page(app, queue, conn, cfg):
     rendered_song(conn, cfg)
     where = header(post(app, "/export", {"sheet": SHEET, "v": QUERY}), "location")
@@ -81,6 +115,18 @@ def test_a_failed_job_says_so_and_a_running_one_refreshes_the_page(app, queue, c
     page = get(app, where)
     assert "Failed" in shown(page) and "no export: no font" in shown(page)
     assert 'http-equiv="refresh"' not in text(page)
+
+
+def test_an_export_cancelled_on_the_requests_page_says_so_and_waits_no_more(app, queue, recorder, conn, cfg):
+    rendered_song(conn, cfg)
+    where = header(post(app, "/export", {"sheet": SHEET, "v": QUERY}), "location")
+    job = re.search(r"job=(\d+)", where).group(1)
+    assert post(app, "/jobs/cancel", {"job": job}).status == 303
+    page = get(app, where)
+    assert "Cancelled before it ran: make it again." in shown(page) and "cancelled" not in shown(page)
+    assert 'http-equiv="refresh"' not in text(page) and "Open the PDF" not in shown(page)
+    queue.run_pending()
+    assert recorder.calls == []
 
 
 def test_the_export_post_needs_the_form_token_and_the_same_origin(app, queue, recorder, conn, cfg):

@@ -130,7 +130,10 @@ goes when the PDF is done, so caracole must be able to write there. Its
 [Where each file came from](#where-each-file-came-from)).
 
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
-to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
+to `caracole.sqlite.vN.bak`, N being the version it had. One caracole migrates
+it at a time (a lock on `caracole.sqlite.migrating`, beside it): `caracole
+serve`'s first requests after an upgrade, or the nightly run starting with
+them, wait the few seconds it takes, then find it migrated. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
 status 2: `database: … is at schema version 9, but this caracole knows up to 8:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
@@ -471,7 +474,8 @@ Options:
 - `--progress` adds a JSON line per stage, which `caracole serve` reads.
 - `--no-songbooks` leaves the songbooks that list the song as they are (by
   default the lookup makes them again). The page's Get the missing songs now
-  uses it for each song and makes the songbook once, after them all.
+  uses it for each song and makes the songbook once, after them all; such a
+  lookup's Try again runs alone, without it, and makes them again itself.
 
 A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
 up, and exits 1. A song the matcher isn't sure of gets everything but its
@@ -2839,7 +2843,10 @@ is no progression exits with status 2.
   library ("oasis wonderwall" finds the Wonderwall pages, and "oasis live
   forever" never a page titled Oasis or Forever), each a possible match. The
   results follow what you type; a search typed over stops at once, and only
-  the newest query's answer is shown, the older one staying until then. The
+  the newest query's answer is shown, the older one staying until then. Only
+  your own typing stops a search: two people searching at the same moment (on
+  two phones, or the library page and the lookup page) each wait their turn
+  and get their answer (`/api/search`'s `box`, an id each search box makes). The
   line under the box says "Searching the sites…", then how many each site has.
   Under the results, one muted line says where caracole looked when a site
   wasn't searched whole, a chip a site: green searched whole (UG ✓,
@@ -3117,7 +3124,10 @@ is no progression exits with status 2.
     Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
-    one that is over stays). Cancelling a request leaves its wanted.txt line:
+    one that is over stays). A cancelled request is over, never run: it stays
+    in the history as **Cancelled**, and the pages that follow it (the library
+    page on another device, the lookup, export and versions pages) say so, the
+    song's line getting its Fetch now back. Cancelling a request leaves its wanted.txt line:
     the song is in your library's list from the moment you asked, and the
     nightly run looks for it; remove it from the library if you don't want it.
     A songbook's Add a song for a song you haven't got queues two requests,
@@ -3153,12 +3163,17 @@ is no progression exits with status 2.
       an error, in the stage's words), and **Failed**, with its error in one
       sentence: **Try again** queues the same commands again
       (`POST /jobs/again`), with no question asked, a songbook's Delete
-      among them; a failed removal's Try again asks what goes first, as of
+      among them (a lookup of Get the missing songs, alone now, makes the
+      songbooks its song is in again itself); a failed removal's Try again asks what goes first, as of
       now (Remove's own question, `POST /remove`);
     - a songbook's **Made** or **Added** · **Open songbook**; **Removed**,
       **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda
       artist page's **Read**, **Not found** or **Not read** (Try again), each
-      in a word and a sentence.
+      in a word and a sentence;
+    - an export's **PDF made** · **Open the PDF** (or **Failed**, no PDF was
+      found, with Try again), and Make this my version's **Your version now**
+      · **Open sheet**: never its song's request, whose line on the library
+      page stays its own.
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and
@@ -3205,7 +3220,9 @@ is no progression exits with status 2.
   leaves it), queues `caracole versions SONG --clear`. Each is the song's
   request, as a lookup is: its card says how it goes, stage by stage, the same
   one asked twice is queued once, and Make this the one takes the place of the
-  song's lookup still waiting. The page then says how it goes (it reloads
+  song's lookup still waiting. Keep it never looks the song up, so a lookup
+  asked for meanwhile (Fetch now, the lookup page's) still runs: after it, in
+  its job while it waits, as a job of its own once it runs. The page then says how it goes (it reloads
   itself while it waits or runs) and, once done, what it came to, read from the
   song and overrides.toml, not from how the command exited: the version is the
   one now (Open the sheet), or your choice is under `[pin]` but a block, a spent

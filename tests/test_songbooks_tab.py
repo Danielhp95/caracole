@@ -447,6 +447,9 @@ def test_add_a_song_searches_everything_and_a_site_song_is_looked_up_then_added(
         page.type("wonderwall")
         assert page.wait(f"{results}.some((r) => r[0] === 'Wonderwall')", timeout=10), page.js(results)
         assert posted == []  # typing posts nothing, and asks no site: /api/search reads the local indexes
+        boxes = page.js("[...new Set(performance.getEntriesByType('resource').map((r) => new URL(r.name))"
+                        ".filter((u) => u.pathname === '/api/search').map((u) => u.searchParams.get('box')))]")
+        assert len(boxes) == 1 and boxes[0], boxes  # Add a song's own box: typed on, it stops its own searches alone
         assert page.js(SHIFTS)
         page.js(STILL)
         page.js("window.shifts = []")  # (typed here without keys, the results coming in count as shifts): from Add on

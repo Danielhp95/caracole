@@ -12,6 +12,8 @@ ran. So a job of other commands reads the same way:
   asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for another caracole…"
   while its lock is held by a nightly run that lets it go first at its next
   pause.
+- **Cancelled**: taken out of the queue before it ran (``JobQueue.cancel``),
+  whatever it was for.
 - **Failed**: the error its failing command gave, in one short sentence (the
   log's last ``error:`` line, its first sentence; a lookup's, its failed
   stage's words). A command that printed no error is named by its step. A fetch that fails on a song with no sheet that
@@ -25,6 +27,10 @@ ran. So a job of other commands reads the same way:
   fetched yet", for one it didn't (a cooldown, a block, a spent budget or an
   error, all of which exit 0): an error is never a miss. A removal
   (``jobs.REMOVING``), whose song is gone once it is done, says "Removed";
+  an export (``jobs.EXPORTING``, export_routes.py), none of its song's own
+  requests, what it made: "PDF made", with a link to it ("Open the PDF"), or
+  "No PDF was found" when it isn't there, and Make this my version "Your
+  version now";
   a songbook's change (songbooks.py), which has no song, what it did:
   "Made", "Moved", "Changed", "Renamed"…, "Made" and "Added" with a link to
   the songbook's page ("Open songbook") once caracole has written it (a move,
@@ -52,7 +58,7 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.web.jobs import LACUERDA_READS, REMOVING, Job, Stage, Step
+from caracole.web.jobs import EXPORTING, LACUERDA_READS, MINE, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -100,6 +106,8 @@ class SongFacts:
     source and its page: ``outcome.elsewhere``), and ``asked_ug`` that the fetch
     itself asked Ultimate Guitar (``checked_since``), so that what the song lacks, UG
     lacks; both the requests page alone says, and the line here never reads them.
+    ``pdf`` is, for an export that is over, the link to the PDF it made, once it is
+    there (``export_routes.made_pdf``).
     """
 
     sheet: str | None = None
@@ -111,11 +119,12 @@ class SongFacts:
     lacuerda: bool = False
     elsewhere: tuple[str, str] | None = None
     asked_ug: bool = False
+    pdf: str | None = None
 
 
 @dataclass(frozen=True)
 class Line:
-    """``tone``: queued, running, ready, added, removed, review, waiting, missing or failed; ``link``: (label, href),
+    """``tone``: queued, running, ready, added, removed, review, waiting, missing, failed or cancelled; ``link``: (label, href),
     where to go next; ``details``: the job's output on /jobs, for a line that ends in a failure or a wait."""
 
     tone: str
@@ -144,6 +153,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         step = next((s for s in job.steps if s.state == "running"), None) or next(
             (s for s in job.steps if s.state == "waiting"), None)
         return Line("running", f"{step.label}…" if step else "Running…")
+    if job.state == "cancelled":  # it never ran: nothing to read from its song
+        return Line("cancelled", "Cancelled")
     details = details_href(job.id)
     if job.state == "failed":
         if job.fetching and song is not None and not song.sheet:
@@ -154,6 +165,12 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
+    if job.song_key.startswith(EXPORTING):  # none of the song's own requests: what it made
+        if job.song_key.endswith(MINE):
+            return Line("ready", "Your version now", ("Open sheet", song.sheet) if song and song.sheet else None)
+        if song is not None and song.pdf:
+            return Line("ready", "PDF made", ("Open the PDF", song.pdf))
+        return Line("failed", "No PDF was found: make it again.", details=details)
     songbook = songbook_of(job.song_key)
     if songbook is not None:  # a songbook's change: no song at all; a deletion says so as a removal does
         action = str(songbook["action"])

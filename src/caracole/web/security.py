@@ -22,7 +22,6 @@ import hmac
 import ipaddress
 import re
 from collections.abc import Iterable, Mapping
-from http.cookies import CookieError, SimpleCookie
 from urllib.parse import urlsplit
 
 SESSION_COOKIE = "caracole_session"
@@ -132,13 +131,18 @@ def session_value(access_token: str) -> str:
 
 
 def session_cookie(header: str | None) -> str | None:
-    """The sign-in cookie's value in a ``Cookie`` header, if it has one."""
-    if not header:
-        return None
-    jar = SimpleCookie()
-    try:
-        jar.load(header)
-    except CookieError:
-        return None
-    morsel = jar.get(SESSION_COOKIE)
-    return morsel.value if morsel is not None else None
+    """The sign-in cookie's value in a ``Cookie`` header, if it has one.
+
+    Read pair by pair, never with ``http.cookies``: cookies ignore ports, so another app on the same
+    host can set one that parser stops at (JSON, a space, no value at all), and it would take
+    caracole's with it. Of two sign-in cookies, the first, which the browser sends for the longer path.
+    """
+    for pair in (header or "").split(";"):
+        name, sep, value = pair.partition("=")
+        if not sep or name.strip() != SESSION_COOKIE:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] == '"':
+            value = value[1:-1]
+        return value or None
+    return None

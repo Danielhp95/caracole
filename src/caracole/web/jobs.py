@@ -31,10 +31,11 @@ A step that exits non-zero fails its job, and the job's other steps are
 skipped. The queue holds ``limit`` jobs waiting or running, one per song (a
 lookup takes the place of the song's waiting add, since ``caracole get`` adds
 the song itself, or follows it once it runs; a version you pick meanwhile
-takes the place of the song's waiting lookup, or follows the running one),
+takes the place of the song's waiting lookup, or follows the running one, and a
+lookup joins the song's Keep it, which never looks it up, or follows it),
 and remembers the last ``keep``
 finished ones, in memory only (``cancel`` takes one that hasn't started out of the queue, never one
-that runs): a request is in wanted.txt from the moment it's
+that runs, and keeps it among those, cancelled): a request is in wanted.txt from the moment it's
 made, so a restart loses no song, only the lookup that would have come before
 the nightly run. ``Job.as_json`` is a job as data, for the page that shows a
 request's progress.
@@ -102,7 +103,7 @@ class Job:
     fetching: bool = False
     note: str = ""
     display: str = ""  # "Artist - Title"; its title when none was given
-    state: str = "queued"  # queued, running, done, failed
+    state: str = "queued"  # queued, running, done, failed, cancelled (before it ran: JobQueue.cancel)
     queued_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -245,6 +246,12 @@ def _looks_up(args: Sequence[str]) -> bool:
         arg == "--clear" or arg.startswith("--choose=") for arg in _options(args)))
 
 
+def _fetches(steps: Sequence[Step]) -> bool:
+    """Whether a job looks its song up (``_looks_up``) or fetches it (``caracole fetch``): Keep it, which asks
+    Ultimate Guitar for one tab page and keeps it beside the sheet, does neither."""
+    return any(_looks_up(step.args) or step.args[:1] == ("fetch",) for step in steps)
+
+
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
     --progress``, or ``caracole lacuerda --search --progress``."""
@@ -305,6 +312,8 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
 
 
 REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it never joins the song's add or fetch
+EXPORTING = "export:"  # an export's song_key (export_routes.py): the song's key and the version, never the song's own
+MINE = ":mine"  # after an export's song_key: making that version the song's own
 
 
 def remove_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
@@ -344,13 +353,14 @@ class JobQueue:
                join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
         """Queue a job, and say whether it is new: one per song, unless a fetch must come after an add.
 
-        A song's waiting or running job that does as much (a fetch, or the new
-        job fetches nothing) is the answer. A fetch joins a song's add that
-        still waits: the add gets the fetch's steps of the commands it doesn't
-        run (one ``caracole add``, whatever its album: the server wrote
-        wanted.txt already), and a lookup takes the add's place, since
-        ``caracole get`` adds the song itself. One asked for while the add
-        runs comes after it, as a job of its own. With ``join=False`` (a pick,
+        A song's waiting or running job that does as much (one that looks the
+        song up or fetches it, or any when the new job fetches nothing) is the
+        answer. A fetch joins a song's add that still waits: the add gets the
+        fetch's steps of the commands it doesn't run (one ``caracole add``,
+        whatever its album: the server wrote wanted.txt already), and a lookup
+        takes the add's place, since ``caracole get`` adds the song itself. One
+        asked for while the add runs comes after it, as a job of its own; so
+        with Keep it, which fetches one tab page but never looks the song up. With ``join=False`` (a pick,
         whose ``caracole review`` must come after the song's own request), any
         waiting or running job of the song is the answer, left as it is.
 
@@ -399,7 +409,7 @@ class JobQueue:
                        join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
         new = [Step(label, tuple(args)) for label, args in steps]
         mine = [job for job in self._jobs if job.active and job.song_key == song_key]
-        enough = next((job for job in mine if job.fetching), None)  # a fetch does the most
+        enough = next((job for job in mine if _fetches(job.steps)), None)  # a lookup or a fetch does the most
         if enough is None and (not fetching or not join) and mine:
             enough = mine[0]
         waiting = next((job for job in mine if job.state == "queued"), None)
@@ -438,16 +448,23 @@ class JobQueue:
         queued, cancelled already or forgotten. Raises JobStarted for one that runs or is over: the command
         it runs is never stopped halfway, and a finished one stays in the history. The jobs queued
         ``together`` with it that haven't started go too (a songbook's Add a song: the lookup and the
-        songbook's change, both or neither). A cancelled add leaves its wanted.txt line, which the server
-        wrote when it was asked for: the nightly run looks for the song."""
+        songbook's change, both or neither). A cancelled job is over, never run ("cancelled", its steps
+        and stages skipped), and stays in the history as a finished one does: a page that follows it (the
+        library page on another device) hears that it ended. A cancelled add leaves its wanted.txt line,
+        which the server wrote when it was asked for: the nightly run looks for the song."""
         with self._lock:
             job = next((j for j in self._jobs if j.id == job_id), None)
-            if job is None:
+            if job is None or job.state == "cancelled":
                 return None
             if job.state != "queued":
                 raise JobStarted(job_id, job.state)
-            self._jobs[:] = [j for j in self._jobs
-                             if j is not job and not (j.id in job.together and j.state == "queued")]
+            now = datetime.now(UTC)
+            for j in self._jobs:
+                if j is job or (j.id in job.together and j.state == "queued"):
+                    j.state, j.finished_at = "cancelled", now
+                    for part in (*j.steps, *j.stages):
+                        part.state = "skipped"
+            self._forget()
             return copy.deepcopy(job)
 
     def snapshot(self) -> list[Job]:

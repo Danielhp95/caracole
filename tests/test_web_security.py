@@ -99,3 +99,27 @@ def test_the_session_cookie_holds_a_digest_of_the_token_never_the_token():
     assert session_cookie("theme=dark") is None
     assert session_cookie('broken="') is None
     assert session_cookie(None) is None
+
+
+@pytest.mark.parametrize("other", [
+    'prefs={"theme":"dark"}',  # JSON, as some apps write it
+    "lang=es ES",  # a space
+    "x=été",  # beyond ASCII
+    "consent",  # no value at all
+    "s=a\\b",
+    'broken="',
+])
+def test_another_apps_cookie_never_hides_the_sign_in_cookie(other):
+    # Cookies ignore ports: another app on the same host can set one that http.cookies can't read, and
+    # the browser sends it beside caracole's, before it or after it.
+    value = session_value("correct horse battery staple")
+    assert session_cookie(f"{other}; caracole_session={value}") == value
+    assert session_cookie(f"caracole_session={value}; {other}") == value
+    assert session_cookie(other) is None
+
+
+def test_the_sign_in_cookie_is_read_quoted_or_bare_and_by_its_whole_name():
+    assert session_cookie('caracole_session="abc"') == "abc"
+    assert session_cookie("caracole_session=abc;theme=dark") == "abc"
+    assert session_cookie("old_caracole_session=abc") is None
+    assert session_cookie("caracole_session=") is None
