@@ -1002,6 +1002,87 @@ def test_a_pin_of_an_ultimate_guitar_sheet_wins_over_a_lacuerda_pick(conn, tmp_p
     assert site.requests == [] and files_of(conn, song) == {"sheet.txt": ug_vid, "sheet.json": ug_vid}
 
 
+class HandingOver(Recording):
+    """The nightly run's client: before asking for ``at``, it hands caracole's lock to a lookup, ``lookup()``."""
+
+    def __init__(self, client, at, lookup):
+        super().__init__(client)
+        self.at, self.lookup, self.handoffs = at, lookup, 0
+
+    def get(self, url, **options):
+        if url == self.at and self.lookup is not None:
+            self.lookup()
+            self.lookup, self.handoffs = None, self.handoffs + 1
+        return super().get(url, **options)
+
+
+def test_a_tab_a_lookup_pinned_while_the_pass_let_it_go_first_is_never_replaced(conn, tmp_path):
+    # In the pause before Persiana Americana's artist page, the run let `caracole get --tab` go first, which
+    # pinned the partial UG sheet De Música Ligera has kept: the pass reads overrides.toml and the song again.
+    persiana_2 = f"{BASE}/soda_stereo/persiana_americana-2.shtml"
+    site = FakeLaCuerda()
+    site.pages[persiana_2] = (200, fixture("version.html"))
+    newer = spanish_song(conn, title="Persiana Americana", added_at="2026-10-05T00:00:00Z")
+    pinned = spanish_song(conn, title="De Música Ligera", added_at="2026-10-01T00:00:00Z")
+    ug_vid = keep_ug_sheet(conn, tmp_path, pinned, 0.5)
+    pin = Overrides(pin={pinned.key: (85053,)})
+    client = HandingOver(site.client(tmp_path / "cache"), SODA, lambda: None)
+
+    stats = lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, overrides=Overrides(),
+                            reload_overrides=lambda: pin)
+
+    assert stats == LaCuerdaStats(tried=1, kept=1) and site.requests == [SODA, persiana_2]
+    assert files_of(conn, pinned) == {"sheet.txt": ug_vid, "sheet.json": ug_vid}
+    assert get_song(conn, newer.id).lacuerda_checked_at == STAMP
+
+
+def test_a_tab_a_lookup_pinned_during_the_songs_own_turn_is_never_replaced(conn, tmp_path):
+    # The pass had read Soda Stereo's page for De Música Ligera when, in the pause before its version's page, the
+    # run let `caracole get --tab` go first, which pinned the partial UG sheet the song keeps: what LaCuerda
+    # answers after it is not kept in its place.
+    song = spanish_song(conn)
+    ug_vid = keep_ug_sheet(conn, tmp_path, song, 0.5)
+    pin = Overrides(pin={song.key: (85053,)})
+    site = FakeLaCuerda()
+    client = HandingOver(site.client(tmp_path / "cache"), DML_3, lambda: None)
+
+    stats = lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, overrides=Overrides(),
+                            reload_overrides=lambda: pin)
+
+    assert stats == LaCuerdaStats(tried=1) and site.requests == [SODA, DML_3]
+    assert files_of(conn, song) == {"sheet.txt": ug_vid, "sheet.json": ug_vid}
+    assert lacuerda_versions(conn, song) == [] and get_song(conn, song.id).lacuerda_checked_at is None
+
+
+def test_a_lacuerda_sheet_a_lookup_picked_during_the_songs_own_turn_stays_the_one_kept(conn, tmp_path):
+    # In the pause before De Música Ligera's best version (3, which covers every line), the run let
+    # `caracole get --lacuerda` go first, which picked version 2 (six lines of eight) and kept it: version 3 does
+    # not replace your pick, nor is the song left for 30 days with it.
+    from caracole.overrides import LaCuerdaPick
+
+    song = spanish_song(conn)
+    dml_2 = f"{BASE}/soda_stereo/de_musica_ligera-2.shtml"
+    site = FakeLaCuerda()
+    site.pages[dml_2] = (200, fixture("version.html").replace("Baila la lluvia", "Llueve en la plaza")
+                         .replace("suena la radio", "cantan los grillos"))
+    pick = Overrides(lacuerda={song.key: LaCuerdaPick("soda_stereo", "de_musica_ligera", 2)})
+
+    def lookup():
+        lookups = site.client(tmp_path / "cache-lookup")
+        assert lacuerda_sheets(conn, lookups, tmp_path / "lib", RANK, NOW, overrides=pick,
+                               only={song.id}) == LaCuerdaStats(tried=1, kept=1)
+
+    client = HandingOver(site.client(tmp_path / "cache"), DML_3, lookup)
+
+    stats = lacuerda_sheets(conn, client, tmp_path / "lib", RANK, NOW, overrides=Overrides(),
+                            reload_overrides=lambda: pick)
+
+    assert stats == LaCuerdaStats(tried=1) and site.requests == [SODA, dml_2, DML_3]
+    (kept,) = {v.id for v in lacuerda_versions(conn, song) if v.tab_id.endswith("-2")}
+    assert files_of(conn, song) == {"sheet.txt": kept, "sheet.json": kept}
+    assert "cantan los grillos" in (song_folder(tmp_path) / "sheet.txt").read_text(encoding="utf-8")
+
+
 def test_an_artists_page_is_read_by_its_slug_or_their_name_for_the_index(conn, tmp_path):
     from caracole.lacuerda import LCArtist
     from caracole.lacuerda_fetch import read_artist_page
@@ -1143,3 +1224,31 @@ def test_tonights_lyrics_score_tonights_lacuerda_sheet(conn, cfg, tmp_path):
     assert report.steps["lacuerda"].startswith("1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors; ")
     (v,) = lacuerda_versions(conn, song)
     assert v.coverage == 1.0
+
+
+def test_a_tab_a_lookup_pinned_during_an_earlier_step_is_never_replaced_by_lacuerda(conn, cfg, tmp_path,
+                                                                                     monkeypatch):
+    # In a pause of the fetch step, the run let `caracole get --tab` go first (_common.hand_over), which pinned
+    # a UG tab for a Spanish song and kept it, partial, as its sheet. The steps after read overrides.toml again.
+    from caracole.commands import _common
+    from caracole.notify import Notifier
+    from caracole.overrides import add_pin
+    from caracole.pipeline import Services, Step, default_steps, run_pipeline
+
+    song = spanish_song(conn)
+    kept = []
+
+    def fetch(ctx):  # what the lookup did while the run let it go first
+        add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/85053"])
+        kept.append(keep_ug_sheet(conn, tmp_path, song, 0.5, lib=cfg.library_dir))
+        monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+
+    site = FakeLaCuerda()
+    services = Services(clients={"lacuerda": site.client(tmp_path / "cache")}, spotify=None,
+                        notifier=Notifier(None, None))
+    steps = [Step("fetch", fetch), *(s for s in default_steps() if s.name == "lacuerda")]
+
+    report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
+
+    assert report.ok and SODA not in site.requests and DML_3 not in site.requests
+    assert files_of(conn, song) == {"sheet.txt": kept[0], "sheet.json": kept[0]}

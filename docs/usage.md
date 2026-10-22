@@ -1020,8 +1020,13 @@ run's ("caracole: Ultimate Guitar blocked"), its text the line the command
 prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
 `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
-lacuerda --artist`) sends none: it says so where you asked. A run or a command the site answers without a
-block starts the count again. Neither a block, nor a spent budget, nor any
+lacuerda --artist`) sends none: it says so where you asked. A run, a command
+or a lookup the site answers without a block starts the count again; one the
+site answered with nothing but errors doesn't, and neither does a run that let
+a lookup go first which was blocked meanwhile: that block's cooldown stands.
+That block is the run's too: the run sends that site nothing more, and its
+ntfy message says so, but it is one block, not two in a row.
+Neither a block, nor a spent budget, nor any
 other error from a site marks a song not found or its lyrics missing: the
 song waits for the next run. An answer that won't read but was cached all the
 same (a maintenance notice served as a page, say) is asked for once more,
@@ -1471,16 +1476,29 @@ A lookup (`caracole get`) never waits behind a whole run: it says
 next pause, or between two songs.`, and the run, which spends most of its time in its 10–20 second
 pauses (its youtube step, in its 15–30 seconds between two yt-dlp runs), lets go
 of the lock in the pause it is in, takes it back once the lookup is done, and
-waits a whole pause again before its next request. The
-run then reads each song again before its turn, and overrides.toml too, so a
-song the lookup fetched isn't fetched twice, and a tab it pinned is the one
-kept. Work that sends no request lets a lookup go first between two songs:
+waits a whole pause again before its next request, to any site the lookup
+asked: its next request to Ultimate Guitar waits UG's 10–20 seconds after the
+lookup's last one, even when the lookup went first in a pause of LRCLIB's. The
+run then reads each song again before its turn, and overrides.toml too, in that
+step and in every step after it, so a song the lookup fetched isn't fetched
+twice, and a tab it pinned, or a LaCuerda sheet it picked, is the one kept:
+another LaCuerda sheet doesn't take its place, even when the run was asking
+LaCuerda about that very song as the lookup went first (what LaCuerda answered
+then waits in the cache, and the song stays as the lookup left it). Work that
+sends no request lets a lookup go first between two songs:
 `caracole autochords` (a song takes minutes, and the unit runs for hours), and
 the PDF pass of the run and of `caracole render`, which reads each song and
-overrides.toml again after it. The waiting lookup announces itself with a file
+overrides.toml again after it, and makes the songbooks and the pages from
+overrides.toml as the lookup left it. `caracole fetch`, `lyrics`, `lacuerda`,
+`gtptabs`, `musescore`, `youtube` and `icons` let a lookup go first in their
+pauses as the run does, and make the pages they write at their end from
+overrides.toml as the lookup left it too. The waiting lookup announces itself with a file
 in `caracole.lock.waiting/` in the state folder, which it touches every second
 while it waits; one left by a lookup that was killed while it waited is no
-longer waited for after five seconds.
+longer waited for after five seconds. The run lets lookups alone go first: a
+command that isn't one (`caracole fetch`, `remove`, `add`, …) still waits for
+the whole run, even when it started before the lookup came, and the run holds
+`caracole.lock.handoff` in the state folder while a lookup has the lock.
 A songbook change, asked for now as a lookup is, waits the same way and says
 the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `delete` and `render`, so a songbook you make (from a terminal, or on

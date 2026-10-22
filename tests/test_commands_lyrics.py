@@ -25,6 +25,7 @@ from caracole import db
 from caracole.cli import build_app
 from caracole.commands import _common
 from caracole.health import get_state, is_cooling, record_block
+from caracole.library import kept_files
 from caracole.lyrics import Lyrics
 from caracole.songs import get_song, update_song
 
@@ -281,6 +282,26 @@ def test_a_pass_that_went_well_clears_old_strikes(tmp_path, sites):
         conn.close()
 
 
+@pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
+def test_a_pass_the_site_answered_with_nothing_but_errors_leaves_the_strikes(tmp_path, sites, command, provider):
+    # As a nightly run of nothing but errors: no sign that the site answers again.
+    getattr(sites, provider).status = 500
+    spanish_song(tmp_path)
+    conn = open_db(tmp_path)
+    try:
+        update_song(conn, 1, lyrics_status="pending")
+        record_block(conn, provider, datetime.now(UTC) - timedelta(days=2), f"{provider}: 429: HTTP 429")
+    finally:
+        conn.close()
+    assert run(tmp_path, command).exit_code == 0
+    assert getattr(sites, provider).requests
+    conn = open_db(tmp_path)
+    try:
+        assert (get_state(conn, provider).strikes, get_state(conn, provider).last_ok) == (1, None)
+    finally:
+        conn.close()
+
+
 def test_a_pass_that_asked_nothing_leaves_the_strikes(tmp_path, sites):
     # Nothing was waiting, so nothing shows LRCLIB answers again.
     conn = open_db(tmp_path)
@@ -394,6 +415,33 @@ def test_lacuerda_follows_overrides(tmp_path, sites):
     assert result.exit_code == 0, result.output
     assert "No song to try on LaCuerda." in result.stdout
     assert sites.lacuerda.requests == []
+
+
+def test_lacuerda_reads_overrides_again_after_a_lookup_it_let_go_first(tmp_path, sites, monkeypatch):
+    # In the pause before Soda Stereo's page, the command let `caracole get --tab` go first, which pinned the
+    # partial UG sheet De Música Ligera keeps: LaCuerda's complete sheet doesn't take its place.
+    sites.lacuerda.pages.update(soda_pages())
+    song_id = spanish_song(tmp_path)
+    vid = ug_sheet_kept_before_its_lyrics(tmp_path, song_id, "Cruzo la plaza con el café frío\n")
+    overrides = tmp_path / "lib" / "overrides.toml"
+    answer = sites.lacuerda.handler
+
+    def lookup_first(request):
+        if str(request.url) == SODA and not overrides.exists():
+            overrides.write_text('[pin]\n"Soda Stereo - De Música Ligera" = '
+                                 '["https://tabs.ultimate-guitar.com/tab/101"]\n', encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return answer(request)
+
+    monkeypatch.setattr(sites.lacuerda, "handler", lookup_first)
+    result = run(tmp_path, "lacuerda")
+    assert result.exit_code == 0, result.output
+    assert sites.lacuerda.requests == [SODA, DML_3]
+    conn = open_db(tmp_path)
+    try:
+        assert {f.name: f.version_id for f in kept_files(conn, song_id)} == {"sheet.json": vid, "sheet.txt": vid}
+    finally:
+        conn.close()
 
 
 def test_lacuerda_with_nothing_to_try(tmp_path, sites):
@@ -912,6 +960,41 @@ def test_a_block_rewrites_the_pages_with_the_cooldown(tmp_path, sites, command, 
     assert result.exit_code == 0, result.output
     todo, _ = pages(tmp_path)
     assert f"| {provider} | cooling down until " in todo
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+@pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
+def test_the_pages_after_a_lookup_went_first_read_overrides_toml_again(tmp_path, sites, monkeypatch, command,
+                                                                       provider, blocked):
+    # In the pause before its first request, the command let `caracole get --tab` go first, which pinned a tab:
+    # the pages it writes at its end, after a block too, go by overrides.toml as the lookup left it.
+    import caracole.commands.lyrics as cmd
+
+    sites.lacuerda.pages.update(soda_pages())
+    spanish_song(tmp_path)
+    conn = open_db(tmp_path)
+    try:
+        update_song(conn, 1, lyrics_status="pending")
+    finally:
+        conn.close()
+    overrides = tmp_path / "lib" / "overrides.toml"
+    site = getattr(sites, provider)
+    answer = site.handler
+
+    def lookup_first(request):
+        if not overrides.exists():
+            overrides.parent.mkdir(parents=True, exist_ok=True)
+            overrides.write_text('[pin]\n"Radiohead - Creep" = ["https://tabs.ultimate-guitar.com/tab/2"]\n',
+                                 encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return httpx.Response(429, text="nope") if blocked else answer(request)
+
+    monkeypatch.setattr(site, "handler", lookup_first)
+    seen = []
+    monkeypatch.setattr(cmd, "write_pages", lambda conn, cfg, o, now: seen.append([*o.pin.values()]))
+    result = run(tmp_path, command)
+    assert result.exit_code == 0, result.output
+    assert seen == [[(2,)]]
 
 
 @pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])

@@ -427,7 +427,8 @@ the sites for pages or writes the library holds it while it works. One
 started meanwhile waits, and says which it waits for (`Another caracole is
 running (pid …: run); waiting for it to finish.`): a `caracole-admin fetch`
 started during the nightly run waits for it, and the run waits for a
-`caracole-admin index build`. `caracole-admin review` and `caracole-admin remove`
+`caracole-admin index build`. The run lets only a lookup (`caracole get`, a
+song asked for on the web page) go first in its pauses, never such a command. `caracole-admin review` and `caracole-admin remove`
 take the lock only after your answers, so the run never waits for you, and
 `search`, `match --dry-run`, `index stats` and `remove --list` never wait. A command that waited for a
 run that got blocked sends that site nothing: it is cooling down. Each

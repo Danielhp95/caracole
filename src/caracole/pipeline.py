@@ -17,6 +17,8 @@ one failed, so the to-do page is always rewritten.
   the run exits non-zero so systemd's OnFailure fires.
 - An overrides.toml that can't be read stops the run before its first step
   (every step reads it); the to-do page is still rewritten, leading with why.
+  Once the run has let a lookup go first (``_common.hand_over``), which may have
+  pinned a tab, the steps after read it again (``StepContext.read_overrides_again``).
 - A provider counts as working (``record_ok``) only when it answered at least
   one of the run's requests: a run of nothing but errors is no success.
 
@@ -39,7 +41,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 from caracole.config import DEFAULT_PROVIDERS, Config
 from caracole.db import kv_get_json, kv_set_json
-from caracole.health import get_state, is_cooling, record_block, record_error, record_ok
+from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
 from caracole.notify import Notifier
 from caracole.overrides import Overrides, OverridesError, load_overrides
@@ -124,6 +126,13 @@ class RunReport:
             self.steps[step] = result or "ok"
 
 
+def _handoffs() -> int:
+    """How many times this process has let a lookup have caracole's lock (``_common.handoffs``)."""
+    from caracole.commands._common import handoffs
+
+    return handoffs()
+
+
 @dataclass
 class StepContext:
     cfg: Config
@@ -133,6 +142,17 @@ class StepContext:
     run_id: str
     services: Services
     report: RunReport
+    handoffs: int = field(default_factory=_handoffs)  # how many there had been when ``overrides`` was read
+
+    def read_overrides_again(self) -> None:
+        """overrides.toml read again once the run has let a lookup have caracole's lock since it was read
+        (``_common.hand_over``: in a pause of a step's client, or between two songs), as the lookup may have
+        pinned a tab or picked a LaCuerda sheet, which the steps after keep to; the copy read before stays
+        when the file can't be read now (``_common.overrides_since``)."""
+        from caracole.commands._common import overrides_since
+
+        handed, self.handoffs = self.handoffs, _handoffs()
+        self.overrides = overrides_since(self.cfg, self.overrides, handed)
 
 
 @dataclass(frozen=True)
@@ -306,8 +326,10 @@ def _lacuerda(ctx: StepContext) -> StepResult:
     from caracole import lacuerda_fetch, lacuerda_index
 
     client = ctx.services.client("lacuerda")
+    # A lookup the run lets go first, in a pause, may pin a tab: read again after one, as the fetch does.
     s = lacuerda_fetch.lacuerda_sheets(ctx.conn, client, ctx.cfg.library_dir, ctx.cfg.rank, ctx.now,
-                                       overrides=ctx.overrides)
+                                       overrides=ctx.overrides,
+                                       reload_overrides=lambda: load_overrides(ctx.cfg.overrides_file))
     # The artist listings, for searches to suggest LaCuerda's artists, get what the sheets left of the budget;
     # as MuseScore's sitemaps, only once the library has a song, so that an empty one asks no site. Then, once
     # they are read whole, the most popular artists' pages get what is left (lacuerda_fetch.popular_pages).
@@ -419,6 +441,7 @@ def _render(ctx: StepContext) -> StepResult:
 
     # Many PDFs to make (a new font, say) take minutes: a waiting lookup goes between two songs.
     s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now, between=lambda: hand_over(ctx.cfg, ctx.conn))
+    ctx.read_overrides_again()  # and what such a lookup changed, for the songbooks
     tail = f"; {s.font_error}" if s.font_error else ""
     result = StepResult(title="PDFs", done=_counted((s.rendered, "rendered")),
                         status=f"{s.rendered} rendered, {s.failed} failed{tail}")
@@ -553,27 +576,13 @@ def _budgets(services: Services) -> dict[str, int]:
     return budgets
 
 
-def _answered(conn: sqlite3.Connection, run_id: str, provider: str, requests: int) -> bool:
-    """Whether the provider answered at least one of this run's requests.
-
-    Every request a PoliteClient sends is logged to ``events`` as answered
-    (``ok``, ``not_modified``), an ``error`` or a ``blocked``; a client that
-    logs nothing counts as answered.
-    """
-    failed = conn.execute(
-        "SELECT COUNT(*) FROM events WHERE run = ? AND provider = ? AND decision IN ('error', 'blocked')",
-        (run_id, provider),
-    ).fetchone()[0]
-    return requests > failed
-
-
 def _record_ok(conn: sqlite3.Connection, report: RunReport, now: datetime) -> None:
     """A provider that answered this run without a block had a good run: clear its cooldown, note the time.
 
     A run whose every request failed (UG answering 502, say) is no success.
     """
     for p, n in report.requests.items():
-        if n and p not in report.blocked and _answered(conn, report.run_id, p, n):
+        if n and p not in report.blocked and answered_any(conn, report.run_id, p, n):
             record_ok(conn, p, now)
 
 
@@ -681,6 +690,7 @@ def _run(cfg: Config, conn: sqlite3.Connection, services: Services, steps: list[
                       report=report)
 
     for step in steps if steps is not None else default_steps():
+        ctx.read_overrides_again()  # what a lookup the step before let go first changed
         result = _skipped(cfg, conn, report, step, now)
         report.record(step.name, result if result is not None else _run_step(ctx, step))
         log.info("%s: %s", step.name, report.steps[step.name])

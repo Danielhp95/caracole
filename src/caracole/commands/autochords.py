@@ -65,9 +65,10 @@ def register(app: typer.Typer) -> None:
             files = "file" if music.seen == 1 else "files"
             typer.echo(f"Music: {music.seen} {files}, {music.matched} linked")
             # A song takes minutes: a lookup waiting for the lock goes between two of them.
+            handed = _common.handoffs()
             stats = autochords_pending(conn, cfg, overrides=overrides,
                                        between=lambda: _common.hand_over(cfg, conn))
             typer.echo(f"auto-chords: {stats.summary()}")
-            write_pages(conn, cfg, overrides, utcnow())
+            write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
         if stats.errors:  # the setup's problems; stats.failures are listed on the to-do page
             raise typer.Exit(1)

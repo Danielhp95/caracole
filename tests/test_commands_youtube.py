@@ -322,6 +322,52 @@ def test_a_block_cools_youtube_down_alerts_once_and_exits_0(tmp_path, ntfy, fake
     assert again.exit_code == 0 and "cooling down" in again.output and len(fake.argvs()) == 1
 
 
+@pytest.mark.parametrize("blocked", [False, True])
+def test_the_pages_after_a_lookup_went_first_read_overrides_toml_again(tmp_path, ntfy, fake, conn, monkeypatch,
+                                                                       blocked):
+    # Between two yt-dlp runs the command let `caracole get --tab` go first, which pinned a tab: the pages it
+    # writes at its end, after a block too, go by overrides.toml as the lookup left it.
+    import caracole.commands.youtube as cmd
+    from caracole.http import ProviderBlocked
+
+    to_buy(conn)
+    config = write_config(tmp_path, fake)
+    overrides = tmp_path / "lib" / "overrides.toml"
+
+    def youtube_pass(conn, runner, cfg, now, **kwargs):  # a lookup had the lock in a pause, and pinned a tab
+        overrides.parent.mkdir(parents=True, exist_ok=True)
+        overrides.write_text('[pin]\n"Radiohead - Creep" = ["https://tabs.ultimate-guitar.com/tab/2"]\n',
+                             encoding="utf-8")
+        monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        if blocked:
+            raise ProviderBlocked("youtube", "ytsearch:Radiohead Creep", None, "bot check")
+        return yf.YouTubeStats()
+
+    monkeypatch.setattr(yf, "youtube_pass", youtube_pass)
+    seen = []
+    monkeypatch.setattr(cmd, "write_pages", lambda conn, cfg, o, now: seen.append([*o.pin.values()]))
+    result = invoke(config)
+    assert result.exit_code == 0, result.output
+    assert seen == [[(2,)]]
+
+
+@pytest.mark.slow
+def test_runs_that_all_failed_leave_youtubes_strikes(tmp_path, ntfy, fake, conn):
+    # Two blocks in a row, the second's cooldown over: yt-dlp runs that all failed are no good run, as a
+    # nightly run of nothing but errors isn't, so the next block still cools YouTube down for 98 hours.
+    from datetime import timedelta
+
+    record_block(conn, "youtube", _common.utcnow() - timedelta(days=10), "youtube: bot check")
+    record_block(conn, "youtube", _common.utcnow() - timedelta(days=7), "youtube: bot check")
+    to_buy(conn)
+    fake.search("Radiohead Creep", stderr="ERROR: [youtube] Unable to extract initial data", exit=1)
+    result = invoke(write_config(tmp_path, fake))
+    assert result.exit_code == 0, result.output
+    assert len(fake.argvs()) == 1
+    state = get_state(conn, "youtube")
+    assert (state.strikes, state.last_ok) == (2, None)
+
+
 @pytest.mark.slow
 def test_a_download_that_fails_the_same_way_every_time_gives_way_to_another_pick(tmp_path, ntfy, fake, conn):
     to_buy(conn)

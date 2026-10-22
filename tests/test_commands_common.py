@@ -445,6 +445,91 @@ def test_bulk_work_after_a_lookup_keeps_the_long_pause(cfg, conn, site, pauses):
     assert 9.5 <= sum(pauses) <= 20
 
 
+def a_lookup_in_a_pause(conn, monkeypatch, *, blocked: bool = False, asked: str | None = None) -> list[int]:
+    """``_common.hand_over``, handing caracole's lock to one lookup at the first look of a pause: it asked
+    ``asked`` (a provider) for a page, or was ``blocked`` by UG (get.py records the block). Once each pause
+    is done, how many handoffs the process had made."""
+    import time
+
+    from caracole.health import record_block
+
+    turns: list[int] = []
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        if turns:
+            return False
+        if asked is not None:
+            db.kv_set(conn, f"http:last_request:{asked}", f"{time.time():.3f}")
+        if blocked:
+            record_block(conn, "ug", _common.utcnow(), "ug: 403: https://tabs.ultimate-guitar.com/tab/9: HTTP 403")
+        monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        turns.append(_common.handoffs())
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    return turns
+
+
+def test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_first(cfg, conn, site, pauses,
+                                                                                       monkeypatch):
+    # In the pause between two UG requests the run let a lookup go first, which UG blocked: the run's client
+    # sends UG nothing more, as after a block of its own, and the step that meets it adds no strike to it.
+    from caracole.health import get_state, record_block
+    from caracole.http import ProviderBlocked
+
+    start = _common.utcnow()
+    turns = a_lookup_in_a_pause(conn, monkeypatch, blocked=True)
+    client = make_client(cfg, conn, "ug", _common.run_id_for(start))
+    try:
+        client.get("https://tabs.ultimate-guitar.com/tab/1")
+        with pytest.raises(ProviderBlocked) as met:
+            client.get("https://tabs.ultimate-guitar.com/tab/2")
+        with pytest.raises(ProviderBlocked):
+            client.get("https://tabs.ultimate-guitar.com/tab/3")
+    finally:
+        client.close()
+    assert turns and site.requests == ["https://tabs.ultimate-guitar.com/tab/1"]
+    lookups = get_state(conn, "ug")
+    assert record_block(conn, "ug", start, str(met.value)) == lookups  # as the step records what it met
+    assert get_state(conn, "ug").strikes == 1
+
+
+def test_a_block_a_lookup_met_in_a_new_clients_first_pause_stops_its_first_request(cfg, conn, site, pauses,
+                                                                                   monkeypatch):
+    # `caracole fetch`, started 3 s after another caracole's UG request, waits out UG's pause before its first
+    # one, and lets a lookup go first meanwhile, which UG blocks: the fetch sends UG nothing.
+    from caracole.http import ProviderBlocked
+
+    log_request(conn, "ug", ago=3)
+    turns = a_lookup_in_a_pause(conn, monkeypatch, blocked=True)
+    client = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    try:
+        with pytest.raises(ProviderBlocked):
+            client.get("https://tabs.ultimate-guitar.com/tab/1")
+    finally:
+        client.close()
+    assert turns and site.requests == []
+
+
+def test_after_a_lookup_bulk_work_keeps_the_long_pause_after_the_lookups_request_to_a_site(cfg, conn, site, pauses,
+                                                                                         monkeypatch):
+    # The run makes every client at its start. In a pause of its LRCLIB client it let a lookup go first, which
+    # asked UG for a page: the run's first UG request, the fetch step's, waits UG's whole pause after it.
+    ug = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    lrclib = make_client(cfg, conn, "lrclib", "2026-10-19T03:30:00Z")
+    try:
+        lrclib.get("https://lrclib.net/api/get?a=1")
+        a_lookup_in_a_pause(conn, monkeypatch, asked="ug")
+        lrclib.get("https://lrclib.net/api/get?a=2")  # in the pause before it, the lookup went first
+        pauses.clear()
+        ug.get("https://tabs.ultimate-guitar.com/tab/1")
+    finally:
+        lrclib.close()
+        ug.close()
+    low, high = cfg.provider("ug").delay
+    assert low - 0.5 <= sum(pauses) <= high
+
+
 def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
     import time
 
@@ -584,6 +669,59 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause(tmp_path, c
     _, sent, handoffs = second.split()
     assert float(sent) >= released + pause - 0.1  # the run waited a whole pause again after the lookup
     assert int(handoffs) == 1
+
+
+WAITER = r"""
+import sys, time
+from pathlib import Path
+from caracole.commands import _common
+from caracole.config import load_config
+
+cfg = load_config(Path(sys.argv[1]))
+out = open(sys.argv[2], "w", buffering=1)
+with _common.exclusive(cfg, "remove Radiohead - Creep --yes"):
+    out.write(f"got {time.time()}\n")
+"""
+
+
+@pytest.mark.slow
+def test_the_nightly_run_hands_the_lock_to_a_lookup_alone_never_to_another_command_waiting(tmp_path, cfg):
+    # During the run's pause, a `caracole-admin remove` waits for the run to finish (deploy.md), then a lookup
+    # comes: the lookup goes first in the pause, and the removal still waits for the whole run, never its middle.
+    import subprocess
+    import sys
+    import time
+
+    from conftest import subprocess_pythonpath
+
+    pause = 3.0  # the run's, between two requests to UG
+    config = tmp_path / "caracole.toml"
+    config.write_text(f'state_dir = "{cfg.state_dir}"\ncache_dir = "{cfg.cache_dir}"\n'
+                      f'library_dir = "{cfg.library_dir}"\n[providers.ug]\ndelay = [{pause}, {pause}]\n',
+                      encoding="utf-8")
+    run_log, removal_log = tmp_path / "holder.log", tmp_path / "waiter.log"
+    env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(Path(__file__).parents[1] / "src")}
+    holder = subprocess.Popen([sys.executable, "-c", HOLDER, str(config), str(run_log)], env=env)
+    removal = None
+    try:
+        deadline = time.time() + 20
+        while "first" not in (run_log.read_text() if run_log.exists() else "") and time.time() < deadline:
+            time.sleep(0.05)
+        removal = subprocess.Popen([sys.executable, "-c", WAITER, str(config), str(removal_log)], env=env,
+                                   stderr=subprocess.DEVNULL)
+        assert waiting_for(lock_path(cfg), lambda: removal.poll() is None, timeout=10)
+        with exclusive(cfg, "get Oasis - Wonderwall", interactive=True):
+            took = time.time()
+        assert holder.wait(30) == 0 and removal.wait(30) == 0
+    finally:
+        holder.kill()
+        if removal is not None:
+            removal.kill()
+    _, second = run_log.read_text().splitlines()
+    _, sent, handoffs = second.split()
+    _, got = removal_log.read_text().split()
+    assert int(handoffs) == 1 and took < float(sent)  # the lookup went first, in the run's pause
+    assert float(got) > float(sent)  # the removal only once the run was done
 
 
 @pytest.mark.slow

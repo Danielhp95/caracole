@@ -540,6 +540,37 @@ def test_caracole_icons_sends_one_alert_for_a_block_as_the_nightly_run_does(tmp_
     assert len(ntfy.posts) == 1
 
 
+def test_the_pages_after_a_lookup_caracole_icons_let_go_first_read_overrides_toml_again(tmp_path, monkeypatch):
+    # In the pause before a site's icon, the command let `caracole get --tab` go first, which pinned a tab: the
+    # pages it writes at its end go by overrides.toml as the lookup left it.
+    import caracole.commands.icons as cmd
+    from caracole.commands import _common
+
+    sites = icon_sites()
+    overrides = tmp_path / "lib" / "overrides.toml"
+    answer = sites["lrclib"].handler
+
+    def lookup_first(request):
+        if not overrides.exists():
+            overrides.parent.mkdir(parents=True, exist_ok=True)
+            overrides.write_text('[pin]\n"Radiohead - Creep" = ["https://tabs.ultimate-guitar.com/tab/2"]\n',
+                                 encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return answer(request)
+
+    monkeypatch.setattr(sites["lrclib"], "handler", lookup_first)
+    seen = []
+
+    def write_pages(conn, cfg, o, now):
+        seen.append([*o.pin.values()])
+        return cfg.library_dir / "_todo.md", cfg.library_dir / "index.html"
+
+    monkeypatch.setattr(cmd, "write_pages", write_pages)
+    result = icons_command(tmp_path, monkeypatch, sites)
+    assert result.exit_code == 0, result.output
+    assert seen == [[(2,)]]
+
+
 def test_caracole_icons_says_when_a_site_has_none_and_leaves_one_turned_off_alone(tmp_path, monkeypatch):
     sites = icon_sites()
     sites["lrclib"].pages = {}

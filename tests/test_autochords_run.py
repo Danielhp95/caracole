@@ -892,6 +892,33 @@ def test_the_command_hands_the_lock_over_between_songs(tmp_path, monkeypatch, mo
     assert handed == [True]
 
 
+def test_the_pages_after_a_lookup_went_between_two_songs_read_overrides_toml_again(tmp_path, monkeypatch,
+                                                                                   models_importable):
+    # The lookup the command let go first pinned a tab (`caracole get --tab`): the pages it writes at its end go
+    # by overrides.toml as the lookup left it.
+    import caracole.autochords.run as ac_run
+    import caracole.commands.autochords as cmd
+    from caracole.commands import _common
+
+    config = write_config(tmp_path)
+    overrides_file = tmp_path / "lib" / "overrides.toml"
+    seen = []
+
+    def pending(conn, cfg, **kwargs):  # a lookup had the lock between two songs, and pinned a tab
+        assert cfg.overrides_file == overrides_file
+        overrides_file.parent.mkdir(parents=True, exist_ok=True)
+        overrides_file.write_text('[pin]\n"Radiohead - Creep" = ["https://tabs.ultimate-guitar.com/tab/2"]\n',
+                                  encoding="utf-8")
+        monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return AutoStats()
+
+    monkeypatch.setattr(ac_run, "autochords_pending", pending)
+    monkeypatch.setattr(cmd, "write_pages", lambda conn, cfg, overrides, now: seen.append([*overrides.pin.values()]))
+    result = invoke(config)
+    assert result.exit_code == 0, result.output
+    assert seen == [[(2,)]]
+
+
 def test_summary():
     assert (
         AutoStats(generated=2, skipped=5, failed=1).summary() == "2 generated, 5 skipped, 1 failed"

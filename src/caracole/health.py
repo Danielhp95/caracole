@@ -75,8 +75,16 @@ def _save(conn: sqlite3.Connection, s: ProviderState) -> ProviderState:
 
 
 def record_block(conn: sqlite3.Connection, provider: str, now: datetime, message: str) -> ProviderState:
-    """Start (or extend) a cooldown: 24 h × 2^(strikes − 1), plus the margin."""
+    """Start (or extend) a cooldown, for a run (or a command, or a lookup) that began at ``now``:
+    24 h × 2^(strikes − 1), plus the margin.
+
+    A cooldown still running at ``now`` stays as it is, with its strikes. A run only asks a provider
+    that isn't cooling down, so that block came while the run went on: another caracole met it while
+    this one let it go first (``_common.hand_over``), and the run met the same block, or its client
+    refused to send for it. One block is one strike."""
     s = get_state(conn, provider)
+    if s.cooldown_until is not None and now < s.cooldown_until:
+        return s
     strikes = s.strikes + 1
     return _save(conn, replace(
         s, strikes=strikes, cooldown_until=now + COOLDOWN_BASE * (2 ** (strikes - 1)) + COOLDOWN_MARGIN,
@@ -85,8 +93,32 @@ def record_block(conn: sqlite3.Connection, provider: str, now: datetime, message
 
 
 def record_ok(conn: sqlite3.Connection, provider: str, now: datetime) -> ProviderState:
-    """A run used the provider without a block: clear the cooldown and the strikes."""
-    return _save(conn, replace(get_state(conn, provider), strikes=0, cooldown_until=None, last_ok=now))
+    """A run that began at ``now`` used the provider without a block: clear the cooldown and the strikes.
+
+    A cooldown still running at ``now`` is left as it is. A run only asks a provider that isn't
+    cooling down, so that block came while the run went on: another caracole met it while this
+    one let it go first (a lookup in a pause of the nightly run, ``_common.hand_over``). It is
+    newer than the run's answers."""
+    s = get_state(conn, provider)
+    if s.cooldown_until is not None and now < s.cooldown_until:
+        return s
+    return _save(conn, replace(s, strikes=0, cooldown_until=None, last_ok=now))
+
+
+def answered_any(conn: sqlite3.Connection, run_id: str, provider: str, requests: int) -> bool:
+    """Whether the provider answered at least one of the ``requests`` a run sent it: a nightly run's,
+    a command's or a lookup's, by its run id in ``events``. Only then did the run go well
+    (``record_ok``): one whose every request failed (UG answering 502, say) is no success.
+
+    Every request a client sends is logged to ``events`` as answered (``ok``,
+    ``not_modified``), an ``error`` or a ``blocked``; a client that logs nothing counts
+    as answered.
+    """
+    failed = conn.execute(
+        "SELECT COUNT(*) FROM events WHERE run = ? AND provider = ? AND decision IN ('error', 'blocked')",
+        (run_id, provider),
+    ).fetchone()[0]
+    return requests > failed
 
 
 def record_error(conn: sqlite3.Connection, provider: str, now: datetime, message: str) -> ProviderState:

@@ -19,7 +19,9 @@ pauses, hands the lock over during a pause (``hand_over``), takes it back once
 the lookup is done, and then waits a whole pause again before its next request.
 Bulk work that sends no request (auto-chords, a pass of PDFs) hands it over
 between two songs. The lookup touches its announcement while it waits, so one
-a killed lookup left soon stops counting.
+a killed lookup left soon stops counting. Only lookups take it in a handoff:
+another caracole waiting meanwhile takes it once the bulk work is done
+(``_take_outside_handoffs``).
 """
 
 from __future__ import annotations
@@ -42,7 +44,7 @@ import typer
 
 from caracole import db, logs
 from caracole.config import Config, ConfigError, ProviderPolicy, load_config
-from caracole.health import EventLog
+from caracole.health import EventLog, is_cooling
 from caracole.overrides import Overrides, OverridesError, load_overrides, override_key
 
 if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_client``)
@@ -54,6 +56,7 @@ if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_
 
 LOCK_NAME = "caracole.lock"  # in the state directory
 WAITING_DIR = "caracole.lock.waiting"  # in the state directory: a file per lookup waiting for the lock
+HANDOFF_NAME = "caracole.lock.handoff"  # in the state directory: flocked while bulk work hands the lock over
 LOOKUP_RUN = "lookup:"  # how an interactive lookup's run id starts, in events
 HANDOFF_SLICE = 0.25  # seconds of a bulk pause between two looks for a waiting lookup
 HANDOFF_TAKE = 10.0  # seconds a lookup has to take the lock once it is handed over
@@ -174,19 +177,18 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
             raise
         fail(f"can't open {path}: {_reason(e)}")
     try:
-        try:
-            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            holder = _holder(fd)
-            if on_wait is not None:
-                on_wait(holder)
-            if interactive:
+        if interactive:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                holder = _holder(fd)
+                if on_wait is not None:
+                    on_wait(holder)
                 warn(f"Another caracole is running ({holder}); it lets a lookup go first at its next pause, "
                      "or between two songs.")
                 _wait_announced(cfg, what, fd)
-            else:
-                warn(f"Another caracole is running ({holder}); waiting for it to finish.")
-                fcntl.flock(fd, fcntl.LOCK_EX)
+        else:
+            _take_outside_handoffs(cfg, fd, fatal=fatal, on_wait=on_wait)
         os.ftruncate(fd, 0)
         os.pwrite(fd, f"{os.getpid()} {what}\n".encode(), 0)
     except BaseException:
@@ -194,6 +196,50 @@ def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = 
         raise
     _held[path] = (fd, 1)
     return path
+
+
+def _take_outside_handoffs(cfg: Config, fd: int, *, fatal: bool,
+                           on_wait: Callable[[str], None] | None) -> None:
+    """Take caracole's lock (``fd``) as a caracole that isn't a lookup: once the one that holds it is done,
+    and never while bulk work has let go of it for a lookup (``hand_over``, which holds the flock of
+    ``HANDOFF_NAME`` meanwhile). A lock taken then is let go at once, and taken again once the handoff is
+    over: a `caracole-admin` command waiting for the nightly run takes it after the whole run, never in the
+    middle of one of its steps, and never ahead of the lookup."""
+    path = cfg.state_dir / HANDOFF_NAME
+    try:
+        gate = os.open(path, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as e:
+        if not fatal:
+            raise
+        fail(f"can't open {path}: {_reason(e)}")
+    said = False
+
+    def say() -> bool:
+        holder = _holder(fd)
+        if on_wait is not None:
+            on_wait(holder)
+        warn(f"Another caracole is running ({holder}); waiting for it to finish.")
+        return True
+
+    try:
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                said = said or say()
+                fcntl.flock(fd, fcntl.LOCK_EX)
+            try:
+                fcntl.flock(gate, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            except BlockingIOError:  # let go for a lookup: the lookup's now, then the bulk work's again
+                fcntl.flock(fd, fcntl.LOCK_UN)
+                said = said or say()
+                fcntl.flock(gate, fcntl.LOCK_SH)  # until the bulk work holds it again
+                fcntl.flock(gate, fcntl.LOCK_UN)
+                continue
+            fcntl.flock(gate, fcntl.LOCK_UN)
+            return
+    finally:
+        os.close(gate)
 
 
 def _announce(cfg: Config, what: str) -> Path:
@@ -273,6 +319,21 @@ def handoffs() -> int:
     return _handoffs
 
 
+def overrides_since(cfg: Config, overrides: Overrides, handed: int) -> Overrides:
+    """``overrides``, read when this process had handed caracole's lock over ``handed`` times (``handoffs()``
+    then), as bulk work holds them now: overrides.toml read again when it has handed the lock to a lookup since,
+    as the lookup may have pinned a tab or picked a LaCuerda sheet that what the work does next keeps to. The
+    copy read before stays when the file can't be read now."""
+    if handoffs() == handed:
+        return overrides
+    try:
+        return load_overrides(cfg.overrides_file)
+    except OverridesError as e:
+        logging.getLogger(__name__).info("overrides.toml couldn't be read again (%s); going on with what was "
+                                         "read before.", e)
+        return overrides
+
+
 def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     """Let a waiting lookup have caracole's lock now, and take it back once it is done; True when it did.
 
@@ -280,7 +341,10 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     the lock and ``conn`` is in no transaction (the lookup must be able to write).
     The lock is let go, each waiting lookup takes it in turn (each has
     ``HANDOFF_TAKE`` seconds to), and this process waits until it is free again.
-    Its record (which caracole holds it) is written back.
+    Its record (which caracole holds it) is written back. Meanwhile it holds the
+    flock of ``HANDOFF_NAME``, so that a caracole waiting for the lock that isn't a
+    lookup (a `caracole-admin` command) leaves it to the lookups and this process
+    (``_take_outside_handoffs``); without that file, nothing is handed over.
     """
     global _handoffs
     path = cfg.state_dir / LOCK_NAME
@@ -288,17 +352,26 @@ def hand_over(cfg: Config, conn: sqlite3.Connection | None = None) -> bool:
     if held is None or (conn is not None and conn.in_transaction) or not lookups_waiting(cfg):
         return False
     fd, _ = held
-    record = os.pread(fd, 256, 0)
-    fcntl.flock(fd, fcntl.LOCK_UN)
     try:
-        for _ in range(int(HANDOFF_TAKE / 0.05)):
-            if not lookups_waiting(cfg):
-                break
-            _handoff_sleep(0.05)
+        gate = os.open(cfg.state_dir / HANDOFF_NAME, os.O_RDWR | os.O_CREAT, 0o600)
+    except OSError as e:
+        logging.getLogger(__name__).info("No lookup goes first: %s can't be opened: %s.", HANDOFF_NAME, _reason(e))
+        return False
+    try:
+        fcntl.flock(gate, fcntl.LOCK_EX)
+        record = os.pread(fd, 256, 0)
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        try:
+            for _ in range(int(HANDOFF_TAKE / 0.05)):
+                if not lookups_waiting(cfg):
+                    break
+                _handoff_sleep(0.05)
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            os.ftruncate(fd, 0)
+            os.pwrite(fd, record, 0)
     finally:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        os.ftruncate(fd, 0)
-        os.pwrite(fd, record, 0)
+        os.close(gate)  # and with it its flock
     _handoffs += 1
     logging.getLogger(__name__).info("Handed caracole's lock to a lookup, and took it back.")
     return True
@@ -388,22 +461,27 @@ def alert_block(cfg: Config, provider: str, message: str) -> None:
 def _locked_client() -> type[PoliteClient]:
     """The class of ``make_client``'s clients, made the first time a command makes one: a
     command that sends no request never imports PoliteClient, and with it httpx."""
-    from caracole.http import PoliteClient
+    from caracole.http import PoliteClient, ProviderBlocked
 
     class _LockedClient(PoliteClient):
         """A PoliteClient holding caracole's lock until it is closed.
 
         Bulk work's (``yields``) spends each pause handing the lock to a lookup that
-        waits (``hand_over``); after one, its pause starts again, whole.
+        waits (``hand_over``); after one, its pause starts again, whole. Once a lookup
+        has had the lock, in this client's pause or another's of the process, it sends
+        nothing more to a site that blocked the lookup, and waits the whole pause after
+        the lookup's last request to its site, not only after its own (``_after_a_lookup``).
         """
 
         def __init__(self, *args, lock: Path, cfg: Config | None = None,
-                     conn: sqlite3.Connection | None = None, yields: bool = False, **kwargs):
+                     conn: sqlite3.Connection | None = None, yields: bool = False, seen: int | None = None,
+                     **kwargs):
             super().__init__(*args, **kwargs)
             self._lock: Path | None = lock
             self._cfg = cfg
             self._conn = conn
             self._yields = yields and cfg is not None
+            self._seen = _handoffs if seen is None else seen  # the handoffs this client has looked at
 
         @property
         def handoffs(self) -> int:
@@ -421,6 +499,28 @@ def _locked_client() -> type[PoliteClient]:
                 return self._rng.uniform(*self.policy.delay)
 
             _patient_sleep(self._cfg, self._conn, seconds, again, self._sleep)
+
+        def _pause(self, url: str) -> None:
+            self._after_a_lookup(url)  # one had the lock since this client last looked
+            super()._pause(url)
+            self._after_a_lookup(url)  # one went first in this very pause, which began again after it
+
+        def _after_a_lookup(self, url: str) -> None:
+            """What a lookup this process let go first left, once there was one since the client last looked,
+            before its next request: a block the lookup met (health.py, as the lookup recorded it) is this
+            client's too, and nothing is sent; else the pause runs from the last request any caracole sent
+            the site (kv ``http:last_request:``), the lookup's included, when that is later than its own."""
+            if not self._yields or self._conn is None or self._seen == _handoffs:
+                return
+            self._seen = _handoffs
+            if is_cooling(self._conn, self.provider, self._wall_clock()):
+                self._blocked = ProviderBlocked(self.provider, url, None, "met by a lookup caracole let go first")
+                raise self._blocked
+            last = _last_request(self._conn, self.provider)
+            if last is not None:
+                at = self._clock() - max(0.0, time.time() - last)
+                if self._last_request is None or at > self._last_request:
+                    self._last_request = at
 
         def close(self) -> None:
             try:
@@ -532,6 +632,7 @@ def make_client(
     lock = _acquire(cfg, f"{provider} requests", interactive=interactive)
     try:
         policy = policy or (lookup_policy(cfg, conn, provider) if interactive else cfg.provider(provider))
+        seen = _handoffs  # a lookup let go first in the pause before its first request counts too
         _pause_after_last_request(conn, provider, policy.delay, cfg=None if interactive else cfg)
         log = EventLog(conn, run_id)
 
@@ -554,6 +655,7 @@ def make_client(
             cfg=cfg,
             conn=conn,
             yields=not interactive,
+            seen=seen,
         )
     except BaseException:
         _release(lock)

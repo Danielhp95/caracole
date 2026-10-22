@@ -47,7 +47,7 @@ from caracole.commands._common import (
     utcnow,
     write_pages,
 )
-from caracole.health import get_state, is_cooling, record_block, record_ok
+from caracole.health import answered_any, get_state, is_cooling, record_block, record_ok
 from caracole.logs import plural, provider_name
 from caracole.stamps import parse as stamps_parse
 from caracole.stamps import shown
@@ -155,6 +155,7 @@ def _lyrics(cfg: Config) -> None:
 def _lacuerda(cfg: Config) -> None:
     """Try LaCuerda for the Spanish songs that need a sheet, then print the counts."""
     from caracole.lacuerda_fetch import lacuerda_sheets
+    from caracole.overrides import load_overrides
     from caracole.ug.fetch import rescore_kept_sheets
 
     overrides = load_ovr(cfg)
@@ -165,7 +166,9 @@ def _lacuerda(cfg: Config) -> None:
         # As the run does before its fetch: a sheet kept before its lyrics is scored first (no
         # request), or no partial LaCuerda sheet could replace it, and a complete one is left be.
         rescored = rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
-        return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides)
+        # A lookup the client lets go first in a pause may pin a tab or pick a sheet: read again after one.
+        return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides,
+                               reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: LaCuerdaStats) -> bool:
         return bool(rescored or s.tried or s.budget_exhausted)
@@ -234,7 +237,8 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
             typer.echo(f"{NOT_READ}LaCuerda is cooling down after a block until "
                        f"{shown(get_state(conn, 'lacuerda').cooldown_until)}; caracole won't ask it before then.")
             return
-        client = make_client(cfg, conn, "lacuerda", _common.lookup_run_id(now), interactive=True)
+        run_id = _common.lookup_run_id(now)
+        client = make_client(cfg, conn, "lacuerda", run_id, interactive=True)
         try:
             found = read_artist_page(conn, client, artist, now)
         except ProviderBlocked as e:
@@ -255,7 +259,7 @@ def _lacuerda_artist(cfg: Config, artist: str) -> None:
             return
         finally:
             client.close()
-        if client.requests_made:
+        if answered_any(conn, run_id, "lacuerda", client.requests_made):
             record_ok(conn, "lacuerda", now)
         row = found and conn.execute("SELECT artist FROM lacuerda_index WHERE artist_slug = ? LIMIT 1",
                                      (found[0],)).fetchone()
@@ -343,8 +347,8 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
             end(f"{NOT_SEARCHED}this hour's {SEARCHES_PER_HOUR} searches of LaCuerda the page sends by itself are "
                 "spent; its Search LaCuerda button, or a terminal, asks anyway.")
             return
-        client = make_client(cfg, conn, "lacuerda", _common.LOOKUP_RUN + RUN + run_id_for(now),
-                             policy=replace(policy, budget=1), interactive=True)
+        run_id = _common.LOOKUP_RUN + RUN + run_id_for(now)
+        client = make_client(cfg, conn, "lacuerda", run_id, policy=replace(policy, budget=1), interactive=True)
         try:
             answer = search(conn, client, query, now)
         except ProviderBlocked as e:
@@ -362,7 +366,7 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
             return
         finally:
             client.close()
-        if client.requests_made:
+        if answered_any(conn, run_id, "lacuerda", client.requests_made):
             record_ok(conn, "lacuerda", now)
     if answer.songs:
         some = (f"{plural(answer.stated, 'song')} for {shown_query}: the first {len(answer.songs)} are"
@@ -450,11 +454,13 @@ def _provider_pass[T](
     """Run one provider's pass as the nightly run does; None after a cooldown or a block.
 
     Either way it says so first; neither is a failure, so the command exits 0.
-    Requests are logged to ``events`` under a run id of their own. A pass that
-    made requests without a block clears the provider's strikes, as a run does.
+    Requests are logged to ``events`` under a run id of their own. A pass the
+    provider answered without a block clears its strikes, as a run does: one it
+    answered with nothing but errors doesn't (``health.answered_any``).
     It holds caracole's lock throughout, so the cooldown it reads is the one a
     caracole it waited for left. After a block, or a pass that did something
-    (``ran``), it rewrites _todo.md and index.html.
+    (``ran``), it rewrites _todo.md and index.html, by overrides.toml as a lookup
+    its client let go first in a pause left it (``_common.overrides_since``).
     """
     from caracole.http import ProviderBlocked
 
@@ -466,7 +472,9 @@ def _provider_pass[T](
             typer.echo(f"{name} is cooling down after a block until {shown(until)}; "
                        "caracole won't ask it before then.")
             return None
-        client = make_client(cfg, conn, provider, run_id_for(now))
+        run_id = run_id_for(now)
+        handed = _common.handoffs()  # the client's first pause may let a lookup go first too
+        client = make_client(cfg, conn, provider, run_id)
         try:
             result = run(conn, client, now)
         except ProviderBlocked as e:
@@ -477,14 +485,14 @@ def _provider_pass[T](
             )
             _common.alert_block(cfg, provider, message)
             typer.echo(f"{name} blocked caracole: {message}")
-            write_pages(conn, cfg, overrides, utcnow())  # with the cooldown
+            write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())  # with the cooldown
             return None
         finally:
             client.close()
-        if client.requests_made:
+        if answered_any(conn, run_id, provider, client.requests_made):
             record_ok(conn, provider, now)
         if ran(result):
-            write_pages(conn, cfg, overrides, utcnow())
+            write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
     return result
 
 

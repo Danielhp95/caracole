@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
+from caracole.commands import _common
 from caracole.commands._common import (
     alert_block,
     exclusive,
@@ -54,6 +55,7 @@ def register(app: typer.Typer) -> None:
         overrides = load_ovr(cfg)
         with exclusive(cfg, "icons"), closing(open_db(cfg)) as conn:
             now = utcnow()
+            handed = _common.handoffs()  # its clients' pauses may let a lookup go first
             for key, source in SOURCES.items():
                 if source.glyph:
                     continue
@@ -83,7 +85,7 @@ def register(app: typer.Typer) -> None:
                         # answer from the cache alone says nothing of it, and leaves its strikes.
                         record_ok(conn, key, now)
                     typer.echo(f"{source.name}: {_outcome(key, run)}")
-            todo, page = write_pages(conn, cfg, overrides, utcnow())
+            todo, page = write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
         typer.echo(f"Wrote {todo} and {page}")
 
 

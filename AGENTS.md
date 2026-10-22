@@ -421,7 +421,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   - Either pace: one request at a time per provider (a synchronous client, and the lock
     below), redirect hops included. `PoliteClient` paces its own requests, and
     `_common._pause_after_last_request` its first after the last one any caracole sent
-    (kv `http:last_request:<provider>`, to the fraction of a second, else `events`). No gap
+    (kv `http:last_request:<provider>`, to the fraction of a second, else `events`), as bulk
+    work's client paces its next one once its process let a lookup go first
+    (`_LockedClient._after_a_lookup`). No gap
     is shorter than the host's robots.txt `Crawl-delay` (`http.ROBOTS_CRAWL_DELAY`, from
     the same `User-agent: *` groups as the rules below: none has one today).
   - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `youtube`) can be
@@ -431,7 +433,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     the k-th block in a row (so the next nightly run is always skipped), one ntfy alert goes out
     for the block, never one a song, titled with `logs.provider_name` (the run's step, or
     `_common.alert_block` in a command, `caracole fetch --song` from serve's review page too; a lookup
-    sends none), and nothing retries or works around it (no proxies).
+    sends none), and nothing retries or works around it (no proxies). A block a lookup met
+    while bulk work let it go first is that work's too: its client sends nothing more
+    (`_LockedClient._after_a_lookup`), and `record_block` adds no strike for a cooldown that
+    began after its caller did, as `record_ok` clears none
+    (`test_commands_common.py::test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_first`).
   - No URL robots.txt closes is asked for, or followed to (`http.ROBOTS_DISALLOW`,
     `robots_disallows`): not UG's `/search.php` (matching is local, against the sitemap
     index), `/tab/download`, `/tab/print?` or `/download/public/`, nor gtptabs.com's
@@ -618,7 +624,14 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (`test_commands_songbook.py::test_a_change_waits_for_the_nightly_run_as_a_lookup_does_never_for_its_whole_run`).
   Bulk work hands the lock over
   (`_common.hand_over`, never inside a transaction): it lets go of the flock, takes it back
-  once the lookup is done, and goes on. It does so in two places. Its clients, and the
+  once the lookup is done, counts the handoff (`_common.handoffs()`), and goes on. That count is
+  how everything below learns a lookup went first (a client's block and pace checks, the re-reads
+  of songs and overrides.toml): it is the one way to let go of the lock mid-work. It hands it to lookups alone: meanwhile it holds the
+  flock of `state_dir/caracole.lock.handoff`, and a caracole that isn't a lookup lets go of a
+  lock it took during a handoff and waits for it to end (`_common._take_outside_handoffs`), so a
+  `caracole-admin` command waiting for the run takes the lock after it, never in its middle
+  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_alone_never_to_another_command_waiting`).
+  It does so in two places. Its clients, and the
   yt-dlp runner of `make_youtube` between two runs, spend each pause looking for a waiting
   lookup (every `HANDOFF_SLICE` s), then pause a whole `delay` again
   (`test_commands_common.py::test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too`).
@@ -627,9 +640,18 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   commands/render.py). A bulk caller
   holding state across a handoff re-reads it after one: ug/fetch.py `fetch_songs` reads each
   song and overrides.toml again (`_Handoffs`; a song a lookup fetched mid-turn is fetched
-  again next run), gtptabs_fetch.py checks a song still has no file before its turn, and
-  `autochords_pending` and `render_all` read each song after and overrides.toml again
-  (`test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`,
+  again next run), lacuerda_fetch.py `lacuerda_sheets` reads each song and overrides.toml again
+  and passes over a song no longer to try (`_Lookups`; after a handoff within a song's turn, it
+  records what LaCuerda answered only for a song still to try with the pick the turn asked for:
+  `test_lacuerda_fetch.py::test_a_tab_a_lookup_pinned_during_the_songs_own_turn_is_never_replaced`),
+  gtptabs_fetch.py checks a song still has no file
+  before its turn, and `autochords_pending` and `render_all` read each song after and
+  overrides.toml again; what comes after (the run's next steps, `StepContext.read_overrides_again`;
+  the songbooks and pages of `caracole render` and `autochords`; the pages of `caracole fetch`,
+  `youtube`, `icons` and commands/lyrics.py's `_provider_pass`) reads overrides.toml again too
+  (`_common.overrides_since`;
+  `test_lacuerda_fetch.py::test_a_tab_a_lookup_pinned_during_an_earlier_step_is_never_replaced_by_lacuerda`,
+  `test_commands_common.py::test_the_nightly_run_hands_the_lock_to_a_lookup_during_its_pause`,
   `test_autochords_run.py::test_a_lookup_waiting_for_the_lock_takes_it_between_two_songs`).
   `serve` never takes it: it reads like `search` and appends to wanted.txt like `add`, and
   runs every other change as a `caracole` command in a child process, one at a time

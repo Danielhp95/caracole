@@ -117,6 +117,23 @@ def test_successful_use_resets_cooldown_strikes(conn, cfg):
     assert get_state(conn, "ug").strikes == 0
 
 
+def test_a_block_a_lookup_met_during_the_run_stands_at_its_end(conn, cfg):
+    # UG answered the index step. In a pause of the lyrics step the run let a lookup go first
+    # (_common.hand_over), and UG blocked the lookup, which recorded the block (get.py). The run's end,
+    # which saw UG answer its own requests and never met the block itself, must leave that cooldown.
+    met = NOW + timedelta(minutes=12)
+
+    def lyrics(ctx):
+        record_block(conn, "ug", met, "ug: 403: https://tabs.ultimate-guitar.com/tab/1: HTTP 403")
+
+    steps = [step("index", provider="ug"), Step("lyrics", lyrics, provider="lrclib"), step("fetch", provider="ug"),
+             step("todo")]
+    report = run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=1), steps=steps, now=NOW)
+    assert report.steps["fetch"] == "skipped: ug cooling down until 2026-10-19 05:42 UTC"
+    state = get_state(conn, "ug")
+    assert state.strikes == 1 and state.cooldown_until == met + timedelta(hours=26)
+
+
 def test_budget_and_provider_errors_are_not_failures(conn, cfg):
     out = Outbox()
     steps = [
@@ -708,7 +725,7 @@ def test_default_lacuerda_step_passes_overrides_and_reports_errors(conn, cfg, mo
 
     seen = {}
 
-    def fake(conn_, client, library_dir, rank, now, *, overrides=None):
+    def fake(conn_, client, library_dir, rank, now, *, overrides=None, reload_overrides=None):
         seen["overrides"] = overrides
         return lf.LaCuerdaStats(tried=2, kept=1, missing=0, errors=1, budget_exhausted=False)
 

@@ -55,9 +55,11 @@ def test_a_first_block_skips_the_next_nightly_run_however_late_it_starts(conn):
 @pytest.mark.parametrize("blocks", [1, 2, 3, 4])
 def test_a_block_skips_its_nights_and_not_one_more(conn, blocks):
     nights = 2 ** (blocks - 1)  # 24 h, 48 h, 96 h, 192 h
-    for _ in range(blocks):
-        record_block(conn, "ug", T0, "403")  # blocked in a run that started on time...
-        record_block(conn, "lrclib", T0 + LATE, "429")  # ...and in one as late as the timer allows
+    for before in range(blocks - 1, 0, -1):  # the blocks before it in a row, each once the one before had ended
+        record_block(conn, "ug", T0 - timedelta(days=30 * before), "403")
+        record_block(conn, "lrclib", T0 - timedelta(days=30 * before), "429")
+    record_block(conn, "ug", T0, "403")  # blocked in a run that started on time...
+    record_block(conn, "lrclib", T0 + LATE, "429")  # ...and in one as late as the timer allows
     # Each of its nights is skipped, even when that run starts as late as it can...
     for n in range(1, nights + 1):
         assert is_cooling(conn, "ug", night(n, LATE, CLOCK_CHANGE)), n
@@ -112,6 +114,26 @@ def test_the_run_after_a_block_leaves_the_provider_alone_however_late_it_starts(
     assert second.steps["fetch"] == "skipped: ug cooling down until 2026-10-19 05:30 UTC"
     _, asked, _ = _nightly_run(conn, cfg, night(2))  # the night after that, on time, asks again
     assert asked and get_state(conn, "ug").strikes == 0
+
+
+def test_a_good_run_leaves_a_cooldown_that_began_after_it_did(conn):
+    # A block another caracole met while this one had let it go first (a lookup in the nightly run's
+    # pause) is newer than this run's answers: the run's end clears no part of it.
+    met = T0 + timedelta(minutes=12)
+    record_block(conn, "ug", met, "403")
+    record_ok(conn, "ug", T0)
+    s = get_state(conn, "ug")
+    assert s.strikes == 1 and s.cooldown_until == met + timedelta(hours=26) and s.last_ok is None
+    assert is_cooling(conn, "ug", night(1))
+
+
+def test_a_block_met_after_a_block_another_caracole_met_meanwhile_is_that_block(conn):
+    # The run (started at T0) let a lookup go first, which UG blocked; the run then met that block too: one block,
+    # one strike and its cooldown, not two in a row.
+    met = T0 + timedelta(minutes=12)
+    lookups = record_block(conn, "ug", met, "ug: 403: https://tabs.ultimate-guitar.com/tab/9: HTTP 403")
+    assert record_block(conn, "ug", T0, "ug: 403: https://tabs.ultimate-guitar.com/tab/2: HTTP 403") == lookups
+    assert get_state(conn, "ug") == lookups and lookups.strikes == 1
 
 
 def test_record_error_keeps_strikes(conn):
