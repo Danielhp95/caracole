@@ -32,7 +32,9 @@ overrides.toml; a song your library has, under any name, is posted as that
 song, by its id), and the page follows the request
 (``GET /api/jobs/<id>``) stage by stage, the results set aside so that it sits
 under the search box: the sheet shows the moment it is kept, scrolled into
-view once, then the PDF, the lyrics and the rest arrive. The progress line
+view once, then the PDF, the lyrics and the rest arrive. It follows one request
+at a time: once you pick another song, an answer of the one before still on its
+way (a poll, its sheet) is dropped. The progress line
 says what the running stage waits for, and the reasons of the stages left are
 listed, not hidden in tooltips. A song of your library with a sheet opens at
 once, with no request at all.
@@ -152,6 +154,9 @@ let shownData = null;  // their answer: what Enter acts on (best) and what leads
 let artistOpen = null;  // the artist whose songs are listed in place of the results
 let enterFor = null;  // a query Enter was pressed for before its results came: acted on then
 let scrolled = false;  // the sheet was brought into view once already
+// The request the reader shows (openReader counts them): an answer of one before it, come late (a poll, its sheet, its
+// lookup's job), is dropped, and its fetches are aborted.
+let reading = 0, readingFetches = new AbortController();
 
 function el(tag, cls, text) {
   const e = document.createElement(tag);
@@ -505,16 +510,18 @@ function lookUp(pick, display) {
   const body = new URLSearchParams({csrf});
   for (const name of ["song", "artist", "title", "ug", "tab", "lacuerda"]) if (pick[name]) body.set(name, pick[name]);
   openReader(display, "Asking for it…");
+  const mine = reading;
   fetch("/lookup", {method: "POST", body, headers: {"Accept": "application/json"}})
     .then(r => r.text().then(text => ({r, text})))
     .then(({r, text}) => {
+      if (mine !== reading) return;  // another song is read now: this one is queued all the same
       let data = null;
       try { data = JSON.parse(text); } catch (e) { data = null; }
       if (!r.ok || !data) { refused(r.status, data, text); return; }
       history.replaceState(null, "", "/lookup?job=" + data.job);
       follow(data.url);
     })
-    .catch(e => said("The request failed: " + e.message));
+    .catch(e => { if (mine === reading) said("The request failed: " + e.message); });
 }
 
 // A refusal: its sentence; a page's, as its text. A form token older than the server, or signing in, needs a reload.
@@ -546,19 +553,24 @@ function openReader(display, words) {
   sheetText.hidden = true;
   shown = ""; lastStages = ""; scrolled = false;
   if (polling) clearTimeout(polling);
+  reading += 1;
+  readingFetches.abort();
+  readingFetches = new AbortController();
   measureBar();
   reader.scrollIntoView({block: "start"});
 }
 function said(words) { if (saying.textContent !== words) saying.textContent = words; }
 
 function follow(url) {
-  fetch(url, {headers: {"Accept": "application/json"}})
+  const mine = reading;
+  fetch(url, {signal: readingFetches.signal, headers: {"Accept": "application/json"}})
     .then(r => r.ok ? r.json() : Promise.reject(new Error("that request is gone")))
     .then(job => {
+      if (mine !== reading) return;  // another request is read now
       progress(job);
       if (job.active) polling = setTimeout(() => follow(url), 500);
     })
-    .catch(e => said(e.message));
+    .catch(e => { if (mine === reading) said(e.message); });
 }
 
 function doing(stage) { return stage.detail ? stage.label + ": " + stage.detail : stage.label + "…"; }
@@ -608,8 +620,9 @@ function links(files) {
 }
 
 function sheet(path) {
-  fetch(href(path)).then(r => r.ok ? r.text() : Promise.reject(new Error(r.status))).then(text => {
-    if (text === shown) return;
+  const mine = reading, signal = readingFetches.signal;
+  fetch(href(path), {signal}).then(r => r.ok ? r.text() : Promise.reject(new Error(r.status))).then(text => {
+    if (mine !== reading || text === shown) return;  // another request's sheet is read now
     shown = text;
     sheetText.textContent = text;
     sheetText.hidden = false;

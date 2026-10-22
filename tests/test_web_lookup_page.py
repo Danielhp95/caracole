@@ -581,3 +581,101 @@ def test_a_rows_artist_searches_for_them_as_typing_their_name_would(cfg, live, b
     assert browser.wait("(document.querySelector('#results .hit .row-title') || {}).textContent === 'C Tangana'")
     assert browser.js("document.activeElement.id") == "q"
     assert queue.snapshot() == []
+
+
+class Held:
+    """The lookup page on a socket, whose answers to ``target`` wait until the test lets them go (``go``): a slow
+    network, a poll or a sheet on its way. ``asked`` notes each request, and ``answered`` each held one sent."""
+
+    def __init__(self, cfg, queue, target):
+        import time
+
+        self.go = threading.Event()
+        self.asked: list[tuple[float, str]] = []
+        self.answered: list[float] = []
+        app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False)
+        real = app.handle
+
+        def handle(request):
+            self.asked.append((time.monotonic(), request.target))
+            if request.target != target:
+                return real(request)
+            self.go.wait(20)
+            try:
+                return real(request)
+            finally:
+                self.answered.append(time.monotonic())
+
+        app.handle = handle
+        self.server = make_server(app, "127.0.0.1", 0)
+        threading.Thread(target=self.server.serve_forever, args=(0.01,), daemon=True).start()
+        self.base = f"http://127.0.0.1:{self.server.server_address[1]}"
+
+    def polls(self, target, since=0.0):
+        return sum(1 for at, asked in self.asked if asked == target and at > since)
+
+    def until(self, check, timeout=10.0):
+        import time
+
+        deadline = time.monotonic() + timeout
+        while not check():
+            assert time.monotonic() < deadline, self.asked
+            time.sleep(0.02)
+
+    def close(self):
+        self.go.set()
+        self.server.shutdown()
+        self.server.server_close()
+
+
+ASKS_BY_NAME = ("(() => { const f = document.getElementById('by-name'); f.artist.value = 'Soda Stereo'; "
+                "f.title.value = 'Musica Ligera'; f.requestSubmit(); })()")
+TITLE = "document.getElementById('reader-title').textContent"
+
+
+@in_chromium
+def test_a_new_lookup_stops_following_the_one_before_even_with_its_answer_on_the_way(cfg, browser):
+    # Job 1 waits in the queue, the page following it; its poll is on its way (a phone's slow Wi-Fi) when you look
+    # another song up. Its answer, come late, is the old request's: the reader stays on the new one, and job 1 is
+    # never asked about again.
+    queue = JobQueue(FakeGet(cfg))  # never started: every job waits
+    queue.submit("Fetch Radiohead - Creep", "radiohead/creep", lookup_steps("Radiohead", "Creep"), fetching=True,
+                 display="Radiohead - Creep", song_id=1)
+    held = Held(cfg, queue, "/api/jobs/1")
+    try:
+        browser.open(held.base + "/lookup?job=1")
+        held.until(lambda: held.polls("/api/jobs/1"))  # its poll is on its way
+        browser.js(ASKS_BY_NAME)
+        assert browser.wait(f"{TITLE} === 'Soda Stereo - Musica Ligera'")
+        held.until(lambda: held.polls("/api/jobs/2") >= 1)
+        held.go.set()
+        held.until(lambda: held.answered)
+        heard = held.answered[0]
+        held.until(lambda: held.polls("/api/jobs/2", since=heard) >= 3)  # the page has gone on a while since
+        assert browser.js(TITLE) == "Soda Stereo - Musica Ligera"
+        assert browser.js("document.getElementById('said').textContent") == "Waiting for the request before it…"
+        assert held.polls("/api/jobs/1", since=heard) == 0, held.asked
+    finally:
+        held.close()
+
+
+@in_chromium
+def test_a_new_lookup_never_shows_the_sheet_of_the_one_before_come_late(cfg, browser):
+    queue = JobQueue(FakeGet(cfg))
+    queue.submit("Fetch Radiohead - Creep", "radiohead/creep", lookup_steps("Radiohead", "Creep"), fetching=True,
+                 display="Radiohead - Creep")
+    queue.run_pending()  # Creep's sheet is kept: the page reads it once it follows job 1
+    held = Held(cfg, queue, "/Radiohead/Creep/sheet.txt")
+    try:
+        browser.open(held.base + "/lookup?job=1")
+        held.until(lambda: held.polls("/Radiohead/Creep/sheet.txt"))  # its sheet is on its way
+        browser.js(ASKS_BY_NAME)
+        assert browser.wait(f"{TITLE} === 'Soda Stereo - Musica Ligera'")
+        held.go.set()
+        held.until(lambda: held.answered)
+        held.until(lambda: held.polls("/api/jobs/2", since=held.answered[0]) >= 2)
+        assert browser.js(TITLE) == "Soda Stereo - Musica Ligera"
+        assert browser.js("[document.getElementById('sheet').hidden, document.getElementById('sheet').textContent]") \
+            == [True, ""]
+    finally:
+        held.close()
