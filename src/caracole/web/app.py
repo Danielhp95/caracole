@@ -439,8 +439,24 @@ class WebApp:
             return message_response(404, "Not found", "There's no such page or file in the library.")
         headers = [("Content-Type", kind)]
         if download:
-            headers.append(("Content-Disposition", "attachment"))
+            headers.append(("Content-Disposition", self._download_header(path[1:])))
         return Response(200, data, headers)
+
+    def _download_header(self, path: str) -> str:
+        """A download's Content-Disposition: named for the song whose folder it is in, "Eagles - Hotel California
+        (2).gp5" (download_names.py), else, with no such song or no database to read, as the file is named."""
+        from caracole.download_names import content_disposition, download_name
+        from caracole.library import songs_in_folder
+        from caracole.normalize import clean_title
+
+        *folder, name = path.split("/")
+        try:
+            with closing(self.connect()) as conn:
+                songs = songs_in_folder(conn, tuple(folder))
+        except (sqlite3.Error, OSError):  # the file is sent all the same
+            songs = []
+        song = songs[0] if songs else None
+        return content_disposition(download_name(song.artist, clean_title(song.title), name) if song else name)
 
     def _written_page(self, path: str, page: WrittenPage) -> Response:
         """A page caracole wrote into the library, while it is still as written

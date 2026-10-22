@@ -134,6 +134,8 @@ section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
 /* A name that wraps keeps its funnel after its last word, not at the band's far end. */
 .artist-title button.artist { display: block; }
 .artist-title .filter-mark { display: inline-block; margin-left: 5px; }
+.artist-title button.artist-only { align-self: center; color: var(--artist); }
+.artist-title button.artist-only .filter-mark { margin-left: 0; }
 .artist-counts { color: var(--muted); font-size: .82rem; font-weight: 500; }
 /* In an artist's group its header names the artist: its lines leave the name out, and the column with it. */
 section.artist .line-by { display: none; }

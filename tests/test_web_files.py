@@ -33,6 +33,16 @@ def test_guitar_pro_files_are_downloads(library):
     assert (data, kind, attachment) == (b"gp5", "application/octet-stream", True)
 
 
+def test_a_scores_file_from_musescore_is_a_download_and_its_pdf_a_pdf(library):
+    folder = library / "Soda Stereo" / "De Música Ligera"
+    for name in ("score-1.mscz", "score-2.mxl", "score-3.musicxml", "score-4.mid", "score-5.midi", "score-6.pdf"):
+        (folder / name).write_bytes(b"score")
+    for name in ("score-1.mscz", "score-2.mxl", "score-3.musicxml", "score-4.mid", "score-5.midi"):
+        assert read_library_file(library, f"Soda Stereo/De Música Ligera/{name}") == \
+            (b"score", "application/octet-stream", True)
+    assert read_library_file(library, "Soda Stereo/De Música Ligera/score-6.pdf")[1:] == ("application/pdf", False)
+
+
 @pytest.mark.parametrize("path", [
     "", "/", "Soda Stereo", "Soda Stereo/De Música Ligera", "../lib/_todo.md", "Soda Stereo/../_todo.md",
     "./_todo.md", "Soda Stereo//De Música Ligera/sheet.pdf", ".stfolder/x.txt", "Soda Stereo/.sheet.pdf.1a2b.tmp",

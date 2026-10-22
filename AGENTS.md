@@ -64,6 +64,7 @@ Shared by the steps and the commands:
 | page_icon.py | the mark in every page's tab, "¿" drawn in SVG (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`); the standard library alone |
 | overrides.py | overrides.toml |
 | library.py | song folders, safe file access in the synced library |
+| download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs |
 | stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`, in UTC; `local=True`, the requests page's, in the server's zone, named); a stored time missing or unreadable is older than any (`before`); the standard library alone |
@@ -105,7 +106,11 @@ Rules a change there keeps (the Invariants below are the others):
   song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of
   it) posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py). A hit's
   name there and on the lookup page presses its Get it (or Add again), disabled while that button is
-  (rows.js `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it. Your
+  (rows.js `nameDoes`): never in place of a title that opens a sheet, and only a click or a key on it. Served, an
+  artist's name (a header's, a line's, a lookup row's) searches for them as typing it would (library.js
+  `searchFor`, a step of the browser's history; lookup_page.py `searchArtist`), which asks no site, and the funnel
+  beside it (rows.js `artistOnly`) shows your songs of theirs alone; from a file the name is the funnel's
+  (`artistFilter`). Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with: a line offers Add to a songbook…
   for those alone. The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the

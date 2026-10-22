@@ -2379,7 +2379,31 @@ def test_the_cards_links_open_the_songs_files(app, cfg):
     assert response.status == 200 and response.body == b"%PDF"
     assert header(response, "content-type") == "application/pdf"
     download = get(app, "/Soda%20Stereo/De%20M%C3%BAsica%20Ligera/guitar-1.gp5")
-    assert header(download, "content-disposition") == "attachment"
+    # No song of the library's in that folder: the file is named as it is.
+    assert header(download, "content-disposition") == "attachment; filename=\"guitar-1.gp5\"; filename*=UTF-8''guitar-1.gp5"
+
+
+def test_a_guitar_pro_file_is_downloaded_under_its_songs_name(app, conn, cfg):
+    from urllib.parse import unquote
+
+    names = {}
+    for artist, title in (("Joaquín Sabina", "19 Días y 500 Noches"), ("宋冬野", "斑马，斑马")):
+        song = add_song(conn, artist, title)
+        folder = song_dir(cfg.library_dir, song)
+        folder.mkdir(parents=True)
+        for name in ("guitar-1.gp5", "guitar-2.ptb"):
+            (folder / name).write_bytes(b"gp")
+        relative = folder.relative_to(cfg.library_dir)
+        for name in ("guitar-1.gp5", "guitar-2.ptb"):
+            said = header(get(app, "/" + quote(f"{relative.as_posix()}/{name}")), "content-disposition")
+            assert said.startswith('attachment; filename="') and said.isascii()
+            names[(artist, name)] = (said.split('filename="', 1)[1].split('"', 1)[0],
+                                     unquote(said.split("filename*=UTF-8''", 1)[1]))
+    assert names[("Joaquín Sabina", "guitar-1.gp5")] == ("Joaquin Sabina - 19 Dias y 500 Noches.gp5",
+                                                         "Joaquín Sabina - 19 Días y 500 Noches.gp5")
+    assert names[("Joaquín Sabina", "guitar-2.ptb")][1] == "Joaquín Sabina - 19 Días y 500 Noches (2).ptb"
+    assert names[("宋冬野", "guitar-1.gp5")][1] == "宋冬野 - 斑马，斑马.gp5"
+    assert names[("宋冬野", "guitar-2.ptb")][1] == "宋冬野 - 斑马，斑马 (2).ptb"
 
 
 def links_on_the_page(app):

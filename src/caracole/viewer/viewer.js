@@ -213,12 +213,14 @@
 
   // The song's Guitar Pro files (``guitar``: their names, beside the sheet), in the settings: served, each opens
   // caracole serve's Guitar Pro page for it (/guitar?file=…), in this tab, as Export does; from a file, each is
-  // the file itself.
+  // the file itself, saved under the song's name (``guitarDownload``: "Eagles - Hotel California (2).gp5").
   (() => {
     const row = $("guitar-row");
     const box = $("guitar-links");
     const names = Array.isArray(data.guitar) ? data.guitar.filter((n) => typeof n === "string" && n) : [];
     if (!row || !box || !names.length) return;
+    const saved = Array.isArray(data.guitarDownload) && data.guitarDownload.length === names.length
+      ? data.guitarDownload : [];
     const served = location.protocol !== "file:";
     const folder = served ? sheetPath().split("/").slice(0, -1).join("/") : "";
     names.forEach((name, i) => {
@@ -227,6 +229,7 @@
       a.textContent = served ? "Guitar Pro tab" + (names.length > 1 ? " " + (i + 1) : "") : name;
       a.setAttribute("href", served ? "/guitar?file=" + encodeURIComponent(folder + "/" + name)
         : encodeURIComponent(name));
+      if (!served && typeof saved[i] === "string" && saved[i]) a.setAttribute("download", saved[i]);
       box.appendChild(a);
     });
     $("guitar-hint").textContent = served ? "Drawn and played in the browser."

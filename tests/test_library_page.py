@@ -328,6 +328,16 @@ def test_scores_are_linked_after_the_guitar_pro_files_and_a_score_pdf_is_never_t
     assert [f["name"] for f in files if f["primary"]] == ["sheet.txt"]
 
 
+def test_a_guitar_pro_or_score_file_downloads_under_its_songs_name(conn, cfg):
+    s = add_song(conn, "Joaquín Sabina", "19 Días y 500 Noches")
+    put(cfg, s, "sheet.pdf", "guitar-1.gp5", "guitar-2.ptb", "score-1.mscz", "score-1.pdf", "lyrics.txt")
+    files = {f["name"]: f.get("download") for f in songs_of(page(conn, cfg))[s.display]["files"]}
+    assert files == {"sheet.pdf": None, "guitar-1.gp5": "Joaquín Sabina - 19 Días y 500 Noches.gp5",
+                     "guitar-2.ptb": "Joaquín Sabina - 19 Días y 500 Noches (2).ptb",
+                     "score-1.mscz": "Joaquín Sabina - 19 Días y 500 Noches.mscz", "score-1.pdf": None,
+                     "lyrics.txt": None}
+
+
 def test_a_songs_musescore_pages_are_linked_as_possible_matches(conn, cfg):
     import dataclasses
 
@@ -1275,6 +1285,19 @@ def test_a_screen_reader_hears_each_artist_and_song_and_a_jump_moves_the_focus(c
     assert re.search(r'<body[^>]*data-focus="radiohead"', dom), dom[-1500:]
 
 
+@in_chromium
+def test_the_written_pages_guitar_pro_links_save_the_file_under_its_songs_name(conn, cfg, tmp_path):
+    from html import unescape
+
+    s = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, s, "sheet.pdf", "guitar-1.gp5", "guitar-2.ptb", "score-1.mscz", "score-1.pdf")
+    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
+    links = {unescape(label): unescape(saved) if saved else None for saved, label in re.findall(
+        r'<a class="btn small[^"]*" href="[^"]*"(?: download="([^"]*)")?[^>]*>([^<]*)<', line_of(shown, "斑马，斑马"))}
+    assert links == {"Open PDF": None, "Guitar Pro 1": "宋冬野 - 斑马，斑马.gp5", "Power Tab 2": "宋冬野 - 斑马，斑马 (2).ptb",
+                     "Score 1 (MuseScore)": "宋冬野 - 斑马，斑马.mscz", "Score 1 (PDF)": None}, links
+
+
 # Notes how an artist's header looks beside their song's line, and what base.css's tokens resolve to.
 HEADER_LOOK = """
 (() => {
@@ -1352,6 +1375,8 @@ def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(co
     assert sorted(after["titles"]) == ["Bohemian Rhapsody", "Don't Stop Me Now"], after
     assert after["chip"].startswith("Queen") and after["q"] == "" and "artist=queen" in after["hash"]
     assert re.search(r'data-cleared="4"', dom)  # the chip takes the filter off
+    # From a file, which can't search the sites, the name is the funnel's: no name that searches, no funnel apart.
+    assert "artist-search" not in listing(dom) and "artist-only" not in listing(dom)
 
     # The address keeps the filter, as it keeps the search.
     plain = write_library_page(cfg.library_dir, page(conn, cfg))

@@ -17,6 +17,8 @@ you mean" that artist, whose name lists their songs the same way. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request.
+A row's artist is a name to press: it searches for them, as typing their name
+would, which asks no site either.
 Picking a song (its Get
 it, or its name, which does the same), or one of its versions, looks it up
 now (``POST /lookup``: one ``caracole get``, which records the pick in
@@ -132,7 +134,7 @@ const STATUS = {"found": "Found", "wanted": "Wanted", "ignored": "Ignored"};
 const ICONS = (() => {
   try { return JSON.parse(document.getElementById("icons").textContent || "{}") || {}; } catch (e) { return {}; }
 })();
-const rowKit = caracoleRows(ICONS);
+const rowKit = caracoleRows(ICONS, {searchArtist: (name) => searchArtist(name)});
 window.caracole = Object.freeze({resultRow: rowKit.resultRow, sourceMark: rowKit.sourceMark, icons: ICONS});
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
 let shownFor = null;  // the query the results on the screen answer
@@ -250,6 +252,18 @@ function openSuggested(s) {
   q.focus();
 }
 
+// An artist's name on a row, pressed: the search for them, as typing their name runs it (their row first, as an artist
+// named whole leads), the focus in the box. It asks no site: the indexes alone.
+function searchArtist(name) {
+  enterFor = null;
+  expand();
+  clearTimeout(timer);
+  q.value = String(name || "");
+  search();
+  window.scrollTo(0, 0);
+  q.focus({preventScroll: true});
+}
+
 // Enter: the answer's best row, its main action (a song of yours opens, an Ultimate Guitar song is looked up);
 // when an artist leads, that artist's songs, LaCuerda's when it leads; when nothing stands out, nothing: a guess
 // never spends a request.
@@ -349,11 +363,12 @@ function librarySong(s) {
   if (opens && s.files.sheet) here.append(reading("Read it here", "Read " + s.display + " here"));
   if (s.files.sheet) here.append(again());
   const others = files.filter(f => f && f !== opens)
-    .map(f => ({label: f.label, href: f.href, source: f.source === s.source ? null : f.source}));
+    .map(f => ({label: f.label, href: f.href, source: f.source === s.source ? null : f.source, download: f.download}));
   const badges = [{kind: s.status, text: STATUS[s.status] || s.status}];
   if (s.review) badges.push({kind: "review", text: "Needs review"});
   const row = window.caracole.resultRow({
-    title: s.title, href: opens ? opens.href : "", artist: s.artist, source: s.source, status: s.status,
+    title: s.title, href: opens ? opens.href : "", artist: s.artist, onSearch: () => searchArtist(s.artist),
+    source: s.source, status: s.status,
     key: typeof s.key === "string" ? s.key : "", badges, action,
     more: [here.childNodes.length ? here : null, {heading: "Files", links: others}].filter(Boolean),
   });

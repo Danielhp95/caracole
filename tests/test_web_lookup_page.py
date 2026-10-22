@@ -551,3 +551,21 @@ def test_on_a_touch_phone_every_control_is_a_thumbs_size_and_every_field_has_an_
         phone.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": scheme}])
         weak = phone.js(weak_edges())  # the search field too: this page's own, a field like the others
         assert weak == [], (scheme, weak)
+
+
+@in_chromium
+def test_a_rows_artist_searches_for_them_as_typing_their_name_would(cfg, live, browser):
+    base, queue = live
+    index_songs(cfg, [("c-tangana", "los-tontos", 3), ("c-tangana", "tu-me-dejaste-de-querer", 5),
+                      ("kase-o", "esto-no-para", 2)])
+    browser.open(base + "/lookup")
+    browser.type("los tontos")
+    hit = "#results .hit[data-ug='c-tangana/los-tontos']"
+    assert browser.wait(f"!!document.querySelector(\"{hit}\")")
+    assert browser.js(f"document.querySelector(\"{hit} .row-artist\").textContent") == "C Tangana"
+    browser.click(f"{hit} button.row-artist")
+    assert browser.wait("document.getElementById('q').value === 'C Tangana'")
+    # Their row first, as an artist's name typed whole leads, the box keeping the focus; nothing asked of a site.
+    assert browser.wait("(document.querySelector('#results .hit .row-title') || {}).textContent === 'C Tangana'")
+    assert browser.js("document.activeElement.id") == "q"
+    assert queue.snapshot() == []

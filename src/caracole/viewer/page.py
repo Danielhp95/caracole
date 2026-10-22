@@ -47,7 +47,8 @@ written ``\\u003c``:
   render.py's ``_versions_data``;
 - ``guitar``: the names of the song's Guitar Pro files beside the page that caracole serve shows in the browser
   (render.py, ``inbox.guitar_files``), for the settings' Guitar Pro row (``_GUITAR_ROW``): served, each a link to
-  caracole serve's Guitar Pro page; or none, and no row.
+  caracole serve's Guitar Pro page; or none, and no row. ``guitarDownload``, beside it: the name each saves under,
+  from a file (``download_names.download_name``: "Eagles - Hotel California (2).gp5"), its link's ``download``.
 """
 
 from __future__ import annotations
@@ -62,6 +63,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+from caracole.download_names import download_name
 from caracole.inline import json_block, sha256_source
 from caracole.normalize import has_han
 from caracole.page_icon import LINK as PAGE_ICON
@@ -123,6 +125,7 @@ BUILD_FILES = (
                                "LICENSE-chords-db")),
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE.parent / "inline.py",  # sha256_source, json_block
+    HERE.parent / "download_names.py",  # download_name, a Guitar Pro link's download attribute
     HERE.parent / "normalize.py",  # has_han
     HERE.parent / "page_icon.py",  # the icon in the page's head
     HERE.parent / "autochords" / "merge.py",  # AUTO_MARKER, which sheet.py reads
@@ -185,6 +188,7 @@ def build_viewer(
         data["versions"] = versions
     if guitar:
         data["guitar"] = list(guitar)
+        data["guitarDownload"] = [download_name(sheet.artist or "", sheet.title or "", name) for name in guitar]
     style, script = _assets()
     title = sheet.title or "Untitled"
     return _page(
