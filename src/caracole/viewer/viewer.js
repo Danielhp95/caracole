@@ -1327,7 +1327,7 @@
     const mine = !active || active === document.body || which.contains(active);
     which.hidden = true;
     if (which === card) for (const el of chordEls) el.classList.remove("on");
-    if (which === harmony) stopPlaying();
+    if (which === harmony) stopPlaying(true);
     restack();
     if (!mine) return;  // the focus is somewhere else of yours: it stays there
     let to = opener && opener.isConnected ? opener : null;
@@ -1495,8 +1495,9 @@
   // neck on a phone (the rail of necks has it on a laptop), and each section's progression (page.py's
   // ``progressions``): its numerals, one cycle, the times it is played, its name and how it ends. Tap one to
   // go to its section; ▶ plays it with strum.js's synthesis (window.caracoleSound, when the page has it), a
-  // chord a bar at the tempo set, each chord as the page shows it, its shape and the capo, and marks the one
-  // playing; ■ stops it. Songs with this progression is the library's page, with it filtered (#prog=).
+  // chord a bar at the tempo set (− and + change it as it plays), each chord as the page shows it, its shape
+  // and the capo, and marks the one playing; ■ stops it, and closing the panel every sound. Songs with this
+  // progression is the library's page, with it filtered (#prog=).
   const ENDINGS = { authentic: "an authentic cadence (V–I)", plagal: "a plagal cadence (IV–I)",
     half: "a half cadence (on V)", deceptive: "a deceptive cadence (V–vi)" };
   const sectionEls = () => Array.from(sheetEl.querySelectorAll(":scope > section.sec"));
@@ -1538,7 +1539,9 @@
       li.querySelectorAll(".pn").forEach((pn, k) => pn.classList.toggle("on", mine && playing.at === k));
     }
   };
-  function stopPlaying() {
+  // ■, another ▶ or the panel closed: the progression stops; the panel closed (``all``), every sound strum.js
+  // still makes too, a chord tapped among them.
+  function stopPlaying(all) {
     const was = playing;
     playing = null;
     if (was && was.handle) {
@@ -1546,6 +1549,8 @@
         was.handle.stop();
       } catch (err) { /* already over */ }
     }
+    const synth = all ? synthesis() : null;
+    if (synth && typeof synth.stop === "function") synth.stop();
     drawPlaying();
   }
   const playSection = (n, repeats, chords) => {
@@ -1648,9 +1653,11 @@
     drawHarmony();
     open(harmony, more);
   });
+  // The progression playing takes the new tempo from its next strum on.
   const setBpm = (n) => {
     state.bpm = Math.max(BPM.min, Math.min(BPM.max, n));
     $("bpm").textContent = String(state.bpm);
+    if (playing && playing.handle && typeof playing.handle.tempo === "function") playing.handle.tempo(state.bpm);
     save();
   };
   $("bpm-down").addEventListener("click", () => setBpm(state.bpm - BPM.step));
