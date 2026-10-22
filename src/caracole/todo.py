@@ -217,8 +217,24 @@ def _alias_line(artist: str, akey: str, overrides: Overrides) -> list[str]:
     return [f"{_toml_str(artist)} = [{listed}]  # in place of the artist's line under [alias]"]
 
 
+def _alias_above(artist: str, akey: str, overrides: Overrides, song: str, given: list[str]) -> str:
+    """What a candidate says of its ``[alias]`` line when the item of ``song``, above, gives the artist one
+    already (for ``given``, its candidates' UG names): pasted for both songs, the artist's key would be in
+    ``[alias]`` twice, which makes overrides.toml unreadable, so the page gives an artist's line once."""
+    if akey in given:
+        return (f"{md(artist)}'s `[alias]` line for `{akey}` is the one under **{md(song)}** above: it goes in "
+                "once, for every song of theirs.")
+    both = ", ".join(_toml_str(a) for a in dict.fromkeys((*overrides.alias.get(slug_key(artist), ()), given[0], akey)))
+    return (f"{md(artist)} takes one line under `[alias]`, and the one under **{md(song)}** above gives them "
+            f"`{given[0]}`: to add `{akey}` too, put this in its place: {_code(f'{_toml_str(artist)} = [{both}]')}. "
+            f"Without it, this candidate's is {_code(_alias_line(artist, akey, overrides)[0])}.")
+
+
 def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, now: datetime) -> list[str]:
     items: list[str] = []
+    # The [alias] lines given so far, by the artist's key: the song whose item gives them, and their UG names.
+    # A song's candidates are alternatives, each with its line; a later song's say where the artist's line is.
+    given: dict[str, tuple[str, list[str]]] = {}
     for s in songs:
         if not s.review or s.status == "ignored":
             continue
@@ -227,6 +243,7 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
         if note:
             items += [note, ""]
         refs: list[str] = []
+        ours: list[str] = []  # the UG names this song's [alias] lines give its artist
         for cand in (s.match_candidates or [])[:5]:
             akey, skey = cand.get("artist_key"), cand.get("song_key")
             if not akey or not skey:
@@ -242,9 +259,19 @@ def _review(conn: sqlite3.Connection, songs: list[Song], overrides: Overrides, n
             # No table headers: overrides.toml may hold [match] and [alias] already (`caracole review`
             # writes them), and a table declared twice makes the whole file unreadable.
             lines = [f"{_toml_str(s.display)} = {_toml_str(f'{akey}/{skey}')}  # under [match]"]
+            above = None
             if step not in NO_ALIAS_STEPS and slug_key(s.artist) != akey:
-                lines += _alias_line(s.artist, akey, overrides)
+                alias = _alias_line(s.artist, akey, overrides)
+                if alias and slug_key(s.artist) in given:
+                    above = _alias_above(s.artist, akey, overrides, *given[slug_key(s.artist)])
+                elif alias:
+                    lines += alias
+                    ours.append(akey)
             items += _paste(lines)
+            if above:
+                items += [above, ""]
+        if ours:
+            given.setdefault(slug_key(s.artist), (s.display, ours))
         if refs:
             items += _dismissal(s, refs, overrides)
         items.append("")

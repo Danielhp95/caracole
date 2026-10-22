@@ -1580,7 +1580,11 @@ when it has something in it:
   another UG name for the artist also gets an `[alias]` line, unless
   overrides.toml has that alias already; for an artist with aliases, the
   line is the artist's whole list with the new one, marked
-  `# in place of the artist's line under [alias]`. After the candidates
+  `# in place of the artist's line under [alias]`. An artist's line is given
+  once on the page, since the same key twice under `[alias]` makes the file
+  unreadable: a later song of theirs gets its `[match]` line alone, and says
+  which item above has the artist's line (for another UG name, the line that
+  holds both, to put in its place). After the candidates
   comes the `[reject]` line that dismisses them all; for a song with a
   `[reject]` line already, the whole line to put in its place (see
   [Review](#review)). When the candidates come only from the steps that never
