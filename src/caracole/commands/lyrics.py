@@ -155,6 +155,7 @@ def _lyrics(cfg: Config) -> None:
 def _lacuerda(cfg: Config) -> None:
     """Try LaCuerda for the Spanish songs that need a sheet, then print the counts."""
     from caracole.lacuerda_fetch import lacuerda_sheets
+    from caracole.overrides import load_overrides
     from caracole.ug.fetch import rescore_kept_sheets
 
     overrides = load_ovr(cfg)
@@ -165,7 +166,9 @@ def _lacuerda(cfg: Config) -> None:
         # As the run does before its fetch: a sheet kept before its lyrics is scored first (no
         # request), or no partial LaCuerda sheet could replace it, and a complete one is left be.
         rescored = rescore_kept_sheets(conn, cfg.library_dir, cfg.rank)
-        return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides)
+        # A lookup the client lets go first in a pause may pin a tab or pick a sheet: read again after one.
+        return lacuerda_sheets(conn, client, cfg.library_dir, cfg.rank, now, overrides=overrides,
+                               reload_overrides=lambda: load_overrides(cfg.overrides_file))
 
     def ran(s: LaCuerdaStats) -> bool:
         return bool(rescored or s.tried or s.budget_exhausted)

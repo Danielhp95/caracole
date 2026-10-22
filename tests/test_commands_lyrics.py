@@ -25,6 +25,7 @@ from caracole import db
 from caracole.cli import build_app
 from caracole.commands import _common
 from caracole.health import get_state, is_cooling, record_block
+from caracole.library import kept_files
 from caracole.lyrics import Lyrics
 from caracole.songs import get_song, update_song
 
@@ -414,6 +415,33 @@ def test_lacuerda_follows_overrides(tmp_path, sites):
     assert result.exit_code == 0, result.output
     assert "No song to try on LaCuerda." in result.stdout
     assert sites.lacuerda.requests == []
+
+
+def test_lacuerda_reads_overrides_again_after_a_lookup_it_let_go_first(tmp_path, sites, monkeypatch):
+    # In the pause before Soda Stereo's page, the command let `caracole get --tab` go first, which pinned the
+    # partial UG sheet De Música Ligera keeps: LaCuerda's complete sheet doesn't take its place.
+    sites.lacuerda.pages.update(soda_pages())
+    song_id = spanish_song(tmp_path)
+    vid = ug_sheet_kept_before_its_lyrics(tmp_path, song_id, "Cruzo la plaza con el café frío\n")
+    overrides = tmp_path / "lib" / "overrides.toml"
+    answer = sites.lacuerda.handler
+
+    def lookup_first(request):
+        if str(request.url) == SODA and not overrides.exists():
+            overrides.write_text('[pin]\n"Soda Stereo - De Música Ligera" = '
+                                 '["https://tabs.ultimate-guitar.com/tab/101"]\n', encoding="utf-8")
+            monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        return answer(request)
+
+    monkeypatch.setattr(sites.lacuerda, "handler", lookup_first)
+    result = run(tmp_path, "lacuerda")
+    assert result.exit_code == 0, result.output
+    assert sites.lacuerda.requests == [SODA, DML_3]
+    conn = open_db(tmp_path)
+    try:
+        assert {f.name: f.version_id for f in kept_files(conn, song_id)} == {"sheet.json": vid, "sheet.txt": vid}
+    finally:
+        conn.close()
 
 
 def test_lacuerda_with_nothing_to_try(tmp_path, sites):
