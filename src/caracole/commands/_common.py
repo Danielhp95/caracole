@@ -42,7 +42,7 @@ import typer
 
 from caracole import db, logs
 from caracole.config import Config, ConfigError, ProviderPolicy, load_config
-from caracole.health import EventLog
+from caracole.health import EventLog, is_cooling
 from caracole.overrides import Overrides, OverridesError, load_overrides, override_key
 
 if TYPE_CHECKING:  # the HTTP client waits for a command that makes one (``make_client``)
@@ -403,13 +403,16 @@ def alert_block(cfg: Config, provider: str, message: str) -> None:
 def _locked_client() -> type[PoliteClient]:
     """The class of ``make_client``'s clients, made the first time a command makes one: a
     command that sends no request never imports PoliteClient, and with it httpx."""
-    from caracole.http import PoliteClient
+    from caracole.http import PoliteClient, ProviderBlocked
 
     class _LockedClient(PoliteClient):
         """A PoliteClient holding caracole's lock until it is closed.
 
         Bulk work's (``yields``) spends each pause handing the lock to a lookup that
-        waits (``hand_over``); after one, its pause starts again, whole.
+        waits (``hand_over``); after one, its pause starts again, whole. Once a lookup
+        has had the lock, in this client's pause or another's of the process, it sends
+        nothing more to a site that blocked the lookup, and waits the whole pause after
+        the lookup's last request to its site, not only after its own (``_after_a_lookup``).
         """
 
         def __init__(self, *args, lock: Path, cfg: Config | None = None,
@@ -419,6 +422,7 @@ def _locked_client() -> type[PoliteClient]:
             self._cfg = cfg
             self._conn = conn
             self._yields = yields and cfg is not None
+            self._seen = _handoffs  # the handoffs this client has looked at
 
         @property
         def handoffs(self) -> int:
@@ -436,6 +440,28 @@ def _locked_client() -> type[PoliteClient]:
                 return self._rng.uniform(*self.policy.delay)
 
             _patient_sleep(self._cfg, self._conn, seconds, again, self._sleep)
+
+        def _pause(self, url: str) -> None:
+            self._after_a_lookup(url)  # one had the lock since this client last looked
+            super()._pause(url)
+            self._after_a_lookup(url)  # one went first in this very pause, which began again after it
+
+        def _after_a_lookup(self, url: str) -> None:
+            """What a lookup this process let go first left, once there was one since the client last looked,
+            before its next request: a block the lookup met (health.py, as the lookup recorded it) is this
+            client's too, and nothing is sent; else the pause runs from the last request any caracole sent
+            the site (kv ``http:last_request:``), the lookup's included, when that is later than its own."""
+            if not self._yields or self._conn is None or self._seen == _handoffs:
+                return
+            self._seen = _handoffs
+            if is_cooling(self._conn, self.provider, self._wall_clock()):
+                self._blocked = ProviderBlocked(self.provider, url, None, "met by a lookup caracole let go first")
+                raise self._blocked
+            last = _last_request(self._conn, self.provider)
+            if last is not None:
+                at = self._clock() - max(0.0, time.time() - last)
+                if self._last_request is None or at > self._last_request:
+                    self._last_request = at
 
         def close(self) -> None:
             try:

@@ -421,7 +421,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   - Either pace: one request at a time per provider (a synchronous client, and the lock
     below), redirect hops included. `PoliteClient` paces its own requests, and
     `_common._pause_after_last_request` its first after the last one any caracole sent
-    (kv `http:last_request:<provider>`, to the fraction of a second, else `events`). No gap
+    (kv `http:last_request:<provider>`, to the fraction of a second, else `events`), as bulk
+    work's client paces its next one once its process let a lookup go first
+    (`_LockedClient._after_a_lookup`). No gap
     is shorter than the host's robots.txt `Crawl-delay` (`http.ROBOTS_CRAWL_DELAY`, from
     the same `User-agent: *` groups as the rules below: none has one today).
   - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `youtube`) can be
@@ -431,7 +433,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     the k-th block in a row (so the next nightly run is always skipped), one ntfy alert goes out
     for the block, never one a song, titled with `logs.provider_name` (the run's step, or
     `_common.alert_block` in a command, `caracole fetch --song` from serve's review page too; a lookup
-    sends none), and nothing retries or works around it (no proxies).
+    sends none), and nothing retries or works around it (no proxies). A block a lookup met
+    while bulk work let it go first is that work's too: its client sends nothing more
+    (`_LockedClient._after_a_lookup`), and `record_block` adds no strike for a cooldown that
+    began after its caller did, as `record_ok` clears none
+    (`test_commands_common.py::test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_first`).
   - No URL robots.txt closes is asked for, or followed to (`http.ROBOTS_DISALLOW`,
     `robots_disallows`): not UG's `/search.php` (matching is local, against the sitemap
     index), `/tab/download`, `/tab/print?` or `/download/public/`, nor gtptabs.com's

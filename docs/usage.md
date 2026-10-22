@@ -1024,6 +1024,8 @@ lacuerda --artist`) sends none: it says so where you asked. A run, a command
 or a lookup the site answers without a block starts the count again; one the
 site answered with nothing but errors doesn't, and neither does a run that let
 a lookup go first which was blocked meanwhile: that block's cooldown stands.
+That block is the run's too: the run sends that site nothing more, and its
+ntfy message says so, but it is one block, not two in a row.
 Neither a block, nor a spent budget, nor any
 other error from a site marks a song not found or its lyrics missing: the
 song waits for the next run. An answer that won't read but was cached all the
@@ -1474,7 +1476,9 @@ A lookup (`caracole get`) never waits behind a whole run: it says
 next pause, or between two songs.`, and the run, which spends most of its time in its 10–20 second
 pauses (its youtube step, in its 15–30 seconds between two yt-dlp runs), lets go
 of the lock in the pause it is in, takes it back once the lookup is done, and
-waits a whole pause again before its next request. The
+waits a whole pause again before its next request, to any site the lookup
+asked: its next request to Ultimate Guitar waits UG's 10–20 seconds after the
+lookup's last one, even when the lookup went first in a pause of LRCLIB's. The
 run then reads each song again before its turn, and overrides.toml too, in that
 step and in every step after it, so a song the lookup fetched isn't fetched
 twice, and a tab it pinned is the one kept: LaCuerda's sheet doesn't take its

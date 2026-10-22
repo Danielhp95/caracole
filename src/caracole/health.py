@@ -75,8 +75,16 @@ def _save(conn: sqlite3.Connection, s: ProviderState) -> ProviderState:
 
 
 def record_block(conn: sqlite3.Connection, provider: str, now: datetime, message: str) -> ProviderState:
-    """Start (or extend) a cooldown: 24 h × 2^(strikes − 1), plus the margin."""
+    """Start (or extend) a cooldown, for a run (or a command, or a lookup) that began at ``now``:
+    24 h × 2^(strikes − 1), plus the margin.
+
+    A cooldown still running at ``now`` stays as it is, with its strikes. A run only asks a provider
+    that isn't cooling down, so that block came while the run went on: another caracole met it while
+    this one let it go first (``_common.hand_over``), and the run met the same block, or its client
+    refused to send for it. One block is one strike."""
     s = get_state(conn, provider)
+    if s.cooldown_until is not None and now < s.cooldown_until:
+        return s
     strikes = s.strikes + 1
     return _save(conn, replace(
         s, strikes=strikes, cooldown_until=now + COOLDOWN_BASE * (2 ** (strikes - 1)) + COOLDOWN_MARGIN,

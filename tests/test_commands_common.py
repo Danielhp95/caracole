@@ -445,6 +445,74 @@ def test_bulk_work_after_a_lookup_keeps_the_long_pause(cfg, conn, site, pauses):
     assert 9.5 <= sum(pauses) <= 20
 
 
+def a_lookup_in_a_pause(conn, monkeypatch, *, blocked: bool = False, asked: str | None = None) -> list[int]:
+    """``_common.hand_over``, handing caracole's lock to one lookup at the first look of a pause: it asked
+    ``asked`` (a provider) for a page, or was ``blocked`` by UG (get.py records the block). Once each pause
+    is done, how many handoffs the process had made."""
+    import time
+
+    from caracole.health import record_block
+
+    turns: list[int] = []
+
+    def hand_over(cfg_, conn_=None) -> bool:
+        if turns:
+            return False
+        if asked is not None:
+            db.kv_set(conn, f"http:last_request:{asked}", f"{time.time():.3f}")
+        if blocked:
+            record_block(conn, "ug", _common.utcnow(), "ug: 403: https://tabs.ultimate-guitar.com/tab/9: HTTP 403")
+        monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
+        turns.append(_common.handoffs())
+        return True
+
+    monkeypatch.setattr(_common, "hand_over", hand_over)
+    return turns
+
+
+def test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_first(cfg, conn, site, pauses,
+                                                                                       monkeypatch):
+    # In the pause between two UG requests the run let a lookup go first, which UG blocked: the run's client
+    # sends UG nothing more, as after a block of its own, and the step that meets it adds no strike to it.
+    from caracole.health import get_state, record_block
+    from caracole.http import ProviderBlocked
+
+    start = _common.utcnow()
+    turns = a_lookup_in_a_pause(conn, monkeypatch, blocked=True)
+    client = make_client(cfg, conn, "ug", _common.run_id_for(start))
+    try:
+        client.get("https://tabs.ultimate-guitar.com/tab/1")
+        with pytest.raises(ProviderBlocked) as met:
+            client.get("https://tabs.ultimate-guitar.com/tab/2")
+        with pytest.raises(ProviderBlocked):
+            client.get("https://tabs.ultimate-guitar.com/tab/3")
+    finally:
+        client.close()
+    assert turns and site.requests == ["https://tabs.ultimate-guitar.com/tab/1"]
+    lookups = get_state(conn, "ug")
+    assert record_block(conn, "ug", start, str(met.value)) == lookups  # as the step records what it met
+    assert get_state(conn, "ug").strikes == 1
+
+
+def test_after_a_lookup_bulk_work_keeps_the_long_pause_after_the_lookups_request_to_a_site(cfg, conn, site, pauses,
+                                                                                         monkeypatch):
+    # The run makes every client at its start. In a pause of its LRCLIB client it let a lookup go first, which
+    # asked UG for a page: the run's first UG request, the fetch step's, waits UG's whole pause after it.
+    ug = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
+    lrclib = make_client(cfg, conn, "lrclib", "2026-10-19T03:30:00Z")
+    try:
+        lrclib.get("https://lrclib.net/api/get?a=1")
+        a_lookup_in_a_pause(conn, monkeypatch, asked="ug")
+        lrclib.get("https://lrclib.net/api/get?a=2")  # in the pause before it, the lookup went first
+        pauses.clear()
+        ug.get("https://tabs.ultimate-guitar.com/tab/1")
+    finally:
+        lrclib.close()
+        ug.close()
+    low, high = cfg.provider("ug").delay
+    assert low - 0.5 <= sum(pauses) <= high
+
+
 def test_a_waiting_lookup_says_whom_it_waits_for_and_is_announced(cfg, capsys):
     import time
 
