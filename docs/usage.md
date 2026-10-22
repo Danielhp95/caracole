@@ -1713,7 +1713,9 @@ when it has something in it:
   and the version, or a score "Artist - Title.ext", the song as caracole names
   it, and the next run files it. Don't move it into the song's
   folder yourself: caracole wouldn't know it is there. A symbolic link in
-  `_inbox/` is listed too: caracole files only regular files. If `_inbox` is a
+  `_inbox/` is listed too: caracole files only regular files. A name that
+  isn't UTF-8 (an old zip's, in Latin-1 or CP437) shows each byte it can't read
+  as `\xNN`, and says so. If `_inbox` is a
   link itself, the page lists nothing from it, and says to make it a folder;
   until then the scan files nothing.
 - **Missing lyrics.** LRCLIB has none for these yet; caracole asks again after

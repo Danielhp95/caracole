@@ -670,21 +670,32 @@ def _inbox(cfg: Config) -> list[str]:
     items = []
     for name, link, regular in entries:
         suffix = Path(name).suffix
+        shown = _file_name(name)
         if link:
-            items.append(f"- {_code(name)}: a symbolic link; caracole files only regular files. Put the file "
+            items.append(f"- {shown}: a symbolic link; caracole files only regular files. Put the file "
                          "itself there.")
         elif not regular:
             continue
         elif suffix.lower() in GP_EXTENSIONS:
-            items.append(f"- {_code(name)}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
+            items.append(f"- {shown}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
                          "to click names the song and the version")
         elif suffix.lower() in SCORE_EXTENSIONS:
-            items.append(f"- {_code(name)}: a score? Rename it \"Artist - Title{suffix}\", the song as caracole "
+            items.append(f"- {shown}: a score? Rename it \"Artist - Title{suffix}\", the song as caracole "
                          f"names it, as {SCORES_TITLE} does")
         else:
-            items.append(f"- {_code(name)}: not a Guitar Pro, Power Tab or score file "
+            items.append(f"- {shown}: not a Guitar Pro, Power Tab or score file "
                          f"({', '.join(GP_EXTENSIONS + SCORE_EXTENSIONS)}), so caracole leaves it there")
     return items
+
+
+def _file_name(name: str) -> str:
+    """A file's name as the page shows it, in code. A name that isn't UTF-8 (an old zip's, unzipped on the host:
+    Latin-1 or CP437) comes from the file system with each byte UTF-8 can't read as a lone surrogate, which no
+    page can hold: it is shown with that byte as ``\\xNN``, and says so."""
+    shown = os.fsencode(name).decode("utf-8", "backslashreplace")
+    if shown == name:
+        return _code(name)
+    return f"{_code(shown)} (its name isn't UTF-8: each \\xNN is a byte of it)"
 
 
 def _suggestions(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:

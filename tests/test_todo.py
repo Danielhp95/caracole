@@ -1,3 +1,4 @@
+import os
 import re
 from datetime import UTC, datetime
 from urllib.parse import quote
@@ -572,6 +573,23 @@ def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
     assert "Guitar Pro pages to click" in section
     assert '`notes.pdf`: a score? Rename it "Artist - Title.pdf", the song as caracole names it' in section
     assert "`notes.txt`: not a Guitar Pro, Power Tab or score file" in section
+
+
+def test_an_inbox_file_named_in_another_encoding_is_listed_and_the_pages_are_written(conn, cfg):
+    # An old zip unzipped on the host names its files in Latin-1 or CP437: os.scandir hands the bytes UTF-8
+    # can't read over as surrogates, which UTF-8 can't write either. Every page must still be written.
+    from caracole.todo import write_pages
+
+    add_song(conn, "Radiohead", "Creep")
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    with open(os.fsencode(inbox) + b"/Jos\xe9 - Canci\xf3n.gp5", "wb") as f:
+        f.write(b"x")
+    todo_md, page = write_pages(conn, cfg, Overrides(), NOW)
+    section = section_of(todo_md.read_text(encoding="utf-8"), "Inbox: files caracole couldn't place")
+    assert ("- `Jos\\xe9 - Canci\\xf3n.gp5` (its name isn't UTF-8: each \\xNN is a byte of it): rename it "
+            '"Artist - Title (ver N).gp5"') in section
+    assert "Creep" in page.read_text(encoding="utf-8")
 
 
 def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
