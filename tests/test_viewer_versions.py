@@ -139,6 +139,14 @@ def test_the_text_size_goes_along_to_the_next_version(tmp_path):
 
 
 @in_chromium
+def test_the_rail_of_necks_hidden_stays_hidden_on_the_next_version(tmp_path):
+    pages = folder(tmp_path, WONDERWALL)
+    with viewer(tmp_path, pages["sheet.html"].as_uri() + "#fs=24&necks=0") as b:
+        shown = seen(b)
+    assert shown["next"] == "version-39144.html#fs=24&necks=0"
+
+
+@in_chromium
 def test_a_lacuerda_sheet_is_the_one_and_ug_versions_still_switch(tmp_path):
     # Review Focus 3: the song's sheet is LaCuerda's: no UG version is chosen, and the line says so.
     versions = deepcopy(WONDERWALL)

@@ -1,6 +1,7 @@
 """caracole.viewer: the bar at the foot of the sheet viewer (page.py ``_CONTROLS``, viewer.js).
 
-[− key +] [guitar] [Aa] [▶] [⋯]: the song a semitone down or up, with its key in short; the strip of
+[necks] [− key +] [guitar] [Aa] [▶] [⋯]: from 1200 px, the rail of chord necks shown or hidden (its tests are
+test_viewer_necks.py's); the song a semitone down or up, with its key in short; the strip of
 the song's chord shapes, shown or hidden; the text size; scrolling by itself; and the rest of the settings. It slides away as you scroll down, and comes
 back when you scroll up, tap the page or reach the end. The tests that scroll and tap run in a
 Chromium of their own on real time (helpers/browser.py's ``Browser``).
@@ -95,7 +96,7 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     controls = html[start:html.index('<div class="pill"')]
     # In the order a keyboard reaches them, each named for a screen reader.
     assert re.findall(r'<button type="button"[^>]*id="([^"]+)"[^>]*aria-label="([^"]*)"', controls) == [
-        ("t-down", "Transpose down a semitone"), ("t-up", "Transpose up a semitone"), ("shapes", "Chord shapes"),
+        ("necks-toggle", "Chord necks"), ("t-down", "Transpose down a semitone"), ("t-up", "Transpose up a semitone"), ("shapes", "Chord shapes"),
         ("size", "Text size"),
         ("smaller", "Smaller text"), ("bigger", "Bigger text"), ("scroll", "Scroll by itself"),
         ("more", "More settings")]
@@ -353,7 +354,7 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
         b.js("document.querySelector('.licence summary').focus({preventScroll: true})")
         assert bar(b)["where"] == "away"
         order = []
-        for _ in range(6):
+        for _ in range(7):
             b.press("Tab")
             order.append(bar(b)["focus"])
         back = settled(b, "shown")
@@ -365,7 +366,7 @@ def test_the_keyboard_reaches_every_control_even_when_the_bar_is_away(tmp_path):
         kept = down and not slid(b) and bar(b)["where"] == "shown"
         b.press("Enter")  # ⋯
         opened = bar(b)
-    assert order == ["t-down", "t-up", "shapes", "size", "scroll", "more"]
+    assert order == ["necks-toggle", "t-down", "t-up", "shapes", "size", "scroll", "more"]  # the rail's first, at 1280
     assert back and kept and opened["panel"]
 
 
@@ -440,10 +441,11 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
             m = b.js(measure)
             clear = b.js(end)
         assert 50 <= m["height"] <= 54 and m["bottom"] == height, (width, m)
-        rail = 300 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
+        rail = 345 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
         assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
-        assert m["ids"] == ["t-down", "t-up", "shapes", "size", "scroll", "more"], (width, m)
+        tools = ["t-down", "t-up", "shapes", "size", "scroll", "more"]
+        assert m["ids"] == ["necks-toggle"] * (width >= 1200) + tools, (width, m)  # the rail's toggle on its side
         assert m["inside"], (width, m)  # the key's lines in its box, which is no taller than the buttons
         if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1")
             assert m["main"] and m["sub"] and m["said"] == ["shapes · capo 2 · +1"], (width, m)

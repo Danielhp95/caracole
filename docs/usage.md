@@ -2012,9 +2012,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   longer one stays in one, as it would otherwise run down the first column
   and back up the second. The viewer measures again when the window or the
   text size changes, and when the settings' rail opens beside the song. From
-  1200 px the rail of necks (below) takes 300 px on the left, and the song is
+  1200 px the rail of necks (below) takes 345 px on the left, and the song is
   measured beside it: two columns then need a wider window (at 1280 px a song
-  reads in one, at 1600 px two fit as they did at 1280 px without it).
+  reads in one, at 1600 px two fit as they did at 1280 px without it). Hidden,
+  the rail gives the song the whole width back. At 1200 px, with both the rail
+  and the settings open, the song still has about 480 px, and wraps rather
+  than scroll sideways.
 - **Tap a chord** for its fingerings: up to four shapes from chords-db, after
   any the sheet gives, with the fingers, the barre and the fret they start on
   (swipe, or ‹ ›, for the next). Every place the chord is played lights up
@@ -2073,6 +2076,17 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   name (A# and Bb, transposed to B) share one neck. The rail scrolls on its
   own, the song and the bar move over for it, and it isn't printed; on a
   narrower screen or a phone, the chord's card is where the shapes are.
+  **Showing and hiding it**: the button at the rail's top (a sidebar, "Hide
+  chord necks", which stays at the top as the rail scrolls) hides it, and the
+  song takes the whole width; the same sidebar, first in the bar, hides it or
+  brings it back (pressed while it shows), and so does **Chord necks**
+  (Show, Hide) in the settings: the three always agree. The choice is the
+  screen's, not a song's: the browser keeps it once for every sheet and
+  songbook, and the address keeps `necks=0` too, for a page served by
+  `caracole serve`, where the browser keeps nothing; ‹ and › to another
+  version keep it. **Reset everything** shows the rail again. Hidden, the
+  Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
+  there is no rail and no button for it.
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
@@ -2097,7 +2111,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `caracole versions` command that does it, with Copy, and a version not kept
   links to its page on UG.
 - **The bar** at the foot of the page holds what you reach for while
-  playing: `− Em +`, a guitar, `Aa`, `▶` and `⋯`. − and + move every
+  playing: `− Em +`, a guitar, `Aa`, `▶` and `⋯`, and from 1200 px, first,
+  the rail of necks' button (above). − and + move every
   chord, its shapes and the key a semitone at a time, with the key you play
   between them in short: "Em" over "shapes · capo 2" (or "key" with no
   capo), and "· +1" once transposed, or "capo 2 · +1" on a screen too
@@ -2206,7 +2221,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset everything, at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
-  the viewer starts them.
+  the viewer starts them, and shows the rail of necks again.
 - **Guitar Pro**, in the settings of a song with a Guitar Pro file (not a
   Power Tab one): served by caracole serve, **Guitar Pro tab** opens the file
   drawn and played in the browser (see
@@ -2235,7 +2250,8 @@ speed, the text size, the volume and the shape chosen for each chord among them:
 named otherwise when the page opens (an address with another key, mode or
 capo) starts at its first shape. It keeps the transposition, the mode, the
 capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
-volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), and so the shape chosen for a
+volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
+(`necks=0`; the browser keeps that once for every page), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or

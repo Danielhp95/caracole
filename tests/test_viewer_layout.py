@@ -22,7 +22,7 @@ LONG = "{title: Long Song}\n{artist: The Placeholders}\n" + "".join(
     for n in range(1, 21)
 )
 TINY = "{title: Tiny Song}\n{artist: The Placeholders}\n{comment: Verse}\n[G]Tiny [D]words\n\n{comment: Chorus}\n[C]Sing it [G]out\n"
-# A wide laptop's: beside the rail of necks (300 px, from 1200 px wide), as much room as 1280 px without it.
+# A wide laptop's: beside the rail of necks (345 px, from 1200 px wide), as much room as 1280 px without it.
 DESKTOP = "1600,800"
 
 pytestmark = CHROMIUM_MARKS  # every test here opens the page in Chromium
@@ -158,7 +158,7 @@ def test_the_rail_of_necks_takes_its_width_off_the_room_for_two_columns(tmp_path
         with Chromium(tmp_path / f"profile-{width}", size=f"{width},800") as browser:
             seen[width] = opened(browser, build_viewer(SHORT), tmp_path).eval(LAYOUT)
     assert seen[1199]["rail"] == 0 and seen[1199]["right"] > 0, seen[1199]  # no rail: two columns
-    assert seen[1280]["rail"] == 300 and seen[1280]["right"] == 0 and seen[1280]["font"] > 18, seen[1280]
+    assert seen[1280]["rail"] == 345 and seen[1280]["right"] == 0 and seen[1280]["font"] > 18, seen[1280]
     assert abs(seen[1280]["margins"][0] - seen[1280]["margins"][1]) <= 1, seen[1280]  # centred beside it
-    assert seen[1600]["rail"] == 300 and seen[1600]["right"] > 0, seen[1600]
+    assert seen[1600]["rail"] == 345 and seen[1600]["right"] > 0, seen[1600]
     assert not any(s["sideways"] for s in seen.values()), seen

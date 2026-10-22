@@ -253,8 +253,11 @@ html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
 .bar .shapes { margin-left: auto; }
 .bar .shapes:not([hidden]) + .size-box { margin-left: 0; }
 .bar .shapes svg { width: 20px; height: 20px; }
-.bar .shapes[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent);
-  box-shadow: inset 0 0 0 1.5px var(--accent); }
+.bar .shapes[aria-pressed="true"], .bar .necks-toggle[aria-pressed="true"] { background: var(--accent-soft);
+  color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+/* The rail of necks shown or hidden: from 1200 px, where there is a rail (viewer.js), first in the bar, on the
+   rail's side; pressed while it shows, as the guitar is. */
+.bar .necks-toggle svg { width: 18px; height: 18px; }
 /* A phone: the tools side by side with no gap (each 44 px, its icon in the middle) and the bar closer to
    the screen's edges, so the key between − and + keeps its room: "Ab mixolydian" whole at 390 px. */
 @media (max-width: 419px) {
@@ -484,35 +487,56 @@ a.ver-main .ver-name { color: var(--accent); }
 .nk-dot.few, .nk-open.few { stroke-width: .6; }  /* three or more on one note, smaller (viewer.js neck) */
 .nk-dot.few.chosen, .nk-open.few.chosen { stroke-width: 1.2; }
 
-/* From 1200 px wide: the rail of necks on the left (viewer.js shows it, and says so in data-necks), which the
-   song and the bar move over for, as they do for the settings' rail on the right. It scrolls on its own, and
-   a wheel or a finger at its end leaves the song where it is. */
-:root { --necks: 300px; }
+/* From 1200 px wide: the rail of necks on the left (viewer.js shows it while you keep it shown, and says so in
+   data-necks), which the song and the bar move over for, as they do for the settings' rail on the right. It
+   scrolls on its own, and a wheel or a finger at its end leaves the song where it is. Everything in it is
+   --nk times the page's sizes (the owner's 15 % more than the first 300 px): the rail, its padding, its text,
+   the legends' buttons and swatches and the key's switch; the necks, drawn at its width, grow with it. */
+:root { --nk: 1.15; --necks: calc(300px * var(--nk)); }
 @media screen and (min-width: 1200px) {
   .necks { position: fixed; z-index: 7; top: 0; bottom: 0; left: 0; width: var(--necks); overflow-y: auto;
-    overscroll-behavior: contain; padding: 4px 16px calc(18px + env(safe-area-inset-bottom));
-    border-right: 1px solid var(--border); background: var(--surface); scrollbar-width: thin; }
+    overscroll-behavior: contain; padding: 0 calc(16px * var(--nk)) calc(18px + env(safe-area-inset-bottom));
+    border-right: 1px solid var(--border); background: var(--surface); font-size: calc(1rem * var(--nk));
+    scrollbar-width: thin; }
   html[data-necks] body { padding-left: var(--necks); }
   html[data-necks] .bar { left: var(--necks); }
 }
-.nk { padding: 12px 0 10px; }
+/* Its head, kept at its top as it scrolls: its name, and Hide (viewer.js; the bar's button brings it back). */
+.nk-head { position: sticky; z-index: 1; top: 0; display: flex; align-items: center; gap: 8px;
+  margin: 0 calc(-16px * var(--nk)); padding: calc(2px * var(--nk)) calc(8px * var(--nk)) 0 calc(16px * var(--nk));
+  background: var(--surface); }
+.nk-title { margin: 0; color: var(--muted); font-size: .72em; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; }
+.nk-hide { flex: none; display: grid; place-items: center; width: calc(44px * var(--nk)); height: calc(44px * var(--nk));
+  margin-left: auto; padding: 0; border: 0; border-radius: 12px; background: none; color: var(--muted); cursor: pointer; }
+.nk-hide svg { width: calc(16px * var(--nk)); height: calc(16px * var(--nk)); fill: currentColor; }
+@media (hover: hover) { .nk-hide:hover { background: var(--raised); color: var(--text); } }
+.nk { padding: calc(12px * var(--nk)) 0 calc(10px * var(--nk)); }
 .nk + .nk { border-top: 1px solid var(--border); }
-.nk-name { margin: 0 0 6px; font-weight: 700; }
+.nk-name { margin: 0 0 calc(6px * var(--nk)); font-weight: 700; }
 .nk .neck { cursor: pointer; }  /* a dot clicked plays its shape */
-.nk-none { margin: 0; color: var(--muted); font-size: .82rem; }
+.nk-none { margin: 0; color: var(--muted); font-size: .82em; }
 /* The legend: each position's colour and where it sits, a button to play it; the one played is outlined. */
-.nk-legend { display: flex; flex-wrap: wrap; gap: 2px 4px; margin-top: 6px; }
-.nk-legend button { display: inline-flex; align-items: center; gap: 6px; min-width: 44px; min-height: 44px;
-  padding: 0 8px; border: 1px solid transparent; border-radius: 10px; background: none; color: var(--text);
-  font: inherit; font-size: .8rem; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.nk-legend { display: flex; flex-wrap: wrap; gap: calc(2px * var(--nk)) calc(4px * var(--nk)); margin-top: calc(6px * var(--nk)); }
+.nk-legend button { display: inline-flex; align-items: center; gap: calc(6px * var(--nk)); min-width: calc(44px * var(--nk));
+  min-height: calc(44px * var(--nk)); padding: 0 calc(8px * var(--nk)); border: 1px solid transparent; border-radius: 10px;
+  background: none; color: var(--text); font: inherit; font-size: .8em; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; }
 .nk-legend button[aria-checked="true"] { border-color: var(--text); font-weight: 650; }
 @media (hover: hover) { .nk-legend button:hover { background: var(--raised); } }
 .sw { flex: none; width: 10px; height: 10px; border-radius: 50%; }
-/* The key's neck: its scale's notes, the tonic larger in the accent's colour, open strings as rings. */
+.necks .sw { width: calc(10px * var(--nk)); height: calc(10px * var(--nk)); }
+/* The key's neck: its scale's notes, the tonic larger in the accent's colour, open strings as rings. In the
+   rail, its switch as large as the rest of it. */
 .kn { padding: 12px 0 10px; }
 .kn + .nk { border-top: 1px solid var(--border); }
 .kn-name { margin: 0 0 6px; font-weight: 700; }
 .kn-switch { margin: 0 0 8px; }
+.necks .kn { padding: calc(12px * var(--nk)) 0 calc(10px * var(--nk)); }
+.necks .kn-name { margin-bottom: calc(6px * var(--nk)); }
+.necks .kn-switch { gap: calc(8px * var(--nk)); margin-bottom: calc(8px * var(--nk)); }
+.necks .kn-switch .chip { min-width: calc(44px * var(--nk)); min-height: calc(44px * var(--nk));
+  padding: 0 calc(12px * var(--nk)); font-size: .95em; }
 .kn-dot { fill: var(--muted); stroke: var(--surface); stroke-width: 1; }
 .kn-dot.tonic { fill: var(--accent); }
 .kn-dot.open { fill: none; stroke: var(--muted); stroke-width: 1.4; }

@@ -141,7 +141,11 @@ Rules a change there keeps (the Invariants below are the others):
   documents it; the Harmony panel's ▶ does), never another synthesis (test_viewer_sound.py,
   test_viewer_panels.py). A sheet viewer's data `versions` (sheet_versions.as_data, with each entry's `this` and the one's provider, `sheet`) draws its switcher
   under the key line and the list it opens, a rail like the settings and never beside them
-  (test_viewer_versions.py); the songbook has none.
+  (test_viewer_versions.py); the songbook has none. The rail of necks (from 1200 px) is sized by
+  viewer.css's `--nk` (1.15: the owner's 15 % over the first 300 px), its width, padding, text and
+  targets alike; whether it shows (`state.necks`) is the one setting kept for every page at once
+  (localStorage `caracole-viewer-necks`, and `necks=0` in the address), with its Hide, the bar's
+  button and the settings' row in step (test_viewer_necks.py).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it

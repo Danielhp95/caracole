@@ -41,9 +41,10 @@
   // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
   // through a transposition, as on a guitar: the shapes move instead.
   // nm: the chord names as numerals beside them ("both") or in their place ("numerals"), null for the
-  // chords alone; roles: the numerals in their families' colours.
+  // chords alone; roles: the numerals in their families' colours; necks: the rail of necks shown, on a screen
+  // wide enough for it.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
-    speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL };
+    speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -128,6 +129,18 @@
       state.strip = saved.strip === true;
     }
   } catch (err) { /* no storage: the page still works */ }
+  // The rail of necks is the screen's choice, not a song's: kept once for every sheet and songbook (a name no
+  // page's own settings have, as theirs end in its path), and in the address too, where there is no storage.
+  const NECKS = "caracole-viewer-necks";
+  try {
+    if (localStorage.getItem(NECKS) === "hidden") state.necks = false;
+  } catch (err) { /* no storage: shown, unless the address says otherwise */ }
+  if (hash.get("necks") === "0") state.necks = false;
+  const keepNecks = () => {
+    try {
+      localStorage.setItem(NECKS, state.necks ? "shown" : "hidden");
+    } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
+  };
   adopt(hash);
   if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
   if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
@@ -156,6 +169,7 @@
       keep("fs", state.fs, state.fs !== FS.start);
       keep("speed", state.speed, state.speed !== SPEED.start);
       keep("vol", state.vol, state.vol !== VOL);
+      keep("necks", "0", !state.necks);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -174,7 +188,7 @@
     const version = new URLSearchParams(location.hash.slice(1));
     if (location.protocol === "file:") {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -888,8 +902,30 @@
   // Picking one, on the neck or in the legend, makes it the shape the strip and the chord's card show, at
   // every place of that chord, kept with the rest (state.at). A legend is a group of radio buttons: one
   // Tab stop a chord, on the shape played, and the arrows go from shape to shape. Narrower, the card alone.
+  // Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the settings' Chord necks row
+  // show it or hide it (state.necks), the three always in step; hidden, the song has the whole width.
   const necksEl = $("necks");
   const railWide = window.matchMedia("(min-width: 1200px)");
+  const necksButton = $("necks-toggle"), necksChip = $("necks-chip");
+  const railCan = () => Boolean(necksEl) && count > 0 && railWide.matches;
+  const railOn = () => railCan() && state.necks;
+  const SIDEBAR = "M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8"
+    + "a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z";  // as the bar's button draws it
+  const railHead = () => {
+    const head = document.createElement("header");  // not a div: the chords' necks are the rail's divs
+    head.className = "nk-head";
+    const title = head.appendChild(document.createElement("p"));
+    title.className = "nk-title";
+    title.textContent = "Chord necks";
+    const hide = head.appendChild(document.createElement("button"));
+    hide.type = "button";
+    hide.className = "nk-hide";
+    hide.setAttribute("aria-label", "Hide chord necks");
+    hide.setAttribute("aria-controls", necksEl.id);
+    const icon = svg("svg", { viewBox: "0 0 16 16", "aria-hidden": "true" }, hide);
+    svg("path", { d: SIDEBAR, "fill-rule": "evenodd" }, icon);
+    return head;
+  };
   const shownAs = (name) => {  // the chords the sheet shows by this name, by index
     const out = [];
     for (let i = 0; i < count; i++) {
@@ -899,8 +935,17 @@
     return out;
   };
   const drawNecks = () => {
+    const can = railCan(), on = railOn();
+    if (necksButton) {
+      necksButton.hidden = !can;
+      necksButton.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (necksChip) {
+      $("necks-row").hidden = !can;
+      necksChip.setAttribute("aria-pressed", on ? "true" : "false");
+      necksChip.textContent = on ? "Hide" : "Show";
+    }
     if (!necksEl) return;
-    const on = count > 0 && railWide.matches;
     necksEl.hidden = !on;
     if (on) doc.dataset.necks = "1";  // the song and the bar move over for it
     else delete doc.dataset.necks;
@@ -908,6 +953,7 @@
     const focused = active ? Array.prototype.indexOf.call(necksEl.children, active) : -1;
     necksEl.textContent = "";
     if (!on) return;
+    necksEl.appendChild(railHead());
     if (key && data.keyScale) necksEl.appendChild(keyNeck());
     const drawn = new Set();
     for (let i = 0; i < count; i++) {
@@ -979,9 +1025,23 @@
     }
     return best;
   };
+  // Shown or hidden: the song and the bar move back, or over, and the card follows its chord.
+  const showNecks = (on) => {
+    state.necks = on;
+    keepNecks();
+    render();
+    place();
+  };
+  if (necksButton) necksButton.addEventListener("click", () => showNecks(!state.necks));
+  if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (necksEl) {
     necksEl.addEventListener("click", (e) => {
       const target = e.target instanceof Element ? e.target : null;
+      if (target && target.closest(".nk-hide")) {
+        showNecks(false);
+        if (necksButton) necksButton.focus();  // the focus where the rail comes back from, not lost with it
+        return;
+      }
       const group = target && target.closest(".nk");
       if (!group) return;
       const radio = target.closest("[role=radio]");
@@ -1523,7 +1583,7 @@
     const neckBox = $("harmony-neck");
     const inNeck = neckBox.contains(document.activeElement);
     neckBox.textContent = "";
-    if (!railWide.matches && data.keyScale) neckBox.appendChild(keyNeck());
+    if (!railOn() && data.keyScale) neckBox.appendChild(keyNeck());  // not in the rail: here
     if (inNeck) {
       const to = neckBox.querySelector('[aria-pressed="true"]');
       if (to) to.focus({ preventScroll: true });
@@ -1630,6 +1690,7 @@
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
+    if (!state.necks) params.set("necks", "0");  // the rail hidden there too
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };
@@ -1837,10 +1898,13 @@
     }
   });
   $("reset-all").addEventListener("click", () => {
-    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null });
+    Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
+      necks: true });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
     adopt(start);  // the song's own version, if it has one
+    keepNecks();  // the rail of necks back, on every sheet
     render();
+    place();
   });
 
   // --- scrolling by itself, hands on the guitar ----------------------------------------------------

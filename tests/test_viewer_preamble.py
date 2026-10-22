@@ -184,16 +184,16 @@ def test_the_keyboard_reaches_more_after_the_title_and_opens_it(tmp_path):
         browser.open(page.as_uri())
         assert browser.wait("document.documentElement.dataset.ready === '1'")
         focused = []
-        for _ in range(2 + 2 + 6):
+        for _ in range(2 + 1 + 2 + 6):
             browser.press("Tab")
             focused.append(browser.js("document.activeElement.matches('.back') ? 'back'"
                                       " : document.activeElement.matches('.pre summary') ? 'more'"
                                       " : document.activeElement.closest('#necks') ? 'rail' : 'else'"))
         browser.press("Enter")
         opened_now = browser.js("document.querySelector('#sheet .pre').open")
-    # From 1200 px the rail of necks comes between, on the left: the key's neck's Scale and Pentatonic, then one
-    # stop for each of the song's six chords.
-    assert focused == ["back", *["rail"] * (2 + 6), "more"] and opened_now
+    # From 1200 px the rail of necks comes between, on the left: its Hide, the key's neck's Scale and Pentatonic,
+    # then one stop for each of the song's six chords.
+    assert focused == ["back", *["rail"] * (1 + 2 + 6), "more"] and opened_now
 
 
 # Printed: which of the notes' lines a reader sees, and whether the fold's own parts show.

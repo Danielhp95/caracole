@@ -587,8 +587,10 @@ def _words(text: str) -> list[str]:
 
 
 # The bar at the foot of the page, the settings and the chord card the script fills in; hidden
-# until it runs. The bar, in the order a keyboard reaches it: the song a semitone down or up, its key
-# in short between them (for the eye; whole for a screen reader); a guitar, the strip of the song's chord
+# until it runs. The bar, in the order a keyboard reaches it: the rail of necks shown or hidden (from 1200 px,
+# where there is a rail: pressed while it shows, as the settings' Chord necks row says; a sidebar, drawn as a
+# path); the song a semitone down or up, its key in short between them (for the eye; whole for a screen
+# reader); a guitar, the strip of the song's chord
 # shapes shown or hidden (a toggle, pressed while it shows, as the settings' Show all chip is, the two
 # always in step; the body with its waist and sound hole, the neck and the headstock, drawn as paths);
 # Aa, the text size in a box beside it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
@@ -603,6 +605,7 @@ _EXPORT_ROW = """<div class="row" id="export-row"><a class="link" id="export" hr
 
 _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">
+<button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="keys" role="group" aria-label="Transpose">
 <button type="button" class="step" id="t-down" aria-label="Transpose down a semitone">−</button>
 <output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
@@ -653,6 +656,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="chip" id="harmony-open" aria-haspopup="dialog" aria-controls="harmony">Progressions, the key's scale</button></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
+<div class="row" id="necks-row" hidden><span class="lab">Chord necks</span>
+<button type="button" class="chip" id="necks-chip" aria-pressed="true" aria-controls="necks">Hide</button></div>
 <div class="row" id="sound-row" hidden><span class="lab">Sound</span><span class="chips" id="volumes"></span>
 <p class="hint">Tap a chord, or its shape on its card, to hear it strummed.</p></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>

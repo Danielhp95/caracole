@@ -183,7 +183,7 @@ def test_from_1200_px_a_rail_on_the_left_shows_a_neck_per_chord(tmp_path, width)
     with open_viewer(tmp_path, written(tmp_path, LEGEND), width=width, height=800, mobile=False) as b:
         seen = b.js(RAIL)
     rail = seen["rail"]
-    assert rail == {"top": 0, "bottom": 800, "left": 0, "right": 300, "width": 300, "height": 800}
+    assert rail == {"top": 0, "bottom": 800, "left": 0, "right": 345, "width": 345, "height": 800}
     assert seen["sheet"]["left"] >= rail["right"] + 16  # the song beside it, never under it
     assert seen["bar"]["left"] == rail["right"] and seen["bar"]["right"] == seen["client"]
     assert [c["name"] for c in seen["chords"]] == LEGEND_CHORDS == seen["sheetChords"]
@@ -218,8 +218,177 @@ def test_the_rail_comes_and_goes_as_the_window_widens_and_narrows(tmp_path):
         assert b.wait("!(" + shown + ")")
         again = b.js(RAIL)
     assert narrow["rail"] is None and again["rail"] is None and again["padding"] == "0px"
-    assert wide["rail"]["right"] == 300 and [c["name"] for c in wide["chords"]] == LEGEND_CHORDS
-    assert wide["sheet"]["left"] >= 300 and again["sheet"]["left"] < 300
+    assert wide["rail"]["right"] == 345 and [c["name"] for c in wide["chords"]] == LEGEND_CHORDS
+    assert wide["sheet"]["left"] >= 345 and again["sheet"]["left"] < 345
+
+
+def test_the_rail_and_everything_in_it_is_fifteen_percent_larger_than_it_was(tmp_path):
+    # The owner's ask: 15 % larger than the 300 px rail, its necks (drawn at its width), their names, the legends
+    # and their buttons, and the key's neck with its switch, all of it.
+    sizes = """(() => { const rail = document.getElementById('necks'), q = (s) => rail.querySelector(s);
+      const px = (el, p) => parseFloat(getComputedStyle(el)[p]), w = (el) => el.getBoundingClientRect().width;
+      const radio = q('.nk [role=radio]');
+      return {neck: w(q('.nk svg.neck')), key: w(q('.kn svg.neck')), name: px(q('.nk-name'), 'fontSize'),
+              keyName: px(q('.kn-name'), 'fontSize'), legend: px(radio, 'fontSize'),
+              button: radio.getBoundingClientRect().height, swatch: w(q('.sw')),
+              chip: px(q('.kn-switch .chip'), 'fontSize'), chipHeight: q('.kn-switch .chip').getBoundingClientRect().height,
+              title: px(q('.nk-title'), 'fontSize')}; })()"""
+    # Tall enough for the whole rail: no scroll bar takes its width from the necks.
+    with open_viewer(tmp_path, written(tmp_path, IN_C), width=1280, height=1600, mobile=False) as b:
+        seen = b.js(sizes)
+        rail = b.js(RAIL)
+        whole = b.js("(() => { const r = document.getElementById('necks'); return r.scrollHeight <= r.clientHeight; })()")
+    assert whole and rail["rail"]["width"] == 345 and rail["sheet"]["left"] >= 345 + 16 and rail["bar"]["left"] == 345
+    was = {"neck": 267, "key": 267, "name": 16, "keyName": 16, "legend": 12.8, "button": 44, "swatch": 10,
+           "chip": 15.2, "chipHeight": 44}
+    for what, size in was.items():
+        assert seen[what] == pytest.approx(size * 1.15, abs=1), (what, seen)
+    assert seen["title"] == pytest.approx(0.72 * 16 * 1.15, abs=0.5), seen  # the rail's own heading too
+
+
+# --- showing and hiding the rail -----------------------------------------------------------------------
+
+# The rail's toggles: the bar's (shown from 1200 px), the rail's own Hide at its top and the settings' row.
+TOGGLES = """(() => { const q = (s) => document.querySelector(s), shown = (el) => Boolean(el && el.getClientRects().length);
+  const button = q('#necks-toggle'), chip = q('#necks-chip');
+  return {button: shown(button), pressed: button.getAttribute('aria-pressed'), named: button.getAttribute('aria-label'),
+          row: !q('#necks-row').hidden, chip: chip.getAttribute('aria-pressed'), said: chip.textContent,
+          hide: shown(q('#necks .nk-hide')), harmonyNeck: Boolean(q('#harmony-neck .kn')),
+          necks: new URLSearchParams(location.hash.slice(1)).get('necks'), focus: document.activeElement.id}; })()"""
+
+
+def toggles(b: Browser) -> dict:
+    return b.js(TOGGLES)
+
+
+@pytest.mark.parametrize("width", [1200, 1280])
+def test_the_bars_button_hides_the_rail_and_the_song_takes_the_whole_width(tmp_path, width):
+    with open_viewer(tmp_path, written(tmp_path, LEGEND), width=width, height=800, mobile=False) as b:
+        shown = [b.js(RAIL), toggles(b)]
+        b.click("#necks-toggle")
+        hidden = [b.js(RAIL), toggles(b)]
+        b.click("#necks-toggle")
+        again = [b.js(RAIL), toggles(b)]
+    assert shown[0]["rail"]["width"] == 345 and shown[0]["padding"] == "345px"
+    assert shown[1]["button"] and shown[1]["pressed"] == "true" and shown[1]["named"] == "Chord necks"
+    assert shown[1]["hide"] and shown[1]["necks"] is None
+    rail, said = hidden
+    assert rail["rail"] is None and rail["padding"] == "0px"  # the song has the whole width
+    assert rail["bar"]["left"] == 0 and rail["bar"]["right"] == rail["client"]
+    assert rail["sheet"]["left"] < 345 and not rail["sideways"]
+    assert said["button"] and said["pressed"] == "false" and said["necks"] == "0"  # the address keeps it
+    assert again[0]["rail"]["width"] == 345 and again[1]["pressed"] == "true" and again[1]["necks"] is None
+    assert [c["name"] for c in again[0]["chords"]] == LEGEND_CHORDS
+
+
+def test_the_rails_own_hide_button_at_its_top_hides_it_and_the_bars_button_brings_it_back(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, MANY_CHO), **DESKTOP) as b:
+        b.js("document.getElementById('necks').scrollTop = 1e6")  # far down the rail, its top stays in reach
+        top = b.js("""(() => { const r = document.querySelector('#necks .nk-hide').getBoundingClientRect();
+          return [Math.round(r.top), Math.round(r.left), Math.round(r.right), r.width, r.height,
+                  document.querySelector('#necks .nk-hide').getAttribute('aria-label')]; })()""")
+        b.click("#necks .nk-hide")
+        hidden = [b.js(RAIL), toggles(b)]
+        b.press("Enter")  # the focus is on the bar's button now: Enter brings the rail back
+        back = [b.js(RAIL), toggles(b)]
+    assert 0 <= top[0] <= 8 and top[2] <= 345 and top[3] >= 44 * 1.15 - 1 and top[4] >= 44 * 1.15 - 1
+    assert top[5] == "Hide chord necks"
+    assert hidden[0]["rail"] is None and hidden[1]["pressed"] == "false" and hidden[1]["focus"] == "necks-toggle"
+    assert back[0]["rail"]["width"] == 345 and back[1]["pressed"] == "true"
+
+
+def test_the_settings_row_and_the_bars_button_say_the_same_both_ways(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LEGEND), **DESKTOP) as b:
+        b.click("#more")
+        before = toggles(b)
+        b.click("#necks-chip")
+        from_row = [b.js(RAIL), toggles(b)]
+        b.click("#necks-toggle")  # with the settings open: the row says so
+        from_bar = [b.js(RAIL), toggles(b)]
+    assert before["row"] and before["chip"] == before["pressed"] == "true" and before["said"] == "Hide"
+    assert from_row[0]["rail"] is None and from_row[1]["chip"] == from_row[1]["pressed"] == "false"
+    assert from_row[1]["said"] == "Show" and from_row[0]["panel"] is not None  # the settings stay open
+    assert from_bar[0]["rail"]["width"] == 345 and from_bar[1]["chip"] == from_bar[1]["pressed"] == "true"
+    assert from_bar[1]["said"] == "Hide"
+    # The song between the two rails, or beside the settings' alone.
+    assert from_row[0]["sheet"]["left"] < 345 <= from_bar[0]["sheet"]["left"]
+    assert from_bar[0]["sheet"]["right"] <= from_bar[0]["panel"]["left"]
+
+
+def test_the_choice_is_kept_across_a_reload_and_for_every_other_sheet(tmp_path):
+    # One choice for the screen, not a song's: hidden here, it is hidden on the next sheet opened too.
+    url, other = written(tmp_path, LEGEND), written(tmp_path, IN_C, name="Other")
+    with open_viewer(tmp_path, url, **DESKTOP) as b:
+        b.click("#necks-toggle")
+        reload(b)
+        reloaded = [b.js(RAIL), toggles(b)]
+        reopen(b, other)
+        elsewhere = [b.js(RAIL), toggles(b)]
+        b.click("#necks-toggle")
+        reopen(b, url)
+        shown = [b.js(RAIL), toggles(b)]
+    assert reloaded[0]["rail"] is None and reloaded[1]["pressed"] == "false" and reloaded[0]["padding"] == "0px"
+    assert elsewhere[0]["rail"] is None and elsewhere[1]["pressed"] == "false"
+    assert shown[0]["rail"]["width"] == 345 and shown[1]["pressed"] == "true"
+
+
+def test_the_address_hides_it_where_the_page_has_no_storage(tmp_path):
+    # Served, in its sandbox, the page keeps nothing: necks=0 in the address hides the rail, as fs= keeps the size.
+    with open_viewer(tmp_path, written(tmp_path, LEGEND) + "#necks=0", **DESKTOP) as b:
+        seen = [b.js(RAIL), toggles(b)]
+    assert seen[0]["rail"] is None and seen[1]["pressed"] == "false" and seen[1]["necks"] == "0"
+
+
+def test_reset_everything_brings_the_rail_back(tmp_path):
+    url = written(tmp_path, LEGEND)
+    with open_viewer(tmp_path, url, **DESKTOP) as b:
+        b.click("#necks-toggle")
+        b.click("#more")
+        b.click("#reset-all")
+        reset = [b.js(RAIL), toggles(b)]
+        reopen(b, url)
+        kept = b.js(RAIL)
+    assert reset[0]["rail"]["width"] == 345 and reset[1]["pressed"] == reset[1]["chip"] == "true"
+    assert reset[1]["necks"] is None and kept["rail"]["width"] == 345
+
+
+def test_with_the_rail_hidden_the_harmony_panel_shows_the_keys_neck(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_C), **DESKTOP) as b:
+        b.click("#more")
+        b.click("#harmony-open")
+        with_rail = toggles(b)
+        b.click("#necks-toggle")
+        without = toggles(b)
+    assert not with_rail["harmonyNeck"] and without["harmonyNeck"]  # the key's neck in one place or the other
+
+
+@pytest.mark.parametrize("width", [1200, 1280, 1440])
+def test_no_sideways_scroll_with_the_rail_shown_or_hidden_and_the_settings_open(tmp_path, width):
+    with open_viewer(tmp_path, written(tmp_path, LEGEND), width=width, height=800, mobile=False) as b:
+        shown = b.js(RAIL)
+        b.click("#more")
+        both = b.js(RAIL)
+        b.click("#necks-toggle")
+        hidden = b.js(RAIL)
+    for seen in (shown, both, hidden):
+        assert not seen["sideways"], seen
+        assert seen["sheet"]["right"] <= (seen["panel"]["left"] if seen["panel"] else seen["client"]), seen
+    assert shown["sheet"]["left"] >= 345 + 16 and both["sheet"]["width"] >= 440, both  # room for the song still
+
+
+@pytest.mark.parametrize("size", [{"width": 1100, "height": 800, "mobile": False},
+                                  {"width": 390, "height": 844, "mobile": True}], ids=["1100", "390"])
+def test_below_1200_px_there_is_no_toggle(tmp_path, size):
+    with open_viewer(tmp_path, written(tmp_path, LEGEND), **size) as b:
+        b.click("#more")
+        seen = toggles(b)
+    assert not seen["button"] and not seen["row"] and not seen["hide"]
+
+
+def test_a_sheet_without_chords_has_no_rail_and_no_toggle(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, "{title: T}\n{artist: A}\nwords alone\n"), **DESKTOP) as b:
+        seen = [b.js(RAIL), toggles(b)]
+    assert seen[0]["rail"] is None and not seen[1]["button"] and not seen[1]["row"]
 
 
 # --- the necks ---------------------------------------------------------------------------------------
@@ -363,7 +532,7 @@ def test_a_neck_widened_for_shared_open_strings_keeps_its_frets_under_the_others
     for wide, nut, last, at in necks:
         assert nut == pytest.approx(plain[1], abs=0.5) and last == pytest.approx(plain[2], abs=0.5)
         assert at >= 0  # inside the rail, in its padding at most
-    assert not seen["sideways"] and seen["rail"]["width"] == 300
+    assert not seen["sideways"] and seen["rail"]["width"] == 345
 
 
 def test_each_dot_of_a_shared_note_plays_its_own_position(tmp_path):
@@ -375,6 +544,7 @@ def test_each_dot_of_a_shared_note_plays_its_own_position(tmp_path):
                 middle = b.js(f"""(() => {{ const c = [...document.querySelectorAll('#necks .nk')[{g}]
                   .querySelectorAll('circle[data-p="{d["p"]}"][data-fret="{note[1]}"]')]
                   .find((c) => Number(c.getAttribute('cy')) === {d["cy"]});
+                  c.scrollIntoView({{block: 'center', behavior: 'instant'}});  // a neck past the rail's foot
                   const r = c.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; }})()""")
                 click_at(b, *middle)
                 assert b.wait(f"document.querySelectorAll('#necks .nk')[{g}].querySelector('[aria-checked=true]')"
@@ -566,7 +736,7 @@ OPEN_STRINGS = [4, 9, 2, 7, 11, 4]  # E A D G B E, low E first
 MAJOR, DORIAN, MAJOR_BOX = (0, 2, 4, 5, 7, 9, 11), (0, 2, 3, 5, 7, 9, 10), (0, 2, 4, 7, 9)
 # The rail's key neck: where it is, its name, its switch, and its dots as [string (0: low E), fret, tonic].
 KEY_NECK = """(() => { const g = document.querySelector('#necks .kn'); if (!g) return null;
-  return {first: document.getElementById('necks').firstElementChild === g, name: g.querySelector('.kn-name').textContent,
+  return {first: document.querySelector('#necks :is(.kn, .nk)') === g, name: g.querySelector('.kn-name').textContent,
     switch: [...g.querySelectorAll('.chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')]),
     label: g.querySelector('svg').getAttribute('aria-label'),
     dots: [...g.querySelectorAll('circle[data-fret]')].map((c) => [Number(c.dataset.string), Number(c.dataset.fret),
@@ -634,7 +804,7 @@ def test_a_songbook_song_has_its_own_rail(tmp_path):
         other = b.js("[document.getElementById('necks-1').getClientRects().length, document.getElementById('necks-2')]")
         b.click('#necks .nk [role=radio][data-p="1"]')
         picked = b.js("[location.hash, document.querySelector('#necks [aria-checked=true]').dataset.p]")
-    assert seen["rail"]["left"] == 0 and seen["rail"]["width"] == 300
+    assert seen["rail"]["left"] == 0 and seen["rail"]["width"] == 345
     assert [c["name"] for c in seen["chords"]] == ["A#", "Bb", "F"]  # its own chords
     assert other == [0, None]  # the other song's rail is in its hidden section; this one's is the viewer's
     assert picked[0] == "#song-2=&at=0.1" and picked[1] == "1"
@@ -659,3 +829,22 @@ def test_in_a_songbook_each_song_keeps_its_shapes_from_song_to_song(tmp_path):
     assert [c["name"] for c in two[0]["chords"]] == ["A#", "Bb", "F"] and two[1] == "#song-2="  # its own, as left
     assert back[1] == "#song-1=&t=1&at=1.2"
     assert back[0]["chords"][1]["name"] == "Ab" and back[0]["chords"][1]["checked"] == 2
+
+
+def test_in_a_songbook_the_rail_hidden_stays_hidden_from_song_to_song(tmp_path):
+    songs = [BookSong("Legend Song", "The Placeholders", cho=LEGEND, id="aaaa"),
+             BookSong("Twins", "Synthetic", cho=TWINS, id="bbbb")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    with open_viewer(tmp_path, path.as_uri() + "#song-1", **DESKTOP) as b:
+        shown = [b.js(RAIL), toggles(b)]
+        b.click("#necks-toggle")
+        to_song(b, 2)
+        two = [b.js(RAIL), toggles(b)]
+        b.click("#necks-toggle")
+        to_song(b, 1)
+        one = [b.js(RAIL), toggles(b)]
+    assert shown[0]["rail"]["width"] == 345 and shown[1]["button"] and shown[1]["pressed"] == "true"
+    assert two[0]["rail"] is None and two[1]["pressed"] == "false" and two[0]["padding"] == "0px"
+    assert one[0]["rail"]["width"] == 345 and one[1]["pressed"] == "true"
