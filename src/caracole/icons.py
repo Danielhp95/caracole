@@ -64,7 +64,7 @@ TARGET = 32  # the side an ICO's image is picked by
 RETRY = timedelta(days=7)  # how long a site that gave no icon is left alone
 LYRICS = "lrclib"  # the source of lyrics.txt and lyrics.lrc
 AUTO = "auto"  # the auto-chords sheet's (autochords/run.py PROVIDER)
-INBOX = "inbox"  # a score you filed from _inbox/ (inbox.py)
+INBOX = "inbox"  # a score or a Guitar Pro file you filed from _inbox/ (inbox.py)
 YOUTUBE = "youtube"  # an auto sheet's, when its audio came from YouTube (youtube_fetch.py)
 FOLDER = "icons"  # in cache_dir
 

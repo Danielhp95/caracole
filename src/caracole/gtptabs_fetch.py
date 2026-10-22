@@ -391,7 +391,7 @@ def _keep(run: _Pass, song: Song, tab: GtpTab, data: bytes, ext: str) -> str:
              "instruments": list(tab.instruments), "download": download_url(tab.tab_id)},
         now=run.stamp,
     )
-    number = guitar_number(run.conn, run.library_dir, song, 1)
+    number = guitar_number(run.conn, run.library_dir, song)
     name = f"guitar-{number}{ext}"
     keep_file(run.conn, run.library_dir, song=song, version_id=version_id, name=name, data=data, rank=number)
     write_info(run.conn, run.library_dir, get_song(run.conn, song.id))

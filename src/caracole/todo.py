@@ -691,8 +691,8 @@ def _inbox(cfg: Config) -> list[str]:
         elif not regular:
             continue
         elif suffix.lower() in GP_EXTENSIONS:
-            items.append(f"- {shown}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
-                         "to click names the song and the version")
+            items.append(f"- {shown}: a Guitar Pro file? Rename it \"Artist - Title{suffix}\", the song as "
+                         "caracole names it")
         elif suffix.lower() in SCORE_EXTENSIONS:
             items.append(f"- {shown}: a score? Rename it \"Artist - Title{suffix}\", the song as caracole "
                          f"names it, as {SCORES_TITLE} does")
@@ -921,10 +921,11 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         (SCORES_TITLE, ms_pages, ms_intro, n_ms),
         ("Guitar parts not found", _guitar_parts_not_found(conn, songs), None, None),
         ("Inbox: files caracole couldn't place", _inbox(cfg),
-         "caracole files a download by its name, for a version listed under Guitar Pro pages to click: the "
-         "next run, or `caracole scan`, makes it the song's guitar-N file. It files a score "
-         "(.mscz, .mxl, .musicxml, .pdf, .mid, .midi) as `Artist - Title.mscz`, for any song, as its score-N. "
-         "Don't move one into a song's folder yourself: caracole wouldn't know it is there.", None),
+         "caracole files a download by its name, the song as caracole names it: the next run, or "
+         "`caracole scan`, files a Guitar Pro or Power Tab file (.gp3, .gp4, .gp5, .gpx, .gp, .ptb) as "
+         "`Artist - Title.gp5`, for any song, as its guitar-N, and a score (.mscz, .mxl, .musicxml, .pdf, .mid, "
+         ".midi) as `Artist - Title.mscz` as its score-N. Don't move one into a song's folder yourself: "
+         "caracole wouldn't know it is there.", None),
         ("Missing lyrics", [f"- {md(s.display)}" for s in songs
                             if s.lyrics_status == "missing" and s.status != "ignored"],
          "LRCLIB has no lyrics for these yet.", None),

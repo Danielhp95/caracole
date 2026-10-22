@@ -1241,19 +1241,22 @@ and cache.
   斑马斑马. A Music/ folder that is missing or has no audio, such as a disk
   that isn't mounted, unlinks nothing, and the scan says so
   (`Music: /srv/music is missing, so nothing was unlinked`). Then it files the
-  Guitar Pro and Power Tab files you dropped into `_inbox/`, by their names: a
-  file named `Soda Stereo - De Musica Ligera (ver 2).gp5` becomes that song's
-  `guitar-N.gp5`, where N is the rank caracole gave version 2, or the lowest
-  free number when another file already holds guitar-N. It files scores too,
-  such as MuseScore's downloads (`.mscz`, `.mxl`, `.musicxml`, `.pdf`, `.mid`,
-  `.midi`): one named `Oasis - Wonderwall.mscz`, or `Wonderwall.mscz` when only
-  one song has that title, becomes that song's `score-N.mscz`, N the lowest
-  number no score of that format holds, so the formats of one score share it.
-  A MusicXML file is also placed by the title and composer its header gives,
-  when exactly one song has both. A score is never `sheet.pdf`, which caracole
-  renders itself. A name UG writes in two scripts meets yours by any of its
-  parts, the bracketed original included: the file of 周杰伦's 晴天 may be
-  named `Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5`. A file the library
+  Guitar Pro and Power Tab files you dropped into `_inbox/` (`.gp3`, `.gp4`,
+  `.gp5`, `.gpx`, `.gp`, `.ptb`), wherever you got them, by their names, for
+  any song you haven't ignored: one named `Soda Stereo - De Musica Ligera.gp5`,
+  or `De Musica Ligera.gp5` when only one song has that title, becomes that
+  song's `guitar-N.gp5`, N the lowest number no file of the song holds, so a
+  file is never written over (a version number in the name, `(ver 2)`, is
+  left out). It files scores too, such as MuseScore's downloads (`.mscz`,
+  `.mxl`, `.musicxml`, `.pdf`, `.mid`, `.midi`): one named
+  `Oasis - Wonderwall.mscz`, or `Wonderwall.mscz` when only one song has that
+  title, becomes that song's `score-N.mscz`, N the lowest number no score of
+  that format holds, so the formats of one score share it. A MusicXML file is
+  also placed by the title and composer its header gives, when exactly one
+  song has both. A score is never `sheet.pdf`, which caracole renders itself.
+  A name a site writes in two scripts meets yours by any of its parts, the
+  bracketed original included: the file of 周杰伦's 晴天 may be named
+  `Jay Chou (周杰倫) - 晴天 Qing Tian Sunny Day (ver 1).gp5`. A file the library
   already has is removed from the inbox, and one it had and lost (deleted on a
   device, say), told by its bytes, is put back in its place; a file it can't
   place stays there, as does one whose place in the song's folder holds another
@@ -1743,10 +1746,9 @@ when it has something in it:
 - **Guitar parts not found.** Songs UG has no guitar part for, and with no
   Guitar Pro or Power Tab file kept (from `_inbox/` or gtptabs.com), with
   Songsterr and YouTube links.
-- **Inbox: files caracole couldn't place.** Rename such a file
-  "Artist - Title (ver N).ext", as Guitar Pro pages to click names the song
-  and the version, or a score "Artist - Title.ext", the song as caracole names
-  it, and the next run files it. Don't move it into the song's
+- **Inbox: files caracole couldn't place.** Rename such a file, a Guitar Pro
+  file or a score, "Artist - Title.ext", the song as caracole names it, and
+  the next run files it. Don't move it into the song's
   folder yourself: caracole wouldn't know it is there. A symbolic link in
   `_inbox/` is listed too: caracole files only regular files. A name that
   isn't UTF-8 (an old zip's, in Latin-1 or CP437) shows each byte it can't read
@@ -3965,7 +3967,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       version-39144.html    version as UG gave it, and its viewer (no PDF of its own)
       lyrics.txt            the lyrics, from LRCLIB
       lyrics.lrc            the timed lyrics, when LRCLIB has them
-      guitar-1.gp5          Guitar Pro or Power Tab files: filed by rank, or from gtptabs.com
+      guitar-1.gp5          Guitar Pro or Power Tab files: filed from _inbox/, or from gtptabs.com
       score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, or caracole took from YouTube,

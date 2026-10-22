@@ -560,8 +560,8 @@ def test_inbox_unmatched_files_listed(conn, cfg):
 
 
 def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
-    # A file moved into a song's folder by hand gets no record: index.html never lists it, and its
-    # Guitar Pro page stays on the list to click.
+    # A file moved into a song's folder by hand gets no record: index.html never lists it, and gtptabs.com
+    # still downloads a Guitar Pro file for its song.
     inbox = cfg.library_dir / "_inbox"
     inbox.mkdir(parents=True)
     (inbox / "Radiohead - Creep live bootleg.gp5").write_bytes(b"x")
@@ -569,8 +569,9 @@ def test_inbox_advice_is_a_name_the_inbox_files_not_a_move_by_hand(conn, cfg):
     (inbox / "notes.txt").write_bytes(b"x")
     section = section_of(todo(conn, cfg), "Inbox: files caracole couldn't place")
     assert "move it into the song's folder" not in section
-    assert '`Radiohead - Creep live bootleg.gp5`: rename it "Artist - Title (ver N).gp5"' in section
-    assert "Guitar Pro pages to click" in section
+    assert ('`Radiohead - Creep live bootleg.gp5`: a Guitar Pro file? Rename it "Artist - Title.gp5", the song as '
+            "caracole names it") in section
+    assert "Guitar Pro pages to click" not in section and "(ver N)" not in section
     assert '`notes.pdf`: a score? Rename it "Artist - Title.pdf", the song as caracole names it' in section
     assert "`notes.txt`: not a Guitar Pro, Power Tab or score file" in section
 
@@ -587,8 +588,8 @@ def test_an_inbox_file_named_in_another_encoding_is_listed_and_the_pages_are_wri
         f.write(b"x")
     todo_md, page = write_pages(conn, cfg, Overrides(), NOW)
     section = section_of(todo_md.read_text(encoding="utf-8"), "Inbox: files caracole couldn't place")
-    assert ("- `Jos\\xe9 - Canci\\xf3n.gp5` (its name isn't UTF-8: each \\xNN is a byte of it): rename it "
-            '"Artist - Title (ver N).gp5"') in section
+    assert ("- `Jos\\xe9 - Canci\\xf3n.gp5` (its name isn't UTF-8: each \\xNN is a byte of it): a Guitar Pro "
+            'file? Rename it "Artist - Title.gp5"') in section
     assert "Creep" in page.read_text(encoding="utf-8")
 
 
@@ -606,7 +607,7 @@ def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
     refused = ": a symbolic link; caracole files only regular files. Put the file itself there."
     assert section.startswith(" (2)\n")
     assert f"- `Soda Stereo - Signos.gp5`{refused}" in section and f"- `gone.gp5`{refused}" in section
-    assert "rename it" not in section and "a folder" not in section
+    assert "Rename it" not in section and "a folder" not in section
 
 
 def test_a_linked_inbox_lists_nothing_of_what_it_points_at(conn, cfg):
@@ -1422,3 +1423,13 @@ def test_the_inbox_section_says_how_a_score_is_named(conn, cfg):
     (inbox / "score.mscz").write_bytes(b"PK")
     section = section_of(todo(conn, cfg), "Inbox: files caracole couldn't place")
     assert "a score (.mscz, .mxl, .musicxml, .pdf, .mid, .midi) as `Artist - Title.mscz`" in section
+
+
+def test_the_inbox_section_says_how_a_guitar_pro_file_is_named_for_any_song(conn, cfg):
+    inbox = cfg.library_dir / "_inbox"
+    inbox.mkdir(parents=True)
+    (inbox / "tab.gp5").write_bytes(b"GP")
+    section = section_of(todo(conn, cfg), "Inbox: files caracole couldn't place")
+    assert ("a Guitar Pro or Power Tab file (.gp3, .gp4, .gp5, .gpx, .gp, .ptb) as `Artist - Title.gp5`, for any "
+            "song, as its guitar-N") in section
+    assert "Guitar Pro pages to click" not in section

@@ -33,7 +33,7 @@ from caracole.songs import get_song, update_song
 from caracole.ug.artist import artist_page_url
 from caracole.ug.fetch import FetchContext, fetch_songs, process_song
 from caracole.ug.lookup import learned_artist_url
-from caracole.versions import set_picks, song_versions, upsert_version
+from caracole.versions import song_versions
 
 NOW = datetime(2026, 10, 19, 3, 30, tzinfo=UTC)
 WWW = "https://www.ultimate-guitar.com"
@@ -201,11 +201,6 @@ def test_w7_6_a_purchase_of_another_song_holding_the_title_is_not_linked(conn, t
     assert get_song(conn, s.id).audio_path is None
 
 
-def pick(conn, song, tab_id):
-    return upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="guitar", kind="guitar-pro",
-                          rating=4.5, votes=10, version=1, label=None, url=f"{TAB}{tab_id}", raw={}, now="x")
-
-
 def drop(cfg, name):
     inbox = cfg.library_dir / "_inbox"
     inbox.mkdir(parents=True, exist_ok=True)
@@ -215,8 +210,6 @@ def drop(cfg, name):
 def test_w7_7_a_download_of_a_title_with_latin_in_it_files_into_its_own_song(conn, cfg):
     sorry = add_song(conn, "周杰伦", "对不起")
     baby = add_song(conn, "周杰伦", "Baby 对不起")
-    set_picks(conn, sorry.id, ["guitar-pro", "power"], [pick(conn, sorry, 7)])
-    set_picks(conn, baby.id, ["guitar-pro", "power"], [pick(conn, baby, 8)])
     drop(cfg, "周杰伦 - Baby 对不起 Baby Dui Bu Qi (ver 1).gp5")
 
     file_inbox(conn, cfg.library_dir)
@@ -297,7 +290,6 @@ def test_w7_11_a_romanization_with_its_translation_bracketed(conn, tmp_path, art
 ])
 def test_w7_12_a_download_named_after_ugs_artist_in_two_scripts_is_filed(conn, cfg, artist, title, download):
     s = add_song(conn, artist, title)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [pick(conn, s, 7)])
     drop(cfg, download)
 
     file_inbox(conn, cfg.library_dir)
