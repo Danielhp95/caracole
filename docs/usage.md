@@ -2083,8 +2083,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   (Show, Hide) in the settings: the three always agree. The choice is the
   screen's, not a song's: the browser keeps it once for every sheet and
   songbook, and the address keeps `necks=0` too, for a page served by
-  `caracole serve`, where the browser keeps nothing; ‹ and › to another
-  version keep it. **Reset everything** shows the rail again. Hidden, the
+  `caracole serve`, where the browser keeps nothing: ‹ and › to another
+  version keep it, and in a songbook so does every step to another song (the
+  arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
+  library page shows the rail again, as it starts at the usual text size: the
+  library's links don't carry it. **Reset everything** shows the rail again. Hidden, the
   Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
   there is no rail and no button for it.
 - **The key line** under the title says how the song is played. With a capo,

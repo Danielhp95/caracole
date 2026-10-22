@@ -501,9 +501,10 @@ a.ver-main .ver-name { color: var(--accent); }
   html[data-necks] body { padding-left: var(--necks); }
   html[data-necks] .bar { left: var(--necks); }
 }
-/* Its head, kept at its top as it scrolls: its name, and Hide (viewer.js; the bar's button brings it back). */
+/* Its head, kept at its top as it scrolls: its name, and Hide (viewer.js; the bar's button brings it back), far
+   enough below the rail's top for the keyboard's ring round Hide to show whole. */
 .nk-head { position: sticky; z-index: 1; top: 0; display: flex; align-items: center; gap: 8px;
-  margin: 0 calc(-16px * var(--nk)); padding: calc(2px * var(--nk)) calc(8px * var(--nk)) 0 calc(16px * var(--nk));
+  margin: 0 calc(-16px * var(--nk)); padding: calc(6px * var(--nk)) calc(8px * var(--nk)) 0 calc(16px * var(--nk));
   background: var(--surface); }
 .nk-title { margin: 0; color: var(--muted); font-size: .72em; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }

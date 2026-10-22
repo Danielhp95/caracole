@@ -144,7 +144,8 @@ Rules a change there keeps (the Invariants below are the others):
   (test_viewer_versions.py); the songbook has none. The rail of necks (from 1200 px) is sized by
   viewer.css's `--nk` (1.15: the owner's 15 % over the first 300 px), its width, padding, text and
   targets alike; whether it shows (`state.necks`) is the one setting kept for every page at once
-  (localStorage `caracole-viewer-necks`, and `necks=0` in the address), with its Hide, the bar's
+  (localStorage `caracole-viewer-necks`, and `necks=0` in the address, which book.js's `carryNecks`
+  takes on to a songbook's next address, for its sandbox with no storage), with its Hide, the bar's
   button and the settings' row in step (test_viewer_necks.py).
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,

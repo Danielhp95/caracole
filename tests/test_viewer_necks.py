@@ -7,13 +7,18 @@ The tests open a viewer in a Chromium of their own (helpers/viewer_pages.py) and
 
 from __future__ import annotations
 
+import http.server
 import re
+import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
-from caracole.viewer.book import BookSong, build_songbook
+from caracole.viewer import build_viewer, viewer_csp
+from caracole.viewer.book import BookSong, build_songbook, songbook_csp
 from caracole.viewer.voicings import load_voicings
 
 from helpers.browser import CHROMIUM_MARKS, Browser
@@ -158,6 +163,37 @@ def reopen(b: Browser, url: str) -> None:
     assert b.wait("document.documentElement.dataset.ready === '1'")
 
 
+@contextmanager
+def served(pages: dict[str, tuple[str, object]]) -> Iterator[str]:
+    """Each of ``pages`` (its path: its HTML and the function that makes its policy) served with its own policy
+    in its sandbox, as caracole serve serves it: an origin of its own, and no storage. The server's address."""
+    bodies = {path: (html.encode("utf-8"), csp) for path, (html, csp) in pages.items()}
+
+    class Server(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            body, csp = bodies[self.path.split("#")[0]]
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Security-Policy", csp(body))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Server)
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    try:
+        yield f"http://127.0.0.1:{server.server_port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+# Whether the page has storage: in its sandbox, localStorage throws.
+STORAGE = "(() => { try { localStorage.getItem('x'); return true; } catch (err) { return false; } })()"
+
+
 def to_song(b: Browser, n: int) -> None:
     """A songbook's next song, as its arrows and swipes go there: its address, which loads the page again."""
     b.js(f"window.before = true; location.hash = 'song-{n}'")
@@ -254,7 +290,8 @@ TOGGLES = """(() => { const q = (s) => document.querySelector(s), shown = (el) =
   return {button: shown(button), pressed: button.getAttribute('aria-pressed'), named: button.getAttribute('aria-label'),
           row: !q('#necks-row').hidden, chip: chip.getAttribute('aria-pressed'), said: chip.textContent,
           hide: shown(q('#necks .nk-hide')), harmonyNeck: Boolean(q('#harmony-neck .kn')),
-          necks: new URLSearchParams(location.hash.slice(1)).get('necks'), focus: document.activeElement.id}; })()"""
+          necks: new URLSearchParams(location.hash.slice(1)).get('necks'), focus: document.activeElement.id,
+          railNamed: q('#necks') && q('#necks').getAttribute('aria-label')}; })()"""
 
 
 def toggles(b: Browser) -> dict:
@@ -272,6 +309,7 @@ def test_the_bars_button_hides_the_rail_and_the_song_takes_the_whole_width(tmp_p
     assert shown[0]["rail"]["width"] == 345 and shown[0]["padding"] == "345px"
     assert shown[1]["button"] and shown[1]["pressed"] == "true" and shown[1]["named"] == "Chord necks"
     assert shown[1]["hide"] and shown[1]["necks"] is None
+    assert shown[1]["railNamed"] == "Chord necks"  # the rail by the name its heading and its toggles give it
     rail, said = hidden
     assert rail["rail"] is None and rail["padding"] == "0px"  # the song has the whole width
     assert rail["bar"]["left"] == 0 and rail["bar"]["right"] == rail["client"]
@@ -295,6 +333,24 @@ def test_the_rails_own_hide_button_at_its_top_hides_it_and_the_bars_button_bring
     assert top[5] == "Hide chord necks"
     assert hidden[0]["rail"] is None and hidden[1]["pressed"] == "false" and hidden[1]["focus"] == "necks-toggle"
     assert back[0]["rail"]["width"] == 345 and back[1]["pressed"] == "true"
+
+
+def test_the_hide_buttons_focus_ring_is_whole_inside_the_rail(tmp_path):
+    # The keyboard's ring round Hide (3 px, 2 px away from it) is clipped by nothing, the rail's top or side, at
+    # the rail's top or scrolled far down it.
+    ring = """(() => { const rail = document.getElementById('necks'), hide = rail.querySelector('.nk-hide');
+      hide.focus();
+      const s = getComputedStyle(hide), out = parseFloat(s.outlineWidth) + parseFloat(s.outlineOffset);
+      const r = hide.getBoundingClientRect(), box = rail.getBoundingClientRect();
+      return {visible: hide.matches(':focus-visible'), out,
+              top: r.top - out - box.top, right: box.left + rail.clientLeft + rail.clientWidth - (r.right + out)}; })()"""
+    with open_viewer(tmp_path, written(tmp_path, MANY_CHO), **DESKTOP) as b:
+        top = b.js(ring)
+        b.js("document.getElementById('necks').scrollTop = 1e6")
+        down = b.js(ring)
+    for seen in (top, down):
+        assert seen["visible"] and seen["out"] == 5, seen
+        assert seen["top"] >= 0 and seen["right"] >= 0, seen
 
 
 def test_the_settings_row_and_the_bars_button_say_the_same_both_ways(tmp_path):
@@ -332,11 +388,29 @@ def test_the_choice_is_kept_across_a_reload_and_for_every_other_sheet(tmp_path):
     assert shown[0]["rail"]["width"] == 345 and shown[1]["pressed"] == "true"
 
 
-def test_the_address_hides_it_where_the_page_has_no_storage(tmp_path):
-    # Served, in its sandbox, the page keeps nothing: necks=0 in the address hides the rail, as fs= keeps the size.
+def test_necks_0_in_the_address_opens_the_sheet_with_the_rail_hidden(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, LEGEND) + "#necks=0", **DESKTOP) as b:
         seen = [b.js(RAIL), toggles(b)]
     assert seen[0]["rail"] is None and seen[1]["pressed"] == "false" and seen[1]["necks"] == "0"
+
+
+def test_served_in_its_sandbox_with_no_storage_a_reload_keeps_the_rail_hidden_by_its_address(tmp_path):
+    # Served, in its sandbox, the page keeps nothing: necks=0 in the address hides the rail, as fs= keeps the size.
+    sheet = "/Artist/Title/sheet.html"
+    with served({sheet: (build_viewer(LEGEND), viewer_csp)}) as site, \
+            open_viewer(tmp_path, site + sheet, **DESKTOP) as b:
+        sandboxed = [b.js("origin"), b.js(STORAGE)]
+        b.click("#necks-toggle")
+        hidden = toggles(b)
+        reload(b)
+        reloaded = [b.js(RAIL), toggles(b)]
+        b.click("#necks-toggle")
+        reload(b)
+        shown = [b.js(RAIL), toggles(b)]
+    assert sandboxed == ["null", False]  # an origin of its own, with no storage
+    assert hidden["pressed"] == "false" and hidden["necks"] == "0"
+    assert reloaded[0]["rail"] is None and reloaded[1]["pressed"] == "false" and reloaded[0]["padding"] == "0px"
+    assert shown[0]["rail"]["width"] == 345 and shown[1]["pressed"] == "true" and shown[1]["necks"] is None
 
 
 def test_reset_everything_brings_the_rail_back(tmp_path):
@@ -848,3 +922,44 @@ def test_in_a_songbook_the_rail_hidden_stays_hidden_from_song_to_song(tmp_path):
     assert shown[0]["rail"]["width"] == 345 and shown[1]["button"] and shown[1]["pressed"] == "true"
     assert two[0]["rail"] is None and two[1]["pressed"] == "false" and two[0]["padding"] == "0px"
     assert one[0]["rail"]["width"] == 345 and one[1]["pressed"] == "true"
+
+
+def follow(b: Browser, script: str, ready: str = "document.documentElement?.dataset.ready === '1'") -> None:
+    """``script`` run in the page, which takes it to another address of the songbook: the page loaded again."""
+    b.js(f"window.before = true; {script}")
+    assert b.wait(f"!window.before && {ready}")
+
+
+def test_a_served_songbook_keeps_the_rail_hidden_from_song_to_song_and_through_its_contents(tmp_path):
+    # In caracole serve's sandbox there is no storage: the address keeps the choice, and every step to another
+    # song (the arrows, a swipe, the ‹ › links, the contents) carries it into the next song's address.
+    songs = [BookSong("Legend Song", "The Placeholders", cho=LEGEND, id="aaaa"),
+             BookSong("Twins", "Synthetic", cho=TWINS, id="bbbb"),
+             BookSong("In C", "Synthetic", cho=IN_C, id="cccc")]
+    page = "/_songbooks/Campfire/songbook.html"
+    contents = "document.documentElement?.dataset.view === 'contents'"
+    with served({page: (build_songbook("Campfire", songs), songbook_csp)}) as site, \
+            open_viewer(tmp_path, site + page + "#song-1", **DESKTOP) as b:
+        sandboxed = [b.js("origin"), b.js(STORAGE)]
+        b.click("#necks-toggle")
+        one = toggles(b)
+        b.js("document.activeElement.blur(); window.before = true")
+        key(b, "ArrowRight", 39)  # the next song, from the keyboard
+        assert b.wait("!window.before && document.documentElement?.dataset.ready === '1'")
+        two = [b.js(RAIL), toggles(b), b.js("location.hash")]
+        follow(b, "document.querySelector('#song-2 a[rel=next]').click()")
+        three = [b.js(RAIL), toggles(b), b.js("location.hash")]
+        follow(b, "document.querySelector('#song-3 a[href=\"#contents\"]').click()", contents)
+        listed = b.js("location.hash")
+        follow(b, "document.querySelector('#contents a[href=\"#song-1\"]').click()")
+        back = [b.js(RAIL), toggles(b), b.js("location.hash")]
+        b.click("#necks-toggle")  # shown again: so on the next song
+        follow(b, "document.querySelector('#song-1 a[rel=next]').click()")
+        shown = [b.js(RAIL), toggles(b), b.js("location.hash")]
+    assert sandboxed == ["null", False]
+    assert one["pressed"] == "false" and one["necks"] == "0"
+    for seen, at in ((two, "#song-2=&necks=0"), (three, "#song-3=&necks=0"), (back, "#song-1=&necks=0")):
+        assert seen[0]["rail"] is None and seen[1]["pressed"] == "false" and seen[0]["padding"] == "0px", seen
+        assert seen[2] == at
+    assert listed == "#contents=&necks=0"  # as the viewer writes a song's: "#song-1=&necks=0"
+    assert shown[0]["rail"]["width"] == 345 and shown[1]["pressed"] == "true" and shown[2] == "#song-2="

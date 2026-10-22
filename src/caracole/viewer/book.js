@@ -88,9 +88,23 @@
     if (current) book.y = Math.round(window.scrollY);
     keep();
   };
+  // The rail of necks is the screen's choice, not a song's: where there is no storage (caracole serve's sandbox),
+  // the address the viewer keeps it in ("necks=0") goes on with every step, to the next song or the contents.
+  const carryNecks = (from) => {
+    const at = String(from || "").indexOf("#");
+    const hidden = at >= 0 && new URLSearchParams(from.slice(at + 1)).get("necks") === "0";
+    const to = new URLSearchParams(location.hash.slice(1));
+    if ((to.get("necks") === "0") === hidden) return;
+    if (hidden) to.set("necks", "0");
+    else to.delete("necks");
+    try {
+      history.replaceState(null, "", "#" + to.toString());
+    } catch (err) { /* an address the page can't change */ }
+  };
   // Each step loads the page again, so the viewer starts afresh on the song it shows.
-  window.addEventListener("hashchange", () => {
+  window.addEventListener("hashchange", (e) => {
     save();
+    carryNecks(e.oldURL);
     location.reload();
   });
   window.addEventListener("pagehide", save);
