@@ -6,8 +6,8 @@ What a coding agent needs before changing caracole. User documentation: README.m
 
 caracole is a Python CLI, run every night by a NixOS service, that builds a private library
 of sing-along chord sheets (Ultimate Guitar, LaCuerda), lyrics (LRCLIB), PDFs (ChordPro)
-and Guitar Pro files (downloaded from gtptabs.com, or picked on UG for the user to
-download) for the songs in `wanted.txt` and, optionally, Spotify. For a song
+and Guitar Pro files (downloaded from gtptabs.com, or filed from what the user drops
+into `_inbox/`) for the songs in `wanted.txt` and, optionally, Spotify. For a song
 nobody has charted, `caracole autochords` writes a sheet from audio with local models
 (torch, optional): a purchase, or audio the nightly run takes from YouTube with yt-dlp
 (youtube.py, youtube_fetch.py), a few songs a night, only where auto-chords is. The
@@ -37,7 +37,7 @@ section says where things are, and the rules a change there keeps.
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
-| fetch | ug/fetch.py, ug/page.py (tab pages), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores, written by ug/fetch.py's `_keep_beside` with no request more, a pinned sheet's from the cache alone; `in_library`, the list as the library holds it; `as_data`, the pages' JSON) |
+| fetch | ug/fetch.py (UG's chords and text tabs alone), ug/page.py (tab pages; `KINDS`, the types caracole uses: chords, tabs), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores, written by ug/fetch.py's `_keep_beside` with no request more, a pinned sheet's from the cache alone; `in_library`, the list as the library holds it; `as_data`, the pages' JSON) |
 | lacuerda | lacuerda.py (URLs, parsing, its search's pages), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page; `popular_pages`, the most popular artists' pages once the listings are read whole), lacuerda_index.py (its listings of every artist, for searches; `backfill_cached`, the artist pages the HTTP cache holds; `store_search`, what its search answered), lacuerda_search.py (its own search, one query at the lookup pace, `caracole lacuerda --search`; `gate`, whether the pages may send it) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
@@ -134,7 +134,7 @@ Rules a change there keeps (the Invariants below are the others):
   says Removed, the song that has the id now is new to the page, and select.js and songbooks.js let it go
   (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity alone). The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
   data's `songbooks` (songbook_section.py: each songbook's set list, where it plays each song as
-  `songbook.plays_in` says it, each song's Guitar Pro mark, `guitar`: a file kept, else a pick on UG to download,
+  `songbook.plays_in` says it, each song's Guitar Pro mark, `guitar`: a file kept, else none,
   and the setting's menus' names, the theory's), which `/jobs.json`
   gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the
   songbooks its song is in again, or a removal; a LaCuerda artist's read changes none). library.js lends it `window.caracoleLibrary`
@@ -540,11 +540,22 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   kv `ug:pasted_tab:<tab id>`; one that won't parse waits as any tab page does, kv
   `ug:unreadable:<tab id>` (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
   `::test_bare_id_chords_of_a_matched_song_come_from_its_artist_page`, tests/test_live_banma.py).
-- **Guitar Pro: Ultimate Guitar's assisted, gtptabs.com's downloaded.** config.py refuses
-  any `guitar_pro_mode` but "assisted", which is UG's mode (its robots.txt closes
-  `/tab/download`); ug/fetch.py picks Guitar Pro and Power Tab versions and downloads
-  none; the to-do page lists them, and inbox.py files what the user drops into `_inbox/`.
-  Official and non-public versions are never used. gtptabs_fetch.py downloads from
+- **Guitar Pro: gtptabs.com's downloads and the inbox, never Ultimate Guitar's.** ug/page.py
+  gives UG's `Pro` and `Power` types no kind (`KINDS`: chords, tabs), so ug/fetch.py never
+  reads, rates, records or picks a Guitar Pro or Power Tab version, never reads an artist
+  page's lists of them, and a `[pin]` of one pins nothing (unread when its version or the
+  index says what it is; `caracole get --tab` refuses one before writing anything);
+  `ug.lookup.song_tabs` leaves them out of a song's tabs, so no page, search, count or link
+  shows one, and `ug_index` keeps their rows for the matcher alone
+  (`test_fetch.py::test_ultimate_guitars_guitar_pro_and_power_tab_versions_are_never_read_nor_picked`,
+  `test_search.py::test_a_song_ultimate_guitar_has_only_as_guitar_pro_or_power_tab_files_is_no_hit`).
+  Schema 9 took the picks out, but for a version a file was filed for, which stays as that
+  file's record. A caracole.toml that still sets `guitar_pro_mode` or `keep_guitar_pro` under
+  `[rank]` loads, with one warning naming them to delete (config.py `_OBSOLETE`). inbox.py
+  files what the user drops into `_inbox/` by its name, for any song not ignored, as the
+  song's lowest free `guitar-N`, under its own `inbox` version of the file's kind
+  (`test_inbox.py::test_files_into_song_by_name`). Official and non-public versions are
+  never used. gtptabs_fetch.py downloads from
   `/tabs/download/{id}.html` alone, never logged in, one file for a song with no Guitar
   Pro or Power Tab file in `files` (filed or downloaded, deleted since or not), and keeps
   it only when `gtptabs.sniff` reads a Guitar Pro or Power Tab header: as the lowest
