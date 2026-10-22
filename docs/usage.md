@@ -1962,7 +1962,8 @@ shows that line at once. A key typed as a key ("a minor", "F# major") filters
 your songs alone: the sites' indexes know no keys, so the line under the box
 says so, and Enter waits for a search without one. The page puts each word of a line to run in single quotes
 (`'Guns N'\'' Roses'`), so that no shell changes a `!`, a `$` or a quote in
-it. `caracole serve` serves the same page, where typing searches what the
+it, and the names after `--` when one starts with "-" (the artist -M-), so that
+caracole takes none for an option. `caracole serve` serves the same page, where typing searches what the
 sites have too, under the same artist headers, with Get it, and a form to
 request a song by name (see below).
 
@@ -1996,7 +1997,8 @@ can't write anything, Make songbook gives the command to run where caracole
 runs, folded under "The command to run", with Copy beside it:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
 each word in single quotes, so that no shell changes a `!`, a `$` or a quote
-in a name.
+in a name (and the names after `--` when one starts with "-": `caracole
+songbook make -- 'Camp' '-M- - Je dis aime'`).
 On `caracole serve`, the button makes the songbook, and the page opens the
 Songbooks tab on it (see below).
 

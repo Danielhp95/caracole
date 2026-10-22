@@ -59,6 +59,10 @@
   const terms = (folded) => folded.split(/\s+/).map(term).filter(Boolean);
   // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+  // The names a command takes, each quoted, after "--" when one starts with "-" (-M-, an artist): caracole would
+  // take it for an option ("No such option: -M"). caracole serve's own command lines always have it.
+  const shellNames = (...names) => (names.some((n) => String(n).startsWith("-")) ? "-- " : "") +
+    names.map(shellQuote).join(" ");
   const hay = songs.map((s) => String(s.search || ""));
   const inits = songs.map((s) => String(s.initials || ""));  // a title's initials: "wywh" finds Wish You Were Here
 
@@ -1467,7 +1471,7 @@
     box.appendChild(el("p", null, "Searching Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore needs caracole serve. " +
       "Where caracole runs, this searches its copies of Ultimate Guitar's and LaCuerda's indexes:"));
     const line = el("div", "command");
-    const code = el("code", null, "caracole search " + shellQuote(q));
+    const code = el("code", null, "caracole search " + shellNames(q));
     const copy = button("Copy", "small", () => copyText(code, copy), "Copy the line");
     line.appendChild(code);
     line.appendChild(copy);

@@ -550,6 +550,32 @@ def test_the_file_page_shows_the_songbooks_read_only_with_their_commands(conn, c
 # --- touch, contrast, dark mode ---------------------------------------------------------------------------------
 
 
+def test_the_file_pages_commands_run_for_names_that_start_with_a_dash(conn, cfg, tmp_path):
+    # The songbook "-M- nights" of a song by -M-, a French artist: each line, run as shown, reaches its command with
+    # those names, none taken for an option ("No such option: -M").
+    from urllib.parse import quote
+
+    from helpers.cli_lines import parsed
+
+    add_song(conn, "-M-", "Je dis aime")
+    make_songbook(songbooks_file(cfg.library_dir), "-M- nights", ["-M- - Je dis aime"])
+    conn.commit()
+    path = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
+    with opened(tmp_path) as page:
+        page.open(path.as_uri() + "#tab=songbooks&book=" + quote("-M- nights"))
+        assert page.wait("document.querySelectorAll('#songbooks .book-commands code').length === 6")
+        commands = page.js("Array.from(document.querySelectorAll('#songbooks .book-commands code'))"
+                           ".map((c) => c.textContent)")
+    name, song = "-M- nights", "-M- - Je dis aime"
+    assert [parsed(line) for line in commands] == [
+        (("songbook", "add"), {"name": name, "songs": ("ARTIST - TITLE",)}),
+        (("songbook", "move"), {"name": name, "song": song, "position": 2}),
+        (("songbook", "set"), {"name": name, "song": song, "key": "G", "mode": "dorian", "capo": 0, "clear": False}),
+        (("songbook", "remove"), {"name": name, "songs": (song,)}),
+        (("songbook", "rename"), {"name": name, "new": "NEW NAME"}),
+        (("songbook", "delete"), {"name": name})], commands
+
+
 @pytest.mark.parametrize("size,dark", [((390, 844), False), ((390, 844), True), ((1280, 800), False),
                                        ((1280, 800), True)], ids=["phone", "phone-dark", "laptop", "laptop-dark"])
 def test_the_tab_meets_touch_contrast_and_dark_mode(serve, cfg, library, tmp_path, size, dark):

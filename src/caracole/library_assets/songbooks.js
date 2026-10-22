@@ -40,6 +40,10 @@
   const isActive = (view) => Boolean(view) && (view.state === "queued" || view.state === "running");
   const plural = (n, word) => n + " " + word + (Number(n) === 1 ? "" : "s");
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+  // The names a command takes, each quoted, after "--" when one starts with "-" (-M-, an artist): caracole would
+  // take it for an option ("No such option: -M"). caracole serve's own command lines always have it.
+  const shellNames = (...names) => (names.some((n) => String(n).startsWith("-")) ? "-- " : "") +
+    names.map(shellQuote).join(" ");
   const shelfOf = (value) => (value && typeof value === "object" ? value : {});
   let shelf = shelfOf(data.songbooks);
   const books = () => listOf(shelf.books).filter((b) => b && typeof b === "object");
@@ -374,17 +378,19 @@
   const fileCommands = (b) => {
     const first = listOf(b.set)[0];
     const song = first ? String(first.entry) : "ARTIST - TITLE";
-    const name = shellQuote(b.name);
+    const setting = "--key G --mode dorian --capo 0";  // before "--", when the names need it
+    const names = shellNames(b.name, song);
     const box = el("div", "book-commands");
     box.appendChild(el("p", "hint", "This page changes nothing: where caracole runs, these do (or edit songbooks.toml):"));
     const list = el("ul", "commands");
     for (const [what, command] of [
-      ["Add a song", "caracole songbook add " + name + " 'ARTIST - TITLE'"],
-      ["Move a song", "caracole songbook move " + name + " " + shellQuote(song) + " 2"],
-      ["Play it elsewhere", "caracole songbook set " + name + " " + shellQuote(song) + " --key G --mode dorian --capo 0"],
-      ["Take it out", "caracole songbook remove " + name + " " + shellQuote(song)],
-      ["Rename it", "caracole songbook rename " + name + " 'NEW NAME'"],
-      ["Delete it", "caracole songbook delete " + name],
+      ["Add a song", "caracole songbook add " + shellNames(b.name, "ARTIST - TITLE")],
+      ["Move a song", "caracole songbook move " + names + " 2"],
+      ["Play it elsewhere", "caracole songbook set " +
+        (names.startsWith("--") ? setting + " " + names : names + " " + setting)],
+      ["Take it out", "caracole songbook remove " + names],
+      ["Rename it", "caracole songbook rename " + shellNames(b.name, "NEW NAME")],
+      ["Delete it", "caracole songbook delete " + shellNames(b.name)],
     ]) {
       const item = el("li");
       item.append(el("span", "command-what", what), el("code", null, command));

@@ -2740,6 +2740,21 @@ def test_with_none_of_your_songs_matching_the_file_page_says_what_to_run_at_once
 
 
 @in_chromium
+def test_the_file_pages_search_line_runs_for_a_query_that_starts_with_a_dash(conn, cfg, tmp_path):
+    # -M-, a French artist: run as shown, the line must not take the query for an option ("No such option: -M").
+    from helpers.cli_lines import parsed
+
+    add_song(conn, "Radiohead", "Creep")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path, "#q=" + quote("-M- je dis aime"))
+    import html
+
+    line = html.unescape(re.search(r"<code>(caracole search [^<]*)</code>", listing(dom)).group(1))
+    assert parsed(line) == (("search",), {"query": ("-M- je dis aime",), "limit": 10, "add": None, "key": None,
+                                          "artist": None, "title": None, "progression": None}), line
+
+
+@in_chromium
 def test_a_key_filters_your_songs_alone_as_the_sites_know_no_keys(conn, cfg, driven):
     from caracole.library_page import WebControls
 

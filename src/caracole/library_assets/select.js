@@ -23,6 +23,10 @@
   };
   // Each word in single quotes, each ' written '\'': bash and zsh expand ! even in double quotes.
   const shellQuote = (text) => "'" + String(text).replace(/'/g, "'\\''") + "'";
+  // The names a command takes, each quoted, after "--" when one starts with "-" (-M-, an artist): caracole would
+  // take it for an option ("No such option: -M"). caracole serve's own command lines always have it.
+  const shellNames = (...names) => (names.some((n) => String(n).startsWith("-")) ? "-- " : "") +
+    names.map(shellQuote).join(" ");
   const picked = [];  // song ids, in the order they were picked: the songbook's order
   let sending = false;  // on caracole serve, until the server answers the bar's form
 
@@ -296,9 +300,8 @@
       return;  // the Songbooks tab's script posts it, and its songbook says how it goes
     }
     e.preventDefault();
-    const words = ["caracole songbook", existing ? "add" : "make", shellQuote(name)];
-    for (const id of picked) words.push(shellQuote(songs.get(id).display));
-    commandText.textContent = words.join(" ");
+    const names = shellNames(name, ...picked.map((id) => songs.get(id).display));
+    commandText.textContent = "caracole songbook " + (existing ? "add " : "make ") + names;
     commandFold.open = false;
     command.hidden = false;
     copy.textContent = "Copy";
