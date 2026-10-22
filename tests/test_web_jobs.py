@@ -16,6 +16,7 @@ from caracole.web.jobs import (
     child_env,
     fetch_steps,
     lookup_steps,
+    version_steps,
 )
 
 from conftest import subprocess_pythonpath
@@ -298,6 +299,40 @@ def test_a_newer_pick_replaces_the_one_still_waiting_and_the_same_pick_is_the_sa
                             lookup_steps("Oasis", "Wonderwall", tab=TAB_B), fetching=True)
     assert other.id == first.id and other.steps[0].args[2] == f"--tab={TAB_B}"
     assert queue.active_count() == 1
+
+
+def test_a_lookup_asked_for_while_the_songs_keep_it_waits_joins_it():
+    # Keep it fetches one tab page and keeps it beside the sheet: it never looks the song up, so it doesn't do as
+    # much as Fetch now, which must still run.
+    queue = JobQueue(FakeRunner())
+    keep, _ = queue.submit("Keep it", "a|t", version_steps("A", "T", keep="123"), fetching=True)
+    fetch, new = queue.submit("Fetch A - T", "a|t", lookup_steps("A", "T"), fetching=True)
+    assert not new and fetch.id == keep.id
+    assert [s.args[0] for s in fetch.steps] == ["versions", "get"]
+    assert {"song", "sheet", "version"} <= {s.name for s in fetch.stages}
+    again, new_again = queue.submit("Fetch A - T", "a|t", lookup_steps("A", "T"), fetching=True)
+    assert not new_again and again.id == keep.id and [s.args[0] for s in again.steps] == ["versions", "get"]
+    queue.run_pending()
+    assert [call[0] for call in queue._runner.calls] == ["versions", "get"]
+
+
+def test_a_lookup_asked_for_while_the_songs_keep_it_runs_comes_after_it():
+    asked = []
+
+    def runner(args, emit):
+        if args[0] == "versions" and not asked:
+            asked.append(queue.submit("Fetch A - T", "a|t", lookup_steps("A", "T"), fetching=True))
+            asked.append(queue.submit("Fetch A - T", "a|t", lookup_steps("A", "T"), fetching=True))
+        calls.append(args[0])
+        return 0
+
+    calls = []
+    queue = JobQueue(runner)
+    keep, _ = queue.submit("Keep it", "a|t", version_steps("A", "T", keep="123"), fetching=True)
+    queue.run_pending()
+    (fetch, new), (again, new_again) = asked
+    assert new and fetch.id != keep.id and not new_again and again.id == fetch.id
+    assert calls == ["versions", "get"]
 
 
 PROGRESS = "caracole-progress: "

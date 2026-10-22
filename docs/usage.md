@@ -3176,7 +3176,9 @@ is no progression exits with status 2.
   leaves it), queues `caracole versions SONG --clear`. Each is the song's
   request, as a lookup is: its card says how it goes, stage by stage, the same
   one asked twice is queued once, and Make this the one takes the place of the
-  song's lookup still waiting. The page then says how it goes (it reloads
+  song's lookup still waiting. Keep it never looks the song up, so a lookup
+  asked for meanwhile (Fetch now, the lookup page's) still runs: after it, in
+  its job while it waits, as a job of its own once it runs. The page then says how it goes (it reloads
   itself while it waits or runs) and, once done, what it came to, read from the
   song and overrides.toml, not from how the command exited: the version is the
   one now (Open the sheet), or your choice is under `[pin]` but a block, a spent

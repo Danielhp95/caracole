@@ -375,6 +375,17 @@ def test_a_version_asked_for_while_the_songs_lookup_waits_joins_it(app, queue, r
                                                      ["versions", f"--choose={KEPT}", "--progress"]]
 
 
+def test_fetch_now_asked_for_while_keep_it_waits_still_looks_the_song_up(app, queue, recorder, conn, cfg):
+    # Keep it asks UG for one tab page, and never looks the song up: a Fetch now joins it, never vanishes into it.
+    song = versioned_song(conn, cfg)
+    keep = header(post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER}), "location")
+    fetch = header(post(app, "/fetch", {"song": str(song.id)}), "location")
+    assert re.search(r"job=(\d+)", keep).group(1) == re.search(r"job=(\d+)", fetch).group(1) == "1"
+    queue.run_pending()
+    assert recorder.calls == [["versions", f"--keep={OTHER}", "--progress", "--", *NAMES],
+                              ["get", "--progress", "--", *NAMES]]
+
+
 def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):
     # caracole versions --progress writes caracole get's lines: Keep it's stages (the song, the version, its page,
     # the library page) and Back to caracole's pick's, a lookup's, are the job's, and stay out of its output.

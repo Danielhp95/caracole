@@ -31,7 +31,8 @@ A step that exits non-zero fails its job, and the job's other steps are
 skipped. The queue holds ``limit`` jobs waiting or running, one per song (a
 lookup takes the place of the song's waiting add, since ``caracole get`` adds
 the song itself, or follows it once it runs; a version you pick meanwhile
-takes the place of the song's waiting lookup, or follows the running one),
+takes the place of the song's waiting lookup, or follows the running one, and a
+lookup joins the song's Keep it, which never looks it up, or follows it),
 and remembers the last ``keep``
 finished ones, in memory only (``cancel`` takes one that hasn't started out of the queue, never one
 that runs): a request is in wanted.txt from the moment it's
@@ -245,6 +246,12 @@ def _looks_up(args: Sequence[str]) -> bool:
         arg == "--clear" or arg.startswith("--choose=") for arg in _options(args)))
 
 
+def _fetches(steps: Sequence[Step]) -> bool:
+    """Whether a job looks its song up (``_looks_up``) or fetches it (``caracole fetch``): Keep it, which asks
+    Ultimate Guitar for one tab page and keeps it beside the sheet, does neither."""
+    return any(_looks_up(step.args) or step.args[:1] == ("fetch",) for step in steps)
+
+
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
     --progress``, or ``caracole lacuerda --search --progress``."""
@@ -344,13 +351,14 @@ class JobQueue:
                join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
         """Queue a job, and say whether it is new: one per song, unless a fetch must come after an add.
 
-        A song's waiting or running job that does as much (a fetch, or the new
-        job fetches nothing) is the answer. A fetch joins a song's add that
-        still waits: the add gets the fetch's steps of the commands it doesn't
-        run (one ``caracole add``, whatever its album: the server wrote
-        wanted.txt already), and a lookup takes the add's place, since
-        ``caracole get`` adds the song itself. One asked for while the add
-        runs comes after it, as a job of its own. With ``join=False`` (a pick,
+        A song's waiting or running job that does as much (one that looks the
+        song up or fetches it, or any when the new job fetches nothing) is the
+        answer. A fetch joins a song's add that still waits: the add gets the
+        fetch's steps of the commands it doesn't run (one ``caracole add``,
+        whatever its album: the server wrote wanted.txt already), and a lookup
+        takes the add's place, since ``caracole get`` adds the song itself. One
+        asked for while the add runs comes after it, as a job of its own; so
+        with Keep it, which fetches one tab page but never looks the song up. With ``join=False`` (a pick,
         whose ``caracole review`` must come after the song's own request), any
         waiting or running job of the song is the answer, left as it is.
 
@@ -399,7 +407,7 @@ class JobQueue:
                        join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
         new = [Step(label, tuple(args)) for label, args in steps]
         mine = [job for job in self._jobs if job.active and job.song_key == song_key]
-        enough = next((job for job in mine if job.fetching), None)  # a fetch does the most
+        enough = next((job for job in mine if _fetches(job.steps)), None)  # a lookup or a fetch does the most
         if enough is None and (not fetching or not join) and mine:
             enough = mine[0]
         waiting = next((job for job in mine if job.state == "queued"), None)
