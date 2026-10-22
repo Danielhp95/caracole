@@ -94,14 +94,19 @@ Rules a change there keeps (the Invariants below are the others):
   route is `Route.public` (no sign-in) and answers any origin. Enter in a search box never
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
   opens the leading artist's songs), and on the library page, whose served bar searches
-  `/api/search` as you type (which asks no site), it only moves the focus to the first result.
-  LaCuerda's own search is the one request a search may bring, and never on Enter: both pages
-  send it (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) only once the query
-  has settled, the box unchanged for 1.5 s, when `/api/search`'s `lacuerda_search` says `auto`, never
-  twice for a query in a page; Enter holds it back, and `button` (the hour's share of such searches
-  spent) and `failed` (it failed within the hour, or three did) offer it by hand, a line under the
-  results (rows.js `lacuerdaSearcher`; its rows come with the search asked again once the job is over,
-  and a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). A test that drives
+  `/api/search` as you type (which asks no site), it only moves the focus to the first result;
+  the one exception is LaCuerda's search, which Enter sends when its gate allows.
+  LaCuerda's own search is the one request a search may bring: both pages send it by themselves
+  (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) once the query has settled,
+  the box unchanged for 1.5 s, when `/api/search`'s `lacuerda_search` says `auto`, and Enter sends it
+  at once, by hand as the button does (no `--auto`), when it says `auto` or `button` (for the query's
+  answer on the screen, else with the answer on its way, unless Escape leaves the results first; the
+  settle's timer then sends nothing), never
+  twice for a query in a page; `button` (the hour's share of such searches spent) and `failed` (it
+  failed within the hour, or three did) offer it by hand, a line under the results (rows.js
+  `lacuerdaSearcher`; its rows come with the search asked again once the job is over, the focus Enter
+  moved to a result staying on it, an artist's songs Enter opened on the lookup page staying open, and
+  a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). A test that drives
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
   does.
   What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
@@ -458,7 +463,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     pace (`caracole lacuerda --search`), one request, only when the query has settled and its gate
     allows (`lacuerda_search.gate`, read with no request: a word of four letters, neither your library
     nor LaCuerda's index answering it well already, not asked within 30 days, no cooldown, the hour's
-    lookups, no failure within the hour), never on Enter, at most 20 an hour sent by the pages by
+    lookups, no failure within the hour), or by hand (its button, or Enter while the gate says `auto`
+    or `button`), at most 20 an hour sent by the pages by
     themselves within `lookup_per_hour`, each query kept 30 days (kv and the HTTP cache). An artist's
     songs come from their page, read at most once in 30 days.
   - **The one exception is YouTube**, the owner's explicit choice for a handful of their

@@ -1445,11 +1445,12 @@
   // after the last key: one list under the bar, in the list's place, its tools with it, until Escape: your songs that
   // match, then what caracole's offline indexes hold of Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore
   // (/api/search), under the same artist headers (mergeSites), the newest query's answer alone, the older one staying
-  // until it comes. Enter moves the focus to the first result: it never spends a request, only a result's Get it
+  // until it comes. Enter moves the focus to the first result: it never asks for a song, only a result's Get it
   // does. LaCuerda's own search, which finds the songs of artists whose page caracole hasn't read, is one request:
-  // sent by itself once the query has settled, when /api/search says so (``lacuerda_search``), or offered as a
-  // button, a line under the results (rows.js lacuerdaSearcher, lcBox); its rows come in a new answer once it is
-  // over. On the file, which can ask nothing, Enter shows the line that searches the sites.
+  // sent by itself once the query has settled, when /api/search says so (``lacuerda_search``), at once by Enter
+  // when its gate sends one, or offered as a button, a line under the results (rows.js lacuerdaSearcher, lcBox); its
+  // rows come in a new answer once it is over. On the file, which can ask nothing, Enter shows the line that
+  // searches the sites.
   const say = (text) => {
     if (barStatus.textContent === text) return;
     barStatus.textContent = text;
@@ -1822,8 +1823,13 @@
   // (MINE_SHOWN in all, then All N of your songs), and the answer's groups, under one header
   // an artist: yours first, A to Z, then the answer's, in its order. A song of yours is its own line, with all it
   // offers, wherever the answer has it, unless the buttons hide it; a song of the sites, an index line (indexLine),
-  // the same node from one draw to the next while the answer stands, so that what it shows stays.
+  // the same node from one draw to the next while the answer stands, so that what it shows stays. The focus stays
+  // where it was as they are drawn again, a newer answer's too (LaCuerda's search's end brings one): on the same
+  // node; else, from a line (Enter's, or Tab's), on the line of the same song, else on the first line.
   const drawGroups = () => {
+    const had = groupsBox.contains(document.activeElement) ? document.activeElement : null;
+    const hadLine = had ? had.closest("article") : null;
+    const hadHit = hadLine ? String(hadLine.dataset.hit || "") : "";
     const model = answer && answer.model;
     const q = normal(state.q);
     const fits = typedMatch(parseQuery(state.q));
@@ -1879,6 +1885,12 @@
     }
     groupsBox.replaceChildren(box);
     groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
+    if (had && !groupsBox.contains(document.activeElement)) {
+      const lines = Array.from(groupsBox.querySelectorAll("article"));
+      const back = groupsBox.contains(had) ? had
+        : hadLine ? (hadHit && lines.find((a) => String(a.dataset.hit || "") === hadHit)) || lines[0] : null;
+      if (back) back.focus({ preventScroll: true });
+    }
     allMine.replaceChildren();
     if (mine.length > MINE_SHOWN) {
       allMine.appendChild(button("All " + mine.length + " of your songs", "small", () => leaveAll(true)));
@@ -2006,8 +2018,7 @@
     }
     drawGroups();
     if (going.size) settleSpots(true);
-    let lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q) : null;
-    if (searcher && focusFirst && q === normal(state.q)) lcLine = searcher.enter(q) || lcLine;  // Enter came first
+    const lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q) : null;  // sent, if Enter came first
     lcBox.replaceChildren(...(lcLine ? [lcLine] : []));
     if (data.short) {
       say("Type three letters or more to search the sites");
@@ -2036,7 +2047,7 @@
     }
   };
   // Enter: on to the first result's line, from which Tab goes on to its name (which gets it, as its button does),
-  // then its button. Enter itself never asks for a song.
+  // then its button. Enter itself never asks for a song (LaCuerda's search, the keydown's, asks for none).
   const toFirstResult = () => {
     const first = groupsBox.querySelector("article");
     if (first) first.focus();
@@ -2119,6 +2130,7 @@
     if (!state.all) return;
     state.all = false;
     focusFirst = false;
+    if (searcher) searcher.leave();  // an Enter waiting for the answer: LaCuerda's search with it too
     clearTimeout(askTimer);
     if (asking) asking.abort();
     asked += 1;
@@ -2144,14 +2156,17 @@
     if (composing(e)) return;
     if (e.key === "Enter") {
       e.preventDefault();
+      const q = normal(state.q);
       if (!server || !state.all) {
         enterAll();
-      } else if (answer && answer.q === normal(state.q)) {  // the query's answer is in: its first result
-        const held = searcher && searcher.enter(normal(state.q));  // and LaCuerda's search, a button now
-        if (held) lcBox.replaceChildren(held);
+        if (searcher && state.all) searcher.enter(q, false);  // LaCuerda's search too, with the sites' answer
+      } else if (answer && answer.q === q) {  // the query's answer is in: its first result
+        const line = searcher && searcher.enter(q, true);  // and LaCuerda's search now, when its gate sends one
+        if (line) lcBox.replaceChildren(line);
         toFirstResult();
-      } else {  // on its way: its first result once it is drawn, the search sent now
+      } else {  // on its way: its first result once it is drawn, the search sent now, LaCuerda's with its answer
         focusFirst = true;
+        if (searcher) searcher.enter(q, false);
         askSources(true);
       }
     } else if (e.key === "ArrowDown" && state.all && server) {  // on to the first result's button

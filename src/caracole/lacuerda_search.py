@@ -5,7 +5,7 @@ the artist pages caracole has read, so a song by anyone else is no hit there. La
 (lacuerda.py: ``search_url``, ``parse_search``) answers it: what a page of results lists goes into the
 index (``lacuerda_index.store_search``), and every search after finds it locally. caracole serve's
 search bar sends it by itself (``--auto``) once a query has settled, when ``gate`` says so; its
-button, and a terminal, send it by hand.
+button, Enter in the bar, and a terminal, send it by hand.
 
 **One request.** A search of the songs (``canc=1``): the artists a query names are the listings'
 (and Ask LaCuerda's, for a letter they don't reach yet), so a general search, whose answer is the
