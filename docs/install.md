@@ -104,6 +104,15 @@ Then read `_todo.md` in the library.
 None may be under `/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`,
 which the units' sandbox hides.
 
+**Guitar Pro files in the browser.** Both packages carry
+[alphaTab](https://www.alphatab.net) 1.8.4, which `caracole serve` draws and
+plays a song's Guitar Pro file with ([usage.md](usage.md#caracole-serve)):
+`nix/alphatab.nix` fetches its npm package when the package is built, pinned
+by hash, and keeps three files of it, about 2.4 MB, with their licences in
+`licenses/`: its browser build (MPL-2.0), the Bravura music font (SIL Open Font
+License 1.1) and the Sonivox SoundFont (Apache-2.0). The wrapper points
+`CARACOLE_ALPHATAB_DIR` at them.
+
 [deploy.md](deploy.md) covers the rest: agenix, Syncthing, restic backups,
 Spotify, and how auto-chords works.
 
@@ -271,6 +280,30 @@ caracole runs `yt-dlp` from PATH, or the program `ytdlp_bin` in caracole.toml
 or `CARACOLE_YTDLP_BIN` names: here `ytdlp_bin = "/opt/yt-dlp/bin/yt-dlp"`.
 Without it, caracole takes no audio from YouTube, and the to-do page says why;
 `enabled = false` under `[providers.youtube]` turns that off on purpose.
+
+**alphaTab, for Guitar Pro files in the browser**, if you run `caracole
+serve`. Without it the server runs all the same, and Guitar Pro files are
+downloads alone. Fetch alphaTab 1.8.4's npm package, check it, and keep its
+three files and their licences:
+
+```sh
+curl -fLo /tmp/alphatab-1.8.4.tgz https://registry.npmjs.org/@coderline/alphatab/-/alphatab-1.8.4.tgz
+echo '70b2c77abc9698a055d90a11d77308b6b41247936476e969d85770e3d4db4602  /tmp/alphatab-1.8.4.tgz' | sha256sum -c
+mkdir /tmp/alphatab && tar -xzf /tmp/alphatab-1.8.4.tgz -C /tmp/alphatab
+sudo install -d /usr/local/share/caracole/alphatab/licenses
+cd /tmp/alphatab/package
+sudo install -m 0644 dist/alphaTab.min.js dist/font/Bravura.woff2 dist/soundfont/sonivox.sf3 \
+  /usr/local/share/caracole/alphatab/
+sudo install -m 0644 LICENSE /usr/local/share/caracole/alphatab/licenses/alphaTab-LICENSE
+sudo install -m 0644 dist/font/Bravura-OFL.txt /usr/local/share/caracole/alphatab/licenses/
+sudo install -m 0644 dist/soundfont/LICENSE /usr/local/share/caracole/alphatab/licenses/sonivox-LICENSE
+```
+
+alphaTab is MPL-2.0, the Bravura font SIL Open Font License 1.1, the Sonivox
+SoundFont Apache-2.0. caracole reads the folder from `CARACOLE_ALPHATAB_DIR`:
+add `--setenv=CARACOLE_ALPHATAB_DIR=/usr/local/share/caracole/alphatab` to
+[`caracole-admin`](#run-it-nightly-on-ubuntu), which runs `caracole serve` (the
+Nix package's wrapper sets it already).
 
 Then [run it nightly](#run-it-nightly-on-ubuntu).
 
@@ -503,8 +536,8 @@ pytest -q -m "not slow"                             # all but the browser, chord
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
 ```
 
-Both shells set `CARACOLE_CJK_FONT`, and `.#autochords` also sets
-`CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT`.
+Both shells set `CARACOLE_CJK_FONT` and `CARACOLE_ALPHATAB_DIR`, and
+`.#autochords` also sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT`.
 
 Without Nix, install ChordPro and the font as [above](#ubuntu-without-nix)
 first, and torch too if you want the auto-chords tests:
@@ -523,6 +556,7 @@ under root. Tests that need a program or a file skip without it:
 |---|---|
 | `chordpro` on PATH | the real PDFs (marked `chordpro`): in test_render.py and test_render_all.py, two in test_chordpro.py |
 | `CARACOLE_CJK_FONT` | the two Chinese PDFs |
+| `CARACOLE_ALPHATAB_DIR` (alphaTab's three files) | the tests of caracole serve's Guitar Pro page in a browser |
 | torch, librosa and beat_this, or `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` | the model tests (marked `autochords`) |
 | `ffmpeg`, `chromium` | one `.m4a` test; the tests of `index.html`, `sheet.html`, `songbook.html`, the lookup page and the pages `caracole serve` serves, in a browser |
 

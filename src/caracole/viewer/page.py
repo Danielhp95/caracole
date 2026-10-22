@@ -44,7 +44,10 @@ written ``\\u003c``:
   opens (``_VERSIONS``, ``_VERSION_LIST``), or null for none: ``sheet_versions.as_data``'s ``{"total",
   "list"}``, each entry's ``this`` saying whether it is this page's, ``sheet``, the provider of the
   sheet the title opens ("ug", "lacuerda", "auto"), and ``pinned``, whether a ``[pin]`` of yours chooses it:
-  render.py's ``_versions_data``.
+  render.py's ``_versions_data``;
+- ``guitar``: the names of the song's Guitar Pro files beside the page that caracole serve shows in the browser
+  (render.py, ``inbox.guitar_files``), for the settings' Guitar Pro row (``_GUITAR_ROW``): served, each a link to
+  caracole serve's Guitar Pro page; or none, and no row.
 """
 
 from __future__ import annotations
@@ -160,6 +163,7 @@ def build_viewer(
     pdf: str | None = None,
     export: bool = True,
     versions: dict[str, Any] | None = None,
+    guitar: tuple[str, ...] | list[str] = (),
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -171,17 +175,21 @@ def build_viewer(
     this version (an auto sheet kept beside a human one, or a version's page, whose exports are the
     sheet's: render.py ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
     ``sheet_versions.as_data`` with ``sheet``, the provider of the one, and ``this`` on each entry,
-    true on the page's own), goes in the page's data as ``versions``; without it, the data has none.
+    true on the page's own), goes in the page's data as ``versions``; without it, the data has none. ``guitar``, the
+    names of the song's Guitar Pro files beside the page that caracole serve shows in the browser (render.py), goes
+    in its data as ``guitar``, and its settings get a Guitar Pro row (``_GUITAR_ROW``); without any, neither.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     data["start"] = start
     if versions is not None:
         data["versions"] = versions
+    if guitar:
+        data["guitar"] = list(guitar)
     style, script = _assets()
     title = sheet.title or "Untitled"
     return _page(
         f"{title} · {sheet.artist}" if sheet.artist else title,
-        _body(sheet, title, song_key, origin, pdf, export=export) + json_block("song", data),
+        _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar)) + json_block("song", data),
         styles=(style,),
         scripts=(_sound(), script),
     )
@@ -430,7 +438,7 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
 
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
-          export: bool = True) -> str:
+          export: bool = True, guitar: bool = False) -> str:
     pdf_link = f'<a class="pdf" href="{escape(quote(pdf))}">PDF</a>\n' if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
@@ -443,7 +451,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + _song_html(sheet)
         + _footer(pdf_link)
         + "</div>\n"
-        + (_SHEET_CONTROLS if export else _CONTROLS)
+        + _with_guitar(_SHEET_CONTROLS if export else _CONTROLS, guitar)
         + _VERSION_LIST
     )
 
@@ -697,6 +705,19 @@ _VERSION_LIST = """<section class="sheet-ui panel vlist" id="version-list" hidde
 <ol class="vers" id="ver-items"></ol>
 </section>
 """
+
+# A sheet viewer's Guitar Pro files, in its settings, for a song that has some: the script fills in a link to each
+# (viewer.js: caracole serve's Guitar Pro page, served; the file itself, from a file).
+_GUITAR_ROW = """<div class="row" id="guitar-row" hidden><span class="lab">Guitar Pro</span><span class="chips" id="guitar-links"></span>
+<p class="hint" id="guitar-hint"></p></div>
+"""
+_RESET_ROW = '<div class="row"><button type="button" class="link" id="reset-all">'
+
+
+def _with_guitar(controls: str, guitar: bool) -> str:
+    """``controls`` with the Guitar Pro row before Reset everything, when the song has Guitar Pro files."""
+    return controls.replace(_RESET_ROW, _GUITAR_ROW + _RESET_ROW, 1) if guitar else controls
+
 
 # The sheet viewer's controls: the shared ones and the export row. The songbook has none: no song owns it.
 _SHEET_CONTROLS = _CONTROLS.replace(

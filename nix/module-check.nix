@@ -75,10 +75,12 @@ let
     beatCheckpoint = "/models/beat_this.ckpt";
   };
 
-  # What the packages' wrappers must default to: the fetched models, and the one
-  # CJK font ChordPro 6.050.7 renders correctly (see src/caracole/render.py).
+  # What the packages' wrappers must default to: the fetched models, the one
+  # CJK font ChordPro 6.050.7 renders correctly (see src/caracole/render.py), and
+  # alphaTab, for caracole serve's Guitar Pro page (src/caracole/web/alphatab.py).
   models = pkgs.callPackage ./autochords.nix { };
   fusionKai = "${pkgs.lxgw-fusionkai}/share/fonts/truetype/FusionKaiJ-Regular.ttf";
+  alphatab = "${pkgs.callPackage ./alphatab.nix { }}";
 
   # Whether makeWrapperArgs holds `--set-default NAME VALUE`.
   setsDefault =
@@ -445,6 +447,9 @@ let
     "both packages default CARACOLE_CJK_FONT to lxgw-fusionkai's FusionKaiJ-Regular.ttf" =
       setsDefault defaultPackage "CARACOLE_CJK_FONT" fusionKai
       && setsDefault autochordsPackage "CARACOLE_CJK_FONT" fusionKai;
+    "both packages default CARACOLE_ALPHATAB_DIR to the fetched alphaTab" =
+      setsDefault defaultPackage "CARACOLE_ALPHATAB_DIR" alphatab
+      && setsDefault autochordsPackage "CARACOLE_ALPHATAB_DIR" alphatab;
     "caracole-autochords.service follows a successful run and notifies on failure" =
       nucAutochords.systemd.services.caracole.onSuccess == [ "caracole-autochords.service" ]
       && autochords.onFailure == [ "caracole-notify-failure.service" ];

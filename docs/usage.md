@@ -1839,7 +1839,8 @@ sheet, it leads the list by that name: `The one: LaCuerda's sheet`); its PDF
 exports, the sheet's PDFs in other versions, each
 by its version (`G Dorian, capo 0`: see `caracole render --version` and Export
 PDF of this version); its other files (the PDF, the text, the ChordPro file,
-the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files) and the
+the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files, which
+caracole serve also opens in the browser: see [caracole serve](#caracole-serve)) and the
 Guitar Pro versions to download from Ultimate Guitar; its MuseScore pages,
 each a possible match, as on the to-do page; for a song without a sheet, its
 search and buy links; its progressions, as it plays them ("vi–IV–I–V"), each a
@@ -2206,6 +2207,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   with the fingers. Reset everything, at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
   the viewer starts them.
+- **Guitar Pro**, in the settings of a song with a Guitar Pro file (not a
+  Power Tab one): served by caracole serve, **Guitar Pro tab** opens the file
+  drawn and played in the browser (see
+  [Guitar Pro files in the browser](#caracole-serve)); from the folder, the
+  file's name links the file itself.
 - **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the
@@ -3127,6 +3133,40 @@ afresh. Its links to
 the PDF and back to the library work with an access token too: the sign-in
 cookie goes with a link followed from another page, but not with a form
 another site posts or anything it loads from the server.
+
+**Guitar Pro files in the browser.** Served, a song's Guitar Pro file
+(`guitar-N.gp3`, `.gp4`, `.gp5`, `.gpx` or `.gp`, one caracole keeps: filed
+from `_inbox/` or downloaded from gtptabs.com) has a group of its own under its
+line's ⋯, named as the file is (`Guitar Pro 1 · gtptabs.com`): **Open in the
+browser**, and **Download** beside it. A sheet viewer the server sends offers
+the same as **Guitar Pro tab**, in its ⋯ settings, for a song with such a file
+(the viewer from the folder links the file itself). Open in the browser is
+`/guitar?file=<the file's path in the library>`, a page the server makes for
+each request, where [alphaTab](https://www.alphatab.net) draws and plays the
+file: the song's title and artist, links back to the song in the library, to
+its sheet viewer when it has one and to the file as a download, then a bar
+that stays at the top while the score scrolls: **Play** (Pause while it plays)
+and **Stop**, the **Tempo** (50 to 125 %), the **track** (each track of the
+file; the page starts on the first one with a tab, a guitar's or a bass') and
+**Tab only** or **Score and tab**. On a screen under 600 px wide it starts with
+the tab alone, a little smaller, three or four bars a line; a track with no tab
+(a piano's, the drums') is shown as a score whatever the switch says. Playing,
+the page follows the cursor. It is dark or light as your system is. A Power Tab
+file (`.ptb`) stays a download: alphaTab can't read it.
+
+Nothing is written into the library for it: the file is read when you open
+the page (never through a symbolic link, and only a file the database records
+as a song's Guitar Pro file; any other path answers 404), and its bytes are in
+the page. The page runs in a sandbox, like a viewer, and loads one thing from
+the server: alphaTab, its music font and its SoundFont, about 2.9 MB in one
+script, `/assets/alphatab/alphatab-1.8.4-<hash>.js`, which the browser checks
+against its hash and keeps for good. That script is the same for anyone, so the
+server sends it signed in or not. Only caracole serve does this: `index.html`
+opened from the folder lists the file as before, and the server needs alphaTab
+for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`, see
+[install.md](install.md)). Without it the server runs all the same, the line's ⋯
+says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
+why it can't show one.
 
 Who can reach it:
 

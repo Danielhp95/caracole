@@ -927,10 +927,23 @@
     // The sheet's PDFs in other versions (Export PDF of this version), by their versions, before the other files.
     const isVersion = (f) => f && typeof f.version === "string" && f.version;
     const versions = listed.filter(isVersion).map((f) => Object.assign({}, elsewhere(s, f), { label: f.version }));
+    // Served, a Guitar Pro file caracole serve shows (``guitarPage``) gets a group of its own: Open in the browser,
+    // and Download; without alphaTab there, a note says why it is a download alone. From a file, a file like any.
+    const shownInBrowser = (f) => Boolean(server) && typeof f.guitarPage === "string" && f.guitarPage !== "";
+    const others = listed.filter((f) => !isVersion(f) && !(shownInBrowser(f) && server.guitar));
     more.push({ heading: "Sheet versions", links: keptVersions(s, primary) },
       { heading: "PDF exports", links: versions },
-      { heading: "Files", links: listed.filter((f) => !isVersion(f)).map((f) => elsewhere(s, f)) },
-      { heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
+      { heading: "Files", links: others.map((f) => elsewhere(s, f)) });
+    if (server && server.guitar) {
+      for (const f of listed.filter(shownInBrowser)) {
+        more.push({ heading: String(f.label || f.name), links: [{ label: "Open in the browser", href: f.guitarPage },
+          { label: "Download", href: f.href }] });
+      }
+    } else if (listed.some(shownInBrowser)) {
+      more.push(el("p", "note", "caracole serve can show Guitar Pro files in the browser once it has alphaTab " +
+        "(CARACOLE_ALPHATAB_DIR): until then they are downloads."));
+    }
+    more.push({ heading: "Guitar Pro to download", links: listOf(s.guitarPro) },
       { heading: "Scores on MuseScore", links: listOf(s.museScore) },
       { heading: "Find the chords", links: listOf(s.links) },
       { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });

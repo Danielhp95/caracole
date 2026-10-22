@@ -642,6 +642,19 @@ Make the token with `openssl rand -base64 24` and store it with
   in the library, under the same lock, then, asked to fetch, `caracole fetch
   --song` and `caracole render --song`, at the nightly pace. The song's card says how
   it goes, on one line; `/jobs` keeps what each command printed, at `-v`.
+- **Guitar Pro files in the browser.** A song's Guitar Pro file opens in the
+  browser too (its line's ⋯, Open in the browser; Guitar Pro tab in a sheet
+  viewer's settings), drawn and played by alphaTab, on a page the server makes
+  for each request: nothing is written into the library for it
+  ([usage.md](usage.md), "Guitar Pro files in the browser"). Both packages carry
+  alphaTab, fetched when the package is built, as the model files are
+  (`nix/alphatab.nix`, a fixed-output download of its npm package, pinned by
+  hash): alphaTab 1.8.4's browser build (MPL-2.0), the Bravura music font (SIL
+  Open Font License 1.1) and the Sonivox SoundFont (Apache-2.0), about 2.4 MB in
+  the store, their licences beside them in `licenses/`. The wrapper points
+  `CARACOLE_ALPHATAB_DIR` at them; the server sends the three, in one script of
+  about 2.9 MB, to the Guitar Pro page alone, and the browser keeps it. It needs
+  no network at run time and no option.
 
 ## Logs
 

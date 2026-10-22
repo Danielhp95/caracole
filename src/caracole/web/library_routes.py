@@ -47,6 +47,7 @@ ROUTES = (
 
 def library(app: WebApp) -> Response:
     from caracole.library_page import WebControls, build_library_page
+    from caracole.web.alphatab import available
 
     overrides = app.overrides(" Fix it, then reload this page.")
     from caracole.songs import list_songs
@@ -63,7 +64,7 @@ def library(app: WebApp) -> Response:
         active = tuple(views(app, conn, overrides, jobs, only=[
             j for j in jobs if j.active and not j.song_key.startswith(LACUERDA_ARTIST)]))
         controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
-                               timers=app.timers)
+                               timers=app.timers, guitar=available(app.cfg.alphatab_dir))
         html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
                                   controls=controls)
     # The page's own CSP is in its meta tag; a header CSP would apply on top of it.

@@ -238,7 +238,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     # Its script may ask the server how the requests go, and nothing else.
     assert "connect-src 'self'" in csp_of(html) and "default-src 'none'" in csp_of(html)
     assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id],
-                                       "jobs": [job]}
+                                       "jobs": [job], "guitar": False}
     # Where the songs just requested go, and the list of requests.
     assert re.search(r'<section class="requested" id="requested"[^>]*hidden>', shell)
     assert re.search(r'<aside class="tray" id="tray"[^>]*hidden>', shell)

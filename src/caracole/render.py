@@ -137,6 +137,7 @@ from caracole.autochords.merge import AUTO_MARKER
 from caracole.chordpro import to_chordpro
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
+from caracole.inbox import guitar_files
 from caracole.library import (
     KeptFile,
     NotRegularFile,
@@ -599,7 +600,9 @@ def _render_song(
     versions = in_library(conn, song.id, cfg.rank)
     listed = _versions_data(conn, versions, human or auto,
                             pinned=bool(sheet_pins(conn, song.id, overrides.pin.get(song.key, ()))))
-    done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed)]
+    # Its Guitar Pro files caracole serve shows in the browser, which each of its viewers links (viewer/page.py).
+    guitar = tuple(f.name for f in guitar_files(conn, song.id) if f.in_browser)
+    done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed, guitar)]
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     chosen = next((v.tab_id for v in versions if v.chosen), None)
 
@@ -617,7 +620,7 @@ def _render_song(
         done.append(_render_sheet(conn, cfg, song, folder, kept, text, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
                                   cjk_font=cjk_font, runner=runner, force=force, key=mine, export=not beside,
-                                  primary=not sheet.auto or human is None, versions=listed))
+                                  primary=not sheet.auto or human is None, versions=listed, guitar=guitar))
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
 
@@ -668,7 +671,8 @@ def _on_page(listed: dict[str, Any] | None, tab: str | None) -> dict[str, Any] |
 
 
 def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: Mapping[str, KeptFile],
-                     versions: list[SheetVersion], listed: dict[str, Any] | None) -> _Done:
+                     versions: list[SheetVersion], listed: dict[str, Any] | None,
+                     guitar: tuple[str, ...] = ()) -> _Done:
     """Write a viewer page for each version kept beside the sheet, ``version-<tab>.html`` (its ``page``),
     from its ``version-<tab>.json`` as the sheet's is from sheet.json, and no ChordPro file or PDF. It offers
     no export: an export is made from the sheet ``export_viewer`` names, so this page's would be the one's PDF.
@@ -683,14 +687,14 @@ def _render_versions(conn: sqlite3.Connection, cfg: Config, song: Song, files: M
     pages = {v.page: v for v in versions if v.page == version_names(v.tab_id)[2]}  # kept, and not the one
     ok = True
     for page, v in pages.items():
-        ok = _render_version(conn, cfg, song, folder, files, v, _on_page(listed, v.tab_id)) and ok
+        ok = _render_version(conn, cfg, song, folder, files, v, _on_page(listed, v.tab_id), guitar) and ok
     left = tuple(name for name in _written(conn, song.id) if tab_of(name) is not None and name not in pages)
     _forget_written(conn, song.id, left, folder)
     return _Done("pages", viewer_failed=not ok)
 
 
 def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: Path, files: Mapping[str, KeptFile],
-                    v: SheetVersion, listed: dict[str, Any] | None) -> bool:
+                    v: SheetVersion, listed: dict[str, Any] | None, guitar: tuple[str, ...] = ()) -> bool:
     """Write the kept version ``v``'s viewer page; False, logged, when it can't be made or written."""
     _, doc, page = version_names(v.tab_id)
     kept = files.get(doc)
@@ -707,7 +711,7 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
     text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
                           key=sheet.key, capo=sheet.capo)
     data = _write_viewer(song, text, folder / page, None, key=(found.key, found.source) if found else (None, None),
-                         transpose=0, start=None, export=False, versions=listed)
+                         transpose=0, start=None, export=False, versions=listed, guitar=guitar)
     if data is None:
         return False
     _note_written(conn, song.id, page, data)
@@ -1039,6 +1043,7 @@ def _render_sheet(
     export: bool = True,
     primary: bool = False,
     versions: dict[str, Any] | None = None,
+    guitar: tuple[str, ...] = (),
 ) -> _Done:
     """Write one sheet's .cho, ``text`` (``_sheet_cho``), render its PDF in ``version`` unless kv ``state_key``
     says it is up to date, then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a
@@ -1046,7 +1051,8 @@ def _render_sheet(
     song's own version as the viewer's address writes it, where the viewer starts, or None for none;
     ``export``, whether the viewer offers an export (``export_viewer``); ``primary``, whether this is the
     song's sheet the library finds it by (its human one, else its auto one: ``_note_progressions``);
-    ``versions``, the song's versions as this viewer lists them (``_on_page``), or None.
+    ``versions``, the song's versions as this viewer lists them (``_on_page``), or None; ``guitar``, the names of the
+    song's Guitar Pro files its viewer links.
 
     The PDF, the viewer and the record of the .cho are made from the text written, never read
     back: a synced device may write there a moment later."""
@@ -1062,7 +1068,7 @@ def _render_sheet(
     def viewer() -> bool:
         page = folder / f"{stem}.html"
         data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start, export=export,
-                             versions=versions)
+                             versions=versions, guitar=guitar)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
@@ -1160,12 +1166,13 @@ def _printed(text: str, *, key: str | None, capo: int | None) -> str:
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],
                   transpose: int, start: str | None, export: bool = True,
-                  versions: dict[str, Any] | None = None) -> bytes | None:
+                  versions: dict[str, Any] | None = None, guitar: tuple[str, ...] = ()) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one (a version page has none: ``pdf`` None), and return the page's bytes. It starts where the
     PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's
     key (``keys.sheet_keys``) when it has one; with ``export``, it offers Export PDF of this version;
-    ``versions`` lists the song's versions. A viewer that hasn't changed isn't written again.
+    ``versions`` lists the song's versions, and ``guitar`` its Guitar Pro files caracole serve shows in the
+    browser (``inbox.guitar_files``). A viewer that hasn't changed isn't written again.
 
     The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
     with its traceback) or written (a link or a FIFO in its place), and the song's PDFs and
@@ -1174,7 +1181,7 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: t
     linked = pdf.name if pdf is not None and pdf.is_file() and not pdf.is_symlink() else None
     try:
         html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked,
-                            export=export, versions=versions)
+                            export=export, versions=versions, guitar=guitar)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None

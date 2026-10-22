@@ -38,6 +38,8 @@ from caracole.versions import VersionRow, picks, upsert_version
 
 GP_EXTENSIONS = (".gp3", ".gp4", ".gp5", ".gpx", ".gp", ".ptb")
 GUITAR_FILE_KINDS = ("guitar-pro", "power")
+# The Guitar Pro files caracole serve's Guitar Pro page shows (alphaTab reads them all): every kind but Power Tab's.
+BROWSER_EXTENSIONS = (".gp3", ".gp4", ".gp5", ".gpx", ".gp")
 # What MuseScore downloads: its own format, MusicXML (compressed or not), PDF and MIDI.
 SCORE_EXTENSIONS = (".mscz", ".mxl", ".musicxml", ".pdf", ".mid", ".midi")
 SCORE_KIND = "score"
@@ -46,6 +48,7 @@ _VERSION = re.compile(r"\(\s*ver\.?\s*(\d+)[^)]*\)", re.IGNORECASE)
 _PARENS = re.compile(r"\s*\([^)]*\)")
 _GUITAR_FILE = re.compile(r"guitar-(\d+)\.", re.IGNORECASE)
 _SCORE_FILE = re.compile(r"score-(\d+)(\.[A-Za-z0-9]+)")
+_KEPT_GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
 MATCH_CUTOFF = 90  # music.Names.score is exact from 82 up (test_inbox.py)
 
 
@@ -55,6 +58,43 @@ class InboxStats:
     duplicates: list[Path] = field(default_factory=list)
     unmatched: list[Path] = field(default_factory=list)
     refused: list[Path] = field(default_factory=list)  # symbolic links (_inbox itself, if one), never read
+
+
+@dataclass(frozen=True)
+class GuitarFile:
+    """A Guitar Pro or Power Tab file caracole keeps for a song (``guitar-N.<ext>``, recorded in ``files``):
+    filed from the inbox, or downloaded from gtptabs.com. ``path``: where it is, relative to the library."""
+
+    song_id: int
+    name: str
+    path: str
+    number: int
+
+    @property
+    def in_browser(self) -> bool:
+        """Whether caracole serve's Guitar Pro page shows it (``BROWSER_EXTENSIONS``): not a Power Tab file."""
+        return Path(self.name).suffix.lower() in BROWSER_EXTENSIONS
+
+
+def guitar_files(conn: sqlite3.Connection, song_id: int | None = None, *,
+                 path: str | None = None) -> list[GuitarFile]:
+    """The Guitar Pro and Power Tab files caracole keeps, ``guitar-N.<ext>`` recorded for a version of either kind
+    (``GUITAR_FILE_KINDS``), of the song ``song_id`` or every song's, or the one at ``path``; by song, then N."""
+    sql = ("SELECT f.song_id, f.name, f.path FROM files f JOIN versions v ON v.id = f.version_id "
+           f"WHERE v.kind IN ({', '.join('?' * len(GUITAR_FILE_KINDS))})")
+    args: list[object] = list(GUITAR_FILE_KINDS)
+    if song_id is not None:
+        sql += " AND f.song_id = ?"
+        args.append(song_id)
+    if path is not None:
+        sql += " AND f.path = ?"
+        args.append(path)
+    found = []
+    for row_song, name, at in conn.execute(sql, args):
+        m = _KEPT_GUITAR.fullmatch(name)
+        if m and m.group(2).lower() in GP_EXTENSIONS:
+            found.append(GuitarFile(row_song, name, at, int(m.group(1))))
+    return sorted(found, key=lambda f: (f.song_id, f.number, f.name))
 
 
 def parse_download_name(name: str) -> tuple[str | None, str, int | None]:

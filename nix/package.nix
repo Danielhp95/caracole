@@ -2,7 +2,9 @@
 # wrapper puts `chordpro` on PATH for sheet PDFs, and points CARACOLE_CJK_FONT at
 # a font with Chinese glyphs, so a song like 斑马斑马 renders. The `autochords`
 # variant's wrapper also points at the model files the offline unit needs, and
-# puts `yt-dlp` on PATH, for the audio of songs nobody has charted.
+# puts `yt-dlp` on PATH, for the audio of songs nobody has charted. Both point
+# CARACOLE_ALPHATAB_DIR at alphaTab (./alphatab.nix), which caracole serve's Guitar
+# Pro page draws and plays a song's Guitar Pro file with.
 {
   lib,
   callPackage,
@@ -33,6 +35,11 @@
   # refuses those. FusionKaiJ, a Kai (brush) face, has none, and renders with
   # normal subsetting: about 0.4 MB per Chinese sheet.
   cjkFont ? "${lxgw-fusionkai}/share/fonts/truetype/FusionKaiJ-Regular.ttf",
+
+  # alphaTab's browser build, its music font and its SoundFont (./alphatab.nix), which
+  # caracole serve sends to its Guitar Pro page (src/caracole/web/alphatab.py). Null
+  # leaves CARACOLE_ALPHATAB_DIR unset: Guitar Pro files are then downloads alone.
+  alphatab ? callPackage ./alphatab.nix { },
 
   # The `autochords` extra: torch, beat-this, librosa and friends.
   withAutochords ? false,
@@ -118,6 +125,11 @@ python3Packages.buildPythonApplication (finalAttrs: {
     "CARACOLE_CJK_FONT"
     cjkFont
   ]
+  ++ lib.optionals (alphatab != null) [
+    "--set-default"
+    "CARACOLE_ALPHATAB_DIR"
+    "${alphatab}"
+  ]
   ++ lib.optionals withAutochords modelDefaults;
 
   # `chordpro` on PATH lets the tests marked `chordpro` run. Those marked
@@ -133,6 +145,9 @@ python3Packages.buildPythonApplication (finalAttrs: {
   preCheck = ''
     export HOME=$(mktemp -d)
     export CARACOLE_CJK_FONT=${lib.escapeShellArg cjkFont}
+  ''
+  + lib.optionalString (alphatab != null) ''
+    export CARACOLE_ALPHATAB_DIR=${alphatab}
   '';
 
   # After the tests, on the installed package: it is src/, file for file. The
@@ -141,7 +156,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
   # (library_assets/, viewer/, chordpro-style.json) left out of the wheel, or
   # with a folder beside src/caracole that the wheel never takes.
   # Then on the wrapped program: the font exists, and the wrapper
-  # sets it and finds chordpro. The auto-chords variant finds its models, their
+  # sets it and finds chordpro, and points at alphaTab's three files. The auto-chords variant finds its models, their
   # packages and yt-dlp, so its YouTube route is on (with no song to ask about,
   # it asks nothing); the default one says where to get them, and takes no audio
   # from YouTube.
@@ -157,6 +172,15 @@ python3Packages.buildPythonApplication (finalAttrs: {
     fi
     grep -qF -- ${lib.escapeShellArg cjkFont} $out/bin/caracole
     grep -qF -- ${lib.escapeShellArg "${chordpro}/bin"} $out/bin/caracole
+  ''
+  + lib.optionalString (alphatab != null) ''
+    for file in alphaTab.min.js Bravura.woff2 sonivox.sf3; do
+      test -f ${alphatab}/$file
+    done
+    grep -qF -- "CARACOLE_ALPHATAB_DIR" $out/bin/caracole
+    grep -qF -- ${alphatab} $out/bin/caracole
+  ''
+  + ''
     $out/bin/caracole --version | grep -qFx "caracole ${finalAttrs.version}"
   ''
   + (
@@ -205,6 +229,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
       yt-dlp
       cjkFont
       withAutochords
+      alphatab
       btcWeights
       beatCheckpoint
       ;

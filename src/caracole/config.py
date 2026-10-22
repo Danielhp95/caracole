@@ -143,6 +143,9 @@ class Config:
     chordpro_bin: str = "chordpro"
     ytdlp_bin: str = "yt-dlp"
     cjk_font: Path | None = None
+    # alphaTab's three files (nix/alphatab.nix), for caracole serve's Guitar Pro page (web/alphatab.py); None
+    # without them, when Guitar Pro files are downloads alone.
+    alphatab_dir: Path | None = None
     spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     providers: Mapping[str, ProviderPolicy] = field(default_factory=lambda: dict(DEFAULT_PROVIDERS))
     match: MatchPolicy = field(default_factory=MatchPolicy)
@@ -434,6 +437,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
 
     cjk_font_value = _optional_string(data, "cjk_font", "cjk_font") or env.get("CARACOLE_CJK_FONT")
     ytdlp_bin = _optional_string(data, "ytdlp_bin", "ytdlp_bin") or env.get("CARACOLE_YTDLP_BIN") or "yt-dlp"
+    alphatab_value = env.get("CARACOLE_ALPHATAB_DIR")
 
     return Config(
         library_dir=library_dir,
@@ -446,6 +450,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         chordpro_bin=_string(data.get("chordpro_bin", "chordpro"), "chordpro_bin"),
         ytdlp_bin=ytdlp_bin,
         cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,
+        alphatab_dir=paths.resolve(alphatab_value) if alphatab_value else None,
         spotify=spotify,
         providers=providers,
         match=match,

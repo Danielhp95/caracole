@@ -25,9 +25,11 @@ A small server from the standard library (``http.server``), in these parts:
   requests, Fetch now), review_routes.py (the picker), jobs_routes.py (the
   requests page, its Cancel and Try again, /jobs.json, /api/jobs), search_routes.py (the lookup page,
   search as you type, lookups), remove_routes.py, songbook_routes.py,
-  export_routes.py (a sheet's PDF in the version its viewer was left in) and
+  export_routes.py (a sheet's PDF in the version its viewer was left in),
   versions_routes.py (one of Ultimate Guitar's versions of a song's sheet made
-  the one, or kept beside it).
+  the one, or kept beside it) and guitar_routes.py (a song's Guitar Pro file
+  drawn and played in the browser: guitar_page.py, with alphaTab's bundle,
+  alphatab.py).
   pages.py: the pages it writes itself.
 - songbooks.py: the songbook forms, each queued as its ``caracole songbook``
   command (songbook_routes.py). Each songbook's page is one of the pages

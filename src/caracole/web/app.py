@@ -8,8 +8,9 @@ Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, Ca
 /jobs.json, /api/jobs),
 search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
 read), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
-sheet's PDF in the version its viewer was left in, and Make this my version) and versions_routes.py
-(a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick). A new route, or a new
+sheet's PDF in the version its viewer was left in, and Make this my version), versions_routes.py
+(a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick) and guitar_routes.py
+(a song's Guitar Pro file in the browser, and alphaTab's bundle, answered before signing in: ``Route.public``). A new route, or a new
 module of them, changes nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
@@ -126,6 +127,7 @@ class Route:
     page: str = "the library"
     under: bool = False
     script_only: bool = False
+    public: bool = False
 
 
 @cache
@@ -263,10 +265,13 @@ class WebApp:
 
     @staticmethod
     def finish(response: Response) -> Response:
-        """Add the headers every answer has: no framing, no sniffing, no referrer, no cache."""
+        """Add the headers every answer has: no framing, no sniffing, no referrer, no cache; each unless the answer
+        has its own (alphaTab's bundle, kept for good and loaded by any origin: guitar_routes.py)."""
         if not any(name == "Content-Security-Policy" for name, _ in response.headers):
             response.headers.append(("Content-Security-Policy", FRAMES))
-        response.headers.extend(_COMMON_HEADERS)
+        own = {name.lower() for name, _ in response.headers}
+        response.headers.extend((name, value) for name, value in _COMMON_HEADERS
+                                if name.lower() not in own)
         return response
 
     # --- routing -----------------------------------------------------------------------------------
@@ -282,6 +287,9 @@ class WebApp:
             return message_response(400, "Not an address", "That address can't be read.")
         method = request.method
         if self._session is not None and not self._signed_in(request):
+            public = route_for("GET", path) if method in ("GET", "HEAD") else None
+            if public is not None and public.public:
+                return public.answer(self, request)
             if method == "POST" and path == "/login":
                 return self._sign_in(request)
             if path.startswith("/api/"):  # data, whoever asks: no page to sign in on
