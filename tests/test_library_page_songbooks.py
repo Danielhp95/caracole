@@ -155,6 +155,98 @@ def test_each_line_carries_its_songs_id(library):
     assert "line.dataset.id = String(s.id);" in _SCRIPT  # the Select mode finds the lines by it
 
 
+# --- a song's Guitar Pro mark ---------------------------------------------------------------------------
+
+
+def ug_guitar_pick(conn, song, tab_id=555890, *, kind="guitar-pro", url=None) -> int:
+    """A Guitar Pro (or Power Tab) version caracole picked on Ultimate Guitar for the song, for you to download."""
+    from caracole.versions import set_picks, upsert_version
+
+    vid = upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="guitar", kind=kind,
+                         rating=4.2, votes=5, version=2, label=None,
+                         url=url or f"https://tabs.ultimate-guitar.com/tab/{tab_id}", raw={}, now="x")
+    set_picks(conn, song.id, [kind], [vid])
+    return vid
+
+
+def by_title(html: str) -> dict[str, dict]:
+    return {s["title"]: s for s in books_of(html)[0]["set"]}
+
+
+def test_a_song_with_a_guitar_pro_file_or_a_pick_on_ug_carries_its_mark_and_one_with_neither_none(library):
+    from caracole.songs import find_song
+    from helpers.guitar import keep_guitar
+
+    conn, cfg = library
+    creep, soda = find_song(conn, "radiohead/creep"), find_song(conn, "soda-stereo/de-musica-ligera")
+    keep_guitar(conn, cfg, creep, b"FICHIER GUITAR PRO 5", name="guitar-1.gp5")
+    ug_guitar_pick(conn, soda)
+    songs = by_title(page(conn, cfg))
+    # A file caracole keeps: the file, the name it downloads under, and caracole serve's Guitar Pro page of it.
+    assert songs["Creep"]["guitar"] == {
+        "kind": "file", "href": "Radiohead/Creep/guitar-1.gp5", "download": "Radiohead - Creep.gp5",
+        "page": "guitar?file=Radiohead%2FCreep%2Fguitar-1.gp5"}
+    # No file, but a version picked on Ultimate Guitar, to download there: its page, and what it is.
+    assert songs["De Música Ligera"]["guitar"] == {
+        "kind": "ug", "href": "https://tabs.ultimate-guitar.com/tab/555890",
+        "label": "Guitar Pro ver 2 · 4.2★ · 5 votes"}
+    assert songs["Hysteria"]["guitar"] is None
+
+
+def test_a_kept_file_wins_over_a_pick_and_one_the_browser_shows_over_a_power_tab_file(library):
+    from caracole.songs import find_song
+    from helpers.guitar import keep_guitar
+
+    conn, cfg = library
+    creep, soda = find_song(conn, "radiohead/creep"), find_song(conn, "soda-stereo/de-musica-ligera")
+    ug_guitar_pick(conn, creep)  # still to download on UG, but the song has a file already
+    keep_guitar(conn, cfg, creep, b"ptab", name="guitar-1.ptb", tab="1")
+    keep_guitar(conn, cfg, creep, b"FICHIER GUITAR PRO 5", name="guitar-2.gp5", tab="2")
+    keep_guitar(conn, cfg, soda, b"ptab", name="guitar-1.ptb")  # a Power Tab file alone: a download, no page
+    songs = by_title(page(conn, cfg))
+    assert songs["Creep"]["guitar"] == {
+        "kind": "file", "href": "Radiohead/Creep/guitar-2.gp5", "download": "Radiohead - Creep (2).gp5",
+        "page": "guitar?file=Radiohead%2FCreep%2Fguitar-2.gp5"}
+    assert songs["De Música Ligera"]["guitar"] == {
+        "kind": "file", "href": "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/guitar-1.ptb",
+        "download": "Soda Stereo - De Música Ligera.ptb", "page": None}
+
+
+def test_a_file_gone_from_the_folder_is_no_mark_and_a_pick_that_isnt_a_web_page_none(library):
+    from caracole.library import song_dir
+    from caracole.songs import find_song
+    from helpers.guitar import keep_guitar
+
+    conn, cfg = library
+    creep, soda = find_song(conn, "radiohead/creep"), find_song(conn, "soda-stereo/de-musica-ligera")
+    keep_guitar(conn, cfg, creep, b"FICHIER GUITAR PRO 5", name="guitar-1.gp5")
+    (song_dir(cfg.library_dir, creep) / "guitar-1.gp5").unlink()  # deleted on a device: Syncthing took it away
+    ug_guitar_pick(conn, soda, url="javascript:alert(1)")
+    songs = by_title(page(conn, cfg))
+    assert songs["Creep"]["guitar"] is None and songs["De Música Ligera"]["guitar"] is None
+
+
+def test_a_song_not_in_the_library_has_no_guitar_pro_mark(conn, cfg):
+    add_song(conn, "Radiohead", "Creep")
+    make_songbook(songbooks_file(cfg.library_dir), "Gig", ["Radiohead - Creep", "Pixies - Debaser"])
+    assert [s["guitar"] for s in books_of(page(conn, cfg))[0]["set"]] == [None, None]
+
+
+def test_a_guitar_pro_file_changes_nothing_of_the_songbooks_files(library):
+    # The mark is the tab's alone: the songbook's PDF, ChordPro file and phone page are made from its sheets.
+    from caracole.songs import find_song
+    from helpers.guitar import keep_guitar
+
+    conn, cfg = library
+    folder = cfg.library_dir / "_songbooks" / "Campfire"
+    before = {p.name: p.read_bytes() for p in folder.iterdir()}
+    keep_guitar(conn, cfg, find_song(conn, "radiohead/creep"), b"FICHIER GUITAR PRO 5", name="guitar-1.gp5")
+    ug_guitar_pick(conn, find_song(conn, "soda-stereo/de-musica-ligera"))
+    stats = render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
+    assert (stats.rendered, stats.skipped) == (0, 1)
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == before
+
+
 # --- the Select mode, in a real browser ---------------------------------------------------------------
 
 

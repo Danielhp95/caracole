@@ -133,7 +133,8 @@ Rules a change there keeps (the Invariants below are the others):
   says Removed, the song that has the id now is new to the page, and select.js and songbooks.js let it go
   (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity alone). The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
   data's `songbooks` (songbook_section.py: each songbook's set list, where it plays each song as
-  `songbook.plays_in` says it, and the setting's menus' names, the theory's), which `/jobs.json`
+  `songbook.plays_in` says it, each song's Guitar Pro mark, `guitar`: a file kept, else a pick on UG to download,
+  and the setting's menus' names, the theory's), which `/jobs.json`
   gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the
   songbooks its song is in again, or a removal; a LaCuerda artist's read changes none). library.js lends it `window.caracoleLibrary`
   (`track`, `showLine`, `focusOn`, and `fold`, the search's normalize.fold, for Add a song) and tells it every job's view (`caracole:job`) and the songbooks
@@ -213,7 +214,8 @@ Rules a change there keeps (the Invariants below are the others):
   `changeTrackMute`; guitar.js `mend` patches alphaTab 1.8.4's canvas, which drew a part black when it began in the
   colour the last part ended in and cut the header's first line, so an alphaTab upgrade re-checks it:
   test_web_guitar_browser.py reads the header's pixels); a song's kept Guitar Pro files are
-  `inbox.guitar_files`, which library_page.py (`guitarPage`) and render.py (the viewer's `guitar`) read too. web/__init__.py names its parts, and web/app.py's
+  `inbox.guitar_files`, which library_page.py (`guitarPage`), songbook_section.py (a set list's `guitar`) and render.py
+  (the viewer's `guitar`) read too. web/__init__.py names its parts, and web/app.py's
   docstring the modules of routes and the checks every request passes. app.py is the router and
   what every route shares (`Request`, `Response`, the answers' shapes, `WebApp.db()`,
   `.overrides()`, `.submit()`, `.queued()`); a route lives in its area's `*_routes.py`, as a
