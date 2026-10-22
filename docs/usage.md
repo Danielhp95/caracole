@@ -658,9 +658,9 @@ does: wanted.txt is its one source of songs. After the upgrade:
 
 - The songs Spotify brought stay in the library as ordinary songs, with their
   sheets, files, lyrics, songbooks and decisions in overrides.toml. Nothing
-  is looked for again because of the upgrade. What Spotify last said of a
-  song's album and duration stays the song's, after what its wanted.txt line
-  says, if it has one. To write one for a song, `caracole add` it.
+  is looked for again because of the upgrade. Such a song's album and duration
+  are still what Spotify last said, unless its wanted.txt line says otherwise.
+  To give it a line of its own, `caracole add` it.
 - A `[spotify]` table left in caracole.toml is ignored, and every command
   says so once on stderr until you delete it: `warning: …/caracole.toml:
   delete its [spotify] table: caracole no longer reads Spotify, …`. Its client
