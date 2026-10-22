@@ -464,3 +464,101 @@ def test_a_partial_match_in_pinyin_is_no_strong_hit(banma):
     (hit,) = li.find(banma, "斑马", artists=10, songs=10).songs
     assert hit.score <= 100 * li.PINYIN_PARTIAL_SCALE + 0.1
     assert li.find(banma, "宋冬野 斑马斑马").songs[0].score == 100
+
+
+# --- letters inside words, and a word of a name inside a longer query ---------------------------
+
+
+@pytest.fixture
+def mana(conn):
+    """Names and titles that hold "mana" inside a word, and two whose word it starts."""
+    li.store_artists(conn, "tabs/d/index0.html", [LCArtist("david_chumana", "David Chumaña", 7),
+                                                  LCArtist("cuarteto_almanaque", "Cuarteto Almanaque", 6),
+                                                  LCArtist("alimana", "Alimaña", 2),
+                                                  LCArtist("bragas_de_la_flaca", "Las Bragas de la Flaca", 1),
+                                                  LCArtist("joaquin_sabina", "Joaquín Sabina", 241),
+                                                  LCArtist("enrique_bunbury", "Enrique Bunbury", 264),
+                                                  LCArtist("lady_pank", "Lady Pank", 3)])
+    li.store_artist_page(conn, "estopa", artist_page(
+        "Estopa", "estopa", ("esta_manana", "Esta mañana", "R-1"), ("fin_de_semana", "Fín de semana", "R-1"),
+        ("manana_clara", "Mañana Clara", "R-1"), ("mananitas", "Mañanitas", "R-1")))
+    return conn
+
+
+def test_letters_inside_a_word_never_score_a_strong_hit(mana):
+    from caracole.search import STRONG
+
+    found = li.find(mana, "maná", artists=10, songs=10)
+    assert {h.artist for h in found.artists} >= {"David Chumaña", "Alimaña"}
+    assert all(h.score < STRONG for h in (*found.artists, *found.songs)), found
+    # Whole words of a name stay as they were: a part of it, at 90, which a search tells from a whole name.
+    (bragas,) = li.find(mana, "flaca").artists
+    assert (bragas.artist, bragas.score, bragas.part) == ("Las Bragas de la Flaca", 90.0, True)
+    sabina = li.find(mana, "sabina").artists[0]
+    assert (sabina.artist, sabina.score, sabina.part) == ("Joaquín Sabina", 90.0, True)
+    # A name typed so far, its words whole but the last, is the name it starts.
+    typed = li.find(mana, "joaquin sab").artists[0]
+    assert (typed.artist, typed.score, typed.part) == ("Joaquín Sabina", 90.0, False)
+
+
+def test_a_word_of_an_artists_name_at_either_end_of_a_longer_query_finds_the_artist(mana):
+    # A well-known artist (Enrique Bunbury's 264 songs) by a word few names hold.
+    for query in ("bunbury lady blue", "lady blue bunbury"):
+        found = li.find(mana, query)
+        assert [(h.artist, h.score, h.via) for h in found.artists] == [("Enrique Bunbury", li.WORD_NAMED, "both")]
+    # Never a word in the middle of the query, nor letters of one.
+    for query in ("lady bunbury blue", "bunburys lady blue"):
+        assert "Enrique Bunbury" not in {h.artist for h in li.find(mana, query).artists}, query
+    # Any other artist only when the rest is a title an index knows of theirs: Lady Pank's 3 songs.
+    assert li.find(mana, "lady zawsze tam").artists == ()
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import upsert_rows
+
+    upsert_rows(mana, [(9001, "lady-pank", "zawsze-tam", "chords", "lady-pank/zawsze-tam-chords-9001")], "1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    assert [(h.artist, h.via) for h in li.find(mana, "lady zawsze tam").artists] == [("Lady Pank", "both")]
+
+
+def test_a_word_of_a_name_is_no_artist_beside_one_the_query_names_whole_nor_when_titles_hold_it(conn):
+    # "amaral sin ti no soy nada": Amaral's whole name; the rest is their title, whatever names hold "nada".
+    li.store_artists(conn, "tabs/a/index0.html", [
+        LCArtist("amaral", "Amaral", 119), LCArtist("abuelos_de_la_nada", "Abuelos de la Nada", 135),
+        LCArtist("corazon_serrano", "Corazón Serrano", 53), LCArtist("un_corazon", "Un Corazón", 64),
+        LCArtist("alma_corazon_y_vida", "Alma Corazón y vida", 8)])
+    assert [h.artist for h in li.find(conn, "amaral sin ti no soy nada").artists] == ["Amaral"]
+    # "corazon espinado": a word three names hold names none of them so, well known or not; each keeps what the
+    # query scores against its name otherwise (Corazón Serrano's 71, a weak hit, as before).
+    found = li.find(conn, "corazon espinado").artists
+    assert [(h.artist, h.score, h.via) for h in found] == [("Corazón Serrano", 71.0, "artist")]
+
+
+def test_a_word_that_names_many_artists_names_none_of_them_so(conn):
+    li.store_artists(conn, "tabs/a/index0.html", [LCArtist(f"amor_{n}", f"Amor {w}", 5) for n, w in enumerate(
+        "Prohibido Eterno Salvaje Propio Ciego Gitano Bandido Moreno Ausente Lejano Dormido Perdido".split())])
+    assert li.find(conn, "amor de mis amores").artists == ()
+
+
+# --- artist pages the HTTP cache holds -------------------------------------------------------------
+
+
+def test_an_artist_page_in_the_cache_is_put_in_the_index_with_no_request(conn, tmp_path):
+    site = LaCuerdaSite()
+    site.pages[f"{BASE}/soda_stereo/"] = (200, fixture("artist.html"), {})
+    site.pages[f"{BASE}/sabina/"] = (200, "aqui llega:../tabs/s/sabina/index.html", {})
+    warm = site.client(tmp_path / "cache")
+    for url in (f"{BASE}/soda_stereo/", f"{BASE}/sabina/"):
+        warm.get(url, accept=(200, 404))
+    site.status = 500  # nothing may be asked now
+    cold = site.client(tmp_path / "cache")
+    site.requests.clear()
+
+    assert li.backfill_cached(conn, cold) == 1
+    assert site.requests == [] and len(songs_of(conn, "soda_stereo")) == 14
+    assert songs_of(conn, "sabina") == []
+    assert li.backfill_cached(conn, cold) == 0  # read already: nothing more to do
+    # The nightly pass does it whatever its listings are due for.
+    conn.execute("DELETE FROM lacuerda_index")
+    kv_set(conn, li.COMPLETE_KEY, "2026-10-19T03:00:00Z")
+    li.index_pass(conn, cold, NOW)
+    assert site.requests == [] and len(songs_of(conn, "soda_stereo")) == 14

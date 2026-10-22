@@ -5,8 +5,10 @@ a page (lacuerda.py), are read into ``lacuerda_index`` (db.py): a row per artist
 name LaCuerda writes, the slug of their page, its identity key and the songs the listing
 counts. The songs of an artist come from their page, whenever caracole has one, with no
 request of their own: each page lacuerda_fetch.py reads (``store_artist_page``), and, as a
-listing page is read, the cached pages of its artists. A song's row has its title and key,
-its versions, its best Letra y Acordes version and its place in the artist's popularity.
+listing page is read, the cached pages of its artists, and, each night, every artist page
+the HTTP cache holds that the index hasn't read (``backfill_cached``). A song's row has its
+title and key, its versions, its best Letra y Acordes version and its place in the artist's
+popularity.
 
 **The refresh** (``refresh``) reads the listings when they never were all read, and again
 after 30 days, as site_index.py reads sitemaps: each letter's first page, which names the
@@ -32,18 +34,27 @@ an artist, a title or both: each hit says which reading scored it (``via``). The
 apart from the songs, and a song only its artist's name matched is in its artist's row
 (``LaCuerdaHit.top``), never a hit of its own. As most artists' songs aren't in the index, an
 artist whose whole name is words of the query among others ("estopa como camaron") is a
-possible match: ``NAMED`` (80), by "both", below a strong hit. While a letter's listing isn't
+possible match: ``NAMED`` (80), by "both", below a strong hit; and so, below that, is one with
+a word of their name at the query's start or end, the rest a title ("bunbury lady blue":
+Enrique Bunbury, ``WORD_NAMED``), when an index knows that title of theirs, or they are well
+known and few names hold the word, and no artist's whole name is in the query. Letters inside a word of a name or
+a title score below a strong hit (``INSIDE_SCALE``: "maná" is no David Chumaña, nor "Esta
+mañana"): only whole words, or a name's start as typed so far ("joaquin sab"), make one. While a
+letter's listing isn't
 read whole, no artist found is no sign that LaCuerda lacks them: ``unread_letter`` says under
 which letter a name would be, for a search to offer reading the page of that name.
 """
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 import sqlite3
 from collections.abc import Callable, Iterable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from rapidfuzz import fuzz
@@ -56,8 +67,10 @@ from caracole.http import (
     ProviderBlocked,
     ProviderError,
     ProviderUnavailable,
+    cached_answer,
 )
 from caracole.lacuerda import (
+    BASE_URL,
     LETTERS,
     LaCuerdaParseError,
     LCArtist,
@@ -85,6 +98,7 @@ from caracole.normalize import (
     name_forms,
     name_words,
     romanize,
+    slug_key,
 )
 
 log = logging.getLogger(__name__)
@@ -98,11 +112,15 @@ _ACCEPT = (200, 404)
 MIN_SCORE = 70  # below this a hit is noise
 PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
 NAMED = 80.0  # an artist's whole name among the query's other words: a possible match, below a strong hit
+WORD_NAMED = 75.0  # a word of an artist's name at the query's start or end, the rest a title: below NAMED
+INSIDE_SCALE = 0.85  # letters inside a word of a name ("mana" of Chumaña): at most 85, never a strong hit
 READINGS = ("title", "both", "artist")  # how a query may name a song; a tie goes to the first
 ARTIST_ROWS, SONG_ROWS, TOP_SONGS = 3, 5, 3  # what ``find`` gives by default
 WORD_ARTISTS, WORD_SHARE = 10, 500  # a word in more names than this, and in more than 1 in 500 listed, is common
 ROWS_READ = 2000  # rows the prefilter reads, at most: those that hold more of the query's words first
 MAX_PATTERNS, MAX_EXTRA = 3, 2
+CLOSE_LETTERS = 4  # a word of a name shorter than this, at the query's start or end, names no one (WORD_NAMED)
+WORD_FEW, WORD_KNOWN = 2, 50  # a word in this many names at most names a well-known artist (this many songs) so
 
 _COLUMNS = ("path", "artist_slug", "artist", "artist_key", "title", "title_key", "songs", "versions",
             "acordes", "popular", "page")
@@ -175,6 +193,36 @@ def store_artist_page(conn: sqlite3.Connection, slug: str, html: str) -> bool:
         return False
     store_songs(conn, slug, parse_artist_name(html), songs, parse_popularity(html))
     return True
+
+
+_ARTIST_PAGE = re.compile(re.escape(BASE_URL) + r"/([a-z0-9_]+)/")
+
+
+def backfill_cached(conn: sqlite3.Connection, client: Client) -> int:
+    """The songs of every artist page the HTTP cache holds that the index hasn't read (no song of theirs comes from
+    their page), stored from the cache alone (``store_artist_page``): no request, whatever the budget, a block or a
+    cooldown. Returns how many pages it stored. A cache it can't read is none."""
+    root = getattr(client, "cache_root", None)  # a PoliteClient's; a test's fake client may have none
+    if root is None:
+        return 0
+    read = {r[0] for r in conn.execute("SELECT DISTINCT page FROM lacuerda_index WHERE title != ''")}
+    stored = 0
+    try:
+        metas = sorted(Path(root).glob("*/*.json"))
+    except OSError:
+        return 0
+    for meta in metas:
+        try:
+            said = json.loads(meta.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        found = _ARTIST_PAGE.fullmatch(str(said.get("url", ""))) if isinstance(said, dict) else None
+        if found is None or said.get("status") != 200 or f"{found.group(1)}/" in read:
+            continue
+        cached = cached_answer(Path(root), found.group(0))
+        if cached is not None and store_artist_page(conn, found.group(1), cached.text):
+            stored += 1
+    return stored
 
 
 def artist_slugs(conn: sqlite3.Connection, name: str) -> list[str]:
@@ -279,15 +327,18 @@ def _replace(conn: sqlite3.Connection, page: str, rows: Sequence[Sequence[Any]])
 
 @dataclass
 class IndexStats:
-    """What one ``index_pass`` did: the listing pages read into the index (one found unchanged isn't)."""
+    """What one ``index_pass`` did: the listing pages read into the index (one found unchanged isn't), and the
+    artist pages it took from the HTTP cache (``backfill_cached``)."""
 
     pages: int = 0
+    cached: int = 0
     errors: int = 0
     budget_exhausted: bool = False
 
 
 def index_pass(conn: sqlite3.Connection, client: Client, now: datetime) -> IndexStats:
-    """Read LaCuerda's listings into the index when due, as the nightly lacuerda step does.
+    """Read LaCuerda's listings into the index when due, as the nightly lacuerda step does, after the artist pages
+    the HTTP cache holds and the index hasn't read (``backfill_cached``, no request).
 
     ``ProviderBlocked`` propagates. A spent budget ends the pass (``budget_exhausted``), and
     so does a client that gives up on LaCuerda for the run; any other provider error counts in
@@ -298,6 +349,7 @@ def index_pass(conn: sqlite3.Connection, client: Client, now: datetime) -> Index
     def read() -> None:
         stats.pages += 1
 
+    stats.cached = backfill_cached(conn, client)
     try:
         refresh(conn, client, now, on_read=read)
     except ProviderBlocked:
@@ -488,9 +540,12 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
     Calamaro before Andresito's, ``LaCuerdaHit.part``), unless more than ``WORD_ARTISTS`` names, and more
     than a ``WORD_SHARE``th of the artists listed, do (as Ultimate Guitar's index counts a word in more than
     300 of its 148,705 names common): "band" is no word of Banda el Limón's, and their 184 songs still come
-    before the Quartet de Baño Band's 44. Then to the one with more songs; and to the song with a Letra y Acordes
-    version, then with more versions. A query of fewer than three letters (two Chinese characters) finds
-    nothing. Reads only the table: nothing is asked of LaCuerda.
+    before the Quartet de Baño Band's 44, a common word's whole words scoring as letters inside a word do. A word
+    of a name at the query's start or end names that artist (``WORD_NAMED``) only where ``_word_names`` says so,
+    and never beside an artist the query names whole. Then to the one with more songs; and to the song with a
+    Letra y Acordes version, then with more versions. A query of fewer than three letters (two Chinese characters)
+    finds nothing. Reads only the tables (Ultimate Guitar's index too, for a word of a name): nothing is asked of
+    LaCuerda.
     """
     queries = _queries(query)
     patterns, extra = _patterns(query)
@@ -498,13 +553,18 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
         return LaCuerdaFound()
     named: dict[str, tuple[float, str, _Row]] = {}
     by_name: dict[str, tuple[float, _Row]] = {}  # artists only their songs' rows matched
+    by_word: dict[tuple[tuple[str, ...], tuple[str, ...]], set[str]] = {}  # named by a word (WORD_NAMED): word, rest
+    otherwise: dict[str, float] = {}  # what those score but for the word
     found: list[tuple[float, str, _Row]] = []
     for row in _rows_like(conn, patterns, extra):
         names = row.artist_key.replace("-", " ")
         if not row.title:
-            score, via = max((q.artist(names) for q in queries), key=lambda r: r[0])
+            score, via, word = max((q.artist(names) for q in queries), key=lambda r: r[0])
             if score >= MIN_SCORE:
                 named[row.artist_slug] = (score, via, row)
+                if word is not None:
+                    by_word.setdefault(word[:2], set()).add(row.artist_slug)
+                    otherwise[row.artist_slug] = word[2]
             continue
         score, via = _reading(q.readings(names, row.title_key.replace("-", " ")) for q in queries)
         if score < MIN_SCORE:
@@ -514,6 +574,16 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
                 by_name[row.artist_slug] = (score, row)
         else:
             found.append((score, via, row))
+    # Beside an artist the query names whole, its other words are a title: a word of them names no one.
+    whole = any(via == "both" and score >= NAMED for score, via, _ in named.values())
+    for (_, rest), slugs in by_word.items():
+        for slug in slugs:
+            row = named[slug][2]
+            if whole or not _word_names(conn, row, rest, len(slugs) <= WORD_FEW):
+                if otherwise[slug] >= MIN_SCORE:  # what the query scores against their name but for the word
+                    named[slug] = (otherwise[slug], "artist", row)
+                else:
+                    named.pop(slug)
     for slug, (score, row) in by_name.items():
         if slug not in named or named[slug][0] < score:
             own = conn.execute(f"SELECT {', '.join(_COLUMNS)} FROM lacuerda_index WHERE path = ?",
@@ -522,7 +592,13 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
     parts = {slug for slug, (_, _, row) in named.items()
              if any(q.part_of(row.artist_key.replace("-", " ")) for q in queries)}
     if len(parts) > WORD_ARTISTS and len(parts) * WORD_SHARE > _listed_artists(conn):
-        parts = set()  # a common word ("band", "los"): no name holds it as its own more than another
+        # A common word ("band", "los"): no name holds it as its own more than another, so its whole words count
+        # as letters inside one do ("band" of Banda el Limón), and the artists' songs alone order them.
+        for slug in parts:
+            score, via, row = named[slug]
+            if score <= 100 * PARTIAL_SCALE:
+                named[slug] = (score * INSIDE_SCALE / PARTIAL_SCALE, via, row)
+        parts = set()
     ranked = sorted(named.values(), key=lambda s: (-s[0], s[2].artist_slug not in parts, -_artist_songs(conn, s[2]),
                                                    s[2].artist.casefold(), s[2].artist_slug))
     found.sort(key=lambda s: (-s[0], s[2].acordes == 0, -len(s[2].versions), s[2].artist.casefold(),
@@ -688,24 +764,44 @@ class _Query:
         words, name = self.text.split(), artist.split()
         return len(words) < len(name) and all(w in name for w in words) and self.holds(artist)
 
-    def artist(self, artist: str) -> tuple[float, str]:
-        """How well the query names an artist, and the reading: 100 for the whole name, at most 90 for a
-        part of it ("artist"); ``NAMED`` for the whole name, as words of its own, among other words of the
-        query, which may be a title the index doesn't hold ("both")."""
+    def artist(self, artist: str) -> tuple[float, str, tuple[tuple[str, ...], tuple[str, ...], float] | None]:
+        """How well the query names an artist, the reading, and, when it names them only by a word of their name,
+        that word (a run of the query's words), the rest of the query and the score the name has otherwise (for
+        ``find`` to fall back on): 100 for the whole name, at most 90 for a
+        part of it in whole words or its start as typed so far, at most 85 for letters inside a word (``_scale``)
+        ("artist"); ``NAMED`` for the whole name, as words of its own, among other words of the query, which may be
+        a title the index doesn't hold ("both"); ``WORD_NAMED`` for words of the name, fewer than all, as the
+        query's first or last words among others ("both": "bunbury lady blue", Enrique Bunbury), which ``find``
+        keeps only for an artist that word may name (``_word_names``)."""
         q, qc, a = self.text, self.compact, artist.replace(" ", "")
+        words, name = q.split(), artist.split()
         best = 0.0
         if self.holds(artist):
-            scale = PINYIN_PARTIAL_SCALE if self.runs else PARTIAL_SCALE
             best = max(fuzz.ratio(q, artist), fuzz.ratio(qc, a))
-            if len(q) < len(artist):
-                best = max(best, scale * fuzz.partial_ratio(q, artist))
-            if len(qc) < len(a):
-                best = max(best, scale * fuzz.partial_ratio(qc, a))
-        words, name = q.split(), artist.split()
+            for needle, hay, together in ((q, artist, False), (qc, a, True)):
+                if len(needle) < len(hay):
+                    part = fuzz.partial_ratio_alignment(needle, hay)
+                    best = max(best, self._scale(part, name, together, (name,)) * part.score)
         if best < NAMED and 0 < len(name) < len(words) and any(
                 words[i:i + len(name)] == name for i in range(len(words) - len(name) + 1)):
-            return NAMED, "both"
-        return best, "artist"
+            return NAMED, "both", None
+        if best < WORD_NAMED and not self.runs:
+            word = _word_of(words, name)
+            if word is not None:
+                return WORD_NAMED, "both", (*word, best)
+        return best, "artist", None
+
+    def _scale(self, part: Any, words: Sequence[str], together: bool, starts: Sequence[Sequence[str]]) -> float:
+        """What a partial match counts for: ``PARTIAL_SCALE`` when it is whole words of ``words`` (spaced, or
+        ``together``), or the query is the start of one of ``starts`` as typed so far (``_typed_start``);
+        ``INSIDE_SCALE`` for letters inside a word; a Chinese query's pinyin, ``PINYIN_PARTIAL_SCALE``."""
+        if self.runs:
+            return PINYIN_PARTIAL_SCALE
+        begins, ends = _bounds(words, together)
+        if (part.dest_start in begins and part.dest_end in ends) or any(
+                _typed_start(self.text.split(), w) for w in starts):
+            return PARTIAL_SCALE
+        return INSIDE_SCALE
 
     def readings(self, artist: str, title: str) -> tuple[float, float, float]:
         """How well the query names a song, by reading, in ``READINGS``' order: as its title, as both its
@@ -716,7 +812,7 @@ class _Query:
         q, qc = self.text, self.compact
         a, t = artist.replace(" ", ""), title.replace(" ", "")
         full = f"{artist} {title}"
-        scale = PINYIN_PARTIAL_SCALE if self.runs else PARTIAL_SCALE
+        words = full.split()
         by = {"title": max(fuzz.ratio(q, title), fuzz.ratio(qc, t)),
               "both": max(fuzz.token_sort_ratio(q, full), fuzz.ratio(qc, a + t)),
               "artist": max(fuzz.ratio(q, artist), fuzz.ratio(qc, a))}
@@ -726,8 +822,55 @@ class _Query:
                 part = fuzz.partial_ratio_alignment(needle, names)
                 where = ("title" if part.dest_start >= edge else
                          "artist" if part.dest_end <= edge + gap else "both")
+                scale = self._scale(part, words, gap == 0, (title.split(), artist.split(), words))
                 by[where] = max(by[where], scale * part.score)
         return by["title"], by["both"], by["artist"]
+
+
+def _bounds(words: Sequence[str], together: bool) -> tuple[set[int], set[int]]:
+    """Where each word starts, and where each ends, in ``words`` written spaced or ``together``."""
+    begins, ends, at = set(), set(), 0
+    for word in words:
+        begins.add(at)
+        at += len(word)
+        ends.add(at)
+        at += 0 if together else 1
+    return begins, ends
+
+
+def _typed_start(query: Sequence[str], name: Sequence[str]) -> bool:
+    """Whether the query is the start of a name as typed so far: two words or more, each but the last a word of
+    the name's start, the last the start of the next ("joaquin sab"). One word alone is letters of a word."""
+    k = len(query)
+    return 2 <= k <= len(name) and list(query[:-1]) == list(name[:k - 1]) and name[k - 1].startswith(query[-1])
+
+
+def _word_of(words: Sequence[str], name: Sequence[str]) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    """The longest run of the query's first or last words, fewer than all, that is a run of a name's words, fewer
+    than all, with a word of ``CLOSE_LETTERS`` letters at least, and the query's other words: the query may name
+    the artist by a word of theirs, the rest being a title ("bunbury lady blue": "bunbury" of Enrique Bunbury, and
+    "lady blue"). None for none."""
+    for n in range(min(len(words), len(name)) - 1, 0, -1):
+        for run, rest in ((words[:n], words[n:]), (words[-n:], words[:-n])):
+            if any(len(w) >= CLOSE_LETTERS for w in run) and any(
+                    list(name[i:i + n]) == list(run) for i in range(len(name) - n + 1)):
+                return tuple(run), tuple(rest)
+    return None
+
+
+def _word_names(conn: sqlite3.Connection, row: _Row, rest: Sequence[str], few: bool) -> bool:
+    """Whether a word of an artist's name at the query's start or end names them (``WORD_NAMED``): when the rest of
+    the query is a title an index knows of theirs exactly (LaCuerda's, or Ultimate Guitar's under their key: "lady
+    blue" of Enrique Bunbury's), or when they are well known (``WORD_KNOWN`` songs) and the word is in ``few``
+    names ("bunbury"). A word of titles ("vida", "nada", "corazon") is in more names than that, or in an unknown
+    artist's: none of them is named so."""
+    text = " ".join(rest)
+    if text and (conn.execute("SELECT 1 FROM lacuerda_index WHERE artist_slug = ? AND title_key = ? LIMIT 1",
+                              (row.artist_slug, title_key(text))).fetchone() or
+                 conn.execute("SELECT 1 FROM ug_index WHERE artist_key = ? AND song_key = ? LIMIT 1",
+                              (row.artist_key, slug_key(text))).fetchone()):
+        return True
+    return few and _artist_songs(conn, row) >= WORD_KNOWN
 
 
 def _reading(scores: Iterable[tuple[float, float, float]]) -> tuple[float, str]:

@@ -1981,6 +1981,70 @@ def test_the_search_offers_no_page_lacuerdas_own_answer_already_names(app, conn)
     assert as_json(get(app, "/api/search?q=bunbury"))["lacuerda_unlisted"] == {"name": "Enrique Bunbury", "letter": "E"}
 
 
+def test_ask_lacuerda_offers_the_artist_part_of_a_query_never_a_name_ultimate_guitar_only_holds_its_words_of(app,
+                                                                                                          conn):
+    from caracole.ug.index import mark_built, upsert_rows
+
+    lacuerda_index(conn)  # E and J read whole
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3401, "till-lindemann", "entre-dos-tierras", "chords", "till-lindemann/entre-dos-tierras-3401"),
+                       (3402, "ana-gabriel", "rayando-el-sol", "chords", "ana-gabriel/rayando-el-sol-chords-3402"),
+                       (3403, "silvio-martinez-rodriguez", "la-era", "chords",
+                        "silvio-martinez-rodriguez/la-era-chords-3403"),
+                       (3404, "vic-ruggiero", "sabina", "chords", "vic-ruggiero/sabina-chords-3404")], "1", when)
+    mark_built(conn, when)
+    conn.commit()
+
+    def unlisted(q):
+        return as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_unlisted"]
+
+    # A title an index knows ends the query: the rest is the artist, as typed.
+    assert unlisted("héroes del silencio entre dos tierras") == {"name": "héroes del silencio", "letter": "H"}
+    assert unlisted("mana rayando el sol") == {"name": "mana", "letter": "M"}
+    # A title of one word is no proof: "sabina" is a title, and "joaquin sabina" a name all the same.
+    from caracole.db import kv_set_json
+    from caracole import lacuerda_index as li
+
+    kv_set_json(conn, li.PAGES_KEY, {"tabs/e/index0.html": {"pages": ["index0.html"]}})  # J no longer read whole
+    conn.commit()
+    assert unlisted("joaquin sabina") is None  # LaCuerda lists them: Joaquín Sabina's J read in part
+    li.store_artists(conn, "tabs/j/index0.html", [])
+    conn.commit()
+    assert unlisted("joaquín sabina") == {"name": "joaquín sabina", "letter": "J"}  # an answer not kept yet
+    # An artist on Ultimate Guitar whose name puts another word between the query's is someone else.
+    assert unlisted("silvio rodriguez") == {"name": "silvio rodriguez", "letter": "S"}
+
+
+def test_ask_lacuerda_never_offers_an_artist_lacuerda_lists_under_another_name(app, conn):
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCArtist
+    from caracole.ug.index import mark_built, upsert_rows
+
+    lacuerda_index(conn)  # E and J read whole; F and M in part
+    li.store_artists(conn, "tabs/f/index0.html", [LCArtist("fito__fitipaldis", "Fito & Fitipaldis", 77)])
+    li.store_artists(conn, "tabs/c/index0.html", [LCArtist("chao", "Chao", 1)])
+    li.store_artists(conn, "tabs/e/index0.html", [LCArtist("estopa", "Estopa", 159),
+                                                  LCArtist("enanitos", "Enanitos Verdes", 151)])
+    when = datetime(2026, 10, 19, tzinfo=UTC)
+    upsert_rows(conn, [(3501, "los-enanitos-verdes", "lamento-boliviano", "chords",
+                        "los-enanitos-verdes/lamento-boliviano-chords-3501"),
+                       (3502, "fito-fitipaldis", "por-la-boca-vive-el-pez", "chords",
+                        "fito-fitipaldis/por-la-boca-vive-el-pez-chords-3502"),
+                       (3503, "manu-chao", "me-gustas-tu", "chords", "manu-chao/me-gustas-tu-chords-3503")], "1", when)
+    mark_built(conn, when)
+    conn.commit()
+
+    def unlisted(q):
+        return as_json(get(app, "/api/search?q=" + quote(q)))["lacuerda_unlisted"]
+
+    # Ultimate Guitar's "Los Enanitos Verdes" and "Fito Fitipaldis" are LaCuerda's Enanitos Verdes and Fito &
+    # Fitipaldis, whom its listings name: no page to read under L, nor under F.
+    assert unlisted("enanitos verdes lamento boliviano") is None
+    assert unlisted("fito & fitipaldis por la boca vive el pez") is None
+    # LaCuerda's Chao is no Manu Chao: Ultimate Guitar's artist is still the name to read.
+    assert unlisted("manu chao me gustas tu") == {"name": "Manu Chao", "letter": "M"}
+
+
 def test_lacuerda_leads_with_the_artist_the_query_names_when_ultimate_guitar_has_nothing_strong(app, conn):
     # "andres calamaro": Ultimate Guitar's index has Javier Calamaro alone, LaCuerda's has Andrés Calamaro.
     from caracole import lacuerda_index as li
@@ -2639,3 +2703,5 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     assert route_for("POST", "/songbook/make").page == "the library"
     assert route_for("POST", "/lookup").page == "the page" and route_for("GET", "/jobs.json").script_only
     assert route_for("POST", "/export").page == "the export page"
+
+

@@ -915,7 +915,8 @@ configuration it would take, and why it waits.
 7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet,
    then read LaCuerda's listings of every artist into a local index, for
    searches, with what the sheets left of its budget (once the library has a
-   song: an empty one asks no site).
+   song: an empty one asks no site). The artist pages caracole's HTTP cache
+   holds go into that index first, with no request.
 8. **scan**: link purchases in Music/, and file Guitar Pro downloads.
 9. **gtptabs**: download a Guitar Pro file from gtptabs.com for each song that
    has none. It comes after the scan, so a file you dropped into `_inbox/` is
@@ -2533,7 +2534,12 @@ holds every artist of LaCuerda's listings the nightly run has read, and the
 songs of the artists whose page caracole has read. Its names are compared as
 Ultimate Guitar's are, also with their words run together: "rockstar" finds
 Los Rock Star, and "banma" a song LaCuerda writes 斑马斑马, whose pinyin is
-`ban-ma-ban-ma`. An artist the query names
+`ban-ma-ban-ma`. Only whole words, or a name's start as typed so far ("joaquin
+sab"), match well: letters inside a word score below a strong hit (`maná` finds
+David Chumaña and Esta mañana weakly), and a word in many artists' names ranks
+them by their songs alone. A word of an artist's name at the query's start or
+end, the rest a title, names them too, below an artist whose whole name is there
+(`bunbury lady blue`: Enrique Bunbury). An artist the query names
 is a line of their own, with the songs LaCuerda's listing counts, then their
 most popular songs with chords the index holds; or, when caracole has never
 read their page, the line that reads it, one request:
@@ -2559,13 +2565,18 @@ index can't tell whether LaCuerda has an artist it doesn't list: for a query
 it has no artist by, under such a letter, the group ends with the line that
 reads the page of that name now. The name is the artist the query names on
 Ultimate Guitar, by their whole name or by part of it (`Enrique Bunbury` for
-"bunbury"), else an artist whose whole name starts or ends the query and whose
-songs Ultimate Guitar's index reads it as (`Estopa` for "estopa como camaron",
-while caracole hasn't read their page; never `Fito` for "fito paez"), else the
-query. A query LaCuerda's own index answers well gets no such line: a song by
-its title ("como camaron" is Estopa's Como Camarón), or by an artist it lists or
-holds the songs of ("estopa como camaron", once their page is read), and
-neither does a query Ultimate Guitar's index reads as a title ("creep"):
+"bunbury"; never a name that puts another word between the query's, `Silvio
+Martinez Rodriguez` for "silvio rodriguez"), else an artist whose whole name
+starts or ends the query and whose songs Ultimate Guitar's index reads it as
+(`Estopa` for "estopa como camaron", while caracole hasn't read their page;
+never `Fito` for "fito paez"), else the query less a title of two words or more
+that Ultimate Guitar's index or LaCuerda's knows at its end or start (`mana` for
+"mana rayando el sol"), else the query. A query LaCuerda's own index answers well
+gets no such line: a song by its title ("como camaron" is Estopa's Como Camarón),
+or by an artist it lists or holds the songs of ("estopa como camaron", once their
+page is read), and neither does a name its listings give under another spelling
+(Ultimate Guitar's `Los Enanitos Verdes` are its Enanitos Verdes) nor a query
+Ultimate Guitar's index reads as a title ("creep"):
 
     $ caracole search estopa
     …
@@ -2688,10 +2699,16 @@ is no progression exits with status 2.
   LaCuerda has no artist page for estopa.`, or, for a cooldown, a block, a
   spent hour's budget or an error, `Not read: …`, with a link to the request's
   output. The name is chosen as `caracole search` chooses it: the artist the
-  query names on Ultimate Guitar, else the one of theirs whose name starts or
-  ends it, else the query; a title there, "creep", or a song LaCuerda's index
-  has, "como camaron", gets no offer. Once a page is read, a search finds their
-  songs at once. When LaCuerda alone has the artist the query names, and
+  query names on Ultimate Guitar (never one whose name puts another word between
+  the query's: Silvio Martinez Rodriguez is no answer for "silvio rodriguez"),
+  else the one of theirs whose name starts or ends it, else the query less a
+  title of two words or more an index knows at its end or start ("mana" for
+  "mana rayando el sol", "héroes del silencio" for "héroes del silencio entre
+  dos tierras"), else the query; a title there, "creep", or a song LaCuerda's
+  index has, "como camaron", gets no offer, and neither does a name LaCuerda's
+  listings already give under another spelling (Ultimate Guitar's Los Enanitos
+  Verdes are its Enanitos Verdes, under E). Once a page is read, a search
+  finds their songs at once. When LaCuerda alone has the artist the query names, and
   Ultimate Guitar's index nothing that matches well ("andres calamaro": only
   Javier Calamaro's songs; "antonio josé", beside Ultimate Guitar's José
   Antonio Méndez, one song, whose name holds those words), or LaCuerda's artist
