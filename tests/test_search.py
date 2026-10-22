@@ -981,6 +981,24 @@ def test_cli_search_by_progression_lists_your_songs_that_play_it_in_any_key(tmp_
     assert result.output == "Your songs with the Andalusian cadence\n  none\n"
 
 
+def test_cli_search_by_progression_finds_a_song_that_plays_it_within_a_section(tmp_path):
+    from caracole.db import kv_set_json
+    from caracole.progressions import KV, sheet_progressions
+
+    conn = seed_progressions(tmp_path)
+    song = add_song(conn, "Fourth Band", "Within")
+    # In C: ii, then the pop progression twice, the second after a ♭VII; and a bridge on the Andalusian cadence.
+    sheet = ("{title: X}\n{comment: Verse}\n[Dm]a [C]b [G]c [Am]d [F]e [Bb]f [C]g [G]h [Am]i [F]j\n"
+             "{comment: Bridge}\n[C]k [Am]l [G]m [F]n [E7]o\n")
+    kv_set_json(conn, f"{KV}{song.id}", sheet_progressions(sheet, "C"))
+    pop = run(tmp_path, "search", "--progression", "the pop progression")
+    assert pop.exit_code == 0, pop.output
+    assert "  Fourth Band - Within · wanted, no sheet yet · Verse · in C major · " in pop.output
+    lines = run(tmp_path, "search", "--progression", "andalusian").output.splitlines()
+    assert lines[0] == "Your songs with the Andalusian cadence" and len(lines) == 2
+    assert lines[1].startswith("  Fourth Band - Within · wanted, no sheet yet · Bridge · in C major · ")
+
+
 def test_cli_search_by_progression_says_when_limit_cuts_the_list(tmp_path):
     seed_progressions(tmp_path)
     result = run(tmp_path, "search", "--progression", "vi IV I V", "--limit", "1")

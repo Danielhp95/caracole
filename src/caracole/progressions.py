@@ -6,20 +6,27 @@ search and ``caracole search --progression``.
 of it in kv ``render:progressions:<song id>``: the key the viewer reads the sheet in
 (``page.viewer_key``, the song's own key first), and each section's progression
 (``viewer.harmony.progressions``): its numerals, one cycle, its repeats, its name from
-``harmony.CATALOGUE``, how it ends, and ``harmony.progression_key``, the same in every key and
-rotation. A song with no sheet, or one whose sheet has no chord caracole can read, has no record.
+``harmony.CATALOGUE``, how it ends, ``harmony.progression_key``, the same in every key and
+rotation, and the named progressions it plays within it (``contains``: each one's name, its name's key
+and its numerals the first time). A song with no sheet, or one whose sheet has no chord caracole can
+read, has no record.
 So the library page reads one kv row a song, never a sheet; a library rendered by an older caracole
 has its records after the next render, which a new viewer (``page.BUILD_FILES``) brings anyway.
 
 **For searching**, a progression is a section's cycle of two chords or more (a section held on one
 chord is none). ``read_progression`` reads what you type: numerals ("vi IV I V", "vi–IV–I–V",
-"bVII" for ♭VII, the chord's quality and extensions ignored, as the key ignores them), or a
+"bVII" for ♭VII, the chord's quality and extensions ignored, as the key ignores them; in a minor key's
+own way, "i VII VI V" is i–♭VII–♭VI–V: ``harmony.read_typed``), or a
 catalogue name or a word of one ("andalusian", "the pop progression", "blues"; words of fewer than
 five letters, "pop" or "the road", are too common to be a name unless "progression" or "cadence" says
-one is meant, "pop progression", and so is "minor" alone). A progression the catalogue names stands for every
+one is meant, "pop progression", and so are "minor" alone and the song's title a name is after,
+"creep", which means the song). Numerals typed are named as a section's are (``harmony.name_of``:
+"III7 VI7 II7 V7" is the ragtime progression; a progression that goes somewhere from its first chord
+alone, so "iii vi IV V" is no royal road). A progression the catalogue names stands for every
 progression of that name: the pop progression is I–V–vi–IV and, read in the relative minor,
 i–♭VI–♭III–♭VII, so a song whose key caracole read as A minor rather than C major is found either
-way. ``songs_with`` gives the songs that play it, with the sections that do.
+way, and so is a song that plays it within a longer section. ``songs_with`` gives the songs that play
+it, with the sections that do.
 """
 
 from __future__ import annotations
@@ -53,6 +60,9 @@ _GENERIC = frozenset({"the", "a", "of", "progression", "cadence", "chords"})
 _SAYS_PROGRESSION = frozenset({"progression", "cadence"})
 _NAME_LETTERS = 5
 _NOT_ALONE = frozenset({"minor", "major"})
+# The words of a name that is a song's title ("the Creep progression"): typed alone, they are the song's, not the
+# progression's, unless a word says a progression is meant ("creep progression").
+_TITLES = frozenset({"creep"})
 
 
 @dataclass(frozen=True)
@@ -73,13 +83,12 @@ def label(key: str) -> str:
 
 
 def catalogue() -> dict[str, str]:
-    """Each progression of ``harmony.CATALOGUE`` by its key: {"I V vi IV": "the pop progression", ...}."""
-    from caracole.viewer.harmony import CATALOGUE, progression_key
+    """Each progression of ``harmony.CATALOGUE`` by its key, in its own key and read in the relative one
+    (``harmony.catalogue_keys``): {"I V vi IV": "the pop progression", "i ♭VI ♭III ♭VII": "the pop
+    progression", ...}, each name's first key its first row's."""
+    from caracole.viewer.harmony import catalogue_keys
 
-    names: dict[str, str] = {}
-    for name, numerals in CATALOGUE:
-        names.setdefault(progression_key(numerals), name)
-    return names
+    return catalogue_keys()
 
 
 def key_words(key: Any) -> str:
@@ -92,8 +101,9 @@ def key_words(key: Any) -> str:
 
 def sheet_progressions(cho: str, key: str | None) -> dict[str, Any] | None:
     """What a ChordPro sheet plays, as ``record`` keeps it: ``{"key": "C major", "sections": [{"section",
-    "numerals", "repeats", "name", "ending", "key"}]}``, each section's ``section`` its heading (None for
-    none), in the key its viewer reads it in (``key``, the song's, else the sheet's own, else estimated).
+    "numerals", "repeats", "name", "ending", "key", "contains": [{"name", "key", "numerals"}]}]}``, each
+    section's ``section`` its heading (None for none), in the key its viewer reads it in (``key``, the
+    song's, else the sheet's own, else estimated).
     The chords of a chord legend's line (its fingerings) are no chords played; one caracole can't read
     (N.C.) is left out. None for a sheet with no chord it can read."""
     from caracole.viewer.harmony import progression_key, progressions
@@ -120,7 +130,8 @@ def sheet_progressions(cho: str, key: str | None) -> dict[str, Any] | None:
         return None
     return {"key": key_words(shapes), "sections": [
         {"section": name or None, "numerals": list(p.numerals), "repeats": p.repeats, "name": p.name,
-         "ending": p.ending, "key": progression_key(p.numerals)}
+         "ending": p.ending, "key": progression_key(p.numerals),
+         "contains": [{"name": c.name, "key": c.key, "numerals": list(c.numerals)} for c in p.contains]}
         for name, p in found
     ]}
 
@@ -182,15 +193,34 @@ def any_recorded(conn: sqlite3.Connection) -> bool:
     return conn.execute("SELECT 1 FROM kv WHERE substr(key, 1, ?) = ? LIMIT 1", (len(KV), KV)).fetchone() is not None
 
 
+def _contained(section: dict[str, Any]) -> list[dict[str, Any]]:
+    """The named progressions a record's section plays within it, those well formed."""
+    contains = section.get("contains")
+    return [c for c in contains if isinstance(c, dict) and isinstance(c.get("name"), str)
+            and isinstance(c.get("key"), str) and " " in c["key"]
+            and isinstance(c.get("numerals"), list) and all(isinstance(n, str) for n in c["numerals"])
+            ] if isinstance(contains, list) else []
+
+
 def library_progressions(conn: sqlite3.Connection) -> dict[int, list[dict[str, str]]]:
     """What the library page's data gives each song: its progressions, each once, in the order its
     sheet plays them, ``{"key": "I V vi IV", "plays": "vi–IV–I–V"}`` (as its first section that plays
-    it does)."""
+    it does): each section's cycle, then those of the catalogue it plays within it, by their name's key,
+    and a section that is a named progression whole by its name's key too, where its own is none of that
+    name's (a sus chord's: "I V VI IV"), so that ``#prog=`` finds it by its name."""
+    names = catalogue()
+    keys = {name: key for key, name in reversed(names.items())}  # each name's first key
     found: dict[int, list[dict[str, str]]] = {}
     for song_id, sections in _records(conn).items():
         seen: dict[str, str] = {}
         for s in sections:
-            seen.setdefault(s["key"], "–".join(s["numerals"]))
+            plays = "–".join(s["numerals"])
+            seen.setdefault(s["key"], plays)
+            name = s.get("name")
+            if isinstance(name, str) and name in keys and names.get(s["key"]) != name:
+                seen.setdefault(keys[name], plays)
+            for c in _contained(s):
+                seen.setdefault(c["key"], "–".join(c["numerals"]))
         found[song_id] = [{"key": k, "plays": plays} for k, plays in seen.items()]
     return found
 
@@ -198,22 +228,24 @@ def library_progressions(conn: sqlite3.Connection) -> dict[int, list[dict[str, s
 def read_progression(text: str) -> Wanted | None:
     """The progression ``text`` asks for: numerals, two chords or more ("vi IV I V"), or a catalogue
     name or words of one ("andalusian"); None for anything else."""
-    from caracole.viewer.harmony import progression_key
+    from caracole.viewer.harmony import name_of, progression_key, read_typed
 
     names = catalogue()
     tokens = [t for t in _SEPARATORS.split(text.strip()) if t]
     if tokens and all(_TYPED.fullmatch(t) for t in tokens):
+        tokens = list(read_typed(tokens))
         key = progression_key(tokens)
         if " " not in key:
             return None
-        name = names.get(key)
+        name = name_of(tokens)
         # A name that is numerals ("ii–V–I", whose key is "I ii V") says them as they are played.
         said = name if name is not None and progression_key(name) == key else label(key)
         return Wanted(key, frozenset({key, *_named(names, {name})}), name, said)
     words = _words(text)
     rest = [w for w in words if w not in _GENERIC]
-    short = sum(map(len, rest)) < _NAME_LETTERS and not _SAYS_PROGRESSION & set(words)
-    if not rest or short or (len(rest) == 1 and rest[0] in _NOT_ALONE):
+    says = bool(_SAYS_PROGRESSION & set(words))
+    short = sum(map(len, rest)) < _NAME_LETTERS and not says
+    if not rest or short or (len(rest) == 1 and rest[0] in _NOT_ALONE) or (set(rest) <= _TITLES and not says):
         return None
     found = [name for name in dict.fromkeys(names.values()) if set(words) <= set(_words(name))]
     if not found:
@@ -240,15 +272,25 @@ class Playing:
     key: str
 
 
+def _plays(section: dict[str, Any], wanted: Wanted) -> bool:
+    """A record's section plays ``wanted``: its cycle is one of its keys, or, for a named progression, the
+    section is it whole or plays it within it."""
+    if section["key"] in wanted.keys:
+        return True
+    if wanted.name is None:
+        return False
+    return section.get("name") == wanted.name or any(c["name"] == wanted.name for c in _contained(section))
+
+
 def songs_with(conn: sqlite3.Connection, wanted: Wanted) -> list[Playing]:
-    """Your songs that play ``wanted`` (any of its keys), by name."""
+    """Your songs that play ``wanted`` (any of its keys, or its name within a section), by name."""
     from caracole.songs import list_songs
 
     records = _records(conn, whole=True)
     found = []
     for song in sorted(list_songs(conn), key=lambda s: (s.display.casefold(), s.id)):
         record = records.get(song.id)
-        sections = [s.get("section") or UNNAMED for s in _searchable(record) if s["key"] in wanted.keys]
+        sections = [s.get("section") or UNNAMED for s in _searchable(record) if _plays(s, wanted)]
         if sections:
             key = record.get("key")
             found.append(Playing(song, list(dict.fromkeys(str(s) for s in sections)),

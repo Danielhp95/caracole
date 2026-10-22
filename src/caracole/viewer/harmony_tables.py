@@ -22,10 +22,12 @@ script's ``#sheet .c``):
 - ``keyScale[mode]``, ``pentatonic[mode]``: the key's scale and its pentatonic box, as semitones above the
   tonic (``harmony.key_scale``, ``harmony.pentatonic``), and ``pentatonicName[mode]``; ``tuning``, the
   pitch class of each open string, low E first (``voicings.TUNING``), for the key's neck;
-- ``progressions[mode]``: each section's ``[section, numerals, repeats, name, ending, key, chords]``
-  (``harmony.progressions``; ``section`` counts the sheet's ``section.sec`` elements, ``key`` is
-  ``harmony.progression_key``, and ``chords`` the chord played for each numeral of one cycle, by index,
-  or null where they can't be told);
+- ``progressions[mode]``: each section's ``[section, numerals, repeats, name, ending, key, chords, variations,
+  contains]`` (``harmony.progressions``; ``section`` counts the sheet's ``section.sec`` elements, ``key`` is
+  ``harmony.progression_key``, ``chords`` the chord played for each numeral of one cycle, by index, where the
+  section first plays it whole, or null where they can't be told, ``variations`` the passes that play the
+  cycle otherwise, and ``contains`` each progression of the catalogue played within the section, but its
+  ``name``, as ``[name, times, key]``, its key the one ``#prog=`` finds it by);
 
 and, for every mode alike, ``tones``: each chord the page can name (base or alternative, on every
 transposition) by its name as viewer.js writes it (``nameOf``), as "C E G Bb|R 3 5 ♭7"
@@ -227,8 +229,11 @@ def _progressions(sections: list[int], played: list[tuple[int, int, int]], here:
         n = int(name)
         texts = texts_of[n]
         held = [x for j, x in enumerate(texts) if j == 0 or x[1] != texts[j - 1][1]]
-        cycle = held[:len(p.numerals)]
-        indexes = [i for i, _ in cycle] if [t for _, t in cycle] == list(p.numerals) else None
+        words = [t for _, t in held]
+        k = len(p.numerals)
+        # The chords of the cycle where the section first plays it whole (after a pass that varies it, maybe).
+        at = next((j for j in range(len(words) - k + 1) if words[j:j + k] == list(p.numerals)), None)
+        indexes = None if at is None else [i for i, _ in held[at:at + k]]
         found.append([n, list(p.numerals), p.repeats, p.name, p.ending, harmony.progression_key(p.numerals),
-                      indexes])
+                      indexes, p.variations, [[c.name, c.times, c.key] for c in p.contains]])
     return found

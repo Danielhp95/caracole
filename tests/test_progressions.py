@@ -44,7 +44,7 @@ def test_a_sheets_sections_are_read_as_numerals_in_the_key_of_its_viewer():
     assert found["key"] == "C major"
     verse, chorus, outro = found["sections"]
     assert verse == {"section": "Verse", "numerals": ["vi", "IV", "I", "V"], "repeats": 2, "key": POP,
-                     "name": "the pop progression", "ending": "half"}
+                     "name": "the pop progression", "ending": "half", "contains": []}
     assert (chorus["section"], chorus["numerals"], chorus["key"]) == ("Chorus", ["I", "V", "vi", "IV"], POP)
     assert (outro["numerals"], outro["key"]) == (["I"], "I")
 
@@ -76,13 +76,30 @@ def test_a_progression_typed_as_numerals_in_any_rotation_or_spelling():
         assert wanted.keys == frozenset({POP, POP_MINOR})  # its name's other reading too
         assert wanted.label == "I–V–vi–IV"
     flat = read_progression("I bVII IV")
-    assert flat.key == "I ♭VII IV" and flat.name == "I–♭VII–IV"
-    unnamed = read_progression("I iii IV")
-    assert (unnamed.keys, unnamed.name, unnamed.label) == (frozenset({"I iii IV"}), None, "I–iii–IV")
+    assert flat.key == "I ♭VII IV" and flat.name == "the double-plagal progression"
+    unnamed = read_progression("I ii iii")
+    assert (unnamed.keys, unnamed.name, unnamed.label) == (frozenset({"I ii iii"}), None, "I–ii–iii")
+    assert read_progression("I iii IV").name == "the puff progression"
     assert read_progression("Imaj7 vi7 ii7 V7").key == "I vi ii V"
     # A progression whose name is its numerals is said by its name, not turned to start where its key does.
     two_five = read_progression("ii V I")
     assert (two_five.key, two_five.name, two_five.label) == ("I ii V", "ii–V–I", "ii–V–I")
+    # Numerals are named as a section's are, by their roots and thirds: III7 is the V7/vi it sounds as.
+    ragtime = read_progression("III7 VI7 II7 V7")
+    assert (ragtime.name, ragtime.label) == ("the ragtime progression", "II–V–III–VI")
+    assert catalogue_key("the ragtime progression") in ragtime.keys  # its rows' keys, as a sheet's sections have them
+    assert read_progression("I III IV iv").name == "the Creep progression"
+    assert read_progression("i bIII bVII IV").name is None  # Wonderwall's verse
+    # A progression that goes somewhere is named from its first chord alone, as a section's is: iii–vi–IV–V is no
+    # royal road, I–vi–ii–V no circle of fifths, a major key's IV–V–vi–V no Aeolian shuttle, an I–V–IV vamp no blues.
+    for typed in ("iii vi IV V", "I vi ii V", "IV V vi V", "I V IV I V IV I V"):
+        found = read_progression(typed)
+        assert (found.name, found.keys) == (None, frozenset({found.key})), typed
+    assert read_progression("IV V iii vi").name == "the royal road"
+    # Numerals in a minor key's own way, against its natural minor scale: VII is its ♭VII.
+    shuttle = read_progression("i VII VI VII")
+    assert (shuttle.key, shuttle.name) == ("i ♭VII ♭VI ♭VII", "the Aeolian shuttle")
+    assert read_progression("i bVII bVI v").name == "the lament"
 
 
 def test_a_progression_named_from_the_catalogue():
@@ -92,7 +109,12 @@ def test_a_progression_named_from_the_catalogue():
     assert andalusian.label == "the Andalusian cadence"
     assert read_progression("Andalusian Cadence").keys == andalusian.keys
     assert read_progression("the pop progression").keys == {POP, POP_MINOR}
-    assert len(read_progression("blues").keys) == 4  # the 12-bar blues, in each of its forms
+    blues = read_progression("blues")  # the 12-bar and the 8-bar blues, in each of their forms
+    assert (len(blues.keys), blues.name, blues.label) == (5, "the 12-bar blues", "the 12-bar blues or the 8-bar blues")
+    assert read_progression("extended plagal").name == "the extended plagal progression"
+    assert read_progression("lament").name == "the lament"
+    assert read_progression("the Creep progression").name == "the Creep progression"
+    assert read_progression("backdoor").name == "the backdoor progression"
     assert read_progression("royal road").name == "the royal road"
     assert read_progression("the royal road").name == "the royal road"
     assert read_progression("minor ii V i").name == "the minor ii–V–i"
@@ -105,7 +127,9 @@ def test_words_that_are_no_progression():
                  "Wonderwall", "via",
                  # A title's words: a name's other words must come to five letters, a generic word beside them or
                  # not, and "minor" alone is a key's word
-                 "The Road", "the bar", "a road", "minor", "Minor", "the minor"):
+                 "The Road", "the bar", "a road", "minor", "Minor", "the minor",
+                 # A song's title, which a progression is named after: the song, unless "progression" says otherwise
+                 "creep", "Creep"):
         assert read_progression(text) is None, text
 
 
@@ -180,8 +204,48 @@ def test_songs_with_a_progression_and_the_sections_that_play_it(conn, cfg):
     assert songs_with(conn, read_progression("ii V I")) == []
 
 
+# In C, a verse that plays the pop progression within a longer section, twice, and a chorus on none.
+WITHIN = ("{title: Within}\n{key: C}\n{comment: Verse}\n[Dm]a [C]b [G]c [Am]d [F]e\n[Bb]f [C]g [G]h [Am]i [F]j\n"
+          "{comment: Chorus}\n[C]k [E]l [F]m [Fm]n\n")
+
+
+def test_a_sections_record_names_the_progressions_it_plays_within_it():
+    verse, chorus = sheet_progressions(WITHIN, None)["sections"]
+    assert verse["name"] is None and verse["key"] != POP
+    assert verse["contains"] == [{"name": "the pop progression", "key": POP, "numerals": ["I", "V", "vi", "IV"]}]
+    assert (chorus["name"], chorus["contains"]) == ("the Creep progression", [])
+
+
+def test_songs_that_play_a_named_progression_within_a_section_are_found_by_it(conn, cfg):
+    within = add_song(conn, "Placeholder Band", "Within")
+    kv_set_json(conn, f"{KV}{within.id}", sheet_progressions(WITHIN, None))
+    whole = add_song(conn, "Another Band", "Whole")
+    kv_set_json(conn, f"{KV}{whole.id}", sheet_progressions(CHO, None))
+    for typed in ("pop progression", "vi IV I V", "i bVI bIII bVII"):
+        found = songs_with(conn, read_progression(typed))
+        assert [(p.song.title, p.sections) for p in found] == [("Whole", ["Verse", "Chorus"]), ("Within", ["Verse"])], typed
+    # The library page finds it by the name's key as well as by the verse's own.
+    plays = library_progressions(conn)[within.id]
+    assert {"key": POP, "plays": "I–V–vi–IV"} in plays and plays[0]["key"] == verse_key(WITHIN)
+    assert {"key": catalogue_key("the Creep progression"), "plays": "I–V/vi–IV–iv"} in plays
+
+
+def verse_key(cho: str) -> str:
+    return sheet_progressions(cho, None)["sections"][0]["key"]
+
+
+def catalogue_key(name: str) -> str:
+    return next(k for k, n in catalogue().items() if n == name)
+
+
 def test_a_record_a_device_or_an_older_caracole_left_odd_is_read_as_none(conn, cfg):
     song = add_song(conn)
     for odd in ([], "x", {"sections": "x"}, {"sections": [1, {"key": 2}, {"numerals": ["I"]}]}):
         kv_set_json(conn, f"{KV}{song.id}", odd)
         assert library_progressions(conn) == {} and songs_with(conn, read_progression(POP)) == []
+    # What it contains, odd, is none of it.
+    for contains in ("x", [1, {"name": 2}, {"name": "the pop progression", "key": 3}], None):
+        kv_set_json(conn, f"{KV}{song.id}", {"sections": [{"key": "I iii", "numerals": ["I", "iii"],
+                                                            "contains": contains}]})
+        assert library_progressions(conn) == {song.id: [{"key": "I iii", "plays": "I–iii"}]}
+        assert songs_with(conn, read_progression(POP)) == []
