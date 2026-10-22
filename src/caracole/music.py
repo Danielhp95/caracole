@@ -242,7 +242,13 @@ def scan_music(conn: sqlite3.Connection, music_dir: Path) -> ScanStats:
         if s.audio_path and not Path(s.audio_path).exists():
             update_song(conn, s.id, audio_path=None, audio_mtime=None)
             s.audio_path, s.audio_mtime = None, None
-    audio = [read_audio(p) for p in paths]
+    audio: list[AudioFile] = []
+    for p in paths:
+        try:
+            audio.append(read_audio(p))
+        except OSError:  # deleted or renamed since the folder was listed: a synced device's doing
+            continue
+    paths = [af.path for af in audio]
     stats.seen = len(audio)
     by_song: dict[int, list[_Match]] = {}
     for m in _matches(audio, songs):
