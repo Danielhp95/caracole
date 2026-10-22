@@ -29,7 +29,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from caracole.library import NotRegularFile, keep_file, read_regular, song_dir
+from caracole.library import KeptFile, NotRegularFile, holds, keep_file, read_regular, safe_name, song_dir
 from caracole.music import Names
 from caracole.musicxml import header
 from caracole.normalize import clean_title, compact, has_other_script, identity_key, slug_key
@@ -233,28 +233,66 @@ def _score_version(conn: sqlite3.Connection, song: Song) -> int:
     )
 
 
-def _place(conn: sqlite3.Connection, library_dir: Path, entry: str, ext: str,
-           data: bytes) -> tuple[Song, int, str, int] | None:
-    """Where the download ``entry`` goes: its song, the version it is kept for, its name in the
-    song's folder and its rank. None when it is no song's."""
+def _download_song(conn: sqlite3.Connection, entry: str, ext: str,
+                   data: bytes) -> tuple[Song, list[VersionRow]] | None:
+    """The song the download ``entry`` is of, and its open picks (none for a score); None when it is no
+    song's. Only reads."""
     if ext in SCORE_EXTENSIONS:
         song = _score_song(conn, entry, ext, data)
-        if song is None:
-            return None
+        return None if song is None else (song, [])
+    artist, title, _ = parse_download_name(entry)
+    return _match(artist, title, _songs_with_open_picks(conn))
+
+
+def _place(conn: sqlite3.Connection, library_dir: Path, entry: str, ext: str,
+           found: tuple[Song, list[VersionRow]]) -> tuple[Song, int, str, int]:
+    """Where the download ``entry`` of the song ``found`` goes: its song, the version it is kept for, its
+    name in the song's folder and its rank."""
+    song, open_picks = found
+    if ext in SCORE_EXTENSIONS:
         n = score_number(conn, library_dir, song, ext)
         return song, _score_version(conn, song), f"score-{n}{ext}", n
-    artist, title, version = parse_download_name(entry)
-    found = _match(artist, title, _songs_with_open_picks(conn))
-    if found is None:
-        return None
-    song, open_picks = found
+    _, _, version = parse_download_name(entry)
     chosen = _choose_pick(open_picks, version, ext)
     rank = chosen.pick_rank or 1
     return song, chosen.id, f"guitar-{guitar_number(conn, library_dir, song, rank)}{ext}", rank
 
 
+def _copies(conn: sqlite3.Connection, sha: str) -> list[KeptFile]:
+    """The files caracole keeps whose recorded bytes are these, whether or not the library still holds them."""
+    rows = conn.execute(
+        "SELECT id, version_id, song_id, name, path, sha256, kept_rank FROM files WHERE sha256 = ? ORDER BY id",
+        (sha,),
+    )
+    return [KeptFile(**dict(r)) for r in rows]
+
+
+def _again(conn: sqlite3.Connection, library_dir: Path, copies: list[KeptFile],
+           data: bytes) -> tuple[list[Path], bool]:
+    """A download that is a file caracole kept: each of ``copies`` the library lost (nothing at its place
+    now) is written back there, and listed; and whether the library still holds one as recorded. A copy
+    whose place holds other bytes (yours, since) is left alone."""
+    put_back: list[Path] = []
+    held = False
+    for copy in copies:
+        song = get_song(conn, copy.song_id)
+        place = song_dir(library_dir, song) / safe_name(copy.name)
+        if holds(library_dir / copy.path, copy.sha256, len(data)):
+            held = True
+        elif not os.path.lexists(library_dir / copy.path) and not os.path.lexists(place):
+            if keep_file(conn, library_dir, song=song, version_id=copy.version_id, name=copy.name, data=data,
+                         rank=copy.kept_rank):
+                put_back.append(place)
+    return put_back, held
+
+
 def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
     """File every Guitar Pro / Power Tab download in ``_inbox/`` under its song.
+
+    A download with the bytes of a file caracole keeps is that file again, when its name is of no other
+    song: a duplicate, removed, while the library holds the file; written back in its place when the
+    library lost it (deleted on a synced device, say); left in the inbox when its place holds other bytes
+    now. A download named for another song is filed for that song, whatever another song keeps.
 
     The folder is opened without following a link, then listed, read and emptied through that
     descriptor. A link in place of ``_inbox`` is refused (``refused`` holds it): nothing in the
@@ -291,16 +329,24 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
             except NotRegularFile:  # swapped for a link since it was listed
                 stats.refused.append(path)
                 continue
-            sha = hashlib.sha256(data).hexdigest()
-            if conn.execute("SELECT 1 FROM files WHERE sha256 = ? LIMIT 1", (sha,)).fetchone():
-                os.unlink(entry, dir_fd=inbox_fd)
-                stats.duplicates.append(path)
+            found = _download_song(conn, entry, ext, data)
+            copies = _copies(conn, hashlib.sha256(data).hexdigest())
+            if copies and (found is None or found[0].id in {c.song_id for c in copies}):
+                # A file caracole kept, by its bytes: the song's own when its name says so, else any song's.
+                mine = [c for c in copies if found is None or c.song_id == found[0].id]
+                put_back, held = _again(conn, library_dir, mine, data)
+                if put_back or held:
+                    os.unlink(entry, dir_fd=inbox_fd)
+                    stats.filed.extend(put_back)
+                    if not put_back:
+                        stats.duplicates.append(path)
+                else:  # its place holds other bytes now: nothing is replaced, and the download stays
+                    stats.unmatched.append(path)
                 continue
-            placed = _place(conn, library_dir, entry, ext, data)
-            if placed is None:
+            if found is None:
                 stats.unmatched.append(path)
                 continue
-            song, version_id, name, rank = placed
+            song, version_id, name, rank = _place(conn, library_dir, entry, ext, found)
             if keep_file(conn, library_dir, song=song, version_id=version_id, name=name, data=data, rank=rank):
                 stats.filed.append(song_dir(library_dir, song) / name)
             else:

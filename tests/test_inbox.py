@@ -159,6 +159,62 @@ def test_duplicate_removed(conn, cfg):
     assert [f.name for f in kept_files(conn, s.id)] == ["guitar-1.gp5"]
 
 
+def test_a_file_the_library_lost_dropped_again_is_put_back(conn, cfg):
+    s = add_song(conn)
+    v = pick(conn, s, 555890)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
+    drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"GP-DATA")
+    file_inbox(conn, cfg.library_dir)
+    kept = song_dir(cfg.library_dir, s) / "guitar-1.gp5"
+    kept.unlink()  # deleted on a synced device
+    again = drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"GP-DATA")  # downloaded again
+    stats = file_inbox(conn, cfg.library_dir)
+    assert stats.filed == [kept] and stats.duplicates == [] and not again.exists()
+    assert kept.read_bytes() == b"GP-DATA"
+    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", v)]
+
+
+def test_a_lost_score_dropped_again_under_another_name_is_put_back(conn, cfg):
+    s = add_song(conn, "Oasis", "Wonderwall")
+    drop(cfg, "Oasis - Wonderwall.pdf", b"%PDF-score")
+    file_inbox(conn, cfg.library_dir)
+    kept = song_dir(cfg.library_dir, s) / "score-1.pdf"
+    kept.unlink()
+    again = drop(cfg, "download (3).pdf", b"%PDF-score")  # a name no song has: the bytes say which file it is
+    stats = file_inbox(conn, cfg.library_dir)
+    assert stats.filed == [kept] and not again.exists() and kept.read_bytes() == b"%PDF-score"
+    assert score_kept(conn, s) == [("score-1.pdf", "inbox", "score")]
+
+
+def test_a_download_with_the_bytes_of_a_file_you_changed_replaces_nothing_and_stays(conn, cfg):
+    s = add_song(conn)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [pick(conn, s, 1)])
+    drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"GP-DATA")
+    file_inbox(conn, cfg.library_dir)
+    kept = song_dir(cfg.library_dir, s) / "guitar-1.gp5"
+    kept.write_bytes(b"edited on the laptop")
+    again = drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"GP-DATA")
+    stats = file_inbox(conn, cfg.library_dir)
+    assert stats.filed == [] and stats.duplicates == [] and stats.unmatched == [again] and again.exists()
+    assert kept.read_bytes() == b"edited on the laptop"
+
+
+def test_a_download_with_another_songs_bytes_is_filed_for_its_own_song(conn, cfg):
+    live = add_song(conn, "Soda Stereo", "Persiana Americana")
+    s = add_song(conn)
+    set_picks(conn, live.id, ["guitar-pro", "power"], [pick(conn, live, 1)])
+    v = pick(conn, s, 2)
+    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
+    drop(cfg, "Soda Stereo - Persiana Americana.gp5", b"SAME BYTES")
+    file_inbox(conn, cfg.library_dir)
+    src = drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"SAME BYTES")
+    stats = file_inbox(conn, cfg.library_dir)
+    dest = song_dir(cfg.library_dir, s) / "guitar-1.gp5"
+    assert stats.filed == [dest] and stats.duplicates == [] and not src.exists()
+    assert dest.read_bytes() == b"SAME BYTES"
+    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", v)]
+
+
 def test_cjk_name_files_into_cjk_song(conn, cfg):
     s = add_song(conn, "宋冬野", "斑马，斑马")
     v = pick(conn, s, 7)
