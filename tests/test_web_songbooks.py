@@ -749,6 +749,21 @@ def test_get_one_missing_song_now_looks_it_up_then_makes_the_songbook_again(app,
     assert refused.status == 409 and "has a sheet" in json.loads(refused.body)["error"]
 
 
+def test_try_again_on_a_missing_songs_lookup_makes_its_songbooks_again_itself(app, setup, queue, gig):
+    # Get the missing songs leaves the songbook to the render queued after its lookups. Once those are over, a lookup's
+    # Try again runs alone: nothing after it would make the songbook again with the sheet it gets, so it does, as a
+    # song's Fetch now does.
+    queue._limit = 10
+    post(app, "/songbook/get", {"name": "Gig", "song": str(gig["uprising"].id)})
+    queue._runner = lambda args, emit: (emit("error: Ultimate Guitar blocked caracole"), 1)[1] if args[0] == "get" else 0
+    queue.run_pending()
+    lookup = next(job for job in queue.snapshot() if job.steps[0].args[0] == "get")
+    assert lookup.state == "failed"
+    assert post(app, "/jobs/again", {"job": str(lookup.id)}).status == 303
+    assert [[s.args for s in job.steps] for job in queue.snapshot() if job.active] == [
+        [("get", "--progress", "--", "Muse", "Uprising")]]
+
+
 @pytest.mark.parametrize("fields,status,said", [
     ({"name": "Picnic"}, 404, 'No songbook named "Picnic"'),
     ({"name": "Campfire"}, 409, "has a sheet"),

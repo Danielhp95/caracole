@@ -471,7 +471,8 @@ Options:
 - `--progress` adds a JSON line per stage, which `caracole serve` reads.
 - `--no-songbooks` leaves the songbooks that list the song as they are (by
   default the lookup makes them again). The page's Get the missing songs now
-  uses it for each song and makes the songbook once, after them all.
+  uses it for each song and makes the songbook once, after them all; such a
+  lookup's Try again runs alone, without it, and makes them again itself.
 
 A song ignored in overrides.toml, or one wanted.txt can't hold, is not looked
 up, and exits 1. A song the matcher isn't sure of gets everything but its
@@ -3124,7 +3125,8 @@ is no progression exits with status 2.
       an error, in the stage's words), and **Failed**, with its error in one
       sentence: **Try again** queues the same commands again
       (`POST /jobs/again`), with no question asked, a songbook's Delete
-      among them; a failed removal's Try again asks what goes first, as of
+      among them (a lookup of Get the missing songs, alone now, makes the
+      songbooks its song is in again itself); a failed removal's Try again asks what goes first, as of
       now (Remove's own question, `POST /remove`);
     - a songbook's **Made** or **Added** · **Open songbook**; **Removed**,
       **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda

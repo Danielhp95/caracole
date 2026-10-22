@@ -43,7 +43,7 @@ from caracole.web.app import (
     query,
     redirect,
 )
-from caracole.web.jobs import EXPORTING, LACUERDA_READS, LACUERDA_SEARCH, REMOVING, Job, JobStarted
+from caracole.web.jobs import EXPORTING, LACUERDA_READS, LACUERDA_SEARCH, LOOKUP, REMOVING, Job, JobStarted
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import SongFacts, details_href, job_line
@@ -118,7 +118,9 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
     It is queued as any request is (``JobQueue.submit``): a song's request waiting or running is the answer. A
     LaCuerda artist's read, or a query of its search, is one of ``app._reads``, as the search's Read is, so the
     answers the searches kept go once it is over; a search the page sent by itself is asked by hand now, past the
-    share of those (no ``--auto``). A failed removal's Try again asks what goes first (outcome.py: ``POST
+    share of those (no ``--auto``). A lookup Get the missing songs queued (``--no-songbooks``, its songbook made
+    after them all) runs alone now, with nothing after it: it makes the songbooks its song is in again itself, as
+    a song's Fetch now does. A failed removal's Try again asks what goes first (outcome.py: ``POST
     /remove``)."""
     job_id = _form_job(form)
     job = app.queue.job(job_id)
@@ -130,6 +132,7 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
     steps = [(step.label, step.args) for step in job.steps]
     if job.song_key.startswith(LACUERDA_SEARCH):  # you ask for it now: by hand
         steps = [(label, tuple(arg for arg in args if arg != "--auto")) for label, args in steps]
+    steps = [(label, _with_songbooks(args)) for label, args in steps]
     picked = any(step.args[:1] == ("review",) for step in job.steps)  # a pick comes after the song's own request
     queued, _ = app.submit(job.title, job.song_key, steps, fetching=job.fetching, note=job.note,
                            display=job.display, join=not picked, song_id=job.song_id)
@@ -137,6 +140,15 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
         with app._searching:
             app._reads.add(queued.id)
     return app.queued(queued, "/jobs")
+
+
+def _with_songbooks(args: tuple[str, ...]) -> tuple[str, ...]:
+    """A lookup's command with its songbooks stage (no ``--no-songbooks`` before ``--``): the render that followed
+    it is no longer after it."""
+    if args[:1] != (LOOKUP,) or "--" not in args:
+        return args
+    end = args.index("--")
+    return tuple(arg for arg in args[:end] if arg != "--no-songbooks") + args[end:]
 
 
 def _form_job(form: dict[str, str]) -> int:
