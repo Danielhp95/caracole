@@ -21,6 +21,7 @@ from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
 import pytest
+from conftest import add_song
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.lacuerda_site import search_page
 from test_web_page_lacuerda import LC_ROWS, LOOKUP_TITLES, TITLES, lacuerda
@@ -157,8 +158,8 @@ def type_into(browser, field, text):
 
 
 def type_and_enter(browser, text, *after):
-    """``text`` typed into the search box and Enter pressed in one go, then the keys ``after``: before the query's
-    answer, which the page asks for only once its timer, after the last key, has run."""
+    """``text`` typed into the search box and Enter pressed in one go, then the keys ``after`` (Escape): before the
+    query's answer, which the page asks for only once its timer, after the last key, has run."""
     browser.js("(() => { const q = document.getElementById('q'); q.focus(); q.value = " + json.dumps(text) + "; "
                "q.dispatchEvent(new Event('input', {bubbles: true})); "
                "for (const key of " + json.dumps(["Enter", *after]) + ") "
@@ -262,6 +263,26 @@ def test_enter_back_into_the_results_sends_it_once_their_answer_is_in(cfg, live,
     time.sleep(2)
     assert jobs(queue) == [BY_HAND]
     assert searches(heard) == SENT_BY_HAND
+
+
+def test_escape_before_the_answer_takes_back_the_enter_that_waited_for_it(cfg, live, browser, heard):
+    base, queue, _ = live
+    lacuerda(cfg)
+    conn = db.connect(cfg.db_path)
+    add_song(conn)  # a song of yours: the list, with none that matches, offers the sites' search again
+    conn.commit()
+    conn.close()
+    browser.open(base)
+    type_and_enter(browser, "corazon de tiza", "Escape")  # Enter, then Escape, before the query's answer
+    time.sleep(2)
+    assert browser.js("document.getElementById('results').hidden") and searches(heard) == []
+    # The sites' results again by the list's button, no Enter: the query waits to settle, as one typed does, and its
+    # search goes by itself then.
+    browser.js("[...document.querySelectorAll('button')].find((b) => b.textContent.startsWith('Search the sites for'))"
+               ".click()")
+    assert browser.wait(ANSWERED)
+    assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
+    assert searches(heard) == SENT_BY_ITSELF and jobs(queue) == [AUTO]
 
 
 @pytest.mark.parametrize("page, titles", [("", TITLES), ("lookup", LOOKUP_TITLES)], ids=["library", "lookup"])

@@ -100,7 +100,8 @@ Rules a change there keeps (the Invariants below are the others):
   (`POST /lacuerda/search`, a queued `caracole lacuerda --search --auto`) once the query has settled,
   the box unchanged for 1.5 s, when `/api/search`'s `lacuerda_search` says `auto`, and Enter sends it
   at once, by hand as the button does (no `--auto`), when it says `auto` or `button` (for the query's
-  answer on the screen, else with the answer on its way; the settle's timer then sends nothing), never
+  answer on the screen, else with the answer on its way, unless Escape leaves the results first; the
+  settle's timer then sends nothing), never
   twice for a query in a page; `button` (the hour's share of such searches spent) and `failed` (it
   failed within the hour, or three did) offer it by hand, a line under the results (rows.js
   `lacuerdaSearcher`; its rows come with the search asked again once the job is over, the focus Enter

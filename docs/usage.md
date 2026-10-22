@@ -2858,10 +2858,11 @@ is no progression exits with status 2.
   asked again. Typing on sends nothing. **Enter** sends it at once, without
   waiting for the query to settle, as the button below does (by hand: past the
   hour's 20, within the hour's lookups), and still moves to the first result,
-  where the focus stays as LaCuerda's songs arrive. When no search would go
-  (nothing to ask, asked in the last 30 days, the hour's lookups spent, or
-  LaCuerda cooling down), or searches failed lately (the button's to ask,
-  below), Enter sends nothing.
+  where the focus stays as LaCuerda's songs arrive; Escape before the query's
+  answer is in takes that Enter back. Enter sends nothing when no search would
+  go: your library or LaCuerda's index already answers the query, it was asked
+  in the last 30 days, the hour's lookups are spent, or LaCuerda cools down.
+  Nor does it after a search failed lately: only the button below asks then.
   Once the hour's 20 are spent, the line offers **Search
   LaCuerda for “…” (1 request)**, which asks by hand, within the hour's lookups;
   when those are spent, or LaCuerda cools down, it says LaCuerda's search waits.

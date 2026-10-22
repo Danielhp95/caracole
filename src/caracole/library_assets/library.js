@@ -2109,6 +2109,7 @@
     if (!state.all) return;
     state.all = false;
     focusFirst = false;
+    if (searcher) searcher.leave();  // an Enter waiting for the answer: LaCuerda's search with it too
     clearTimeout(askTimer);
     if (asking) asking.abort();
     asked += 1;

@@ -622,7 +622,7 @@ const caracoleRows = (icons, does) => {
   // (``place(line)``). Enter (``enter(query, shown)``) sends it at once, by hand as the button does, when the gate
   // says "auto" or "button" (not "failed": its button asks again): for the answer on the screen (``shown``), its
   // line given back, else with the query's next answer, which ``show`` then gives; the settle's wait for it ends.
-  // Never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
+  // ``leave()``, the results left before that answer, takes such an Enter back. Never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
   // LaCuerda for “…” (1 request)", by hand; state "failed", its search failed lately (or three did): the gate's
   // ``why``, and the button. While it runs the line says so ("Searching LaCuerda for “…”…"), then what LaCuerda
   // answered, or why the search was refused, and ``done(query)`` asks the page's search again, whose answer the
@@ -753,7 +753,11 @@ const caracoleRows = (icons, does) => {
       entered = query;
       return null;
     };
-    return { show, typed, enter };
+    // The results left (Escape) before the answer an Enter waits for: that Enter is taken back.
+    const leave = () => {
+      entered = null;
+    };
+    return { show, typed, enter, leave };
   };
   // A read that left no songs to list: what LaCuerda answered, as its request's line says it ("Not read: LaCuerda is
   // cooling down…", "Not found: …"), and its output on the requests page.
