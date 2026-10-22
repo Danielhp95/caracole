@@ -77,6 +77,7 @@ from caracole.viewer.sheet import (
     Sheet,
     Tab,
     Text,
+    is_legend,
     parse_sheet,
     preamble_section,
     written,
@@ -556,6 +557,9 @@ def _mark_html(mark: str) -> str:
 
 
 def _line_html(line, names: list[str]) -> str:
+    """A line of the sheet as HTML: a chord legend's line (``sheet.is_legend``) is a ``legend``, whose chords
+    viewer.js leaves as written, whatever the version."""
+    legend = " legend" if is_legend(line, names) else ""
     if isinstance(line, Lyrics):
         out = []
         for head, text in line.parts:
@@ -565,10 +569,10 @@ def _line_html(line, names: list[str]) -> str:
                 first = escape(words.pop(0)) if words else ""
                 out.append(f'<span class="s">{top}<span class="y">{first}</span></span>')
             out += [f'<span class="w">{escape(w)}</span>' for w in words]
-        return f'<p class="l">{"".join(out)}</p>'
+        return f'<p class="l{legend}">{"".join(out)}</p>'
     if isinstance(line, ChordRow):
         items = [_chord_html(i, names) if isinstance(i, int) else _mark_html(i) for i in line.items]
-        return f'<p class="l chords">{" ".join(items)}</p>'
+        return f'<p class="l chords{legend}">{" ".join(items)}</p>'
     if isinstance(line, Text):
         return f'<p class="l">{escape(line.text)}</p>'
     if isinstance(line, Tab):

@@ -14,6 +14,9 @@
   const signed = (n) => (n > 0 ? "+" + n : n < 0 ? "−" + -n : "0");
   const key = data.key;
   const chordEls = Array.from(document.querySelectorAll("#sheet .c"));
+  // The chords of a chord legend's lines ("Am x02210", page.py's "legend"): each names the shape beside it, so it
+  // stays as the sheet writes it, whatever the version (version.py's apply_version leaves them so too).
+  const legendEls = new Set(chordEls.filter((el) => el.closest(".legend")));
   const written = {};  // each chord as the sheet writes it, by index
   for (const el of chordEls) if (!own.call(written, el.dataset.c)) written[el.dataset.c] = el.textContent;
   const count = data.chords.length;
@@ -410,6 +413,10 @@
   // numeral (a chord with none, N.C., as written). A screen reader hears both.
   const drawChord = (el, k) => {
     const i = el.dataset.c;
+    if (legendEls.has(el)) {
+      el.textContent = written[i];
+      return;
+    }
     const name = label(i, current(i));
     const found = numbered() ? reading(i, k) : null;
     if (!found) {
@@ -662,7 +669,7 @@
     else doc.dataset.roles = "off";
     chordEls.forEach((el, k) => {
       drawChord(el, k);
-      el.classList.toggle("changed", choice(el.dataset.c) >= 0);
+      el.classList.toggle("changed", !legendEls.has(el) && choice(el.dataset.c) >= 0);
     });
     doc.style.setProperty("--fs", state.fs + "px");
     $("fs-now").textContent = state.fs + " px";

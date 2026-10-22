@@ -35,7 +35,7 @@ from urllib.parse import parse_qsl, quote, unquote
 
 from caracole.autochords.merge import AUTO_MARKER
 from caracole.viewer.page import shapes_of
-from caracole.viewer.sheet import COMMENTS, Sheet, directive, parse_sheet
+from caracole.viewer.sheet import COMMENTS, Sheet, directive, is_legend_line, parse_sheet
 from caracole.viewer.theory import (
     MODES,
     SCALES,
@@ -319,10 +319,11 @@ def apply_version(cho: str, v: Version, *, key: Key | None, capo_sheet: int | No
     ``key`` is the key of the sheet's shapes as its viewer names it (``page.viewer_key``, with the song's key)
     and ``capo_sheet`` the sheet's capo (``parse_sheet(cho).capo``). Each chord is named as the viewer names it,
     moved, in the mode, played instead; a chord ``theory.parse_chord`` can't read ("N.C.") stays as written,
-    as do marks, tabs and the rest of the text. The header names the version's key (of its shapes, as chordpro
-    reads a key: "Em" for E dorian) and its capo, and after it comes a ``{define}`` of each chord's chosen shape,
-    once a name, in place of the sheet's own ``{define}``s that the viewer reads. No ``{transpose}`` is left:
-    the chords are where the version plays them.
+    as do a chord legend's lines (``sheet.is_legend``: "Am x02210" names the shape beside it), marks, tabs and the
+    rest of the text. The header names the version's key (of its shapes, as chordpro reads a key: "Em" for E
+    dorian) and its capo, and after it comes a ``{define}`` of each chord's chosen shape, once a name, in place of
+    the sheet's own ``{define}``s that the viewer reads. No ``{transpose}`` is left: the chords are where the
+    version plays them.
     """
     sheet = parse_sheet(cho)
     played = _played(v, key, capo_sheet)
@@ -353,7 +354,7 @@ def apply_version(cho: str, v: Version, *, key: Key | None, capo_sheet: int | No
                 continue  # the version's, below
             if what == "key" and (key is not None or played.shift):
                 continue  # a key that names the chords no more
-        elif not line.startswith("#"):
+        elif not line.startswith("#") and not is_legend_line(line):  # a legend names the shapes it gives as written
             line = _TOKEN.sub(rename, line)
         out.append(line)
 

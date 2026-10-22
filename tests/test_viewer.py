@@ -248,6 +248,16 @@ def test_a_key_estimated_from_the_chords_is_the_shapes_key_whatever_the_capo():
     assert viewer_key(sheet, "A minor") == Key(4, "aeolian")  # no source said: a key a tab may name
 
 
+def test_a_chord_legends_lines_are_marked_so_the_script_leaves_their_chords_as_written():
+    # "Am x02210" names the shape beside it: moved, viewer.js names the song's chords anew, never a legend's
+    cho = ("{title: T}\n{artist: A}\n{comment: Verse}\n[Am]Words [C]here\n\n{comment: Chords}\n[Am] [*x02210]\n"
+           "[C] [*x32010]\n")
+    sheet = sheet_of(build_viewer(cho))
+    assert ('<p class="l chords legend"><b class="c" data-c="0" tabindex="0" role="button">Am</b> '
+            '<i class="m">x02210</i></p>') in sheet
+    assert sheet.count(" legend") == 2 and '<p class="l"><span class="s"><b class="c" data-c="0"' in sheet
+
+
 def test_without_a_capo_the_key_line_names_the_key():
     assert facts_of(build_viewer(MINOR)) == 'Key <b>Cm</b> <span class="from">from the sheet</span>'
     assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")) == "Capo <b>3</b>"

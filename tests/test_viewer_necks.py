@@ -64,7 +64,10 @@ RAIL = """(() => {
               dots: svg ? [...svg.querySelectorAll('circle[data-p]')].map((c) => [Number(c.dataset.p),
                 Number(c.dataset.fret), c.classList.contains('nk-open') ? 'open' : 'dot']) : []};
     }) : [],
-    sheetChords: [...new Set([...document.querySelectorAll('#sheet .c')].map((c) => c.textContent))],
+    // each chord the song plays as the sheet shows it, once, in the order it first comes (a legend's, as written,
+    // names the shape beside it)
+    sheetChords: [...new Set([...document.querySelectorAll('#sheet .c')].filter((c) => !c.closest('.legend'))
+      .sort((a, b) => a.dataset.c - b.dataset.c).map((c) => c.textContent))],
     at: new URLSearchParams(location.hash.slice(1)).get('at'),
     sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth,
     client: document.documentElement.clientWidth, padding: getComputedStyle(document.body).paddingLeft,

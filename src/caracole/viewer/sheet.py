@@ -186,6 +186,26 @@ def _played(line: Line, names: list[str]) -> bool:
     return not isinstance(line, (Text, Blank)) and not chord_legend(written(line, names))
 
 
+def is_legend(line: Line, names: list[str]) -> bool:
+    """Whether a line of chords is a chord legend's: chords given with their fingerings ("[Am] [*x02210]",
+    ``voicings.chord_legend``), which name the tab's shapes as it writes them and play nothing. In any version
+    of the sheet its chords stay as written (``version.apply_version``, viewer.js), or Am's shape would be
+    named Bm two semitones up."""
+    return isinstance(line, (Lyrics, ChordRow)) and bool(chord_legend(written(line, names)))
+
+
+def is_legend_line(text: str) -> bool:
+    """``is_legend`` for a line of a ChordPro text that ``parse_sheet`` reads as a line of the song (no
+    directive, ``#`` comment or line of a tab)."""
+    names: list[str] = []
+
+    def chord(name: str) -> int:
+        names.append(name)
+        return len(names) - 1
+
+    return is_legend(_line(text.replace(_ESCAPED_BACKSLASH, "\\"), chord), names)
+
+
 def preamble_section(sheet: Sheet) -> Section | None:
     """What a tab says before its first section (its tabber's notes, a link, a chord legend), or None:
     an unlabelled first section, before another, up to its first tab (UG's first label is often inside

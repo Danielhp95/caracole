@@ -1935,6 +1935,18 @@ def test_a_versions_pdf_draws_the_shape_its_viewer_shows_for_a_slash_chord_too(c
     assert drawn == shown
 
 
+def test_a_chord_legend_after_the_first_section_stays_as_written_in_a_versions_pdf(conn, cfg):
+    # "[ch]Am[/ch] x02210" gives the tab's shape for Am: two up, its chord named Bm would print Am's shape as Bm's
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    sheet = GM_SHEET + "\r\n[Chords]\r\n[ch]Gm[/ch] x55333\r\n[ch]Eb[/ch] x68886\r\n[ch]Bb[/ch] x13331\r\n"
+    human_sheet(conn, cfg, song, sheet, tonality="Gm")
+    _, run = export(conn, cfg, song, "t=2")
+    printed = run.printed[-1].decode("utf-8").splitlines()
+    assert any(line.startswith("[Am]Una") for line in printed)  # the song moves
+    chords = printed[printed.index("{comment: CHORDS}") + 1:]
+    assert chords[:3] == ["[Gm] [*x55333]", "[Eb] [*x68886]", "[Bb] [*x13331]"]
+
+
 def test_the_same_export_again_replaces_it(conn, cfg):
     from caracole.render import EXPORT_KV
 
