@@ -26,7 +26,10 @@ Tables (plan §5, plus ``kv``):
 
 from __future__ import annotations
 
+import fcntl
 import json
+import os
+import secrets
 import sqlite3
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -326,8 +329,12 @@ def connect(path: Path) -> sqlite3.Connection:
     all go in a ``savepoint``.
 
     Each migration applies whole or not at all, after the database is copied to
-    ``<name>.v<N>.bak`` (N: the version it's migrated from). A database newer
-    than this caracole, say after a NixOS rollback, raises DatabaseTooNew.
+    ``<name>.v<N>.bak`` (N: the version it's migrated from). One connection
+    migrates at a time, of every thread and process (an flock on
+    ``<name>.migrating``, the version read again under it): caracole serve opens
+    one a request, and the nightly run may start with it, so the others wait for
+    it, then find the database migrated. A database newer than this caracole,
+    say after a NixOS rollback, raises DatabaseTooNew.
     """
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, isolation_level=None, timeout=30)  # SQLite's busy timeout: 30 s
@@ -345,7 +352,8 @@ def connect(path: Path) -> sqlite3.Connection:
     return conn
 
 
-def _migrate(conn: sqlite3.Connection, path: Path) -> None:
+def _version(conn: sqlite3.Connection, path: Path) -> int:
+    """The database's schema version; DatabaseTooNew for one newer than this caracole."""
     current = conn.execute("PRAGMA user_version").fetchone()[0]
     if current > SCHEMA_VERSION:
         backup = path.with_name(f"{path.name}.v{SCHEMA_VERSION}.bak")
@@ -356,11 +364,33 @@ def _migrate(conn: sqlite3.Connection, path: Path) -> None:
             f"{path} is at schema version {current}, but this caracole knows up to {SCHEMA_VERSION}: "
             f"a newer caracole migrated it. Run that caracole{restore}."
         )
+    return current
+
+
+def _migrate(conn: sqlite3.Connection, path: Path) -> None:
+    if not any(v > _version(conn, path) for v in _MIGRATIONS):
+        return
+    # One migrator at a time: flock's lock belongs to the open file, so another thread's open waits too.
+    lock = os.open(path.with_name(f"{path.name}.migrating"), os.O_RDWR | os.O_CREAT | os.O_CLOEXEC, 0o600)
+    try:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        _migrate_locked(conn, path)
+    finally:
+        os.close(lock)  # and its lock with it
+
+
+def _migrate_locked(conn: sqlite3.Connection, path: Path) -> None:
+    current = _version(conn, path)  # again: the one before may have migrated it while this one waited
     pending = sorted(v for v in _MIGRATIONS if v > current)
     if current and pending:
         backup = path.with_name(f"{path.name}.v{current}.bak")
-        backup.unlink(missing_ok=True)  # VACUUM INTO won't overwrite an older copy
-        conn.execute("VACUUM INTO ?", (str(backup),))
+        # Made whole under a name of its own, then put in the older copy's place (VACUUM INTO overwrites nothing).
+        partial = path.with_name(f"{backup.name}.{secrets.token_hex(6)}.part")
+        try:
+            conn.execute("VACUUM INTO ?", (str(partial),))
+            os.replace(partial, backup)
+        finally:
+            partial.unlink(missing_ok=True)
     for version in pending:
         # executescript adds no transaction of its own: without this one, each
         # statement would commit alone and a failure would leave half a migration.

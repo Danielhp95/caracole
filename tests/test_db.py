@@ -65,6 +65,91 @@ def test_the_database_is_backed_up_before_a_migration(current, newer):
     b.close()
 
 
+# A migration long enough for every other connection opened with it to read the version before it: a column added
+# (twice, it fails), and a table of a million rows.
+SLOW = ("ALTER TABLE kv ADD COLUMN at TEXT;\n"
+        "CREATE TABLE pad AS WITH RECURSIVE n(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM n WHERE x < 1000000) "
+        "SELECT x FROM n;")
+
+
+def migrated_once(path):
+    """The database is at the next version, migrated once, its backup whole and alone."""
+    cols, version = columns(path, "kv")
+    assert cols == ["key", "value", "at"] and version == NEXT
+    backup = path.with_name(f"caracole.sqlite.v{NOW}.bak")
+    cols, version = columns(backup, "kv")
+    assert cols == ["key", "value"] and version == NOW
+    b = sqlite3.connect(backup)
+    assert b.execute("SELECT value FROM kv WHERE key = 'spotify:top_tracks'").fetchone()[0] == "[]"
+    b.close()
+    assert sorted(p.name for p in path.parent.iterdir() if p.name.endswith(".bak") or ".bak." in p.name) == [
+        backup.name]  # nothing half-written left beside it
+
+
+def test_connections_opened_at_once_migrate_once_and_each_opens_the_database(current, newer):
+    # caracole serve opens a connection a request, in threads of its own: after an upgrade, a page and its first
+    # poll, or two devices, open the database at the same moment. One migrates; the others wait for it, then open it.
+    import threading
+
+    newer(SLOW)
+    start = threading.Barrier(6)
+    said = []
+
+    def opens():
+        start.wait()
+        try:
+            db.connect(current).close()
+            said.append("ok")
+        except Exception as e:  # noqa: BLE001 (what each said is the test)
+            said.append(f"{type(e).__name__}: {e}")
+
+    threads = [threading.Thread(target=opens) for _ in range(6)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(60)
+    assert said == ["ok"] * 6, said
+    migrated_once(current)
+
+
+CHILD = """
+import sys, time
+from pathlib import Path
+from caracole import db
+db.SCHEMA_VERSION = int(sys.argv[2])
+db._MIGRATIONS[db.SCHEMA_VERSION] = sys.argv[3]
+while time.time() < float(sys.argv[4]):  # both processes start at the same moment
+    pass
+try:
+    db.connect(Path(sys.argv[1])).close()
+    print("ok")
+except Exception as e:
+    print(type(e).__name__, e)
+"""
+
+
+@pytest.mark.slow
+def test_two_caracoles_starting_at_once_migrate_once(current):
+    # The nightly run starts as caracole serve opens the database, right after an upgrade: one migrates, the other
+    # waits for it, and neither fails.
+    import os
+    import subprocess
+    import sys
+    import time
+    from pathlib import Path
+
+    from conftest import subprocess_pythonpath
+
+    env = {"HOME": str(current.parent), "PATH": os.environ.get("PATH", ""),
+           "PYTHONPATH": subprocess_pythonpath(Path(__file__).resolve().parents[1] / "src")}
+    start = str(time.time() + 1.5)
+    children = [subprocess.Popen([sys.executable, "-c", CHILD, str(current), str(NEXT), SLOW, start], env=env,
+                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) for _ in range(2)]
+    said = [child.communicate(timeout=120)[0].strip() for child in children]
+    assert said == ["ok", "ok"], said
+    migrated_once(current)
+
+
 def test_a_new_database_needs_no_backup(tmp_path):
     db.connect(tmp_path / "caracole.sqlite").close()
     assert not list(tmp_path.glob("*.bak"))

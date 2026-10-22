@@ -130,7 +130,10 @@ goes when the PDF is done, so caracole must be able to write there. Its
 [Where each file came from](#where-each-file-came-from)).
 
 **The database.** Before a new caracole migrates `caracole.sqlite`, it copies it
-to `caracole.sqlite.vN.bak`, N being the version it had. A database a newer
+to `caracole.sqlite.vN.bak`, N being the version it had. One caracole migrates
+it at a time (a lock on `caracole.sqlite.migrating`, beside it): `caracole
+serve`'s first requests after an upgrade, or the nightly run starting with
+them, wait the few seconds it takes, then find it migrated. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
 status 2: `database: … is at schema version 9, but this caracole knows up to 8:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
