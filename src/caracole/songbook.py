@@ -67,6 +67,7 @@ from caracole.library import (
 from caracole.logs import plural
 from caracole.normalize import clean_title, identity_key
 from caracole.overrides import TOO_DEEP
+from caracole.pdf_fonts import PdfFonts
 
 # The render step's own pieces: a songbook is rendered the way a sheet is, and right after the sheets.
 from caracole.render import (
@@ -80,10 +81,11 @@ from caracole.render import (
     RenderError,
     Runner,
     _cjk_font,
-    _font_options,
     _sheet_text,
     _style,
+    _usable_pdf_fonts,
     export_query,
+    fonts_options,
     keeps_key,
     own_version,
     pdf_font,
@@ -629,8 +631,8 @@ BOOK_CONFIG = {
     }],
     "pdf": {"pagealign-songs": 0, "fonts": {"toc": {"name": "Helvetica", "size": 12}}},
 }
-# The elements whose font file a CJK font replaces: render.FONT_ELEMENTS, and the contents, whose
-# font chordpro's own config names.
+# The elements whose font file a CJK font replaces in the built-in fonts: render.FONT_ELEMENTS, and the
+# contents, whose font BOOK_CONFIG names (with ``pdf_fonts``, render.PDF_FONT_ELEMENTS has them all).
 BOOK_FONT_ELEMENTS = ("text", "title", "toc")
 
 
@@ -822,11 +824,12 @@ def render_songbooks(conn: sqlite3.Connection, cfg: Config, overrides: Overrides
         log.warning("no songbooks: %s", e)
         return stats
     font, font_problem = _cjk_font(cfg.cjk_font)
+    fonts = _usable_pdf_fonts(cfg)
     waiting: list[str] = []
     for book in books:
         if only_keys is not None and name_key(book.name) not in only_keys:
             continue
-        done = _render_book(conn, cfg, overrides, book, font=font, runner=runner, force=force)
+        done = _render_book(conn, cfg, overrides, book, font=font, fonts=fonts, runner=runner, force=force)
         if done.no_font:
             waiting.append(f"{book.name} ({done.no_font} U+{ord(done.no_font):04X})")
         if done.failed:
@@ -851,8 +854,9 @@ class _BookDone:
 
 
 def _render_book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, book: Songbook, *,
-                 font: Path | None, runner: Runner, force: bool) -> _BookDone:
-    """Make the songbook's files: songbook.cho, songbook.pdf, then songbook.html, which links them."""
+                 font: Path | None, runner: Runner, force: bool, fonts: PdfFonts | None = None) -> _BookDone:
+    """Make the songbook's files: songbook.cho, songbook.pdf, then songbook.html, which links them; the PDF in
+    the PDF fonts ``fonts`` (None: the built-in ones), its words in the CJK font ``font`` when they need it."""
     done = _BookDone()
     entries = songbook_entries(conn, cfg.library_dir, overrides, book)
     try:
@@ -863,14 +867,15 @@ def _render_book(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, bo
         return done
     record = _record(conn, book.folder)
     try:
-        _make_files(cfg, book, entries, folder, record, done, font=font, runner=runner, force=force)
+        _make_files(cfg, book, entries, folder, record, done, font=font, fonts=fonts, runner=runner, force=force)
     finally:  # what was written stays recorded, whatever stopped the rest
         kv_set_json(conn, f"{RECORD_KEY}{book.folder}", record)
     return done
 
 
 def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path, record: dict[str, Any],
-                done: _BookDone, *, font: Path | None, runner: Runner, force: bool) -> None:
+                done: _BookDone, *, font: Path | None, runner: Runner, force: bool,
+                fonts: PdfFonts | None = None) -> None:
     """songbook.cho, songbook.pdf, then songbook.html, into ``folder``, each written in ``record``."""
     playable = [e for e in entries if e.cho is not None]
 
@@ -900,7 +905,7 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
         made[name] = digest
 
     # What chordpro reads and prints of each song: made from more than its .cho (its key, its version, the
-    # viewer's theory and shapes), so the files' inputs hold these texts; the PDF's font is the one they need
+    # viewer's theory and shapes), so the files' inputs hold these texts; the PDF's fonts are the ones they need
     try:
         texts = [_song_file(e) for e in playable]
     except RenderError as e:
@@ -911,22 +916,24 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
         make(CHO_NAME, {"songs": texts, "v": 4}, lambda: _chordpro_file(cfg, texts, runner) if texts else None)
 
     try:
-        printed = [_song_file(e, pdf=True) for e in entries]
+        printed = [_song_file(e, pdf=True, fonts=fonts) for e in entries]
     except RenderError as e:
         log.warning("songbook %s: no %s: %s", book.name, PDF_NAME, e)
         done.failed = True
         printed = None
     if printed is not None:
         text = "\n".join([book.name, *printed])
-        book_font, lost = pdf_font(text, font)
+        book_font, lost = pdf_font(text, font, fonts)
         if lost is not None:
             done.no_font = lost
         else:
             pdf_inputs = {
                 "name": book.name, "songs": printed, "style": _style(), "book": BOOK_CONFIG,
                 "font": str(book_font) if book_font else None, "v": 5,
+                # only when set: without them, a songbook made before them is made from the same
+                **({"fonts": str(fonts.folder)} if fonts is not None else {}),
             }
-            make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, printed, runner, font=book_font)
+            make(PDF_NAME, pdf_inputs, lambda: _pdf(cfg, book, entries, printed, runner, font=book_font, fonts=fonts)
                  if playable else None)
 
     from caracole.viewer.book import BookSong, assets_version, build_songbook
@@ -1077,17 +1084,18 @@ def _like_prefix(prefix: str) -> str:
 # --- the chordpro runs -------------------------------------------------------------------------
 
 
-def _song_file(entry: Entry, *, pdf: bool = False) -> str:
+def _song_file(entry: Entry, *, pdf: bool = False, fonts: PdfFonts | None = None) -> str:
     """One song for chordpro: its sheet where the songbook plays it (``Entry.version``), each chord named as its
     viewer names it there (``apply_version``: chordpro moves nothing, and its A# would be the viewer's Bb); for
-    the PDF, that sheet's PDF text (``render._sheet_text``), with the viewer's shapes as its diagrams; for
+    the PDF, that sheet's PDF text (``render._sheet_text``, levelled in the PDF fonts ``fonts``), with the viewer's
+    shapes as its diagrams; for
     songbook.cho, without the chord definitions an app may not read. Or a page naming it as missing, which the
     contents then name too. A text that can't be made (a bug in the viewer's code it runs) is a RenderError,
     logged with its traceback: it costs the files it is in, and no more."""
     if entry.cho is not None:
         try:
-            return (_sheet_text(entry.cho, key=entry.key, key_source=entry.key_source, version=entry.version) if pdf
-                    else _app_text(entry))
+            return (_sheet_text(entry.cho, key=entry.key, key_source=entry.key_source, version=entry.version,
+                                fonts=fonts) if pdf else _app_text(entry))
         except Exception as e:
             log.warning("%s: cannot make its text for the songbook %s", entry.text, "PDF" if pdf else "ChordPro file",
                         exc_info=True)
@@ -1132,9 +1140,9 @@ _BRACES = str.maketrans("{}", "()")
 
 
 def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], printed: Sequence[str], runner: Runner, *,
-         font: Path | None) -> bytes:
+         font: Path | None, fonts: PdfFonts | None = None) -> bytes:
     """songbook.pdf: every song, in order (``printed``: each one's ``_song_file`` for the PDF), through
-    one chordpro run, in caracole's look."""
+    one chordpro run, in caracole's look, in the PDF fonts ``fonts`` and the CJK font ``font``."""
     with private_dir(cfg.cache_dir, "songbook-") as tmp:
         files = _write_songs(tmp, printed)
         (tmp / CONTENTS_TEMPLATE).write_text(_contents_file(book, entries), encoding="utf-8")
@@ -1142,8 +1150,7 @@ def _pdf(cfg: Config, book: Songbook, entries: Sequence[Entry], printed: Sequenc
         config.write_text(json.dumps(_book_config(book), ensure_ascii=False), encoding="utf-8")
         out = tmp / PDF_NAME
         cmd = [cfg.chordpro_bin, "--nodefaultconfigs", f"--config={STYLE_FILE}", f"--config={config}"]
-        if font is not None:
-            cmd += _font_options(font, BOOK_FONT_ELEMENTS)  # a missing file or a collection is a RenderError
+        cmd += fonts_options(fonts, font, BOOK_FONT_ELEMENTS)  # a missing file or a collection is a RenderError
         run_chordpro([*cmd, f"--output={out}", *map(str, files)], out, runner=runner,
                      timeout=TIMEOUT + PER_SONG_TIMEOUT * len(files), chordpro_bin=cfg.chordpro_bin)
         return out.read_bytes()

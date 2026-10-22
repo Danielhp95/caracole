@@ -20,6 +20,7 @@ up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
 - [Browse and search](#browse-and-search)
 - [Songbooks](#songbooks)
 - [overrides.toml: your decisions](#overridestoml-your-decisions)
+- [Fonts in the PDFs](#fonts-in-the-pdfs)
 - [Fonts for Chinese sheets](#fonts-for-chinese-sheets)
 - [The library folder](#the-library-folder)
 - [A worked example](#a-worked-example)
@@ -50,6 +51,7 @@ user_agent = "caracole/0.1 (personal tab library)"
 guitar_pro_mode = "assisted"      # UG's mode, the only one: you click its Guitar Pro pages
 chordpro_bin = "chordpro"         # the program that renders PDFs
 ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouTube"
+# pdf_fonts = "/path/to/folder"   # or $CARACOLE_PDF_FONTS; see "Fonts in the PDFs"
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
 
 [spotify]                         # optional: without a client_id, Spotify is skipped
@@ -1276,7 +1278,9 @@ and cache.
   DADGAD"), never one they only talk about, and never standard tuning. Then the chord diagrams above
   the song, bold rust chords over the lyrics, and section names in small rust
   capitals (no band). The title is large, the page a clean two columns, and a
-  songbook's songs are set the same way. chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
+  songbook's songs are set the same way: in Adwaita Sans with the packages, the
+  title, the chords and the section names bold, a repeat mark italic, a tab in
+  Adwaita Mono (see [Fonts in the PDFs](#fonts-in-the-pdfs)). chordpro prints a text of the PDF's own, and `sheet.cho` stays as it
   is, for the viewer: the tab's notes before its first section stay out of the
   PDF (a tab after them stays in), the chord diagrams are the shapes the
   viewer shows first for the chords the sheet gives shapes for (its chord
@@ -1300,7 +1304,7 @@ and cache.
   way, each where the songbook plays it (see [Songbooks](#songbooks)).
   `sheet.html` is the sheet viewer, for the phone (see
   [The sheet viewer](#the-sheet-viewer)). A PDF is made again only when its
-  sheet, its version, the font, caracole's PDF style or the text the
+  sheet, its version, the fonts, caracole's PDF style or the text the
   PDF prints changes (the key it names, as when an auto sheet's key is heard
   again, or a newer caracole's way of writing it), or when
   it is no longer the PDF caracole wrote: deleted, cut short, edited, or a
@@ -3607,7 +3611,7 @@ songbooks.toml that can't be read exits 2.
 
 `caracole render` and the nightly run make the songbooks' files after the
 sheets, and a file only when what it is made from changed: its songs, their
-order, their sheets, their transpositions, caracole's PDF style or the font,
+order, their sheets, their transpositions, caracole's PDF style or the fonts,
 for `songbook.pdf` the text each song's PDF prints too (the key it names, as
 when an auto sheet's key is heard again, or a newer caracole's way of writing
 it), and for `songbook.html` the sheet viewer too, so an upgrade that changes the
@@ -3824,10 +3828,49 @@ with the error, and leave `index.html` as it was. `caracole add`,
 `caracole search --add` and `caracole sync` still add and sync your songs, with
 a warning.
 
+## Fonts in the PDFs
+
+Every PDF caracole makes (a sheet's, an export's, a songbook's) is set in the
+fonts of one folder, `pdf_fonts`, or `$CARACOLE_PDF_FONTS` (the key wins). It
+holds four, each a `.ttf` or an `.otf`:
+
+| File | What it sets |
+|---|---|
+| `regular` | the words, the line under the title, the page footer, the contents |
+| `bold` | the title, the chords, the section names, the chord diagrams' names |
+| `italic` | a repeat mark ("x2") beside the chords |
+| `mono` | a tab |
+
+The Nix packages' wrapper points `$CARACOLE_PDF_FONTS` at Adwaita Sans and
+Adwaita Mono (nixpkgs' `adwaita-fonts`), GNOME's system fonts: what a Firefox
+that sets no font of its own shows on GNOME, and what caracole's own pages
+show there. Adwaita Sans comes as variable fonts, which ChordPro 6.050.7 draws
+only in their default weight, so the package makes static Regular, Bold and
+Italic instances of them (`nix/pdf-fonts.nix`), with their licence, the SIL
+Open Font License 1.1, in `licenses/` beside them. A sheet's PDF embeds the
+letters it uses of each, about 0.2 MB.
+
+Each must be a font ChordPro draws right, as the Chinese font below must: a
+single `.ttf` or `.otf`, no collection, no odd-length glyph records, and a
+static font, not a variable one. A folder that lacks one, or holds one that
+isn't, is logged once a render (`pdf_fonts is unusable (…): the PDFs keep
+ChordPro's built-in fonts`), and the PDFs keep ChordPro's built-in Helvetica
+and Courier, as they do with no folder set. Setting the folder, changing it or
+taking it away makes every PDF again at the next render.
+
+Adwaita Sans has the Latin, Greek and Cyrillic letters, the accents, and the
+curly quotes and apostrophes (’ ʼ “ ”), so a sheet that has them is set in it
+whole. Only letters it lacks, Chinese among them, bring in the Chinese font
+below, for the words alone: the chords, their repeat marks and a tab stay in
+Adwaita. A symbol it lacks (an emoji, say) prints as an empty box and brings
+in no other font. A songbook is one PDF: with a Chinese song in it, all its
+words are in the Chinese font.
+
 ## Fonts for Chinese sheets
 
-ChordPro's built-in PDF fonts have no Chinese glyphs, so a sheet with Chinese
-lyrics needs a font file. The Nix package sets one: its wrapper points
+Neither ChordPro's built-in PDF fonts nor Adwaita Sans have Chinese glyphs, so
+a sheet with Chinese lyrics needs a font file. The Nix package sets one: its
+wrapper points
 `$CARACOLE_CJK_FONT` at `FusionKaiJ-Regular.ttf` from nixpkgs' `lxgw-fusionkai`,
 a Kai (brush-style) face. To use another font, set `cjk_font`, which wins over
 the variable.
@@ -3850,7 +3893,9 @@ details.
 
 The font is used only for sheets that need it, by what the PDF prints: Chinese
 only in the tab's notes before its first section, which stay out of the PDF,
-needs none. Some transcribers type a
+needs none. Without `pdf_fonts`, ChordPro's built-in fonts lose any letter
+outside Windows' Western set (a ʼ, Greek, Cyrillic), and such a sheet is set in
+the Chinese font whole, as is one with a symbol they lack. Some transcribers type a
 Cyrillic or Greek letter that looks Latin, such as the Cyrillic х in a repeat
 mark "(х2)": when those are a sheet's only such letters, they are written as
 the Latin ones, so the sheet keeps ChordPro's built-in fonts and needs no font

@@ -143,6 +143,9 @@ class Config:
     chordpro_bin: str = "chordpro"
     ytdlp_bin: str = "yt-dlp"
     cjk_font: Path | None = None
+    # The folder of fonts the PDFs are set in (pdf_fonts.py: nix/pdf-fonts.nix's Adwaita Sans and Mono); None
+    # without one, when they keep ChordPro's built-in Helvetica and Courier.
+    pdf_fonts: Path | None = None
     # alphaTab's three files (nix/alphatab.nix), for caracole serve's Guitar Pro page (web/alphatab.py); None
     # without them, when Guitar Pro files are downloads alone.
     alphatab_dir: Path | None = None
@@ -164,7 +167,7 @@ class Config:
 _TOP_KEYS = {
     "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
     "wanted_file",
-    "user_agent", "guitar_pro_mode", "chordpro_bin", "ytdlp_bin", "cjk_font",
+    "user_agent", "guitar_pro_mode", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
     "spotify", "providers", "match", "rank", "ntfy", "autochords",
 }
 _SPOTIFY_KEYS = {
@@ -436,6 +439,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     )
 
     cjk_font_value = _optional_string(data, "cjk_font", "cjk_font") or env.get("CARACOLE_CJK_FONT")
+    pdf_fonts_value = _optional_string(data, "pdf_fonts", "pdf_fonts") or env.get("CARACOLE_PDF_FONTS")
     ytdlp_bin = _optional_string(data, "ytdlp_bin", "ytdlp_bin") or env.get("CARACOLE_YTDLP_BIN") or "yt-dlp"
     alphatab_value = env.get("CARACOLE_ALPHATAB_DIR")
 
@@ -450,6 +454,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         chordpro_bin=_string(data.get("chordpro_bin", "chordpro"), "chordpro_bin"),
         ytdlp_bin=ytdlp_bin,
         cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,
+        pdf_fonts=paths.resolve(pdf_fonts_value) if pdf_fonts_value else None,
         alphatab_dir=paths.resolve(alphatab_value) if alphatab_value else None,
         spotify=spotify,
         providers=providers,

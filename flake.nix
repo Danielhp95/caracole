@@ -20,9 +20,11 @@
       # The same program with the `autochords` extra (torch, beat-this, librosa),
       # its wrapper pointing at the model files from nix/autochords.nix.
       caracoleAutochords = caracole.override { withAutochords = true; };
-      # The font the packages render Chinese sheets with, so the CJK test runs here too.
+      # The fonts the packages set the PDFs in (Adwaita Sans and Mono, nix/pdf-fonts.nix) and render
+      # Chinese sheets with, so the tests of both run here too.
       # And alphaTab, for caracole serve's Guitar Pro page and the browser tests of it.
       fontEnv.CARACOLE_CJK_FONT = caracole.cjkFont;
+      fontEnv.CARACOLE_PDF_FONTS = "${caracole.pdfFonts}";
       fontEnv.CARACOLE_ALPHATAB_DIR = "${caracole.alphatab}";
       # `caracole` in a dev shell runs the checkout's src/ (the worktree the shell was
       # entered in), so an edit shows at once, with no rebuild.

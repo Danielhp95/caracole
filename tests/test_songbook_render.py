@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 from conftest import add_song
+from helpers.fonts import PDF_FONTS, font_folder
 from helpers.songbooks import SHEET, ZH_SHEET, FakeChordPro, keep_sheet, output_of, render_sheets
 
 from caracole.db import kv_get_json, kv_set_json
@@ -634,6 +635,45 @@ def test_a_latin_songbook_keeps_the_built_in_fonts(conn, cfg, two, tmp_path):
     assert not any(a.startswith("--define=pdf.fonts") for a in pdf_call(fake))
 
 
+def test_with_pdf_fonts_a_songbook_and_its_contents_are_set_in_them_never_in_the_cjk_font(conn, cfg, tmp_path):
+    # The Epic songbook went brush entirely for one ʼ: with the PDF fonts, a Latin songbook never does.
+    epic = add_song(conn, "Epic", "Hymn")
+    keep_sheet(conn, cfg, epic, SHEET.replace("Una canción", "Weʼre “singing” don’t"), tab_id=1)
+    render_sheets(conn, cfg)
+    make(cfg, "Epic", "Epic - Hymn")
+    fonts, kai = font_folder(tmp_path / "fonts"), fake_font(tmp_path / "Kai.otf")
+    fake = FakeChordPro()
+    stats = render(conn, replace(cfg, cjk_font=kai, pdf_fonts=fonts), runner=fake)
+    call = pdf_call(fake)
+    assert stats.font_error is None and stats.failed == []
+    assert f"--define=pdf.fonts.toc.file={fonts / 'regular.ttf'}" in call
+    assert f"--define=pdf.fonts.title.file={fonts / 'bold.ttf'}" in call
+    assert not any(str(kai) in a for a in call)
+
+
+def test_with_pdf_fonts_a_songbook_with_a_chinese_song_sets_its_words_in_the_cjk_font(conn, cfg, two, tmp_path):
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    keep_sheet(conn, cfg, zh, ZH_SHEET, tab_id=3, tonality="")
+    render_sheets(conn, cfg)
+    make(cfg, "Mixed", "Radiohead - Creep", "宋冬野 - 斑马斑马")
+    fonts, kai = font_folder(tmp_path / "fonts"), fake_font(tmp_path / "Kai.otf")
+    fake = FakeChordPro()
+    render(conn, replace(cfg, cjk_font=kai, pdf_fonts=fonts), runner=fake, only="Mixed")
+    call = pdf_call(fake)
+    for element in ("text", "title", "toc"):
+        assert f"--define=pdf.fonts.{element}.file={kai}" in call
+    assert f"--define=pdf.fonts.chord.file={fonts / 'bold.ttf'}" in call
+
+
+def test_pdf_fonts_set_or_taken_away_make_the_songbook_pdf_again(conn, cfg, two, tmp_path):
+    render(conn, cfg)
+    fonts = font_folder(tmp_path / "fonts")
+    for setting, made in ((fonts, True), (fonts, False), (None, True), (None, False)):
+        fake = FakeChordPro()
+        render(conn, replace(cfg, pdf_fonts=setting), runner=fake)
+        assert any(output_of(c).suffix == ".pdf" for c in fake.calls) == made, (setting, made)
+
+
 def test_a_failed_run_is_reported_and_the_rest_goes_on(conn, cfg, two, caplog):
     make(cfg, "Picnic", "Soda Stereo - De Música Ligera")
     stats = render(conn, cfg, runner=FakeChordPro(fail=("Creep",)))
@@ -967,6 +1007,33 @@ def test_the_real_pdf_of_a_chinese_songbook_embeds_the_font(conn, cfg):
     assert stats.failed == [] and stats.font_error is None
     data = (folder(cfg, "宋冬野的歌") / "songbook.pdf").read_bytes()
     assert Path(CJK_FONT).stem.split("-")[0].encode() in data
+
+
+def base_fonts(pdf: Path) -> set[str]:
+    """The fonts a PDF names (its font dictionaries' /BaseFont)."""
+    return {m.decode() for m in re.findall(rb"/BaseFont /([^\s/]+)", pdf.read_bytes())}
+
+
+@real_chordpro
+@pytest.mark.skipif(not (CJK_FONT and Path(CJK_FONT).is_file()), reason="set CARACOLE_CJK_FONT")
+@pytest.mark.skipif(PDF_FONTS is None, reason="set CARACOLE_PDF_FONTS to nix/pdf-fonts.nix's folder")
+@pytest.mark.chordpro
+def test_the_real_pdf_of_a_songbook_is_in_adwaita_sans_and_the_cjk_font_only_for_chinese(conn, cfg):
+    cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=Path(CJK_FONT), pdf_fonts=PDF_FONTS)
+    epic, zh = add_song(conn, "Epic", "Hymn"), add_song(conn, "宋冬野", "斑马斑马")
+    keep_sheet(conn, cfg, epic, SHEET.replace("Una canción", "Weʼre “singing” don’t"), tab_id=1)
+    keep_sheet(conn, cfg, zh, ZH_SHEET, tab_id=2, tonality="")
+    render_sheets(conn, cfg)
+    make(cfg, "Epic", "Epic - Hymn")
+    make(cfg, "Mixed", "Epic - Hymn", "宋冬野 - 斑马斑马")
+    stats = render_songbooks(conn, cfg, overrides(cfg, ""))
+    assert stats.failed == [] and stats.font_error is None
+    kai = Path(CJK_FONT).stem.split("-")[0]
+    latin = base_fonts(folder(cfg, "Epic") / "songbook.pdf")
+    assert {"AdwaitaSans", "AdwaitaSansBold"} <= latin and not any(f.startswith((kai, "Helvetica")) for f in latin)
+    mixed = base_fonts(folder(cfg, "Mixed") / "songbook.pdf")
+    assert any(f.startswith(kai) for f in mixed) and "AdwaitaSansBold" in mixed  # the words, and the chords
+    assert not any(f.startswith("Helvetica") for f in mixed)
 
 
 def test_each_song_goes_in_as_its_pdf_text(conn, cfg, two):

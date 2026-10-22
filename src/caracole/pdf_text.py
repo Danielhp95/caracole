@@ -36,7 +36,9 @@ private copy it renders (``render._render_into``). It is the .cho with:
   column of a song a little longer than one held a single line now and then. Where that is comes
   from how tall chordpro prints each line in caracole's style (``layout``, ``line_heights``,
   ``column_height``, read from STYLE_FILE's sizes and spacings and pinned to the real chordpro's
-  pages by test_render.py). With ``names``, the legend is part of the song it levels, each chord as
+  pages by test_render.py), in the PDF's fonts: a line wraps where its letters fill the column, by
+  Helvetica's widths in the built-in fonts, by the font files' own in ``pdf_fonts``'s (pdf_fonts.py,
+  ``fonts``). With ``names``, the legend is part of the song it levels, each chord as
   wide as the name chordpro displays for it ("D · V/V"), and a numerals chart has no diagrams' rows.
 
 Each PDF's record (render.py) keeps the SHA-256 of this text, so a PDF is made again whenever it
@@ -50,13 +52,14 @@ import json
 import re
 import unicodedata
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from caracole.autochords.merge import AUTO_MARKER
 from caracole.chordpro import directive_text
+from caracole.pdf_fonts import PdfFonts, metrics
 from caracole.progressions import key_words
 from caracole.viewer import harmony
 from caracole.viewer.page import key_line_text, shapes_of
@@ -81,13 +84,14 @@ _NAMEABLE = re.compile(r"[^\s{}\[\]\"~]+")  # a chord name a {define} can carry,
 
 
 def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, names: str = "chords",
-             notes_capo: bool = True, defined: bool = False) -> str:
+             notes_capo: bool = True, defined: bool = False, fonts: PdfFonts | None = None) -> str:
     """The text of the PDF of the .cho ``cho`` (see the module's docstring). ``key`` is the key of
     its shapes and ``capo`` its capo, None for none, as the viewer reads them (``page.viewer_key``);
     ``columns`` the song's columns, one for none; ``names``, one of ``NAMES``; ``notes_capo``, whether a
     capo the notes name is the one the chords are played at: not in a version of the sheet that moves
     them or the capo (``render._version_text``); ``defined``, whether ``cho``'s ``{define}``s are the
-    shapes its viewer shows, a version's (``apply_version``), each drawn as it is."""
+    shapes its viewer shows, a version's (``apply_version``), each drawn as it is; ``fonts``, the PDF fonts
+    it is printed in (``pdf_fonts``), None for ChordPro's built-in ones."""
     if names not in NAMES:
         raise ValueError(f"names: {names!r} is none of {', '.join(NAMES)}")
     lines = cho.splitlines()
@@ -119,7 +123,7 @@ def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, n
     out += body
     if numbered is not None:
         out += _legend(played, numbered)
-    if columns == 2 and (at := _column_break(out)) is not None:
+    if columns == 2 and (at := _column_break(out, fonts)) is not None:
         out.insert(at, "{column_break}")
     return "\n".join(out) + "\n"
 
@@ -277,7 +281,7 @@ def _song(lines: list[str]) -> list[str]:
 # --- two columns that end level ----------------------------------------------------------------
 
 # The share of a column each part of a song may fill, by the estimate, to be sure chordpro's column
-# holds it (else the second part would start the next page): the estimate is exact for Helvetica
+# holds it (else the second part would start the next page): the estimate is exact for the PDF's fonts
 # (test_render.py), but a songbook with a Chinese song prints its other songs in the CJK font too,
 # whose Latin letters are wider, and wrap sooner.
 _FILL = 0.85
@@ -286,17 +290,17 @@ _SECTION_STARTS = frozenset({*COMMENTS, "start_of_chorus", "soc"})
 _FLOW = frozenset({"column_break", "colb", "new_page", "np", "new_physical_page", "npp", "columns", "col"})
 
 
-def _column_break(lines: list[str]) -> int | None:
+def _column_break(lines: list[str], fonts: PdfFonts | None = None) -> int | None:
     """Where a ``{column_break}`` levels the two columns of the song ``lines`` (the PDF's text, its
-    ``{columns: 2}`` in it), or None to leave chordpro's flow, which fills the first column and puts the
-    rest in the second: a single line, now and then. Only a song whose first page's two columns hold
-    it gets one, and only before a section (between two stanzas in a song without any heading), never
-    inside one or a tab: there, the one that leaves the taller column shortest. A song one column holds
+    ``{columns: 2}`` in it, printed in ``fonts``), or None to leave chordpro's flow, which fills the first
+    column and puts the rest in the second: a single line, now and then. Only a song whose first page's two
+    columns hold it gets one, and only before a section (between two stanzas in a song without any heading),
+    never inside one or a tab: there, the one that leaves the taller column shortest. A song one column holds
     stays in one, a longer one than two hold keeps chordpro's flow, and so does a song that sets its
     own columns or pages."""
     if sum(1 for line in lines if (found := _directive(line)) and found[0] in _FLOW) > 1:
         return None
-    shape = layout()
+    shape = layout(fonts)
     heights = line_heights(lines, shape)
     column, total = column_height(lines, shape), sum(heights)
     if total <= column:
@@ -354,19 +358,33 @@ def _blanks_before(lines: list[str], at: int) -> range:
 
 # --- how tall chordpro prints it ----------------------------------------------------------------
 
+class _Widths(dict):
+    """A font's advance widths, in thousandths of its size, by character. One it lacks (``__missing__``) is a
+    square when it is a wide East Asian letter, as wide as its letter without its accent when it has one, else
+    as wide as a digit; and kept."""
+
+    def __missing__(self, ch: str) -> float:
+        if unicodedata.east_asian_width(ch) in "WF":
+            width: float = 1000
+        else:
+            width = dict.get(self, unicodedata.normalize("NFKD", ch)[:1], dict.get(self, "0", 556))
+        self[ch] = width
+        return width
+
+
 # Helvetica's advance widths, in thousandths of the size, for " " to "~" (Adobe's core-font metrics):
 # the lyrics' font, and the bold one the chords are in, with the "·" a chord's numeral is named after
-# (WinAnsi's, "D · V/V"). ``_letter`` gives every other letter's.
-_HELVETICA = dict(zip(map(chr, range(32, 127)), map(int, """
+# (WinAnsi's, "D · V/V"). Helvetica-Oblique's are Helvetica's.
+_HELVETICA = _Widths(zip(map(chr, range(32, 127)), map(int, """
 278 278 355 556 556 889 667 222 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 278 278
 584 584 584 556 1015 667 667 722 722 667 611 778 722 278 500 667 556 833 722 778 667 778 722 667 611 722 667 944
 667 667 611 278 278 278 469 556 222 556 556 500 556 556 278 556 556 222 222 500 222 833 556 556 556 556 333 500
-278 556 500 722 500 500 500 334 260 334 584""".split()), strict=True)) | {"\u00b7": 278}
-_HELVETICA_BOLD = dict(zip(map(chr, range(32, 127)), map(int, """
+278 556 500 722 500 500 500 334 260 334 584""".split()), strict=True), **{"\u00b7": 278})
+_HELVETICA_BOLD = _Widths(zip(map(chr, range(32, 127)), map(int, """
 278 333 474 556 556 889 722 278 333 333 389 584 278 333 278 278 556 556 556 556 556 556 556 556 556 556 333 333
 584 584 584 611 975 722 722 722 722 667 611 778 722 278 556 722 611 833 722 778 667 778 722 667 611 722 667 944
 667 667 611 333 278 333 584 556 278 556 611 556 611 556 333 611 611 278 278 556 278 889 611 611 611 611 389 556
-333 611 556 778 556 556 500 389 280 389 584""".split()), strict=True)) | {"\u00b7": 278}
+333 611 556 778 556 556 500 389 280 389 584""".split()), strict=True), **{"\u00b7": 278})
 _TOKEN = re.compile(r"\[([^\]]*)\]")
 _BREAKS = re.compile(r"(.+)([-_,.:;\s])(.+)", re.DOTALL)  # where chordpro may wrap a line, its last place
 _STRINGS = 6  # a guitar's, for the width of a chord diagram
@@ -385,7 +403,9 @@ class Layout:
     size times its spacing). ``diagram_row`` is a row of chord diagrams above the song, ``per_row`` how
     many a row holds; ``wrap_indent`` is how far a wrapped line's next part is indented (an "x"). A
     heading is its font's size times ``heading_spacing``: a {comment}'s (``comment``), a
-    {comment_italic}'s or a {comment_box}'s (``italic_size``, ``box_size``)."""
+    {comment_italic}'s or a {comment_box}'s (``italic_size``, ``box_size``). ``regular``, ``bold`` and
+    ``italic`` are its fonts' widths (``_Widths``): the words', the chords' and section names', and the
+    repeat marks' and a {comment_italic}'s."""
 
     width: float
     height: float
@@ -408,6 +428,9 @@ class Layout:
     empty: float
     diagram_row: float
     per_row: int
+    regular: _Widths = field(compare=False, repr=False)
+    bold: _Widths = field(compare=False, repr=False)
+    italic: _Widths = field(compare=False, repr=False)
 
     @property
     def column_width(self) -> float:
@@ -420,12 +443,12 @@ class Layout:
 
     @property
     def wrap_indent(self) -> float:
-        return _width("x", self.text_size)
+        return _width("x", self.text_size, self.regular)
 
 
-@lru_cache(maxsize=1)
-def layout() -> Layout:
-    """The page STYLE_FILE describes (see ``Layout``)."""
+@lru_cache(maxsize=4)
+def layout(pdf_fonts: PdfFonts | None = None) -> Layout:
+    """The page STYLE_FILE describes (see ``Layout``), in the PDF fonts ``pdf_fonts`` (None: the built-in ones)."""
     pdf = json.loads(STYLE_FILE.read_text(encoding="utf-8"))["pdf"]
     fonts, spacing, d = pdf["fonts"], pdf["spacing"], pdf["diagrams"]
     width, height = pdf["papersize"]
@@ -446,7 +469,15 @@ def layout() -> Layout:
         comment=fonts["comment"]["size"] * spacing["lyrics"], tab=fonts["tab"]["size"] * spacing["tab"],
         empty=fonts["text"]["size"] * spacing["empty"],  # an empty line's font is the text's
         diagram_row=row, per_row=int((inner + d["hspace"] * d["width"]) / across),
+        **_font_widths(pdf_fonts),
     )
+
+
+def _font_widths(fonts: PdfFonts | None) -> dict[str, _Widths]:
+    """``Layout``'s widths in the PDF fonts ``fonts``: their files' own (``pdf_fonts.metrics``), else Helvetica's."""
+    if fonts is None:
+        return {"regular": _HELVETICA, "bold": _HELVETICA_BOLD, "italic": _HELVETICA}
+    return {role: _Widths(metrics(getattr(fonts, role)).widths) for role in ("regular", "bold", "italic")}
 
 
 def column_height(lines: list[str], shape: Layout) -> float:
@@ -498,9 +529,9 @@ def line_heights(lines: list[str], shape: Layout) -> list[float]:
             if found[0] in ("define", "chord") and (shown := _DISPLAY.search(found[1])) and found[1].split():
                 displays[found[1].split()[0]] = shown.group(1)
             elif (found[0] in COMMENTS or found[0] == "chorus") and text:
-                size, widths = ((shape.box_size, _HELVETICA) if found[0] in _BOX
-                                else (shape.italic_size, _HELVETICA) if found[0] in _ITALIC
-                                else (shape.comment_size, _HELVETICA_BOLD))
+                size, widths = ((shape.box_size, shape.regular) if found[0] in _BOX
+                                else (shape.italic_size, shape.italic) if found[0] in _ITALIC
+                                else (shape.comment_size, shape.bold))
                 height = size * shape.heading_spacing * _wrapped(text, size, shape, widths)
         elif line.startswith("#"):
             pass
@@ -514,26 +545,12 @@ def line_heights(lines: list[str], shape: Layout) -> list[float]:
     return out
 
 
-def _width(text: str, size: float, widths: dict[str, int] = _HELVETICA) -> float:
-    """The width of ``text`` in Helvetica (``widths``) at ``size``, a letter the table lacks as
-    ``_letter`` says."""
-    try:
-        return sum(map(widths.__getitem__, text)) * size / 1000
-    except KeyError:
-        bold = widths is _HELVETICA_BOLD
-        return sum(widths[ch] if ch in widths else _letter(ch, bold) for ch in text) * size / 1000
+def _width(text: str, size: float, widths: _Widths) -> float:
+    """The width of ``text`` in the font of ``widths`` at ``size``, a letter it lacks as ``_Widths`` says."""
+    return sum(map(widths.__getitem__, text)) * size / 1000
 
 
-@lru_cache(maxsize=4096)
-def _letter(ch: str, bold: bool) -> int:
-    """The width of a letter the Helvetica tables lack: a wide East Asian letter is a square, an
-    accented one its letter's width, any other the width of a digit."""
-    if unicodedata.east_asian_width(ch) in "WF":
-        return 1000
-    return (_HELVETICA_BOLD if bold else _HELVETICA).get(unicodedata.normalize("NFKD", ch)[:1], 556)
-
-
-def _fit(text: str, room: float, size: float, widths: dict[str, int] = _HELVETICA) -> tuple[str, str]:
+def _fit(text: str, room: float, size: float, widths: _Widths) -> tuple[str, str]:
     """chordpro's Writer::wrap: as much of ``text`` as fits in ``room``, broken after its last break
     that lets it fit (a space there goes), and the rest."""
     rest = space = ""
@@ -548,7 +565,7 @@ def _fit(text: str, room: float, size: float, widths: dict[str, int] = _HELVETIC
     return text, rest
 
 
-def _wrapped(text: str, size: float, shape: Layout, widths: dict[str, int] = _HELVETICA) -> int:
+def _wrapped(text: str, size: float, shape: Layout, widths: _Widths) -> int:
     """How many lines chordpro wraps a line of ``text`` alone onto (a heading's, say)."""
     count, room = 1, shape.column_width
     while True:
@@ -561,12 +578,19 @@ def _wrapped(text: str, size: float, shape: Layout, widths: dict[str, int] = _HE
 def _parts(line: str, shape: Layout, displays: dict[str, str] | None = None) -> list[tuple[bool, bool]]:
     """The parts chordpro's ``wrap`` draws a line of chords and words in, each as (whether it has a chord,
     whether it has words): the words fill the column, a chord placed where its words would start, as
-    wide as the name chordpro prints for it (``displays``: a chord's, by a {define})."""
+    wide as the name chordpro prints for it (``displays``: a chord's, by a {define}), or a repeat mark
+    ("*x2") as wide as its words in the annotations' font."""
     shown = displays or {}
     pieces = _TOKEN.split(line)
     names, sung = pieces[1::2], "".join(pieces[0::2])
-    widest = max((len(shown.get(name, name)) for name in names), default=0) * shape.chord_size  # no letter is wider than its size
-    if _width(sung, shape.text_size) + widest <= shape.column_width:  # nothing to wrap: one part
+
+    def wide(chord: str) -> float:
+        if chord.startswith("*"):
+            return _width(chord[1:], shape.annotation_size, shape.italic)
+        return _width(shown.get(chord, chord), shape.chord_size, shape.bold)
+
+    # No chord can fail to fit where its words start when the words and the widest chord fit together.
+    if _width(sung, shape.text_size, shape.regular) + max(map(wide, names), default=0) <= shape.column_width:
         return [(any(name.strip() for name in names), bool(sung.strip()))]
     pairs = ([("", pieces[0])] if pieces[0] else []) + list(zip(pieces[1::2], pieces[2::2]))
     parts: list[tuple[bool, bool]] = []
@@ -574,15 +598,11 @@ def _parts(line: str, shape: Layout, displays: dict[str, str] | None = None) -> 
     while pairs:
         chord, phrase = pairs.pop(0)
         rest = ""
-        if placed and chord:
-            mark = chord.startswith("*")  # a repeat mark, in the annotations' font
-            size = shape.annotation_size if mark else shape.chord_size
-            printed = chord[1:] if mark else shown.get(chord, chord)
-            if _width(printed, size, _HELVETICA if mark else _HELVETICA_BOLD) > shape.column_width - x:
-                rest = phrase
+        if placed and chord and wide(chord) > shape.column_width - x:
+            rest = phrase
         if not rest:
-            head, rest = _fit(phrase, shape.column_width - x, shape.text_size)
-            width = _width(head, shape.text_size)
+            head, rest = _fit(phrase, shape.column_width - x, shape.text_size, shape.regular)
+            width = _width(head, shape.text_size, shape.regular)
             if width > shape.column_width - x and placed > 1:
                 rest = phrase
             else:

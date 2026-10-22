@@ -36,6 +36,7 @@ from caracole.versions import set_coverage, upsert_version
 
 from conftest import add_song
 from helpers.browser import in_chromium
+from helpers.fonts import LATIN_GREEK_CYRILLIC, PDF_FONTS, font_folder, truetype
 from helpers.ug_pages import version_dict
 
 NOW = datetime(2026, 10, 18, 3, 30, tzinfo=UTC)
@@ -1022,6 +1023,107 @@ def test_an_unusable_cjk_font_is_reported_once_like_a_missing_one(
     assert len(run.calls) == 1 and b"pdf.fonts" not in pdf_of(cfg, latin).read_bytes()
 
 
+# --- the PDF fonts (pdf_fonts) ---------------------------------------------------------------------
+
+# The Epic's sheet in shape (synthetic words): a modifier-letter apostrophe (U+02BC), which no built-in font has,
+# and curly quotes.
+EPIC_SHEET = "[Verse]\n[tab][ch]G[/ch]       [ch]D[/ch]\nWeʼre singing “don’t stop” — señorita[/tab]\n"
+
+
+def font_defined(element: str, path: Path) -> bytes:
+    return f"--define=pdf.fonts.{element}.file={path}".encode()
+
+
+def test_with_pdf_fonts_a_latin_sheet_is_set_in_them_never_in_the_cjk_font(conn, cfg, tmp_path):
+    folder = font_folder(tmp_path / "fonts")
+    kai = fake_font(tmp_path / "Kai.otf")
+    epic = add_song(conn, "Epic", "Hymn")
+    human_sheet(conn, cfg, epic, EPIC_SHEET, tonality="G")
+    render(conn, replace(cfg, cjk_font=kai))  # the built-in fonts lack ʼ: the whole sheet in the brush face
+    assert font_defined("text", kai) in pdf_of(cfg, epic).read_bytes()
+
+    stats = render(conn, replace(cfg, cjk_font=kai, pdf_fonts=folder))
+    data = pdf_of(cfg, epic).read_bytes()
+    assert stats.rendered == 1 and stats.font_error is None and str(kai).encode() not in data
+    for element, role in (("text", "regular"), ("title", "bold"), ("chord", "bold"), ("annotation", "italic"),
+                          ("tab", "mono")):
+        assert font_defined(element, folder / f"{role}.ttf") in data, element
+    assert "Weʼre si[D]nging “don’t stop”" in data.decode("utf-8")  # as written: nothing to make Latin
+
+
+def test_with_pdf_fonts_a_chinese_sheet_takes_the_cjk_font_for_its_words_alone(conn, cfg, tmp_path):
+    folder = font_folder(tmp_path / "fonts")
+    kai = fake_font(tmp_path / "Kai.otf")
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tonality="")
+    stats = render(conn, replace(cfg, cjk_font=kai, pdf_fonts=folder))
+    data = pdf_of(cfg, zh).read_bytes()
+    assert stats.rendered == 1 and stats.font_error is None
+    assert font_defined("text", kai) in data and font_defined("title", kai) in data
+    assert font_defined("chord", folder / "bold.ttf") in data and font_defined("tab", folder / "mono.ttf") in data
+
+
+def test_with_pdf_fonts_a_chinese_sheet_still_waits_for_a_cjk_font(conn, cfg, tmp_path):
+    assert cfg.cjk_font is None
+    zh = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, cfg, zh, ZH_SHEET, tonality="")
+    stats = render(conn, replace(cfg, pdf_fonts=font_folder(tmp_path / "fonts")))
+    assert stats.rendered == 0 and "宋冬野 - 斑马斑马 (斑 U+6591)" in stats.font_error
+    assert not pdf_of(cfg, zh).exists()
+
+
+def test_pdf_fonts_set_changed_or_taken_away_render_every_pdf_again(conn, cfg, tmp_path):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    assert render(conn, cfg).rendered == 1
+    one, other = font_folder(tmp_path / "one"), font_folder(tmp_path / "other")
+    assert render(conn, replace(cfg, pdf_fonts=one)).rendered == 1
+    assert render(conn, replace(cfg, pdf_fonts=one)).skipped == 1
+    assert render(conn, replace(cfg, pdf_fonts=other)).rendered == 1
+    assert render(conn, cfg).rendered == 1
+    assert b"pdf.fonts" not in pdf_of(cfg, song).read_bytes()
+
+
+def test_without_pdf_fonts_a_pdf_a_caracole_before_them_rendered_is_not_rendered_again(conn, cfg):
+    # A record from before them says nothing of them: without them, it is still up to date.
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    render(conn, cfg)
+    record = kv_get_json(conn, f"render:{song.id}")
+    assert record.pop("fonts") is None
+    kv_set_json(conn, f"render:{song.id}", record)
+    assert render(conn, cfg).skipped == 1
+
+
+@pytest.mark.parametrize("problem", ["variable", "missing", "odd"])
+def test_unusable_pdf_fonts_keep_the_built_in_fonts_and_say_why(conn, cfg, tmp_path, caplog, problem):
+    folder = tmp_path / "fonts"
+    if problem == "variable":  # chordpro would draw its default instance alone: a "bold" as regular
+        font_folder(folder, bold=truetype(LATIN_GREEK_CYRILLIC, variable=True))
+    elif problem == "odd":  # ChordPro's PDF library would corrupt its subsets
+        font_folder(folder, italic=truetype(LATIN_GREEK_CYRILLIC, odd=True))
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song)
+    with caplog.at_level(logging.WARNING):
+        stats = render(conn, replace(cfg, pdf_fonts=folder))
+    assert stats.rendered == 1 and stats.failed == 0
+    assert b"pdf.fonts" not in pdf_of(cfg, song).read_bytes()
+    (warned,) = [r.getMessage() for r in caplog.records if "pdf_fonts" in r.getMessage()]  # once for the pass
+    assert str(folder) in warned and "built-in fonts" in warned
+
+
+def test_an_export_is_set_in_the_pdf_fonts_too(conn, cfg, tmp_path):
+    folder = font_folder(tmp_path / "fonts")
+    cfg = replace(cfg, pdf_fonts=folder)
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    render(conn, cfg)
+    path, run = export(conn, cfg, song, "t=2")
+    assert font_defined("text", folder / "regular.ttf").decode() in run.calls[-1]
+    assert export(conn, cfg, song, "t=2")[1].calls == []  # made from the same, it stays
+    assert export(conn, replace(cfg, pdf_fonts=None), song, "t=2")[1].calls != []
+
+
 # --- failures --------------------------------------------------------------------------------
 
 
@@ -1270,6 +1372,7 @@ def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
         "source_sha": hashlib.sha256(cho).hexdigest(),
         "transpose": 3,
         "font": str(font),
+        "fonts": None,  # the PDF fonts' folder (pdf_fonts), none: the built-in fonts
         "style": hashlib.sha256(STYLE_FILE.read_bytes()).hexdigest(),  # the look of the PDF
         "pdf": "sheet.pdf",
         "pdf_text": PDF_TEXT_VERSION,  # how the PDF's own text was made from sheet.cho
@@ -1848,6 +1951,45 @@ def test_real_chinese_sheet_with_the_cjk_font(conn, real):
         for shown in ("斑马斑马", "宋冬野", "这是一个合成的例子", "测试歌词第二行"):
             assert shown in text
         assert set(CHORD.findall(text)) == {"C", "G", "Am", "F"}
+
+
+def base_fonts(pdf: Path) -> set[str]:
+    """The fonts a PDF names (its font dictionaries' /BaseFont)."""
+    return {m.decode() for m in re.findall(rb"/BaseFont /([^\s/]+)", pdf.read_bytes())}
+
+
+real_pdf_fonts = pytest.mark.skipif(PDF_FONTS is None, reason="set CARACOLE_PDF_FONTS to nix/pdf-fonts.nix's folder")
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@real_pdf_fonts
+def test_real_latin_sheet_is_set_in_adwaita_sans_never_in_the_cjk_font(conn, real):
+    # The Epic's ʼ, which the built-in fonts lack, set the whole sheet in the CJK font's brush face.
+    real = replace(real, pdf_fonts=PDF_FONTS)
+    song = add_song(conn, "Epic", "Hymn")
+    human_sheet(conn, real, song, EPIC_SHEET, tonality="G")
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    fonts = base_fonts(pdf_of(real, song))
+    assert {"AdwaitaSans", "AdwaitaSansBold"} <= fonts, fonts
+    assert not any(f.startswith(("Helvetica", "FusionKai")) for f in fonts), fonts
+    if (text := pdf_text(pdf_of(real, song))) is not None:
+        assert re.search("We[’ʼ]re si", text) and "señorita" in text  # ’ and ʼ are one glyph in Adwaita Sans
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@real_cjk_font
+@real_pdf_fonts
+def test_real_chinese_sheet_takes_the_cjk_font_for_its_words_and_adwaita_for_its_chords(conn, real):
+    real = replace(real, pdf_fonts=PDF_FONTS)
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    human_sheet(conn, real, song, ZH_SHEET, tonality="")
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    fonts = base_fonts(pdf_of(real, song))
+    assert any(f.startswith(font_name(real.cjk_font).decode()) for f in fonts) and "AdwaitaSansBold" in fonts
+    if (text := pdf_text(pdf_of(real, song))) is not None:
+        assert "这是一个合成的例子" in text and set(CHORD.findall(text)) == {"C", "G", "Am", "F"}
 
 
 # --- an export: the sheet's PDF in another version -------------------------------------------

@@ -10,9 +10,11 @@ from pathlib import Path
 
 import pytest
 
+from caracole.pdf_fonts import in_folder
 from caracole.pdf_text import pdf_text as printed_text
-from caracole.render import STYLE_FILE, RenderError, needs_font_file, render_pdf, write_chordpro
+from caracole.render import STYLE_FILE, RenderError, needs_font_file, pdf_font, render_pdf, write_chordpro
 from caracole.viewer.theory import Key
+from helpers.fonts import PDF_FONTS, font_folder
 from helpers.pdf_pages import decode, pdf_objects, pdf_pages, to_unicode as parse_to_unicode
 
 FIXTURES = Path(__file__).parent / "fixtures" / "chordpro"
@@ -197,6 +199,83 @@ def test_missing_font_file_rejected(cho, tmp_path):
         render_pdf(
             cho, tmp_path / "sheet.pdf", font_file=tmp_path / "gone.ttf", runner=FakeRunner()
         )
+
+
+# --- the fonts the PDFs are set in (pdf_fonts) ---------------------------------------------------
+
+# Every element chordpro sets text in: STYLE_FILE's, and those chordpro derives from another's (its
+# Output/PDF.pm configurator), which a font file of the other's would set otherwise.
+CHORDPRO_ELEMENTS = {"title", "subtitle", "text", "chorus", "empty", "chord", "annotation", "comment",
+                     "comment_italic", "comment_box", "tab", "footer", "toc", "diagram", "diagram_base", "grid",
+                     "grid_margin"}
+
+
+def defined_fonts(cmd: list[str]) -> dict[str, str]:
+    """The font file a chordpro command line gives each element."""
+    return {name.removeprefix("pdf.fonts.").removesuffix(".file"): value
+            for name, _, value in (a.removeprefix("--define=").partition("=") for a in cmd if a.startswith("--define="))
+            if name.startswith("pdf.fonts.")}
+
+
+def test_the_pdf_fonts_set_every_element_bold_italic_or_mono_as_the_style_has_it(cho, tmp_path):
+    fonts = in_folder(font_folder(tmp_path / "fonts"))
+    run = FakeRunner()
+    render_pdf(cho, tmp_path / "sheet.pdf", fonts=fonts, runner=run)
+    defined = defined_fonts(run.cmd)
+    assert set(defined) == CHORDPRO_ELEMENTS >= set(json.loads(STYLE_FILE.read_text(encoding="utf-8"))["pdf"]["fonts"])
+    by_file = {path: {e for e, p in defined.items() if p == str(path)} for path in
+               (fonts.regular, fonts.bold, fonts.italic, fonts.mono)}
+    assert by_file == {
+        fonts.regular: {"text", "subtitle", "chorus", "empty", "comment_box", "footer", "toc", "diagram_base"},
+        fonts.bold: {"title", "chord", "comment", "diagram", "grid", "grid_margin"},
+        fonts.italic: {"annotation", "comment_italic"},
+        fonts.mono: {"tab"},
+    }
+
+
+def test_a_cjk_font_takes_the_words_from_the_pdf_fonts_as_it_takes_them_from_the_built_in_ones(cho, font, tmp_path):
+    # The elements a CJK font's file reaches today through chordpro's derivations (text, title, and all that
+    # derive from text); the chords, their annotations and the tab keep the PDF fonts as they keep Helvetica and Courier.
+    fonts = in_folder(font_folder(tmp_path / "fonts"))
+    run = FakeRunner()
+    render_pdf(cho, tmp_path / "sheet.pdf", fonts=fonts, font_file=font, runner=run)
+    defined = defined_fonts(run.cmd)
+    assert {e for e, p in defined.items() if p == str(font)} == CHORDPRO_ELEMENTS - {"chord", "annotation", "grid", "tab"}
+    assert (defined["chord"], defined["annotation"], defined["grid"], defined["tab"]) == (
+        str(fonts.bold), str(fonts.italic), str(fonts.bold), str(fonts.mono))
+
+
+def test_pdf_fonts_chordpro_would_draw_wrongly_are_refused(cho, tmp_path):
+    fonts = in_folder(font_folder(tmp_path / "fonts", bold=sfnt((10, 11, 12))))
+    run = FakeRunner()
+    with pytest.raises(RenderError, match="odd-length glyph"):
+        render_pdf(cho, tmp_path / "sheet.pdf", fonts=fonts, runner=run)
+    assert run.cmd == []
+
+
+@pytest.mark.parametrize("text", ["Don’t stop me now", "Epicʼs song", "Fito Páez, señorita", "Λάμπρος",
+                                  "Кино — Группа крови", "Smart “quotes” · x2"])
+def test_with_the_pdf_fonts_latin_greek_or_cyrillic_needs_no_cjk_font(tmp_path, font, text):
+    fonts = in_folder(font_folder(tmp_path / "fonts"))
+    assert pdf_font(text, font, fonts) == (None, None)
+
+
+def test_with_the_built_in_fonts_a_modifier_apostrophe_took_the_cjk_font_and_still_does(font):
+    # The Epic songbook went brush entirely for one ʼ (U+02BC, a letter cp1252 lacks): no pdf_fonts, no change.
+    assert pdf_font("Epicʼs song", font) == (font, None)
+    assert pdf_font("Don’t stop", font) == (None, None)  # ’ is in WinAnsi
+
+
+def test_with_the_pdf_fonts_chinese_takes_the_cjk_font_or_waits_for_one(tmp_path, font):
+    fonts = in_folder(font_folder(tmp_path / "fonts"))
+    assert pdf_font("斑马斑马 · Don’t", font, fonts) == (font, None)
+    assert pdf_font("Don’t 斑马斑马", None, fonts) == (None, "斑")
+
+
+def test_with_the_pdf_fonts_a_symbol_they_lack_never_brings_the_cjk_font(tmp_path, font):
+    fonts = in_folder(font_folder(tmp_path / "fonts"))
+    assert pdf_font("Una canción ♪ \U0001f3b8", font, fonts) == (None, None)  # blemished, not brushed
+    assert pdf_font("Una canción ♪", font) == (font, None)  # as with the built-in fonts today
 
 
 # --- failures -------------------------------------------------------------------------
@@ -558,6 +637,55 @@ def test_render_real_chinese_sheet_with_cjk_font(tmp_path):
     )
 
 
+adwaita = pytest.mark.skipif(PDF_FONTS is None, reason="set CARACOLE_PDF_FONTS to nix/pdf-fonts.nix's folder")
+
+
+def adwaita_file(base: str) -> Path:
+    """The file of CARACOLE_PDF_FONTS's folder a PDF's font named ``base`` (its BaseFont) was embedded from."""
+    fonts = in_folder(PDF_FONTS)
+    if base.startswith("AdwaitaMono"):
+        return fonts.mono
+    return fonts.bold if "Bold" in base else fonts.italic if "Italic" in base else fonts.regular
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@adwaita
+def test_render_real_sets_the_sheet_in_adwaita_sans_and_its_tab_in_adwaita_mono(tmp_path):
+    fonts = in_folder(PDF_FONTS)
+    markup = fixture("ug_sheet.txt").replace("Tiny test", "Tiny test, don’t stop ʼ señorita")
+    cho = write_chordpro(markup, tmp_path / "sheet.cho", title="Synthetic Test Song", artist="The Placeholders",
+                         key="G", capo=2)
+    printed = tmp_path / "printed.cho"
+    printed.write_text(printed_text(cho.read_text(encoding="utf-8"), key=Key(7, "ionian"), capo=None, fonts=fonts),
+                       encoding="utf-8")
+    pdf = tmp_path / "sheet.pdf"
+    render_pdf(printed, pdf, chordpro_bin=CHORDPRO, fonts=fonts)
+    runs, programs = pdf_runs(pdf)
+
+    def font_of(shown: str) -> set[str]:
+        return {font for font, text, _ in runs if shown in text}
+
+    assert {font for font, _, _ in runs} <= set(programs)  # every string in a font embedded, none built in
+    # Adwaita's, and ChordPro's own symbols, which number the fingers in the diagrams' dots whatever the fonts
+    programs.pop("MusicalSymbolsForChordPro", None)
+    assert programs and all(base.startswith(("AdwaitaSans", "AdwaitaMono")) for base in programs), list(programs)
+    (title,) = font_of("Synthetic Test Song")
+    assert title.startswith("AdwaitaSans") and "Bold" in title
+    (words,) = font_of("señorita")
+    assert words.startswith("AdwaitaSans") and "Bold" not in words and "Italic" not in words
+    # No letter lost. Adwaita draws ’ and ʼ with one glyph, which the PDF's text names by one of the two.
+    assert re.search("don[’ʼ]t stop [’ʼ] señorita", pdf_text(pdf))
+    assert {"G", "D", "Em", "C", "G/B", "Am", "F"} <= {text.strip() for font, text, _ in runs if font == title}
+    (repeat,) = font_of("x2")
+    assert "Italic" in repeat
+    assert font_of("e|-----0---0---|") == {next(base for base in programs if base.startswith("AdwaitaMono"))}
+    # The glyphs drawn are the fonts' own: a subset of a font with odd-length glyph records would be corrupt.
+    for base, program in programs.items():
+        gids = {g for font, _, codes in runs if font == base for g in codes}
+        assert gids and glyph_records(program, gids) == glyph_records(adwaita_file(base).read_bytes(), gids), base
+
+
 @pytest.mark.chordpro
 @real_chordpro
 def test_chinese_glyphs_lost_with_core_fonts(tmp_path):
@@ -632,13 +760,25 @@ def test_render_real_numerals_chart_draws_not_even_the_diagram_of_a_chord_the_sh
 
 # --- two columns that end level (pdf_text.py's estimate, against the real chordpro) ---------------
 
-def drawn_at(tmp_path: Path, text: str, *, font: str | None = None) -> list[list[tuple[float, float, str]]]:
-    """What chordpro draws of the ChordPro ``text``, page by page: (x, y, string)."""
+def drawn_at(tmp_path: Path, text: str, *, font: str | None = None, fonts=None) -> list[list[tuple[float, float, str]]]:
+    """What chordpro draws of the ChordPro ``text``, page by page: (x, y, string), in the PDF fonts ``fonts``
+    (None: the built-in ones), the CJK ``font`` taking the words from them."""
     cho = tmp_path / "estimate.cho"
     cho.write_text(text, encoding="utf-8")
     pdf = tmp_path / "estimate.pdf"
-    render_pdf(cho, pdf, chordpro_bin=CHORDPRO, font_file=Path(font) if font else None)
+    render_pdf(cho, pdf, chordpro_bin=CHORDPRO, font_file=Path(font) if font else None, fonts=fonts)
     return pdf_pages(pdf)
+
+
+@pytest.fixture(scope="module", params=["built-in", "adwaita"])
+def pdf_fonts(request):
+    """The fonts the estimates are checked in: ChordPro's built-in ones (None), and Adwaita's
+    (CARACOLE_PDF_FONTS, skipped without it), whose letters are wider and wrap sooner."""
+    if request.param == "built-in":
+        return None
+    if PDF_FONTS is None:
+        pytest.skip("set CARACOLE_PDF_FONTS to nix/pdf-fonts.nix's folder")
+    return in_folder(PDF_FONTS)
 
 
 _WORDS = " ".join(["placeholder"] * 12)
@@ -678,9 +818,9 @@ _KINDS_TEXT = "{title: Estimate}\n{subtitle: The Placeholders}\n{columns: 2}\n" 
 
 
 @pytest.fixture(scope="module")
-def kinds_drawn(tmp_path_factory):
+def kinds_drawn(tmp_path_factory, pdf_fonts):
     """Where chordpro draws each "ZZZ n" and "YYY n" line of _KINDS_TEXT, by its text, on one page."""
-    pages = drawn_at(tmp_path_factory.mktemp("kinds"), _KINDS_TEXT)
+    pages = drawn_at(tmp_path_factory.mktemp("kinds"), _KINDS_TEXT, fonts=pdf_fonts)
     assert len(pages) == 1
     return {s.strip(): (x, y) for x, y, s in pages[0] if s.startswith(("ZZZ", "YYY"))}
 
@@ -688,10 +828,10 @@ def kinds_drawn(tmp_path_factory):
 @pytest.mark.chordpro
 @real_chordpro
 @pytest.mark.parametrize("kind", list(_KINDS))
-def test_the_estimate_of_a_lines_height_is_chordpros(kinds_drawn, kind):
+def test_the_estimate_of_a_lines_height_is_chordpros(kinds_drawn, pdf_fonts, kind):
     from caracole.pdf_text import layout, line_heights
 
-    shape, n = layout(), list(_KINDS).index(kind)
+    shape, n = layout(pdf_fonts), list(_KINDS).index(kind)
     lines = _KINDS_TEXT.splitlines()
     estimate = sum(line_heights(lines, shape)[lines.index(f"ZZZ {n}") + 1:lines.index(f"YYY {n}")])
     (x, top), (x_after, bottom) = kinds_drawn[f"ZZZ {n}"], kinds_drawn[f"YYY {n}"]
@@ -706,18 +846,18 @@ def test_the_estimate_of_a_lines_height_is_chordpros(kinds_drawn, kind):
     (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], ""),
     (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], "{diagrams: off}\n"),  # a numerals chart
 ], ids=["a row of diagrams", "two rows", "no diagrams"])
-def test_the_estimate_of_the_first_pages_column_is_chordpros(tmp_path, chords, header):
+def test_the_estimate_of_the_first_pages_column_is_chordpros(tmp_path, pdf_fonts, chords, header):
     from caracole.pdf_text import column_height, layout, line_heights
 
     lines = [f"[{chords[i % len(chords)]}]Line {i:02d}" for i in range(60)]
     text = "{title: Estimate}\n" + header + "{columns: 2}\n" + "\n".join(lines) + "\n"
-    shape = layout()
+    shape = layout(pdf_fonts)
     room, held = column_height(text.splitlines(), shape), 0
     for height in line_heights(lines, shape):
         if room < height:
             break
         room, held = room - height, held + 1
-    first = drawn_at(tmp_path, text)[0]
+    first = drawn_at(tmp_path, text, fonts=pdf_fonts)[0]
     assert sorted(s for x, y, s in first if s.startswith("Line") and x < shape.second_column) == [
         f"Line {i:02d}" for i in range(held)]
 
@@ -739,26 +879,27 @@ def columns_of(page, shape, mark: str) -> tuple[list[str], list[str]]:
 
 @pytest.mark.chordpro
 @real_chordpro
-def test_a_mid_length_songs_two_columns_each_hold_a_fair_share(tmp_path):
+def test_a_mid_length_songs_two_columns_each_hold_a_fair_share(tmp_path, pdf_fonts):
     from caracole.pdf_text import layout
 
-    pages = drawn_at(tmp_path, printed_text(level_song(), key=Key(0, "ionian"), capo=None))
-    left, right = columns_of(pages[0], layout(), "Made up words")
+    pages = drawn_at(tmp_path, printed_text(level_song(), key=Key(0, "ionian"), capo=None, fonts=pdf_fonts),
+                     fonts=pdf_fonts)
+    left, right = columns_of(pages[0], layout(pdf_fonts), "Made up words")
     assert len(pages) == 1 and len(left) + len(right) == 25
     assert min(len(left), len(right)) >= 10, (left, right)  # chordpro alone: 24 and 1
-    second = [s for x, y, s in sorted(pages[0], key=lambda r: -r[1]) if x >= layout().second_column]
+    second = [s for x, y, s in sorted(pages[0], key=lambda r: -r[1]) if x >= layout(pdf_fonts).second_column]
     assert second[0] == "PART 4"  # a section starts the second column
 
 
 @pytest.mark.chordpro
 @real_chordpro
 @cjk_font
-def test_a_mid_length_chinese_songs_two_columns_each_hold_a_fair_share(tmp_path):
+def test_a_mid_length_chinese_songs_two_columns_each_hold_a_fair_share(tmp_path, pdf_fonts):
     from caracole.pdf_text import layout
 
-    printed = printed_text(level_song("斑马斑马你不要睡着啦"), key=Key(4, "aeolian"), capo=None)
-    pages = drawn_at(tmp_path, printed, font=CJK_FONT)
-    left, right = columns_of(pages[0], layout(), "斑马")
+    printed = printed_text(level_song("斑马斑马你不要睡着啦"), key=Key(4, "aeolian"), capo=None, fonts=pdf_fonts)
+    pages = drawn_at(tmp_path, printed, font=CJK_FONT, fonts=pdf_fonts)
+    left, right = columns_of(pages[0], layout(pdf_fonts), "斑马")
     assert len(pages) == 1 and len(left) + len(right) == 25
     assert min(len(left), len(right)) >= 10, (left, right)
 
@@ -766,12 +907,13 @@ def test_a_mid_length_chinese_songs_two_columns_each_hold_a_fair_share(tmp_path)
 @pytest.mark.chordpro
 @real_chordpro
 @pytest.mark.parametrize("names", ["both", "numerals"])
-def test_a_numbered_songs_two_columns_each_hold_a_fair_share_its_legend_too(tmp_path, names):
+def test_a_numbered_songs_two_columns_each_hold_a_fair_share_its_legend_too(tmp_path, pdf_fonts, names):
     # "D · V/V" over the words and the diagrams, or the numerals with none, and a legend after the song.
     from caracole.pdf_text import layout
 
-    pages = drawn_at(tmp_path, printed_text(level_song(), key=Key(0, "ionian"), capo=None, names=names))
-    left, right = columns_of(pages[0], layout(), "Made up words")
+    pages = drawn_at(tmp_path, printed_text(level_song(), key=Key(0, "ionian"), capo=None, names=names,
+                                            fonts=pdf_fonts), fonts=pdf_fonts)
+    left, right = columns_of(pages[0], layout(pdf_fonts), "Made up words")
     assert len(pages) == 1 and len(left) + len(right) == 25
     assert min(len(left), len(right)) >= 10, (left, right)
     assert "THE NUMERALS, IN C MAJOR" in [s.strip() for x, y, s in pages[0]]
