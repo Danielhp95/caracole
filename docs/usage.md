@@ -668,7 +668,7 @@ does: wanted.txt is its one source of songs. After the upgrade:
   `$CREDENTIALS_DIRECTORY/spotify_client_secret`, or
   `$CARACOLE_SPOTIFY_CLIENT_SECRET`, whichever you used. On NixOS, take
   `settings.spotify` and `credentials.spotify_client_secret` out of
-  `services.caracole`.
+  `services.caracole`: until you do, a rebuild warns about each.
 - The token `caracole auth spotify` saved, `spotify_token.json` in the state
   folder, is harmless and read by nothing: delete it. `caracole auth` is gone.
 - The database keeps the few rows the Spotify sync wrote (how its last sync

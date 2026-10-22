@@ -266,7 +266,8 @@ Rules a change there keeps (the Invariants below are the others):
   with fontTools, each glyph record padded to an even length, Adwaita Mono, and the OFL; alphatab.nix:
   alphaTab's npm package, fixed-output, three files and their licences; `withAutochords` adds the extra, the model files and
   `yt-dlp` on PATH), autochords.nix (the model files, fixed-output), module.nix
-  (`services.caracole`: units, timer, `caracole-admin`; with auto-chords on, the nightly
+  (`services.caracole`: units, timer, `caracole-admin`, and a warning for each Spotify setting an
+  older caracole read, left in `settings` or `credentials`; with auto-chords on, the nightly
   unit runs the auto-chords package, for its youtube step, and caracole-web and
   `caracole-admin` run it too, so their pages agree), module-check.nix
   (`checks.module`).
@@ -356,7 +357,7 @@ Traps:
 - A dependency is listed three times: pyproject.toml, flake.nix (`runtimeDeps` or
   `autochordsDeps`) and nix/package.nix. It comes from nixpkgs: no pip, uv or PyPI pins.
   Every third-party module src/ imports is listed, even one another dependency brings (click
-  with typer, requests and urllib3 with spotipy); auto-chords' modules may import the extra's.
+  with typer); auto-chords' modules may import the extra's.
   test_nix_package.py checks both.
 - The version is in pyproject.toml and src/caracole/__init__.py; the package check compares
   `caracole --version` with pyproject's, and test_cli.py expects "caracole 0.1.0".

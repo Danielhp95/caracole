@@ -90,14 +90,13 @@ let
     User = "caracole";
     Group = "caracole";
     # The files it writes are group-writable: Syncthing, in group caracole, syncs
-    # the library both ways (the inbox, edits from a phone). The database and
-    # the Spotify token stay with the caracole user alone, in a folder of mode
-    # 0700.
+    # the library both ways (the inbox, edits from a phone). The database
+    # stays with the caracole user alone, in a folder of mode 0700.
     UMask = "0007";
   };
 
-  # The static secrets, for the nightly run and caracole-admin (`auth spotify`,
-  # `sync`). The auto-chords unit reads none, so it gets none.
+  # The static secrets (the ntfy token), for the nightly run and caracole-admin.
+  # The auto-chords unit reads none, so it gets none.
   secrets.LoadCredential = credentials;
 
   # No StateDirectory or CacheDirectory: systemd keeps those in /var/lib and
@@ -184,10 +183,10 @@ let
     '';
   };
 
-  # caracole as its units run it, for `auth spotify`, `index build` and one-off
-  # commands: a transient unit under the caracole user, in the units' sandbox,
-  # with the same folders, credentials and generated config. It keeps the
-  # network (`auth spotify` and `index build` need it). With the auto-chords
+  # caracole as its units run it, for `index build` and one-off commands: a
+  # transient unit under the caracole user, in the units' sandbox, with the
+  # same folders, credentials and generated config. It keeps the network
+  # (`index build` and `get` need it). With the auto-chords
   # package when that is on, so `caracole-admin autochords` and `youtube` work
   # too, and then, as in the auto-chords unit, without MemoryDenyWriteExecute.
   adminPackage = runPackage;
@@ -224,7 +223,7 @@ let
         echo "caracole-admin starts a system unit as the caracole user: run it with sudo" >&2
         exit 1
       fi
-      # --pty on a terminal (auth spotify asks for a pasted URL), --pipe otherwise.
+      # --pty on a terminal (review and remove ask questions), --pipe otherwise.
       exec systemd-run --quiet --collect --wait --pty --pipe \
         ${lib.escapeShellArgs adminArgs} \
         -- ${lib.getExe adminPackage} "$@"
@@ -284,8 +283,7 @@ in
       default = "${cfg.dataDir}/state";
       defaultText = lib.literalExpression ''"''${config.services.caracole.dataDir}/state"'';
       description = ''
-        The database, the Spotify token and caracole's lock: back it up, but don't
-        share it. It is created as `caracole:caracole`, mode 0700.
+        The database and caracole's lock: back it up, but don't share it. It is created as `caracole:caracole`, mode 0700.
       '';
     };
 
@@ -311,10 +309,6 @@ in
       default = { };
       example = lib.literalExpression ''
         {
-          spotify = {
-            client_id = "0123456789abcdef";
-            playlists = [ "Learn" ];
-          };
           ntfy.url = "https://ntfy.sh/my-caracole-topic";
           providers.ug.budget = 40;
         }
@@ -333,14 +327,13 @@ in
       default = { };
       example = lib.literalExpression ''
         {
-          spotify_client_secret = config.age.secrets.caracole-spotify.path;
           ntfy_token = config.age.secrets.caracole-ntfy.path;
         }
       '';
       description = ''
         Files systemd passes to caracole through `LoadCredential`, by credential
-        name. caracole reads `spotify_client_secret`, `ntfy_token` and
-        `web_token` (the access token caracole-web asks each browser for). The
+        name. caracole reads `ntfy_token` and `web_token` (the access token
+        caracole-web asks each browser for). The
         files are read as root, so they can stay root-only. The nightly run and
         `caracole-admin` get them; caracole-web gets `web_token` alone, and the
         auto-chords unit, which reads none, gets none.
@@ -549,7 +542,7 @@ in
         group = "caracole";
         mode = "2775";
       };
-      # The database, the Spotify token, the lock and every response.
+      # The database, the lock and every response.
       ${cfg.stateDir}.d = {
         user = "caracole";
         group = "caracole";
@@ -643,7 +636,7 @@ in
     # so it has the nightly run's folders, network and sandbox. Of the
     # credentials it gets web_token alone: neither the server nor the commands
     # it runs (get, add, review, match, fetch, render, remove, songbook and
-    # lacuerda --artist) read Spotify or ntfy. With auto-chords on, it runs the
+    # lacuerda --artist) read ntfy. With auto-chords on, it runs the
     # nightly run's package (runPackage), and none of those commands runs yt-dlp.
     systemd.services.caracole-web = lib.mkIf cfg.web.enable {
       description = "caracole web: the library page and song requests";
@@ -688,7 +681,15 @@ in
           ])
           && !(cfg.credentials ? web_token)
         )
-        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs.";
+        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs."
+      # What an older caracole read of Spotify. settings is caracole.toml, a TOML
+      # value, so no option can be declared under it (mkRemovedOptionModule):
+      # the generated file keeps the table, which caracole ignores with a warning
+      # at every command, and the rebuild says what to delete.
+      ++ lib.optional (cfg.settings ? spotify)
+        "services.caracole.settings.spotify: caracole no longer reads Spotify (wanted.txt is its one source of songs) and ignores this table: delete it."
+      ++ lib.optional (cfg.credentials ? spotify_client_secret)
+        "services.caracole.credentials.spotify_client_secret: caracole no longer reads Spotify, so nothing reads this credential: delete it, and the secret.";
 
     networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [
       cfg.web.port

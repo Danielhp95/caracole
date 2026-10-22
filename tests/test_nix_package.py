@@ -89,7 +89,7 @@ def test_pyproject_the_flake_and_the_package_list_the_same_dependencies():
 
 
 def test_every_module_the_source_imports_comes_from_a_listed_dependency():
-    # A module that arrives with another dependency (click with typer, requests with spotipy) is
+    # A module that arrives with another dependency (click with typer) is
     # still listed: the package that brings it may stop bringing it, or change it under caracole.
     listed = _listed()["pyproject.toml"]
     from_distribution = packages_distributions()  # "yaml" → ["PyYAML"], for what is installed here

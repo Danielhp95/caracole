@@ -13,10 +13,6 @@ dependencies = [
   "httpx",
   "selectolax",
   "rapidfuzz",
-  "spotipy",
-  # spotify.py sets up spotipy's HTTP session itself, with requests and urllib3's Retry.
-  "requests",
-  "urllib3",
   "typer",
   # progress.py writes its live line with click, which typer is built on.
   "click",

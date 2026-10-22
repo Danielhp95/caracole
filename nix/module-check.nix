@@ -54,19 +54,19 @@ let
     autochords.package = stubAutochords;
   };
 
-  # ntfy, Spotify and both static secrets, as the NUC will have them.
+  # ntfy and its token, as the NUC will have them.
   configured.services.caracole = {
-    settings = {
-      ntfy.url = "https://ntfy.example/caracole";
-      spotify = {
-        client_id = "abc123";
-        playlists = [ "Learn" ];
-      };
+    settings.ntfy.url = "https://ntfy.example/caracole";
+    credentials.ntfy_token = "/run/agenix/ntfy_token";
+  };
+
+  # What an older caracole read of Spotify, left in a configuration.
+  spotifyLeftOver.services.caracole = {
+    settings.spotify = {
+      client_id = "abc123";
+      playlists = [ "Learn" ];
     };
-    credentials = {
-      spotify_client_secret = "/run/agenix/spotify_client_secret";
-      ntfy_token = "/run/agenix/ntfy_token";
-    };
+    credentials.spotify_client_secret = "/run/agenix/spotify_client_secret";
   };
 
   autochordsOn.services.caracole.autochords = {
@@ -120,6 +120,12 @@ let
     stubbed
     configured
     { services.caracole.autochords.enable = true; }
+  ];
+  # A NUC whose configuration still names Spotify.
+  nucSpotifyLeftOver = evalSystem [
+    stubbed
+    configured
+    spotifyLeftOver
   ];
   # caracole-web with its defaults, and on a tailnet address with a token.
   webDefault = evalSystem [
@@ -384,9 +390,8 @@ let
     "caracole.service has MemoryDenyWriteExecute and RestrictNamespaces" =
       runSc.MemoryDenyWriteExecute && runSc.RestrictNamespaces;
     "caracole.service has the rest of the plan's hardening" = hardened runSc;
-    "caracole.service loads the ntfy_token and spotify_client_secret credentials" =
-      lib.elem "ntfy_token:/run/agenix/ntfy_token" runSc.LoadCredential
-      && lib.elem "spotify_client_secret:/run/agenix/spotify_client_secret" runSc.LoadCredential;
+    "caracole.service loads the ntfy_token credential" =
+      runSc.LoadCredential == [ "ntfy_token:/run/agenix/ntfy_token" ];
     "caracole.service notifies on failure" = run.onFailure == [ "caracole-notify-failure.service" ];
     "caracole.service waits for the network" =
       lib.elem "network-online.target" run.wants && lib.elem "network-online.target" run.after;
@@ -481,10 +486,17 @@ let
     # Its requests run caracole commands, which write what the nightly run writes.
     "caracole-web.service writes only the library, state and cache, reads the music if it exists, waits for their mounts and caches there" =
       opens web defaultLayout;
-    # Neither caracole serve nor the commands it runs (get, add, fetch, render, ...) read Spotify or ntfy.
+    # Neither caracole serve nor the commands it runs (get, add, fetch, render, ...) read ntfy.
     "caracole-web.service loads web_token alone of the credentials, and none without it" =
       tailnetWeb.serviceConfig.LoadCredential == [ "web_token:/run/agenix/caracole-web-token" ]
       && (webOpen.systemd.services.caracole-web.serviceConfig.LoadCredential or [ ]) == [ ];
+    # settings is a TOML value, which no option can be declared under (lib.mkRemovedOptionModule):
+    # the rebuild warns, and caracole loads the generated file, ignoring the table (below).
+    "settings.spotify and credentials.spotify_client_secret, left over, are each warned about, and only then" =
+      says [ "services.caracole.settings.spotify" "no longer reads Spotify" "delete it" ] nucSpotifyLeftOver.warnings
+      && says [ "services.caracole.credentials.spotify_client_secret" "delete it" ] nucSpotifyLeftOver.warnings
+      && !(says [ "Spotify" ] nuc.warnings)
+      && failedAssertions nucSpotifyLeftOver == [ ];
     "caracole-web listening beyond loopback without credentials.web_token is warned about, and only then" =
       says [
         "services.caracole.web listens on 0.0.0.0"
@@ -679,6 +691,7 @@ else
         (loads nuc defaultLayout)
         (loads moved movedLayout)
         (loads libraryAlone libraryAloneLayout)
+        (loads nucSpotifyLeftOver defaultLayout)
       ];
       runUnit = unitText nuc "caracole.service";
       timerUnit = unitText nuc "caracole.timer";
@@ -705,21 +718,34 @@ else
       # units' environment, and name the folders the units open.
       PYTHONPATH=${source}/src python3 - "$loadCasesPath" <<'EOF'
       import json
+      import logging
       import sys
       from pathlib import Path
 
       from caracole.config import load_config
 
+      warned = []
+
+
+      class Warned(logging.Handler):
+          def emit(self, record):
+              warned.append(record.getMessage())
+
+
+      logging.getLogger("caracole.config").addHandler(Warned())
       with open(sys.argv[1], encoding="utf-8") as f:
           cases = json.load(f)
       for case in cases:
+          warned.clear()
           cfg = load_config(Path(case["config"]), env=case["env"])
           for key, value in case["paths"].items():
               assert getattr(cfg, key) == Path(value), (case["config"], key, getattr(cfg, key))
-          print("generated caracole.toml loads:", case["config"])
+          print("generated caracole.toml loads:", case["config"], *warned)
+      # The last case still has [spotify]: it loads, ignored, with the one warning saying to delete it.
+      assert len(warned) == 1 and "delete its [spotify] table" in warned[0], warned
+      assert not hasattr(cfg, "spotify")
       cfg = load_config(Path(cases[0]["config"]), env=cases[0]["env"])
       assert cfg.ntfy.url == "https://ntfy.example/caracole", cfg.ntfy.url
-      assert cfg.spotify.client_id == "abc123" and cfg.spotify.playlists == ("Learn",)
       EOF
 
       # Each unit's command line, as systemd reads it, parses with caracole's own CLI,
@@ -826,7 +852,6 @@ else
       grep -qx -- "StartLimitBurst=30" "$webUnitPath"
       lacks "--token-file" "$webUnitPath"
       lacks "ntfy_token" "$webUnitPath"
-      lacks "spotify_client_secret" "$webUnitPath"
 
       mkdir -p $out/data-caracole
       cp "$configFile" $out/caracole.toml

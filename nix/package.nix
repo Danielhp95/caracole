@@ -101,9 +101,6 @@ python3Packages.buildPythonApplication (finalAttrs: {
       httpx
       selectolax
       rapidfuzz
-      spotipy
-      requests
-      urllib3
       typer
       click
       mutagen
