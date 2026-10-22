@@ -6,7 +6,8 @@
 // alphaTab's synthesizer runs in a worker made from a blob: of the library's own text. Its audio goes through a
 // ScriptProcessor, since an AudioWorklet module can't be loaded here. Every element is made with createElement and
 // textContent. The page says where it stands on <html> (data-rendered, the times the score was drawn;
-// data-player: loading, ready, playing, paused; data-track, the track shown), for the tests.
+// data-player: loading, ready, playing, paused; data-track, the tracks shown, their indexes joined by commas), for
+// the tests.
 (() => {
   "use strict";
   const $ = (id) => document.getElementById(id);
@@ -59,19 +60,70 @@
   });
   // Tab only shows a track's tablature alone, which a track without one (a piano's, the drums') hasn't got: that
   // one is shown as a score, whatever the switch says, and the switch waits for a track with a tab.
-  const drums = (track) => track.staves.some((staff) => staff.isPercussion) ||
+  const percussion = (track) => track.staves.some((staff) => staff.isPercussion) ||
     (track.playbackInfo && track.playbackInfo.primaryChannel === 9);  // MIDI's channel 10
-  const hasTab = (track) => Boolean(track) && !drums(track) && track.staves.some((staff) =>
+  const hasTab = (track) => Boolean(track) && !percussion(track) && track.staves.some((staff) =>
     staff.showTablature && staff.tuning && staff.tuning.length > 0);
+  // A drum kit: a percussion track, or one written as strings that are all tuned to MIDI's note 0, as Guitar Pro 5
+  // files from elsewhere carry the drums (on channel 10, which alphaTab moves when the track isn't marked as drums):
+  // its tab's numbers are the drums' notes, so its tab is still shown.
+  const drums = (track) => percussion(track) || track.staves.some((staff) =>
+    staff.tuning && staff.tuning.length > 0 && staff.tuning.every((note) => note === 0));
   let score = null;
-  let current = 0;
+  let shown = [0];  // the indexes of the tracks shown, in the score's order
   const viewSwitch = $("view");
   const look = (s) => {
     s.fillFromJson(colours());
-    const tab = score === null || hasTab(score.tracks[current]);
+    const tab = score === null || shown.every((index) => hasTab(score.tracks[index]));
     viewSwitch.disabled = !tab;
     s.display.staveProfile = tabOnly() && tab ? lib.StaveProfile.Tab : lib.StaveProfile.Default;
     s.display.scale = narrow.matches ? 0.8 : 1;
+  };
+
+  // alphaTab's canvas (1.8.4) draws each part of the score on a fresh <canvas>, whose 2D context starts black, and
+  // gives that context a colour only when it differs from the last colour it set: a part that starts in the colour
+  // the one before ended in (the score's header, after notes drawn in the same --text) was drawn black, unreadable
+  // on the dark page. Each fresh context is given the colour alphaTab takes it to have. And the header's first line
+  // is drawn hanging from the very top of its canvas, which cut the tops of a title's letters (in a font whose
+  // letters rise above that line): a part whose first drawing is a text whose font reaches above its canvas is moved
+  // down by as much, all of it (the part has room under it).
+  const contexts = (canvas) => Object.values(canvas).filter((v) => v instanceof CanvasRenderingContext2D);
+  const mend = (canvas) => {
+    const proto = Object.getPrototypeOf(canvas);
+    if (proto.caracoleMended) return;
+    proto.caracoleMended = true;
+    const begin = proto.beginRender;
+    proto.beginRender = function (...args) {
+      const before = contexts(this);
+      const result = begin.apply(this, args);
+      const context = contexts(this).find((c) => !before.includes(c));
+      if (context) {
+        context.fillStyle = context.strokeStyle = this.color.rgba;
+        this.caracoleFresh = context;
+      }
+      return result;
+    };
+    for (const name of ["fillRect", "strokeRect", "fill", "stroke", "fillCircle", "strokeCircle",
+      "fillMusicFontSymbol", "fillMusicFontSymbols"]) {
+      const draw = proto[name];
+      if (typeof draw !== "function") continue;
+      proto[name] = function (...args) {
+        this.caracoleFresh = null;
+        return draw.apply(this, args);
+      };
+    }
+    const write = proto.fillText;
+    proto.fillText = function (text, x, y, ...rest) {
+      const context = this.caracoleFresh;
+      this.caracoleFresh = null;
+      if (context && context.textBaseline === "hanging") {
+        // Above the hanging baseline, the font's ascent (an accent's room) or the text's own ink, if taller.
+        const size = context.measureText(String(text));
+        const above = Math.max(size.fontBoundingBoxAscent || 0, size.actualBoundingBoxAscent || 0) - y;
+        if (above > 0) context.translate(0, Math.ceil(above) + 2);
+      }
+      return write.call(this, text, x, y, ...rest);
+    };
   };
 
   const settings = new lib.Settings();
@@ -95,11 +147,12 @@
     return;
   }
   // The first track with a tab (a guitar's, a bass'), else the first.
-  current = Math.max(0, score.tracks.findIndex(hasTab));
+  shown = [Math.max(0, score.tracks.findIndex(hasTab))];
   look(settings);
 
   const api = new lib.AlphaTabApi($("score"), settings);
   window.caracoleGuitar = api;
+  if (api.renderer.instance && api.renderer.instance.canvas) mend(api.renderer.instance.canvas);
   let drawn = 0;
   let ready = false;
   root.dataset.rendered = "0";
@@ -114,59 +167,91 @@
   api.error.on(failed);
   say("Drawing the tab…");
 
-  // The track picker: each track of the score, the one shown ticked.
-  const picker = $("tracks");
-  const list = $("track-list");
-  const shown = $("track-name");
+  // The tracks, laid out: a button for each, its name and its instrument, pressed while it is shown, and a speaker
+  // on it that mutes it. A tap shows that track alone; with Shift, Ctrl or ⌘ held it is shown beside those shown, or
+  // taken away from them (the last one stays). A track stays muted, whichever is shown, while the page is open: the
+  // synthesizer mutes its channels at once, playing or not, and keeps them muted (alphaTab never resets them; and
+  // the track's playbackInfo says so too).
+  const bar = $("tracks");
   const trackName = (track, index) => String(track.name || "").trim() || "Track " + (index + 1);
   const trackKind = (track) => {
-    const staff = track.staves[0];
     if (drums(track)) return "drums";
+    const staff = track.staves[0];
     const strings = staff && staff.tuning ? staff.tuning.length : 0;
     return strings ? strings + " strings" : "";
   };
-  const showTrack = (index) => {
-    current = index;
-    root.dataset.track = String(index);
-    shown.textContent = trackName(score.tracks[index], index);
-    for (const input of list.querySelectorAll("input")) input.checked = Number(input.value) === index;
+  const SVG = "http://www.w3.org/2000/svg";
+  const speaker = () => {
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    const shape = (d, cls) => {
+      const path = svg.appendChild(document.createElementNS(SVG, "path"));
+      path.setAttribute("d", d);
+      if (cls) path.setAttribute("class", cls);
+    };
+    shape("M4 9h4l5-4v14l-5-4H4z", "cone");
+    shape("M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12", "waves");
+    shape("M16 9l6 6M22 9l-6 6", "cross");
+    return svg;
+  };
+  const buttons = [];
+  const mark = () => {
+    root.dataset.track = shown.join(",");
+    buttons.forEach(({ show }, index) => show.setAttribute("aria-pressed", String(shown.includes(index))));
+  };
+  const showTracks = (indexes) => {
+    shown = indexes;
+    mark();
+    say("Drawing the tab…");
+    look(api.settings);
+    api.updateSettings();
+    api.renderTracks(shown.map((index) => score.tracks[index]));
+  };
+  const mute = (index, muted) => {
+    const track = score.tracks[index];
+    track.playbackInfo.isMute = muted;
+    api.changeTrackMute([track], muted);
+    const { item, button } = buttons[index];
+    item.classList.toggle("muted", muted);
+    button.setAttribute("aria-pressed", String(muted));
   };
   score.tracks.forEach((track, index) => {
-    const label = document.createElement("label");
-    const input = document.createElement("input");
-    input.type = "radio";
-    input.name = "track";
-    input.value = String(index);
-    label.appendChild(input);
-    label.appendChild(document.createElement("span")).textContent = trackName(track, index);
+    const name = trackName(track, index);
+    const item = bar.appendChild(document.createElement("div"));
+    item.className = "track";
+    const button = item.appendChild(document.createElement("button"));
+    button.type = "button";
+    button.className = "mute";
+    button.setAttribute("aria-label", "Mute " + name);
+    button.setAttribute("aria-pressed", "false");
+    button.title = "Mute " + name;
+    button.appendChild(speaker());
+    const show = item.appendChild(document.createElement("button"));
+    show.type = "button";
+    show.className = "show";
+    show.appendChild(document.createElement("span")).textContent = name;
+    show.firstChild.className = "name";
     const kind = trackKind(track);
     if (kind) {
-      const small = label.appendChild(document.createElement("span"));
+      const small = show.appendChild(document.createElement("span"));
       small.className = "kind";
       small.textContent = kind;
     }
-    input.addEventListener("change", () => {
-      if (!input.checked) return;
-      picker.open = false;
-      showTrack(index);
-      say("Drawing the tab…");
-      look(api.settings);
-      api.updateSettings();
-      api.renderTracks([track]);
+    buttons.push({ item, button, show });
+    button.addEventListener("click", () => mute(index, button.getAttribute("aria-pressed") !== "true"));
+    show.addEventListener("click", (e) => {
+      if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        const next = shown.includes(index) ? shown.filter((i) => i !== index) : shown.concat(index).sort((a, b) => a - b);
+        if (next.length && next.join() !== shown.join()) showTracks(next);
+      } else if (shown.length !== 1 || shown[0] !== index) {
+        showTracks([index]);
+      }
     });
-    list.appendChild(label);
   });
-  picker.hidden = score.tracks.length < 2;
-  showTrack(current);
-  document.addEventListener("click", (e) => {
-    if (picker.open && !picker.contains(e.target)) picker.open = false;
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape" && picker.open) {
-      picker.open = false;
-      picker.querySelector("summary").focus();
-    }
-  });
+  bar.hidden = score.tracks.length < 2;
+  mark();
 
   api.renderFinished.on(() => {
     drawn += 1;
@@ -210,5 +295,5 @@
   narrow.addEventListener("change", redraw);
 
   api.loadSoundFont(bytesOf(at.soundFont), false);
-  api.renderScore(score, [current]);
+  api.renderScore(score, shown);
 })();

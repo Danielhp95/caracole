@@ -1,10 +1,11 @@
 /* caracole serve's Guitar Pro page (guitar_page.py), after base.css: the song's name and its links, the bar of
-   controls, which stays at the top, and the score alphaTab draws. */
+   controls, which stays at the top (playback on one row, the tracks on the next), and the score alphaTab draws. */
 .gp .masthead { align-items: flex-start; }
 .gp .by { margin: 4px 0 0; color: var(--muted); }
 .gp .file { margin: 2px 0 0; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
-.gp-bar { position: sticky; top: 0; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
-  margin: 8px -16px 0; padding: 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.gp-bar { position: sticky; top: 0; z-index: 5; display: grid; gap: 8px; margin: 8px -16px 0; padding: 8px 16px;
+  border-bottom: 1px solid var(--border); background: var(--bg); }
+.gp-play { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }
 .gp-bar .btn { min-width: 44px; min-height: 44px; }
 .gp-bar .btn.primary { min-width: 6.5rem; }
 .tempo { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; color: var(--muted); font-size: .9rem;
@@ -13,7 +14,8 @@
 .tempo output { min-width: 3.2em; color: var(--text); font-variant-numeric: tabular-nums; }
 .view { display: inline-flex; margin: 0; padding: 0; border: 1px solid var(--control-edge); border-radius: 11px;
   overflow: hidden; }
-.view label { position: relative; display: inline-flex; align-items: center; min-height: 44px; padding: 0 12px;
+.view label { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 44px;
+  min-height: 44px; padding: 0 12px;
   font-size: .9rem; font-weight: 550; cursor: pointer; }
 .view label + label { border-left: 1px solid var(--control-edge); }
 .view input { position: absolute; opacity: 0; pointer-events: none; }
@@ -22,20 +24,35 @@
 .view:disabled { opacity: .55; }
 .view:disabled label { cursor: default; }
 .view label:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: -3px; }
-.tracks { position: relative; }
-.tracks > summary { list-style: none; max-width: 16rem; gap: 6px; }
-.tracks > summary::-webkit-details-marker { display: none; }
-.tracks > summary .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.tracks > summary::after { content: "▾"; color: var(--muted); }
-.track-list { position: absolute; z-index: 6; top: calc(100% + 6px); left: 0; display: grid; gap: 2px;
-  min-width: 14rem; max-width: min(22rem, calc(100vw - 32px)); max-height: 60vh; margin: 0; padding: 6px;
-  overflow: auto; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface);
-  box-shadow: var(--shadow); }
-.track-list label { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 10px; border-radius: 8px;
-  cursor: pointer; overflow-wrap: anywhere; }
-.track-list label:hover { background: var(--raised); }
-.track-list input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
-.track-list .kind { margin-left: auto; color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.view .short { display: none; }
+/* The tracks: wrapped on a wide screen, a row of their own that scrolls sideways on a phone. Each is a chip of two
+   buttons, the speaker that mutes it and its name, which shows it (pressed: shown). */
+.gp-tracks { display: flex; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
+.track { display: inline-flex; flex: none; align-items: stretch; border: 1px solid var(--control-edge);
+  border-radius: 11px; background: var(--surface); }
+.track button { display: inline-flex; align-items: center; min-height: 44px; margin: 0; border: 0; background: none;
+  color: var(--text); font: inherit; cursor: pointer; }
+.track button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.track .mute { justify-content: center; width: 44px; padding: 0; border-right: 1px solid var(--border-strong);
+  border-radius: 10px 0 0 10px; color: var(--muted); }
+.track .mute:hover { color: var(--text); }
+.track .mute svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+  stroke-linejoin: round; }
+.track .mute .cone { fill: currentColor; }
+.track .mute .cross { display: none; }
+.track .show { flex-direction: column; align-items: flex-start; justify-content: center; max-width: 13rem;
+  padding: 2px 12px; border-radius: 0 10px 10px 0; font-size: .88rem; font-weight: 600; line-height: 1.2;
+  text-align: left; }
+.track .show .name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.track .show .kind { color: var(--muted); font-size: .74rem; font-weight: 500; white-space: nowrap; }
+.track:has(.show[aria-pressed="true"]) { border-color: var(--accent); }
+.track .show[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.track .show[aria-pressed="true"] .kind { color: inherit; opacity: .85; }
+.track.muted .mute { color: var(--failed); }
+.track.muted .mute .waves { display: none; }
+.track.muted .mute .cross { display: inline; }
+.track.muted .show .name { text-decoration: line-through; text-decoration-thickness: 1.5px; }
+.track.muted .show:not([aria-pressed="true"]) { color: var(--muted); }
 .gp-status { min-height: 1.45em; margin: 10px 0 0; color: var(--muted); font-size: .9rem; }
 .gp-status.failed { color: var(--failed); font-weight: 600; }
 .score { isolation: isolate; margin-top: 10px; overflow: hidden; border: 1px solid var(--border); border-radius: 14px;
@@ -44,6 +61,25 @@
 .at-cursor-beat { width: 3px; background: var(--accent); }
 .at-selection div { background: color-mix(in srgb, var(--focus) 18%, transparent); }
 .at-highlight * { fill: var(--accent); stroke: var(--accent); }
+/* A phone: playback on one row (Play, Stop, the tempo without its word, Tab or Score), the tracks under it. */
+@media (max-width: 599px) {
+  .gp-bar { gap: 6px; padding-top: 6px; padding-bottom: 6px; }
+  .gp-play { flex-wrap: nowrap; gap: 6px; }
+  .gp-play > .btn { flex: none; padding-left: 10px; padding-right: 10px; white-space: nowrap; }
+  .gp-bar .btn.primary { min-width: 4.4rem; }
+  .tempo { flex: 1 1 auto; min-width: 0; gap: 4px; }
+  .tempo .word { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .tempo input { flex: 1 1 auto; width: auto; min-width: 44px; }
+  .tempo output { min-width: 2.7em; font-size: .85rem; }
+  .view { flex: none; }
+  .view label { padding: 0 9px; }
+  .view .long { display: none; }
+  .view .short { display: inline; }
+  .gp-tracks { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
+    margin: 0 -16px; padding: 0 16px; }
+  .gp-tracks::-webkit-scrollbar { display: none; }
+  .track .show { max-width: 11rem; }
+}
 @media (min-width: 720px) {
   .gp-bar { margin: 8px -24px 0; padding: 8px 24px; }
 }

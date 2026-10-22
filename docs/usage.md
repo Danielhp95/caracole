@@ -3187,12 +3187,20 @@ each request, where [alphaTab](https://www.alphatab.net) draws and plays the
 file: the song's title and artist, links back to the song in the library, to
 its sheet viewer when it has one and to the file as a download, then a bar
 that stays at the top while the score scrolls: **Play** (Pause while it plays)
-and **Stop**, the **Tempo** (50 to 125 %), the **track** (each track of the
-file; the page starts on the first one with a tab, a guitar's or a bass') and
-**Tab only** or **Score and tab**. On a screen under 600 px wide it starts with
-the tab alone, a little smaller, three or four bars a line; a track with no tab
-(a piano's, the drums') is shown as a score whatever the switch says. Playing,
-the page follows the cursor. It is dark or light as your system is. A Power Tab
+and **Stop**, the **Tempo** (50 to 125 %) and **Tab only** or **Score and tab**
+on one row, and under it the file's **tracks**, a button each with its name and
+its instrument (6 strings, 4 strings, drums). The page starts on the first track
+with a tab, a guitar's or a bass'; tap a track to show it instead, or hold
+Shift (or Ctrl, or ⌘) as you tap to show it beside those shown, or take it away
+from them. The speaker on each track mutes it, and again unmutes it: at once,
+while it plays too, whichever track is shown, until you close the page; a
+muted track is struck through. On a screen under 600 px wide the bar is
+compact (the switch reads **Tab** or **Score**, and the tracks scroll sideways
+in their own row) and the page starts with the tab alone, a little smaller,
+three or four bars a line; a track with no tab (a piano's, the drums') is
+shown as a score whatever the switch says. Playing, the page follows the
+cursor. It is dark or light as your system is, the score too: its title,
+artist and every text alphaTab draws in the page's text colour. A Power Tab
 file (`.ptb`) stays a download: alphaTab can't read it.
 
 Nothing is written into the library for it: the file is read when you open
