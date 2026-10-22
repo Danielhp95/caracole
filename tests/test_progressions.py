@@ -90,6 +90,16 @@ def test_a_progression_typed_as_numerals_in_any_rotation_or_spelling():
     assert catalogue_key("the ragtime progression") in ragtime.keys  # its rows' keys, as a sheet's sections have them
     assert read_progression("I III IV iv").name == "the Creep progression"
     assert read_progression("i bIII bVII IV").name is None  # Wonderwall's verse
+    # A progression that goes somewhere is named from its first chord alone, as a section's is: iii–vi–IV–V is no
+    # royal road, I–vi–ii–V no circle of fifths, a major key's IV–V–vi–V no Aeolian shuttle, an I–V–IV vamp no blues.
+    for typed in ("iii vi IV V", "I vi ii V", "IV V vi V", "I V IV I V IV I V"):
+        found = read_progression(typed)
+        assert (found.name, found.keys) == (None, frozenset({found.key})), typed
+    assert read_progression("IV V iii vi").name == "the royal road"
+    # Numerals in a minor key's own way, against its natural minor scale: VII is its ♭VII.
+    shuttle = read_progression("i VII VI VII")
+    assert (shuttle.key, shuttle.name) == ("i ♭VII ♭VI ♭VII", "the Aeolian shuttle")
+    assert read_progression("i bVII bVI v").name == "the lament"
 
 
 def test_a_progression_named_from_the_catalogue():
@@ -100,8 +110,9 @@ def test_a_progression_named_from_the_catalogue():
     assert read_progression("Andalusian Cadence").keys == andalusian.keys
     assert read_progression("the pop progression").keys == {POP, POP_MINOR}
     blues = read_progression("blues")  # the 12-bar and the 8-bar blues, in each of their forms
-    assert (len(blues.keys), blues.name, blues.label) == (6, "the 12-bar blues", "the 12-bar blues or the 8-bar blues")
-    assert read_progression("hey joe progression").name == "the Hey Joe progression"
+    assert (len(blues.keys), blues.name, blues.label) == (5, "the 12-bar blues", "the 12-bar blues or the 8-bar blues")
+    assert read_progression("extended plagal").name == "the extended plagal progression"
+    assert read_progression("lament").name == "the lament"
     assert read_progression("the Creep progression").name == "the Creep progression"
     assert read_progression("backdoor").name == "the backdoor progression"
     assert read_progression("royal road").name == "the royal road"
@@ -118,7 +129,7 @@ def test_words_that_are_no_progression():
                  # not, and "minor" alone is a key's word
                  "The Road", "the bar", "a road", "minor", "Minor", "the minor",
                  # A song's title, which a progression is named after: the song, unless "progression" says otherwise
-                 "creep", "Creep", "hey joe", "Hey Joe"):
+                 "creep", "Creep"):
         assert read_progression(text) is None, text
 
 

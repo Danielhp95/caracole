@@ -2211,27 +2211,39 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   numerals are read in and where it came from, the key's neck on a phone (on
   a laptop it heads the rail of necks), and each section's progression in
   numerals, one cycle of it with the times it is played ("I–V–vi–IV ×4"; "×8,
-  one variation" when one pass changes, adds or leaves out a chord of it, as
-  Wonderwall's verse does), its name when it has a common one, the named
+  one variation" when a pass plays it otherwise, with a chord changed, or one
+  added or left out, or, in a cycle of four chords or more, a chord changed
+  and one added or left out as well, as Wonderwall's verse does; two chords
+  changed are another line), its name when it has a common one, the named
   progressions it plays within it when it is longer ("contains the pop
   progression ×2"), and how the section ends (an authentic cadence, V–I;
   plagal, IV–I; half, on V; deceptive, V–vi). The names, each from Wikipedia
   or Open Music Theory: the pop progression (I–V–vi–IV), the '50s progression
-  (I–vi–IV–V), the circle of fifths (vi–ii–V–I, or through every chord of the
-  key), Pachelbel's Canon, the royal road (IV–V–iii–vi), the double-plagal
-  progression (♭VII–IV–I), the Creep progression (I–III–IV–iv), the Aeolian
-  shuttle (i–♭VII–♭VI–♭VII), which loop and so are named from any of their
-  chords; and ii–V–I, the minor ii–V–i, I–IV–V, the 12-bar and the 8-bar
-  blues, the Andalusian cadence (i–♭VII–♭VI–V), the ragtime progression
-  (III7–VI7–II7–V7), the Hey Joe progression (♭VI–♭III–♭VII–IV–I), the
-  backdoor progression (iv–♭VII–I), the Aeolian cadence (♭VI–♭VII–i), the
-  minor plagal cadence (IV–iv–I), the puff progression (I–iii–IV) and the
-  Montgomery-Ward bridge (I–IV–ii–V), from their first chord. A chord's
+  (I–vi–IV–V), the circle of fifths through every chord of the key
+  (I–IV–vii°–iii–vi–ii–V–I, and in a minor key), Pachelbel's Canon, the
+  double-plagal progression (♭VII–IV–I), the Creep progression (I–III–IV–iv)
+  and the Aeolian shuttle (i–♭VII–♭VI–♭VII), which loop and so are named from
+  any of their chords (within a longer section, from another than their
+  first only when it plays it twice or more: a vi–IV–V–I played once there
+  is a cadence); and the circle of fifths's vi–ii–V–I, the royal road
+  (IV–V–iii–vi), ii–V–I, the minor ii–V–i, I–IV–V, the 12-bar blues, the
+  8-bar blues (I–V–IV–I–V–I–V; an I–V–IV vamp is none), the Andalusian cadence
+  (i–♭VII–♭VI–V), the lament (i–♭VII–♭VI–v), the ragtime progression
+  (III7–VI7–II7–V7), the extended plagal progression (♭VI–♭III–♭VII–IV–I, the
+  verse of "Hey Joe"), the backdoor progression (iv–♭VII–I), the Aeolian
+  cadence (♭VI–♭VII–i), the minor plagal cadence (IV–iv–I), the puff
+  progression (I–iii–IV) and the Montgomery-Ward bridge (I–IV–ii–V), from
+  their first chord: I–vi–ii–V is no circle of fifths, nor iii–vi–IV–V the
+  royal road. A section played round and round is read from where each pass
+  starts, so a progression that goes somewhere is named within a pass, never
+  across two (I–vi–ii–V ×4 plays no vi–ii–V–I). A chord's
   extensions and bass don't change its name (Cmaj7 and C/E are I), a chord
   with no third (Asus4, A5) is major or minor, and each is named in any key,
   and in a song whose key caracole read as the relative one (the pop
   progression in A minor, i–♭VI–♭III–♭VII), but the blues, the Aeolian
-  cadence and the names that are numerals. A section with no chord caracole can read isn't listed; a sheet with
+  cadence and the names that are numerals, and the Aeolian shuttle there from
+  its first chord alone (vi–V–IV–V in C major: a major key's IV–V–vi–V is no
+  shuttle). A section with no chord caracole can read isn't listed; a sheet with
   no headings has one section, "Section 1". Tap a progression to go to its
   section. **▶** plays it (strummed, as a tap on a chord is, above; not with
   **Sound** off, or in a browser that can't make sound), a chord a bar at
@@ -2647,9 +2659,12 @@ extensions are left aside, so `"Imaj7 vi7 ii7 V7"` is I–vi–ii–V), or the n
 of a progression or words of it (`andalusian`, `"the pop progression"`,
 `blues`, `"royal road"`; words of fewer than five letters, `"the road"`, name
 none unless "progression" or "cadence" is among them, nor do `minor` alone
-and a song's title a name is after, `creep` or `"hey joe"`, without
-"progression"). Numerals are named as a sheet's are: `"III7 VI7 II7 V7"` is
-the ragtime progression. A progression with a name finds every reading of
+and a song's title a name is after, `creep`, without "progression").
+Numerals are named as a sheet's are: `"III7 VI7 II7 V7"` is the ragtime
+progression, and `"iii vi IV V"` no royal road, which starts on its IV.
+Written in a minor key's own way, against its natural minor scale (a minor
+tonic, i, and no flat), a major III, VI or VII is its ♭III, ♭VI or ♭VII:
+`"i VII VI V"` is i–♭VII–♭VI–V, the Andalusian cadence. A progression with a name finds every reading of
 it, the pop progression in a major key and in the relative minor, and the
 songs that play it within a longer section:
 

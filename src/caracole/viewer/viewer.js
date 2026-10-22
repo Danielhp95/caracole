@@ -1614,9 +1614,13 @@
     $("tempo-row").hidden = !synth;
     $("bpm").textContent = String(state.bpm);
     const list = $("progs");
+    // The focus comes back to the same control of the same row: its row, its class, and which of the row's
+    // controls of that class it is (a row has a Songs with … link for each progression it contains).
     const active = list.contains(document.activeElement) ? document.activeElement : null;
-    const back = active ? [Array.prototype.indexOf.call(list.children, active.closest(".prog")),
-      ["prog-go", "prog-play", "prog-songs", "prog-named"].find((cls) => active.classList.contains(cls))] : null;
+    const cls = active && ["prog-go", "prog-play", "prog-songs", "prog-named"].find((c) => active.classList.contains(c));
+    const row = active && active.closest(".prog");
+    const back = cls && row ? [Array.prototype.indexOf.call(list.children, row), cls,
+      Array.prototype.indexOf.call(row.querySelectorAll("." + cls), active)] : null;
     list.textContent = "";
     const found = table("progressions") || [];
     $("progs-none").hidden = found.length > 0;
@@ -1676,7 +1680,7 @@
       }
     }
     drawPlaying();
-    const again = back && list.children[back[0]] && list.children[back[0]].querySelector("." + back[1]);
+    const again = back && list.children[back[0]] && list.children[back[0]].querySelectorAll("." + back[1])[back[2]];
     if (again) again.focus({ preventScroll: true });
   };
   $("harmony-open").addEventListener("click", () => {

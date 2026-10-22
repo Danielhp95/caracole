@@ -15,12 +15,14 @@ has its records after the next render, which a new viewer (``page.BUILD_FILES``)
 
 **For searching**, a progression is a section's cycle of two chords or more (a section held on one
 chord is none). ``read_progression`` reads what you type: numerals ("vi IV I V", "vi–IV–I–V",
-"bVII" for ♭VII, the chord's quality and extensions ignored, as the key ignores them), or a
+"bVII" for ♭VII, the chord's quality and extensions ignored, as the key ignores them; in a minor key's
+own way, "i VII VI V" is i–♭VII–♭VI–V: ``harmony.read_typed``), or a
 catalogue name or a word of one ("andalusian", "the pop progression", "blues"; words of fewer than
 five letters, "pop" or "the road", are too common to be a name unless "progression" or "cadence" says
 one is meant, "pop progression", and so are "minor" alone and the song's title a name is after,
-"creep" or "hey joe", which mean the song). Numerals typed are named as a section's are
-(``harmony.name_of``: "III7 VI7 II7 V7" is the ragtime progression). A progression the catalogue names stands for every
+"creep", which means the song). Numerals typed are named as a section's are (``harmony.name_of``:
+"III7 VI7 II7 V7" is the ragtime progression; a progression that goes somewhere from its first chord
+alone, so "iii vi IV V" is no royal road). A progression the catalogue names stands for every
 progression of that name: the pop progression is I–V–vi–IV and, read in the relative minor,
 i–♭VI–♭III–♭VII, so a song whose key caracole read as A minor rather than C major is found either
 way, and so is a song that plays it within a longer section. ``songs_with`` gives the songs that play
@@ -58,9 +60,9 @@ _GENERIC = frozenset({"the", "a", "of", "progression", "cadence", "chords"})
 _SAYS_PROGRESSION = frozenset({"progression", "cadence"})
 _NAME_LETTERS = 5
 _NOT_ALONE = frozenset({"minor", "major"})
-# The words of a name that is a song's title ("the Creep progression", "the Hey Joe progression"): typed alone,
-# they are the song's, not the progression's, unless a word says a progression is meant ("creep progression").
-_TITLES = frozenset({"creep", "hey", "joe"})
+# The words of a name that is a song's title ("the Creep progression"): typed alone, they are the song's, not the
+# progression's, unless a word says a progression is meant ("creep progression").
+_TITLES = frozenset({"creep"})
 
 
 @dataclass(frozen=True)
@@ -226,15 +228,16 @@ def library_progressions(conn: sqlite3.Connection) -> dict[int, list[dict[str, s
 def read_progression(text: str) -> Wanted | None:
     """The progression ``text`` asks for: numerals, two chords or more ("vi IV I V"), or a catalogue
     name or words of one ("andalusian"); None for anything else."""
-    from caracole.viewer.harmony import name_of, progression_key
+    from caracole.viewer.harmony import name_of, progression_key, read_typed
 
     names = catalogue()
     tokens = [t for t in _SEPARATORS.split(text.strip()) if t]
     if tokens and all(_TYPED.fullmatch(t) for t in tokens):
+        tokens = list(read_typed(tokens))
         key = progression_key(tokens)
         if " " not in key:
             return None
-        name = names.get(key) or name_of(tokens)
+        name = name_of(tokens)
         # A name that is numerals ("ii–V–I", whose key is "I ii V") says them as they are played.
         said = name if name is not None and progression_key(name) == key else label(key)
         return Wanted(key, frozenset({key, *_named(names, {name})}), name, said)

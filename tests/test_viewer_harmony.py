@@ -25,6 +25,7 @@ from caracole.viewer.harmony import (
     name_of,
     progression_key,
     progressions,
+    read_typed,
     relation,
     solo_scale,
 )
@@ -496,9 +497,11 @@ _ROW = re.compile(r"([♭♯]?)(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)(°?)(
 # Names read only on their own tonic, never in the relative key: the blues are major, the Aeolian cadence read
 # in the relative major is a deceptive IV–V–vi, and a name that is numerals says where its tonic is.
 ON_ITS_TONIC = {"the 12-bar blues", "the 8-bar blues", "the Aeolian cadence", "ii–V–I", "the minor ii–V–i", "I–IV–V"}
-# Names that loop, so that a section may start on any of their chords; the others go somewhere and start on their first.
-LOOPS = {"the pop progression", "the '50s progression", "the circle of fifths", "Pachelbel's Canon", "the royal road",
-         "the double-plagal progression", "the Creep progression", "the Aeolian shuttle"}
+# The rows that loop, so that a section may start on any of their chords; the others go somewhere and start on their
+# first: the royal road and the circle of fifths's vi–ii–V–I among them (iii–vi–IV–V, I–vi–ii–V are neither).
+LOOPS = {("I", "V", "vi", "IV"), ("I", "vi", "IV", "V"), ("I", "IV", "vii°", "iii", "vi", "ii", "V", "I"),
+         ("i", "iv", "♭VII", "♭III", "♭VI", "ii°", "V", "i"), ("I", "V", "vi", "iii", "IV", "I", "IV", "V"),
+         ("♭VII", "IV", "I"), ("I", "V/vi", "IV", "iv"), ("i", "♭VII", "♭VI", "♭VII")}
 ROWS = [(name, numerals) for name, numerals, _ in CATALOGUE]
 IDS = [f"{name} {' '.join(numerals)}" for name, numerals in ROWS]
 
@@ -548,10 +551,14 @@ def test_a_progression_that_loops_is_named_from_any_of_its_chords_one_that_goes_
     rows = {ns for n, ns in ROWS if n == name}
     for turn in range(1, len(cycle)):
         turned = cycle[turn:] + cycle[:turn]
-        if name in LOOPS:
+        if numerals in LOOPS:
             assert named(turned, key).name == name, turn
         elif tuple(written[turn:] + written[:turn]) not in rows:  # the ragtime progression from its I, or to it
             assert named(turned, key).name != name, turn
+
+
+def test_the_loops_are_rows_of_the_catalogue():
+    assert LOOPS <= {numerals for _, numerals in ROWS}
 
 
 @pytest.mark.parametrize(("name", "numerals"), ROWS, ids=IDS)
@@ -578,20 +585,21 @@ def test_extensions_inversions_suspensions_and_power_chords_dont_stop_a_name():
 
 def test_wonderwalls_verse_folds_with_its_one_variation_and_is_no_famous_progression():
     # Oasis's verse as sheets write it (capo 2): Em7 G Dsus4 A7sus4, with one pass on Cadd9 in place of its first
-    # two chords. In E minor, i–♭III–♭VII–IV: three rising fifths back to the tonic (G D A E), the IV a Dorian IV
-    # (A7sus4 has no third: IV or iv). No progression of the catalogue: in G major it is vi–I–V–II, and its
-    # ♭VII–IV–i is no double plagal, which comes home to a major I.
+    # two chords (one chord changed, one left out). In E minor, i–♭III–♭VII–IV: three rising fifths back to the
+    # tonic (G D A E), the IV a Dorian IV (A7sus4 has no third: IV or iv); from its G, ♭III–♭VII–IV–i, the last four
+    # chords of the extended plagal progression's chain of fifths (♭VI–♭III–♭VII–IV–I, "Hey Joe") come home to a
+    # minor tonic, which that progression's major I is not. No progression of the catalogue: in G major it is
+    # vi–I–V–II, and its ♭VII–IV–i is no double plagal, which comes home to a major I.
     verse = "Em7 G Dsus4 A7sus4 " * 3 + "Cadd9 Dsus4 A7sus4 " + "Em7 G Dsus4 A7sus4 " * 4
     e_minor = Key(4, "aeolian")
     assert named(section(verse), e_minor) == Progression(("i7", "♭III", "♭VIIsus4", "IV7sus4"), 8, None, None,
                                                          variations=1)
     in_g = named(section(verse), Key(7, "ionian"))
     assert (in_g.numerals, in_g.name, in_g.contains) == (("vi7", "I", "Vsus4", "II7sus4"), None, ())
-    # Its pre-chorus's Cadd9 Dsus4 Em7 is the Aeolian cadence, three times, and its Cadd9 Dsus4 G Em7 then is
-    # the '50s progression from its IV (in G major, IV–V–I–vi), its G/F# a G with its 7th in the bass.
+    # Its pre-chorus's Cadd9 Dsus4 Em7 is the Aeolian cadence, three times. Its Cadd9 Dsus4 G Em7 then (in G
+    # major, IV–V–I–vi) is the '50s progression from its IV played once: a cadence, no doo-wop loop.
     pre = named(section("Cadd9 Dsus4 Em7 " * 3 + "Cadd9 Dsus4 G G/F# Em7 Dsus4/F# A7sus4"), e_minor)
-    assert pre.contains == (Contained("the Aeolian cadence", 3, ("♭VIadd9", "♭VIIsus4", "i7"), "i ♭VI ♭VII"),
-                            Contained("the '50s progression", 1, ("♭VIadd9", "♭VIIsus4", "♭III", "i7"), "I vi IV V"))
+    assert pre.contains == (Contained("the Aeolian cadence", 3, ("♭VIadd9", "♭VIIsus4", "i7"), "i ♭VI ♭VII"),)
 
 
 def test_a_famous_progression_inside_a_longer_section_is_named_with_the_times_it_is_played():
@@ -611,14 +619,14 @@ def test_a_famous_progression_inside_a_longer_section_is_named_with_the_times_it
 
 def test_a_near_miss_is_not_named():
     for names, key in (("C G Am Em", C),  # I–V–vi–iii: half of the Canon
-                       ("Am G F Em " * 2, A_MINOR),  # a minor v is no Andalusian cadence
                        ("F G Am C", C),  # IV–V–vi: the Aeolian cadence comes home to its own tonic only
                        ("F G E7 Am", A_MINOR)):  # ♭VI–♭VII–V–i: no royal road (♭VI–♭VII–v–i), no Aeolian cadence
         found = named(section(names), key)
         assert (found.name, found.contains) == (None, ()), names
     assert named(section("F G Em7 Am7"), A_MINOR).name == "the royal road"
-    # i–♭VII–♭VI–♭VII is the Aeolian shuttle, never the Andalusian cadence.
+    # i–♭VII–♭VI–♭VII is the Aeolian shuttle, and i–♭VII–♭VI–v the lament, never the Andalusian cadence.
     assert named(section("Am G F G"), A_MINOR).name == "the Aeolian shuttle"
+    assert named(section("Am G F Em " * 2), A_MINOR).name == "the lament"
     assert named(section("G B C Cm"), Key(7, "ionian")).name == "the Creep progression"
     assert named(section("G Bm C Cm"), Key(7, "ionian")).name is None  # iii is no III
 
@@ -631,13 +639,110 @@ def test_the_andalusian_cadence_in_any_minor_key_and_read_in_the_relative_major(
     assert named(section("Em D C B7"), Key(7, "ionian")).name == "the Andalusian cadence"
 
 
+@pytest.fixture
+def catalogue_of(monkeypatch):
+    """Read progressions with the catalogue a test gives (rows that loop none), the kept answers cleared before and
+    after."""
+    def clear():
+        for v in vars(harmony).values():
+            if callable(getattr(v, "cache_clear", None)) and getattr(v, "__module__", "") == harmony.__name__:
+                v.cache_clear()
+
+    def use(rows):
+        monkeypatch.setattr(harmony, "CATALOGUE", rows)
+        monkeypatch.setattr(harmony, "_LOOPS", frozenset())
+        clear()
+
+    yield use
+    monkeypatch.undo()
+    clear()
+
+
+def test_a_chord_lent_to_the_next_run_is_held_once(catalogue_of):
+    # A run that ends on the chord it starts with (the blues, on I) lends that chord to the next run: I–IV–I then
+    # I–V–vi hold five chords, not six, as many as one run of I–IV–I–V–vi, which is read, being one run.
+    catalogue_of((("the lending row", ("I", "IV", "I"), "a test"), ("the next row", ("I", "V", "vi"), "a test"),
+                  ("the long row", ("I", "IV", "I", "V", "vi"), "a test")))
+    found = named(section("Db C F C G Am"), C)  # ♭II first: the section is no row whole
+    assert [(c.name, c.times) for c in found.contains] == [("the long row", 1)]
+
+
+def test_the_lament_is_the_andalusian_cadences_descent_onto_a_minor_v():
+    # Open Music Theory's lament, i–♭VII–♭VI–v (Eva Simons's "I Don't Like You"), in A minor, in D minor, and read
+    # in C major (vi–V–IV–iii); with V, the Andalusian cadence.
+    assert named(section("Am G F Em"), A_MINOR) == Progression(("i", "♭VII", "♭VI", "v"), 1, "the lament", None)
+    assert named(section("Dm7 C Bb Am7"), Key(2, "aeolian")).name == "the lament"
+    assert named(section("Am G F Em"), C).name == "the lament"
+    assert named(section("Am G F E7"), A_MINOR).name == "the Andalusian cadence"
+
+
+@pytest.mark.parametrize(("names", "key", "contains"), [
+    # An I–V–IV vamp, its last pass cut short before the chorus, or played three times: no 8-bar blues.
+    ("G D C G D C G D", Key(7, "ionian"), []),
+    ("C G F " * 3, C, []),
+    # iii–vi–IV–V (F#m Bm G A in D, "Hey There Delilah") is no royal road, which starts on its IV.
+    ("Em Am F G", C, []),
+    ("F#m Bm G A", Key(2, "ionian"), []),
+    # I–vi–ii–V, jazz's turnaround, and V–I–vi–ii are no circle of fifths, which is vi–ii–V–I.
+    ("C Am Dm G", C, []),
+    ("G C Am Dm", C, []),
+    # Played round and round, a cycle is read from where each pass starts: the vi–ii–V–I and the ii–V–I across
+    # the seam of I–vi–ii–V are no progression of it, nor the ii–V–I across V–I–ii's.
+    ("C Am Dm G " * 4 + "C", C, []),
+    ("G C Dm " * 2, C, []),
+    # A major key's IV–V–vi–V is no Aeolian shuttle, which circles on a minor tonic.
+    ("F G Am G", C, []),
+    ("C F G Am G F C", C, ["I–IV–V"]),
+    # A loop played once from another of its chords within a longer section is a cadence there ("Yesterday",
+    # vi–IV–V–I), no '50s progression.
+    ("F Em7 A7 Dm Dm/C Bb C7 F", Key(5, "ionian"), []),
+])
+def test_no_name_for_a_vamp_or_a_turn_its_sources_dont_give(names, key, contains):
+    found = named(section(names), key)
+    assert (found.name, [c.name for c in found.contains]) == (None, contains)
+
+
+def test_a_progression_within_each_pass_of_a_loop_and_a_turned_loop_played_twice_are_named():
+    found = named(section("Dm7 G7 Cmaj7 A7 " * 4), C)  # ii–V–I–V/ii: a ii–V–I in every pass
+    assert (found.repeats, found.contains) == (4, (Contained("ii–V–I", 4, ("ii7", "V7", "Imaj7"), "I ii V"),))
+    found = named(section("Am F G C " * 2 + "E7"), C)  # vi–IV–V–I twice, then somewhere else
+    assert [(c.name, c.times) for c in found.contains] == [("the '50s progression", 2)]
+
+
+def test_typed_numerals_are_named_as_a_section_is():
+    for typed in ("I V IV I V IV I V", "iii vi IV V", "IV V vi V", "I vi ii V", "V I vi ii"):
+        assert name_of(typed) is None, typed
+    assert name_of("vi IV I V") == "the pop progression"
+    assert name_of("i bVII bVI bVII") == "the Aeolian shuttle"
+
+
+def test_numerals_typed_in_a_minor_keys_own_way_are_named():
+    # Written against the natural minor scale, as Wikipedia writes the minor circle (i–iv–VII–III–VI–ii°–V–i), an
+    # unaltered III, VI and VII of a minor tonic are its ♭III, ♭VI and ♭VII.
+    assert read_typed("i VII VI VII") == ("i", "♭VII", "♭VI", "♭VII")
+    assert read_typed("i7–iv–VII7") == ("i7", "iv", "♭VII7")
+    assert name_of("i VII VI VII") == "the Aeolian shuttle"
+    assert name_of("i–iv–VII–III–VI–ii°–V–i") == "the circle of fifths"
+    assert name_of("i VII VI V") == "the Andalusian cadence"
+    assert name_of("i VII VI v") == "the lament"
+    # With a major tonic, or an accidental typed, the numerals are as written: VII is the major chord on the 7th.
+    assert read_typed("I VII IV") == ("I", "VII", "IV") and name_of("I VII IV") is None
+    assert read_typed(["i", "bVII", "VI"]) == ("i", "bVII", "VI")
+
+
 def test_a_sections_repeats_fold_even_when_one_pass_varies_a_chord():
     found = named(section("C G Am F " * 3 + "C G Am Dm"), C)
     assert (found.numerals, found.repeats, found.variations, found.name) == (
         ("I", "V", "vi", "IV"), 4, 1, "the pop progression")
-    # A pass with a chord more, or one less, is a variation too.
+    # A pass with a chord more, or one less, is a variation too, and in a cycle of four chords or more, one with a
+    # chord changed besides.
     assert named(section("C G Am F " * 2 + "C G Em Am F " + "C G Am F"), C).variations == 1
     assert named(section("C G Am F " * 2 + "C Am F " + "C G Am F"), C).variations == 1
+    assert named(section("C G Am F " * 2 + "C Em Am F G " + "C G Am F"), C).variations == 1
+    # Two chords changed are another line, half of a cycle of four: no variation.
+    other = named(section("C G Am F " * 3 + "Dm G C F"), C)
+    assert (other.repeats, other.variations, [c.name for c in other.contains]) == (
+        1, 0, ["the pop progression", "ii–V–I"])
     # Played whole every time, there is no variation, and a cycle twice varied still folds with both.
     assert named(section("C G Am F " * 4), C).variations == 0
     eight = named(section("C G Am F C G Am Dm " * 3), C)  # the whole eight chords, three times

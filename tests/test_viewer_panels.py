@@ -386,7 +386,7 @@ def test_on_a_phone_the_harmony_panel_docks_in_place_of_the_settings_and_lists_e
                      "about": "the pop progression", "play": True,  # strum.js plays it
                      "songs": "../../index.html#prog=I%20V%20vi%20IV", "named": []}
     assert chorus["numerals"] == ["IV", "V", "I", "vi", "IV", "V", "I"] and chorus["repeats"] == ""
-    # IV–V–I–vi is the '50s progression from its IV, inside the longer chorus.
+    # Its C Am F G, I–vi–IV–V, is the '50s progression from its own first chord, inside the longer chorus.
     assert chorus["about"] == "contains the '50s progression · ends on an authentic cadence (V–I)"
     assert chorus["named"] == [["Songs with the '50s progression", "../../index.html#prog=I%20vi%20IV%20V"]]
     assert verse["named"] == []  # the verse is the pop progression whole: its own link says so
@@ -484,6 +484,22 @@ def test_the_panel_names_a_progression_a_section_plays_within_it_and_a_cycle_tha
     assert chorus["numerals"] == ["i", "♭VII", "♭VI", "V7"] and chorus["repeats"] == "×4, one variation"
     assert chorus["about"] == "the Andalusian cadence · ends on a half cadence (on V)" and chorus["named"] == []
     assert heads == ["Verse · contains the pop progression ×2", "Chorus · the Andalusian cadence"]
+
+
+# A verse that plays ii–V–I, then the Andalusian cadence read in C major: a link to the songs with each.
+TWO = "{title: Two}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n[Dm7]a [G7]b [Cmaj7]c [Am]d [G]e [F]f [E7]g\n"
+
+
+@in_chromium
+def test_a_link_focused_in_the_panel_keeps_the_focus_though_the_panel_is_drawn_anew(tmp_path):
+    with viewer(tmp_path, written(tmp_path, TWO)) as b:
+        open_harmony(b)
+        links = b.js("[...document.querySelectorAll('#harmony .prog-named')].map((a) => a.textContent)")
+        b.js("document.querySelectorAll('#harmony .prog-named')[1].focus()")
+        b.js("document.querySelectorAll('#volumes .chip')[1].click()")  # the panel is drawn anew
+        after = b.js("[document.activeElement.textContent, document.activeElement.isConnected]")
+    assert links == ["Songs with ii–V–I", "Songs with the Andalusian cadence"]
+    assert after == ["Songs with the Andalusian cadence", True]  # the second link, as before, not the first
 
 
 @in_chromium

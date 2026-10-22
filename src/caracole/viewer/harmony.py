@@ -50,19 +50,23 @@ rock's Aeolian cadence, ♭VII–i). None for a chord from outside the key.
 **Progressions**: a section's chords as numerals, each read with the chord it goes to (the next on
 the sheet on another root, the next section's after its last); a chord held over several lines
 once; the cycle it repeats folded ("vi IV I V" ×4), even when a pass varies it by a chord changed,
-added or left out ("×8, one variation", ``_fold``); its name from ``CATALOGUE`` when the cycle is a
-progression of it whole, and the ones the section plays within it, with the times (``Contained``:
-"contains the pop progression ×2"); and its ending. Names compare the chords' roots and thirds
-(``_token``): extensions and the bass are left aside (Imaj7, I7 and I/3 are I), a chord with no third
-(sus2, sus4, a power chord) is major or minor (Asus4 is vi as well as VI), and a secondary chord is the
-chord on its own root (V7/V is II7, so the ragtime progression's III7 is the V7/vi a sheet's E7 reads as). A
-progression that loops is named from any of its chords (vi–IV–I–V is the pop progression); one that
-goes somewhere, from its first alone (V–I–ii is no ii–V–I, nor the blues's changes turned round a
-blues). Each is named in any key, on its own tonic and, but the blues, the Aeolian cadence and the
-names that are numerals, read in the relative key too, where a song whose key caracole read as the
-other of the two plays it (the pop progression in A minor is i–♭VI–♭III–♭VII). ``progression_key``,
-for searching, compares the numerals' roots alone (Imaj7 is I, I/3 is I; V/V stays V/V, but V/IV,
-built on the tonic, is I).
+added or left out, or in a cycle of four or more a chord changed and one added or left out ("×8, one
+variation", ``_fold``); its name from ``CATALOGUE`` when the cycle is a progression of it whole, and
+the ones the section plays within it, with the times (``Contained``: "contains the pop progression
+×2"); and its ending. Names compare the chords' roots and thirds (``_token``): extensions and the bass
+are left aside (Imaj7, I7 and I/3 are I), a chord with no third (sus2, sus4, a power chord) is major or
+minor (Asus4 is vi as well as VI), and a secondary chord is the chord on its own root (V7/V is II7, so
+the ragtime progression's III7 is the V7/vi a sheet's E7 reads as). A progression that loops
+(``_LOOPS``) is named from any of its chords (vi–IV–I–V is the pop progression), within a longer
+section from another than its first only when played twice; one that goes somewhere, from its first
+alone (V–I–ii is no ii–V–I, I–vi–ii–V no circle of fifths, nor the blues's changes turned round a
+blues), and within each pass of a section played round and round, never across two. Each is named in
+any key, on its own tonic and, but the blues, the Aeolian cadence and the names that are numerals, read
+in the relative key too, where a song whose key caracole read as the other of the two plays it (the pop
+progression in A minor is i–♭VI–♭III–♭VII; the Aeolian shuttle there from its first chord alone).
+``progression_key``, for searching, compares the numerals' roots alone (Imaj7 is I, I/3 is I; V/V
+stays V/V, but V/IV, built on the tonic, is I); ``name_of`` names numerals typed, ``read_typed`` reads
+them in a minor key's own way too ("i VII VI V" is i–♭VII–♭VI–V).
 
 **Notes** keep one letter a degree, from the root up (G♯7's 3rd is B♯, F♯ major's 7th E♯; a double
 sharp is "##", a double flat "bb"). The root is spelled as the key spells it, a secondary chord's
@@ -199,8 +203,8 @@ CATALOGUE: tuple[tuple[str, tuple[str, ...], str], ...] = (
      'Wikipedia, "Creep (Radiohead song)" (G–B–C–Cm, I–V7/vi–IV–iv, as in "The Air That I Breathe"); Open '
      'Music Theory 2e, 7.11 Puff Schemas'),
     ("the Aeolian shuttle", ("i", "♭VII", "♭VI", "♭VII"),
-     'Open Music Theory 2e, 7.12 Modal Schemas ("Aeolian shuttle": the chorus of "Somebody That I Used to '
-     'Know"); Wikipedia, "List of chord progressions" (i–♭VII–♭VI–♭VII)'),
+     'Open Music Theory 2e, 7.12 Modal Schemas ("Aeolian shuttle i–♭VII–♭VI–♭VII", circling on its minor tonic: the '
+     'chorus of "Somebody That I Used to Know"); Wikipedia, "List of chord progressions" (I–♭VII–♭VI–♭VII, minor)'),
     ("ii–V–I", ("ii", "V", "I"), 'Wikipedia, "ii–V–I progression"'),
     ("the minor ii–V–i", ("ii", "V", "i"), 'Wikipedia, "ii–V–I progression" (in C minor, Dm7♭5–G7–Cm)'),
     ("I–IV–V", ("I", "IV", "V"), 'Wikipedia, "Three-chord song" (scale degrees I, IV and V)'),
@@ -212,20 +216,24 @@ CATALOGUE: tuple[tuple[str, tuple[str, ...], str], ...] = (
      'Wikipedia, "Twelve-bar blues" (the quick change: IV in the second bar)'),
     ("the 12-bar blues", ("I", "IV", "I", "IV", "I", "V", "IV", "I", "V"),
      'Wikipedia, "Twelve-bar blues" (the quick change, with the turnaround\'s V)'),
-    ("the 8-bar blues", ("I", "V", "IV", "I", "V", "IV", "I", "V"),
-     'Wikipedia, "Eight-bar blues" (I–V7–IV7–IV7–I–V7 IV7–I–V7)'),
+    # Not the article's other 8-bar blues, I–V7–IV7–IV7–I–V7 IV7–I–V7: a chord held once (no bars), it is an I–V–IV
+    # vamp played twice and a half, as many a verse plays it.
     ("the 8-bar blues", ("I", "V", "IV", "I", "V", "I", "V"),
-     'Wikipedia, "Eight-bar blues" (I7–V7–IV7–IV7–I7–V7–I7–V7, "Key to the Highway")'),
+     'Wikipedia, "Eight-bar blues" (I7–V7–IV7–IV7–I7–V7–I7–V7, "Key to the Highway"); Wikipedia, "List of chord '
+     'progressions" (I–V–IV–IV–I–V–I–V)'),
     ("the Andalusian cadence", ("i", "♭VII", "♭VI", "V"),
      'Wikipedia, "Andalusian cadence" (i–♭VII–♭VI–V, "the minor descending tetrachord"); Open Music Theory 2e, '
-     '7.10 Classical Schemas (the lament, "most typically ... harmonized by i–♭VII–♭VI–V")'),
+     '7.10 Classical Schemas (the lament bass on a minor tonic, "most typically ... harmonized by I–♭VII–♭VI–V")'),
+    ("the lament", ("i", "♭VII", "♭VI", "v"),
+     'Open Music Theory 2e, 7.12 Modal Schemas (an Aeolian schema, "Lament i–♭VII–♭VI–v": with a minor v, where the '
+     'Andalusian cadence has V; Eva Simons\'s "I Don\'t Like You")'),
     ("the ragtime progression", ("V/vi", "V/ii", "V/V", "V"),
      'Wikipedia, "Ragtime progression" (III7–VI7–II7–V7–I: each chord the V7 of the next)'),
     ("the ragtime progression", ("V/vi", "V/ii", "V/V", "V", "I"), 'Wikipedia, "Ragtime progression"'),
     ("the ragtime progression", ("I", "V/vi", "V/ii", "V/V", "V"), 'Wikipedia, "Ragtime progression" (from its I)'),
-    ("the Hey Joe progression", ("♭VI", "♭III", "♭VII", "IV", "I"),
-     'Open Music Theory 2e, 7.8 Blues-Based Schemas (the "extended plagal" ♭VI–♭III–♭VII–IV–I of the verse of '
-     'Jimi Hendrix\'s "Hey Joe")'),
+    ("the extended plagal progression", ("♭VI", "♭III", "♭VII", "IV", "I"),
+     'Open Music Theory 2e, 7.8 Blues-Based Schemas ("extended plagal, ♭VI–♭III–♭VII–IV–I": the verse of Jimi '
+     'Hendrix\'s "Hey Joe")'),
     ("the backdoor progression", ("iv", "♭VII", "I"),
      'Wikipedia, "Backdoor progression" (iv7–♭VII7–I, "the backdoor ii–V")'),
     ("the Aeolian cadence", ("♭VI", "♭VII", "i"), 'Open Music Theory 2e, 7.12 Modal Schemas (♭VI–♭VII–i, or I)'),
@@ -240,15 +248,30 @@ CATALOGUE: tuple[tuple[str, tuple[str, ...], str], ...] = (
     ("the Montgomery-Ward bridge", ("I", "IV", "ii", "V"),
      'Wikipedia, "Montgomery-Ward bridge" (I7–IV7–ii7–V7, "Riepel\'s Monte")'),
 )
-# Names whose rows loop, so that a section may start on any of their chords; the others go somewhere and start on
-# their first chord (the blues's changes turned round, "C G F C F", are no blues, nor V–I–ii a ii–V–I).
-_LOOPS = frozenset({"the pop progression", "the '50s progression", "the circle of fifths", "Pachelbel's Canon",
-                    "the royal road", "the double-plagal progression", "the Creep progression", "the Aeolian shuttle"})
+# The rows that loop, by their numerals, so that a section may start on any of their chords, as their sources turn
+# them: the pop progression's vi–IV–I–V, the double plagal looped I–♭VII–IV, the circle through every chord (a song
+# may start it on its iv, as "Autumn Leaves" does). The others go somewhere and start on their first chord: the
+# blues's changes turned round, "C G F C F", are no blues, nor V–I–ii a ii–V–I, iii–vi–IV–V the royal road or
+# I–vi–ii–V the circle of fifths (jazz's turnaround, which "Circle progression" keeps apart from vi–ii–V–I).
+_LOOPS = frozenset({
+    ("I", "V", "vi", "IV"),  # the pop progression
+    ("I", "vi", "IV", "V"),  # the '50s progression
+    ("I", "IV", "vii°", "iii", "vi", "ii", "V", "I"),  # the circle of fifths through every chord
+    ("i", "iv", "♭VII", "♭III", "♭VI", "ii°", "V", "i"),  # and in a minor key
+    ("I", "V", "vi", "iii", "IV", "I", "IV", "V"),  # Pachelbel's Canon
+    ("♭VII", "IV", "I"),  # the double-plagal progression
+    ("I", "V/vi", "IV", "iv"),  # the Creep progression
+    ("i", "♭VII", "♭VI", "♭VII"),  # the Aeolian shuttle
+})
 # Names read on the song's own tonic alone, never in its relative key (the others are: the pop progression in a
 # song read in A minor rather than C major is i–♭VI–♭III–♭VII): the blues are major, the Aeolian cadence read in
 # the relative major is a deceptive IV–V–vi, and a name that is numerals says where its tonic is.
 _ON_ITS_TONIC = frozenset({"the 12-bar blues", "the 8-bar blues", "the Aeolian cadence", "ii–V–I",
                            "the minor ii–V–i", "I–IV–V"})
+# Loops whose turns are named on their own tonic alone: the Aeolian shuttle circles on its minor tonic, and turned
+# in the relative major (IV–V–vi–V) it is a major key's climb to its vi and back, no shuttle. Read in the relative
+# key it is named from its first chord (vi–V–IV–V).
+_TURNS_ON_ITS_TONIC = frozenset({"the Aeolian shuttle"})
 
 # The modes a key borrows from, first the one asked first (the module's docstring says why).
 _BORROWS = {
@@ -935,16 +958,17 @@ class _Row:
     tokens: tuple[Token, ...]
     numerals: tuple[str, ...]  # as numeral() writes its chords in the key, for its key for searching
     own: bool
-    forms: tuple[tuple[Token, ...], ...]  # every run of chords that plays it: as written, or each turn of a loop
+    loops: bool  # a section may start it on any of its chords
+    forms: tuple[tuple[Token, ...], ...]  # every run of chords that plays it: as written, or each turn of a loop, its own first
 
 
-def _row(name: str, tokens: tuple[Token, ...], numerals: tuple[str, ...], own: bool) -> _Row:
-    if name in _LOOPS:
+def _row(name: str, tokens: tuple[Token, ...], numerals: tuple[str, ...], own: bool, loops: bool) -> _Row:
+    if loops:
         cycle = _closed(tokens)
         forms = tuple(dict.fromkeys(cycle[i:] + cycle[:i] for i in range(len(cycle))))
     else:
         forms = (tokens,)
-    return _Row(name, tokens, numerals, own, forms)
+    return _Row(name, tokens, numerals, own, loops, forms)
 
 
 # The tonic of each mode above the tonic of the major scale with its notes: D Dorian is C major's.
@@ -956,18 +980,21 @@ def _rows(mode: str) -> tuple[_Row, ...]:
     """The catalogue as a key in ``mode`` reads it: each row on the key's tonic, then each read in the key's
     relative one, where the row's tonic is in the scale the key's notes make (the pop progression read in A
     minor, i–♭VI–♭III–♭VII; the Andalusian cadence in C major, vi–V–IV–V/vi): a row with a minor tonic (i) is
-    in a minor key, the others in a major one. Not those of ``_ON_ITS_TONIC``."""
+    in a minor key, the others in a major one. Not those of ``_ON_ITS_TONIC``, and those of
+    ``_TURNS_ON_ITS_TONIC`` from their first chord alone."""
     own: list[_Row] = []
     relative: list[_Row] = []
     for name, numerals, _ in CATALOGUE:
         tokens = tuple(_token(n) for n in numerals)
-        own.append(_row(name, tokens, tuple(numerals), True))
+        loops = numerals in _LOOPS
+        own.append(_row(name, tokens, tuple(numerals), True, loops))
         home = "aeolian" if (0, "m") in tokens else "ionian"
         shift = (_PARENT[home] - _PARENT[mode]) % 12
         if name in _ON_ITS_TONIC or shift == 0:
             continue
         moved = tuple(((root + shift) % 12, third) for root, third in tokens)
-        relative.append(_row(name, moved, _written(moved, Key(0, mode), name in _LOOPS), False))
+        relative.append(_row(name, moved, _written(moved, Key(0, mode), loops), False,
+                             loops and name not in _TURNS_ON_ITS_TONIC))
     return tuple(own + relative)
 
 
@@ -984,30 +1011,45 @@ def _whole(tokens: Sequence[Token], mode: str) -> str | None:
     and the row each closed (``_closed``); the first row that fits, those on the tonic first."""
     cycle = _closed(tokens)
     for row in _rows(mode):
-        forms = row.forms if row.name in _LOOPS else (_closed(row.tokens),)
+        forms = row.forms if row.loops else (_closed(row.tokens),)
         if any(len(form) == len(cycle) and all(map(_fits, cycle, form)) for form in forms):
             return row.name
     return None
 
 
-def _contained(held: Sequence[str], mode: str) -> tuple[Contained, ...]:
+def _contained(held: Sequence[str], mode: str, seams: Sequence[int] = ()) -> tuple[Contained, ...]:
     """The catalogue's progressions a section plays (``held``: its numerals, a chord held once) as runs of its
     chords, in the order it first plays each, with the times. Runs share no chord, but a run that ends on the
     chord it starts with (the blues, on I) lends that chord to the next; of the ways to read the section so,
     the one whose runs hold the most chords, then the fewest runs (a longer progression rather than two that
     make it), then the most read on the key's own tonic, then the one that starts a run first. So Dm7 G7 Cmaj7 Am
-    G F E7 is ii–V–I, then the Andalusian cadence, not the circle of fifths from ii (ii–V–I–vi) and a run cut
-    short."""
+    G F E7 is ii–V–I, then the Andalusian cadence.
+
+    A loop is played from any of its chords, but from another than its own first only twice or more: played
+    once within a section, vi–IV–V–I is a cadence there ("Yesterday"), no '50s progression. A section played
+    round and round (``seams``: where each pass after the first starts, ``_fold``) is read from where each pass
+    starts: a progression that goes somewhere is named within a pass, never across the seam of two (I–vi–ii–V
+    round and round plays no circle of fifths, vi–ii–V–I, nor V–I–ii a ii–V–I), but for a run that ends on the
+    chord it starts with, which may end on the next pass's first."""
     merged = _merged(held)
     tokens = [t for t, _ in merged]
     n = len(tokens)
+    # Each seam as the index of the chord (merged) it falls on.
+    cuts = sorted({max(i for i, (_, first) in enumerate(merged) if first <= seam) for seam in seams})
     starting: dict[int, list[tuple[int, int, bool, bool, str]]] = {}
     for order, row in enumerate(_rows(mode)):
-        for form in row.forms:
+        for turn, form in enumerate(row.forms):
             k = len(form)
-            for start in range(n - k + 1):
-                if all(_fits(tokens[start + j], form[j]) for j in range(k)):
-                    starting.setdefault(start, []).append((k, order, row.own, form[0] == form[-1], row.name))
+            closes = form[0] == form[-1]
+            found = [start for start in range(n - k + 1)
+                     if all(_fits(tokens[start + j], form[j]) for j in range(k))]
+            if not row.loops:
+                last = k - 2 if closes else k - 1  # the run's last chord a seam may not fall within
+                found = [start for start in found if not any(start < cut <= start + last for cut in cuts)]
+            elif turn and _apart(found, k) < 2:
+                continue
+            for start in found:
+                starting.setdefault(start, []).append((k, order, row.own, closes, row.name))
     # best[pos]: the best reading of the chords from pos on, as (chords held, -runs, runs on the tonic), and
     # the run it starts with there (None: the chord at pos is in none).
     best: list[tuple[int, int, int]] = [(0, 0, 0)] * (n + 1)
@@ -1015,8 +1057,10 @@ def _contained(held: Sequence[str], mode: str) -> tuple[Contained, ...]:
     for pos in range(n - 1, -1, -1):
         best[pos] = best[pos + 1]
         for k, _, own, closes, name in sorted(starting.get(pos, ()), key=lambda c: (-c[0], not c[2], c[1])):
-            rest = best[pos + k - 1 if closes else pos + k]
-            score = (rest[0] + k, rest[1] - 1, rest[2] + own)
+            end = pos + k - 1 if closes else pos + k
+            rest = best[end]
+            # A chord lent to the next run is held once.
+            score = (rest[0] + k - (closes and pick[end] is not None), rest[1] - 1, rest[2] + own)
             if score > best[pos] or (score == best[pos] and pick[pos] is None):
                 best[pos], pick[pos] = score, (k, closes, name)
     times: dict[str, int] = {}
@@ -1032,6 +1076,16 @@ def _contained(held: Sequence[str], mode: str) -> tuple[Contained, ...]:
         pos += k - 1 if closes else k
     keys = _name_keys()
     return tuple(Contained(name, count, first[name], keys[name]) for name, count in times.items())
+
+
+def _apart(starts: Sequence[int], k: int) -> int:
+    """How many runs of ``k`` chords starting at ``starts`` (in order) a section plays one after another, none
+    sharing a chord."""
+    count, free = 0, 0
+    for start in starts:
+        if start >= free:
+            count, free = count + 1, start + k
+    return count
 
 
 @functools.cache
@@ -1060,11 +1114,27 @@ def catalogue_keys() -> dict[str, str]:
 
 
 def name_of(numerals: Sequence[str] | str) -> str | None:
-    """The catalogue's name for a progression's numerals typed ("vi IV I V", "III7 VI7 II7 V7"), played whole,
-    read in a major key or in a minor one; None for none."""
+    """The catalogue's name for a progression's numerals typed ("vi IV I V", "III7 VI7 II7 V7", "i VII VI V":
+    ``read_typed``), played whole, read in a major key or in a minor one, as a section's is (a progression that
+    goes somewhere from its first chord alone: "iii vi IV V" is no royal road); None for none."""
+    return _name_of(read_typed(numerals))
+
+
+# The degrees a minor key's own numerals write unaltered and this module's notation lowers: its III, VI and VII.
+_NATURAL_MINOR = frozenset({"III", "VI", "VII"})
+
+
+def read_typed(numerals: Sequence[str] | str) -> tuple[str, ...]:
+    """Numerals as typed ("vi IV I V", "vi–IV–I–V", or a list of them), in this module's notation: written in a
+    minor key's own way, against its natural minor scale (a minor tonic, i, and no accidental, as Wikipedia writes
+    the minor circle, i–iv–VII–III–VI–ii°–V–i), a major III, VI or VII is its ♭III, ♭VI or ♭VII ("i VII VI V" is
+    i–♭VII–♭VI–V); others are as typed."""
     if isinstance(numerals, str):
         numerals = [n for n in _SEPARATORS.split(numerals) if n]
-    return _name_of(tuple(numerals))
+    found = [_NUMERAL.match(n) for n in numerals]
+    if any(m is None or m.group(1) for m in found) or not any(m.group(2) == "i" for m in found):
+        return tuple(numerals)
+    return tuple("♭" + n if m.group(2) in _NATURAL_MINOR else n for n, m in zip(numerals, found, strict=True))
 
 
 @functools.lru_cache(maxsize=1024)
@@ -1080,43 +1150,46 @@ def _name_of(numerals: tuple[str, ...]) -> str | None:
 _LONGEST_CYCLE = 16  # chords: a cycle of more is no loop
 
 
-def _fold(held: Sequence[str]) -> tuple[tuple[str, ...], int, int]:
-    """A section's numerals (a chord held once) as one cycle, the times it is played and how many of those
-    play it otherwise: the shortest cycle it repeats whole; else the shortest one played whole twice or more,
-    and more often than not, where each other pass changes, adds or leaves out at most one chord of a cycle of
-    two or three, two of a longer one (Wonderwall's verse, Em7 G Dsus4 A7sus4 with one pass on Cadd9 Dsus4
-    A7sus4, is i7–♭III–♭VIIsus4–IV7sus4 ×8, one variation); the section may end on the cycle's first chords,
-    home, which is no pass. Else the whole section, once."""
+def _fold(held: Sequence[str]) -> tuple[tuple[str, ...], int, int, tuple[int, ...]]:
+    """A section's numerals (a chord held once) as one cycle, the times it is played, how many of those play it
+    otherwise, and where each pass after the first starts (an index of ``held``): the shortest cycle it repeats
+    whole; else the shortest one played whole twice or more, and more often than not, where each other pass
+    plays it with one chord changed, or one added or left out, or, in a cycle of four chords or more, a chord
+    changed and one added or left out as well (``_varies``: Wonderwall's verse, Em7 G Dsus4 A7sus4 with one pass
+    on Cadd9 Dsus4 A7sus4, is i7–♭III–♭VIIsus4–IV7sus4 ×8, one variation); the section may end on the cycle's
+    first chords, home, which is no pass. Else the whole section, once."""
     n = len(held)
     period = _period(held)
     if period < n:
-        return tuple(held[:period]), n // period, 0
+        return tuple(held[:period]), n // period, 0, tuple(range(period, n, period))
     for p in range(2, min(_LONGEST_CYCLE, n // 2) + 1):
-        allowed = 1 if p < 4 else 2
         at: dict[tuple[str, ...], list[int]] = {}
         for i in range(n - p + 1):
             at.setdefault(tuple(held[i:i + p]), []).append(i)
-        best: tuple[tuple[str, ...], int, int] | None = None
-        for s in range(min(p + allowed, n - p) + 1):
+        best: tuple[tuple[str, ...], int, int, tuple[int, ...]] | None = None
+        for s in range(min(p + 1, n - p) + 1):  # a first pass that varies it has a chord more at most
             cycle = tuple(held[s:s + p])
-            passes = _passes(held, cycle, at[cycle], allowed)
+            passes = _passes(held, cycle, at[cycle])
             if passes is not None and (best is None or (passes[0], -passes[1]) > (best[1], -best[2])):
                 best = (cycle, *passes)
         if best is not None:
-            return best[0], best[1] + best[2], best[2]
-    return tuple(held), 1, 0
+            cycle, whole, varied, seams = best
+            return cycle, whole + varied, varied, seams
+    return tuple(held), 1, 0, ()
 
 
-def _passes(held: Sequence[str], cycle: tuple[str, ...], starts: list[int],
-            allowed: int) -> tuple[int, int] | None:
-    """The passes of ``cycle`` the section plays whole, and the others, each at most ``allowed`` chords from
-    it; None when the section is no such cycle (``_fold``)."""
+def _passes(held: Sequence[str], cycle: tuple[str, ...], starts: list[int]) -> tuple[int, int, tuple[int, ...]] | None:
+    """The passes of ``cycle`` the section plays whole, the others (``_varies``), and where each after the first
+    starts, the home it may end on too; None when the section is no such cycle (``_fold``)."""
     if len(starts) < 2:
         return None
     n, p = len(held), len(cycle)
     whole = varied = 0
+    seams: list[int] = []
     j = 0
     while j < n:
+        if j:
+            seams.append(j)
         if tuple(held[j:j + p]) == cycle:
             whole += 1
             j += p
@@ -1125,24 +1198,27 @@ def _passes(held: Sequence[str], cycle: tuple[str, ...], starts: list[int],
         rest = tuple(held[j:] if k is None else held[j:k])
         if k is None and len(rest) < p and cycle[:len(rest)] == rest:
             break  # home: the section ends on the cycle's first chords
-        if _distance(rest, cycle) > allowed:
+        if not _varies(rest, cycle):
             return None
         varied += 1
         if k is None:
             break
         j = k
-    return (whole, varied) if whole >= 2 and whole > varied else None
+    return (whole, varied, tuple(seams)) if whole >= 2 and whole > varied else None
 
 
-def _distance(a: Sequence[str], b: Sequence[str]) -> int:
-    """How many chords change, come in or go to make ``a`` of ``b``."""
-    previous = list(range(len(b) + 1))
-    for i, x in enumerate(a, 1):
-        current = [i]
-        for j, y in enumerate(b, 1):
-            current.append(min(previous[j] + 1, current[j - 1] + 1, previous[j - 1] + (x != y)))
-        previous = current
-    return previous[-1]
+def _varies(played: Sequence[str], cycle: Sequence[str]) -> bool:
+    """A pass ``played`` plays ``cycle`` otherwise: with one chord changed, or one added or left out, or, in a
+    cycle of four chords or more, a chord changed and one added or left out as well. Two chords changed are
+    another line (C G Am F, then Dm G C F)."""
+    longer, shorter = (played, cycle) if len(played) >= len(cycle) else (cycle, played)
+    if len(longer) == len(shorter):
+        return sum(x != y for x, y in zip(longer, shorter, strict=True)) <= 1
+    if len(longer) - len(shorter) != 1:
+        return False
+    changed = 1 if len(cycle) >= 4 else 0
+    return any(sum(x != y for x, y in zip(longer[:i] + longer[i + 1:], shorter, strict=True)) <= changed
+               for i in range(len(longer)))
 
 
 def _ending(cores: Sequence[str]) -> str | None:
@@ -1183,13 +1259,9 @@ def _progressions(sections: tuple[tuple[str, tuple[Chord | None, ...]], ...],
         if not numerals:
             continue
         held = _collapse(numerals)
-        cycle, repeats, varied = _fold(held)
+        cycle, repeats, varied, seams = _fold(held)
         whole = _whole([t for t, _ in _merged(cycle)], key.mode)
-        if whole is None and len(cycle) < len(held) and (all_of := _whole([t for t, _ in _merged(held)], key.mode)):
-            # The section is a progression of the catalogue whole (the 8-bar blues, I–V–IV twice then I–V):
-            # that, not a cycle that hides it.
-            cycle, repeats, varied, whole = tuple(held), 1, 0, all_of
-        contains = tuple(c for c in _contained(held, key.mode) if c.name != whole)
+        contains = tuple(c for c in _contained(held, key.mode, seams) if c.name != whole)
         found.append((name, Progression(cycle, repeats, whole, _ending([_core(t) for t in held]), varied,
                                         contains)))
     return tuple(found)
