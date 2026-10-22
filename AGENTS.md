@@ -7,7 +7,7 @@ What a coding agent needs before changing caracole. User documentation: README.m
 caracole is a Python CLI, run every night by a NixOS service, that builds a private library
 of sing-along chord sheets (Ultimate Guitar, LaCuerda), lyrics (LRCLIB), PDFs (ChordPro)
 and Guitar Pro files (downloaded from gtptabs.com, or picked on UG for the user to
-download) for the songs in `wanted.txt` and, optionally, Spotify. For a song
+download) for the songs in `wanted.txt`. For a song
 nobody has charted, `caracole autochords` writes a sheet from audio with local models
 (torch, optional): a purchase, or audio the nightly run takes from YouTube with yt-dlp
 (youtube.py, youtube_fetch.py), a few songs a night, only where auto-chords is. The
@@ -17,7 +17,7 @@ design lives in three files:
   runs `caracole run --config …`, which the CLI rejects (`--config` is a root option:
   `caracole --config FILE run`).
 - `docs/superpowers/plans/2026-10-18-caracole.md`: the task plan, with amendments A1–A7 made
-  during the build: A2 optional Spotify and `wanted.txt`, A3 Chinese titles, A4 command
+  during the build: A2 optional Spotify (removed since) and `wanted.txt`, A3 Chinese titles, A4 command
   plug-ins, A5 agent rules, A6 bare-id tabs, A7 `index.html` and `caracole search`.
 - `docs/spike-2026-10-18.md`: what the live sites did when checked. It corrects plan.md:
   UG's `Pro` is a public Guitar Pro file; a slugged tab answers only at its slugged URL.
@@ -32,7 +32,7 @@ section says where things are, and the rules a change there keeps.
 
 | Step | Modules |
 |---|---|
-| sync | sources.py, wanted.py, spotify.py, songs.py |
+| sync | sources.py, wanted.py (the one source of songs), songs.py |
 | icons | icons.py (each source's mark) |
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
@@ -55,7 +55,7 @@ Shared by the steps and the commands:
 
 | Module | What for |
 |---|---|
-| config.py | caracole.toml, directories, secrets |
+| config.py | caracole.toml, directories, secrets; `REMOVED`, the tables an older caracole read, ignored with a warning |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
 | health.py | cooldowns, `events` |
@@ -372,12 +372,11 @@ Traps:
 
 - Test first: a test that fails (on the missing name or an assertion), then the code.
 - Never a live request in a test: not to ultimate-guitar.com, lrclib.net, lacuerda.net,
-  gtptabs.com, musescore.com, YouTube or Spotify. Give `PoliteClient` an
+  gtptabs.com, musescore.com or YouTube. Give `PoliteClient` an
   `httpx.MockTransport` as `transport=`; CLI tests monkeypatch
   `caracole.commands._common.transport_for` (and `_common.sleep`); pipeline tests pass
   `Services` with fake clients (`FakeGtpTabs.client` and `FakeMuseScore.client` make real
-  ones); Spotify tests use `FakeSpotify` (test_spotify.py) or patch
-  `caracole.spotify.client_from_config`; YouTube tests run `FakeYtDlp` as `ytdlp_bin`,
+  ones); YouTube tests run `FakeYtDlp` as `ytdlp_bin`,
   never a real yt-dlp: conftest.py points `CARACOLE_YTDLP_BIN` at no program for every
   test, so a command reading the real environment in `nix develop .#autochords` (torch, the
   model paths, yt-dlp on PATH) finds the route off. Nothing blocks the network for the
@@ -590,11 +589,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   then the files caracole wrote. `songs.upsert_song`, the one way a source adds a song, finds a
   tombstone by source id, or by key when no song has it, and raises `songs.SongRemoved`
   unless the source asks again (`_unless_removed`): a wanted.txt line always does (`caracole
-  add`, the web page, a line typed), and any other source only with a track added after the
-  removal. Spotify counts what stays out in `SyncStats.removed`. The to-do page suggests no
-  removed song (`todo._suggestions`). Nothing else may create a song
+  add`, the web page, a line typed), and no other source ever does. Nothing else may create a song
   (`test_removal.py::test_the_next_sync_brings_nothing_back_until_you_ask_for_the_song_again`,
-  `test_songs.py::test_no_spotify_track_added_before_a_songs_removal_brings_it_back`).
+  `test_songs.py::test_no_source_but_a_wanted_line_brings_a_removed_song_back`).
 - **Schema changes go through db.py**: bump `SCHEMA_VERSION` and add the script to
   `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
   (`VACUUM INTO`, under a name of its own, then renamed), then runs each script in one `BEGIN IMMEDIATE`
@@ -621,7 +618,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   song, as it is an `OverridesError` or a `SongbookFileError` in overrides.toml or
   songbooks.toml), and write one with `library.write_atomic`: a random temporary name opened
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
-  Nothing private or bulky goes there: the database, the Spotify token, the lock, the HTTP
+  Nothing private or bulky goes there: the database, the lock, the HTTP
   cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in
   `state_dir` and `cache_dir`, and chordpro works on a copy in a 0700 folder under the cache
   (render.py). tests/test_library_safety.py. A removal deletes only what caracole
@@ -689,6 +686,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (the library page's script; without it, a page of its own), having asked what goes
   (`removal.plan_removal`, which only reads, and `removal.brief`); its job's song key is
   `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.
-- **Spotify is optional, and wanted.txt is always a source.** `sources.sync_sources` syncs
-  wanted.txt first, then Spotify, importing spotipy, only when `cfg.spotify.enabled` (a
-  `client_id` is set); any Spotify failure becomes a state on its report, never an error.
+- **wanted.txt is the one source of songs.** `sources.sync_sources` syncs it alone. Spotify was
+  one once: a song an older caracole had from it is an ordinary song, keeping its Spotify source
+  ids and what they last said (`songs:fields:spotify:`, after the line's word: `songs._resolve`),
+  and the kv rows its sync wrote (`source:spotify`, `spotify:top_tracks`,
+  `spotify:retry_after_until`) stay, read by nothing. A caracole.toml that still has a `[spotify]`
+  table loads, the table ignored, with one warning naming what to delete (`config.REMOVED`), never
+  an unknown-key error: an upgrade never stops the nightly run
+  (`test_config.py::test_a_file_that_still_has_spotify_loads_and_says_once_to_delete_it`).

@@ -489,7 +489,7 @@ def test_the_nightly_render_step_makes_the_songbooks(setup):
     _, cfg, conn = setup
     make_songbook(cfg.library_dir / FILE_NAME, "Campfire", ["Soda Stereo - De Música Ligera", "Muse - Hysteria"])
     steps = [s for s in default_steps() if s.name == "render"]
-    services = Services(clients={}, spotify=None, notifier=Notifier(None, None))
+    services = Services(clients={}, notifier=Notifier(None, None))
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps)
     assert report.ok, report.errors
     result = report.results["render"]
@@ -507,7 +507,7 @@ def test_a_songbook_file_that_cant_be_written_costs_the_nightly_render_step_noth
     make_songbook(cfg.library_dir / FILE_NAME, "Trip", ["Soda Stereo - De Música Ligera"])
     (folder(setup, "Trip") / "songbook.pdf").mkdir(parents=True)
     steps = [s for s in default_steps() if s.name == "render"]
-    services = Services(clients={}, spotify=None, notifier=Notifier(None, None))
+    services = Services(clients={}, notifier=Notifier(None, None))
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps)
     assert report.ok, report.errors  # no crash: the sheets' counts are kept
     problems = " ".join(p.text for p in report.results["render"].problems)
@@ -521,7 +521,7 @@ def test_the_nightly_render_step_reports_a_broken_songbooks_file(setup):
     _, cfg, conn = setup
     (cfg.library_dir / FILE_NAME).write_text("[Campfire\n", encoding="utf-8")
     steps = [s for s in default_steps() if s.name == "render"]
-    services = Services(clients={}, spotify=None, notifier=Notifier(None, None))
+    services = Services(clients={}, notifier=Notifier(None, None))
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps)
     assert report.ok, report.errors  # the PDFs were made all the same
     problems = " ".join(p.text for p in report.results["render"].problems)

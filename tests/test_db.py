@@ -15,7 +15,7 @@ def current(tmp_path):
     """A database at this caracole's schema version, holding one kv row."""
     path = tmp_path / "state" / "caracole.sqlite"
     c = db.connect(path)
-    db.kv_set(c, "spotify:top_tracks", "[]")
+    db.kv_set(c, "run:last", "[]")
     c.close()
     return path
 
@@ -61,7 +61,7 @@ def test_the_database_is_backed_up_before_a_migration(current, newer):
     cols, version = columns(backup, "kv")
     assert version == NOW and cols == ["key", "value"]
     b = sqlite3.connect(backup)
-    assert b.execute("SELECT value FROM kv WHERE key = 'spotify:top_tracks'").fetchone()[0] == "[]"
+    assert b.execute("SELECT value FROM kv WHERE key = 'run:last'").fetchone()[0] == "[]"
     b.close()
 
 
@@ -80,7 +80,7 @@ def migrated_once(path):
     cols, version = columns(backup, "kv")
     assert cols == ["key", "value"] and version == NOW
     b = sqlite3.connect(backup)
-    assert b.execute("SELECT value FROM kv WHERE key = 'spotify:top_tracks'").fetchone()[0] == "[]"
+    assert b.execute("SELECT value FROM kv WHERE key = 'run:last'").fetchone()[0] == "[]"
     b.close()
     assert sorted(p.name for p in path.parent.iterdir() if p.name.endswith(".bak") or ".bak." in p.name) == [
         backup.name]  # nothing half-written left beside it

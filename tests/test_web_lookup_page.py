@@ -309,7 +309,7 @@ def test_your_librarys_song_found_on_ug_under_another_name_is_looked_up_as_itsel
     base, queue = live
     index_songs(cfg, [("acdc", "back-in-black", 4)])
     conn = db.connect(cfg.db_path)
-    acdc = add_song(conn, "AC/DC", "Back In Black", source="spotify", source_id="spotify:track:9")
+    acdc = add_song(conn, "AC/DC", "Back In Black")  # its line taken off wanted.txt since
     update_song(conn, acdc.id, match_decision="accept", match_artist_key="acdc", match_song_key="back-in-black")
     conn.close()
     browser.open(base + "/lookup")
@@ -318,7 +318,7 @@ def test_your_librarys_song_found_on_ug_under_another_name_is_looked_up_as_itsel
     browser.click("#results .hit:last-child button.primary")
     args = posted(queue)
     assert args[-3:] == ("--", "AC/DC", "Back In Black") and "--ug=acdc/back-in-black" in args
-    assert not cfg.wanted_file.exists()  # Spotify's song: no second song, and no new source for it
+    assert not cfg.wanted_file.exists()  # no second song, and no line back for it
 
 
 SHEET_TOP = ("(() => { const s = document.getElementById('sheet'); if (s.hidden || !s.textContent) return null; "

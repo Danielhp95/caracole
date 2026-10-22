@@ -1,7 +1,7 @@
 r"""wanted.txt: the songs you want to learn, as a plain text file you edit.
 
-This is caracole's always-available source; Spotify is optional. The file lives in
-the library folder, so Syncthing carries it to your phone. One song per line:
+This is caracole's one source of songs. The file lives in the library folder,
+so Syncthing carries it to your phone. One song per line:
 
     Artist - Title
     Artist - Title | Album
@@ -19,13 +19,13 @@ the library folder, so Syncthing carries it to your phone. One song per line:
 - ``#`` starts a comment, at the start of a line or after a space, and blank
   lines are ignored. Write ``\#`` for a ``#`` that belongs to a name
   ("John Lennon - \#9 Dream") and ``\|`` for a ``|``.
-- A line's album and duration win over Spotify's. Correcting one corrects the
-  song at the next sync, and taking one off the line takes it off the song,
-  for Spotify's to take its place. A song on two lines is its first line; a
-  later one only fills in what the first leaves out.
-- Deleting a line doesn't delete the song from caracole, just as unliking a track
-  on Spotify doesn't. ``caracole remove`` does, and takes the song's lines out
-  (``remove_wanted``); a line for it written again later brings it back.
+- Correcting a line's album or duration corrects the song at the next sync, and
+  taking one off the line takes it off the song (or gives way to what Spotify
+  last said of a song an older caracole had from it). A song on two lines is
+  its first line; a later one only fills in what the first leaves out.
+- Deleting a line doesn't delete the song from caracole. ``caracole remove``
+  does, and takes the song's lines out (``remove_wanted``); a line for it
+  written again later brings it back.
 - The file must be a regular file. Others can write to the library, so a
   symbolic link is refused rather than followed (it could point at caracole's
   credentials, and a bad line is quoted on the to-do page).

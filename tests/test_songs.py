@@ -45,36 +45,42 @@ def test_kv_roundtrip(conn):
 
 
 def test_upsert_creates_then_merges(conn):
+    key = "soda-stereo/de-musica-ligera"
     a = upsert_song(conn, artists=["Soda Stereo"], title="De Música Ligera", album=None, duration_ms=213000,
-                    isrc=None, source="spotify", source_id="t1", added_at="2026-01-01T00:00:00Z")
+                    isrc=None, source="wanted", source_id=key, added_at="2026-01-01T00:00:00Z")
     b = upsert_song(conn, artists=["Soda Stereo"], title="De Música Ligera", album="Canción Animal",
-                    duration_ms=None, isrc="ARX1", source="spotify", source_id="t1",
+                    duration_ms=213000, isrc=None, source="wanted", source_id=key,
                     added_at="2026-02-01T00:00:00Z")
     assert a == (1, True)
     assert b == (1, False)
     s = get_song(conn, 1)
     assert s.album == "Canción Animal"
     assert s.duration_ms == 213000
-    assert s.isrc == "ARX1"
-    assert s.source_ids == {"spotify": ["t1"]}
+    assert s.isrc is None
+    assert s.source_ids == {"wanted": [key]}
     assert s.added_at.startswith("2026-02")
     assert s.key == "soda-stereo/de-musica-ligera"
     assert s.status == "wanted" and s.ug_dirty and s.lyrics_status == "pending"
 
 
 def test_remaster_merges_with_original(conn):
+    # A song an older caracole had from two Spotify tracks of it, a remaster and the original.
     upsert_song(conn, artists=["The Beatles"], title="Let It Be - Remastered 2009", album=None,
                 duration_ms=243000, isrc=None, source="spotify", source_id="t2", added_at="2026-01-01T00:00:00Z")
     upsert_song(conn, artists=["The Beatles"], title="Let It Be", album=None, duration_ms=243000,
                 isrc=None, source="spotify", source_id="t3", added_at="2026-01-02T00:00:00Z")
+    _, created = upsert_song(conn, artists=["The Beatles"], title="Let It Be", album=None, duration_ms=None,
+                             isrc=None, source="wanted", source_id="the-beatles/let-it-be",
+                             added_at="2026-01-03T00:00:00Z")
+    assert not created
     rows = list_songs(conn)
     assert len(rows) == 1
-    assert rows[0].source_ids == {"spotify": ["t2", "t3"]}
+    assert rows[0].source_ids == {"spotify": ["t2", "t3"], "wanted": ["the-beatles/let-it-be"]}
     assert rows[0].title == "Let It Be - Remastered 2009"
     assert rows[0].display == "The Beatles - Let It Be"
 
 
-def test_same_song_from_two_sources(conn):
+def test_a_wanted_line_joins_the_song_an_older_caracole_had_from_spotify(conn):
     upsert_song(conn, artists=["宋冬野"], title="斑马，斑马", album=None, duration_ms=253000, isrc=None,
                 source="spotify", source_id="sp1", added_at="2026-01-01T00:00:00Z")
     _, created = upsert_song(conn, artists=["宋冬野"], title="斑马斑马", album="安和桥北", duration_ms=253000,
@@ -96,7 +102,7 @@ def test_a_new_song_takes_the_spelling_of_an_artist_the_library_writes_in_anothe
     from caracole.library import song_dir
     from caracole.normalize import identity_key
 
-    oasis = add_song(conn, "Oasis", "Wonderwall", source="spotify", source_id="t1")  # liked on Spotify
+    oasis = add_song(conn, "Oasis", "Wonderwall")
     typed = add_song(conn, "oasis", "champagne supernova", artists=["oasis", "Noel Gallagher"])  # typed on a phone
     assert (typed.artist, typed.artists, typed.title) == ("Oasis", ["Oasis", "Noel Gallagher"], "champagne supernova")
     assert typed.key == identity_key("oasis", "champagne supernova")
@@ -170,22 +176,6 @@ def test_refresh_status_found_requires_kept_sheet(conn):
 
 # --- one record per song, whatever the normalizer ------------------------------------------
 
-SPOTIFY = {"album": None, "duration_ms": None, "isrc": None, "source": "spotify",
-           "added_at": "2026-10-01T00:00:00Z"}
-
-
-def test_a_retitled_track_is_still_its_song(conn):
-    # Spotify retitles a track: its id still names the song it was, under the key it had.
-    first, _ = upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana",
-                           source_id="3Zr1nVDLLMxKdDKfbmyhqa", **SPOTIFY)
-    again = upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana (Ensayo)",
-                        source_id="3Zr1nVDLLMxKdDKfbmyhqa", **SPOTIFY)
-    assert again == (first, False)
-    (song,) = list_songs(conn)
-    assert (song.key, song.source_ids) == (
-        "soda-stereo/persiana-americana", {"spotify": ["3Zr1nVDLLMxKdDKfbmyhqa"]})
-
-
 def older_song(conn, artist, title, key, *, source, source_id, added_at="2026-09-01T00:00:00Z"):
     """A song as an older caracole stored it: keyed by that day's normalizer, with no key version."""
     cur = conn.execute(
@@ -237,13 +227,15 @@ def test_re_keying_carries_a_wanted_lines_first_seen_time(conn, tmp_path):
     assert song.added_at == "2026-09-01T00:00:00Z"
 
 
-def test_a_spotify_song_keyed_by_an_older_normalizer_is_re_keyed_not_split(conn):
+def test_a_song_an_older_caracole_had_from_spotify_is_re_keyed_and_its_line_joins_it(conn, tmp_path):
+    from caracole.wanted import sync_wanted
+
     song_id = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
                          source="spotify", source_id="sp1")
-    again = upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana - En Vivo",
-                        source_id="sp1", **SPOTIFY)
-    assert again == (song_id, False)
-    assert [s.key for s in list_songs(conn)] == ["soda-stereo/persiana-americana"]
+    sync_wanted(conn, wanted_file(tmp_path), NIGHT)
+    (song,) = list_songs(conn)
+    assert (song.id, song.key) == (song_id, "soda-stereo/persiana-americana")
+    assert song.source_ids == {"spotify": ["sp1"], "wanted": ["soda-stereo/persiana-americana"]}
 
 
 def test_todays_overrides_meet_a_song_an_older_normalizer_keyed(conn):
@@ -267,7 +259,8 @@ def keep(conn, lib, song_id, tab_id, kind, name, data, *, pick):
 
 
 def test_songs_an_older_normalizer_kept_apart_are_merged(conn, tmp_path):
-    # Spotify's "Los Enanitos Verdes" and wanted.txt's "Enanitos Verdes": two songs until now.
+    # An older caracole's "Los Enanitos Verdes", from Spotify, and wanted.txt's "Enanitos Verdes": two songs
+    # until now.
     lib = tmp_path / "lib"
     older = older_song(conn, "Los Enanitos Verdes", "Lamento Boliviano",
                        "los-enanitos-verdes/lamento-boliviano", source="spotify", source_id="sp9")
@@ -337,7 +330,7 @@ def test_keys_are_re_keyed_once_per_normalizer_version(conn):
     assert [s.key for s in list_songs(conn)] == ["stale/key"]
 
 
-# --- album, duration, ISRC and variant: what the sources say now ---------------------------
+# --- album, duration, ISRC and variant: what the line says now, and what Spotify said ------
 
 LINE = "radiohead/creep"  # a wanted.txt line's source id is its identity key
 
@@ -351,7 +344,7 @@ def line(conn, title="Creep", *, album=None, duration_ms=None):
 
 def track(conn, track_id="tCreep", title="Creep", *, album="Pablo Honey", duration_ms=238000,
           isrc="GBAYE9200070"):
-    """Radiohead's Creep as a liked Spotify track hands it over (sync_spotify)."""
+    """Radiohead's Creep as a liked Spotify track handed it over to an older caracole, which kept its word."""
     return upsert_song(conn, artists=["Radiohead"], title=title, album=album,
                        duration_ms=duration_ms, isrc=isrc, source="spotify", source_id=track_id,
                        added_at="2026-10-02T00:00:00Z")
@@ -377,42 +370,23 @@ def test_what_comes_off_a_wanted_line_comes_off_the_song(conn):
 
 def test_the_wanted_line_outranks_spotify_which_fills_in_what_it_leaves_out(conn):
     # wanted.txt is your own word (plan, Amendment A2): the album version you bought, say,
-    # where Spotify has the single edit. Liked first or not, Spotify's track doesn't win.
+    # where Spotify had the single edit. What Spotify last said fills in what the line leaves out.
     track(conn)
     line(conn, "Creep - Acoustic", duration_ms=253000)
-    track(conn)  # the next night
     assert fields(conn) == ("Pablo Honey", 253000, "GBAYE9200070", "acoustic")
     line(conn)  # the duration and the variant taken off the line: Spotify's take their place
     assert fields(conn) == ("Pablo Honey", 238000, "GBAYE9200070", None)
 
 
-def test_a_spotify_track_that_changes_changes_the_song(conn):
-    line(conn)
-    track(conn)
-    track(conn, album="Pablo Honey (Remastered)", duration_ms=238640, isrc="GBAYE9200071")
-    assert fields(conn) == ("Pablo Honey (Remastered)", 238640, "GBAYE9200071", None)
-
-
 def test_two_tracks_of_one_song_dont_take_turns(conn):
     # A remaster and the original are one song: the track first seen gives what it has, every
     # night, and the other one only what the first lacks.
+    track(conn, "tRemaster", "Creep - Remastered 2009", album=None, duration_ms=239000,
+          isrc="GBAYE0900001")
+    track(conn, "tOriginal", duration_ms=238000, isrc=None)
     for _ in range(2):
-        track(conn, "tRemaster", "Creep - Remastered 2009", album=None, duration_ms=239000,
-              isrc="GBAYE0900001")
-        track(conn, "tOriginal", duration_ms=238000, isrc=None)
-    assert fields(conn) == ("Pablo Honey", 239000, "GBAYE0900001", None)
-
-
-def test_a_value_stored_before_sources_were_heard_gives_way_once_they_are(conn):
-    # A database from before caracole kept what each source says: nothing tells whose value
-    # this duration is, so it stays until each of the song's sources has spoken.
-    both = older_song(conn, "Radiohead", "Creep", LINE, source="wanted", source_id=LINE)
-    update_song(conn, both, source_ids={"wanted": [LINE], "spotify": ["tCreep"]},
-                duration_ms=193000)
-    line(conn)
-    assert get_song(conn, both).duration_ms == 193000
-    track(conn)
-    assert get_song(conn, both).duration_ms == 238000
+        line(conn)
+        assert fields(conn) == ("Pablo Honey", 239000, "GBAYE0900001", None)
 
 
 def test_a_value_stored_before_goes_when_the_only_source_no_longer_gives_it(conn):
@@ -423,7 +397,8 @@ def test_a_value_stored_before_goes_when_the_only_source_no_longer_gives_it(conn
 
 
 def test_a_source_never_heard_again_keeps_only_what_no_other_source_said(conn):
-    # A track since taken off your Learn playlist is never read again. What the song has that
+    # A Spotify track an older caracole had is never read again, nor is one from a database from before
+    # caracole kept what each source says. What the song has that
     # no source heard since gives is taken for its word (the album here); what the line still
     # says is the line's (the duration), and comes off the song when it comes off the line.
     song_id = older_song(conn, "Radiohead", "Creep", LINE, source="wanted", source_id=LINE)
@@ -437,18 +412,14 @@ def test_a_source_never_heard_again_keeps_only_what_no_other_source_said(conn):
 
 def test_a_source_saying_the_same_again_writes_nothing(conn):
     # Every sync hands every song over again; one nothing changed for is left as it is.
-    song_id, _ = line(conn, album="Pablo Honey")
     track(conn)
+    song_id, _ = line(conn, album="Pablo Honey")
     before = conn.total_changes
     assert line(conn, album="Pablo Honey") == (song_id, False)  # its added_at is older: no news either
-    assert track(conn) == (song_id, False)
     assert conn.total_changes == before
     line(conn, album="Pablo Honey (Deluxe)")  # the line's album edited
     assert conn.total_changes > before
     assert fields(conn) == ("Pablo Honey (Deluxe)", 238000, "GBAYE9200070", None)
-    upsert_song(conn, artists=["Radiohead"], title="Creep", album="Pablo Honey", duration_ms=238000,
-                isrc="GBAYE9200070", source="spotify", source_id="tCreep", added_at="2026-10-15T00:00:00Z")
-    assert get_song(conn, song_id).added_at == "2026-10-15T00:00:00Z"  # liked again since: newer
 
 
 def test_a_second_sync_of_an_unchanged_wanted_txt_writes_nothing(conn, tmp_path):
@@ -464,7 +435,7 @@ def test_a_second_sync_of_an_unchanged_wanted_txt_writes_nothing(conn, tmp_path)
 
 
 def test_re_keying_carries_what_a_wanted_line_said(conn):
-    # Said under the key an older normalizer gave the line; it still outranks Spotify after.
+    # Said under the key an older normalizer gave the line; it still outranks Spotify's word after.
     from caracole.songs import SOURCE_FIELDS_KV
 
     song_id = older_song(conn, "Soda Stereo", "Persiana Americana - En Vivo", OLD_LIVE_KEY,
@@ -476,9 +447,11 @@ def test_re_keying_carries_what_a_wanted_line_said(conn):
     new_key = "soda-stereo/persiana-americana"
     assert db.kv_get_json(conn, f"{SOURCE_FIELDS_KV}wanted:{new_key}") == said
     assert db.kv_get(conn, f"{SOURCE_FIELDS_KV}wanted:{OLD_LIVE_KEY}") is None
-    upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana", album="Signos",
-                duration_ms=250000, isrc="ARX1", source="spotify", source_id="sp1",
-                added_at="2026-10-01T00:00:00Z")
+    update_song(conn, song_id, source_ids={"wanted": [new_key], "spotify": ["sp1"]})
+    db.kv_set_json(conn, f"{SOURCE_FIELDS_KV}spotify:sp1",
+                   {"album": "Signos", "duration_ms": 250000, "isrc": "ARX1", "variant": None})
+    upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana - En Vivo", album="Comfort y Música Para Volar",
+                duration_ms=300000, isrc=None, source="wanted", source_id=new_key, added_at="2026-10-01T00:00:00Z")
     song = get_song(conn, song_id)
     assert (song.album, song.duration_ms, song.isrc, song.variant) == (
         "Comfort y Música Para Volar", 300000, "ARX1", "live")
@@ -497,17 +470,20 @@ def removed(conn, song):
     conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))
 
 
-def test_no_spotify_track_added_before_a_songs_removal_brings_it_back(conn):
+def test_no_source_but_a_wanted_line_brings_a_removed_song_back(conn):
+    # A song an older caracole had from Spotify, removed: no source but your own line asks for it again,
+    # whenever it says the song was added.
     from caracole.songs import SongRemoved, removed_song
 
     track(conn)
     (song,) = list_songs(conn)
     removed(conn, song)
     with pytest.raises(SongRemoved) as raised:
-        track(conn)  # the track you liked before removing the song
+        track(conn)
     assert raised.value.removed.display == "Radiohead - Creep"
-    with pytest.raises(SongRemoved):
-        track(conn, "tCreepRemaster", "Creep - Remastered 2008")  # another track of it: the same song
+    with pytest.raises(SongRemoved):  # another source id of it, added since: the same song
+        upsert_song(conn, artists=["Radiohead"], title="Creep - Remastered 2008", album=None, duration_ms=None,
+                    isrc=None, source="spotify", source_id="tCreepRemaster", added_at="2026-10-11T00:00:00Z")
     assert list_songs(conn) == []
     assert removed_song(conn, "radiohead/creep").source_ids == {"spotify": ["tCreep"]}
 
@@ -520,20 +496,7 @@ def test_a_wanted_line_brings_a_removed_song_back_as_new(conn):
     removed(conn, song)
     song_id, created = line(conn)
     assert created and removed_song(conn, "radiohead/creep") is None
-    # Then Spotify's track is one of its sources again.
-    assert track(conn) == (song_id, False)
-    assert get_song(conn, song_id).source_ids == {"wanted": [LINE], "spotify": ["tCreep"]}
-
-
-def test_a_track_added_to_spotify_again_after_the_removal_brings_the_song_back(conn):
-    from caracole.songs import removed_song
-
-    track(conn)
-    (song,) = list_songs(conn)
-    removed(conn, song)
-    again = upsert_song(conn, artists=["Radiohead"], title="Creep", album=None, duration_ms=None, isrc=None,
-                        source="spotify", source_id="tCreep", added_at="2026-10-11T00:00:00Z")
-    assert again[1] and removed_song(conn, "radiohead/creep") is None
+    assert get_song(conn, song_id).source_ids == {"wanted": [LINE]}  # new: what it had went with it
 
 
 def test_a_song_of_the_same_key_in_the_library_outranks_a_tombstone(conn):
@@ -545,7 +508,7 @@ def test_a_song_of_the_same_key_in_the_library_outranks_a_tombstone(conn):
     conn.execute("UPDATE removed SET key = 'radiohead/creep-old'")
     kept = add_song(conn, "Radiohead", "Creep", source="spotify", source_id="tNew")
     conn.execute("UPDATE removed SET key = 'radiohead/creep'")
-    assert track(conn, "tOther") == (kept.id, False)
+    assert line(conn) == (kept.id, False)
 
 
 def test_removed_songs_are_listed_newest_first_and_merge_their_sources(conn):
@@ -575,5 +538,6 @@ def test_removed_songs_are_re_keyed_with_the_songs(conn):
     assert removed_song(conn, OLD_LIVE_KEY) is None
     stone = removed_song(conn, "soda-stereo/persiana-americana")
     assert stone.source_ids == {"wanted": ["soda-stereo/persiana-americana"], "spotify": ["sp1"]}
-    with pytest.raises(SongRemoved):
-        upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana", source_id="sp2", **SPOTIFY)
+    with pytest.raises(SongRemoved):  # found by its key, under today's normalizer
+        upsert_song(conn, artists=["Soda Stereo"], title="Persiana Americana", album=None, duration_ms=None,
+                    isrc=None, source="spotify", source_id="sp2", added_at="2026-10-11T00:00:00Z")

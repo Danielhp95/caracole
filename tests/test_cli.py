@@ -56,7 +56,7 @@ def test_config_option_is_stored_on_context(tmp_path):
 
 # --- the log, set up once for every command by the root callback ------------------------------
 
-SECRET, TOKEN = "spotify-client-s3cret", "tk_ntfy-s3cret-token"
+TOKEN = "tk_ntfy-s3cret-token"
 
 
 def command(name: str, body) -> list[str]:
@@ -81,7 +81,7 @@ def chatter(ctx) -> None:
 
     import typer
 
-    for name in ("caracole.zz", "httpx", "httpcore.connection", "spotipy.client"):
+    for name in ("caracole.zz", "httpx", "httpcore.connection", "librosa.core"):
         logging.getLogger(name).debug("%s debug", name)
         logging.getLogger(name).info("%s info", name)
         logging.getLogger(name).warning("%s warning", name)
@@ -103,14 +103,14 @@ def test_every_command_logs_problems_only_by_default_on_stderr_alone():
     assert result.stdout == "the report\n"  # the log never reaches stdout
     assert result.stderr.splitlines() == [
         "warning: caracole.zz warning", "warning: httpx warning", "warning: httpcore.connection warning",
-        "warning: spotipy.client warning",
+        "warning: librosa.core warning",
     ]
 
 
 def test_verbose_adds_caracoles_own_information_and_very_verbose_everything():
     verbose = invoke("-v").stderr.splitlines()
     assert "caracole.zz info" in verbose
-    assert not [line for line in verbose if "debug" in line or line in ("httpx info", "spotipy.client info")]
+    assert not [line for line in verbose if "debug" in line or line in ("httpx info", "librosa.core info")]
     very = invoke("-vv").stderr.splitlines()
     assert "debug: caracole.zz: caracole.zz debug" in very
     assert "httpx: httpx info" in very and "debug: httpcore.connection: httpcore.connection debug" in very
@@ -145,22 +145,20 @@ def test_the_secrets_the_config_read_never_reach_the_log(tmp_path, monkeypatch):
     from caracole.commands._common import load_cfg
 
     monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
-    monkeypatch.setenv("CARACOLE_SPOTIFY_CLIENT_SECRET", SECRET)
     monkeypatch.setenv("CARACOLE_NTFY_TOKEN", TOKEN)
     path = tmp_path / "caracole.toml"
-    path.write_text(f'data_dir = "{tmp_path}"\n[spotify]\nclient_id = "abc"\n[ntfy]\nurl = "https://ntfy.example/t"\n',
-                    encoding="utf-8")
+    path.write_text(f'data_dir = "{tmp_path}"\n[ntfy]\nurl = "https://ntfy.example/t"\n', encoding="utf-8")
 
     def body(ctx):
         cfg = load_cfg(ctx)
-        assert (cfg.spotify.client_secret, cfg.ntfy.token) == (SECRET, TOKEN)
-        for name in ("caracole.zz", "spotipy.oauth2"):
-            logging.getLogger(name).debug("client_secret %s, ntfy %s", SECRET, TOKEN)
-            logging.getLogger(name).error("client_secret %s, ntfy %s", SECRET, TOKEN)
+        assert cfg.ntfy.token == TOKEN
+        for name in ("caracole.zz", "httpx"):
+            logging.getLogger(name).debug("ntfy %s, again %s", TOKEN, TOKEN)
+            logging.getLogger(name).error("ntfy %s, again %s", TOKEN, TOKEN)
 
     result = invoke("--config", str(path), "-vv", body=body)
     assert result.exit_code == 0, result.output
-    assert SECRET not in result.stderr and TOKEN not in result.stderr
+    assert TOKEN not in result.stderr
     assert result.stderr.count("[redacted]") == 8
 
 

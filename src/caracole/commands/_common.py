@@ -86,7 +86,7 @@ def load_cfg(ctx: typer.Context) -> Config:
         cfg = load_config(path)
     except ConfigError as e:
         fail(f"config: {e}", 2)
-    logs.add_secrets(cfg.spotify.client_secret, cfg.ntfy.token)
+    logs.add_secrets(cfg.ntfy.token)
     return cfg
 
 

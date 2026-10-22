@@ -54,15 +54,13 @@ come from the options.
 ```nix
 services.caracole.credentials = {
   ntfy_token = config.age.secrets.caracole-ntfy.path;
-  spotify_client_secret = config.age.secrets.caracole-spotify.path;
 };
 ```
 
 systemd's `LoadCredential=` reads each file as root and gives the unit a
 private copy in `$CREDENTIALS_DIRECTORY`. caracole reads
-`$CREDENTIALS_DIRECTORY/ntfy_token` and
-`$CREDENTIALS_DIRECTORY/spotify_client_secret`. The nightly unit and
-`caracole-admin` get both. The auto-chords unit gets neither.
+`$CREDENTIALS_DIRECTORY/ntfy_token`. The nightly unit and `caracole-admin`
+get it. The auto-chords unit gets none.
 
 **Auto-chords:**
 
@@ -84,13 +82,14 @@ keeps auto-chords for purchases alone.
 ```sh
 sudo caracole-admin index build                 # once: UG's sitemaps, about 10 minutes
 sudo caracole-admin add "Oasis" "Wonderwall"    # or edit wanted.txt in the library
-sudo caracole-admin auth spotify                # only if you set up Spotify
 systemctl list-timers caracole.timer            # when the next run starts
 sudo systemctl start caracole.service           # one run now
 journalctl -u caracole.service -e
 ```
 
-Then read `_todo.md` in the library.
+Then read `_todo.md` in the library. An upgrade from a caracole that read
+Spotify needs nothing done first, and leaves a few things to delete:
+[usage.md](usage.md#songs-from-spotify-before) lists them.
 
 **Data** lives in `dataDir`, `/var/lib/caracole` unless you set it:
 
@@ -98,7 +97,7 @@ Then read `_todo.md` in the library.
 |---|---|
 | `library` | sheets, lyrics, `_todo.md`, `index.html`, `wanted.txt`, `overrides.toml` |
 | `music` | audio you bought, read-only, for auto-chords |
-| `state` | the database, the Spotify token and the lock: back it up, don't sync it |
+| `state` | the database and the lock: back it up, don't sync it |
 | `cache` | every HTTP response, kept, and audio taken from YouTube: losing it costs only requests |
 
 `libraryDir`, `musicDir`, `stateDir` and `cacheDir` move one folder each.
@@ -115,7 +114,7 @@ License 1.1) and the Sonivox SoundFont (Apache-2.0). The wrapper points
 `CARACOLE_ALPHATAB_DIR` at them.
 
 [deploy.md](deploy.md) covers the rest: agenix, Syncthing, restic backups,
-Spotify, and how auto-chords works.
+and how auto-chords works.
 
 ## Ubuntu
 
@@ -158,7 +157,9 @@ Before Nix 2.30, `nix profile add` was `nix profile install`. To update:
 sudo -i nix profile upgrade --profile /nix/var/nix/profiles/caracole --all
 ```
 
-Then [run it nightly](#run-it-nightly-on-ubuntu).
+Coming from a caracole that read Spotify, see
+[usage.md](usage.md#songs-from-spotify-before) for what to delete. Then
+[run it nightly](#run-it-nightly-on-ubuntu).
 
 ### Ubuntu without Nix
 
@@ -377,7 +378,6 @@ missing:
 ```sh
 sudo install -d -m 0700 /etc/credstore
 sudo sh -c 'umask 077; cat > /etc/credstore/ntfy_token'              # paste it, then Ctrl-D
-sudo sh -c 'umask 077; cat > /etc/credstore/spotify_client_secret'   # only with Spotify
 ```
 
 **The units.** The nightly run:
@@ -402,7 +402,6 @@ User=caracole
 Group=caracole
 UMask=0007
 Environment=XDG_CACHE_HOME=/var/lib/caracole/cache NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba
-LoadCredential=spotify_client_secret
 LoadCredential=ntfy_token
 ReadWritePaths=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
 ReadOnlyPaths=-/var/lib/caracole/music
@@ -512,7 +511,7 @@ index.html it rewrites say what the nightly run's say about audio from YouTube.
 # /usr/local/bin/caracole-admin: run a caracole command as caracole.service does.
 exec systemd-run --quiet --collect --wait --pty --pipe \
   --uid=caracole --gid=caracole --property=UMask=0007 \
-  --property=LoadCredential=spotify_client_secret --property=LoadCredential=ntfy_token \
+  --property=LoadCredential=ntfy_token \
   --setenv=CARACOLE_CONFIG=/etc/caracole/caracole.toml \
   --setenv=XDG_CACHE_HOME=/var/lib/caracole/cache \
   --setenv=NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba \

@@ -127,7 +127,7 @@ def night(cfg, conn, ug, *, at=NIGHT):
         "lacuerda": PoliteClient("lacuerda", cfg.provider("lacuerda"), cfg.cache_dir, user_agent="caracole-test",
                                  transport=httpx.MockTransport(no_request), sleep=lambda s: None),
     }
-    services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
+    services = Services(clients=clients, notifier=Notifier(None, None))
     try:
         report = run_pipeline(cfg, conn=conn, services=services, steps=[s for s in default_steps() if s.name in STEPS],
                               now=at)

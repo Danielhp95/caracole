@@ -1,8 +1,6 @@
-"""``caracole add``, ``caracole sync`` and ``caracole auth spotify``, run through the CLI.
+"""``caracole add`` and ``caracole sync``, run through the CLI.
 
-Each test writes a caracole.toml rooted in tmp_path. Spotify is faked by replacing
-``caracole.spotify.client_from_config`` (or the token session of a real OAuth
-manager), and no request can reach the network.
+Each test writes a caracole.toml rooted in tmp_path. Neither command sends a request.
 """
 
 from __future__ import annotations
@@ -14,8 +12,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
-import requests
-from spotipy.exceptions import SpotifyException
 from typer.testing import CliRunner
 
 from caracole import db
@@ -24,15 +20,11 @@ from caracole.songs import list_songs
 from caracole.wanted import HEADER
 from conftest import subprocess_pythonpath
 
-# Environment that load_config or spotipy would read; none of it may leak into a test.
+# Environment that load_config would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
     "CREDENTIALS_DIRECTORY",
     "CARACOLE_CONFIG",
-    "CARACOLE_SPOTIFY_CLIENT_SECRET",
     "CARACOLE_NTFY_TOKEN",
-    "SPOTIPY_CLIENT_ID",
-    "SPOTIPY_CLIENT_SECRET",
-    "SPOTIPY_REDIRECT_URI",
 )
 
 
@@ -40,11 +32,6 @@ OUTSIDE_SETTINGS = (
 def isolated(monkeypatch):
     for name in OUTSIDE_SETTINGS:
         monkeypatch.delenv(name, raising=False)
-
-    def refuse(*args, **kwargs):
-        pytest.fail("tried to reach the network")
-
-    monkeypatch.setattr(requests.Session, "request", refuse)
 
 
 def write_config(tmp_path, extra=""):
@@ -78,60 +65,6 @@ def songs(tmp_path):
         return list_songs(conn)
     finally:
         conn.close()
-
-
-def spotify_config(tmp_path, *, secret=True):
-    """A [spotify] table for caracole.toml; the client secret sits in a file next to it."""
-    if not secret:
-        return '[spotify]\nclient_id = "cid"\n'
-    (tmp_path / "spotify_secret").write_text("secret\n", encoding="utf-8")
-    return '[spotify]\nclient_id = "cid"\nclient_secret_file = "spotify_secret"\n'
-
-
-class OneTrackSpotify:
-    """A Spotify account with one liked track, no playlists and no top tracks."""
-
-    def __init__(self, error=None):
-        self.error = error
-
-    def current_user_saved_tracks(self, limit=20, offset=0, market=None):
-        if self.error:
-            raise self.error
-        creep = {
-            "type": "track",
-            "id": "tCreep",
-            "name": "Creep",
-            "artists": [{"name": "Radiohead"}],
-            "album": {"name": "Pablo Honey"},
-            "duration_ms": 238000,
-        }
-        return {"items": [{"added_at": "2026-10-01T12:00:00Z", "track": creep}], "next": None}
-
-    def current_user_playlists(self, limit=50, offset=0):
-        return {"items": [], "next": None}
-
-    def playlist_items(self, playlist_id, **kwargs):
-        raise SpotifyException(404, -1, "x:\n Not found")
-
-    def current_user_top_tracks(self, limit=20, offset=0, time_range="medium_term"):
-        return {"items": [], "next": None}
-
-    def next(self, result):
-        return None
-
-
-def fake_spotify(monkeypatch, client):
-    """Make ``client_from_config`` return ``client`` (or raise it); returns a list of its calls."""
-    calls = []
-
-    def client_from_config(cfg):
-        calls.append(cfg)
-        if isinstance(client, BaseException):
-            raise client
-        return client
-
-    monkeypatch.setattr("caracole.spotify.client_from_config", client_from_config)
-    return calls
 
 
 # --- caracole add -----------------------------------------------------------------------------
@@ -250,7 +183,7 @@ def test_add_says_what_the_library_has_of_a_song_it_knew(tmp_path):
     from caracole.songs import update_song
     from conftest import add_song as insert
 
-    creep = insert(conn, "Radiohead", "Creep", source="spotify")
+    creep = insert(conn, "Radiohead", "Creep")  # known, its line taken off wanted.txt since
     update_song(conn, creep.id, status="found")
     conn.close()
     result = run(tmp_path, "add", "Radiohead", "Creep")
@@ -514,15 +447,26 @@ TWO_SONGS_AND_A_TYPO = (
 )
 
 
-def test_sync_without_spotify_reads_wanted_txt(tmp_path, monkeypatch):
-    clients_made = fake_spotify(monkeypatch, OneTrackSpotify())
+def test_sync_reads_wanted_txt(tmp_path):
     wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
     result = run(tmp_path, "sync")
     assert result.exit_code == 0, result.output
-    assert "wanted.txt 2 songs, 2 new, 1 problem; Spotify off\n" in result.output
-    assert "wanted.txt line 2: expected 'Artist - Title'" in result.output
+    assert result.stdout == "wanted.txt 2 songs, 2 new, 1 problem\n"
+    assert "wanted.txt line 2: expected 'Artist - Title'" in result.stderr
     assert {s.key for s in songs(tmp_path)} == {"宋冬野/斑马斑马", "soda-stereo/de-musica-ligera"}
-    assert clients_made == []  # Spotify is off: no client is even made
+
+
+def test_sync_with_a_config_that_still_names_spotify_says_once_to_delete_it_and_syncs(tmp_path):
+    # caracole.toml from before Spotify went: its table and its client secret file (gone since) are
+    # ignored, so the upgrade stops nothing, and one warning says what to delete.
+    wanted_file(tmp_path, "Radiohead - Creep\n")
+    config = '[spotify]\nclient_id = "cid"\nclient_secret_file = "spotify_secret"\nplaylists = ["Learn"]\n'
+    result = run(tmp_path, "sync", config=config)
+    assert result.exit_code == 0, result.output
+    assert result.stdout == "wanted.txt 1 song, 1 new\n"
+    [warning] = result.stderr.splitlines()
+    assert warning.startswith(f"warning: {tmp_path / 'caracole.toml'}: delete its [spotify] table: ")
+    assert [s.key for s in songs(tmp_path)] == ["radiohead/creep"]
 
 
 OLD_LIVE_KEY = "soda-stereo/persiana-americana-en-vivo"  # before " - En Vivo" was a version suffix
@@ -568,61 +512,17 @@ def test_sync_after_an_upgrade_keeps_a_re_keyed_lines_place_in_the_queue(tmp_pat
         conn.close()
 
 
+def test_caracole_auth_is_no_command_now(tmp_path):
+    # It held `caracole auth spotify` alone.
+    result = run(tmp_path, "auth", "spotify")
+    assert result.exit_code == 2 and "No such command 'auth'" in result.output
+
+
 def test_sync_with_nothing_to_read_says_how_to_start(tmp_path):
     result = run(tmp_path, "sync")
     assert result.exit_code == 0, result.output
-    assert "wanted.txt 0 songs, 0 new; Spotify off" in result.output
+    assert "wanted.txt 0 songs, 0 new\n" in result.output
     assert str(wanted_file(tmp_path)) in result.output and "`caracole add" in result.output
-
-
-def test_sync_with_spotify(tmp_path, monkeypatch):
-    fake_spotify(monkeypatch, OneTrackSpotify())
-    wanted_file(tmp_path, "宋冬野 - 斑马斑马 | 安和桥北 | 4:13\n")
-    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
-    assert result.exit_code == 0, result.output
-    assert "wanted.txt 1 song, 1 new; Spotify 1 song, 1 new\n" in result.output
-    by_key = {s.key: s for s in songs(tmp_path)}
-    assert set(by_key) == {"宋冬野/斑马斑马", "radiohead/creep"}
-    assert by_key["radiohead/creep"].source_ids == {"spotify": ["tCreep"]}
-
-
-def test_sync_when_spotify_needs_authorization(tmp_path):
-    # Spotify is set up but never authorized: the real client_from_config finds no token.
-    wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
-    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
-    assert result.exit_code == 0, result.output
-    assert "Spotify needs authorization (run `caracole auth spotify`)" in result.output
-    token = tmp_path / "state" / "spotify_token.json"
-    assert f"Spotify: No Spotify authorization is saved yet (no token in {token})." in result.output
-    assert len(songs(tmp_path)) == 2  # wanted.txt synced all the same
-
-
-def test_sync_says_once_that_the_client_secret_is_missing(tmp_path):
-    token = tmp_path / "state" / "spotify_token.json"
-    token.parent.mkdir(parents=True)
-    token.write_text('{"access_token": "AT", "refresh_token": "RT", "expires_at": 4102444800}')
-    result = run(tmp_path, "sync", config=spotify_config(tmp_path, secret=False))
-    assert result.exit_code == 0, result.output
-    assert result.output.count("client secret is missing") == 1
-
-
-def test_sync_when_spotify_fails(tmp_path, monkeypatch):
-    outage = SpotifyException(502, -1, "https://api.spotify.com/v1/me/tracks:\n Bad gateway")
-    fake_spotify(monkeypatch, OneTrackSpotify(error=outage))
-    wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
-    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
-    assert result.exit_code == 0, result.output
-    assert "Spotify 0 songs, 0 new (Spotify Liked Songs: HTTP 502: Bad gateway)" in result.output
-    assert len(songs(tmp_path)) == 2
-
-
-def test_sync_when_the_spotify_client_cannot_be_made(tmp_path, monkeypatch):
-    fake_spotify(monkeypatch, RuntimeError("the token cache is unreadable"))
-    wanted_file(tmp_path, TWO_SONGS_AND_A_TYPO)
-    result = run(tmp_path, "sync", config=spotify_config(tmp_path))
-    assert result.exit_code == 0, result.output
-    assert "warning: Spotify unavailable: RuntimeError: the token cache is unreadable" in result.output
-    assert len(songs(tmp_path)) == 2
 
 
 # --- the pages ------------------------------------------------------------------------------
@@ -694,138 +594,18 @@ def test_a_page_it_cant_write_is_a_warning_and_the_songs_are_synced(tmp_path, ar
     assert said in result.output
 
 
-# --- caracole auth spotify --------------------------------------------------------------------
-
-REDIRECT = "http://127.0.0.1:8888/callback"
-
-
-class FakeResponse:
-    def __init__(self, payload):
-        self.payload = payload
-
-    def raise_for_status(self):
-        pass
-
-    def json(self):
-        return self.payload
-
-
-class FakeTokenSession:
-    """Stands in for the session a real SpotifyOAuth posts the code exchange with."""
-
-    def __init__(self, error=None):
-        self.error = error
-        self.posts = []
-
-    def post(self, url, data=None, headers=None, **kwargs):
-        self.posts.append((url, data))
-        if self.error:
-            raise self.error
-        token = {
-            "access_token": "AT",
-            "token_type": "Bearer",
-            "expires_in": 3600,
-            "refresh_token": "RT",
-            "scope": "user-library-read playlist-read-private",
-        }
-        return FakeResponse(token)
-
-
-def token_session(monkeypatch, session):
-    """Have the real OAuth manager that ``make_auth`` builds post through ``session``."""
-    import caracole.spotify
-
-    real = caracole.spotify.make_auth
-
-    def make_auth(cfg, state_dir):
-        auth = real(cfg, state_dir)
-        auth._session = session
-        return auth
-
-    monkeypatch.setattr(caracole.spotify, "make_auth", make_auth)
-
-
-def test_auth_spotify_without_a_client_id_says_how_to_set_it_up(tmp_path, monkeypatch):
-    monkeypatch.setattr("caracole.spotify.make_auth", lambda *a: pytest.fail("Spotify is off"))
-    result = run(tmp_path, "auth", "spotify")
-    assert result.exit_code == 1, result.output
-    out = result.output
-    assert "optional" in out and "wanted.txt" in out
-    assert "developer.spotify.com" in out and REDIRECT in out
-    assert str(tmp_path / "caracole.toml") in out
-    assert "[spotify]" in out and 'client_id = "' in out
-    assert "spotify_client_secret" in out
-
-
-def test_auth_spotify_saves_the_token_and_says_where(tmp_path, monkeypatch):
-    session = FakeTokenSession()
-    token_session(monkeypatch, session)
-    result = run(
-        tmp_path,
-        "auth",
-        "spotify",
-        config=spotify_config(tmp_path),
-        input=f"{REDIRECT}?code=AQDcode-123\n",
-    )
-    assert result.exit_code == 0, result.output
-    assert "https://accounts.spotify.com/authorize?" in result.output
-    assert "Address: " in result.output and "Address: :" not in result.output
-    [(url, data)] = session.posts
-    assert url == "https://accounts.spotify.com/api/token" and data["code"] == "AQDcode-123"
-    token = tmp_path / "state" / "spotify_token.json"
-    assert '"refresh_token": "RT"' in token.read_text(encoding="utf-8")
-    assert f"the token is in {token}" in result.output
-    assert "`caracole sync`" in result.output
-
-
-def test_auth_spotify_refused_in_the_browser_exits_1(tmp_path, monkeypatch):
-    session = FakeTokenSession()
-    token_session(monkeypatch, session)
-    result = run(
-        tmp_path,
-        "auth",
-        "spotify",
-        config=spotify_config(tmp_path),
-        input=f"{REDIRECT}?error=access_denied\n",
-    )
-    assert result.exit_code == 1, result.output
-    assert "access was refused in the browser (access_denied)" in result.output
-    assert "Run `caracole auth spotify`" not in result.output  # that's what was just run
-    assert session.posts == []
-    assert not (tmp_path / "state" / "spotify_token.json").exists()
-
-
-def test_auth_spotify_without_the_client_secret_exits_1(tmp_path):
-    result = run(tmp_path, "auth", "spotify", config=spotify_config(tmp_path, secret=False))
-    assert result.exit_code == 1, result.output
-    assert "client secret is missing" in result.output
-
-
-def test_auth_spotify_when_spotify_cannot_be_reached_exits_1(tmp_path, monkeypatch):
-    token_session(monkeypatch, FakeTokenSession(error=requests.ConnectionError("no route")))
-    result = run(
-        tmp_path,
-        "auth",
-        "spotify",
-        config=spotify_config(tmp_path),
-        input=f"{REDIRECT}?code=AQDcode\n",
-    )
-    assert result.exit_code == 1, result.output
-    assert "couldn't reach accounts.spotify.com" in result.output
-
-
 # --- the module -----------------------------------------------------------------------------
 
 
 @pytest.mark.slow
-def test_registering_the_commands_imports_no_spotipy(tmp_path):
-    # Every command module is imported on every start, so spotipy waits for a command.
+def test_registering_the_commands_imports_neither_the_sources_nor_the_matcher(tmp_path):
+    # Every command module is imported on every start, so wanted.txt's sync and the matcher wait for a command.
     src = Path(__file__).resolve().parents[1] / "src"
     code = (
         "import sys, typer\n"
         "from caracole.commands import sources\n"
         "sources.register(typer.Typer())\n"
-        "print([m for m in ('spotipy', 'caracole.spotify') if m in sys.modules])\n"
+        "print([m for m in ('caracole.sources', 'caracole.wanted', 'caracole.match', 'rapidfuzz') if m in sys.modules])\n"
     )
     env = {"HOME": str(tmp_path), "PATH": os.environ.get("PATH", ""), "PYTHONPATH": subprocess_pythonpath(src)}
     result = subprocess.run(

@@ -18,7 +18,8 @@ CREEP = "radiohead/creep"
 
 
 def creep(conn, cfg, *, wanted="Radiohead - Creep\nOasis - Wonderwall\n"):
-    """Radiohead's Creep, from wanted.txt and Spotify, with what caracole keeps of a found song."""
+    """Radiohead's Creep, from wanted.txt and, as an older caracole had it, Spotify, with what caracole keeps of a
+    found song."""
     song = add_song(conn, "Radiohead", "Creep", source="wanted", source_id=CREEP)
     add_song(conn, "Radiohead", "Creep", source="spotify", source_id="tCreep")
     if wanted is not None:
@@ -88,7 +89,7 @@ def test_your_own_files_stay_in_the_folder_and_the_removal_says_so(conn, cfg, tm
     (folder / ".notes.md.swp").write_bytes(b"vim")
     (folder / "photos").mkdir()
     (folder / "photos" / "fretboard.jpg").write_bytes(b"jpg")
-    secret = tmp_path / "state" / "spotify_token.json"
+    secret = tmp_path / "state" / "secret.json"
     secret.write_text("token", encoding="utf-8")
     (folder / "sheet.pdf").unlink()
     (folder / "sheet.pdf").symlink_to(secret)  # planted under a name of caracole's

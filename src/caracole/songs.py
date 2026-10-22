@@ -1,14 +1,16 @@
 """Song records: one row per song you want to learn, whatever source it came from.
 
-A song's identity is ``normalize.identity_key(primary artist, title)``, so the
-same song liked on Spotify and listed in ``wanted.txt`` (or a remaster next to
-the original) becomes one record that remembers every source id. A source id
-it already has finds it first, so a track Spotify retitles stays one song.
+A song's identity is ``normalize.identity_key(primary artist, title)``, so
+"斑马，斑马" and "斑马斑马" (or a remaster next to the original) become one
+record that remembers every source id. A source id it already has finds it
+first. ``wanted.txt`` is the one source today; a song an older caracole had
+from Spotify keeps its Spotify source ids, and is an ordinary song.
 
 Its album, duration, ISRC and variant are what its sources say now, not what
 the first one said: the latest word of each source is kept, and each field
-comes from the first source that gives it, your wanted.txt line before
-Spotify's tracks (:func:`upsert_song`).
+comes from the first source that gives it, your wanted.txt line first, then
+what Spotify last said of a song an older caracole had from it
+(:func:`upsert_song`).
 
 The stored keys follow the normalizer: when its rules change
 (``normalize.KEY_VERSION``), every key is recomputed once, before the songs are
@@ -16,10 +18,9 @@ next read or added, and songs that now share a key become one
 (:func:`ensure_current_keys`).
 
 A song ``caracole remove`` took out leaves a tombstone in the ``removed`` table
-(:func:`mark_removed`; removal.py does the rest). No source brings it back
+(:func:`mark_removed`; removal.py does the rest). Nothing brings it back
 (:class:`SongRemoved`) until you ask for it again: a wanted.txt line for it, the
-one ``caracole add`` and the web page write too, or a Spotify track you added
-after the removal. Then it comes back as a new song.
+one ``caracole add`` and the web page write too. Then it comes back as a new song.
 """
 
 from __future__ import annotations
@@ -53,13 +54,13 @@ def is_export(name: str) -> bool:
 
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
 # What each source id last said of its song's album, duration, ISRC and variant (_remember),
-# as JSON under this prefix + "<source>:<source id>", e.g. "songs:fields:spotify:<track id>".
+# as JSON under this prefix + "<source>:<source id>", e.g. "songs:fields:wanted:radiohead/creep",
+# or "songs:fields:spotify:<track id>", what Spotify last said to an older caracole.
 SOURCE_FIELDS_KV = "songs:fields:"
 _SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")
-# Whose word a field takes first: wanted.txt is your own (plan, Amendment A2), then Spotify's
-# tracks (wanted.SOURCE, spotify.SOURCE). A source not named here comes after them.
+# Whose word a field takes first: wanted.txt's, your own (plan, Amendment A2; wanted.SOURCE); then
+# any other source's, Spotify's of a song an older caracole had from it.
 _WANTED = "wanted"
-_PRECEDENCE = (_WANTED, "spotify")
 # What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py,
 # gtptabs_fetch.py, youtube_fetch.py), as "<prefix><song id>" or "<prefix><song id>:<more>"
 # ("render:7:auto"). It goes with a song merged into another or removed (delete_song_kv): SQLite
@@ -189,7 +190,8 @@ def upsert_song(
     this source id's word now, kept in kv (``SOURCE_FIELDS_KV``); the song
     then takes each field from the first of its sources that gives it
     (:func:`_resolve`). So a wanted.txt line you correct corrects the song at
-    the next sync, and a value you take off the line gives way to Spotify's.
+    the next sync, and a value you take off the line gives way to what Spotify
+    last said of a song an older caracole had from it, if it said one.
 
     A song ``caracole remove`` took out, found by the source id or, failing a
     record of yours, by the key, raises SongRemoved, unless this is a request
@@ -205,10 +207,10 @@ def upsert_song(
     ensure_current_keys(conn)
     row = _with_source_id(conn, source, source_id)
     if row is None:
-        _unless_removed(conn, _removed_with_source_id(conn, source, source_id), source, added_at)
+        _unless_removed(conn, _removed_with_source_id(conn, source, source_id), source)
         row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
     if row is None:
-        _unless_removed(conn, removed_song(conn, key), source, added_at)
+        _unless_removed(conn, removed_song(conn, key), source)
         names[0] = _artist_as_written(conn, names[0], key)
         cur = conn.execute(
             "INSERT INTO songs (key, artist, title, artists, album, duration_ms, isrc, source_ids, "
@@ -273,19 +275,11 @@ def _fields_key(source: str, source_id: str) -> str:
 
 
 def _remember(conn: sqlite3.Connection, source: str, source_id: str, said: dict[str, Any]) -> None:
-    """Keep what a source id says of its song's fields; unchanged, nothing is written.
-
-    A wanted.txt line is your whole word: what you take off it, it no longer
-    says. A field another source leaves out (a Spotify track without an ISRC
-    tonight) is no news, so its earlier word on it stands.
-    """
+    """Keep what a source id says of its song's fields; unchanged, nothing is written. A wanted.txt
+    line is your whole word: what you take off it, it no longer says."""
     key = _fields_key(source, source_id)
-    before = kv_get(conn, key)
-    if before is not None and source != _WANTED:
-        old = json.loads(before)
-        said = {name: old.get(name) if value is None else value for name, value in said.items()}
     value = json.dumps(said, ensure_ascii=False)
-    if before != value:
+    if kv_get(conn, key) != value:
         kv_set(conn, key, value)
 
 
@@ -293,8 +287,10 @@ def _resolve(conn: sqlite3.Connection, source_ids: dict[str, list[str]], song: S
     """The album, duration, ISRC and variant a song's sources give it now.
 
     Each field comes from the first source that gives one: the wanted.txt
-    line, then Spotify's tracks in the order the song gained them (so a
-    remaster and the original don't take turns), then any other source.
+    line, then the other sources' ids in the order the song gained them,
+    which, for a song an older caracole had from Spotify, are its tracks (so
+    a remaster and the original don't take turns). Spotify's ids are never
+    heard again: what they last said stands, after the line's word.
 
     A source id with no word kept was last heard by a caracole that kept none
     and merged first come, first served, so whose value the song holds is
@@ -302,9 +298,8 @@ def _resolve(conn: sqlite3.Connection, source_ids: dict[str, list[str]], song: S
     no source heard since says the same: a track you no longer like keeps its
     album, and a duration the line says now stays the line's to take back.
     """
-    rank = {name: i for i, name in enumerate(_PRECEDENCE)}
     words: dict[str, dict[str, Any] | None] = {}
-    for source in sorted(source_ids, key=lambda s: rank.get(s, len(rank))):
+    for source in sorted(source_ids, key=lambda s: s != _WANTED):
         for source_id in source_ids[source]:
             value = kv_get(conn, _fields_key(source, source_id))
             words[_fields_key(source, source_id)] = None if value is None else json.loads(value)
@@ -453,19 +448,17 @@ def forget_removed(conn: sqlite3.Connection, key: str) -> bool:
     return conn.execute("DELETE FROM removed WHERE key = ?", (key,)).rowcount > 0
 
 
-def _unless_removed(conn: sqlite3.Connection, stone: RemovedSong | None, source: str, added_at: str) -> None:
-    """Raise SongRemoved for a removed song, unless the source asks for it again.
+def _unless_removed(conn: sqlite3.Connection, stone: RemovedSong | None, source: str) -> None:
+    """Raise SongRemoved for a removed song, unless a wanted.txt line asks for it again.
 
-    A wanted.txt line asks for it: ``caracole remove`` took the song's lines
-    out, so a line there now is one you wrote since, or ``caracole add``, or
-    the web page. Another source asks for it with a track added after the
-    removal (Spotify's date it was liked or put on a playlist); one added
-    before, which the playlist still lists, doesn't. A request drops the
-    tombstone, and the song comes back new.
+    ``caracole remove`` took the song's lines out, so a line there now is one
+    you wrote since, or ``caracole add``, or the web page. A request drops the
+    tombstone, and the song comes back new. Only your own line asks for a song
+    you removed: any other source is refused.
     """
     if stone is None:
         return
-    if source != _WANTED and added_at <= stone.removed_at:
+    if source != _WANTED:
         raise SongRemoved(stone)
     forget_removed(conn, stone.key)
 

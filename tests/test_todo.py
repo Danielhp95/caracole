@@ -325,12 +325,12 @@ def test_a_wanted_file_caracole_cant_read_says_so_rather_than_count_a_bad_line(c
 
     index(conn, [(1, "radiohead", "creep", "chords")])
     mark_built(conn, NOW)
-    private = cfg.state_dir / "spotify-token.json"
+    private = cfg.state_dir / "private.json"
     private.parent.mkdir(parents=True, exist_ok=True)
     private.write_text("{}", encoding="utf-8")
     cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
     cfg.wanted_file.symlink_to(private)
-    sync_sources(conn, cfg, NOW, spotify=None)
+    sync_sources(conn, cfg, NOW)
     text = todo(conn, cfg)
     why = (f"wanted.txt: not read: {cfg.wanted_file} is a symbolic link, which caracole doesn't follow; put the "
            "file itself there")
@@ -594,7 +594,7 @@ def test_an_inbox_file_named_in_another_encoding_is_listed_and_the_pages_are_wri
 
 def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
     # Anyone who can write to the library can put a link in the inbox; caracole files only regular files.
-    private = cfg.state_dir / "spotify-token.json"
+    private = cfg.state_dir / "private.json"
     private.parent.mkdir(parents=True, exist_ok=True)
     private.write_text("{}", encoding="utf-8")
     inbox = cfg.library_dir / "_inbox"
@@ -613,11 +613,11 @@ def test_a_linked_inbox_lists_nothing_of_what_it_points_at(conn, cfg):
     # A link in place of _inbox/ would list the folder it points at: the credentials' names, say.
     private = cfg.state_dir / "credentials"
     private.mkdir(parents=True)
-    (private / "spotify_client_secret").write_text("x", encoding="utf-8")
+    (private / "ntfy_token").write_text("x", encoding="utf-8")
     cfg.library_dir.mkdir(parents=True)
     (cfg.library_dir / "_inbox").symlink_to(private)
     text = todo(conn, cfg)
-    assert "spotify_client_secret" not in text
+    assert "ntfy_token" not in text
     section = section_of(text, "Inbox: files caracole couldn't place")
     assert "- `_inbox` is a symbolic link, so this page doesn't list what it points at. Make `_inbox` a folder " \
            "of its own." in section
@@ -1016,47 +1016,23 @@ def test_provider_health_shows_cooldown(conn, cfg):
     assert "HTTP 403" in text
 
 
-def test_suggestions_exclude_songs_already_wanted(conn, cfg):
+def test_what_an_older_caracole_kept_of_spotify_shows_nowhere(conn, cfg):
+    # A database from before Spotify went still holds its top tracks and how its last sync went.
     add_song(conn, "Radiohead", "Creep")
-    kv_set_json(conn, "spotify:top_tracks", [
-        {"id": "1", "title": "Creep", "artists": ["Radiohead"]},
-        {"id": "2", "title": "Karma Police", "artists": ["Radiohead"]},
-    ])
+    kv_set_json(conn, "spotify:top_tracks", [{"id": "2", "title": "Karma Police", "artists": ["Radiohead"]}])
+    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
+                                         "message": "the refresh token was revoked"})
     text = todo(conn, cfg)
-    assert "## Suggestions from your Spotify top tracks (1)" in text
-    assert "Radiohead - Karma Police" in text
-
-
-def test_suggestions_leave_out_the_songs_you_removed(conn, cfg):
-    from caracole.songs import mark_removed
-
-    mark_removed(conn, add_song(conn, "Radiohead", "Karma Police"), "2026-10-10T00:00:00Z")
-    conn.execute("DELETE FROM songs")
-    kv_set_json(conn, "spotify:top_tracks", [
-        {"id": "1", "title": "Creep", "artists": ["Radiohead"]},
-        {"id": "2", "title": "Karma Police", "artists": ["Radiohead"]},
-    ])
-    text = todo(conn, cfg)
-    assert "## Suggestions from your Spotify top tracks (1)" in text
-    assert "Karma Police" not in text
+    assert "Spotify" not in text and "Karma Police" not in text and "auth" not in text
 
 
 def test_sources_status(conn, cfg):
-    import dataclasses
-
-    from caracole.config import SpotifyConfig
-
     text = todo(conn, cfg)
-    assert "Spotify: not configured" in text
-    cfg = dataclasses.replace(cfg, spotify=SpotifyConfig(client_id="abc"))
-    assert "Spotify: not synced yet" in todo(conn, cfg)
-    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
-                                         "message": "run `caracole auth spotify`"})
+    assert "- wanted.txt: not created yet. `caracole add ARTIST TITLE` creates it." in section_of(text, "Sources")
     kv_set_json(conn, "source:wanted", {"at": "2026-10-18T03:30:00Z", "lines": 12, "new": 2,
                                         "errors": [[3, "expected \"Artist - Title\""]]})
-    text = todo(conn, cfg)
-    assert "caracole auth spotify" in text
-    assert "wanted.txt: 12 songs" in text and "line 3" in text
+    sources = section_of(todo(conn, cfg), "Sources")
+    assert "wanted.txt: 12 songs" in sources and "line 3" in sources
 
 
 def test_markdown_special_characters_are_escaped(conn, cfg):
@@ -1111,18 +1087,6 @@ def test_no_pdf_section_before_the_first_render_or_for_a_bad_record(conn, cfg):
     assert "## PDFs" not in todo(conn, cfg)
     kv_set_json(conn, "render:status", ["not", "a", "record"])
     assert "## PDFs" not in todo(conn, cfg)
-
-
-def test_spotify_auth_line_keeps_reason_and_advice(conn, cfg):
-    import dataclasses
-
-    from caracole.config import SpotifyConfig
-
-    cfg = dataclasses.replace(cfg, spotify=SpotifyConfig(client_id="abc"))
-    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
-                                         "message": "the refresh token was revoked"})
-    text = todo(conn, cfg)
-    assert "the refresh token was revoked" in text and "Run `caracole auth spotify`." in text
 
 
 AUTOCHORDS = "## Auto-chords couldn't read these purchases"

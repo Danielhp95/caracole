@@ -1,6 +1,6 @@
 """Text normalization shared by every source and provider.
 
-The same token rules are applied to names from Spotify or ``wanted.txt`` and to
+The same token rules are applied to names from ``wanted.txt`` and to
 Ultimate Guitar's URL slugs, so the two sides meet in one key space:
 
 - accents are stripped and a few letters transliterated (``ñ`` → ``n``, ``ß`` → ``ss``);
@@ -47,7 +47,8 @@ _CJK = re.compile(
 )
 _HAN = re.compile("[㐀-䶿一-鿿豈-﫿\U00020000-\U0002ebef]")
 
-# Spotify's version suffixes. Each is removed only as a " - …" suffix or as a
+# The version suffixes streaming services put on titles (Spotify's, as a line copied from it
+# into wanted.txt has them). Each is removed only as a " - …" suffix or as a
 # parenthesized group, never from the start of a title ("Live and Let Die").
 # Live and acoustic versions are named in Spanish and Portuguese too ("En Vivo",
 # "Ao Vivo", "Versión Acústica"), and may run on after a ";" or a ","
@@ -126,7 +127,7 @@ def holds_run(words: list[str], run: str) -> bool:
 
 
 def clean_title(title: str) -> str:
-    """Drop Spotify's version suffixes: remasters, live and acoustic versions (in English,
+    """Drop streaming services' version suffixes: remasters, live and acoustic versions (in English,
     Spanish or Portuguese), featurings, mixes, edits, demos and session recordings."""
     prev = None
     cur = title.strip()
@@ -309,7 +310,8 @@ GENERIC_WORDS = frozenset({
 _PART_BREAK = re.compile(r"\s+[-–—/|]\s+|[()\[\]{}（）［］｛｝【】「」『』《》〈〉〔〕〖〗／｜]")
 _LATIN, _CJK_SCRIPT, _OTHER = "latin", "cjk", "other"
 # The artists a name features, bracketed in any width or after it: "Ma Di (feat. 宋冬野)", "南山南（feat.
-# 宋冬野）", "Ma Di feat. 宋冬野". Spotify's ASCII-bracketed featurings leave titles in clean_title.
+# 宋冬野）", "Ma Di feat. 宋冬野". A streaming service's ASCII-bracketed featurings leave titles in
+# clean_title.
 _FEATURING = re.compile(
     r"\s*[(\[（［【]\s*(?:feat\.|ft\.|(?:feat|ft|featuring|with)\s)[^)\]）］】]*[)\]）］】]"
     r"|\s+(?:feat\.|ft\.|featuring\s).*$",

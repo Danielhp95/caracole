@@ -8,7 +8,7 @@ root callback, so every command shares it, and undone when the command ends:
   (warnings and errors); ``-q`` also cuts the report down to its problems.
   ``-v`` adds caracole's information, such as a line for each request; ``-vv``
   adds debug lines, the logger names, and the other libraries' logs. Below
-  ``-vv``, those libraries (httpx, httpcore, urllib3, spotipy, numba, torch, …)
+  ``-vv``, those libraries (httpx, httpcore, numba, torch, …)
   show their warnings and errors only, whatever level they set themselves.
 - **Under systemd** (``$JOURNAL_STREAM`` names stderr), every line starts with
   its sd-daemon priority (``<3>`` an error, ``<4>`` a warning, ``<6>``
@@ -18,9 +18,9 @@ root callback, so every command shares it, and undone when the command ends:
 - **On a terminal**, the level is coloured, unless ``$NO_COLOR`` is set. Never
   anywhere else.
 - **Secrets never reach it**, at any level: the values ``add_secrets`` names
-  (the Spotify client secret, the ntfy token), Authorization headers, bearer
-  and basic credentials, and OAuth tokens and codes are replaced by
-  ``[redacted]`` in every line, tracebacks included.
+  (the ntfy token), Authorization headers, bearer and basic credentials, and a
+  token, secret or password given as ``name=value`` or a JSON field are replaced
+  by ``[redacted]`` in every line, tracebacks included.
 
 stdlib only: the CLI imports this module on every start.
 """
@@ -37,7 +37,7 @@ from typing import IO, Any
 QUIET, NORMAL, VERBOSE, DEBUG = -1, 0, 1, 2
 
 # Libraries whose logs stay at warnings below -vv; any other non-caracole logger does too.
-THIRD_PARTY = ("httpx", "httpcore", "urllib3", "requests", "spotipy", "numba", "torch", "torchaudio",
+THIRD_PARTY = ("httpx", "httpcore", "urllib3", "requests", "numba", "torch", "torchaudio",
                "librosa", "audioread", "matplotlib", "PIL", "fsspec", "filelock")
 
 _LEVELS = {QUIET: logging.WARNING, NORMAL: logging.WARNING, VERBOSE: logging.INFO, DEBUG: logging.DEBUG}
@@ -50,7 +50,6 @@ PROVIDER_NAMES: Mapping[str, str] = {
     "gtptabs": "gtptabs.com",
     "musescore": "MuseScore",
     "youtube": "YouTube",
-    "spotify": "Spotify",
 }
 
 
@@ -129,11 +128,10 @@ _SCHEMES = re.compile(
     r"(?=[A-Za-z0-9._~+/=-]{6})(?:[A-Za-z.]*[0-9_~+/=-][A-Za-z0-9._~+/=-]*|[A-Za-z]{20,})"
 )
 _HEADER = re.compile(r"""(?i)(\b(?:proxy-)?authorization["']?\s*[:=]\s*["']?)(?!(?:bearer|basic|token)\s)[^"'\s,}]+""")
+# caracole serve's access token (the sign-in form's ``token``, ``WebApp(access_token=…)``), a secret, a password.
 _KEYS = re.compile(
-    r"""(?i)(["']?\b(?:access_token|refresh_token|id_token|client_secret|code_verifier|password|secret|token)"""
-    r"""["']?\s*[:=]\s*["']?)[^"'\s,&}]+"""
+    r"""(?i)(["']?\b(?:access_token|password|secret|token)["']?\s*[:=]\s*["']?)[^"'\s,&}]+"""
 )
-_CODE = re.compile(r"(?i)([?&](?:code|access_token|refresh_token|client_secret)=)[^&\s#\"']+")
 
 
 def add_secrets(*values: str | None) -> None:
@@ -148,13 +146,12 @@ def forget_secrets() -> None:
 
 
 def redact(text: str) -> str:
-    """``text`` without the known secrets, credentials in headers, or OAuth tokens and codes."""
+    """``text`` without the known secrets, credentials in headers, or tokens, secrets and passwords."""
     for secret in sorted(_secrets, key=len, reverse=True):
         text = text.replace(secret, REDACTED)
     text = _SCHEMES.sub(rf"\1\2{REDACTED}", text)
     text = _HEADER.sub(rf"\1{REDACTED}", text)
-    text = _KEYS.sub(rf"\1{REDACTED}", text)
-    return _CODE.sub(rf"\1{REDACTED}", text)
+    return _KEYS.sub(rf"\1{REDACTED}", text)
 
 
 # --- formatting ---------------------------------------------------------------------------------
