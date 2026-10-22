@@ -220,7 +220,7 @@ Rules a change there keeps (the Invariants below are the others):
   (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step; Cancel takes a request that hasn't started out of the
   queue (`JobQueue.cancel`, never one that runs, with the jobs `submit_all` queued `together` with
-  it), and Try again queues a finished one's steps again (a removal's asks its question again). A sandboxed
+  it), keeping it in the history as over ("cancelled"), so a page that follows it hears it ended, and Try again queues a finished one's steps again (a removal's asks its question again). A sandboxed
   viewer reaches a form only through a GET page of the server's own, whose form posts with the token:
   `/export` (export_routes.py) and `/versions` (versions_routes.py: Make this the one, Keep it and back
   to caracole's pick, `caracole versions --choose`, `--keep` and `--clear`, with `--progress`: the job's

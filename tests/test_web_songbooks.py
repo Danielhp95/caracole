@@ -573,10 +573,10 @@ def test_cancelling_either_half_of_add_a_song_cancels_both(app, setup, queue, ca
     # left alone would run for a song the library may not have.
     for half in (0, 1):
         post(app, "/songbook/add-song", {"name": "Campfire", "artist": "Oasis", "title": "Wonderwall"})
-        ids = sorted(job.id for job in queue.snapshot())
+        ids = sorted(job.id for job in queue.snapshot() if job.active)
         assert len(ids) == 2
         assert post(app, "/jobs/cancel", {"job": str(ids[half])}).status == 303
-        assert queue.snapshot() == []
+        assert {job.id: job.state for job in queue.snapshot() if job.id in ids} == dict.fromkeys(ids, "cancelled")
 
 
 def test_add_a_song_from_an_index_looks_it_up_then_adds_it(app, setup, queue, campfire):

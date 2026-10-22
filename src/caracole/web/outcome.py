@@ -23,7 +23,8 @@ song:
   ``/review?song=ID``), also offered beside Get it from there (``Outcome.also``), and for any other,
   requests it by name (the library page's request form, filled in: ``/#q=Artist - Title``); Failed and
   Not fetched yet try again (``POST /jobs/again``: the same steps, queued again), a failed removal by
-  asking what goes again (``POST /remove``, its question, as of now); a songbook made opens it.
+  asking what goes again (``POST /remove``, its question, as of now); a songbook made opens it. A
+  request cancelled before it ran says so, Cancelled, with no next step: you took it out of the queue.
 
 A reason is a site's own answer, worded for a person: a lookup's stage that ended in a wait or an error
 says which site, what it answered and what waits ("LRCLIB answered 503: the lyrics wait for tonight's
@@ -82,6 +83,7 @@ NOT_INDEXED = "Not in the offline Ultimate Guitar index under this name"
 NOT_ASKED = ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block, a spent budget or an error: "
              "the output says which).")
 IN_REVIEW = "caracole isn't sure which Ultimate Guitar song it is."
+CANCELLED = "Taken out of the queue before it ran."
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs.com's index lists a page for it"}
 
 
@@ -173,6 +175,8 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         return Outcome("failed", "Failed", _sentence(text), again)
     if tone == "removed":
         return Outcome("removed", text)
+    if tone == "cancelled":  # you took it out of the queue: asked for again from the library, never from here
+        return Outcome("cancelled", text, CANCELLED)
     if tone == "ready":
         href = _href(line.link[1]) if line.link else None
         if text == "Ready":

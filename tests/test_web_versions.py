@@ -221,6 +221,25 @@ def test_keep_it_fetches_that_version_and_keeps_it_beside_the_sheet(app, queue, 
     assert f'href="/{quote(f"{FOLDER}/version-{OTHER}.html")}"' in text(done) and "Open it" in shown(done)
 
 
+@pytest.mark.parametrize("do,form", [("keep", {"tab": OTHER}), ("choose", {"tab": KEPT}), ("clear", {})])
+def test_a_version_cancelled_on_the_requests_page_says_so_and_waits_no_more(app, queue, recorder, conn, cfg, do,
+                                                                             form):
+    versioned_song(conn, cfg)
+    if do == "clear":
+        cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+        cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
+    where = header(post(app, f"/versions/{do}", {"sheet": SHEET} | form), "location")
+    job = re.search(r"job=(\d+)", where).group(1)
+    ran = list(recorder.calls)
+    assert post(app, "/jobs/cancel", {"job": job}).status == 303
+    page = get(app, where)
+    assert "Cancelled before it ran." in shown(page), shown(page)
+    assert 'http-equiv="refresh"' not in text(page)
+    assert not any(running in shown(page) for running in ("Making it the one", "Fetching the version", "Going back"))
+    queue.run_pending()
+    assert recorder.calls == ran
+
+
 def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cfg):
     versioned_song(conn, cfg)
     page = get(app, versions_url("", "clear"))

@@ -3089,7 +3089,10 @@ is no progression exits with status 2.
     Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
-    one that is over stays). Cancelling a request leaves its wanted.txt line:
+    one that is over stays). A cancelled request is over, never run: it stays
+    in the history as **Cancelled**, and the pages that follow it (the library
+    page on another device, the lookup, export and versions pages) say so, the
+    song's line getting its Fetch now back. Cancelling a request leaves its wanted.txt line:
     the song is in your library's list from the moment you asked, and the
     nightly run looks for it; remove it from the library if you don't want it.
     A songbook's Add a song for a song you haven't got queues two requests,

@@ -117,6 +117,18 @@ def test_a_failed_job_says_so_and_a_running_one_refreshes_the_page(app, queue, c
     assert 'http-equiv="refresh"' not in text(page)
 
 
+def test_an_export_cancelled_on_the_requests_page_says_so_and_waits_no_more(app, queue, recorder, conn, cfg):
+    rendered_song(conn, cfg)
+    where = header(post(app, "/export", {"sheet": SHEET, "v": QUERY}), "location")
+    job = re.search(r"job=(\d+)", where).group(1)
+    assert post(app, "/jobs/cancel", {"job": job}).status == 303
+    page = get(app, where)
+    assert "Cancelled before it ran: make it again." in shown(page) and "cancelled" not in shown(page)
+    assert 'http-equiv="refresh"' not in text(page) and "Open the PDF" not in shown(page)
+    queue.run_pending()
+    assert recorder.calls == []
+
+
 def test_the_export_post_needs_the_form_token_and_the_same_origin(app, queue, recorder, conn, cfg):
     rendered_song(conn, cfg)
     form = {"sheet": SHEET, "v": QUERY}

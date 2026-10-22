@@ -435,13 +435,18 @@ def test_a_job_that_has_not_started_can_be_cancelled_never_one_that_runs_or_ende
             queue.cancel(first.id)
         cancelled = queue.cancel(second.id)
         assert cancelled is not None and cancelled.id == second.id and cancelled.title == "Add A - 2"
-        assert [j.id for j in queue.snapshot()] == [third.id, first.id]
-        assert queue.cancel(second.id) is None  # gone: nothing to cancel
+        # Over, never run: it stays in the history, so that a page following it hears that it ended.
+        assert cancelled.state == "cancelled" and not cancelled.active and cancelled.finished_at is not None
+        assert [s.state for s in cancelled.steps] == ["skipped"]
+        assert [(j.id, j.state) for j in queue.snapshot()] == [(third.id, "queued"), (second.id, "cancelled"),
+                                                                (first.id, "running")]
+        assert queue.cancel(second.id) is None  # cancelled already: nothing to cancel
         assert queue.cancel(99) is None
     finally:
         go_on.set()
         queue.stop()
-    assert {j.id: j.state for j in queue.snapshot()} == {third.id: "queued", first.id: "done"}
+    assert {j.id: j.state for j in queue.snapshot()} == {third.id: "queued", second.id: "cancelled",
+                                                         first.id: "done"}
     with pytest.raises(JobStarted):  # over: it stays in the history
         queue.cancel(first.id)
 
@@ -453,7 +458,8 @@ def test_jobs_queued_together_are_cancelled_together_while_they_wait():
         {"title": "Fetch B - 2", "song_key": "b|2", "steps": add_steps("B", "2"), "fetching": True},
         {"title": "Put B - 2 in a songbook", "song_key": "songbook|b|2", "steps": [("Adding", ("songbook", "add"))]}])
     assert queue.cancel(second.id).id == second.id
-    assert [j.id for j in queue.snapshot()] == [alone.id]
+    assert [(j.id, j.state) for j in queue.snapshot()] == [(second.id, "cancelled"), (first.id, "cancelled"),
+                                                            (alone.id, "queued")]
     # One of them running: the one that waits still goes, and the running one runs on.
     (first, _), (second, _) = queue.submit_all([
         {"title": "Fetch C - 3", "song_key": "c|3", "steps": add_steps("C", "3"), "fetching": True},
@@ -461,7 +467,8 @@ def test_jobs_queued_together_are_cancelled_together_while_they_wait():
     with queue._lock:
         next(j for j in queue._jobs if j.id == first.id).state = "running"
     queue.cancel(second.id)
-    assert sorted(j.id for j in queue.snapshot()) == [alone.id, first.id]
+    assert sorted(j.id for j in queue.snapshot() if j.state != "cancelled") == [alone.id, first.id]
+    assert next(j for j in queue.snapshot() if j.id == second.id).state == "cancelled"
 
 
 def test_a_cancelled_job_makes_room_in_the_queue():
@@ -473,7 +480,8 @@ def test_a_cancelled_job_makes_room_in_the_queue():
     queue.cancel(waiting.id)
     queue.submit("Add A - 3", "a|3", add_steps("A", "3"))
     queue.run_pending()
-    assert sorted(j.title for j in queue.snapshot()) == ["Add A - 1", "Add A - 3"]
+    assert sorted((j.title, j.state) for j in queue.snapshot()) == [
+        ("Add A - 1", "done"), ("Add A - 2", "cancelled"), ("Add A - 3", "done")]
 
 
 def test_finished_jobs_are_forgotten_beyond_a_few():

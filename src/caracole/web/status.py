@@ -12,6 +12,8 @@ ran. So a job of other commands reads the same way:
   asks LaCuerda, ``get.SHEET_FROM``), or "Waiting for another caracole…"
   while its lock is held by a nightly run that lets it go first at its next
   pause.
+- **Cancelled**: taken out of the queue before it ran (``JobQueue.cancel``),
+  whatever it was for.
 - **Failed**: the error its failing command gave, in one short sentence (the
   log's last ``error:`` line, its first sentence; a lookup's, its failed
   stage's words). A command that printed no error is named by its step. A fetch that fails on a song with no sheet that
@@ -122,7 +124,7 @@ class SongFacts:
 
 @dataclass(frozen=True)
 class Line:
-    """``tone``: queued, running, ready, added, removed, review, waiting, missing or failed; ``link``: (label, href),
+    """``tone``: queued, running, ready, added, removed, review, waiting, missing, failed or cancelled; ``link``: (label, href),
     where to go next; ``details``: the job's output on /jobs, for a line that ends in a failure or a wait."""
 
     tone: str
@@ -151,6 +153,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         step = next((s for s in job.steps if s.state == "running"), None) or next(
             (s for s in job.steps if s.state == "waiting"), None)
         return Line("running", f"{step.label}…" if step else "Running…")
+    if job.state == "cancelled":  # it never ran: nothing to read from its song
+        return Line("cancelled", "Cancelled")
     details = details_href(job.id)
     if job.state == "failed":
         if job.fetching and song is not None and not song.sheet:

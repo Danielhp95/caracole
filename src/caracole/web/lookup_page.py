@@ -581,6 +581,8 @@ function progress(job) {
          + (running ? "; still getting: " + running.label.toLowerCase() : "") : "Done.");
   } else if (job.active) {
     said(job.state === "queued" ? "Waiting for the request before it…" : (running ? doing(running) : "Working…"));
+  } else if (job.state === "cancelled") {  // on the requests page, before it ran
+    said("Cancelled before it ran: look it up again to get it.");
   } else {
     const failed = job.steps.filter(s => s.detail && s.state !== "done").map(s => s.label + ": " + s.detail);
     said("No sheet this time. " + failed.join(" "));

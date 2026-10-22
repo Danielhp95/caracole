@@ -224,6 +224,7 @@ def _body(csrf: str, song: Song, sheet: str, shown: str, label: str, job: Job | 
                      for name, value in (("csrf", csrf), ("sheet", sheet), ("v", shown)))
     making = job is not None and job.song_key.endswith(MINE)
     states = {"queued": "Queued: it runs after the requests before it.",
+              "cancelled": "Cancelled before it ran: make it again.",  # on the requests page
               "running": "Making it your version…" if making else "Making the PDF…",
               "done": "Done." if pdf else "Done, but no PDF was found: make it again."}
     if making:

@@ -107,6 +107,18 @@ def test_a_lookup_shows_its_stages_and_the_sheet_in_a_real_browser(cfg, served, 
 
 
 @in_chromium
+def test_a_lookup_cancelled_on_the_requests_page_says_so(cfg, served, tmp_path):
+    server, queue = served
+    queue.submit("Fetch Radiohead - Creep", "radiohead/creep", lookup_steps("Radiohead", "Creep"), fetching=True)
+    queue.cancel(1)
+
+    dom = dump_dom(f"http://127.0.0.1:{server.server_address[1]}/lookup?job=1", tmp_path)
+
+    reader = shown(dom, 'section class="reader"')
+    assert "Cancelled before it ran: look it up again to get it." in reader and "No sheet this time" not in reader
+
+
+@in_chromium
 def test_the_search_lists_the_offline_index_as_you_type_in_a_real_browser(cfg, served, tmp_path):
     server, _ = served
     conn = db.connect(cfg.db_path)

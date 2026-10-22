@@ -35,7 +35,7 @@ takes the place of the song's waiting lookup, or follows the running one, and a
 lookup joins the song's Keep it, which never looks it up, or follows it),
 and remembers the last ``keep``
 finished ones, in memory only (``cancel`` takes one that hasn't started out of the queue, never one
-that runs): a request is in wanted.txt from the moment it's
+that runs, and keeps it among those, cancelled): a request is in wanted.txt from the moment it's
 made, so a restart loses no song, only the lookup that would have come before
 the nightly run. ``Job.as_json`` is a job as data, for the page that shows a
 request's progress.
@@ -103,7 +103,7 @@ class Job:
     fetching: bool = False
     note: str = ""
     display: str = ""  # "Artist - Title"; its title when none was given
-    state: str = "queued"  # queued, running, done, failed
+    state: str = "queued"  # queued, running, done, failed, cancelled (before it ran: JobQueue.cancel)
     queued_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -448,16 +448,23 @@ class JobQueue:
         queued, cancelled already or forgotten. Raises JobStarted for one that runs or is over: the command
         it runs is never stopped halfway, and a finished one stays in the history. The jobs queued
         ``together`` with it that haven't started go too (a songbook's Add a song: the lookup and the
-        songbook's change, both or neither). A cancelled add leaves its wanted.txt line, which the server
-        wrote when it was asked for: the nightly run looks for the song."""
+        songbook's change, both or neither). A cancelled job is over, never run ("cancelled", its steps
+        and stages skipped), and stays in the history as a finished one does: a page that follows it (the
+        library page on another device) hears that it ended. A cancelled add leaves its wanted.txt line,
+        which the server wrote when it was asked for: the nightly run looks for the song."""
         with self._lock:
             job = next((j for j in self._jobs if j.id == job_id), None)
-            if job is None:
+            if job is None or job.state == "cancelled":
                 return None
             if job.state != "queued":
                 raise JobStarted(job_id, job.state)
-            self._jobs[:] = [j for j in self._jobs
-                             if j is not job and not (j.id in job.together and j.state == "queued")]
+            now = datetime.now(UTC)
+            for j in self._jobs:
+                if j is job or (j.id in job.together and j.state == "queued"):
+                    j.state, j.finished_at = "cancelled", now
+                    for part in (*j.steps, *j.stages):
+                        part.state = "skipped"
+            self._forget()
             return copy.deepcopy(job)
 
     def snapshot(self) -> list[Job]:

@@ -232,10 +232,10 @@ def test_cancel_takes_a_queued_request_out_and_never_stops_the_running_one(cfg, 
     running, cancelled = answers
     assert running.status == 409 and "never stops a command halfway" in text(running)
     assert cancelled.status == 303 and header(cancelled, "location") == "/jobs"
-    assert [(j.id, j.state) for j in queue.snapshot()] == [(1, "done")]
+    assert [(j.id, j.state) for j in queue.snapshot()] == [(2, "cancelled"), (1, "done")]
     # Its wanted.txt line stays: the nightly run looks for the song.
     assert "Oasis - Wonderwall" in cfg.wanted_file.read_text(encoding="utf-8")
-    assert post(app, "/jobs/cancel", {"job": "2"}).status == 404  # gone
+    assert post(app, "/jobs/cancel", {"job": "2"}).status == 404  # cancelled already
     over = post(app, "/jobs/cancel", {"job": "1"})
     assert over.status == 409 and "is over" in text(over)
     assert post(app, "/jobs/cancel", {"job": "x"}).status == 400
@@ -244,7 +244,34 @@ def test_cancel_takes_a_queued_request_out_and_never_stops_the_running_one(cfg, 
 def test_cancel_answers_the_pages_script_as_data(app, queue):
     post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
     response = post(app, "/jobs/cancel", {"job": "1"}, accept="application/json")
-    assert response.status == 200 and answer(response) == {"cancelled": 1} and queue.snapshot() == []
+    assert response.status == 200 and answer(response) == {"cancelled": 1}
+    assert [(job.id, job.state, job.active) for job in queue.snapshot()] == [(1, "cancelled", False)]
+
+
+def test_a_cancelled_request_ends_as_cancelled_for_every_page_that_follows_it(app, queue, conn):
+    # A library page open on another device follows the request cancelled here: it ends there, as Cancelled, with
+    # its song's card as it is now (its Fetch now back), never a request queued for ever; and it stays in the history.
+    creep = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})  # the request before it
+    post(app, "/fetch", {"song": str(creep.id)})
+    assert post(app, "/jobs/cancel", {"job": "2"}).status == 303
+    seen = {view["id"]: view for view in answer(get_json(app, "/jobs.json?jobs=1,2"))["jobs"]}
+    assert (seen[2]["state"], seen[2]["songId"], seen[2]["line"]) == (
+        "cancelled", creep.id, {"tone": "cancelled", "text": "Cancelled", "link": None, "details": None})
+    assert seen[2]["card"]["id"] == creep.id and seen[2]["card"]["fetchable"] is True
+    assert answer(get_json(app, "/jobs.json"))["active"] == 1
+    assert queue.room() == queue._limit - 1  # it waits no more: the add alone does
+    body = text(get(app, "/jobs"))
+    assert '<li class="job over cancelled" id="job-2">' in section(body, "today")
+    item = dict(JOB_ITEM.findall(body))["2"]
+    assert '<span class="says cancelled">Cancelled</span>' in item
+    assert '<p class="reason">Taken out of the queue before it ran.</p>' in item
+    assert "/jobs/cancel" not in item and "/jobs/again" not in item  # you cancelled it: the library asks again
+    assert post(app, "/jobs/cancel", {"job": "2"}).status == 404  # cancelled already
+    queue.run_pending()
+    assert queue._runner.calls == [["add", "--", "Oasis", "Wonderwall"]]
+    assert [(job.id, job.state) for job in queue.snapshot()] == [(2, "cancelled"), (1, "done")]
 
 
 def test_try_again_queues_the_same_steps_and_needs_the_token(cfg, conn):
