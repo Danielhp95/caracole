@@ -121,7 +121,8 @@ Guitar for you to download, which it no longer does. A file that still has
 them loads all the same, whatever they say, and every command warns once on
 stderr (`warning: /etc/caracole/caracole.toml: delete guitar_pro_mode and
 keep_guitar_pro in [rank]: …`): delete them, from
-`services.caracole.settings` on NixOS.
+`services.caracole.settings` on NixOS, whose evaluation warns too
+(`services.caracole.settings: delete guitar_pro_mode and rank.keep_guitar_pro: …`).
 
 **Folders.** With `data_dir`, everything is in one folder: `library_dir`,
 `music_dir`, `state_dir` and `cache_dir` default to its `library`, `music`,

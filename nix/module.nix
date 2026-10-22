@@ -17,6 +17,12 @@ let
   toml = pkgs.formats.toml { };
   configFile = toml.generate "caracole.toml" cfg.settings;
 
+  # caracole.toml keys an older caracole read and this one ignores (src/caracole/config.py
+  # _OBSOLETE): the generated file still loads, and every command warns; so does the evaluation.
+  obsoleteSettings =
+    lib.optional (cfg.settings ? guitar_pro_mode) "guitar_pro_mode"
+    ++ lib.optional ((cfg.settings.rank or { }) ? keep_guitar_pro) "rank.keep_guitar_pro";
+
   credentials = lib.mapAttrsToList (name: path: "${name}:${path}") cfg.credentials;
 
   # The four folders by option, and dataDir, which holds them by default.
@@ -688,7 +694,11 @@ in
           ])
           && !(cfg.credentials ? web_token)
         )
-        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs.";
+        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs."
+      ++ lib.optional (obsoleteSettings != [ ])
+        "services.caracole.settings: delete ${lib.concatStringsSep " and " obsoleteSettings}: caracole picks no Guitar Pro or Power Tab file on Ultimate Guitar any more, so ${
+          if lib.length obsoleteSettings > 1 then "they do" else "it does"
+        } nothing.";
 
     networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [
       cfg.web.port
