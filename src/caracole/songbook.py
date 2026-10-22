@@ -543,14 +543,24 @@ def move_in_songbook(path: Path, name: str, entry: str, position: int) -> int:
         at = next((i for i, s in enumerate(songs) if same_entry(_text_of(s), entry)), None)
         if at is None:
             raise SongbookError(f'"{entry}" isn\'t in the songbook "{header}": caracole songbook show lists its songs')
-        value = _item(_song_of(songs[at], f"[{_quoted(header)}]"))
         to = min(position, len(songs)) - 1
         if to != at:
-            del songs[at]
-            songs.insert(to, value)
+            _move_item(songs, at, to)
         return to + 1
 
     return _edit(path, change)
+
+
+def _move_item(songs, at: int, to: int) -> None:
+    """Move the array's item at ``at`` to ``to`` as it is written, with the comment after it on its line
+    (``"Radiohead - Creep",  # capo 3``): tomlkit keeps that comment with the item's place, not the item,
+    so it is taken along by hand. A comment on a line of its own stays where it is."""
+    comment = songs._value[songs._index_map[at]].comment
+    item = songs[at]
+    del songs[at]
+    songs.insert(to, item)
+    if comment is not None:
+        songs._value[songs._index_map[to]].comment = comment
 
 
 def set_song_setting(path: Path, name: str, entry: str, setting: Setting | None) -> None:
