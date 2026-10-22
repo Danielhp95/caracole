@@ -2226,6 +2226,7 @@
     if (view.kind === "songbook") return;
     const data = view.card && typeof view.card === "object" ? view.card : null;
     if (!data) return;
+    lostTo(Number(data.id), data.identity);
     const i = byIndex.get(Number(data.id));
     if (i !== undefined) {
       songs[i] = data;
@@ -2249,6 +2250,7 @@
     const id = Number(view.id);
     views.set(id, view);
     const song = songOf(view);
+    if (song !== null) lostTo(song, view.identity);  // before anything shows the view on the line of another song
     if (song !== null) {
       if (!songJob.has(song) || songJob.get(song) <= id) songJob.set(song, id);
       if (!isActive(view)) busy.delete(song);
@@ -2258,10 +2260,9 @@
       redraw(view);
     }
     paint(view);
-    // A removal done, its line saying so: the id names that song no more. songs.id has no AUTOINCREMENT, so the next
-    // song added may get it again, and comes as a song new to the page (``arrived``), never in the removed one's line.
+    // A removal done, its line saying so: the id names that song no more.
     if (view.kind === "remove" && view.state === "done" && song !== null && byIndex.has(song)
-        && songs[byIndex.get(song)].status === "removed") byIndex.delete(song);
+        && songs[byIndex.get(song)].status === "removed") forget(song);
   };
   // The job's line on the song's line, and wherever else it shows (a result's row, #requested), and in the list
   // of requests.
@@ -2348,6 +2349,29 @@
     summarize();
     tallyChips();
     tell();
+  };
+  // A song of the page's gone from the library: its id names it no more, nor does what the page knew of it by that id
+  // (fetched or removed when the page loaded). songs.id has no AUTOINCREMENT, so the next song added may get the id
+  // again, and comes as a song new to the page (``arrived``), never in the gone one's line; select.js and
+  // songbooks.js, which know the page's songs by id too, let it go ("caracole:gone").
+  const forget = (id) => {
+    if (!byIndex.has(id)) return;
+    byIndex.delete(id);
+    busy.delete(id);
+    removing.delete(id);
+    document.dispatchEvent(new CustomEvent("caracole:gone", { detail: { id } }));
+  };
+  // A view or a card that names by ``identity`` another song than the one the page knows by its id ``id``: that song
+  // left the library where the page never saw it (removed in another tab, on another device or by caracole remove;
+  // merged into another), and the newest song since got its id. Its line says Removed, as one removed here does.
+  const REMOVED = { line: { tone: "removed", text: "Removed" } };
+  const lostTo = (id, identity) => {
+    const i = byIndex.get(id);
+    if (i === undefined || !identity || String(songs[i].identity || "") === String(identity)) return;
+    stopRemoval(id, REMOVED, false);  // counting down to its removal: nothing left to remove
+    removed(id);
+    showLine(progressIn(lines.get(i)), REMOVED);
+    forget(id);
   };
 
   let timer = 0;

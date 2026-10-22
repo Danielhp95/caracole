@@ -938,6 +938,79 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
     assert (creeps, uprisings) == ([], ["Uprising"])
 
 
+def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(serve, cfg, conn, tmp_path):
+    # The newest song removed elsewhere (another tab, another device, caracole remove) while the page was open: the
+    # page never saw it go. The song asked for next gets its id again, and comes on the page as a new song, once,
+    # under the form, while it is looked up as once it is in: never on the removed song's line, under its artist, or
+    # on its line in a songbook's set list, and the removed song's line says Removed from then on. Neither Select nor
+    # Add a song takes the one for the other.
+    from caracole.songbook import make_songbook, songbooks_file
+
+    add_song(conn, "Band", "Song")
+    creep = add_song(conn, "Radiohead", "Creep")  # the newest
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Band - Song", "Radiohead - Creep"])
+    runner = FakeCaracole(cfg)
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
+    yours = ("Array.from(document.querySelectorAll('#songbooks .add-results .line'))"
+             ".filter((l) => l.textContent.includes('Yours')).map((l) => l.querySelector('h3').textContent)")
+    # The removed song's line in the list, under its artist, and in Campfire's set list.
+    creeps_line = """Array.from(document.querySelectorAll('#list section.artist'))
+      .find((g) => g.querySelector('.artist-name').textContent === 'Radiohead').querySelector('article')"""
+    record = """(() => {
+      window.said = { list: [], set: [] };
+      const note = (where, p) => {
+        const t = p ? p.textContent : '';
+        const seen = window.said[where];
+        if (t && seen[seen.length - 1] !== t) seen.push(t);
+      };
+      new MutationObserver(() => {  // every text they show, as it changes
+        note('list', (%s || document).querySelector('.progress'));
+        const line = Array.from(document.querySelectorAll('#songbooks .set-line'))
+          .find((li) => (li.querySelector('h3') || {}).textContent === 'Creep');
+        note('set', line && line.querySelector(':scope > .progress'));
+      }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    })()""" % creeps_line
+    with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
+        page.open(url)
+        page.click(".pick-toggle")  # Creep picked for a songbook: the picks stay once Select is left
+        page.click(f'#list [data-id="{creep.id}"] .pick')
+        page.click(".pick-done")
+        page.click("#tab-songbooks")
+        page.click('#songbooks .book-line[data-book="Campfire"]')
+        assert page.wait("document.querySelectorAll('#songbooks .set-line').length === 2")
+        page.js(record)
+        conn.execute("DELETE FROM songs WHERE id = ?", (creep.id,))  # removed on another device
+        page.js("""(() => { const form = document.querySelector("form.request-form");
+          form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
+          form.requestSubmit(); })()""")
+        assert page.wait("(document.querySelector('#requested article .progress') || {}).textContent === "
+                         "'Ready·Open sheet'", timeout=20), page.js("document.getElementById('requested').innerText")
+        page.click("#tab-library")
+        shown = page.js("""(() => { const song = %s; return {
+          creep: [song.querySelector('h3').textContent, song.querySelector('.progress').textContent, song.dataset.id],
+          list: Array.from(document.querySelectorAll('#list h3')).map((h) => h.textContent),
+          requested: Array.from(document.querySelectorAll('#requested article h3')).map((h) => h.textContent),
+          summary: Array.from(document.querySelectorAll('#summary .stat')).map((s) => s.textContent),
+          said: window.said }; })()""" % creeps_line)
+        page.click(".pick-toggle")
+        picks = page.js("[document.querySelector('.pick-count').textContent].concat(Array.from("
+                        "document.querySelectorAll('#list .pick-label')).map((l) => l.textContent))")
+        page.click(".pick-done")
+        page.click("#tab-songbooks")
+        page.click("#songbooks .add-song input")
+        page.type("Creep")
+        note = "document.querySelector('#songbooks .add-status').textContent"
+        assert page.wait(f"{note} === 'Nothing found yet.' || {yours}.length > 0", timeout=10)
+        creeps = page.js(yours)
+    uprising = find_song(conn, override_key("Muse - Uprising"))
+    assert uprising.id == creep.id  # its id again
+    assert shown == {"creep": ["Creep", "Removed", None], "list": ["Song", "Creep"],
+                     "requested": ["Uprising"], "summary": ["2 songs", "1 found", "1 wanted"],
+                     "said": {"list": ["Removed"], "set": []}}, shown
+    assert picks == ["0 selected", "Pick Song by Band"]  # Creep's pick gone with it: its id is Uprising's now
+    assert creeps == []
+
+
 @pytest.mark.parametrize("left", ["", "#show=review"])
 def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_path, left):
     # A song in review, removed: Needs review counts it no more, as All and Wanted don't, and goes once nothing needs it

@@ -589,6 +589,25 @@ def test_the_status_endpoint_gives_each_requests_line_newest_first(app, conn, qu
     assert all("card" not in j for j in data["jobs"])
 
 
+def test_a_requests_song_comes_with_its_identity_which_an_id_given_again_never_shares(app, conn, cfg, queue):
+    # songs.id has no AUTOINCREMENT: once the newest song is removed, the next one added gets its id again. A page that
+    # knew the removed song by that id tells the two apart by the identity key each view names with its song.
+    creep = add_song(conn, "Radiohead", "Creep")
+    fetch = answer(post(app, "/fetch", {"song": str(creep.id)}, accept=JSON))["job"]
+    lookup = answer(post(app, "/request", {"artist": "Muse", "title": "Uprising", "fetch": "1"}, accept=JSON))["job"]
+    removal = answer(post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"},
+                          accept=JSON))["job"]
+    assert (fetch["songId"], fetch["identity"]) == (creep.id, creep.key)
+    assert (lookup["songId"], "identity" in lookup) == (None, False)  # no song yet
+    assert (removal["songId"], removal["identity"]) == (creep.id, creep.key)
+    conn.execute("DELETE FROM songs WHERE id = ?", (creep.id,))  # removed
+    uprising = add_song(conn, "Muse", "Uprising")
+    assert uprising.id == creep.id
+    seen = {j["id"]: (j["songId"], j.get("identity")) for j in answer(get_json(app, "/jobs.json"))["jobs"]}
+    assert seen == {fetch["id"]: (None, None), lookup["id"]: (creep.id, uprising.key),
+                    removal["id"]: (creep.id, creep.key)}  # a removal's song is gone: the job knows which it was
+
+
 def test_a_done_requests_line_and_card_say_what_the_library_has_now(app, conn, cfg, queue):
     creep = add_song(conn, "Radiohead", "Creep")
     post(app, "/fetch", {"song": str(creep.id)})

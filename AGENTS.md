@@ -121,9 +121,12 @@ Rules a change there keeps (the Invariants below are the others):
   beside it (rows.js `artistOnly`) shows your songs of theirs alone; from a file the name is the funnel's
   (`artistFilter`). Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
-  do. select.js knows only the songs the page was loaded with, less those removed on it since (songs.id
-  has no AUTOINCREMENT: the next song added may get a removed song's id, which the page's scripts then take
-  for a new song's): a line offers Add to a songbook… for those alone. The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
+  do. select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a
+  songbook… for those alone. songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id;
+  library.js knows a song gone by its removal done on the page, or by a view or a card of `/jobs.json` that names
+  another song's identity under its id (the view's `identity`, `jobs_routes.view`): removed elsewhere, its line
+  says Removed, the song that has the id now is new to the page, and select.js and songbooks.js let it go
+  (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity alone). The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
   data's `songbooks` (songbook_section.py: each songbook's set list, where it plays each song as
   `songbook.plays_in` says it, and the setting's menus' names, the theory's), which `/jobs.json`
   gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the

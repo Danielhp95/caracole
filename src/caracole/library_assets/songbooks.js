@@ -113,6 +113,11 @@
   const newest = new Map();  // a songbook's name -> the newest view of a change of it
   const lookupViews = new Map();  // job id -> the newest view of a lookup that a song added here waits for
   const songViews = new Map();  // song id -> the newest view of its lookup
+  // The set list's lines of a lookup's song: by its id, and by its identity key where both have one, which an id
+  // given again never shares (songs.id has no AUTOINCREMENT: once the newest song is removed, in another tab or by
+  // caracole remove, the next one added gets its id, while a set list drawn before still has the removed one's).
+  const songLines = (root, view) => Array.from(root.querySelectorAll('.set-line[data-song="' + Number(view.songId) +
+    '"]')).filter((li) => !view.identity || !li.dataset.key || li.dataset.key === String(view.identity));
   const changes = new Map();  // job id -> the newest view of a songbook's change
   const placed = new Map();  // job id -> the line that shows it (a song added, before the songbook has it)
   const namesOf = (view) => {
@@ -380,8 +385,8 @@
     }
     for (const li of before) if (gone.has(li) && final.indexOf(li) < 0) final.splice(before.indexOf(li), 0, li);
     list.replaceChildren(...final);
-    for (const [song, view] of songViews) {  // a lookup's line, on its song's line
-      for (const li of list.querySelectorAll('.set-line[data-song="' + Number(song) + '"]')) showLine(lineIn(li), view);
+    for (const view of songViews.values()) {  // a lookup's line, on its song's line
+      for (const li of songLines(list, view)) showLine(lineIn(li), view);
     }
     renumber();
   };
@@ -596,10 +601,6 @@
       const lookup = spot ? lookupViews.get(Number(spot.dataset.lookup)) : null;
       const looking = lookup && (lookup.state === "queued" || lookup.state === "running");
       if (spot && spot.isConnected && !looking) showLine(lineIn(spot), view);
-    } else if (view.kind === "remove" && view.state === "done") {
-      // A song removed: Add a song offers it no more, as its id may come back with the next song added.
-      const s = songs.find((x) => x && Number(x.id) === Number(view.songId));
-      if (s) s.status = "removed";
     } else if (view.kind === "song") {
       const spot = placed.get(Number(view.id));
       if (spot) {  // a song added here: its line, even before the lookup has found the song (no songId yet)
@@ -608,11 +609,7 @@
       }
       if (view.songId !== null && view.songId !== undefined) {
         songViews.set(Number(view.songId), view);
-        if (book) {
-          for (const li of book.querySelectorAll('.set-line[data-song="' + Number(view.songId) + '"]')) {
-            showLine(lineIn(li), view);
-          }
-        }
+        if (book) for (const li of songLines(book, view)) showLine(lineIn(li), view);
       }
       if (spot && spot.isConnected) showLine(lineIn(spot), view);
     }
@@ -620,6 +617,12 @@
   document.addEventListener("caracole:job", (e) => {
     const view = e.detail;
     if (view && typeof view === "object") shown(view);
+  });
+  // A song gone from the library, removed on the page or elsewhere (library.js): Add a song offers it no more, as its
+  // id may come back with the next song added (songs.id has no AUTOINCREMENT).
+  document.addEventListener("caracole:gone", (e) => {
+    const s = songs.find((x) => x && Number(x.id) === Number(e.detail && e.detail.id));
+    if (s) s.status = "removed";
   });
   document.addEventListener("caracole:songbooks", (e) => {
     const detail = e.detail && typeof e.detail === "object" ? e.detail : {};

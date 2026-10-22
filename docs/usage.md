@@ -3027,7 +3027,12 @@ is no progression exits with status 2.
   then on the song counts nowhere: the numbers at the top, the buttons'
   counts and the count over the list leave it out. A page older than a
   change to the library (the song merged into another since, say) removes
-  nothing, and the line says to reload the library. Without JavaScript,
+  nothing, and the line says to reload the library. A song removed elsewhere
+  while the page is open (in another tab, on another device, by `caracole
+  remove`) stays on it as it was, until a request of the page's comes back
+  with another song under its number in the library, which the next song
+  added may get: then its line says "Removed" too, and the new song comes
+  under the search box, as any song new to the library does. Without JavaScript,
   Remove… opens a page that says what goes and what stays; Remove it queues
   the removal and goes back to the library as you left it (its search,
   filters and sort), the song's line in view, and Keep it goes back there

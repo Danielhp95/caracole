@@ -259,13 +259,12 @@
     paintAll();
     error.textContent = String(detail.error || "");
   });
-  // A song removed on the page (each job's view, library.js): no more to pick, nor to send, as its id may come back
-  // with the next song added (songs.id has no AUTOINCREMENT).
-  document.addEventListener("caracole:job", (e) => {
-    const view = e.detail;
-    if (!view || view.kind !== "remove" || view.state !== "done" || view.songId === null || view.songId === undefined
-        || !songs.delete(String(view.songId))) return;
-    const at = picked.indexOf(String(view.songId));
+  // A song gone from the library, removed on the page or elsewhere (library.js): no more to pick, nor to send, as its
+  // id may come back with the next song added (songs.id has no AUTOINCREMENT).
+  document.addEventListener("caracole:gone", (e) => {
+    const id = String(e.detail && e.detail.id);
+    if (!songs.delete(id)) return;
+    const at = picked.indexOf(id);
     if (at >= 0) picked.splice(at, 1);
     paintAll();
   });
