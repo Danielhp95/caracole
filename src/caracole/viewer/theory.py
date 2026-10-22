@@ -138,7 +138,10 @@ def parse_chord(text: str, *, strict: bool = True) -> Chord | None:
     return Chord(root, quality, bass, rest)
 
 
-# Spellings of a suffix, rewritten in order before it is read (see _intervals).
+# Spellings of a suffix, rewritten in order before it is read (see _intervals). A sign that starts the
+# suffix is read before the same sign inside it: "+7" is augmented ("aug7"), "7+5" a sharp fifth ("7#5"),
+# and "+5" the sharp fifth that makes an augmented triad. "Maj" is read before "mM", so "mMaj7" is the
+# minor-major seventh ("mmaj7"), never "mmajaj7".
 _REWRITES = [
     (re.compile(r"[()\s]"), ""),
     (re.compile(r"♯"), "#"),
@@ -150,11 +153,12 @@ _REWRITES = [
     (re.compile(r"^[°o]"), "dim"),
     (re.compile(r"^-"), "m"),
     (re.compile(r"-(?=\d)"), "b"),
+    (re.compile(r"^\+(?!5)"), "aug"),
     (re.compile(r"\+(?=\d)"), "#"),
     (re.compile(r"^\+"), "aug"),
     (re.compile(r"^min?"), "m"),
-    (re.compile(r"^mM"), "mmaj"),
     (re.compile(r"Maj|MA|Ma"), "maj"),
+    (re.compile(r"^mM"), "mmaj"),
     (re.compile(r"^M(?=\d)"), "maj"),
     (re.compile(r"^M$"), ""),
     (re.compile(r"ma(?!j|dd)"), "maj"),

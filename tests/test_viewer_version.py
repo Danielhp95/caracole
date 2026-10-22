@@ -74,6 +74,13 @@ def test_a_version_names_chords_as_the_viewer_does():
     assert "[*x2]" in applied(UG, Version(t=5)) and "e|-----0---0---|" in applied(UG, Version(t=5))
 
 
+def test_a_minor_major_seventh_keeps_its_seventh_however_it_is_spelled():
+    # Am(maj7) in A major is Amaj7: spelled "AmMaj7" it is the same chord, never a plain Am that loses it
+    for spelled in ("Am(maj7)", "AmMaj7", "AminMaj7"):
+        cho = f"{{title: T}}\n{{artist: A}}\n{{key: Am}}\n[Am]la [{spelled}]le [Am7]li [D]lo\n"
+        assert played(applied(cho, Version(mode="ionian"))) == ["A", "Amaj7", "Amaj7", "D"], spelled
+
+
 def test_a_capo_names_the_shapes_and_a_swap_plays_its_chord():
     # The chords name the shapes played: three up with the capo a fret higher (3, on a sheet with capo 2) is
     # two up, A shapes; two up with the capo off is four up, B shapes.
