@@ -596,6 +596,10 @@
       const lookup = spot ? lookupViews.get(Number(spot.dataset.lookup)) : null;
       const looking = lookup && (lookup.state === "queued" || lookup.state === "running");
       if (spot && spot.isConnected && !looking) showLine(lineIn(spot), view);
+    } else if (view.kind === "remove" && view.state === "done") {
+      // A song removed: Add a song offers it no more, as its id may come back with the next song added.
+      const s = songs.find((x) => x && Number(x.id) === Number(view.songId));
+      if (s) s.status = "removed";
     } else if (view.kind === "song") {
       const spot = placed.get(Number(view.id));
       if (spot) {  // a song added here: its line, even before the lookup has found the song (no songId yet)

@@ -2258,6 +2258,10 @@
       redraw(view);
     }
     paint(view);
+    // A removal done, its line saying so: the id names that song no more. songs.id has no AUTOINCREMENT, so the next
+    // song added may get it again, and comes as a song new to the page (``arrived``), never in the removed one's line.
+    if (view.kind === "remove" && view.state === "done" && song !== null && byIndex.has(song)
+        && songs[byIndex.get(song)].status === "removed") byIndex.delete(song);
   };
   // The job's line on the song's line, and wherever else it shows (a result's row, #requested), and in the list
   // of requests.

@@ -885,6 +885,59 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
                       "count": "0 of 12 songs" if searched else "12 songs"}, counts
 
 
+def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cfg, conn, tmp_path):
+    # songs.id has no AUTOINCREMENT: the song added once your newest one is removed gets its id again. On the page
+    # that loaded with the song removed, the id names it no more: the removed song's line still says Removed, under
+    # its artist, and the new song comes once, as new, under the form; neither Select nor Add a song takes the one
+    # for the other.
+    from caracole.songbook import make_songbook, songbooks_file
+
+    add_song(conn, "Band", "Song")
+    creep = add_song(conn, "Radiohead", "Creep")  # the newest
+    make_songbook(songbooks_file(cfg.library_dir), "Campfire", ["Band - Song"])
+    runner = FakeCaracole(cfg)
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
+    item = f'#list [data-id="{creep.id}"]'
+    yours = ("Array.from(document.querySelectorAll('#songbooks .add-results .line'))"
+             ".filter((l) => l.textContent.includes('Yours')).map((l) => l.querySelector('h3').textContent)")
+    with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
+        page.open(url)
+        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
+        page.js(f"window.song = document.querySelector('{item}')")
+        page.click(f"{item} form.remove button")
+        assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
+        page.js("""(() => { const form = document.querySelector("form.request-form");
+          form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
+          form.querySelector('button[type="submit"]').click(); })()""")
+        assert page.wait("(document.querySelector('#requested article .progress') || {}).textContent === "
+                         "'Ready·Open sheet'", timeout=20), page.js("document.getElementById('requested').innerText")
+        shown = page.js("""(() => ({
+          creep: [window.song.querySelector('h3').textContent, window.song.querySelector('.progress').textContent,
+                  window.song.closest('section.artist').querySelector('.artist-name').textContent],
+          list: Array.from(document.querySelectorAll('#list h3')).map((h) => h.textContent),
+          requested: Array.from(document.querySelectorAll('#requested article h3')).map((h) => h.textContent),
+          summary: Array.from(document.querySelectorAll('#summary .stat')).map((s) => s.textContent) }))()""")
+        page.click(".pick-toggle")
+        picks = page.js("Array.from(document.querySelectorAll('#list .pick-label')).map((l) => l.textContent)")
+        page.click(".pick-done")
+        page.click("#tab-songbooks")  # Campfire, open beside the list: Add a song offers the removed song no more
+        page.click("#songbooks .add-song input")
+        page.type("Creep")
+        note = "document.querySelector('#songbooks .add-status').textContent"
+        assert page.wait(f"{note} === 'Nothing found yet.' || {yours}.length > 0", timeout=10)
+        creeps = page.js(yours)
+        page.js("document.querySelector('#songbooks .add-song input').select()")
+        page.type("Uprising")
+        assert page.wait(f"{yours}.length > 0", timeout=10), page.js(note)
+        uprisings = page.js(yours)
+    uprising = find_song(conn, override_key("Muse - Uprising"))
+    assert uprising.id == creep.id  # its id again
+    assert shown == {"creep": ["Creep", "Removed", "Radiohead"], "list": ["Song", "Creep"],
+                     "requested": ["Uprising"], "summary": ["2 songs", "1 found", "1 wanted"]}, shown
+    assert picks == ["Pick Song by Band"]
+    assert (creeps, uprisings) == ([], ["Uprising"])
+
+
 @pytest.mark.parametrize("left", ["", "#show=review"])
 def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_path, left):
     # A song in review, removed: Needs review counts it no more, as All and Wanted don't, and goes once nothing needs it

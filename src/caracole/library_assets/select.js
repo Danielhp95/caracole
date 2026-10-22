@@ -259,6 +259,16 @@
     paintAll();
     error.textContent = String(detail.error || "");
   });
+  // A song removed on the page (each job's view, library.js): no more to pick, nor to send, as its id may come back
+  // with the next song added (songs.id has no AUTOINCREMENT).
+  document.addEventListener("caracole:job", (e) => {
+    const view = e.detail;
+    if (!view || view.kind !== "remove" || view.state !== "done" || view.songId === null || view.songId === undefined
+        || !songs.delete(String(view.songId))) return;
+    const at = picked.indexOf(String(view.songId));
+    if (at >= 0) picked.splice(at, 1);
+    paintAll();
+  });
   // The server's answer to the bar's form: on its way, the picks go and the mode ends (the page shows the
   // songbook in its tab, songbooks.js); refused, the bar says why, and the picks stay.
   form.addEventListener("caracole:sent", (e) => {
