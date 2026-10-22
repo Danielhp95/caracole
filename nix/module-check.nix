@@ -76,10 +76,12 @@ let
   };
 
   # What the packages' wrappers must default to: the fetched models, the one
-  # CJK font ChordPro 6.050.7 renders correctly (see src/caracole/render.py), and
+  # CJK font ChordPro 6.050.7 renders correctly (see src/caracole/render.py), the
+  # fonts the PDFs are set in (src/caracole/pdf_fonts.py), and
   # alphaTab, for caracole serve's Guitar Pro page (src/caracole/web/alphatab.py).
   models = pkgs.callPackage ./autochords.nix { };
   fusionKai = "${pkgs.lxgw-fusionkai}/share/fonts/truetype/FusionKaiJ-Regular.ttf";
+  pdfFonts = "${pkgs.callPackage ./pdf-fonts.nix { }}";
   alphatab = "${pkgs.callPackage ./alphatab.nix { }}";
 
   # Whether makeWrapperArgs holds `--set-default NAME VALUE`.
@@ -447,6 +449,9 @@ let
     "both packages default CARACOLE_CJK_FONT to lxgw-fusionkai's FusionKaiJ-Regular.ttf" =
       setsDefault defaultPackage "CARACOLE_CJK_FONT" fusionKai
       && setsDefault autochordsPackage "CARACOLE_CJK_FONT" fusionKai;
+    "both packages default CARACOLE_PDF_FONTS to Adwaita Sans and Mono (nix/pdf-fonts.nix)" =
+      setsDefault defaultPackage "CARACOLE_PDF_FONTS" pdfFonts
+      && setsDefault autochordsPackage "CARACOLE_PDF_FONTS" pdfFonts;
     "both packages default CARACOLE_ALPHATAB_DIR to the fetched alphaTab" =
       setsDefault defaultPackage "CARACOLE_ALPHATAB_DIR" alphatab
       && setsDefault autochordsPackage "CARACOLE_ALPHATAB_DIR" alphatab;

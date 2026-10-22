@@ -1,7 +1,8 @@
 # Installing caracole
 
 caracole needs Python 3.12 or newer, ChordPro 6.050.7 for the PDFs, a font
-with Chinese glyphs for Chinese sheets and, for auto-chords only, torch, two
+with Chinese glyphs for Chinese sheets, Adwaita Sans for the PDFs' look (or
+they keep ChordPro's Helvetica) and, for auto-chords only, torch, two
 model files and yt-dlp (with ffmpeg and deno), which takes the audio of songs
 nobody has charted from YouTube. The Nix packages bring all of it. Without Nix
 you install each one. The flake builds for x86_64-linux only.
@@ -122,7 +123,7 @@ Checked on Ubuntu 24.04 and 26.04.
 
 ### Ubuntu with Nix
 
-The recommended route: the packages bring ChordPro 6.050.7, the font and the
+The recommended route: the packages bring ChordPro 6.050.7, the fonts and the
 model files, pinned and tested together.
 
 Install Nix with the official installer, in multi-user mode, then turn on
@@ -217,6 +218,30 @@ caracole reads its path from `CARACOLE_CJK_FONT`, or from `cjk_font` in
 caracole.toml, which wins. The service's config below sets `cjk_font`.
 Without the font, a Chinese sheet gets no PDF, and the to-do page says so.
 [usage.md](usage.md#fonts-for-chinese-sheets) says which other fonts work.
+
+**The PDFs' fonts**, if you want them as the Nix package sets them: Adwaita
+Sans and Adwaita Mono from GNOME's adwaita-fonts 50.0, in a folder of four
+files (`regular.ttf`, `bold.ttf`, `italic.ttf`, `mono.ttf`). Adwaita Sans
+comes as variable fonts, which ChordPro draws in their default weight alone,
+so `nix/pdf-fonts.py` in caracole's source makes static instances of them with
+fontTools:
+
+```sh
+curl -fLO https://download.gnome.org/sources/adwaita-fonts/50/adwaita-fonts-50.0.tar.xz
+echo '4c927fbfeec1c503801ba510c2c94e0054c82c522cf7ba0d3be5d4d41fcf5c86  adwaita-fonts-50.0.tar.xz' | sha256sum -c
+tar -xJf adwaita-fonts-50.0.tar.xz
+python3 -m venv /tmp/fonttools && /tmp/fonttools/bin/pip install fonttools
+/tmp/fonttools/bin/python caracole/nix/pdf-fonts.py adwaita-fonts-50.0/sans pdf-fonts   # caracole: the source
+sudo install -Dm644 -t /usr/local/share/caracole/pdf-fonts pdf-fonts/*.ttf
+sudo install -m644 adwaita-fonts-50.0/mono/AdwaitaMono-Regular.ttf /usr/local/share/caracole/pdf-fonts/mono.ttf
+sudo install -Dm644 adwaita-fonts-50.0/LICENSE /usr/local/share/caracole/pdf-fonts/licenses/Adwaita-OFL.txt
+```
+
+caracole reads the folder from `CARACOLE_PDF_FONTS`, or from `pdf_fonts` in
+caracole.toml, which wins. Without it, the PDFs keep ChordPro's built-in
+Helvetica and Courier, and a sheet with a letter they lack (a ʼ, Greek,
+Cyrillic) is set in the Chinese font, when one is set.
+[usage.md](usage.md#fonts-in-the-pdfs) says what each file sets.
 
 **Auto-chords**, if you want it. Install torch first, from PyTorch's CPU-only
 index, because the PyPI build brings several GB of CUDA libraries. Then
@@ -335,8 +360,9 @@ sudo usermod -aG caracole "$USER"   # to edit wanted.txt and read the library; l
 # /etc/caracole/caracole.toml
 data_dir = "/var/lib/caracole"
 
-# Without Nix: the font and, for auto-chords, yt-dlp and the model files.
+# Without Nix: the fonts and, for auto-chords, yt-dlp and the model files.
 # cjk_font = "/usr/local/share/caracole/FusionKaiJ-Regular.ttf"
+# pdf_fonts = "/usr/local/share/caracole/pdf-fonts"
 # ytdlp_bin = "/opt/yt-dlp/bin/yt-dlp"
 #
 # [autochords]
@@ -536,16 +562,17 @@ pytest -q -m "not slow"                             # all but the browser, chord
 nix develop .#autochords -c pytest -m autochords    # the model tests, with the model files
 ```
 
-Both shells set `CARACOLE_CJK_FONT` and `CARACOLE_ALPHATAB_DIR`, and
+Both shells set `CARACOLE_CJK_FONT`, `CARACOLE_PDF_FONTS` and `CARACOLE_ALPHATAB_DIR`, and
 `.#autochords` also sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT`.
 
-Without Nix, install ChordPro and the font as [above](#ubuntu-without-nix)
+Without Nix, install ChordPro and the fonts as [above](#ubuntu-without-nix)
 first, and torch too if you want the auto-chords tests:
 
 ```sh
 python3 -m venv .venv
 .venv/bin/pip install -e . pytest pytest-xdist      # -e '.[autochords]' for auto-chords
-CARACOLE_CJK_FONT=/usr/local/share/caracole/FusionKaiJ-Regular.ttf .venv/bin/pytest -q
+CARACOLE_CJK_FONT=/usr/local/share/caracole/FusionKaiJ-Regular.ttf \
+  CARACOLE_PDF_FONTS=/usr/local/share/caracole/pdf-fonts .venv/bin/pytest -q
 .venv/bin/caracole --help
 ```
 
@@ -556,6 +583,7 @@ under root. Tests that need a program or a file skip without it:
 |---|---|
 | `chordpro` on PATH | the real PDFs (marked `chordpro`): in test_render.py and test_render_all.py, two in test_chordpro.py |
 | `CARACOLE_CJK_FONT` | the two Chinese PDFs |
+| `CARACOLE_PDF_FONTS` (Adwaita's four files) | the real PDFs in Adwaita Sans, and the two-column estimates in its widths |
 | `CARACOLE_ALPHATAB_DIR` (alphaTab's three files) | the tests of caracole serve's Guitar Pro page in a browser |
 | torch, librosa and beat_this, or `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` | the model tests (marked `autochords`) |
 | `ffmpeg`, `chromium` | one `.m4a` test; the tests of `index.html`, `sheet.html`, `songbook.html`, the lookup page and the pages `caracole serve` serves, in a browser |

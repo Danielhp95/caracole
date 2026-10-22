@@ -560,9 +560,21 @@ units' command lines it parses with caracole's own CLI.
 
 ## 7. Chinese sheets in the PDFs
 
-ChordPro's built-in PDF fonts have no Chinese glyphs, so the packages' wrapper
+The PDFs are set in Adwaita Sans and Adwaita Mono, GNOME's system fonts: the
+packages' wrapper points `CARACOLE_PDF_FONTS` at the folder `nix/pdf-fonts.nix`
+makes from nixpkgs' `adwaita-fonts`, static Regular, Bold and Italic instances
+of Adwaita Sans's variable fonts (ChordPro draws a variable font in its default
+weight alone), their glyph records padded to even lengths (see below), and
+Adwaita Mono, with their licence, the SIL Open Font License 1.1.
+`settings.pdf_fonts` names another folder of the same four files
+([usage.md](usage.md#fonts-in-the-pdfs)), and `caracole.override { pdfFonts =
+null; }` builds a package whose PDFs keep ChordPro's built-in Helvetica and
+Courier.
+
+Neither those nor Adwaita Sans have Chinese glyphs, so the packages' wrapper
 points `CARACOLE_CJK_FONT` at lxgw-fusionkai's `FusionKaiJ-Regular.ttf`, a Kai
-(brush-style) face. The choice is narrow with ChordPro 6.050.7:
+(brush-style) face, which sets the words of a PDF that has Chinese in it (its
+chords and tabs stay in Adwaita). The choice is narrow with ChordPro 6.050.7:
 
 - it cannot open `.ttc` collections, which is all nixpkgs ships of Noto CJK
   and Source Han Sans;

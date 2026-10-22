@@ -252,6 +252,16 @@ def test_cjk_font_setting_and_env(tmp_path):
     assert load_config(None, env={"HOME": str(tmp_path)}).cjk_font is None
 
 
+def test_pdf_fonts_setting_and_env(tmp_path):
+    p = write(tmp_path, 'pdf_fonts = "~/fonts/pdf"\n')
+    env = {"HOME": str(tmp_path), "CARACOLE_PDF_FONTS": "/env/fonts"}
+    assert load_config(p, env=env).pdf_fonts == tmp_path / "fonts/pdf"  # the file's wins
+    assert load_config(None, env=env).pdf_fonts == Path("/env/fonts")
+    assert load_config(None, env={"HOME": str(tmp_path)}).pdf_fonts is None
+    with pytest.raises(ConfigError, match="pdf_fonts"):
+        load_config(write(tmp_path, "pdf_fonts = 3\n"), env={"HOME": str(tmp_path)})
+
+
 def test_youtube_is_a_switchable_provider_of_a_few_yt_dlp_runs_a_night(tmp_path):
     # A run is a search or a download: six are three songs. Its pauses are longer than a site's,
     # since each run sends several requests of its own (which yt-dlp's own pauses space out).

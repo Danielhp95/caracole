@@ -1,6 +1,7 @@
 # caracole as a Python application built from nixpkgs dependencies only. The
-# wrapper puts `chordpro` on PATH for sheet PDFs, and points CARACOLE_CJK_FONT at
-# a font with Chinese glyphs, so a song like 斑马斑马 renders. The `autochords`
+# wrapper puts `chordpro` on PATH for sheet PDFs, points CARACOLE_PDF_FONTS at the
+# fonts they are set in (./pdf-fonts.nix: Adwaita Sans and Mono, GNOME's), and
+# CARACOLE_CJK_FONT at a font with Chinese glyphs, so a song like 斑马斑马 renders. The `autochords`
 # variant's wrapper also points at the model files the offline unit needs, and
 # puts `yt-dlp` on PATH, for the audio of songs nobody has charted. Both point
 # CARACOLE_ALPHATAB_DIR at alphaTab (./alphatab.nix), which caracole serve's Guitar
@@ -35,6 +36,13 @@
   # refuses those. FusionKaiJ, a Kai (brush) face, has none, and renders with
   # normal subsetting: about 0.4 MB per Chinese sheet.
   cjkFont ? "${lxgw-fusionkai}/share/fonts/truetype/FusionKaiJ-Regular.ttf",
+
+  # The fonts every PDF is set in (./pdf-fonts.nix): Adwaita Sans, static Regular, Bold and
+  # Italic instances of GNOME's variable fonts, and Adwaita Mono for tabs, in one folder
+  # (src/caracole/pdf_fonts.py). The CJK font above takes the words only where they need
+  # letters Adwaita lacks (Chinese). Null leaves CARACOLE_PDF_FONTS unset: the PDFs then
+  # keep ChordPro's built-in Helvetica and Courier.
+  pdfFonts ? callPackage ./pdf-fonts.nix { },
 
   # alphaTab's browser build, its music font and its SoundFont (./alphatab.nix), which
   # caracole serve sends to its Guitar Pro page (src/caracole/web/alphatab.py). Null
@@ -125,6 +133,11 @@ python3Packages.buildPythonApplication (finalAttrs: {
     "CARACOLE_CJK_FONT"
     cjkFont
   ]
+  ++ lib.optionals (pdfFonts != null) [
+    "--set-default"
+    "CARACOLE_PDF_FONTS"
+    "${pdfFonts}"
+  ]
   ++ lib.optionals (alphatab != null) [
     "--set-default"
     "CARACOLE_ALPHATAB_DIR"
@@ -146,6 +159,9 @@ python3Packages.buildPythonApplication (finalAttrs: {
     export HOME=$(mktemp -d)
     export CARACOLE_CJK_FONT=${lib.escapeShellArg cjkFont}
   ''
+  + lib.optionalString (pdfFonts != null) ''
+    export CARACOLE_PDF_FONTS=${pdfFonts}
+  ''
   + lib.optionalString (alphatab != null) ''
     export CARACOLE_ALPHATAB_DIR=${alphatab}
   '';
@@ -156,7 +172,8 @@ python3Packages.buildPythonApplication (finalAttrs: {
   # (library_assets/, viewer/, chordpro-style.json) left out of the wheel, or
   # with a folder beside src/caracole that the wheel never takes.
   # Then on the wrapped program: the font exists, and the wrapper
-  # sets it and finds chordpro, and points at alphaTab's three files. The auto-chords variant finds its models, their
+  # sets it and finds chordpro, and points at the PDF fonts' four files and at
+  # alphaTab's three. The auto-chords variant finds its models, their
   # packages and yt-dlp, so its YouTube route is on (with no song to ask about,
   # it asks nothing); the default one says where to get them, and takes no audio
   # from YouTube.
@@ -172,6 +189,13 @@ python3Packages.buildPythonApplication (finalAttrs: {
     fi
     grep -qF -- ${lib.escapeShellArg cjkFont} $out/bin/caracole
     grep -qF -- ${lib.escapeShellArg "${chordpro}/bin"} $out/bin/caracole
+  ''
+  + lib.optionalString (pdfFonts != null) ''
+    for role in regular bold italic mono; do
+      test -f ${pdfFonts}/$role.ttf
+    done
+    grep -qF -- "CARACOLE_PDF_FONTS" $out/bin/caracole
+    grep -qF -- ${pdfFonts} $out/bin/caracole
   ''
   + lib.optionalString (alphatab != null) ''
     for file in alphaTab.min.js Bravura.woff2 sonivox.sf3; do
@@ -228,6 +252,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
       chordpro
       yt-dlp
       cjkFont
+      pdfFonts
       withAutochords
       alphatab
       btcWeights

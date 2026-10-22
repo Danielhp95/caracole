@@ -13,8 +13,17 @@ JSON under exactly that name (ChordPro dies on it). The option also keeps a
 stray ``chordpro.json`` in the working directory, or a user config, out of the
 nightly run.
 
-ChordPro's built-in PDF fonts have no CJK glyphs, so Chinese text vanishes from
-the PDF. ``font_file`` names a TrueType/OpenType font for the lyrics and titles.
+The PDFs are set in the fonts of ``pdf_fonts`` (pdf_fonts.py; the packages' Adwaita Sans and
+Mono, nix/pdf-fonts.nix), each element in the one ``PDF_FONT_ELEMENTS`` names: the words regular,
+the title, the chords and the section names bold, a repeat mark italic, a tab monospaced. Without
+them, or when one of them is a font ChordPro draws wrongly (below; a variable font draws as its
+default instance alone), ChordPro's built-in Helvetica and Courier, as before them.
+
+Neither has CJK glyphs, so Chinese text vanishes from the PDF. ``font_file`` names a
+TrueType/OpenType font for the lyrics and titles, and every element that derives its font
+from theirs; the chords and a tab keep theirs (``fonts_options``). Which text needs it is judged
+by the letters of the PDF's own fonts (``pdf_font``): Adwaita Sans has Latin, Greek and Cyrillic
+and the curly apostrophes, the built-in fonts only WinAnsi's.
 Two kinds of font come out wrong, so ``render_pdf`` refuses them up front:
 
 - collections (``.ttc``), such as nixpkgs' Noto CJK fonts, variable or static:
@@ -87,7 +96,7 @@ level when the first page's two hold the song. That
 text runs the viewer's code: a bug there fails that song's PDF alone, logged with its traceback,
 as a chordpro failure does, and its viewer is still written. kv ``render:<song id>``
 keeps what the song's PDF was made from (the SHA-256 of the .cho, the
-version's transposition, the font, the SHA-256 of the style, the PDF's name,
+version's transposition, the CJK font, the PDF fonts' folder, the SHA-256 of the style, the PDF's name,
 ``pdf_text.PDF_TEXT_VERSION`` and the SHA-256 of the text chordpro prints, whose
 key line and chord diagrams come from more than the .cho) and what was
 written (the PDF's length and SHA-256): its human sheet's, else its auto
@@ -96,7 +105,7 @@ beside a human one. A PDF is rendered again only when one of those changes,
 when it is missing or no longer what was written (cut short by a power cut,
 changed on a synced device, a link in its place), or when forced: its length
 is compared, then, when that matches, its SHA-256. A sheet whose letters the
-built-in fonts lack gets its .cho and viewer but no PDF until a usable CJK font is set:
+PDF's fonts lack gets its .cho and viewer but no PDF until a usable CJK font is set:
 one font error for the pass, naming each sheet's first such letter, not a
 failure per song. A font that is set but unusable (a collection, a missing
 file) counts as none. Cyrillic and Greek letters that look like Latin ones,
@@ -154,6 +163,7 @@ from caracole.library import (
 from caracole.keys import SongKey, sheet_key, sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
+from caracole.pdf_fonts import ROLES, PdfFonts, in_folder, metrics
 from caracole.pdf_text import PDF_TEXT_VERSION, STYLE_FILE, pdf_text
 from caracole.sheet_versions import SheetVersion, as_data, in_library, sheet_pins, tab_of, version_names
 from caracole.songs import (
@@ -202,8 +212,25 @@ TIMEOUT = 120  # seconds; a sheet renders in about one
 # are ASCII, and tablature needs the monospaced Courier.
 FONT_ELEMENTS = ("text", "title")
 
-# How the PDFs look (a ChordPro config): Helvetica, bold chords in caracole's rust,
-# the chord diagrams above the song, section names in small rust capitals with no band,
+# With ``pdf_fonts``, the font of the four each element is set in: STYLE_FILE's elements, and those chordpro
+# derives from them (Output/PDF.pm's configurator: a chorus, an empty line, its own comment_italic and
+# comment_box, the songbook's contents, a grid), which would take the font file of the one they derive from
+# otherwise. Bold, italic and monospaced where the style has Helvetica-Bold, Helvetica-Oblique and Courier.
+PDF_FONT_ELEMENTS = {
+    "title": "bold", "subtitle": "regular", "text": "regular", "chorus": "regular", "empty": "regular",
+    "chord": "bold", "annotation": "italic", "comment": "bold", "comment_italic": "italic",
+    "comment_box": "regular", "tab": "mono", "footer": "regular", "toc": "regular", "diagram": "bold",
+    "diagram_base": "regular", "grid": "bold", "grid_margin": "bold",
+}
+# Those a CJK font leaves to them, as it leaves them their built-in fonts: the chords, their annotations and a
+# grid (chord names are Latin; none derives from "text") and a tab (monospaced). Every other takes the CJK font.
+_KEPT_BESIDE_CJK = frozenset({"chord", "annotation", "grid", "tab"})
+# Where render_version takes the PDF fonts from unless told: the config, as an export a command asks for does. A
+# render pass hands over its own, checked once for the pass (``_usable_pdf_fonts``).
+_CONFIG: Any = object()
+
+# How the PDFs look (a ChordPro config): Helvetica (with ``pdf_fonts``, PDF_FONT_ELEMENTS' fonts), bold
+# chords in caracole's rust, the chord diagrams above the song, section names in small rust capitals with no band,
 # and under the title the text's {subtitle} (pdf_text.py: the artist, the viewer's key
 # line, a capo or a tuning the notes name), as ChordPro prints neither the artist nor the
 # capo by default: a capo the guitarist can't see means playing in the wrong key. Its
@@ -255,9 +282,11 @@ def _lost_letter(ch: str) -> bool:
     return unicodedata.category(ch).startswith("L") and needs_font_file(ch)
 
 
-def _first_lost_letter(text: str) -> str | None:
-    """The letter a font file is needed for: the first lost one with no Latin twin, if any."""
-    lost = [ch for ch in text if _lost_letter(ch)]
+def _first_lost_letter(text: str, fonts: PdfFonts | None = None) -> str | None:
+    """The letter a font file is needed for: the first the PDF's fonts lose (``_lacks``) with no Latin twin, if
+    any."""
+    lacks = _lacks(fonts)
+    lost = [ch for ch in text if unicodedata.category(ch).startswith("L") and lacks(ch)]
     return next((ch for ch in lost if ord(ch) not in _LATIN_LOOKALIKES), lost[0] if lost else None)
 
 
@@ -333,16 +362,18 @@ def render_pdf(
     *,
     chordpro_bin: str = "chordpro",
     font_file: Path | None = None,
+    fonts: PdfFonts | None = None,
     runner: Runner = subprocess.run,
 ) -> None:
-    """Render ``cho`` to ``pdf``, its chords where it names them (chordpro transposes nothing).
+    """Render ``cho`` to ``pdf``, its chords where it names them (chordpro transposes nothing), in the PDF
+    fonts ``fonts`` (None: ChordPro's built-in ones), its words in the CJK font ``font_file`` when one is given
+    (``fonts_options``).
 
     Raises RenderError when the binary is missing, exits non-zero, times out
-    or writes no PDF.
+    or writes no PDF, or when a font is one chordpro would draw wrongly.
     """
     cmd = [chordpro_bin, "--nodefaultconfigs", f"--config={STYLE_FILE}"]
-    if font_file is not None:
-        cmd += _font_options(Path(font_file))
+    cmd += fonts_options(fonts, Path(font_file) if font_file is not None else None)
     cmd += [f"--output={pdf}", str(cho)]
     run_chordpro(cmd, Path(pdf), runner=runner, timeout=TIMEOUT, chordpro_bin=chordpro_bin, on=f" on {cho}",
                  nothing=f"no PDF for {cho}")
@@ -380,6 +411,38 @@ def _font_options(font: Path, elements: tuple[str, ...] = FONT_ELEMENTS) -> list
     if problem := _font_problem(str(font), stat.st_size, stat.st_mtime_ns):
         raise RenderError(f"{font} {problem}")
     return [f"--define=pdf.fonts.{element}.file={font}" for element in elements]
+
+
+def fonts_options(fonts: PdfFonts | None, cjk: Path | None, elements: tuple[str, ...] = FONT_ELEMENTS) -> list[str]:
+    """chordpro's options that set the PDF in the fonts ``fonts`` (``PDF_FONT_ELEMENTS``), the CJK font ``cjk``
+    taking every element but the chords' and the tab's (``_KEPT_BESIDE_CJK``); without ``fonts``, the built-in
+    fonts, ``cjk`` taking ``elements`` and those derived from them. RenderError for a font chordpro can't use."""
+    if fonts is None:
+        return _font_options(cjk, elements) if cjk is not None else []
+    out: list[str] = []
+    for element, role in PDF_FONT_ELEMENTS.items():
+        font = cjk if cjk is not None and element not in _KEPT_BESIDE_CJK else getattr(fonts, role)
+        out += _font_options(font, (element,))
+    return out
+
+
+def _pdf_fonts(folder: Path | None) -> tuple[PdfFonts | None, str | None]:
+    """The fonts of the folder ``pdf_fonts`` when chordpro can use each; otherwise None, and what is wrong with
+    them: the PDFs then keep the built-in fonts. A font missing, a collection, one with odd-length glyph records
+    (``_font_problem``) or a variable one, which chordpro draws as its default instance alone."""
+    if folder is None:
+        return None, None
+    try:
+        fonts = in_folder(folder)
+        for role in ROLES:
+            font = getattr(fonts, role)
+            _font_options(font)
+            if metrics(font).variable:
+                raise RenderError(f"{font} is a variable font; ChordPro 6.050.7 draws only its default instance, "
+                                  "so use a static one (fonttools varLib.instancer makes one)")
+    except (RenderError, OSError, ValueError) as e:
+        return None, f"pdf_fonts is unusable ({e}): the PDFs keep ChordPro's built-in fonts"
+    return fonts, None
 
 
 _SFNT_VERSIONS = (b"\x00\x01\x00\x00", b"OTTO", b"true")
@@ -478,6 +541,7 @@ def render_all(
     failed: list[str] = []
     no_font: dict[str, str] = {}
     font, font_problem = _cjk_font(cfg.cjk_font)
+    fonts = _usable_pdf_fonts(cfg)
     handed = False
     songs = list_songs(conn) if song_ids is None else _songs_of(conn, song_ids)
     for n, listed in enumerate(songs):
@@ -497,7 +561,7 @@ def render_all(
             continue
         try:
             done = _render_song(
-                conn, cfg, overrides, song, cjk_font=font, runner=runner, force=force
+                conn, cfg, overrides, song, cjk_font=font, fonts=fonts, runner=runner, force=force
             )
         except (RenderError, OSError) as e:
             log.warning("no PDF for %s: %s", song.display, e)
@@ -577,11 +641,12 @@ def _render_song(
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
+    fonts: PdfFonts | None = None,
 ) -> list[_Done]:
     """Render every sheet the song keeps, the human one first, after the pages of the versions kept beside
     it: their ``_Done("pages")`` is always the first, so a song that keeps no sheet has that alone.
 
-    ``cjk_font`` is a usable font or None. The auto sheet is kept, and so
+    ``cjk_font`` is a usable font or None, and ``fonts`` the PDF fonts (``_pdf_fonts``) or None. The auto sheet is kept, and so
     rendered, until the fetch steps retire it for a complete human sheet; its
     outputs go once that has happened and the human sheet's PDF is in place.
     A human sheet the song no longer keeps takes its outputs along
@@ -619,7 +684,8 @@ def _render_song(
             played = replace(played, at={}, alt={})
         done.append(_render_sheet(conn, cfg, song, folder, kept, text, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
-                                  cjk_font=cjk_font, runner=runner, force=force, key=mine, export=not beside,
+                                  cjk_font=cjk_font, fonts=fonts, runner=runner, force=force, key=mine,
+                                  export=not beside,
                                   primary=not sheet.auto or human is None, versions=listed, guitar=guitar))
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
@@ -641,7 +707,7 @@ def _render_song(
         render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside), beside=beside,
                listed=None if beside else _on_page(listed, None))
     if human is not None or auto is not None:
-        _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, runner=runner, force=force)
+        _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
     return done
 
 
@@ -918,30 +984,33 @@ def render_version(
     *,
     runner: Runner = subprocess.run,
     force: bool = False,
+    pdf_fonts: Any = _CONFIG,
 ) -> Path:
     """Render the song's sheet in the version ``v`` (its key, capo, mode, chosen shapes and swaps, as the
     viewer shows it: ``apply_version``) to ``sheet (<label>).pdf`` in its folder, and return the path.
 
     The sheet is the human one, else the auto one. The export is recorded in kv ``render:export:<song id>``
     under its label (``version_label``): {"pdf", "query", "source_sha", "style", "printed_sha", "pdf_text",
-    "font", "pdf_sha256", "pdf_size"}; another export with the same label replaces the file and the record,
+    "font", "fonts", "pdf_sha256", "pdf_size"}; another export with the same label replaces the file and the record,
     and one whose record says it was made from this very text and is still on disk is not rendered again
     (unless ``force``). A render pass remakes the exports whose sheet or style changed (``_remake_exports``).
+    It is set in the PDF fonts ``pdf_fonts`` hands over (a pass's), else ``cfg``'s when chordpro can use them.
     Raises RenderError: no sheet kept, a sheet that can't be read or made, a CJK font needed and missing, or
     chordpro failing.
     """
     sheet, text, found = _export_source(conn, cfg, song)
     folder = song_dir(cfg.library_dir, song)
+    fonts = _pdf_fonts(cfg.pdf_fonts)[0] if pdf_fonts is _CONFIG else pdf_fonts
     try:
         shapes = viewer_key(text, *_key_of(found))
         capo = parse_sheet(text).capo
         label = version_label(v, shapes, capo)
-        printed = _version_text(text, v, shapes, capo)
+        printed = _version_text(text, v, shapes, capo, fonts=fonts)
     except Exception as e:  # a sheet the viewer's code can't read
         log.warning("%s: cannot make the export %s", song.display, version_query(v), exc_info=True)
         raise RenderError(f"cannot make the export: {type(e).__name__}: {e}") from e
     pdf = folder / f"sheet ({safe_name(label)}).pdf"
-    font, lost = pdf_font(printed, _cjk_font(cfg.cjk_font)[0])
+    font, lost = pdf_font(printed, _cjk_font(cfg.cjk_font)[0], fonts)
     if lost is not None:
         raise RenderError(f"{pdf.name} needs a CJK font: {FONT_HINT}")
     state = {
@@ -952,6 +1021,7 @@ def render_version(
         "pdf_text": PDF_TEXT_VERSION,
         "printed_sha": hashlib.sha256(printed.encode("utf-8")).hexdigest(),
         "font": str(font) if font else None,
+        "fonts": _fonts_record(fonts),
     }
     key = f"{EXPORT_KV}{song.id}"
     record = kv_get_json(conn, key)
@@ -959,7 +1029,7 @@ def render_version(
     if not force and _up_to_date(pdf, record.get(label), state):
         return pdf
     sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin, font_file=font,
-                             runner=runner)
+                             fonts=fonts, runner=runner)
     # The label names the file, so another label never names the same one; a name that sorts the same
     # after safe_name is the same file, and its older record goes.
     record = {k: e for k, e in record.items() if e.get("pdf") != pdf.name}
@@ -969,7 +1039,7 @@ def render_version(
 
 
 def _remake_exports(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song, *,
-                    cjk_font: Path | None, runner: Runner, force: bool) -> None:
+                    cjk_font: Path | None, runner: Runner, force: bool, fonts: PdfFonts | None = None) -> None:
     """Render the song's exports again that its sheet, the style or the viewer's theory changed; the others
     are left (``render_version``). One that can't be made is logged, and the rest go on.
 
@@ -984,7 +1054,8 @@ def _remake_exports(conn: sqlite3.Connection, cfg: Config, overrides: Overrides,
         if not isinstance(query, str):
             continue
         try:
-            pdf = render_version(conn, cfg, overrides, song, version_from_query(query), runner=runner, force=force)
+            pdf = render_version(conn, cfg, overrides, song, version_from_query(query), runner=runner, force=force,
+                                 pdf_fonts=fonts)
         except (RenderError, OSError) as e:
             log.warning("no export for %s (%s): %s", song.display, query, e)
             continue
@@ -1046,6 +1117,7 @@ def _render_sheet(
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
+    fonts: PdfFonts | None = None,
     key: tuple[str | None, str | None] = (None, None),
     export: bool = True,
     primary: bool = False,
@@ -1082,7 +1154,7 @@ def _render_sheet(
 
     try:
         done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, version, key=key,
-                                 cjk_font=cjk_font, runner=runner, force=force)
+                                 cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
     except RenderError:
         viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
         raise
@@ -1114,23 +1186,25 @@ def _render_sheet_pdf(
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
+    fonts: PdfFonts | None = None,
 ) -> _Done:
     """Render the ChordPro ``text`` to ``pdf`` in ``version`` unless kv ``state_key`` says it is up to date:
-    chordpro prints the PDF's own text (``_sheet_text``, in ``key``: the sheet's and where it came from), and the
-    font is the one that text needs. A text that can't be made (a bug in the viewer's code it runs) is a
+    chordpro prints the PDF's own text (``_sheet_text``, in ``key``: the sheet's and where it came from), in the
+    PDF fonts ``fonts``, and the CJK font is there when that text needs it (``pdf_font``). A text that can't be made (a bug in the viewer's code it runs) is a
     RenderError, logged with its traceback: this PDF fails, and the pass goes on."""
     try:
-        printed = _sheet_text(text, key=key[0], key_source=key[1], version=version)
+        printed = _sheet_text(text, key=key[0], key_source=key[1], version=version, fonts=fonts)
     except Exception as e:  # a sheet the viewer's code can't read must never cost the other PDFs
         log.warning("%s: cannot make the text of %s", song.display, pdf.name, exc_info=True)
         raise RenderError(f"cannot make the text of {pdf.name}: {type(e).__name__}: {e}") from e
-    font, lost = pdf_font(printed, cjk_font)
+    font, lost = pdf_font(printed, cjk_font, fonts)
     if lost is not None:
         return _Done("no font", missing=lost)
     state = {
         "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
         "transpose": version.t,  # info.json's; the rest of the version is in the text printed
         "font": str(font) if font else None,
+        "fonts": _fonts_record(fonts),
         "style": _style(),
         "pdf": pdf.name,
         "pdf_text": PDF_TEXT_VERSION,
@@ -1141,22 +1215,25 @@ def _render_sheet_pdf(
     if not force and _up_to_date(pdf, kv_get_json(conn, state_key), state):
         return _Done("skipped")
     sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin, font_file=font,
-                             runner=runner)
+                             fonts=fonts, runner=runner)
     kv_set_json(conn, state_key, {**state, "pdf_sha256": sha, "pdf_size": size})
     write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
     return _Done("rendered")
 
 
-def _sheet_text(text: str, *, key: str | None, version: Version, key_source: str | None = None) -> str:
+def _sheet_text(text: str, *, key: str | None, version: Version, key_source: str | None = None,
+                fonts: PdfFonts | None = None) -> str:
     """The text chordpro prints of the sheet ``text`` in ``version``: the sheet as written (``Version()``) as it
     is (``_printed``), else in that version as its viewer shows it (``_version_text``). ``key`` is the sheet's
-    (``keys.sheet_keys``), and ``key_source`` where it came from."""
+    (``keys.sheet_keys``), and ``key_source`` where it came from; ``fonts``, the PDF fonts its columns are
+    levelled in (``pdf_text``)."""
     if version == Version():
-        return _printed(text, key=key, key_source=key_source, capo=parse_sheet(text).capo)
-    return _version_text(text, version, viewer_key(text, key, key_source), parse_sheet(text).capo)
+        return _printed(text, key=key, key_source=key_source, capo=parse_sheet(text).capo, fonts=fonts)
+    return _version_text(text, version, viewer_key(text, key, key_source), parse_sheet(text).capo, fonts=fonts)
 
 
-def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None) -> str:
+def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None, *,
+                  fonts: PdfFonts | None = None) -> str:
     """The text chordpro prints of the sheet ``text`` in the version ``v``: each chord named and shaped as the
     viewer shows it there (``apply_version``), then the PDF's own text of that (``pdf_text``), each chord's diagram
     the shape its ``{define}`` gives, with the key line of the shapes the version plays and its capo. A capo the
@@ -1167,14 +1244,15 @@ def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None) -
     played, played_capo = played_key(v, shapes, capo)
     in_place = v.t == 0 and played_capo == (capo or 0)  # no move: the chords' shift is t less the capo's move
     return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo,
-                              notes_capo=in_place, defined=True))
+                              notes_capo=in_place, defined=True, fonts=fonts))
 
 
-def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | None = None) -> str:
+def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | None = None,
+             fonts: PdfFonts | None = None) -> str:
     """The text chordpro prints of the sheet ``text`` as written (``pdf_text``), with the key of its shapes as
     its viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``, from ``key_source``), and the look-alike
     letters capitals can make written in Latin (``_as_latin``)."""
-    return _as_latin(pdf_text(text, key=viewer_key(text, key, key_source), capo=capo))
+    return _as_latin(pdf_text(text, key=viewer_key(text, key, key_source), capo=capo, fonts=fonts))
 
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],
@@ -1377,6 +1455,7 @@ def _render_into(
     chordpro_bin: str,
     font_file: Path | None,
     runner: Runner,
+    fonts: PdfFonts | None = None,
 ) -> tuple[str, int]:
     """``render_pdf`` of the ChordPro ``text`` (a PDF's own, ``_printed``) in a private directory, then
     the PDF to ``pdf``; return the SHA-256 and the length of the PDF written.
@@ -1394,7 +1473,7 @@ def _render_into(
     with private_dir(work_dir, "render-") as tmp:
         cho, out = tmp / f"{pdf.stem}.cho", tmp / pdf.name
         cho.write_bytes(text.encode("utf-8"))
-        render_pdf(cho, out, chordpro_bin=chordpro_bin, font_file=font_file, runner=runner)
+        render_pdf(cho, out, chordpro_bin=chordpro_bin, font_file=font_file, fonts=fonts, runner=runner)
         data = out.read_bytes()
         return write_atomic(pdf, data), len(data)
 
@@ -1412,28 +1491,61 @@ def private_dir(cache_dir: Path, prefix: str) -> Iterator[Path]:
 _INVISIBLE = frozenset({"Cc", "Cf"})  # controls, zero-width spaces, byte-order marks
 
 
-def pdf_font(text: str, cjk_font: Path | None) -> tuple[Path | None, str | None]:
-    """The font file chordpro prints the PDF text ``text`` in, and the first letter it would lose: the
-    CJK font ``cjk_font`` (one ``_cjk_font`` found usable, or None) when the built-in fonts lose some of
+def pdf_font(text: str, cjk_font: Path | None, fonts: PdfFonts | None = None) -> tuple[Path | None, str | None]:
+    """The font file chordpro prints the words of the PDF text ``text`` in, and the first letter it would lose:
+    the CJK font ``cjk_font`` (one ``_cjk_font`` found usable, or None) when the PDF's fonts lose some of
     ``text``, else none; a letter lost only when they lose letters (``_font_need``) and no font is set,
-    and the PDF then waits for one."""
-    need = _font_need(text)
+    and the PDF then waits for one.
+
+    The PDF's fonts are ``fonts`` (``_pdf_fonts``), judged by the letters their regular font has: Latin,
+    Greek and Cyrillic, curly quotes and a modifier letter's apostrophe (ʼ) need no CJK font, so a Latin
+    sheet is never set in its brush face; Chinese still does, and a symbol they lack only blemishes the PDF.
+    Without them, ChordPro's built-in fonts, which lose anything WinAnsi lacks, and a lost symbol takes the
+    CJK font too."""
+    need = _font_need(text, fonts)
     if need == "letters" and cjk_font is None:
-        return None, _first_lost_letter(text)
+        return None, _first_lost_letter(text, fonts)
+    if fonts is not None:
+        return (cjk_font if need == "letters" else None), None
     return (cjk_font if need else None), None
 
 
-def _font_need(text: str) -> Literal["letters", "symbols"] | None:
-    """What ChordPro's built-in fonts would lose of ``text``.
+def _font_need(text: str, fonts: PdfFonts | None = None) -> Literal["letters", "symbols"] | None:
+    """What the PDF's fonts would lose of ``text``: ``fonts``' regular one, else ChordPro's built-in fonts.
 
     Invisible characters don't count, as there is nothing to lose. Lost letters
     (Chinese lyrics, say) leave a sheet unsingable; a lost symbol, such as a
     music note, only blemishes it.
     """
-    lost = {unicodedata.category(ch) for ch in set(text) if needs_font_file(ch)} - _INVISIBLE
+    lacks = _lacks(fonts)
+    lost = {unicodedata.category(ch) for ch in set(text) if lacks(ch)} - _INVISIBLE
     if any(category.startswith("L") for category in lost):
         return "letters"
     return "symbols" if lost else None
+
+
+def _lacks(fonts: PdfFonts | None) -> Callable[[str], bool]:
+    """Whether the PDF's fonts lack a character: ``fonts``' regular one (its characters, ``pdf_fonts.metrics``),
+    else ChordPro's built-in fonts (``needs_font_file``)."""
+    if fonts is None:
+        return needs_font_file
+    have = metrics(fonts.regular).widths
+    return lambda ch: ch not in have
+
+
+def _fonts_record(fonts: PdfFonts | None) -> str | None:
+    """What a PDF's record keeps of the PDF fonts it was set in: their folder, None for the built-in fonts (a
+    record from before ``pdf_fonts`` has none, and is still up to date without them: ``_up_to_date``)."""
+    return str(fonts.folder) if fonts is not None else None
+
+
+def _usable_pdf_fonts(cfg: Config) -> PdfFonts | None:
+    """``cfg.pdf_fonts`` when chordpro can use them (``_pdf_fonts``), checked once for a pass, which says once
+    why it can't: the PDFs keep the built-in fonts."""
+    fonts, problem = _pdf_fonts(cfg.pdf_fonts)
+    if problem:
+        log.warning("%s", problem)
+    return fonts
 
 
 def _cjk_font(path: Path | None) -> tuple[Path | None, str | None]:
