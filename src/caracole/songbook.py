@@ -696,20 +696,22 @@ def _entry_of(conn: sqlite3.Connection, library_dir: Path, overrides: Overrides,
     name, cho = sheet
     human, auto = sheet_keys(conn, library_dir, song)
     found = auto if name == AUTO_OUTPUTS[0] else human
-    key = found.key if found else None
-    version = _played_in(text, cho, key, own_version(overrides, song, cho, key), setting)
+    key, source = (found.key, found.source) if found else (None, None)
+    version = _played_in(text, cho, key, source, own_version(overrides, song, cho, key, source), setting)
     return Entry(text, title, song.artist, song, cho=cho, transpose=version.t, version=version, key=key,
-                 key_source=found.source if found else None, setting=setting, keeps_key=keeps_key(overrides, song))
+                 key_source=source, setting=setting, keeps_key=keeps_key(overrides, song))
 
 
-def _played_in(text: str, cho: str, key: str | None, own: Version, setting: Setting | None) -> Version:
-    """Where the songbook plays the song (``in_setting``), ``key`` being its sheet's (``keys.sheet_keys``). A
-    sheet the viewer's code can't read (a bug, logged with its traceback) is in its own version here, and never
-    stops the songbook's entries: its files run that code too, and fail as for any song."""
+def _played_in(text: str, cho: str, key: str | None, key_source: str | None, own: Version,
+               setting: Setting | None) -> Version:
+    """Where the songbook plays the song (``in_setting``), ``key`` being its sheet's (``keys.sheet_keys``) and
+    ``key_source`` where it came from. A sheet the viewer's code can't read (a bug, logged with its traceback) is
+    in its own version here, and never stops the songbook's entries: its files run that code too, and fail as for
+    any song."""
     if not setting:
         return own
     try:
-        return in_setting(own, setting, viewer_key(cho, key), parse_sheet(cho).capo)
+        return in_setting(own, setting, viewer_key(cho, key, key_source), parse_sheet(cho).capo)
     except Exception:
         log.warning("%s: cannot place it in its songbook setting", text, exc_info=True)
         return own
@@ -724,9 +726,9 @@ def with_capo(entry: Entry, setting: Setting, overrides: Overrides) -> Setting:
     if setting.capo is not None or not places(setting) or entry.cho is None or entry.song is None:
         return setting
     try:
-        own = own_version(overrides, entry.song, entry.cho, entry.key)
-        version = _played_in(entry.text, entry.cho, entry.key, own, setting)
-        _, capo = played_key(version, viewer_key(entry.cho, entry.key), parse_sheet(entry.cho).capo)
+        own = own_version(overrides, entry.song, entry.cho, entry.key, entry.key_source)
+        version = _played_in(entry.text, entry.cho, entry.key, entry.key_source, own, setting)
+        _, capo = played_key(version, viewer_key(entry.cho, entry.key, entry.key_source), parse_sheet(entry.cho).capo)
     except Exception:
         log.warning("%s: cannot say at which capo its songbook plays it", entry.text, exc_info=True)
         return setting
@@ -752,7 +754,7 @@ def where_played(entry: Entry) -> tuple[str | None, tuple[Key | None, int] | Non
     if entry.cho is None:
         return None, None
     try:
-        shapes = viewer_key(entry.cho, entry.key)
+        shapes = viewer_key(entry.cho, entry.key, entry.key_source)
         capo = parse_sheet(entry.cho).capo
         played = played_key(entry.version, shapes, capo)
         if shapes is None and (places(entry.setting) or entry.keeps_key):
@@ -1074,7 +1076,8 @@ def _song_file(entry: Entry, *, pdf: bool = False) -> str:
     logged with its traceback: it costs the files it is in, and no more."""
     if entry.cho is not None:
         try:
-            return _sheet_text(entry.cho, key=entry.key, version=entry.version) if pdf else _app_text(entry)
+            return (_sheet_text(entry.cho, key=entry.key, key_source=entry.key_source, version=entry.version) if pdf
+                    else _app_text(entry))
         except Exception as e:
             log.warning("%s: cannot make its text for the songbook %s", entry.text, "PDF" if pdf else "ChordPro file",
                         exc_info=True)
@@ -1091,7 +1094,7 @@ def _app_text(entry: Entry) -> str:
     ``{define}`` of each chord's shape that gives the PDF its diagrams."""
     if entry.version == Version():
         return entry.cho
-    moved = apply_version(entry.cho, entry.version, key=viewer_key(entry.cho, entry.key),
+    moved = apply_version(entry.cho, entry.version, key=viewer_key(entry.cho, entry.key, entry.key_source),
                           capo_sheet=parse_sheet(entry.cho).capo)
     return "".join(line for line in moved.splitlines(keepends=True)
                    if (found := directive(line)) is None or found[0] != "define")

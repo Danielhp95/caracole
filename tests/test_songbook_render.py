@@ -383,6 +383,35 @@ def test_a_key_set_with_no_capo_takes_the_capo_the_song_plays_at_now(conn, cfg):
     assert plays_in(entry) == "E Minor, capo 0"  # the new sheet's capo: Em sounds, two semitones down
 
 
+def test_a_key_estimated_from_the_chords_is_the_key_of_the_shapes_a_songbook_plays(conn, cfg):
+    # No key named: A minor, estimated from the chords as the sheet writes them, the Am shapes at capo 5. Their
+    # notes are E minor's too, A minor lowered by the capo, which a key a tab names may be taken for: never the
+    # key the chords gave, or a setting in A would move the shapes it names.
+    from caracole.library import keep_file, kept_files, song_dir
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    keep_sheet(conn, cfg, song, "[Verse 1]\n" + "[ch]Am[/ch]  [ch]C[/ch]  [ch]G[/ch]  [ch]D[/ch]\nUna canción\n" * 3,
+               tab_id=7, tonality="", capo=5)
+    vid = next(f.version_id for f in kept_files(conn, song.id) if f.name == "sheet.txt")
+    doc = song_dir(cfg.library_dir, song) / "sheet.json"  # kept, as the fetch step keeps it: keys.py reads it
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json", data=doc.read_bytes(), rank=1)
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", "Soda Stereo - De Música Ligera")
+    (entry,) = entries_of(conn, cfg)
+    assert (entry.key, entry.key_source, plays_in(entry)) == ("A minor", "chords", "A Minor, capo 5")
+    set_setting(cfg, "Soda Stereo - De Música Ligera", Setting("A"))  # the shapes it writes, at its capo
+    (entry,) = entries_of(conn, cfg)
+    assert entry.version == Version() and plays_in(entry) == "A Minor, capo 5"
+    fake = FakeChordPro()
+    render(conn, cfg, runner=fake)
+    (text,) = inputs(fake, pdf_call(fake))
+    assert sung(text) == ["Am", "C", "G", "D"] * 3
+    assert "{subtitle: Soda Stereo · Am shapes · capo 5 · sounds Dm}" in text.splitlines()
+    set_setting(cfg, "Soda Stereo - De Música Ligera", Setting(capo=0))
+    (entry,) = entries_of(conn, cfg)
+    assert plays_in(entry) == "D Minor, capo 0"
+
+
 def test_a_song_without_a_sheet_keeps_a_setting_as_given(conn, cfg):
     add_song(conn, "Muse", "Hysteria")
     make(cfg, "Campfire", "Muse - Hysteria")

@@ -1883,6 +1883,29 @@ def test_the_notes_capo_is_printed_only_where_the_chords_are_where_the_sheet_wri
     assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Am}"
 
 
+def test_a_key_estimated_from_the_chords_names_the_shapes_in_the_pdf_viewer_exports_and_progressions(conn, cfg):
+    # No key named (UG's tonality_name empty, none in the sheet): A minor, estimated from the chords as the sheet
+    # writes them, the Am shapes played at capo 5, which sound Dm. Their notes are E minor's too, A minor lowered
+    # by the capo, which a key a tab names may be taken for: never the key the chords gave.
+    from caracole.progressions import KV
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    sheet = "[Verse 1]\r\n" + "[ch]Am[/ch]  [ch]C[/ch]  [ch]G[/ch]  [ch]D[/ch]\r\nUna canción de prueba\r\n" * 3
+    vid = human_sheet(conn, cfg, song, sheet, tonality="", meta={"capo": 5})
+    doc = song_dir(cfg.library_dir, song) / "sheet.json"  # kept, as the fetch step keeps it: keys.py reads it
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json", data=doc.read_bytes(), rank=1)
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert (info_json(cfg, song)["key"], info_json(cfg, song)["key_source"]) == ("A minor", "chords")
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Am shapes · capo 5 · sounds Dm}"
+    page = (song_dir(cfg.library_dir, song) / "sheet.html").read_text(encoding="utf-8")
+    assert re.search(r'<p class="facts" id="facts"><b>Am</b> shapes · capo <b>5</b> · sounds <b>Dm</b>', page)
+    assert kv_get_json(conn, f"{KV}{song.id}")["key"] == "A minor"
+    path, run = export(conn, cfg, song, "capo=0")  # the Am shapes moved up five, to sound where they did
+    assert path.name == "sheet (D Minor, capo 0).pdf"
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Dm}"
+
+
 def test_the_same_export_again_replaces_it(conn, cfg):
     from caracole.render import EXPORT_KV
 

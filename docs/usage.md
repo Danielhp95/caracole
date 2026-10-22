@@ -2345,7 +2345,10 @@ the page says which. With a capo, a tab may name the key the song sounds in
 rather than the shapes' (F# for a song played in C shapes with capo 6): when
 the chords are in the named key lowered by the capo, the viewer takes them as
 the shapes and the named key as the sound ("C shapes · capo 6 · sounds F#").
-Beside a human sheet, `sheet (auto).html` keeps to the
+A key estimated from the chords, or heard in the audio, is the key of the
+chords as the sheet writes them: always the shapes', whatever the capo ("Am
+shapes · capo 5 · sounds Dm"), in the viewer, the PDFs, the exports and the
+songbooks alike. Beside a human sheet, `sheet (auto).html` keeps to the
 chords the model heard, which may be in another key than the tab (another
 transposition, or a capo).
 

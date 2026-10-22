@@ -99,11 +99,11 @@ def key_words(key: Any) -> str:
     return f"{spelling(key)[key.tonic]} {mode}"
 
 
-def sheet_progressions(cho: str, key: str | None) -> dict[str, Any] | None:
+def sheet_progressions(cho: str, key: str | None, key_source: str | None = None) -> dict[str, Any] | None:
     """What a ChordPro sheet plays, as ``record`` keeps it: ``{"key": "C major", "sections": [{"section",
     "numerals", "repeats", "name", "ending", "key", "contains": [{"name", "key", "numerals"}]}]}``, each
     section's ``section`` its heading (None for none), in the key its viewer reads it in (``key``, the
-    song's, else the sheet's own, else estimated).
+    song's, from ``key_source``, else the sheet's own, else estimated).
     The chords of a chord legend's line (its fingerings) are no chords played; one caracole can't read
     (N.C.) is left out. None for a sheet with no chord it can read."""
     from caracole.viewer.harmony import progression_key, progressions
@@ -112,7 +112,7 @@ def sheet_progressions(cho: str, key: str | None) -> dict[str, Any] | None:
     from caracole.viewer.theory import parse_chord
     from caracole.viewer.voicings import chord_legend
 
-    shapes = viewer_key(cho, key)
+    shapes = viewer_key(cho, key, key_source)
     if shapes is None:
         return None
     sheet = parse_sheet(cho)
@@ -136,11 +136,11 @@ def sheet_progressions(cho: str, key: str | None) -> dict[str, Any] | None:
     ]}
 
 
-def record(conn: sqlite3.Connection, song_id: int, cho: str, key: str | None) -> None:
-    """Keep what the song's sheet ``cho`` plays (``sheet_progressions``), in the key ``key``, in kv
-    ``render:progressions:<song id>``, written only when it changed; a sheet that plays nothing leaves
+def record(conn: sqlite3.Connection, song_id: int, cho: str, key: str | None, key_source: str | None = None) -> None:
+    """Keep what the song's sheet ``cho`` plays (``sheet_progressions``), in the key ``key`` (from ``key_source``),
+    in kv ``render:progressions:<song id>``, written only when it changed; a sheet that plays nothing leaves
     no record."""
-    found = sheet_progressions(cho, key)
+    found = sheet_progressions(cho, key, key_source)
     if found is None:
         forget(conn, song_id)
     elif kv_get_json(conn, f"{KV}{song_id}") != found:
