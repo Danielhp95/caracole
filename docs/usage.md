@@ -3828,7 +3828,10 @@ yourself costs only downloads, and only for songs that have no auto sheet yet:
 the next run, or `caracole youtube`, downloads their videos again.
 
 Folder names keep their accents and scripts, but never contain a path
-separator or a character file systems reserve: `AC/DC` becomes `AC-DC`.
+separator or a character file systems reserve: `AC/DC` becomes `AC-DC`. An
+artist has one folder: a new song by an artist the library has already,
+written in another case alone (`oasis` beside `Oasis`), takes the library's
+spelling, as a phone's file system may not tell two folders apart by case.
 
 **The `.cho` files** are the sheet in ChordPro, a plain-text format that puts
 each chord in brackets before the syllable it falls on (`[Am]Yesterday`).

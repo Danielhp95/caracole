@@ -180,7 +180,9 @@ def upsert_song(
     The existing record is the one that has this source id already, else the
     one with the song's identity key. Merging keeps the newest ``added_at``
     and adds the source id. The display artist and title of the first source
-    are kept, and so is its key. A source saying nothing new (every sync hands
+    are kept, and so is its key; an artist the library writes already in
+    another case alone takes the library's spelling (:func:`_artist_as_written`),
+    so that one artist has one folder. A source saying nothing new (every sync hands
     every song over again) leaves the record as it is: nothing is written.
 
     The album, duration, ISRC and variant (read from the title) given here are
@@ -207,6 +209,7 @@ def upsert_song(
         row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
     if row is None:
         _unless_removed(conn, removed_song(conn, key), source, added_at)
+        names[0] = _artist_as_written(conn, names[0], key)
         cur = conn.execute(
             "INSERT INTO songs (key, artist, title, artists, album, duration_ms, isrc, source_ids, "
             "added_at, variant, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -238,6 +241,23 @@ def upsert_song(
         ),
     )
     return existing.id, False
+
+
+def _artist_as_written(conn: sqlite3.Connection, artist: str, key: str) -> str:
+    """The primary ``artist`` of a new song keyed ``key``, as the library writes them: when no song has their folder
+    (``library.song_folder``) but one has a folder that differs from it in case alone ("oasis" beside "Oasis"), the
+    oldest such song's spelling, so that an artist's songs share one folder, which a phone's file system, blind to
+    case, can hold. The artist's side of the key stays as it was, as keys ignore case."""
+    from caracole.library import safe_name  # library imports this module
+
+    folder = safe_name(artist)
+    side = key.split("/", 1)[0]
+    # The songs whose artist is ours by the key: its artist's side, then "/" (and "0" is the character after "/").
+    rows = conn.execute("SELECT artist FROM songs WHERE key >= ? AND key < ? ORDER BY id", (f"{side}/", f"{side}0"))
+    theirs = [(other, safe_name(other)) for (other,) in rows]
+    if any(name == folder for _, name in theirs):
+        return artist
+    return next((other for other, name in theirs if name.casefold() == folder.casefold()), artist)
 
 
 def _add_ids(ids: dict[str, list[str]], more: dict[str, list[str]]) -> dict[str, list[str]]:
