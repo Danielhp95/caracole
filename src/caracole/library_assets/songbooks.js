@@ -882,12 +882,7 @@
   });
 
   // --- Add a song: your songs and the indexes', as you type -------------------------------------------------------
-  const table = data.fold && typeof data.fold === "object" ? data.fold : {};
-  const fold = (text) => {
-    let out = "";
-    for (const ch of String(text).normalize("NFKD").replace(/\p{Mn}/gu, "")) out += own.call(table, ch) ? table[ch] : ch;
-    return out.toLowerCase();
-  };
+  const fold = lib ? lib.fold : (text) => String(text).toLowerCase();  // the library's search's, as it reads songs
   const words = (text) => fold(text).split(/\s+/).map((w) => w.replace(/['’‘`´ʼ]/g, "")
     .replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")).filter(Boolean);
   const HAN = /\p{Script=Han}/u;

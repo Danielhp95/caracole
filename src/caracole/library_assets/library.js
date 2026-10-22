@@ -44,10 +44,23 @@
   };
 
   // The same folding as caracole's normalize.fold: NFKD, no accents, a few letters spelled out, lowercase.
+  // An accent is a mark with a canonical combining class (unicodedata.combining), not every \p{Mn}: a Devanagari
+  // vowel sign ("ु") has none, and stays, and a few \p{Mc} have one. JavaScript can't read the class, but canonical
+  // ordering shows it: a mark with one goes before U+0301 (class 230) when its class is lower, or after U+0334 (1)
+  // when it is higher, and one without moves nowhere.
+  const classed = new Map();
+  const accent = (ch) => {
+    if (!classed.has(ch)) {
+      const before = "x\u0301" + ch;
+      const after = "x" + ch + "\u0334";
+      classed.set(ch, /\p{M}/u.test(ch) && (before.normalize("NFD") !== before || after.normalize("NFD") !== after));
+    }
+    return classed.get(ch);
+  };
   const fold = (text) => {
     let out = "";
-    for (const ch of String(text).normalize("NFKD").replace(/\p{Mn}/gu, "")) {
-      out += own.call(table, ch) ? table[ch] : ch;
+    for (const ch of String(text).normalize("NFKD")) {
+      if (!accent(ch)) out += own.call(table, ch) ? table[ch] : ch;
     }
     return out.toLowerCase();
   };
@@ -2393,7 +2406,7 @@
   };
   // The Songbooks tab's seam (songbooks.js, which runs after this script): a job it asked for, followed as this
   // page's own are (``quiet``: its set list says how a lookup goes, so the list of requests leaves it out), each of
-  // its views told back ("caracole:job"), and a request's line, written as this page writes them.
+  // its views told back ("caracole:job"), a request's line, written as this page writes them, and the search's fold.
   window.caracoleLibrary = Object.freeze({
     track: (view, options) => {
       if (options && options.quiet) quiet.add(Number(view.id));
@@ -2401,6 +2414,7 @@
     },
     showLine,
     focusOn,
+    fold,
   });
 
   if (server) {

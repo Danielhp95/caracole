@@ -127,7 +127,7 @@ Rules a change there keeps (the Invariants below are the others):
   `songbook.plays_in` says it, and the setting's menus' names, the theory's), which `/jobs.json`
   gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the
   songbooks its song is in again, or a removal; a LaCuerda artist's read changes none). library.js lends it `window.caracoleLibrary`
-  (`track`, `showLine`, `focusOn`) and tells it every job's view (`caracole:job`) and the songbooks
+  (`track`, `showLine`, `focusOn`, and `fold`, the search's normalize.fold, for Add a song) and tells it every job's view (`caracole:job`) and the songbooks
   (`caracole:songbooks`); it posts the Select bar's songbook too. A song's chip sends the capo with
   the key and the mode (`/songbook/set`, as `caracole songbook set` keeps it), and Add a song looks
   a song the library hasn't got up first (`/songbook/add-song`: `search_routes.lookup_request`, then

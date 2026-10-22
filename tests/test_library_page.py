@@ -950,6 +950,39 @@ def test_the_page_renders_and_filters_in_a_real_browser(conn, cfg, tmp_path):
 
 
 @in_chromium
+def test_titles_in_indic_and_thai_scripts_typed_as_written_are_found(conn, cfg, tmp_path):
+    # A Devanagari vowel sign ("ु", "े") is a mark with no combining class: normalize.fold keeps it, so the page must
+    # too, as it folds what you type, or a word holding one and a spacing sign ("ा") is in no form of the title.
+    titles = ("गुलाबी आँखें", "सुहाना सफ़र", "तुम ही हो", "คิดถึง")
+    for n, title in enumerate(titles):
+        add_song(conn, f"Singer {n}", title)
+    add_song(conn, "Radiohead", "Creep")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    for title in titles:
+        shown = listing(dump_dom(path, tmp_path, "#q=" + quote(title)))
+        assert titles_in(shown) == [title], title
+
+
+@in_chromium
+def test_the_pages_fold_is_normalize_folds_for_every_mark(conn, cfg, driven):
+    # normalize.fold drops a mark with a canonical combining class (unicodedata.combining), not every \p{Mn}, and
+    # keeps every other: the page folds what you type the same way (library.js's, lent to songbooks.js's Add a song).
+    import unicodedata
+
+    marks = [chr(c) for c in range(0x30000) if unicodedata.category(chr(c)).startswith("M")]
+    texts = [f"A{m}b" for m in marks] + ["गुलाबी आँखें", "Ærøskøbing Ñandú", "Đồng Nai", "𝄞\U0001d165 x"]
+    add_song(conn, "Radiohead", "Creep")
+    driven.open(write_library_page(cfg.library_dir, page(conn, cfg)).as_uri())
+    folded = driven.js(f"""(() => {{ const texts = {json.dumps(texts)};
+      // A mark Chromium's Unicode doesn't know yet (newer than its own) is left out: it can't fold it.
+      return texts.map((t) => (/^A.b$/su.test(t) && !/\\p{{M}}/u.test(t.slice(1, -1)) ? null
+        : window.caracoleLibrary.fold(t))); }})()""")
+    differ = [(t, f, fold(t)) for t, f in zip(texts, folded) if f is not None and f != fold(t)]
+    assert differ == [], differ[:20]
+    assert sum(f is not None for f in folded) > 2000  # nearly every mark checked
+
+
+@in_chromium
 def test_a_lines_youtube_note_links_its_video_in_a_real_browser(conn, cfg, tmp_path, monkeypatch):
     from helpers.fake_ytdlp import route_on
 
