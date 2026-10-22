@@ -1,8 +1,8 @@
 """caracole serve's Guitar Pro page in Chromium, with the real alphaTab (``CARACOLE_ALPHATAB_DIR``, which both dev
 shells set) and the synthetic score (helpers/guitar.py): it draws a track, breaks no rule of its policy, loads
 nothing but alphaTab's bundle, lays the tracks out as buttons that show them and mute them one by one (by mouse or
-keyboard), draws the score's header in the page's text colour, dark or light, plays on a click, and fits a phone with
-a compact bar; the library page's link opens it.
+keyboard), draws the score's header in the page's text colour, dark or light, cuts no part of the score at its top or
+its bottom, plays on a click, and fits a phone with a compact bar; the library page's link opens it.
 
 The Guitar Pro 3, 5 and GPX files of real songs were checked by hand against a library of copies (alphaTab reads
 them all); no real song's tab is a fixture in this public repository."""
@@ -244,6 +244,40 @@ def test_the_score_s_header_is_drawn_in_the_page_s_text_colour_dark_or_light(ser
         text, surface, _ = header_text(page)
         assert luminance(text) < luminance(surface)  # dark on light
         assert contrast(text, surface) >= 4.5, (text, surface)
+    finally:
+        page.close()
+
+
+# Each canvas of the score: its height in rows and the first and the last row it has ink on (-1: none).
+INK_ROWS = """[...document.querySelectorAll('#score canvas')].map((c) => {
+  const { data, width, height } = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+  let first = -1, last = -1;
+  for (let i = 3; i < data.length; i += 4) if (data[i]) { const row = Math.floor(i / 4 / width);
+    if (first < 0) first = row; last = row; }
+  return [height, first, last]; })"""
+
+
+@pytest.mark.parametrize("size", [{"width": 390, "height": 844, "mobile": True}, {"width": 1280, "height": 800}],
+                         ids=["phone", "wide"])
+def test_no_part_of_the_score_is_cut_at_its_top_or_its_bottom(served, tmp_path, size):
+    """alphaTab draws each part of the score (the header, the tuning's box, each line of bars, its name at the
+    foot) on a canvas of its own: nothing it draws reaches the first or the last row of its canvas, where it would
+    be cut, as the lead guitar's dropped D was ("Guitar Dropped D Tuning" over the circled strings, which lost
+    their bottoms), or a title's tops."""
+    _, url = served
+    page = opened(tmp_path, url, **size)
+    try:
+        assert page.wait(RENDERED, 30)
+        assert page.js("window.caracoleGuitar.tracks[0].staves[0].stringTuning.name") == "Guitar Dropped D Tuning"
+        parts = page.js(INK_ROWS)
+        assert len(parts) >= 3, parts  # the header, the tuning's box, the bars
+        for height, first, last in parts:
+            assert first == -1 or (first > 0 and last < height - 1), parts
+        # And drawn again (a track's tap, the switch, a turned phone).
+        page.js("window.caracoleGuitar.render()")
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
+        for height, first, last in page.js(INK_ROWS):
+            assert first == -1 or (first > 0 and last < height - 1)
     finally:
         page.close()
 

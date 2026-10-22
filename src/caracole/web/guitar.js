@@ -80,49 +80,36 @@
     s.display.scale = narrow.matches ? 0.8 : 1;
   };
 
-  // alphaTab's canvas (1.8.4) draws each part of the score on a fresh <canvas>, whose 2D context starts black, and
-  // gives that context a colour only when it differs from the last colour it set: a part that starts in the colour
-  // the one before ended in (the score's header, after notes drawn in the same --text) was drawn black, unreadable
-  // on the dark page. Each fresh context is given the colour alphaTab takes it to have. And the header's first line
-  // is drawn hanging from the very top of its canvas, which cut the tops of a title's letters (in a font whose
-  // letters rise above that line): a part whose first drawing is a text whose font reaches above its canvas is moved
-  // down by as much, all of it (the part has room under it).
+  // alphaTab's canvas (1.8.4) draws each part of the score (the header, the tuning's box, each line of bars, its
+  // name at the foot) on a fresh <canvas> the size of the part's box, and some of what it draws reaches past that
+  // box: the header's first line, drawn hanging from the box's very top in a font whose letters rise above that
+  // line, a tempo's note over the bars. A canvas cuts it. So each one is made ROOM px taller above the box and below
+  // it, its drawing moved down by as much and the canvas itself up by as much: what alphaTab draws lands where it
+  // put it, and what reaches past the box shows, in the room between two parts, as in alphaTab's SVG (whose parts
+  // are overflow: visible). The fresh 2D context starts black, too, and alphaTab gives it a colour only when that
+  // differs from the last colour it set: a part that starts in the colour the one before ended in (the score's
+  // header, after notes drawn in the same --text) was drawn black, unreadable on the dark page. Each fresh context
+  // is given the colour alphaTab takes it to have.
+  const ROOM = 12;
   const contexts = (canvas) => Object.values(canvas).filter((v) => v instanceof CanvasRenderingContext2D);
   const mend = (canvas) => {
     const proto = Object.getPrototypeOf(canvas);
     if (proto.caracoleMended) return;
     proto.caracoleMended = true;
     const begin = proto.beginRender;
-    proto.beginRender = function (...args) {
+    proto.beginRender = function (width, height, ...rest) {
       const before = contexts(this);
-      const result = begin.apply(this, args);
+      const result = begin.call(this, width, height + 2 * ROOM, ...rest);
       const context = contexts(this).find((c) => !before.includes(c));
       if (context) {
+        const element = context.canvas;
+        const m = context.getTransform();  // alphaTab's scale: the page's pixel ratio times the score's
+        context.setTransform(m.a, m.b, m.c, m.d, m.e, m.f + ROOM * element.height / (height + 2 * ROOM));
+        element.style.position = "relative";
+        element.style.top = -ROOM + "px";
         context.fillStyle = context.strokeStyle = this.color.rgba;
-        this.caracoleFresh = context;
       }
       return result;
-    };
-    for (const name of ["fillRect", "strokeRect", "fill", "stroke", "fillCircle", "strokeCircle",
-      "fillMusicFontSymbol", "fillMusicFontSymbols"]) {
-      const draw = proto[name];
-      if (typeof draw !== "function") continue;
-      proto[name] = function (...args) {
-        this.caracoleFresh = null;
-        return draw.apply(this, args);
-      };
-    }
-    const write = proto.fillText;
-    proto.fillText = function (text, x, y, ...rest) {
-      const context = this.caracoleFresh;
-      this.caracoleFresh = null;
-      if (context && context.textBaseline === "hanging") {
-        // Above the hanging baseline, the font's ascent (an accent's room) or the text's own ink, if taller.
-        const size = context.measureText(String(text));
-        const above = Math.max(size.fontBoundingBoxAscent || 0, size.actualBoundingBoxAscent || 0) - y;
-        if (above > 0) context.translate(0, Math.ceil(above) + 2);
-      }
-      return write.call(this, text, x, y, ...rest);
     };
   };
 

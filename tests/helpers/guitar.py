@@ -1,10 +1,11 @@
 """Guitar Pro files for the tests of caracole serve's Guitar Pro page (test_web_guitar.py): a synthetic score, kept
 for a song as caracole keeps one, and alphaTab, when the dev shell has it.
 
-``SYNTHETIC`` is tests/fixtures/guitar/synthetic.gp: two tracks of three bars ("Lead guitar", six strings, score
-and tab; "Bass", four strings, tab), written by nobody but alphaTab, from synthetic.alphatex beside it, by its
-Gp7Exporter (``export_alphatex``: test_web_guitar.py checks the file is still what alphaTab makes of it). No real
-song's tab is a fixture here: the repository is public.
+``SYNTHETIC`` is tests/fixtures/guitar/synthetic.gp, "Synthetic Étude" (a title whose accent rises above the line
+alphaTab hangs it from): two tracks of three bars ("Lead guitar", six strings in dropped D, which alphaTab names in a
+box over its strings, score and tab; "Bass", four strings, tab), written by nobody but alphaTab, from
+synthetic.alphatex beside it, by its Gp7Exporter (``export_alphatex``: test_web_guitar_browser.py checks the file is
+still what alphaTab makes of it). No real song's tab is a fixture here: the repository is public.
 
 ``keep_guitar(conn, cfg, song, data)`` records ``data`` as the song's ``guitar-N.<ext>``, as gtptabs_fetch.py keeps
 a download (a ``gtptabs`` version of kind ``guitar-pro``, or ``power`` for a .ptb), and returns its library path.
