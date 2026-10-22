@@ -26,10 +26,12 @@
 .view label:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: -3px; }
 .view .short { display: none; }
 /* The tracks: wrapped on a wide screen, a row of their own that scrolls sideways on a phone. Each is a chip of two
-   buttons, the speaker that mutes it and its name, which shows it (pressed: shown). */
+   buttons, the speaker that mutes it and its name, which shows it (pressed: shown), and which a long press selects
+   no text of. */
 .gp-tracks { display: flex; flex-wrap: wrap; gap: 6px 8px; min-width: 0; }
 .track { display: inline-flex; flex: none; align-items: stretch; border: 1px solid var(--control-edge);
-  border-radius: 11px; background: var(--surface); }
+  border-radius: 11px; background: var(--surface); -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none; }
 .track button { display: inline-flex; align-items: center; min-height: 44px; margin: 0; border: 0; background: none;
   color: var(--text); font: inherit; cursor: pointer; }
 .track button:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
@@ -76,7 +78,7 @@
   .view .long { display: none; }
   .view .short { display: inline; }
   .gp-tracks { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: none;
-    margin: 0 -16px; padding: 0 16px; }
+    margin: 0 -16px; padding: 0 16px; scroll-padding-inline: 16px; }
   .gp-tracks::-webkit-scrollbar { display: none; }
   .track .show { max-width: 11rem; }
 }

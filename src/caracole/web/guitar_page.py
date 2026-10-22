@@ -6,8 +6,8 @@ At its top, the song's title and artist, the file it shows, and links: back to t
 stays at the top while the score scrolls: on one row Play (Pause while it plays) and Stop, the tempo (50 to 125 %,
 alphaTab's ``playbackSpeed``) and Tab only or Score and tab ("Tab" and "Score" on a phone; tab only from the start on
 a screen under 600 px wide, where the tab is drawn at 0.8 of its size: three or four bars a line on a phone); under
-it the score's tracks, laid out (guitar.js: none for a score of one track), each a button that shows it, pressed while
-it is shown, with a speaker on it that mutes it; they wrap on a wide screen and scroll sideways in their own row on a
+it the score's tracks, laid out (guitar.js: the one it opens on, and how to show several; none for a score of one
+track), each a button that shows it, pressed while it is shown, with a speaker on it that mutes it; they wrap on a wide screen and scroll sideways in their own row on a
 phone. Then the score, in the page's light or dark colours. Every target is 44 px each way at the least.
 
 The page holds the file's bytes (base64, in a ``<script type="application/octet-stream">`` block, which nothing

@@ -2,6 +2,11 @@
 \artist "caracole tests"
 \tempo 96
 .
+\track "Vocals, the melody written as a tab"
+\staff {score tabs}
+\tuning e4 b3 g3 d3 a2 e2
+\instrument 53
+:4 r.4 0.2 1.2 3.2 | 0.1 r.4 3.2 1.2 | 0.2.2 r.2 |
 \track "Lead guitar"
 \staff {score tabs}
 \tuning e4 b3 g3 d3 a2 d2
@@ -12,3 +17,12 @@
 \tuning g2 d2 a1 e1
 \instrument 33
 :4 0.4 0.4 3.4 3.4 | 5.3 5.3 3.3 3.3 | 0.4.2 r.2 |
+\track "Keys"
+\staff {score}
+\tuning piano
+\instrument 0
+:2 (c4 e4 g4) (c4 f4 a4) | (b3 d4 g4) (c4 e4 g4) | c4.1 |
+\track "Drums"
+\instrument percussion
+\articulation defaults
+:4 (KickHit HiHatClosed) HiHatClosed (SnareHit HiHatClosed) HiHatClosed | (KickHit HiHatClosed) HiHatClosed (SnareHit HiHatClosed) HiHatClosed | KickHit.2 r.2 |

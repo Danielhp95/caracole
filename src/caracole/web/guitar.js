@@ -69,6 +69,28 @@
   // its tab's numbers are the drums' notes, so its tab is still shown.
   const drums = (track) => percussion(track) || track.staves.some((staff) =>
     staff.tuning && staff.tuning.length > 0 && staff.tuning.every((note) => note === 0));
+  // The track the page opens on, the first a guitarist would want. Of the tracks with notes and a tab (not the
+  // drums'), the first whose name says a guitar; else the first whose name says nothing of it, a guitar's sound
+  // (General MIDI's 24 to 31) first; else the first whose name says a voice, keys, a synth, the drums or a bass. Else
+  // the first track with notes, else the first. A Guitar Pro 3 file writes every track as a tab, the vocals' too.
+  const GUITAR = /guit|gitar|chitar|gtr|\bgt\b/i;
+  const ELSE = /voc|voice|vox|sing|choir|piano|keys|keyb|organ|synth|string|drum|perc/i;
+  const notes = (track) => track.staves.some((staff) => staff.bars.some((bar) => bar.voices.some((voice) =>
+    voice.beats.some((beat) => beat.notes.length > 0))));
+  const wanted = (track) => {
+    if (!notes(track)) return 5;
+    if (!hasTab(track) || drums(track)) return 4;
+    const name = String(track.name || "");
+    if (/bass/i.test(name)) return 3;  // a bass guitar too
+    if (GUITAR.test(name)) return 0;
+    if (ELSE.test(name)) return 3;
+    const program = track.playbackInfo ? track.playbackInfo.program : -1;
+    return program >= 24 && program <= 31 ? 1 : 2;
+  };
+  const opening = (tracks) => {
+    const ranks = tracks.map(wanted);
+    return ranks.indexOf(Math.min(...ranks));
+  };
   let score = null;
   let shown = [0];  // the indexes of the tracks shown, in the score's order
   const viewSwitch = $("view");
@@ -133,8 +155,7 @@
     failed(e);
     return;
   }
-  // The first track with a tab (a guitar's, a bass'), else the first.
-  shown = [Math.max(0, score.tracks.findIndex(hasTab))];
+  shown = [Math.max(0, opening(score.tracks))];
   look(settings);
 
   const api = new lib.AlphaTabApi($("score"), settings);
@@ -154,19 +175,24 @@
   api.error.on(failed);
   say("Drawing the tab…");
 
-  // The tracks, laid out: a button for each, its name and its instrument, pressed while it is shown, and a speaker
-  // on it that mutes it. A tap shows that track alone; with Shift, Ctrl or ⌘ held it is shown beside those shown, or
-  // taken away from them (the last one stays). A track stays muted, whichever is shown, while the page is open: the
-  // synthesizer mutes its channels at once, playing or not, and keeps them muted (alphaTab never resets them; and
-  // the track's playbackInfo says so too).
+  // The tracks, laid out: a button for each, its name and its kind (its strings, the drums, or no tab: a voice's,
+  // a piano's), pressed while it is shown, and a speaker on it that mutes it. A name cut short is whole in the
+  // button's title, and a kind the name says already ("Drums") isn't said twice. A tap shows that track alone; with
+  // Shift, Ctrl or ⌘ held it is shown beside those shown, or taken away from them (the last one stays), and so on a
+  // touch screen with a long press (HOLD ms, the finger still: a finger that moves scrolls the row), whose tap at
+  // the end does nothing more. A track stays muted, whichever is shown, while the page is open: the synthesizer
+  // mutes its channels at once, playing or not, and keeps them muted (alphaTab never resets them; and the track's
+  // playbackInfo says so too).
+  const HOLD = 450;
   const bar = $("tracks");
   const trackName = (track, index) => String(track.name || "").trim() || "Track " + (index + 1);
   const trackKind = (track) => {
     if (drums(track)) return "drums";
     const staff = track.staves[0];
     const strings = staff && staff.tuning ? staff.tuning.length : 0;
-    return strings ? strings + " strings" : "";
+    return strings ? strings + " strings" : "no tab";
   };
+  const says = (name, kind) => kind === "drums" && /drum|perc/i.test(name);
   const SVG = "http://www.w3.org/2000/svg";
   const speaker = () => {
     const svg = document.createElementNS(SVG, "svg");
@@ -218,20 +244,58 @@
     const show = item.appendChild(document.createElement("button"));
     show.type = "button";
     show.className = "show";
-    show.appendChild(document.createElement("span")).textContent = name;
-    show.firstChild.className = "name";
+    const label = show.appendChild(document.createElement("span"));
+    label.className = "name";
+    label.textContent = name;
     const kind = trackKind(track);
-    if (kind) {
+    if (says(name, kind)) {
+      show.setAttribute("aria-label", name);
+    } else {
       const small = show.appendChild(document.createElement("span"));
       small.className = "kind";
       small.textContent = kind;
+      show.setAttribute("aria-label", name + ", " + kind);
     }
-    buttons.push({ item, button, show });
+    buttons.push({ item, button, show, label, name });
     button.addEventListener("click", () => mute(index, button.getAttribute("aria-pressed") !== "true"));
+    const toggle = () => {
+      const next = shown.includes(index) ? shown.filter((i) => i !== index) : shown.concat(index).sort((a, b) => a - b);
+      if (next.length && next.join() !== shown.join()) showTracks(next);
+    };
+    let held = false;  // the long press that ends in this tap has done its work
+    let press = null;  // a finger down: where, and its timer
+    const lift = () => {
+      if (press) clearTimeout(press.timer);
+      press = null;
+    };
+    const hold = () => {
+      lift();
+      held = true;
+      toggle();
+    };
+    show.addEventListener("pointerdown", (e) => {
+      held = false;
+      lift();
+      if (e.pointerType !== "touch" || !e.isPrimary) return;
+      press = { x: e.clientX, y: e.clientY, timer: setTimeout(hold, HOLD) };
+    });
+    show.addEventListener("pointermove", (e) => {
+      if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > 10) lift();
+    });
+    show.addEventListener("pointerup", lift);
+    show.addEventListener("pointercancel", lift);
+    show.addEventListener("keydown", () => { held = false; });  // a key's click is no long press's end
+    // A long press is a context menu's too, where the browser has one (Chrome on Android), sometimes before HOLD.
+    show.addEventListener("contextmenu", (e) => {
+      if (!press && !held) return;
+      e.preventDefault();
+      if (press) hold();
+    });
     show.addEventListener("click", (e) => {
-      if (e.shiftKey || e.ctrlKey || e.metaKey) {
-        const next = shown.includes(index) ? shown.filter((i) => i !== index) : shown.concat(index).sort((a, b) => a - b);
-        if (next.length && next.join() !== shown.join()) showTracks(next);
+      if (held) {
+        held = false;
+      } else if (e.shiftKey || e.ctrlKey || e.metaKey) {
+        toggle();
       } else if (shown.length !== 1 || shown[0] !== index) {
         showTracks([index]);
       }
@@ -239,6 +303,13 @@
   });
   bar.hidden = score.tracks.length < 2;
   mark();
+  // The track it opens on, in the view of the row of tracks, which on a phone scrolls sideways.
+  if (!bar.hidden) buttons[shown[0]].item.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const titles = () => buttons.forEach(({ show, label, name }) => {
+    if (label.scrollWidth > label.clientWidth) show.title = name;
+    else show.removeAttribute("title");
+  });
+  titles();
 
   api.renderFinished.on(() => {
     drawn += 1;
@@ -279,7 +350,7 @@
   });
   for (const view of views) view.addEventListener("change", () => { say("Drawing the tab…"); redraw(); });
   dark.addEventListener("change", redraw);
-  narrow.addEventListener("change", redraw);
+  narrow.addEventListener("change", () => { titles(); redraw(); });
 
   api.loadSoundFont(bytesOf(at.soundFont), false);
   api.renderScore(score, shown);

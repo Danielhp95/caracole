@@ -1,8 +1,9 @@
 """caracole serve's Guitar Pro page in Chromium, with the real alphaTab (``CARACOLE_ALPHATAB_DIR``, which both dev
-shells set) and the synthetic score (helpers/guitar.py): it draws a track, breaks no rule of its policy, loads
-nothing but alphaTab's bundle, lays the tracks out as buttons that show them and mute them one by one (by mouse or
-keyboard), draws the score's header in the page's text colour, dark or light, cuts no part of the score at its top or
-its bottom, plays on a click, and fits a phone with a compact bar; the library page's link opens it.
+shells set) and the synthetic score (helpers/guitar.py): it opens on the guitar's track, breaks no rule of its
+policy, loads nothing but alphaTab's bundle, lays the tracks out as buttons that show them and mute them one by one
+(by mouse, keyboard or finger), draws the score's header in the page's text colour, dark or light, cuts no part of
+the score at its top or its bottom, plays on a click, and fits a phone with a compact bar; the library page's link
+opens it.
 
 The Guitar Pro 3, 5 and GPX files of real songs were checked by hand against a library of copies (alphaTab reads
 them all); no real song's tab is a fixture in this public repository."""
@@ -65,13 +66,15 @@ def requests(page):
     return [e["params"]["request"]["url"] for e in page.events if e.get("method") == "Network.requestWillBeSent"]
 
 
-def test_the_page_draws_the_first_track_within_its_policy_and_loads_the_bundle_alone(served, tmp_path):
+def test_the_page_draws_the_guitar_s_track_within_its_policy_and_loads_the_bundle_alone(served, tmp_path):
     base, url = served
     page = opened(tmp_path, url)
     try:
         assert page.wait(RENDERED, 30), page.js("document.getElementById('gp-status').textContent")
         assert page.js("document.getElementById('gp-status').classList.contains('failed')") is False
-        assert page.js("document.documentElement.dataset.track") == "0"
+        # The lead guitar, not the vocals before it, though a Guitar Pro 3 file writes them as a tab too.
+        assert page.js("document.documentElement.dataset.track") == "1"
+        assert page.js("window.caracoleGuitar.tracks.map((t) => t.name)") == ["Lead guitar"]
         assert page.wait("document.documentElement.dataset.player === 'ready'", 30)
         assert page.js("window.caracoleViolations") == []
         at = alphatab.load(alphatab_dir())
@@ -92,6 +95,7 @@ def test_the_page_draws_the_first_track_within_its_policy_and_loads_the_bundle_a
 
 
 TRACKS = "[...document.querySelectorAll('#tracks .track')]"
+VOCALS = "Vocals, the melody written as a tab"
 SHOW = "#tracks .track:nth-child({n}) .show"
 MUTE = "#tracks .track:nth-child({n}) .mute"
 # Every call to changeTrackMute, noted: the tracks' indexes and whether muted.
@@ -104,6 +108,16 @@ def pressed(page, selector):
     return page.js(f"[...document.querySelectorAll({selector!r})].map((b) => b.getAttribute('aria-pressed'))")
 
 
+def accessible_names(page, selector):
+    """What a screen reader names each element ``selector`` finds."""
+    root = page.send("DOM.getDocument")["root"]["nodeId"]
+    names = []
+    for node in page.send("DOM.querySelectorAll", nodeId=root, selector=selector)["nodeIds"]:
+        tree = page.send("Accessibility.getPartialAXTree", nodeId=node, fetchRelatives=False)["nodes"]
+        names.append(tree[0]["name"]["value"])
+    return names
+
+
 def test_the_tracks_are_laid_out_as_buttons_and_a_tap_shows_one(served, tmp_path):
     _, url = served
     page = opened(tmp_path, url)
@@ -111,24 +125,31 @@ def test_the_tracks_are_laid_out_as_buttons_and_a_tap_shows_one(served, tmp_path
         assert page.wait(RENDERED, 30)
         assert page.js("document.querySelector('#gp-bar select, #gp-bar details')") is None
         assert page.js("document.getElementById('tracks').hidden") is False
-        assert page.js(f"{TRACKS}.map((t) => t.querySelector('.show').textContent)") == [
-            "Lead guitar6 strings", "Bass4 strings"]
-        assert pressed(page, "#tracks .show") == ["true", "false"]
-        page.click(SHOW.format(n=2))
-        assert page.wait("document.documentElement.dataset.track === '1'")
+        # Each its name and its kind: its strings, the drums (which a track named so doesn't say twice), or no tab.
+        assert page.js(f"{TRACKS}.map((t) => [...t.querySelector('.show').children].map((s) => s.textContent))") == [
+            [VOCALS, "6 strings"], ["Lead guitar", "6 strings"], ["Bass", "4 strings"], ["Keys", "no tab"],
+            ["Drums"]]
+        assert accessible_names(page, "#tracks .show") == [
+            VOCALS + ", 6 strings", "Lead guitar, 6 strings", "Bass, 4 strings", "Keys, no tab", "Drums"]
+        # A name too long for its button is cut short, and whole in its title.
+        assert page.js("[...document.querySelectorAll('#tracks .show')].map((b) => b.title)") == [
+            VOCALS, "", "", "", ""]
+        assert pressed(page, "#tracks .show") == ["false", "true", "false", "false", "false"]
+        page.click(SHOW.format(n=3))
+        assert page.wait("document.documentElement.dataset.track === '2'")
         assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
         assert page.js("window.caracoleGuitar.tracks.map((t) => t.name)") == ["Bass"]
-        assert pressed(page, "#tracks .show") == ["false", "true"]
+        assert pressed(page, "#tracks .show") == ["false", "false", "true", "false", "false"]
         # Shift (or Ctrl) and a tap adds a track to those shown, and takes it away again; the last one stays.
         for kind in ("mousePressed", "mouseReleased"):
-            box = page.js(f"(() => {{ const r = document.querySelector({SHOW.format(n=1)!r})"
+            box = page.js(f"(() => {{ const r = document.querySelector({SHOW.format(n=2)!r})"
                           ".getBoundingClientRect(); return [r.x + r.width / 2, r.y + r.height / 2]; })()")
             page.send("Input.dispatchMouseEvent", type=kind, x=box[0], y=box[1], button="left", clickCount=1,
                       modifiers=8)
-        assert page.wait("document.documentElement.dataset.track === '0,1'")
+        assert page.wait("document.documentElement.dataset.track === '1,2'")
         assert page.wait("Number(document.documentElement.dataset.rendered) >= 3", 30)
         assert page.js("window.caracoleGuitar.tracks.map((t) => t.name)") == ["Lead guitar", "Bass"]
-        assert pressed(page, "#tracks .show") == ["true", "true"]
+        assert pressed(page, "#tracks .show") == ["false", "true", "true", "false", "false"]
         assert page.js("window.caracoleViolations") == []
     finally:
         page.close()
@@ -141,26 +162,27 @@ def test_each_track_mutes_on_its_own_whichever_is_shown(served, tmp_path):
         assert page.wait(RENDERED, 30)
         page.js(SPY_MUTE)
         labels = page.js(f"{TRACKS}.map((t) => t.querySelector('.mute').getAttribute('aria-label'))")
-        assert labels == ["Mute Lead guitar", "Mute Bass"]
-        assert pressed(page, "#tracks .mute") == ["false", "false"]
-        page.click(MUTE.format(n=2))  # the bass, not shown
+        assert labels == ["Mute " + VOCALS, "Mute Lead guitar", "Mute Bass", "Mute Keys", "Mute Drums"]
+        assert pressed(page, "#tracks .mute") == ["false"] * 5
+        page.click(MUTE.format(n=3))  # the bass, not shown
         assert page.wait("window.mutes.length === 1")
-        assert page.js("window.mutes") == [[[1], True]]
-        assert pressed(page, "#tracks .mute") == ["false", "true"]
-        assert page.js("window.caracoleGuitar.score.tracks.map((t) => t.playbackInfo.isMute)") == [False, True]
-        assert page.js("document.querySelector('#tracks .track:nth-child(2)').classList.contains('muted')") is True
-        assert page.js("document.documentElement.dataset.track") == "0"  # muting shows nothing else
+        assert page.js("window.mutes") == [[[2], True]]
+        assert pressed(page, "#tracks .mute") == ["false", "false", "true", "false", "false"]
+        assert page.js("window.caracoleGuitar.score.tracks.map((t) => t.playbackInfo.isMute)") == [
+            False, False, True, False, False]
+        assert page.js("document.querySelector('#tracks .track:nth-child(3)').classList.contains('muted')") is True
+        assert page.js("document.documentElement.dataset.track") == "1"  # muting shows nothing else
         # Showing the bass keeps it muted, and the sound alphaTab loads again is told so.
-        page.click(SHOW.format(n=2))
+        page.click(SHOW.format(n=3))
         assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
-        assert pressed(page, "#tracks .mute") == ["false", "true"]
-        assert page.js("window.caracoleGuitar.score.tracks[1].playbackInfo.isMute") is True
-        assert all(call == [[1], True] for call in page.js("window.mutes"))
+        assert pressed(page, "#tracks .mute") == ["false", "false", "true", "false", "false"]
+        assert page.js("window.caracoleGuitar.score.tracks[2].playbackInfo.isMute") is True
+        assert all(call == [[2], True] for call in page.js("window.mutes"))
         # Unmuted again with a tap.
-        page.click(MUTE.format(n=2))
+        page.click(MUTE.format(n=3))
         assert page.wait("window.mutes.at(-1)[1] === false")
-        assert page.js("window.mutes.at(-1)") == [[1], False]
-        assert pressed(page, "#tracks .mute") == ["false", "false"]
+        assert page.js("window.mutes.at(-1)") == [[2], False]
+        assert pressed(page, "#tracks .mute") == ["false"] * 5
     finally:
         page.close()
 
@@ -171,15 +193,57 @@ def test_the_tracks_work_from_the_keyboard(served, tmp_path):
     try:
         assert page.wait(RENDERED, 30)
         page.js(SPY_MUTE)
-        page.js(f"document.querySelector({SHOW.format(n=2)!r}).focus()")
+        page.js(f"document.querySelector({SHOW.format(n=3)!r}).focus()")
         page.press("Enter")
-        assert page.wait("document.documentElement.dataset.track === '1'")
-        page.js(f"document.querySelector({MUTE.format(n=1)!r}).focus()")
+        assert page.wait("document.documentElement.dataset.track === '2'")
+        page.js(f"document.querySelector({MUTE.format(n=2)!r}).focus()")
         page.press("Enter")
         assert page.wait("window.mutes.length === 1")
-        assert pressed(page, "#tracks .mute") == ["true", "false"]
+        assert pressed(page, "#tracks .mute") == ["false", "true", "false", "false", "false"]
         # Every track's buttons are in the order Tab goes through.
         assert page.js("[...document.querySelectorAll('#tracks button')].every((b) => b.tabIndex === 0)") is True
+    finally:
+        page.close()
+
+
+def finger(page, selector, kind):
+    """A finger on the element ``selector`` finds, brought into the row's view: put down (``touchStart``) or lifted
+    (``touchEnd``)."""
+    box = page.js(f"(() => {{ const e = document.querySelector({selector!r}); "
+                  "e.scrollIntoView({block: 'nearest', inline: 'center'}); const r = e.getBoundingClientRect(); "
+                  "return [r.x + r.width / 2, r.y + r.height / 2]; })()")
+    page.send("Input.dispatchTouchEvent", type=kind, touchPoints=[{"x": box[0], "y": box[1]}] if kind == "touchStart"
+              else [])
+
+
+FRAMES = "new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))"
+
+
+def test_a_long_press_shows_a_track_beside_those_shown_on_a_touch_screen(served, tmp_path):
+    _, url = served
+    page = opened(tmp_path, url, width=390, height=844, mobile=True)
+    try:
+        assert page.wait(RENDERED, 30)
+        # Held, the bass is shown beside the guitar, at once, the finger still down; let go, nothing more.
+        finger(page, SHOW.format(n=3), "touchStart")
+        assert page.wait("document.documentElement.dataset.track === '1,2'", 5)
+        finger(page, SHOW.format(n=3), "touchEnd")
+        assert page.js(FRAMES)
+        assert page.js("document.documentElement.dataset.track") == "1,2"
+        assert pressed(page, "#tracks .show") == ["false", "true", "true", "false", "false"]
+        assert page.wait("Number(document.documentElement.dataset.rendered) >= 2", 30)
+        assert page.js("window.caracoleGuitar.tracks.map((t) => t.name)") == ["Lead guitar", "Bass"]
+        # Held again, taken away.
+        finger(page, SHOW.format(n=2), "touchStart")
+        assert page.wait("document.documentElement.dataset.track === '2'", 5)
+        finger(page, SHOW.format(n=2), "touchEnd")
+        assert page.js(FRAMES)
+        assert page.js("document.documentElement.dataset.track") == "2"
+        # A tap shows a track alone, as a click does.
+        finger(page, SHOW.format(n=4), "touchStart")
+        finger(page, SHOW.format(n=4), "touchEnd")
+        assert page.wait("document.documentElement.dataset.track === '3'", 5)
+        assert page.js("window.caracoleViolations") == []
     finally:
         page.close()
 
@@ -323,6 +387,13 @@ def test_a_phone_gets_the_tab_alone_with_no_sideways_scroll(served, tmp_path):
         bar = page.js("document.getElementById('gp-bar').getBoundingClientRect().height")
         assert bar <= 0.15 * 844, bar
         assert page.js("getComputedStyle(document.getElementById('tracks')).overflowX") == "auto"
+        # The track it opens on, the second, is in that row's view, whole, off its edge.
+        assert page.js("document.documentElement.dataset.track") == "1"
+        chip = page.js("(() => { const r = document.querySelector('#tracks .track:nth-child(2)')"
+                       ".getBoundingClientRect(); return [r.left, r.right]; })()")
+        assert chip[0] >= 16 and chip[1] <= 390 - 15, chip
+        assert page.js("document.getElementById('tracks').scrollLeft") > 0
+        assert page.js("scrollY") == 0
         middles = page.js("[...document.querySelectorAll('#gp-bar .gp-play > *')]"
                           ".map((e) => { const r = e.getBoundingClientRect(); return r.top + r.height / 2; })")
         assert len(middles) == 4 and max(middles) - min(middles) < 4, middles
