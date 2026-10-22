@@ -1044,18 +1044,24 @@
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
   };
-  try {
-    const params = new URLSearchParams(location.hash.slice(1));
-    state.q = params.get("q") || "";
-    if (artistName(params.get("artist") || "")) state.artist = params.get("artist");
-    if (own.call(SHOWS, params.get("show"))) state.show = params.get("show");
-    if (SORTS.indexOf(params.get("sort")) >= 0) state.sort = params.get("sort");
-    if (keyGroup(params.get("key"))) state.key = keyGroup(params.get("key")).value;  // any spelling of it
-    state.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
-    state.all = params.get("all") === "1" && sitesCan(state.q) && (!server || typedEnough(state.q));
-  } catch (err) {
-    // A malformed address: start from the defaults.
-  }
+  // What the address says of the list (save() writes it): what the page opens on, and what Back brings again.
+  const addressed = () => {
+    const at = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
+    try {
+      const params = new URLSearchParams(location.hash.slice(1));
+      at.q = params.get("q") || "";
+      if (artistName(params.get("artist") || "")) at.artist = params.get("artist");
+      if (own.call(SHOWS, params.get("show"))) at.show = params.get("show");
+      if (SORTS.indexOf(params.get("sort")) >= 0) at.sort = params.get("sort");
+      if (keyGroup(params.get("key"))) at.key = keyGroup(params.get("key")).value;  // any spelling of it
+      at.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
+      at.all = params.get("all") === "1" && sitesCan(at.q) && (!server || typedEnough(at.q));
+    } catch (err) {
+      // A malformed address: the defaults.
+    }
+    return at;
+  };
+  Object.assign(state, addressed());
   const keySelect = byId("key");
   for (const group of Array.from(keyGroups.values()).sort((a, b) => compare(a.name, b.name))) {
     const option = el("option", null, group.name + " · " + group.n);
@@ -1346,19 +1352,14 @@
     window.scrollTo(0, 0);
     input.focus({ preventScroll: true });
   };
-  // Back (or Forward) to a search's step: its query again, as the address has it, and its results.
+  // Back (or Forward) to a step of the list's: the list as the address has it, its query, its results, its artist,
+  // show, sort, key and progression; an address that changes none of them (the Songbooks tab's, say) moves nothing.
   window.addEventListener("popstate", () => {
-    let params = null;
-    try {
-      params = new URLSearchParams(location.hash.slice(1));
-    } catch (err) {
-      return;
-    }
-    const q = params.get("q") || "";
-    if (q === state.q) return;  // not a search's step (the Songbooks tab's, say)
-    const all = params.get("all") === "1" && sitesCan(q) && (!server || typedEnough(q));
-    input.value = q;
-    state.q = q;
+    const at = addressed();
+    if (Object.keys(at).every((name) => at[name] === state[name])) return;
+    const all = at.all;
+    Object.assign(state, at, { all: state.all });
+    input.value = state.q;
     focusFirst = false;
     if (state.all && !all) {
       leaveAll(false);

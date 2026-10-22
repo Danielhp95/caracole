@@ -6,11 +6,15 @@ gtptabs_fetch.py): a download is named for the song, ``<Artist> - <Title>.<ext>`
 The name is one every system takes: no ``/ \\ : * ? " < > |``, no control character (a tab or a new line is a
 space, any other ``_``) and no invisible formatting one (a direction mark), never a dot or a space at either end
 (Windows drops them; a leading dot hides a file), and its stem at most ``MAX_BYTES`` bytes of UTF-8, cut on a
-whole character; accents and Chinese stay as they are. A song with no name left is its file's own name.
+whole character, the longer of the two names first, so that a long artist leaves the title its half and the dash
+between; accents and Chinese stay as they are. A part with nothing left (dots alone) is none, and a song with no
+name left is its file's own name.
 
 ``content_disposition`` is the header caracole serve sends such a file with (web/app.py): an attachment named in
-ASCII for an old browser and, as RFC 6266 and RFC 5987 say, in UTF-8. index.html and the sheet viewer put the
-same name in their links' ``download`` attribute (library_page.py, viewer/page.py), for a page opened as a file.
+ASCII for an old browser and, as RFC 6266 and RFC 5987 say, in UTF-8: the one name every browser keeps.
+index.html and the sheet viewer put the same name in their links' ``download`` attribute (library_page.py,
+viewer/page.py), which Chromium ignores on a page opened as a file (a file:// link saves under its own name, guitar-N);
+it holds served, and in a browser that honours it there.
 
 The standard library alone: the viewer imports it (viewer/page.py ``BUILD_FILES``).
 """
@@ -34,8 +38,7 @@ def download_name(artist: str, title: str, file_name: str) -> str:
     numbered = _NUMBERED.fullmatch(file_name)
     number = int(numbered.group(1)) if numbered else 1
     extension = (numbered.group(2) if numbered else PurePosixPath(file_name).suffix).lower()
-    stem = " - ".join(part for part in (_clean(artist), _clean(title)) if part)
-    stem = _ends(_cut(_ends(stem)))
+    stem = " - ".join(_fit([_ends(_clean(part)) for part in (artist, title) if _ends(_clean(part))]))
     if not stem:
         return file_name
     return stem + (f" ({number})" if number > 1 else "") + extension
@@ -68,9 +71,28 @@ def _ends(stem: str) -> str:
     return stem.strip(" .")
 
 
-def _cut(stem: str) -> str:
-    """The stem, cut to ``MAX_BYTES`` bytes of UTF-8 on a whole character."""
-    data = stem.encode("utf-8")
-    if len(data) <= MAX_BYTES:
-        return stem
-    return data[:MAX_BYTES].decode("utf-8", errors="ignore")
+def _fit(parts: list[str]) -> list[str]:
+    """The parts of a stem, joined by " - ", cut to ``MAX_BYTES`` bytes of UTF-8 in all: a part shorter than its
+    share whole, the other the rest, or each its half."""
+    if len(parts) < 2:
+        return [_ends(_cut(part, MAX_BYTES)) for part in parts]
+    room = MAX_BYTES - len(" - ")
+    sizes = [len(part.encode("utf-8")) for part in parts]
+    if sum(sizes) <= room:
+        return parts
+    half = room // 2
+    if sizes[0] <= half:
+        budgets = [sizes[0], room - sizes[0]]
+    elif sizes[1] <= half:
+        budgets = [room - sizes[1], sizes[1]]
+    else:
+        budgets = [half, room - half]
+    return [kept for part, budget in zip(parts, budgets) if (kept := _ends(_cut(part, budget)))]
+
+
+def _cut(text: str, size: int) -> str:
+    """``text``, cut to ``size`` bytes of UTF-8 on a whole character."""
+    data = text.encode("utf-8")
+    if len(data) <= size:
+        return text
+    return data[:size].decode("utf-8", errors="ignore")

@@ -2759,7 +2759,8 @@ is no progression exits with status 2.
   searches it as typing it would (their group first, with their songs, as a
   name typed whole leads), which asks no site, only the offline indexes; the
   focus goes to the box, Escape goes back to your songs, and the browser's Back
-  to the search before it. The funnel beside the name of an artist you have
+  to the list as it was before it (its search, artist, Show, sort and key, as
+  its address had them). The funnel beside the name of an artist you have
   songs of shows those alone. A newer answer drawn while it goes (a search typed on)
   keeps the line where it has the song, with its request line; one it hasn't
   moves the request under the box as its line ("Just requested"), its request
@@ -3116,9 +3117,13 @@ hidden file, and never the database, the token or the cache. A download is
 named for its song, whatever it is called in the song's folder (where it stays
 `guitar-N` or `score-N`): `Eagles - Hotel California.gp3`, its second file
 `Eagles - Hotel California (2).gp5`, accents and Chinese as they are, and
-nothing a system refuses in a file's name (`AC/DC` saves as `AC_DC - …`). The
-page opened from the folder names its links' downloads the same way, and so
-does a sheet viewer opened from the folder. A songbook's page,
+nothing a system refuses in a file's name (`AC/DC` saves as `AC_DC - …`), a very
+long name cut so that the title stays. That name comes from the server, so it
+holds only for a file caracole serve sends. The page opened from the folder,
+and a sheet viewer opened from the folder, put the same name in their links'
+`download` attribute, but Chromium-based browsers (Chrome, Edge, Brave) ignore
+it on a page opened as a file and save the file as `guitar-N` (or `score-N`),
+its name in the folder. A songbook's page,
 `_songbooks/<name>/songbook.html`, is sent only while it is the very page
 caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts

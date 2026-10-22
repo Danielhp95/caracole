@@ -52,3 +52,19 @@ def test_the_header_names_the_file_in_ascii_and_in_utf_8():
     assert fallback.isascii() and fallback.endswith(".gp")
     assert unquote(chinese.split("filename*=UTF-8''", 1)[1]) == "宋冬野 - 斑马.gp"
     assert content_disposition("100% - Song.gp5").startswith('attachment; filename="100_ - Song.gp5"; ')
+
+
+def test_a_long_artist_leaves_the_title_its_share_and_the_dash_between():
+    name = download_name("宋" * 60, "斑马，斑马", "guitar-2.gp5")
+    assert name.endswith(" - 斑马，斑马 (2).gp5"), name
+    assert len(name.removesuffix(" (2).gp5").encode("utf-8")) <= MAX_BYTES
+    name = download_name("Joaquín Sabina", "x" * 400, "guitar-1.gp5")
+    assert name.startswith("Joaquín Sabina - x") and len(name.removesuffix(".gp5").encode("utf-8")) <= MAX_BYTES
+    both = download_name("a" * 300, "b" * 300, "guitar-1.gp5").removesuffix(".gp5")
+    assert both.startswith("a") and " - b" in both and len(both.encode("utf-8")) <= MAX_BYTES
+
+
+def test_parts_with_nothing_but_dots_are_no_part():
+    assert download_name("...", "...", "guitar-2.gp4") == "guitar-2.gp4"
+    assert download_name("...", "Song", "guitar-2.gp4") == "Song (2).gp4"
+    assert download_name("Muse", ". .", "guitar-1.gp4") == "Muse.gp4"

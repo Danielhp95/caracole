@@ -1164,3 +1164,29 @@ def test_an_artists_name_in_your_list_searches_for_them_and_its_funnel_shows_the
     assert browser.wait(f"document.querySelectorAll('{by}').length === 2")
     assert browser.js(f"[...document.querySelector('{by}').children].map((b) => b.className)") == [
         "artist artist-search", "artist-only"]
+
+
+def test_back_after_an_artists_name_and_its_funnel_brings_the_whole_address_again(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=C_TANGANA)
+    library(cfg, ("C Tangana", "Demasiadas Mujeres"), ("Radiohead", "Creep"))
+    browser.open(base)
+    browser.click("#list section.artist h2 button.artist-search")  # C Tangana: the search for them
+    assert browser.wait("document.getElementById('found').dataset.query === 'C Tangana'")
+    funnel = "#results section.artist h2 button.artist-only"
+    assert browser.wait(f"document.querySelector({json.dumps(funnel)}) !== null")
+    browser.click(funnel)  # their songs of yours alone, the search left
+    assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\"]'"), browser.js(GRID)
+    assert "artist=c-tangana" in browser.js("location.hash")
+    # Back: the page as it was before the name, every song and no chip, as its address says.
+    browser.js("history.back()")
+    assert browser.wait("!location.hash.includes('artist=')")
+    assert browser.wait("document.getElementById('artist').hidden === true")
+    assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\",\"Creep\"]'"), browser.js(GRID)
+    assert browser.js("document.getElementById('q').value") == ""
+    assert browser.js("document.getElementById('results').hidden") is True
+    # Forward: the funnel's step again, its chip on.
+    browser.js("history.forward()")
+    assert browser.wait("document.getElementById('artist').hidden === false")
+    assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\"]'"), browser.js(GRID)
+    assert queue.snapshot() == []

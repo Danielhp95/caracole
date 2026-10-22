@@ -1286,7 +1286,9 @@ def test_a_screen_reader_hears_each_artist_and_song_and_a_jump_moves_the_focus(c
 
 
 @in_chromium
-def test_the_written_pages_guitar_pro_links_save_the_file_under_its_songs_name(conn, cfg, tmp_path):
+def test_the_written_pages_guitar_pro_links_name_their_song_in_their_download_attribute(conn, cfg, tmp_path):
+    # The attribute alone: Chromium ignores it on a page opened as a file (docs/usage.md says so); served, the
+    # header names the file (test_web_downloads.py).
     from html import unescape
 
     s = add_song(conn, "宋冬野", "斑马，斑马")
