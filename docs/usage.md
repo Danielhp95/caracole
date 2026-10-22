@@ -1185,7 +1185,8 @@ and cache.
   isn't sent for an hour after its query's search failed, nor at all while three
   searches failed in the last hour (`Not searched: LaCuerda's search for “…”
   failed less than an hour ago (…), so the page won't send it by itself before
-  …`); by hand, it asks. `--progress` prints a JSON line per event,
+  …`); by hand (the page's button, or Enter in its search box), it asks.
+  `--progress` prints a JSON line per event,
   for caracole serve's request page. It goes with neither `--index` nor
   `--artist` (exit 2).
 - **`caracole gtptabs`** downloads a Guitar Pro file from gtptabs.com for each
@@ -2854,8 +2855,14 @@ is no progression exits with status 2.
   searches an hour, within the hour's 60 lookup requests to LaCuerda. A line
   under the results says "Searching LaCuerda for “…”…", then what LaCuerda
   answered, and its songs arrive in their artists' groups as the search is
-  asked again. Typing on sends nothing, and neither does Enter: it leaves the
-  button instead. Once the hour's 20 are spent, the line offers **Search
+  asked again. Typing on sends nothing. **Enter** sends it at once, without
+  waiting for the query to settle, as the button below does (by hand: past the
+  hour's 20, within the hour's lookups), and still moves to the first result,
+  where the focus stays as LaCuerda's songs arrive. When no search would go
+  (nothing to ask, asked in the last 30 days, the hour's lookups spent, or
+  LaCuerda cooling down), or searches failed lately (the button's to ask,
+  below), Enter sends nothing.
+  Once the hour's 20 are spent, the line offers **Search
   LaCuerda for “…” (1 request)**, which asks by hand, within the hour's lookups;
   when those are spent, or LaCuerda cools down, it says LaCuerda's search waits.
   A search that failed (LaCuerda erred, or answered a page caracole can't read)
@@ -2863,7 +2870,8 @@ is no progression exits with status 2.
   last hour: the line says so, with the button. A search refused or failed has
   the button under what it said. A query is sent once a page, and once in 30
   days. The Look up page does the same.
-  **Enter never spends a request**, however clear the best result: it moves to
+  **Enter never asks for a song**, however clear the best result (LaCuerda's
+  search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Get it, or a click or a key on the name,
   does. Escape, or Back to your songs, goes back to
@@ -2934,7 +2942,8 @@ is no progression exits with status 2.
   stage. Its Enter acts on the song you clearly meant (one of
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
-  nothing), or nothing when nothing stands out. A query that finds nothing
+  nothing; they stay open as LaCuerda's search ends), or nothing when nothing
+  stands out, and sends LaCuerda's search as the library page's Enter does. A query that finds nothing
   shows the same "Did you mean" and card, whose first button is Look “…” up by
   name (the form under the results, filled in), and whose Their songs lists
   that artist's songs, as their row's Songs does. A row's artist searches for

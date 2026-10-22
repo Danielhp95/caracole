@@ -28,7 +28,7 @@
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
     POST /lacuerda/search ask LaCuerda's search for the songs of a query (``q``) and put them into its index:
                           ``caracole lacuerda --search --progress`` queued, one request; ``by_hand``, the
-                          button's, past the share of the searches the page sends by itself
+                          button's (and Enter's), past the share of the searches the page sends by itself
 
 A lookup is one ``caracole get --progress``. Without JavaScript, the answer
 sends the browser to the lookup page, which follows it; the lookup page's
@@ -687,7 +687,7 @@ def _lacuerda_search_gate(app: WebApp, conn: sqlite3.Connection, q: str, lc_arti
 
 def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
     """LaCuerda's search for a query (``q``), its rows read into the index: ``caracole lacuerda --search --progress``
-    queued, a job of its own (one request, at the lookup pace), ``--auto`` unless asked ``by_hand`` (the button);
+    queued, a job of its own (one request, at the lookup pace), ``--auto`` unless asked ``by_hand`` (the button, Enter);
     asked again while it waits or runs, under any spelling LaCuerda reads the same, that job. Refused as its gate
     refuses it (``_lacuerda_search_gate``): no word LaCuerda reads (400), LaCuerda's index or your library has the
     song or the query was asked within 30 days (409), a cooldown or the hour's lookups spent, or, without

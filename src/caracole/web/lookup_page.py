@@ -12,9 +12,11 @@ under a letter LaCuerda's listings aren't read to yet. LaCuerda's own search,
 which finds the songs of an artist whose page caracole hasn't read, is one
 request too (``POST /lacuerda/search``): the page sends it by itself once the
 query has settled, the box unchanged for 1.5 s, when ``/api/search`` says so
-(``lacuerda_search``), never on Enter, never twice for a query, or offers it as
-a button, a line under the results (rows.js ``lacuerdaSearcher``); its rows come
-with the search asked again once it is over. A query may be an
+(``lacuerda_search``), never twice for a query, or offers it as a button, a
+line under the results (rows.js ``lacuerdaSearcher``); Enter sends it at once,
+by hand as the button does, when its gate sends one. Its rows come with the
+search asked again once it is over (once you are back to All results, when an
+artist's songs are open meanwhile). A query may be an
 artist's name alone or a title alone, or a word of an artist's name
 ("skynyrd"): an artist it names is a row of its own, whose Songs lists all
 their songs (``GET /api/artist``), and comes first when it leads. A query
@@ -22,7 +24,8 @@ nothing matches well, spelled close to an artist's name ("lynrd"), says "Did
 you mean" that artist, whose name lists their songs the same way. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
-songs; when nothing stands out, nothing, so a guess never spends a request.
+songs; when nothing stands out, nothing, so a guess never spends a request
+(LaCuerda's search, which Enter sends too, looks nothing up).
 A row's artist is a name to press: it searches for them, as typing their name
 would, which asks no site either.
 Picking a song (its Get
@@ -141,16 +144,21 @@ const ICONS = (() => {
   try { return JSON.parse(document.getElementById("icons").textContent || "{}") || {}; } catch (e) { return {}; }
 })();
 const rowKit = caracoleRows(ICONS, {searchArtist: (name) => searchArtist(name)});
-// LaCuerda's own search, sent by itself once the query settles or by its button (ROWS_SCRIPT's): once it is over,
-// the search again, for the rows it put into LaCuerda's index.
-const searcher = rowKit.lacuerdaSearcher(csrf, typedText, (asked) => { if (typedText() === asked) search(); },
-  (line) => { if (!line.isConnected) results.append(line); });
+// LaCuerda's own search, sent by itself once the query settles, by Enter or by its button (ROWS_SCRIPT's): once it
+// is over, the search again, for the rows it put into LaCuerda's index; an artist's songs open meanwhile stay, and
+// All results asks it again (``lcChanged``).
+const searcher = rowKit.lacuerdaSearcher(csrf, typedText, (asked) => {
+  if (typedText() !== asked) return;
+  if (artistOpen) { lcChanged = asked; return; }
+  search();
+}, (line) => { if (!line.isConnected) results.append(line); });
 window.caracole = Object.freeze({resultRow: rowKit.resultRow, sourceMark: rowKit.sourceMark, icons: ICONS});
 let typed = 0, inflight = null, timer = null, polling = null, shown = "", lastStages = "";
 let shownFor = null;  // the query the results on the screen answer
 let shownData = null;  // their answer: what Enter acts on (best) and what leads
 let artistOpen = null;  // the artist whose songs are listed in place of the results
 let enterFor = null;  // a query Enter was pressed for before its results came: acted on then
+let lcChanged = null;  // a query whose answer LaCuerda's search changed while an artist's songs were open
 let scrolled = false;  // the sheet was brought into view once already
 
 function el(tag, cls, text) {
@@ -235,13 +243,13 @@ function show(data, text) {
     const line = rowKit.lookedLine(data, text, does);
     if (line) results.append(line);
   }
-  // LaCuerda's own search, under the results: sent by itself once the query settles, held back by an Enter.
-  let lcLine = searcher.show(data.lacuerda_search, text);
-  if (enterFor === text) lcLine = searcher.enter(text) || lcLine;
-  if (lcLine) results.append(lcLine);
   shownFor = text;
   shownData = data;
-  if (enterFor === text) { enterFor = null; pickBest(); }
+  if (lcChanged === text) lcChanged = null;
+  if (enterFor === text) { enterFor = null; pickBest(); }  // before LaCuerda's search: a song it looks up goes first
+  // LaCuerda's own search, under the results: sent by itself once the query settles, or by an Enter that came first.
+  const lcLine = searcher.show(data.lacuerda_search, text);
+  if (lcLine) results.append(lcLine);
 }
 
 // "Look “…” up by name": the form under the results, filled in from the query ("Artist - Title", else the title), open
@@ -354,7 +362,8 @@ function showArtist(data, focus) {
 }
 
 function backToSearch() {
-  if (shownData) show(shownData, shownFor);
+  if (lcChanged !== null && lcChanged === typedText()) search();  // LaCuerda's search put rows in meanwhile
+  else if (shownData) show(shownData, shownFor);
   q.focus();
 }
 
@@ -474,13 +483,14 @@ q.addEventListener("keydown", e => {
   if (results.hidden) { expand(); return; }  // after a pick: the results again, not the pick again
   const text = typedText();
   if (text === shownFor) {
-    const held = searcher.enter(text);  // Enter never sends LaCuerda's search: its button, now
-    if (held && !held.isConnected) results.append(held);
-    pickBest();
+    pickBest();  // first: a song it looks up goes before LaCuerda's search in the queue
+    const line = searcher.enter(text, true);  // LaCuerda's search, when its gate sends one
+    if (line && !line.isConnected) results.append(line);
     return;
   }
-  // The results on the screen answer an older query: search now, and act on its answer.
+  // The results on the screen answer an older query: search now, and act on its answer, LaCuerda's search with it.
   enterFor = text;
+  searcher.enter(text, false);
   clearTimeout(timer);
   search();
 });

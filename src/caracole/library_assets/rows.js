@@ -619,8 +619,10 @@ const caracoleRows = (icons, does) => {
   // its ``state``, the ``query`` and its ``key``), one line under the results. State "auto": sent by itself once
   // the query has settled, the box unchanged for ``SETTLE`` ms (``typed()`` hears each key; a query is new to the
   // box when its first answer is shown) and still what ``current()`` gives, its line then put under the results
-  // (``place(line)``); never on Enter (``enter(query)`` holds it back for that query, which then offers the
-  // button), never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
+  // (``place(line)``). Enter (``enter(query, shown)``) sends it at once, by hand as the button does, when the gate
+  // says "auto" or "button" (not "failed": its button asks again): for the answer on the screen (``shown``), its
+  // line given back, else with the query's next answer, which ``show`` then gives; the settle's wait for it ends.
+  // Never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
   // LaCuerda for “…” (1 request)", by hand; state "failed", its search failed lately (or three did): the gate's
   // ``why``, and the button. While it runs the line says so ("Searching LaCuerda for “…”…"), then what LaCuerda
   // answered, or why the search was refused, and ``done(query)`` asks the page's search again, whose answer the
@@ -633,7 +635,8 @@ const caracoleRows = (icons, does) => {
     const keys = new Map();  // each query's key, as its first gate gave it: a later answer may have none
     const sent = new Set();
     const running = new Set();  // the keys whose search is on its way
-    const held = new Set();
+    const gates = new Map();  // each query's gate, as its newest answer gave it (null: none)
+    let entered = null;  // the query an Enter waits for the answer of
     const firstShown = new Map();
     let lastKey = 0;
     let timer = 0;
@@ -686,7 +689,7 @@ const caracoleRows = (icons, does) => {
       timer = 0;
       const wait = pending;
       if (!wait) return;
-      if (current() !== wait.query || sent.has(wait.key) || held.has(wait.key)) {  // typed on: the next answer says
+      if (current() !== wait.query || sent.has(wait.key)) {  // typed on: the next answer says
         pending = null;
         return;
       }
@@ -698,18 +701,34 @@ const caracoleRows = (icons, does) => {
       pending = null;
       place(send(wait.gate, wait.query, false));
     };
+    // Enter's search, by hand, when the gate sends one (and none went for the query yet): the settle's wait ends.
+    const entering = (g, query) => {
+      if (!g || (g.state !== "auto" && g.state !== "button") || sent.has(String(g.key))) return null;
+      if (pending && pending.key === String(g.key)) {
+        clearTimeout(timer);
+        timer = 0;
+        pending = null;
+      }
+      return send(g, query, true);
+    };
     const show = (gate, query) => {
       const g = gate && typeof gate === "object" && typeof gate.key === "string" && gate.key ? gate : null;
       if (!firstShown.has(query)) firstShown.set(query, performance.now());
       if (g && !keys.has(query)) keys.set(query, String(g.key));
+      gates.set(query, g);
+      if (entered !== null && current() !== entered) entered = null;  // the box holds another query now
+      const wanted = entered === query;
+      if (wanted) entered = null;
       const key = g ? String(g.key) : keys.get(query);
       const byHand = g && (g.state === "button" || g.state === "failed");
       if (key && running.has(key)) return lineOf(key);
+      const now = wanted ? entering(g, query) : null;  // Enter came before the answer
+      if (now) return now;
       // Over: what it said, and the button when the gate still offers a search (refused, failed or cancelled).
       if (key && sent.has(key)) return g && (byHand || g.state === "auto") ? offer(g, query) : lineOf(key);
       if (key && lines.has(key) && lines.get(key).firstChild) return lineOf(key);  // offered already
       if (!g) return null;
-      if (byHand || (g.state === "auto" && held.has(key))) return offer(g, query);
+      if (byHand) return offer(g, query);
       if (g.state === "spent") {  // said afresh each time: in an hour, the same query may be sent
         const line = el("div", "lacuerda-search");
         line.appendChild(el("p", "hint lacuerda-search-said", "LaCuerda's search waits: it cools down after a " +
@@ -725,17 +744,13 @@ const caracoleRows = (icons, does) => {
     };
     const typed = () => {
       lastKey = performance.now();
+      entered = null;
     };
-    // Enter acts on what is there: it never sends the search, and holds back the one the query waits to send.
-    const enter = (query) => {
-      if (pending && pending.query === query) {
-        held.add(pending.key);
-        clearTimeout(timer);
-        timer = 0;
-        const wait = pending;
-        pending = null;
-        return offer(wait.gate, query);
-      }
+    // Enter for ``query``: its search now, when the answer on the screen is the query's (``shown``) and its gate
+    // sends one (the line, to put under the results), else null; or, its answer on its way, with that answer.
+    const enter = (query, shown) => {
+      if (shown) return gates.has(query) ? entering(gates.get(query), query) : null;
+      entered = query;
       return null;
     };
     return { show, typed, enter };
