@@ -69,7 +69,8 @@
     all: () => true,
     found: (s) => s.status === "found",
     wanted: (s) => s.status === "wanted",
-    review: (s) => Boolean(s.review) && s.status !== "ignored",
+    // Not a song removed since the page loaded, which counts nowhere (counted, below), as found and wanted have it.
+    review: (s) => Boolean(s.review) && s.status !== "ignored" && s.status !== "removed",
   };
   const CHIP_TEXT = { found: "found songs", wanted: "wanted songs", review: "songs that need review" };
   const SORTS = ["artist", "title", "recent"];

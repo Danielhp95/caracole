@@ -885,6 +885,34 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
                       "count": "0 of 12 songs" if searched else "12 songs"}, counts
 
 
+@pytest.mark.parametrize("left", ["", "#show=review"])
+def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_path, left):
+    # A song in review, removed: Needs review counts it no more, as All and Wanted don't, and goes once nothing needs it
+    # (unless it is the button pressed). Pressed then, it shows no line: a removed song counts nowhere.
+    creep = in_review(conn)
+    add_song(conn, "Oasis", "Wonderwall")
+    runner = FakeCaracole(cfg)
+    url = serve(runner, "(() => {})();\n", timers=QUICK)
+    item = f'#list [data-id="{creep.id}"]'
+    chip = "document.querySelector('.chip[data-show=review]')"
+    with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
+        page.open(url + left)
+        assert page.js(COUNTS)["chips"]["review"] == "1" and page.js(f"{chip}.hidden") is False
+        page.click(f"{item} .line-more")  # Remove… waits under "⋯"
+        page.js(f"window.song = document.querySelector('{item}')")
+        page.click(f"{item} form.remove button")
+        assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
+        counts, hidden = page.js(COUNTS), page.js(f"{chip}.hidden")
+        page.click(".chip[data-show=all]")
+        page.js(f"{chip}.click()")  # pressed all the same
+        listed = page.js("Array.from(document.querySelectorAll('#list article h3')).map((h) => h.textContent)")
+        count = page.js("document.getElementById('count').textContent")
+    assert counts["summary"] == ["1 song", "0 found", "1 wanted"]
+    assert counts["chips"] == {"all": "1", "found": "0", "wanted": "1", "review": "0"}, counts
+    assert hidden is (left == ""), hidden
+    assert (listed, count) == ([], "0 of 1 song")
+
+
 @pytest.mark.parametrize("size", ["390,844", "1280,800"])
 def test_undo_keeps_the_song_and_nothing_is_sent(serve, cfg, conn, tmp_path, size):
     creep = add_song(conn, "Radiohead", "Creep")
