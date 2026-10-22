@@ -3244,7 +3244,11 @@ is no progression exits with status 2.
   as a name another songbook has, a song no longer in the library or a
   songbook deleted since the page was made, is refused at once, and nothing
   runs: the songbook's status line, or the Select bar, says why, and the bar
-  keeps your ticks.
+  keeps your ticks. A make that fails once it runs (songbooks.toml can't be
+  written, say) leaves the songbook on the tab as it would have been, its line
+  saying it couldn't be made and its status line why, with nothing in it to
+  change, and gives the Select bar back its ticks, the name and why: making it
+  again is one tap.
 
 Every request runs the `caracole` command line, one command at a time, so the
 server is never more aggressive than you at a terminal: each command takes

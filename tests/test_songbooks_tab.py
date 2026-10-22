@@ -672,6 +672,57 @@ def test_select_refused_says_why_in_its_bar_and_keeps_the_picks(serve, cfg, libr
         assert not page.js("document.querySelector('.pickbar-form button[type=submit]').disabled")
 
 
+@SIZES
+def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(serve, cfg, library, tmp_path, size):
+    # Select's make, queued, then failed where it ran: songbooks.toml hasn't got the songbook, which was never deleted.
+    # Its line and its set list stay, its status line says why (with Details), and the Select bar has its ticks again.
+    why = "songbooks.toml can't be written: read-only file system."
+    runner = Fake(cfg, fail={"Brand new": why})
+    url, _ = serve(runner)
+    with opened(tmp_path, *size) as page:
+        page.open(url)
+        page.click(".pick-toggle")
+        page.click('#list [data-id="%d"] .pick' % library["Hysteria"].id)
+        page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
+        if size[0] < 900:
+            page.click(".pick-open")
+        page.click(".pick-name")
+        page.type("Brand new")
+        page.click(".pickbar-form button[type=submit]")
+        assert page.wait(f"{SHOWN}('#songbooks') && document.querySelector('#songbooks .book h2').textContent === "
+                         "'Brand new'", timeout=5)
+        assert page.wait(f"{STATUS}.includes(\"songbooks.toml can't be written\")", timeout=20), page.js(STATUS)
+        page.js(STILL)
+        page.click("#songbooks .book h2")  # a click, and a key: nothing that says so goes
+        page.press("Tab")
+        assert "Details" in page.js(STATUS) and why in page.js(STATUS)
+        assert page.js("document.querySelector('#songbooks .book h2').textContent") == "Brand new"
+        assert page.js(TITLES) == ["Hysteria", "Creep"]
+        books = page.js(BOOKS)
+        assert [b[0] for b in books] == ["Campfire", "Road trip", "Brand new"], books
+        assert books[2][1] == "2 songs · couldn't be made", books
+        # Nothing on it to change but by making it again, from the Select bar, which has the picks and says why.
+        assert page.js("document.querySelectorAll('#songbooks .book .set-line button:not([disabled]), "
+                       "#songbooks .book .book-more button:not([disabled])').length") == 0
+        assert page.js(f"!{SHOWN}('#songbooks .book .add-song')")
+        assert page.js("document.querySelector('.pick-count').textContent") == "2 selected"
+        assert page.js("document.querySelector('.pick-name').value") == "Brand new"
+        assert why in page.js("document.querySelector('.pick-error').textContent")
+        assert [b.name for b in books_toml(cfg)] == ["Campfire", "Road trip"]
+        # Made again once the file can be written: the songbook as new, its controls back.
+        runner.fail.clear()
+        page.click("#tab-library")
+        page.click(".pick-toggle")
+        if size[0] < 900:
+            page.click(".pick-open")
+        page.click(".pickbar-form button[type=submit]")
+        assert page.wait(f"{STATUS} === 'Made·Open songbook'", timeout=20), page.js(STATUS)
+        assert page.js(TITLES) == ["Hysteria", "Creep"] and page.js(f"{SHOWN}('#songbooks .book .add-song')")
+        assert page.js("document.querySelectorAll('#songbooks .book .set-line .grip:not([disabled])').length") == 2
+        assert re.fullmatch(r"2 songs · 1 without a sheet · changed \S+", page.js(BOOKS)[2][1]), page.js(BOOKS)
+    assert [b.name for b in books_toml(cfg)] == ["Campfire", "Road trip", "Brand new"]
+
+
 def test_renaming_then_deleting_a_songbook_stay_on_the_tab(serve, cfg, library, tmp_path):
     url, _ = serve(Fake(cfg))
     with opened(tmp_path) as page:

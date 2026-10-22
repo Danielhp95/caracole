@@ -128,7 +128,8 @@ Rules a change there keeps (the Invariants below are the others):
   gives again once a job is over (`jobs_routes.views`: a songbook's change, a lookup, which makes the
   songbooks its song is in again, or a removal; a LaCuerda artist's read changes none). library.js lends it `window.caracoleLibrary`
   (`track`, `showLine`, `focusOn`, and `fold`, the search's normalize.fold, for Add a song) and tells it every job's view (`caracole:job`) and the songbooks
-  (`caracole:songbooks`); it posts the Select bar's songbook too. A song's chip sends the capo with
+  (`caracole:songbooks`); it posts the Select bar's songbook too, and gives the bar its ticks back when
+  that make fails (`caracole:unmade`). A song's chip sends the capo with
   the key and the mode (`/songbook/set`, as `caracole songbook set` keeps it), and Add a song looks
   a song the library hasn't got up first (`/songbook/add-song`: `search_routes.lookup_request`, then
   `caracole songbook add`, both or neither: `JobQueue.submit_all`). A change that ends seconds after its tap moves nothing on the screen:

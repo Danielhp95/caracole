@@ -47,6 +47,15 @@
   const shelfOf = (value) => (value && typeof value === "object" ? value : {});
   let shelf = shelfOf(data.songbooks);
   const books = () => listOf(shelf.books).filter((b) => b && typeof b === "object");
+  // A songbook Select was making whose make failed where it ran: songbooks.toml hasn't got it, and nothing deleted it.
+  // It stays as it would have been, its line saying it couldn't be made and its status line why, until it is made.
+  const unmade = new Map();  // its name -> its book
+  const withUnmade = (given) => {
+    const named = new Set(listOf(given.books).map((b) => String(b && b.name)));
+    for (const name of Array.from(unmade.keys())) if (named.has(name)) unmade.delete(name);
+    return unmade.size ? Object.assign({}, given, { books: listOf(given.books).concat(Array.from(unmade.values())) })
+      : given;
+  };
   const songs = listOf(data.songs);
 
   // --- the tab, and the address ---------------------------------------------------------------------------
@@ -165,7 +174,8 @@
   };
   const metaOf = (b) => [plural(Number(b.songs) || 0, "song"),
     Number(b.missing) ? b.missing + " without a sheet" : "",
-    b.changed ? "changed " + b.changed : b.pending ? "on its way" : "not made yet"].filter(Boolean).join(" · ");
+    b.changed ? "changed " + b.changed : b.failed ? "couldn't be made" : b.pending ? "on its way" : "not made yet"]
+    .filter(Boolean).join(" · ");
   const gone = new Set();  // what a change left on the page, until your next click or key: nothing moves meanwhile
   const sweep = () => {
     if (!gone.size) return;
@@ -407,8 +417,8 @@
       return a;
     });
     const parts = links.length ? links
-      : [el("p", "hint", b.pending ? "Its files come once it is made." : "Not made yet: caracole render, or caracole " +
-        "songbook render, makes its files.")];
+      : [el("p", "hint", b.failed ? "Not made: Select can make it again." : b.pending ? "Its files come once it is made."
+        : "Not made yet: caracole render, or caracole songbook render, makes its files.")];
     const toGet = listOf(b.set).filter((e) => e && e.get).length;
     const was = row.querySelector("form.get-missing");
     if (!toGet && was && !gone.has(was)) {  // nothing left to get: its room kept until your next click or key
@@ -515,15 +525,19 @@
       bookName = b.name;
       const view = newest.get(b.name);
       if (view) showLine(status, view);
-      lockBook(busyFor(b.name));
+      lockBook(locked(b.name));
     }
     bookName = b.name;
     book.dataset.songbook = b.name;
     const h2 = book.querySelector("h2");
     if (h2.textContent !== b.name) h2.textContent = b.name;
-    book.querySelector(".book-meta").textContent = metaOf(b).replace(/ · changed .*| · not made yet| · on its way/, "");
+    book.querySelector(".book-meta").textContent = metaOf(b)
+      .replace(/ · changed .*| · not made yet| · on its way| · couldn't be made/, "");
     drawFiles(b, readOnly);
     if (!moving) drawSet(b, readOnly);
+    const adder = book.querySelector(".add-song");
+    if (adder) adder.hidden = Boolean(b.failed);
+    if (b.failed) lockBook(true);
     const rename = book.querySelector(".book-rename input[name=new]");
     if (rename && document.activeElement !== rename) rename.value = b.name;
     const del = book.querySelector(".book-delete button");
@@ -536,6 +550,7 @@
   // A rename or a deletion waits: the songbook's controls wait with it (a form sent meanwhile would name it wrong).
   const busyFor = (name) => Array.from(changes.values()).some((v) => isActive(v) && namesOf(v).indexOf(name) >= 0 &&
     v.songbook && (v.songbook.action === "rename" || v.songbook.action === "delete"));
+  const locked = (name) => busyFor(name) || unmade.has(name);  // or never made: nothing in it to change
 
   // --- the songbook's changes -------------------------------------------------------------------------------------
   // A change posted; ``spot``, a line it shows on as well (a set list's song, an Add a song result).
@@ -575,7 +590,7 @@
       const names = namesOf(view);
       for (const n of names) if (n) newest.set(n, view);
       if (book && status && names.indexOf(bookName) >= 0) showLine(status, view);
-      if (book && names.indexOf(bookName) >= 0) lockBook(busyFor(bookName));
+      if (book && names.indexOf(bookName) >= 0) lockBook(locked(bookName));
       const spot = placed.get(Number(view.id));
       // A song new to the library has its lookup's line there until that is over, then the songbook's change's.
       const lookup = spot ? lookupViews.get(Number(spot.dataset.lookup)) : null;
@@ -604,9 +619,21 @@
   });
   document.addEventListener("caracole:songbooks", (e) => {
     const detail = e.detail && typeof e.detail === "object" ? e.detail : {};
+    const before = books();
     shelf = shelfOf(detail.songbooks);
     const view = detail.view && typeof detail.view === "object" ? detail.view : null;
     const [was, after] = view ? namesOf(view) : ["", ""];
+    if (view && view.state === "failed" && view.songbook && view.songbook.action === "make") {
+      const b = before.find((x) => x.name === was && x.pending);
+      if (b && !books().some((x) => x.name === was)) {  // never made, not deleted; the Select bar gets its ticks back
+        unmade.set(was, Object.assign(b, { failed: true }));
+        const why = String(view.line && view.line.text || "");
+        document.dispatchEvent(new CustomEvent("caracole:unmade", { detail: {
+          name: was, songs: listOf(b.set).map((x) => x && x.id).filter((id) => id !== null && id !== undefined),
+          error: "“" + was + "” wasn't made" + (why ? ": " + why : ".") } }));
+      }
+    }
+    shelf = withUnmade(shelf);
     if (view && view.state === "done" && view.songbook) {
       if (view.songbook.action === "rename") {  // its line in the list, where it was, under its new name
         const li = Array.from(lines.children).find((x) => x.dataset.book === was);
@@ -762,6 +789,13 @@
         detail: { ok: Boolean(view && view.songbook), error: view ? "" : failure(reply) } }));
       if (!view || !view.songbook) return;
       const after = String(view.songbook.after || name);
+      if (unmade.delete(after)) {  // one whose make failed, made again: as new, its article too
+        shelf = Object.assign({}, shelf, { books: books().filter((x) => x.name !== after) });
+        if (book && bookName === after) {
+          book.remove();
+          book = null;
+        }
+      }
       // Until it is done, the songbook as it will be: its songs as the library names them, at its end.
       let b = books().find((x) => x.name === after);
       if (!b) {

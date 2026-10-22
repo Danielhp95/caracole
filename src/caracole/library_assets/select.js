@@ -246,6 +246,19 @@
     intoLabel.hidden = !now.length;
     paintAll();
   });
+  // A songbook made from here whose make failed once it ran (songbooks.js): its ticks back, its name and why, so that
+  // making it again is one tap; unless songs were picked anew since, which stay.
+  document.addEventListener("caracole:unmade", (e) => {
+    const detail = e.detail && typeof e.detail === "object" ? e.detail : {};
+    if (picked.length) return;
+    for (const id of Array.isArray(detail.songs) ? detail.songs : []) {
+      if (songs.has(String(id)) && picked.indexOf(String(id)) < 0) picked.push(String(id));
+    }
+    into.value = "";
+    nameInput.value = String(detail.name || "");
+    paintAll();
+    error.textContent = String(detail.error || "");
+  });
   // The server's answer to the bar's form: on its way, the picks go and the mode ends (the page shows the
   // songbook in its tab, songbooks.js); refused, the bar says why, and the picks stay.
   form.addEventListener("caracole:sent", (e) => {
