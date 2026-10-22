@@ -4,12 +4,14 @@ progressions, on top of viewer/theory.py."""
 from __future__ import annotations
 
 import dataclasses
+import re
 
 import pytest
 
 from caracole.viewer import harmony, page
 from caracole.viewer.harmony import (
     CATALOGUE,
+    Contained,
     Numeral,
     Progression,
     Relation,
@@ -20,6 +22,7 @@ from caracole.viewer.harmony import (
     key_scale,
     numeral,
     pentatonic,
+    name_of,
     progression_key,
     progressions,
     relation,
@@ -427,9 +430,9 @@ def test_the_twelve_bar_blues(names):
     ("Dm7 G7 Cmaj7", C, "ii–V–I"),
     ("Bm7b5 E7 Am", A_MINOR, "the minor ii–V–i"),
     ("C F G", C, "I–IV–V"),
-    ("C Bb F", C, "I–♭VII–IV"),
+    ("C Bb F", C, "the double-plagal progression"),
     ("Am Dm G C", C, "the circle of fifths"),
-    ("C G Am Em F C F G", C, "the Canon"),
+    ("C G Am Em F C F G", C, "Pachelbel's Canon"),
     ("E7 A7 D7 G7", C, "the ragtime progression"),
     ("F G Em Am", C, "the royal road"),
     ("C Dm Em F", C, None),
@@ -479,10 +482,174 @@ def test_a_chord_held_before_it_resolves_reads_the_chord_it_goes_to():
     assert "V/x" in symbols
 
 
-def test_the_catalogue_is_numerals():
-    for name, numerals in CATALOGUE:
-        assert name and len(numerals) >= 3
+def test_the_catalogue_is_numerals_each_with_its_source():
+    for name, numerals, source in CATALOGUE:
+        assert name and len(numerals) >= 3 and source
         assert progression_key(numerals)
+        assert name_of(numerals) == name  # a name stands for its numerals typed, as they are written
+
+
+# --- every progression of the catalogue, where songs play it ------------------------------------
+
+_STEPS = {"I": 0, "II": 2, "III": 4, "IV": 5, "V": 7, "VI": 9, "VII": 11}
+_ROW = re.compile(r"([♭♯]?)(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i)(°?)(?:/([♭♯]?)(VII|VI|V|IV|III|II|I|vii|vi|v|iv|iii|ii|i))?$")
+# Names read only on their own tonic, never in the relative key: the blues are major, the Aeolian cadence read
+# in the relative major is a deceptive IV–V–vi, and a name that is numerals says where its tonic is.
+ON_ITS_TONIC = {"the 12-bar blues", "the 8-bar blues", "the Aeolian cadence", "ii–V–I", "the minor ii–V–i", "I–IV–V"}
+# Names that loop, so that a section may start on any of their chords; the others go somewhere and start on their first.
+LOOPS = {"the pop progression", "the '50s progression", "the circle of fifths", "Pachelbel's Canon", "the royal road",
+         "the double-plagal progression", "the Creep progression", "the Aeolian shuttle"}
+ROWS = [(name, numerals) for name, numerals, _ in CATALOGUE]
+IDS = [f"{name} {' '.join(numerals)}" for name, numerals in ROWS]
+
+
+def played(numerals, tonic: int) -> list[Chord]:
+    """The triads a row of the catalogue names on ``tonic``, worked out here rather than by harmony.py: a
+    numeral's root up the major scale, a V/x a fifth above x."""
+    chords = []
+    for text in numerals:
+        accidental, roman, dim, of_accidental, of = _ROW.match(text).groups()
+        root = _STEPS[roman.upper()] + {"♭": -1, "♯": 1, "": 0}[accidental]
+        if of:
+            root += _STEPS[of.upper()] + {"♭": -1, "♯": 1, "": 0}[of_accidental]
+        chords.append(Chord((tonic + root) % 12, "dim" if dim else "m" if roman.islower() else ""))
+    return chords
+
+
+def own_key(numerals) -> Key:
+    """A row with a minor tonic (i) is in A minor, the others in C major."""
+    return A_MINOR if "i" in numerals else C
+
+
+def named(chords, key: Key) -> Progression:
+    [(_, found)] = progressions([("Verse", chords)], key)
+    return found
+
+
+@pytest.mark.parametrize(("name", "numerals"), ROWS, ids=IDS)
+def test_every_catalogue_progression_is_named_in_its_own_key_and_in_the_relative_one(name, numerals):
+    key = own_key(numerals)
+    chords = played(numerals, key.tonic)
+    assert named(chords, key).name == name
+    relative = C if key == A_MINOR else A_MINOR
+    assert named(chords, relative).name == (None if name in ON_ITS_TONIC else name)
+    # In another key altogether, the same.
+    up = [Chord((c.root + 5) % 12, c.quality) for c in chords]
+    assert named(up, Key((key.tonic + 5) % 12, key.mode)).name == name
+
+
+@pytest.mark.parametrize(("name", "numerals"), ROWS, ids=IDS)
+def test_a_progression_that_loops_is_named_from_any_of_its_chords_one_that_goes_somewhere_only_from_its_first(
+        name, numerals):
+    key = own_key(numerals)
+    chords = played(numerals, key.tonic)
+    closed = chords[0] == chords[-1]
+    cycle, written = (chords[:-1], numerals[:-1]) if closed else (chords, numerals)
+    rows = {ns for n, ns in ROWS if n == name}
+    for turn in range(1, len(cycle)):
+        turned = cycle[turn:] + cycle[:turn]
+        if name in LOOPS:
+            assert named(turned, key).name == name, turn
+        elif tuple(written[turn:] + written[:turn]) not in rows:  # the ragtime progression from its I, or to it
+            assert named(turned, key).name != name, turn
+
+
+@pytest.mark.parametrize(("name", "numerals"), ROWS, ids=IDS)
+def test_every_catalogue_progression_is_found_inside_a_longer_section(name, numerals):
+    key = own_key(numerals)
+    # Two chords before it and one after that start no progression of the catalogue with it: ♯IV° and ♭II
+    # are in no row.
+    odd = [Chord((key.tonic + 6) % 12, "dim"), Chord((key.tonic + 1) % 12, "")]
+    found = named(odd + played(numerals, key.tonic) + odd[:1], key)
+    assert found.name is None
+    assert [c.name for c in found.contains] == [name]
+    assert found.contains[0].times == 1
+
+
+def test_extensions_inversions_suspensions_and_power_chords_dont_stop_a_name():
+    for names in ("Cmaj7 G/B Am7 Fadd9", "C G7sus4 Am F/A", "C5 G5 A5 F5", "Csus2 G Asus4 F"):
+        assert named(section(names), C).name == "the pop progression", names
+    # A suspended chord has no third: Asus4 is vi as well as VI, and Dsus4 ii as well as II.
+    assert named(section("Dsus4 G C"), C).name == "ii–V–I"
+    assert named(section("Am7 G/B Fmaj7 E7"), A_MINOR).name == "the Andalusian cadence"
+    # A chord held a while, or played with its suspension first, is one chord of the progression.
+    assert named(section("C C/E G Gsus4 G Am Am7 F Fmaj7"), C).name == "the pop progression"
+
+
+def test_wonderwalls_verse_folds_with_its_one_variation_and_is_no_famous_progression():
+    # Oasis's verse as sheets write it (capo 2): Em7 G Dsus4 A7sus4, with one pass on Cadd9 in place of its first
+    # two chords. In E minor, i–♭III–♭VII–IV: three rising fifths back to the tonic (G D A E), the IV a Dorian IV
+    # (A7sus4 has no third: IV or iv). No progression of the catalogue: in G major it is vi–I–V–II, and its
+    # ♭VII–IV–i is no double plagal, which comes home to a major I.
+    verse = "Em7 G Dsus4 A7sus4 " * 3 + "Cadd9 Dsus4 A7sus4 " + "Em7 G Dsus4 A7sus4 " * 4
+    e_minor = Key(4, "aeolian")
+    assert named(section(verse), e_minor) == Progression(("i7", "♭III", "♭VIIsus4", "IV7sus4"), 8, None, None,
+                                                         variations=1)
+    in_g = named(section(verse), Key(7, "ionian"))
+    assert (in_g.numerals, in_g.name, in_g.contains) == (("vi7", "I", "Vsus4", "II7sus4"), None, ())
+    # Its pre-chorus's Cadd9 Dsus4 Em7 is the Aeolian cadence, three times, and its Cadd9 Dsus4 G Em7 then is
+    # the '50s progression from its IV (in G major, IV–V–I–vi), its G/F# a G with its 7th in the bass.
+    pre = named(section("Cadd9 Dsus4 Em7 " * 3 + "Cadd9 Dsus4 G G/F# Em7 Dsus4/F# A7sus4"), e_minor)
+    assert pre.contains == (Contained("the Aeolian cadence", 3, ("♭VIadd9", "♭VIIsus4", "i7"), "i ♭VI ♭VII"),
+                            Contained("the '50s progression", 1, ("♭VIadd9", "♭VIIsus4", "♭III", "i7"), "I vi IV V"))
+
+
+def test_a_famous_progression_inside_a_longer_section_is_named_with_the_times_it_is_played():
+    found = named(section("Dm C G Am F Bb C G Am F"), C)
+    assert (found.name, found.repeats) == (None, 1)
+    assert found.contains == (Contained("the pop progression", 2, ("I", "V", "vi", "IV"), "I V vi IV"),)
+    # Two in one section, each by the times it is played, in the order they come.
+    found = named(section("Dm7 G7 Cmaj7 Am G F E7 Am G F E7"), C)
+    assert [(c.name, c.times) for c in found.contains] == [("ii–V–I", 1), ("the Andalusian cadence", 2)]
+    # A blues played twice shares the I it ends on with the next.
+    found = named(section("C7 F7 C7 G7 F7 C7 F7 C7 G7 F7 C7 Am"), C)
+    assert [(c.name, c.times) for c in found.contains] == [("the 12-bar blues", 2)]
+    # A section that is the progression whole is named so, and contains nothing else.
+    found = named(section("Am F C G " * 2), C)
+    assert (found.name, found.contains) == ("the pop progression", ())
+
+
+def test_a_near_miss_is_not_named():
+    for names, key in (("C G Am Em", C),  # I–V–vi–iii: half of the Canon
+                       ("Am G F Em " * 2, A_MINOR),  # a minor v is no Andalusian cadence
+                       ("F G Am C", C),  # IV–V–vi: the Aeolian cadence comes home to its own tonic only
+                       ("F G E7 Am", A_MINOR)):  # ♭VI–♭VII–V–i: no royal road (♭VI–♭VII–v–i), no Aeolian cadence
+        found = named(section(names), key)
+        assert (found.name, found.contains) == (None, ()), names
+    assert named(section("F G Em7 Am7"), A_MINOR).name == "the royal road"
+    # i–♭VII–♭VI–♭VII is the Aeolian shuttle, never the Andalusian cadence.
+    assert named(section("Am G F G"), A_MINOR).name == "the Aeolian shuttle"
+    assert named(section("G B C Cm"), Key(7, "ionian")).name == "the Creep progression"
+    assert named(section("G Bm C Cm"), Key(7, "ionian")).name is None  # iii is no III
+
+
+def test_the_andalusian_cadence_in_any_minor_key_and_read_in_the_relative_major():
+    assert named(section("Am G F E"), A_MINOR).name == "the Andalusian cadence"
+    assert named(section("Dm C Bb A"), Key(2, "aeolian")).name == "the Andalusian cadence"
+    assert named(section("F#m E D C#7"), Key(6, "aeolian")).name == "the Andalusian cadence"
+    assert named(section("Am G F E"), C).name == "the Andalusian cadence"  # vi–V–IV–V/vi
+    assert named(section("Em D C B7"), Key(7, "ionian")).name == "the Andalusian cadence"
+
+
+def test_a_sections_repeats_fold_even_when_one_pass_varies_a_chord():
+    found = named(section("C G Am F " * 3 + "C G Am Dm"), C)
+    assert (found.numerals, found.repeats, found.variations, found.name) == (
+        ("I", "V", "vi", "IV"), 4, 1, "the pop progression")
+    # A pass with a chord more, or one less, is a variation too.
+    assert named(section("C G Am F " * 2 + "C G Em Am F " + "C G Am F"), C).variations == 1
+    assert named(section("C G Am F " * 2 + "C Am F " + "C G Am F"), C).variations == 1
+    # Played whole every time, there is no variation, and a cycle twice varied still folds with both.
+    assert named(section("C G Am F " * 4), C).variations == 0
+    eight = named(section("C G Am F C G Am Dm " * 3), C)  # the whole eight chords, three times
+    assert (len(eight.numerals), eight.repeats, eight.variations) == (8, 3, 0)
+    twice = named(section("C G Am F " * 4 + "C G Am Dm " + "C G Am F " + "C G Am Dm"), C)
+    assert (twice.repeats, twice.variations) == (7, 2)
+    # A variation needs the cycle at least twice besides, and more often than not.
+    assert named(section("C G Am F C G Am Em"), C).repeats == 1
+    assert named(section("C G Am F C G Am Em C G Am Dm"), C).repeats == 1
+    # The section may end on the cycle's first chord: home, not a pass.
+    ends = named(section("C G Am F " * 2 + "C"), C)
+    assert (ends.numerals, ends.repeats, ends.variations) == (("I", "V", "vi", "IV"), 2, 0)
 
 
 # --- the progression's search key ---------------------------------------------------------------
@@ -537,7 +704,8 @@ def test_the_kept_answers_are_the_answers_asked_anew():
         return [(numeral(c, k, n).text, relation(c, k, n), family(c, k), explain(c, k, n),
                  chord_tones(c, k), solo_scale(c, k))
                 for k in keys for c, n in zip(chords, chords[1:] + [None], strict=True)] + [
-            glossary(chords, k) for k in keys] + [progressions([("V", chords)], k) for k in keys]
+            glossary(chords, k) for k in keys] + [progressions([("V", chords)], k) for k in keys] + [
+            name_of(("vi", "IV", "I", "V")), name_of(("i", "♭VI", "♭III", "♭VII"))]
 
     for function in kept:
         function.cache_clear()

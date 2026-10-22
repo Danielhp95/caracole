@@ -146,7 +146,8 @@ html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
 .gloss .gloss-key { color: var(--text); }
 .gloss-roles .nm { font-weight: 700; }
 /* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
-   ▶ beside it, and its songs; the numeral playing marked. A section's heading names its progression. */
+   ▶ beside it, and its songs, and those of each named progression it contains; the numeral playing marked. A
+   section's heading names its progression. */
 .progs { margin: 0; padding: 0; list-style: none; }
 .prog { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 8px; padding: 6px 0;
   border-top: 1px solid var(--border); }
@@ -157,9 +158,10 @@ html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
 .pn { border-radius: 4px; }
 .pn.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 .prog-x { margin-left: .45em; color: var(--muted); font-weight: 600; }
+.prog-var { white-space: nowrap; }
 .prog-about { color: var(--muted); font-size: .82rem; }
 .prog-about:empty { display: none; }
-.prog-songs { grid-column: 1 / -1; justify-self: start; font-size: .85rem; }
+.prog-songs, .prog-named { grid-column: 1 / -1; justify-self: start; font-size: .85rem; }
 .hint-inline { color: var(--muted); font-size: .82rem; }
 #harmony-key { margin-bottom: 8px; }
 #harmony-neck:empty { display: none; }

@@ -201,7 +201,8 @@ once.
 
 **Progressions.** Each song carries its sheet's progressions as its last render read them
 (``progressions.library_progressions``: each cycle's key, the same in every key and rotation, and how
-the song plays it), and the page the catalogue's names by key (``catalogue``). A song's "⋯" lists them,
+the song plays it, and the named progressions a section plays within it by their name's key), and the page
+the catalogue's names by key (``catalogue``). A song's "⋯" lists them,
 each a button that shows the songs that play it alone, and so does ``#prog=<key>`` in the address (a
 viewer's Harmony panel links there), under a line that says which ("Songs with I–V–vi–IV, the pop
 progression · Show all"); a named progression stands for every progression of its name, so the pop

@@ -1493,21 +1493,40 @@
   // --- the Harmony panel: each section's progression, named, played ------------------------------------
   // In the settings' place (docked on a phone, a rail from 900 px): the key the numerals are read in, its
   // neck on a phone (the rail of necks has it on a laptop), and each section's progression (page.py's
-  // ``progressions``): its numerals, one cycle, the times it is played, its name and how it ends. Tap one to
-  // go to its section; ▶ plays it with strum.js's synthesis (window.caracoleSound, when the page has it), a
-  // chord a bar at the tempo set, each chord as the page shows it, its shape and the capo, and marks the one
-  // playing; ■ stops it. Songs with this progression is the library's page, with it filtered (#prog=).
+  // ``progressions``): its numerals, one cycle, the times it is played (and how many of those vary it), its
+  // name, the named progressions it plays within it, and how it ends. Tap one to go to its section; ▶ plays it
+  // with strum.js's synthesis (window.caracoleSound, when the page has it), a chord a bar at the tempo set, each
+  // chord as the page shows it, its shape and the capo, and marks the one playing; ■ stops it. Songs with this
+  // progression is the library's page, with it filtered (#prog=), and so is Songs with each one it contains.
   const ENDINGS = { authentic: "an authentic cadence (V–I)", plagal: "a plagal cadence (IV–I)",
     half: "a half cadence (on V)", deceptive: "a deceptive cadence (V–vi)" };
+  const COUNTS = ["no", "one", "two", "three"];
+  const counted = (n, word) => (n < COUNTS.length ? COUNTS[n] : String(n)) + " " + word + (n === 1 ? "" : "s");
+  // The named progressions a section plays within it, each [name, times, key].
+  const containedOf = (found) => (Array.isArray(found[8]) ? found[8] : [])
+    .filter((c) => Array.isArray(c) && typeof c[0] === "string" && c[0] && typeof c[2] === "string");
+  // "contains the pop progression ×2 and ii–V–I".
+  const containsWords = (found) => {
+    const names = containedOf(found).map((c) => c[0] + (Number(c[1]) > 1 ? " ×" + Number(c[1]) : ""));
+    if (!names.length) return "";
+    const last = names.pop();
+    return "contains " + (names.length ? names.join(", ") + " and " + last : last);
+  };
   const sectionEls = () => Array.from(sheetEl.querySelectorAll(":scope > section.sec"));
   const sectionName = (n) => {
     const head = (sectionEls()[n] || document.body).querySelector(":scope > h2.lbl");
     return head && head.firstChild ? head.firstChild.textContent : "Section " + (n + 1);
   };
-  // With the numerals shown, each section's heading names its progression, when it has a name.
+  // With the numerals shown, each section's heading names its progression, when it has a name, or those it
+  // plays within it.
   function drawHeadings() {
     const named = {};
-    if (numbered()) for (const found of table("progressions") || []) if (found[3]) named[found[0]] = found[3];
+    if (numbered()) {
+      for (const found of table("progressions") || []) {
+        const said = found[3] || containsWords(found);
+        if (said) named[found[0]] = said;
+      }
+    }
     sectionEls().forEach((sec, n) => {
       const head = sec.querySelector(":scope > h2.lbl");
       if (!head) return;
@@ -1597,11 +1616,12 @@
     const list = $("progs");
     const active = list.contains(document.activeElement) ? document.activeElement : null;
     const back = active ? [Array.prototype.indexOf.call(list.children, active.closest(".prog")),
-      ["prog-go", "prog-play", "prog-songs"].find((cls) => active.classList.contains(cls))] : null;
+      ["prog-go", "prog-play", "prog-songs", "prog-named"].find((cls) => active.classList.contains(cls))] : null;
     list.textContent = "";
     const found = table("progressions") || [];
     $("progs-none").hidden = found.length > 0;
-    for (const [n, numerals, repeats, name, ending, pkey, chords] of found) {
+    for (const row of found) {
+      const [n, numerals, repeats, name, ending, pkey, chords, variations] = row;
       const li = list.appendChild(document.createElement("li"));
       li.className = "prog";
       li.dataset.n = String(n);
@@ -1622,9 +1642,19 @@
         pn.className = "pn";
         pn.textContent = numeral;
       });
-      if (repeats > 1) nums.appendChild(document.createElement("span")).className = "prog-x";
-      if (repeats > 1) nums.lastChild.textContent = "×" + repeats;
-      part("prog-about", [name, ending && ENDINGS[ending] ? "ends on " + ENDINGS[ending] : ""].filter(Boolean).join(" · "));
+      if (repeats > 1) {
+        const times = nums.appendChild(document.createElement("span"));
+        times.className = "prog-x";
+        times.textContent = "×" + repeats;
+        if (variations > 0) {  // "×8, one variation", the words kept together
+          times.appendChild(document.createTextNode(", "));
+          const varied = times.appendChild(document.createElement("span"));
+          varied.className = "prog-var";
+          varied.textContent = counted(variations, "variation");
+        }
+      }
+      part("prog-about", [name, containsWords(row), ending && ENDINGS[ending] ? "ends on " + ENDINGS[ending] : ""]
+        .filter(Boolean).join(" · "));
       go.addEventListener("click", () => {
         const sec = sectionEls()[n];
         if (sec) sec.scrollIntoView({ block: "start", behavior: calm.matches ? "auto" : "smooth" });
@@ -1638,6 +1668,12 @@
       songs.className = "link prog-songs";
       songs.href = String(data.library || "") + "#prog=" + encodeURIComponent(pkey);
       songs.textContent = "Songs with this progression";
+      for (const [cname, , ckey] of containedOf(row)) {
+        const more = li.appendChild(document.createElement("a"));
+        more.className = "link prog-named";
+        more.href = String(data.library || "") + "#prog=" + encodeURIComponent(ckey);
+        more.textContent = "Songs with " + cname;
+      }
     }
     drawPlaying();
     const again = back && list.children[back[0]] && list.children[back[0]].querySelector("." + back[1]);

@@ -353,7 +353,8 @@ HARMONY = """(() => { const h = document.getElementById('harmony');
       repeats: li.querySelector('.prog-x') ? li.querySelector('.prog-x').textContent : '',
       about: li.querySelector('.prog-about').textContent,
       play: !li.querySelector('.prog-play').hidden,
-      songs: li.querySelector('.prog-songs').getAttribute('href')})),
+      songs: li.querySelector('.prog-songs').getAttribute('href'),
+      named: [...li.querySelectorAll('.prog-named')].map((a) => [a.textContent, a.getAttribute('href')])})),
     focus: document.activeElement ? document.activeElement.id : '', panel: !document.getElementById('panel').hidden,
     page: document.documentElement.scrollWidth}; })()"""
 # A stand-in for HV3's synthesis (strum.js: window.caracoleSound), noting what it is asked to play.
@@ -383,9 +384,12 @@ def test_on_a_phone_the_harmony_panel_docks_in_place_of_the_settings_and_lists_e
     verse, chorus, bridge = seen["rows"]  # the riff has no chord to read
     assert verse == {"section": "Verse", "numerals": ["I", "V", "vi", "IV"], "repeats": "×4",
                      "about": "the pop progression", "play": True,  # strum.js plays it
-                     "songs": "../../index.html#prog=I%20V%20vi%20IV"}
+                     "songs": "../../index.html#prog=I%20V%20vi%20IV", "named": []}
     assert chorus["numerals"] == ["IV", "V", "I", "vi", "IV", "V", "I"] and chorus["repeats"] == ""
-    assert chorus["about"] == "ends on an authentic cadence (V–I)"
+    # IV–V–I–vi is the '50s progression from its IV, inside the longer chorus.
+    assert chorus["about"] == "contains the '50s progression · ends on an authentic cadence (V–I)"
+    assert chorus["named"] == [["Songs with the '50s progression", "../../index.html#prog=I%20vi%20IV%20V"]]
+    assert verse["named"] == []  # the verse is the pop progression whole: its own link says so
     assert bridge["section"] == "Bridge" and bridge["numerals"][0] == "vi"
     assert seen["tempo"] and seen["page"] <= 390 and targets == []
 
@@ -445,8 +449,10 @@ def test_with_numerals_on_a_sections_heading_names_its_progression(tmp_path):
     with viewer(tmp_path, written(tmp_path, SONG, name="Numbered") + "#nm=both") as b:
         named = b.js(heads)
     assert plain == ["Verse", "Chorus", "Riff", "Bridge"]
-    # The bridge, vi V IV V7/vi, is the Andalusian cadence read in the relative major.
-    assert named == ["Verse · the pop progression", "Chorus", "Riff", "Bridge · the Andalusian cadence"]
+    # The bridge, vi V IV V7/vi, is the Andalusian cadence read in the relative major; the chorus plays the
+    # '50s progression within it.
+    assert named == ["Verse · the pop progression", "Chorus · contains the '50s progression", "Riff",
+                     "Bridge · the Andalusian cadence"]
 
 
 @in_chromium
@@ -456,6 +462,28 @@ def test_a_sheet_with_no_headings_has_one_section_to_list(tmp_path):
         seen = b.js(HARMONY)
     assert [(r["section"], r["numerals"], r["repeats"], r["about"]) for r in seen["rows"]] == [
         ("Section 1", ["i", "♭VII", "♭VI", "V7"], "×2", "the Andalusian cadence · ends on a half cadence (on V)")]
+
+
+# A verse that plays the pop progression twice within it, and folds round one pass that varies it; a chorus on
+# the Andalusian cadence, its last pass with a chord more.
+NAMED = ("{title: Named}\n{artist: Synthetic}\n{key: Am}\n"
+         "{comment: Verse}\n[Dm]made [C]up [G]words [Am]to [F]sing\n[Bb]and [C]more [G]of [Am]them [F]here\n\n"
+         "{comment: Chorus}\n" + "[Am]la [G]la [F]la [E7]la\n" * 3 + "[Am]la [G]la [F]la [Dm]la [E7]la\n")
+
+
+@in_chromium
+def test_the_panel_names_a_progression_a_section_plays_within_it_and_a_cycle_that_varies(tmp_path):
+    with viewer(tmp_path, written(tmp_path, NAMED) + "#nm=numerals") as b:
+        open_harmony(b)
+        seen = b.js(HARMONY)
+        heads = b.js("[...document.querySelectorAll('#sheet h2.lbl')].map((h) => h.textContent)")
+    verse, chorus = seen["rows"]
+    assert verse["numerals"] == ["iv", "♭III", "♭VII", "i", "♭VI", "♭II", "♭III", "♭VII", "i", "♭VI"]
+    assert verse["about"] == "contains the pop progression ×2"
+    assert verse["named"] == [["Songs with the pop progression", "../../index.html#prog=I%20V%20vi%20IV"]]
+    assert chorus["numerals"] == ["i", "♭VII", "♭VI", "V7"] and chorus["repeats"] == "×4, one variation"
+    assert chorus["about"] == "the Andalusian cadence · ends on a half cadence (on V)" and chorus["named"] == []
+    assert heads == ["Verse · contains the pop progression ×2", "Chorus · the Andalusian cadence"]
 
 
 @in_chromium
