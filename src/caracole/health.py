@@ -85,8 +85,16 @@ def record_block(conn: sqlite3.Connection, provider: str, now: datetime, message
 
 
 def record_ok(conn: sqlite3.Connection, provider: str, now: datetime) -> ProviderState:
-    """A run used the provider without a block: clear the cooldown and the strikes."""
-    return _save(conn, replace(get_state(conn, provider), strikes=0, cooldown_until=None, last_ok=now))
+    """A run that began at ``now`` used the provider without a block: clear the cooldown and the strikes.
+
+    A cooldown still running at ``now`` is left as it is. A run only asks a provider that isn't
+    cooling down, so that block came while the run went on: another caracole met it while this
+    one let it go first (a lookup in a pause of the nightly run, ``_common.hand_over``). It is
+    newer than the run's answers."""
+    s = get_state(conn, provider)
+    if s.cooldown_until is not None and now < s.cooldown_until:
+        return s
+    return _save(conn, replace(s, strikes=0, cooldown_until=None, last_ok=now))
 
 
 def record_error(conn: sqlite3.Connection, provider: str, now: datetime, message: str) -> ProviderState:

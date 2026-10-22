@@ -114,6 +114,17 @@ def test_the_run_after_a_block_leaves_the_provider_alone_however_late_it_starts(
     assert asked and get_state(conn, "ug").strikes == 0
 
 
+def test_a_good_run_leaves_a_cooldown_that_began_after_it_did(conn):
+    # A block another caracole met while this one had let it go first (a lookup in the nightly run's
+    # pause) is newer than this run's answers: the run's end clears no part of it.
+    met = T0 + timedelta(minutes=12)
+    record_block(conn, "ug", met, "403")
+    record_ok(conn, "ug", T0)
+    s = get_state(conn, "ug")
+    assert s.strikes == 1 and s.cooldown_until == met + timedelta(hours=26) and s.last_ok is None
+    assert is_cooling(conn, "ug", night(1))
+
+
 def test_record_error_keeps_strikes(conn):
     record_block(conn, "ug", T0, "403")
     record_error(conn, "ug", T0 + timedelta(hours=30), "502 on sitemap")

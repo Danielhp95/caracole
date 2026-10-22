@@ -1021,7 +1021,8 @@ prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
 `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
 lacuerda --artist`) sends none: it says so where you asked. A run or a command the site answers without a
-block starts the count again. Neither a block, nor a spent budget, nor any
+block starts the count again, unless a lookup it let go first was blocked meanwhile: that block's cooldown
+stands. Neither a block, nor a spent budget, nor any
 other error from a site marks a song not found or its lyrics missing: the
 song waits for the next run. An answer that won't read but was cached all the
 same (a maintenance notice served as a page, say) is asked for once more,
