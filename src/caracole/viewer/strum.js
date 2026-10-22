@@ -12,6 +12,14 @@
   // the next tap, never before. Hidden, the page falls silent at once. One sound at a time: a strum, or a
   // progression's next chord, stops the one before it.
   //
+  // A progression is scheduled on the context's clock, a little ahead (AHEAD), by a timer that looks every
+  // TICK ms; each bar is marked (onChord) and the end told (onEnd) on that clock too. A strum the timer comes
+  // to too late (the page was busy) moves the rest of the progression on with it, a beat after the one
+  // before: never two chords crammed together, never one out of its order. Stopped (stop(), its handle's,
+  // another strum or progression, the volume off, the page hidden or left), nothing scheduled sounds: a
+  // note not begun never begins, one ringing fades out (at once where the page is hidden), and no timer of
+  // it is left. A sound still waiting for the context to resume plays only if nothing was asked after it.
+  //
   // window.caracoleSound:
   //   notes(position, capo)        the MIDI notes a position sounds, low string first: a position as the
   //                                viewer's data has one ([frets, fingers, base fret, barres]: voicings.py),
@@ -26,8 +34,9 @@
   //                                (4), a strum every ``every`` beats (1, the bar's first the strongest);
   //                                ``onChord(i)`` as chord i's bar begins, ``onEnd(done)`` once, when it
   //                                ran to the end (true) or was stopped (false). It returns
-  //                                {playing, stop()}; ``playing`` is false when it couldn't start (as
-  //                                strum's false) or has ended. Call it from a tap, as strum.
+  //                                {playing, stop(), tempo(bpm)}; ``playing`` is false when it couldn't
+  //                                start (as strum's false) or has ended; ``tempo`` sets the tempo from
+  //                                the next strum not yet scheduled on. Call it from a tap, as strum.
   //   stop()                       stops whatever plays
   //   setVolume(v)                 0 (off) to 1; held for the next sounds, and the one playing
   //   pluck(hz, rate, seconds)     one plucked note's samples (a Float32Array), as a buffer holds them
@@ -40,6 +49,10 @@
   const DAMP = 0.035;  // the time constant a sound stopped (or the next one) fades with
   const IDLE = 2;  // seconds of silence before the context is suspended
   const LEVEL = 0.32;  // each string's level, at full volume
+  const FADE = DAMP * 8;  // seconds a sound stopped takes to fall silent, when its notes stop
+  const AHEAD = 0.3;  // seconds of a progression scheduled ahead on the context's clock
+  const LEAD = 0.05;  // the least a progression's strum is scheduled ahead: its first, and one that would be late
+  const TICK = 50;  // ms between two looks at the clock while a progression plays
   // The string's loss: each sample is this much of the one a period and a sample back, the rest of the one a
   // period back. 0.5 (Karplus and Strong's average) dulls a note within half a second; less rings brighter.
   const BLEND = 0.3;
@@ -121,6 +134,7 @@
   const ready = () => {
     if (!Context || volume <= 0) return null;
     clearTimeout(idle);
+    idle = 0;
     if (!context) {
       if (!tapped() || document.visibilityState === "hidden") return null;
       try {
@@ -145,53 +159,94 @@
     }
     return context;
   };
-  // Once the context runs (at once, or once a resume asked for has done), unless the page was hidden since.
+  // What was asked last: each strum, progression and stop counts one, and a sound waiting for the context
+  // to resume plays only if nothing was asked after it.
+  let turn = 0;
+  // Once the context runs (at once, or once a resume asked for has done), unless the page was hidden or
+  // something else was asked since.
   const whenRunning = (go) => {
+    const mine = turn;
     if (context.state === "running") go();
-    else context.resume().then(() => { if (document.visibilityState !== "hidden") go(); }, () => {});
+    else {
+      context.resume().then(() => {
+        if (mine === turn && document.visibilityState !== "hidden") go();
+      }, () => {});
+    }
   };
 
-  let progression = null;  // the progression playing: {playing, stop}
-  // The sounds still playing, each its gain and its sources: the last one, and those fading under it.
-  // ``at``: a time on the context's clock.
+  let progression = null;  // the progression playing: {playing, stop, tempo}
+  // The sounds scheduled or still playing: the last one, and those fading under it. Each its gain, its
+  // sources and the time each begins (``times``), ``at``, the time it begins, and ``ends``, the time it is
+  // silent by (Infinity: it rings out), on the context's clock.
   // Once nothing has played for IDLE seconds, the context is suspended, so the device's audio can sleep;
   // the next tap resumes it (ready).
   const live = new Set();
   let idle = 0;
+  const sleep = () => {
+    clearTimeout(idle);
+    idle = 0;
+    if (context && context.state === "running") context.suspend().catch(() => {});
+  };
   const rest = () => {
     clearTimeout(idle);
-    if (live.size || progression) return;
+    idle = 0;
+    if (!context || live.size || progression) return;
     idle = setTimeout(() => {
-      if (!live.size && !progression && context.state === "running") context.suspend().catch(() => {});
+      idle = 0;
+      if (!live.size && !progression) sleep();
     }, IDLE * 1000);
   };
-  // Damped from ``at`` (at once, ``hard``: the page went out of sight, where nothing may sound on).
-  const damp = (which, at, hard) => {
-    const when = Math.max(at, context.currentTime);
-    which.gain.gain.cancelScheduledValues(when);
-    if (hard) which.gain.gain.setValueAtTime(0, when);
-    else which.gain.gain.setTargetAtTime(0, when, DAMP);
+  // Silent at once: its level to nothing and its notes stopped, so one not begun never begins.
+  const cut = (which) => {
+    live.delete(which);
+    which.ends = 0;
+    try {
+      which.gain.gain.cancelScheduledValues(0);
+      which.gain.gain.value = 0;
+    } catch (err) { /* the context is gone */ }
     for (const source of which.sources) {
       try {
-        source.stop(hard ? when : when + DAMP * 8);
+        source.stop();
       } catch (err) { /* stopped already */ }
     }
   };
+  // Faded out from ``at``, its notes stopped FADE after, and a string it hadn't come to by then never
+  // sounds: never later than it was to stop already, so a sound faded by the next strum stays faded under
+  // the ones after it.
+  const damp = (which, at) => {
+    const when = Math.max(at, context.currentTime);
+    if (which.ends <= when + FADE) return;
+    which.ends = when + FADE;
+    which.gain.gain.cancelScheduledValues(when);
+    which.gain.gain.setTargetAtTime(0, when, DAMP);
+    which.sources.forEach((source, n) => {
+      try {
+        source.stop(which.times[n] >= when ? when : which.ends);
+      } catch (err) { /* stopped already */ }
+    });
+  };
+  // Every sound from ``at`` on (now, at the soonest): one that hasn't begun by then never does, the others
+  // fade out; all cut at once (``hard``) where nothing may sound on: the page went out of sight.
   const silence = (at, hard) => {
-    for (const which of live) damp(which, at, hard);
+    const from = Math.max(at, context.currentTime);
+    for (const which of Array.from(live)) {
+      if (hard || which.at >= from) cut(which);
+      else damp(which, from);
+    }
   };
   // A strum at ``at``, low string first (``up``: high first), the sounds before it stopped as it begins.
   const sound = (midis, at, level, up) => {
+    const order = up ? midis.slice().reverse() : midis;
+    const made = order.map(bufferOf);
     silence(at);
     const gain = context.createGain();
     gain.gain.value = level;
     gain.connect(out);
-    const order = up ? midis.slice().reverse() : midis;
-    const which = { gain, sources: [] };
-    let left = order.length;
-    which.sources = order.map((midi, n) => {
+    const which = { gain, sources: [], times: made.map((_, n) => at + n * GAP), at, ends: Infinity };
+    let left = made.length;
+    which.sources = made.map((buffer, n) => {
       const source = context.createBufferSource();
-      source.buffer = bufferOf(midi);
+      source.buffer = buffer;
       source.connect(gain);
       source.onended = () => {
         if (--left === 0) {
@@ -200,85 +255,114 @@
           rest();
         }
       };
-      source.start(at + n * GAP);
+      source.start(which.times[n]);
       return source;
     });
     live.add(which);
     clearTimeout(idle);
+    idle = 0;
     doc.dataset.heard = midis.map((midi) => hz(midi).toFixed(2)).join(" ");
   };
 
   const stop = (hard) => {
+    turn += 1;
     if (progression) progression.stop();
-    if (context) silence(context.currentTime, hard);
+    if (context) {
+      silence(context.currentTime, hard);
+      rest();
+    }
   };
 
   const strum = (position, options) => {
     const midis = notes(position, options && options.capo);
     if (!midis.length || !ready()) return false;
-    if (progression) progression.stop();
-    whenRunning(() => sound(midis, context.currentTime + 0.005, LEVEL, false));
+    stop();
+    whenRunning(() => {
+      midis.forEach(bufferOf);  // made before the clock is read, so no string starts late
+      sound(midis, context.currentTime + 0.005, LEVEL, false);
+    });
     return true;
   };
 
+  const tempoOf = (bpm) => Math.min(600, Math.max(20, Number(bpm) || 80));
   const play = (chords, options) => {
     const o = options || {};
     const list = Array.isArray(chords) ? chords : [];
-    const bpm = Math.min(600, Math.max(20, Number(o.bpm) || 80));
     const beats = Math.max(1, Math.round(Number(o.beats) || 4));
     const every = Math.max(1, Math.round(Number(o.every) || 1));
-    const handle = { playing: false, stop: () => {} };
+    const handle = { playing: false, stop: () => {}, tempo: () => {} };
     if (!list.length || !ready()) return handle;
     stop();
-    const beat = 60 / bpm;
-    const timers = [];
-    let start = 0, next = 0, ticking = 0, over = false;
-    // Every strum: [time from the start, chord, beat of its bar]; a bar's first is down and the strongest,
-    // and the others alternate up and down.
+    const chordNotes = list.map((chord) => (chord ? notes(chord.position, chord.capo) : []));
+    // Every strum: [its beat, from the first, chord, beat of its bar]; a bar's first is down and the
+    // strongest, and the others alternate up and down.
     const strums = [];
     list.forEach((chord, i) => {
-      for (let b = 0; b < beats; b += every) strums.push([(i * beats + b) * beat, i, b]);
+      for (let b = 0; b < beats; b += every) strums.push([i * beats + b, i, b]);
     });
+    // On the context's clock: beat ``from`` at ``origin``, and one every ``beat`` seconds from there.
+    let beat = 60 / tempoOf(o.bpm), origin = 0, from = 0;
+    const timeOf = (n) => origin + (n - from) * beat;
+    const bars = [];  // [time, chord] of each bar scheduled, until it is marked
+    let next = 0, ticking = 0, over = false;
     const end = (done) => {
       if (over) return;
       over = true;
       handle.playing = false;
       clearTimeout(ticking);
-      for (const timer of timers) clearTimeout(timer);
+      ticking = 0;
       if (progression === handle) progression = null;
-      if (!done) silence(context.currentTime);
+      if (!done) {
+        turn += 1;
+        silence(context.currentTime);
+      }
       rest();
       if (typeof o.onEnd === "function") o.onEnd(done);
     };
     // Scheduled a little ahead on the context's clock, as timers in a page are late at times.
     const tick = () => {
+      ticking = 0;
       if (over) return;
-      const now = context.currentTime;
-      while (next < strums.length && start + strums[next][0] < now + 0.3) {
-        const [from, i, b] = strums[next];
-        const at = start + from;
-        const chord = list[i];
-        const midis = chord ? notes(chord.position, chord.capo) : [];
+      while (next < strums.length && timeOf(strums[next][0]) < context.currentTime + AHEAD) {
+        const [n, i, b] = strums[next];
+        const midis = chordNotes[i];
+        midis.forEach(bufferOf);  // made before the clock is read: the first time, a note takes a while
+        const soonest = context.currentTime + LEAD;
+        if (timeOf(n) < soonest) origin += soonest - timeOf(n);  // late: the rest moves on with it
+        const at = timeOf(n);
         if (b === 0) {
           if (midis.length) sound(midis, at, LEVEL, false);
           else silence(at);  // a bar of silence
-          timers.push(setTimeout(() => { if (!over && typeof o.onChord === "function") o.onChord(i); },
-            Math.max(0, (at - now) * 1000)));
+          bars.push([at, i]);
         } else if (midis.length) sound(midis, at, LEVEL * 0.62, (b / every) % 2 === 1);
         next += 1;
       }
-      if (next >= strums.length) {
-        timers.push(setTimeout(() => end(true), Math.max(0, (start + list.length * beats * beat - now) * 1000)));
+      while (bars.length && bars[0][0] <= context.currentTime) {
+        const i = bars.shift()[1];
+        if (typeof o.onChord === "function") o.onChord(i);
+        if (over) return;
+      }
+      if (next >= strums.length && !bars.length && context.currentTime >= timeOf(list.length * beats)) {
+        end(true);
         return;
       }
-      ticking = setTimeout(tick, 100);
+      ticking = setTimeout(tick, TICK);
     };
     handle.playing = true;
     handle.stop = () => end(false);
+    // The strums scheduled keep their times; the next one comes the new beat after the last of them.
+    handle.tempo = (bpm) => {
+      if (over) return;
+      const pivot = next > 0 ? strums[next - 1][0] : 0;
+      origin = timeOf(pivot);
+      from = pivot;
+      beat = 60 / tempoOf(bpm);
+    };
     progression = handle;
     whenRunning(() => {
       if (over) return;
-      start = context.currentTime + 0.05;
+      for (const midis of chordNotes) midis.forEach(bufferOf);  // every note made before the first is timed
+      origin = context.currentTime + LEAD;
       tick();
     });
     return handle;
@@ -294,7 +378,7 @@
   // sleep; it plays again on the next tap, which resumes it.
   const hush = () => {
     stop(true);
-    if (context && context.state === "running") context.suspend().catch(() => {});
+    sleep();
   };
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") hush();

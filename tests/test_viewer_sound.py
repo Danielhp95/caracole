@@ -8,7 +8,9 @@ was hidden) is resumed on the next. One sound at a time. The volume is a setting
 The page writes the frequencies it strummed last on ``<html data-heard>`` for these tests. They count
 the AudioContexts the page makes with a script the browser runs before the page's own
 (``Page.addScriptToEvaluateOnNewDocument``, which the page's policy doesn't stop), in a Chromium of their
-own on real time (helpers/browser.py's ``Browser``).
+own on real time (helpers/browser.py's ``Browser``). A progression's tests record every note the page
+schedules and every timer it sets the same way (``SCHEDULE``): it plays in its order at its tempo, and once
+stopped nothing of it sounds and no timer of strum.js is left.
 """
 
 from __future__ import annotations
@@ -397,3 +399,289 @@ def test_a_progression_plays_a_chord_a_bar_at_its_tempo_and_stops(tmp_path):
         assert b.wait("played.length >= 1", 5)
         tap(b, '#sheet .c[data-c="0"]')
         assert b.wait("ended === false")
+
+
+# --- a progression in its order, and nothing after it stops ---------------------------------------------
+# What the page schedules, for these tests (a script run before the page's own, as SPY): every note started,
+# with its time on the context's clock (``when``), the clock when it was scheduled (``at``), what <html
+# data-heard> said just before it (the page writes a strum's frequencies once its notes are started: so the
+# strum before its own), when it is to stop (the last stop() asked, unless it had stopped already: at once
+# for a time gone by), when its sound was cut off (the node it plays through disconnected); and the timers
+# alive, each with the line of the page that set it.
+SCHEDULE = """(() => {
+  const Real = window.AudioContext;
+  const log = window.log = { context: null, notes: [], timers: new Map() };
+  window.AudioContext = class extends Real {
+    constructor(...args) { super(...args); log.context = this; }
+  };
+  const connect = AudioNode.prototype.connect, disconnect = AudioNode.prototype.disconnect;
+  AudioNode.prototype.connect = function (to, ...rest) {
+    this.through = to;
+    return connect.call(this, to, ...rest);
+  };
+  AudioNode.prototype.disconnect = function (...args) {
+    if (this.cut === undefined) this.cut = this.context.currentTime;
+    return disconnect.apply(this, args);
+  };
+  const start = AudioBufferSourceNode.prototype.start;
+  AudioBufferSourceNode.prototype.start = function (when, ...rest) {
+    this.note = { when, at: this.context.currentTime, before: document.documentElement.dataset.heard || null,
+      stop: null, node: this };
+    log.notes.push(this.note);
+    return start.call(this, when, ...rest);
+  };
+  const stop = AudioScheduledSourceNode.prototype.stop;
+  AudioScheduledSourceNode.prototype.stop = function (when) {
+    const now = this.context.currentTime;
+    if (this.note && !(this.note.stop !== null && this.note.stop <= now)) this.note.stop = Math.max(when || 0, now);
+    return stop.call(this, when);
+  };
+  window.notesNow = () => log.notes.map((n) => {
+    const cuts = [n.node.cut, n.node.through && n.node.through.cut].filter((t) => t !== undefined);
+    return { when: n.when, at: n.at, before: n.before, stop: n.stop, cut: cuts.length ? Math.min(...cuts) : null };
+  });
+  const set = window.setTimeout, clear = window.clearTimeout;
+  window.setTimeout = function (fn, ms, ...rest) {
+    const caller = (new Error().stack || "").split("\\n")[2] || "";
+    const line = Number((caller.match(/:(\\d+):\\d+\\)?$/) || [0, 0])[1]);
+    const id = set.call(window, (...args) => {
+      log.timers.delete(id);
+      if (typeof fn === "function") fn(...args);
+    }, ms, ...rest);
+    log.timers.set(id, line);
+    return id;
+  };
+  window.clearTimeout = function (id) {
+    log.timers.delete(id);
+    return clear.call(window, id);
+  };
+})()"""
+
+G_OPEN = "98.00 123.47 146.83 196.00 246.94 392.00"  # 320003
+AM_OPEN = "110.00 164.81 220.00 261.63 329.63"  # x02210
+F_BARRE = "87.31 130.81 174.61 220.00 261.63 349.23"  # 133211
+POSITIONS = {C_OPEN: '["x32010", "032010", 1, []]', G_OPEN: '["320003", "210003", 1, []]',
+             AM_OPEN: '["x02210", "002310", 1, []]', F_BARRE: '["133211", "134211", 1, [1]]'}
+# Two sections: the verse I–V–vi–IV four times, the chorus IV–V–I–vi twice (▶ 0 and ▶ 1 in the Harmony panel).
+SECTIONS = ("{title: Sections}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
+            + "[C]made [G]up [Am]words [F]here\n" * 4 + "\n{comment: Chorus}\n" + "[F]and [G]the [C]cho[Am]rus\n" * 2)
+VERSE = [C_OPEN, G_OPEN, AM_OPEN, F_BARRE] * 4
+CHORUS = [F_BARRE, G_OPEN, C_OPEN, AM_OPEN] * 2
+GAP = 0.022  # strum.js: a string after the one before it
+FADE = 0.3  # the most a sound stopped takes to fade out (strum.js: DAMP, eight times)
+
+
+@contextmanager
+def scheduled(tmp_path: Path, cho: str, address: str = "", **size):
+    """The viewer of ``cho`` with SCHEDULE run before its script, and the lines its strum.js takes in the page."""
+    html = build_viewer(cho)
+    strum = (page.HERE / "strum.js").read_text(encoding="utf-8")
+    first = html[:html.index(strum)].count("\n") + 1
+    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), **({"width": 390, "height": 844,
+                                                                             "mobile": True} | size)) as b:
+        b.send("Page.addScriptToEvaluateOnNewDocument", source=SCHEDULE)
+        b.open(written(tmp_path, html) + address)
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        b.strum_lines = range(first, first + strum.count("\n") + 1)
+        yield b
+
+
+def tapped(b: Browser, expression: str):
+    """``expression``'s value, run as a tap runs: with the user's activation."""
+    found = b.send("Runtime.evaluate", expression=expression, userGesture=True, returnByValue=True)
+    assert "exceptionDetails" not in found, found
+    return found["result"].get("value")
+
+
+def strums(b: Browser) -> list[dict]:
+    """The strums the page scheduled, in order: each its notes (one a GAP after the one before), its time, the
+    clock when it was scheduled, and what it strummed (what the next one's first note found the page saying it
+    strummed last, or what it says now)."""
+    found: list[dict] = []
+    notes, last_heard = b.js("[notesNow(), document.documentElement.dataset.heard || null]")
+    for note in notes:
+        last = found[-1] if found else None
+        if last and abs(note["when"] - last["when"] - GAP * len(last["notes"])) < 1e-6 and abs(note["at"] - last["at"]) < 0.05:
+            last["notes"].append(note)
+        else:
+            found.append({"when": note["when"], "at": note["at"], "notes": [note]})
+    for k, strum in enumerate(found):
+        strum["heard"] = found[k + 1]["notes"][0]["before"] if k + 1 < len(found) else last_heard
+    return found
+
+
+def sounds(note: dict) -> bool:
+    """Whether a note is heard at all: stopped or cut off only once it began."""
+    return all(t is None or t > note["when"] for t in (note["stop"], note["cut"]))
+
+
+def ends(note: dict) -> float:
+    return min(t for t in (note["stop"], note["cut"], note["when"] + 2.6) if t is not None)
+
+
+def heard_after(found: list[dict], t: float) -> list[dict]:
+    """The strums of ``found`` some note of which is heard after the time ``t``."""
+    return [s for s in found if any(sounds(n) and ends(n) > t for n in s["notes"])]
+
+
+def silent_after(b: Browser, t: float) -> None:
+    """Nothing the page scheduled sounds once ``t`` is past but a fade: no note due after it is heard at all."""
+    for strum in strums(b):
+        for note in strum["notes"]:
+            if note["when"] > t + 0.01:
+                assert not sounds(note), (t, strum["heard"], note)
+            else:
+                assert ends(note) <= t + FADE + 1e-6, (t, strum["heard"], note)
+
+
+def strum_timers(b: Browser) -> list[int]:
+    return [line for line in b.js("[...log.timers.values()]") if line in b.strum_lines]
+
+
+# A moment when the page has scheduled a strum ahead of its time on the clock: what the tests stop it in.
+AHEAD = "notesNow().some((n) => n.when > log.context.currentTime + 0.05)"
+
+
+def when_ahead(b: Browser, action: str) -> float:
+    """Waits for a strum scheduled ahead, then runs ``action`` as a tap at once; the clock just before."""
+    for _ in range(400):
+        t = tapped(b, f"(() => {{ if (!({AHEAD})) return null; const t = log.context.currentTime; {action}; return t; }})()")
+        if t is not None:
+            return t
+        time.sleep(0.01)
+    raise AssertionError("no strum scheduled ahead")
+
+
+def harmony_at_200_bpm(b: Browser) -> None:
+    tapped(b, "document.getElementById('more').click(); document.getElementById('harmony-open').click();"
+              "for (let k = 0; k < 24; k++) document.getElementById('bpm-up').click()")
+    assert b.js("document.getElementById('bpm').textContent") == "200"
+
+
+PLAY = "document.querySelectorAll('#harmony .prog-play')[%d].click()"
+
+
+@in_chromium
+def test_a_progression_plays_in_its_order_across_its_repeats_even_when_the_page_is_busy(tmp_path):
+    # C G Am F three times, a strum a bar at 600 bpm; the page busy for 0.7 s after the fourth: the rest comes
+    # later, in its order, a beat apart, never late and crammed together.
+    with scheduled(tmp_path, SONG) as b:
+        cycle = [C_OPEN, G_OPEN, AM_OPEN, F_BARRE]
+        chords = ", ".join("{position: %s, capo: 0}" % POSITIONS[c] for c in cycle * 3)
+        assert tapped(b, f"""window.marked = []; window.ended = null;
+          window.caracoleSound.play([{chords}], {{ bpm: 600, beats: 1, onChord: (i) => marked.push(i),
+            onEnd: (done) => {{ ended = done; }} }}).playing""") is True
+        assert b.wait("marked.length >= 4", 5)
+        b.js("(() => { const t = performance.now(); while (performance.now() - t < 700) {} })()")
+        assert b.wait("ended !== null", 10)
+        found = strums(b)
+        assert b.js("ended") is True and b.js("marked") == list(range(12))
+    assert [s["heard"] for s in found] == cycle * 3
+    beat = 60 / 600
+    for strum in found:
+        assert strum["when"] >= strum["at"], strum  # scheduled ahead of its time, never after it
+    gaps = [b2["when"] - a["when"] for a, b2 in zip(found, found[1:])]
+    assert all(gap >= beat - 1e-6 for gap in gaps), gaps
+    assert sum(abs(gap - beat) < 1e-6 for gap in gaps) >= 10  # the tempo, but where the page was busy
+
+
+@in_chromium
+def test_a_second_play_stops_the_first_and_nothing_of_it_sounds_after(tmp_path):
+    with scheduled(tmp_path, SECTIONS) as b:
+        harmony_at_200_bpm(b)
+        tapped(b, PLAY % 0)  # the verse
+        assert b.wait("notesNow().length >= 15")
+        t = when_ahead(b, PLAY % 1)  # the chorus, while a strum of the verse waits for its time
+        time.sleep(2.5)
+        found = strums(b)
+        label = b.js("[...document.querySelectorAll('#harmony .prog-play')].map((p) => p.textContent)")
+    verse = [s for s in found if s["at"] < t]
+    chorus = [s for s in found if s["at"] >= t]
+    assert any(s["when"] > t + 0.05 for s in verse)  # one of the verse's was waiting for its time
+    for strum in verse:  # it never sounds, and the one ringing fades out
+        for note in strum["notes"]:
+            assert not sounds(note) if note["when"] > t + 0.01 else ends(note) <= t + FADE + 1e-6, note
+    assert not [s for s in heard_after(found, t + FADE) if s["at"] < t]
+    assert len(chorus) >= 6 and [s["heard"] for s in chorus] == [c for c in CHORUS for _ in range(4)][:len(chorus)]
+    assert label == ["▶", "■"]
+
+
+@in_chromium
+def test_play_twice_at_once_plays_the_second_alone(tmp_path):
+    with scheduled(tmp_path, SECTIONS) as b:
+        harmony_at_200_bpm(b)
+        tapped(b, f"{PLAY % 0}; {PLAY % 1}")
+        time.sleep(1.5)
+        found = strums(b)
+    heard = [s["heard"] for s in found if any(sounds(n) for n in s["notes"])]
+    assert len(heard) >= 4 and heard == [c for c in CHORUS for _ in range(4)][:len(heard)]  # never the verse's C
+
+
+@in_chromium
+def test_closing_the_panel_stops_every_sound_and_leaves_no_timer(tmp_path):
+    with scheduled(tmp_path, SECTIONS) as b:
+        harmony_at_200_bpm(b)
+        tapped(b, PLAY % 0)
+        assert b.wait("notesNow().length >= 15")
+        t = when_ahead(b, "document.querySelector('#harmony [data-close]').click()")
+        time.sleep(0.6)
+        silent_after(b, t)
+        before = len(b.js("notesNow()"))
+        time.sleep(0.5)
+        assert len(b.js("notesNow()")) == before  # nothing more is scheduled
+        assert b.wait("log.context.state === 'suspended'", 8)  # silent, it lets the device's audio sleep
+        assert strum_timers(b) == []
+
+        # A chord's strum, ringing when the panel closes, stops with it.
+        tapped(b, "document.getElementById('more').click(); document.getElementById('harmony-open').click()")
+        tapped(b, "document.querySelector('#sheet .c[data-c=\"1\"]').click()")
+        assert b.wait("log.context.state === 'running' && document.documentElement.dataset.heard === %s" % json.dumps(G_OPEN))
+        t = tapped(b, "(() => { const t = log.context.currentTime; document.querySelector('#harmony [data-close]').click(); return t; })()")
+        silent_after(b, t)
+
+
+@in_chromium
+def test_hidden_or_left_the_progression_stops_and_nothing_plays_when_it_is_back(tmp_path):
+    with scheduled(tmp_path, SECTIONS) as b:
+        harmony_at_200_bpm(b)
+        tapped(b, PLAY % 0)
+        assert b.wait("notesNow().length >= 15")
+        assert b.wait(AHEAD)
+        other = b._send("Target.createTarget", url="about:blank")["targetId"]
+        b._send("Target.activateTarget", targetId=other)  # another tab
+        assert b.wait("document.visibilityState === 'hidden' && log.context.state === 'suspended'")
+        silent_after(b, b.js("log.context.currentTime"))
+        assert strum_timers(b) == []
+        assert b.js("document.querySelectorAll('#harmony .prog-play')[0].textContent") == "▶"
+        before = len(b.js("notesNow()"))
+        b._send("Target.closeTarget", targetId=other)
+        assert b.wait("document.visibilityState === 'visible'")
+        time.sleep(0.5)
+        assert len(b.js("notesNow()")) == before and b.js("log.context.state") == "suspended"
+
+        # Left (pagehide, as Back or a link from a server's sandbox): the same.
+        tapped(b, PLAY % 1)
+        assert b.wait("log.context.state === 'running'")
+        assert b.wait(AHEAD)
+        b.js("window.dispatchEvent(new PageTransitionEvent('pagehide', {persisted: true}))")
+        assert b.wait("log.context.state === 'suspended'")
+        silent_after(b, b.js("log.context.currentTime"))
+        assert strum_timers(b) == []
+
+
+@in_chromium
+def test_the_tempo_changed_as_it_plays_keeps_the_order_and_takes_the_new_beat(tmp_path):
+    with scheduled(tmp_path, SECTIONS) as b:
+        harmony_at_200_bpm(b)
+        tapped(b, PLAY % 0)
+        assert b.wait("notesNow().length >= 15")
+        t = when_ahead(b, "for (let k = 0; k < 8; k++) document.getElementById('bpm-down').click()")  # 160 bpm
+        time.sleep(3)
+        found = strums(b)
+        tapped(b, PLAY % 0)  # ■
+        assert b.js("document.getElementById('bpm').textContent") == "160"
+    assert [s["heard"] for s in found] == [c for c in VERSE for _ in range(4)][:len(found)]
+    gaps = [(a["when"], b2["when"] - a["when"]) for a, b2 in zip(found, found[1:])]
+    assert all(gap == pytest.approx(0.3) for at, gap in gaps if at < t - 0.01)
+    assert all(gap == pytest.approx(0.375) for at, gap in gaps if at > t + 0.35)
+    assert sum(at > t + 0.35 for at, _ in gaps) >= 4

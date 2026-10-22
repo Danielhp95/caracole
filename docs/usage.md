@@ -2216,9 +2216,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   no headings has one section, "Section 1". Tap a progression to go to its
   section. **▶** plays it (strummed, as a tap on a chord is, above; not with
   **Sound** off, or in a browser that can't make sound), a chord a bar at
-  the tempo above the list (80 bpm to start), each chord with the shape and
-  the capo the page shows, marking the chord playing, and **■** stops it, as
-  closing the panel does. **Songs with this progression** opens the library
+  the tempo above the list (80 bpm to start; − and + change it as it plays),
+  each chord with the shape and the capo the page shows, always in the
+  progression's order (a busy page plays the rest later, never two chords at
+  once), marking the chord playing. **■** stops it at once, as another ▶, a
+  tap on a chord and switching away from the page do: nothing more of it
+  sounds. Closing the panel stops every sound, a chord tapped too.
+  **Songs with this progression** opens the library
   page with the songs that have it (`index.html#prog=I%20V%20vi%20IV`). With
   numerals on, a section's heading on the sheet names its progression too
   ("Verse · the pop progression").
