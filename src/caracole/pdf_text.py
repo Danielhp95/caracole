@@ -11,9 +11,11 @@ private copy it renders (``render._render_into``). It is the .cho with:
   under the name the song writes it by. The sheet's own ``{define}``s that the viewer reads go:
   chordpro draws a chord's last one;
 - ``{subtitle}`` under the title: the artist, the viewer's key line (``page.key_line_text``), a
-  capo the notes name for a sheet with no capo of its own, and a tuning they name ("half step
-  down", "Drop D") or give after a "Tuning:" label (``sheet.split_preamble``), so a song in another
-  tuning never prints as if in standard tuning, and one in standard tuning never as if in another;
+  capo the notes name for a sheet with no capo of its own, where its chords are played where the
+  sheet writes them (``notes_capo``: a version that moves them or the capo plays them elsewhere), and
+  a tuning they name ("half step down", "Drop D") or give after a "Tuning:" label
+  (``sheet.split_preamble``), so a song in another tuning never prints as if in standard tuning, and
+  one in standard tuning never as if in another;
 - its section names in capitals;
 - ``{columns: N}`` after its header;
 - with ``names`` (a version's ``nm``, the viewer's Chord names), each chord's Roman numeral in the key
@@ -75,10 +77,13 @@ _CHORD = re.compile(r"\[([^\]*][^\]]*)\]")  # a chord on a line of the song; [*â
 _NAMEABLE = re.compile(r"[^\s{}\[\]\"~]+")  # a chord name a {define} can carry, and display
 
 
-def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, names: str = "chords") -> str:
+def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, names: str = "chords",
+             notes_capo: bool = True) -> str:
     """The text of the PDF of the .cho ``cho`` (see the module's docstring). ``key`` is the key of
     its shapes and ``capo`` its capo, None for none, as the viewer reads them (``page.viewer_key``);
-    ``columns`` the song's columns, one for none; ``names``, one of ``NAMES``."""
+    ``columns`` the song's columns, one for none; ``names``, one of ``NAMES``; ``notes_capo``, whether a
+    capo the notes name is the one the chords are played at: not in a version of the sheet that moves
+    them or the capo (``render._version_text``)."""
     if names not in NAMES:
         raise ValueError(f"names: {names!r} is none of {', '.join(NAMES)}")
     lines = cho.splitlines()
@@ -92,7 +97,7 @@ def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, n
     if numbered is not None:
         body, shown, played = _numbered(body, numbered, names, shapes)
     out = lines[:head]
-    if subtitle := _subtitle(lines[:head], key, capo, pre, numbered):
+    if subtitle := _subtitle(lines[:head], key, capo, pre, numbered, notes_capo=notes_capo):
         out.append(f"{{subtitle: {directive_text(subtitle)}}}")
     # A directive among the notes stays (a {define} the viewer can't read, say)
     out += [line for line in lines[head:pre.end] if (found := directive(line)) and not _read_define(found)]
@@ -118,12 +123,13 @@ def _in_header(line: str) -> bool:
 
 
 def _subtitle(header: list[str], key: Key | None, capo: int | None, pre: Preamble,
-              numbered: Key | None = None) -> str:
+              numbered: Key | None = None, *, notes_capo: bool = True) -> str:
     """The line under the title: the artist, the key line, the key the numerals are read in, the notes'
-    capo and their tuning."""
+    capo (for a sheet with no capo, where the chords are played where it writes them: ``notes_capo``) and
+    their tuning."""
     artist = next((found[1] for line in header if (found := directive(line)) and found[0] == "artist"), "")
     read = f"numerals in {key_words(numbered)}" if numbered is not None else ""
-    parts = (artist, key_line_text(key, capo), read, "" if capo else pre.capo_note, pre.tuning)
+    parts = (artist, key_line_text(key, capo), read, "" if capo or not notes_capo else pre.capo_note, pre.tuning)
     return " Â· ".join(part for part in parts if part)
 
 

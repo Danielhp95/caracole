@@ -1151,10 +1151,14 @@ def _sheet_text(text: str, *, key: str | None, version: Version) -> str:
 def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None) -> str:
     """The text chordpro prints of the sheet ``text`` in the version ``v``: each chord named and shaped as the
     viewer shows it there (``apply_version``), then the PDF's own text of that (``pdf_text``), with the key line
-    of the shapes the version plays and its capo. ``shapes`` and ``capo`` are the sheet's, as its viewer reads
-    them (``page.viewer_key``, its ``{capo}``)."""
+    of the shapes the version plays and its capo. A capo the sheet's notes name is printed only where the version
+    plays its chords where the sheet writes them, at the sheet's capo: one that moves them or the capo plays them
+    elsewhere (A shapes with the capo off a sheet whose notes say capo 2 sound A). ``shapes`` and ``capo`` are the
+    sheet's, as its viewer reads them (``page.viewer_key``, its ``{capo}``)."""
     played, played_capo = played_key(v, shapes, capo)
-    return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo))
+    in_place = v.t == 0 and played_capo == (capo or 0)  # no move: the chords' shift is t less the capo's move
+    return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo,
+                              notes_capo=in_place))
 
 
 def _printed(text: str, *, key: str | None, capo: int | None) -> str:

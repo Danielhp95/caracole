@@ -1849,6 +1849,40 @@ def test_an_export_is_a_pdf_beside_the_sheet_in_that_version(conn, cfg):
     assert {"source_sha", "style"} <= set(entry)
 
 
+CAPO_NOTE_SHEET = "Capo 2nd fret\r\n\r\n" + GM_SHEET  # the tabber's notes name the capo before the song
+
+
+def subtitle(printed: bytes) -> str:
+    return next(line for line in printed.decode("utf-8").splitlines() if line.startswith("{subtitle"))
+
+
+def test_a_version_that_takes_the_sheets_capo_off_never_prints_the_notes_capo(conn, cfg):
+    # The sheet's own capo 2, which its notes name too: with the capo off, its Am shapes sound Am, and a
+    # "Capo 2" beside them would have them played two frets higher, a whole step sharp
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, CAPO_NOTE_SHEET, tonality="Gm", meta={"capo": 2})
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Gm shapes · capo 2 · sounds Am}"
+    path, run = export(conn, cfg, song, "capo=0")
+    assert path.name == "sheet (A Minor, capo 0).pdf"
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Am}"
+
+
+def test_the_notes_capo_is_printed_only_where_the_chords_are_where_the_sheet_writes_them(conn, cfg):
+    # A sheet with no capo of its own whose notes name one: as written, or with a shape chosen, its chords are
+    # played at that capo; moved two up, they are played where the version says, its capo none
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, CAPO_NOTE_SHEET, tonality="Gm")
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Gm · Capo 2}"
+    _, run = export(conn, cfg, song, "at=0.1")
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Gm · Capo 2}"
+    _, run = export(conn, cfg, song, "t=2")
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Am}"
+
+
 def test_the_same_export_again_replaces_it(conn, cfg):
     from caracole.render import EXPORT_KV
 

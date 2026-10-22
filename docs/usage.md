@@ -1256,7 +1256,10 @@ and cache.
   The PDF has one line under the title: the artist and the viewer's key line
   ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
   without a capo), then a capo or a tuning the tab's notes name
-  ("Soda Stereo · Key Bm · half step down"): a tuning they name ("half step
+  ("Soda Stereo · Key Bm · half step down"): a capo they name for a sheet
+  with none of its own, only where its chords are played where the sheet
+  writes them (a version in another key or capo plays them elsewhere, and
+  leaves it out); a tuning they name ("half step
   down", "Drop D", "Eb standard") or give after a "Tuning:" label ("Tuning:
   DADGAD"), never one they only talk about, and never standard tuning. Then the chord diagrams above
   the song, bold rust chords over the lyrics, and section names in small rust
