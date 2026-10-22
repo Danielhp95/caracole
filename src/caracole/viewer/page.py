@@ -77,6 +77,7 @@ from caracole.viewer.sheet import (
     Sheet,
     Tab,
     Text,
+    is_legend,
     parse_sheet,
     preamble_section,
     written,
@@ -116,6 +117,9 @@ CREDIT_URL = "https://github.com/tombatossals/chords-db"
 # importing keys.py would bring db.py, songs.py and the rest into BUILD_FILES (test_viewer.py checks
 # that the two agree).
 _SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
+# Those whose key is the key of the chords as the sheet writes them, the shapes played (keys.py): estimated from
+# them, or heard in the chords an auto sheet writes. Never one that may name the sound, as a tab's own word may.
+_OF_THE_SHAPES = frozenset({"chords", "audio"})
 
 
 # What a page is made from besides its song: this module, those it imports and the files they read.
@@ -275,20 +279,21 @@ def _read_song(cho: str, key: str | None, key_source: str | None,
     return sheet, song_key, origin, _data(sheet, chords, song_key, origin, transpose)
 
 
-def viewer_key(cho: str, key: str | None = None) -> Key | None:
-    """The key of a ChordPro sheet's shapes as its page names it (``build_viewer`` given ``key``), for
-    what says the same beside the page: the PDF's key line (``key_line_text``)."""
+def viewer_key(cho: str, key: str | None = None, key_source: str | None = None) -> Key | None:
+    """The key of a ChordPro sheet's shapes as its page names it (``build_viewer`` given ``key`` and
+    ``key_source``), for what says the same beside the page: the PDF's key line (``key_line_text``)."""
     sheet = parse_sheet(cho)
-    return _song_key(sheet, [parse_chord(name, strict=False) for name in sheet.chords], key, None)[0]
+    return _song_key(sheet, [parse_chord(name, strict=False) for name in sheet.chords], key, key_source)[0]
 
 
 def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
               source: str | None) -> tuple[Key | None, str | None]:
     """The key of the shapes the sheet's chords are, and where it came from in words. A key named
-    for a sheet with a capo may be the one the song sounds in (``theory.shapes_key``)."""
+    for a sheet with a capo may be the one the song sounds in (``theory.shapes_key``); one the chords
+    gave (``_OF_THE_SHAPES``) is their shapes', whatever the capo."""
     played = [chords[i] for i in _played(sheet) if chords[i] is not None]
     if (found := parse_key(key)) is not None:
-        return shapes_key(found, sheet.capo or 0, played), _origin(source)
+        return found if source in _OF_THE_SHAPES else shapes_key(found, sheet.capo or 0, played), _origin(source)
     if (found := parse_key(sheet.key)) is not None:
         return shapes_key(found, sheet.capo or 0, played), "from the sheet"
     found = estimate_key(played)
@@ -552,6 +557,9 @@ def _mark_html(mark: str) -> str:
 
 
 def _line_html(line, names: list[str]) -> str:
+    """A line of the sheet as HTML: a chord legend's line (``sheet.is_legend``) is a ``legend``, whose chords
+    viewer.js leaves as written, whatever the version."""
+    legend = " legend" if is_legend(line, names) else ""
     if isinstance(line, Lyrics):
         out = []
         for head, text in line.parts:
@@ -561,10 +569,10 @@ def _line_html(line, names: list[str]) -> str:
                 first = escape(words.pop(0)) if words else ""
                 out.append(f'<span class="s">{top}<span class="y">{first}</span></span>')
             out += [f'<span class="w">{escape(w)}</span>' for w in words]
-        return f'<p class="l">{"".join(out)}</p>'
+        return f'<p class="l{legend}">{"".join(out)}</p>'
     if isinstance(line, ChordRow):
         items = [_chord_html(i, names) if isinstance(i, int) else _mark_html(i) for i in line.items]
-        return f'<p class="l chords">{" ".join(items)}</p>'
+        return f'<p class="l chords{legend}">{" ".join(items)}</p>'
     if isinstance(line, Text):
         return f'<p class="l">{escape(line.text)}</p>'
     if isinstance(line, Tab):

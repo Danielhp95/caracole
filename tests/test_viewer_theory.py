@@ -82,11 +82,17 @@ def test_a_chord_name_gives_its_root_quality_and_bass(text, root, quality, bass)
         ("Cø7", "m7b5"),
         ("Cm7(b5)", "m7b5"),
         ("C+", "aug"),
+        ("C+7", "aug7"),  # "+" before a number is augmented, not a sharp ("#7")
+        ("C+5", "aug"),  # but for the fifth it says, which the plus raises
         ("C(add9)", "add9"),
         ("Cadd2", "add9"),
         ("Cm(add9)", "madd9"),
         ("Cm(maj7)", "mmaj7"),
         ("CmM7", "mmaj7"),
+        ("CmMaj7", "mmaj7"),  # "Maj" read before "mM", or it would be "mmajaj7"
+        ("Cm(Maj7)", "mmaj7"),
+        ("CminMaj7", "mmaj7"),
+        ("CmMA7", "mmaj7"),
         ("Csus", "sus4"),
         ("C4", "sus4"),
         ("C2", "sus2"),
@@ -141,6 +147,8 @@ def test_a_flat_five_is_written_in_brackets():
         ("C5", {0, 7}),
         ("Cadd11", {0, 4, 5, 7}),
         ("Cm9b5", {0, 2, 3, 6, 10}),
+        ("CmMaj9", {0, 2, 3, 7, 11}),
+        ("C+9", {0, 2, 4, 8, 10}),
     ],
 )
 def test_a_chord_knows_its_intervals(text, intervals):

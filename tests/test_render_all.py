@@ -1892,6 +1892,104 @@ def test_an_export_is_a_pdf_beside_the_sheet_in_that_version(conn, cfg):
     assert {"source_sha", "style"} <= set(entry)
 
 
+CAPO_NOTE_SHEET = "Capo 2nd fret\r\n\r\n" + GM_SHEET  # the tabber's notes name the capo before the song
+
+
+def subtitle(printed: bytes) -> str:
+    return next(line for line in printed.decode("utf-8").splitlines() if line.startswith("{subtitle"))
+
+
+def test_a_version_that_takes_the_sheets_capo_off_never_prints_the_notes_capo(conn, cfg):
+    # The sheet's own capo 2, which its notes name too: with the capo off, its Am shapes sound Am, and a
+    # "Capo 2" beside them would have them played two frets higher, a whole step sharp
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, CAPO_NOTE_SHEET, tonality="Gm", meta={"capo": 2})
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Gm shapes · capo 2 · sounds Am}"
+    path, run = export(conn, cfg, song, "capo=0")
+    assert path.name == "sheet (A Minor, capo 0).pdf"
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Am}"
+
+
+def test_the_notes_capo_is_printed_only_where_the_chords_are_where_the_sheet_writes_them(conn, cfg):
+    # A sheet with no capo of its own whose notes name one: as written, or with a shape chosen, its chords are
+    # played at that capo; moved two up, they are played where the version says, its capo none
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, CAPO_NOTE_SHEET, tonality="Gm")
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Gm · Capo 2}"
+    _, run = export(conn, cfg, song, "at=0.1")
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Gm · Capo 2}"
+    _, run = export(conn, cfg, song, "t=2")
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Am}"
+
+
+def test_a_key_estimated_from_the_chords_names_the_shapes_in_the_pdf_viewer_exports_and_progressions(conn, cfg):
+    # No key named (UG's tonality_name empty, none in the sheet): A minor, estimated from the chords as the sheet
+    # writes them, the Am shapes played at capo 5, which sound Dm. Their notes are E minor's too, A minor lowered
+    # by the capo, which a key a tab names may be taken for: never the key the chords gave.
+    from caracole.progressions import KV
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    sheet = "[Verse 1]\r\n" + "[ch]Am[/ch]  [ch]C[/ch]  [ch]G[/ch]  [ch]D[/ch]\r\nUna canción de prueba\r\n" * 3
+    vid = human_sheet(conn, cfg, song, sheet, tonality="", meta={"capo": 5})
+    doc = song_dir(cfg.library_dir, song) / "sheet.json"  # kept, as the fetch step keeps it: keys.py reads it
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json", data=doc.read_bytes(), rank=1)
+    run = FakeChordPro()
+    render(conn, cfg, runner=run)
+    assert (info_json(cfg, song)["key"], info_json(cfg, song)["key_source"]) == ("A minor", "chords")
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Am shapes · capo 5 · sounds Dm}"
+    page = (song_dir(cfg.library_dir, song) / "sheet.html").read_text(encoding="utf-8")
+    assert re.search(r'<p class="facts" id="facts"><b>Am</b> shapes · capo <b>5</b> · sounds <b>Dm</b>', page)
+    assert kv_get_json(conn, f"{KV}{song.id}")["key"] == "A minor"
+    path, run = export(conn, cfg, song, "capo=0")  # the Am shapes moved up five, to sound where they did
+    assert path.name == "sheet (D Minor, capo 0).pdf"
+    assert subtitle(run.printed[-1]) == "{subtitle: Soda Stereo · Key Dm}"
+
+
+SLASH_SHEET = (
+    "[Verse 1]\r\n"
+    "[tab][ch]Am[/ch]      [ch]Am7/G[/ch]      [ch]D7/F#[/ch]\r\n"
+    "Una canción de prueba[/tab]\r\n"
+    "[tab][ch]E7/G#[/ch]      [ch]C/G[/ch]      [ch]D/F#[/ch]\r\n"
+    "solo para el analizador[/tab]\r\n"
+)
+
+
+@pytest.mark.parametrize("query", ["t=2", "mode=dorian", "at=1.1", "t=2&at=1.2"])
+def test_a_versions_pdf_draws_the_shape_its_viewer_shows_for_a_slash_chord_too(conn, cfg, query):
+    # Am7/G has no shape of its own in chords-db: the viewer shows Am7's, to play with G in the bass, and the
+    # version's {define} of it gives that shape, or the one chosen (apply_version). Its PDF draws it as it draws
+    # every other chord's, never only the shapes with the slash's bass lowest.
+    from caracole.viewer.page import viewer_key
+    from caracole.viewer.version import apply_version, version_from_query
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, SLASH_SHEET, tonality="Am")
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet.cho").read_text(encoding="utf-8")
+    moved = apply_version(cho, version_from_query(query), key=viewer_key(cho, "A minor", "tab"), capo_sheet=None)
+    shown = [line for line in moved.splitlines() if line.startswith("{define: ")]
+    assert len(shown) == 6  # every chord the version plays, Am7/G's in Am7's shape
+    _, run = export(conn, cfg, song, query)
+    drawn = [line for line in run.printed[-1].decode("utf-8").splitlines() if line.startswith("{define: ")]
+    assert drawn == shown
+
+
+def test_a_chord_legend_after_the_first_section_stays_as_written_in_a_versions_pdf(conn, cfg):
+    # "[ch]Am[/ch] x02210" gives the tab's shape for Am: two up, its chord named Bm would print Am's shape as Bm's
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    sheet = GM_SHEET + "\r\n[Chords]\r\n[ch]Gm[/ch] x55333\r\n[ch]Eb[/ch] x68886\r\n[ch]Bb[/ch] x13331\r\n"
+    human_sheet(conn, cfg, song, sheet, tonality="Gm")
+    _, run = export(conn, cfg, song, "t=2")
+    printed = run.printed[-1].decode("utf-8").splitlines()
+    assert any(line.startswith("[Am]Una") for line in printed)  # the song moves
+    chords = printed[printed.index("{comment: CHORDS}") + 1:]
+    assert chords[:3] == ["[Gm] [*x55333]", "[Eb] [*x68886]", "[Bb] [*x13331]"]
+
+
 def test_the_same_export_again_replaces_it(conn, cfg):
     from caracole.render import EXPORT_KV
 

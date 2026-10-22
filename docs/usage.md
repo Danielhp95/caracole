@@ -1263,7 +1263,10 @@ and cache.
   The PDF has one line under the title: the artist and the viewer's key line
   ("Soda Stereo · Bm shapes · capo 2 · sounds C#m", or "Soda Stereo · Key Bm"
   without a capo), then a capo or a tuning the tab's notes name
-  ("Soda Stereo · Key Bm · half step down"): a tuning they name ("half step
+  ("Soda Stereo · Key Bm · half step down"): a capo they name for a sheet
+  with none of its own, only where its chords are played where the sheet
+  writes them (a version in another key or capo plays them elsewhere, and
+  leaves it out); a tuning they name ("half step
   down", "Drop D", "Eb standard") or give after a "Tuning:" label ("Tuning:
   DADGAD"), never one they only talk about, and never standard tuning. Then the chord diagrams above
   the song, bold rust chords over the lyrics, and section names in small rust
@@ -1287,8 +1290,9 @@ and cache.
   mode, by its `[version]` or its `[transpose]`, has every chord written as
   its viewer shows it there (Bb, not chordpro's A#), each with the shape the
   viewer shows (or the one the version chose) as its diagram: chordpro moves
-  nothing. A songbook's songs are written the same way, each where the
-  songbook plays it (see [Songbooks](#songbooks)).
+  nothing. A chord legend's lines stay as the tab writes them ("Am x02210"
+  names that shape), as in the viewer. A songbook's songs are written the same
+  way, each where the songbook plays it (see [Songbooks](#songbooks)).
   `sheet.html` is the sheet viewer, for the phone (see
   [The sheet viewer](#the-sheet-viewer)). A PDF is made again only when its
   sheet, its version, the font, caracole's PDF style or the text the
@@ -2104,7 +2108,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   show where chords-db has the same shape), or a ChordPro `{define}` in a
   sheet of yours. It counts only for the very chord it was given for, and only
   where it plays that chord: transposed, Cadd9 becomes a Dadd9, with
-  chords-db's shapes, and so does a capo moved off the sheet's fret.
+  chords-db's shapes, and so does a capo moved off the sheet's fret. The
+  legend's own lines stay as written in any key, capo or mode: "Am x02210"
+  names that shape, and Am stays Am there.
 - **The key on the neck**: the rail's first neck (below) shows the key's
   scale across the frets, the tonic larger in rust, and Scale or the key's
   pentatonic box (Major pentatonic for a major key, Minor pentatonic for a
@@ -2362,7 +2368,10 @@ the page says which. With a capo, a tab may name the key the song sounds in
 rather than the shapes' (F# for a song played in C shapes with capo 6): when
 the chords are in the named key lowered by the capo, the viewer takes them as
 the shapes and the named key as the sound ("C shapes · capo 6 · sounds F#").
-Beside a human sheet, `sheet (auto).html` keeps to the
+A key estimated from the chords, or heard in the audio, is the key of the
+chords as the sheet writes them: always the shapes', whatever the capo ("Am
+shapes · capo 5 · sounds Dm"), in the viewer, the PDFs, the exports and the
+songbooks alike. Beside a human sheet, `sheet (auto).html` keeps to the
 chords the model heard, which may be in another key than the tab (another
 transposition, or a capo).
 

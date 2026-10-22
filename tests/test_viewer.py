@@ -230,6 +230,34 @@ def test_a_tabs_key_that_names_the_sound_is_not_taken_for_the_shapes():
     assert data_of(build_viewer(UG_CHO))["key"]["tonic"] == 7  # G with capo 2, its chords in G: the shapes
 
 
+def test_a_key_estimated_from_the_chords_is_the_shapes_key_whatever_the_capo():
+    # keys.py's estimate (or the key heard) is the key of the chords as the sheet writes them: Am C G D with capo 5
+    # are Am shapes that sound Dm. Their notes are also E minor's, A minor lowered by the capo, which a key a tab
+    # names may be taken for (the sound, theory.shapes_key): never a key the chords gave.
+    from caracole.viewer.page import viewer_key
+    from caracole.viewer.theory import Key
+
+    sheet = to_chordpro("[ch]Am[/ch]  [ch]C[/ch]  [ch]G[/ch]  [ch]D[/ch]\nsynthetic words here\n" * 3,
+                        title="T", artist="A", capo=5)
+    for source in ("chords", "audio"):
+        html = build_viewer(sheet, key="A minor", key_source=source)
+        assert (data_of(html)["key"]["tonic"], data_of(html)["key"]["mode"]) == (9, "aeolian"), source
+        assert facts_of(html).startswith("<b>Am</b> shapes · capo <b>5</b> · sounds <b>Dm</b>"), source
+        assert viewer_key(sheet, "A minor", source) == Key(9, "aeolian"), source
+    assert data_of(build_viewer(sheet, key="A minor", key_source="tab"))["key"]["tonic"] == 4  # a tab's word: Em
+    assert viewer_key(sheet, "A minor") == Key(4, "aeolian")  # no source said: a key a tab may name
+
+
+def test_a_chord_legends_lines_are_marked_so_the_script_leaves_their_chords_as_written():
+    # "Am x02210" names the shape beside it: moved, viewer.js names the song's chords anew, never a legend's
+    cho = ("{title: T}\n{artist: A}\n{comment: Verse}\n[Am]Words [C]here\n\n{comment: Chords}\n[Am] [*x02210]\n"
+           "[C] [*x32010]\n")
+    sheet = sheet_of(build_viewer(cho))
+    assert ('<p class="l chords legend"><b class="c" data-c="0" tabindex="0" role="button">Am</b> '
+            '<i class="m">x02210</i></p>') in sheet
+    assert sheet.count(" legend") == 2 and '<p class="l"><span class="s"><b class="c" data-c="0"' in sheet
+
+
 def test_without_a_capo_the_key_line_names_the_key():
     assert facts_of(build_viewer(MINOR)) == 'Key <b>Cm</b> <span class="from">from the sheet</span>'
     assert facts_of(build_viewer("{title: T}\n{artist: A}\n{capo: 3}\nOnly words\n")) == "Capo <b>3</b>"
@@ -254,6 +282,7 @@ def test_the_viewers_copy_of_keys_sources_is_the_same_both_ways():
 
     # page.py copies keys.SOURCES rather than import keys.py (BUILD_FILES): no word lost, none added.
     assert page._SOURCES == SOURCES
+    assert page._OF_THE_SHAPES < SOURCES.keys() and "tab" not in page._OF_THE_SHAPES  # a tab's word may be the sound
 
 
 # --- what the script works from ------------------------------------------------------------------

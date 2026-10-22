@@ -101,6 +101,19 @@ def test_the_sheets_own_defines_are_written_as_the_viewer_shows_them():
     assert lines[lines.index("{comment: CHORUS}") + 1] == "[Am]More"
 
 
+def test_a_versions_defines_are_drawn_as_they_are_a_slash_chords_too():
+    # Am7/G in Am7's shape, its bass G to add, as the viewer shows it: a sheet's own shape for it would be one that
+    # plays G lowest, but a version's (apply_version: defined) is the one its viewer shows, or the one chosen.
+    cho = ("{title: T}\n{artist: A}\n{define: Am7/G base-fret 1 frets x 0 2 0 1 0 fingers 0 0 2 0 1 0}\n"
+           "{define: C base-fret 1 frets x 3 2 0 1 0 fingers 0 3 2 0 1 0}\n\n"
+           "{comment: Verse}\n[Am7/G]Words [C]to sing\n")
+    c = "{define: C base-fret 1 frets x 3 2 0 1 0 fingers 0 3 2 0 1 0}"
+    assert defines(pdf_text(cho, key=None, capo=None)) == [c]
+    assert defines(pdf_text(cho, key=None, capo=None, defined=True)) == [
+        "{define: Am7/G base-fret 1 frets x 0 2 0 1 0 fingers 0 0 2 0 1 0}", c,
+    ]
+
+
 @pytest.mark.parametrize("cho", [LEGEND, LATER, DEFINED, SHAPES, UG_CHO, MINOR], ids=[
     "legend", "legend-later", "defines", "shapes", "no-shapes", "no-legend"])
 def test_the_chord_diagrams_are_the_shapes_the_viewer_shows(cho):

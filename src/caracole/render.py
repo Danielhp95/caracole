@@ -612,7 +612,7 @@ def _render_song(
         mine = (found.key, found.source) if found is not None else (None, None)
         text = _sheet_cho(song, sheet)
         # Each sheet in its own place: a version kept by its key moves each by what puts it in that key
-        played = own_version(overrides, song, text, mine[0])
+        played = own_version(overrides, song, text, *mine)
         if beside:
             # Beside the human sheet, the version's shapes and swaps were chosen on that sheet, and an export is
             # that sheet's (export_viewer): its viewer offers none
@@ -725,10 +725,11 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
 _VERSION_NAMES = frozenset({"t", "mode", "capo", "alt", "at"})
 
 
-def own_version(overrides: Overrides, song: Song, cho: str, key: str | None) -> Version:
+def own_version(overrides: Overrides, song: Song, cho: str, key: str | None, key_source: str | None = None) -> Version:
     """The song's own version on its sheet ``cho`` (its ChordPro as caracole writes it; ``key``, the sheet's,
-    ``keys.sheet_keys``), where its PDF, its viewer and its songbooks start: its ``[version]`` ("Make this my
-    version"), else its ``[transpose]`` alone, else the sheet as written (``Version()``).
+    ``keys.sheet_keys``, and ``key_source`` where it came from), where its PDF, its viewer and its songbooks
+    start: its ``[version]`` ("Make this my version"), else its ``[transpose]`` alone, else the sheet as written
+    (``Version()``).
 
     A ``[version]`` kept by its key (``key=Gm&mode=dorian&capo=0``, as Make this my version writes it) plays in
     that key on whatever sheet the song has, by a songbook setting's rule, its chords read in the notes of the
@@ -740,7 +741,7 @@ def own_version(overrides: Overrides, song: Song, cho: str, key: str | None) -> 
     if isinstance(own, Version):
         return own
     try:
-        return in_key(own, cho, key=viewer_key(cho, key), capo_sheet=parse_sheet(cho).capo)
+        return in_key(own, cho, key=viewer_key(cho, key, key_source), capo_sheet=parse_sheet(cho).capo)
     except Exception:  # a sheet the viewer's code can't read (a bug) never stops the song's other files
         log.warning("%s: cannot place it in its own version", song.display, exc_info=True)
         return Version()
@@ -825,7 +826,7 @@ class ExportSheet:
 
     def own(self, overrides: Overrides) -> Version:
         """The song's own version (``own_version``) on this sheet, where its viewer starts."""
-        return own_version(overrides, self.song, self.text, self.found.key if self.found is not None else None)
+        return own_version(overrides, self.song, self.text, *_key_of(self.found))
 
     def label(self, v: Version) -> str:
         """The name of the version ``v`` of this sheet ("G Dorian, capo 0"), as its export is recorded under."""
@@ -859,7 +860,7 @@ def export_sheet(conn: sqlite3.Connection, cfg: Config, song: Song) -> ExportShe
     when the song keeps no sheet, or keeps one the viewer's code can't read (a bug)."""
     _, text, found = _export_source(conn, cfg, song)
     try:
-        shapes = viewer_key(text, found.key if found is not None else None)
+        shapes = viewer_key(text, *_key_of(found))
         capo = parse_sheet(text).capo
     except Exception as e:
         raise RenderError(f"cannot read the sheet: {type(e).__name__}: {e}") from e
@@ -896,6 +897,12 @@ def _export_source(conn: sqlite3.Connection, cfg: Config, song: Song):
     return sheet, _sheet_cho(song, sheet), found
 
 
+def _key_of(found: SongKey | None) -> tuple[str | None, str | None]:
+    """A sheet's key as ``keys.sheet_keys`` finds it, and where it came from (its ``source``), for the viewer's code
+    (``page.viewer_key``): (None, None) for none."""
+    return (found.key, found.source) if found is not None else (None, None)
+
+
 def _sheet_cho(song: Song, sheet: _Sheet) -> str:
     """The ChordPro text of one of the song's sheets, as ``sheet.cho`` (or ``sheet (auto).cho``) is written."""
     return _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
@@ -926,7 +933,7 @@ def render_version(
     sheet, text, found = _export_source(conn, cfg, song)
     folder = song_dir(cfg.library_dir, song)
     try:
-        shapes = viewer_key(text, found.key if found is not None else None)
+        shapes = viewer_key(text, *_key_of(found))
         capo = parse_sheet(text).capo
         label = version_label(v, shapes, capo)
         printed = _version_text(text, v, shapes, capo)
@@ -1062,7 +1069,7 @@ def _render_sheet(
     _write_if_changed(cho, data)
     _note_written(conn, song.id, cho.name, data)
     if primary:
-        _note_progressions(conn, song, text, key[0])
+        _note_progressions(conn, song, text, *key)
     pdf = folder / f"{stem}.pdf"
 
     def viewer() -> bool:
@@ -1074,7 +1081,7 @@ def _render_sheet(
         return data is not None
 
     try:
-        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, version, key=key[0],
+        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, version, key=key,
                                  cjk_font=cjk_font, runner=runner, force=force)
     except RenderError:
         viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
@@ -1082,12 +1089,13 @@ def _render_sheet(
     return done if viewer() else replace(done, viewer_failed=True)
 
 
-def _note_progressions(conn: sqlite3.Connection, song: Song, text: str, key: str | None) -> None:
-    """Record what the sheet ``text`` plays, for finding the song by its progressions
-    (``progressions.record``). An extra, as the viewer is: a sheet its code can't read leaves no
+def _note_progressions(conn: sqlite3.Connection, song: Song, text: str, key: str | None,
+                       key_source: str | None = None) -> None:
+    """Record what the sheet ``text`` plays, in its key (``key``, from ``key_source``), for finding the song by its
+    progressions (``progressions.record``). An extra, as the viewer is: a sheet its code can't read leaves no
     record, logged with its traceback, and costs the song nothing else."""
     try:
-        progressions.record(conn, song.id, text, key)
+        progressions.record(conn, song.id, text, key, key_source)
     except Exception:  # a bug in the theory must never cost the PDFs
         log.warning("no progressions for %s", song.display, exc_info=True)
         progressions.forget(conn, song.id)
@@ -1102,17 +1110,17 @@ def _render_sheet_pdf(
     state_key: str,
     version: Version,
     *,
-    key: str | None,
+    key: tuple[str | None, str | None],
     cjk_font: Path | None,
     runner: Runner,
     force: bool,
 ) -> _Done:
     """Render the ChordPro ``text`` to ``pdf`` in ``version`` unless kv ``state_key`` says it is up to date:
-    chordpro prints the PDF's own text (``_sheet_text``), and the font is the one that text needs. A text that
-    can't be made (a bug in the viewer's code it runs) is a RenderError, logged with its traceback:
-    this PDF fails, and the pass goes on."""
+    chordpro prints the PDF's own text (``_sheet_text``, in ``key``: the sheet's and where it came from), and the
+    font is the one that text needs. A text that can't be made (a bug in the viewer's code it runs) is a
+    RenderError, logged with its traceback: this PDF fails, and the pass goes on."""
     try:
-        printed = _sheet_text(text, key=key, version=version)
+        printed = _sheet_text(text, key=key[0], key_source=key[1], version=version)
     except Exception as e:  # a sheet the viewer's code can't read must never cost the other PDFs
         log.warning("%s: cannot make the text of %s", song.display, pdf.name, exc_info=True)
         raise RenderError(f"cannot make the text of {pdf.name}: {type(e).__name__}: {e}") from e
@@ -1139,29 +1147,34 @@ def _render_sheet_pdf(
     return _Done("rendered")
 
 
-def _sheet_text(text: str, *, key: str | None, version: Version) -> str:
+def _sheet_text(text: str, *, key: str | None, version: Version, key_source: str | None = None) -> str:
     """The text chordpro prints of the sheet ``text`` in ``version``: the sheet as written (``Version()``) as it
     is (``_printed``), else in that version as its viewer shows it (``_version_text``). ``key`` is the sheet's
-    (``keys.sheet_keys``)."""
+    (``keys.sheet_keys``), and ``key_source`` where it came from."""
     if version == Version():
-        return _printed(text, key=key, capo=parse_sheet(text).capo)
-    return _version_text(text, version, viewer_key(text, key), parse_sheet(text).capo)
+        return _printed(text, key=key, key_source=key_source, capo=parse_sheet(text).capo)
+    return _version_text(text, version, viewer_key(text, key, key_source), parse_sheet(text).capo)
 
 
 def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None) -> str:
     """The text chordpro prints of the sheet ``text`` in the version ``v``: each chord named and shaped as the
-    viewer shows it there (``apply_version``), then the PDF's own text of that (``pdf_text``), with the key line
-    of the shapes the version plays and its capo. ``shapes`` and ``capo`` are the sheet's, as its viewer reads
-    them (``page.viewer_key``, its ``{capo}``)."""
+    viewer shows it there (``apply_version``), then the PDF's own text of that (``pdf_text``), each chord's diagram
+    the shape its ``{define}`` gives, with the key line of the shapes the version plays and its capo. A capo the
+    sheet's notes name is printed only where the version plays its chords where the sheet writes them, at the
+    sheet's capo: one that moves them or the capo plays them elsewhere (A shapes with the capo off a sheet whose
+    notes say capo 2 sound A). ``shapes`` and ``capo`` are the sheet's, as its viewer reads them
+    (``page.viewer_key``, its ``{capo}``)."""
     played, played_capo = played_key(v, shapes, capo)
-    return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo))
+    in_place = v.t == 0 and played_capo == (capo or 0)  # no move: the chords' shift is t less the capo's move
+    return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo,
+                              notes_capo=in_place, defined=True))
 
 
-def _printed(text: str, *, key: str | None, capo: int | None) -> str:
+def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | None = None) -> str:
     """The text chordpro prints of the sheet ``text`` as written (``pdf_text``), with the key of its shapes as
-    its viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``), and the look-alike letters capitals
-    can make written in Latin (``_as_latin``)."""
-    return _as_latin(pdf_text(text, key=viewer_key(text, key), capo=capo))
+    its viewer names it from ``key`` (the sheet's, ``keys.sheet_keys``, from ``key_source``), and the look-alike
+    letters capitals can make written in Latin (``_as_latin``)."""
+    return _as_latin(pdf_text(text, key=viewer_key(text, key, key_source), capo=capo))
 
 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],

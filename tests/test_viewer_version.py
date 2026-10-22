@@ -26,6 +26,9 @@ LEGEND = (FIXTURES / "legend_sheet.cho").read_text(encoding="utf-8")  # capo 2, 
 # Chords theory.parse_chord can't read: "N.C.", a German B minor, a chord in brackets; and Cadd9(no3),
 # which it reads as C, D and G (a Csus2 written otherwise).
 ODD = "{title: Odd}\n{artist: A}\n{key: C}\n[N.C.]la [Cadd9(no3)]lo [Hm]li [G]le [(G)]lu\n[C] [N.C.] [*x2]\n"
+# A chord legend after the song's first section, as to_chordpro writes "[ch]Am[/ch] x02210": each fingering a mark.
+LEGEND_LATER = ("{title: T}\n{artist: A}\n{key: Am}\n{comment: Verse}\n[Am]Una canció[C]n de [G]prueba\n\n"
+                "{comment: Chords}\n[Am] [*x02210]\n[C] [*x32010]\n\n{comment: Chorus}\n[F]Otra [C]vez\n")
 
 
 def applied(cho: str, v: Version, key: str | None = None) -> str:
@@ -72,6 +75,25 @@ def test_a_version_names_chords_as_the_viewer_does():
     # As written, every chord is named as the sheet writes it; marks and tabs stay as they are
     assert played(applied(UG, Version())) == played(UG)
     assert "[*x2]" in applied(UG, Version(t=5)) and "e|-----0---0---|" in applied(UG, Version(t=5))
+
+
+def test_a_chord_legends_lines_stay_as_written_in_any_version():
+    # A legend's line gives the tab's shapes by the names the tab gives them: moved, "[Bm] [*x02210]" would name
+    # Am's shape Bm. It stays as written, as the viewer shows it, wherever the song is played.
+    legend = ["[Am] [*x02210]", "[C] [*x32010]"]
+    swapped_am = Version(t=2, alt={"aeolian": {0: (9, "m7", None)}})
+    for v in (Version(t=2), Version(mode="ionian"), Version(capo=3), swapped_am):
+        out = applied(LEGEND_LATER, v).splitlines()
+        assert out[out.index("{comment: Chords}") + 1:][:2] == legend, v
+    assert "[Bm]Una canció[D]n de [A]prueba" in applied(LEGEND_LATER, Version(t=2))  # the song moves
+    assert "[Em7] [*(022033)]" in applied(LEGEND, Version(t=3), "Em").splitlines()  # a legend in the notes too
+
+
+def test_a_minor_major_seventh_keeps_its_seventh_however_it_is_spelled():
+    # Am(maj7) in A major is Amaj7: spelled "AmMaj7" it is the same chord, never a plain Am that loses it
+    for spelled in ("Am(maj7)", "AmMaj7", "AminMaj7"):
+        cho = f"{{title: T}}\n{{artist: A}}\n{{key: Am}}\n[Am]la [{spelled}]le [Am7]li [D]lo\n"
+        assert played(applied(cho, Version(mode="ionian"))) == ["A", "Amaj7", "Amaj7", "D"], spelled
 
 
 def test_a_capo_names_the_shapes_and_a_swap_plays_its_chord():
@@ -251,8 +273,9 @@ VERSIONS = (Version(t=3), Version(t=-3, capo=0), Version(mode="dorian"), Version
 
 
 @in_chromium
-@pytest.mark.parametrize(("cho", "key"), [(LEGEND, "Em"), (LEGEND, None), (UG, None), (ODD, None)],
-                         ids=["legend-em", "legend", "ug", "odd"])
+@pytest.mark.parametrize(("cho", "key"),
+                         [(LEGEND, "Em"), (LEGEND, None), (UG, None), (ODD, None), (LEGEND_LATER, None)],
+                         ids=["legend-em", "legend", "ug", "odd", "legend-later"])
 def test_python_and_the_viewer_name_every_chord_alike(cho, key, tmp_path):
     capo = parse_sheet(cho).capo or 0
     for v in (*VERSIONS, swapped(cho, key)):
