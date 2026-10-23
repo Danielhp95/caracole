@@ -3114,9 +3114,9 @@ Who can reach it, below).
   - **Now**: the request that runs, as a card with its song, how long ago it
     started ("started 12 s ago"), its line ("Rendering the sheet…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
-    Song, Match, Sheet, PDF, Lyrics, Guitar Pro (Ultimate Guitar's second
-    pass, its sheets scored and its tab, LaCuerda's and gtptabs.com's) and
-    Songbooks, leaving out a step it
+    Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass,
+    its sheets scored and its tab, LaCuerda's sheet and gtptabs.com's Guitar
+    Pro file) and Songbooks, leaving out a step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
     of a song with no sheet); for a request of other commands, its commands.

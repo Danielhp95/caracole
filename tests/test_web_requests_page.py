@@ -112,7 +112,7 @@ def test_the_running_lookup_is_a_card_with_its_stages_as_steps():
                        r"([^<]+)<span", card)
     assert [(state, mark + name, bool(current)) for state, current, mark, name in chips] == [
         ("done", "✓ Song", False), ("done", "✓ Match", False), ("done", "✓ Sheet", False),
-        ("running", "PDF", True), ("waiting", "Lyrics", False), ("waiting", "Guitar Pro", False),
+        ("running", "PDF", True), ("waiting", "Lyrics", False), ("waiting", "Extras", False),
         ("waiting", "Songbooks", False)]
 
 

@@ -13,24 +13,23 @@ search, and why it doesn't yet.
 
 ## The rules it must keep
 
-- **An official API, with your own key, off by default.** No search engine's
+- **An official API, off by default, and no secret.** No search engine's
   result pages are scraped: they are no API, and caracole works around
   nothing. DuckDuckGo has no web-search API (its Instant Answer API returns
-  no result links), so it is out. Two fit:
-  - [Brave Search API](https://brave.com/search/api/): `GET
-    https://api.search.brave.com/res/v1/web/search?q=…`, the key in the
-    `X-Subscription-Token` header. $5 per 1,000 requests, with $5 of free
-    credit a month; a card is required. Its results may be stored only "with a
-    plan that includes storage rights", and caracole caches every answer
-    forever: Brave's answers would have to skip the cache, a second exception
-    to an invariant.
+  no result links), so it is out. caracole keeps no secret (no credentials,
+  no token file: the owner's choice), so an API that needs a key is out too,
+  [Brave Search API](https://brave.com/search/api/) among them (its key in the
+  `X-Subscription-Token` header; besides, its results may be stored only
+  "with a plan that includes storage rights", and caracole caches every
+  answer forever). One fits:
   - [SearXNG](https://docs.searxng.org/), self-hosted: `GET <url>/search?q=…&format=json`,
     once `json` is added to `search.formats` in its `settings.yml` (a stock
     instance answers 403). caracole talks only to your instance, which asks
-    the engines you set it up for.
+    the engines you set it up for. It is reached on a network you trust, as
+    caracole serve is, with no key.
 - **Politeness**, as for every provider: a budget per run, one request at a
   time with a pause, a 403 or 429 cools it down (`health.record_block`), and
-  every answer is cached (but Brave's, above).
+  every answer is cached.
 - **Errors are never misses**: a failed or skipped search leaves the song as
   it was.
 - **A web result is never an accept.** It is a candidate, step `web`, in a
@@ -38,24 +37,18 @@ search, and why it doesn't yet.
 
 ## Configuration
 
-Off unless `[web_search]` names an engine. Like `[ntfy]`'s token, the
-secret stays out of the file:
+Off unless `[web_search]` names an instance:
 
 ```toml
-[web_search]                          # off without an engine
-engine = "searxng"                    # or "brave"
-url = "https://searx.example.org"     # searxng only: your instance, with JSON on
-# key_file = "/path/to/key"           # brave only: else $CREDENTIALS_DIRECTORY/web_search_key,
-                                      # else $CARACOLE_WEB_SEARCH_KEY
+[web_search]                          # off without a url
+url = "https://searx.example.org"     # your SearXNG instance, with JSON on
 
 [providers.web_search]                # the fourth provider
 budget = 10                           # searches per run
 delay = [2, 4]                        # seconds between two searches
 ```
 
-On NixOS: `services.caracole.settings.web_search`, and
-`credentials.web_search_key` for Brave's key (`LoadCredential`), as for the
-ntfy token.
+On NixOS: `services.caracole.settings.web_search`.
 
 ## What it would do
 
@@ -64,8 +57,8 @@ ntfy token.
    `match.REVIEW_ONLY_STEPS`), once its artist's UG page, if known, has been
    tried; at most once per song in 90 days (kv `web:searched:<song id>`, its
    prefix in `songs._PER_SONG_KV`).
-2. **Query**: `"<artist> <title>" ultimate guitar`; Brave also takes
-   `site:tabs.ultimate-guitar.com`.
+2. **Query**: `"<artist> <title>" ultimate guitar`, or
+   `site:tabs.ultimate-guitar.com` where the engines SearXNG asks take it.
 3. **Results**: only `https://tabs.ultimate-guitar.com/tab/…` addresses that
    robots.txt allows (`http.robots_disallows`), read for their tab id. A tab in
    the index becomes its UG song's candidate; a bare-id tab is read once
@@ -82,6 +75,5 @@ ntfy token.
 - The offline steps find the owner's example and the common cases at no
   request and no cost.
 - A fourth provider touches config.py, http.py, health.py, the pipeline and
-  the to-do page's provider table, and Brave's terms would need an exception
-  to the cache; SearXNG needs an instance to run. Worth it once the to-do
+  the to-do page's provider table, and SearXNG needs an instance to run. Worth it once the to-do
   page shows songs the index keeps missing.

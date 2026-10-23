@@ -38,22 +38,22 @@ def test_a_lookup_in_progress_shows_its_stages_as_steps_in_plain_words():
     job = lookup(stages={"song": ("done", "in the library"), "match": ("done", "matched to muse/hysteria"),
                          "sheet": ("done", "tab 1 from Ultimate Guitar"), "pdf": ("running", "")})
     assert steps(job) == [Chip("Song", "done"), Chip("Match", "done"), Chip("Sheet", "done"), Chip("PDF", "running"),
-                          Chip("Lyrics", "waiting"), Chip("Guitar Pro", "waiting"), Chip("Songbooks", "waiting")]
+                          Chip("Lyrics", "waiting"), Chip("Extras", "waiting"), Chip("Songbooks", "waiting")]
     # Ultimate Guitar's second pass, LaCuerda's and gtptabs.com's are one step, running from the first to the last.
     later = lookup(stages={name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug")}
                    | {"lacuerda": ("running", "")})
-    assert Chip("Guitar Pro", "running") in steps(later) and Chip("Lyrics", "done") in steps(later)
+    assert Chip("Extras", "running") in steps(later) and Chip("Lyrics", "done") in steps(later)
 
 
 def test_a_step_the_request_doesnt_use_is_not_drawn():
     # Its songbooks left to a later job (Get the missing songs): no Songbooks step.
     job = lookup(args=lookup_steps("Muse", "Hysteria", songbooks=False)[0][1])
-    assert [c.name for c in steps(job)] == ["Song", "Match", "Sheet", "PDF", "Lyrics", "Guitar Pro"]
+    assert [c.name for c in steps(job)] == ["Song", "Match", "Sheet", "PDF", "Lyrics", "Extras"]
     # A stage that ended with nothing to do for this song: no sheet, so no PDF; no songbook lists it.
     skipped = lookup(stages={"song": ("done", ""), "match": ("done", "not in the offline Ultimate Guitar index"),
                              "sheet": ("skipped", "the offline index doesn't have it"), "pdf": ("skipped", "no sheet yet"),
                              "lyrics": ("running", "")})
-    assert [c.name for c in steps(skipped)] == ["Song", "Match", "Lyrics", "Guitar Pro", "Songbooks"]
+    assert [c.name for c in steps(skipped)] == ["Song", "Match", "Lyrics", "Extras", "Songbooks"]
     # A failed stage stays, as failed.
     failed = lookup(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
                             "pdf": ("failed", "chordpro couldn't make the PDF; the log says why"),

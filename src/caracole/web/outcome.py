@@ -4,15 +4,14 @@ The library page's song lines keep status.py's ``Line``; the requests page (page
 line and says it its own way, never from anything else than the job and what the library knows of its
 song:
 
-- **Steps** (``steps``), for the request that runs: a lookup's stages (get.py's ``STAGES``) as a few
-  steps in plain words, Song, Match, Sheet, PDF, Lyrics, Guitar Pro (Ultimate Guitar's second pass, its
-  sheets scored and its tab, LaCuerda's and gtptabs.com's, from the first to the last) and Songbooks; a
-  request of other commands,
-  its commands, each by what it does ("Sheet" for ``caracole fetch``), else by its step's label. A step
-  is running while one of its stages runs, or once some ran and others wait; done once all are over,
-  failed when one failed. A step the request doesn't use is not drawn: the songbooks of a lookup that
-  leaves them to a later job (``--no-songbooks``), and a step whose every stage ended skipped, with
-  nothing to do for the song.
+- **Steps** (``steps``), for the request that runs: a lookup's stages (get.py's ``STAGES``) as a few steps
+  in plain words, Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored
+  and its tab, LaCuerda's sheet and gtptabs.com's Guitar Pro file, from the first to the last) and
+  Songbooks; a request of other commands, its commands, each by what it does ("Sheet" for ``caracole
+  fetch``), else by its step's label. A step is running while one of its stages runs, or once some ran and
+  others wait; done once all are over, failed when one failed. A step the request doesn't use is not drawn:
+  the songbooks of a lookup that leaves them to a later job (``--no-songbooks``), and a step whose every
+  stage ended skipped, with nothing to do for the song.
 - **Outcome** (``outcome``), for one that is over: a word and its tone (Ready, Needs review, Not found,
   Not fetched yet, Failed, Removed, a songbook's Made, Deleted…: the line's), a reason in one sentence
   when there is one, from the job's stages and the song's state (``SongFacts``), and the next step
@@ -60,7 +59,7 @@ LOOKUP_STEPS = (
     ("Sheet", ("sheet",)),
     ("PDF", ("pdf",)),
     ("Lyrics", ("lyrics",)),
-    ("Guitar Pro", ("ug", "lacuerda", "gtptabs")),
+    ("Extras", ("ug", "lacuerda", "gtptabs")),
     ("Songbooks", ("songbooks",)),
 )
 # A request of other commands: each command's step, by what it does; any other by its step's label.
