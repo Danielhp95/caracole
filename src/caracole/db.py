@@ -187,8 +187,9 @@ CREATE TABLE IF NOT EXISTS removed (
 # distinct keys of ug_index, artist and song keys alike, so that a LIKE '%…%' pattern of three
 # letters or more reads the index instead of 1.6 million rows twice (ug/key_search.py). The
 # keys follow every row inserted or re-keyed; a key no row has any longer stays, matching
-# nothing. detail=none: LIKE needs no positions, and the index is a third the size. The
-# triggers test for the key first: an upsert's conflict handling would override OR IGNORE.
+# nothing (schema 9 took out those there were then). detail=none: LIKE needs no positions,
+# and the index is a third the size. The triggers test for the key first: an upsert's
+# conflict handling would override OR IGNORE.
 _SCHEMA_V5 = """
 CREATE TABLE IF NOT EXISTS ug_keys (
   id INTEGER PRIMARY KEY,
@@ -273,21 +274,10 @@ CREATE INDEX IF NOT EXISTS ug_artist_tabs_song ON ug_artist_tabs(artist_key, son
 CREATE INDEX IF NOT EXISTS ug_artist_tabs_tab ON ug_artist_tabs(tab_id);
 """
 
-# Search by artist (search.py): every artist key of ug_index once, indexed word by word (unicode61 splits a key at
-# its hyphens), so that a word of an artist's name finds them ("skynyrd": lynyrd-skynyrd) without reading 1.6 million
-# rows, and ug_artist_words, the index's vocabulary (each word with how many artists' keys hold it, ``doc``), which
-# says how common a word is and holds the words a close spelling is looked for among. The keys follow every row
-# inserted, re-keyed or deleted: a key goes with the last row that has it (a tab closed, a sitemap parsed again under
-# new keys), so no artist gone counts toward how common a word is.
-_SCHEMA_V8 = """
-CREATE TABLE IF NOT EXISTS ug_artists (
-  id INTEGER PRIMARY KEY,
-  artist_key TEXT NOT NULL UNIQUE
-);
-CREATE VIRTUAL TABLE IF NOT EXISTS ug_artists_fts USING fts5(
-  artist_key, content='ug_artists', content_rowid='id', tokenize='unicode61', detail='none'
-);
-CREATE VIRTUAL TABLE IF NOT EXISTS ug_artist_words USING fts5vocab(ug_artists_fts, row);
+# The triggers that keep ug_artists to the artist keys of ug_index: a key comes with its first row, inserted or
+# re-keyed, and goes with its last, deleted or re-keyed, out of the word index too. Schema 9 makes them again: the
+# first caracole with schema 8 made neither delete trigger, nor the re-key's delete.
+_ARTIST_TRIGGERS = """
 CREATE TRIGGER IF NOT EXISTS ug_artists_indexed AFTER INSERT ON ug_artists BEGIN
   INSERT INTO ug_artists_fts(rowid, artist_key) VALUES (new.id, new.artist_key);
 END;
@@ -309,19 +299,67 @@ WHEN new.artist_key IS NOT old.artist_key BEGIN
   DELETE FROM ug_artists WHERE artist_key = old.artist_key
   AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key);
 END;
+"""
+
+# Search by artist (search.py): every artist key of ug_index once, indexed word by word (unicode61 splits a key at
+# its hyphens), so that a word of an artist's name finds them ("skynyrd": lynyrd-skynyrd) without reading 1.6 million
+# rows, and ug_artist_words, the index's vocabulary (each word with how many artists' keys hold it, ``doc``), which
+# says how common a word is and holds the words a close spelling is looked for among. The keys follow every row
+# inserted, re-keyed or deleted (``_ARTIST_TRIGGERS``): a key goes with the last row that has it (a tab closed, a
+# sitemap parsed again under new keys), so no artist gone counts toward how common a word is.
+_SCHEMA_V8 = """
+CREATE TABLE IF NOT EXISTS ug_artists (
+  id INTEGER PRIMARY KEY,
+  artist_key TEXT NOT NULL UNIQUE
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS ug_artists_fts USING fts5(
+  artist_key, content='ug_artists', content_rowid='id', tokenize='unicode61', detail='none'
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS ug_artist_words USING fts5vocab(ug_artists_fts, row);
+""" + _ARTIST_TRIGGERS + """
 INSERT OR IGNORE INTO ug_artists(artist_key) SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key;
 """
 
-# caracole uses no Guitar Pro or Power Tab file of Ultimate Guitar's: its versions of them go (any file kept for one
-# with it: files cascade), and so do the artist pages' tabs and the index's rows of those types, which a parse no
-# longer stores (ug/sitemap.py KEEP_TYPES; the triggers of schema 8 take an artist with no other row out of
-# ug_artists). A song's record is its wanted.txt line's word (songs.upsert_song): the copy of each line's word an
-# older caracole kept in kv, to arbitrate between sources, goes.
+# caracole uses no Guitar Pro or Power Tab file of Ultimate Guitar's: its versions of them go, and so do the artist
+# pages' tabs and the index's rows of those types, which a parse no longer stores (ug/sitemap.py KEEP_TYPES). A file
+# an older caracole filed from _inbox/ under such a version (the song's pick on UG) is the song's inbox file now,
+# under its version of the file's kind, as inbox.py files one. The artist triggers are made again first, so that an
+# artist with no other row leaves ug_artists, and so is every artist an earlier delete left there; the substring
+# index loses the keys no row has (a quarter of a million rows gone would leave a common word's budget of keys,
+# ug/key_search.py KEYS_PER_PATTERN, spent on them; it has no delete trigger, so they go here). A song's record is
+# its wanted.txt line's word (songs.upsert_song): the copy of each line's word an older caracole kept in kv, to
+# arbitrate between sources, goes, and so does what Spotify left: its ids among a song's or a removed song's sources,
+# and its rows in kv. Every info.json, which writes out a song's sources and picks, is then written again once
+# (keys.refresh_info_keys).
 _SCHEMA_V9 = """
+DROP TRIGGER IF EXISTS ug_index_artist_changed;
+""" + _ARTIST_TRIGGERS + """
+INSERT OR IGNORE INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at)
+SELECT DISTINCT 'inbox', kind, song_id, 'guitar', kind, '', strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM (
+  SELECT f.song_id, CASE WHEN f.name LIKE '%.ptb' THEN 'power' ELSE 'guitar-pro' END AS kind
+  FROM files f JOIN versions v ON v.id = f.version_id
+  WHERE v.provider = 'ug' AND v.kind IN ('guitar-pro', 'power')
+);
+UPDATE files SET version_id = (
+  SELECT id FROM versions WHERE provider = 'inbox' AND song_id = files.song_id
+  AND tab_id = CASE WHEN files.name LIKE '%.ptb' THEN 'power' ELSE 'guitar-pro' END
+) WHERE version_id IN (SELECT id FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power'));
 DELETE FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power');
 DELETE FROM ug_artist_tabs WHERE type IN ('guitar-pro', 'power');
 DELETE FROM ug_index WHERE type IN ('guitar-pro', 'power');
+DELETE FROM ug_artists WHERE NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = ug_artists.artist_key);
+INSERT INTO ug_keys_fts(ug_keys_fts, rowid, key) SELECT 'delete', id, key FROM ug_keys
+WHERE NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = ug_keys.key)
+AND NOT EXISTS (SELECT 1 FROM ug_index WHERE song_key = ug_keys.key);
+DELETE FROM ug_keys WHERE NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = ug_keys.key)
+AND NOT EXISTS (SELECT 1 FROM ug_index WHERE song_key = ug_keys.key);
 DELETE FROM kv WHERE substr(key, 1, 13) = 'songs:fields:';
+UPDATE songs SET source_ids = json_remove(source_ids, '$.spotify')
+WHERE CASE WHEN json_valid(source_ids) THEN json_type(source_ids, '$.spotify') END IS NOT NULL;
+UPDATE removed SET source_ids = json_remove(source_ids, '$.spotify')
+WHERE CASE WHEN json_valid(source_ids) THEN json_type(source_ids, '$.spotify') END IS NOT NULL;
+DELETE FROM kv WHERE key IN ('source:spotify', 'spotify:top_tracks', 'spotify:retry_after_until');
+DELETE FROM kv WHERE key = 'keys:info_version';
 """
 
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),

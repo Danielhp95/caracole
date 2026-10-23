@@ -127,7 +127,7 @@ it at a time (a lock on `caracole.sqlite.migrating`, beside it): `caracole
 serve`'s first requests after an upgrade, or the nightly run starting with
 them, wait the few seconds it takes, then find it migrated. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 9, but this caracole knows up to 8:
+status 2: `database: … is at schema version 10, but this caracole knows up to 9:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
 when there is one. Schema 4 keeps the songs you removed. Schema 5 adds an index of the UG index's names, for
 searching as you type: the first command after the upgrade builds it from the
@@ -142,7 +142,13 @@ pages caracole knows, with no request, even while Ultimate Guitar cools down. Sc
 adds an index of the words of the UG index's artists' names, for finding an artist by
 a word of their name and by a close spelling of it (see [caracole search](#caracole-search)):
 the first command after the upgrade builds it from the index, in about a second, and it
-adds about 10 MB to a full index. A state
+adds about 10 MB to a full index. Schema 9 takes out what caracole no longer uses: Ultimate
+Guitar's Guitar Pro and Power Tab tabs (the picks among them, and their rows in the UG index:
+about 270,000 of a full index's 1.6 million, with the artists and names they alone had), and
+what Spotify left (its ids among a song's sources, its state; an old `spotify_token.json` in
+the state folder is yours to delete). A file you dropped into `_inbox/` that an older caracole
+filed under a Guitar Pro pick on Ultimate Guitar stays, as the song's own inbox file. It takes
+a few seconds more than the copy. A state
 folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
 `caracole add` is the exception to both: it keeps its line and warns (see

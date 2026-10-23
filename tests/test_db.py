@@ -434,8 +434,9 @@ def test_a_version_7_database_gains_its_artists_by_word_and_keeps_every_row(tmp_
 
 
 def test_a_version_8_database_loses_everything_of_ultimate_guitars_guitar_pro_and_power_tab_files(tmp_path):
-    # caracole uses no Guitar Pro or Power Tab file of Ultimate Guitar's: their versions go (with any file kept for
-    # one), the artist pages' tabs of those types, and the index's rows of them, an artist with no other row too.
+    # caracole uses no Guitar Pro or Power Tab file of Ultimate Guitar's: their versions go (a file filed for one is
+    # the inbox's now: test_a_file_filed_from_the_inbox_for_a_pick_on_ultimate_guitar_stays_the_songs), the artist
+    # pages' tabs of those types, and the index's rows of them, an artist with no other row too.
     path = tmp_path / "state" / "caracole.sqlite"
     path.parent.mkdir()
     old = sqlite3.connect(path)
@@ -451,7 +452,7 @@ def test_a_version_8_database_loses_everything_of_ultimate_guitars_guitar_pro_an
          (2, "ug", "301", "guitar", "guitar-pro", 1, 0),
          (3, "ug", "303", "guitar", "power", 2, 0),
          (4, "ug", "302", "guitar", "guitar-pro", None, 1),
-         (5, "ug", "305", "guitar", "guitar-pro", 3, 0),  # a file was filed for it
+         (5, "ug", "305", "guitar", "guitar-pro", 3, 0),
          (6, "gtptabs", "9", "guitar", "guitar-pro", None, 0),
          (7, "inbox", "guitar-pro", "guitar", "guitar-pro", None, 0),
          (8, "ug", "401", "guitar", "tabs", 1, 0)],
@@ -459,8 +460,7 @@ def test_a_version_8_database_loses_everything_of_ultimate_guitars_guitar_pro_an
     old.executemany(
         "INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) "
         "VALUES (?, 1, ?, 'Oasis/Wonderwall/' || ?2, ?, 1, 'x')",
-        [(1, "sheet.txt", "a"), (5, "guitar-3.gp5", "b"), (6, "guitar-1.gp5", "c"), (7, "guitar-2.gp", "d"),
-         (8, "tab.txt", "e")],
+        [(1, "sheet.txt", "a"), (6, "guitar-1.gp5", "c"), (7, "guitar-2.gp", "d"), (8, "tab.txt", "e")],
     )
     old.executemany(
         "INSERT INTO ug_artist_tabs (page, tab_id, type, artist, title, url, artist_key, song_key, artist_forms, "
@@ -472,7 +472,7 @@ def test_a_version_8_database_loses_everything_of_ultimate_guitars_guitar_pro_an
                     [(101, "oasis", "wonderwall", "chords"), (305, "oasis", "wonderwall", "guitar-pro"),
                      (303, "oasis", "wonderwall", "power"), (601, "metallica", "one", "guitar-pro")])
     old.commit()
-    files = old.execute("SELECT * FROM files WHERE version_id != 5 ORDER BY id").fetchall()
+    files = old.execute("SELECT * FROM files ORDER BY id").fetchall()
     old.close()
 
     c = db.connect(path)
@@ -484,8 +484,105 @@ def test_a_version_8_database_loses_everything_of_ultimate_guitars_guitar_pro_an
     assert [r[0] for r in c.execute("SELECT type FROM ug_artist_tabs ORDER BY tab_id")] == ["chords", "tabs"]
     assert [tuple(r) for r in c.execute("SELECT tab_id, type FROM ug_index ORDER BY tab_id")] == [(101, "chords")]
     assert [r[0] for r in c.execute("SELECT artist_key FROM ug_artists ORDER BY artist_key")] == ["oasis"]
+    # The substring index keeps no key those rows alone had: a common word's keys are the rows'.
+    assert [r[0] for r in c.execute("SELECT key FROM ug_keys ORDER BY key")] == ["oasis", "wonderwall"]
+    assert c.execute("SELECT rowid FROM ug_keys_fts WHERE key LIKE '%etallic%'").fetchall() == []
+    c.execute("INSERT INTO ug_keys_fts(ug_keys_fts) VALUES ('integrity-check')")
     c.close()
     assert columns(path.with_name("caracole.sqlite.v8.bak"), "versions")[1] == 8
+
+
+def test_a_file_filed_from_the_inbox_for_a_pick_on_ultimate_guitar_stays_the_songs(tmp_path):
+    # An older caracole filed a file dropped into _inbox/ under the song's pick on Ultimate Guitar: the pick goes,
+    # and the file is the song's inbox file of its kind, as inbox.py files one now, joining the song's own when it
+    # has one. Its Guitar Pro page, its mark and gtptabs.com's "one file a song" all read it still.
+    from caracole.inbox import guitar_files
+
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 9)) + "\nPRAGMA user_version = 8;")
+    old.executemany(
+        "INSERT INTO songs (id, key, artist, title, artists, added_at, created_at, updated_at) "
+        "VALUES (?, ?, 'A', ?, '[]', 'x', 'x', 'x')", [(1, "a/one", "One"), (2, "a/two", "Two")])
+    old.executemany(
+        "INSERT INTO versions (id, provider, tab_id, song_id, slot, kind, url, fetched_at, pick_rank) "
+        "VALUES (?, ?, ?, ?, 'guitar', ?, '', 'x', ?)",
+        [(1, "ug", "301", 1, "guitar-pro", 1), (2, "ug", "302", 1, "power", 2),
+         (3, "inbox", "guitar-pro", 1, "guitar-pro", None), (4, "ug", "401", 2, "guitar-pro", 1)])
+    old.executemany(
+        "INSERT INTO files (id, version_id, song_id, name, path, sha256, kept_rank, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?, 1, 'x')",
+        [(1, 1, 1, "guitar-1.gp5", "A/One/guitar-1.gp5", "a"),
+         (2, 1, 1, "guitar-3.PTB", "A/One/guitar-3.PTB", "b"),  # a Power Tab file filed for a Guitar Pro pick
+         (3, 2, 1, "guitar-2.ptb", "A/One/guitar-2.ptb", "c"),
+         (4, 3, 1, "guitar-4.gp", "A/One/guitar-4.gp", "d"),
+         (5, 4, 2, "guitar-1.gpx", "A/Two/guitar-1.gpx", "e")])
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    inbox = {(r[0], r[1]): r[2] for r in c.execute(
+        "SELECT song_id, kind, id FROM versions WHERE provider = 'inbox' AND tab_id = kind AND slot = 'guitar'")}
+    assert sorted(inbox) == [(1, "guitar-pro"), (1, "power"), (2, "guitar-pro")] and inbox[1, "guitar-pro"] == 3
+    assert c.execute("SELECT COUNT(*) FROM versions WHERE provider = 'ug'").fetchone()[0] == 0
+    assert {r[0]: r[1] for r in c.execute("SELECT id, version_id FROM files")} == {
+        1: inbox[1, "guitar-pro"], 2: inbox[1, "power"], 3: inbox[1, "power"], 4: inbox[1, "guitar-pro"],
+        5: inbox[2, "guitar-pro"]}
+    assert [f.name for f in guitar_files(c)] == [
+        "guitar-1.gp5", "guitar-2.ptb", "guitar-3.PTB", "guitar-4.gp", "guitar-1.gpx"]
+    c.close()
+
+
+def test_a_version_8_database_made_before_its_artists_followed_deleted_rows_has_them_follow_now(tmp_path):
+    # Schema 8 as its first caracole made it (e91ef66) had no trigger taking out the artist of a deleted or
+    # re-keyed row: a database migrated then leaves an artist behind for each, and would for every Guitar Pro row
+    # schema 9 deletes. Schema 9 makes the triggers again first, and takes out the artists no row has.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 9)) + """
+DROP TRIGGER ug_artists_unindexed;
+DROP TRIGGER ug_index_artist_gone;
+DROP TRIGGER ug_index_artist_changed;
+CREATE TRIGGER ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index
+WHEN new.artist_key IS NOT old.artist_key BEGIN
+  INSERT INTO ug_artists(artist_key) SELECT new.artist_key
+  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);
+END;
+PRAGMA user_version = 8;""")
+    old.executemany("INSERT INTO ug_index VALUES (?, ?, ?, ?, '1', 'x', '')",
+                    [(1, "van-morrison", "moondance", "chords"), (2, "van-halen", "jump", "guitar-pro"),
+                     (3, "van-halen", "panama", "chords"), (4, "van-der-graaf", "refugees", "power"),
+                     (5, "vann-closed", "x", "chords"), (6, "van-old-key", "y", "tabs")])
+    old.execute("DELETE FROM ug_index WHERE tab_id = 5")  # a tab closed: its artist stayed
+    old.execute("UPDATE ug_index SET artist_key = 'van-new-key' WHERE tab_id = 6")  # re-keyed: the old key stayed
+    old.commit()
+    assert old.execute("SELECT COUNT(*) FROM ug_artists").fetchone()[0] == 6
+    old.close()
+
+    c = db.connect(path)
+
+    def artists():
+        return [r[0] for r in c.execute("SELECT artist_key FROM ug_artists ORDER BY artist_key")]
+
+    def by_word(word):
+        return sorted(r[0] for r in c.execute(
+            "SELECT artist_key FROM ug_artists WHERE id IN "
+            "(SELECT rowid FROM ug_artists_fts WHERE ug_artists_fts MATCH ?)", (f'"{word}"',)))
+
+    def doc(word):
+        row = c.execute("SELECT doc FROM ug_artist_words WHERE term = ?", (word,)).fetchone()
+        return row[0] if row else 0
+
+    assert artists() == ["van-halen", "van-morrison", "van-new-key"]
+    assert by_word("van") == artists() and doc("van") == 3 and doc("closed") == doc("graaf") == doc("old") == 0
+    c.execute("INSERT INTO ug_artists_fts(ug_artists_fts) VALUES ('integrity-check')")
+    # And the triggers follow every row deleted or re-keyed from now on.
+    c.execute("DELETE FROM ug_index WHERE tab_id = 1")
+    c.execute("UPDATE ug_index SET artist_key = 'van-halen-band' WHERE tab_id = 3")
+    assert artists() == ["van-halen-band", "van-new-key"] and doc("van") == 2 and doc("morrison") == 0
+    c.close()
 
 
 def test_a_version_8_database_loses_what_each_line_said_beside_its_song(tmp_path):
@@ -503,6 +600,35 @@ def test_a_version_8_database_loses_what_each_line_said_beside_its_song(tmp_path
     c = db.connect(path)
     assert [r[0] for r in c.execute("SELECT key FROM kv ORDER BY key")] == [
         "songs:key_version", "wanted:first_seen:oasis/wonderwall"]
+    c.close()
+
+
+def test_a_version_8_database_loses_what_spotify_left(tmp_path):
+    # Spotify is no source any more: its ids among a song's or a removed song's sources go, and so do its rows in kv;
+    # the songs it brought stay, and so does every other source id. Every info.json, which writes out a song's
+    # sources and its picks (a Guitar Pro pick on UG among them), is written again once (keys.refresh_info_keys).
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 9)) + "\nPRAGMA user_version = 8;")
+    old.executemany(
+        "INSERT INTO songs (id, key, artist, title, artists, source_ids, added_at, created_at, updated_at) "
+        "VALUES (?, ?, 'Oasis', ?, '[]', ?, 'x', 'x', 'x')",
+        [(1, "oasis/wonderwall", "Wonderwall", '{"wanted": ["oasis/wonderwall"], "spotify": ["3ZOEytg"]}'),
+         (2, "oasis/live-forever", "Live Forever", '{"spotify": ["1Rq2pX"]}'),
+         (3, "oasis/whatever", "Whatever", '{"wanted": ["oasis/whatever"]}')])
+    old.execute("INSERT INTO removed VALUES ('blur/song-2', 'Blur', 'Song 2', '{\"spotify\": [\"9x\"]}', 'x')")
+    old.executemany("INSERT INTO kv VALUES (?, ?)", [
+        ("source:spotify", "{}"), ("source:wanted", "{}"), ("spotify:top_tracks", "[]"),
+        ("spotify:retry_after_until", "2026-10-01T00:00:00Z"), ("keys:info_version", "1")])
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert [tuple(r) for r in c.execute("SELECT id, source_ids FROM songs ORDER BY id")] == [
+        (1, '{"wanted":["oasis/wonderwall"]}'), (2, "{}"), (3, '{"wanted": ["oasis/whatever"]}')]
+    assert c.execute("SELECT source_ids FROM removed").fetchone()[0] == "{}"
+    assert [r[0] for r in c.execute("SELECT key FROM kv ORDER BY key")] == ["source:wanted"]
     c.close()
 
 
