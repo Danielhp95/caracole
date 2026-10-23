@@ -412,13 +412,14 @@ def test_a_wanted_line_brings_a_removed_song_back_as_new(conn):
 
 
 def test_a_song_of_the_same_key_in_the_library_outranks_a_tombstone(conn):
-    # After a re-keying, a removed song may share its key with one you have.
+    # After a re-keying, a removed song may share its key with one you have: the line finds that song, and as it asks
+    # for the song, the tombstone goes, so that no search lists the song under the songs removed too.
     from caracole.songs import mark_removed, removed_song
 
     kept_id, _ = line(conn)
     mark_removed(conn, get_song(conn, kept_id), REMOVED_AT)
     assert line(conn) == (kept_id, False)
-    assert removed_song(conn, LINE) is not None  # the line found its song: no tombstone was asked about
+    assert removed_song(conn, LINE) is None
 
 
 def test_removed_songs_are_listed_newest_first_and_merge_their_sources(conn):

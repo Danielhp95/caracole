@@ -181,10 +181,11 @@ def upsert_song(
     correct corrects the song at the next sync, and a value you take off the
     line comes off the song.
 
-    A song ``caracole remove`` took out, found by the source id or, failing a
-    record of yours, by the key, is asked for again: its tombstone goes, and it
-    comes back as a new song (``caracole remove`` took its lines out, so a line
-    there now is one you wrote since).
+    A song ``caracole remove`` took out, found by the source id or by the key,
+    is asked for again: its tombstone goes, and it comes back as a new song
+    (``caracole remove`` took its lines out, so a line there now is one you wrote
+    since), unless the library has a song of that key (after a re-keying, say),
+    which the line finds.
     """
     names = [a.strip() for a in artists if a and a.strip()]
     if not names:
@@ -194,12 +195,12 @@ def upsert_song(
     said = {"album": album, "duration_ms": duration_ms, "isrc": isrc, "variant": title_variant(title)}
     now = utc_now_iso()
     ensure_current_keys(conn)
+    _forget_removed(conn, _removed_with_source_id(conn, source, source_id))
     row = _with_source_id(conn, source, source_id)
     if row is None:
-        _forget_removed(conn, _removed_with_source_id(conn, source, source_id))
         row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
+    _forget_removed(conn, removed_song(conn, key if row is None else row["key"]))
     if row is None:
-        _forget_removed(conn, removed_song(conn, key))
         names[0] = _artist_as_written(conn, names[0], key)
         cur = conn.execute(
             "INSERT INTO songs (key, artist, title, artists, album, duration_ms, isrc, source_ids, "
