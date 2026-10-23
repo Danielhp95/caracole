@@ -2,7 +2,7 @@
 
 **Version 2.1 of the design, 18 October 2026.** This version is updated with your answers: you're learning guitar only, lyrics matter because you sing, and you can buy audio files.
 
-**Revised 22 October 2026:** `wanted.txt` is the one list of songs, and Guitar Pro files come from gtptabs.com or from what you drop into the inbox, never from Ultimate Guitar.
+**Revised 22 October 2026:** `wanted.txt` is the one list of songs, and Guitar Pro files come from gtptabs.com or from what you drop into the inbox, never from Ultimate Guitar. caracole keeps no secret: ntfy is a topic's URL alone, and `caracole serve` has no sign-in.
 
 This review replaces the first report's architecture with a much smaller one. The first report is still the reference for the provider terms of service and the audio chord models. This version changes what you build and in what order.
 
@@ -82,7 +82,7 @@ That is roughly a third of the first design's moving parts.
 - **Formats are ordered by quality.** Each slot has an ordered list of formats, and a song upgrades when a better one appears.
 - **Ratings are shrunk by vote count** (a Bayesian average).
 - **Artist aliases are learned from your corrections.**
-- **Secrets and hardening:** static secrets go through agenix or sops-nix, and the service uses Sonarr-style systemd hardening.
+- **Hardening:** the service uses Sonarr-style systemd hardening.
 - **The legal map:** free content through its intended path, link-outs for services that forbid automation, and no paywall-circumvention tools.
 
 ## The design
@@ -333,7 +333,6 @@ in {
     musicDir = lib.mkOption { type = lib.types.str; default = "/srv/music"; };
     schedule = lib.mkOption { type = lib.types.str; default = "*-*-* 03:30"; };
     settings = lib.mkOption { type = toml.type; default = { }; };
-    credentials = lib.mkOption { type = lib.types.attrsOf lib.types.path; default = { }; };
   };
 
   config = lib.mkIf cfg.enable {
@@ -351,7 +350,6 @@ in {
         StateDirectory = "caracole"; CacheDirectory = "caracole";
         ReadWritePaths = [ cfg.libraryDir ];
         ReadOnlyPaths = [ "-${cfg.musicDir}" ];          # "-": don't fail if it doesn't exist yet
-        LoadCredential = lib.mapAttrsToList (n: p: "${n}:${p}") cfg.credentials;
         NoNewPrivileges = true; ProtectSystem = "strict"; ProtectHome = true;
         PrivateTmp = true; PrivateDevices = true; ProtectProc = "invisible";
         ProtectKernelTunables = true; ProtectKernelModules = true; ProtectControlGroups = true;
@@ -379,7 +377,7 @@ in {
 
 **Everything else**
 
-- **Static secrets** (the ntfy token) come from agenix or sops-nix through `LoadCredential`.
+- **No secrets:** ntfy is a topic's URL alone, posted to with no token, and `caracole serve` has no sign-in, so it listens only on a network you trust. Nothing goes through agenix, sops-nix or `LoadCredential`.
 - **Backups:** restic covers `/var/lib/caracole` (take a SQLite `.backup` first), the library and `Music/`.
 
 ## Build order
@@ -388,7 +386,7 @@ in {
 |---|---|---|
 | **0. Spike (an evening)** | (1) Fetch `sitemap_last` and one numbered sitemap, parse them, and find 20 of your songs locally; (2) one tab page still has `js-store` with a versions list carrying ratings and votes; (3) LRCLIB returns lyrics for 10 of your songs, half of them Spanish | You know which parts of this plan are real |
 | **1. MVP on the laptop** | Command line: `index build` and `index refresh`, `sync`, `match --dry-run`, `run`; LRCLIB lyrics; UG sheets ranked by lyric coverage, then rating; text tabs; library and `_todo.md`; `overrides.toml`; SQLite | Every song in `wanted.txt` has lyrics and a sheet with at least 80% lyric coverage, or a clear line on the to-do page |
-| **2. Move to the NUC** | Flake, module, timer, agenix, ntfy, Syncthing, restic | A week of nightly runs with no intervention |
+| **2. Move to the NUC** | Flake, module, timer, ntfy, Syncthing, restic | A week of nightly runs with no intervention |
 | **3. Sheets you can sing from** | ChordPro conversion (UG marks every chord with `[ch]`, so it's deterministic); PDF rendering with `chordpro`; per-song transposition from `overrides.toml`; LaCuerda for Spanish songs; a `caracole review` TUI | Your phone shows a PDF of every sheet, in your key |
 | **4. The floor** | Buy list; `Music/` scan; the auto-chords unit merging timed chords with synced lyrics | Every song you bought has at least an auto sheet |
 | **Later, if needed** | Guitar Pro file introspection, MuseScore, Cifra Club, a web UI or player (It's MyTabs or TabVault), Navidrome as a source, Music.AI | — |
