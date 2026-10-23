@@ -7,7 +7,7 @@ lyrics on their own, and guitar parts where they exist. A nightly
 `Library/_todo.md` lists only what it can't decide without you.
 
 This page covers using caracole on any machine. [deploy.md](deploy.md) sets it
-up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
+up as a nightly service on a NixOS host, with Syncthing and backups.
 `caracole --help` and `caracole COMMAND --help` list every command and option.
 
 - [Configure](#configure)
@@ -678,8 +678,9 @@ does: wanted.txt is its one source of songs. After the upgrade:
   secret is never read either: delete the file `client_secret_file` named,
   `$CREDENTIALS_DIRECTORY/spotify_client_secret`, or
   `$CARACOLE_SPOTIFY_CLIENT_SECRET`, whichever you used. On NixOS, take
-  `settings.spotify` and `credentials.spotify_client_secret` out of
-  `services.caracole`: until you do, a rebuild warns about each.
+  `settings.spotify` out of `services.caracole`: until you do, a rebuild warns
+  about it. `services.caracole.credentials` is gone, so a rebuild that still
+  sets it fails: delete it, and the secrets it named.
 - The token `caracole auth spotify` saved, `spotify_token.json` in the state
   folder, is harmless and read by nothing: delete it. `caracole auth` is gone.
 - The database keeps the few rows the Spotify sync wrote (how its last sync
@@ -4165,7 +4166,7 @@ later takes the video's place.
 ## Running it on the NUC
 
 [deploy.md](deploy.md) sets caracole up as a nightly NixOS service: the timer,
-the hardened units, agenix secrets, Syncthing for the library and the music,
+the hardened units, Syncthing for the library and the music,
 restic backups, the offline auto-chords unit, and caracole-web, which serves
 the library page with its request form. There, run any command as the service
 does with `sudo caracole-admin COMMAND`, for example

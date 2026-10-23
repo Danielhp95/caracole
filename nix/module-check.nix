@@ -54,19 +54,13 @@ let
     autochords.package = stubAutochords;
   };
 
-  # ntfy and its token, as the NUC will have them.
-  configured.services.caracole = {
-    settings.ntfy.url = "https://ntfy.example/caracole";
-    credentials.ntfy_token = "/run/agenix/ntfy_token";
-  };
+  # ntfy, as the NUC will have it: a topic's URL, no token.
+  configured.services.caracole.settings.ntfy.url = "https://ntfy.example/caracole";
 
   # What an older caracole read of Spotify, left in a configuration.
-  spotifyLeftOver.services.caracole = {
-    settings.spotify = {
-      client_id = "abc123";
-      playlists = [ "Learn" ];
-    };
-    credentials.spotify_client_secret = "/run/agenix/spotify_client_secret";
+  spotifyLeftOver.services.caracole.settings.spotify = {
+    client_id = "abc123";
+    playlists = [ "Learn" ];
   };
 
   autochordsOn.services.caracole.autochords = {
@@ -139,7 +133,7 @@ let
     configured
     spotifyLeftOver
   ];
-  # caracole-web with its defaults, and on a tailnet address with a token.
+  # caracole-web with its defaults, and on a tailnet address.
   webDefault = evalSystem [
     stubbed
     { services.caracole.web.enable = true; }
@@ -159,7 +153,6 @@ let
           ];
           openFirewall = true;
         };
-        credentials.web_token = "/run/agenix/caracole-web-token";
       };
     }
   ];
@@ -170,7 +163,7 @@ let
     autochordsOn
     { services.caracole.web.enable = true; }
   ];
-  # caracole-web on every address, with no access token.
+  # caracole-web on every address.
   webOpen = evalSystem [
     stubbed
     configured
@@ -402,8 +395,15 @@ let
     "caracole.service has MemoryDenyWriteExecute and RestrictNamespaces" =
       runSc.MemoryDenyWriteExecute && runSc.RestrictNamespaces;
     "caracole.service has the rest of the plan's hardening" = hardened runSc;
-    "caracole.service loads the ntfy_token credential" =
-      runSc.LoadCredential == [ "ntfy_token:/run/agenix/ntfy_token" ];
+    # caracole reads no secret, so no unit loads one, wherever caracole-web listens.
+    "no unit loads credentials" = lib.all (sc: !(sc ? LoadCredential) || sc.LoadCredential == [ ]) [
+      runSc
+      notify.serviceConfig
+      autochordsSc
+      webSc
+      tailnetWeb.serviceConfig
+      webOpen.systemd.services.caracole-web.serviceConfig
+    ];
     "caracole.service notifies on failure" = run.onFailure == [ "caracole-notify-failure.service" ];
     "caracole.service waits for the network" =
       lib.elem "network-online.target" run.wants && lib.elem "network-online.target" run.after;
@@ -428,9 +428,7 @@ let
       && timer.timerConfig.Persistent == true
       && timer.timerConfig.RandomizedDelaySec == "45m"
       && lib.elem "timers.target" timer.wantedBy;
-    "caracole-notify-failure.service is a oneshot that loads only ntfy_token" =
-      notify.serviceConfig.Type == "oneshot"
-      && notify.serviceConfig.LoadCredential == [ "ntfy_token:/run/agenix/ntfy_token" ];
+    "caracole-notify-failure.service is a oneshot" = notify.serviceConfig.Type == "oneshot";
     "caracole-notify-failure.service is hardened, under a user of its own" =
       hardened notify.serviceConfig && notify.serviceConfig.DynamicUser;
     "caracole-notify-failure.service opens none of caracole's folders, wherever they are" =
@@ -444,9 +442,6 @@ let
     "caracole-autochords.service runs `caracole --config <generated caracole.toml> autochords`" =
       autochordsSc.ExecStart == "${lib.getExe stubAutochords} --config ${configFile} autochords";
     "caracole-autochords.service runs as caracole, with a group-writable umask" = sameUser autochordsSc;
-    # It reads no secret, and its parsers (FFmpeg, libsndfile) see the most outside data.
-    "caracole-autochords.service loads no credentials" =
-      !(autochordsSc ? LoadCredential) || autochordsSc.LoadCredential == [ ];
     "caracole-autochords.service is otherwise hardened the same way" =
       hardened autochordsSc && autochordsSc.Type == "oneshot";
     "caracole-autochords.service gets the model paths" =
@@ -498,15 +493,10 @@ let
     # Its requests run caracole commands, which write what the nightly run writes.
     "caracole-web.service writes only the library, state and cache, reads the music if it exists, waits for their mounts and caches there" =
       opens web defaultLayout;
-    # Neither caracole serve nor the commands it runs (get, add, fetch, render, ...) read ntfy.
-    "caracole-web.service loads web_token alone of the credentials, and none without it" =
-      tailnetWeb.serviceConfig.LoadCredential == [ "web_token:/run/agenix/caracole-web-token" ]
-      && (webOpen.systemd.services.caracole-web.serviceConfig.LoadCredential or [ ]) == [ ];
     # settings is a TOML value, which no option can be declared under (lib.mkRemovedOptionModule):
     # the rebuild warns, and caracole loads the generated file, ignoring the table (below).
-    "settings.spotify and credentials.spotify_client_secret, left over, are each warned about, and only then" =
+    "settings.spotify, left over, is warned about, and only then" =
       says [ "services.caracole.settings.spotify" "no longer reads Spotify" "delete it" ] nucSpotifyLeftOver.warnings
-      && says [ "services.caracole.credentials.spotify_client_secret" "delete it" ] nucSpotifyLeftOver.warnings
       && !(says [ "Spotify" ] nuc.warnings)
       && failedAssertions nucSpotifyLeftOver == [ ];
     "settings an older caracole read (guitar_pro_mode, rank.keep_guitar_pro) are warned about, and only then" =
@@ -515,13 +505,12 @@ let
         "Ultimate Guitar"
       ] legacy.warnings
       && !(says [ "services.caracole.settings" ] nuc.warnings);
-    "caracole-web listening beyond loopback without credentials.web_token is warned about, and only then" =
-      says [
-        "services.caracole.web listens on 0.0.0.0"
-        "credentials.web_token"
-      ] webOpen.warnings
-      && !(says [ "credentials.web_token" ] webDefault.warnings)
-      && !(says [ "credentials.web_token" ] webTailnet.warnings);
+    # It has no sign-in, by the owner's choice: the network it listens on is trusted, and nothing warns.
+    "caracole-web listening beyond loopback is no warning" = lib.all (system: !(says [ "services.caracole.web" ] system.warnings)) [
+      webOpen
+      webTailnet
+      webDefault
+    ];
     "caracole-web.service starts at boot after the network, restarts when it fails, and notifies on failure" =
       lib.elem "multi-user.target" web.wantedBy
       && lib.elem "network-online.target" web.after
@@ -822,11 +811,11 @@ else
       "$notifyUnconfigured" > notify.log
       grep -q "not configured" notify.log
 
-      # caracole-admin runs as the units do: their user, folders, credentials and
-      # sandbox, network included.
+      # caracole-admin runs as the units do: their user, folders and sandbox,
+      # network included, and no credentials.
       grep -q -- "CARACOLE_CONFIG=$configFile" "$adminScript"
       grep -q -- "--property=User=caracole" "$adminScript"
-      grep -q -- "LoadCredential=ntfy_token:/run/agenix/ntfy_token" "$adminScript"
+      lacks LoadCredential "$adminScript"
       grep -q -- "'--setenv=NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba'" "$adminScript"
       for property in \
         ProtectSystem=strict ProtectHome=yes PrivateTmp=yes PrivateDevices=yes \
@@ -873,19 +862,17 @@ else
       grep -qx -- "'d' '/data/caracole/state' '0700' 'caracole' 'caracole' '-' *" "$movedTmpfiles"
       grep -qx -- "'d' '/data/caracole/cache' '0700' 'caracole' 'caracole' '-' *" "$movedTmpfiles"
 
-      # The auto-chords unit holds no secret.
-      lacks LoadCredential "$autochordsUnitPath"
-      grep -q -- "LoadCredential=ntfy_token:/run/agenix/ntfy_token" "$runUnitPath"
+      # No unit holds a secret: caracole reads none.
+      for file in "$runUnitPath" "$autochordsUnitPath" "$notifyUnitPath" "$webUnitPath" "$webDefaultUnitPath"; do
+        lacks LoadCredential "$file"
+      done
 
-      # caracole-web, as systemd reads it: the token by credential, never on its command line.
-      grep -q -- "LoadCredential=web_token:/run/agenix/caracole-web-token" "$webUnitPath"
+      # caracole-web, as systemd reads it.
       grep -q -- " serve --address 100.64.0.7 --port 8740 " "$webUnitPath"
       grep -qx -- "Restart=on-failure" "$webUnitPath"
       grep -qx -- "RestartMode=direct" "$webUnitPath"
       grep -qx -- "StartLimitIntervalSec=600" "$webUnitPath"
       grep -qx -- "StartLimitBurst=30" "$webUnitPath"
-      lacks "--token-file" "$webUnitPath"
-      lacks "ntfy_token" "$webUnitPath"
 
       mkdir -p $out/data-caracole
       cp "$configFile" $out/caracole.toml

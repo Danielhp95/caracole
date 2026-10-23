@@ -271,8 +271,9 @@ Rules a change there keeps (the Invariants below are the others):
   with fontTools, each glyph record padded to an even length, Adwaita Mono, and the OFL; alphatab.nix:
   alphaTab's npm package, fixed-output, three files and their licences; `withAutochords` adds the extra, the model files and
   `yt-dlp` on PATH), autochords.nix (the model files, fixed-output), module.nix
-  (`services.caracole`: units, timer, `caracole-admin`, and a warning for each Spotify setting an
-  older caracole read, left in `settings` or `credentials`; with auto-chords on, the nightly
+  (`services.caracole`: units, timer, `caracole-admin`, and a warning for the Spotify settings an
+  older caracole read, left in `settings`; no `credentials` option, as caracole reads no secret, so no unit
+  and not `caracole-admin` loads one; with auto-chords on, the nightly
   unit runs the auto-chords package, for its youtube step, and caracole-web and
   `caracole-admin` run it too, so their pages agree), module-check.nix
   (`checks.module`).
