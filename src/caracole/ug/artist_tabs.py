@@ -10,7 +10,7 @@ included), so that a search finds those tabs too, with no request (search.py ``f
 
 - ``store``: a list page's tabs, added or brought up to date; an older read never overwrites a
   newer one (``read_at``, when UG gave the list). Only public tabs of the kinds caracole uses
-  (chords, tabs, Guitar Pro, Power Tab), at a tab page, are kept.
+  (chords and tabs: ug/page.py ``KINDS``), at a tab page, are kept.
 - ``keep_only``: a list of one kind read whole: the page's tabs of that kind it no longer lists
   go (a tab UG dropped). A list the page cap cut short only adds.
 - ``forget``: an artist page UG answers 404 for: its tabs go.
@@ -51,7 +51,7 @@ log = logging.getLogger(__name__)
 
 KEYS_KEY = "ug:artist_tabs:keys"  # the normalize.KEY_VERSION the keys were made with
 BACKFILL_KEY = "ug:artist_tabs:backfill"  # set once the backfill has read the cache
-KINDS = tuple(KIND_FILTERS)  # the lists of an artist page caracole reads: chords, tabs, guitar-pro, power
+KINDS = tuple(KIND_FILTERS)  # the lists of an artist page caracole reads: chords, tabs
 ROWS_READ = 2000  # rows the prefilter reads, at most
 _TAB_HOST = urlsplit(TAB_BASE_URL).netloc
 _COLUMNS = ("page", "tab_id", "type", "artist", "title", "label", "rating", "votes", "url", "artist_key",

@@ -50,14 +50,14 @@ def test_unknown_coverage_counts_as_incomplete():
 
 
 def test_guitar_penalty_and_variant_bonus():
-    gp = [
-        c(1, 4.9, 100, label="solo", kind="guitar-pro"),
-        c(2, 4.6, 100, kind="guitar-pro"),
-        c(3, 4.5, 100, label="acoustic", kind="guitar-pro"),
+    tabs = [
+        c(1, 4.9, 100, label="solo", kind="tabs"),
+        c(2, 4.6, 100, kind="tabs"),
+        c(3, 4.5, 100, label="acoustic", kind="tabs"),
     ]
-    assert [x.tab_id for x in rank_guitar(gp, P)] == ["2", "3", "1"]
-    assert [x.tab_id for x in rank_guitar(gp, P, variant="acoustic")] == ["3", "2", "1"]
-    unplugged = [c(4, 4.5, 100, label="unplugged", kind="guitar-pro"), c(5, 4.6, 100, kind="guitar-pro")]
+    assert [x.tab_id for x in rank_guitar(tabs, P)] == ["2", "3", "1"]
+    assert [x.tab_id for x in rank_guitar(tabs, P, variant="acoustic")] == ["3", "2", "1"]
+    unplugged = [c(4, 4.5, 100, label="unplugged", kind="tabs"), c(5, 4.6, 100, kind="tabs")]
     assert rank_guitar(unplugged, P, variant="acoustic")[0].tab_id == "4"
 
 

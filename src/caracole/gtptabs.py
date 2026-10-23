@@ -1,9 +1,9 @@
 """gtptabs.com: Guitar Pro files caracole may download for you.
 
-Ultimate Guitar's robots.txt closes its download endpoint, so its Guitar Pro pages stay
-yours to click (inbox.py files what you download). gtptabs.com's robots.txt leaves its
-download endpoint open, so caracole fetches one Guitar Pro or Power Tab file there for
-each song that has none (gtptabs_fetch.py). What the site looked like on 19 October 2026:
+Ultimate Guitar's robots.txt closes its download endpoint, and caracole uses none of its
+Guitar Pro pages (inbox.py files a file you download anywhere yourself). gtptabs.com's
+robots.txt leaves its download endpoint open, so caracole fetches one Guitar Pro or Power
+Tab file there for each song that has none (gtptabs_fetch.py). What the site looked like on 19 October 2026:
 
 - **robots.txt** closes /ru/ (a Russian copy of every page: half of each sitemap),
   /storage/ (each artist's "Download all" archive), /search/, /profile/, /message/,

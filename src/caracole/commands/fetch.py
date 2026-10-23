@@ -1,4 +1,4 @@
-"""``caracole fetch``: fetch, rank and keep UG sheets and guitar parts, within the request budget.
+"""``caracole fetch``: fetch, rank and keep UG sheets and text tabs, within the request budget.
 
 The nightly ``caracole run`` does this as one of its steps; the command runs it
 on its own, or for one song with ``--song``, and like the run it first scores
@@ -194,13 +194,11 @@ def _one_song(conn: sqlite3.Connection, display: str, overrides: Overrides) -> S
 
 
 def _line(song: Song, outcome: SongFetchOutcome, *, requests: bool = True) -> str:
-    """One song's result, as ``Artist - Title: sheet 101 · Guitar Pro 301, 303 · tab 402 (3 requests)``;
-    without ``requests``, the count is left to -v."""
+    """One song's result, as ``Artist - Title: sheet 101 · tab 402 (3 requests)``; without ``requests``, the
+    count is left to -v."""
     parts = []
     if outcome.sheet is not None:
         parts.append(f"sheet {outcome.sheet}")
-    if outcome.guitar_pro:
-        parts.append("Guitar Pro " + ", ".join(str(t) for t in outcome.guitar_pro))
     if outcome.tab is not None:
         parts.append(f"tab {outcome.tab}")
     line = f"{song.display}: {' · '.join(parts) or 'nothing kept'}"
@@ -222,8 +220,8 @@ def _not_done(song: Song, stats: FetchStats, budget: int, *, due: bool = True) -
     spent = f"the UG budget of {plural(budget, 'request')} is spent"
     if stats.sheets_done:
         if stats.failures:
-            return f"{song.display}: sheet kept; its guitar parts wait for the next run ({stats.failures[0][1]})."
-        return f"{song.display}: sheet kept; {spent}, so its guitar parts wait for the next run."
+            return f"{song.display}: sheet kept; its tab waits for the next run ({stats.failures[0][1]})."
+        return f"{song.display}: sheet kept; {spent}, so its tab waits for the next run."
     then = "it waits for the next run" if due else "ask for it again later"
     if stats.failures:
         return f"{song.display}: not fetched ({stats.failures[0][1]}); {then}."

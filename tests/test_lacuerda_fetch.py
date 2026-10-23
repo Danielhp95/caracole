@@ -928,7 +928,7 @@ def test_a_sheet_you_pinned_is_never_replaced(conn, tmp_path):
 
 
 def test_a_pin_of_another_tab_leaves_the_sheet_open_to_lacuerda(conn, tmp_path):
-    # A pinned Guitar Pro tab, say: the sheet slot isn't pinned.
+    # A pinned text tab, say: the sheet slot isn't pinned.
     song = spanish_song(conn)
     keep_ug_sheet(conn, tmp_path, song, 0.5)
     stats = run_with(FakeLaCuerda(), conn, tmp_path, Overrides(pin={song.key: (6571406,)}))

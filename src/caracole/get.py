@@ -28,8 +28,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``lyrics``: LRCLIB.
 - ``ug``: Ultimate Guitar again, as the nightly run would: the top sheets
   scored against the lyrics (a better one replaces the first, and the others
-  are kept beside it, said as "kept beside it: tab B, tab C"), guitar parts
-  and the text tab. It spends only what leaves ``SHEETS_SHARE`` of the hour's
+  are kept beside it, said as "kept beside it: tab B, tab C"), and the text
+  tab. It spends only what leaves ``SHEETS_SHARE`` of the hour's
   lookup requests to UG for sheets (``after_the_sheet``), so that an evening
   of lookups keeps getting them.
 - ``lacuerda``: LaCuerda, for a Spanish song without a complete sheet; within
@@ -80,7 +80,7 @@ STAGES = (
     ("sheet", "The sheet"),
     ("pdf", "The PDF"),
     ("lyrics", "Lyrics from LRCLIB"),
-    ("ug", "Ultimate Guitar: the sheets scored, guitar parts"),
+    ("ug", "Ultimate Guitar: the sheets scored, the tab"),
     ("lacuerda", "LaCuerda"),
     ("gtptabs", "A Guitar Pro file from gtptabs.com"),
     ("pages", "The library page"),
@@ -395,6 +395,8 @@ class _Lookup:
         key = identity_key(req.artist, req.title)
         if key in self.overrides.ignore:
             raise _Stop(f"{req.display} is ignored in overrides.toml: take it out of [ignore] to look it up")
+        if req.tab:
+            self._refuse_an_unused_kind(req)
         song = find_song(self.conn, key)
         said = "in the library"
         if song is None:
@@ -436,15 +438,33 @@ class _Lookup:
             tell(song.id, song.display)
         return said + (f"; recorded in overrides.toml: {', '.join(picked)}" if picked else "")
 
+    def _refuse_an_unused_kind(self, req: LookupRequest) -> None:
+        """Stop, before anything is written, when the offline index says the tab asked for is a Guitar Pro or Power
+        Tab file's page: caracole picks none on Ultimate Guitar, so its pin would pin nothing (ug/fetch.py)."""
+        from caracole.overrides import OverridesError, tab_id_from_url
+        from caracole.ug.page import KINDS
+
+        try:
+            tab_id = tab_id_from_url(req.tab or "")
+        except OverridesError:
+            return  # said as the pin is recorded
+        row = self.conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab_id,)).fetchone()
+        if row is not None and row[0] not in KINDS:
+            ext = ".ptb" if row[0] == "power" else ".gp5"
+            raise _Stop(f"tab {tab_id} is a Guitar Pro or Power Tab file's page, and caracole uses none on Ultimate "
+                        f"Guitar: a file you get yourself goes into _inbox/ as \"{req.display}{ext}\", and caracole "
+                        "files it under the song")
+
     def _other_pins(self, song, tab_id: int) -> list[str]:
         """The song's pins that stay beside a tab you pick, as written: those of another kind group (a
-        chords sheet beside a Guitar Pro pick), by the offline index's types. A pin of the pick's group,
-        or of a kind the index doesn't know on either side, is replaced; the pick goes first anyway."""
-        from caracole.ug.fetch import CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS
+        text tab beside a chords sheet you pick), by the offline index's types. A pin of the pick's group,
+        or of a kind caracole doesn't use or the index doesn't know on either side (a Guitar Pro file's,
+        which pins nothing), is replaced; the pick goes first anyway."""
+        from caracole.ug.fetch import CHORDS_KINDS, TAB_KINDS
 
         def group(tab: int) -> tuple[str, ...] | None:
             row = self.conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab,)).fetchone()
-            kinds = (CHORDS_KINDS, GUITAR_PRO_KINDS, TAB_KINDS)  # the groups a pin replaces (ug/fetch.py)
+            kinds = (CHORDS_KINDS, TAB_KINDS)  # the groups a pin replaces (ug/fetch.py)
             return next((g for g in kinds if row is not None and row[0] in g), None)
 
         mine = group(tab_id)
@@ -611,8 +631,6 @@ class _Lookup:
         def rest(client) -> str:
             out = process_song(self._fetch_context(client, first=False), get_song(self.conn, self.song.id))
             parts = [f"sheet {out.sheet}" if out.sheet is not None else "no UG sheet"]
-            if out.guitar_pro:
-                parts.append("Guitar Pro " + ", ".join(str(t) for t in out.guitar_pro))
             if out.tab is not None:
                 parts.append(f"tab {out.tab}")
             if out.kept_versions:

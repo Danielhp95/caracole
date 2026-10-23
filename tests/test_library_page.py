@@ -633,9 +633,9 @@ def test_a_song_in_review_carries_its_candidates_as_caracole_review_lists_them(c
         {"n": 1, "ref": "radiohead/creep", "artist": "Radiohead", "title": "Creep", "score": 89,
          "why": "artist spelled differently", "tabs": "Chords ×2 · Tabs ×1",
          "href": "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-1"},
+        # UG has it only as a Guitar Pro file, a type caracole doesn't use there: no tab to count, no page to open.
         {"n": 2, "ref": "jeff-buckley/creep", "artist": "Jeff Buckley", "title": "Creep", "score": 80,
-         "why": "title only: another artist's song, probably a cover", "tabs": "Guitar Pro ×1",
-         "href": "https://tabs.ultimate-guitar.com/tab/jeff-buckley/creep-guitar-pro-5"},
+         "why": "title only: another artist's song, probably a cover", "tabs": "", "href": ""},
         # Not in the index (any more): its names come from its keys, and it has no page to open.
         {"n": 3, "ref": "misc-musicals/creep-the-musical", "artist": "Misc Musicals", "title": "Creep The Musical",
          "score": 76, "why": "under UG's catch-all misc-musicals", "tabs": "", "href": ""},
@@ -738,25 +738,18 @@ def test_a_one_song_card_reads_the_lacuerda_sheets_and_kept_versions_of_that_son
     assert card["lacuerdaSheet"] == "https://acordes.lacuerda.net/estopa/como_camaron.shtml"
 
 
-def test_guitar_pro_pages_to_click_are_the_picks_without_files(conn, cfg):
+def test_no_guitar_pro_version_of_ultimate_guitars_is_offered_to_download(conn, cfg):
+    # caracole picks none there any more; a pick stored before (schema 9 takes them out) shows nowhere. A file kept
+    # for one stays a file of the song's, like any.
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)
     v2 = version(conn, s, 555891, slot="guitar", kind="power", ver=1, rating=4.0, votes=2)
     set_picks(conn, s.id, ["guitar-pro", "power"], [v1, v2])
     keep_file(conn, cfg.library_dir, song=s, version_id=v2, name="guitar-2.ptb", data=b"pt", rank=2)
-    gp = songs_of(page(conn, cfg))[s.display]["guitarPro"]
-    assert [g["href"] for g in gp] == ["https://tabs.ultimate-guitar.com/tab/555890"]
-    assert "Guitar Pro" in gp[0]["label"] and "ver 2" in gp[0]["label"] and "4.2" in gp[0]["label"]
-
-
-def test_a_link_that_isnt_http_is_dropped(conn, cfg):
-    s = add_song(conn, "Soda Stereo", "De Música Ligera")
-    v = upsert_version(conn, provider="ug", tab_id="1", song_id=s.id, slot="guitar", kind="guitar-pro",
-                       rating=4, votes=1, version=1, label=None, url="javascript:alert(1)", raw={}, now="x")
-    set_picks(conn, s.id, ["guitar-pro"], [v])
     html = page(conn, cfg)
-    assert songs_of(html)[s.display]["guitarPro"] == []
-    assert "javascript:alert" not in html
+    song = songs_of(html)[s.display]
+    assert "guitarPro" not in song and "tab/555890" not in html
+    assert [f["name"] for f in song["files"]] == ["guitar-2.ptb"]
 
 
 # --- search haystack -------------------------------------------------------------------
@@ -812,9 +805,7 @@ def test_a_title_cannot_break_out_of_the_json_block(conn, cfg, title):
 
 
 def test_no_external_resources_and_no_urls_outside_the_data(conn, cfg):
-    s = add_song(conn, "宋冬野", "斑马，斑马")
-    v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
-    set_picks(conn, s.id, ["guitar-pro"], [v])
+    add_song(conn, "宋冬野", "斑马，斑马")
     from caracole.page_icon import LINK
 
     html = page(conn, cfg)
@@ -823,7 +814,7 @@ def test_no_external_resources_and_no_urls_outside_the_data(conn, cfg):
     shell = re.sub(r"'sha256-[A-Za-z0-9+/]+=*'", "'sha256'", JSON_BLOCK.sub("", html.replace(LINK, "")))
     assert not re.search(r"https?://|//[a-z]", shell, re.I)  # no CDN, fonts, images, fetches
     assert not re.search(r"<(link|img|iframe|object|embed)\b|\bsrc=|@import|url\(", shell, re.I)
-    allowed = set(search_links("宋冬野", "斑马，斑马").values()) | {"https://tabs.ultimate-guitar.com/tab/555890"}
+    allowed = set(search_links("宋冬野", "斑马，斑马").values())
     assert set(re.findall(r'https?://[^"\s]+', JSON_BLOCK.findall(html)[0])) <= allowed
 
 
@@ -1723,10 +1714,7 @@ def test_a_song_whose_first_link_is_its_viewer_shows_where_its_sheet_came_from(c
 
 def test_links_to_other_sites_name_them(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
-    v = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
-    set_picks(conn, s.id, ["guitar-pro"], [v])
     song = songs_of(page(conn, cfg))[s.display]
-    assert [g["source"] for g in song["guitarPro"]] == ["ug"]
     assert {link["label"]: link.get("source") for link in song["links"]} == {"Chordify": None, "YouTube": "youtube"}
 
 
@@ -1869,13 +1857,12 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
 
 
 def filed_library(conn, cfg):
-    """Creep, found, with every kind of file and a Guitar Pro version to download; Wonderwall, found, its
-    PDF alone; The Underworld, wanted and in review (two badges); Yesterday, wanted, with no file."""
+    """Creep, found, with every kind of file; Wonderwall, found, its PDF alone; The Underworld, wanted and in
+    review (two badges); Yesterday, wanted, with no file."""
     creep = add_song(conn, "Radiohead", "Creep")
     keep_sheet_json(conn, cfg, creep, "Words\n", raw={"tonality_name": "G"})
     put(cfg, creep, "sheet.html", "sheet.pdf", "sheet.cho", "lyrics.txt", "lyrics.lrc", "guitar-1.gp5", "tab.txt",
         "info.json")
-    set_picks(conn, creep.id, ["guitar-pro"], [version(conn, creep, 555890, slot="guitar", kind="guitar-pro")])
     update_song(conn, creep.id, status="found")
     wonderwall = add_song(conn, "Oasis", "Wonderwall")
     put(cfg, wonderwall, "sheet.pdf")
@@ -2032,11 +2019,11 @@ def test_a_line_opens_its_sheet_from_one_button_and_its_other_files_wait_under_i
     top, menu = creep.split('class="line-panel"', 1)
     # One button opens the viewer, as the title does.
     assert link_texts(top) == ["Open"], top
-    # Every other file, and the Guitar Pro versions to download, under "⋯": closed, small.
+    # Every other file under "⋯": closed, small. No Guitar Pro version to download: caracole picks none on UG.
     assert re.search(r'<button class="line-more"[^>]*aria-expanded="false"', top) and re.search(r'^[^>]*hidden', menu)
     assert link_texts(menu) == ["Sheet PDF", "Sheet text", "ChordPro", "Lyrics", "Timed lyrics", "Guitar Pro 1",
-                                "Tab", "Info", "Guitar Pro ver 1 · 4.5★ · 12 votes ↗"], menu
-    assert '<p class="subhead">Files</p>' in menu and '<p class="subhead">Guitar Pro to download</p>' in menu
+                                "Tab", "Info"], menu
+    assert '<p class="subhead">Files</p>' in menu and "Guitar Pro to download" not in menu
     assert all(cls.startswith("btn small") for cls in re.findall(r'<a class="([^"]*)"', menu)), menu
     # A sheet with no viewer opens its PDF; nothing else to list.
     wonderwall = line_of(shown, "Wonderwall")
@@ -2198,7 +2185,7 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_ski
         phone.click(line + " .line-more")
         assert phone.wait(f"!{q}.querySelector('.line-panel').hidden")
         heights = phone.js(f"Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.getBoundingClientRect().height)")
-        assert len(heights) == 9 and min(heights) >= 44, heights
+        assert len(heights) == 8 and min(heights) >= 44, heights  # the eight files filed_library keeps
         # From the line, Tab goes to Open: the title opens the same, and isn't a stop of its own.
         phone.js(f"{q}.focus()")
         phone.press("Tab")
@@ -2228,9 +2215,9 @@ def test_an_artists_name_shows_it_is_a_filter_over_their_songs_and_on_a_line_alo
 
 def every_control(conn, cfg, *, served: bool = True) -> str:
     """The page caracole serve serves (``served``; else the file on disk), with a control of every kind:
-    filed_library's songs (every file, a Guitar Pro version to download, a song in review, one with no
-    file), a review's candidates to pick, a wanted song with an auto sheet, a songbook, the form to
-    request a song, and the A-Z strip, which takes 40 songs shown (``JUMP_FROM``)."""
+    filed_library's songs (every file, a song in review, one with no file), a review's candidates to pick, a
+    wanted song with an auto sheet, a songbook, the form to request a song, and the A-Z strip, which takes 40
+    songs shown (``JUMP_FROM``)."""
     from caracole.library_page import WebControls
     from caracole.songbook import FILE_NAME, make_songbook
 
@@ -3133,8 +3120,6 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     controls, s = served_states(conn, cfg)
     conn.execute("INSERT INTO musescore_index VALUES (?, ?, ?, '18')",
                  parse_song_url("https://musescore.com/song/yesterday-680101"))
-    gp = version(conn, s["soda"], 555890, slot="guitar", kind="guitar-pro")
-    set_picks(conn, s["soda"].id, ["guitar-pro"], [gp])
     put(cfg, s["soda"], "lyrics.txt")
     overrides = Overrides(transpose={s["soda"].key: -2})
     html = build_library_page(conn, cfg, overrides, NOW, controls=controls)
@@ -3163,14 +3148,14 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     menu = lost.split('class="line-panel"', 1)[1]
     assert re.search(rf'href="/review\?song={s["lost"].id}"[^>]*>Look in the index</a>', menu)
     assert "Scores on MuseScore" in menu and "Find the chords" in menu and "yesterday-680101 (possible match)" in menu
-    # Found: Open, its key and its marks on the line; its files, its Guitar Pro to download, its key in words, its
-    # transposition, Add to a songbook… and Remove… under "⋯".
+    # Found: Open, its key and its marks on the line; its files, its key in words, its transposition, Add to a
+    # songbook… and Remove… under "⋯".
     soda = line_of(shown, "De Música Ligera")
     assert re.search(r'<div class="line-action"><a class="btn small primary"[^>]*>Open PDF</a>', soda), soda
     assert re.search(r'<span class="line-key"[^>]*>', soda) and "Key A minor (from the tab)" in soda
     assert 'data-source="ug"' in soda.split('class="line-panel"', 1)[0]
     menu = soda.split('class="line-panel"', 1)[1]
-    assert "Sheet text" in menu and "Lyrics" in menu and "Guitar Pro ver 1" in menu and "−2" in menu
+    assert "Sheet text" in menu and "Lyrics" in menu and "−2" in menu and "Guitar Pro to download" not in menu
     assert ">Add to a songbook…</button>" in menu and re.search(r'<form[^>]*action="/remove"', menu)
 
     clicks = noted(dom, "data-clicks")

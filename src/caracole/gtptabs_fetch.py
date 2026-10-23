@@ -1,6 +1,6 @@
 """gtptabs.com in the nightly run: a Guitar Pro file for each song that has none.
 
-Ultimate Guitar's Guitar Pro pages stay yours to click: its robots.txt closes
+caracole picks no Guitar Pro page on Ultimate Guitar, whose robots.txt closes
 /tab/download. gtptabs.com's leaves /tabs/download/ open, so this step downloads one
 file there for each song that has no Guitar Pro or Power Tab file yet. What the site
 looks like is in gtptabs.py. A pass:
@@ -391,7 +391,7 @@ def _keep(run: _Pass, song: Song, tab: GtpTab, data: bytes, ext: str) -> str:
              "instruments": list(tab.instruments), "download": download_url(tab.tab_id)},
         now=run.stamp,
     )
-    number = guitar_number(run.conn, run.library_dir, song, 1)
+    number = guitar_number(run.conn, run.library_dir, song)
     name = f"guitar-{number}{ext}"
     keep_file(run.conn, run.library_dir, song=song, version_id=version_id, name=name, data=data, rank=number)
     write_info(run.conn, run.library_dir, get_song(run.conn, song.id))

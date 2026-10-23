@@ -90,8 +90,9 @@ def test_version_fields():
 
 
 def test_pro_page_meta():
+    # A Guitar Pro file's page parses, but its type is none caracole uses on Ultimate Guitar.
     page = pro_page()
-    assert (page.tab.tab_id, page.tab.kind, page.tab.label) == (555890, "guitar-pro", "solo")
+    assert (page.tab.tab_id, page.tab.kind, page.tab.label) == (555890, None, "solo")
     assert page.meta["fileExtension"] == ".gp5"
     assert page.meta["duration"] == 14
     assert page.content is None
@@ -112,8 +113,8 @@ def test_artist_url_missing_is_none():
     [
         ("Chords", "chords"),
         ("Tabs", "tabs"),
-        ("Pro", "guitar-pro"),
-        ("Power", "power"),
+        ("Pro", None),  # a Guitar Pro file, which caracole never picks on UG
+        ("Power", None),  # a Power Tab file, neither
         ("Official", None),
         ("Bass Tabs", None),
         ("Ukulele Chords", None),
@@ -287,7 +288,7 @@ def test_helper_page_round_trip():
     assert (t.tab_id, t.song_id, t.kind, t.version, t.rating, t.votes, t.label) == (
         10,
         5,
-        "guitar-pro",
+        None,
         2,
         4.2,
         9,

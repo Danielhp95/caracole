@@ -106,6 +106,18 @@ let
     lib.any (arg: lib.elem (plain "${program}/bin") (lib.splitString ":" (plain arg))) package.makeWrapperArgs;
 
   bare = evalSystem [ stubbed ];
+  # An older configuration that still sets the keys of Ultimate Guitar's Guitar Pro picks, which
+  # caracole no longer makes: it evaluates, warned, and its caracole.toml loads.
+  legacy = evalSystem [
+    stubbed
+    configured
+    {
+      services.caracole.settings = {
+        guitar_pro_mode = "assisted";
+        rank.keep_guitar_pro = 2;
+      };
+    }
+  ];
   nuc = evalSystem [
     stubbed
     configured
@@ -497,6 +509,12 @@ let
       && says [ "services.caracole.credentials.spotify_client_secret" "delete it" ] nucSpotifyLeftOver.warnings
       && !(says [ "Spotify" ] nuc.warnings)
       && failedAssertions nucSpotifyLeftOver == [ ];
+    "settings an older caracole read (guitar_pro_mode, rank.keep_guitar_pro) are warned about, and only then" =
+      says [
+        "services.caracole.settings: delete guitar_pro_mode and rank.keep_guitar_pro"
+        "Ultimate Guitar"
+      ] legacy.warnings
+      && !(says [ "services.caracole.settings" ] nuc.warnings);
     "caracole-web listening beyond loopback without credentials.web_token is warned about, and only then" =
       says [
         "services.caracole.web listens on 0.0.0.0"
@@ -691,6 +709,7 @@ else
         (loads nuc defaultLayout)
         (loads moved movedLayout)
         (loads libraryAlone libraryAloneLayout)
+        (loads legacy defaultLayout)
         (loads nucSpotifyLeftOver defaultLayout)
       ];
       runUnit = unitText nuc "caracole.service";
@@ -746,6 +765,21 @@ else
       assert not hasattr(cfg, "spotify")
       cfg = load_config(Path(cases[0]["config"]), env=cases[0]["env"])
       assert cfg.ntfy.url == "https://ntfy.example/caracole", cfg.ntfy.url
+      # The older configuration's file loads with one warning, naming the keys to delete.
+
+      class Said(logging.Handler):
+          def __init__(self):
+              super().__init__()
+              self.lines = []
+
+          def emit(self, record):
+              self.lines.append(record.getMessage())
+
+      said = Said()
+      logging.getLogger("caracole.config").addHandler(said)
+      load_config(Path(cases[3]["config"]), env=cases[3]["env"])
+      assert len(said.lines) == 1, said.lines
+      assert "delete guitar_pro_mode and keep_guitar_pro in [rank]" in said.lines[0], said.lines
       EOF
 
       # Each unit's command line, as systemd reads it, parses with caracole's own CLI,

@@ -1,18 +1,21 @@
-"""The assisted inbox: Guitar Pro files from Ultimate Guitar, and scores from MuseScore (plan §3).
+"""The inbox: the Guitar Pro files and the MuseScore scores you download yourself (plan §3).
 
-UG's download endpoint is disallowed for bots, so caracole never downloads
-Guitar Pro or Power Tab files there. It lists the pages it picked on the to-do page;
-you click Download and drop the files into ``Library/_inbox/``; this module
-files each one under its song as ``guitar-<rank>.<ext>``, or under the lowest
-free number when another file already holds that one: a file is never replaced.
+A Guitar Pro or Power Tab file you got anywhere (``GP_EXTENSIONS``), dropped into
+``Library/_inbox/`` named as the song is in caracole, "Artist - Title.gp5" (or the
+title alone, when one song has it), is filed under its song as ``guitar-N.<ext>``,
+N the lowest number no file of the song holds, as gtptabs.com's downloads are
+(gtptabs_fetch.py): a file is never replaced. Its version is the song's one
+``inbox`` version of its kind, ``guitar-pro`` (``power`` for a ``.ptb``): caracole
+can't tell where you got the file.
 
 MuseScore's downloads need a login, so its pages are listed too (musescore.py), and a
 score you download there (``SCORE_EXTENSIONS``) is filed as the song's ``score-N.<ext>``,
 N the lowest number no file of that extension holds: never as ``sheet.pdf``, which
-caracole renders itself. A score is placed by its name, "Artist - Title.ext" (or the
-title alone, when one song has it), and a MusicXML one also by the title and creator its
-header gives (musicxml.py). Its version is the song's one ``inbox`` version of kind
-``score``: caracole can't tell where you got the file.
+caracole renders itself. A score is placed by its name as a Guitar Pro file is, and a
+MusicXML one also by the title and creator its header gives (musicxml.py). Its version
+is the song's one ``inbox`` version of kind ``score``.
+
+Either is placed among every song that isn't ignored.
 
 Anyone who can write to the library can put a symbolic link in the inbox, so
 only regular files are read; a link is refused and left where it is. So is a
@@ -34,9 +37,11 @@ from caracole.music import Names
 from caracole.musicxml import header
 from caracole.normalize import clean_title, compact, has_other_script, identity_key, slug_key
 from caracole.songs import Song, get_song, list_songs, utc_now_iso
-from caracole.versions import VersionRow, picks, upsert_version
+from caracole.versions import upsert_version
 
 GP_EXTENSIONS = (".gp3", ".gp4", ".gp5", ".gpx", ".gp", ".ptb")
+# The kinds of the versions a kept Guitar Pro or Power Tab file has: one you filed from the inbox, one gtptabs.com
+# gave, or one filed for a version caracole picked on Ultimate Guitar when it still did (schema 9 keeps that version).
 GUITAR_FILE_KINDS = ("guitar-pro", "power")
 # The Guitar Pro files caracole serve's Guitar Pro page shows (alphaTab reads them all): every kind but Power Tab's.
 BROWSER_EXTENSIONS = (".gp3", ".gp4", ".gp5", ".gpx", ".gp")
@@ -100,8 +105,9 @@ def guitar_files(conn: sqlite3.Connection, song_id: int | None = None, *,
 def parse_download_name(name: str) -> tuple[str | None, str, int | None]:
     """``"Artist - Title (ver 2).gp5"`` → ("Artist", "Title", 2).
 
-    Bracketed words go, the version first, but not an original in another script: UG writes some
-    artists and songs in two scripts ("Jay Chou (周杰倫)"), and that part is the one that meets yours.
+    Bracketed words go, the version first, but not an original in another script: a site names a download
+    after an artist and a song it may write in two scripts ("Jay Chou (周杰倫)"), and that part is the one
+    that meets yours.
     """
     stem = Path(name).stem
     m = _VERSION.search(stem)
@@ -114,68 +120,28 @@ def parse_download_name(name: str) -> tuple[str | None, str, int | None]:
     return None, stem, version
 
 
-def _open_picks(conn: sqlite3.Connection, song_id: int) -> list[VersionRow]:
-    taken = {r[0] for r in conn.execute("SELECT version_id FROM files WHERE song_id = ?", (song_id,))}
-    return [v for v in picks(conn, song_id, GUITAR_FILE_KINDS) if v.id not in taken]
-
-
-def _songs_with_open_picks(conn: sqlite3.Connection) -> list[tuple[Song, list[VersionRow]]]:
-    marks = ", ".join("?" for _ in GUITAR_FILE_KINDS)
-    ids = [r[0] for r in conn.execute(
-        f"SELECT DISTINCT song_id FROM versions WHERE kind IN ({marks}) AND pick_rank IS NOT NULL",
-        GUITAR_FILE_KINDS,
-    )]
-    out = []
-    for sid in ids:
-        open_picks = _open_picks(conn, sid)
-        if open_picks:
-            out.append((get_song(conn, sid), open_picks))
-    return out
-
-
-def _match(artist: str | None, title: str, candidates: list[tuple[Song, list[VersionRow]]]):
-    """The song a download is of: by identity, else the closest, by the forms of the names UG gave
-    it (``normalize.name_forms``), which it writes in two scripts for some artists."""
+def _match(artist: str | None, title: str, songs: list[Song]) -> Song | None:
+    """The song a download is of: by identity, else the closest, by the forms of the names it was given
+    (``normalize.name_forms``), which a site writes in two scripts for some artists."""
     if artist:
         key = identity_key(artist, title)
-        for song, open_picks in candidates:
+        for song in songs:
             if song.key == key:
-                return song, open_picks
+                return song
     own = Names.of(artist or "", title)
     alike = own.score if artist else own.title_score
-    scored = ((alike(Names.of(song.artist, song.title)), (song, open_picks)) for song, open_picks in candidates)
-    fits = [(score, c) for score, c in scored if score >= MATCH_CUTOFF]
+    scored = ((alike(Names.of(song.artist, song.title)), song) for song in songs)
+    fits = [(score, song) for score, song in scored if score >= MATCH_CUTOFF]
     if not fits or (not artist and len(fits) > 1):
         return None  # a name without an artist is only trusted when exactly one song fits
     return max(fits, key=lambda fit: fit[0])[1]  # the first of the closest
 
 
-def _choose_pick(open_picks: list[VersionRow], version: int | None, ext: str) -> VersionRow:
-    """The pick of the file's kind and version number, else the first of its kind, else the first.
-
-    UG numbers versions within each type, so a song's Guitar Pro and Power Tab
-    picks are often both "ver 1": the number alone can't tell them apart.
-    """
-    wanted_kind = "power" if ext == ".ptb" else "guitar-pro"
-    same_kind = [v for v in open_picks if v.kind == wanted_kind]
-    if version is not None:
-        for v in same_kind:
-            if v.version == version:
-                return v
-    return same_kind[0] if same_kind else open_picks[0]
-
-
-def guitar_number(conn: sqlite3.Connection, library_dir: Path, song: Song, rank: int) -> int:
-    """The N of a new ``guitar-N`` file: the pick's rank, or the lowest number no file holds.
-
-    Picks are ranked again as versions appear, so the rank may be the number of
-    a file you downloaded for another version, or put in the folder yourself.
-    That file is never replaced. A number is taken by any kept file, or any file
-    in the folder, named ``guitar-N.*``, whatever its extension.
-    """
+def guitar_number(conn: sqlite3.Connection, library_dir: Path, song: Song) -> int:
+    """The N of a new ``guitar-N`` file: the lowest number no file of the song holds, so that no file is ever
+    replaced: a number is taken by any kept file, or any file in the folder, named ``guitar-N.*``, whatever its
+    extension (one you put there yourself, say)."""
     taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song) if (m := _GUITAR_FILE.match(n))}
-    if rank not in taken:
-        return rank
     return next(n for n in itertools.count(1) if n not in taken)
 
 
@@ -206,14 +172,15 @@ def _names_taken(conn: sqlite3.Connection, library_dir: Path, song: Song) -> set
     return names
 
 
-def _score_song(conn: sqlite3.Connection, name: str, ext: str, data: bytes) -> Song | None:
-    """The song a score is of: by its name, as for a Guitar Pro file but among every song not
-    ignored, else (MusicXML) by its header's title and creator, when exactly one song has both."""
+def _download_song(conn: sqlite3.Connection, name: str, ext: str, data: bytes) -> Song | None:
+    """The song the download ``name`` is of, among every song not ignored: by its name, else, for a MusicXML
+    score, by its header's title and creator, when exactly one song has both; None when it is no song's. Only
+    reads."""
     songs = [s for s in list_songs(conn) if s.status != "ignored"]
     artist, title, _ = parse_download_name(name)
-    found = _match(artist, title, [(s, []) for s in songs])
+    found = _match(artist, title, songs)
     if found is not None:
-        return found[0]
+        return found
     head = header(data, ext) if ext in _MUSICXML else None
     if head is None:
         return None
@@ -231,37 +198,23 @@ def _same_key(a: str, b: str) -> bool:
     return bool(a) and (a == b or compact(a) == compact(b))
 
 
-def _score_version(conn: sqlite3.Connection, song: Song) -> int:
-    """The song's one version for the scores filed from the inbox."""
+def _inbox_version(conn: sqlite3.Connection, song: Song, kind: str) -> int:
+    """The song's one version of ``kind`` for the files filed from the inbox: ``score``, ``guitar-pro`` or
+    ``power``."""
     return upsert_version(
-        conn, provider="inbox", tab_id=SCORE_KIND, song_id=song.id, slot="guitar", kind=SCORE_KIND, rating=0,
+        conn, provider="inbox", tab_id=kind, song_id=song.id, slot="guitar", kind=kind, rating=0,
         votes=0, version=1, label=None, url="", raw={}, now=utc_now_iso(),
     )
 
 
-def _download_song(conn: sqlite3.Connection, entry: str, ext: str,
-                   data: bytes) -> tuple[Song, list[VersionRow]] | None:
-    """The song the download ``entry`` is of, and its open picks (none for a score); None when it is no
-    song's. Only reads."""
-    if ext in SCORE_EXTENSIONS:
-        song = _score_song(conn, entry, ext, data)
-        return None if song is None else (song, [])
-    artist, title, _ = parse_download_name(entry)
-    return _match(artist, title, _songs_with_open_picks(conn))
-
-
-def _place(conn: sqlite3.Connection, library_dir: Path, entry: str, ext: str,
-           found: tuple[Song, list[VersionRow]]) -> tuple[Song, int, str, int]:
-    """Where the download ``entry`` of the song ``found`` goes: its song, the version it is kept for, its
-    name in the song's folder and its rank."""
-    song, open_picks = found
+def _place(conn: sqlite3.Connection, library_dir: Path, ext: str, song: Song) -> tuple[int, str, int]:
+    """Where a download of the song goes: the version it is kept for, its name in the song's folder and its
+    rank (its number)."""
     if ext in SCORE_EXTENSIONS:
         n = score_number(conn, library_dir, song, ext)
-        return song, _score_version(conn, song), f"score-{n}{ext}", n
-    _, _, version = parse_download_name(entry)
-    chosen = _choose_pick(open_picks, version, ext)
-    rank = chosen.pick_rank or 1
-    return song, chosen.id, f"guitar-{guitar_number(conn, library_dir, song, rank)}{ext}", rank
+        return _inbox_version(conn, song, SCORE_KIND), f"score-{n}{ext}", n
+    n = guitar_number(conn, library_dir, song)
+    return _inbox_version(conn, song, "power" if ext == ".ptb" else "guitar-pro"), f"guitar-{n}{ext}", n
 
 
 def _copies(conn: sqlite3.Connection, sha: str) -> list[KeptFile]:
@@ -293,7 +246,7 @@ def _again(conn: sqlite3.Connection, library_dir: Path, copies: list[KeptFile],
 
 
 def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
-    """File every Guitar Pro / Power Tab download in ``_inbox/`` under its song.
+    """File every Guitar Pro, Power Tab and score download in ``_inbox/`` under its song.
 
     A download with the bytes of a file caracole keeps is that file again, when its name is of no other
     song: a duplicate, removed, while the library holds the file; written back in its place when the
@@ -337,9 +290,9 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
                 continue
             found = _download_song(conn, entry, ext, data)
             copies = _copies(conn, hashlib.sha256(data).hexdigest())
-            if copies and (found is None or found[0].id in {c.song_id for c in copies}):
+            if copies and (found is None or found.id in {c.song_id for c in copies}):
                 # A file caracole kept, by its bytes: the song's own when its name says so, else any song's.
-                mine = [c for c in copies if found is None or c.song_id == found[0].id]
+                mine = [c for c in copies if found is None or c.song_id == found.id]
                 put_back, held = _again(conn, library_dir, mine, data)
                 if put_back or held:
                     os.unlink(entry, dir_fd=inbox_fd)
@@ -352,9 +305,9 @@ def file_inbox(conn: sqlite3.Connection, library_dir: Path) -> InboxStats:
             if found is None:
                 stats.unmatched.append(path)
                 continue
-            song, version_id, name, rank = _place(conn, library_dir, entry, ext, found)
-            if keep_file(conn, library_dir, song=song, version_id=version_id, name=name, data=data, rank=rank):
-                stats.filed.append(song_dir(library_dir, song) / name)
+            version_id, name, rank = _place(conn, library_dir, ext, found)
+            if keep_file(conn, library_dir, song=found, version_id=version_id, name=name, data=data, rank=rank):
+                stats.filed.append(song_dir(library_dir, found) / name)
             else:
                 stats.duplicates.append(path)
             os.unlink(entry, dir_fd=inbox_fd)

@@ -89,6 +89,6 @@ def rank_sheets(cands: Sequence[Candidate], policy: RankPolicy, *, variant: str 
     return sorted(cands, key=lambda c: (not is_complete(c, policy), -c.score, *_tiebreak(c)))
 
 
-# Guitar parts rank by score alone, with the penalty for intro/solo/outro/riff/lesson labels that every
+# Text tabs rank by score alone, with the penalty for intro/solo/outro/riff/lesson labels that every
 # score carries.
 rank_guitar = rank_by_rating

@@ -16,6 +16,10 @@
   artist (``misc-musicals``…) is also scored on its title alone, with and
   without words such as "the musical": "epic not sorry for loving you" is
   ``misc-musicals/epic-the-musical-not-sorry-for-loving-you``.
+  A song's tabs, and an artist's songs and tabs, are those of the kinds
+  caracole uses, chords and text tabs (ug/page.py ``KINDS``): the index's
+  Guitar Pro and Power Tab rows, which the matcher reads, are counted for
+  nothing, and a song UG has only as one is no hit.
 
 Both sides are compared as words made the way slug keys are made (accents
 folded, apostrophes, "and" and a leading "the" dropped), and Chinese is also
@@ -139,6 +143,7 @@ from caracole.rank import bayes, prior_mean
 from caracole.songs import Song, list_removed, list_songs
 from caracole.ug.key_search import rows_like
 from caracole.ug.lookup import IndexTab, song_tabs
+from caracole.ug.page import KINDS
 
 if TYPE_CHECKING:
     from caracole.lacuerda_index import LaCuerdaHit
@@ -147,7 +152,7 @@ if TYPE_CHECKING:
 MIN_SCORE = 70  # below this a hit is noise
 STRONG = 90  # a hit this good is the song you meant
 PARTIAL_SCALE = 0.9  # a query that is only part of a name tops out at 90
-TYPE_ORDER = ("chords", "tabs", "guitar-pro", "power")
+TYPE_ORDER = KINDS  # chords, then tabs
 MAX_PATTERNS = 2
 SHOWN_CANDIDATES = 3  # a review's candidates shown under its song: the rest are in `caracole review`
 READINGS = ("title", "both", "artist")  # how a query may name a song; a tie goes to the first
@@ -1507,13 +1512,14 @@ def _hits(conn: sqlite3.Connection, rows: Sequence[_Row]) -> list[IndexHit]:
 
 
 def _artist_groups(conn: sqlite3.Connection, artist_key: str) -> list[tuple[str, int]]:
-    """Each song of an artist with its tabs (a song's variants counted with it), most tabbed first: the
-    index's, with the tabs only an artist page caracole read lists (ug/artist_tabs.py)."""
+    """Each song of an artist with its tabs of the kinds caracole uses (a song's variants counted with it), most
+    tabbed first: the index's, with the tabs only an artist page caracole read lists (ug/artist_tabs.py)."""
     from caracole.ug.artist_tabs import unindexed_songs
 
     groups: dict[str, int] = {}
     for song_key, n in conn.execute(
-        "SELECT song_key, COUNT(*) FROM ug_index WHERE artist_key = ? GROUP BY song_key", (artist_key,)
+        f"SELECT song_key, COUNT(*) FROM ug_index WHERE artist_key = ? AND type IN ({', '.join('?' for _ in KINDS)}) "
+        "GROUP BY song_key", (artist_key, *KINDS)
     ):
         base = split_variant(song_key)[0]
         groups[base] = groups.get(base, 0) + n

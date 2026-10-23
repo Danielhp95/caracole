@@ -159,7 +159,8 @@ def test_each_line_carries_its_songs_id(library):
 
 
 def ug_guitar_pick(conn, song, tab_id=555890, *, kind="guitar-pro", url=None) -> int:
-    """A Guitar Pro (or Power Tab) version caracole picked on Ultimate Guitar for the song, for you to download."""
+    """A Guitar Pro (or Power Tab) version caracole picked on Ultimate Guitar for the song, as it did before it
+    picked none there (schema 9 takes them out)."""
     from caracole.versions import set_picks, upsert_version
 
     vid = upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="guitar", kind=kind,
@@ -173,7 +174,7 @@ def by_title(html: str) -> dict[str, dict]:
     return {s["title"]: s for s in books_of(html)[0]["set"]}
 
 
-def test_a_song_with_a_guitar_pro_file_or_a_pick_on_ug_carries_its_mark_and_one_with_neither_none(library):
+def test_a_song_with_a_guitar_pro_file_carries_its_mark_and_one_with_none_or_a_pick_on_ug_none(library):
     from caracole.songs import find_song
     from helpers.guitar import keep_guitar
 
@@ -186,20 +187,17 @@ def test_a_song_with_a_guitar_pro_file_or_a_pick_on_ug_carries_its_mark_and_one_
     assert songs["Creep"]["guitar"] == {
         "kind": "file", "href": "Radiohead/Creep/guitar-1.gp5", "download": "Radiohead - Creep.gp5",
         "page": "guitar?file=Radiohead%2FCreep%2Fguitar-1.gp5"}
-    # No file, but a version picked on Ultimate Guitar, to download there: its page, and what it is.
-    assert songs["De Música Ligera"]["guitar"] == {
-        "kind": "ug", "href": "https://tabs.ultimate-guitar.com/tab/555890",
-        "label": "Guitar Pro ver 2 · 4.2★ · 5 votes"}
+    # No file, but a version picked on Ultimate Guitar before: caracole offers none to download there.
+    assert songs["De Música Ligera"]["guitar"] is None
     assert songs["Hysteria"]["guitar"] is None
 
 
-def test_a_kept_file_wins_over_a_pick_and_one_the_browser_shows_over_a_power_tab_file(library):
+def test_a_file_the_browser_shows_wins_over_a_power_tab_file(library):
     from caracole.songs import find_song
     from helpers.guitar import keep_guitar
 
     conn, cfg = library
     creep, soda = find_song(conn, "radiohead/creep"), find_song(conn, "soda-stereo/de-musica-ligera")
-    ug_guitar_pick(conn, creep)  # still to download on UG, but the song has a file already
     keep_guitar(conn, cfg, creep, b"ptab", name="guitar-1.ptb", tab="1")
     keep_guitar(conn, cfg, creep, b"FICHIER GUITAR PRO 5", name="guitar-2.gp5", tab="2")
     keep_guitar(conn, cfg, soda, b"ptab", name="guitar-1.ptb")  # a Power Tab file alone: a download, no page
@@ -212,18 +210,17 @@ def test_a_kept_file_wins_over_a_pick_and_one_the_browser_shows_over_a_power_tab
         "download": "Soda Stereo - De Música Ligera.ptb", "page": None}
 
 
-def test_a_file_gone_from_the_folder_is_no_mark_and_a_pick_that_isnt_a_web_page_none(library):
+def test_a_file_gone_from_the_folder_is_no_mark(library):
     from caracole.library import song_dir
     from caracole.songs import find_song
     from helpers.guitar import keep_guitar
 
     conn, cfg = library
-    creep, soda = find_song(conn, "radiohead/creep"), find_song(conn, "soda-stereo/de-musica-ligera")
+    creep = find_song(conn, "radiohead/creep")
     keep_guitar(conn, cfg, creep, b"FICHIER GUITAR PRO 5", name="guitar-1.gp5")
     (song_dir(cfg.library_dir, creep) / "guitar-1.gp5").unlink()  # deleted on a device: Syncthing took it away
-    ug_guitar_pick(conn, soda, url="javascript:alert(1)")
     songs = by_title(page(conn, cfg))
-    assert songs["Creep"]["guitar"] is None and songs["De Música Ligera"]["guitar"] is None
+    assert songs["Creep"]["guitar"] is None
 
 
 def test_a_song_not_in_the_library_has_no_guitar_pro_mark(conn, cfg):

@@ -103,7 +103,7 @@ def test_ready_says_what_waits_for_tonights_run_in_the_stages_words():
                                          "waits for tonight's run.")
     blocked = ended({"ug": ("skipped", "Ultimate Guitar blocked caracole (ug: 429: https://x: HTTP 429): no more "
                                        "requests to it until 2026-10-22 18:00 UTC. Nothing was marked not found.")})
-    assert said(blocked, facts).reason == ("Ultimate Guitar blocked caracole: its other versions and guitar parts "
+    assert said(blocked, facts).reason == ("Ultimate Guitar blocked caracole: its other versions and its tab "
                                            "wait until 2026-10-22 18:00 UTC.")
     cooling = ended({"lyrics": ("skipped", "LRCLIB is cooling down after a block, until 2026-10-22 18:00 UTC")})
     assert said(cooling, facts).reason == ("LRCLIB is cooling down after a block: the lyrics wait until "

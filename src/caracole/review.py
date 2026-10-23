@@ -69,7 +69,8 @@ def candidates_of(song: Song) -> list[dict[str, Any]]:
 
 def candidate_page(conn: sqlite3.Connection, artist_key: str, song_key: str) -> str | None:
     """The UG page to show for a candidate, the one the web picker links (``search.index_song``): its best
-    chords page, not its oldest tab, which may be a variant or a power tab. None when the index has none."""
+    chords page, not its oldest tab, which may be a variant. None when the index has none of a kind caracole
+    uses (a song UG has only as a Guitar Pro file)."""
     from caracole.search import index_song
 
     hit = index_song(conn, artist_key, song_key)

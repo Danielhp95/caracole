@@ -78,10 +78,22 @@ def test_exact_title_ranks_first_and_popular_songs_lead_ties(conn):
 def test_index_hit_groups_variant_slugs_and_counts_types(conn):
     index(conn, ROWS)
     top = search_index(conn, "creep")[0]
-    assert dict(top.counts) == {"chords": 3, "tabs": 2, "guitar-pro": 1}
-    assert list(top.counts) == ["chords", "tabs", "guitar-pro"]
-    assert top.labels == ("acoustic",)
+    # Its acoustic variant is a Guitar Pro file, which caracole doesn't use on Ultimate Guitar: counted for nothing.
+    assert dict(top.counts) == {"chords": 3, "tabs": 2}
+    assert list(top.counts) == ["chords", "tabs"]
+    assert top.labels == ()
     assert top.url == "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"
+
+
+def test_a_song_ultimate_guitar_has_only_as_guitar_pro_or_power_tab_files_is_no_hit(conn):
+    from caracole.search import find_index
+
+    index(conn, ROWS + [(6101, "metallica", "one", "guitar-pro"), (6102, "metallica", "one", "power"),
+                        (6201, "dream-theater", "pull-me-under", "guitar-pro")])
+    assert ("metallica", "one") not in keys(search_index(conn, "metallica one"))
+    found = find_index(conn, "metallica")
+    assert [(a.artist_key, a.songs, a.tabs) for a in found.artists] == [("metallica", 1, 1)]  # creeping-death's tab
+    assert find_index(conn, "dream theater").artists == ()
 
 
 def test_variant_only_match_is_grouped_under_its_song(conn):
@@ -605,7 +617,7 @@ def test_cli_prints_library_hits_and_numbered_index_hits(tmp_path):
     assert "Radiohead - Creep" in library and "found" in library
     assert str(tmp_path / "lib" / "Radiohead" / "Creep") in library
     assert "1. [UG] Radiohead - Creep" in ug
-    assert "chords×3 tabs×2 guitar-pro×1" in ug
+    assert "chords×3 tabs×2" in ug and "guitar-pro" not in ug
     assert "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169" in ug
     assert "2. [UG] Stone Temple Pilots - Creep" in ug
     assert 'caracole add "Stone Temple Pilots" "Creep"' in ug
@@ -1210,7 +1222,7 @@ def test_artist_songs_lists_every_song_most_tabbed_first_variants_with_their_son
     index(conn, EITHER)
     hits, total = artist_songs(conn, "radiohead")
     assert total == 2 and [h.song_key for h in hits] == ["creep", "karma-police"]
-    assert dict(hits[0].counts) == {"chords": 3, "tabs": 2, "guitar-pro": 1} and hits[0].labels == ("acoustic",)
+    assert dict(hits[0].counts) == {"chords": 3, "tabs": 2} and hits[0].labels == ()
     assert (hits[0].artist, hits[0].title) == ("Radiohead", "Creep")
     assert [h.song_key for h in artist_songs(conn, "radiohead", limit=1)[0]] == ["creep"]
     assert [h.song_key for h in artist_songs(conn, "radiohead", limit=1, offset=1)[0]] == ["karma-police"]

@@ -774,10 +774,10 @@ def test_a_corrected_match_takes_the_old_matchs_ug_versions_out_of_the_running(c
     index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwall-ii", "chords"))
     s = add_song(conn, "Oasis", "Wonderwall")
     match_all(conn, Overrides(), POLICY)
-    sheet, gp = version(conn, s, 1), version(conn, s, 3, "guitar-pro")
+    sheet, tab = version(conn, s, 1), version(conn, s, 3, "tabs")
     lacuerda = version(conn, s, "oasis/wonderwall-1", "acordes", provider="lacuerda")
     set_picks(conn, s.id, ("chords",), [sheet])
-    set_picks(conn, s.id, ("guitar-pro",), [gp])
+    set_picks(conn, s.id, ("tabs",), [tab])
     set_picks(conn, s.id, ("acordes",), [lacuerda])
     match_all(conn, Overrides(), POLICY)  # the same match: nothing changes
     assert len(song_versions(conn, s.id)) == 3
@@ -787,7 +787,7 @@ def test_a_corrected_match_takes_the_old_matchs_ug_versions_out_of_the_running(c
     # UG's versions were the old match's; LaCuerda's are the song's whatever UG's index says.
     assert [v.tab_id for v in song_versions(conn, s.id)] == ["oasis/wonderwall-1"]
     assert [v.tab_id for v in song_versions(conn, s.id, include_gone=True) if v.stale] == ["1", "3"]
-    assert [v.kind for v in picks(conn, s.id, ("chords", "acordes", "guitar-pro"))] == ["acordes"]
+    assert [v.kind for v in picks(conn, s.id, ("chords", "acordes", "tabs"))] == ["acordes"]
     assert get_song(conn, s.id).ug_dirty is True
 
 

@@ -1,8 +1,8 @@
 """_todo.md: the whole user interface until a richer one is needed (plan §5).
 
-Every section is a list of things only you can do: confirm a match, download a
-Guitar Pro file, buy a track, replace a purchase auto-chords can't read, find an
-artist's UG page. Each comes with the links to do it, and the exact
+Every section is a list of things only you can do: confirm a match, buy a
+track, replace a purchase auto-chords can't read, find an artist's UG page,
+download a score. Each comes with the links to do it, and the exact
 overrides.toml line to paste.
 
 The songs no human sheet was found for are a buy list, unless caracole takes
@@ -56,7 +56,7 @@ NO_SHEET_TITLE = "No human sheet found yet"  # the buy list, when caracole takes
 NOTHING_TITLE = "Nothing on YouTube for these"
 NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
-_KIND_NAMES = {"guitar-pro": "Guitar Pro", "power": "Power Tab", "tabs": "Tab", "chords": "Chords"}
+_KIND_NAMES = {"tabs": "Tab", "chords": "Chords"}
 PERFORMER = "catch_all:performer"  # a catch_all candidate under misc-originals or misc-unsigned-bands
 
 
@@ -562,31 +562,6 @@ def _new_gtptabs_files(conn: sqlite3.Connection, songs_by_id: dict[int, Song], n
     return items
 
 
-def _guitar_pro_pages(conn: sqlite3.Connection, songs_by_id: dict[int, Song]) -> tuple[list[str], int]:
-    rows = conn.execute(
-        "SELECT v.* FROM versions v WHERE v.kind IN ('guitar-pro', 'power') AND v.pick_rank IS NOT NULL "
-        "AND v.gone = 0 AND NOT EXISTS (SELECT 1 FROM files f WHERE f.version_id = v.id) "
-        "ORDER BY v.song_id, v.pick_rank"
-    ).fetchall()
-    by_song: dict[int, list[str]] = {}
-    for v in rows:
-        s = songs_by_id.get(v["song_id"])
-        if s is None or s.status == "ignored":
-            continue
-        label = f" ({v['label']})" if v["label"] else ""
-        text = (f"guitar-{v['pick_rank']}: {_KIND_NAMES[v['kind']]} ver {v['version']}{label} · "
-                f"{v['rating']:.1f}★ ({v['votes']} votes)")
-        by_song.setdefault(v["song_id"], []).append(_link(text, v["url"]))
-    downloaded = _gtptabs_files(conn)
-    lines = []
-    for sid, links in by_song.items():
-        # A song with a file from gtptabs.com has a guitar part already: its UG pages are optional.
-        has = ", ".join(r["name"] for r in downloaded.get(sid, []))
-        note = f" ({md(has)} came from gtptabs.com)" if has else ""
-        lines.append(f"- **{md(songs_by_id[sid].display)}**{note}: " + " · ".join(links))
-    return lines, sum(len(links) for links in by_song.values())
-
-
 def save_as(song: Song, ext: str = ".mscz") -> str:
     """The name a score of the song is filed by from ``_inbox/``: "Artist - Title.mscz"."""
     return safe_name(song.display).replace("`", "'") + ext
@@ -651,9 +626,9 @@ def _guitar_parts_not_found(conn: sqlite3.Connection, songs: list[Song]) -> list
     for s in songs:
         if s.status == "ignored" or not s.ug_checked_at:
             continue
-        has = conn.execute(
-            "SELECT 1 FROM versions WHERE song_id = ? AND slot = 'guitar' AND pick_rank IS NOT NULL LIMIT 1", (s.id,)
-        ).fetchone() or conn.execute(  # a file kept for the song, such as one gtptabs.com gave
+        has = conn.execute(  # a text tab picked on Ultimate Guitar
+            "SELECT 1 FROM versions WHERE song_id = ? AND kind = 'tabs' AND pick_rank IS NOT NULL LIMIT 1", (s.id,)
+        ).fetchone() or conn.execute(  # a Guitar Pro file kept for the song: from gtptabs.com, or your inbox
             "SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id "
             "WHERE f.song_id = ? AND v.kind IN ('guitar-pro', 'power') LIMIT 1", (s.id,)
         ).fetchone()
@@ -691,8 +666,8 @@ def _inbox(cfg: Config) -> list[str]:
         elif not regular:
             continue
         elif suffix.lower() in GP_EXTENSIONS:
-            items.append(f"- {shown}: rename it \"Artist - Title (ver N){suffix}\", as Guitar Pro pages "
-                         "to click names the song and the version")
+            items.append(f"- {shown}: a Guitar Pro file? Rename it \"Artist - Title{suffix}\", the song as "
+                         "caracole names it")
         elif suffix.lower() in SCORE_EXTENSIONS:
             items.append(f"- {shown}: a score? Rename it \"Artist - Title{suffix}\", the song as caracole "
                          f"names it, as {SCORES_TITLE} does")
@@ -864,7 +839,6 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                 "", *_near_names_intro(songs), *review]
     artists, n_artists = _artists_to_find(conn, songs, overrides)
     unread, unread_intro = _autochords_failures(conn, cfg)
-    gp_pages, n_pages = _guitar_pro_pages(conn, by_id)
     ms_pages, ms_intro, n_ms, ms_blocking = _musescore_pages(conn, cfg, songs, overrides, now)
     if route_problem(cfg) is None:  # caracole takes these songs' audio from YouTube
         states = youtube if youtube is not None else song_states(conn, overrides, now)
@@ -886,18 +860,16 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         ("Auto-chords couldn't read these purchases", unread, unread_intro, None),
         ("New Guitar Pro files from gtptabs.com", _new_gtptabs_files(conn, by_id, now),
          "caracole downloaded these in the last 7 days, one for each song that had none. Open each in "
-         "Guitar Pro or TuxGuitar: if it isn't the version you want, any Ultimate Guitar page below is "
-         "still there to click.", None),
-        ("Guitar Pro pages to click", gp_pages,
-         "Download each file with the page's Download button and drop it into `_inbox/`; caracole "
-         "files it under the right song.", n_pages),
+         "Guitar Pro or TuxGuitar: if it isn't the version you want, drop the one you want into `_inbox/`, "
+         "named as the song is, `Artist - Title.gp5`, and caracole files it beside this one.", None),
         (SCORES_TITLE, ms_pages, ms_intro, n_ms),
         ("Guitar parts not found", _guitar_parts_not_found(conn, songs), None, None),
         ("Inbox: files caracole couldn't place", _inbox(cfg),
-         "caracole files a download by its name, for a version listed under Guitar Pro pages to click: the "
-         "next run, or `caracole scan`, makes it the song's guitar-N file. It files a score "
-         "(.mscz, .mxl, .musicxml, .pdf, .mid, .midi) as `Artist - Title.mscz`, for any song, as its score-N. "
-         "Don't move one into a song's folder yourself: caracole wouldn't know it is there.", None),
+         "caracole files a download by its name, the song as caracole names it: the next run, or "
+         "`caracole scan`, files a Guitar Pro or Power Tab file (.gp3, .gp4, .gp5, .gpx, .gp, .ptb) as "
+         "`Artist - Title.gp5`, for any song, as its guitar-N, and a score (.mscz, .mxl, .musicxml, .pdf, .mid, "
+         ".midi) as `Artist - Title.mscz` as its score-N. Don't move one into a song's folder yourself: "
+         "caracole wouldn't know it is there.", None),
         ("Missing lyrics", [f"- {md(s.display)}" for s in songs
                             if s.lyrics_status == "missing" and s.status != "ignored"],
          "LRCLIB has no lyrics for these yet.", None),

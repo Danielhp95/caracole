@@ -298,8 +298,8 @@ const caracoleRows = (icons, does) => {
     new MutationObserver(mirror).observe(item, { subtree: true, childList: true, attributes: true,
       attributeFilter: ["disabled"] });
   };
-  const KINDS = { chords: "Chords", tabs: "Tab", "guitar-pro": "Guitar Pro", power: "Power Tab" };
-  const COUNTED = { chords: "chords", tabs: "tabs", "guitar-pro": "Guitar Pro", power: "Power Tab" };
+  const KINDS = { chords: "Chords", tabs: "Tab" };
+  const COUNTED = { chords: "chords", tabs: "tabs" };
   const counts = (c) => Object.entries(c && typeof c === "object" ? c : {})
     .map(([kind, n]) => n + " " + (own.call(COUNTED, kind) ? COUNTED[kind] : kind)).join(" · ");
   // A song's sheet viewer or PDF, as its line opens it: a link of the library's, relative to the page.
@@ -443,7 +443,7 @@ const caracoleRows = (icons, does) => {
   // --- index.html's search: a song of the sites a dense line, under its artist's header --------------------
   // "chords ×9 · tabs ×2": an Ultimate Guitar song's tabs per type, as a line counts them. The index holds no
   // ratings (only the sheets caracole fetched have them), so a line never shows stars.
-  const TIMES = { chords: "chords", tabs: "tabs", "guitar-pro": "Guitar Pro", power: "Power Tab" };
+  const TIMES = { chords: "chords", tabs: "tabs" };
   const tabCounts = (c) => Object.entries(c && typeof c === "object" ? c : {})
     .map(([kind, n]) => (own.call(TIMES, kind) ? TIMES[kind] : kind) + " ×" + Number(n || 0)).join(" · ");
   const https = (url) => /^https:[/][/]/i.test(String(url || ""));

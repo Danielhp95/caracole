@@ -2,7 +2,7 @@ import pytest
 
 from caracole.inbox import GP_EXTENSIONS, SCORE_EXTENSIONS, file_inbox, parse_download_name
 from caracole.library import keep_file, kept_files, song_dir
-from caracole.versions import set_picks, upsert_version
+from caracole.versions import upsert_version
 
 from conftest import add_song
 
@@ -33,10 +33,10 @@ def test_the_cutoff_is_one_music_names_scores_exactly():
     assert inbox.MATCH_CUTOFF >= music.MATCH_CUTOFF - music.MATCH_MARGIN
 
 
-def pick(conn, song, tab_id, *, kind="guitar-pro", version=1):
-    return upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="guitar", kind=kind,
-                          rating=4.5, votes=10, version=version, label=None,
-                          url=f"https://tabs.ultimate-guitar.com/tab/{tab_id}", raw={}, now="x")
+def guitar_version(conn, song, kind="guitar-pro"):
+    """The song's one inbox version of a Guitar Pro kind, as file_inbox records one."""
+    return upsert_version(conn, provider="inbox", tab_id=kind, song_id=song.id, slot="guitar", kind=kind, rating=0,
+                          votes=0, version=1, label=None, url="", raw={}, now="x")
 
 
 def drop(cfg, name, data=b"GP-DATA"):
@@ -46,86 +46,66 @@ def drop(cfg, name, data=b"GP-DATA"):
     return inbox / name
 
 
+def guitar_kept(conn, song):
+    from caracole.versions import get_version
+
+    return [(f.name, get_version(conn, f.version_id).provider, get_version(conn, f.version_id).kind)
+            for f in kept_files(conn, song.id)]
+
+
 def test_files_into_song_by_name(conn, cfg):
+    # Any song, as for a score: caracole picks no Guitar Pro version anywhere for you to download.
     s = add_song(conn)
-    v = pick(conn, s, 555890)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
     src = drop(cfg, "Soda Stereo - De Musica Ligera.gp5")
     stats = file_inbox(conn, cfg.library_dir)
     dest = song_dir(cfg.library_dir, s) / "guitar-1.gp5"
     assert stats.filed == [dest] and not src.exists()
     assert dest.read_bytes() == b"GP-DATA"
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", v)]
+    assert guitar_kept(conn, s) == [("guitar-1.gp5", "inbox", "guitar-pro")]
+    assert [f.kept_rank for f in kept_files(conn, s.id)] == [1]
 
 
-def test_version_number_selects_pick(conn, cfg):
+def test_a_power_tab_file_is_kept_for_the_songs_power_tab_version(conn, cfg):
     s = add_song(conn)
-    a = pick(conn, s, 1, version=3)
-    b = pick(conn, s, 2, version=1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [a, b])
-    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5")
+    drop(cfg, "Soda Stereo - De Musica Ligera.ptb")
     file_inbox(conn, cfg.library_dir)
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-2.gp5", b)]
+    assert guitar_kept(conn, s) == [("guitar-1.ptb", "inbox", "power")]
 
 
-@pytest.mark.parametrize("ext,kind", [(".gp5", "guitar-pro"), (".ptb", "power")])
-def test_version_number_selects_a_pick_of_the_files_kind(conn, cfg, ext, kind):
-    # UG numbers versions within each type, so a Power Tab and a Guitar Pro file are both "ver 1".
+def test_a_version_number_in_the_name_still_names_the_song(conn, cfg):
     s = add_song(conn)
-    other = "power" if kind == "guitar-pro" else "guitar-pro"
-    first = pick(conn, s, 1, kind=other, version=1)
-    second = pick(conn, s, 2, kind=kind, version=1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [first, second])
-    drop(cfg, f"Soda Stereo - De Musica Ligera (ver 1){ext}")
+    drop(cfg, "Soda Stereo - De Musica Ligera (ver 2 by Pelusteriano).gp5")
     file_inbox(conn, cfg.library_dir)
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [(f"guitar-2{ext}", second)]
+    assert guitar_kept(conn, s) == [("guitar-1.gp5", "inbox", "guitar-pro")]
 
 
-def test_version_number_of_another_kind_falls_back_to_the_kind(conn, cfg):
+def test_a_second_file_takes_the_next_free_number(conn, cfg):
     s = add_song(conn)
-    gp = pick(conn, s, 1, kind="guitar-pro", version=3)
-    pt = pick(conn, s, 2, kind="power", version=1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [gp, pt])
-    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5")
-    file_inbox(conn, cfg.library_dir)
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", gp)]
-
-
-def test_second_file_takes_next_open_pick(conn, cfg):
-    s = add_song(conn)
-    a, b = pick(conn, s, 1), pick(conn, s, 2, version=2)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [a, b])
     drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"one")
     file_inbox(conn, cfg.library_dir)
     drop(cfg, "Soda Stereo - De Musica Ligera.gpx", b"two")
+    drop(cfg, "Soda Stereo - De Musica Ligera.ptb", b"three")
     file_inbox(conn, cfg.library_dir)
-    assert [f.name for f in kept_files(conn, s.id)] == ["guitar-1.gp5", "guitar-2.gpx"]
+    assert guitar_kept(conn, s) == [("guitar-1.gp5", "inbox", "guitar-pro"), ("guitar-2.gpx", "inbox", "guitar-pro"),
+                                    ("guitar-3.ptb", "inbox", "power")]
 
 
-def test_a_new_top_pick_never_overwrites_the_file_of_the_old_one(conn, cfg):
+def test_a_file_beside_one_from_gtptabs_takes_the_next_number(conn, cfg):
     s = add_song(conn)
-    a = pick(conn, s, 1, version=1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [a])
-    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5", b"A's file")
+    gtp = upsert_version(conn, provider="gtptabs", tab_id="9", song_id=s.id, slot="guitar", kind="guitar-pro",
+                         rating=4, votes=0, version=1, label=None, url="https://gtptabs.com/tabs/9.html", raw={},
+                         now="x")
+    keep_file(conn, cfg.library_dir, song=s, version_id=gtp, name="guitar-1.gp5", data=b"FROM GTPTABS", rank=1)
+    drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"MINE")
     file_inbox(conn, cfg.library_dir)
-    # A better-rated version appears: the next fetch ranks it first and A second.
-    b = pick(conn, s, 2, version=2)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [b, a])
-    drop(cfg, "Soda Stereo - De Musica Ligera (ver 2).gp5", b"B's file")
-    stats = file_inbox(conn, cfg.library_dir)
     folder = song_dir(cfg.library_dir, s)
-    assert (folder / "guitar-1.gp5").read_bytes() == b"A's file"
-    assert stats.filed == [folder / "guitar-2.gp5"]
-    assert (folder / "guitar-2.gp5").read_bytes() == b"B's file"
-    kept = kept_files(conn, s.id)
-    assert [(f.name, f.version_id) for f in kept] == [("guitar-1.gp5", a), ("guitar-2.gp5", b)]
-    assert [f.kept_rank for f in kept] == [1, 1]  # each version's rank when it was filed
+    assert (folder / "guitar-1.gp5").read_bytes() == b"FROM GTPTABS"
+    assert (folder / "guitar-2.gp5").read_bytes() == b"MINE"
+    assert guitar_kept(conn, s) == [("guitar-1.gp5", "gtptabs", "guitar-pro"), ("guitar-2.gp5", "inbox", "guitar-pro")]
 
 
 def test_a_guitar_file_put_in_the_folder_by_hand_is_never_overwritten(conn, cfg):
     s = add_song(conn)
-    v = pick(conn, s, 1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
     folder = song_dir(cfg.library_dir, s)
     folder.mkdir(parents=True)
     (folder / "guitar-1.gp5").write_bytes(b"mine")
@@ -134,17 +114,8 @@ def test_a_guitar_file_put_in_the_folder_by_hand_is_never_overwritten(conn, cfg)
     file_inbox(conn, cfg.library_dir)
     assert (folder / "guitar-1.gp5").read_bytes() == b"mine"
     assert (folder / "guitar-2.gpx").read_bytes() == b"also mine"
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-3.gp5", v)]
+    assert guitar_kept(conn, s) == [("guitar-3.gp5", "inbox", "guitar-pro")]
     assert (folder / "guitar-3.gp5").read_bytes() == b"download"
-
-
-def test_ptb_prefers_power_pick(conn, cfg):
-    s = add_song(conn)
-    gp, pt = pick(conn, s, 1), pick(conn, s, 2, kind="power")
-    set_picks(conn, s.id, ["guitar-pro", "power"], [gp, pt])
-    drop(cfg, "Soda Stereo - De Musica Ligera.ptb")
-    file_inbox(conn, cfg.library_dir)
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-2.ptb", pt)]
 
 
 def test_a_number_another_song_keeps_in_the_folder_their_names_make_is_not_taken(conn, cfg):
@@ -154,20 +125,17 @@ def test_a_number_another_song_keeps_in_the_folder_their_names_make_is_not_taken
     one, two = add_song(conn, "Joaquín Rodrigo", f"{long} one"), add_song(conn, "Joaquín Rodrigo", f"{long} two")
     folder = song_dir(cfg.library_dir, one)
     assert one.key != two.key and song_dir(cfg.library_dir, two) == folder
-    keep_file(conn, cfg.library_dir, song=one, version_id=pick(conn, one, 1), name="guitar-1.gp5", data=b"ONE", rank=1)
+    keep_file(conn, cfg.library_dir, song=one, version_id=guitar_version(conn, one), name="guitar-1.gp5", data=b"ONE",
+              rank=1)
     (folder / "guitar-1.gp5").unlink()  # lost on a synced device: the first song keeps its number all the same
-    v = pick(conn, two, 2)
-    set_picks(conn, two.id, ["guitar-pro", "power"], [v])
     src = drop(cfg, f"Joaquín Rodrigo - {long} two.gp5", b"TWO")
     stats = file_inbox(conn, cfg.library_dir)
     assert stats.filed == [folder / "guitar-2.gp5"] and not src.exists()
-    assert [(f.name, f.version_id) for f in kept_files(conn, two.id)] == [("guitar-2.gp5", v)]
+    assert guitar_kept(conn, two) == [("guitar-2.gp5", "inbox", "guitar-pro")]
 
 
 def test_duplicate_removed(conn, cfg):
     s = add_song(conn)
-    a, b = pick(conn, s, 1), pick(conn, s, 2)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [a, b])
     drop(cfg, "Soda Stereo - De Musica Ligera.gp5")
     file_inbox(conn, cfg.library_dir)
     again = drop(cfg, "Soda Stereo - De Musica Ligera (1).gp5")
@@ -178,8 +146,6 @@ def test_duplicate_removed(conn, cfg):
 
 def test_a_file_the_library_lost_dropped_again_is_put_back(conn, cfg):
     s = add_song(conn)
-    v = pick(conn, s, 555890)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
     drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"GP-DATA")
     file_inbox(conn, cfg.library_dir)
     kept = song_dir(cfg.library_dir, s) / "guitar-1.gp5"
@@ -188,7 +154,22 @@ def test_a_file_the_library_lost_dropped_again_is_put_back(conn, cfg):
     stats = file_inbox(conn, cfg.library_dir)
     assert stats.filed == [kept] and stats.duplicates == [] and not again.exists()
     assert kept.read_bytes() == b"GP-DATA"
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", v)]
+    assert guitar_kept(conn, s) == [("guitar-1.gp5", "inbox", "guitar-pro")]
+
+
+def test_a_file_filed_for_an_ultimate_guitar_pick_before_stays_and_is_put_back_on_its_version(conn, cfg):
+    # A file caracole filed when it still picked Guitar Pro versions on Ultimate Guitar keeps that version
+    # (schema 9 leaves a version that has a file): dropped again once the library lost it, it is put back there.
+    s = add_song(conn)
+    old = upsert_version(conn, provider="ug", tab_id="555890", song_id=s.id, slot="guitar", kind="guitar-pro",
+                         rating=4.5, votes=10, version=1, label=None,
+                         url="https://tabs.ultimate-guitar.com/tab/555890", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=s, version_id=old, name="guitar-1.gp5", data=b"FROM UG", rank=1)
+    (song_dir(cfg.library_dir, s) / "guitar-1.gp5").unlink()
+    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5", b"FROM UG")
+    stats = file_inbox(conn, cfg.library_dir)
+    assert stats.filed == [song_dir(cfg.library_dir, s) / "guitar-1.gp5"]
+    assert guitar_kept(conn, s) == [("guitar-1.gp5", "ug", "guitar-pro")]
 
 
 def test_a_lost_score_dropped_again_under_another_name_is_put_back(conn, cfg):
@@ -205,7 +186,6 @@ def test_a_lost_score_dropped_again_under_another_name_is_put_back(conn, cfg):
 
 def test_a_download_with_the_bytes_of_a_file_you_changed_replaces_nothing_and_stays(conn, cfg):
     s = add_song(conn)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [pick(conn, s, 1)])
     drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"GP-DATA")
     file_inbox(conn, cfg.library_dir)
     kept = song_dir(cfg.library_dir, s) / "guitar-1.gp5"
@@ -219,9 +199,6 @@ def test_a_download_with_the_bytes_of_a_file_you_changed_replaces_nothing_and_st
 def test_a_download_with_another_songs_bytes_is_filed_for_its_own_song(conn, cfg):
     live = add_song(conn, "Soda Stereo", "Persiana Americana")
     s = add_song(conn)
-    set_picks(conn, live.id, ["guitar-pro", "power"], [pick(conn, live, 1)])
-    v = pick(conn, s, 2)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
     drop(cfg, "Soda Stereo - Persiana Americana.gp5", b"SAME BYTES")
     file_inbox(conn, cfg.library_dir)
     src = drop(cfg, "Soda Stereo - De Musica Ligera.gp5", b"SAME BYTES")
@@ -229,43 +206,48 @@ def test_a_download_with_another_songs_bytes_is_filed_for_its_own_song(conn, cfg
     dest = song_dir(cfg.library_dir, s) / "guitar-1.gp5"
     assert stats.filed == [dest] and stats.duplicates == [] and not src.exists()
     assert dest.read_bytes() == b"SAME BYTES"
-    assert [(f.name, f.version_id) for f in kept_files(conn, s.id)] == [("guitar-1.gp5", v)]
+    assert guitar_kept(conn, s) == [("guitar-1.gp5", "inbox", "guitar-pro")]
+    assert guitar_kept(conn, live) == [("guitar-1.gp5", "inbox", "guitar-pro")]
 
 
 def test_cjk_name_files_into_cjk_song(conn, cfg):
-    s = add_song(conn, "宋冬野", "斑马，斑马")
-    v = pick(conn, s, 7)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
+    add_song(conn, "宋冬野", "斑马，斑马")
     drop(cfg, "宋冬野 - 斑马斑马.gp")
     file_inbox(conn, cfg.library_dir)
     assert (cfg.library_dir / "宋冬野" / "斑马，斑马" / "guitar-1.gp").exists()
 
 
 def test_a_download_named_in_two_scripts_files_into_its_song(conn, cfg):
-    # UG names a download after its artist and song, which it writes in two scripts for 宋冬野.
+    # Ultimate Guitar and others name a download after the artist and song, in two scripts for 宋冬野.
     s = add_song(conn, "宋冬野", "斑马斑马")
     other = add_song(conn, "宋冬野", "董小姐")
-    set_picks(conn, s.id, ["guitar-pro", "power"], [pick(conn, s, 7)])
-    set_picks(conn, other.id, ["guitar-pro", "power"], [pick(conn, other, 8)])
     drop(cfg, "Song Dongye (宋冬野) - 斑马 斑马 Banma Banma Zebra Zebra (ver 1 by someone).gp5")
     file_inbox(conn, cfg.library_dir)
     assert [f.name for f in kept_files(conn, s.id)] == ["guitar-1.gp5"]
     assert kept_files(conn, other.id) == []
 
 
-def test_title_only_name_matches_a_unique_open_pick(conn, cfg):
+def test_a_name_of_the_title_alone_needs_the_only_song_of_that_title(conn, cfg):
     s = add_song(conn, "Radiohead", "Creep")
-    v = pick(conn, s, 9)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
-    drop(cfg, "creep.gp5")
+    drop(cfg, "creep.gp5", b"one")
     file_inbox(conn, cfg.library_dir)
     assert [f.name for f in kept_files(conn, s.id)] == ["guitar-1.gp5"]
+    add_song(conn, "TLC", "Creep")
+    left = drop(cfg, "creep.gpx", b"two")
+    assert file_inbox(conn, cfg.library_dir).unmatched == [left] and left.exists()
+
+
+def test_an_ignored_song_gets_no_guitar_file(conn, cfg):
+    from caracole.songs import update_song
+
+    s = add_song(conn)
+    update_song(conn, s.id, status="ignored")
+    left = drop(cfg, "Soda Stereo - De Musica Ligera.gp5")
+    assert file_inbox(conn, cfg.library_dir).unmatched == [left] and left.exists()
 
 
 def test_unmatched_stays(conn, cfg):
-    s = add_song(conn)
-    v = pick(conn, s, 1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
+    add_song(conn)
     a = drop(cfg, "Somebody Else - Unknown Song.gp5")
     b = drop(cfg, "notes.pdf")
     stats = file_inbox(conn, cfg.library_dir)
@@ -273,11 +255,9 @@ def test_unmatched_stays(conn, cfg):
 
 
 def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
-    # Anyone who can write to the library could point a link at caracole's credentials,
-    # under a name the to-do page lists ("Guitar Pro pages to click").
+    # Anyone who can write to the library could point a link at caracole's credentials, under a name the
+    # to-do page would list (its inbox section).
     s = add_song(conn)
-    v = pick(conn, s, 555890)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v])
     secret = tmp_path / "credentials" / "ntfy_token"
     secret.parent.mkdir()
     secret.write_text("f00dfeedcafe0123456789abcdef0123\n")
@@ -294,12 +274,11 @@ def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
 
 
 def linked_inbox(conn, cfg, tmp_path):
-    """A song with an open pick, and a link in place of _inbox/ to a folder outside the library that
-    holds a download for it and a copy of a file caracole keeps. Returns the song, the inbox and the files."""
+    """A song with a Guitar Pro file kept, and a link in place of _inbox/ to a folder outside the library that
+    holds a download for it and a copy of the file caracole keeps. Returns the song, the inbox and the files."""
     s = add_song(conn)
-    a, b = pick(conn, s, 555890), pick(conn, s, 555891, version=2)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [a, b])
-    keep_file(conn, cfg.library_dir, song=s, version_id=a, name="guitar-1.gp5", data=b"KEPT", rank=1)
+    keep_file(conn, cfg.library_dir, song=s, version_id=guitar_version(conn, s), name="guitar-1.gp5", data=b"KEPT",
+              rank=1)
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     new, kept = elsewhere / "Soda Stereo - De Musica Ligera (ver 2).gp5", elsewhere / "copy.gp5"
@@ -329,21 +308,20 @@ def test_an_inbox_swapped_for_a_link_while_it_is_filed_is_emptied_only_where_it_
     import caracole.inbox as inbox_module
 
     s = add_song(conn)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [pick(conn, s, 555890)])
     name = "Soda Stereo - De Musica Ligera.gp5"
     drop(cfg, name, b"DOWNLOAD")
     elsewhere = tmp_path / "elsewhere"
     elsewhere.mkdir()
     (elsewhere / name).write_bytes(b"NOT THE INBOX'S")
     inbox, moved = cfg.library_dir / "_inbox", cfg.library_dir / "_inbox.moved"
-    real = inbox_module._songs_with_open_picks
+    real = inbox_module._download_song
 
-    def swapped(conn_):  # between reading the download and deleting it from the inbox
+    def swapped(*args):  # between reading the download and deleting it from the inbox
         inbox.rename(moved)
         inbox.symlink_to(elsewhere)
-        return real(conn_)
+        return real(*args)
 
-    monkeypatch.setattr(inbox_module, "_songs_with_open_picks", swapped)
+    monkeypatch.setattr(inbox_module, "_download_song", swapped)
     stats = file_inbox(conn, cfg.library_dir)
     assert stats.filed == [song_dir(cfg.library_dir, s) / "guitar-1.gp5"]
     assert stats.filed[0].read_bytes() == b"DOWNLOAD"
