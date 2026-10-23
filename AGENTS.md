@@ -614,8 +614,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   cascade), its per-song kv and its lines' `wanted:first_seen:`; then the files caracole wrote.
   `songs.upsert_song`, the one way a song is added, is given wanted.txt lines alone (`caracole
   add`, the web page, a line typed): a line for a removed song asks for it again, so its tombstone
-  (found by source id, or by key when no song has it) goes and the song comes back new. Nothing
-  else may create a song
+  (found by source id or by key) goes and the song comes back new, or the line finds the song of
+  that key the library has (after a re-keying). Nothing else may create a song
   (`test_removal.py::test_the_next_sync_brings_nothing_back_until_you_ask_for_the_song_again`,
   `test_songs.py::test_a_wanted_line_brings_a_removed_song_back_as_new`).
 - **Schema changes go through db.py**: bump `SCHEMA_VERSION` and add the script to
