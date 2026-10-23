@@ -52,7 +52,7 @@ class Chromium:
         theirs = [fcntl.fcntl(fd, fcntl.F_DUPFD, 10) for fd in (commands, answers)]
         os.close(commands)
         os.close(answers)
-        cmd = [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+        cmd = [CHROMIUM, "--headless=new", "--mute-audio", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
                f"--user-data-dir={profile}", no_lookups(local), f"--window-size={size}", "--remote-debugging-pipe",
                "about:blank"]
         script = f'exec "$@" 3<&{theirs[0]} 4>&{theirs[1]} {theirs[0]}<&- {theirs[1]}>&-'

@@ -117,7 +117,7 @@ class SharedBrowser:
         try:
             with open(self.log, "wb") as log:
                 self.process = subprocess.Popen(
-                    [binary, "--headless=new", "--disable-gpu", "--no-first-run",
+                    [binary, "--headless=new", "--mute-audio", "--disable-gpu", "--no-first-run",
                      "--no-default-browser-check", f"--user-data-dir={profile}", NO_LOOKUPS,
                      "--remote-debugging-pipe", "about:blank"],
                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=log,
@@ -323,7 +323,7 @@ class Browser:
         high_in, high_out = fcntl.fcntl(to_child, fcntl.F_DUPFD, 10), fcntl.fcntl(from_child, fcntl.F_DUPFD, 10)
         os.close(to_child)
         os.close(from_child)
-        command = [CHROMIUM, "--headless=new", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
+        command = [CHROMIUM, "--headless=new", "--mute-audio", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
                    "--no-proxy-server", "--disable-extensions", f"--user-data-dir={profile}", NO_LOOKUPS,
                    f"--window-size={width},{height}", "--remote-debugging-pipe", "about:blank"]
         try:

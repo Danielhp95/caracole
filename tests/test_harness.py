@@ -427,3 +427,13 @@ def test_a_wait_rides_out_a_page_still_loading_and_raises_at_once_on_one_that_ha
         rest.set()
         server.shutdown()
         server.server_close()
+
+
+def test_every_chromium_the_helpers_start_plays_no_sound():
+    # The sound and Harmony panel tests strum chords for real (strum.js): a Chromium started without
+    # --mute-audio plays them through the machine's speakers, from a dozen workers at once.
+    helpers = Path(__file__).parent / "helpers"
+    launches = [(f.name, line) for f in sorted(helpers.glob("*.py"))
+                for line in f.read_text(encoding="utf-8").splitlines() if '"--headless=new"' in line]
+    assert launches
+    assert [name for name, line in launches if '"--mute-audio"' not in line] == []
