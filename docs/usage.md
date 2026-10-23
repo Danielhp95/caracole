@@ -222,9 +222,7 @@ says come before the command (`caracole -v run`):
 A warning starts with `warning:` and an error with `error:`, coloured on a
 terminal unless `$NO_COLOR` is set; nothing is coloured when the output isn't
 a terminal. Under systemd, each line starts with its priority for the journal
-instead (see [deploy.md](deploy.md#logs)). No secret reaches the log, at any
-level: not the ntfy token, `caracole serve`'s access token, an Authorization
-header, or a token, secret or password a line would otherwise show.
+instead (see [deploy.md](deploy.md#logs)).
 
 An unexpected error, a bug in caracole, ends the command with exit status 1:
 one line that says so, then its traceback, on stderr.

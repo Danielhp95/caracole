@@ -17,10 +17,6 @@ root callback, so every command shares it, and undone when the command ends:
   keeps its own.
 - **On a terminal**, the level is coloured, unless ``$NO_COLOR`` is set. Never
   anywhere else.
-- **Secrets never reach it**, at any level: the values ``add_secrets`` names
-  (the ntfy token), Authorization headers, bearer and basic credentials, and a
-  token, secret or password given as ``name=value`` or a JSON field are replaced
-  by ``[redacted]`` in every line, tracebacks included.
 
 stdlib only: the CLI imports this module on every start.
 """
@@ -29,7 +25,6 @@ from __future__ import annotations
 
 import logging
 import os
-import re
 import sys
 from collections.abc import Mapping
 from typing import IO, Any
@@ -117,43 +112,6 @@ def wants_colour(stream: Any, env: Mapping[str, str] | None = None) -> bool:
         return False
 
 
-# --- secrets ------------------------------------------------------------------------------------
-
-REDACTED = "[redacted]"
-_secrets: set[str] = set()
-# A credential after its scheme: six or more token characters with a digit or a symbol among them,
-# or twenty letters, so "token expired" and "basic chords" stay as they are.
-_SCHEMES = re.compile(
-    r"(?i)\b(bearer|basic|token)(\s+)"
-    r"(?=[A-Za-z0-9._~+/=-]{6})(?:[A-Za-z.]*[0-9_~+/=-][A-Za-z0-9._~+/=-]*|[A-Za-z]{20,})"
-)
-_HEADER = re.compile(r"""(?i)(\b(?:proxy-)?authorization["']?\s*[:=]\s*["']?)(?!(?:bearer|basic|token)\s)[^"'\s,}]+""")
-# caracole serve's access token (the sign-in form's ``token``, ``WebApp(access_token=…)``), a secret, a password.
-_KEYS = re.compile(
-    r"""(?i)(["']?\b(?:access_token|password|secret|token)["']?\s*[:=]\s*["']?)[^"'\s,&}]+"""
-)
-
-
-def add_secrets(*values: str | None) -> None:
-    """Values the log must never show, such as the secrets the config read. They stay known
-    for the life of the process: a crash reported after a command ends is scrubbed too."""
-    _secrets.update(v for v in values if v and len(v) >= 4)
-
-
-def forget_secrets() -> None:
-    """Forget the values ``add_secrets`` named (for tests, which run many commands in one process)."""
-    _secrets.clear()
-
-
-def redact(text: str) -> str:
-    """``text`` without the known secrets, credentials in headers, or tokens, secrets and passwords."""
-    for secret in sorted(_secrets, key=len, reverse=True):
-        text = text.replace(secret, REDACTED)
-    text = _SCHEMES.sub(rf"\1\2{REDACTED}", text)
-    text = _HEADER.sub(rf"\1{REDACTED}", text)
-    return _KEYS.sub(rf"\1{REDACTED}", text)
-
-
 # --- formatting ---------------------------------------------------------------------------------
 
 _LABELS = ((logging.ERROR, "error", "\x1b[1;31m"), (logging.WARNING, "warning", "\x1b[1;33m"),
@@ -174,7 +132,6 @@ class Formatter(logging.Formatter):
             text = f"{text}\n{self.formatException(record.exc_info)}"
         if record.stack_info:
             text = f"{text}\n{self.formatStack(record.stack_info)}"
-        text = redact(text)
         name = f"{record.name}: " if self.names else ""
         if self.journal:
             p = f"<{priority(record.levelno)}>"

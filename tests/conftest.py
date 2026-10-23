@@ -120,16 +120,6 @@ def _no_real_yt_dlp(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("CARACOLE_YTDLP_BIN", str(tmp_path_factory.getbasetemp() / "no-real-yt-dlp-in-tests"))
 
 
-@pytest.fixture(autouse=True)
-def _forget_the_logs_secrets():
-    """The log keeps the secrets a command's config read for the life of the process; a test's
-    ("secret", say) must not hide words from the next test's output."""
-    yield
-    from caracole import logs
-
-    logs.forget_secrets()
-
-
 _migrated: dict[tuple, bytes] = {}
 
 

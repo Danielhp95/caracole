@@ -49,7 +49,7 @@ section says where things are, and the rules a change there keeps.
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
 left, with the error; what needs the user), which report.py turns into the run's summary on
 stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, set up once
-by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted secrets).
+by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities).
 
 Shared by the steps and the commands:
 
