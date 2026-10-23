@@ -17,7 +17,7 @@ design lives in three files:
   runs `caracole run --config …`, which the CLI rejects (`--config` is a root option:
   `caracole --config FILE run`).
 - `docs/superpowers/plans/2026-10-18-caracole.md`: the task plan, with amendments A1–A7 made
-  during the build: A2 `wanted.txt` (and Spotify, gone since), A3 Chinese titles, A4 command
+  during the build: A2 `wanted.txt`, A3 Chinese titles, A4 command
   plug-ins, A5 agent rules, A6 bare-id tabs, A7 `index.html` and `caracole search`.
 - `docs/spike-2026-10-18.md`: what the live sites did when checked. It corrects plan.md:
   UG's `Pro` is a public Guitar Pro file; a slugged tab answers only at its slugged URL.
