@@ -631,7 +631,7 @@
     "caracole serve answered " + answer.status + ": reload the page." } });
   // A form, posted as the page's script: the answer is the job, or {error}, never a page.
   const postTo = (path, body) => fetch(path, {
-    method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" },
+    method: "POST", body, headers: { Accept: "application/json" },
   }).then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })));
   const send = (form) => postTo(form.getAttribute("action"), new URLSearchParams(new FormData(form)));
   let track = () => {};
@@ -1973,7 +1973,7 @@
     say("Searching the sites…");
     found.setAttribute("aria-busy", "true");
     fetch("api/search?q=" + encodeURIComponent(q) + "&box=" + SEARCH_BOX, {
-      signal: asking.signal, credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" },
+      signal: asking.signal, cache: "no-store", headers: { Accept: "application/json" },
     }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
       .then((reply) => {
         if (mine !== asked || !state.all) return;
@@ -2054,7 +2054,7 @@
 
   // An artist's songs on Ultimate Guitar, fifty from ``offset`` (/api/artist), for their group's "+ N more".
   const artistPage = (key, offset) => fetch("api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
-    { credentials: "same-origin", headers: { Accept: "application/json" } })
+    { headers: { Accept: "application/json" } })
     .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
     .then((reply) => {
       if (!reply.ok || !reply.body || reply.body.error) {
@@ -2070,7 +2070,7 @@
   // ({ slug }) or by a name ({ name }: a page read by name); ``quiet``, a 404 isn't said.
   const sitePage = (who) => fetch("api/artist?" + (who.slug ? "lacuerda=" + encodeURIComponent(String(who.slug))
     : "lacuerda_name=" + encodeURIComponent(String(who.name || ""))),
-    { credentials: "same-origin", headers: { Accept: "application/json" } })
+    { headers: { Accept: "application/json" } })
     .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
     .then((reply) => {
       if (!reply.ok || !reply.body || reply.body.error) {
@@ -2408,7 +2408,7 @@
     timer = 0;
     const ask = pending();
     fetch("jobs.json?jobs=" + ask.join(","), {
-      credentials: "same-origin", cache: "no-store",
+      cache: "no-store",
       headers: { Accept: "application/json", "X-Caracole-Form-Token": String(server.csrf || "") },
     }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
       .then((answer) => {
@@ -2497,7 +2497,7 @@
           body.set(name, String(fields[name]));
         }
       }
-      fetch(path, { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
+      fetch(path, { method: "POST", body, headers: { Accept: "application/json" } })
         .then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })))
         .then((reply) => {
           const job = reply.ok && reply.body && view(reply.body);

@@ -574,14 +574,14 @@ const caracoleRows = (icons, does) => {
   const queueAndFollow = (address, body, said, words) => new Promise((resolve) => {
     const gone = () => resolve({ error: "caracole serve can't be reached: is it still running?" });
     said(words.asking);
-    fetch(address, { method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" } })
+    fetch(address, { method: "POST", body, headers: { Accept: "application/json" } })
       .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
       .then(({ ok, data }) => {
         if (!ok || !data || typeof data.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(data.url)) {
           resolve({ error: (data && data.error) || words.failed });
           return;
         }
-        const follow = () => fetch(data.url, { credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" } })
+        const follow = () => fetch(data.url, { cache: "no-store", headers: { Accept: "application/json" } })
           .then((r) => (r.ok ? r.json() : null))
           .then((job) => {
             if (!job || typeof job !== "object") {

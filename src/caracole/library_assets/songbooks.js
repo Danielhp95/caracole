@@ -135,7 +135,7 @@
   const failure = (reply) => (reply.body && reply.body.error) || "caracole serve answered " + reply.status +
     ": reload the page.";
   const postTo = (path, body) => fetch(path, {
-    method: "POST", body, credentials: "same-origin", headers: { Accept: "application/json" },
+    method: "POST", body, headers: { Accept: "application/json" },
   }).then((r) => r.json().catch(() => null).then((answer) => ({ ok: r.ok, status: r.status, body: answer })));
   const fields = (book, more) => {
     const body = new URLSearchParams({ csrf: String(server && server.csrf || ""), name: String(book) });
@@ -1082,7 +1082,7 @@
       timer = setTimeout(() => {
         asking = new AbortController();
         fetch("api/search?q=" + encodeURIComponent(q.trim()) + "&box=" + SEARCH_BOX, {
-          signal: asking.signal, credentials: "same-origin", cache: "no-store", headers: { Accept: "application/json" },
+          signal: asking.signal, cache: "no-store", headers: { Accept: "application/json" },
         }).then((r) => r.json().catch(() => null)).then((body) => {
           if (mine !== asked || !body || typeof body !== "object") return;
           if (body.superseded) {
