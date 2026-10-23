@@ -55,7 +55,7 @@ Shared by the steps and the commands:
 
 | Module | What for |
 |---|---|
-| config.py | caracole.toml, directories, secrets; `REMOVED`, the tables an older caracole read, ignored with a warning |
+| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `REMOVED`, the tables an older caracole read, ignored with a warning |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
 | health.py | cooldowns, `events` |
@@ -500,8 +500,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     name after `--`, arguments a list and never a shell; no cookies, login, config files,
     plugins (PO-token providers among them) or remote code (`--ignore-config`,
     `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`,
-    `--no-remote-components`); none of caracole's secrets (`ytdlp_env` passes no
-    `CREDENTIALS_DIRECTORY` or `CARACOLE_*` variable); a stop or Ctrl-C stops its process
+    `--no-remote-components`); an environment of its own (`ytdlp_env`: what a program needs, no
+    `CARACOLE_*` variable); a stop or Ctrl-C stops its process
     group too; a bot check, an HTTP 429 or 403, a rate limit or a captcha
     is `ProviderBlocked`, honoured like any block (tests/test_youtube.py). Everything else
     keeps honouring robots.txt; widen nothing here without the owner, and copy it to no

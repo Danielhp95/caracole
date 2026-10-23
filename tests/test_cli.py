@@ -56,9 +56,6 @@ def test_config_option_is_stored_on_context(tmp_path):
 
 # --- the log, set up once for every command by the root callback ------------------------------
 
-TOKEN = "tk_ntfy-s3cret-token"
-
-
 def command(name: str, body) -> list[str]:
     """A command module named ``caracole.commands.zz_<name>`` whose command runs ``body(ctx)``."""
     import typer
@@ -136,30 +133,6 @@ def test_the_logging_a_command_found_is_back_once_it_ends():
     before = (list(root.handlers), root.level, logging.getLogger("httpx").level)
     invoke("-vv")
     assert (list(root.handlers), root.level, logging.getLogger("httpx").level) == before
-
-
-def test_the_secrets_the_config_read_never_reach_the_log(tmp_path, monkeypatch):
-    # Even at -vv, and even when a library would print them.
-    import logging
-
-    from caracole.commands._common import load_cfg
-
-    monkeypatch.delenv("CREDENTIALS_DIRECTORY", raising=False)
-    monkeypatch.setenv("CARACOLE_NTFY_TOKEN", TOKEN)
-    path = tmp_path / "caracole.toml"
-    path.write_text(f'data_dir = "{tmp_path}"\n[ntfy]\nurl = "https://ntfy.example/t"\n', encoding="utf-8")
-
-    def body(ctx):
-        cfg = load_cfg(ctx)
-        assert cfg.ntfy.token == TOKEN
-        for name in ("caracole.zz", "httpx"):
-            logging.getLogger(name).debug("ntfy %s, again %s", TOKEN, TOKEN)
-            logging.getLogger(name).error("ntfy %s, again %s", TOKEN, TOKEN)
-
-    result = invoke("--config", str(path), "-vv", body=body)
-    assert result.exit_code == 0, result.output
-    assert TOKEN not in result.stderr
-    assert result.stderr.count("[redacted]") == 8
 
 
 def test_a_bug_exits_1_with_one_line_that_says_so_then_its_traceback(monkeypatch, capsys):

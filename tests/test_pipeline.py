@@ -32,7 +32,7 @@ class Outbox:
             self.sent.append((request.headers.get("title"), request.content.decode()))
             return httpx.Response(200)
 
-        return Notifier("https://ntfy.sh/t", None, transport=httpx.MockTransport(handler))
+        return Notifier("https://ntfy.sh/t", transport=httpx.MockTransport(handler))
 
 
 def services(outbox, **requests):

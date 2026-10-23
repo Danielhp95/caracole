@@ -55,7 +55,6 @@ ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouT
 
 [ntfy]                            # optional: a summary after each run, and alerts
 # url = "https://ntfy.sh/a-long-private-topic"
-# token_file = "/path/to/ntfy_token"
 
 [providers.ug]                    # Ultimate Guitar
 budget = 60                       # requests per run
@@ -157,9 +156,11 @@ folder caracole can't use ends a command with status
 `caracole add` is the exception to both: it keeps its line and warns (see
 below).
 
-**Secrets** stay out of the file. The ntfy token comes from
-`$CREDENTIALS_DIRECTORY/ntfy_token` (systemd's `LoadCredential`), else the
-file `token_file` names, else `$CARACOLE_NTFY_TOKEN`.
+**No secrets.** caracole reads none. ntfy is a topic's `url` alone, posted to
+with no token, so choose a long topic name nobody would guess; and `caracole
+serve` has no sign-in (see [caracole serve](#caracole-serve)). A `token_file`
+under `[ntfy]`, which an older caracole read, is now an unknown key like any
+other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`
 and `youtube`. Any other `[providers.…]` table is an error, like any other
@@ -1528,9 +1529,8 @@ it honours it. It does so on these terms:
   Nothing is retried, and caracole never works around a block: no cookies, no
   login, no proxy, no PO tokens or plugins (yt-dlp gets `--ignore-config`,
   `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`). Nor does
-  yt-dlp get any of caracole's secrets: it runs without the unit's credentials
-  or any `CARACOLE_*` variable, with only the paths, language, proxy and
-  certificate settings it needs.
+  yt-dlp get caracole's settings: it runs without any `CARACOLE_*` variable,
+  with only the paths, language, proxy and certificate settings it needs.
 - **Audio alone**, as m4a, never a playlist, at most 100 MB, kept outside the
   synced library, in the cache (see [the library folder](#the-library-folder)).
 

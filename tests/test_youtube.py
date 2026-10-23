@@ -383,20 +383,20 @@ def test_deno_runs_without_its_jit_so_the_units_memory_protection_holds(fake, tm
 
 
 @pytest.mark.slow
-def test_yt_dlp_gets_none_of_caracoles_secrets(fake, tmp_path, monkeypatch):
-    # The nightly unit's credentials (ntfy) and caracole's tokens stay with caracole:
+def test_yt_dlp_gets_only_the_environment_a_program_needs(fake, tmp_path, monkeypatch):
+    # caracole's own settings and whatever else the environment holds stay with caracole:
     # yt-dlp, deno and ffmpeg are other people's programs reading YouTube's pages.
-    secrets = {"CREDENTIALS_DIRECTORY": str(tmp_path / "creds"), "CARACOLE_NTFY_TOKEN": "tk_secret",
-               "CARACOLE_WEB_TOKEN": "w3b", "DENO_AUTH_TOKENS": "a@b"}
+    others = {"CARACOLE_CONFIG": str(tmp_path / "caracole.toml"), "CARACOLE_CJK_FONT": "/fonts/cjk.ttf",
+              "DENO_AUTH_TOKENS": "a@b", "SSH_AUTH_SOCK": "/run/user/1000/ssh"}
     kept = {"HTTPS_PROXY": "http://proxy.example:3128", "no_proxy": "localhost", "LC_ALL": "C.UTF-8",
             "LOCALE_ARCHIVE": "/run/current-system/sw/lib/locale/locale-archive",
             "LANG": "C.UTF-8", "XDG_CACHE_HOME": str(tmp_path / "xdg"), "SSL_CERT_FILE": "/etc/ssl/ca.pem",
             "HOME": str(tmp_path), "TMPDIR": str(tmp_path)}
-    for name, value in {**secrets, **kept}.items():
+    for name, value in {**others, **kept}.items():
         monkeypatch.setenv(name, value)
     runner(fake, tmp_path).search("q")
     names = set(fake.calls()[0]["env_names"])
-    assert not names & set(secrets) and not any(n.startswith("CARACOLE_") for n in names)
+    assert not names & set(others) and not any(n.startswith("CARACOLE_") for n in names)
     assert {"PATH", "DENO_V8_FLAGS", *kept} <= names
 
 

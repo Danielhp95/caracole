@@ -871,7 +871,7 @@ def test_the_nightly_todo_step_also_writes_index_html(conn, cfg):
 
     add_song(conn, "Radiohead", "Creep")
     todo = [s for s in default_steps() if s.name == "todo"]
-    services = Services(clients={}, notifier=Notifier(None, None))
+    services = Services(clients={}, notifier=Notifier(None))
     report = run_pipeline(cfg, conn=conn, services=services, steps=todo, now=NOW)
     assert report.ok, report.errors
     html = (cfg.library_dir / "index.html").read_text(encoding="utf-8")

@@ -535,7 +535,7 @@ def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Service
         for client in clients.values():
             client.close()
         raise
-    notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=transport_for("ntfy"))
+    notifier = Notifier(cfg.ntfy.url, transport=transport_for("ntfy"))
     return Services(clients=clients, notifier=notifier)
 
 

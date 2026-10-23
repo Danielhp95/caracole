@@ -24,7 +24,7 @@ from caracole.health import is_cooling, record_block
 
 NTFY = "https://ntfy.example/caracole-test"
 OUTSIDE_SETTINGS = (
-    "CREDENTIALS_DIRECTORY", "CARACOLE_CONFIG", "CARACOLE_NTFY_TOKEN",
+    "CARACOLE_CONFIG",
 )
 
 

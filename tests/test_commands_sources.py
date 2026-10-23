@@ -22,9 +22,7 @@ from conftest import subprocess_pythonpath
 
 # Environment that load_config would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
-    "CREDENTIALS_DIRECTORY",
     "CARACOLE_CONFIG",
-    "CARACOLE_NTFY_TOKEN",
 )
 
 

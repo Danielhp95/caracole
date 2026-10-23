@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from caracole.config import ConfigError, MatchPolicy, ProviderPolicy, RankPolicy, load_config
+from caracole.config import ConfigError, MatchPolicy, NtfyConfig, ProviderPolicy, RankPolicy, load_config
 
 
 def write(tmp_path: Path, text: str) -> Path:
@@ -31,7 +31,7 @@ def test_defaults(tmp_path):
         coverage_threshold=0.8, line_match=85, prior_votes=10, scored_sheets=3,
         label_penalty=0.5, variant_bonus=0.25,
     )
-    assert cfg.ntfy.url is None and cfg.ntfy.token is None
+    assert cfg.ntfy == NtfyConfig(url=None)
 
 
 def test_xdg_directories(tmp_path):
@@ -133,22 +133,22 @@ def test_an_empty_data_dir_leaves_the_defaults(tmp_path):
     assert cfg.cache_dir == home / ".cache/caracole"
 
 
-def test_credentials_directory_secret_is_stripped(tmp_path):
+def test_ntfy_is_its_topic_url_alone_and_caracole_reads_no_secret(tmp_path):
+    # No token: an alert goes to the topic's URL as it is. Nothing is read from systemd's credentials, a file
+    # or the environment.
     creds = tmp_path / "creds"
     creds.mkdir()
     (creds / "ntfy_token").write_text("tk_123\n")
-    cfg = load_config(None, env={"HOME": str(tmp_path), "CREDENTIALS_DIRECTORY": str(creds),
-                                 "CARACOLE_NTFY_TOKEN": "from-env"})
-    assert cfg.ntfy.token == "tk_123"
+    p = write(tmp_path, '[ntfy]\nurl = "https://ntfy.sh/my-caracole-topic"\n')
+    cfg = load_config(p, env={"HOME": str(tmp_path), "CREDENTIALS_DIRECTORY": str(creds),
+                              "CARACOLE_NTFY_TOKEN": "from-env"})
+    assert cfg.ntfy == NtfyConfig(url="https://ntfy.sh/my-caracole-topic")
 
 
-def test_secret_file_key_then_env_fallback(tmp_path):
-    secret = tmp_path / "secret.txt"
-    secret.write_text("from-file\n")
-    p = write(tmp_path, f'[ntfy]\ntoken_file = "{secret}"\n')
-    assert load_config(p, env={"HOME": str(tmp_path), "CARACOLE_NTFY_TOKEN": "from-env"}).ntfy.token == "from-file"
-    cfg = load_config(None, env={"HOME": str(tmp_path), "CARACOLE_NTFY_TOKEN": "from-env"})
-    assert cfg.ntfy.token == "from-env"
+def test_a_token_file_for_ntfy_is_an_unknown_key(tmp_path):
+    p = write(tmp_path, '[ntfy]\nurl = "https://ntfy.sh/t"\ntoken_file = "/run/agenix/ntfy"\n')
+    with pytest.raises(ConfigError, match=r"unknown key\(s\) in \[ntfy\]: token_file"):
+        load_config(p, env={"HOME": str(tmp_path)})
 
 
 @pytest.mark.parametrize("table", [
@@ -362,7 +362,6 @@ def load(tmp_path, text):
         ("overrides_file = 5\n", "overrides_file"),
         ("wanted_file = 5\n", "wanted_file"),
         ("cjk_font = 5\n", "cjk_font"),
-        ("[ntfy]\ntoken_file = 5\n", "token_file"),
         ("[autochords]\nbtc_weights = 5\n", "btc_weights"),
         ("[autochords]\nbeat_checkpoint = 5\n", "beat_checkpoint"),
     ],
