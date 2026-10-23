@@ -456,19 +456,6 @@ def test_sync_reads_wanted_txt(tmp_path):
     assert {s.key for s in songs(tmp_path)} == {"宋冬野/斑马斑马", "soda-stereo/de-musica-ligera"}
 
 
-def test_sync_with_a_config_that_still_names_spotify_says_once_to_delete_it_and_syncs(tmp_path):
-    # caracole.toml from before Spotify went: its table and its client secret file (gone since) are
-    # ignored, so the upgrade stops nothing, and one warning says what to delete.
-    wanted_file(tmp_path, "Radiohead - Creep\n")
-    config = '[spotify]\nclient_id = "cid"\nclient_secret_file = "spotify_secret"\nplaylists = ["Learn"]\n'
-    result = run(tmp_path, "sync", config=config)
-    assert result.exit_code == 0, result.output
-    assert result.stdout == "wanted.txt 1 song, 1 new\n"
-    [warning] = result.stderr.splitlines()
-    assert warning.startswith(f"warning: {tmp_path / 'caracole.toml'}: delete its [spotify] table: ")
-    assert [s.key for s in songs(tmp_path)] == ["radiohead/creep"]
-
-
 OLD_LIVE_KEY = "soda-stereo/persiana-americana-en-vivo"  # before " - En Vivo" was a version suffix
 SEPTEMBER = "2026-09-01T00:00:00Z"
 
@@ -510,12 +497,6 @@ def test_sync_after_an_upgrade_keeps_a_re_keyed_lines_place_in_the_queue(tmp_pat
         assert db.kv_get(conn, FIRST_SEEN_KEY + "soda-stereo/persiana-americana") == SEPTEMBER
     finally:
         conn.close()
-
-
-def test_caracole_auth_is_no_command_now(tmp_path):
-    # It held `caracole auth spotify` alone.
-    result = run(tmp_path, "auth", "spotify")
-    assert result.exit_code == 2 and "No such command 'auth'" in result.output
 
 
 def test_sync_with_nothing_to_read_says_how_to_start(tmp_path):

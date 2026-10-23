@@ -55,7 +55,7 @@ Shared by the steps and the commands:
 
 | Module | What for |
 |---|---|
-| config.py | caracole.toml, directories, secrets; `REMOVED`, the tables an older caracole read, ignored with a warning |
+| config.py | caracole.toml, directories, secrets |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
 | health.py | cooldowns, `events` |
@@ -266,8 +266,7 @@ Rules a change there keeps (the Invariants below are the others):
   with fontTools, each glyph record padded to an even length, Adwaita Mono, and the OFL; alphatab.nix:
   alphaTab's npm package, fixed-output, three files and their licences; `withAutochords` adds the extra, the model files and
   `yt-dlp` on PATH), autochords.nix (the model files, fixed-output), module.nix
-  (`services.caracole`: units, timer, `caracole-admin`, and a warning for each Spotify setting an
-  older caracole read, left in `settings` or `credentials`; with auto-chords on, the nightly
+  (`services.caracole`: units, timer, `caracole-admin`; with auto-chords on, the nightly
   unit runs the auto-chords package, for its youtube step, and caracole-web and
   `caracole-admin` run it too, so their pages agree), module-check.nix
   (`checks.module`).
@@ -550,8 +549,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (`test_fetch.py::test_ultimate_guitars_guitar_pro_and_power_tab_versions_are_never_read_nor_picked`,
   `test_search.py::test_a_song_ultimate_guitar_has_only_as_guitar_pro_or_power_tab_files_is_no_hit`).
   Schema 9 took the picks out, but for a version a file was filed for, which stays as that
-  file's record. A caracole.toml that still sets `guitar_pro_mode` or `keep_guitar_pro` under
-  `[rank]` loads, with one warning naming them to delete (config.py `_OBSOLETE`). inbox.py
+  file's record. inbox.py
   files what the user drops into `_inbox/` by its name, for any song not ignored, as the
   song's lowest free `guitar-N`, under its own `inbox` version of the file's kind
   (`test_inbox.py::test_files_into_song_by_name`). Official and non-public versions are
@@ -702,7 +700,4 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   one once: a song an older caracole had from it is an ordinary song, keeping its Spotify source
   ids and what they last said (`songs:fields:spotify:`, after the line's word: `songs._resolve`),
   and the kv rows its sync wrote (`source:spotify`, `spotify:top_tracks`,
-  `spotify:retry_after_until`) stay, read by nothing. A caracole.toml that still has a `[spotify]`
-  table loads, the table ignored, with one warning naming what to delete (`config.REMOVED`), never
-  an unknown-key error: an upgrade never stops the nightly run
-  (`test_config.py::test_a_file_that_still_has_spotify_loads_and_says_once_to_delete_it`).
+  `spotify:retry_after_until`) stay, read by nothing.

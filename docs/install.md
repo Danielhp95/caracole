@@ -87,9 +87,7 @@ sudo systemctl start caracole.service           # one run now
 journalctl -u caracole.service -e
 ```
 
-Then read `_todo.md` in the library. An upgrade from a caracole that read
-Spotify needs nothing done first, and leaves a few things to delete:
-[usage.md](usage.md#songs-from-spotify-before) lists them.
+Then read `_todo.md` in the library.
 
 **Data** lives in `dataDir`, `/var/lib/caracole` unless you set it:
 
@@ -157,9 +155,7 @@ Before Nix 2.30, `nix profile add` was `nix profile install`. To update:
 sudo -i nix profile upgrade --profile /nix/var/nix/profiles/caracole --all
 ```
 
-Coming from a caracole that read Spotify, see
-[usage.md](usage.md#songs-from-spotify-before) for what to delete. Then
-[run it nightly](#run-it-nightly-on-ubuntu).
+Then [run it nightly](#run-it-nightly-on-ubuntu).
 
 ### Ubuntu without Nix
 

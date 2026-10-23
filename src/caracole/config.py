@@ -8,15 +8,11 @@ from ``$CREDENTIALS_DIRECTORY`` (systemd ``LoadCredential``), then a ``*_file``
 key, then an environment variable.
 Unknown keys are errors, and so are values of the wrong type or out of range,
 so a typo never silently falls back to a default or turns into another value.
-A table an older caracole read and this one doesn't (``REMOVED``), or a key
-(``_OBSOLETE``), is no error: the file loads, the table or key ignored whatever
-its value, and the log says what to delete.
 """
 
 from __future__ import annotations
 
 import json
-import logging
 import math
 import os
 import tomllib
@@ -25,9 +21,6 @@ from pathlib import Path
 from typing import Any, Mapping
 
 DEFAULT_USER_AGENT = "caracole/0.1 (personal tab library)"
-log = logging.getLogger(__name__)
-
-log = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -159,49 +152,15 @@ _TOP_KEYS = {
     "user_agent", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
     "providers", "match", "rank", "ntfy", "autochords",
 }
-# The tables an older caracole read and this one ignores, with why: a file that still has one loads,
-# so that an upgrade never stops the nightly run, and the log says once to delete it (_without_removed).
-REMOVED = {
-    "spotify": "caracole no longer reads Spotify, so it ignores the table and its client secret; "
-               "wanted.txt is the one source of songs, and the songs Spotify brought stay in the library",
-}
 _PROVIDER_KEYS = {"budget", "delay", "lookup_delay", "lookup_requests", "lookup_per_hour"}
 _NTFY_KEYS = {"url", "token_file"}
-# The keys an older caracole read and this one doesn't, by table ("" for the top level), as a file may still set them
-# (a NixOS system's settings, say): the file loads, each ignored whatever its value, and ``load_config`` warns once,
-# naming every one it sets to delete, and why. Ultimate Guitar's Guitar Pro mode and how many of its Guitar Pro
-# versions to pick: caracole picks none there any more.
-_OBSOLETE: dict[str, tuple[str, ...]] = {"": ("guitar_pro_mode",), "rank": ("keep_guitar_pro",)}
-_OBSOLETE_WHY = "caracole picks no Guitar Pro or Power Tab file on Ultimate Guitar any more"
 _AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device"}
-
-
-def _without_obsolete(table: Mapping[str, Any], name: str, found: list[str]) -> Mapping[str, Any]:
-    """``table`` (``name``: "" for the top level) less its obsolete keys (``_OBSOLETE``), each it held added to
-    ``found`` as the file writes it ("guitar_pro_mode", "keep_guitar_pro in [rank]")."""
-    gone = [key for key in _OBSOLETE.get(name, ()) if key in table]
-    found += [f"{key} in [{name}]" if name else key for key in gone]
-    return {key: value for key, value in table.items() if key not in gone}
-
-
-def _warn_obsolete(path: Path | None, found: list[str]) -> None:
-    """The one warning a file that sets obsolete keys gets, naming them all."""
-    if found:
-        they = "they do" if len(found) > 1 else "it does"
-        log.warning("%s: delete %s: %s, so %s nothing.", path, " and ".join(found), _OBSOLETE_WHY, they)
 
 
 def _check_keys(table: Mapping[str, Any], allowed: set[str], where: str) -> None:
     unknown = sorted(set(table) - allowed)
     if unknown:
         raise ConfigError(f"unknown key(s) in {where}: {', '.join(unknown)}")
-
-
-def _without_removed(data: Mapping[str, Any], path: Path) -> Mapping[str, Any]:
-    """The file's settings without the tables ``REMOVED`` names, each one it has said in a warning."""
-    for key in sorted(set(data) & set(REMOVED)):
-        log.warning("%s: delete its [%s] table: %s.", path, key, REMOVED[key])
-    return {key: value for key, value in data.items() if key not in REMOVED}
 
 
 def _table(data: Mapping[str, Any], key: str) -> Mapping[str, Any]:
@@ -348,10 +307,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             data = tomllib.loads(path.read_text(encoding="utf-8"))
         except tomllib.TOMLDecodeError as e:
             raise ConfigError(f"{path}: {e}") from e
-        data = _without_removed(data, path)
     paths = _Paths(env, path.parent if path is not None else None)
-    obsolete: list[str] = []
-    data = _without_obsolete(data, "", obsolete)
     _check_keys(data, _TOP_KEYS, "caracole.toml")
 
     def dir_value(key: str, default: Path) -> Path:
@@ -403,7 +359,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         raise ConfigError(
             f"[match].review ({match.review:g}) must not be above [match].accept ({match.accept:g})"
         )
-    rank = RankPolicy(**_numbers(_without_obsolete(_table(data, "rank"), "rank", obsolete), _RANK_RANGES, "[rank]"))
+    rank = RankPolicy(**_numbers(_table(data, "rank"), _RANK_RANGES, "[rank]"))
 
     ntfy_t = _table(data, "ntfy")
     _check_keys(ntfy_t, _NTFY_KEYS, "[ntfy]")
@@ -432,7 +388,6 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
     pdf_fonts_value = _optional_string(data, "pdf_fonts", "pdf_fonts") or env.get("CARACOLE_PDF_FONTS")
     ytdlp_bin = _optional_string(data, "ytdlp_bin", "ytdlp_bin") or env.get("CARACOLE_YTDLP_BIN") or "yt-dlp"
     alphatab_value = env.get("CARACOLE_ALPHATAB_DIR")
-    _warn_obsolete(path, obsolete)
 
     return Config(
         library_dir=library_dir,

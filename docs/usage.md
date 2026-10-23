@@ -107,15 +107,6 @@ other Ultimate Guitar versions it scored (`scored_sheets`). Scores and
 thresholds can't be negative, scores stop at 100, and `scored_sheets` is a
 whole number.
 
-**Keys from an older caracole.** `guitar_pro_mode` and `keep_guitar_pro` under
-`[rank]` set how caracole picked Guitar Pro and Power Tab versions on Ultimate
-Guitar for you to download, which it no longer does. A file that still has
-them loads all the same, whatever they say, and every command warns once on
-stderr (`warning: /etc/caracole/caracole.toml: delete guitar_pro_mode and
-keep_guitar_pro in [rank]: …`): delete them, from
-`services.caracole.settings` on NixOS, whose evaluation warns too
-(`services.caracole.settings: delete guitar_pro_mode and rank.keep_guitar_pro: …`).
-
 **Folders.** With `data_dir`, everything is in one folder: `library_dir`,
 `music_dir`, `state_dir` and `cache_dir` default to its `library`, `music`,
 `state` and `cache` folders, and one you set yourself still wins. Without
@@ -252,9 +243,7 @@ For example:
   exact. A duration is `m:ss`, `h:mm:ss` or whole seconds.
 - Edit the line's album or duration, and the next sync changes the song, and
   the duration the scan checks a purchase against; take one off the line, and
-  it comes off the song (for a song an older caracole had from Spotify, what
-  Spotify last said takes its place: see
-  [Songs from Spotify](#songs-from-spotify-before)).
+  it comes off the song.
 - The artist ends at the first " - " (an en or em dash works too), so a title
   may contain " - " but an artist can't.
 - A version after the title, as in `Radiohead - Creep - Acoustic` or
@@ -662,29 +651,6 @@ with the same sync.
 the pages: with an overrides.toml that can't be read, or a page that can't be
 written, they still add and sync your songs and exit 0. They warn, and leave
 the pages as they were.
-
-### Songs from Spotify, before
-
-caracole once read your Spotify Liked Songs and playlists too. It no longer
-does: wanted.txt is its one source of songs. After the upgrade:
-
-- The songs Spotify brought stay in the library as ordinary songs, with their
-  sheets, files, lyrics, songbooks and decisions in overrides.toml. Nothing
-  is looked for again because of the upgrade. Such a song's album and duration
-  are still what Spotify last said, unless its wanted.txt line says otherwise.
-  To give it a line of its own, `caracole add` it.
-- A `[spotify]` table left in caracole.toml is ignored, and every command
-  says so once on stderr until you delete it: `warning: …/caracole.toml:
-  delete its [spotify] table: caracole no longer reads Spotify, …`. Its client
-  secret is never read either: delete the file `client_secret_file` named,
-  `$CREDENTIALS_DIRECTORY/spotify_client_secret`, or
-  `$CARACOLE_SPOTIFY_CLIENT_SECRET`, whichever you used. On NixOS, take
-  `settings.spotify` and `credentials.spotify_client_secret` out of
-  `services.caracole`: until you do, a rebuild warns about each.
-- The token `caracole auth spotify` saved, `spotify_token.json` in the state
-  folder, is harmless and read by nothing: delete it. `caracole auth` is gone.
-- The database keeps the few rows the Spotify sync wrote (how its last sync
-  went, your top tracks); nothing reads them, the to-do page included.
 
 ## The first run
 

@@ -17,12 +17,6 @@ let
   toml = pkgs.formats.toml { };
   configFile = toml.generate "caracole.toml" cfg.settings;
 
-  # caracole.toml keys an older caracole read and this one ignores (src/caracole/config.py
-  # _OBSOLETE): the generated file still loads, and every command warns; so does the evaluation.
-  obsoleteSettings =
-    lib.optional (cfg.settings ? guitar_pro_mode) "guitar_pro_mode"
-    ++ lib.optional ((cfg.settings.rank or { }) ? keep_guitar_pro) "rank.keep_guitar_pro";
-
   credentials = lib.mapAttrsToList (name: path: "${name}:${path}") cfg.credentials;
 
   # The four folders by option, and dataDir, which holds them by default.
@@ -687,19 +681,7 @@ in
           ])
           && !(cfg.credentials ? web_token)
         )
-        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs."
-      # What an older caracole read of Spotify. settings is caracole.toml, a TOML
-      # value, so no option can be declared under it (mkRemovedOptionModule):
-      # the generated file keeps the table, which caracole ignores with a warning
-      # at every command, and the rebuild says what to delete.
-      ++ lib.optional (cfg.settings ? spotify)
-        "services.caracole.settings.spotify: caracole no longer reads Spotify (wanted.txt is its one source of songs) and ignores this table: delete it."
-      ++ lib.optional (cfg.credentials ? spotify_client_secret)
-        "services.caracole.credentials.spotify_client_secret: caracole no longer reads Spotify, so nothing reads this credential: delete it, and the secret."
-      ++ lib.optional (obsoleteSettings != [ ])
-        "services.caracole.settings: delete ${lib.concatStringsSep " and " obsoleteSettings}: caracole picks no Guitar Pro or Power Tab file on Ultimate Guitar any more, so ${
-          if lib.length obsoleteSettings > 1 then "they do" else "it does"
-        } nothing.";
+        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs.";
 
     networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [
       cfg.web.port
