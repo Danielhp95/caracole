@@ -11,9 +11,6 @@ import pytest
 
 from caracole import logs
 
-SECRETS = ("client-s3cret-value", "tk_ntfy-s3cret-token")
-
-
 class TTY(io.StringIO):
     def isatty(self) -> bool:
         return True
@@ -160,40 +157,6 @@ def test_colour_on_a_terminal_only_and_never_with_no_color(log_to):
     assert logs.wants_colour(TTY(), {"NO_COLOR": ""})  # NO_COLOR counts only when it says something
 
 
-# --- secrets -------------------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("verbosity", [logs.QUIET, logs.NORMAL, logs.VERBOSE, logs.DEBUG])
-def test_no_secret_reaches_the_log_at_any_level(log_to, verbosity):
-    out = log_to(verbosity)
-    logs.add_secrets(*SECRETS, None, "")
-    caracole, client = (logging.getLogger(n) for n in ("caracole.x", "httpx"))
-    for level in (logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR):
-        caracole.log(level, "config: secret %s, token %s", *SECRETS)
-        # a client's debug line, with the ntfy token's header and a basic one
-        client.log(level, "Sending %s to %s with Headers: %s", "POST", "https://ntfy.example/t",
-                   {"Authorization": "Bearer tk_ntfy-bearer-value", "Proxy-Authorization": "Basic Y2xpZW50OnNlY3JldA=="})
-        caracole.log(level, "sign-in form: {'token': 'serve-access-token', 'csrf': 'x'}")
-        caracole.log(level, 'token JSON {"access_token": "json-access-value", "expires_in": 3600}')
-        caracole.log(level, "Authorization: tk_bare-header-token")
-    try:
-        raise ValueError(f"ntfy said: invalid token {SECRETS[1]}")
-    except ValueError:
-        caracole.exception("ntfy failed")
-    text = out.getvalue()
-    for secret in (*SECRETS, "tk_ntfy-bearer-value", "Y2xpZW50OnNlY3JldA==", "serve-access-token",
-                   "json-access-value", "tk_bare-header-token"):
-        assert secret not in text
-    assert "[redacted]" in text  # the errors still show, without what they would leak
-
-
-def test_redaction_leaves_ordinary_words_alone():
-    for text in ("the token is in /run/credentials/caracole.service/web_token",
-                 "token_file = /run/agenix/ntfy", "LRCLIB GET https://lrclib.net/api/get?track_name=x → 503",
-                 "ntfy's token expired. Give caracole another", "basic chords only, token refresh failed"):
-        assert logs.redact(text) == text
-
-
 # --- one place, undone after ---------------------------------------------------------------
 
 
@@ -225,9 +188,8 @@ def test_say_writes_one_line_the_way_the_log_would(tmp_path, monkeypatch):
     # For a command's last word on stderr (commands._common.fail), outside the logging machinery.
     err = io.StringIO()
     monkeypatch.setattr(sys, "stderr", err)
-    logs.add_secrets(SECRETS[0])  # secrets stay known for the life of the process
-    logs.say(logging.ERROR, f"config: can't read {SECRETS[0]}", env={})
-    assert err.getvalue() == "error: config: can't read [redacted]\n"
+    logs.say(logging.ERROR, "config: can't read caracole.toml", env={})
+    assert err.getvalue() == "error: config: can't read caracole.toml\n"
     f, env = journal_stream(tmp_path)
     with f:
         monkeypatch.setattr(sys, "stderr", f)

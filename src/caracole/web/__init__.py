@@ -3,7 +3,8 @@
 A small server from the standard library (``http.server``), in these parts:
 
 - security.py: the host names it answers to (a guard against DNS rebinding),
-  the cross-origin check every write passes, and the tokens.
+  the cross-origin check every write passes, and the form token. There is no
+  sign-in: whoever can reach the server may use it.
 - files.py: the library's files, opened without following a link, and only
   the kinds caracole keeps there; and the pages caracole wrote there (the
   sheet viewers, a kept version's among them, and the songbooks' pages), only

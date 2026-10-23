@@ -2,7 +2,6 @@
 sheet viewer it serves, in Chromium."""
 
 import http.client
-import json
 import sys
 import threading
 import time
@@ -259,58 +258,29 @@ def test_a_viewer_written_before_an_upgrade_still_works_served(cfg, conn, tmp_pa
 
 
 @in_chromium
-def test_a_phone_on_the_lan_signs_in(cfg, conn, tmp_path):
+def test_a_phone_on_the_lan_cancels_a_request(cfg, conn, tmp_path):
     # Over plain HTTP to a LAN or tailnet address a page is no secure context: the browser sends no
     # Sec-Fetch-Site, and the server compares the form's Origin with Host. Under Referrer-Policy no-referrer a
-    # form posted from the server's own page says Origin "null", so the sign-in was refused; same-origin
-    # names the page's origin to its own server, and nothing to another site.
-    token = "a-long-random-access-token"
+    # form posted from the server's own page says Origin "null", so every form from a phone was refused;
+    # same-origin names the page's origin to its own server, and nothing to another site. The requests page
+    # has no script: its Cancel is a plain form.
+    from caracole.web.jobs import add_steps
+
     lan = "caracole.test"
-    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1", extra=[lan]), csrf="tok",
-                            access_token=token))
-    root = f"http://{lan}:{server.server_address[1]}/"
+    app = WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1", extra=[lan]), csrf="tok")
+    job, _ = app.submit("Add Radiohead - Creep", "radiohead/creep", add_steps("Radiohead", "Creep"))
+    server = running(app)  # its queue never started: the request waits
     try:
         with Chromium(tmp_path / "profile", local=[lan]) as browser:
-            tab = browser.open(root)
-            tab.wait_for("document.querySelector('input[name=token]') !== null")
+            tab = browser.open(f"http://{lan}:{server.server_address[1]}/jobs?refresh=0")
+            tab.wait_for("document.readyState === 'complete' && "
+                         "document.querySelector('form[action=\"/jobs/cancel\"] button') !== null")
             assert tab.eval("window.isSecureContext") is False  # as a phone on the LAN sees it
-            tab.eval(f"document.querySelector('input[name=token]').value = {json.dumps(token)}")
-            tab.click("button[type=submit]")
-            tab.wait_for("document.readyState === 'complete' && !document.querySelector('input[name=token]')")
-            assert tab.eval("document.title") == "caracole library", tab.eval("document.body.innerText")
-    finally:
-        server.shutdown()
-        server.server_close()
-
-
-@in_chromium
-def test_a_served_viewers_links_open_once_signed_in(cfg, conn, tmp_path):
-    # The sandboxed viewer has an origin of its own, so following one of its links is a navigation
-    # from another site: the sign-in cookie must go with it (SameSite=Lax, not Strict), or its PDF
-    # and its way back to the library open the sign-in page.
-    rendered_song(conn, cfg)
-    token = "a-long-random-access-token"
-    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok",
-                            access_token=token))
-    root = f"http://127.0.0.1:{server.server_address[1]}/"
-    viewer = root + quote("Soda Stereo/De Música Ligera/sheet.html")
-    ready = "document.documentElement.dataset.ready === '1'"
-    try:
-        with Chromium(tmp_path / "profile") as browser:
-            tab = browser.open(root)
-            tab.wait_for("document.querySelector('input[name=token]') !== null")
-            tab.eval(f"document.querySelector('input[name=token]').value = {json.dumps(token)}")
-            tab.click("button[type=submit]")
-            tab.wait_for("document.title === 'caracole library'")
-            for link, opened in (("a.pdf", "document.contentType === 'application/pdf'"),
-                                 ("a.back", "document.title === 'caracole library'")):
-                tab = browser.open(viewer)
-                tab.wait_for(ready)
-                tab.eval(f"document.querySelector('{link}').scrollIntoView({{block: 'center'}})")
-                tab.click(link)
-                tab.wait_for(f"!document.documentElement.dataset.ready && document.readyState === 'complete' "
-                             f"&& ({opened} || document.title.startsWith('Sign in'))")
-                assert tab.eval(opened), (link, tab.eval("document.title"), tab.eval("location.href"))
+            tab.eval("window.before = true")
+            tab.click('form[action="/jobs/cancel"] button')
+            tab.wait_for("window.before === undefined && document.readyState === 'complete'")  # the page it went to
+            assert tab.eval("document.title").startswith("Requests"), tab.eval("document.body.innerText")
+        assert [j.state for j in app.queue.snapshot() if j.id == job.id] == ["cancelled"]
     finally:
         server.shutdown()
         server.server_close()

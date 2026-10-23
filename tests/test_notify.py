@@ -17,7 +17,7 @@ def capture():
 
 def test_send_posts_with_headers():
     seen, transport = capture()
-    n = Notifier("https://ntfy.sh/caracole-test", "tk_1", transport=transport)
+    n = Notifier("https://ntfy.sh/caracole-test", transport=transport)
     assert n.send("caracole run", "3 new sheets", priority="high", tags=["guitar", "white_check_mark"])
     r = seen[0]
     assert r.method == "POST" and str(r.url) == "https://ntfy.sh/caracole-test"
@@ -25,12 +25,12 @@ def test_send_posts_with_headers():
     assert r.headers["title"] == "caracole run"
     assert r.headers["priority"] == "high"
     assert r.headers["tags"] == "guitar,white_check_mark"
-    assert r.headers["authorization"] == "Bearer tk_1"
+    assert "authorization" not in r.headers  # the topic's URL alone: caracole has no token for ntfy
 
 
 def test_non_ascii_title_is_rfc2047_encoded_and_body_is_utf8():
     seen, transport = capture()
-    Notifier("https://ntfy.sh/t", None, transport=transport).send("新谱: 斑马斑马", "宋冬野 – 斑马斑马 ✓")
+    Notifier("https://ntfy.sh/t", transport=transport).send("新谱: 斑马斑马", "宋冬野 – 斑马斑马 ✓")
     r = seen[0]
     decoded = "".join(
         part.decode(enc or "ascii") if isinstance(part, bytes) else part
@@ -38,19 +38,18 @@ def test_non_ascii_title_is_rfc2047_encoded_and_body_is_utf8():
     )
     assert decoded == "新谱: 斑马斑马"
     assert r.content.decode("utf-8") == "宋冬野 – 斑马斑马 ✓"
-    assert "authorization" not in r.headers
 
 
 def test_send_swallows_errors():
     def boom(request):
         raise httpx.ConnectError("down", request=request)
 
-    assert Notifier("https://ntfy.sh/t", None, transport=httpx.MockTransport(boom)).send("a", "b") is False
-    assert Notifier("https://ntfy.sh/t", None,
+    assert Notifier("https://ntfy.sh/t", transport=httpx.MockTransport(boom)).send("a", "b") is False
+    assert Notifier("https://ntfy.sh/t",
                     transport=httpx.MockTransport(lambda r: httpx.Response(500))).send("a", "b") is False
 
 
 def test_unconfigured_notifier_is_a_no_op():
     seen, transport = capture()
-    assert Notifier(None, None, transport=transport).send("a", "b") is False
+    assert Notifier(None, transport=transport).send("a", "b") is False
     assert seen == []

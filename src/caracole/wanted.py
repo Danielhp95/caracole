@@ -27,7 +27,7 @@ so Syncthing carries it to your phone. One song per line:
   written again later brings it back.
 - The file must be a regular file. Others can write to the library, so a
   symbolic link is refused rather than followed (it could point at caracole's
-  credentials, and a bad line is quoted on the to-do page).
+  private files, and a bad line is quoted on the to-do page).
 """
 
 from __future__ import annotations

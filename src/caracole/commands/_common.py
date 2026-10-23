@@ -80,13 +80,12 @@ def warn(message: str) -> None:
 
 
 def load_cfg(ctx: typer.Context) -> Config:
-    """The config, the one way a command reads it; its secrets are kept out of the log from then on."""
+    """The config, the one way a command reads it."""
     path = ctx.obj.config_path if ctx.obj is not None else None
     try:
         cfg = load_config(path)
     except ConfigError as e:
         fail(f"config: {e}", 2)
-    logs.add_secrets(cfg.ntfy.token)
     return cfg
 
 
@@ -453,7 +452,7 @@ def alert_block(cfg: Config, provider: str, message: str) -> None:
         return
     from caracole.notify import Notifier  # httpx: only when there is an alert to send
 
-    notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=transport_for("ntfy"))
+    notifier = Notifier(cfg.ntfy.url, transport=transport_for("ntfy"))
     notifier.send(f"caracole: {logs.provider_name(provider)} blocked", message, priority="high", tags=["warning"])
 
 

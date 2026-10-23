@@ -1,4 +1,4 @@
-"""What keeps ``caracole serve`` to its owner: host names, cross-origin writes, tokens.
+"""What keeps other sites out of ``caracole serve``: host names, cross-origin writes, the form token.
 
 - **Host names.** A page on another site can make a browser send requests to
   127.0.0.1 under a name of its own that it points there (DNS rebinding), and
@@ -11,20 +11,19 @@
   and, where a browser sends no such header (plain HTTP to a LAN address),
   ``Origin`` against ``Host``. Every form also carries a token the server made
   when it started, which another site can't read.
-- **An access token**, optional, for a server on the LAN: a sign-in page sets a
-  cookie holding a digest of it, never the token itself.
+
+There is no sign-in: whoever can reach the server may use it, so it listens only
+where you say (127.0.0.1 unless ``--address`` says otherwise), on a network you trust.
 """
 
 from __future__ import annotations
 
-import hashlib
 import hmac
 import ipaddress
 import re
 from collections.abc import Iterable, Mapping
 from urllib.parse import urlsplit
 
-SESSION_COOKIE = "caracole_session"
 LOOPBACK = ("localhost", "127.0.0.1", "::1")
 WILDCARDS = ("", "0.0.0.0", "::")
 _NAME = re.compile(r"[a-z0-9._-]+|[0-9a-f:.]+")
@@ -123,26 +122,3 @@ def same_token(given: str | None, expected: str) -> bool:
     if not given or not expected:
         return False
     return hmac.compare_digest(given.encode("utf-8"), expected.encode("utf-8"))
-
-
-def session_value(access_token: str) -> str:
-    """What the sign-in cookie holds: a digest of the access token, the same after a restart."""
-    return hmac.new(access_token.encode("utf-8"), b"caracole serve session", hashlib.sha256).hexdigest()
-
-
-def session_cookie(header: str | None) -> str | None:
-    """The sign-in cookie's value in a ``Cookie`` header, if it has one.
-
-    Read pair by pair, never with ``http.cookies``: cookies ignore ports, so another app on the same
-    host can set one that parser stops at (JSON, a space, no value at all), and it would take
-    caracole's with it. Of two sign-in cookies, the first, which the browser sends for the longer path.
-    """
-    for pair in (header or "").split(";"):
-        name, sep, value = pair.partition("=")
-        if not sep or name.strip() != SESSION_COOKIE:
-            continue
-        value = value.strip()
-        if len(value) >= 2 and value[0] == value[-1] == '"':
-            value = value[1:-1]
-        return value or None
-    return None

@@ -22,7 +22,7 @@ from caracole.commands import _common
 
 # Environment load_config, the log or the report would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
-    "CREDENTIALS_DIRECTORY", "CARACOLE_CONFIG", "CARACOLE_NTFY_TOKEN",
+    "CARACOLE_CONFIG",
     "JOURNAL_STREAM", "NO_COLOR",
 )
 NTFY = "https://ntfy.example/caracole-test"

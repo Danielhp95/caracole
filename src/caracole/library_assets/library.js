@@ -2399,7 +2399,7 @@
     if (timer || stopped || !pending().length) return;
     timer = setTimeout(poll, delay !== undefined ? delay : document.hidden ? BACKGROUND_POLL : POLL);
   };
-  // The server can't answer this page any more (it restarted, or signs in again): say so on each line.
+  // The server can't answer this page any more (it restarted since the page was loaded): say so on each line.
   const stop = (text) => {
     stopped = true;
     for (const id of pending()) apply(Object.assign({}, views.get(id), { line: { tone: "failed", text } }));
@@ -2412,7 +2412,7 @@
       headers: { Accept: "application/json", "X-Caracole-Form-Token": String(server.csrf || "") },
     }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
       .then((answer) => {
-        if (answer.status === 401 || answer.status === 403) {
+        if (answer.status === 403) {
           stop(failure(answer).line.text);
           return;
         }

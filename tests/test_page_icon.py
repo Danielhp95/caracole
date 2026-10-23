@@ -59,7 +59,6 @@ def the_pages(conn, cfg) -> dict[str, tuple[str, list[str]]]:
         "sheet.html": (viewer, [meta(viewer), viewer_csp(viewer.encode("utf-8"))]),
         "songbook.html": (book, [meta(book), songbook_csp(book.encode("utf-8"))]),
         "message page": (pages.message_page("Not here", "Nothing here."), [pages.PAGE_CSP]),
-        "sign-in page": (pages.sign_in_page("tok"), [pages.PAGE_CSP]),
         "lookup page": (lookup_page.lookup_page("tok"), [lookup_page.LOOKUP_CSP]),
     }
 

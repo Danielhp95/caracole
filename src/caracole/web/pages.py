@@ -1,4 +1,4 @@
-"""The pages caracole serve writes itself: the requests, the picker, the sign-in page, and errors.
+"""The pages caracole serve writes itself: the requests, the picker, Remove's question, and errors.
 
 They share index.html's look (library_assets/base.css, ``BASE_STYLE``), carry no script,
 and every text in them is escaped. The requests page (``jobs_page``) says, under
@@ -113,9 +113,6 @@ pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-
   font: .8rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap;
   overflow-wrap: anywhere; }
 .empty { margin: 24px 0; }
-.sign-in { display: grid; gap: 14px; max-width: 26rem; padding: 16px; border: 1px solid var(--border);
-  border-radius: 16px; background: var(--surface); }
-.error { margin: 0; color: var(--failed); font-weight: 600; }
 .message { max-width: 72ch; }
 .sub { margin: 18px 0 6px; font-size: 1rem; }
 .plan { max-width: 72ch; margin: 0; padding-left: 1.2em; overflow-wrap: anywhere; }
@@ -501,20 +498,6 @@ def _step(step: Step, *, picking: bool = False) -> str:
     badge = _badge("review", "Waits for a pick") if picking else _badge(step.state)
     return (f'<li class="step {escape(step.state)}"><div class="step-head"><span>{escape(step.label)}</span>'
             f"{badge}</div>{note}{output}</li>")
-
-
-def sign_in_page(csrf: str, *, failed: bool = False) -> str:
-    error = '<p class="error">That isn\'t the access token.</p>' if failed else ""
-    form = (
-        '<form class="sign-in" method="post" action="/login">\n'
-        f'  <input type="hidden" name="csrf" value="{escape(csrf, quote=True)}">\n'
-        '  <label class="f">Access token<input type="password" name="token" required '
-        'autocomplete="current-password"></label>\n'
-        f'  {error}<button class="btn primary" type="submit">Sign in</button>\n</form>'
-    )
-    lede = ('<p class="lede">This caracole asks for the access token its owner set '
-            "(<code>--token-file</code>). Your browser keeps you signed in.</p>")
-    return page("Sign in", lede + form)
 
 
 def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str], stays: list[str],

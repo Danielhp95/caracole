@@ -49,13 +49,13 @@ section says where things are, and the rules a change there keeps.
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
 left, with the error; what needs the user), which report.py turns into the run's summary on
 stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, set up once
-by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities, redacted secrets).
+by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities).
 
 Shared by the steps and the commands:
 
 | Module | What for |
 |---|---|
-| config.py | caracole.toml, directories, secrets |
+| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone) |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
 | health.py | cooldowns, `events` |
@@ -92,7 +92,7 @@ Rules a change there keeps (the Invariants below are the others):
   one bundle (`web/alphatab.py`: the library, its font and its SoundFont, from `CARACOLE_ALPHATAB_DIR`) by
   `<script src integrity crossorigin>`, which its policy allows by the bundle's SHA-256, as it does the
   `@font-face` stylesheet alphaTab adds (`alphatab.font_face`, pinned by test_web_guitar_browser.py); the bundle
-  route is `Route.public` (no sign-in) and answers any origin. Enter in a search box never
+  route answers any origin. Enter in a search box never
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
   opens the leading artist's songs), and on the library page, whose served bar searches
   `/api/search` as you type (which asks no site), it only moves the focus to the first result;
@@ -232,7 +232,12 @@ Rules a change there keeps (the Invariants below are the others):
   app.py. A route refuses with `pages.Refused`, which `WebApp.handle` answers as the message
   page, or to the page's script as JSON: every refusal as data. Every `/api/` read is refused to
   another site's fetch (`security.own_page_read`), and every write passes security.py's
-  cross-origin check and carries the form token. Beyond a wanted.txt line, every change runs as a
+  cross-origin check and carries the form token. There is no sign-in, by the owner's choice: no access
+  token, no cookie, no secret; whoever can reach the server may use it, so it is for a network they trust (a
+  LAN, a tailnet). What keeps other sites' pages out is the host-name check (DNS rebinding), the
+  cross-origin check, the form token and `own_page_read`, with Referrer-Policy `same-origin` (header and
+  every page's meta tag), so that a form a phone posts over plain HTTP carries its Origin
+  (`test_web_server.py::test_a_phone_on_the_lan_cancels_a_request`). Beyond a wanted.txt line, every change runs as a
   `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
   shows is status.py's, read from the job's steps and the song's state, never from which commands
   ran: a step's label is that line while it runs ("Adding to the library…"). The requests page
@@ -266,7 +271,8 @@ Rules a change there keeps (the Invariants below are the others):
   with fontTools, each glyph record padded to an even length, Adwaita Mono, and the OFL; alphatab.nix:
   alphaTab's npm package, fixed-output, three files and their licences; `withAutochords` adds the extra, the model files and
   `yt-dlp` on PATH), autochords.nix (the model files, fixed-output), module.nix
-  (`services.caracole`: units, timer, `caracole-admin`; with auto-chords on, the nightly
+  (`services.caracole`: units, timer, `caracole-admin`; no `credentials` option, as caracole reads no
+  secret, so no unit and not `caracole-admin` loads one; with auto-chords on, the nightly
   unit runs the auto-chords package, for its youtube step, and caracole-web and
   `caracole-admin` run it too, so their pages agree), module-check.nix
   (`checks.module`).
@@ -494,8 +500,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     name after `--`, arguments a list and never a shell; no cookies, login, config files,
     plugins (PO-token providers among them) or remote code (`--ignore-config`,
     `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`,
-    `--no-remote-components`); none of caracole's secrets (`ytdlp_env` passes no
-    `CREDENTIALS_DIRECTORY` or `CARACOLE_*` variable); a stop or Ctrl-C stops its process
+    `--no-remote-components`); an environment of its own (`ytdlp_env`: what a program needs, no
+    `CARACOLE_*` variable); a stop or Ctrl-C stops its process
     group too; a bot check, an HTTP 429 or 403, a rate limit or a captcha
     is `ProviderBlocked`, honoured like any block (tests/test_youtube.py). Everything else
     keeps honouring robots.txt; widen nothing here without the owner, and copy it to no

@@ -378,7 +378,7 @@ def run_icons(conn, cfg, *sites):
     from caracole.pipeline import Services, run_pipeline
 
     clients = {s.provider: s.client(cfg.cache_dir) for s in sites}
-    return run_pipeline(cfg, conn=conn, services=Services(clients, Notifier(None, None)),
+    return run_pipeline(cfg, conn=conn, services=Services(clients, Notifier(None)),
                         steps=icons_step(), now=NOW)
 
 

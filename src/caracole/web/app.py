@@ -10,26 +10,25 @@ search_routes.py (the lookup page, search as you type, a song looked up now, a L
 read, LaCuerda's own search), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
 sheet's PDF in the version its viewer was left in, and Make this my version), versions_routes.py
 (a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick) and guitar_routes.py
-(a song's Guitar Pro file in the browser, and alphaTab's bundle, answered before signing in: ``Route.public``). A new route, or a new
-module of them, changes nothing here. This module answers the rest:
+(a song's Guitar Pro file in the browser, and alphaTab's bundle). A new route, or a new module of them, changes
+nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
                           a sheet viewer or a kept version's, while it is as written (``written_page``),
                           in a sandbox
-    GET, POST /login      the sign-in page, with an access token
 
+There is no sign-in: whoever can reach the server may use it (security.py).
 Every request must name the server by a name it answers to (421 otherwise).
 Every POST must pass the cross-origin check and carry the form token (403),
 be a form (415) and be small (413). /jobs.json, which no form asks for, must
 pass the same cross-origin check and carry the form token in an
-``X-Caracole-Form-Token`` header (403). With an access token, nothing but the
-sign-in page is served before signing in (401).
+``X-Caracole-Form-Token`` header (403).
 
 A route that turns a request down raises ``Refused`` (pages.py: a status, a
 title and one sentence), which ``WebApp.handle`` answers with the message page.
 To a page's script (it accepts JSON, or asks ``/api/``), a refusal is then
 ``{"error": "one sentence"}``, with the same status, and ``"reload": true`` when
-the page must be reloaded (a form token older than the server, signing in). A
+the page must be reloaded (a form token older than the server). A
 request queued is answered alike (``WebApp.queued``): to a form, a redirect; to
 the page's script, the job, as /jobs.json gives it.
 
@@ -62,16 +61,7 @@ from caracole.web import pages
 from caracole.web.files import NotServed, read_library_file, read_written_page
 from caracole.web.jobs import Job, JobQueue, QueueFull
 from caracole.web.pages import Refused
-from caracole.web.security import (
-    SESSION_COOKIE,
-    answers_to,
-    cross_origin_ok,
-    host_name,
-    own_page_read,
-    same_token,
-    session_cookie,
-    session_value,
-)
+from caracole.web.security import answers_to, cross_origin_ok, host_name, own_page_read, same_token
 from caracole.web.status import SongFacts, details_href
 
 if TYPE_CHECKING:
@@ -130,7 +120,6 @@ class Route:
     page: str = "the library"
     under: bool = False
     script_only: bool = False
-    public: bool = False
 
 
 @cache
@@ -173,8 +162,8 @@ def message_response(status: int, title: str, message: str) -> Response:
     return response
 
 
-def redirect(location: str, *extra: tuple[str, str]) -> Response:
-    return Response(303, b"", [("Location", location), *extra])
+def redirect(location: str) -> Response:
+    return Response(303, b"", [("Location", location)])
 
 
 def json_response(status: int, data: Any) -> Response:
@@ -230,12 +219,11 @@ def overrides_or_none(cfg: Config) -> Overrides | None:
 
 
 class WebApp:
-    """The server's state: the config, the queue, the names it answers to and its tokens, and what its
+    """The server's state: the config, the queue, the names it answers to and its form token, and what its
     routes keep between two requests."""
 
     def __init__(self, cfg: Config, queue: JobQueue, *, allowed: frozenset[str], csrf: str | None = None,
-                 access_token: str | None = None, timers: Mapping[str, int] | None = None,
-                 searches_lacuerda: bool = True):
+                 timers: Mapping[str, int] | None = None, searches_lacuerda: bool = True):
         self.cfg = cfg
         self.queue = queue
         self.allowed = allowed
@@ -244,7 +232,6 @@ class WebApp:
         # Whether the pages may send LaCuerda's own search (search_routes.py): False for the tests alone that drive
         # the pages for something else, whose queue it would join; caracole serve never sets it.
         self.searches_lacuerda = searches_lacuerda
-        self._session = session_value(access_token) if access_token else None
         self._wanted = threading.Lock()  # one append to wanted.txt at a time, of the server's threads
         self._ended: dict[int, tuple[int | None, SongFacts | None]] = {}  # job id -> its song's id and facts
         self._ended_lock = threading.Lock()
@@ -296,30 +283,12 @@ class WebApp:
         except (UnicodeDecodeError, ValueError):
             return message_response(400, "Not an address", "That address can't be read.")
         method = request.method
-        if self._session is not None and not self._signed_in(request):
-            public = route_for("GET", path) if method in ("GET", "HEAD") else None
-            if public is not None and public.public:
-                return public.answer(self, request)
-            if method == "POST" and path == "/login":
-                return self._sign_in(request)
-            if path.startswith("/api/"):  # data, whoever asks: no page to sign in on
-                return json_response(401, {"error": "Sign in first: reload the page, and sign in with the access "
-                                                    "token.", "reload": True})
-            if method in ("GET", "HEAD"):
-                signed_out = html_response(401, pages.sign_in_page(self.csrf))
-                signed_out.data = {"error": "Sign in again: reload the page.", "reload": True}
-                return signed_out
-            refused = message_response(401, "Sign in first", "Sign in with the access token first.")
-            refused.data = {**(refused.data or {}), "reload": True}
-            return refused
         if method in ("GET", "HEAD"):
             if path.startswith("/api/") and not own_page_read(request.headers):
                 return json_response(403, {"error": "This came from another site, so caracole refused it."})
             route = route_for("GET", path)
             if route is not None:
                 return (route.script_only and self._script_read_refused(request)) or route.answer(self, request)
-            if path == "/login":
-                return redirect("/")
             return self._file(path)
         if method == "POST":
             route = route_for("POST", path)
@@ -361,24 +330,6 @@ class WebApp:
             refused.data = {**(refused.data or {}), "reload": True}
             return refused
         return form
-
-    # --- an access token -------------------------------------------------------------------------
-
-    def _signed_in(self, request: Request) -> bool:
-        return same_token(session_cookie(request.headers.get("cookie")), self._session or "")
-
-    def _sign_in(self, request: Request) -> Response:
-        form = self._form(request)
-        if isinstance(form, Response):
-            return form
-        if not same_token(session_value(form.get("token", "")), self._session or ""):
-            return html_response(401, pages.sign_in_page(self.csrf, failed=True))
-        # Lax: a sheet viewer's links (its PDF, the library) are navigations from the origin of its
-        # sandbox, another site's to the browser, which a Strict cookie wouldn't go with. Lax still
-        # keeps it from other sites' POSTs and subresources; no GET changes anything, and every
-        # write must pass the cross-origin check and carry the form token anyway (_form).
-        cookie = f"{SESSION_COOKIE}={self._session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000"
-        return redirect("/", ("Set-Cookie", cookie))
 
     # --- what the routes share ---------------------------------------------------------------------
 

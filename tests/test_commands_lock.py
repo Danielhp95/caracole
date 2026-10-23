@@ -46,7 +46,7 @@ LRCLIB_HIT = Path(__file__).parent / "fixtures" / "lrclib" / "get_hit.json"
 SPANISH_LYRICS = "Cruzo la plaza con el café frío\ny cuento las luces del tren de las seis\n"
 # Environment load_config would read; none of it may leak into a test.
 OUTSIDE_SETTINGS = (
-    "CREDENTIALS_DIRECTORY", "CARACOLE_CONFIG", "CARACOLE_NTFY_TOKEN",
+    "CARACOLE_CONFIG",
 )
 
 

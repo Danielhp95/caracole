@@ -10,7 +10,7 @@ from helpers.browser import in_chromium
 from helpers.targets import UNFOLD, noted, noting, small_targets, weak_edges
 
 from caracole.web.jobs import Job, Step
-from caracole.web.pages import Pick, jobs_page, remove_page, review_page, sign_in_page
+from caracole.web.pages import Pick, jobs_page, remove_page, review_page
 from caracole.web.status import Line
 
 CHOICES = ({"n": 1, "ref": "radiohead/creep", "artist": "Radiohead", "title": "Creep", "score": 89,
@@ -28,12 +28,11 @@ def pages() -> dict[str, str]:
     return {
         "requests": jobs_page([job], lines, picks={"radio head/crep": PICK}, csrf="tok"),
         "pick": review_page(PICK, "tok"),
-        "sign-in": sign_in_page("tok", failed=True),
         "remove": remove_page("Radiohead - Creep", 1, "radiohead/creep", "tok", ["sheet.pdf"], ["Music/"], []),
     }
 
 
-@pytest.mark.parametrize("name", ["requests", "pick", "sign-in", "remove"])
+@pytest.mark.parametrize("name", ["requests", "pick", "remove"])
 @in_chromium
 def test_on_a_touch_screen_every_control_is_a_thumbs_size_and_every_field_has_an_edge(tmp_path, name):
     # The brand above the title goes where the Library link beside it goes, which is a thumb's size.

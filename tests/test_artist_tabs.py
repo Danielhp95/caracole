@@ -390,7 +390,7 @@ def test_the_nightly_run_backfills_while_ug_cools_down(conn, read, tmp_path, cfg
     record_block(conn, "ug", NOW, "HTTP 429")
     assert is_cooling(conn, "ug", NOW)
     cfg.cache_dir.mkdir(parents=True, exist_ok=True)
-    services = Services(clients={"ug": refusing(tmp_path / "cache")}, notifier=Notifier(None, None))
+    services = Services(clients={"ug": refusing(tmp_path / "cache")}, notifier=Notifier(None))
 
     report = run_pipeline(cfg, conn=conn, services=services, now=NOW,
                           steps=[s for s in default_steps() if s.name in ("match", "fetch")])

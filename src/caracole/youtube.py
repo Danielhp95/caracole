@@ -16,8 +16,8 @@ night, on these terms (youtube_fetch.py runs it, AGENTS.md says why):
   ``--ignore-config``, ``--no-cookies``, ``--no-cookies-from-browser``,
   ``--no-plugin-dirs`` and ``--no-remote-components``, and nothing that logs in. A video
   that needs a login (private, age-restricted, members-only) is ``VideoUnavailable``.
-  Nor any of caracole's secrets: yt-dlp runs in an environment of its own (``ytdlp_env``),
-  without the unit's credentials or caracole's tokens.
+  yt-dlp runs in an environment of its own (``ytdlp_env``): what a program needs, and
+  none of caracole's own settings.
 - **Audio alone**: ``-x`` to m4a, never a playlist, at most 100 MB.
 
 yt-dlp runs as a program, its arguments a list and never a shell, and whatever comes from
@@ -608,8 +608,8 @@ class YtDlp:
 
 # What yt-dlp, and the deno and ffmpeg it starts, are given of caracole's environment: where
 # programs and home are, the language, temporary and cache folders, proxies, certificates, and
-# deno's flags. Nothing else: not the unit's credentials (CREDENTIALS_DIRECTORY) nor caracole's
-# tokens (CARACOLE_*), for these are other people's programs reading YouTube's pages.
+# deno's flags. Nothing else, not caracole's own settings (CARACOLE_*) nor whatever else the
+# environment holds: these are other people's programs reading YouTube's pages.
 _KEPT_ENV = frozenset({
     "PATH", "HOME", "USER", "LOGNAME", "LANG", "LANGUAGE", "LOCALE_ARCHIVE", "TZ", "TZDIR", "TMPDIR", "TEMP", "TMP",
     "XDG_CACHE_HOME",

@@ -7,7 +7,7 @@ lyrics on their own, and guitar parts where they exist. A nightly
 `Library/_todo.md` lists only what it can't decide without you.
 
 This page covers using caracole on any machine. [deploy.md](deploy.md) sets it
-up as a nightly service on a NixOS host, with secrets, Syncthing and backups.
+up as a nightly service on a NixOS host, with Syncthing and backups.
 `caracole --help` and `caracole COMMAND --help` list every command and option.
 
 - [Configure](#configure)
@@ -55,7 +55,6 @@ ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouT
 
 [ntfy]                            # optional: a summary after each run, and alerts
 # url = "https://ntfy.sh/a-long-private-topic"
-# token_file = "/path/to/ntfy_token"
 
 [providers.ug]                    # Ultimate Guitar
 budget = 60                       # requests per run
@@ -148,9 +147,11 @@ folder caracole can't use ends a command with status
 `caracole add` is the exception to both: it keeps its line and warns (see
 below).
 
-**Secrets** stay out of the file. The ntfy token comes from
-`$CREDENTIALS_DIRECTORY/ntfy_token` (systemd's `LoadCredential`), else the
-file `token_file` names, else `$CARACOLE_NTFY_TOKEN`.
+**No secrets.** caracole reads none. ntfy is a topic's `url` alone, posted to
+with no token, so choose a long topic name nobody would guess; and `caracole
+serve` has no sign-in (see [caracole serve](#caracole-serve)). A `token_file`
+under `[ntfy]`, which an older caracole read, is now an unknown key like any
+other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`
 and `youtube`. Any other `[providers.…]` table is an error, like any other
@@ -212,9 +213,7 @@ says come before the command (`caracole -v run`):
 A warning starts with `warning:` and an error with `error:`, coloured on a
 terminal unless `$NO_COLOR` is set; nothing is coloured when the output isn't
 a terminal. Under systemd, each line starts with its priority for the journal
-instead (see [deploy.md](deploy.md#logs)). No secret reaches the log, at any
-level: not the ntfy token, `caracole serve`'s access token, an Authorization
-header, or a token, secret or password a line would otherwise show.
+instead (see [deploy.md](deploy.md#logs)).
 
 An unexpected error, a bug in caracole, ends the command with exit status 1:
 one line that says so, then its traceback, on stderr.
@@ -1492,9 +1491,8 @@ it honours it. It does so on these terms:
   Nothing is retried, and caracole never works around a block: no cookies, no
   login, no proxy, no PO tokens or plugins (yt-dlp gets `--ignore-config`,
   `--no-cookies`, `--no-cookies-from-browser`, `--no-plugin-dirs`). Nor does
-  yt-dlp get any of caracole's secrets: it runs without the unit's credentials
-  or any `CARACOLE_*` variable, with only the paths, language, proxy and
-  certificate settings it needs.
+  yt-dlp get caracole's settings: it runs without any `CARACOLE_*` variable,
+  with only the paths, language, proxy and certificate settings it needs.
 - **Audio alone**, as m4a, never a playlist, at most 100 MB, kept outside the
   synced library, in the cache (see [the library folder](#the-library-folder)).
 
@@ -2740,9 +2738,11 @@ is no progression exits with status 2.
 
 ### caracole serve
 
-`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
-[--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with what the file on disk can't do:
+`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…`
+serves the library page over HTTP, at `http://127.0.0.1:8737/` by default,
+with what the file on disk can't do. It has no sign-in: anyone who can reach it
+can read the library and request songs, so keep it on a network you trust (see
+Who can reach it, below).
 
 - **Search as you type.** The library page's search box filters your songs as
   you type, here as on the file, and from the third letter (the second with a
@@ -3296,7 +3296,7 @@ command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
 and Guitar Pro, Power Tab and MuseScore's score files (`.mscz`, `.mxl`,
 `.musicxml`, `.mid`, `.midi`) as downloads, never through a symbolic link, never a
-hidden file, and never the database, the token or the cache. A download is
+hidden file, and never the database or the cache. A download is
 named for its song, whatever it is called in the song's folder (where it stays
 `guitar-N` or `score-N`): `Eagles - Hotel California.gp3`, its second file
 `Eagles - Hotel California (2).gp5`, accents and Chinese as they are, and
@@ -3310,7 +3310,7 @@ its name in the folder. A songbook's page,
 `_songbooks/<name>/songbook.html`, is sent only while it is the very page
 caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts
-run, but it can reach neither the server nor your sign-in, and keeps no
+run, but it can't reach the server, and keeps no
 storage, so the song it shows is the one in its address (`#song-3`), where the
 viewer keeps the song's transposition, mode, capo, text size and scroll speed
 too (`#song-3=&t=2&fs=20&speed=8`). Edited
@@ -3334,10 +3334,7 @@ viewer an older caracole wrote keeps working after an upgrade until the next
 render writes it again. It works as it does from the folder, but keeps only
 the transposition, the mode, the capo, the text size and the scroll speed, in
 its address: a reload or Back keeps them, and opening it again from the library starts
-afresh. Its links to
-the PDF and back to the library work with an access token too: the sign-in
-cookie goes with a link followed from another page, but not with a form
-another site posts or anything it loads from the server.
+afresh.
 
 **Guitar Pro files in the browser.** Served, a song's Guitar Pro file
 (`guitar-N.gp3`, `.gp4`, `.gp5`, `.gpx` or `.gp`, one caracole keeps: filed
@@ -3380,14 +3377,17 @@ the page. The page runs in a sandbox, like a viewer, and loads one thing from
 the server: alphaTab, its music font and its SoundFont, about 2.9 MB in one
 script, `/assets/alphatab/alphatab-1.8.4-<hash>.js`, which the browser checks
 against its hash and keeps for good. That script is the same for anyone, so the
-server sends it signed in or not. Only caracole serve does this: `index.html`
+server sends it to any origin, the page's sandbox among them. Only caracole serve does this: `index.html`
 opened from the folder lists the file as before, and the server needs alphaTab
 for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`, see
 [install.md](install.md)). Without it the server runs all the same, the line's ⋯
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
 
-Who can reach it:
+Who can reach it: there is no sign-in, no access token and no cookie, so
+whoever can reach the server can read the library, request songs and change
+songbooks. Keep it reachable only on a network you trust, your LAN or your
+tailnet, never the internet.
 
 - `--address` is 127.0.0.1 by default: this machine alone. A LAN or tailnet
   address, or 0.0.0.0 for every address, opens it to those networks. `--port`
@@ -3407,11 +3407,8 @@ Who can reach it:
   Only the served page may ask the server anything from its script (its
   Content-Security-Policy has `connect-src 'self'`); `index.html` on disk asks
   nothing of anyone.
-- `--token-file FILE` asks each browser once for the access token in FILE (16
-  characters or more, such as `openssl rand -base64 24`), then remembers it in
-  a cookie. Without the option, a `web_token` credential from systemd
-  (`$CREDENTIALS_DIRECTORY/web_token`) does the same. Listening beyond this
-  machine without a token, it warns.
+- These keep other sites' pages, open in a browser on your network, from using
+  the server; they keep out no person or program on the network itself.
 
 It runs until Ctrl-C. On the NUC, `services.caracole.web` runs it as a unit
 ([deploy.md](deploy.md), section 8).
@@ -4128,7 +4125,7 @@ later takes the video's place.
 ## Running it on the NUC
 
 [deploy.md](deploy.md) sets caracole up as a nightly NixOS service: the timer,
-the hardened units, agenix secrets, Syncthing for the library and the music,
+the hardened units, Syncthing for the library and the music,
 restic backups, the offline auto-chords unit, and caracole-web, which serves
 the library page with its request form. There, run any command as the service
 does with `sudo caracole-admin COMMAND`, for example

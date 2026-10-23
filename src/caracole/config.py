@@ -1,11 +1,10 @@
-"""caracole.toml: settings, directories and secrets.
+"""caracole.toml: settings and directories.
 
 Directories resolve in this order: an explicit key in the TOML file, then the
 ``library``, ``music``, ``state`` or ``cache`` folder in ``data_dir`` when that
 key is set, then the systemd-provided ``$STATE_DIRECTORY`` /
-``$CACHE_DIRECTORY``, then the XDG base directories, then ``~``. Secrets come
-from ``$CREDENTIALS_DIRECTORY`` (systemd ``LoadCredential``), then a ``*_file``
-key, then an environment variable.
+``$CACHE_DIRECTORY``, then the XDG base directories, then ``~``. caracole reads
+no secret: ntfy is a topic's URL alone.
 Unknown keys are errors, and so are values of the wrong type or out of range,
 so a typo never silently falls back to a default or turns into another value.
 """
@@ -103,8 +102,7 @@ _RANK_RANGES = {
 
 @dataclass(frozen=True)
 class NtfyConfig:
-    url: str | None = None
-    token: str | None = None
+    url: str | None = None  # the topic's URL, posted to as it is; None: no alerts
 
 
 @dataclass(frozen=True)
@@ -153,7 +151,7 @@ _TOP_KEYS = {
     "providers", "match", "rank", "ntfy", "autochords",
 }
 _PROVIDER_KEYS = {"budget", "delay", "lookup_delay", "lookup_requests", "lookup_per_hour"}
-_NTFY_KEYS = {"url", "token_file"}
+_NTFY_KEYS = {"url"}
 _AUTOCHORDS_KEYS = {"btc_weights", "beat_checkpoint", "device"}
 
 
@@ -247,24 +245,6 @@ class _Paths:
         if xdg:
             return Path(xdg) / "caracole"
         return self.home / fallback / "caracole"
-
-
-def _read_secret(
-    env: Mapping[str, str], paths: _Paths, credential: str, file_value: str | None, env_var: str
-) -> str | None:
-    creds = env.get("CREDENTIALS_DIRECTORY")
-    if creds:
-        p = Path(creds) / credential
-        if p.is_file():
-            return p.read_text(encoding="utf-8").strip()
-    if file_value:
-        p = paths.resolve(file_value)
-        try:
-            return p.read_text(encoding="utf-8").strip()
-        except OSError as e:
-            raise ConfigError(f"cannot read secret file {p}: {e}") from e
-    value = env.get(env_var)
-    return value.strip() if value else None
 
 
 def _delay(value: Any, where: str, key: str = "delay") -> tuple[float, float]:
@@ -363,13 +343,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
 
     ntfy_t = _table(data, "ntfy")
     _check_keys(ntfy_t, _NTFY_KEYS, "[ntfy]")
-    ntfy = NtfyConfig(
-        url=_optional_string(ntfy_t, "url", "[ntfy].url"),
-        token=_read_secret(
-            env, paths, "ntfy_token", _optional_string(ntfy_t, "token_file", "[ntfy].token_file"),
-            "CARACOLE_NTFY_TOKEN",
-        ),
-    )
+    ntfy = NtfyConfig(url=_optional_string(ntfy_t, "url", "[ntfy].url"))
 
     ac_t = _table(data, "autochords")
     _check_keys(ac_t, _AUTOCHORDS_KEYS, "[autochords]")

@@ -30,7 +30,7 @@ import sys
 out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--output="))
 open(out, "w").write("%PDF-1.4 fake")
 """
-OUTSIDE_SETTINGS = ("CREDENTIALS_DIRECTORY", "CARACOLE_CONFIG", "CARACOLE_NTFY_TOKEN")
+OUTSIDE_SETTINGS = ("CARACOLE_CONFIG",)
 
 
 @pytest.fixture

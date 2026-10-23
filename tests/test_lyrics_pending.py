@@ -432,7 +432,7 @@ def test_the_nightly_lyrics_step_reports_the_counts(conn, cfg, tmp_path):
     add_song(conn, "Soda Stereo", "De Música Ligera")
     add_song(conn, "Soda Stereo", "Canción Inexistente")
     lrclib = FakeLrclib([load("get_hit.json")])
-    services = Services(clients={"lrclib": lrclib.client(tmp_path / "cache")}, notifier=Notifier(None, None))
+    services = Services(clients={"lrclib": lrclib.client(tmp_path / "cache")}, notifier=Notifier(None))
     steps = [s for s in default_steps() if s.name == "lyrics"]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
     assert report.steps == {"lyrics": "1 found, 1 missing, 0 instrumental, 0 errors"}

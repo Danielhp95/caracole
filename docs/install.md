@@ -49,18 +49,12 @@ get `caracole.service`, a hardened oneshot run as user `caracole`, and
 [usage.md](usage.md#configure) describes it, without the folder keys: those
 come from the options.
 
-**Secrets.** Give the module paths outside the Nix store, such as agenix's:
-
-```nix
-services.caracole.credentials = {
-  ntfy_token = config.age.secrets.caracole-ntfy.path;
-};
-```
-
-systemd's `LoadCredential=` reads each file as root and gives the unit a
-private copy in `$CREDENTIALS_DIRECTORY`. caracole reads
-`$CREDENTIALS_DIRECTORY/ntfy_token`. The nightly unit and `caracole-admin`
-get it. The auto-chords unit gets none.
+**No secrets.** caracole keeps none, so the module takes none: ntfy is
+`services.caracole.settings.ntfy.url`, a topic's URL alone, with no token. And
+caracole-web (`services.caracole.web`) has no sign-in: anyone who can reach it
+can read the library and request songs, so give it an address only a network
+you trust reaches, your LAN or your tailnet. A configuration that still sets
+`services.caracole.credentials` fails to evaluate until you delete it.
 
 **Auto-chords:**
 
@@ -111,8 +105,8 @@ by hash, and keeps three files of it, about 2.4 MB, with their licences in
 License 1.1) and the Sonivox SoundFont (Apache-2.0). The wrapper points
 `CARACOLE_ALPHATAB_DIR` at them.
 
-[deploy.md](deploy.md) covers the rest: agenix, Syncthing, restic backups,
-and how auto-chords works.
+[deploy.md](deploy.md) covers the rest: Syncthing, restic backups, and how
+auto-chords works.
 
 ## Ubuntu
 
@@ -331,8 +325,8 @@ Then [run it nightly](#run-it-nightly-on-ubuntu).
 
 ### Run it nightly on Ubuntu
 
-These files mirror the NixOS module: the same schedule, user, folders,
-hardening and credentials. Two parts aren't here. One is the module's ntfy
+These files mirror the NixOS module: the same schedule, user, folders and
+hardening. Two parts aren't here. One is the module's ntfy
 message when a unit fails; caracole's own messages, a summary after each run
 and alerts for blocks, still come once `[ntfy]` has a `url`. The other is
 caracole-web, the library page over HTTP: `sudo caracole-admin serve` runs
@@ -367,15 +361,6 @@ data_dir = "/var/lib/caracole"
 # beat_checkpoint = "/usr/local/share/caracole/final0.ckpt"
 ```
 
-**Secrets** go in `/etc/credstore`, which only root can read. The units
-load them with `LoadCredential=`, and systemd skips any whose file is
-missing:
-
-```sh
-sudo install -d -m 0700 /etc/credstore
-sudo sh -c 'umask 077; cat > /etc/credstore/ntfy_token'              # paste it, then Ctrl-D
-```
-
 **The units.** The nightly run:
 
 ```ini
@@ -398,7 +383,6 @@ User=caracole
 Group=caracole
 UMask=0007
 Environment=XDG_CACHE_HOME=/var/lib/caracole/cache NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba
-LoadCredential=ntfy_token
 ReadWritePaths=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
 ReadOnlyPaths=-/var/lib/caracole/music
 NoNewPrivileges=yes
@@ -445,7 +429,7 @@ WantedBy=timers.target
 
 With auto-chords, this unit too, and uncomment `OnSuccess=` and the second
 `ExecStart=` in `caracole.service` (taking out the first). It runs after each
-successful run, as the same user, with no network and no credentials.
+successful run, as the same user, with no network.
 `MemoryDenyWriteExecute` is off here because PyTorch and numba generate code
 at run time; the nightly run keeps it, since it never imports torch and
 yt-dlp's deno runs without its JIT.
@@ -497,7 +481,7 @@ CapabilityBoundingSet=
 ```
 
 **`caracole-admin`** runs one command as the units do: as user `caracole`,
-with the config, the credentials and the cache. With auto-chords from Nix,
+with the config and the cache. With auto-chords from Nix,
 point it at the `caracole-autochords` profile instead, so that
 `caracole-admin autochords` and `youtube` work too, and the to-do page and
 index.html it rewrites say what the nightly run's say about audio from YouTube.
@@ -507,7 +491,6 @@ index.html it rewrites say what the nightly run's say about audio from YouTube.
 # /usr/local/bin/caracole-admin: run a caracole command as caracole.service does.
 exec systemd-run --quiet --collect --wait --pty --pipe \
   --uid=caracole --gid=caracole --property=UMask=0007 \
-  --property=LoadCredential=ntfy_token \
   --setenv=CARACOLE_CONFIG=/etc/caracole/caracole.toml \
   --setenv=XDG_CACHE_HOME=/var/lib/caracole/cache \
   --setenv=NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba \

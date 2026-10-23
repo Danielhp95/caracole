@@ -17,8 +17,6 @@ let
   toml = pkgs.formats.toml { };
   configFile = toml.generate "caracole.toml" cfg.settings;
 
-  credentials = lib.mapAttrsToList (name: path: "${name}:${path}") cfg.credentials;
-
   # The four folders by option, and dataDir, which holds them by default.
   folders = [
     "libraryDir"
@@ -95,10 +93,6 @@ let
     UMask = "0007";
   };
 
-  # The static secrets (the ntfy token), for the nightly run and caracole-admin.
-  # The auto-chords unit reads none, so it gets none.
-  secrets.LoadCredential = credentials;
-
   # No StateDirectory or CacheDirectory: systemd keeps those in /var/lib and
   # /var/cache only, so tmpfiles creates the folders and the state and cache
   # are opened like the library.
@@ -172,20 +166,13 @@ let
         --data-binary "$unit failed on ${config.networking.hostName} ($result). See: journalctl -u $unit"
       )
 
-      token_file=''${CREDENTIALS_DIRECTORY:-/nonexistent}/ntfy_token
-      if [ -r "$token_file" ]; then
-        # As curl config on stdin, so the token never shows in a process list.
-        printf 'header = "Authorization: Bearer %s"\n' "$(< "$token_file")" \
-          | curl --config - "''${args[@]}" "$url"
-      else
-        curl "''${args[@]}" "$url"
-      fi
+      curl "''${args[@]}" "$url"
     '';
   };
 
   # caracole as its units run it, for `index build` and one-off commands: a
   # transient unit under the caracole user, in the units' sandbox, with the
-  # same folders, credentials and generated config. It keeps the network
+  # same folders and generated config. It keeps the network
   # (`index build` and `get` need it). With the auto-chords
   # package when that is on, so `caracole-admin autochords` and `youtube` work
   # too, and then, as in the auto-chords unit, without MemoryDenyWriteExecute.
@@ -198,7 +185,6 @@ let
   adminProperties =
     sandbox
     // identity
-    // secrets
     // paths
     // {
       # As the units: started once the folders' file systems are mounted.
@@ -317,26 +303,8 @@ in
         caracole.toml, as src/caracole/config.py reads it. Unknown keys are fatal
         there. `library_dir`, `music_dir`, `state_dir` and `cache_dir` come from
         the options above, the folders the units' sandbox opens: set those, not
-        these keys or `data_dir`. Secrets go in `credentials`, not here.
-      '';
-    };
-
-    credentials = lib.mkOption {
-      # Not in the store: these are secrets, such as agenix paths.
-      type = lib.types.attrsOf lib.types.externalPath;
-      default = { };
-      example = lib.literalExpression ''
-        {
-          ntfy_token = config.age.secrets.caracole-ntfy.path;
-        }
-      '';
-      description = ''
-        Files systemd passes to caracole through `LoadCredential`, by credential
-        name. caracole reads `ntfy_token` and `web_token` (the access token
-        caracole-web asks each browser for). The
-        files are read as root, so they can stay root-only. The nightly run and
-        `caracole-admin` get them; caracole-web gets `web_token` alone, and the
-        auto-chords unit, which reads none, gets none.
+        these keys or `data_dir`. caracole reads no secret: `ntfy.url` is the
+        topic's URL alone, posted to with no token.
       '';
     };
 
@@ -354,8 +322,9 @@ in
           Where caracole-web listens. 127.0.0.1, the default, is this machine
           alone (reach it through `ssh -L` or a reverse proxy). The host's tailnet
           or LAN address opens it to those networks, and 0.0.0.0 to every
-          network. Beyond this machine, set `credentials.web_token` so each
-          browser gives an access token once, and see `openFirewall`.
+          network. It has no sign-in: anyone who can reach it can read the
+          library and request songs, so listen only on a network you trust (your
+          LAN or tailnet), and see `openFirewall`.
         '';
       };
 
@@ -580,7 +549,6 @@ in
       serviceConfig =
         sandbox
         // identity
-        // secrets
         // paths
         // {
           Type = "oneshot";
@@ -631,13 +599,12 @@ in
         };
     };
 
-    # The library page, and song requests: `caracole serve`. A request runs
-    # caracole commands in this unit, one at a time, each under caracole's lock,
-    # so it has the nightly run's folders, network and sandbox. Of the
-    # credentials it gets web_token alone: neither the server nor the commands
-    # it runs (get, add, review, match, fetch, render, remove, songbook and
-    # lacuerda --artist) read ntfy. With auto-chords on, it runs the
-    # nightly run's package (runPackage), and none of those commands runs yt-dlp.
+    # The library page, and song requests: `caracole serve`, with no sign-in. A
+    # request runs caracole commands in this unit, one at a time, each under
+    # caracole's lock, so it has the nightly run's folders, network and sandbox.
+    # With auto-chords on, it runs the nightly run's package (runPackage), and
+    # none of those commands (get, add, review, match, fetch, render, remove,
+    # songbook and lacuerda) runs yt-dlp.
     systemd.services.caracole-web = lib.mkIf cfg.web.enable {
       description = "caracole web: the library page and song requests";
       wantedBy = [ "multi-user.target" ];
@@ -658,9 +625,6 @@ in
         // {
           Type = "exec";
           ExecStart = "${lib.getExe runPackage} --config ${configFile} serve ${webArgs}";
-          LoadCredential = lib.optional (
-            cfg.credentials ? web_token
-          ) "web_token:${cfg.credentials.web_token}";
           # A tailnet address may not exist yet at boot: try again until it does.
           Restart = "on-failure";
           RestartSec = "10s";
@@ -669,19 +633,6 @@ in
           RestartMode = "direct";
         };
     };
-
-    warnings =
-      lib.optional
-        (
-          cfg.web.enable
-          && !(lib.elem cfg.web.address [
-            "127.0.0.1"
-            "::1"
-            "localhost"
-          ])
-          && !(cfg.credentials ? web_token)
-        )
-        "services.caracole.web listens on ${cfg.web.address} without credentials.web_token: anyone who reaches it can read the library and request songs.";
 
     networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [
       cfg.web.port
@@ -693,12 +644,9 @@ in
       after = [ "network-online.target" ];
       serviceConfig = sandbox // {
         Type = "oneshot";
-        # Its own throwaway user: it needs nothing of caracole's but the token.
+        # Its own throwaway user: it needs nothing of caracole's.
         DynamicUser = true;
         ExecStart = lib.getExe notifyFailure;
-        LoadCredential = lib.optional (
-          cfg.credentials ? ntfy_token
-        ) "ntfy_token:${cfg.credentials.ntfy_token}";
       };
     };
 
