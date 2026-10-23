@@ -12,9 +12,10 @@ For each song (plan §3, Task 15, amendment A6):
    or one at a link that isn't a URL. A not-found song is looked up on its
    artist's UG page, which also lists the bare-id tabs the index can't see (A6).
    Only UG's chords and text tabs are candidates (ug/page.py ``KINDS``): its
-   Guitar Pro and Power Tab files are never read, rated or picked (gtptabs.com's
+   Guitar Pro and Power Tab files are never rated or picked (gtptabs.com's
    are downloaded for you, gtptabs_fetch.py, and you file your own from the
-   inbox), and a ``[pin]`` of one pins nothing.
+   inbox), and a ``[pin]`` of one pins nothing: its page is read once, as any
+   pin's is, for its type, which the index no longer holds.
 2. **Ratings.** A tab page lists the other versions of its type and part, so
    for each kind group (chords; tabs) caracole reads
    the page of the lowest id it has no rating for, up to

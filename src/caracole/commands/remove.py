@@ -105,21 +105,28 @@ def _remove_now(conn: sqlite3.Connection, cfg: Config, key: str) -> None:
 
 
 def _song(conn: sqlite3.Connection, text: str) -> Song:
-    """The song "Artist - Title" names, the artist ending at the first " - ", as in wanted.txt.
+    """The song "Artist - Title" names: the artist ends at the first " - ", as in wanted.txt, or at a later one, as
+    a song an older caracole kept may have " - " in its artist's name (the web page names a song by its display).
 
     A song removed already says so and exits 0; one caracole doesn't know exits 1.
     """
-    from caracole.overrides import OverridesError, override_key
+    from caracole.normalize import identity_key
     from caracole.songs import find_song, removed_song
 
-    try:
-        key = override_key(text)
-    except OverridesError:
+    keys = []
+    start = 0
+    while (at := text.find(" - ", start)) >= 0:
+        artist, title = text[:at].strip(), text[at + 3:].strip()
+        if artist and title:
+            keys.append(identity_key(artist, title))
+        start = at + 1
+    if not keys:
         fail(f'Name the song as "ARTIST - TITLE", as the to-do page does: {text!r} isn\'t.', 2)
-    song = find_song(conn, key)
-    if song is not None:
-        return song
-    stone = removed_song(conn, key)
+    for key in keys:
+        song = find_song(conn, key)
+        if song is not None:
+            return song
+    stone = next((s for k in keys if (s := removed_song(conn, k))), None)
     if stone is not None:
         typer.echo(f"{stone.display} was removed on {_when(stone.removed_at)}. To bring it back: "
                    f"caracole add \"{stone.artist}\" \"{stone.title}\"")

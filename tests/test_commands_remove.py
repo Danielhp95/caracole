@@ -120,6 +120,17 @@ def test_a_song_removed_already_says_how_to_bring_it_back(tmp_path, conn):
     assert "Radiohead - Creep was removed on 20" in result.output and "caracole add" in result.output
 
 
+def test_an_artist_with_a_dash_in_the_name_is_found(tmp_path, conn):
+    # A song an older caracole kept (Spotify brought some) may have " - " in its artist's name, and the web page's
+    # Remove names a song by its display: every split is tried, removed already too.
+    add_song(conn, "Sergio Mendes - Brasil '66", "Mas Que Nada")
+    result = run(tmp_path, "remove", "--yes", "Sergio Mendes - Brasil '66 - Mas Que Nada")
+    assert result.exit_code == 0, result.output
+    assert list_songs(conn) == []
+    result = run(tmp_path, "remove", "--yes", "Sergio Mendes - Brasil '66 - Mas Que Nada")
+    assert result.exit_code == 0 and "Sergio Mendes - Brasil '66 - Mas Que Nada was removed on 20" in result.output
+
+
 def test_list_shows_the_removed_songs_newest_first(tmp_path, conn):
     assert run(tmp_path, "remove", "--list").output == "No removed songs.\n"
     a_found_song(tmp_path, conn)
