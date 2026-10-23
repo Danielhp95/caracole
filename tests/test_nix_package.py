@@ -2,6 +2,7 @@
 pyproject.toml lists: every third-party module the source imports."""
 
 import ast
+import base64
 import re
 import sys
 import tomllib
@@ -18,6 +19,20 @@ SRC = ROOT / "src" / "caracole"
 pytestmark = pytest.mark.skipif(
     not (ROOT / "nix" / "package.nix").is_file(), reason="the Nix files are not in this tree"
 )
+
+
+def test_deploy_md_checks_what_nix_fetches_against_the_same_hashes():
+    # docs/deploy.md's Ubuntu part downloads by hand what nix/ fetches, each checked against its SHA-256: a version
+    # or a hash nix/ moves, deploy.md moves too (AGENTS.md's traps name what no test checks: the constraints).
+    deploy = (ROOT / "docs" / "deploy.md").read_text(encoding="utf-8")
+    for name in ("alphatab.nix", "autochords.nix"):
+        nix = (ROOT / "nix" / name).read_text(encoding="utf-8")
+        hashes = re.findall(r'hash = "sha256-([A-Za-z0-9+/]+=*)";', nix)
+        assert hashes, name
+        for sri in hashes:
+            assert base64.b64decode(sri).hex() in deploy, (name, sri)
+    version = re.search(r'version = "([^"]+)";', (ROOT / "nix" / "alphatab.nix").read_text(encoding="utf-8"))
+    assert f"alphatab-{version.group(1)}.tgz" in deploy
 
 
 def test_the_nix_files_set_only_variables_caracole_reads():

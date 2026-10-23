@@ -373,6 +373,10 @@ Traps:
   `caracole --version` with pyproject's, and test_cli.py expects "caracole 0.1.0".
 - A Nix file may set only `CARACOLE_*` variables the source reads (test_nix_package.py). A
   unit setting changes together with its expectation in nix/module-check.nix.
+- docs/deploy.md's Ubuntu part pins by hand what Nix pins: its constraints.txt is the package's
+  versions in flake.lock's nixpkgs, its CPython and deno are nixpkgs' too, and its SHA-256s are
+  nix/'s (alphaTab's and the model files', which test_nix_package.py checks, and the fonts
+  nix/pdf-fonts.py makes). A commit that moves flake.lock or nix/ moves deploy.md with it.
 - `ruff check --select E4,E7,E9,F src tests` is clean; ruff's default rules and
   `ruff format --check` are not. Don't reformat code you aren't changing.
 - Every pytest-xdist worker collects the suite itself and must find the same test ids:

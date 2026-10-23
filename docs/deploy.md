@@ -52,7 +52,10 @@ In your system flake's `flake.nix`:
 ```
 
 A new commit on caracole's default branch, `caracole-v1`, reaches the host
-after `nix flake update caracole` and a switch. Then, in the host's
+after `nix flake update caracole` and a switch. `follows` builds caracole, and
+runs its tests, with your nixpkgs: one whose tomlkit or ChordPro is newer than
+caracole takes yet (tomlkit 0.15.1, ChordPro 6.060) fails the build, and
+without the line caracole builds with its own. Then, in the host's
 configuration (with `inputs` in `specialArgs`):
 
 ```nix
@@ -93,9 +96,6 @@ Every option of `nix/module.nix`:
 | `autochords.btcWeights`, `autochords.beatCheckpoint` | `null` | model files other than the package's |
 | `package`, `autochords.package` | the flake's builds | |
 
-A configuration that still sets `services.caracole.credentials`, an older
-caracole's, fails to evaluate: delete it.
-
 ### 2. Syncthing for the library and the music
 
 The library is `caracole:caracole`, mode 2775, setgid, and caracole writes with
@@ -105,6 +105,8 @@ too. Add to `hosts/nuc/caracole.nix`:
 ```nix
   services.syncthing = {
     enable = true;
+    # For devices on the LAN; over a tailnet whose interface is trusted, it needs none.
+    openDefaultPorts = true;
     # The GUI stays on localhost: ssh -L 8384:localhost:8384 nuc
     settings = {
       devices.laptop.id = "…"; # syncthing --device-id, on the laptop
@@ -161,7 +163,7 @@ sudo sh -c 'umask 077; openssl rand -base64 32 > /etc/restic/caracole-password'
 To restore, stop caracole, restore, and put the copy back as the database:
 
 ```sh
-sudo systemctl stop caracole.timer caracole-web.service
+sudo systemctl stop caracole.timer caracole-web.service caracole.service   # and caracole-autochords.service
 sudo restic-caracole restore latest --target /
 cd /var/lib/caracole/state
 sudo rm -f caracole.sqlite-wal caracole.sqlite-shm
@@ -209,10 +211,11 @@ exist yet at boot is tried again every 10 seconds.
 
 ## Ubuntu 24.04 without Nix
 
-The same service, with no Nix: what the Nix package brings goes under
-`/opt/caracole`, and the units are the module's. Run the blocks in order, in
-one shell, as a user with sudo: later blocks use `$PY` and `$REV`. Each
-download is checked against its SHA-256: stop at a `FAILED`.
+The same service, with no Nix, on an x86-64 machine (the downloads are
+x86-64's): what the Nix package brings goes under `/opt/caracole`, and the
+units are the module's. Run the blocks in order, in one shell, as a user with
+sudo: later blocks use `$PY` and `$REV`. Each download is checked against its
+SHA-256: stop at a `FAILED`.
 
 ### 1. Packages from apt
 
@@ -243,7 +246,8 @@ PY=/opt/caracole/python/cpython-3.14.7-linux-x86_64-gnu/bin/python3.14
 ```
 
 caracole's dependencies come from PyPI, held to the Nix package's versions,
-which the tests pass with (PyPI's latest tomlkit breaks renaming a songbook):
+which the tests pass with (PyPI's latest tomlkit breaks renaming a songbook);
+the packages they bring in are PyPI's latest:
 
 ```sh
 sudo tee /opt/caracole/constraints.txt > /dev/null <<'EOF'
@@ -271,13 +275,15 @@ EOF
 ```
 
 Then caracole, at the head of `caracole-v1`, in a virtual environment of that
-commit:
+commit, compiled ahead (the units can't write `.pyc` files there), and linked
+as `current` once it is whole:
 
 ```sh
 REV=$(git ls-remote https://github.com/Danielhp95/caracole refs/heads/caracole-v1 | cut -f1)
-sudo uv venv --python $PY /opt/caracole/releases/$REV
-sudo uv pip install --python /opt/caracole/releases/$REV/bin/python \
-  -c /opt/caracole/constraints.txt "caracole @ git+https://github.com/Danielhp95/caracole@$REV"
+test -n "$REV" &&
+sudo uv venv --allow-existing --python $PY /opt/caracole/releases/$REV &&
+sudo uv pip install --compile-bytecode --python /opt/caracole/releases/$REV/bin/python \
+  -c /opt/caracole/constraints.txt "caracole @ git+https://github.com/Danielhp95/caracole@$REV" &&
 sudo ln -sfn releases/$REV /opt/caracole/current
 ```
 
@@ -387,12 +393,13 @@ every file of this part.
 
 ### 7. The units
 
-The module's user, folders and sandbox are one file, which each caracole unit
-takes as a drop-in, and `caracole-admin` reads too:
+The module's user and folders are one file, and its sandbox another, which
+each caracole unit takes as drop-ins, and `caracole-admin` reads too; the
+failure alert takes the sandbox alone:
 
 ```sh
 sudo tee /etc/caracole/units.conf > /dev/null <<'EOF'
-# The user, the folders, the config and the sandbox of every caracole unit.
+# The user, the folders and the config of every caracole unit.
 [Unit]
 RequiresMountsFor=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
 
@@ -404,6 +411,10 @@ Environment=CARACOLE_CONFIG=/etc/caracole/caracole.toml
 Environment=XDG_CACHE_HOME=/var/lib/caracole/cache NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba
 ReadWritePaths=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
 ReadOnlyPaths=-/var/lib/caracole/music
+EOF
+sudo tee /etc/caracole/sandbox.conf > /dev/null <<'EOF'
+# The sandbox of every caracole unit, and of the failure alert.
+[Service]
 NoNewPrivileges=yes
 ProtectSystem=strict
 ProtectHome=yes
@@ -428,6 +439,31 @@ SystemCallFilter=~@privileged
 SystemCallErrorNumber=EPERM
 CapabilityBoundingSet=
 EOF
+```
+
+The failure alert, to your ntfy topic, whose URL goes on its last line: the
+URL of caracole.toml's `[ntfy]` again, so a new topic means editing both.
+Without ntfy, skip this block, leave the `OnFailure=` lines out of the units
+below, and the alert out of the check after them.
+
+```sh
+sudo tee /etc/systemd/system/caracole-notify-failure@.service > /dev/null <<'EOF'
+[Unit]
+Description=Tell ntfy that %i failed
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+DynamicUser=yes
+MemoryDenyWriteExecute=yes
+ExecStart=/usr/bin/curl --silent --show-error --fail-with-body --max-time 30 --retry 3 \
+  --header "Title: caracole: %i failed" --header "Priority: high" --header "Tags: warning" \
+  --data-binary "%i failed on %H (${MONITOR_SERVICE_RESULT}). See: journalctl -u %i" \
+  https://ntfy.sh/caracole-change-me
+EOF
+sudo mkdir -p /etc/systemd/system/caracole-notify-failure@.service.d
+sudo ln -sfn /etc/caracole/sandbox.conf /etc/systemd/system/caracole-notify-failure@.service.d/sandbox.conf
 ```
 
 The nightly run, its timer, and the library page (on this machine alone until
@@ -482,32 +518,13 @@ WantedBy=multi-user.target
 EOF
 ```
 
-The failure alert, to the ntfy topic of caracole.toml, whose URL goes on its
-last line (for none, leave out this unit and the `OnFailure=` lines):
-
-```sh
-sudo tee /etc/systemd/system/caracole-notify-failure@.service > /dev/null <<'EOF'
-[Unit]
-Description=Tell ntfy that %i failed
-Wants=network-online.target
-After=network-online.target
-
-[Service]
-Type=oneshot
-DynamicUser=yes
-ExecStart=/usr/bin/curl --silent --show-error --fail-with-body --max-time 30 --retry 3 \
-  --header "Title: caracole: %i failed" --header "Priority: high" --header "Tags: warning" \
-  --data-binary "%i failed on %H (${MONITOR_SERVICE_RESULT}). See: journalctl -u %i" \
-  https://ntfy.sh/caracole-change-me
-EOF
-```
-
-Then the shared file for both caracole units, a check, and the start:
+Then the shared files for both caracole units, a check, and the start:
 
 ```sh
 for unit in caracole caracole-web; do
   sudo mkdir -p /etc/systemd/system/$unit.service.d
   sudo ln -sfn /etc/caracole/units.conf /etc/systemd/system/$unit.service.d/caracole.conf
+  sudo ln -sfn /etc/caracole/sandbox.conf /etc/systemd/system/$unit.service.d/sandbox.conf
 done
 sudo systemd-analyze verify caracole.service caracole.timer caracole-web.service \
   caracole-notify-failure@caracole.service.service   # silent when all is well
@@ -528,8 +545,8 @@ if [ "$EUID" -ne 0 ]; then
   echo "caracole-admin starts a system unit as the caracole user: run it with sudo" >&2
   exit 1
 fi
-# Each setting of units.conf, as a --property; with auto-chords, MemoryDenyWriteExecute=no.
-mapfile -t properties < <(sed -n 's/^[A-Z]/--property=&/p' /etc/caracole/units.conf)
+# Each setting of units.conf and sandbox.conf, as a --property; with auto-chords, MemoryDenyWriteExecute=no.
+mapfile -t properties < <(sed -n 's/^[A-Z]/--property=&/p' /etc/caracole/units.conf /etc/caracole/sandbox.conf)
 # --pty on a terminal (review and remove ask questions), --pipe otherwise.
 exec systemd-run --quiet --collect --wait --pty --pipe "${properties[@]}" \
   --property=MemoryDenyWriteExecute=yes -- /opt/caracole/bin/caracole "$@"
@@ -625,10 +642,12 @@ Optional, as on NixOS (section 4). torch comes from PyTorch's CPU-only index
 
 ```sh
 sudo apt install ffmpeg unzip
-sudo uv pip install --python /opt/caracole/releases/$REV/bin/python -c /opt/caracole/constraints.txt \
+PY=/opt/caracole/python/cpython-3.14.7-linux-x86_64-gnu/bin/python3.14
+VENV=$(readlink -f /opt/caracole/current)   # the commit caracole runs now
+sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
   --index-url https://download.pytorch.org/whl/cpu torch torchaudio torchcodec
-sudo uv pip install --python /opt/caracole/releases/$REV/bin/python -c /opt/caracole/constraints.txt \
-  "caracole[autochords] @ git+https://github.com/Danielhp95/caracole@$REV"
+sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
+  "caracole[autochords] @ git+https://github.com/Danielhp95/caracole@$(basename $VENV)"
 ```
 
 The model files `nix/autochords.nix` pins (JKU's server is sometimes down: try
@@ -649,8 +668,8 @@ EOF
 sudo install -d /opt/caracole/models
 sudo install -m 0644 btc_model_large_voca.pt final0.ckpt /opt/caracole/models/
 sudo unzip -o deno-x86_64-unknown-linux-gnu.zip deno -d /opt/caracole/bin
-sudo uv venv --python $PY /opt/caracole/yt-dlp
-sudo uv pip install --python /opt/caracole/yt-dlp/bin/python 'yt-dlp[default]'
+sudo uv venv --allow-existing --python $PY /opt/caracole/yt-dlp
+sudo uv pip install --compile-bytecode --python /opt/caracole/yt-dlp/bin/python 'yt-dlp[default]'
 sudo ln -sfn ../yt-dlp/bin/yt-dlp /opt/caracole/bin/yt-dlp
 ```
 
@@ -675,6 +694,7 @@ MemoryDenyWriteExecute=no
 EOF
 sudo mkdir -p /etc/systemd/system/caracole-autochords.service.d
 sudo ln -sfn /etc/caracole/units.conf /etc/systemd/system/caracole-autochords.service.d/caracole.conf
+sudo ln -sfn /etc/caracole/sandbox.conf /etc/systemd/system/caracole-autochords.service.d/sandbox.conf
 sudo sed -i 's/^#OnSuccess=/OnSuccess=/' /etc/systemd/system/caracole.service
 sudo sed -i 's/MemoryDenyWriteExecute=yes/MemoryDenyWriteExecute=no/' /usr/local/sbin/caracole-admin
 sudo systemctl daemon-reload && sudo systemctl restart caracole-web.service
@@ -689,16 +709,22 @@ is ready:
 ```sh
 PY=/opt/caracole/python/cpython-3.14.7-linux-x86_64-gnu/bin/python3.14
 REV=$(git ls-remote https://github.com/Danielhp95/caracole refs/heads/caracole-v1 | cut -f1)
-sudo uv venv --python $PY /opt/caracole/releases/$REV
-sudo uv pip install --python /opt/caracole/releases/$REV/bin/python \
-  -c /opt/caracole/constraints.txt "caracole @ git+https://github.com/Danielhp95/caracole@$REV"
-# With auto-chords, section 12's two uv pip install lines too.
-sudo ln -sfn releases/$REV /opt/caracole/current
+VENV=/opt/caracole/releases/$REV
+test -n "$REV" &&
+sudo uv venv --allow-existing --python $PY $VENV &&
+sudo uv pip install --compile-bytecode --python $VENV/bin/python \
+  -c /opt/caracole/constraints.txt "caracole @ git+https://github.com/Danielhp95/caracole@$REV" &&
+# With auto-chords, section 12's two installs, into this commit's: take the # off these four lines.
+# sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
+#   --index-url https://download.pytorch.org/whl/cpu torch torchaudio torchcodec &&
+# sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
+#   "caracole[autochords] @ git+https://github.com/Danielhp95/caracole@$REV" &&
+sudo ln -sfn releases/$REV /opt/caracole/current &&
 sudo systemctl restart caracole-web.service
 ```
 
 yt-dlp falls behind when YouTube changes:
-`sudo uv pip install --python /opt/caracole/yt-dlp/bin/python -U 'yt-dlp[default]'`.
+`sudo uv pip install --compile-bytecode --python /opt/caracole/yt-dlp/bin/python -U 'yt-dlp[default]'`.
 
 To roll back, point `current` at the commit before, and restart caracole-web.
 A commit that moves `flake.lock`, `nix/pdf-fonts.py`, `nix/alphatab.nix` or
