@@ -41,7 +41,7 @@ def summary(r: MatchResult):
 
 
 def test_index_view_groups_tabs_by_title_with_their_variant_keys(conn):
-    index(conn, (3, "oasis", "wonderwall", "guitar-pro"), (1, "oasis", "wonderwall", "chords"),
+    index(conn, (3, "oasis", "wonderwall", "tabs"), (1, "oasis", "wonderwall", "chords"),
           (2, "oasis", "wonderwall-acoustic", "chords"), (5, "oasis", "wonderwall-ii", "chords"),
           (6, "oasis", "champagne-supernova", "chords"), (4, "radiohead", "creep", "chords"),
           (7, "liam-gallagher", "wonderwall-live", "chords"))
@@ -125,7 +125,7 @@ def test_an_exact_match_never_loads_every_artist_key(conn):
 
 def test_exact_accept_collects_all_types(conn):
     index(conn, (1, "oasis", "wonderwall", "chords"), (2, "oasis", "wonderwall", "tabs"),
-          (3, "oasis", "wonderwall", "guitar-pro"), (4, "oasis", "champagne-supernova", "chords"))
+          (3, "oasis", "wonderwall", "tabs"), (4, "oasis", "champagne-supernova", "chords"))
     r = match(conn, "Oasis", "Wonderwall")
     assert summary(r) == ("accept", "exact", 100.0, "oasis", "wonderwall")
     assert r.candidates[0] == MatchCandidate("oasis", "wonderwall", 100.0, "exact")
@@ -213,7 +213,7 @@ def test_artist_below_the_gate_falls_through_to_title_only(conn):
     # form helps. (The real "Enanitos Verdes" case is accepted by the article rule.)
     index(conn, (1, "los-enanitos-verdes", "lamento-boliviano", "chords"),
           (2, "los-enanitos-verdes", "lamento-boliviano", "tabs"),
-          (3, "toque-de-queda", "lamento-boliviano", "guitar-pro"))
+          (3, "toque-de-queda", "lamento-boliviano", "tabs"))
     r = match(conn, "Los Enanitos", "Lamento Boliviano")
     assert summary(r) == ("review", "title_only", 100.0, "los-enanitos-verdes", "lamento-boliviano")
 
@@ -451,7 +451,7 @@ def test_a_catch_all_title_must_hold_the_artists_name(conn):
 
 
 def test_a_show_song_under_its_composers_name_is_found_at_the_end_of_a_catch_all_title(conn):
-    # Spotify credits EPIC's songs to Jorge Rivera-Herrans, whose name UG's title doesn't hold.
+    # Streaming services credit EPIC's songs to Jorge Rivera-Herrans, whose name UG's title doesn't hold.
     index(conn, EPIC, *NEAR_EPIC)
     r = match(conn, "Jorge Rivera-Herrans", "Not Sorry for Loving You")
     assert summary(r) == ("review", "catch_all", 90.0, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you")

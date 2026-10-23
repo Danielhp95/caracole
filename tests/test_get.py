@@ -21,7 +21,7 @@ from caracole import db
 from caracole.commands import _common
 from caracole.config import load_config
 from caracole.health import get_state, record_block
-from caracole.overrides import load_overrides
+from caracole.overrides import load_overrides, tab_id_from_url
 from caracole.songs import find_song, get_song, list_songs
 from caracole.ug.index import mark_built, upsert_rows
 
@@ -402,31 +402,16 @@ def test_a_picked_version_replaces_only_the_pins_of_its_kind(cfg, conn, sites):
     assert sorted(load_overrides(cfg.overrides_file).pin["radiohead/creep"]) == [103, 401]  # chords for chords
 
 
-def test_a_picked_version_replaces_a_pin_of_a_guitar_pro_page(cfg, conn, sites):
-    # A [pin] of a Guitar Pro version on Ultimate Guitar, from when caracole still picked them there: it pins
-    # nothing now, so a version you pick takes its place.
-    from caracole.overrides import add_pin
-
+def test_a_page_of_another_type_asked_for_as_the_tab_is_refused_and_nothing_is_written(cfg, conn, sites):
+    # A Guitar Pro file's page, or a bass tab's, as its address says: its pin would pin nothing, so the lookup says
+    # so before it adds or records anything.
     serve_creep(sites, conn)
-    upsert_rows(conn, [(301, "radiohead", "creep", "guitar-pro", "radiohead/creep-guitar-pro-301")], "1", NOW)
-    add_pin(cfg.overrides_file, "Radiohead - Creep", [f"{TAB}radiohead/creep-guitar-pro-301"])
-
-    look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=f"{TAB}radiohead/creep-chords-103")
-    assert load_overrides(cfg.overrides_file).pin["radiohead/creep"] == (103,)
-    assert f"{TAB}radiohead/creep-guitar-pro-301" not in sites.ug()
-
-
-def test_a_guitar_pro_page_asked_for_as_the_tab_is_refused_and_nothing_is_written(cfg, conn, sites):
-    # caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar: one asked for (an old link, say) would
-    # pin nothing, so the lookup says so before it adds or records anything.
-    serve_creep(sites, conn)
-    upsert_rows(conn, [(301, "radiohead", "creep", "guitar-pro", "radiohead/creep-guitar-pro-301"),
-                       (302, "radiohead", "creep", "power", "radiohead/creep-power-302")], "1", NOW)
-    for tab in (f"{TAB}radiohead/creep-guitar-pro-301", "302"):
+    for tab in (f"{TAB}radiohead/creep-guitar-pro-301", "tabs.ultimate-guitar.com/tab/radiohead/creep-power-302?ref=x",
+                f"{TAB}radiohead/creep-bass-303"):
         result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=tab)
 
         assert progress.states()["song"] == "failed" and sites.requests == []
-        assert "Guitar Pro" in result.details["song"] and "_inbox" in result.details["song"]
+        assert result.details["song"] == f"tab {tab_id_from_url(tab)} is not a chords or tabs page"
     assert not cfg.wanted_file.exists() and not cfg.overrides_file.exists()
 
 

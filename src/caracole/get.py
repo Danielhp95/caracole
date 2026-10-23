@@ -439,27 +439,23 @@ class _Lookup:
         return said + (f"; recorded in overrides.toml: {', '.join(picked)}" if picked else "")
 
     def _refuse_an_unused_kind(self, req: LookupRequest) -> None:
-        """Stop, before anything is written, when the offline index says the tab asked for is a Guitar Pro or Power
-        Tab file's page: caracole picks none on Ultimate Guitar, so its pin would pin nothing (ug/fetch.py)."""
-        from caracole.overrides import OverridesError, tab_id_from_url
-        from caracole.ug.page import KINDS
+        """Stop, before anything is written, when the address of the tab asked for names a type caracole doesn't use
+        (a Guitar Pro file's page, a bass tab's): its pin would pin nothing (ug/fetch.py)."""
+        from caracole.overrides import OverridesError, pin_url, tab_id_from_url
+        from caracole.ug.sitemap import BARE, UNRECOGNIZED, classify_tab_url
 
         try:
             tab_id = tab_id_from_url(req.tab or "")
         except OverridesError:
             return  # said as the pin is recorded
-        row = self.conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab_id,)).fetchone()
-        if row is not None and row[0] not in KINDS:
-            ext = ".ptb" if row[0] == "power" else ".gp5"
-            raise _Stop(f"tab {tab_id} is a Guitar Pro or Power Tab file's page, and caracole uses none on Ultimate "
-                        f"Guitar: a file you get yourself goes into _inbox/ as \"{req.display}{ext}\", and caracole "
-                        "files it under the song")
+        kind = classify_tab_url(pin_url(req.tab or ""))
+        if isinstance(kind, str) and kind not in (BARE, UNRECOGNIZED):
+            raise _Stop(f"tab {tab_id} is not a chords or tabs page")
 
     def _other_pins(self, song, tab_id: int) -> list[str]:
         """The song's pins that stay beside a tab you pick, as written: those of another kind group (a
         text tab beside a chords sheet you pick), by the offline index's types. A pin of the pick's group,
-        or of a kind caracole doesn't use or the index doesn't know on either side (a Guitar Pro file's,
-        which pins nothing), is replaced; the pick goes first anyway."""
+        or of a tab the index doesn't know on either side, is replaced; the pick goes first anyway."""
         from caracole.ug.fetch import CHORDS_KINDS, TAB_KINDS
 
         def group(tab: int) -> tuple[str, ...] | None:

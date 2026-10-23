@@ -23,7 +23,7 @@ from caracole.logs import plural
 
 if TYPE_CHECKING:
     from caracole.config import Config
-    from caracole.songs import RemovedSong, Song
+    from caracole.songs import Song
 
 
 def register(app: typer.Typer) -> None:
@@ -105,27 +105,21 @@ def _remove_now(conn: sqlite3.Connection, cfg: Config, key: str) -> None:
 
 
 def _song(conn: sqlite3.Connection, text: str) -> Song:
-    """The song "Artist - Title" names; an artist may have " - " in its name, so every split is tried.
+    """The song "Artist - Title" names, the artist ending at the first " - ", as in wanted.txt.
 
     A song removed already says so and exits 0; one caracole doesn't know exits 1.
     """
-    from caracole.normalize import identity_key
+    from caracole.overrides import OverridesError, override_key
     from caracole.songs import find_song, removed_song
 
-    keys = []
-    start = 0
-    while (at := text.find(" - ", start)) >= 0:
-        artist, title = text[:at].strip(), text[at + 3:].strip()
-        if artist and title:
-            keys.append(identity_key(artist, title))
-        start = at + 1
-    if not keys:
+    try:
+        key = override_key(text)
+    except OverridesError:
         fail(f'Name the song as "ARTIST - TITLE", as the to-do page does: {text!r} isn\'t.', 2)
-    for key in keys:
-        song = find_song(conn, key)
-        if song is not None:
-            return song
-    stone: RemovedSong | None = next((s for k in keys if (s := removed_song(conn, k))), None)
+    song = find_song(conn, key)
+    if song is not None:
+        return song
+    stone = removed_song(conn, key)
     if stone is not None:
         typer.echo(f"{stone.display} was removed on {_when(stone.removed_at)}. To bring it back: "
                    f"caracole add \"{stone.artist}\" \"{stone.title}\"")

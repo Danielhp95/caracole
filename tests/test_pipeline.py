@@ -921,23 +921,6 @@ def test_the_default_steps_say_in_the_summary_what_they_did_and_leave_out_the_ze
     assert f"1 thing on your to-do page needs you: {cfg.library_dir / '_todo.md'}" in lines
 
 
-def test_what_an_older_caracole_kept_of_spotify_is_never_said_or_alerted(conn, cfg):
-    # A database from before Spotify went still holds how its last sync went: it needed you, say.
-    from caracole.db import kv_set_json
-    from caracole.pipeline import default_steps
-
-    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-17T03:30:00Z",
-                                         "message": "The token was revoked."})
-    kv_set_json(conn, "spotify:retry_after_until", "2026-10-19T03:30:00Z")
-    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
-    cfg.wanted_file.write_text("Radiohead - Creep\n", encoding="utf-8")
-    out = Outbox()
-    sync = [s for s in default_steps() if s.name == "sync"]
-    report = run_pipeline(cfg, conn=conn, services=services(out), steps=sync, now=NOW)
-    assert not [sent for sent in out.sent if "Spotify" in f"{sent}"]
-    assert "Spotify" not in report.summary() and "Songs: 1 in wanted.txt, 1 new." in report.summary().splitlines()
-
-
 # --- provider health on the to-do page ------------------------------------------------------
 
 

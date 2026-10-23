@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 from caracole.db import kv_delete, kv_get, kv_set
 from caracole.normalize import split_variant
-from caracole.ug.page import KINDS, page_url
+from caracole.ug.page import page_url
 
 
 @dataclass(frozen=True)
@@ -25,14 +25,12 @@ class IndexTab:
 
 
 def song_tabs(conn: sqlite3.Connection, artist_key: str, song_key: str) -> list[IndexTab]:
-    """Every indexed tab of a song of the kinds caracole uses (ug/page.py ``KINDS``: chords, tabs), including
-    variant slugs such as ``song-key-acoustic``. The index keeps the sitemaps' Guitar Pro and Power Tab rows too,
-    for the matcher, which reads the table itself (match.py): a song UG has only as a Guitar Pro file is still
-    the song, whose chords its artist's page may list; nothing reads them as a song's tabs."""
+    """Every indexed tab of a song (chords and text tabs: the index keeps no other type), including variant slugs
+    such as ``song-key-acoustic``."""
     rows = conn.execute(
         "SELECT tab_id, type, song_key, path FROM ug_index WHERE artist_key = ? AND (song_key = ? OR song_key LIKE ?) "
-        f"AND type IN ({', '.join('?' for _ in KINDS)}) ORDER BY tab_id",
-        (artist_key, song_key, song_key + "-%", *KINDS),
+        "ORDER BY tab_id",
+        (artist_key, song_key, song_key + "-%"),
     )
     out: list[IndexTab] = []
     for r in rows:

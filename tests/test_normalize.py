@@ -89,7 +89,7 @@ TEARS_IN_HEAVEN_UNPLUGGED = (
         ("Song (Versión Acústica)", "Song"),
         ("Song (Ao Vivo)", "Song"),
         ("Song - Ao Vivo No Rio", "Song"),
-        # Spotify's mixes, edits and session recordings.
+        # Streaming services' mixes, edits and session recordings.
         ("Here Comes The Sun - 2019 Mix", "Here Comes The Sun"),
         ("Song - 2018 Mix", "Song"),
         ("Song (2019 Mix)", "Song"),
@@ -199,7 +199,7 @@ def test_identity_key():
 @pytest.mark.parametrize(
     "one,other",
     [
-        # Traditional and Simplified Han: Spotify's Taiwanese releases use Traditional.
+        # Traditional and Simplified Han: Taiwanese releases use Traditional.
         (("宋冬野", "斑馬斑馬"), ("宋冬野", "斑马斑马")),
         (("周杰倫", "告白氣球"), ("周杰伦", "告白气球")),
         # A leading Spanish article on the artist, as the matcher tries it both ways.
@@ -237,7 +237,7 @@ def test_display_key():
 
 
 def test_cjk_keys_survive_and_ignore_punctuation():
-    # Spotify writes the title with a full-width comma; LRCLIB and hand-typed lists often omit it.
+    # A title copied from a streaming service has a full-width comma; LRCLIB and hand-typed lists often omit it.
     assert slug_key("斑马，斑马") == slug_key("斑马斑马") == "斑马斑马"
     assert identity_key("宋冬野", "斑马，斑马") == identity_key("宋冬野", "斑马斑马") == "宋冬野/斑马斑马"
 

@@ -10,7 +10,7 @@ from caracole.normalize import slug_key
 from caracole.overrides import LaCuerdaPick, Overrides, load_overrides
 from caracole.songs import get_song, list_songs, update_song
 from caracole.todo import build_todo, md, search_links, songs_to_buy, write_todo
-from caracole.versions import set_coverage, set_picks, upsert_version
+from caracole.versions import set_coverage, upsert_version
 
 from conftest import add_song
 
@@ -476,19 +476,6 @@ def test_one_songs_buy_verdict_lists_no_other_song(conn, monkeypatch):
     monkeypatch.setattr(caracole.songs, "ensure_current_keys", listed)
     buy, waiting = songs_to_buy(conn, [song], Overrides(), NOW)
     assert [b.id for b in buy] == [song.id] and waiting == 0
-
-
-def test_no_guitar_pro_page_of_ultimate_guitars_is_listed_to_click(conn, cfg):
-    # caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar for you to download any more: even a
-    # pick stored before (schema 9 takes them out) lists nothing, and the song has no guitar part yet.
-    s = add_song(conn)
-    update_song(conn, s.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z")
-    v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", rating=4.2, votes=5, ver=1)
-    v2 = version(conn, s, 555891, slot="guitar", kind="power", rating=4.0, votes=2, ver=1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v1, v2])
-    text = todo(conn, cfg)
-    assert "Guitar Pro pages to click" not in text and "555890" not in text and "555891" not in text
-    assert "## Guitar parts not found (1)" in text
 
 
 def test_guitar_parts_not_found(conn, cfg):
@@ -1012,16 +999,6 @@ def test_provider_health_shows_cooldown(conn, cfg):
     assert "## Provider health" in text
     assert "cooling down until 2026-10-19 05:41 UTC" in text
     assert "HTTP 403" in text
-
-
-def test_what_an_older_caracole_kept_of_spotify_shows_nowhere(conn, cfg):
-    # A database from before Spotify went still holds its top tracks and how its last sync went.
-    add_song(conn, "Radiohead", "Creep")
-    kv_set_json(conn, "spotify:top_tracks", [{"id": "2", "title": "Karma Police", "artists": ["Radiohead"]}])
-    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
-                                         "message": "the refresh token was revoked"})
-    text = todo(conn, cfg)
-    assert "Spotify" not in text and "Karma Police" not in text and "auth" not in text
 
 
 def test_sources_status(conn, cfg):

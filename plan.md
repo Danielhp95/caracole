@@ -1,10 +1,10 @@
 # Caracole, simplified
 
-**Version 2.1 of the design, 18 October 2026.** This version is updated with your answers: you have Spotify Premium, you're learning guitar only, lyrics matter because you sing, and you can buy audio files.
+**Version 2.1 of the design, 18 October 2026.** This version is updated with your answers: you're learning guitar only, lyrics matter because you sing, and you can buy audio files.
 
-**Since then, 22 October 2026:** Spotify is no longer a source. You no longer wanted to log in to it for playlists, so its sync, `caracole auth spotify`, the `[spotify]` settings and spotipy are gone, and `wanted.txt` is the one list of songs (docs/usage.md, "Songs from Spotify, before"). The Spotify parts below are the design as it was.
+**Revised 22 October 2026:** `wanted.txt` is the one list of songs, and Guitar Pro files come from gtptabs.com or from what you drop into the inbox, never from Ultimate Guitar.
 
-This review replaces the first report's architecture with a much smaller one. The first report is still the reference for Spotify's 2026 rules, the provider terms of service, and the audio chord models. This version changes what you build and in what order.
+This review replaces the first report's architecture with a much smaller one. The first report is still the reference for the provider terms of service and the audio chord models. This version changes what you build and in what order.
 
 ## The short version
 
@@ -50,12 +50,9 @@ That is roughly a third of the first design's moving parts.
 
 | Your answer | What it changed |
 |---|---|
-| Spotify Premium | The Spotify source works as designed; no fallback is needed |
 | Guitar only | Bass and ukulele are dropped; the guitar-part slot looks only at guitar formats |
 | You sing | Two slots per song; lyrics fetched for every song; sheets ranked by how much of the lyrics they contain; ChordPro, PDF and per-song transposition moved earlier |
 | You can buy audio | Local auto-chords now covers any song, through a buy list; Navidrome becomes optional |
-
-One choice is still yours: **assisted or automatic Guitar Pro downloads** (section 3). The default is assisted.
 
 ## What changes from the first design, and why
 
@@ -63,7 +60,7 @@ One choice is still yours: **assisted or automatic Guitar Pro downloads** (secti
 |---|---|---|
 | Per-song UG search with an 11-step ladder | Local match against an index built from UG's sitemaps | `search.php` is disallowed in robots.txt; local matching is instant, unlimited and re-runnable |
 | Exponential re-search backoff per song | Re-match locally after each sitemap refresh | New tabs arrive in the newest sitemap, so nothing needs scheduling per song |
-| Weighted listening signals from many sources | Liked Songs plus playlists you choose, ideally one "Learn" playlist | Your intent is explicit, the wanted list stays small, and fewer requests are made |
+| Weighted listening signals from many sources | `wanted.txt`, a plain list of the songs you're learning | Your intent is explicit, the wanted list stays small, and no account is needed |
 | MusicBrainz canonicalization of every track | Manual aliases, plus MusicBrainz later and only if leftover misses need it | Your library is mostly Latin-script English and Spanish |
 | 7 states multiplied by instrument profiles | 3 states (wanted, found, ignored), a review flag, no instrument profiles | You play guitar and sing; nothing else |
 | 8 format tiers on one ladder | Two slots: a sing-along sheet (required) and a guitar part (optional) | A singer needs lyrics with chords; a Guitar Pro file doesn't replace that |
@@ -71,12 +68,12 @@ One choice is still yours: **assisted or automatic Guitar Pro downloads** (secti
 | 4-layer dedupe | Unique (provider, tab id) plus a SHA-256 of the file | Keeping 1–2 files per slot makes near-duplicate detection moot |
 | ChordPro normalization in the core path | Sheets saved as plain text with the raw JSON beside them; ChordPro, PDF and transposition added in step 3 | Plain text first; transposition for your voice next |
 | FastAPI, HTMX and an asyncio loop | Command line, systemd timer and a `_todo.md` page, with a review TUI later | No server to run, secure or keep alive |
-| Playwright with Chromium | httpx with cookies from your own browser | This removes the hardest Nix packaging and hardening problems |
+| Playwright with Chromium | httpx | This removes the hardest Nix packaging and hardening problems |
 | uv2nix | `buildPythonApplication` on nixpkgs dependencies | Every dependency is already in nixpkgs |
 | healthchecks.io, Prometheus, a NixOS VM test | An ntfy summary per run, plus ntfy from systemd `OnFailure` | That is enough for one machine |
 | A 200–300 track labelled evaluation set in CI | Parser fixtures plus a dry-run diff of match decisions | Matching is local, so you can re-check your whole library in seconds |
 | A Chordify MIDI import pipeline | A Chordify link on the to-do page | Chordify's terms forbid automation, and a link is zero code |
-| 9+ providers | UG now; LRCLIB lyrics for every song; LaCuerda next; local auto-chords on audio you buy; MuseScore maybe | Effort goes where your songs are |
+| 9+ providers | UG now; LRCLIB lyrics for every song; LaCuerda next; gtptabs.com's Guitar Pro files; local auto-chords on audio you buy; MuseScore maybe | Effort goes where your songs are |
 
 **Kept from the first design:**
 
@@ -85,39 +82,27 @@ One choice is still yours: **assisted or automatic Guitar Pro downloads** (secti
 - **Formats are ordered by quality.** Each slot has an ordered list of formats, and a song upgrades when a better one appears.
 - **Ratings are shrunk by vote count** (a Bayesian average).
 - **Artist aliases are learned from your corrections.**
-- **Secrets and hardening:** the Spotify token lives in writable state, static secrets go through agenix or sops-nix, and the service uses Sonarr-style systemd hardening.
+- **Secrets and hardening:** static secrets go through agenix or sops-nix, and the service uses Sonarr-style systemd hardening.
 - **The legal map:** free content through its intended path, link-outs for services that forbid automation, and no paywall-circumvention tools.
 
 ## The design
 
 ### 1. Sources: tell it what you want to learn
 
-**Spotify**
+**`wanted.txt`**
 
-- **What to read:** Liked Songs (`GET /me/tracks`) plus the playlists you list in config. The best signal is a dedicated "Learn" playlist that you add to from your phone. Development Mode only returns the contents of playlists you own or collaborate on, so editorial playlists won't work ([migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)).
-- **Top tracks:** optionally read `/me/top/tracks` to suggest songs. Have caracole list these on the to-do page instead of fetching them automatically.
-- **Library:** use spotipy 2.26.0, which is in nixpkgs unstable and already follows the 2026 playlist `/items` rename.
-- **Auth:**
-  - `caracole auth spotify` prints the authorize URL, and you paste back the URL you were redirected to.
-  - Register `http://127.0.0.1:8888/callback` as the redirect URI; `localhost` is rejected ([redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri)).
-  - The token lives in the state directory.
-  - Refresh tokens expire six months after issue, so expect to re-authorise twice a year. Caracole sends an ntfy alert when a refresh fails ([refreshing tokens](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)).
-- **Premium:** a Development Mode app needs its owner to have Spotify Premium, which you have ([Spotify blog](https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security)).
+- **What it is:** a plain text file in the library, one song per line: `Artist - Title`, optionally followed by ` | Album` and ` | m:ss`. Syncthing carries it to your phone, where you add to it; `caracole add` appends a line too.
+- **The one list of wanted songs:** a line is a song you're learning. Deleting a line keeps the song; `caracole remove` takes the song and its line out.
 
 **Your music folder**
 
 - Caracole reads a `Music/` folder of tracks you've bought. It uses this only as audio for auto-chords, never as a list of wanted songs.
 - If you later run Navidrome, point it at the same folder. Caracole doesn't need Navidrome.
 
-**GDPR history export (optional)**
-
-- A one-off import: `caracole import spotify-history <zip> --top 200`.
-- Count only plays of at least 30 seconds that weren't skipped.
-
 **The song record**
 
-- Fields: title, artists, album, duration, ISRC if known, source ids, and date added.
-- Spotify's duration is what makes the lyrics lookup exact.
+- Fields: title, artists, album and duration as its line gives them, and the date the line was first seen.
+- A duration on the line is what makes the lyrics lookup exact.
 - Process the queue newest first, so a song you just added gets its sheet that night.
 
 ### 2. Discovery: a local index of Ultimate Guitar
@@ -135,7 +120,7 @@ One choice is still yours: **assisted or automatic Guitar Pro downloads** (secti
 
 - **`caracole index build`** fetches the child sitemaps once, slowly. It parses each URL into a row `ug_index(artist_slug, song_slug, type, tab_id)`.
   - Peel the trailing `-{id}` first, then the type suffix. Try `guitar-pro` before the single-word types.
-  - Keep only `chords`, `tabs` and `guitar-pro`, and skip bare ids.
+  - Keep only `chords` and `tabs`, and skip bare ids.
   - The sitemap protocol caps each file at 50,000 URLs, so the tab sitemaps hold at most about two million entries. Expect a few hundred MB of XML once; I haven't measured it.
 - **`caracole index refresh`** runs every night but re-fetches only `sitemap_last` and the highest-numbered sitemap. A new row matching a wanted song triggers a versions fetch for that song.
 - **A full rebuild** can run monthly, or never.
@@ -152,7 +137,7 @@ One choice is still yours: **assisted or automatic Guitar Pro downloads** (secti
 
 1. Unicode NFKD, then strip accents, then lowercase.
 2. Replace "&" with "and" and drop a leading "the".
-3. Drop Spotify's version suffixes: " - Remastered 2011", " - Live", "(feat. …)", "(Live at …)", " - Radio Edit".
+3. Drop the version suffixes streaming services put on titles, which a line copied from one keeps: " - Remastered 2011", " - Live", "(feat. …)", "(Live at …)", " - Radio Edit".
 4. Slugify with hyphens the way UG does.
 
 Keep "acoustic" and "live" as a preference when ranking versions, not as a reason to treat songs as different.
@@ -163,7 +148,7 @@ Keep "acoustic" and "live" as a preference when ranking versions, not as a reaso
 - **Review** when it scores 75–90.
 - **Not found** otherwise.
 
-These thresholds are starting points. After the first run, `caracole match --dry-run` prints every decision. Because matching is local, you can change the normalizer and re-check your whole library in seconds. Each review correction writes an alias, such as Spotify artist → UG artist slug, which fixes every song by that artist at once.
+These thresholds are starting points. After the first run, `caracole match --dry-run` prints every decision. Because matching is local, you can change the normalizer and re-check your whole library in seconds. Each review correction writes an alias, such as your spelling of an artist → UG artist slug, which fixes every song by that artist at once.
 
 ### 3. Fetch, rank and keep
 
@@ -172,7 +157,7 @@ These thresholds are starting points. After the first run, `caracole match --dry
 | Slot | Formats, best first | Required? | Keep |
 |---|---|---|---|
 | Sheet | Human chords over lyrics (UG Chords, LaCuerda acordes) → auto-chords with synced lyrics → lyrics only | Yes: a song is "found" only once it has a human or auto sheet | 1 |
-| Guitar part | Guitar Pro (.gp3–5, .gpx, .gp) or Power Tab → ASCII tab | No; it never blocks "found" | 2 Guitar Pro, 1 tab |
+| Guitar part | Guitar Pro (.gp3–5, .gpx, .gp) or Power Tab, from gtptabs.com or your inbox → UG's ASCII tab | No; it never blocks "found" | Every Guitar Pro file, never replaced; 1 tab |
 
 **Lyrics for every song.** Before anything else, caracole asks LRCLIB for the song's lyrics.
 
@@ -189,23 +174,15 @@ These thresholds are starting points. After the first run, `caracole match --dry
    - **Then, the Bayesian rating** `(v·R + m·C)/(v + m)`, where v is the version's vote count and R its rating. Start with m = 10 and C = the vote-weighted mean of that song's versions.
 
    A sheet with chords only for the first verse, or no lyrics at all, sinks below any complete one, but it is kept if nothing better exists. Coverage needs the sheet's text, so fetch only the top three sheets by rating and score those.
-3. **Rank guitar parts** by the Bayesian rating alone. Give a small penalty when a version is labelled intro, solo or lesson, if the data carries such a label. Skip `Official`.
-4. **Download the kept files.**
-   - **Sheets and text tabs:** fetch the version's page and save `wiki_tab.content` as plain text, with the raw JSON beside it.
-   - **Guitar Pro:** see below.
+3. **Rank text tabs** by the Bayesian rating alone. Give a small penalty when a version is labelled intro, solo or lesson, if the data carries such a label. Skip `Official`.
+4. **Keep the files.** Fetch the version's page of each sheet and text tab kept, and save `wiki_tab.content` as plain text, with the raw JSON beside it.
 
-**Guitar Pro downloads**
+**Guitar Pro files**
 
-UG's help centre says free user-submitted Guitar Pro files can be downloaded with the website's download button, and Official tabs can't ([UG Help](https://help.ultimate-guitar.com/en/articles/6749046-website-can-i-download-pro-tabs)). The endpoint behind that button, `/tab/download?id=`, is disallowed for bots in the tabs host's robots.txt. That leaves two modes, and the choice is yours:
+UG's help centre says free user-submitted Guitar Pro files can be downloaded with the website's download button ([UG Help](https://help.ultimate-guitar.com/en/articles/6749046-website-can-i-download-pro-tabs)), but the endpoint behind that button, `/tab/download?id=`, is disallowed for bots in the tabs host's robots.txt. So caracole uses none of UG's Guitar Pro or Power Tab files:
 
-- **Assisted (the compliant default):**
-  1. The to-do page lists the Guitar Pro pages caracole picked.
-  2. You click Download on your laptop and drop the files into `Library/_inbox/`.
-  3. Caracole files each one under the right song by matching the file name.
-- **Automatic:**
-  - httpx sends the request with cookies exported from your logged-in browser.
-  - It makes at most about 10 downloads a night, 10–20 seconds apart.
-  - It is low volume and acts as you, but it does go against the robots rule.
+- **gtptabs.com** allows its downloads in its robots.txt. Caracole downloads one file for a song that has none, a few a night, never logged in, and keeps it only when it is a Guitar Pro or Power Tab file.
+- **Your inbox:** a file you got anywhere else goes into `Library/_inbox/`, named as the song, and caracole files it under that song.
 
 **Upgrades and dedupe**
 
@@ -282,7 +259,7 @@ tab_ids = [1601668]
 Music/                      tracks you bought (read-only for caracole)
 Library/
   _todo.md
-  _inbox/                   Guitar Pro files you download in assisted mode
+  _inbox/                   Guitar Pro files you download yourself
   Soda Stereo/
     De Música Ligera/
       sheet.txt             chords over lyrics, as the source shows it
@@ -302,14 +279,14 @@ Library/
 - **Partial sheets:** sheets under 80% lyric coverage.
 - **The buy list:** songs with no human sheet, with store links.
 - **Not-found guitar parts:** each with its Songsterr and YouTube links.
-- **Guitar Pro pages to click**, in assisted mode.
+- **New Guitar Pro files from gtptabs.com**, to check.
 - **Provider health.**
 
 ### 6. Running it on the NUC
 
 **One nightly `caracole run`:**
 
-1. Sync Spotify.
+1. Sync `wanted.txt`.
 2. Refresh the UG index from the newest sitemaps.
 3. Match locally.
 4. Fetch lyrics for new songs.
@@ -336,7 +313,6 @@ A separate `caracole-autochords` unit runs after it and only touches songs whose
 - httpx 0.28.1
 - selectolax 1.0.0
 - rapidfuzz 3.14.5
-- spotipy 2.26.0
 - typer 0.25.1
 - mutagen 1.48.1
 
@@ -403,27 +379,26 @@ in {
 
 **Everything else**
 
-- **Static secrets** (Spotify client secret, ntfy token) come from agenix or sops-nix through `LoadCredential`.
-- **Mutable credentials** (the Spotify token, your UG cookies) live in the state directory, written by `caracole auth spotify` and `caracole auth ug --cookies cookies.txt`.
+- **Static secrets** (the ntfy token) come from agenix or sops-nix through `LoadCredential`.
 - **Backups:** restic covers `/var/lib/caracole` (take a SQLite `.backup` first), the library and `Music/`.
 
 ## Build order
 
 | Step | Scope | Done when |
 |---|---|---|
-| **0. Spike (an evening)** | (1) Your Spotify app reads Liked Songs and your Learn playlist; (2) fetch `sitemap_last` and one numbered sitemap, parse them, and find 20 of your songs locally; (3) one tab page still has `js-store` with a versions list carrying ratings and votes; (4) LRCLIB returns lyrics for 10 of your songs, half of them Spanish; (5) one Guitar Pro download with your cookies works, or you choose assisted mode | You know which parts of this plan are real |
-| **1. MVP on the laptop** | Command line: `auth`, `index build` and `index refresh`, `sync`, `match --dry-run`, `run`; LRCLIB lyrics; UG sheets ranked by lyric coverage, then rating; Guitar Pro and tab parts; library and `_todo.md`; `overrides.toml`; SQLite | Every song in your Learn playlist has lyrics and a sheet with at least 80% lyric coverage, or a clear line on the to-do page |
+| **0. Spike (an evening)** | (1) Fetch `sitemap_last` and one numbered sitemap, parse them, and find 20 of your songs locally; (2) one tab page still has `js-store` with a versions list carrying ratings and votes; (3) LRCLIB returns lyrics for 10 of your songs, half of them Spanish | You know which parts of this plan are real |
+| **1. MVP on the laptop** | Command line: `index build` and `index refresh`, `sync`, `match --dry-run`, `run`; LRCLIB lyrics; UG sheets ranked by lyric coverage, then rating; text tabs; library and `_todo.md`; `overrides.toml`; SQLite | Every song in `wanted.txt` has lyrics and a sheet with at least 80% lyric coverage, or a clear line on the to-do page |
 | **2. Move to the NUC** | Flake, module, timer, agenix, ntfy, Syncthing, restic | A week of nightly runs with no intervention |
 | **3. Sheets you can sing from** | ChordPro conversion (UG marks every chord with `[ch]`, so it's deterministic); PDF rendering with `chordpro`; per-song transposition from `overrides.toml`; LaCuerda for Spanish songs; a `caracole review` TUI | Your phone shows a PDF of every sheet, in your key |
 | **4. The floor** | Buy list; `Music/` scan; the auto-chords unit merging timed chords with synced lyrics | Every song you bought has at least an auto sheet |
-| **Later, if needed** | Guitar Pro file introspection, MuseScore, Cifra Club, a web UI or player (It's MyTabs or TabVault), Navidrome as a source, GDPR import, Music.AI | — |
+| **Later, if needed** | Guitar Pro file introspection, MuseScore, Cifra Club, a web UI or player (It's MyTabs or TabVault), Navidrome as a source, Music.AI | — |
 
 ## Rules of the road
 
 - **Discover through what UG publishes for crawlers:** the sitemaps and the pages robots.txt allows. Never call `search.php`.
 - **Fetch only songs you asked for.** Cache forever, keep a small nightly budget, and make one request at a time.
 - **Keep the library private.** Chord sheets and lyrics are other people's work. A personal offline copy is the closest thing to UG's personal-use terms, so keep it behind Syncthing or Tailscale and share it with no one.
-- **Guitar Pro files:** downloading through the website is allowed for users, but the endpoint is disallowed for bots. Assisted mode stays inside both.
+- **Guitar Pro files:** UG's download endpoint is disallowed for bots, so caracole takes none of UG's; gtptabs.com's robots.txt allows its downloads.
 - **No paywalls:** skip Official and Pro tabs, and never use paywall tools such as dl-librescore, songsterr-downloader, TabGrabberr, or UG "Official" unlockers. Chordify and Songsterr are links only.
 - **Audio for the local model comes from purchases**, not from streams.
 - **On a block, back off.** Don't escalate.
@@ -440,12 +415,8 @@ None of this is legal advice.
   - [freetar source and commit history](https://github.com/kmille/freetar)
   - [UGDownloader source](https://github.com/jabbey1/UGDownloader) (artist pages list tabs by type, paginated)
   - [LRCLIB server source](https://github.com/tranxuanthang/lrclib) (album and duration are optional; ±2 s duration match)
-  - nixpkgs unstable versions for spotipy, rapidfuzz, selectolax, httpx, typer, mutagen, beat-this and `perl5Packages.AppMusicChordPro`
+  - nixpkgs unstable versions for rapidfuzz, selectolax, httpx, typer, mutagen, beat-this and `perl5Packages.AppMusicChordPro`
 - Carried over from the first report:
-  - [Spotify Development Mode update](https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security)
-  - [Spotify migration guide](https://developer.spotify.com/documentation/web-api/tutorials/february-2026-migration-guide)
-  - [Spotify redirect URIs](https://developer.spotify.com/documentation/web-api/concepts/redirect_uri)
-  - [Spotify refreshing tokens](https://developer.spotify.com/documentation/web-api/tutorials/refreshing-tokens)
   - [UG Help: downloading Guitar Pro files](https://help.ultimate-guitar.com/en/articles/6749046-website-can-i-download-pro-tabs)
   - [Chordify terms](https://chordify.net/pages/terms-and-conditions/)
   - [Chordify Premium](https://chordify.net/premium)

@@ -18,9 +18,7 @@ Tables (plan §5, plus ``kv``):
   indexed by its words, and those words with how many artists hold each, for searches by a
   word of an artist's name and by a close spelling of one (schema 8, search.py).
 - ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
-  file or score it keeps (gtptabs.com's, your inbox's). Schema 9 took out the Guitar Pro and
-  Power Tab versions caracole picked on Ultimate Guitar, when it still did, but for one a file
-  was filed for.
+  file or score it keeps (gtptabs.com's, your inbox's).
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
 - ``kv``: small state such as provider cooldowns, sitemap validators and learned
@@ -314,17 +312,16 @@ END;
 INSERT OR IGNORE INTO ug_artists(artist_key) SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key;
 """
 
-# caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar any more (ug/fetch.py reads, rates and records
-# none, and no page lists one to download by hand): the versions it picked or saw go, so that none surfaces again
-# as a pick or a count, but for one a file was filed for, which stays as that file's record (files cascade with
-# their version), no pick. The artist pages' tabs of those kinds go too: searches no longer count them, and they
-# are no longer stored. ug_index keeps its Guitar Pro and Power Tab rows, which the matcher reads whole (a song
-# UG has only as a Guitar Pro file is still that song): ug/lookup.py's song_tabs reads a song's tabs without them.
+# caracole uses no Guitar Pro or Power Tab file of Ultimate Guitar's: its versions of them go (any file kept for one
+# with it: files cascade), and so do the artist pages' tabs and the index's rows of those types, which a parse no
+# longer stores (ug/sitemap.py KEEP_TYPES; the triggers of schema 8 take an artist with no other row out of
+# ug_artists). A song's record is its wanted.txt line's word (songs.upsert_song): the copy of each line's word an
+# older caracole kept in kv, to arbitrate between sources, goes.
 _SCHEMA_V9 = """
-DELETE FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power')
-  AND NOT EXISTS (SELECT 1 FROM files f WHERE f.version_id = versions.id);
-UPDATE versions SET pick_rank = NULL WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power');
+DELETE FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power');
 DELETE FROM ug_artist_tabs WHERE type IN ('guitar-pro', 'power');
+DELETE FROM ug_index WHERE type IN ('guitar-pro', 'power');
+DELETE FROM kv WHERE substr(key, 1, 13) = 'songs:fields:';
 """
 
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),

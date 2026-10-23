@@ -41,7 +41,6 @@ from caracole.songbook import (
     songbooks_file,
 )
 from caracole.songs import find_song, update_song
-from caracole.versions import set_picks, upsert_version
 from caracole.web.app import WebApp
 from caracole.web.jobs import JobQueue
 from caracole.web.security import allowed_hosts
@@ -621,45 +620,34 @@ def test_the_tab_meets_touch_contrast_and_dark_mode(serve, cfg, library, tmp_pat
 # --- a song's Guitar Pro mark -----------------------------------------------------------------------------------
 
 
-UG_PICK = "https://tabs.ultimate-guitar.com/tab/555890"
-
-
 @pytest.fixture
 def guitars(conn, cfg, library):
-    """Creep with a Guitar Pro file caracole keeps (gtptabs.com's), De Música Ligera with a version picked on
-    Ultimate Guitar when caracole still picked them there (schema 9 takes them out), Hysteria with neither."""
+    """Creep with a Guitar Pro file caracole keeps (gtptabs.com's); De Música Ligera and Hysteria with none."""
     keep_guitar(conn, cfg, library["Creep"], SYNTHETIC.read_bytes(), name="guitar-1.gp")
-    soda = library["De Música Ligera"]
-    vid = upsert_version(conn, provider="ug", tab_id="555890", song_id=soda.id, slot="guitar", kind="guitar-pro",
-                         rating=4.2, votes=5, version=2, label=None, url=UG_PICK, raw={}, now="x")
-    set_picks(conn, soda.id, ["guitar-pro"], [vid])
     conn.commit()
     return library
 
 
 # Each song of the set list: its title, then its mark's address, classes, name, download, target and rel, and how
-# its guitar is drawn (filled, or "none" for an outline); its title alone without one. A pick on Ultimate Guitar is
-# no mark: caracole offers no Guitar Pro file to download there.
+# its guitar is drawn (filled, or "none" for an outline); its title alone without one.
 MARKS = """Array.from(document.querySelectorAll('#songbooks .book .set-line:not(.gone)')).map((li) => {
   const a = li.querySelector('.set-gp'), title = li.querySelector('h3').textContent;
   return a ? [title, a.getAttribute('href'), a.className, a.getAttribute('aria-label'), a.getAttribute('download'),
               a.target, a.rel, getComputedStyle(a.querySelector('svg path')).fill === 'none' ? 'outline' : 'solid']
     : [title]; })"""
-ON_UG = ["De Música Ligera"]
+WITHOUT = ["De Música Ligera"]
 
 
 @SIZES
-def test_a_songs_guitar_pro_mark_opens_its_page_served_and_a_pick_on_ultimate_guitar_is_none(serve, cfg, guitars,
-                                                                                              tmp_path, size):
+def test_a_songs_guitar_pro_mark_opens_its_page_served(serve, cfg, guitars, tmp_path, size):
     url, _ = serve(Fake(cfg), alphatab=alphatab_dir())
     with opened(tmp_path, *size) as page:
         page.open(url + CAMPFIRE)
         assert page.js(MARKS) == [
             ["Creep", "guitar?file=Radiohead%2FCreep%2Fguitar-1.gp", "set-gp",
              "Guitar Pro tab: Radiohead - Creep.gp, open it in the browser", None, "", "", "solid"],
-            ["Hysteria"], ON_UG]
+            ["Hysteria"], WITHOUT]
         assert page.js("document.querySelector('#songbooks .set-gp').title") == "Guitar Pro tab: open it in the browser"
-        assert page.js(f"document.querySelector('#songbooks a[href={json.dumps(UG_PICK)}]')") is None
         assert page.js("fetch(document.querySelector('#songbooks .set-gp').href).then((r) => r.status)") == 200
         # Next to its title, on its line, before what else the line holds; a key's reach (Tab) like any link.
         beside = page.js("""Array.from(document.querySelectorAll('#songbooks .set-gp')).map((a) => {
@@ -695,7 +683,7 @@ def test_a_kept_guitar_pro_files_mark_downloads_it_where_no_page_shows_it(serve,
         assert page.js(MARKS) == [
             ["Creep", "Radiohead/Creep/guitar-1.gp", "set-gp", "Guitar Pro tab: Radiohead - Creep.gp, download it",
              "Radiohead - Creep.gp", "", "", "solid"],
-            ["Hysteria"], ON_UG]
+            ["Hysteria"], WITHOUT]
         assert page.js("document.querySelector('#songbooks .set-gp').title") == \
             "Guitar Pro tab: download Radiohead - Creep.gp"
         if where != "file":  # the file itself, as the library's line links it

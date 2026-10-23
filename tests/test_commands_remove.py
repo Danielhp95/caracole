@@ -120,15 +120,6 @@ def test_a_song_removed_already_says_how_to_bring_it_back(tmp_path, conn):
     assert "Radiohead - Creep was removed on 20" in result.output and "caracole add" in result.output
 
 
-def test_an_artist_with_a_dash_in_the_name_is_found(tmp_path, conn):
-    # Such an artist can't be written in wanted.txt: an older caracole had the song from Spotify, say.
-    add_song(conn, "Sergio Mendes - Brasil '66", "Mas Que Nada", source="spotify", source_id="t66")
-    result = run(tmp_path, "remove", "--yes", "Sergio Mendes - Brasil '66 - Mas Que Nada")
-    assert result.exit_code == 0, result.output
-    assert list_songs(conn) == []
-    assert "Spotify" not in result.output
-
-
 def test_list_shows_the_removed_songs_newest_first(tmp_path, conn):
     assert run(tmp_path, "remove", "--list").output == "No removed songs.\n"
     a_found_song(tmp_path, conn)

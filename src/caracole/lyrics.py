@@ -349,9 +349,8 @@ def pick_candidate(
 
 
 def _search_title(track: str) -> str:
-    # Spotify writes 斑马，斑马, as does a wanted.txt line copied from it, where LRCLIB lists 斑马斑马,
-    # the query the spike found it with. /api/search gets the joined form; /api/get keeps the title
-    # as written.
+    # A wanted.txt line may write 斑马，斑马 where LRCLIB lists 斑马斑马, the query the spike found it
+    # with. /api/search gets the joined form; /api/get keeps the title as written.
     return _HAN_GAP.sub("", track)
 
 

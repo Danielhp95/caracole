@@ -19,7 +19,7 @@ from caracole.normalize import fold
 from caracole.overrides import Overrides
 from caracole.songs import update_song
 from caracole.todo import search_links
-from caracole.versions import set_picks, upsert_version
+from caracole.versions import upsert_version
 
 from conftest import add_song
 
@@ -360,14 +360,15 @@ def test_a_songs_musescore_pages_are_linked_as_possible_matches(conn, cfg):
 
 
 def test_a_guitar_pro_file_from_gtptabs_says_where_it_came_from(conn, cfg):
-    # One downloaded for you, beside one you filed from _inbox for a UG pick.
+    # One downloaded for you, beside one you filed from _inbox.
     s = add_song(conn, "Blur", "Song 2")
     gtp = upsert_version(conn, provider="gtptabs", tab_id="12", song_id=s.id, slot="guitar", kind="guitar-pro",
                          rating=4, votes=0, version=1, label=None, url="https://gtptabs.com/tabs/2/blur/song-2.html",
                          raw={}, now="2026-10-17T03:30:00Z")
     keep_file(conn, cfg.library_dir, song=s, version_id=gtp, name="guitar-1.gpx", data=b"gpx", rank=1)
-    ug = version(conn, s, 555890, slot="guitar", kind="guitar-pro")
-    keep_file(conn, cfg.library_dir, song=s, version_id=ug, name="guitar-2.gp5", data=b"gp5", rank=2)
+    filed = upsert_version(conn, provider="inbox", tab_id="guitar-pro", song_id=s.id, slot="guitar", kind="guitar-pro",
+                           rating=0, votes=0, version=1, label=None, url="", raw={}, now="2026-10-18T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=s, version_id=filed, name="guitar-2.gp5", data=b"gp5", rank=2)
     files = {f["name"]: f["label"] for f in songs_of(page(conn, cfg))["Blur - Song 2"]["files"]}
     assert files == {"guitar-1.gpx": "Guitar Pro 1 · gtptabs.com", "guitar-2.gp5": "Guitar Pro 2"}
 
@@ -625,7 +626,7 @@ def in_review(conn, artist="Radio Head", title="Crep", cands=CREEP):
 def test_a_song_in_review_carries_its_candidates_as_caracole_review_lists_them(conn, cfg):
     index_tabs(conn, (1, "radiohead", "creep", "chords"), (2, "radiohead", "creep", "chords"),
                (3, "radiohead", "creep", "tabs"), (4, "the-radiohead", "x", "chords"),
-               (5, "jeff-buckley", "creep", "guitar-pro"))
+               (5, "jeff-buckley", "creep", "tabs"))
     s = in_review(conn)
     plain = add_song(conn, "Oasis", "Wonderwall")
     songs = songs_of(page(conn, cfg))
@@ -633,9 +634,9 @@ def test_a_song_in_review_carries_its_candidates_as_caracole_review_lists_them(c
         {"n": 1, "ref": "radiohead/creep", "artist": "Radiohead", "title": "Creep", "score": 89,
          "why": "artist spelled differently", "tabs": "Chords ×2 · Tabs ×1",
          "href": "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-1"},
-        # UG has it only as a Guitar Pro file, a type caracole doesn't use there: no tab to count, no page to open.
         {"n": 2, "ref": "jeff-buckley/creep", "artist": "Jeff Buckley", "title": "Creep", "score": 80,
-         "why": "title only: another artist's song, probably a cover", "tabs": "", "href": ""},
+         "why": "title only: another artist's song, probably a cover", "tabs": "Tabs ×1",
+         "href": "https://tabs.ultimate-guitar.com/tab/jeff-buckley/creep-tabs-5"},
         # Not in the index (any more): its names come from its keys, and it has no page to open.
         {"n": 3, "ref": "misc-musicals/creep-the-musical", "artist": "Misc Musicals", "title": "Creep The Musical",
          "score": 76, "why": "under UG's catch-all misc-musicals", "tabs": "", "href": ""},
@@ -736,20 +737,6 @@ def test_a_one_song_card_reads_the_lacuerda_sheets_and_kept_versions_of_that_son
     assert set(_lacuerda_met(conn)) == {asked.id, other.id}  # every song's, for the whole page
     [card] = song_cards(conn, cfg, Overrides(), NOW, [get_song(conn, asked.id)])
     assert card["lacuerdaSheet"] == "https://acordes.lacuerda.net/estopa/como_camaron.shtml"
-
-
-def test_no_guitar_pro_version_of_ultimate_guitars_is_offered_to_download(conn, cfg):
-    # caracole picks none there any more; a pick stored before (schema 9 takes them out) shows nowhere. A file kept
-    # for one stays a file of the song's, like any.
-    s = add_song(conn, "Soda Stereo", "De Música Ligera")
-    v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", ver=2, rating=4.2, votes=5)
-    v2 = version(conn, s, 555891, slot="guitar", kind="power", ver=1, rating=4.0, votes=2)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v1, v2])
-    keep_file(conn, cfg.library_dir, song=s, version_id=v2, name="guitar-2.ptb", data=b"pt", rank=2)
-    html = page(conn, cfg)
-    song = songs_of(html)[s.display]
-    assert "guitarPro" not in song and "tab/555890" not in html
-    assert [f["name"] for f in song["files"]] == ["guitar-2.ptb"]
 
 
 # --- search haystack -------------------------------------------------------------------

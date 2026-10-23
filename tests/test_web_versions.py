@@ -261,13 +261,13 @@ def test_back_to_caracoles_pick_takes_the_pin_out(app, queue, recorder, conn, cf
 
 
 def test_only_a_chords_pin_is_one_to_go_back_from(app, conn, cfg):
-    # A Guitar Pro version pinned chooses no sheet: caracole versions --clear leaves it, so the page offers nothing.
+    # A text tab pinned chooses no sheet: caracole versions --clear leaves it, so the page offers nothing.
     song = versioned_song(conn, cfg)
-    upsert_version(conn, provider="ug", tab_id="301", song_id=song.id, slot="guitar", kind="pro", rating=4.0,
-                   votes=9, version=1, label=None, url=SLUGGED.format(301).replace("chords", "guitar-pro"),
+    upsert_version(conn, provider="ug", tab_id="301", song_id=song.id, slot="guitar", kind="tabs", rating=4.0,
+                   votes=9, version=1, label=None, url=SLUGGED.format(301).replace("chords", "tabs"),
                    raw={"id": 301}, now=FETCHED)
     cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
-    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(301).replace("chords", "guitar-pro")}"]\n',
+    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(301).replace("chords", "tabs")}"]\n',
                                   encoding="utf-8")
     page = get(app, versions_url("", "clear"))
     assert "<form" not in text(page) and "caracole picks" in shown(page)

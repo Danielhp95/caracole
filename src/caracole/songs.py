@@ -1,16 +1,12 @@
-"""Song records: one row per song you want to learn, whatever source it came from.
+"""Song records: one row per song you want to learn, from its wanted.txt line.
 
 A song's identity is ``normalize.identity_key(primary artist, title)``, so
 "斑马，斑马" and "斑马斑马" (or a remaster next to the original) become one
-record that remembers every source id. A source id it already has finds it
-first. ``wanted.txt`` is the one source today; a song an older caracole had
-from Spotify keeps its Spotify source ids, and is an ordinary song.
+record. A source id it already has finds it first: a wanted.txt line's is its
+identity key.
 
-Its album, duration, ISRC and variant are what its sources say now, not what
-the first one said: the latest word of each source is kept, and each field
-comes from the first source that gives it, your wanted.txt line first, then
-what Spotify last said of a song an older caracole had from it
-(:func:`upsert_song`).
+Its album, duration, ISRC and variant are what its line says now, not what the
+first sync read (:func:`upsert_song`).
 
 The stored keys follow the normalizer: when its rules change
 (``normalize.KEY_VERSION``), every key is recomputed once, before the songs are
@@ -18,9 +14,9 @@ next read or added, and songs that now share a key become one
 (:func:`ensure_current_keys`).
 
 A song ``caracole remove`` took out leaves a tombstone in the ``removed`` table
-(:func:`mark_removed`; removal.py does the rest). Nothing brings it back
-(:class:`SongRemoved`) until you ask for it again: a wanted.txt line for it, the
-one ``caracole add`` and the web page write too. Then it comes back as a new song.
+(:func:`mark_removed`; removal.py does the rest). Nothing brings it back until
+you ask for it again: a wanted.txt line for it, the one ``caracole add`` and the
+web page write too. Then it comes back as a new song.
 """
 
 from __future__ import annotations
@@ -53,14 +49,8 @@ def is_export(name: str) -> bool:
 
 
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with
-# What each source id last said of its song's album, duration, ISRC and variant (_remember),
-# as JSON under this prefix + "<source>:<source id>", e.g. "songs:fields:wanted:radiohead/creep",
-# or "songs:fields:spotify:<track id>", what Spotify last said to an older caracole.
-SOURCE_FIELDS_KV = "songs:fields:"
-_SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")
-# Whose word a field takes first: wanted.txt's, your own (plan, Amendment A2; wanted.SOURCE); then
-# any other source's, Spotify's of a song an older caracole had from it.
-_WANTED = "wanted"
+_SOURCE_FIELDS = ("album", "duration_ms", "isrc", "variant")  # what a line says of its song, kept whole
+_WANTED = "wanted"  # wanted.SOURCE: a line's source id is its identity key
 # What other modules keep in kv under a song's id (render.py, ug/fetch.py, autochords/run.py,
 # gtptabs_fetch.py, youtube_fetch.py), as "<prefix><song id>" or "<prefix><song id>:<more>"
 # ("render:7:auto"). It goes with a song merged into another or removed (delete_song_kv): SQLite
@@ -187,15 +177,14 @@ def upsert_song(
     every song over again) leaves the record as it is: nothing is written.
 
     The album, duration, ISRC and variant (read from the title) given here are
-    this source id's word now, kept in kv (``SOURCE_FIELDS_KV``); the song
-    then takes each field from the first of its sources that gives it
-    (:func:`_resolve`). So a wanted.txt line you correct corrects the song at
-    the next sync, and a value you take off the line gives way to what Spotify
-    last said of a song an older caracole had from it, if it said one.
+    the line's word now, and the song takes them whole: a wanted.txt line you
+    correct corrects the song at the next sync, and a value you take off the
+    line comes off the song.
 
     A song ``caracole remove`` took out, found by the source id or, failing a
-    record of yours, by the key, raises SongRemoved, unless this is a request
-    for it again (:func:`_unless_removed`): then it comes back as a new song.
+    record of yours, by the key, is asked for again: its tombstone goes, and it
+    comes back as a new song (``caracole remove`` took its lines out, so a line
+    there now is one you wrote since).
     """
     names = [a.strip() for a in artists if a and a.strip()]
     if not names:
@@ -207,10 +196,10 @@ def upsert_song(
     ensure_current_keys(conn)
     row = _with_source_id(conn, source, source_id)
     if row is None:
-        _unless_removed(conn, _removed_with_source_id(conn, source, source_id), source)
+        _forget_removed(conn, _removed_with_source_id(conn, source, source_id))
         row = conn.execute("SELECT * FROM songs WHERE key = ?", (key,)).fetchone()
     if row is None:
-        _unless_removed(conn, removed_song(conn, key), source)
+        _forget_removed(conn, removed_song(conn, key))
         names[0] = _artist_as_written(conn, names[0], key)
         cur = conn.execute(
             "INSERT INTO songs (key, artist, title, artists, album, duration_ms, isrc, source_ids, "
@@ -222,24 +211,21 @@ def upsert_song(
             ),
         )
         assert cur.lastrowid is not None
-        _remember(conn, source, source_id, said)
         return cur.lastrowid, True
 
     existing = _from_row(row)
     ids = _add_ids({k: list(v) for k, v in existing.source_ids.items()}, {source: [source_id]})
-    _remember(conn, source, source_id, said)
-    fields = _resolve(conn, ids, existing)
     added = max(existing.added_at, added_at)
     if ids == existing.source_ids and added == existing.added_at and all(
-        fields[name] == getattr(existing, name) for name in _SOURCE_FIELDS
+        said[name] == getattr(existing, name) for name in _SOURCE_FIELDS
     ):
         return existing.id, False
     conn.execute(
         "UPDATE songs SET source_ids = ?, added_at = ?, album = ?, duration_ms = ?, isrc = ?, "
         "variant = ?, updated_at = ? WHERE id = ?",
         (
-            json.dumps(ids, ensure_ascii=False), added, fields["album"],
-            fields["duration_ms"], fields["isrc"], fields["variant"], now, existing.id,
+            json.dumps(ids, ensure_ascii=False), added, said["album"],
+            said["duration_ms"], said["isrc"], said["variant"], now, existing.id,
         ),
     )
     return existing.id, False
@@ -268,54 +254,6 @@ def _add_ids(ids: dict[str, list[str]], more: dict[str, list[str]]) -> dict[str,
         bucket = ids.setdefault(source, [])
         bucket.extend(v for v in values if v not in bucket)
     return ids
-
-
-def _fields_key(source: str, source_id: str) -> str:
-    return f"{SOURCE_FIELDS_KV}{source}:{source_id}"
-
-
-def _remember(conn: sqlite3.Connection, source: str, source_id: str, said: dict[str, Any]) -> None:
-    """Keep what a source id says of its song's fields; unchanged, nothing is written. A wanted.txt
-    line is your whole word: what you take off it, it no longer says."""
-    key = _fields_key(source, source_id)
-    value = json.dumps(said, ensure_ascii=False)
-    if kv_get(conn, key) != value:
-        kv_set(conn, key, value)
-
-
-def _resolve(conn: sqlite3.Connection, source_ids: dict[str, list[str]], song: Song) -> dict[str, Any]:
-    """The album, duration, ISRC and variant a song's sources give it now.
-
-    Each field comes from the first source that gives one: the wanted.txt
-    line, then the other sources' ids in the order the song gained them,
-    which, for a song an older caracole had from Spotify, are its tracks (so
-    a remaster and the original don't take turns). Spotify's ids are never
-    heard again: what they last said stands, after the line's word.
-
-    A source id with no word kept was last heard by a caracole that kept none
-    and merged first come, first served, so whose value the song holds is
-    unknown. Such an id is taken, once, to have said what the song holds and
-    no source heard since says the same: a track you no longer like keeps its
-    album, and a duration the line says now stays the line's to take back.
-    """
-    words: dict[str, dict[str, Any] | None] = {}
-    for source in sorted(source_ids, key=lambda s: s != _WANTED):
-        for source_id in source_ids[source]:
-            value = kv_get(conn, _fields_key(source, source_id))
-            words[_fields_key(source, source_id)] = None if value is None else json.loads(value)
-    heard = [w for w in words.values() if w is not None]
-    held = {
-        name: None if any(w.get(name) == getattr(song, name) for w in heard) else getattr(song, name)
-        for name in _SOURCE_FIELDS
-    }
-    for key, word in words.items():
-        if word is None:
-            kv_set(conn, key, json.dumps(held, ensure_ascii=False))
-            words[key] = held
-    return {
-        name: next((w[name] for w in words.values() if w and w.get(name) is not None), None)
-        for name in _SOURCE_FIELDS
-    }
 
 
 def _with_source_id(conn: sqlite3.Connection, source: str, source_id: str) -> sqlite3.Row | None:
@@ -385,14 +323,6 @@ class RemovedSong:
         return display_key(self.artist, self.title)
 
 
-class SongRemoved(Exception):
-    """A source handed over a song you removed, and that isn't asking for it again."""
-
-    def __init__(self, removed: RemovedSong):
-        super().__init__(f"{removed.display} was removed with caracole remove on {removed.removed_at}")
-        self.removed = removed
-
-
 def _removed_from_row(row: sqlite3.Row) -> RemovedSong:
     return RemovedSong(row["key"], row["artist"], row["title"], json.loads(row["source_ids"]), row["removed_at"])
 
@@ -420,7 +350,7 @@ def _removed_with_source_id(conn: sqlite3.Connection, source: str, source_id: st
 
 
 def mark_removed(conn: sqlite3.Connection, song: Song, removed_at: str) -> RemovedSong:
-    """Leave the song's tombstone, so no source brings it back (``upsert_song``); return it.
+    """Leave the song's tombstone, which a line for the song again takes away (``upsert_song``); return it.
 
     A tombstone under its key already (two songs re-keyed into one) gains its
     source ids and the later time. The song's record itself is removal.py's to delete.
@@ -448,19 +378,10 @@ def forget_removed(conn: sqlite3.Connection, key: str) -> bool:
     return conn.execute("DELETE FROM removed WHERE key = ?", (key,)).rowcount > 0
 
 
-def _unless_removed(conn: sqlite3.Connection, stone: RemovedSong | None, source: str) -> None:
-    """Raise SongRemoved for a removed song, unless a wanted.txt line asks for it again.
-
-    ``caracole remove`` took the song's lines out, so a line there now is one
-    you wrote since, or ``caracole add``, or the web page. A request drops the
-    tombstone, and the song comes back new. Only your own line asks for a song
-    you removed: any other source is refused.
-    """
-    if stone is None:
-        return
-    if source != _WANTED:
-        raise SongRemoved(stone)
-    forget_removed(conn, stone.key)
+def _forget_removed(conn: sqlite3.Connection, stone: RemovedSong | None) -> None:
+    """Drop the tombstone of a removed song a wanted.txt line asks for again, if there is one."""
+    if stone is not None:
+        forget_removed(conn, stone.key)
 
 
 def delete_song_kv(conn: sqlite3.Connection, song_id: int) -> None:
@@ -580,10 +501,8 @@ def _merge(conn: sqlite3.Connection, keep: Song, other: Song) -> None:
 
 
 def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], key: str) -> None:
-    """A wanted.txt line's source id is its key, and so are the kv keys of its first-seen time
-    (``wanted.sync_wanted``) and of its word on the song's fields (``_remember``): all move
-    from the song's old keys to its new one. Of several lines' words, one is kept, until the
-    next sync says it again."""
+    """A wanted.txt line's source id is its key, and so is the kv key of its first-seen time
+    (``wanted.sync_wanted``): both move from the song's old keys to its new one."""
     from caracole.wanted import FIRST_SEEN_KEY  # a source of songs: imported on use
 
     ids = get_song(conn, song_id).source_ids
@@ -596,11 +515,3 @@ def _follow_wanted(conn: sqlite3.Connection, song_id: int, old_keys: set[str], k
             current = kv_get(conn, FIRST_SEEN_KEY + key)
             kv_set(conn, FIRST_SEEN_KEY + key, min(seen, current) if current else seen)
             kv_delete(conn, FIRST_SEEN_KEY + old)
-    said = kv_get(conn, _fields_key(_WANTED, key))
-    for old in sorted(old_keys):
-        old_said = kv_get(conn, _fields_key(_WANTED, old))
-        if old_said is not None:
-            if said is None:
-                said = old_said
-                kv_set(conn, _fields_key(_WANTED, key), said)
-            kv_delete(conn, _fields_key(_WANTED, old))

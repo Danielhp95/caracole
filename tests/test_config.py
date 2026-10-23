@@ -1,4 +1,3 @@
-import logging
 from pathlib import Path
 
 import pytest
@@ -151,28 +150,6 @@ def test_secret_file_key_then_env_fallback(tmp_path):
     assert cfg.ntfy.token == "from-env"
 
 
-@pytest.mark.parametrize("table", [
-    '[spotify]\nclient_id = "abc"\nplaylists = ["Learn"]\nclient_secret_file = "/run/agenix/gone"\n',
-    "[spotify]\n",
-    'spotify = "whatever an older file held"\n',
-], ids=["its-settings", "empty", "not-a-table"])
-def test_a_file_that_still_has_spotify_loads_and_says_once_to_delete_it(tmp_path, caplog, table):
-    # An older caracole read Spotify; this one doesn't: an upgrade must not stop the nightly run, so the
-    # table is ignored, its secret file unread, and the log says what to delete.
-    p = write(tmp_path, f'library_dir = "/srv/tabs"\n{table}[ntfy]\nurl = "https://ntfy.sh/t"\n')
-    with caplog.at_level(logging.WARNING, logger="caracole.config"):
-        cfg = load_config(p, env={"HOME": str(tmp_path)})
-    assert cfg.library_dir == Path("/srv/tabs") and cfg.ntfy.url == "https://ntfy.sh/t"
-    assert not hasattr(cfg, "spotify")
-    (record,) = caplog.records
-    assert record.levelno == logging.WARNING
-    assert str(p) in record.getMessage() and "delete its [spotify] table" in record.getMessage()
-    caplog.clear()
-    with caplog.at_level(logging.WARNING, logger="caracole.config"):
-        load(tmp_path, "[ntfy]\n")
-    assert caplog.records == []  # a file without it says nothing
-
-
 def test_unknown_key_is_config_error(tmp_path):
     p = write(tmp_path, "[providers.ug]\nbudgte = 5\n")
     with pytest.raises(ConfigError, match="budgte"):
@@ -185,64 +162,15 @@ def test_unknown_top_level_key_is_config_error(tmp_path):
         load_config(p, env={"HOME": str(tmp_path)})
 
 
-OBSOLETE = ("delete guitar_pro_mode and keep_guitar_pro in [rank]: caracole picks no Guitar Pro or Power Tab file "
-            "on Ultimate Guitar any more, so they do nothing")
-
-
-@pytest.mark.parametrize("mode", ["assisted", "automatic", 3])
-def test_a_file_that_still_sets_ultimate_guitars_guitar_pro_keys_loads_with_one_warning(tmp_path, caplog, mode):
-    # caracole picks no Guitar Pro version on Ultimate Guitar any more: an older file loads (the generated one of a
-    # NixOS system that set them, say), each key ignored whatever it says, and one warning names them to delete.
-    toml = f"guitar_pro_mode = {mode!r}\n[rank]\nkeep_guitar_pro = 1.5\nscored_sheets = 2\n".replace("'", '"')
-    p = write(tmp_path, toml)
-    with caplog.at_level(logging.WARNING, logger="caracole.config"):
-        cfg = load_config(p, env={"HOME": str(tmp_path)})
-    assert cfg.rank == RankPolicy(scored_sheets=2) and cfg.provider("gtptabs").enabled
-    assert [(r.levelno, r.getMessage()) for r in caplog.records] == [(logging.WARNING, f"{p}: {OBSOLETE}.")]
-
-
-def test_a_file_that_sets_one_of_them_is_told_that_one(tmp_path, caplog):
-    p = write(tmp_path, "[rank]\nkeep_guitar_pro = 2\n")
-    with caplog.at_level(logging.WARNING, logger="caracole.config"):
-        load_config(p, env={"HOME": str(tmp_path)})
-    assert [r.getMessage() for r in caplog.records] == [
-        f"{p}: delete keep_guitar_pro in [rank]: caracole picks no Guitar Pro or Power Tab file on Ultimate Guitar "
-        "any more, so it does nothing."]
-
-
-def test_a_file_without_them_loads_with_no_warning(tmp_path, caplog):
-    with caplog.at_level(logging.WARNING, logger="caracole.config"):
-        load_config(write(tmp_path, "[rank]\nscored_sheets = 2\n"), env={"HOME": str(tmp_path)})
-        load_config(None, env={"HOME": str(tmp_path)})
-    assert caplog.records == []
-
-
-def test_a_command_says_once_on_stderr_what_to_delete(tmp_path, monkeypatch):
-    import sys
-    import types
-
-    import typer
-    from typer.testing import CliRunner
-
-    from caracole import cli
-    from caracole.commands._common import load_cfg
-
-    fake = types.ModuleType("caracole.commands.zz_config")
-
-    def register(app: typer.Typer) -> None:
-        @app.command("zz-config")
-        def loaded(ctx: typer.Context) -> None:
-            load_cfg(ctx)
-            typer.echo("loaded")
-
-    fake.register = register
-    monkeypatch.setitem(sys.modules, "caracole.commands.zz_config", fake)
-    p = write(tmp_path, 'guitar_pro_mode = "assisted"\n[rank]\nkeep_guitar_pro = 2\n')
-    result = CliRunner().invoke(cli.build_app(extra_modules=["caracole.commands.zz_config"]),
-                                ["--config", str(p), "zz-config"])
-    assert result.exit_code == 0, result.output
-    assert result.stdout == "loaded\n"
-    assert result.stderr.splitlines() == [f"warning: {p}: {OBSOLETE}."]
+@pytest.mark.parametrize("toml,named", [
+    ('[spotify]\nclient_id = "abc"\n', r"unknown key\(s\) in caracole\.toml: spotify"),
+    ('guitar_pro_mode = "assisted"\n', r"unknown key\(s\) in caracole\.toml: guitar_pro_mode"),
+    ("[rank]\nkeep_guitar_pro = 2\n", r"unknown key\(s\) in \[rank\]: keep_guitar_pro"),
+], ids=["spotify", "guitar_pro_mode", "keep_guitar_pro"])
+def test_settings_caracole_has_none_of_are_unknown_keys(tmp_path, toml, named):
+    # caracole reads no Spotify and picks no Guitar Pro file on Ultimate Guitar: these are typos like any other.
+    with pytest.raises(ConfigError, match=named):
+        load_config(write(tmp_path, toml), env={"HOME": str(tmp_path)})
 
 
 def test_gtptabs_downloads_are_on_by_default_with_a_small_budget(tmp_path):

@@ -377,44 +377,6 @@ def test_a_pages_own_tab_is_recorded_at_the_address_it_was_read_from(conn, tmp_p
 # --- the tab slot ---------------------------------------------------------------------
 
 
-def test_ultimate_guitars_guitar_pro_and_power_tab_versions_are_never_read_nor_picked(conn, tmp_path):
-    # caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar for you to download: the index's
-    # tabs of those types cost no request, and no version of theirs is recorded for the song.
-    song = accepted(conn)
-    index(conn, (301, "soda-stereo", "persiana-americana", "guitar-pro"),
-          (303, "soda-stereo", "persiana-americana", "power"),
-          (401, "soda-stereo", "persiana-americana", "tabs"))
-    ug = FakeUG()
-    ug.tab(v(301, "guitar-pro", rating=4.5, votes=20), meta={"fileExtension": ".gp5", "duration": 213})
-    ug.tab(v(303, "power", rating=4.3, votes=15), meta={"fileExtension": ".ptb"})
-    ug.tab(v(401, "tabs"), content=riff("tab 401"))
-    soda_chords(ug)  # the index lists no chords of the song, so the artist's chords list is read
-
-    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
-
-    assert out.tab == 401 and "tab 401" in read(tmp_path, song, "tab.txt")
-    assert sorted(ug.requests) == sorted([slugged(401, "tabs"), artist_list(SODA_URL)])
-    assert {r.kind for r in song_versions(conn, song.id, include_gone=True)} == {"tabs"}
-    assert not list((tmp_path / "lib").rglob("guitar-*"))
-
-
-def test_a_pin_of_a_guitar_pro_page_pins_nothing_and_costs_no_request(conn, tmp_path):
-    # A [pin] written when caracole still picked Guitar Pro versions on Ultimate Guitar: the index says what
-    # it is, so its page isn't asked for, and the song's slots are filled as if it weren't there.
-    song = accepted(conn)
-    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
-          (301, "soda-stereo", "persiana-americana", "guitar-pro"))
-    ug = FakeUG()
-    ug.tab(v(101), content=sheet("sheet 101", LINES))
-    ug.tab(v(301, "guitar-pro"), meta={"fileExtension": ".gp5"})
-    pinned = Overrides(pin={song.key: (301,)})
-
-    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, pinned), song)
-
-    assert out.sheet == 101 and ug.requests == [slugged(101)]
-    assert {r.kind for r in song_versions(conn, song.id, include_gone=True)} == {"chords"}
-
-
 def test_a_pin_ultimate_guitar_answers_with_a_guitar_pro_page_pins_nothing(conn, tmp_path):
     # A bare id the index doesn't know: its page tells, once read, and it is no candidate of any slot.
     song = accepted(conn)
@@ -662,18 +624,6 @@ def test_a_kept_sheet_blocked_after_the_fetch_sends_its_song_back_and_unblocking
     process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
     assert "sheet 102" in read(tmp_path, song, "sheet.txt") and songs_to_fetch(conn, Overrides(), NOW) == []
     assert ug.requests == [slugged(101), slugged(102), slugged(103)]  # all of it from the cache since
-
-
-def test_blocking_a_guitar_pro_tab_of_the_song_sends_nothing_back(conn, tmp_path):
-    # caracole uses no Guitar Pro tab of Ultimate Guitar's: blocking one changes nothing it keeps.
-    song = accepted(conn)
-    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
-          (301, "soda-stereo", "persiana-americana", "guitar-pro"))
-    ug = FakeUG()
-    ug.tab(v(101), content=sheet("sheet 101", LINES))
-    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
-
-    assert songs_to_fetch(conn, Overrides(block=frozenset({301})), NOW) == []
 
 
 def test_blocking_a_tab_the_song_doesnt_use_sends_nothing_back(conn, tmp_path):
@@ -1001,21 +951,6 @@ def test_a_clean_song_whose_kept_file_the_library_lost_is_fetched_again_at_the_n
 
     assert (folder / name).read_bytes() == kept and ug.requests == []  # from the HTTP cache
     rescore_kept_sheets(conn, tmp_path / "lib", RankPolicy())
-    assert songs_to_fetch(conn, Overrides(), NOW) == []
-
-
-def test_a_guitar_pro_file_you_filed_and_deleted_sends_nothing_back(conn, tmp_path):
-    # caracole never downloads Guitar Pro files from Ultimate Guitar, so it can't write one again: here one filed
-    # for a version it picked there when it still did (schema 9 keeps a version that has a file).
-    song, _ = fetched_persiana(conn, tmp_path)
-    gp = upsert_version(conn, provider="ug", tab_id="301", song_id=song.id, slot="guitar", kind="guitar-pro",
-                        rating=4.5, votes=20, version=1, label=None, url=slugged(301, "guitar-pro"), raw={},
-                        now="2026-10-18T03:30:00Z")
-    keep_file(conn, tmp_path / "lib", song=song, version_id=gp, name="guitar-1.gp5", data=b"GP5 bytes", rank=1)
-    (song_dir(tmp_path / "lib", song) / "guitar-1.gp5").unlink()
-
-    rescore_kept_sheets(conn, tmp_path / "lib", RankPolicy())
-
     assert songs_to_fetch(conn, Overrides(), NOW) == []
 
 
@@ -1781,7 +1716,7 @@ def test_an_entry_written_as_ug_names_the_artist_serves_the_songs_artist(conn, t
 
 
 @pytest.mark.parametrize("listed,found", [
-    ("De Musica Ligera (Unplugged)", True),  # the same title once Spotify-style suffixes go
+    ("De Musica Ligera (Unplugged)", True),  # the same title once version suffixes go
     ("De Música Ligeras", True),  # rapidfuzz ratio 97
     ("De Música", False),  # ratio 72: another song
 ])
@@ -3033,11 +2968,11 @@ def test_a_pin_whose_indexed_page_robots_txt_closes_pins_nothing(conn, tmp_path)
 
 
 def test_a_song_whose_every_candidate_robots_txt_closes_is_done_without_a_request(conn, tmp_path):
-    # The live index lists Track's "Ave Fénix" only under /tab/track/: two Guitar Pro files and no
-    # chords, so its own tabs can't name the artist page either.
+    # Track's "Ave Fénix" with its tabs only under /tab/track/ and no chords, so its own tabs can't name the
+    # artist page either.
     song = accepted(conn, "Track", "Ave Fénix", "track", "ave-fenix")
-    index_at(conn, (1149792, "track", "ave-fenix", "guitar-pro", f"{TAB}track/ave-fenix-guitar-pro-1149792"),
-             (1765760, "track", "ave-fenix", "guitar-pro", f"{TAB}track/ave-fenix-guitar-pro-1765760"))
+    index_at(conn, (1149792, "track", "ave-fenix", "tabs", f"{TAB}track/ave-fenix-tabs-1149792"),
+             (1765760, "track", "ave-fenix", "tabs", f"{TAB}track/ave-fenix-tabs-1765760"))
     ug = FakeUG()
 
     stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])

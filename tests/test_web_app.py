@@ -1452,8 +1452,8 @@ def creep_index(conn):
     from caracole.ug.index import mark_built, upsert_rows
 
     rows = [(4169, "radiohead", "creep", "chords"), (4170, "radiohead", "creep", "chords"),
-            (4172, "radiohead", "creep", "tabs"), (4174, "radiohead", "creep-acoustic", "guitar-pro"),
-            (5001, "stone-temple-pilots", "creep", "chords"), (9, "oasis", "wonderwall", "chords")]
+            (4172, "radiohead", "creep", "tabs"), (5001, "stone-temple-pilots", "creep", "chords"),
+            (9, "oasis", "wonderwall", "chords")]
     upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1",
                 datetime(2026, 10, 19, tzinfo=UTC))
     mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
@@ -1482,9 +1482,7 @@ def test_the_search_answers_json_from_your_library_and_the_offline_index(app, co
     assert data["library"][0]["id"] == mine.id and data["library"][0]["status"] == "wanted"
     first, second = data["index"][:2]
     assert (first["artist"], first["title"], first["ug"]) == ("Radiohead", "Creep", "radiohead/creep")
-    # Its acoustic variant is a Guitar Pro file, which caracole doesn't use on Ultimate Guitar: counted for nothing.
     assert first["counts"] == {"chords": 2, "tabs": 1} and first["song"] == mine.id
-    assert "guitar-pro" not in {t["type"] for t in first["tabs"]}
     assert [t["id"] for t in first["tabs"]][:2] == [4169, 4170]  # chords first
     assert first["tabs"][0] == {"id": 4169, "type": "chords", "label": None,
                                 "url": "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-4169"}

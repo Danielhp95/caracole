@@ -157,21 +157,6 @@ def test_a_file_the_library_lost_dropped_again_is_put_back(conn, cfg):
     assert guitar_kept(conn, s) == [("guitar-1.gp5", "inbox", "guitar-pro")]
 
 
-def test_a_file_filed_for_an_ultimate_guitar_pick_before_stays_and_is_put_back_on_its_version(conn, cfg):
-    # A file caracole filed when it still picked Guitar Pro versions on Ultimate Guitar keeps that version
-    # (schema 9 leaves a version that has a file): dropped again once the library lost it, it is put back there.
-    s = add_song(conn)
-    old = upsert_version(conn, provider="ug", tab_id="555890", song_id=s.id, slot="guitar", kind="guitar-pro",
-                         rating=4.5, votes=10, version=1, label=None,
-                         url="https://tabs.ultimate-guitar.com/tab/555890", raw={}, now="x")
-    keep_file(conn, cfg.library_dir, song=s, version_id=old, name="guitar-1.gp5", data=b"FROM UG", rank=1)
-    (song_dir(cfg.library_dir, s) / "guitar-1.gp5").unlink()
-    drop(cfg, "Soda Stereo - De Musica Ligera (ver 1).gp5", b"FROM UG")
-    stats = file_inbox(conn, cfg.library_dir)
-    assert stats.filed == [song_dir(cfg.library_dir, s) / "guitar-1.gp5"]
-    assert guitar_kept(conn, s) == [("guitar-1.gp5", "ug", "guitar-pro")]
-
-
 def test_a_lost_score_dropped_again_under_another_name_is_put_back(conn, cfg):
     s = add_song(conn, "Oasis", "Wonderwall")
     drop(cfg, "Oasis - Wonderwall.pdf", b"%PDF-score")

@@ -105,7 +105,7 @@ def test_sync_sources_reads_wanted_txt_and_records_how_it_went(tmp_path, wanted)
     assert record["at"] == "2026-10-18T03:30:00Z" and (record["lines"], record["new"]) == (2, 2)
     assert [n for n, _ in record["errors"]] == [2]
     assert set(repo.kv) == {"source:wanted", "wanted:first_seen:宋冬野/斑马斑马",
-                            "wanted:first_seen:soda-stereo/de-musica-ligera"}  # and nothing of Spotify's
+                            "wanted:first_seen:soda-stereo/de-musica-ligera"}
     assert report.summary() == "wanted.txt 2 songs, 2 new, 1 problem"
 
 
@@ -162,22 +162,3 @@ def test_a_fixed_wanted_line_lets_the_purchase_it_kept_out_link(conn, tmp_path, 
     sync_sources(conn, cfg, NOW + timedelta(days=1))
     assert scan_music(conn, cfg.music_dir).unmatched == []
     assert find_song(conn, "radiohead/creep").audio_path == str(bought)
-
-
-def test_a_song_an_older_caracole_had_from_spotify_keeps_what_it_said_after_the_lines_word(conn, tmp_path):
-    # An older caracole had Creep from Spotify, at 3:58 on Pablo Honey, and kept what the track said.
-    # The line says 4:20, the version you bought, say: the line wins, and Spotify's album fills in what
-    # it leaves out. Taken off the line, the duration is what Spotify last said, as it was.
-    from caracole.songs import find_song, upsert_song
-
-    upsert_song(conn, artists=["Radiohead"], title="Creep", album="Pablo Honey", duration_ms=238000, isrc=None,
-                source="spotify", source_id="tCreep", added_at="2026-10-01T12:00:00Z")
-    cfg = config(tmp_path)
-    write_wanted(cfg, "Radiohead - Creep | 4:20\n")
-    sync_sources(conn, cfg, NOW)
-    song = find_song(conn, "radiohead/creep")
-    assert song.source_ids == {"spotify": ["tCreep"], "wanted": ["radiohead/creep"]}
-    assert (song.album, song.duration_ms) == ("Pablo Honey", 260000)
-    write_wanted(cfg, "Radiohead - Creep\n")
-    sync_sources(conn, cfg, NOW + timedelta(days=1))
-    assert find_song(conn, "radiohead/creep").duration_ms == 238000

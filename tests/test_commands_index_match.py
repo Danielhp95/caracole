@@ -42,9 +42,9 @@ def sitemap_index(*names: str) -> bytes:
 
 
 S1 = urlset("oasis/wonderwall-chords-1001", "oasis/wonderwall-bass-1003", "1004",
-            "the-rifles/the-general-guitar-pro-1005")
+            "the-rifles/the-general-guitar-pro-1005")  # a Guitar Pro file: left out, as a bass tab is
 S2 = urlset("radiohead/creep-chords-2002", "radiohead/creep-tabs-2003")
-LAST = urlset("radiohead/creep-chords-2002", "eagles/hotel-california-power-3001")
+LAST = urlset("radiohead/creep-chords-2002", "eagles/hotel-california-tabs-3001")
 
 
 class FakeUG:
@@ -132,12 +132,12 @@ PLAN = [
     "The sitemap index lists 3 tab sitemaps (sitemap1.xml, sitemap2.xml and sitemap_last.xml): 3 to download.",
     "About 150,000 tab URLs (up to 50,000 a sitemap). 3 requests, 0 s apart: under a second.",
 ]
-SITEMAP1 = "[1/3] sitemap1.xml  4 tabs: 2 indexed, 1 bare id, 1 of another type  2 left, under a second"
+SITEMAP1 = "[1/3] sitemap1.xml  4 tabs: 1 indexed, 1 bare id, 2 of other types  2 left, under a second"
 INDEX = [  # what the index holds after a build, whatever the build read
-    "  Indexed     5 tabs: chords 2, guitar-pro 1, power 1, tabs 1",
-    "  Artists     4",
+    "  Indexed     4 tabs: chords 2, tabs 2",
+    "  Artists     3",
     "  Bare ids    1 of 8 tab URLs (12.5%): with no artist or title in the URL, only artist pages lead to them",
-    "  Left out    1 of another type (bass 1)",
+    "  Left out    2 of other types (bass 1, guitar-pro 1)",
     "  robots.txt  no tab left out",
 ]
 COMPLETE = ("The index is complete: `caracole match` can now match your songs against it, "
@@ -158,7 +158,7 @@ def test_cli_index_build_says_what_it_indexes_how_each_sitemap_went_and_what_the
         SITEMAP1,
         "[2/3] sitemap2.xml  2 tabs: 2 indexed  1 left, under a second",
         "[3/3] sitemap_last.xml  2 tabs: 2 indexed (1 new)",  # 2002 is in sitemap2 too
-        "Index built: 3 sitemaps read; 5 new tabs.",
+        "Index built: 3 sitemaps read; 4 new tabs.",
         *INDEX,
         "  Requests    4 of a budget of 100",
         "  Duration    0.0 s",
@@ -172,16 +172,16 @@ def test_cli_index_build_from_dir_sends_no_requests(tmp_path, ug):
     result = run(tmp_path, "index", "build", "--from", str(d))
     assert result.exit_code == 0, result.output
     assert ug.requests == []
-    assert tab_ids(tmp_path) == [1001, 1005, 2002, 2003, 3001]
+    assert tab_ids(tmp_path) == [1001, 2002, 2003, 3001]
     assert result.output.splitlines() == [
         INTRO[0],
         f"Only the sitemap files in {d} are read: no request is sent.",
         "Found 3 sitemap files (sitemap1.xml, sitemap2.xml and sitemap_last.xml).",
         "About 150,000 tab URLs (up to 50,000 a sitemap): about 2 s.",
-        "[1/3] sitemap1.xml.gz  4 tabs: 2 indexed, 1 bare id, 1 of another type  2 left, under a second",
+        "[1/3] sitemap1.xml.gz  4 tabs: 1 indexed, 1 bare id, 2 of other types  2 left, under a second",
         "[2/3] sitemap2.xml  2 tabs: 2 indexed  1 left, under a second",
         "[3/3] sitemap_last.xml.gz  2 tabs: 2 indexed (1 new)",
-        "Index built from 3 sitemap files; 5 new tabs.",
+        "Index built from 3 sitemap files; 4 new tabs.",
         *INDEX,
         "  Requests    none: read from files",
         "  Duration    0.0 s",
@@ -194,9 +194,9 @@ def test_cli_index_build_from_a_dir_with_a_broken_file_keeps_the_files_before_it
     (d / "sitemap2.xml").write_bytes(b"<html>not a sitemap</html>")
     result = run(tmp_path, "index", "build", "--from", str(d))
     assert result.exit_code == 1
-    assert ug.requests == [] and tab_ids(tmp_path) == [1001, 1005]
+    assert ug.requests == [] and tab_ids(tmp_path) == [1001]
     lines = result.output.splitlines()
-    assert "Index build stopped after 1 of 3 sitemaps; 2 new tabs." in lines
+    assert "Index build stopped after 1 of 3 sitemaps; 1 new tab." in lines
     assert lines[-3:] == [
         "The index is partial: 1 tab sitemap indexed, so no song is matched against it yet.",
         f"To finish, run `caracole index build --from {d}` again: it reads every file again, with no request.",
@@ -216,7 +216,7 @@ def test_cli_index_build_over_the_network_has_a_budget_of_its_own(tmp_path, ug):
     result = run(tmp_path, "index", "build", budget=2)
     assert result.exit_code == 0, result.output
     assert ug.requests == ["sitemap.xml", "sitemap1.xml", "sitemap2.xml", "sitemap_last.xml"]
-    assert tab_ids(tmp_path) == [1001, 1005, 2002, 2003, 3001]
+    assert tab_ids(tmp_path) == [1001, 2002, 2003, 3001]
     conn = connect(tmp_path)
     assert conn.execute("SELECT COUNT(*) FROM events WHERE provider = 'ug' AND decision = 'ok'").fetchone()[0] == 4
     assert get_state(conn, "ug").last_ok is not None
@@ -242,12 +242,12 @@ def test_cli_index_block_cools_ug_down_and_exits_0(tmp_path, ug):
     result = run(tmp_path, "index", "build")
     assert result.exit_code == 0, result.output
     assert "blocked" in result.output and "sitemaps read so far are kept" in result.output
-    assert tab_ids(tmp_path) == [1001, 1005]  # sitemap1 was stored before the block
+    assert tab_ids(tmp_path) == [1001]  # sitemap1 was stored before the block
     state = get_state(connect(tmp_path), "ug")
     assert state.strikes == 1 and state.cooldown_until is not None
     lines = result.output.splitlines()
     assert lines[len(INTRO) + len(PLAN)] == SITEMAP1
-    assert "Index build stopped after 1 of 3 sitemaps; 2 new tabs." in lines
+    assert "Index build stopped after 1 of 3 sitemaps; 1 new tab." in lines
     assert "  Requests    3 of a budget of 100" in lines
     until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC")
     assert lines[-2:] == [
@@ -316,10 +316,10 @@ def test_cli_index_build_stopped_by_ctrl_c_keeps_what_it_read_and_says_how_to_re
     monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(interrupted))
     result = run(tmp_path, "index", "build")
     assert result.exit_code == 130  # as Ctrl-C always ends a caracole command
-    assert tab_ids(tmp_path) == [1001, 1005]
+    assert tab_ids(tmp_path) == [1001]
     lines = result.output.splitlines()
     assert "Stopped by Ctrl-C; the sitemaps read so far are kept." in lines
-    assert "Index build stopped after 1 of 3 sitemaps; 2 new tabs." in lines
+    assert "Index build stopped after 1 of 3 sitemaps; 1 new tab." in lines
     assert lines[-2] == PARTIAL
     assert resume_line(result.output) == (
         "To resume, run `caracole index refresh`: it reads the 2 sitemaps left, sitemap2.xml and sitemap_last.xml "
@@ -363,7 +363,7 @@ def test_cli_index_build_on_a_terminal_keeps_one_live_line(tmp_path, ug, monkeyp
     out = screen.getvalue()
     assert "\r" + SITEMAP1 in out and SITEMAP1 + "\n" not in out  # rewritten in place, never a line of its own
     lines = [line.rsplit("\r", 1)[-1] for line in out.split("\n")]  # what stays on screen
-    assert lines[:2] == INTRO and "Index built: 3 sitemaps read; 5 new tabs." in lines and COMPLETE in lines
+    assert lines[:2] == INTRO and "Index built: 3 sitemaps read; 4 new tabs." in lines and COMPLETE in lines
     assert "\x1b" not in out  # NO_COLOR
 
 
@@ -419,7 +419,7 @@ def test_cli_index_refresh_stopped_by_ctrl_c_sums_up_what_it_read_and_says_how_t
     monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(interrupted))
     result = run(tmp_path, "index", "refresh")
     assert result.exit_code == 130
-    assert tab_ids(tmp_path) == [1001, 1005, 2002, 2003]  # sitemap2 is kept
+    assert tab_ids(tmp_path) == [1001, 2002, 2003]  # sitemap2 is kept
     assert result.output.splitlines()[-4:] == [
         "Stopped by Ctrl-C; the sitemaps read so far are kept.",
         "Index refresh stopped: 1 of 1 sitemap changed (sitemap2.xml): +2 tabs. 3 requests, 0.0 s.",  # the cut one too
@@ -455,8 +455,8 @@ def test_cli_index_stats(tmp_path):
     result = run(tmp_path, "index", "stats")
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
-    assert lines[0] == "Tabs: 5 (chords 2, guitar-pro 1, power 1, tabs 1)"  # most first, ties by name
-    assert "Artists: 4" in lines and "Sitemaps indexed: 3" in lines and "Newest tab id: 3001" in lines
+    assert lines[0] == "Tabs: 4 (chords 2, tabs 2)"  # most first, ties by name
+    assert "Artists: 3" in lines and "Sitemaps indexed: 3" in lines and "Newest tab id: 3001" in lines
     assert any(line.startswith("Built: 20") and line.endswith("refreshed: never") for line in lines)
 
 

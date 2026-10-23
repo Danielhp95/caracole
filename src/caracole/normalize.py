@@ -47,8 +47,8 @@ _CJK = re.compile(
 )
 _HAN = re.compile("[㐀-䶿一-鿿豈-﫿\U00020000-\U0002ebef]")
 
-# The version suffixes streaming services put on titles (Spotify's, as a line copied from it
-# into wanted.txt has them). Each is removed only as a " - …" suffix or as a
+# The version suffixes streaming services put on titles, which a line copied from one into
+# wanted.txt keeps. Each is removed only as a " - …" suffix or as a
 # parenthesized group, never from the start of a title ("Live and Let Die").
 # Live and acoustic versions are named in Spanish and Portuguese too ("En Vivo",
 # "Ao Vivo", "Versión Acústica"), and may run on after a ";" or a ","

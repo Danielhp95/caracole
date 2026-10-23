@@ -18,15 +18,13 @@ CREEP = "radiohead/creep"
 
 
 def creep(conn, cfg, *, wanted="Radiohead - Creep\nOasis - Wonderwall\n"):
-    """Radiohead's Creep, from wanted.txt and, as an older caracole had it, Spotify, with what caracole keeps of a
-    found song."""
+    """Radiohead's Creep, from wanted.txt, with what caracole keeps of a found song."""
     song = add_song(conn, "Radiohead", "Creep", source="wanted", source_id=CREEP)
-    add_song(conn, "Radiohead", "Creep", source="spotify", source_id="tCreep")
     if wanted is not None:
         cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
         cfg.wanted_file.write_text(wanted, encoding="utf-8")
     sheet = version(conn, song, "101", "chords")
-    gp = version(conn, song, "301", "guitar-pro")
+    gp = version(conn, song, "301", "guitar-pro", provider="gtptabs")
     song = get_song(conn, song.id)
     for vid, name in ((sheet, "sheet.txt"), (sheet, "sheet.json"), (gp, "guitar-1.gp5")):
         keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=name, data=name.encode(), rank=1)
@@ -39,8 +37,8 @@ def creep(conn, cfg, *, wanted="Radiohead - Creep\nOasis - Wonderwall\n"):
     return get_song(conn, song.id)
 
 
-def version(conn, song, tab_id, kind):
-    return upsert_version(conn, provider="ug", tab_id=tab_id, song_id=song.id,
+def version(conn, song, tab_id, kind, provider="ug"):
+    return upsert_version(conn, provider=provider, tab_id=tab_id, song_id=song.id,
                           slot="sheet" if kind == "chords" else "guitar", kind=kind, rating=4.5, votes=10,
                           version=1, label=None, url=f"https://u/{tab_id}", raw={}, now="2026-10-01T00:00:00Z")
 
@@ -74,12 +72,11 @@ def test_a_song_goes_with_its_files_its_wanted_line_and_its_record(conn, cfg):
     assert list_songs(conn) == []
     for table in ("versions", "files"):
         assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
-    for key in (f"render:{song.id}", f"render:{song.id}:auto", f"ug:blocked:{song.id}",
-                f"songs:fields:wanted:{CREEP}", "songs:fields:spotify:tCreep", f"wanted:first_seen:{CREEP}"):
+    for key in (f"render:{song.id}", f"render:{song.id}:auto", f"ug:blocked:{song.id}", f"wanted:first_seen:{CREEP}"):
         assert db.kv_get(conn, key) is None, key
     stone = removed_song(conn, CREEP)
     assert (stone.display, stone.removed_at) == ("Radiohead - Creep", "2026-10-19T12:00:00Z")
-    assert stone.source_ids == {"wanted": [CREEP], "spotify": ["tCreep"]}
+    assert stone.source_ids == {"wanted": [CREEP]}
 
 
 def test_your_own_files_stay_in_the_folder_and_the_removal_says_so(conn, cfg, tmp_path):

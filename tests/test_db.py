@@ -433,11 +433,9 @@ def test_a_version_7_database_gains_its_artists_by_word_and_keeps_every_row(tmp_
     assert columns(path.with_name("caracole.sqlite.v7.bak"), "ug_artists") == ([], 7)
 
 
-def test_a_version_8_database_loses_ultimate_guitars_guitar_pro_picks_and_keeps_every_file(tmp_path):
-    # caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar any more: those versions go, so that no
-    # pick to download by hand surfaces again, but for one a file was filed for, which stays as that file's
-    # record, no pick; and the artist pages' Guitar Pro tabs go, which searches no longer count. The index keeps
-    # its rows, which the matcher reads whole.
+def test_a_version_8_database_loses_everything_of_ultimate_guitars_guitar_pro_and_power_tab_files(tmp_path):
+    # caracole uses no Guitar Pro or Power Tab file of Ultimate Guitar's: their versions go (with any file kept for
+    # one), the artist pages' tabs of those types, and the index's rows of them, an artist with no other row too.
     path = tmp_path / "state" / "caracole.sqlite"
     path.parent.mkdir()
     old = sqlite3.connect(path)
@@ -450,9 +448,9 @@ def test_a_version_8_database_loses_ultimate_guitars_guitar_pro_picks_and_keeps_
         "INSERT INTO versions (id, provider, tab_id, song_id, slot, kind, url, fetched_at, pick_rank, gone) "
         "VALUES (?, ?, ?, 1, ?, ?, '', 'x', ?, ?)",
         [(1, "ug", "101", "sheet", "chords", 1, 0),
-         (2, "ug", "301", "guitar", "guitar-pro", 1, 0),  # a pick still to download
+         (2, "ug", "301", "guitar", "guitar-pro", 1, 0),
          (3, "ug", "303", "guitar", "power", 2, 0),
-         (4, "ug", "302", "guitar", "guitar-pro", None, 1),  # seen once, gone since
+         (4, "ug", "302", "guitar", "guitar-pro", None, 1),
          (5, "ug", "305", "guitar", "guitar-pro", 3, 0),  # a file was filed for it
          (6, "gtptabs", "9", "guitar", "guitar-pro", None, 0),
          (7, "inbox", "guitar-pro", "guitar", "guitar-pro", None, 0),
@@ -470,23 +468,42 @@ def test_a_version_8_database_loses_ultimate_guitars_guitar_pro_picks_and_keeps_
         "'Wonderwall', '', 'oasis', 'wonderwall', 'oasis', 'wonderwall', 'oasis wonderwall', 'x')",
         [(101, "chords"), (305, "guitar-pro"), (303, "power"), (401, "tabs")],
     )
-    old.executemany("INSERT INTO ug_index VALUES (?, 'oasis', 'wonderwall', ?, '1', 'x', '')",
-                    [(101, "chords"), (305, "guitar-pro"), (303, "power")])
+    old.executemany("INSERT INTO ug_index VALUES (?, ?, ?, ?, '1', 'x', '')",
+                    [(101, "oasis", "wonderwall", "chords"), (305, "oasis", "wonderwall", "guitar-pro"),
+                     (303, "oasis", "wonderwall", "power"), (601, "metallica", "one", "guitar-pro")])
     old.commit()
-    files = old.execute("SELECT * FROM files ORDER BY id").fetchall()
-    index = old.execute("SELECT * FROM ug_index ORDER BY tab_id").fetchall()
+    files = old.execute("SELECT * FROM files WHERE version_id != 5 ORDER BY id").fetchall()
     old.close()
 
     c = db.connect(path)
     assert c.execute("PRAGMA user_version").fetchone()[0] == NOW >= 9
     assert [tuple(r) for r in c.execute("SELECT id, provider, kind, pick_rank FROM versions ORDER BY id")] == [
-        (1, "ug", "chords", 1), (5, "ug", "guitar-pro", None), (6, "gtptabs", "guitar-pro", None),
-        (7, "inbox", "guitar-pro", None), (8, "ug", "tabs", 1)]
+        (1, "ug", "chords", 1), (6, "gtptabs", "guitar-pro", None), (7, "inbox", "guitar-pro", None),
+        (8, "ug", "tabs", 1)]
     assert [tuple(r) for r in c.execute("SELECT * FROM files ORDER BY id")] == [tuple(r) for r in files]
     assert [r[0] for r in c.execute("SELECT type FROM ug_artist_tabs ORDER BY tab_id")] == ["chords", "tabs"]
-    assert [tuple(r) for r in c.execute("SELECT * FROM ug_index ORDER BY tab_id")] == [tuple(r) for r in index]
+    assert [tuple(r) for r in c.execute("SELECT tab_id, type FROM ug_index ORDER BY tab_id")] == [(101, "chords")]
+    assert [r[0] for r in c.execute("SELECT artist_key FROM ug_artists ORDER BY artist_key")] == ["oasis"]
     c.close()
     assert columns(path.with_name("caracole.sqlite.v8.bak"), "versions")[1] == 8
+
+
+def test_a_version_8_database_loses_what_each_line_said_beside_its_song(tmp_path):
+    # A song's record is its wanted.txt line's word, kept nowhere else: the copies an older caracole kept in kv go.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 9)) + "\nPRAGMA user_version = 8;")
+    old.executemany("INSERT INTO kv VALUES (?, ?)", [
+        ("songs:fields:wanted:oasis/wonderwall", '{"album": "Morning Glory"}'),
+        ("songs:key_version", "3"), ("wanted:first_seen:oasis/wonderwall", "2026-10-01T00:00:00Z")])
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert [r[0] for r in c.execute("SELECT key FROM kv ORDER BY key")] == [
+        "songs:key_version", "wanted:first_seen:oasis/wonderwall"]
+    c.close()
 
 
 def test_an_artist_no_row_has_any_longer_leaves_the_index_of_their_words(conn):

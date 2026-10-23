@@ -158,7 +158,7 @@ def test_an_instrumental_is_stored_without_lyric_files(conn, tmp_path):
 
 
 def test_banma_banma_plain_lyrics_are_saved_without_an_lrc(conn, tmp_path):
-    # 宋冬野's records have plain lyrics only. Spotify writes the title 斑马，斑马, which
+    # 宋冬野's records have plain lyrics only. A line may write the title 斑马，斑马, which
     # /api/get doesn't know; /api/search finds it as 斑马斑马, and the album's cut wins.
     song = add_song(conn, "宋冬野", "斑马，斑马", album="安和桥北", duration_ms=253000)
     stats = run(FakeLrclib(load("search_banma.json")), conn, tmp_path)

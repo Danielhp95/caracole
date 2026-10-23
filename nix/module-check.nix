@@ -60,15 +60,6 @@ let
     credentials.ntfy_token = "/run/agenix/ntfy_token";
   };
 
-  # What an older caracole read of Spotify, left in a configuration.
-  spotifyLeftOver.services.caracole = {
-    settings.spotify = {
-      client_id = "abc123";
-      playlists = [ "Learn" ];
-    };
-    credentials.spotify_client_secret = "/run/agenix/spotify_client_secret";
-  };
-
   autochordsOn.services.caracole.autochords = {
     enable = true;
     btcWeights = "/models/btc.pt";
@@ -106,18 +97,6 @@ let
     lib.any (arg: lib.elem (plain "${program}/bin") (lib.splitString ":" (plain arg))) package.makeWrapperArgs;
 
   bare = evalSystem [ stubbed ];
-  # An older configuration that still sets the keys of Ultimate Guitar's Guitar Pro picks, which
-  # caracole no longer makes: it evaluates, warned, and its caracole.toml loads.
-  legacy = evalSystem [
-    stubbed
-    configured
-    {
-      services.caracole.settings = {
-        guitar_pro_mode = "assisted";
-        rank.keep_guitar_pro = 2;
-      };
-    }
-  ];
   nuc = evalSystem [
     stubbed
     configured
@@ -132,12 +111,6 @@ let
     stubbed
     configured
     { services.caracole.autochords.enable = true; }
-  ];
-  # A NUC whose configuration still names Spotify.
-  nucSpotifyLeftOver = evalSystem [
-    stubbed
-    configured
-    spotifyLeftOver
   ];
   # caracole-web with its defaults, and on a tailnet address with a token.
   webDefault = evalSystem [
@@ -502,19 +475,6 @@ let
     "caracole-web.service loads web_token alone of the credentials, and none without it" =
       tailnetWeb.serviceConfig.LoadCredential == [ "web_token:/run/agenix/caracole-web-token" ]
       && (webOpen.systemd.services.caracole-web.serviceConfig.LoadCredential or [ ]) == [ ];
-    # settings is a TOML value, which no option can be declared under (lib.mkRemovedOptionModule):
-    # the rebuild warns, and caracole loads the generated file, ignoring the table (below).
-    "settings.spotify and credentials.spotify_client_secret, left over, are each warned about, and only then" =
-      says [ "services.caracole.settings.spotify" "no longer reads Spotify" "delete it" ] nucSpotifyLeftOver.warnings
-      && says [ "services.caracole.credentials.spotify_client_secret" "delete it" ] nucSpotifyLeftOver.warnings
-      && !(says [ "Spotify" ] nuc.warnings)
-      && failedAssertions nucSpotifyLeftOver == [ ];
-    "settings an older caracole read (guitar_pro_mode, rank.keep_guitar_pro) are warned about, and only then" =
-      says [
-        "services.caracole.settings: delete guitar_pro_mode and rank.keep_guitar_pro"
-        "Ultimate Guitar"
-      ] legacy.warnings
-      && !(says [ "services.caracole.settings" ] nuc.warnings);
     "caracole-web listening beyond loopback without credentials.web_token is warned about, and only then" =
       says [
         "services.caracole.web listens on 0.0.0.0"
@@ -709,8 +669,6 @@ else
         (loads nuc defaultLayout)
         (loads moved movedLayout)
         (loads libraryAlone libraryAloneLayout)
-        (loads legacy defaultLayout)
-        (loads nucSpotifyLeftOver defaultLayout)
       ];
       runUnit = unitText nuc "caracole.service";
       timerUnit = unitText nuc "caracole.timer";
@@ -737,49 +695,20 @@ else
       # units' environment, and name the folders the units open.
       PYTHONPATH=${source}/src python3 - "$loadCasesPath" <<'EOF'
       import json
-      import logging
       import sys
       from pathlib import Path
 
       from caracole.config import load_config
 
-      warned = []
-
-
-      class Warned(logging.Handler):
-          def emit(self, record):
-              warned.append(record.getMessage())
-
-
-      logging.getLogger("caracole.config").addHandler(Warned())
       with open(sys.argv[1], encoding="utf-8") as f:
           cases = json.load(f)
       for case in cases:
-          warned.clear()
           cfg = load_config(Path(case["config"]), env=case["env"])
           for key, value in case["paths"].items():
               assert getattr(cfg, key) == Path(value), (case["config"], key, getattr(cfg, key))
-          print("generated caracole.toml loads:", case["config"], *warned)
-      # The last case still has [spotify]: it loads, ignored, with the one warning saying to delete it.
-      assert len(warned) == 1 and "delete its [spotify] table" in warned[0], warned
-      assert not hasattr(cfg, "spotify")
+          print("generated caracole.toml loads:", case["config"])
       cfg = load_config(Path(cases[0]["config"]), env=cases[0]["env"])
       assert cfg.ntfy.url == "https://ntfy.example/caracole", cfg.ntfy.url
-      # The older configuration's file loads with one warning, naming the keys to delete.
-
-      class Said(logging.Handler):
-          def __init__(self):
-              super().__init__()
-              self.lines = []
-
-          def emit(self, record):
-              self.lines.append(record.getMessage())
-
-      said = Said()
-      logging.getLogger("caracole.config").addHandler(said)
-      load_config(Path(cases[3]["config"]), env=cases[3]["env"])
-      assert len(said.lines) == 1, said.lines
-      assert "delete guitar_pro_mode and keep_guitar_pro in [rank]" in said.lines[0], said.lines
       EOF
 
       # Each unit's command line, as systemd reads it, parses with caracole's own CLI,

@@ -40,8 +40,8 @@ from caracole.songs import Song, get_song, list_songs, utc_now_iso
 from caracole.versions import upsert_version
 
 GP_EXTENSIONS = (".gp3", ".gp4", ".gp5", ".gpx", ".gp", ".ptb")
-# The kinds of the versions a kept Guitar Pro or Power Tab file has: one you filed from the inbox, one gtptabs.com
-# gave, or one filed for a version caracole picked on Ultimate Guitar when it still did (schema 9 keeps that version).
+# The kinds of the versions a kept Guitar Pro or Power Tab file has: one you filed from the inbox, or one gtptabs.com
+# gave.
 GUITAR_FILE_KINDS = ("guitar-pro", "power")
 # The Guitar Pro files caracole serve's Guitar Pro page shows (alphaTab reads them all): every kind but Power Tab's.
 BROWSER_EXTENSIONS = (".gp3", ".gp4", ".gp5", ".gpx", ".gp")

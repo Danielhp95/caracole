@@ -18,10 +18,9 @@ from xml.sax.saxutils import unescape
 
 from caracole.normalize import ug_slug_key
 
-# The types the index keeps. Its Guitar Pro and Power Tab rows are the matcher's alone (match.py reads every row: a
-# song UG has only as a Guitar Pro file is still that song, whose chords its artist's page may list); nothing reads
-# them as a song's tabs (ug/lookup.py ``song_tabs``), as caracole picks none of those files on UG.
-KEEP_TYPES = frozenset({"chords", "tabs", "guitar-pro", "power"})
+# The types the index keeps: those caracole uses (ug/page.py ``KINDS``). Every other type's tab is counted, by type,
+# and left out (``classify_tab_url``), Guitar Pro and Power Tab files among them.
+KEEP_TYPES = frozenset({"chords", "tabs"})
 
 # Every type token seen in the sitemaps. "guitar-pro" comes first, so it is peeled
 # off whole before any single-word token could match its last part.

@@ -20,9 +20,8 @@ so Syncthing carries it to your phone. One song per line:
   lines are ignored. Write ``\#`` for a ``#`` that belongs to a name
   ("John Lennon - \#9 Dream") and ``\|`` for a ``|``.
 - Correcting a line's album or duration corrects the song at the next sync, and
-  taking one off the line takes it off the song (or gives way to what Spotify
-  last said of a song an older caracole had from it). A song on two lines is
-  its first line; a later one only fills in what the first leaves out.
+  taking one off the line takes it off the song. A song on two lines is its
+  first line; a later one only fills in what the first leaves out.
 - Deleting a line doesn't delete the song from caracole. ``caracole remove``
   does, and takes the song's lines out (``remove_wanted``); a line for it
   written again later brings it back.
