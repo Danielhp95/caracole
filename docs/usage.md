@@ -155,8 +155,9 @@ folder caracole can't use ends a command with status
 below).
 
 **No secrets.** caracole reads none. ntfy is a topic's `url` alone, posted to
-with no token, so choose a long topic name nobody would guess; and `caracole
-serve` has no sign-in (see [caracole serve](#caracole-serve)). A `token_file`
+with no token, so choose a long topic name nobody would guess. It is no secret
+on the host either: on NixOS it is in the Nix store, which every user of the
+machine can read. And `caracole serve` has no sign-in (see [caracole serve](#caracole-serve)). A `token_file`
 under `[ntfy]`, which an older caracole read, is now an unknown key like any
 other: delete it, and the token.
 

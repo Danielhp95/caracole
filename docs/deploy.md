@@ -33,7 +33,8 @@ hides:
 | `cache` | every raw HTTP response, kept forever: losing it costs only requests |
 
 caracole keeps no secret: no credential, no token, no sign-in. ntfy is a
-topic's URL alone, which anyone who knows it can read: make it long and random.
+topic's URL alone, which anyone who knows it can read: make it long and random,
+and know that every user of the host can read it (on NixOS, in the Nix store).
 The library page has no sign-in either: whoever reaches it can read the library
 and request songs, so it listens only on a network you trust, your LAN or your
 tailnet, never the internet.

@@ -641,6 +641,7 @@ else
       nativeBuildInputs = [ python3 ];
       inherit configFile;
       notifyUnconfigured = bare.systemd.services.caracole-notify-failure.serviceConfig.ExecStart;
+      notifyConfigured = notify.serviceConfig.ExecStart;
       adminScript = lib.getExe admin;
       adminAutochordsScript = lib.getExe adminAutochords;
       adminMovedScript = lib.getExe adminMoved;
@@ -740,9 +741,13 @@ else
               assert params["address"] == "100.64.0.7" and params["port"] == 8740, params
       EOF
 
-      # Without ntfy the notifier says so and succeeds.
+      # Without ntfy the notifier says so and succeeds; with it, it posts to the
+      # topic's URL alone, reading no token and sending no credential.
       "$notifyUnconfigured" > notify.log
       grep -q "not configured" notify.log
+      grep -q -- "https://ntfy.example/caracole" "$notifyConfigured"
+      lacks Authorization "$notifyConfigured"
+      lacks CREDENTIALS_DIRECTORY "$notifyConfigured"
 
       # caracole-admin runs as the units do: their user, folders and sandbox,
       # network included, and no credentials.
