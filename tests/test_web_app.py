@@ -14,7 +14,6 @@ from caracole.library import song_dir
 from caracole.songs import update_song
 from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
-from caracole.web.security import session_value
 
 from conftest import add_song
 from helpers.rendered import rendered_song
@@ -2382,14 +2381,6 @@ def test_the_lookup_pages_script_hears_a_refusal_as_data_and_is_told_to_reload(a
     assert queue.snapshot() == []
 
 
-def test_before_signing_in_the_api_and_the_lookups_answer_data(locked, conn):
-    response = get(locked, "/api/search?q=creep")
-    assert response.status == 401 and as_json(response)["reload"] is True
-    refused = lookup(locked, {"artist": "Radiohead", "title": "Creep"})
-    assert refused.status == 401 and "Sign in" in as_json(refused)["error"]
-    assert get(locked, "/lookup").status == 401 and 'action="/login"' in text(get(locked, "/lookup"))
-
-
 def test_a_job_is_served_as_data_with_each_step_and_its_state(app, queue):
     lookup(app, {"artist": "Radiohead", "title": "Creep"})
     data = as_json(get(app, "/api/jobs/1"))
@@ -2689,23 +2680,7 @@ def test_a_viewer_of_a_song_the_database_no_longer_holds_is_not_served(app, conn
     assert get(app, "/" + quote("Soda Stereo/De Música Ligera/sheet.html")).status == 404
 
 
-def test_no_page_shows_a_secret(tmp_path, queue, conn):
-    from caracole.config import load_config
-
-    secret_cfg = load_config(None, env={
-        "HOME": str(tmp_path / "home"), "STATE_DIRECTORY": str(tmp_path / "state"),
-        "CACHE_DIRECTORY": str(tmp_path / "cache"), "CARACOLE_NTFY_TOKEN": "ntfy-secret-token",
-    })
-    app = WebApp(secret_cfg, queue, allowed=ALLOWED, csrf="tok")
-    add_song(conn, "Radiohead", "Creep")
-    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall", "fetch": "1"})
-    queue.run_pending()
-    for path in ("/", "/jobs"):
-        body = get(app, path).body
-        assert b"ntfy-secret-token" not in body, path
-
-
-def test_the_database_and_secrets_are_never_served(app, cfg, conn):
+def test_the_database_is_never_served(app, cfg, conn):
     add_song(conn, "Radiohead", "Creep")
     (cfg.library_dir).mkdir(parents=True, exist_ok=True)
     (cfg.library_dir / "Evil").symlink_to(cfg.state_dir, target_is_directory=True)
@@ -2714,53 +2689,17 @@ def test_the_database_and_secrets_are_never_served(app, cfg, conn):
         assert get(app, path).status == 404, path
 
 
-# --- an access token ------------------------------------------------------------------------------
+# --- no sign-in -----------------------------------------------------------------------------------
 
 
-@pytest.fixture
-def locked(cfg, queue):
-    return WebApp(cfg, queue, allowed=ALLOWED, csrf="tok", access_token="a-long-random-access-token")
-
-
-def test_with_an_access_token_nothing_is_shown_before_signing_in(locked, conn):
+def test_there_is_no_sign_in_every_page_goes_to_whoever_reaches_the_server(app, conn):
+    # caracole serve is for a network you trust: no access token, no cookie, no sign-in page.
     add_song(conn, "Radiohead", "Creep")
-    for path in ("/", "/jobs", "/_todo.md"):
-        response = get(locked, path)
-        assert response.status == 401 and b"Radiohead" not in response.body
-        assert 'action="/login"' in text(response)
-    assert post(locked, "/request", {"artist": "A", "title": "B"}).status == 401
-    # The page's script is told to sign in again, in JSON.
-    response = get_json(locked, "/jobs.json")
-    assert response.status == 401 and "Sign in" in answer(response)["error"]
-    response = post(locked, "/request", {"artist": "A", "title": "B"}, accept=JSON)
-    assert response.status == 401 and "Sign in" in answer(response)["error"]
-
-
-def test_signing_in_sets_a_cookie_that_opens_the_library(locked, conn):
-    add_song(conn, "Radiohead", "Creep")
-    assert post(locked, "/login", {"token": "wrong"}).status == 401
-    assert post(locked, "/login", {"token": "a-long-random-access-token"}, csrf="bad").status == 403
-    response = post(locked, "/login", {"token": "a-long-random-access-token"})
-    assert response.status == 303 and header(response, "location") == "/"
-    cookie = header(response, "set-cookie")
-    value = session_value("a-long-random-access-token")
-    assert cookie.startswith(f"caracole_session={value};")
-    # Lax, not Strict: the sandboxed viewer's links are navigations from another origin (its own),
-    # which a Strict cookie doesn't go with. Writes keep the form token and the cross-origin check.
-    assert "HttpOnly" in cookie and "SameSite=Lax" in cookie and "Path=/" in cookie
-    assert "a-long-random-access-token" not in cookie
-    signed_in = get(locked, "/", cookie=f"caracole_session={value}")
-    assert signed_in.status == 200 and "Radiohead - Creep" in text(signed_in)
-    assert get(locked, "/", cookie="caracole_session=forged").status == 401
-
-
-def test_a_viewer_waits_for_signing_in_like_any_file(locked, conn, cfg):
-    rendered_song(conn, cfg)
-    viewer = "/" + quote("Soda Stereo/De Música Ligera/sheet.html")
-    response = get(locked, viewer)
-    assert response.status == 401 and b"Palabras" not in response.body
-    signed_in = get(locked, viewer, cookie=f"caracole_session={session_value('a-long-random-access-token')}")
-    assert signed_in.status == 200 and b"Palabras" in signed_in.body
+    response = get(app, "/")
+    assert response.status == 200 and "Radiohead - Creep" in text(response)
+    assert header(response, "set-cookie") is None
+    assert get(app, "/login").status == 404
+    assert post(app, "/login", {"token": "a-long-random-access-token"}).status == 404
 
 
 def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_own():

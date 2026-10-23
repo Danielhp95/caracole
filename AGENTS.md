@@ -92,7 +92,7 @@ Rules a change there keeps (the Invariants below are the others):
   one bundle (`web/alphatab.py`: the library, its font and its SoundFont, from `CARACOLE_ALPHATAB_DIR`) by
   `<script src integrity crossorigin>`, which its policy allows by the bundle's SHA-256, as it does the
   `@font-face` stylesheet alphaTab adds (`alphatab.font_face`, pinned by test_web_guitar_browser.py); the bundle
-  route is `Route.public` (no sign-in) and answers any origin. Enter in a search box never
+  route answers any origin. Enter in a search box never
   spends a request on a guess: on the lookup page it acts only on `/api/search`'s `best` (or
   opens the leading artist's songs), and on the library page, whose served bar searches
   `/api/search` as you type (which asks no site), it only moves the focus to the first result;
@@ -232,7 +232,12 @@ Rules a change there keeps (the Invariants below are the others):
   app.py. A route refuses with `pages.Refused`, which `WebApp.handle` answers as the message
   page, or to the page's script as JSON: every refusal as data. Every `/api/` read is refused to
   another site's fetch (`security.own_page_read`), and every write passes security.py's
-  cross-origin check and carries the form token. Beyond a wanted.txt line, every change runs as a
+  cross-origin check and carries the form token. There is no sign-in, by the owner's choice: no access
+  token, no cookie, no secret; whoever can reach the server may use it, so it is for a network they trust (a
+  LAN, a tailnet). What keeps other sites' pages out is the host-name check (DNS rebinding), the
+  cross-origin check, the form token and `own_page_read`, with Referrer-Policy `same-origin` (header and
+  every page's meta tag), so that a form a phone posts over plain HTTP carries its Origin
+  (`test_web_server.py::test_a_phone_on_the_lan_cancels_a_request`). Beyond a wanted.txt line, every change runs as a
   `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
   shows is status.py's, read from the job's steps and the song's state, never from which commands
   ran: a step's label is that line while it runs ("Adding to the library…"). The requests page

@@ -3,7 +3,7 @@
     GET  /guitar?file=    the page of a Guitar Pro file caracole keeps (``file``: its path in the library), with
                           the file's bytes inline (guitar_page.py)
     GET  /assets/alphatab[/<name>]  alphaTab's bundle (alphatab.py), which that page loads: to any origin,
-                          signed in or not, kept for good
+                          kept for good
 
 ``/guitar`` shows only a file caracole recorded as a song's Guitar Pro file (``inbox.guitar_files``: a
 ``guitar-N.<ext>`` in the files table, filed from the inbox or downloaded from gtptabs.com) in a format alphaTab
@@ -14,9 +14,8 @@ is served in a sandbox with its own policy (``guitar_page.policy``), which the r
 
 The page loads the bundle by its address under ``/assets/alphatab/``, which names its hash, so the bundle is sent
 with ``Cache-Control: immutable``; any other name there is 404. The page's sandbox gives it an origin of its own, so
-the bundle is asked for by another origin, without the sign-in cookie: it is the same for anyone (alphaTab, its
-font and its SoundFont, all published), so it is answered to any origin (``Access-Control-Allow-Origin: *``),
-signed in or not (``Route.public``). Without alphaTab (``CARACOLE_ALPHATAB_DIR`` unset), ``/guitar`` says so (503),
+the bundle is asked for by another origin: it is the same for anyone (alphaTab, its font and its SoundFont, all
+published), so it is answered to any origin (``Access-Control-Allow-Origin: *``). Without alphaTab (``CARACOLE_ALPHATAB_DIR`` unset), ``/guitar`` says so (503),
 the library page offers Guitar Pro files as downloads alone, and ``/assets/alphatab/`` answers 404.
 """
 
@@ -38,7 +37,7 @@ ONE_YEAR = 365 * 24 * 3600
 
 ROUTES = (
     Route("GET", "/guitar", lambda app, asked: guitar(app, asked.target)),
-    Route("GET", ASSETS, lambda app, asked: asset(app, address(asked)[len(ASSETS):]), under=True, public=True),
+    Route("GET", ASSETS, lambda app, asked: asset(app, address(asked)[len(ASSETS):]), under=True),
 )
 
 NOT_KEPT = Refused(404, "Not a Guitar Pro file", "That isn't a Guitar Pro file caracole keeps in the library.")

@@ -2779,9 +2779,11 @@ is no progression exits with status 2.
 
 ### caracole serve
 
-`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…
-[--token-file FILE]` serves the library page over HTTP, at
-`http://127.0.0.1:8737/` by default, with what the file on disk can't do:
+`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…`
+serves the library page over HTTP, at `http://127.0.0.1:8737/` by default,
+with what the file on disk can't do. It has no sign-in: anyone who can reach it
+can read the library and request songs, so keep it on a network you trust (see
+Who can reach it, below).
 
 - **Search as you type.** The library page's search box filters your songs as
   you type, here as on the file, and from the third letter (the second with a
@@ -3335,7 +3337,7 @@ command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
 and Guitar Pro, Power Tab and MuseScore's score files (`.mscz`, `.mxl`,
 `.musicxml`, `.mid`, `.midi`) as downloads, never through a symbolic link, never a
-hidden file, and never the database, the token or the cache. A download is
+hidden file, and never the database or the cache. A download is
 named for its song, whatever it is called in the song's folder (where it stays
 `guitar-N` or `score-N`): `Eagles - Hotel California.gp3`, its second file
 `Eagles - Hotel California (2).gp5`, accents and Chinese as they are, and
@@ -3349,7 +3351,7 @@ its name in the folder. A songbook's page,
 `_songbooks/<name>/songbook.html`, is sent only while it is the very page
 caracole wrote there, as recorded when it wrote it (anyone with a synced device
 could put a page of their own in the library), and in a sandbox: its scripts
-run, but it can reach neither the server nor your sign-in, and keeps no
+run, but it can't reach the server, and keeps no
 storage, so the song it shows is the one in its address (`#song-3`), where the
 viewer keeps the song's transposition, mode, capo, text size and scroll speed
 too (`#song-3=&t=2&fs=20&speed=8`). Edited
@@ -3373,10 +3375,7 @@ viewer an older caracole wrote keeps working after an upgrade until the next
 render writes it again. It works as it does from the folder, but keeps only
 the transposition, the mode, the capo, the text size and the scroll speed, in
 its address: a reload or Back keeps them, and opening it again from the library starts
-afresh. Its links to
-the PDF and back to the library work with an access token too: the sign-in
-cookie goes with a link followed from another page, but not with a form
-another site posts or anything it loads from the server.
+afresh.
 
 **Guitar Pro files in the browser.** Served, a song's Guitar Pro file
 (`guitar-N.gp3`, `.gp4`, `.gp5`, `.gpx` or `.gp`, one caracole keeps: filed
@@ -3419,14 +3418,17 @@ the page. The page runs in a sandbox, like a viewer, and loads one thing from
 the server: alphaTab, its music font and its SoundFont, about 2.9 MB in one
 script, `/assets/alphatab/alphatab-1.8.4-<hash>.js`, which the browser checks
 against its hash and keeps for good. That script is the same for anyone, so the
-server sends it signed in or not. Only caracole serve does this: `index.html`
+server sends it to any origin, the page's sandbox among them. Only caracole serve does this: `index.html`
 opened from the folder lists the file as before, and the server needs alphaTab
 for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`, see
 [install.md](install.md)). Without it the server runs all the same, the line's ⋯
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
 
-Who can reach it:
+Who can reach it: there is no sign-in, no access token and no cookie, so
+whoever can reach the server can read the library, request songs and change
+songbooks. Keep it reachable only on a network you trust, your LAN or your
+tailnet, never the internet.
 
 - `--address` is 127.0.0.1 by default: this machine alone. A LAN or tailnet
   address, or 0.0.0.0 for every address, opens it to those networks. `--port`
@@ -3446,11 +3448,8 @@ Who can reach it:
   Only the served page may ask the server anything from its script (its
   Content-Security-Policy has `connect-src 'self'`); `index.html` on disk asks
   nothing of anyone.
-- `--token-file FILE` asks each browser once for the access token in FILE (16
-  characters or more, such as `openssl rand -base64 24`), then remembers it in
-  a cookie. Without the option, a `web_token` credential from systemd
-  (`$CREDENTIALS_DIRECTORY/web_token`) does the same. Listening beyond this
-  machine without a token, it warns.
+- These keep other sites' pages, open in a browser on your network, from using
+  the server; they keep out no person or program on the network itself.
 
 It runs until Ctrl-C. On the NUC, `services.caracole.web` runs it as a unit
 ([deploy.md](deploy.md), section 8).

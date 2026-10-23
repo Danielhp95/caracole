@@ -208,7 +208,7 @@ function search() {
     .then(data => {
       if (mine !== typed) return;
       if (data.superseded) { timer = setTimeout(search, 150); return; }
-      if (data.error) { status.textContent = data.error; return; }  // the database, or signing in
+      if (data.error) { status.textContent = data.error; return; }  // the database, say
       show(data, text);
     })
     .catch(e => { if (e.name !== "AbortError") status.textContent = "The search failed: " + e.message; });
@@ -537,7 +537,7 @@ function lookUp(pick, display) {
     .catch(e => { if (mine === reading) said("The request failed: " + e.message); });
 }
 
-// A refusal: its sentence; a page's, as its text. A form token older than the server, or signing in, needs a reload.
+// A refusal: its sentence; a page's, as its text. A form token older than the server needs a reload.
 function refused(code, data, text) {
   let why = data && data.error;
   if (!why) {
@@ -546,7 +546,7 @@ function refused(code, data, text) {
     why = words.replace(/\s+/g, " ").trim().slice(0, 240) || "caracole answered " + code + ".";
   }
   said(why);
-  if ((data && data.reload) || code === 401 || code === 403) {
+  if ((data && data.reload) || code === 403) {
     const again = el("a", "btn small primary", "Reload the page");
     again.href = location.pathname + location.search;
     fileLinks.replaceChildren(again);

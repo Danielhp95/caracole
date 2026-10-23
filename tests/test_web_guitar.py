@@ -127,16 +127,6 @@ def test_any_other_name_there_is_not_found(app, fake_alphatab):
         assert get(app, "/assets/alphatab/" + name).status == 404, name
 
 
-def test_the_bundle_is_served_before_signing_in_and_the_page_is_not(cfg, conn, fake_alphatab):
-    locked = WebApp(replace(cfg, alphatab_dir=fake_alphatab), JobQueue(Recorder()), allowed=ALLOWED, csrf="tok",
-                    access_token="a-long-random-access-token")
-    _, path = song_with_gp(conn, cfg)
-    # The page in its sandbox asks for the bundle from an origin of its own, with no cookie.
-    assert get(locked, alphatab.load(fake_alphatab).href).status == 200
-    assert get(locked, "/assets/alphatab/nothing.js").status == 404
-    assert get(locked, guitar_url(path)).status == 401
-
-
 def test_without_alphatab_the_page_says_so_and_there_is_no_bundle(cfg, conn):
     plain = WebApp(cfg, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok")
     _, path = song_with_gp(conn, cfg)
