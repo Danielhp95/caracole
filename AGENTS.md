@@ -272,7 +272,10 @@ Rules a change there keeps (the Invariants below are the others):
   (`checks.module`).
 - `docs/`: usage.md (configuration, commands, the to-do page, overrides.toml, the library
   folder), deploy.md (the NixOS host), install.md, and the design files above.
-  web-search.md designs a search-API fallback for matching, not built.
+  web-search.md designs a search-API fallback for matching, not built. screenshots/: the
+  README's pictures, of a demo library of public-domain songs, and make.py, which builds that
+  library with no request and takes them again (its docstring says how): retake them when the
+  pages they show change.
 
 ## Development
 
