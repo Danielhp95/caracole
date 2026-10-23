@@ -112,7 +112,7 @@ def test_a_power_tab_file_is_a_power_tab_version(conn, tmp_path):
 
 def test_titles_meet_as_caracoles_keys_do(conn, tmp_path):
     # "Coffee & TV" is listed twice, as "Coffee & TV" (4 stars) and "Coffee And Tv" (5 stars);
-    # Spotify's suffix goes before the titles are compared.
+    # the version suffix goes before the titles are compared.
     song = add_song(conn, "Blur", "Coffee & TV - 2012 Remaster")
     site = FakeGtpTabs(files={79720: gp_file()})
     run(site, conn, tmp_path)

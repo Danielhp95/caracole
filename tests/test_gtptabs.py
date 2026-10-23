@@ -119,7 +119,7 @@ def test_a_name_without_letters_has_no_key():
     assert artist_keys("!!!") == ()
 
 
-def test_title_keys_drop_spotifys_suffixes():
+def test_title_keys_drop_version_suffixes():
     assert title_key("Song 2 - 2012 Remaster") == "song-2"
     assert title_key("Coffee & TV") == title_key("Coffee And Tv") == "coffee-tv"
 

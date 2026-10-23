@@ -257,7 +257,7 @@ def test_w7_9_a_short_original_title_meets_its_listing_in_two_scripts(conn, tmp_
 
 
 @pytest.mark.parametrize("artist,title,listed", [
-    ("BTS", "Spring Day", "봄날 Bomnal Spring Day"),  # Spotify's title for 봄날
+    ("BTS", "Spring Day", "봄날 Bomnal Spring Day"),  # 봄날's English title
     ("BTS", "Blood Sweat & Tears", "피 땀 눈물 Pi Ttam Nunmul Blood Sweat & Tears"),
     ("YOASOBI", "Yoru ni Kakeru", "夜に駆ける Yoru ni Kakeru Racing Into The Night"),
 ])

@@ -17,7 +17,7 @@ design lives in three files:
   runs `caracole run --config …`, which the CLI rejects (`--config` is a root option:
   `caracole --config FILE run`).
 - `docs/superpowers/plans/2026-10-18-caracole.md`: the task plan, with amendments A1–A7 made
-  during the build: A2 optional Spotify (removed since) and `wanted.txt`, A3 Chinese titles, A4 command
+  during the build: A2 `wanted.txt` (and Spotify, gone since), A3 Chinese titles, A4 command
   plug-ins, A5 agent rules, A6 bare-id tabs, A7 `index.html` and `caracole search`.
 - `docs/spike-2026-10-18.md`: what the live sites did when checked. It corrects plan.md:
   UG's `Pro` is a public Guitar Pro file; a slugged tab answers only at its slugged URL.
@@ -595,13 +595,13 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   takes the song's lines out of wanted.txt first, and stops before anything else when the
   file can't be read; then, in one savepoint, leaves its tombstone (`songs.mark_removed`:
   table `removed`, its key, name and source ids) and deletes its record (versions and files
-  cascade), its per-song kv, its source ids' `songs:fields:` and its lines' `wanted:first_seen:`;
-  then the files caracole wrote. `songs.upsert_song`, the one way a source adds a song, finds a
-  tombstone by source id, or by key when no song has it, and raises `songs.SongRemoved`
-  unless the source asks again (`_unless_removed`): a wanted.txt line always does (`caracole
-  add`, the web page, a line typed), and no other source ever does. Nothing else may create a song
+  cascade), its per-song kv and its lines' `wanted:first_seen:`; then the files caracole wrote.
+  `songs.upsert_song`, the one way a song is added, is given wanted.txt lines alone (`caracole
+  add`, the web page, a line typed): a line for a removed song asks for it again, so its tombstone
+  (found by source id, or by key when no song has it) goes and the song comes back new. Nothing
+  else may create a song
   (`test_removal.py::test_the_next_sync_brings_nothing_back_until_you_ask_for_the_song_again`,
-  `test_songs.py::test_no_source_but_a_wanted_line_brings_a_removed_song_back`).
+  `test_songs.py::test_a_wanted_line_brings_a_removed_song_back_as_new`).
 - **Schema changes go through db.py**: bump `SCHEMA_VERSION` and add the script to
   `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
   (`VACUUM INTO`, under a name of its own, then renamed), then runs each script in one `BEGIN IMMEDIATE`
@@ -696,8 +696,6 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (the library page's script; without it, a page of its own), having asked what goes
   (`removal.plan_removal`, which only reads, and `removal.brief`); its job's song key is
   `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.
-- **wanted.txt is the one source of songs.** `sources.sync_sources` syncs it alone. Spotify was
-  one once: a song an older caracole had from it is an ordinary song, keeping its Spotify source
-  ids and what they last said (`songs:fields:spotify:`, after the line's word: `songs._resolve`),
-  and the kv rows its sync wrote (`source:spotify`, `spotify:top_tracks`,
-  `spotify:retry_after_until`) stay, read by nothing.
+- **wanted.txt is the one source of songs.** `sources.sync_sources` syncs it alone, and a song's
+  album, duration, ISRC and variant are what its line says now, kept in its record alone
+  (`songs.upsert_song`; `test_songs.py::test_a_song_keeps_what_its_line_says_in_its_own_record_alone`).

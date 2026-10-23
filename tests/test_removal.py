@@ -18,10 +18,8 @@ CREEP = "radiohead/creep"
 
 
 def creep(conn, cfg, *, wanted="Radiohead - Creep\nOasis - Wonderwall\n"):
-    """Radiohead's Creep, from wanted.txt and, as an older caracole had it, Spotify, with what caracole keeps of a
-    found song."""
+    """Radiohead's Creep, from wanted.txt, with what caracole keeps of a found song."""
     song = add_song(conn, "Radiohead", "Creep", source="wanted", source_id=CREEP)
-    add_song(conn, "Radiohead", "Creep", source="spotify", source_id="tCreep")
     if wanted is not None:
         cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
         cfg.wanted_file.write_text(wanted, encoding="utf-8")
@@ -74,12 +72,11 @@ def test_a_song_goes_with_its_files_its_wanted_line_and_its_record(conn, cfg):
     assert list_songs(conn) == []
     for table in ("versions", "files"):
         assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
-    for key in (f"render:{song.id}", f"render:{song.id}:auto", f"ug:blocked:{song.id}",
-                f"songs:fields:wanted:{CREEP}", "songs:fields:spotify:tCreep", f"wanted:first_seen:{CREEP}"):
+    for key in (f"render:{song.id}", f"render:{song.id}:auto", f"ug:blocked:{song.id}", f"wanted:first_seen:{CREEP}"):
         assert db.kv_get(conn, key) is None, key
     stone = removed_song(conn, CREEP)
     assert (stone.display, stone.removed_at) == ("Radiohead - Creep", "2026-10-19T12:00:00Z")
-    assert stone.source_ids == {"wanted": [CREEP], "spotify": ["tCreep"]}
+    assert stone.source_ids == {"wanted": [CREEP]}
 
 
 def test_your_own_files_stay_in_the_folder_and_the_removal_says_so(conn, cfg, tmp_path):

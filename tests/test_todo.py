@@ -1014,16 +1014,6 @@ def test_provider_health_shows_cooldown(conn, cfg):
     assert "HTTP 403" in text
 
 
-def test_what_an_older_caracole_kept_of_spotify_shows_nowhere(conn, cfg):
-    # A database from before Spotify went still holds its top tracks and how its last sync went.
-    add_song(conn, "Radiohead", "Creep")
-    kv_set_json(conn, "spotify:top_tracks", [{"id": "2", "title": "Karma Police", "artists": ["Radiohead"]}])
-    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-18T03:30:00Z",
-                                         "message": "the refresh token was revoked"})
-    text = todo(conn, cfg)
-    assert "Spotify" not in text and "Karma Police" not in text and "auth" not in text
-
-
 def test_sources_status(conn, cfg):
     text = todo(conn, cfg)
     assert "- wanted.txt: not created yet. `caracole add ARTIST TITLE` creates it." in section_of(text, "Sources")

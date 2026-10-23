@@ -489,6 +489,24 @@ def test_a_version_8_database_loses_ultimate_guitars_guitar_pro_picks_and_keeps_
     assert columns(path.with_name("caracole.sqlite.v8.bak"), "versions")[1] == 8
 
 
+def test_a_version_8_database_loses_what_each_line_said_beside_its_song(tmp_path):
+    # A song's record is its wanted.txt line's word, kept nowhere else: the copies an older caracole kept in kv go.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 9)) + "\nPRAGMA user_version = 8;")
+    old.executemany("INSERT INTO kv VALUES (?, ?)", [
+        ("songs:fields:wanted:oasis/wonderwall", '{"album": "Morning Glory"}'),
+        ("songs:key_version", "3"), ("wanted:first_seen:oasis/wonderwall", "2026-10-01T00:00:00Z")])
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert [r[0] for r in c.execute("SELECT key FROM kv ORDER BY key")] == [
+        "songs:key_version", "wanted:first_seen:oasis/wonderwall"]
+    c.close()
+
+
 def test_an_artist_no_row_has_any_longer_leaves_the_index_of_their_words(conn):
     def by_word(word):
         return [r[0] for r in conn.execute("SELECT artist_key FROM ug_artists WHERE id IN "

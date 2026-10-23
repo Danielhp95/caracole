@@ -451,7 +451,7 @@ def test_a_catch_all_title_must_hold_the_artists_name(conn):
 
 
 def test_a_show_song_under_its_composers_name_is_found_at_the_end_of_a_catch_all_title(conn):
-    # Spotify credits EPIC's songs to Jorge Rivera-Herrans, whose name UG's title doesn't hold.
+    # Streaming services credit EPIC's songs to Jorge Rivera-Herrans, whose name UG's title doesn't hold.
     index(conn, EPIC, *NEAR_EPIC)
     r = match(conn, "Jorge Rivera-Herrans", "Not Sorry for Loving You")
     assert summary(r) == ("review", "catch_all", 90.0, "misc-musicals", "epic-the-musical-not-sorry-for-loving-you")

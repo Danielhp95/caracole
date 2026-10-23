@@ -1781,7 +1781,7 @@ def test_an_entry_written_as_ug_names_the_artist_serves_the_songs_artist(conn, t
 
 
 @pytest.mark.parametrize("listed,found", [
-    ("De Musica Ligera (Unplugged)", True),  # the same title once Spotify-style suffixes go
+    ("De Musica Ligera (Unplugged)", True),  # the same title once version suffixes go
     ("De Música Ligeras", True),  # rapidfuzz ratio 97
     ("De Música", False),  # ratio 72: another song
 ])

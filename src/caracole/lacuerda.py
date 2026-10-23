@@ -149,8 +149,8 @@ def artist_slug_candidates(name: str) -> tuple[str, ...]:
     """Slugs worth trying for an artist, best guess first.
 
     After :func:`artist_slug` come the slug that keeps a leading article and the
-    slug with "y" and "&" swapped, because names disagree on both (Spotify's
-    "Fito y Fitipaldis" is LaCuerda's ``fito__fitipaldis``). Each extra
+    slug with "y" and "&" swapped, because names disagree on both ("Fito y
+    Fitipaldis" is LaCuerda's ``fito__fitipaldis``). Each extra
     candidate costs a request only when the ones before it miss.
     """
     variants = [name]

@@ -280,7 +280,7 @@ def assert_missed(conn, song, tmp_path):
 
 
 def test_a_soft_404_moves_on_to_the_next_artist_slug(conn, tmp_path):
-    # Spotify writes "Fito y Fitipaldis"; LaCuerda's slug comes from "Fito & Fitipaldis".
+    # A line writes "Fito y Fitipaldis"; LaCuerda's slug comes from "Fito & Fitipaldis".
     site = fito_site()
     song = spanish_song(conn, "Fito y Fitipaldis", "Por la boca vive el pez")
     assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
@@ -476,7 +476,7 @@ def test_spanish_lyrics_decide_whatever_the_title(conn, tmp_path):
     assert run(site, conn, tmp_path) == LaCuerdaStats(tried=1, kept=1)
 
 
-def test_a_title_is_judged_without_spotifys_suffixes(conn, tmp_path):
+def test_a_title_is_judged_without_its_version_suffixes(conn, tmp_path):
     # "(with Juanes)" alone would tip "Corazón" to English.
     site = FakeLaCuerda()
     add_song(conn, "Fonseca", "Corazón (with Juanes)")

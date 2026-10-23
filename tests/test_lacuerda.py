@@ -350,7 +350,7 @@ def test_match_title_exact(artist_songs):
     assert match_title(artist_songs, "De Música Ligera").slug == "de_musica_ligera"
 
 
-def test_match_title_cleans_spotify_suffixes(artist_songs):
+def test_match_title_cleans_version_suffixes(artist_songs):
     assert (
         match_title(artist_songs, "De Música Ligera - Remasterizado 2007").slug
         == "de_musica_ligera"

@@ -320,11 +320,14 @@ INSERT OR IGNORE INTO ug_artists(artist_key) SELECT DISTINCT artist_key FROM ug_
 # their version), no pick. The artist pages' tabs of those kinds go too: searches no longer count them, and they
 # are no longer stored. ug_index keeps its Guitar Pro and Power Tab rows, which the matcher reads whole (a song
 # UG has only as a Guitar Pro file is still that song): ug/lookup.py's song_tabs reads a song's tabs without them.
+# A song's record is its wanted.txt line's word (songs.upsert_song): the copy of each line's word an older caracole
+# kept in kv, to arbitrate between sources, goes.
 _SCHEMA_V9 = """
 DELETE FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power')
   AND NOT EXISTS (SELECT 1 FROM files f WHERE f.version_id = versions.id);
 UPDATE versions SET pick_rank = NULL WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power');
 DELETE FROM ug_artist_tabs WHERE type IN ('guitar-pro', 'power');
+DELETE FROM kv WHERE substr(key, 1, 13) = 'songs:fields:';
 """
 
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),

@@ -6,8 +6,8 @@ A removal takes, in this order:
    file kept byte for byte. A wanted.txt caracole can't read stops it here, before
    anything goes: a line it left there would bring the song back;
 2. its record out of the database, with its versions, its kept files' rows, its
-   match and lyrics, and what other modules keep in kv under its id or its source
-   ids, and leaves its tombstone (``songs.mark_removed``), so that no source brings
+   match and lyrics, and what other modules keep in kv under its id or its lines'
+   keys, and leaves its tombstone (``songs.mark_removed``), so that nothing brings
    it back until you ask for it again (``songs.upsert_song``);
 3. the files caracole wrote out of its folder (``plan_removal`` says which), then
    the folder, and its artist's, once empty;
@@ -37,7 +37,7 @@ from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.logs import plural
 from caracole.library import song_dir, song_folder, songs_in_folder
 from caracole.sheet_versions import tab_of, version_names
-from caracole.songs import SHEET_OUTPUTS, SOURCE_FIELDS_KV, Song, delete_song_kv, is_export, mark_removed
+from caracole.songs import SHEET_OUTPUTS, Song, delete_song_kv, is_export, mark_removed
 
 _LYRICS = ("lyrics.txt", "lyrics.lrc")
 _INFO = "info.json"
@@ -148,9 +148,6 @@ def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now
     with savepoint(conn, "remove_song"):
         mark_removed(conn, song, stamp)
         delete_song_kv(conn, song.id)
-        for source, ids in song.source_ids.items():
-            for source_id in ids:
-                kv_delete(conn, f"{SOURCE_FIELDS_KV}{source}:{source_id}")
         for key in _wanted_keys(song):
             kv_delete(conn, FIRST_SEEN_KEY + key)
         conn.execute("DELETE FROM songs WHERE id = ?", (song.id,))  # its versions and files go with it
