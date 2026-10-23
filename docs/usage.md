@@ -35,8 +35,12 @@ that is set). Without a file, the defaults apply. Every key is optional, and an
 unknown key is an error, so a typo never falls back to a default unnoticed. So
 is a value of the wrong type or out of range: write `true` and `false`, and
 numbers, without quotes, and paths and names as quoted strings. The commands
-then exit with status 2 and name the key. `~` is your home folder, and a
-relative path is relative to the config file's folder.
+then exit with status 2 and name the key. An older caracole's `[spotify]`,
+`guitar_pro_mode`, `keep_guitar_pro` under `[rank]` and `token_file` under
+`[ntfy]` are unknown keys now: delete them before you upgrade, or every
+command, the nightly run and `caracole serve` among them, stops at its start.
+`~` is your home folder, and a relative path is relative to the config file's
+folder.
 
 Here is every key with its default. The commented-out keys have none.
 
