@@ -595,14 +595,13 @@ def test_inbox_lists_a_link_as_refused_never_as_a_file_to_rename(conn, cfg):
 
 
 def test_a_linked_inbox_lists_nothing_of_what_it_points_at(conn, cfg):
-    # A link in place of _inbox/ would list the folder it points at: the credentials' names, say.
-    private = cfg.state_dir / "credentials"
-    private.mkdir(parents=True)
-    (private / "ntfy_token").write_text("x", encoding="utf-8")
+    # A link in place of _inbox/ would list the folder it points at: caracole's state directory, its database
+    # and all, say.
+    assert (cfg.state_dir / "caracole.sqlite").is_file()
     cfg.library_dir.mkdir(parents=True)
-    (cfg.library_dir / "_inbox").symlink_to(private)
+    (cfg.library_dir / "_inbox").symlink_to(cfg.state_dir)
     text = todo(conn, cfg)
-    assert "ntfy_token" not in text
+    assert "caracole.sqlite" not in text
     section = section_of(text, "Inbox: files caracole couldn't place")
     assert "- `_inbox` is a symbolic link, so this page doesn't list what it points at. Make `_inbox` a folder " \
            "of its own." in section

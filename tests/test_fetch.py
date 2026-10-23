@@ -2784,7 +2784,7 @@ def test_rescore_skips_a_sheet_json_it_cannot_read(conn, tmp_path, damage):
 @pytest.mark.parametrize("planted", ["link", "fifo"])
 def test_rescore_reads_nothing_through_a_sheet_json_planted_in_the_library(conn, tmp_path, planted):
     # Every synced device can write to the library: a sheet.json swapped for a link to a private file
-    # (the database, a credential) must not be read, nor a FIFO left to hang the run. Either is
+    # (the database, the HTTP cache) must not be read, nor a FIFO left to hang the run. Either is
     # no sheet, as a missing one is.
     song = accepted(conn)
     vid = keep_sheet(conn, tmp_path, song, sheet("lacuerda sheet", LINES))

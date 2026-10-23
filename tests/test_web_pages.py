@@ -1,5 +1,5 @@
-"""caracole/web/pages.py: the pages caracole serve writes itself (Requests, a song's pick, signing in, a
-removal), in Chromium: on a touch screen every control is a thumb's size, and every field has an edge an
+"""caracole/web/pages.py: the pages caracole serve writes itself (Requests, a song's pick, a removal), in
+Chromium: on a touch screen every control is a thumb's size, and every field has an edge an
 eye can find, in light and dark (index.html's BASE_STYLE and PICKER_STYLE, which they share)."""
 
 from __future__ import annotations

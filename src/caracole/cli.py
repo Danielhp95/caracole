@@ -52,7 +52,8 @@ def build_app(extra_modules: Iterable[str] = ()) -> typer.Typer:
         help="Build a private library of chord sheets, lyrics and guitar parts.",
         no_args_is_help=True,
         add_completion=False,
-        # A traceback goes to the log as plain text (``main``), never rich's, with its local variables.
+        # A traceback goes to the log as plain text (``main``), never as rich's, which would print its local
+        # variables.
         pretty_exceptions_enable=False,
     )
 

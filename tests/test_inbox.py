@@ -240,11 +240,11 @@ def test_unmatched_stays(conn, cfg):
 
 
 def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
-    # Anyone who can write to the library could point a link at caracole's credentials, under a name the
-    # to-do page would list (its inbox section).
+    # Anyone who can write to the library could point a link at a private file of caracole's (an HTTP cache
+    # entry, say), under a name the to-do page would list (its inbox section).
     s = add_song(conn)
-    secret = tmp_path / "credentials" / "ntfy_token"
-    secret.parent.mkdir()
+    secret = tmp_path / "cache" / "http" / "entry"
+    secret.parent.mkdir(parents=True)
     secret.write_text("f00dfeedcafe0123456789abcdef0123\n")
     inbox = cfg.library_dir / "_inbox"
     inbox.mkdir(parents=True)

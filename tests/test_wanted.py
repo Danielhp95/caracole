@@ -462,9 +462,10 @@ def test_sync_of_an_unreadable_path_is_an_error_not_a_crash(tmp_path):
 
 @pytest.fixture
 def secret(tmp_path):
-    """A credential of caracole's: wanted.txt sits in the library, which others can write to."""
-    path = tmp_path / "credentials" / "ntfy_token"
-    path.parent.mkdir()
+    """A private file of caracole's, an HTTP cache entry say: wanted.txt sits in the library, which others can
+    write to."""
+    path = tmp_path / "cache" / "http" / "entry"
+    path.parent.mkdir(parents=True)
     path.write_text("tk_abcdefghijklmnopqrstuvwxyz012\n", encoding="utf-8")
     return path
 

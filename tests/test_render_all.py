@@ -1223,14 +1223,14 @@ def test_unreadable_auto_sheet_fails_that_song_only(conn, cfg, caplog, data):
 # planted there must not copy caracole's private files into a .cho or a PDF, nor have one
 # written over; a FIFO must not hold up the pass.
 
-SECRET = "refresh-token-s3cr3t"
+SECRET = "private-s3cr3t"
 
 
 @pytest.fixture
 def private_file(cfg) -> Path:
-    """A file only caracole may read, in its state directory. It is shaped like sheet.json, so a
-    sheet read through a link to it would carry the secret into the .cho and the PDF."""
-    path = cfg.state_dir / "credentials.json"
+    """A file only caracole may read, in its state directory. It is shaped like sheet.json, so a sheet read
+    through a link to it would carry what it holds into the .cho and the PDF."""
+    path = cfg.state_dir / "private.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"content": SECRET}), encoding="utf-8")
     return path
