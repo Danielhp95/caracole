@@ -43,7 +43,7 @@ Here is every key with its default. The commented-out keys have none.
 # data_dir = "..."                # one folder for the four below (see below)
 library_dir = "~/Tabs"            # sheets, lyrics, _todo.md, index.html, wanted.txt
 music_dir = "~/Music"             # tracks you bought; read only, used only for auto-chords
-# state_dir = "..."               # the database, the Spotify token and the lock (see below)
+# state_dir = "..."               # the database and the lock (see below)
 # cache_dir = "..."               # every raw response, kept forever (see below)
 # overrides_file = "..."          # default: overrides.toml in library_dir
 # wanted_file = "..."             # default: wanted.txt in library_dir
@@ -53,14 +53,6 @@ chordpro_bin = "chordpro"         # the program that renders PDFs
 ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouTube"
 # pdf_fonts = "/path/to/folder"   # or $CARACOLE_PDF_FONTS; see "Fonts in the PDFs"
 # cjk_font = "/path/to/font.ttf"  # or $CARACOLE_CJK_FONT; see "Fonts for Chinese sheets"
-
-[spotify]                         # optional: without a client_id, Spotify is skipped
-# client_id = "your-app-client-id"
-# client_secret_file = "/path/to/spotify_client_secret"
-redirect_uri = "http://127.0.0.1:8888/callback"
-liked_songs = true                # read your Liked Songs
-playlists = []                    # names, ids or links of playlists you own or collaborate on
-suggest_top_tracks = true         # list your top tracks on the to-do page; never added
 
 [ntfy]                            # optional: a summary after each run, and alerts
 # url = "https://ntfy.sh/a-long-private-topic"
@@ -123,8 +115,8 @@ at 100, and `scored_sheets` and `keep_guitar_pro` are whole numbers.
 it, `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/caracole`, else `~/.local/state/caracole`. `cache_dir` works the
 same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
-`~/.cache/caracole`. The state folder holds `caracole.sqlite`, the Spotify token
-and `caracole.lock`: back it up, but don't sync it. The cache keeps every
+`~/.cache/caracole`. The state folder holds `caracole.sqlite` and
+`caracole.lock`: back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
 goes when the PDF is done, so caracole must be able to write there. Its
@@ -158,12 +150,9 @@ folder caracole can't use ends a command with status
 `caracole add` is the exception to both: it keeps its line and warns (see
 below).
 
-**Secrets** stay out of the file. The Spotify client secret comes from
-`$CREDENTIALS_DIRECTORY/spotify_client_secret` (systemd's `LoadCredential`),
-else the file `client_secret_file` names, else
-`$CARACOLE_SPOTIFY_CLIENT_SECRET`. The ntfy token comes from
-`$CREDENTIALS_DIRECTORY/ntfy_token`, else `token_file`, else
-`$CARACOLE_NTFY_TOKEN`.
+**Secrets** stay out of the file. The ntfy token comes from
+`$CREDENTIALS_DIRECTORY/ntfy_token` (systemd's `LoadCredential`), else the
+file `token_file` names, else `$CARACOLE_NTFY_TOKEN`.
 
 **Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`
 and `youtube`. Any other `[providers.…]` table is an error, like any other
@@ -219,14 +208,14 @@ says come before the command (`caracole -v run`):
 | none | the problems: warnings and errors |
 | `-q`, `--quiet` | the problems too; `caracole run` also cuts its summary down to what needs you and what went wrong |
 | `-v`, `--verbose` | caracole's own information too, such as a line per request: `LRCLIB GET https://lrclib.net/api/get?… → 503 Service Unavailable in 0.21 s (1 of 200 requests)`, or `→ 200 OK from the cache` for an answer it sent no request for |
-| `-vv` | debugging lines too, each with the name of its logger, and the logs of the libraries caracole uses (httpx, httpcore, urllib3, spotipy, and numba or torch under auto-chords), which otherwise show only their warnings and errors |
+| `-vv` | debugging lines too, each with the name of its logger, and the logs of the libraries caracole uses (httpx, httpcore, and numba or torch under auto-chords), which otherwise show only their warnings and errors |
 
 A warning starts with `warning:` and an error with `error:`, coloured on a
 terminal unless `$NO_COLOR` is set; nothing is coloured when the output isn't
 a terminal. Under systemd, each line starts with its priority for the journal
 instead (see [deploy.md](deploy.md#logs)). No secret reaches the log, at any
-level: not the Spotify client secret, the ntfy token, an Authorization header
-or an OAuth token.
+level: not the ntfy token, `caracole serve`'s access token, an Authorization
+header, or a token, secret or password a line would otherwise show.
 
 An unexpected error, a bug in caracole, ends the command with exit status 1:
 one line that says so, then its traceback, on stderr.
@@ -236,8 +225,8 @@ one line that says so, then its traceback, on stderr.
 ### wanted.txt
 
 `wanted.txt` sits in the library folder, so Syncthing carries it to your
-laptop and phone and you can edit it anywhere. It always works, with or
-without Spotify. One song per line:
+laptop and phone and you can edit it anywhere. It is caracole's one source of
+songs. One song per line:
 
     Artist - Title
     Artist - Title | Album
@@ -253,10 +242,11 @@ For example:
 
 - The album and the duration are optional. Either one makes the lyrics lookup
   exact. A duration is `m:ss`, `h:mm:ss` or whole seconds.
-- The line's album and duration win over Spotify's. Edit them, and the next
-  sync changes the song, and the duration the scan checks a purchase
-  against; take one off the line, and Spotify's takes its place, if Spotify
-  has the song.
+- Edit the line's album or duration, and the next sync changes the song, and
+  the duration the scan checks a purchase against; take one off the line, and
+  it comes off the song (for a song an older caracole had from Spotify, what
+  Spotify last said takes its place: see
+  [Songs from Spotify](#songs-from-spotify-before)).
 - The artist ends at the first " - " (an en or em dash works too), so a title
   may contain " - " but an artist can't.
 - A version after the title, as in `Radiohead - Creep - Acoustic` or
@@ -272,9 +262,8 @@ For example:
 - An album named like a number needs an empty field after it:
   `Adele - Someone Like You | 21 |`.
 - A line caracole can't read is reported, and the other lines still count.
-- Deleting a line doesn't delete the song from caracole, just as unliking a
-  track on Spotify doesn't, and the song keeps the album and the duration the
-  line gave it. To keep a song but stop all work on it, put it under
+- Deleting a line doesn't delete the song from caracole, and the song keeps
+  the album and the duration the line gave it. To keep a song but stop all work on it, put it under
   `[ignore]` in overrides.toml; to take it out of caracole, files and all,
   run [`caracole remove`](#caracole-remove).
 - The file must be a regular file. A symbolic link there is refused, not
@@ -301,7 +290,7 @@ for you, then syncs the file at once and rewrites `_todo.md` and
 It says in one line what it did and what the library has of the song: "is in
 wanted.txt already" for a song listed before, and "the library has it, with a
 sheet" (or "with no sheet yet", or "ignored by overrides.toml") for a song the
-library knew, from Spotify, say. `caracole -v add …` also prints the song's
+library knew, one whose line you deleted, say. `caracole -v add …` also prints the song's
 line in wanted.txt, with its number and the file's path, and the song's key in
 the library:
 
@@ -552,8 +541,7 @@ to-do page and `caracole search` do. It says what goes and what stays, and asks:
       - its record in caracole's database: its match, its lyrics and 4 versions seen of it
     It leaves:
       - Radiohead/Creep/notes.md: caracole didn't write it
-    Spotify still lists it: caracole leaves it out from now on, unless you like it or add it to a playlist again.
-    caracole won't bring it back, from wanted.txt, Spotify or the nightly run, until you ask for it again: caracole add, the web page's request form, or a line in wanted.txt.
+    caracole won't bring it back, from wanted.txt or the nightly run, until you ask for it again: caracole add, the web page's request form, or a line in wanted.txt.
     Remove it? [y/N]: y
     Removed Radiohead - Creep: deleted 6 files, took 1 line out of wanted.txt.
 
@@ -585,15 +573,11 @@ say), nothing is removed and it exits 1.
   remove`, or × on `caracole serve`) or ask for the song again; its files
   keep the song's sheet until the next render makes them again.
 - **It stays out.** caracole remembers the song as removed, so neither the
-  nightly run nor `caracole sync` brings it back: not from wanted.txt (its
-  line is gone), not from your Liked Songs or a playlist that still lists it
-  (the sync says `Spotify 120 songs, 0 new, 1 removed song left out`), and the
-  to-do page no longer suggests it from your top tracks. `_todo.md`,
-  `index.html` and `caracole search` no longer list it.
+  nightly run nor `caracole sync` brings it back: its line in wanted.txt is
+  gone. `_todo.md`, `index.html` and `caracole search` no longer list it.
 - **Until you ask again.** `caracole add`, the web page's request form, or a
   line for it that you write in wanted.txt brings it back as a new song, and
-  the next run looks for it from scratch. So does a Spotify track you like, or
-  add to a playlist, after the removal. A device that syncs back an old copy
+  the next run looks for it from scratch. A device that syncs back an old copy
   of wanted.txt with the line in it brings it back too.
 - A wanted.txt caracole can't read (a symbolic link, say) stops the removal
   before anything goes: the line it couldn't take out would bring the song
@@ -658,9 +642,8 @@ as UG may give the pair a page of its own.
 
 ### caracole sync
 
-`caracole sync` reads wanted.txt, then Spotify when it's set up, and prints a
-summary such as `wanted.txt 3 songs, 1 new; Spotify off`, followed by each
-problem. Then it rewrites `_todo.md` and `index.html`. The nightly run starts
+`caracole sync` reads wanted.txt and prints a summary such as
+`wanted.txt 3 songs, 1 new`, followed by each problem. Then it rewrites `_todo.md` and `index.html`. The nightly run starts
 with the same sync.
 
 `caracole sync`, `caracole add` and `caracole search --add` never fail because of
@@ -668,48 +651,28 @@ the pages: with an overrides.toml that can't be read, or a page that can't be
 written, they still add and sync your songs and exit 0. They warn, and leave
 the pages as they were.
 
-### Spotify (optional)
+### Songs from Spotify, before
 
-Your Liked Songs and the playlists you name join wanted.txt as sources. A
-dedicated "Learn" playlist that you add to from your phone works best. A song
-that comes from several sources, or a remaster next to the original, is one
-song in the library. Where they disagree, the album and the duration come
-from your wanted.txt line, and Spotify fills in what the line leaves out.
-Each sync takes what the sources say that night, so a change Spotify makes
-to a track's album or duration reaches the song, unless your line says
-otherwise.
+caracole once read your Spotify Liked Songs and playlists too. It no longer
+does: wanted.txt is its one source of songs. After the upgrade:
 
-1. Create an app at developer.spotify.com. In Development Mode the app's owner
-   needs Spotify Premium. Add the redirect URI `http://127.0.0.1:8888/callback`
-   exactly: `localhost` is rejected.
-2. Put its `client_id` and your `playlists` under `[spotify]`, and the client
-   secret where "Secrets" above says.
-3. Run `caracole auth spotify`. It prints an address: open it in a browser and
-   allow access. The browser is then sent to `http://127.0.0.1:8888/callback?code=…`,
-   which won't load; that's expected. Copy that whole address and paste it
-   back. The token is saved in the state folder.
-4. Run `caracole sync`, or leave it to the nightly run.
-
-Without a client id, Spotify is skipped silently, and `caracole auth spotify`
-prints these steps instead. Spotify never fails a sync or a run. With a client
-id but no client secret, the sync says that Spotify isn't fully set up and
-where the secret goes; authorizing can't help until it is there. When the
-token is missing or has expired, the run carries on with wanted.txt, the to-do
-page says that Spotify needs authorization, and ntfy tells you once. Spotify
-expires the refresh token about six months after you authorize: run
-`caracole auth spotify` again then.
-
-Development Mode reads only playlists you own or collaborate on, so
-editorial playlists don't work. A playlist that can't be read is reported.
-
-A song you removed with `caracole remove` stays out while Spotify still lists
-it, and the summary counts it (`1 removed song left out`). Like it, or add it
-to a playlist, again after the removal, and it comes back.
-
-When Spotify says caracole is asking too often (HTTP 429), a wait of up to 30
-seconds is waited out a few times; a longer one isn't. The sync then stops
-asking, keeps the songs it has read, and doesn't ask Spotify again until the
-wait is over, so an app over its limits isn't kept there.
+- The songs Spotify brought stay in the library as ordinary songs, with their
+  sheets, files, lyrics, songbooks and decisions in overrides.toml. Nothing
+  is looked for again because of the upgrade. Such a song's album and duration
+  are still what Spotify last said, unless its wanted.txt line says otherwise.
+  To give it a line of its own, `caracole add` it.
+- A `[spotify]` table left in caracole.toml is ignored, and every command
+  says so once on stderr until you delete it: `warning: …/caracole.toml:
+  delete its [spotify] table: caracole no longer reads Spotify, …`. Its client
+  secret is never read either: delete the file `client_secret_file` named,
+  `$CREDENTIALS_DIRECTORY/spotify_client_secret`, or
+  `$CARACOLE_SPOTIFY_CLIENT_SECRET`, whichever you used. On NixOS, take
+  `settings.spotify` and `credentials.spotify_client_secret` out of
+  `services.caracole`: until you do, a rebuild warns about each.
+- The token `caracole auth spotify` saved, `spotify_token.json` in the state
+  folder, is harmless and read by nothing: delete it. `caracole auth` is gone.
+- The database keeps the few rows the Spotify sync wrote (how its last sync
+  went, your top tracks); nothing reads them, the to-do page included.
 
 ## The first run
 
@@ -910,7 +873,7 @@ configuration it would take, and why it waits.
 
 `caracole run` is what the nightly timer starts. Its steps, in order:
 
-1. **sync**: wanted.txt, then Spotify.
+1. **sync**: wanted.txt.
 2. **icons**: fetch the icon of each site the library has something from, once
    (see [Where each file came from](#where-each-file-came-from)). It comes
    before the steps that can spend a site's budget.
@@ -968,7 +931,7 @@ a night, each going on where the last stopped.)
 
 - **First** comes the one thing that unblocks the rest, when there is one, said
   once however many steps wait for it: build or finish the index, fix
-  overrides.toml or wanted.txt, authorize Spotify again.
+  overrides.toml or wanted.txt.
 - **Then a line for each step that did something**, its counts without the
   zeros ("Lyrics: 3 found, 1 missing."). A step with nothing to do has none.
 - **Last**: how many things on the to-do page need you, and where it is; the
@@ -1755,9 +1718,6 @@ when it has something in it:
   until then the scan files nothing.
 - **Missing lyrics.** LRCLIB has none for these yet; caracole asks again after
   30 days.
-- **Suggestions from your Spotify top tracks**, with `suggest_top_tracks`.
-  Add the ones you want to learn to your Learn playlist or to wanted.txt.
-  Songs you have, and songs you removed, aren't suggested.
 - **PDFs.** The last render of the library (the nightly run's, or `caracole
   render`'s): how many PDFs were made or failed, a font problem if there is
   one, with the sheets it keeps from a PDF, and the sheets that failed. A
@@ -1765,10 +1725,9 @@ when it has something in it:
   pick in `caracole serve`) render their own song alone and leave that record
   as it was, but for their song: they take it off the sheets that failed or
   wait for a font, or put it back on.
-- **Sources.** Whether Spotify is off, synced, not fully set up (the client
-  secret missing, say), or needs `caracole auth spotify`, and how many songs
-  wanted.txt has, with the lines it couldn't read; for a wanted.txt it
-  couldn't read at all, the error, as `wanted.txt: error at <time>: …`.
+- **Sources.** How many songs wanted.txt has, with the lines it couldn't
+  read; for a wanted.txt it couldn't read at all, the error, as
+  `wanted.txt: error at <time>: …`; before it exists, how to create it.
 - **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda, gtptabs.com,
   MuseScore and YouTube: OK, errors (nothing has worked since the last error),
   cooling down until when, or off (`[providers.gtptabs] enabled = false`, and
@@ -3710,8 +3669,8 @@ tab_ids = [1601668]
 ```
 
 - **Song keys** are written `"Artist - Title"`. They match the way songs
-  match, so these don't matter: case, accents, a leading "The", Spotify's
-  suffixes (" - Remastered 2011", " - 2019 Mix", " - En Vivo", "(Acústico)",
+  match, so these don't matter: case, accents, a leading "The", streaming
+  services' version suffixes (" - Remastered 2011", " - 2019 Mix", " - En Vivo", "(Acústico)",
   " - Versión Acústica"), Traditional or Simplified Chinese, and number words
   or digits ("Té Para Tres" is "Té para 3"). In the artist, a leading Los,
   Las, El or La doesn't either, nor "y" for "&" ("Fito y Fitipaldis").

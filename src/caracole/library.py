@@ -111,8 +111,8 @@ def open_regular(path: Path, flags: int = os.O_RDONLY, *, dir_fd: int | None = N
     """A descriptor for the regular file at ``path``, never opened through a symbolic link.
 
     The library is writable by the Syncthing group and every synced device, so a
-    link planted there could point at caracole's private files (the database, the
-    Spotify token, the credentials): read, they would be copied into the
+    link planted there could point at caracole's private files (the database,
+    the credentials): read, they would be copied into the
     library; written, they would be destroyed. The file is opened without
     following a link and without waiting on a FIFO, then checked on the open
     descriptor, so it can't be swapped in between. With ``dir_fd``, a folder's

@@ -2,6 +2,8 @@
 
 **Version 2.1 of the design, 18 October 2026.** This version is updated with your answers: you have Spotify Premium, you're learning guitar only, lyrics matter because you sing, and you can buy audio files.
 
+**Since then, 22 October 2026:** Spotify is no longer a source. You no longer wanted to log in to it for playlists, so its sync, `caracole auth spotify`, the `[spotify]` settings and spotipy are gone, and `wanted.txt` is the one list of songs (docs/usage.md, "Songs from Spotify, before"). The Spotify parts below are the design as it was.
+
 This review replaces the first report's architecture with a much smaller one. The first report is still the reference for Spotify's 2026 rules, the provider terms of service, and the audio chord models. This version changes what you build and in what order.
 
 ## The short version

@@ -38,7 +38,7 @@ search, and why it doesn't yet.
 
 ## Configuration
 
-Off unless `[web_search]` names an engine. Like `[spotify]` and `[ntfy]`, the
+Off unless `[web_search]` names an engine. Like `[ntfy]`'s token, the
 secret stays out of the file:
 
 ```toml
@@ -55,7 +55,7 @@ delay = [2, 4]                        # seconds between two searches
 
 On NixOS: `services.caracole.settings.web_search`, and
 `credentials.web_search_key` for Brave's key (`LoadCredential`), as for the
-Spotify client secret.
+ntfy token.
 
 ## What it would do
 

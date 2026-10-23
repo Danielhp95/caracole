@@ -73,8 +73,8 @@ def lines(r: RunReport, **kw) -> list[str]:
 
 
 def test_providers_go_by_their_own_names():
-    assert [provider_name(p) for p in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "spotify")] == [
-        "Ultimate Guitar", "LRCLIB", "LaCuerda", "gtptabs.com", "MuseScore", "Spotify",
+    assert [provider_name(p) for p in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "youtube")] == [
+        "Ultimate Guitar", "LRCLIB", "LaCuerda", "gtptabs.com", "MuseScore", "YouTube",
     ]
     assert provider_name("newsite") == "newsite"  # a provider the report doesn't know yet
 
@@ -146,14 +146,14 @@ def test_the_to_do_page_counts_the_items_of_its_counted_sections():
 
 def test_what_the_to_do_page_only_tells_you_needs_nothing_from_you():
     page = ("## Review (2)\n\n## Partial sheets (5)\n\n## Missing lyrics (30)\n\n"
-            "## Suggestions from your Spotify top tracks (10)\n\n## Buy list (1)\n")
+            "## No human sheet found yet (10)\n\n## Buy list (1)\n")
     assert todo_count(page) == 3
 
 
 def test_an_action_reads_as_a_sentence_of_its_own():
     # As the summary ends with it, and as an ntfy alert says it.
-    assert sentence(Action("authorize Spotify again: caracole auth spotify", "wanted.txt keeps working.")) == (
-        "Authorize Spotify again: caracole auth spotify. wanted.txt keeps working.")
+    assert sentence(Action("fix wanted.txt, which caracole can't read", "The songs it read before are still looked for.")) == (
+        "Fix wanted.txt, which caracole can't read. The songs it read before are still looked for.")
     assert sentence(Action("build the index once")) == "Build the index once."
 
 
@@ -203,8 +203,9 @@ def test_one_line_per_step_that_did_something_and_none_for_the_others():
 
 
 def test_the_most_pressing_action_leads_once_however_many_steps_wait_for_it():
-    spotify = Action("authorize Spotify again: caracole auth spotify", "wanted.txt keeps working meanwhile.", rank=30)
-    r = report(StepResult(title="Songs", done=["1 in wanted.txt"], actions=[spotify]),
+    lines_ = Action("fix the 2 lines of wanted.txt caracole couldn't read", "The to-do page says what is wrong with each.",
+                    rank=40)
+    r = report(StepResult(title="Songs", done=["1 in wanted.txt"], actions=[lines_]),
                StepResult(title="Index refresh", actions=[BUILD_INDEX]),
                StepResult(title="Matching", actions=[BUILD_INDEX]))
     assert lines(r) == [
@@ -213,7 +214,7 @@ def test_the_most_pressing_action_leads_once_however_many_steps_wait_for_it():
         "",
         "Songs: 1 in wanted.txt.",
         "",
-        "Authorize Spotify again: caracole auth spotify. wanted.txt keeps working meanwhile.",
+        "Fix the 2 lines of wanted.txt caracole couldn't read. The to-do page says what is wrong with each.",
     ]
 
 

@@ -8,11 +8,14 @@ from ``$CREDENTIALS_DIRECTORY`` (systemd ``LoadCredential``), then a ``*_file``
 key, then an environment variable.
 Unknown keys are errors, and so are values of the wrong type or out of range,
 so a typo never silently falls back to a default or turns into another value.
+A table an older caracole read and this one doesn't (``REMOVED``) is the one
+exception: a file that still has it loads, and the log says what to delete.
 """
 
 from __future__ import annotations
 
 import json
+import logging
 import math
 import os
 import tomllib
@@ -21,6 +24,7 @@ from pathlib import Path
 from typing import Any, Mapping
 
 DEFAULT_USER_AGENT = "caracole/0.1 (personal tab library)"
+log = logging.getLogger(__name__)
 
 
 class ConfigError(Exception):
@@ -64,21 +68,6 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
 SWITCHABLE = frozenset({"gtptabs", "musescore", "youtube"})
-
-
-@dataclass(frozen=True)
-class SpotifyConfig:
-    client_id: str | None = None
-    client_secret: str | None = None
-    redirect_uri: str = "http://127.0.0.1:8888/callback"
-    liked_songs: bool = True
-    playlists: tuple[str, ...] = ()
-    suggest_top_tracks: bool = True
-
-    @property
-    def enabled(self) -> bool:
-        """Spotify is optional: without a client id the source is skipped."""
-        return bool(self.client_id)
 
 
 @dataclass(frozen=True)
@@ -149,7 +138,6 @@ class Config:
     # alphaTab's three files (nix/alphatab.nix), for caracole serve's Guitar Pro page (web/alphatab.py); None
     # without them, when Guitar Pro files are downloads alone.
     alphatab_dir: Path | None = None
-    spotify: SpotifyConfig = field(default_factory=SpotifyConfig)
     providers: Mapping[str, ProviderPolicy] = field(default_factory=lambda: dict(DEFAULT_PROVIDERS))
     match: MatchPolicy = field(default_factory=MatchPolicy)
     rank: RankPolicy = field(default_factory=RankPolicy)
@@ -168,11 +156,13 @@ _TOP_KEYS = {
     "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
     "wanted_file",
     "user_agent", "guitar_pro_mode", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
-    "spotify", "providers", "match", "rank", "ntfy", "autochords",
+    "providers", "match", "rank", "ntfy", "autochords",
 }
-_SPOTIFY_KEYS = {
-    "client_id", "client_secret_file", "redirect_uri", "liked_songs", "playlists",
-    "suggest_top_tracks",
+# The tables an older caracole read and this one ignores, with why: a file that still has one loads,
+# so that an upgrade never stops the nightly run, and the log says once to delete it (_without_removed).
+REMOVED = {
+    "spotify": "caracole no longer reads Spotify, so it ignores the table and its client secret; "
+               "wanted.txt is the one source of songs, and the songs Spotify brought stay in the library",
 }
 _PROVIDER_KEYS = {"budget", "delay", "lookup_delay", "lookup_requests", "lookup_per_hour"}
 _NTFY_KEYS = {"url", "token_file"}
@@ -183,6 +173,13 @@ def _check_keys(table: Mapping[str, Any], allowed: set[str], where: str) -> None
     unknown = sorted(set(table) - allowed)
     if unknown:
         raise ConfigError(f"unknown key(s) in {where}: {', '.join(unknown)}")
+
+
+def _without_removed(data: Mapping[str, Any], path: Path) -> Mapping[str, Any]:
+    """The file's settings without the tables ``REMOVED`` names, each one it has said in a warning."""
+    for key in sorted(set(data) & set(REMOVED)):
+        log.warning("%s: delete its [%s] table: %s.", path, key, REMOVED[key])
+    return {key: value for key, value in data.items() if key not in REMOVED}
 
 
 def _table(data: Mapping[str, Any], key: str) -> Mapping[str, Any]:
@@ -329,6 +326,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             data = tomllib.loads(path.read_text(encoding="utf-8"))
         except tomllib.TOMLDecodeError as e:
             raise ConfigError(f"{path}: {e}") from e
+        data = _without_removed(data, path)
     paths = _Paths(env, path.parent if path is not None else None)
     _check_keys(data, _TOP_KEYS, "caracole.toml")
 
@@ -362,28 +360,6 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
             "caracole downloads Guitar Pro files for you from gtptabs.com only, unless "
             "[providers.gtptabs] says enabled = false"
         )
-
-    sp = _table(data, "spotify")
-    _check_keys(sp, _SPOTIFY_KEYS, "[spotify]")
-    playlists = sp.get("playlists", [])
-    if not isinstance(playlists, list) or not all(isinstance(x, str) for x in playlists):
-        raise ConfigError("[spotify].playlists must be a list of strings")
-    spotify = SpotifyConfig(
-        client_id=_optional_string(sp, "client_id", "[spotify].client_id"),
-        client_secret=_read_secret(
-            env, paths, "spotify_client_secret",
-            _optional_string(sp, "client_secret_file", "[spotify].client_secret_file"),
-            "CARACOLE_SPOTIFY_CLIENT_SECRET",
-        ),
-        redirect_uri=_string(
-            sp.get("redirect_uri", SpotifyConfig.redirect_uri), "[spotify].redirect_uri"
-        ),
-        liked_songs=_bool(sp.get("liked_songs", True), "[spotify].liked_songs"),
-        playlists=tuple(playlists),
-        suggest_top_tracks=_bool(
-            sp.get("suggest_top_tracks", True), "[spotify].suggest_top_tracks"
-        ),
-    )
 
     providers = dict(DEFAULT_PROVIDERS)
     for name, table in _table(data, "providers").items():
@@ -456,7 +432,6 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         cjk_font=paths.resolve(cjk_font_value) if cjk_font_value else None,
         pdf_fonts=paths.resolve(pdf_fonts_value) if pdf_fonts_value else None,
         alphatab_dir=paths.resolve(alphatab_value) if alphatab_value else None,
-        spotify=spotify,
         providers=providers,
         match=match,
         rank=rank,

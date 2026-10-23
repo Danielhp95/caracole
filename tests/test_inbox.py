@@ -278,7 +278,7 @@ def test_a_symlink_in_the_inbox_is_refused_and_left_alone(conn, cfg, tmp_path):
     s = add_song(conn)
     v = pick(conn, s, 555890)
     set_picks(conn, s.id, ["guitar-pro", "power"], [v])
-    secret = tmp_path / "credentials" / "spotify_client_secret"
+    secret = tmp_path / "credentials" / "ntfy_token"
     secret.parent.mkdir()
     secret.write_text("f00dfeedcafe0123456789abcdef0123\n")
     inbox = cfg.library_dir / "_inbox"

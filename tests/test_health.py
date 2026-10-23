@@ -99,7 +99,7 @@ def _nightly_run(conn, cfg, start: datetime, ug: str | Exception = "ok"):
         return httpx.Response(200)
 
     notifier = Notifier("https://ntfy.sh/t", None, transport=httpx.MockTransport(ntfy))
-    report = run_pipeline(cfg, conn=conn, services=Services(clients, None, notifier),
+    report = run_pipeline(cfg, conn=conn, services=Services(clients, notifier),
                           steps=[Step("fetch", fetch, provider="ug")], now=start)
     return report, clients["ug"].requests_made > 0, sent
 

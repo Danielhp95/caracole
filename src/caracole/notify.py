@@ -1,4 +1,4 @@
-"""ntfy notifications: a summary per run, and alerts for blocks and expired Spotify auth.
+"""ntfy notifications: a summary per run, and an alert for a block.
 
 Sending never raises: a notification failure must not fail a run.
 """

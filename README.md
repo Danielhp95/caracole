@@ -19,9 +19,8 @@ song gets its key, and where the key came from.
 
 Sheets come from Ultimate Guitar and, for Spanish songs, LaCuerda. Lyrics come
 from LRCLIB. Guitar Pro files come from gtptabs.com, downloaded for you, and
-from the Ultimate Guitar pages the to-do page lists for you to click. A Spotify
-playlist works as a song list too, but you don't need one. For a song nobody
-has charted, caracole works out the chords from the audio, with local models:
+from the Ultimate Guitar pages the to-do page lists for you to click. For a
+song nobody has charted, caracole works out the chords from the audio, with local models:
 a track you bought, or, by default, the song's audio, which it takes from
 YouTube with yt-dlp, a few songs a night.
 

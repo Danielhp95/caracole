@@ -169,7 +169,7 @@ def remove_song(conn: sqlite3.Connection, cfg: Config, plan: RemovalPlan, *, now
 def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list[str]]:
     """What goes, what stays, and what else to know, a line each, as ``caracole remove`` and the web
     page say it; the last line is ``AFTER``."""
-    song, folder = plan.song, f"{plan.folder}/"
+    folder = f"{plan.folder}/"
     goes: list[str] = []
     if plan.wanted_lines:
         n = len(plan.wanted_lines)
@@ -190,11 +190,7 @@ def describe(plan: RemovalPlan, cfg: Config) -> tuple[list[str], list[str], list
     if plan.audio:
         stays.append(f"{_audio(plan.audio, cfg)}: the audio you bought, which caracole never deletes; "
                      "the song lets go of it")
-    notes = []
-    if "spotify" in song.source_ids:
-        notes.append("Spotify still lists it: caracole leaves it out from now on, unless you like it or add it "
-                     "to a playlist again.")
-    return goes, stays, [*notes, AFTER]
+    return goes, stays, [AFTER]
 
 
 def brief(plan: RemovalPlan) -> str:
@@ -222,7 +218,7 @@ def brief(plan: RemovalPlan) -> str:
     return said
 
 
-AFTER = ("caracole won't bring it back, from wanted.txt, Spotify or the nightly run, until you ask for it "
+AFTER = ("caracole won't bring it back, from wanted.txt or the nightly run, until you ask for it "
          "again: caracole add, the web page's request form, or a line in wanted.txt.")
 
 

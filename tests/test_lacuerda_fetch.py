@@ -1194,7 +1194,7 @@ def test_the_nightly_lacuerda_step_reports_the_counts(conn, cfg, tmp_path):
     spanish_song(conn)
     spanish_song(conn, title="Canción Inexistente")
     client = FakeLaCuerda().client(tmp_path / "cache")
-    services = Services(clients={"lacuerda": client}, spotify=None, notifier=Notifier(None, None))
+    services = Services(clients={"lacuerda": client}, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name == "lacuerda"]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
     # Then the listings of every artist, which this LaCuerda hasn't: the index holds the songs of the page read.
@@ -1219,7 +1219,7 @@ def test_a_kept_sheet_scored_tonight_gives_lacuerda_its_chance(conn, cfg, tmp_pa
                       user_agent="caracole-test", transport=httpx.MockTransport(no_ug),
                       sleep=lambda seconds: None)
     clients = {"ug": ug, "lacuerda": FakeLaCuerda().client(tmp_path / "cache")}
-    services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
+    services = Services(clients=clients, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name in ("fetch", "lacuerda")]
 
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
@@ -1246,7 +1246,7 @@ def test_tonights_lyrics_score_tonights_lacuerda_sheet(conn, cfg, tmp_path):
     )
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     clients = {"lrclib": lrclib, "lacuerda": FakeLaCuerda().client(tmp_path / "cache")}
-    services = Services(clients=clients, spotify=None, notifier=Notifier(None, None))
+    services = Services(clients=clients, notifier=Notifier(None, None))
     steps = [s for s in default_steps() if s.name in ("lyrics", "lacuerda")]
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)
     assert report.steps["lacuerda"].startswith("1 tried, 1 sheet kept, 0 not on LaCuerda, 0 errors; ")
@@ -1272,8 +1272,7 @@ def test_a_tab_a_lookup_pinned_during_an_earlier_step_is_never_replaced_by_lacue
         monkeypatch.setattr(_common, "_handoffs", _common.handoffs() + 1)
 
     site = FakeLaCuerda()
-    services = Services(clients={"lacuerda": site.client(tmp_path / "cache")}, spotify=None,
-                        notifier=Notifier(None, None))
+    services = Services(clients={"lacuerda": site.client(tmp_path / "cache")}, notifier=Notifier(None, None))
     steps = [Step("fetch", fetch), *(s for s in default_steps() if s.name == "lacuerda")]
 
     report = run_pipeline(cfg, conn=conn, services=services, steps=steps, now=NOW)

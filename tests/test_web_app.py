@@ -2285,8 +2285,8 @@ def test_getting_a_ug_hit_your_library_has_under_another_name_adds_no_second_son
 
 
 def test_get_it_now_on_a_song_of_your_library_adds_it_to_no_source(app, cfg, conn, queue):
-    # A song from Spotify alone stays Spotify's: once unliked, it is no longer wanted.
-    creep = add_song(conn, "Radiohead", "Creep", source="spotify", source_id="spotify:track:1")
+    # A song whose line you took off wanted.txt stays in the library, and stays off wanted.txt.
+    creep = add_song(conn, "Radiohead", "Creep")
     response = lookup(app, {"song": str(creep.id)})
     assert response.status == 202 and not cfg.wanted_file.exists()
     [job] = queue.snapshot()
@@ -2693,7 +2693,6 @@ def test_no_page_shows_a_secret(tmp_path, queue, conn):
     secret_cfg = load_config(None, env={
         "HOME": str(tmp_path / "home"), "STATE_DIRECTORY": str(tmp_path / "state"),
         "CACHE_DIRECTORY": str(tmp_path / "cache"), "CARACOLE_NTFY_TOKEN": "ntfy-secret-token",
-        "CARACOLE_SPOTIFY_CLIENT_SECRET": "spotify-secret",
     })
     app = WebApp(secret_cfg, queue, allowed=ALLOWED, csrf="tok")
     add_song(conn, "Radiohead", "Creep")
@@ -2701,7 +2700,7 @@ def test_no_page_shows_a_secret(tmp_path, queue, conn):
     queue.run_pending()
     for path in ("/", "/jobs"):
         body = get(app, path).body
-        assert b"ntfy-secret-token" not in body and b"spotify-secret" not in body, path
+        assert b"ntfy-secret-token" not in body, path
 
 
 def test_the_database_and_secrets_are_never_served(app, cfg, conn):

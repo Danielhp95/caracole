@@ -10,7 +10,7 @@ is the markup around the songs (``TEMPLATES``); its Songbooks tab's data is
 songbook_section.py's.
 
 Every song is in a ``<script type="application/json">`` block. Titles come
-from Spotify and from your own wanted.txt, so the page's script builds every
+from wanted.txt, which every synced device can write, so the page's script builds every
 element with ``createElement`` and ``textContent``, never ``innerHTML``, and
 the JSON has each ``<`` written as ``\\u003c``: escaping only ``</`` would
 still let a ``<!--`` change how the HTML tokenizer reads the block.

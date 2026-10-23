@@ -73,7 +73,7 @@ def parse_song_url(url: str) -> SongPage | None:
 
 
 def title_key(title: str) -> str:
-    """The key a song's title meets the pages' titles with: Spotify's suffixes go first."""
+    """The key a song's title meets the pages' titles with: its version suffixes go first (clean_title)."""
     return slug_key(clean_title(title))
 
 

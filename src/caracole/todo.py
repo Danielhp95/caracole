@@ -29,9 +29,9 @@ from caracole.library import safe_name, write_atomic
 from caracole.logs import plural
 from caracole.musescore import song_pages
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
-from caracole.normalize import clean_title, display_key, has_han, identity_key, slug_key
+from caracole.normalize import clean_title, has_han, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, VIDEO_SHAPE, Overrides
-from caracole.songs import Song, list_removed, list_songs
+from caracole.songs import Song, list_songs
 from caracole.stamps import shown
 from caracole.ug.fetch import artist_is_known, fetch_due, needs_artist_page, pasted_page_problem
 from caracole.ug.index import index_state
@@ -712,35 +712,8 @@ def _file_name(name: str) -> str:
     return f"{_code(shown)} (its name isn't UTF-8: each \\xNN is a byte of it)"
 
 
-def _suggestions(conn: sqlite3.Connection, songs: list[Song]) -> list[str]:
-    tracks: list[dict[str, Any]] = kv_get_json(conn, "spotify:top_tracks", default=[]) or []
-    have = {s.key for s in songs} | {r.key for r in list_removed(conn)}  # nor what you removed
-    items = []
-    for t in tracks:
-        artists = t.get("artists") or []
-        if not artists or not t.get("title"):
-            continue
-        if identity_key(artists[0], t["title"]) in have:
-            continue
-        items.append(f"- {md(display_key(artists[0], t['title']))}")
-    return items
-
-
 def _sources(conn: sqlite3.Connection, cfg: Config) -> list[str]:
     out = ["## Sources", ""]
-    sp = kv_get_json(conn, "source:spotify", default=None)
-    if not cfg.spotify.enabled:
-        out.append("- Spotify: not configured. It's optional; wanted.txt works on its own.")
-    elif not sp:
-        out.append("- Spotify: not synced yet.")
-    elif sp.get("state") == "ok":
-        out.append(f"- Spotify: OK, last sync {sp.get('at')} ({sp.get('new', 0)} new)")
-    elif sp.get("state") == "auth_needed":
-        reason = (sp.get("message") or "").strip().rstrip(".")
-        out.append(f"- Spotify: needs authorization{': ' + md(reason) + '.' if reason else '.'} "
-                   "Run `caracole auth spotify`.")
-    else:
-        out.append(f"- Spotify: error at {sp.get('at')}: {sp.get('message')}")
     w = kv_get_json(conn, "source:wanted", default=None)
     if w:
         errors = w.get("errors") or []
@@ -928,8 +901,6 @@ def build_todo(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         ("Missing lyrics", [f"- {md(s.display)}" for s in songs
                             if s.lyrics_status == "missing" and s.status != "ignored"],
          "LRCLIB has no lyrics for these yet.", None),
-        ("Suggestions from your Spotify top tracks", _suggestions(conn, songs),
-         "Add any you want to learn to your Learn playlist or to wanted.txt.", None),
     ):
         if items or (title == SCORES_TITLE and ms_blocking):  # a block is said, even with nothing to list
             out += _section(title, items, intro, count)

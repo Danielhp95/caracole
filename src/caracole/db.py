@@ -20,8 +20,8 @@ Tables (plan §5, plus ``kv``):
 - ``versions``: every sheet, tab or Guitar Pro version seen for a song.
 - ``files``: files kept in the library, with their SHA-256.
 - ``events``: one row per network request.
-- ``kv``: small state such as provider cooldowns, sitemap validators, learned
-  artist page URLs and Spotify suggestions.
+- ``kv``: small state such as provider cooldowns, sitemap validators and learned
+  artist page URLs.
 """
 
 from __future__ import annotations
@@ -171,7 +171,7 @@ CREATE INDEX IF NOT EXISTS musescore_index_sitemap ON musescore_index(sitemap);
 # The songs `caracole remove` took out (removal.py): one row per song, under the identity key
 # it had, with its display artist and title (to re-key it, as songs are re-keyed) and the
 # source ids it had then, as songs.source_ids holds them. songs.upsert_song brings none of them
-# back but for a wanted.txt line, or a Spotify track added after removed_at.
+# back but for a wanted.txt line.
 _SCHEMA_V4 = """
 CREATE TABLE IF NOT EXISTS removed (
   key TEXT PRIMARY KEY,

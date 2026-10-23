@@ -214,16 +214,6 @@ def unreadable_wanted(errors: Iterable[str]) -> Action:
                   "The songs it read before are still looked for.", rank=20)
 
 
-def spotify_auth(message: str | None) -> Action:
-    why_ = f"{message.strip()} " if message and message.strip() else ""
-    return Action("authorize Spotify again: caracole auth spotify",
-                  f"{why_}wanted.txt keeps working meanwhile.", rank=30)
-
-
-def spotify_setup(message: str | None) -> Action:
-    return Action(f"finish setting up Spotify: {(message or 'it is set up only in part').rstrip('.')}", rank=30)
-
-
 def cooling(provider: str, until: datetime | None) -> Problem:
     return Problem(f"{provider_name(provider)} is cooling down after a block until {when(until)}, "
                    "so caracole leaves it alone this run.")
@@ -415,7 +405,7 @@ def style_for(stream: Any, env: Mapping[str, str] | None = None) -> Style:
 
 _COUNTED = re.compile(r"^## (.+) \((\d+)\)$", re.MULTILINE)
 # Sections of the to-do page that only tell you something: caracole keeps at them by itself.
-FOR_YOUR_INFORMATION = frozenset({"Partial sheets", "Missing lyrics", "Suggestions from your Spotify top tracks",
+FOR_YOUR_INFORMATION = frozenset({"Partial sheets", "Missing lyrics",
                                   "No human sheet found yet"})  # the last: what caracole takes from YouTube
 
 

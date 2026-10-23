@@ -1,7 +1,6 @@
-"""Source commands: ``caracole add``, ``caracole sync`` and ``caracole auth spotify``.
+"""Source commands: ``caracole add`` and ``caracole sync``.
 
-wanted.txt is the source that always works. Spotify is optional, and no Spotify
-failure makes ``caracole sync`` fail. ``add_song`` is the one way a command adds
+wanted.txt is caracole's one source of songs. ``add_song`` is the one way a command adds
 a song: ``caracole add`` and ``caracole search --add`` both call it, and each says
 in its own words what it did. With ``--lacuerda`` (a LaCuerda song you picked, as
 ``caracole search --add`` and caracole serve's Add for tonight's run pick one), the
@@ -9,7 +8,7 @@ pick goes under ``[lacuerda]`` in overrides.toml too, for the nightly run to kee
 index at once, as the nightly match step would, so a name that isn't quite
 UG's is a review you can settle now ("Did you mean", ``match_lines``). A sync,
 an add's too, then rewrites _todo.md and index.html. Every command module is
-imported on every start, so spotipy, the matcher and the source modules are
+imported on every start, so the matcher and the source modules are
 imported inside the commands.
 """
 
@@ -27,31 +26,11 @@ from caracole import db
 from caracole.commands._common import LOCK_NAME, exclusive, fail, load_cfg, open_db, utcnow, warn, write_pages
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from caracole.config import Config
     from caracole.match import MatchResult
     from caracole.overrides import Overrides
     from caracole.songs import RemovedSong, Song
-    from caracole.spotify import SpotifyAPI
     from caracole.wanted import WantedLine
-
-# What `caracole auth spotify` says when there's no client id (docs/usage.md, "Spotify (optional)").
-_SPOTIFY_SETUP = """\
-Spotify isn't set up. It's optional: wanted.txt works without it.
-To add your Liked Songs and playlists:
-1. Create an app at https://developer.spotify.com/dashboard, with the redirect URI
-   {redirect}
-2. Add its client id to {config}:
-     [spotify]
-     client_id = "your-app-client-id"
-     playlists = ["Learn"]   # names, ids or links of playlists you own
-3. Give caracole the app's client secret: $CREDENTIALS_DIRECTORY/spotify_client_secret,
-   a file named by [spotify] client_secret_file, or $CARACOLE_SPOTIFY_CLIENT_SECRET.
-4. Run `caracole auth spotify` again.
-On NixOS, set services.caracole.settings.spotify and credentials.spotify_client_secret
-instead (docs/deploy.md, section 5)."""
-_DEFAULT_CONFIG = "caracole.toml (~/.config/caracole/caracole.toml, unless --config names another)"
 
 log = logging.getLogger(__name__)
 
@@ -60,15 +39,6 @@ _KNOWN = {"wanted": "with no sheet yet", "found": "with a sheet", "ignored": "ig
 
 
 def register(app: typer.Typer) -> None:
-    auth = typer.Typer(help="Authorize caracole to read an account of yours.", no_args_is_help=True)
-    app.add_typer(auth, name="auth")
-
-    @auth.command("spotify")
-    def auth_spotify_cmd(ctx: typer.Context) -> None:
-        """Let caracole read your Spotify Liked Songs and playlists (optional)."""
-        config_path = ctx.obj.config_path if ctx.obj is not None else None
-        _auth_spotify(load_cfg(ctx), config_path)
-
     @app.command("add")
     def add_cmd(
         ctx: typer.Context,
@@ -107,72 +77,25 @@ def register(app: typer.Typer) -> None:
 
     @app.command("sync")
     def sync_cmd(ctx: typer.Context) -> None:
-        """Add new songs from wanted.txt and, when it's set up, from Spotify."""
+        """Add the new songs of wanted.txt to the library."""
         _sync(load_cfg(ctx))
-
-
-# --- caracole auth spotify --------------------------------------------------------------------
-
-
-def _auth_spotify(cfg: Config, config_path: Path | None) -> None:
-    """Authorize by pasting back the redirect, or say how to set Spotify up; exit 1 on failure."""
-    if not cfg.spotify.enabled:
-        setup = _SPOTIFY_SETUP.format(
-            redirect=cfg.spotify.redirect_uri, config=config_path or _DEFAULT_CONFIG
-        )
-        typer.echo(setup, err=True)
-        raise typer.Exit(1)
-    from caracole.spotify import SpotifyAuthError, SpotifyError, authorize, make_auth
-
-    try:
-        authorize(
-            make_auth(cfg.spotify, cfg.state_dir),
-            read=lambda prompt: typer.prompt(prompt, prompt_suffix=""),
-            write=typer.echo,
-        )
-    except SpotifyAuthError as e:  # its message says to run this very command: leave that out
-        fail(f"Spotify authorization failed: {e.problem.rstrip('.')}.")
-    except SpotifyError as e:
-        fail(str(e))
-    typer.echo("Run `caracole sync` to read your Spotify songs now, or leave it to the nightly run.")
 
 
 # --- caracole sync ----------------------------------------------------------------------------
 
 
 def _sync(cfg: Config) -> None:
-    """Sync every source, print the summary and each problem; Spotify never fails it."""
+    """Sync wanted.txt, print the summary and each problem."""
     from caracole.sources import sync_sources
 
     with exclusive(cfg, "sync"), closing(open_db(cfg)) as conn:
-        spotify = _spotify_client(cfg)  # it may refresh the token in the state folder
-        report = sync_sources(conn, cfg, utcnow(), spotify=spotify)
+        report = sync_sources(conn, cfg, utcnow())
         _write_pages(conn, cfg, _page_overrides(cfg))
     typer.echo(report.summary())
     for problem in report.wanted.errors:
         warn(problem)
-    if report.spotify_state == "auth_needed" and report.spotify_message:
-        warn(f"Spotify: {report.spotify_message}")
-    if report.spotify_state == "off" and not cfg.wanted_file.exists():
+    if not cfg.wanted_file.exists():
         typer.echo(f"No {cfg.wanted_file} yet: `caracole add ARTIST TITLE` creates it.")
-
-
-def _spotify_client(cfg: Config) -> SpotifyAPI | None:
-    """The Spotify client, or None; as in the nightly run, no failure here stops the sync.
-
-    A SpotifyError is left for ``sync_sources`` to explain, so it's said once.
-    """
-    if not cfg.spotify.enabled:
-        return None
-    from caracole.spotify import SpotifyError, client_from_config
-
-    try:
-        return client_from_config(cfg)
-    except SpotifyError:
-        return None
-    except Exception as e:  # noqa: BLE001 (Spotify is optional: nothing it raises stops the sync)
-        warn(f"Spotify unavailable: {type(e).__name__}: {e}")
-        return None
 
 
 # --- caracole add -----------------------------------------------------------------------------

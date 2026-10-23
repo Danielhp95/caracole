@@ -352,8 +352,8 @@ def test_write_chordpro_leaves_unchanged_file_alone(tmp_path):
 def test_write_chordpro_refuses_what_is_not_a_regular_file(tmp_path, planted):
     # The old file is read only to compare, but anyone who can write to the library can
     # plant a link there to any file caracole can read, or a FIFO that never answers.
-    secret = tmp_path / "spotify_token.json"
-    secret.write_text('{"refresh_token": "secret"}', encoding="utf-8")
+    secret = tmp_path / "private.json"
+    secret.write_text('{"token": "secret"}', encoding="utf-8")
     cho = tmp_path / "sheet.cho"
     if planted == "link":
         cho.symlink_to(secret)
@@ -362,7 +362,7 @@ def test_write_chordpro_refuses_what_is_not_a_regular_file(tmp_path, planted):
     problem = "symbolic link" if planted == "link" else "not a regular file"
     with pytest.raises(RenderError, match=problem):
         write_chordpro("[ch]G[/ch]\nHello", cho, title="T", artist="A")
-    assert secret.read_text(encoding="utf-8") == '{"refresh_token": "secret"}'
+    assert secret.read_text(encoding="utf-8") == '{"token": "secret"}'
 
 
 # --- the real binary ----------------------------------------------------------------------

@@ -690,7 +690,7 @@ def test_an_existing_song_is_looked_up_without_a_new_line_in_wanted_txt(cfg, con
     from conftest import add_song
 
     serve_creep(sites, conn)
-    add_song(conn, "Radiohead", "Creep", source="spotify", source_id="spotify:track:1")
+    add_song(conn, "Radiohead", "Creep")  # its line taken off wanted.txt since: the song stays
 
     look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
 

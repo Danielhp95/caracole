@@ -40,7 +40,8 @@ shows how it goes in its row.
 A lookup of a song your library has (named by its id, or the UG song you
 picked is its match or its names' own: ``_Mine``) runs under that song's own
 names and writes nothing to wanted.txt: no second song for UG's spelling of
-it, and no new source for a song from Spotify. A lookup and a removal of the
+it, and no line back for a song you took off wanted.txt (deleting a line never
+deletes the song). A lookup and a removal of the
 same song never join (``jobs.REMOVING``): they run in the order they were
 asked for, and a lookup after a removal asks for the song again, as a
 wanted.txt line does.

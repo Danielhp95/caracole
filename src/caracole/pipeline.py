@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
 from caracole.config import DEFAULT_PROVIDERS, Config
-from caracole.db import kv_get_json, kv_set_json
+from caracole.db import kv_set_json
 from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
 from caracole.notify import Notifier
@@ -59,10 +59,7 @@ from caracole.report import (
     fix_overrides,
     plural,
     provider_name,
-    sentence,
     shared_folder,
-    spotify_auth,
-    spotify_setup,
     step_error,
     summary_text,
     todo_count,
@@ -79,7 +76,6 @@ clock = time.monotonic  # what the run's duration is measured with; tests replac
 @dataclass
 class Services:
     clients: Mapping[str, Any]
-    spotify: Any | None
     notifier: Notifier
 
     def client(self, provider: str) -> Client:
@@ -195,31 +191,16 @@ def _provider_result(ctx: StepContext, provider: str, *, errors: int, error: str
 def _sync(ctx: StepContext) -> StepResult:
     from caracole.sources import sync_sources
 
-    before = (kv_get_json(ctx.conn, "source:spotify", default={}) or {}).get("state")
-    r = sync_sources(ctx.conn, ctx.cfg, ctx.now, spotify=ctx.services.spotify)
+    r = sync_sources(ctx.conn, ctx.cfg, ctx.now)
     result = StepResult(title="Songs", status=r.summary())
-    w, s = r.wanted, r.spotify
-    new = w.new + (s.new if s is not None else 0)
-    if new:  # a night with no new song needs no line
-        spotify = [f"{s.seen} on Spotify"] if s is not None and s.seen else []
-        result.done = [f"{w.seen} in wanted.txt", *spotify, f"{new} new"]
+    w = r.wanted
+    if w.new:  # a night with no new song needs no line
+        result.done = [f"{w.seen} in wanted.txt", f"{w.new} new"]
     if w.errors and not w.line_errors:  # the file itself couldn't be read
         result.actions.append(unreadable_wanted(w.errors))
     elif w.line_errors:
         result.actions.append(Action(f"fix the {plural(len(w.line_errors), 'line')} of wanted.txt caracole "
                                      "couldn't read", "The to-do page says what is wrong with each.", rank=40))
-    if r.spotify_state == "auth_needed":
-        action = spotify_auth(r.spotify_message)
-        result.actions.append(action)
-        if before != "auth_needed":
-            ctx.services.notifier.send("caracole: Spotify needs you", sentence(action), priority="high",
-                                       tags=["warning"])
-    elif r.spotify_state == "setup_needed":
-        result.actions.append(spotify_setup(r.spotify_message))
-    elif r.spotify_state == "error":
-        why = (r.spotify_message or "it failed").strip().rstrip(".")
-        result.problems.append(Problem(f"Spotify couldn't be synced ({why}), so it will be tried again on the "
-                                       "next run; wanted.txt was synced."))
     return result
 
 
@@ -533,8 +514,8 @@ def default_steps() -> list[Step]:
 
 
 def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Services:
-    """Real clients for a run: one polite client per provider turned on, yt-dlp when the YouTube
-    route is on (``youtube_fetch.route_problem``), Spotify if configured.
+    """Real clients for a run: one polite client per provider turned on, and yt-dlp when the YouTube
+    route is on (``youtube_fetch.route_problem``).
 
     The clients are the commands' own (``commands._common.make_client`` and
     ``make_youtube``): each holds caracole's lock until it is closed, and its first
@@ -554,16 +535,8 @@ def make_services(cfg: Config, conn: sqlite3.Connection, run_id: str) -> Service
         for client in clients.values():
             client.close()
         raise
-    spotify = None
-    if cfg.spotify.enabled:
-        try:
-            from caracole.spotify import client_from_config
-
-            spotify = client_from_config(cfg)
-        except Exception as e:  # Spotify is optional; never let it stop the run: the sync says what to do
-            log.info("Spotify can't be used this run: %s", e)
     notifier = Notifier(cfg.ntfy.url, cfg.ntfy.token, transport=transport_for("ntfy"))
-    return Services(clients=clients, spotify=spotify, notifier=notifier)
+    return Services(clients=clients, notifier=notifier)
 
 
 def _requests(services: Services) -> dict[str, int]:

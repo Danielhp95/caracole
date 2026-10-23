@@ -35,8 +35,8 @@ For each song, in order:
      title that holds one of the artist's names as whole words is scored by
      what is left of it (less the words such as "the musical" next to the
      name), as in step 2 or as a ``word_title``. A show's title that doesn't,
-     but ends in your title of two words or more, scores 90: Spotify credits
-     EPIC's songs to their composer, whose name UG's title doesn't hold.
+     but ends in your title of two words or more, scores 90: streaming services
+     credit EPIC's songs to their composer, whose name UG's title doesn't hold.
      ``misc-originals`` and ``misc-unsigned-bands`` (``PERFORMER_CATCH_ALLS``)
      file "performer-title": there the name must start the title, and no
      ending counts. The other ``misc-…`` keys file the bare title, which

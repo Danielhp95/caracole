@@ -12,17 +12,17 @@ from caracole.library import NotRegularFile, read_json, read_regular, write_atom
 
 @pytest.fixture
 def state(tmp_path):
-    """caracole's private state directory, with a Spotify token in it."""
+    """caracole's private state directory, with a secret in it."""
     d = tmp_path / "state"
     d.mkdir(mode=0o700)
-    (d / "spotify_token.json").write_text('{"refresh_token": "secret"}', encoding="utf-8")
+    (d / "secret.json").write_text('{"refresh_token": "secret"}', encoding="utf-8")
     return d
 
 
 def test_write_atomic_never_writes_through_a_planted_temporary_name(tmp_path, state):
     lib = tmp_path / "Library"
     lib.mkdir()
-    token = state / "spotify_token.json"
+    token = state / "secret.json"
     (lib / ".index.html.tmp").symlink_to(token)  # the temporary name write_atomic used to pick
     write_atomic(lib / "index.html", b"<!doctype html>the library page")
     assert token.read_text(encoding="utf-8") == '{"refresh_token": "secret"}'
@@ -33,7 +33,7 @@ def test_write_atomic_never_writes_through_a_planted_temporary_name(tmp_path, st
 def test_write_atomic_replaces_a_link_at_the_name_itself(tmp_path, state):
     lib = tmp_path / "Library"
     lib.mkdir()
-    token = state / "spotify_token.json"
+    token = state / "secret.json"
     (lib / "_todo.md").symlink_to(token)
     write_atomic(lib / "_todo.md", b"# To do")
     assert token.read_text(encoding="utf-8") == '{"refresh_token": "secret"}'
@@ -67,7 +67,7 @@ def test_read_regular_reads_a_regular_file(tmp_path):
 
 def test_read_regular_refuses_a_symbolic_link(tmp_path, state):
     link = tmp_path / "wanted.txt"
-    link.symlink_to(state / "spotify_token.json")
+    link.symlink_to(state / "secret.json")
     with pytest.raises(NotRegularFile, match="symbolic link") as e:
         read_regular(link)
     assert isinstance(e.value, OSError) and e.value.filename == str(link)
@@ -116,7 +116,7 @@ def test_read_regular_reads_a_name_in_a_folder_open_at_a_descriptor(tmp_path, in
 def test_read_regular_in_a_folder_refuses_what_it_refuses_elsewhere(tmp_path, state, inbox_fd, planted):
     entry = tmp_path / "_inbox" / "a.gp5"
     if planted == "link":
-        entry.symlink_to(state / "spotify_token.json")
+        entry.symlink_to(state / "secret.json")
     elif planted == "folder":
         entry.mkdir()
     else:
@@ -145,6 +145,6 @@ def test_read_json_of_anything_else_is_a_value_error(tmp_path, data):
 
 def test_read_json_refuses_a_symbolic_link(tmp_path, state):
     link = tmp_path / "sheet.json"
-    link.symlink_to(state / "spotify_token.json")
+    link.symlink_to(state / "secret.json")
     with pytest.raises(NotRegularFile, match="symbolic link"):
         read_json(link)

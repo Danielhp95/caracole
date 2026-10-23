@@ -61,10 +61,10 @@ def test_anything_else_is_not_served(library, path):
 def test_no_link_is_followed_to_a_file_or_through_a_folder(library, tmp_path):
     private = tmp_path / "state"
     private.mkdir()
-    (private / "spotify_token.json").write_text('{"refresh_token": "secret"}', encoding="utf-8")
+    (private / "secret.json").write_text('{"refresh_token": "secret"}', encoding="utf-8")
     (library / "Evil").symlink_to(private, target_is_directory=True)
-    (library / "token.json").symlink_to(private / "spotify_token.json")
-    for path in ("Evil/spotify_token.json", "token.json"):
+    (library / "token.json").symlink_to(private / "secret.json")
+    for path in ("Evil/secret.json", "token.json"):
         with pytest.raises(NotServed):
             read_library_file(library, path)
 
@@ -77,11 +77,11 @@ def test_a_fifo_is_never_waited_on(library):
 
 def test_caracoles_private_folders_inside_the_library_stay_private(library):
     (library / "state").mkdir()
-    (library / "state" / "spotify_token.json").write_text("{}", encoding="utf-8")
+    (library / "state" / "secret.json").write_text("{}", encoding="utf-8")
     (library / "cache" / "http").mkdir(parents=True)
     (library / "cache" / "http" / "page.txt").write_text("cached", encoding="utf-8")
     hidden = [library / "state", library / "cache"]
-    for path in ("state/spotify_token.json", "cache/http/page.txt"):
+    for path in ("state/secret.json", "cache/http/page.txt"):
         with pytest.raises(NotServed):
             read_library_file(library, path, hidden=hidden)
     assert read_library_file(library, "_todo.md", hidden=hidden)[0] == b"# To do\n"

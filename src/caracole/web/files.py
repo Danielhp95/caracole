@@ -1,7 +1,7 @@
 """The library's files over HTTP: what index.html links to, and nothing else.
 
 The library is synced, so anyone with a synced device can put a symbolic link
-there, pointing at caracole's database, the Spotify token or the credentials.
+there, pointing at caracole's database or the credentials.
 Each folder on the way is opened relative to the last without following a
 link (``O_NOFOLLOW``), and the file too, without waiting on a FIFO, then checked
 on the open descriptor to be a regular file (as ``library.open_regular`` does

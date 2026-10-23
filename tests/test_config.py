@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 
 import pytest
@@ -30,9 +31,6 @@ def test_defaults(tmp_path):
         coverage_threshold=0.8, line_match=85, prior_votes=10, scored_sheets=3,
         label_penalty=0.5, variant_bonus=0.25, keep_guitar_pro=2,
     )
-    assert cfg.spotify.redirect_uri == "http://127.0.0.1:8888/callback"
-    assert cfg.spotify.client_id is None and not cfg.spotify.enabled
-    assert cfg.spotify.liked_songs is True and cfg.spotify.playlists == ()
     assert cfg.ntfy.url is None and cfg.ntfy.token is None
 
 
@@ -59,10 +57,6 @@ library_dir = "~/Lib"
 music_dir = "music"
 state_dir = "/srv/state"
 
-[spotify]
-client_id = "abc"
-playlists = ["Learn", "Campfire"]
-
 [providers.ug]
 budget = 20
 delay = [12, 18]
@@ -78,7 +72,6 @@ url = "https://ntfy.sh/caracole-test"
     assert cfg.music_dir == tmp_path / "music"
     assert cfg.state_dir == Path("/srv/state")
     assert cfg.overrides_file == Path("/home/u/Lib/overrides.toml")
-    assert cfg.spotify.enabled and cfg.spotify.playlists == ("Learn", "Campfire")
     assert cfg.providers["ug"] == ProviderPolicy(budget=20, delay=(12.0, 18.0))
     assert cfg.providers["lrclib"].budget == 200
     assert cfg.match.accept == 92 and cfg.match.margin == 8
@@ -143,20 +136,41 @@ def test_an_empty_data_dir_leaves_the_defaults(tmp_path):
 def test_credentials_directory_secret_is_stripped(tmp_path):
     creds = tmp_path / "creds"
     creds.mkdir()
-    (creds / "spotify_client_secret").write_text("s3cret\n")
     (creds / "ntfy_token").write_text("tk_123\n")
-    cfg = load_config(None, env={"HOME": str(tmp_path), "CREDENTIALS_DIRECTORY": str(creds)})
-    assert cfg.spotify.client_secret == "s3cret"
+    cfg = load_config(None, env={"HOME": str(tmp_path), "CREDENTIALS_DIRECTORY": str(creds),
+                                 "CARACOLE_NTFY_TOKEN": "from-env"})
     assert cfg.ntfy.token == "tk_123"
 
 
 def test_secret_file_key_then_env_fallback(tmp_path):
     secret = tmp_path / "secret.txt"
     secret.write_text("from-file\n")
-    p = write(tmp_path, f'[spotify]\nclient_secret_file = "{secret}"\n')
-    cfg = load_config(p, env={"HOME": str(tmp_path), "CARACOLE_NTFY_TOKEN": "from-env"})
-    assert cfg.spotify.client_secret == "from-file"
+    p = write(tmp_path, f'[ntfy]\ntoken_file = "{secret}"\n')
+    assert load_config(p, env={"HOME": str(tmp_path), "CARACOLE_NTFY_TOKEN": "from-env"}).ntfy.token == "from-file"
+    cfg = load_config(None, env={"HOME": str(tmp_path), "CARACOLE_NTFY_TOKEN": "from-env"})
     assert cfg.ntfy.token == "from-env"
+
+
+@pytest.mark.parametrize("table", [
+    '[spotify]\nclient_id = "abc"\nplaylists = ["Learn"]\nclient_secret_file = "/run/agenix/gone"\n',
+    "[spotify]\n",
+    'spotify = "whatever an older file held"\n',
+], ids=["its-settings", "empty", "not-a-table"])
+def test_a_file_that_still_has_spotify_loads_and_says_once_to_delete_it(tmp_path, caplog, table):
+    # An older caracole read Spotify; this one doesn't: an upgrade must not stop the nightly run, so the
+    # table is ignored, its secret file unread, and the log says what to delete.
+    p = write(tmp_path, f'library_dir = "/srv/tabs"\n{table}[ntfy]\nurl = "https://ntfy.sh/t"\n')
+    with caplog.at_level(logging.WARNING, logger="caracole.config"):
+        cfg = load_config(p, env={"HOME": str(tmp_path)})
+    assert cfg.library_dir == Path("/srv/tabs") and cfg.ntfy.url == "https://ntfy.sh/t"
+    assert not hasattr(cfg, "spotify")
+    (record,) = caplog.records
+    assert record.levelno == logging.WARNING
+    assert str(p) in record.getMessage() and "delete its [spotify] table" in record.getMessage()
+    caplog.clear()
+    with caplog.at_level(logging.WARNING, logger="caracole.config"):
+        load(tmp_path, "[ntfy]\n")
+    assert caplog.records == []  # a file without it says nothing
 
 
 def test_unknown_key_is_config_error(tmp_path):
@@ -303,7 +317,6 @@ def load(tmp_path, text):
         ("overrides_file = 5\n", "overrides_file"),
         ("wanted_file = 5\n", "wanted_file"),
         ("cjk_font = 5\n", "cjk_font"),
-        ("[spotify]\nclient_secret_file = 5\n", "client_secret_file"),
         ("[ntfy]\ntoken_file = 5\n", "token_file"),
         ("[autochords]\nbtc_weights = 5\n", "btc_weights"),
         ("[autochords]\nbeat_checkpoint = 5\n", "beat_checkpoint"),
@@ -320,8 +333,6 @@ def test_a_path_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
         ("user_agent = 5\n", "user_agent"),
         ("chordpro_bin = 5\n", "chordpro_bin"),
         ("ytdlp_bin = 5\n", "ytdlp_bin"),
-        ("[spotify]\nclient_id = 12345\n", "client_id"),
-        ("[spotify]\nredirect_uri = 5\n", "redirect_uri"),
         ("[ntfy]\nurl = 5\n", "url"),
         ("[autochords]\ndevice = 0\n", "device"),
     ],
@@ -329,20 +340,6 @@ def test_a_path_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
 def test_a_setting_that_is_not_a_string_is_a_config_error(tmp_path, toml, named):
     with pytest.raises(ConfigError, match=f"{named} must be a string, not "):
         load(tmp_path, toml)
-
-
-@pytest.mark.parametrize("key", ["liked_songs", "suggest_top_tracks"])
-@pytest.mark.parametrize("value", ['"false"', '"true"', "0", "1"])
-def test_a_spotify_switch_must_be_true_or_false(tmp_path, key, value):
-    # bool("false") is True: a quoted false would quietly turn the source on.
-    message = rf"\[spotify\]\.{key} must be true or false, not {value}"
-    with pytest.raises(ConfigError, match=message):
-        load(tmp_path, f"[spotify]\n{key} = {value}\n")
-
-
-def test_spotify_switches_read_as_written(tmp_path):
-    cfg = load(tmp_path, "[spotify]\nliked_songs = false\nsuggest_top_tracks = false\n")
-    assert cfg.spotify.liked_songs is False and cfg.spotify.suggest_top_tracks is False
 
 
 @pytest.mark.parametrize(

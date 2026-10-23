@@ -39,7 +39,6 @@ def services(outbox, **requests):
     """A client for every provider, as ``make_services`` makes them, each having made ``requests[p]``."""
     return Services(
         clients={p: FakeClient(requests.get(p, 0)) for p in PROVIDERS},
-        spotify=None,
         notifier=outbox.notifier(),
     )
 
@@ -172,7 +171,7 @@ def test_requests_are_counted_against_each_clients_budget(conn, cfg):
 
     lrclib = PoliteClient("lrclib", ProviderPolicy(budget=200, delay=(0.0, 0.0)), cfg.cache_dir,
                           user_agent="caracole-test", transport=httpx.MockTransport(lambda r: httpx.Response(200)))
-    svc = Services(clients={"lrclib": lrclib}, spotify=None, notifier=Outbox().notifier())
+    svc = Services(clients={"lrclib": lrclib}, notifier=Outbox().notifier())
     report = run_pipeline(cfg, conn=conn, services=svc, steps=[step("todo")], now=NOW)
     assert report.budgets == {"lrclib": 200}
     assert "Requests: LRCLIB 0 of 200." in report.summary().splitlines()
@@ -252,7 +251,7 @@ def gtptabs_context(conn, cfg, client=None, overrides=None):
     from caracole.overrides import Overrides
     from caracole.pipeline import StepContext
 
-    svc = Services(clients={"gtptabs": client or FakeClient()}, spotify=None, notifier=Outbox().notifier())
+    svc = Services(clients={"gtptabs": client or FakeClient()}, notifier=Outbox().notifier())
     return StepContext(cfg=cfg, conn=conn, overrides=overrides or Overrides(), now=NOW, run_id="r", services=svc,
                        report=RunReport(run_id="r", started="r"))
 
@@ -375,7 +374,7 @@ def test_a_gtptabs_block_cools_it_down_and_marks_no_song(conn, cfg, tmp_path):
     song = add_song(conn, "Blur", "Beetlebum")
     site = FakeGtpTabs(pages={"https://gtptabs.com/sitemapGoogle.xml": (403, "Forbidden", HTML)})
     client = site.client(cfg.cache_dir, now=NOW)
-    svc = Services(clients={"gtptabs": client}, spotify=None, notifier=Outbox().notifier())
+    svc = Services(clients={"gtptabs": client}, notifier=Outbox().notifier())
     steps = [s for s in default_steps() if s.name == "gtptabs"]
     report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
     assert report.ok and report.blocked == ["gtptabs"]
@@ -389,7 +388,7 @@ def musescore_run(conn, cfg, site, *, budget=10, now=NOW, config=None):
     from caracole.pipeline import default_steps
 
     client = site.client(cfg.cache_dir, budget=budget, now=now)
-    svc = Services(clients={"musescore": client}, spotify=None, notifier=Outbox().notifier())
+    svc = Services(clients={"musescore": client}, notifier=Outbox().notifier())
     steps = [s for s in default_steps() if s.name == "musescore"]
     return run_pipeline(config or cfg, conn=conn, services=svc, steps=steps, now=now)
 
@@ -922,19 +921,21 @@ def test_the_default_steps_say_in_the_summary_what_they_did_and_leave_out_the_ze
     assert f"1 thing on your to-do page needs you: {cfg.library_dir / '_todo.md'}" in lines
 
 
-def test_spotify_needing_you_is_said_in_the_summarys_words_and_alerted_once(conn, cfg, monkeypatch):
-    import caracole.sources as sources
+def test_what_an_older_caracole_kept_of_spotify_is_never_said_or_alerted(conn, cfg):
+    # A database from before Spotify went still holds how its last sync went: it needed you, say.
+    from caracole.db import kv_set_json
     from caracole.pipeline import default_steps
 
-    monkeypatch.setattr(sources, "sync_sources", lambda *a, **k: sources.SourcesReport(
-        wanted=sources.SyncStats(seen=2), spotify_state="auth_needed", spotify_message="The token was revoked."))
+    kv_set_json(conn, "source:spotify", {"state": "auth_needed", "at": "2026-10-17T03:30:00Z",
+                                         "message": "The token was revoked."})
+    kv_set_json(conn, "spotify:retry_after_until", "2026-10-19T03:30:00Z")
+    cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.wanted_file.write_text("Radiohead - Creep\n", encoding="utf-8")
     out = Outbox()
     sync = [s for s in default_steps() if s.name == "sync"]
     report = run_pipeline(cfg, conn=conn, services=services(out), steps=sync, now=NOW)
-    said = ("Authorize Spotify again: caracole auth spotify. The token was revoked. wanted.txt keeps working "
-            "meanwhile.")
-    assert ("caracole: Spotify needs you", said) in out.sent
-    assert report.summary().splitlines()[0] == "First, authorize Spotify again: caracole auth spotify."
+    assert not [sent for sent in out.sent if "Spotify" in f"{sent}"]
+    assert "Spotify" not in report.summary() and "Songs: 1 in wanted.txt, 1 new." in report.summary().splitlines()
 
 
 # --- provider health on the to-do page ------------------------------------------------------
@@ -991,8 +992,7 @@ def test_ug_fetch_errors_reach_provider_health_and_an_all_error_run_is_no_succes
     ug = PoliteClient("ug", ProviderPolicy(budget=60, delay=(0.0, 0.0)), cfg.cache_dir, user_agent="caracole-test",
                       transport=httpx.MockTransport(lambda request: httpx.Response(502, text="bad gateway")),
                       sleep=lambda s: None, on_event=EventLog(conn, "2026-10-18T03:30:00Z"))
-    svc = Services(clients={"ug": ug, "lrclib": FakeClient(), "lacuerda": FakeClient()}, spotify=None,
-                   notifier=Outbox().notifier())
+    svc = Services(clients={"ug": ug, "lrclib": FakeClient(), "lacuerda": FakeClient()}, notifier=Outbox().notifier())
     steps = [s for s in default_steps() if s.name in ("fetch", "todo")]
 
     report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
@@ -1101,7 +1101,7 @@ def youtube_run(conn, ycfg, fake, *, budget=6, notifier=None):
 
     yt = YtDlp(fake.bin, ProviderPolicy(budget, (0.0, 0.0)), ycfg.cache_dir, sleep=lambda s: None,
                on_event=EventLog(conn, "2026-10-18T03:30:00Z"))
-    svc = Services(clients={"youtube": yt}, spotify=None, notifier=notifier or Outbox().notifier())
+    svc = Services(clients={"youtube": yt}, notifier=notifier or Outbox().notifier())
     return run_pipeline(ycfg, conn=conn, services=svc, steps=youtube_step(), now=NOW)
 
 
