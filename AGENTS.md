@@ -539,18 +539,19 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   kv `ug:pasted_tab:<tab id>`; one that won't parse waits as any tab page does, kv
   `ug:unreadable:<tab id>` (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
   `::test_bare_id_chords_of_a_matched_song_come_from_its_artist_page`, tests/test_live_banma.py).
-- **Guitar Pro: gtptabs.com's downloads and the inbox, never Ultimate Guitar's.** ug/page.py
-  gives UG's `Pro` and `Power` types no kind (`KINDS`: chords, tabs), so ug/fetch.py never
-  reads, rates, records or picks a Guitar Pro or Power Tab version, never reads an artist
-  page's lists of them, and a `[pin]` of one pins nothing (unread when its version or the
-  index says what it is; `caracole get --tab` refuses one before writing anything);
-  `ug.lookup.song_tabs` leaves them out of a song's tabs, so no page, search, count or link
-  shows one, and `ug_index` keeps their rows for the matcher alone
-  (`test_fetch.py::test_ultimate_guitars_guitar_pro_and_power_tab_versions_are_never_read_nor_picked`,
-  `test_search.py::test_a_song_ultimate_guitar_has_only_as_guitar_pro_or_power_tab_files_is_no_hit`).
-  Schema 9 took the picks out, but for a version a file was filed for, which stays as that
-  file's record. inbox.py
-  files what the user drops into `_inbox/` by its name, for any song not ignored, as the
+- **Guitar Pro: gtptabs.com's downloads and the inbox, never Ultimate Guitar's.** The index
+  keeps UG's chords and text tabs alone (ug/sitemap.py `KEEP_TYPES`): a Guitar Pro or Power
+  Tab file's tab is counted by type and left out, so no song matches one and no page, search,
+  count or link shows one
+  (`test_index.py::test_guitar_pro_and_power_tab_files_are_counted_by_type_and_left_out`).
+  ug/page.py gives UG's `Pro` and `Power` types no kind (`KINDS`: chords, tabs), so ug/fetch.py
+  never rates, records or picks such a version, never reads an artist page's lists of them,
+  and a `[pin]` of one pins nothing
+  (`test_fetch.py::test_a_pin_ultimate_guitar_answers_with_a_guitar_pro_page_pins_nothing`,
+  `::test_artist_page_kinds_fill_the_tab_slot_and_its_guitar_pro_lists_are_never_read`);
+  `caracole get --tab` refuses a page whose address names another type before writing anything
+  (`test_get.py::test_a_page_of_another_type_asked_for_as_the_tab_is_refused_and_nothing_is_written`).
+  inbox.py files what the user drops into `_inbox/` by its name, for any song not ignored, as the
   song's lowest free `guitar-N`, under its own `inbox` version of the file's kind
   (`test_inbox.py::test_files_into_song_by_name`). Official and non-public versions are
   never used. gtptabs_fetch.py downloads from

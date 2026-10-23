@@ -31,16 +31,11 @@ def test_http_scheme_accepted():
     ) == IndexRow(1, "queen", "bohemian-rhapsody", "tabs", "queen/bohemian-rhapsody-tabs-1")
 
 
-def test_guitar_pro_peeled_before_single_word():
-    assert parse_tab_url(TAB + "royal-blood/triggers-guitar-pro-6571406") == IndexRow(
-        6571406, "royal-blood", "triggers", "guitar-pro", "royal-blood/triggers-guitar-pro-6571406"
-    )
-
-
-def test_power_kept():
-    assert parse_tab_url(TAB + "queen/the-miracle-power-1041631") == IndexRow(
-        1041631, "queen", "miracle", "power", "queen/the-miracle-power-1041631"
-    )
+def test_guitar_pro_and_power_tab_files_are_left_out_by_their_whole_type():
+    # "guitar-pro" is peeled whole, before a single-word type could take its last part.
+    assert parse_tab_url(TAB + "royal-blood/triggers-guitar-pro-6571406") is None
+    assert classify_tab_url(TAB + "royal-blood/triggers-guitar-pro-6571406") == "guitar-pro"
+    assert classify_tab_url(TAB + "queen/the-miracle-power-1041631") == "power"
 
 
 @pytest.mark.parametrize(
@@ -67,8 +62,8 @@ def test_type_word_inside_song_is_not_the_type():
     assert parse_tab_url(TAB + "nicki-minaj/super-bass-chords-1055050") == IndexRow(
         1055050, "nicki-minaj", "super-bass", "chords", "nicki-minaj/super-bass-chords-1055050"
     )
-    assert parse_tab_url(TAB + "the-vines/tv-pro-guitar-pro-2032598") == IndexRow(
-        2032598, "vines", "tv-pro", "guitar-pro", "the-vines/tv-pro-guitar-pro-2032598"
+    assert parse_tab_url(TAB + "some-band/power-chords-tabs-77") == IndexRow(
+        77, "some-band", "power-chords", "tabs", "some-band/power-chords-tabs-77"
     )
 
 
@@ -94,9 +89,9 @@ def test_names_made_only_of_and_are_kept():
 @pytest.mark.parametrize(
     "url",
     [
-        "https://es.ultimate-guitar.com/tab/queen/the-miracle-power-1041631",
-        "https://www.ultimate-guitar.com/tab/queen/the-miracle-power-1041631",
-        "https://example.com/tab/queen/the-miracle-power-1041631",
+        "https://es.ultimate-guitar.com/tab/queen/the-miracle-chords-1041631",
+        "https://www.ultimate-guitar.com/tab/queen/the-miracle-chords-1041631",
+        "https://example.com/tab/queen/the-miracle-chords-1041631",
     ],
 )
 def test_other_hosts_are_none(url):
@@ -104,11 +99,11 @@ def test_other_hosts_are_none(url):
 
 
 def test_leading_the_and_trailing_hyphen():
-    assert parse_tab_url(TAB + "the-rifles/the-general-guitar-pro-6228251")[1:3] == (
+    assert parse_tab_url(TAB + "the-rifles/the-general-chords-6228251")[1:3] == (
         "rifles",
         "general",
     )
-    assert parse_tab_url(TAB + "misc-originals/armokto--guitar-pro-6573314")[1:3] == (
+    assert parse_tab_url(TAB + "misc-originals/armokto--chords-6573314")[1:3] == (
         "misc-originals",
         "armokto",
     )
@@ -153,16 +148,11 @@ def test_fixture_sitemap_rows():
     ]
     assert [tuple(r[:4]) for r in rows] == [
         (6228227, "amy-shark", "ill-be-yours", "chords"),
-        (6228251, "rifles", "general", "guitar-pro"),
         (6236009, "ella-langley", "froggy-went-a-courtin-intro", "chords"),
-        (6571406, "royal-blood", "triggers", "guitar-pro"),
-        (6573314, "misc-originals", "armokto", "guitar-pro"),
         (1506192, "soda-stereo", "persiana-americana", "chords"),
         (52384, "soda-stereo", "persiana-americana", "tabs"),
-        (1041631, "queen", "miracle", "power"),
         (1042515, "r-e-m", "pale-blue-eyes", "tabs"),
         (2766562, "feast", "jerusalem", "chords"),
-        (2032598, "vines", "tv-pro", "guitar-pro"),
         (1041823, "noah-the-whale", "give-it-all-back", "tabs"),
         (1055050, "nicki-minaj", "super-bass", "chords"),
         (2626344, "fontaines-d-c", "big", "tabs"),
@@ -212,9 +202,9 @@ def test_parse_tab_url_keeps_the_raw_path():
     # UG answers 404 for a slugged tab requested at its bare /tab/{id} URL (checked live,
     # 2026-10-18: /tab/1081462 → 404, /tab/soda-stereo/persiana-americana-tabs-1081462 → 200),
     # and canonical keys drop information ("the-rifles" → "rifles"), so the raw path is kept.
-    row = parse_tab_url("https://tabs.ultimate-guitar.com/tab/the-rifles/the-general-guitar-pro-6228251")
+    row = parse_tab_url("https://tabs.ultimate-guitar.com/tab/the-rifles/the-general-chords-6228251")
     assert (row.artist_key, row.song_key) == ("rifles", "general")
-    assert row.path == "the-rifles/the-general-guitar-pro-6228251"
+    assert row.path == "the-rifles/the-general-chords-6228251"
 
 
 def test_sitemap_label_is_the_file_name_in_the_url():
@@ -231,6 +221,8 @@ def test_sitemap_label_is_the_file_name_in_the_url():
         (TAB + "6571181", "bare"),
         ("http://tabs.ultimate-guitar.com/tab/85053", "bare"),
         (TAB + "china-crisis/arizona-sky-bass-6228233", "bass"),
+        (TAB + "the-rifles/the-general-guitar-pro-6228251", "guitar-pro"),
+        (TAB + "queen/the-miracle-power-1041631", "power"),
         (TAB + "rainbow/man-on-the-silver-mountain-ukulele-6573122", "ukulele"),
         (TAB + "green-day/wake-me-up-when-september-ends-drums-1045015", "drums"),
         (TAB + "nat-adderley/work-song-musescore-5955137", "musescore"),

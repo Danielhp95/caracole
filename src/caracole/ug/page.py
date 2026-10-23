@@ -33,8 +33,8 @@ from caracole.http import ProviderError
 TAB_BASE_URL = "https://tabs.ultimate-guitar.com/tab/"
 
 # UG's tab types that caracole uses: its chords, for the sheet, and its text tabs. Everything else (Pro and
-# Power, a Guitar Pro or Power Tab file, which caracole never picks there; Official, Bass Tabs, Ukulele Chords,
-# Drum Tabs, Video…) has no kind, and every page of a kind carries its text.
+# Power, a Guitar Pro or Power Tab file; Official, Bass Tabs, Ukulele Chords, Drum Tabs, Video…) has no kind,
+# and every page of a kind carries its text.
 _KINDS = {"chords": "chords", "tabs": "tabs"}
 KINDS = tuple(_KINDS.values())  # caracole's kinds of UG's tabs: chords, tabs
 _MARKUP = re.compile(r"\[/?(?:ch|tab)\]")

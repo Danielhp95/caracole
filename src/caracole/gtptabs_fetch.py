@@ -1,6 +1,6 @@
 """gtptabs.com in the nightly run: a Guitar Pro file for each song that has none.
 
-caracole picks no Guitar Pro page on Ultimate Guitar, whose robots.txt closes
+caracole takes no Guitar Pro file from Ultimate Guitar, whose robots.txt closes
 /tab/download. gtptabs.com's leaves /tabs/download/ open, so this step downloads one
 file there for each song that has no Guitar Pro or Power Tab file yet. What the site
 looks like is in gtptabs.py. A pass:

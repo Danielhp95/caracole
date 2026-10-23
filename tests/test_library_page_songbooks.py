@@ -158,36 +158,22 @@ def test_each_line_carries_its_songs_id(library):
 # --- a song's Guitar Pro mark ---------------------------------------------------------------------------
 
 
-def ug_guitar_pick(conn, song, tab_id=555890, *, kind="guitar-pro", url=None) -> int:
-    """A Guitar Pro (or Power Tab) version caracole picked on Ultimate Guitar for the song, as it did before it
-    picked none there (schema 9 takes them out)."""
-    from caracole.versions import set_picks, upsert_version
-
-    vid = upsert_version(conn, provider="ug", tab_id=str(tab_id), song_id=song.id, slot="guitar", kind=kind,
-                         rating=4.2, votes=5, version=2, label=None,
-                         url=url or f"https://tabs.ultimate-guitar.com/tab/{tab_id}", raw={}, now="x")
-    set_picks(conn, song.id, [kind], [vid])
-    return vid
-
-
 def by_title(html: str) -> dict[str, dict]:
     return {s["title"]: s for s in books_of(html)[0]["set"]}
 
 
-def test_a_song_with_a_guitar_pro_file_carries_its_mark_and_one_with_none_or_a_pick_on_ug_none(library):
+def test_a_song_with_a_guitar_pro_file_carries_its_mark_and_one_without_none(library):
     from caracole.songs import find_song
     from helpers.guitar import keep_guitar
 
     conn, cfg = library
-    creep, soda = find_song(conn, "radiohead/creep"), find_song(conn, "soda-stereo/de-musica-ligera")
+    creep = find_song(conn, "radiohead/creep")
     keep_guitar(conn, cfg, creep, b"FICHIER GUITAR PRO 5", name="guitar-1.gp5")
-    ug_guitar_pick(conn, soda)
     songs = by_title(page(conn, cfg))
     # A file caracole keeps: the file, the name it downloads under, and caracole serve's Guitar Pro page of it.
     assert songs["Creep"]["guitar"] == {
         "kind": "file", "href": "Radiohead/Creep/guitar-1.gp5", "download": "Radiohead - Creep.gp5",
         "page": "guitar?file=Radiohead%2FCreep%2Fguitar-1.gp5"}
-    # No file, but a version picked on Ultimate Guitar before: caracole offers none to download there.
     assert songs["De Música Ligera"]["guitar"] is None
     assert songs["Hysteria"]["guitar"] is None
 
@@ -238,7 +224,6 @@ def test_a_guitar_pro_file_changes_nothing_of_the_songbooks_files(library):
     folder = cfg.library_dir / "_songbooks" / "Campfire"
     before = {p.name: p.read_bytes() for p in folder.iterdir()}
     keep_guitar(conn, cfg, find_song(conn, "radiohead/creep"), b"FICHIER GUITAR PRO 5", name="guitar-1.gp5")
-    ug_guitar_pick(conn, find_song(conn, "soda-stereo/de-musica-ligera"))
     stats = render_songbooks(conn, cfg, Overrides(), runner=FakeChordPro())
     assert (stats.rendered, stats.skipped) == (0, 1)
     assert {p.name: p.read_bytes() for p in folder.iterdir()} == before

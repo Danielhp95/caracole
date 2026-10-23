@@ -323,17 +323,17 @@ def test_clear_without_a_pin_changes_nothing(config, sites, conn, tmp_path):
 
 
 @pytest.mark.slow
-def test_clear_leaves_a_guitar_pro_pin(config, sites, conn, tmp_path):
+def test_clear_leaves_a_tab_pin(config, sites, conn, tmp_path):
     looked_up(config, sites, conn, tmp_path)
-    upsert_rows(conn, [(301, "radiohead", "creep", "guitar-pro", "radiohead/creep-guitar-pro-301")], "1", NOW)
+    upsert_rows(conn, [(401, "radiohead", "creep", "tabs", "radiohead/creep-tabs-401")], "1", NOW)
     overrides = tmp_path / "library" / "overrides.toml"
-    overrides.write_text(f'[pin]\n"Radiohead - Creep" = ["{url(104)}", "{TAB}radiohead/creep-guitar-pro-301"]\n',
+    overrides.write_text(f'[pin]\n"Radiohead - Creep" = ["{url(104)}", "{TAB}radiohead/creep-tabs-401"]\n',
                          encoding="utf-8")
 
     result = versions(config, CREEP, "--clear")
 
     assert result.exit_code == 0, result.output
-    assert load_overrides(overrides).pin["radiohead/creep"] == (301,)
+    assert load_overrides(overrides).pin["radiohead/creep"] == (401,)
 
 
 @pytest.mark.slow

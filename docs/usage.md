@@ -187,7 +187,7 @@ requests.
 downloads open, so caracole downloads a file there for each song that has none
 (`caracole gtptabs`, in [One step at a time](#one-step-at-a-time)); and one you
 get anywhere yourself, dropped into `_inbox/` named as the song is, is filed
-under its song (`caracole scan`). caracole picks none on Ultimate Guitar, whose
+under its song (`caracole scan`). caracole takes none from Ultimate Guitar, whose
 robots.txt closes its downloads to bots: from there it takes chords and text
 tabs alone.
 
@@ -449,11 +449,9 @@ Options:
   recorded under `[pin]`, in place of the song's pin of the same kind (a
   chords sheet or a text tab, by the offline index), and beside its pins of
   the other kind: a text tab picked after a chords sheet keeps the sheet you
-  chose. A pin of a Guitar Pro or Power Tab page, from when caracole still
-  picked them on Ultimate Guitar, pins nothing, and the tab you pick takes its
-  place. Such a page asked for as `--tab` (the offline index says what it is)
-  is refused before anything is added or recorded: caracole uses none on
-  Ultimate Guitar, and a Guitar Pro file you get yourself goes into `_inbox/`.
+  chose. A page of another type (a Guitar Pro file's, a bass tab's), when its
+  address says so, is refused before anything is added or recorded: `tab
+  301 is not a chords or tabs page`.
 - `--lacuerda URL` is the LaCuerda song to keep the sheet of, its page's
   address (its best Letra y Acordes version) or a version's
   (`https://acordes.lacuerda.net/estopa/como_camaron-2.shtml`): it is recorded
@@ -664,10 +662,10 @@ With some songs listed:
 
 Caracole never searches Ultimate Guitar, whose robots.txt disallows its search
 page. It reads the sitemaps UG publishes for crawlers instead, and keeps a
-local index of every chords, tabs, Guitar Pro and Power Tab page: about 1.6
-million. Its Guitar Pro and Power Tab rows only tell the matcher a song is on
-UG (whose chords may then be on its artist's page): caracole reads, counts and
-offers none of those pages. `caracole index build` reads the sitemap index and its 41 tab sitemaps,
+local index of every chords and text tabs page, well over a million. Tabs of
+the other types are counted and left out, Guitar Pro and Power Tab files among
+them: caracole uses none of UG's, so a song UG has only as one of those is not
+found there. `caracole index build` reads the sitemap index and its 41 tab sitemaps,
 one request at a time, 10–20 seconds apart: about 42 requests, 70 MB and 10
 minutes. Its budget is 100 requests, more than a night's, so one build is
 enough. A block or a spent budget keeps the sitemaps read so far, and the next
@@ -695,16 +693,16 @@ holds and the state it is in. A small example, five sitemaps where UG lists 41:
     Reading the sitemap index...
     The sitemap index lists 5 tab sitemaps (sitemap1.xml to sitemap4.xml and sitemap_last.xml): 5 to download.
     About 250,000 tab URLs (up to 50,000 a sitemap). 5 requests, 10-20 s apart: about 1 min.
-    [1/5] sitemap1.xml  2,000 tabs: 1,574 indexed, 221 bare ids, 195 of other types, 10 closed by robots.txt  4 left, about 1 min
-    [2/5] sitemap2.xml  2,000 tabs: 1,591 indexed, 201 bare ids, 203 of other types, 5 closed by robots.txt  3 left, about 50 s
-    [3/5] sitemap3.xml  2,000 tabs: 1,595 indexed, 204 bare ids, 199 of other types, 2 closed by robots.txt  2 left, about 30 s
-    [4/5] sitemap4.xml  2,000 tabs: 1,577 indexed, 215 bare ids, 200 of other types, 8 closed by robots.txt  1 left, about 15 s
-    [5/5] sitemap_last.xml  600 tabs: 495 indexed, 58 bare ids, 47 of other types
-    Index built: 5 sitemaps read; 6,832 new tabs.
-      Indexed     6,832 tabs: chords 3,225, tabs 2,483, guitar-pro 772, power 352
+    [1/5] sitemap1.xml  2,000 tabs: 1,315 indexed, 221 bare ids, 454 of other types, 10 closed by robots.txt  4 left, about 1 min
+    [2/5] sitemap2.xml  2,000 tabs: 1,329 indexed, 201 bare ids, 465 of other types, 5 closed by robots.txt  3 left, about 50 s
+    [3/5] sitemap3.xml  2,000 tabs: 1,332 indexed, 204 bare ids, 462 of other types, 2 closed by robots.txt  2 left, about 30 s
+    [4/5] sitemap4.xml  2,000 tabs: 1,318 indexed, 215 bare ids, 459 of other types, 8 closed by robots.txt  1 left, about 15 s
+    [5/5] sitemap_last.xml  600 tabs: 414 indexed, 58 bare ids, 128 of other types
+    Index built: 5 sitemaps read; 5,708 new tabs.
+      Indexed     5,708 tabs: chords 3,225, tabs 2,483
       Artists     1,488
       Bare ids    899 of 8,600 tab URLs (10.5%): with no artist or title in the URL, only artist pages lead to them
-      Left out    844 of other types (bass 469, ukulele 224, drums 76, video 75)
+      Left out    1,968 of other types (guitar-pro 772, bass 469, power 352, ukulele 224, drums 76, video 75)
       robots.txt  25 tabs left out: robots.txt closes their pages
       Requests    6 of a budget of 100
       Duration    1 min 17 s
@@ -1663,9 +1661,7 @@ when it has something in it:
   the last 7 days, one for each song that had none, each with a link to its
   page on gtptabs.com. Open each in Guitar Pro or TuxGuitar: if it isn't the
   version you want, drop the one you want into `_inbox/`, named as the song
-  is (`Artist - Title.gp5`), and caracole files it beside this one. caracole
-  lists no Guitar Pro page of Ultimate Guitar's to download: it picks none
-  there.
+  is (`Artist - Title.gp5`), and caracole files it beside this one.
 - **Scores on MuseScore.** For each song with no score filed, up to three
   MuseScore song pages with its title, oldest first, each a possible match:
   MuseScore's sitemaps give titles only, never the artist. Open one, pick a
@@ -2449,9 +2445,8 @@ offline Ultimate Guitar index and LaCuerda's (see below):
   `caracole add` brings it back, it is in your library and not in this group.
 
 - **On Ultimate Guitar**: numbered hits from the offline index, each tagged
-  `[UG]`, with its tabs per type (chords and text tabs: the index's Guitar Pro
-  and Power Tab pages count for nothing, and a song UG has only as those is no
-  hit), one of its pages, and the `caracole add` line to paste. The UG artist pages caracole has read (see
+  `[UG]`, with its tabs per type (chords and text tabs, the types the index
+  keeps), one of its pages, and the `caracole add` line to paste. The UG artist pages caracole has read (see
   [caracole fetch](#one-step-at-a-time)) are searched too: every tab each one
   listed, bare ids included, which UG's sitemaps list without names. Their
   names are compared in each script UG writes them in ("Song Dongye (宋冬野)"
@@ -2576,8 +2571,8 @@ compares Chinese as pinyin, as whole words only, as the matcher does: 斑马
 finds a title written `ban-ma` or `banma`, never the letters inside
 `suburban-male` or `band-maid`, and pinyin matching only part of a name is
 never a strong hit. It reads an index of the UG index's names, so a
-word of three letters or more is looked up in milliseconds, not by reading all
-1.6 million rows: a song or an artist answers in 5–25 ms on a full index, and
+word of three letters or more is looked up in milliseconds, not by reading
+every row: a song or an artist answers in 5–25 ms on a full index, and
 a query made only of very common words in 50–160 ms ("the" about 0.1 s, "i
 love you" about 0.15 s): such a word is in tens of thousands of names, so it
 brings in only the thousand shortest of them, which hold its exact titles and
@@ -3683,9 +3678,8 @@ tab_ids = [1601668]
   candidates of their kind (sheet, tab), in the order given. A pin whose page
   is gone, is Official, or is closed to bots by robots.txt (UG's `/tab/track/`
   pages), or redirects to such a page, pins nothing, and the song's other
-  versions compete for that kind. Nor does a pin of a Guitar Pro or Power Tab
-  page, written when caracole still picked those on Ultimate Guitar: the index
-  says what it is, so its page isn't even asked for. `caracole versions --clear`
+  versions compete for that kind. Nor does a pin of a page of a type caracole
+  doesn't use (a Guitar Pro file's, a bass tab's). `caracole versions --clear`
   takes a song's chords pins out again.
 - **`[transpose]`** shifts the chords and the key in the PDF. `sheet.txt`
   stays as the source wrote it.

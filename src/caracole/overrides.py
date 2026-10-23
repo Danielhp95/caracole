@@ -215,7 +215,7 @@ def tab_id_from_url(url: str | int) -> int:
     return int(m.group(1))
 
 
-def _pin_url(value: str) -> str:
+def pin_url(value: str) -> str:
     """A pinned page's address: the URL as pasted, on the tabs host, over https and without its query,
     fragment and trailing slash; for a bare tab id, the bare ``/tab/{id}`` page. ``value`` passed
     ``tab_id_from_url``."""
@@ -238,7 +238,7 @@ def artist_page_address(url: Any) -> str | None:
 
 def _artist_url_value(url: Any) -> str | None:
     """An ``[artist_url]`` value: the artist's page (``artist_page_address``), or one of the artist's
-    tab pages, written as a pin's is (``_pin_url``), which caracole reads once for the artist's page
+    tab pages, written as a pin's is (``pin_url``), which caracole reads once for the artist's page
     it links to. None for anything else, a bare number included: it could be either page's."""
     page = artist_page_address(url)
     if page is not None or not isinstance(url, str) or url.strip().isdigit():
@@ -247,7 +247,7 @@ def _artist_url_value(url: Any) -> str | None:
         tab_id_from_url(url)
     except OverridesError:
         return None
-    return _pin_url(url)
+    return pin_url(url)
 
 
 def pasted_tab_id(url: str) -> int | None:
@@ -386,7 +386,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         try:
             ident = override_key(k)
             pin[ident] = tuple(tab_id_from_url(u) for u in pasted)
-            pin_urls[ident] = tuple(_pin_url(u) for u in pasted)
+            pin_urls[ident] = tuple(pin_url(u) for u in pasted)
         except OverridesError as e:
             raise OverridesError(f"[pin] {k!r}: {e}") from e
 

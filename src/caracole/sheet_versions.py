@@ -228,8 +228,7 @@ def note_kept_by_you(conn: sqlite3.Connection, song_id: int, tab_id: str) -> Non
 
 def sheet_pins(conn: sqlite3.Connection, song_id: int, pins: Sequence[int]) -> list[int]:
     """Of the song's ``[pin]`` tabs ``pins``, those that choose its sheet: chords versions, by the song's versions
-    and the offline index, and a pin of a kind neither knows (not fetched yet). Any other stays: a tab's, or a
-    Guitar Pro page's from before caracole stopped picking them (it pins nothing)."""
+    and the offline index, and a pin of a kind neither knows (not fetched yet). Any other stays: a text tab's."""
     out = []
     for tab in pins:
         row = conn.execute("SELECT kind FROM versions WHERE song_id = ? AND provider = ? AND tab_id = ?",

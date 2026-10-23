@@ -24,7 +24,7 @@ def creep(conn, cfg, *, wanted="Radiohead - Creep\nOasis - Wonderwall\n"):
         cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
         cfg.wanted_file.write_text(wanted, encoding="utf-8")
     sheet = version(conn, song, "101", "chords")
-    gp = version(conn, song, "301", "guitar-pro")
+    gp = version(conn, song, "301", "guitar-pro", provider="gtptabs")
     song = get_song(conn, song.id)
     for vid, name in ((sheet, "sheet.txt"), (sheet, "sheet.json"), (gp, "guitar-1.gp5")):
         keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=name, data=name.encode(), rank=1)
@@ -37,8 +37,8 @@ def creep(conn, cfg, *, wanted="Radiohead - Creep\nOasis - Wonderwall\n"):
     return get_song(conn, song.id)
 
 
-def version(conn, song, tab_id, kind):
-    return upsert_version(conn, provider="ug", tab_id=tab_id, song_id=song.id,
+def version(conn, song, tab_id, kind, provider="ug"):
+    return upsert_version(conn, provider=provider, tab_id=tab_id, song_id=song.id,
                           slot="sheet" if kind == "chords" else "guitar", kind=kind, rating=4.5, votes=10,
                           version=1, label=None, url=f"https://u/{tab_id}", raw={}, now="2026-10-01T00:00:00Z")
 

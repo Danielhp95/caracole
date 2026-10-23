@@ -16,10 +16,8 @@
   artist (``misc-musicals``…) is also scored on its title alone, with and
   without words such as "the musical": "epic not sorry for loving you" is
   ``misc-musicals/epic-the-musical-not-sorry-for-loving-you``.
-  A song's tabs, and an artist's songs and tabs, are those of the kinds
-  caracole uses, chords and text tabs (ug/page.py ``KINDS``): the index's
-  Guitar Pro and Power Tab rows, which the matcher reads, are counted for
-  nothing, and a song UG has only as one is no hit.
+  A song's tabs, and an artist's songs and tabs, are chords and text tabs:
+  the index keeps no other type (ug/sitemap.py ``KEEP_TYPES``).
 
 Both sides are compared as words made the way slug keys are made (accents
 folded, apostrophes, "and" and a leading "the" dropped), and Chinese is also
@@ -1512,14 +1510,13 @@ def _hits(conn: sqlite3.Connection, rows: Sequence[_Row]) -> list[IndexHit]:
 
 
 def _artist_groups(conn: sqlite3.Connection, artist_key: str) -> list[tuple[str, int]]:
-    """Each song of an artist with its tabs of the kinds caracole uses (a song's variants counted with it), most
-    tabbed first: the index's, with the tabs only an artist page caracole read lists (ug/artist_tabs.py)."""
+    """Each song of an artist with its tabs (a song's variants counted with it), most tabbed first: the index's,
+    with the tabs only an artist page caracole read lists (ug/artist_tabs.py)."""
     from caracole.ug.artist_tabs import unindexed_songs
 
     groups: dict[str, int] = {}
     for song_key, n in conn.execute(
-        f"SELECT song_key, COUNT(*) FROM ug_index WHERE artist_key = ? AND type IN ({', '.join('?' for _ in KINDS)}) "
-        "GROUP BY song_key", (artist_key, *KINDS)
+        "SELECT song_key, COUNT(*) FROM ug_index WHERE artist_key = ? GROUP BY song_key", (artist_key,)
     ):
         base = split_variant(song_key)[0]
         groups[base] = groups.get(base, 0) + n

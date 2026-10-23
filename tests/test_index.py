@@ -87,12 +87,12 @@ S1 = urlset(
     "oasis/wonderwall-tabs-1002",
     "oasis/wonderwall-bass-1003",
     "1004",
-    "the-rifles/the-general-guitar-pro-1005",
-    "queen/the-miracle-power-1006",
+    "the-rifles/the-general-chords-1005",
+    "queen/the-miracle-tabs-1006",
     "oasis/wonderwall-ukulele-1007",
 )
 S2 = urlset("oasis/champagne-supernova-chords-2001", "radiohead/creep-chords-2002")
-LAST = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-guitar-pro-3001")
+LAST = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-tabs-3001")
 
 
 def site(**extra: bytes) -> FakeUG:
@@ -122,13 +122,13 @@ def test_build_inserts_kept_types_only(conn, tmp_path):
     assert rows(conn) == [
         (1001, "oasis", "wonderwall", "chords", "1", "2026-10-18T03:30:00Z", "oasis/wonderwall-chords-1001"),
         (1002, "oasis", "wonderwall", "tabs", "1", "2026-10-18T03:30:00Z", "oasis/wonderwall-tabs-1002"),
-        (1005, "rifles", "general", "guitar-pro", "1", "2026-10-18T03:30:00Z", "the-rifles/the-general-guitar-pro-1005"),
-        (1006, "queen", "miracle", "power", "1", "2026-10-18T03:30:00Z", "queen/the-miracle-power-1006"),
+        (1005, "rifles", "general", "chords", "1", "2026-10-18T03:30:00Z", "the-rifles/the-general-chords-1005"),
+        (1006, "queen", "miracle", "tabs", "1", "2026-10-18T03:30:00Z", "queen/the-miracle-tabs-1006"),
         (2001, "oasis", "champagne-supernova", "chords", "2", "2026-10-18T03:30:00Z",
          "oasis/champagne-supernova-chords-2001"),
         (2002, "radiohead", "creep", "chords", "2", "2026-10-18T03:30:00Z", "radiohead/creep-chords-2002"),
-        (3001, "radiohead", "creep-acoustic", "guitar-pro", "last", "2026-10-18T03:30:00Z",
-         "radiohead/creep-acoustic-guitar-pro-3001"),
+        (3001, "radiohead", "creep-acoustic", "tabs", "last", "2026-10-18T03:30:00Z",
+         "radiohead/creep-acoustic-tabs-3001"),
     ]
     assert ug.names() == ["sitemap.xml", "sitemap1.xml", "sitemap2.xml", "sitemap_last.xml"]
     # 2002 is listed by sitemap2 and sitemap_last: one row, reported new once.
@@ -159,6 +159,17 @@ def test_refresh_unchanged_sitemaps_parse_nothing(conn, tmp_path):
     assert stats == IndexStats(sitemaps_fetched=0, sitemaps_unchanged=2, rows=0, new_tab_ids=())
 
 
+def test_guitar_pro_and_power_tab_files_are_counted_by_type_and_left_out(conn, tmp_path):
+    # caracole uses no Guitar Pro or Power Tab file of Ultimate Guitar's, so no song matches one and nothing lists one.
+    ug = site(**{"sitemap_last.xml": urlset("radiohead/creep-chords-2002", "radiohead/creep-guitar-pro-3101",
+                                            "metallica/one-power-3102")})
+    seen = []
+    build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=seen.append)
+    assert 3101 not in [r[0] for r in rows(conn)] and 3102 not in [r[0] for r in rows(conn)]
+    assert seen[-1].tabs == TabCounts(urls=3, indexed=1, other={"guitar-pro": 1, "power": 1})
+    assert set(index_stats(conn)["types"]) == {"chords", "tabs"}
+
+
 def test_refresh_returns_new_ids_and_marks_song_dirty(conn, tmp_path):
     ug = site()
     build_index(conn, ug.client(tmp_path / "cache"), NOW)
@@ -168,7 +179,7 @@ def test_refresh_returns_new_ids_and_marks_song_dirty(conn, tmp_path):
         update_song(conn, s.id, match_decision="accept", match_artist_key=s.key.split("/")[0],
                     match_song_key=key, ug_dirty=False)
     ug.files["sitemap_last.xml"] = urlset(
-        "radiohead/creep-chords-2002", "radiohead/creep-acoustic-guitar-pro-3001", "radiohead/creep-intro-tabs-3002"
+        "radiohead/creep-chords-2002", "radiohead/creep-acoustic-tabs-3001", "radiohead/creep-intro-tabs-3002"
     )
     stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
     assert stats.new_tab_ids == (3002,)
@@ -491,7 +502,8 @@ def test_tabs_robots_txt_closes_are_left_out_of_the_index(conn, tmp_path):
     stats = build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=seen.append)
     assert [r[0] for r in rows(conn)] == [1001, 1002, 1005, 1006, 2001, 2002, 3004]
     assert stats.new_tab_ids == (1001, 1002, 1005, 1006, 2001, 2002, 3004)
-    assert seen[-1].tabs == TabCounts(urls=6, indexed=2, closed=4)  # the four closed ones, counted apart
+    # The three closed ones counted apart, and the Guitar Pro file as a type the index doesn't keep.
+    assert seen[-1].tabs == TabCounts(urls=6, indexed=2, other={"guitar-pro": 1}, closed=3)
 
 
 def test_a_refresh_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
@@ -503,7 +515,7 @@ def test_a_refresh_drops_the_indexed_tabs_robots_txt_closes(conn, tmp_path):
                        IndexRow(1126581, "track", "se-que-es-tarde", "chords", "the-track/se-que-es-tarde-chords-1126581"),
                        IndexRow(1126582, ".", "download", "chords", "./download-chords-1126582")], "1", NOW)
     fenix = accepted(conn, "Track", "Ave Fénix", "track", "ave-fenix")
-    ug.files["sitemap_last.xml"] = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-guitar-pro-3001",
+    ug.files["sitemap_last.xml"] = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-tabs-3001",
                                           AVE_FENIX)
 
     seen = []

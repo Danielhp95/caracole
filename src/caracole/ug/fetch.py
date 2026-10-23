@@ -658,8 +658,7 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
 
     A pin's kind comes from its page. A pin whose page is gone, Official or not
     public pins nothing, and so does one whose page robots.txt closes, or one of
-    a kind caracole doesn't use (a Guitar Pro or Power Tab file's): unread when
-    its version or the index says so already.
+    a type caracole doesn't use (a Guitar Pro file's, a bass tab's).
     """
     groups: dict[tuple[str, ...], list[int]] = {}
     for tab_id, pasted in pins:
@@ -667,8 +666,6 @@ def _fetch_pins(run: _SongRun, pins: list[tuple[int, str | None]]) -> dict[tuple
         known = index_tab(run.conn, tab_id)
         url = _pinned_url(run, tab_id, pasted, row)
         kind = row.kind if row is not None else known.type if known is not None else None
-        if kind is not None and kind not in _GROUP_OF:
-            continue
         page = _page(run, tab_id, url, kind)
         if page is None or not _wanted(run, page.tab):  # read at a tab page, wherever its own link goes
             continue
@@ -1533,8 +1530,8 @@ def _artist_page_versions(run: _SongRun, kinds: tuple[str, ...], own: Sequence[I
 
 
 def _song_index_tabs(conn: sqlite3.Connection, song: Song, block: frozenset[int]) -> list[IndexTab]:
-    """The song's tabs in the index of the kinds caracole uses (``lookup.song_tabs``), under its match's
-    keys; blocked ones left out, and ones whose page robots.txt closes."""
+    """The song's tabs in the index (``lookup.song_tabs``), under its match's keys; blocked ones left out,
+    and ones whose page robots.txt closes."""
     tabs = song_tabs(conn, song.match_artist_key, song.match_song_key) if song.match_song_key else []
     return [t for t in tabs if t.tab_id not in block and not _closed(t.url)]
 
@@ -1638,9 +1635,7 @@ def _left_out(run: _SongRun) -> list[int]:
     song = run.song
     ids = {
         int(r.tab_id) for r in song_versions(run.conn, song.id, include_gone=True)
-        # an earlier match's is no candidate, blocked or not; nor is a kind caracole doesn't use (a Guitar Pro
-        # file's version, kept for the file filed for it when caracole still picked them)
-        if r.provider == PROVIDER and not r.stale and r.kind in _GROUP_OF
+        if r.provider == PROVIDER and not r.stale  # an earlier match's: no candidate, blocked or not
     }
     ids |= {t.tab_id for t in _song_index_tabs(run.conn, song, frozenset())}
     ids |= set(run.ctx.overrides.pin.get(song.key, ()))

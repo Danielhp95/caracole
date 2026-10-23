@@ -256,10 +256,10 @@ def test_songs_an_older_normalizer_kept_apart_are_merged(conn, tmp_path):
     newer = older_song(conn, "Enanitos Verdes", "Lamento Boliviano", key, source="wanted",
                        source_id=key, added_at="2026-09-05T00:00:00Z")
     update_song(conn, newer, album="Igual Que Ayer", duration_ms=223000)
-    # Both were fetched to the same sheet; the newer one also has a Guitar Pro file you filed.
+    # Both were fetched to the same sheet; the newer one also has a text tab.
     sheet = keep(conn, lib, older, "101", "chords", "sheet.txt", b"older's sheet", pick=True)
     keep(conn, lib, newer, "101", "chords", "sheet.txt", b"newer's sheet", pick=True)
-    keep(conn, lib, newer, "301", "guitar-pro", "guitar-1.gp5", b"gp5", pick=True)
+    keep(conn, lib, newer, "401", "tabs", "tab.txt", b"tab", pick=True)
     update_song(conn, older, ug_dirty=False)
     refresh_status(conn, older, ignored=False)
 
@@ -273,10 +273,10 @@ def test_songs_an_older_normalizer_kept_apart_are_merged(conn, tmp_path):
         "2026-09-05T00:00:00Z", "Igual Que Ayer", 223000)
     assert song.ug_dirty and song.status == "found"  # the next fetch weighs what it gained
     kept = {f.name: f for f in kept_files(conn, older)}
-    assert set(kept) == {"sheet.txt", "guitar-1.gp5"} and kept["sheet.txt"].version_id == sheet
-    gp = get_version(conn, kept["guitar-1.gp5"].version_id)
-    assert (gp.tab_id, gp.song_id, gp.pick_rank) == ("301", older, None)  # its picks stand
-    assert sorted(v.tab_id for v in song_versions(conn, older)) == ["101", "301"]
+    assert set(kept) == {"sheet.txt", "tab.txt"} and kept["sheet.txt"].version_id == sheet
+    tab = get_version(conn, kept["tab.txt"].version_id)
+    assert (tab.tab_id, tab.song_id, tab.pick_rank) == ("401", older, None)  # its picks stand
+    assert sorted(v.tab_id for v in song_versions(conn, older)) == ["101", "401"]
     assert all((lib / f.path).is_file() for f in kept.values())
 
 

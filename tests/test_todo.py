@@ -10,7 +10,7 @@ from caracole.normalize import slug_key
 from caracole.overrides import LaCuerdaPick, Overrides, load_overrides
 from caracole.songs import get_song, list_songs, update_song
 from caracole.todo import build_todo, md, search_links, songs_to_buy, write_todo
-from caracole.versions import set_coverage, set_picks, upsert_version
+from caracole.versions import set_coverage, upsert_version
 
 from conftest import add_song
 
@@ -476,19 +476,6 @@ def test_one_songs_buy_verdict_lists_no_other_song(conn, monkeypatch):
     monkeypatch.setattr(caracole.songs, "ensure_current_keys", listed)
     buy, waiting = songs_to_buy(conn, [song], Overrides(), NOW)
     assert [b.id for b in buy] == [song.id] and waiting == 0
-
-
-def test_no_guitar_pro_page_of_ultimate_guitars_is_listed_to_click(conn, cfg):
-    # caracole picks no Guitar Pro or Power Tab version on Ultimate Guitar for you to download any more: even a
-    # pick stored before (schema 9 takes them out) lists nothing, and the song has no guitar part yet.
-    s = add_song(conn)
-    update_song(conn, s.id, match_decision="accept", ug_checked_at="2026-10-18T03:35:00Z")
-    v1 = version(conn, s, 555890, slot="guitar", kind="guitar-pro", rating=4.2, votes=5, ver=1)
-    v2 = version(conn, s, 555891, slot="guitar", kind="power", rating=4.0, votes=2, ver=1)
-    set_picks(conn, s.id, ["guitar-pro", "power"], [v1, v2])
-    text = todo(conn, cfg)
-    assert "Guitar Pro pages to click" not in text and "555890" not in text and "555891" not in text
-    assert "## Guitar parts not found (1)" in text
 
 
 def test_guitar_parts_not_found(conn, cfg):
