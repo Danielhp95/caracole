@@ -45,26 +45,29 @@ The pictures show a demo library of public-domain songs, which
 
 ```sh
 nix shell github:Danielhp95/caracole            # x86_64-linux; or see docs/install.md
-caracole add "Traditional - Scarborough Fair"   # a line of ~/Tabs/wanted.txt
+caracole add "Oasis - Wonderwall"               # "Artist - Title": a line of ~/Tabs/wanted.txt
 caracole index build                            # once: Ultimate Guitar's sitemaps, about 10 minutes
 caracole run                                    # what the nightly run does, now
 caracole serve                                  # the library at http://127.0.0.1:8737/
 ```
 
 The library is the folder `~/Tabs`. No settings are needed to start; they go in
-`~/.config/caracole/caracole.toml`, and `caracole serve --address` with
-`--token-file` serves your network.
+`~/.config/caracole/caracole.toml`. `caracole serve --address` serves your network:
+the page has no sign-in, so keep it on a network you trust (your LAN or tailnet).
 
-- [docs/install.md](docs/install.md): NixOS, Ubuntu with or without Nix, and from source.
+- [docs/install.md](docs/install.md): installing it.
 - [docs/usage.md](docs/usage.md): every command, setting and file.
 - [docs/deploy.md](docs/deploy.md): running it on a server.
 
-caracole is gentle with the sites it reads: one request at a time, 10 to 20
-seconds apart at night, within a small budget, never a page robots.txt closes,
-and a day's rest when a site pushes back ([how](docs/usage.md#caracole-run)). The one exception is
-YouTube, which only the auto-chords package uses, for the audio of songs nobody
-has charted ([why](docs/usage.md#audio-from-youtube)). Keep your library private:
-the sheets and lyrics are other people's work.
+caracole is gentle with the sites it reads: one request at a time, seconds apart,
+within a small budget, never a page robots.txt closes, and at least a day's rest
+when a site pushes back ([how](docs/usage.md#caracole-run)). The one site whose
+robots.txt it goes against is YouTube, against its terms too: only the auto-chords
+package takes audio there, for a few songs nobody has charted, within its own
+budget and pauses, resting after a block like any site, and
+`[providers.youtube] enabled = false` turns it off
+([why](docs/usage.md#audio-from-youtube)). Keep your library private: the sheets
+and lyrics are other people's work.
 
 ## Development
 

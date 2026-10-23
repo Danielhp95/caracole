@@ -392,6 +392,7 @@ def serve(cfg, port: int = 0):
 # --- the pictures -----------------------------------------------------------------------------------------------
 
 DESKTOP = (1280, 800, False)  # width, height in CSS pixels, a phone's screen
+SHORTER = (1280, 790, False)  # the foot's PDF button under the bar, and the Harmony panel cut between two links
 PHONE = (390, 844, True)
 SETTLED = ("document.readyState === 'complete' && document.fonts.status === 'loaded'"
            " && document.getAnimations().every((a) => a.playState !== 'running')")
@@ -413,7 +414,8 @@ def below(selector: str, margin: int = 24) -> str:
 
 # Each picture: its file's name, its address on the server, the screen, then what is done before it is taken, in
 # order ("wait" an expression, "click" a selector, "type" text into the focused field, "js" an expression), and
-# its clip (JavaScript for [x, y, width, height] in CSS pixels; None: the screen whole).
+# its clip (JavaScript for [x, y, width, height] in CSS pixels, within the screen; None: the screen whole). The last
+# "wait" must still hold once the picture is taken, or the script stops: a picture that missed it is never written.
 SHOTS = (
     ("library", "", DESKTOP, (
         ("wait", "document.getElementById('q') !== null"),
@@ -430,7 +432,7 @@ SHOTS = (
         ("wait", "!document.getElementById('panel').hidden"),
         ("js", "document.activeElement.blur()"),
     ), None),
-    ("harmony", "Frederic%20Weatherly/Danny%20Boy/sheet.html#nm=both&necks=0", DESKTOP, (
+    ("harmony", "Frederic%20Weatherly/Danny%20Boy/sheet.html#nm=both&necks=0", SHORTER, (
         ("wait", "document.querySelector('#sheet .c') !== null"),
         ("click", "#more"),
         ("click", "#harmony-open"),
@@ -451,6 +453,7 @@ SHOTS = (
         ("wait", "document.querySelector('#songbooks button.plays.set') !== null"),
         ("js", "document.querySelector('#songbooks button.plays.set').id = 'chip'"),  # Amazing Grace, set in A
         ("click", "#chip"),  # its key, mode and capo, open
+        ("js", "document.activeElement.blur()"),  # no focus ring on its Key menu
         ("wait", "document.querySelector('#songbooks .set-line.editing select') !== null"),
     ), below("#songbooks article.book")),
     ("guitar-pro", "guitar?file=Traditional%2FGreensleeves%2Fguitar-1.gp", DESKTOP, (
@@ -488,8 +491,15 @@ def take(url: str, out: Path, profile: Path, cfg) -> list[Path]:
             if not b.wait(SETTLED, timeout=30):
                 sys.exit(f"{name}: the page never settled")
             x, y, w, h = b.js(clip) if clip else (0, 0, width, height)
-            shot = b.send("Page.captureScreenshot", format="png", captureBeyondViewport=clip is not None,
+            if x < 0 or y < 0 or x + w > width or y + h > height:
+                sys.exit(f"{name}: the clip {[x, y, w, h]} goes past the screen, {width} × {height}")
+            # Never beyond the screen: Chromium would resize it for the picture, and a page that redraws for its
+            # width (the Songbooks tab, closing the key editor) would come out in another state.
+            shot = b.send("Page.captureScreenshot", format="png", captureBeyondViewport=False,
                           clip={"x": x, "y": y, "width": w, "height": h, "scale": 1})
+            last = [what for do, what in steps if do == "wait"][-1]
+            if not b.js(last):
+                sys.exit(f"{name}: the page left {last} while its picture was taken")
         path = out / f"{name}.png"
         path.write_bytes(base64.b64decode(shot["data"]))
         written.append(path)
