@@ -7,7 +7,8 @@ lyrics on their own, and guitar parts where they exist. A nightly
 `Library/_todo.md` lists only what it can't decide without you.
 
 This page covers using caracole on any machine. [deploy.md](deploy.md) sets it
-up as a nightly service on a NixOS host, with Syncthing and backups.
+up as a nightly service, on NixOS or on Ubuntu without Nix, with Syncthing and
+backups.
 `caracole --help` and `caracole COMMAND --help` list every command and option.
 
 - [Configure](#configure)
@@ -24,7 +25,7 @@ up as a nightly service on a NixOS host, with Syncthing and backups.
 - [Fonts for Chinese sheets](#fonts-for-chinese-sheets)
 - [The library folder](#the-library-folder)
 - [A worked example](#a-worked-example)
-- [Running it on the NUC](#running-it-on-the-nuc)
+- [Running it on a server](#running-it-on-a-server)
 
 ## Configure
 
@@ -3379,8 +3380,8 @@ script, `/assets/alphatab/alphatab-1.8.4-<hash>.js`, which the browser checks
 against its hash and keeps for good. That script is the same for anyone, so the
 server sends it to any origin, the page's sandbox among them. Only caracole serve does this: `index.html`
 opened from the folder lists the file as before, and the server needs alphaTab
-for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`, see
-[install.md](install.md)). Without it the server runs all the same, the line's ⋯
+for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`; without Nix, see
+[deploy.md](deploy.md#4-the-fonts-and-alphatab)). Without it the server runs all the same, the line's ⋯
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
 
@@ -3410,8 +3411,8 @@ tailnet, never the internet.
 - These keep other sites' pages, open in a browser on your network, from using
   the server; they keep out no person or program on the network itself.
 
-It runs until Ctrl-C. On the NUC, `services.caracole.web` runs it as a unit
-([deploy.md](deploy.md), section 8).
+It runs until Ctrl-C. On a server, `caracole-web.service` runs it
+([deploy.md](deploy.md#5-the-library-page-on-your-network)).
 
 ## Songbooks
 
@@ -3853,8 +3854,8 @@ Until a usable font is set, a Chinese sheet still gets its `.cho` file and its
 viewer (`sheet.html`, which the browser draws with its own fonts), and the
 to-do page's PDFs section names the sheets waiting for a font, each with
 the first letter it needs the font for, such as `宋冬野 - 斑马斑马 (斑 U+6591)`.
-Section 7 of [deploy.md](deploy.md#7-chinese-sheets-in-the-pdfs) has the
-details.
+Without Nix, [deploy.md](deploy.md#4-the-fonts-and-alphatab) installs
+FusionKaiJ.
 
 The font is used only for sheets that need it, by what the PDF prints: Chinese
 only in the tab's notes before its first section, which stay out of the PDF,
@@ -3869,7 +3870,7 @@ file.
 ## The library folder
 
 ```
-Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/library on the NUC
+Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/library on a server
   _todo.md                  what needs you
   index.html                browse and search the library
   wanted.txt                your songs
@@ -4101,7 +4102,7 @@ so a complete sheet counts as complete either way.
 `caracole autochords`.** The buy list links the stores. The command needs the
 flake's `packages.autochords` (`nix shell .#autochords` on the laptop; on the
 NUC, the `caracole-autochords` unit runs it after each nightly run, see
-[deploy.md](deploy.md#6-auto-chords)). It links the new file to the song by
+[deploy.md](deploy.md#4-auto-chords)). It links the new file to the song by
 its tags and duration (tags in two scripts, such as "Song Dongye (宋冬野)",
 work too), finds the chords and the beats, and writes
 `sheet (auto).txt`. With no timed lyrics to lay the chords over, the sheet is
@@ -4122,11 +4123,12 @@ queued, then downloaded, then with its chords done. The auto sheet says which
 video its audio came from, on its third line. A purchase dropped into Music/
 later takes the video's place.
 
-## Running it on the NUC
+## Running it on a server
 
-[deploy.md](deploy.md) sets caracole up as a nightly NixOS service: the timer,
-the hardened units, Syncthing for the library and the music,
-restic backups, the offline auto-chords unit, and caracole-web, which serves
-the library page with its request form. There, run any command as the service
-does with `sudo caracole-admin COMMAND`, for example
+[deploy.md](deploy.md) sets caracole up as a nightly service, on NixOS with
+the flake's module or on Ubuntu 24.04 without Nix: the timer, the hardened
+units, Syncthing for the library and the music, restic backups, the offline
+auto-chords unit, and caracole-web, which serves the library page with its
+request form to your LAN or tailnet, with no sign-in. There, run any command
+as the service does with `sudo caracole-admin COMMAND`, for example
 `sudo caracole-admin index build`.

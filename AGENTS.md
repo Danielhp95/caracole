@@ -277,7 +277,9 @@ Rules a change there keeps (the Invariants below are the others):
   `caracole-admin` run it too, so their pages agree), module-check.nix
   (`checks.module`).
 - `docs/`: usage.md (configuration, commands, the to-do page, overrides.toml, the library
-  folder), deploy.md (the NixOS host), install.md, and the design files above.
+  folder), deploy.md (a server: the NixOS module, or Ubuntu 24.04 without Nix, whose units
+  and caracole-admin do what nix/module.nix's do, so a change to a unit there changes them
+  too), install.md, and the design files above.
   web-search.md designs a search-API fallback for matching, not built.
 
 ## Development

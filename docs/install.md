@@ -1,528 +1,45 @@
 # Installing caracole
 
-caracole needs Python 3.12 or newer, ChordPro 6.050.7 for the PDFs, a font
-with Chinese glyphs for Chinese sheets, Adwaita Sans for the PDFs' look (or
-they keep ChordPro's Helvetica) and, for auto-chords only, torch, two
-model files and yt-dlp (with ffmpeg and deno), which takes the audio of songs
-nobody has charted from YouTube. The Nix packages bring all of it. Without Nix
-you install each one. The flake builds for x86_64-linux only.
+caracole needs Python 3.12 or newer (it is tested on 3.14), ChordPro 6.050.7
+for the PDFs, the fonts they are set in and one with Chinese glyphs, alphaTab
+for Guitar Pro files in the browser and, for auto-chords alone, torch, two
+model files and yt-dlp. The flake's packages bring all of it, for x86_64-linux.
 
-- [NixOS](#nixos): the flake's module runs caracole every night.
-- [Ubuntu](#ubuntu), [with Nix](#ubuntu-with-nix) or
-  [without](#ubuntu-without-nix), then the same
-  [systemd units](#run-it-nightly-on-ubuntu).
-- [From source](#from-source), to change caracole and run its tests.
+- **On a server**, as a nightly service: [deploy.md](deploy.md), on
+  [NixOS](deploy.md#nixos) or on [Ubuntu 24.04 without
+  Nix](deploy.md#ubuntu-2404-without-nix).
+- **[With Nix](#with-nix)**, on any Linux, to run it by hand.
+- **[From source](#from-source)**, to change caracole and run its tests.
 
-## NixOS
+caracole keeps no secret: no credential and no token. `caracole serve` has no
+sign-in, so it listens only on a network you trust
+([usage.md](usage.md#caracole-serve)).
 
-Add the flake to your system's `flake.nix`:
-
-```nix
-inputs.caracole.url = "github:Danielhp95/caracole";
-```
-
-Import its module and turn the service on:
-
-```nix
-{ inputs, ... }:
-{
-  imports = [ inputs.caracole.nixosModules.default ];
-
-  services.caracole = {
-    enable = true;
-    # dataDir = "/data/caracole";   # default: /var/lib/caracole
-  };
-}
-```
-
-This needs `inputs` in `specialArgs`. Otherwise add
-`caracole.nixosModules.default` to `modules` in `nixosSystem`. The module
-runs the flake's own packages, built with the nixpkgs that caracole pins and
-tests. `caracole.inputs.nixpkgs.follows = "nixpkgs";` builds them with your
-nixpkgs instead.
-
-You get `caracole.timer`, which starts a run at 03:30, up to 45 minutes late
-(a run missed while the machine was off starts at the next boot). You also
-get `caracole.service`, a hardened oneshot run as user `caracole`, and
-`caracole-admin`, which runs any command the way the service does.
-`services.caracole.settings` is `caracole.toml`, as
-[usage.md](usage.md#configure) describes it, without the folder keys: those
-come from the options.
-
-**No secrets.** caracole keeps none, so the module takes none: ntfy is
-`services.caracole.settings.ntfy.url`, a topic's URL alone, with no token. And
-caracole-web (`services.caracole.web`) has no sign-in: anyone who can reach it
-can read the library and request songs, so give it an address only a network
-you trust reaches, your LAN or your tailnet. A configuration that still sets
-`services.caracole.credentials` fails to evaluate until you delete it.
-
-**Auto-chords:**
-
-```nix
-services.caracole.autochords.enable = true;
-```
-
-`caracole-autochords.service` then starts after each successful run, with no
-network. It runs the flake's `autochords` package, whose wrapper points at
-the two model files the flake downloads and puts yt-dlp on PATH. The nightly
-run then runs that package too, and takes the audio of up to three songs a
-night that no human sheet was found for from YouTube, for auto-chords: your
-choice, against YouTube's robots.txt and terms (see
-[usage.md](usage.md#audio-from-youtube)). `services.caracole.settings.providers.youtube.enabled = false`
-keeps auto-chords for purchases alone.
-
-**After switching**, in this order:
+## With Nix
 
 ```sh
-sudo caracole-admin index build                 # once: UG's sitemaps, about 10 minutes
-sudo caracole-admin add "Oasis" "Wonderwall"    # or edit wanted.txt in the library
-systemctl list-timers caracole.timer            # when the next run starts
-sudo systemctl start caracole.service           # one run now
-journalctl -u caracole.service -e
+nix run github:Danielhp95/caracole -- --help                  # once, without installing
+nix profile add github:Danielhp95/caracole                    # caracole on your PATH
+nix profile add 'github:Danielhp95/caracole#autochords'       # or with auto-chords (about 3 GB)
 ```
 
-Then read `_todo.md` in the library.
+Before Nix 2.30, `nix profile add` was `nix profile install`. caracole then
+reads `~/.config/caracole/caracole.toml` ([usage.md](usage.md#configure)).
 
-**Data** lives in `dataDir`, `/var/lib/caracole` unless you set it:
-
-| Folder | Holds |
-|---|---|
-| `library` | sheets, lyrics, `_todo.md`, `index.html`, `wanted.txt`, `overrides.toml` |
-| `music` | audio you bought, read-only, for auto-chords |
-| `state` | the database and the lock: back it up, don't sync it |
-| `cache` | every HTTP response, kept, and audio taken from YouTube: losing it costs only requests |
-
-`libraryDir`, `musicDir`, `stateDir` and `cacheDir` move one folder each.
-None may be under `/home`, `/root`, `/run/user`, `/tmp` or `/var/tmp`,
-which the units' sandbox hides.
-
-**Guitar Pro files in the browser.** Both packages carry
-[alphaTab](https://www.alphatab.net) 1.8.4, which `caracole serve` draws and
-plays a song's Guitar Pro file with ([usage.md](usage.md#caracole-serve)):
-`nix/alphatab.nix` fetches its npm package when the package is built, pinned
-by hash, and keeps three files of it, about 2.4 MB, with their licences in
-`licenses/`: its browser build (MPL-2.0), the Bravura music font (SIL Open Font
-License 1.1) and the Sonivox SoundFont (Apache-2.0). The wrapper points
-`CARACOLE_ALPHATAB_DIR` at them.
-
-[deploy.md](deploy.md) covers the rest: Syncthing, restic backups, and how
-auto-chords works.
-
-## Ubuntu
-
-Checked on Ubuntu 24.04 and 26.04.
-
-### Ubuntu with Nix
-
-The recommended route: the packages bring ChordPro 6.050.7, the fonts and the
-model files, pinned and tested together.
-
-Install Nix with the official installer, in multi-user mode, then turn on
-flakes:
-
-```sh
-sudo apt install curl xz-utils
-sh <(curl --proto '=https' --tlsv1.2 -L https://nixos.org/nix/install) --daemon
-echo 'experimental-features = nix-command flakes' | sudo tee -a /etc/nix/nix.conf
-sudo systemctl restart nix-daemon
-```
-
-Install caracole into a profile of its own, which gives the units a fixed
-path. Nix builds it and runs its tests, which takes a few minutes:
+To run it as a service on a system with Nix that isn't NixOS, install it into
+a profile of its own, which gives the units a fixed path (`#autochords` for
+auto-chords), then follow [deploy.md's Ubuntu
+part](deploy.md#ubuntu-2404-without-nix) from section 6, with
+`/nix/var/nix/profiles/caracole/bin/caracole` in place of
+`/opt/caracole/bin/caracole`. The package's wrapper does what section 5's
+does, and brings what section 12 installs.
 
 ```sh
 sudo -i nix profile add --profile /nix/var/nix/profiles/caracole github:Danielhp95/caracole
-/nix/var/nix/profiles/caracole/bin/caracole --help
+sudo -i nix profile upgrade --profile /nix/var/nix/profiles/caracole --all   # to update
 ```
 
-For auto-chords, add the `autochords` package to a second profile. With
-torch and yt-dlp, it takes about 3 GB in the store:
-
-```sh
-sudo -i nix profile add --profile /nix/var/nix/profiles/caracole-autochords 'github:Danielhp95/caracole#autochords'
-```
-
-`sudo -i` because Ubuntu's `sudo` resets PATH, and Nix isn't on the reset one.
-Before Nix 2.30, `nix profile add` was `nix profile install`. To update:
-
-```sh
-sudo -i nix profile upgrade --profile /nix/var/nix/profiles/caracole --all
-```
-
-Then [run it nightly](#run-it-nightly-on-ubuntu).
-
-### Ubuntu without Nix
-
-**caracole.** It needs Python 3.12 or newer: Ubuntu 24.04 has 3.12, 26.04
-has 3.14. Give it a virtual environment of its own:
-
-```sh
-sudo apt install python3-venv git curl
-sudo python3 -m venv /opt/caracole
-sudo /opt/caracole/bin/pip install "git+https://github.com/Danielhp95/caracole@caracole-v1"
-/opt/caracole/bin/caracole --help
-```
-
-caracole's version stays 0.1.0 from one commit to the next, so `pip install
---upgrade` keeps the one you have. To update, reinstall it, without touching
-its dependencies (torch among them):
-
-```sh
-sudo /opt/caracole/bin/pip install --force-reinstall --no-deps "git+https://github.com/Danielhp95/caracole@caracole-v1"
-sudo /opt/caracole/bin/pip check   # names any dependency a new caracole needs
-```
-
-If you only run caracole by hand, as yourself, `sudo apt install pipx` and
-`pipx install git+https://github.com/Danielhp95/caracole@caracole-v1` work
-too, and `pipx reinstall caracole` updates it.
-
-**ChordPro 6.050.7.** caracole makes no PDF with any later release, from
-6.060 to 6.101.0: they read the `--define` values caracole passes, which
-start with `%{`, as JSON, and stop. Ubuntu 24.04 has no `chordpro` package,
-and 26.04's is 6.090.1, so install 6.050.7 from CPAN. apt has most of the
-Perl libraries it needs, and cpanm builds and tests the rest in a few
-minutes:
-
-```sh
-sudo apt install cpanminus build-essential libdata-printer-perl libfile-homedir-perl \
-  libfile-loadlines-perl libimage-info-perl libobject-pad-perl libpdf-api2-perl \
-  libstring-interpolate-named-perl libtext-layout-perl
-sudo cpanm --from https://cpan.metacpan.org \
-  https://cpan.metacpan.org/authors/id/J/JV/JV/App-Music-ChordPro-6.050.7.tar.gz
-chordpro --version   # This is ChordPro core 6.050.7
-```
-
-It lands in `/usr/local/bin`, which is on the units' PATH. Anywhere else,
-set `chordpro_bin` in caracole.toml.
-
-**The font for Chinese sheets** is `FusionKaiJ-Regular.ttf` from LXGW
-FusionKai 24.134, the file the Nix package uses:
-
-```sh
-sudo install -d /usr/local/share/caracole
-sudo curl -fLo /usr/local/share/caracole/FusionKaiJ-Regular.ttf \
-  https://raw.githubusercontent.com/lxgw/FusionKai/v24.134/FusionKaiJ-Regular.ttf
-echo 'fd4eb05a8ae1480957bfe0372728bfde1171015c74b1ac349c889ae740751018  /usr/local/share/caracole/FusionKaiJ-Regular.ttf' | sha256sum -c
-```
-
-caracole reads its path from `CARACOLE_CJK_FONT`, or from `cjk_font` in
-caracole.toml, which wins. The service's config below sets `cjk_font`.
-Without the font, a Chinese sheet gets no PDF, and the to-do page says so.
-[usage.md](usage.md#fonts-for-chinese-sheets) says which other fonts work.
-
-**The PDFs' fonts**, if you want them as the Nix package sets them: Adwaita
-Sans and Adwaita Mono from GNOME's adwaita-fonts 50.0, in a folder of four
-files (`regular.ttf`, `bold.ttf`, `italic.ttf`, `mono.ttf`). Adwaita Sans
-comes as variable fonts, which ChordPro draws in their default weight alone,
-so `nix/pdf-fonts.py` in caracole's source makes static instances of them with
-fontTools:
-
-```sh
-curl -fLO https://download.gnome.org/sources/adwaita-fonts/50/adwaita-fonts-50.0.tar.xz
-echo '4c927fbfeec1c503801ba510c2c94e0054c82c522cf7ba0d3be5d4d41fcf5c86  adwaita-fonts-50.0.tar.xz' | sha256sum -c
-tar -xJf adwaita-fonts-50.0.tar.xz
-python3 -m venv /tmp/fonttools && /tmp/fonttools/bin/pip install fonttools
-/tmp/fonttools/bin/python caracole/nix/pdf-fonts.py adwaita-fonts-50.0/sans pdf-fonts   # caracole: the source
-sudo install -Dm644 -t /usr/local/share/caracole/pdf-fonts pdf-fonts/*.ttf
-sudo install -m644 adwaita-fonts-50.0/mono/AdwaitaMono-Regular.ttf /usr/local/share/caracole/pdf-fonts/mono.ttf
-sudo install -Dm644 adwaita-fonts-50.0/LICENSE /usr/local/share/caracole/pdf-fonts/licenses/Adwaita-OFL.txt
-```
-
-caracole reads the folder from `CARACOLE_PDF_FONTS`, or from `pdf_fonts` in
-caracole.toml, which wins. Without it, the PDFs keep ChordPro's built-in
-Helvetica and Courier, and a sheet with a letter they lack (a ʼ, Greek,
-Cyrillic) is set in the Chinese font, when one is set.
-[usage.md](usage.md#fonts-in-the-pdfs) says what each file sets.
-
-**Auto-chords**, if you want it. Install torch first, from PyTorch's CPU-only
-index, because the PyPI build brings several GB of CUDA libraries. Then
-install the `autochords` extra. torchcodec and FFmpeg decode iTunes Store
-`.m4a` files. WAV, FLAC, Ogg and MP3 need neither. The venv grows to about
-1.5 GB.
-
-```sh
-sudo apt install ffmpeg
-sudo /opt/caracole/bin/pip install torch torchaudio torchcodec --index-url https://download.pytorch.org/whl/cpu
-sudo /opt/caracole/bin/pip install "caracole[autochords] @ git+https://github.com/Danielhp95/caracole@caracole-v1"
-```
-
-Then download the two model files that `nix/autochords.nix` pins: BTC's
-large-vocabulary chord weights and beat_this's `final0` checkpoint, both MIT.
-
-```sh
-cd /usr/local/share/caracole
-sudo curl -fLO https://raw.githubusercontent.com/jayg996/BTC-ISMIR19/2682317be668032e6e4b269ded36adaa2ad57df0/test/btc_model_large_voca.pt
-sudo curl -fLO https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt
-sha256sum -c <<'EOF'
-1673d23f8f9a55ae7f9e8b80a51da616debb22675b8d8b67ea6ce0ef37b0ab51  btc_model_large_voca.pt
-8c328b45f59d8dd3dff219253ff6a8d6482be57d0133a29140e2febbf8eb8331  final0.ckpt
-EOF
-```
-
-caracole reads their paths from `CARACOLE_BTC_WEIGHTS` and
-`CARACOLE_BEAT_CHECKPOINT`, or from `btc_weights` and `beat_checkpoint`
-under `[autochords]` in caracole.toml, which win.
-
-**yt-dlp**, for the audio of songs nobody has charted, which caracole takes
-from YouTube only with auto-chords (see [usage.md](usage.md#audio-from-youtube)):
-a recent yt-dlp, with ffmpeg and ffprobe for its audio extraction, and deno,
-the JavaScript runtime YouTube's player needs (yt-dlp finds `deno` on PATH,
-and needs its `yt-dlp-ejs` scripts, which pip installs with `yt-dlp[default]`).
-Ubuntu's own yt-dlp is too old for YouTube. Into a venv of its own:
-
-```sh
-sudo python3 -m venv /opt/yt-dlp
-sudo /opt/yt-dlp/bin/pip install "yt-dlp[default]"
-```
-
-Then deno, from one of its releases: pick the release (2.0 or later) on
-<https://github.com/denoland/deno/releases>, download its Linux archive and the
-archive's checksum, check it, and put `deno` into /usr/local/bin. Nothing is
-run as root but `unzip`:
-
-```sh
-sudo apt install unzip
-DENO_VERSION=v2.x.y   # the release you picked, as its page names it
-DENO_ZIP=deno-x86_64-unknown-linux-gnu.zip
-curl -fsSLO "https://github.com/denoland/deno/releases/download/$DENO_VERSION/$DENO_ZIP"
-curl -fsSLO "https://github.com/denoland/deno/releases/download/$DENO_VERSION/$DENO_ZIP.sha256sum"
-sha256sum -c "$DENO_ZIP.sha256sum" && sudo unzip -o "$DENO_ZIP" deno -d /usr/local/bin
-```
-
-(Deno's own `install.sh` does the same, but piping a script from the network
-into a root shell runs whatever it says that day: read it first if you use it.)
-
-caracole runs `yt-dlp` from PATH, or the program `ytdlp_bin` in caracole.toml
-or `CARACOLE_YTDLP_BIN` names: here `ytdlp_bin = "/opt/yt-dlp/bin/yt-dlp"`.
-Without it, caracole takes no audio from YouTube, and the to-do page says why;
-`enabled = false` under `[providers.youtube]` turns that off on purpose.
-
-**alphaTab, for Guitar Pro files in the browser**, if you run `caracole
-serve`. Without it the server runs all the same, and Guitar Pro files are
-downloads alone. Fetch alphaTab 1.8.4's npm package, check it, and keep its
-three files and their licences:
-
-```sh
-curl -fLo /tmp/alphatab-1.8.4.tgz https://registry.npmjs.org/@coderline/alphatab/-/alphatab-1.8.4.tgz
-echo '70b2c77abc9698a055d90a11d77308b6b41247936476e969d85770e3d4db4602  /tmp/alphatab-1.8.4.tgz' | sha256sum -c
-mkdir /tmp/alphatab && tar -xzf /tmp/alphatab-1.8.4.tgz -C /tmp/alphatab
-sudo install -d /usr/local/share/caracole/alphatab/licenses
-cd /tmp/alphatab/package
-sudo install -m 0644 dist/alphaTab.min.js dist/font/Bravura.woff2 dist/soundfont/sonivox.sf3 \
-  /usr/local/share/caracole/alphatab/
-sudo install -m 0644 LICENSE /usr/local/share/caracole/alphatab/licenses/alphaTab-LICENSE
-sudo install -m 0644 dist/font/Bravura-OFL.txt /usr/local/share/caracole/alphatab/licenses/
-sudo install -m 0644 dist/soundfont/LICENSE /usr/local/share/caracole/alphatab/licenses/sonivox-LICENSE
-```
-
-alphaTab is MPL-2.0, the Bravura font SIL Open Font License 1.1, the Sonivox
-SoundFont Apache-2.0. caracole reads the folder from `CARACOLE_ALPHATAB_DIR`:
-add `--setenv=CARACOLE_ALPHATAB_DIR=/usr/local/share/caracole/alphatab` to
-[`caracole-admin`](#run-it-nightly-on-ubuntu), which runs `caracole serve` (the
-Nix package's wrapper sets it already).
-
-Then [run it nightly](#run-it-nightly-on-ubuntu).
-
-### Run it nightly on Ubuntu
-
-These files mirror the NixOS module: the same schedule, user, folders and
-hardening. Two parts aren't here. One is the module's ntfy
-message when a unit fails; caracole's own messages, a summary after each run
-and alerts for blocks, still come once `[ntfy]` has a `url`. The other is
-caracole-web, the library page over HTTP: `sudo caracole-admin serve` runs
-it in the foreground, on 127.0.0.1:8737
-([usage.md](usage.md#caracole-serve)).
-
-**A user and the folders:**
-
-```sh
-sudo useradd --system --user-group --home-dir /nonexistent --shell /usr/sbin/nologin caracole
-sudo install -d -o caracole -g caracole -m 0710 /var/lib/caracole
-sudo install -d -o caracole -g caracole -m 2775 /var/lib/caracole/library /var/lib/caracole/music
-sudo install -d -o caracole -g caracole -m 0700 /var/lib/caracole/state /var/lib/caracole/cache
-sudo install -d /etc/caracole
-sudo usermod -aG caracole "$USER"   # to edit wanted.txt and read the library; log in again
-```
-
-**The config**, `/etc/caracole/caracole.toml`. Other settings are in
-[usage.md](usage.md#configure).
-
-```toml
-# /etc/caracole/caracole.toml
-data_dir = "/var/lib/caracole"
-
-# Without Nix: the fonts and, for auto-chords, yt-dlp and the model files.
-# cjk_font = "/usr/local/share/caracole/FusionKaiJ-Regular.ttf"
-# pdf_fonts = "/usr/local/share/caracole/pdf-fonts"
-# ytdlp_bin = "/opt/yt-dlp/bin/yt-dlp"
-#
-# [autochords]
-# btc_weights = "/usr/local/share/caracole/btc_model_large_voca.pt"
-# beat_checkpoint = "/usr/local/share/caracole/final0.ckpt"
-```
-
-**The units.** The nightly run:
-
-```ini
-# /etc/systemd/system/caracole.service
-[Unit]
-Description=caracole nightly run: sync, match, fetch and write the library
-Wants=network-online.target
-After=network-online.target
-RequiresMountsFor=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
-# With auto-chords:
-#OnSuccess=caracole-autochords.service
-
-[Service]
-Type=oneshot
-ExecStart=/nix/var/nix/profiles/caracole/bin/caracole --config /etc/caracole/caracole.toml run
-# With auto-chords, its package's run instead, which also takes audio from YouTube for it:
-#ExecStart=/nix/var/nix/profiles/caracole-autochords/bin/caracole --config /etc/caracole/caracole.toml run
-TimeoutStartSec=3h
-User=caracole
-Group=caracole
-UMask=0007
-Environment=XDG_CACHE_HOME=/var/lib/caracole/cache NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba
-ReadWritePaths=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
-ReadOnlyPaths=-/var/lib/caracole/music
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-PrivateMounts=yes
-ProtectProc=invisible
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
-ProtectControlGroups=yes
-ProtectClock=yes
-ProtectHostname=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-RestrictNamespaces=yes
-RestrictRealtime=yes
-RestrictSUIDSGID=yes
-MemoryDenyWriteExecute=yes
-LockPersonality=yes
-SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged
-SystemCallErrorNumber=EPERM
-CapabilityBoundingSet=
-```
-
-Its timer:
-
-```ini
-# /etc/systemd/system/caracole.timer
-[Unit]
-Description=Nightly caracole run
-
-[Timer]
-OnCalendar=*-*-* 03:30
-RandomizedDelaySec=45m
-Persistent=true
-
-[Install]
-WantedBy=timers.target
-```
-
-With auto-chords, this unit too, and uncomment `OnSuccess=` and the second
-`ExecStart=` in `caracole.service` (taking out the first). It runs after each
-successful run, as the same user, with no network.
-`MemoryDenyWriteExecute` is off here because PyTorch and numba generate code
-at run time; the nightly run keeps it, since it never imports torch and
-yt-dlp's deno runs without its JIT.
-
-```ini
-# /etc/systemd/system/caracole-autochords.service
-[Unit]
-Description=caracole auto-chords: chord sheets from purchased audio, offline
-After=caracole.service
-RequiresMountsFor=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
-
-[Service]
-Type=oneshot
-ExecStart=/nix/var/nix/profiles/caracole-autochords/bin/caracole --config /etc/caracole/caracole.toml autochords
-TimeoutStartSec=6h
-CPUSchedulingPolicy=batch
-IOSchedulingClass=idle
-User=caracole
-Group=caracole
-UMask=0007
-Environment=XDG_CACHE_HOME=/var/lib/caracole/cache NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba
-ReadWritePaths=/var/lib/caracole/library /var/lib/caracole/state /var/lib/caracole/cache
-ReadOnlyPaths=-/var/lib/caracole/music
-PrivateNetwork=yes
-MemoryDenyWriteExecute=no
-NoNewPrivileges=yes
-ProtectSystem=strict
-ProtectHome=yes
-PrivateTmp=yes
-PrivateDevices=yes
-PrivateMounts=yes
-ProtectProc=invisible
-ProtectKernelTunables=yes
-ProtectKernelModules=yes
-ProtectKernelLogs=yes
-ProtectControlGroups=yes
-ProtectClock=yes
-ProtectHostname=yes
-RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
-RestrictNamespaces=yes
-RestrictRealtime=yes
-RestrictSUIDSGID=yes
-LockPersonality=yes
-SystemCallArchitectures=native
-SystemCallFilter=@system-service
-SystemCallFilter=~@privileged
-SystemCallErrorNumber=EPERM
-CapabilityBoundingSet=
-```
-
-**`caracole-admin`** runs one command as the units do: as user `caracole`,
-with the config and the cache. With auto-chords from Nix,
-point it at the `caracole-autochords` profile instead, so that
-`caracole-admin autochords` and `youtube` work too, and the to-do page and
-index.html it rewrites say what the nightly run's say about audio from YouTube.
-
-```sh
-#!/bin/sh
-# /usr/local/bin/caracole-admin: run a caracole command as caracole.service does.
-exec systemd-run --quiet --collect --wait --pty --pipe \
-  --uid=caracole --gid=caracole --property=UMask=0007 \
-  --setenv=CARACOLE_CONFIG=/etc/caracole/caracole.toml \
-  --setenv=XDG_CACHE_HOME=/var/lib/caracole/cache \
-  --setenv=NUMBA_CACHE_DIR=/var/lib/caracole/cache/numba \
-  /nix/var/nix/profiles/caracole/bin/caracole "$@"
-```
-
-Make it executable with `sudo chmod 0755 /usr/local/bin/caracole-admin`.
-Without Nix, point both units and `caracole-admin` at the venv:
-
-```sh
-sudo sed -i 's|/nix/var/nix/profiles/caracole\(-autochords\)\?/bin/caracole|/opt/caracole/bin/caracole|' \
-  /etc/systemd/system/caracole*.service /usr/local/bin/caracole-admin
-```
-
-Then start the timer:
-
-```sh
-sudo systemctl daemon-reload
-sudo systemctl enable --now caracole.timer
-```
-
-The first commands are the same as [on NixOS](#nixos), from
-`sudo caracole-admin index build` on. `systemd-analyze security` scores
-`caracole.service` 1.4 and `caracole-autochords.service` 1.0, as on NixOS.
-
-To keep the data elsewhere, say `/data/caracole`, create the folders there,
-set `data_dir`, and change the units and `caracole-admin`:
-
-```sh
-sudo sed -i 's|/var/lib/caracole|/data/caracole|g' \
-  /etc/systemd/system/caracole*.service /usr/local/bin/caracole-admin
-```
+`sudo -i`, as Ubuntu's `sudo` resets PATH to one without Nix.
 
 ## From source
 
@@ -543,27 +60,29 @@ nix develop .#autochords -c pytest -m autochords    # the model tests, with the 
 Both shells set `CARACOLE_CJK_FONT`, `CARACOLE_PDF_FONTS` and `CARACOLE_ALPHATAB_DIR`, and
 `.#autochords` also sets `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT`.
 
-Without Nix, install ChordPro and the fonts as [above](#ubuntu-without-nix)
-first, and torch too if you want the auto-chords tests:
+Without Nix, on Ubuntu, first sections 1 to 4 of [deploy.md's Ubuntu
+part](deploy.md#ubuntu-2404-without-nix) (Python, ChordPro, the fonts), then,
+in the checkout:
 
 ```sh
-python3 -m venv .venv
-.venv/bin/pip install -e . pytest pytest-xdist      # -e '.[autochords]' for auto-chords
-CARACOLE_CJK_FONT=/usr/local/share/caracole/FusionKaiJ-Regular.ttf \
-  CARACOLE_PDF_FONTS=/usr/local/share/caracole/pdf-fonts .venv/bin/pytest -q
-.venv/bin/caracole --help
+uv venv --python /opt/caracole/python/cpython-3.14.7-linux-x86_64-gnu/bin/python3.14 .venv
+uv pip install --python .venv/bin/python -c /opt/caracole/constraints.txt -e . pytest pytest-xdist
+PATH=/opt/caracole/perl/bin:$PATH PERL5LIB=/opt/caracole/perl/lib/perl5 \
+  CARACOLE_CJK_FONT=/opt/caracole/fonts/FusionKaiJ-Regular.ttf \
+  CARACOLE_PDF_FONTS=/opt/caracole/pdf-fonts CARACOLE_ALPHATAB_DIR=/opt/caracole/alphatab \
+  .venv/bin/pytest -q
 ```
 
-Run the tests as yourself, not as root, because the permission tests skip
-under root. Tests that need a program or a file skip without it:
+Run the tests as yourself, not as root: the permission tests skip under root.
+A test that needs a program or a file it can't find skips:
 
 | Without | These tests skip |
 |---|---|
-| `chordpro` on PATH | the real PDFs (marked `chordpro`): in test_render.py and test_render_all.py, two in test_chordpro.py |
+| `chordpro` on PATH | the real PDFs (marked `chordpro`) |
 | `CARACOLE_CJK_FONT` | the two Chinese PDFs |
 | `CARACOLE_PDF_FONTS` (Adwaita's four files) | the real PDFs in Adwaita Sans, and the two-column estimates in its widths |
-| `CARACOLE_ALPHATAB_DIR` (alphaTab's three files) | the tests of caracole serve's Guitar Pro page in a browser |
+| `CARACOLE_ALPHATAB_DIR` (alphaTab's three files) | caracole serve's Guitar Pro page in a browser |
 | torch, librosa and beat_this, or `CARACOLE_BTC_WEIGHTS` and `CARACOLE_BEAT_CHECKPOINT` | the model tests (marked `autochords`) |
-| `ffmpeg`, `chromium` | one `.m4a` test; the tests of `index.html`, `sheet.html`, `songbook.html`, the lookup page and the pages `caracole serve` serves, in a browser |
+| `ffmpeg`, `chromium` | one `.m4a` test; the pages in a browser |
 
 [AGENTS.md](../AGENTS.md#development) lists every such test and variable.

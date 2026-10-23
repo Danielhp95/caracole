@@ -56,7 +56,7 @@ The page itself was redesigned:
 - a "Title A–Z" sort;
 - clicking an artist's name shows only their songs, with a chip that removes the filter.
 
-On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service`. The options `web.address`, `web.allowedHosts` and `web.openFirewall` open it to a LAN or tailnet. See docs/usage.md ("caracole serve") and docs/deploy.md (section 8).
+On NixOS, `services.caracole.web.enable = true` runs it as `caracole-web.service`. The options `web.address`, `web.allowedHosts` and `web.openFirewall` open it to a LAN or tailnet. See docs/usage.md ("caracole serve") and docs/deploy.md ("The library page on your network").
 
 ## Sheet pdf "makeup" and phone quality.
 
