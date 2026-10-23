@@ -1,88 +1,79 @@
 # caracole
 
-caracole builds a folder of chord sheets for the songs you want to learn on
-guitar. You give it a list of songs. Every night it finds a chord sheet with
-the lyrics, saves the lyrics, and makes a PDF and a page for your phone. Each
-song gets its key, and where the key came from.
+caracole builds a private library of sing-along chord sheets, chords over the full
+lyrics, for the songs you list. Every night it finds each new song's sheet (Ultimate
+Guitar, LaCuerda), its lyrics (LRCLIB) and a Guitar Pro file where gtptabs.com has
+one, and makes a PDF and a phone-friendly page of the sheet; for a song nobody has
+charted, the optional auto-chords package works the chords out from the audio.
+`caracole serve` puts the library, its search and your songbooks on your network.
 
-    ~/Tabs/
-    ├── wanted.txt              your songs, one "Artist - Title" per line
-    ├── _todo.md                what caracole needs you to do
-    ├── index.html              browse and search everything
-    └── Oasis/Wonderwall/
-        ├── sheet.pdf           chords over lyrics
-        ├── sheet.html          the same on a phone: tap a chord for its shapes,
-        │                       transpose, capo, other chords and modes in the key
-        ├── lyrics.txt
-        ├── tab.txt             a guitar tab, when there is one
-        └── guitar-1.gp5        a Guitar Pro file, when there is one
+![The library page searching for "traditional": four songs of the library and three that Ultimate Guitar has, under one artist, each with Open or Get it](docs/screenshots/library.png)
 
-Sheets come from Ultimate Guitar and, for Spanish songs, LaCuerda. Lyrics come
-from LRCLIB. Guitar Pro files come from gtptabs.com, downloaded for you, or
-from wherever you get one: drop it into `_inbox/` and caracole files it. For a
-song nobody has charted, caracole works out the chords from the audio, with local models:
-a track you bought, or, by default, the song's audio, which it takes from
-YouTube with yt-dlp, a few songs a night.
+*Search your songs and the sites' indexes as you type; a song you haven't got is a Get it away.*
 
-## Install
+![Greensleeves on a laptop: chords over the lyrics, the rail of chord necks on the left, the transpose, capo, mode and chord-name settings on the right](docs/screenshots/sheet.png)
 
-See [docs/install.md](docs/install.md) for NixOS, Ubuntu and installing from
-source. [docs/deploy.md](docs/deploy.md) covers running it nightly on a NixOS
-server.
+*Each sheet: the chords over the lyrics, their shapes on the neck, transpose, capo and mode.*
 
-## Use
+![Danny Boy with a Roman numeral beside each chord, and the Harmony panel listing each section's progression and the progressions it contains](docs/screenshots/harmony.png)
 
-    caracole add "Oasis" "Wonderwall"   # or add a line to ~/Tabs/wanted.txt
-    caracole index build                # once, takes about 10 minutes
-    caracole run                        # what the nightly timer runs
-    caracole get "Radiohead - Creep"    # one song now: its sheet in seconds
-    caracole remove "Oasis - Wonderwall"   # gone for good, until you add it again
+*The Harmony panel reads each section in its key: numerals, named progressions, and a ▶ that strums them.*
 
-Then open `~/Tabs/_todo.md`, or `~/Tabs/index.html` to browse. `caracole serve`
-serves that page at `http://127.0.0.1:8737/`, where its search box also
-lists what Ultimate Guitar, LaCuerda, gtptabs.com and MuseScore have (from
-caracole's offline indexes, and LaCuerda's own search) with a Get it on each, a form to request a song by
-name, and a button on each song to remove it; the song's card, or the result's
-row, says how a request goes, on one line. Settings go in
-`~/.config/caracole/caracole.toml`, and none are needed to start. Commands,
-settings and overrides are explained in
-[docs/usage.md](docs/usage.md).
+<p>
+  <img src="docs/screenshots/phone-chord.png" width="300" alt="Scarborough Fair on a phone, the card of its G chord docked at the foot: its shape, other chords to play instead, its notes and the scale to solo in">
+  <img src="docs/screenshots/phone-pinyin.png" width="300" alt="The Chinese folk song 茉莉花 on a phone, with the pinyin of each character between it and its chord">
+</p>
 
-## Requests
+*On a phone: tap a chord for its shapes, its notes and a scale to solo in; pinyin over Chinese lyrics.*
 
-caracole is gentle with the sites it reads. It makes about 60 requests a night
-to Ultimate Guitar, one at a time and 10 to 20 seconds apart. A song you look
-up now (`caracole get`) costs a few requests, about a second apart, and every
-lookup of an hour shares a budget of 60 requests a site. It follows
-robots.txt, never logs in, and stops for at least a day when a site pushes
-back. It uses no site's search but LaCuerda's, whose robots.txt is empty: one
-request for a query you typed and left in the served page's search box, once
-in 30 days a query, at most 20 an hour, within that hour's 60. It downloads Guitar Pro files only where
-robots.txt allows it: from gtptabs.com, with at most 20 requests a night, one
-file for each song that has none. From Ultimate Guitar it takes chords and
-text tabs alone, never a Guitar Pro file: its robots.txt closes its downloads
-to bots. From MuseScore it
-reads only the song sitemaps its robots.txt lists, for links to its pages, and
-downloads nothing: a download there needs a login. A Cloudflare challenge, which
-is what MuseScore answered caracole with in October 2026, counts as a block.
+![The Songbooks tab: the Campfire songbook's set list, each song with the key it is played in, Amazing Grace's key, mode and capo open, and a guitar beside Greensleeves](docs/screenshots/songbooks.png)
 
-YouTube is the one exception, made on purpose, for a personal library: caracole
-uses its search there, its robots.txt closes that search and the API yt-dlp
-uses, and its terms allow no such downloads, so this route is your choice to
-keep or turn off. caracole goes there only for the audio of a song no one has
-charted, only with auto-chords to make chords of it, and on the same terms as
-elsewhere: at most 6 yt-dlp runs a night (three songs), with pauses, no cookies
-and no login, and a cooldown when YouTube pushes back. `[providers.youtube]
-enabled = false` turns it off; see
-[docs/usage.md](docs/usage.md#audio-from-youtube).
+*Songbooks: a set list with each song in the key you play it in, as a PDF, a phone page and a ChordPro file. The guitar marks a song with a Guitar Pro file.*
+
+<img src="docs/screenshots/songbook-pdf.png" width="440" alt="A page of the songbook's PDF: Greensleeves, its chord diagrams, then its verses and chorus with the chords over the words">
+
+*Every sheet and songbook is a PDF too, with its chord diagrams.*
+
+![The Guitar Pro page: Greensleeves' melody drawn as a score and a tab, with Play, the tempo and a button for each track](docs/screenshots/guitar-pro.png)
+
+*A song's Guitar Pro file, drawn and played in the browser.*
+
+The pictures show a demo library of public-domain songs, which
+[docs/screenshots/make.py](docs/screenshots/make.py) builds and photographs.
+
+## Quick start
+
+```sh
+nix shell github:Danielhp95/caracole            # x86_64-linux; or see docs/install.md
+caracole add "Oasis - Wonderwall"               # "Artist - Title": a line of ~/Tabs/wanted.txt
+caracole index build                            # once: Ultimate Guitar's sitemaps, about 10 minutes
+caracole run                                    # what the nightly run does, now
+caracole serve                                  # the library at http://127.0.0.1:8737/
+```
+
+The library is the folder `~/Tabs`. No settings are needed to start; they go in
+`~/.config/caracole/caracole.toml`. `caracole serve --address` serves your network:
+the page has no sign-in, so keep it on a network you trust (your LAN or tailnet).
+
+- [docs/install.md](docs/install.md): installing it.
+- [docs/usage.md](docs/usage.md): every command, setting and file.
+- [docs/deploy.md](docs/deploy.md): running it on a server.
+
+caracole is gentle with the sites it reads: one request at a time, seconds apart,
+within a small budget, never a page robots.txt closes, and at least a day's rest
+when a site pushes back ([how](docs/usage.md#caracole-run)). The one site whose
+robots.txt it goes against is YouTube, against its terms too: only the auto-chords
+package takes audio there, for a few songs nobody has charted, within its own
+budget and pauses, resting after a block like any site, and
+`[providers.youtube] enabled = false` turns it off
+([why](docs/usage.md#audio-from-youtube)). Keep your library private: the sheets
+and lyrics are other people's work.
 
 ## Development
 
-    nix develop
-    pytest
-    caracole --help    # the checkout's own code, no install or rebuild
+`nix develop`, then `pytest -q`. [AGENTS.md](AGENTS.md) says how the code is laid
+out and the rules a change keeps.
 
 ## License
 
-MIT. The sheets and lyrics caracole downloads belong to their authors, so keep
-your library to yourself.
+MIT.
