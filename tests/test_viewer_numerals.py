@@ -330,19 +330,17 @@ def test_a_finger_on_a_numeral_shows_its_line_and_on_the_name_the_card(tmp_path)
 
 
 @in_chromium
-def test_with_numerals_only_a_tap_shows_the_line_and_the_way_to_the_shapes(tmp_path):
+def test_with_numerals_only_a_tap_shows_the_line_and_hear_it_by_the_view_switch(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, IN_A_MINOR) + "#nm=numerals", **PHONE) as b:
         tap_at(b, *middle(b, "#sheet .c", 3))  # E7's V7
         assert b.wait("!document.getElementById('tip').hidden")
         tipped = b.js(TIP)
-        button = b.js("[document.getElementById('tip-card').textContent, document.getElementById('tip-card').getAttribute('aria-label')]")
+        row = b.js("[...document.getElementById('tip-switch').querySelectorAll('button')].map((x) => x.id)")
         targets = b.js(small_targets(".foot *"))
-        b.click("#tip-card")
-        assert b.wait("!document.getElementById('card').hidden")
-        card = b.js("document.getElementById('card-name').textContent")
+        gone = b.js("[!!document.getElementById('tip-card'), document.getElementById('tip').querySelectorAll('.tip-foot').length]")
     assert tipped["line"] == "V7: the 5th chord of A minor, major (upper case) with a 7th (7)"
     assert tipped["key"] == "In the key of Am (from the sheet)."
-    assert button == ["Shapes", "E7: shapes"] and targets == [] and card == "E7 · V7"
+    assert row == ["tip-view", "tip-hear"] and targets == [] and gone == [False, 0]  # no Shapes: Hear it by the switch
 
 
 @in_chromium
@@ -449,7 +447,8 @@ SEEN = """(() => { const tip = document.getElementById('tip'); if (tip.hidden) r
       r.classList.contains('off')]).sort((a, b) => a[0] - b[0]),
     switch: shows(q('#tip-view')) ? [q('#tip-view').textContent, q('#tip-view').getAttribute('aria-label')] : null,
     off: shows(q('#tip-off')) ? q('#tip-off').textContent : null,
-    hear: shows(q('#tip-hear')), shapes: [q('#tip-card').textContent, q('#tip-card').getAttribute('aria-label')]};
+    hear: shows(q('#tip-hear')), beside: q('#tip-hear').parentNode === q('#tip-view').parentNode,
+    shapes: !!q('#tip-card')};
 })()"""
 G_MAJOR = {7, 9, 11, 0, 2, 4, 6}
 
@@ -534,17 +533,19 @@ def test_hear_it_strums_the_chord_and_hides_when_sound_is_off(tmp_path):
         tap_at(b, *middle(b, "#sheet .nm", 6))
         assert b.wait("!document.getElementById('tip').hidden")
         silent = b.js(SEEN)
-    assert not silent["hear"] and silent["shapes"][0] == "Shapes"
+    assert not silent["hear"] and not silent["shapes"]
 
 
 @in_chromium
-def test_shapes_opens_the_chords_card(tmp_path):
+def test_hear_it_sits_after_the_view_switch_in_either_view(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
         g7 = tip_on(b, 1)
-        b.click("#tip-card")
-        assert b.wait("!document.getElementById('card').hidden")
-        card = b.js("[document.getElementById('card-name').textContent, document.getElementById('tip').hidden]")
-    assert g7["shapes"] == ["Shapes", "G7: shapes"] and card == ["G7 · V7/IV", True]
+        b.click("#tip-view")
+        assert b.wait("document.getElementById('tip').dataset.view === 'keys'")
+        keys = b.js("[...document.getElementById('tip-switch').children].filter((x) => getComputedStyle(x).display !== 'none')"
+                    ".sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left).map((x) => x.id || x.className)")
+    assert g7["hear"] and g7["beside"] and not g7["shapes"]
+    assert keys == ["tip-view", "tip-dots", "tip-hear"]  # ‹ Circle, the dots, then ▶ Hear it
 
 
 # Where the tooltip and the numeral it is for are on the screen, the bar's top, and the screen's width.

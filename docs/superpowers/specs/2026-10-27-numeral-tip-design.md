@@ -37,8 +37,9 @@ direction, A.)
    the tooltip (in a songbook they stay there, never going to another song). The view chosen is the reader's,
    kept for every page as the chord necks are (localStorage `caracole-viewer-tipview`, `"circle"` or `"keys"`;
    circle when nothing is kept or storage is refused).
-5. **Footer**: **▶ Hear it**, the chord strummed by `window.caracoleSound` on the instrument and loudness set
-   (hidden when there is no sound or it is Off); and **Shapes →**, today's `tip-card` (opens the chord's card).
+5. **▶ Hear it**, on the switch's row, after it: the chord strummed by `window.caracoleSound` on the instrument
+   and loudness set (hidden when there is no sound or it is Off; it stays where the notes can't be drawn). No
+   Shapes button (the owner's, later the same day): a chord's card opens from its name on the sheet.
 
 The tooltip keeps its behaviour: shown on a mouse's hover over a numeral or a finger's tap, placed by
 `placeTip`, closed by Escape, a tap elsewhere or the mouse leaving; it fits 390 px (the circle beside the list

@@ -1732,8 +1732,8 @@
   // or the mouse moving away closes it; it goes with the page as it scrolls. It heads with the chord as the sheet
   // names it, its numeral as the sheet draws it and its role in words; then the numeral's line and the key it is
   // read in; then the chord's notes, on a twelve-note circle, C at the top, beside their list, or as tiles over a
-  // keyboard, and a button to the other view (← and → too, while the focus is in the tooltip); ▶ Hear it strums the
-  // chord as its card would, and Shapes opens the card. Every note, interval and pitch class is the page's data
+  // keyboard, and a button to the other view (← and → too, while the focus is in the tooltip), with ▶ Hear it beside
+  // it, which strums the chord as its card would. Every note, interval and pitch class is the page's data
   // (data.tones: harmony_tables.py), and the key's notes are its scale (data.keyScale) above the tonic shown: a
   // note of the chord is outside the key when it isn't one of them, and the line under the picture names it, with
   // the key's note of its letter.
@@ -1851,7 +1851,7 @@
   const drawTipNotes = (rep) => {
     const notes = tonesOf(rep), inKey = keyNotes();
     const can = Boolean(notes) && Boolean(inKey);
-    $("tip-pic").hidden = $("tip-switch").hidden = !can;
+    $("tip-pic").hidden = $("tip-view").hidden = $("tip-dots").hidden = !can;  // Hear it stays: the chord sounds all the same
     for (const box of ["tip-clock", "tip-notes", "tip-tiles", "tip-kb"]) $(box).textContent = "";
     const off = can ? offWords(notes, inKey) : "";
     $("tip-off").hidden = !off;
@@ -1894,7 +1894,7 @@
     if ((e.key !== "ArrowLeft" && e.key !== "ArrowRight") || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     e.preventDefault();
     e.stopPropagation();  // in a songbook the arrows go from song to song (book.js), but not from here
-    if (!$("tip-switch").hidden) showTipView(e.key === "ArrowLeft" ? "circle" : "keys");
+    if (!$("tip-view").hidden) showTipView(e.key === "ArrowLeft" ? "circle" : "keys");
   });
   // What Hear it strums: the shape the chord's card shows for it now, on the instrument played, or null where
   // nothing would sound (no Web Audio, the strum off, no shape).
@@ -1938,17 +1938,12 @@
     drawTipNotes(current(i));
     drawTipView();
     $("tip-hear").hidden = !tipSound(i);
-    $("tip-card").setAttribute("aria-label", name + ": shapes");
+    $("tip-switch").hidden = $("tip-view").hidden && $("tip-hear").hidden;  // nothing to switch, nothing to hear
     tip.hidden = false;
     tipOf = el;
     el.setAttribute("aria-describedby", "tip");
     placeTip();
   }
-  $("tip-card").addEventListener("click", () => {
-    const el = tipOf;
-    hideTip();
-    if (el) openCard(el.dataset.c, el);
-  });
   $("tip-hear").addEventListener("click", () => {
     const heard = tipOf ? tipSound(tipOf.dataset.c) : null;
     if (heard) sound.strum(heard.position, { capo: heard.capo, tuning: inst().tuning, voice: inst().voice });

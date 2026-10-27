@@ -2553,9 +2553,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   tiles over a keyboard instead, stacked up from the root (D7: D, then the F#,
   A and C above it), and **‹ Circle** goes back; ← and → do too while the
   focus is in the tooltip. The view you chose is kept for every sheet and
-  songbook (the circle where the browser keeps nothing). ▶ Hear it strums the
-  chord as its card plays it (none with the strum Off), and Shapes opens its
-  card. Escape, a tap elsewhere or the mouse moving away closes it. With numerals
+  songbook (the circle where the browser keeps nothing). ▶ Hear it, beside that
+  button, strums the chord as its card plays it (none with the strum Off).
+  Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
   chord's name opens its card, which names the numeral too ("Bb · ♭VII").
   A song whose key caracole can't tell offers chords alone (the numerals

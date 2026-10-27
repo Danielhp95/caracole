@@ -228,13 +228,13 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 }
 .tip .tip-off { margin-top: 8px; color: var(--off); font-size: .8rem; }
 .tip-switch { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px; }
-.tip[data-view="keys"] .tip-switch { flex-direction: row-reverse; }
+/* ‹ Circle before the dots on the keyboard's view, Keyboard › after them on the circle's; Hear it last on both. */
+.tip[data-view="keys"] .tip-dots { order: 1; }
+.tip-switch .tip-hear { order: 2; margin-left: 4px; }
 .tip-dots { display: inline-flex; gap: 5px; }
 .tip-dots > span { width: 7px; height: 7px; border: 1px solid var(--muted); border-radius: 50%; }
 .tip[data-view="circle"] .tip-dots > span:first-child, .tip[data-view="keys"] .tip-dots > span:last-child {
   background: var(--muted); }
-.tip-foot { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px;
-  border-top: 1px solid var(--border); }
 .tip-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px;
   border: 1px solid var(--border-strong); border-radius: 9px; background: none; color: var(--text); font: inherit;
   font-size: .82rem; font-weight: 650; cursor: pointer; }
@@ -242,7 +242,6 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
   stroke-linejoin: round; }
 .tip-hear { border-color: var(--accent); color: var(--accent); }
 .tip-hear svg { fill: currentColor; stroke: none; }
-#tip-card { margin-left: auto; }
 /* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
    ▶ beside it, and its songs, and those of each named progression it contains; the numeral playing marked. A
    section's heading names its progression. */
