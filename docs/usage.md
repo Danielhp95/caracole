@@ -635,7 +635,7 @@ say), nothing is removed and it exits 1.
 `caracole remove` on a song removed already says when it was, and how to
 bring it back. Like `caracole review`, it asks before it takes caracole's lock,
 so the nightly run never waits for your answer; `--list` only reads. On the
-web page, each song's **Remove…**, under its line's chevron, does the same, right
+web page, each song's **Remove**, under its line's chevron, does the same, right
 there on its line: it says in one line what goes, counts down five seconds with Undo, then
 removes the song ([caracole serve](#caracole-serve)).
 
@@ -1944,39 +1944,67 @@ Radiohead, an auto sheet". Where each file came from, each site's own icon
 says beside the file under the chevron (the lyrics LRCLIB's, a Guitar Pro file
 gtptabs.com's: see [Where each file came from](#where-each-file-came-from)).
 
-Everything else a song has waits under its line's chevron: its key in words and
-where it came from ("Key A minor (from the tab)", "Key C major (estimated from
-the chords)", "(from the audio)"), its transposition, its lyrics' state and
-when it was added; a review's candidates (below); where it stands on the
-YouTube route, when caracole takes the audio of songs with no human sheet from
-YouTube ("No human sheet yet: caracole takes the audio from YouTube next",
-"Audio from YouTube: auto-chords works out the chords next", "Auto sheet from
-YouTube audio"), with a link to the video once there is one, instead of
-offering to buy it; its **Sheet versions**, the Ultimate Guitar versions
-caracole keeps beside its sheet (the runners-up of the three it scores, and a
-version you kept), in rank order, each with UG's version number, its rating and
-votes (`Ver 3 · 4.86★ (408) · the one`), each opening its own viewer page,
+Its chevron opens the song in place, as a card over the list, which the
+chevron closes again. At its top, its key in words and where it came from ("Key
+A minor (from the tab)", "Key C major (estimated from the chords)", "(from the
+audio)"), its transposition, its lyrics' state and when it was added. Then what
+needs you: a review's candidates (below); where it stands on the YouTube route,
+when caracole takes the audio of songs with no human sheet from YouTube ("No
+human sheet yet: caracole takes the audio from YouTube next", "Audio from
+YouTube: auto-chords works out the chords next", "Auto sheet from YouTube
+audio"), with a link to the video once there is one, instead of offering to buy
+it; and, served, Look in the index.
+
+Then what you play from it, a tile each, in this order: its **Chord sheet**
+(the accent's; **Auto sheet** in its own colour when that is its only sheet,
+**Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
+file (**Guitar tab** when it has a text tab and no Guitar Pro file), its
+**Harmonica tab**, its **Lyrics** and a **Score** you filed. A tile's body opens
+what it holds: the sheet's viewer (else its PDF, else its text); the first
+Guitar Pro file, in the browser when `caracole serve` shows it there (see
+[caracole serve](#caracole-serve)), else a download; the first harmonica tab,
+the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
+in use`, `LaCuerda`, `from the recording`); its versions, a chip a source with
+how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
+one source with one version, `From` it; and its formats, downloads: the sheet's
+PDF, Text and ChordPro, then its PDF exports, each by its version (`PDF · G
+Dorian, capo 0`: see `caracole render --version` and Export PDF of this
+version); a Guitar Pro file's, and the text tab; the lyrics' Text and Timed
+(.lrc); each score's format. A tile with more than one version is drawn as a
+small stack. A Guitar Pro or Power Tab file, and a score but its PDF, downloads
+under its song's name (`Eagles - Hotel California (2).ptb`).
+
+A chip opens that source's versions in a drawer under the row of tiles that
+holds its tile (on a phone, under the tile); another chip, the chip again, its
+✕ or Escape closes it, and opening one asks nothing of anyone. **Ultimate
+Guitar**'s: how many versions the site has and how many caracole keeps (`13
+versions on the site · 3 kept in your library`), then each kept version in rank
+order, with UG's version number, its rating and votes, how much of the lyrics
+it has (`Every line of the lyrics`, `80% of the lyrics`, in green when caracole
+counts it whole), the tabber's note, and caracole's pick or your choice: **In
+use** on the one the title opens, **Open** on each, its own viewer page,
 `version-<tab>.html` (served by caracole serve as a sheet viewer is, while it
 holds what caracole wrote), or its text, `version-<tab>.txt`, until render has
-written the page, the one its title opens marked "the one" (when that is LaCuerda's sheet or the auto
-sheet, it leads the list by that name: `The one: LaCuerda's sheet`); its PDF
-exports, the sheet's PDFs in other versions, each
-by its version (`G Dorian, capo 0`: see `caracole render --version` and Export
-PDF of this version); its other files (the PDF, the text, the ChordPro file,
-the lyrics, the timed lyrics, the tab, info.json, the Guitar Pro files, which
-caracole serve also opens in the browser: see [caracole serve](#caracole-serve)); its MuseScore pages,
-each a possible match, as on the to-do page; for a song without a sheet, its
-search and buy links; its progressions, as it plays them ("vi–IV–I–V"), each a
-button that shows your songs with that progression (below); **Add to a songbook…** (see Songbooks, below), for a
-song the page had when it was loaded (one that Get it or a request brought
-since has it once the page is loaded again); and, served, **Fetch again**
-(below), **Use LaCuerda's sheet**, Look in the index and Remove…. When Fetch now has the line's button,
-the sheet is the first of its files there, and its title opens it all the same.
-A Guitar Pro file caracole downloaded names its site, as `Guitar Pro 1 ·
-gtptabs.com`, a harmonica tab its site, as `Harmonica tab 1 · harptabs.com`,
-and a score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
-line opens, which is the sheet. A sheet from Ultimate Guitar's Ukulele Chords
-(a song UG has no chords for) says so: `Sheet viewer · Ukulele Chords`.
+written the page; a version UG no longer has says so. The versions caracole
+hasn't kept are counted, not listed (`10 more on Ultimate Guitar, not kept`);
+from the folder, the drawer gives the command that keeps them, `caracole
+versions --keep-more 'Eagles - Hotel California'`. **LaCuerda**'s: the sheets
+caracole met there, the most of the lyrics first, each with its page (↗) and In
+use on the one that is the sheet. The **auto sheet** beside a human one: its
+viewer, its PDF, text and ChordPro. A Guitar Pro file's, a harmonica tab's or a
+score's source: a row a file, Open where the page shows it, and Download.
+
+Then its progressions, as it plays them ("vi–IV–I–V"), each a chip that shows
+your songs with that progression (below); where else to find it, links that
+leave caracole (↗): its MuseScore pages, each a possible match, as on the
+to-do page, and for a song without a sheet, its search and buy links. At its
+foot, served, **Fetch again** (below) and **Use LaCuerda's sheet**; **Add to a
+songbook…** (see Songbooks, below), for a song the page had when it was loaded
+(one that Get it or a request brought since has it once the page is loaded
+again); and at the far end, info.json, a quiet download, and, served, **Remove**,
+in red. When Fetch now has the line's button, the sheet's tile opens it all the
+same, as its title does. A line drawn again (a request over) keeps its card
+open, its drawer closed.
 
 An artist's name, over their songs and marked with a funnel, shows only that
 artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
@@ -3155,7 +3183,7 @@ Who can reach it, below).
   Back to your songs, a song new to the library gets a line of its own under
   the box ("Just requested").
 
-  **A song you removed** (`caracole remove`, or Remove… on the page) that the
+  **A song you removed** (`caracole remove`, or Remove on the page) that the
   query matches shows in its artist's group as "Removed 2026-10-20", with
   **Add again**, which asks for it again as the request form does with Fetch
   it now ticked: a line in wanted.txt, which brings a removed song back (see
@@ -3239,7 +3267,7 @@ Who can reach it, below).
   hits the same way, without None of these. A pick writes `[match]` alone (see
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
-- **Remove a song.** Each song's Remove…, under its line's chevron, removes the
+- **Remove a song.** Each song's Remove, under its line's chevron, removes the
   song where it is, and you stay on the library: one tap, and
   the song's line says "Removing in 5 s · Undo", the keyboard focus on Undo,
   and under it what goes, in one sentence, as
@@ -3247,7 +3275,7 @@ Who can reach it, below).
   files for it, its record and its wanted.txt line; leaves 1 other file;
   never touches Music/." Nothing is sent for those five seconds but that
   question, which changes nothing, and Undo stops it there: the line says
-  "Not removed", and Remove… is back. Then the page queues `caracole remove
+  "Not removed", and Remove is back. Then the page queues `caracole remove
   --yes "ARTIST - TITLE"`, and the line says how it goes: "Removing…",
   "Queued…", "Removing from caracole…", then "Removed", the song's line keeping
   only its name, its size and its request line where it was, so that nothing
@@ -3261,7 +3289,7 @@ Who can reach it, below).
   with another song under its number in the library, which the next song
   added may get: then its line says "Removed" too, and the new song comes
   under the search box, as any song new to the library does. Without JavaScript,
-  Remove… opens a page that says what goes and what stays; Remove it queues
+  Remove opens a page that says what goes and what stays; Remove it queues
   the removal and goes back to the library as you left it (its search,
   filters and sort), the song's line in view, and Keep it goes back there
   too.

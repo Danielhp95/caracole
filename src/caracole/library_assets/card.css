@@ -1,0 +1,143 @@
+/* A song of yours opened (card.js): its line and what its chevron unfolds, one card raised over the list, its
+   border the line's and the next line's edge; removed while open, its line keeps that box (library.js). A site's
+   song in the search keeps its plain panel. */
+.line:not(.hit):has(> .line-more[aria-expanded="true"]), .line.card-gone { margin: 6px 6px 8px;
+  border: 1px solid var(--border-strong); border-radius: 12px; background: var(--card); box-shadow: var(--card-shadow); }
+.line:not(.hit):has(> .line-more[aria-expanded="true"]) + .line, .line.card-gone + .line { border-top: 0; }
+.line:not(.hit) > .line-panel { gap: 14px; padding: 4px 8px 14px 0; }
+.card-label { margin: 0 0 8px; color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .08em;
+  text-transform: uppercase; }
+.card-label em { margin-left: 8px; font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; }
+
+/* What you play from it: a tile each, its body opening what it holds, its chips its versions per source, its formats
+   downloads along its foot; the sheet's in the accent, an auto sheet's in its own colour. More than one version: a
+   small stack under it. */
+.tiles { position: relative; z-index: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
+  align-items: start; gap: 16px 12px; }
+.tile { position: relative; display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border);
+  border-radius: 12px; background: var(--surface); }
+.tile-open { display: grid; grid-template-columns: 38px minmax(0, 1fr) auto; align-items: center; gap: 10px;
+  padding: 12px 12px 10px; border-radius: 11px 11px 0 0; color: inherit; text-decoration: none; }
+.tile-open:hover .tile-name { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+.tile-ico { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 10px; background: var(--raised); }
+.tile-ico svg.glyph { width: 20px; height: 20px; }
+.tile-words { display: grid; min-width: 0; }
+.tile-name { font-weight: 650; line-height: 1.3; }
+.tile-from { overflow: hidden; color: var(--muted); font-size: .78rem; white-space: nowrap; text-overflow: ellipsis; }
+.tile-go { display: grid; color: var(--muted); }
+.tile-go svg.glyph { width: 18px; height: 18px; }
+.tile.primary { border-color: color-mix(in srgb, var(--accent) 60%, transparent); }
+.tile.primary .tile-ico { background: var(--accent); color: var(--on-accent); }
+.tile.primary .tile-go { color: var(--accent); }
+.tile.auto { border-color: color-mix(in srgb, var(--auto) 60%, transparent); }
+.tile.auto .tile-ico { background: var(--auto); color: var(--auto-bg); }
+.tile.auto .tile-go { color: var(--auto); }
+.tile.stack::before, .tile.stack::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -5px;
+  z-index: -1; height: 8px; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 11px 11px;
+  background: var(--sunk); }
+.tile.stack::after { left: 20px; right: 20px; bottom: -9px; background: var(--card); }
+.tile.primary.stack::before { border-color: color-mix(in srgb, var(--accent) 35%, transparent); }
+.tile.primary.stack::after { border-color: color-mix(in srgb, var(--accent) 20%, transparent); }
+.tile-versions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 12px 10px; }
+.tile-versions .lead { min-width: 3.6rem; color: var(--muted); font-size: .76rem; font-weight: 650; }
+.vchip { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; margin: 0; padding: 0 8px 0 6px;
+  border: 1px solid var(--border-strong); border-radius: 8px; background: var(--sunk); color: var(--text); font: inherit;
+  font-size: .8rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.vchip .n { font-variant-numeric: tabular-nums; }
+.vchip svg.glyph { width: 14px; height: 14px; color: var(--muted); }
+.vchip:hover { border-color: var(--control-edge); }
+.vchip[aria-expanded="true"] { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.vchip[aria-expanded="true"] svg.glyph { transform: rotate(180deg); color: var(--accent); }
+.vchip.one { color: var(--muted); border-style: dashed; cursor: default; }
+.tile-downloads { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: auto; padding: 8px 12px;
+  border-top: 1px solid var(--border); border-radius: 0 0 11px 11px; background: var(--sunk); }
+.dl { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: .8rem; font-weight: 600;
+  text-decoration: none; white-space: nowrap; }
+.dl:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.dl svg.glyph { flex: none; width: 13px; height: 13px; }
+
+/* One source's versions, opened from its chip: under the row of tiles that holds its tile, its pointer over that tile
+   (card.js sets --point), a row a version. */
+.drawer { position: relative; grid-column: 1 / -1; margin-top: -4px; border: 1px solid var(--accent);
+  border-radius: 12px; background: var(--surface); }
+.drawer::before { content: ""; position: absolute; top: -7px; left: calc(var(--point, 48px) - 6px); width: 12px;
+  height: 12px; transform: rotate(45deg); border-top: 1px solid var(--accent); border-left: 1px solid var(--accent);
+  background: var(--surface); }
+.drawer-head { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  min-height: 46px; padding: 8px 48px 8px 12px; border-bottom: 1px solid var(--border); }
+.drawer-what { margin: 0; font-size: .95rem; font-weight: 650; }
+.drawer-said { color: var(--muted); font-size: .84rem; }
+.drawer-head form { margin: 0; }
+.drawer-close { position: absolute; top: 7px; right: 8px; display: grid; place-items: center; width: 30px;
+  height: 30px; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent;
+  color: var(--muted); cursor: pointer; }
+.drawer-close:hover { border-color: var(--border); background: var(--raised); color: var(--text); }
+.drawer-close svg.glyph { width: 18px; height: 18px; }
+.vrows { margin: 0; padding: 0; list-style: none; }
+.vrow { display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "ver stars" "note note" "act act";
+  align-items: center; gap: 4px 12px; min-height: 46px; padding: 8px 12px; }
+.vrow + .vrow { border-top: 1px solid var(--border); }
+.vrow .ver { grid-area: ver; font-weight: 650; }
+.vrow .stars { grid-area: stars; color: var(--muted); font-size: .85rem; font-variant-numeric: tabular-nums; }
+.vrow .stars b { color: var(--wanted); font-weight: 650; }
+.vrow .note { grid-area: note; min-width: 0; color: var(--muted); font-size: .84rem; }
+.vrow .note b { color: var(--found); font-weight: 600; }
+.vrow .note .dl { margin-right: 14px; }
+.vrow .note:empty { display: none; }
+.vbtns { grid-area: act; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.vbtns form { margin: 0; }
+.vrow .btn { min-height: 30px; padding: 0 11px; border-radius: 8px; font-size: .82rem; font-weight: 600; }
+.vrow .btn.go { border-color: color-mix(in srgb, var(--accent) 55%, transparent); background: transparent;
+  color: var(--accent); }
+.inuse { display: inline-flex; align-items: center; gap: 5px; min-height: 30px; padding: 0 10px; border-radius: 8px;
+  background: var(--found-bg); color: var(--found); font-size: .8rem; font-weight: 700; }
+.inuse svg.glyph { width: 14px; height: 14px; }
+.vrow.cur { background: linear-gradient(90deg, color-mix(in srgb, var(--found) 9%, transparent), transparent 60%); }
+.vrow.gone .ver { color: var(--muted); font-weight: 500; }
+.drawer-rest { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px;
+  border-top: 1px solid var(--border); color: var(--muted); font-size: .85rem; }
+.drawer-rest form { margin: 0; }
+@media (max-width: 719px) {  /* on a phone the source's mark, beside what it lists, its counts under that */
+  .drawer-head { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; }
+  .drawer-head > :not(.source):not(.drawer-what) { grid-column: 2; justify-self: start; }
+}
+@media (min-width: 720px) {
+  .vrow { grid-template-columns: 5.5rem 9.5rem minmax(0, 1fr) auto; grid-template-areas: "ver stars note act"; }
+  .vrow .note { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .vbtns { justify-content: flex-end; }
+}
+
+/* Its progressions: chips with a search's mark, which find your songs that play one, unlike a file or an action. */
+.progs { display: flex; flex-wrap: wrap; gap: 8px; }
+.prog { display: inline-flex; align-items: center; gap: 7px; min-height: 32px; margin: 0; padding: 0 12px 0 10px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--sunk); color: var(--text); font: inherit;
+  font-size: .88rem; font-weight: 550; cursor: pointer; }
+.prog:hover { border-color: var(--control-edge); }
+.prog svg.glyph { flex: none; width: 14px; height: 14px; color: var(--artist); }
+.find-elsewhere { display: grid; gap: 6px; }
+.find-elsewhere .card-label { margin: 0; }
+.find-elsewhere .subhead { margin: 0 0 4px; }
+
+/* Its foot: what changes the song, then at the far end info.json, quiet, and Remove, red from the start but outlined,
+   never the main thing to do. */
+.line:not(.hit) > .line-panel > .foot { flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding-top: 12px;
+  border-top: 1px solid var(--border); }
+.foot .btn svg.glyph { flex: none; width: 16px; height: 16px; margin-right: 7px; color: var(--muted); }
+.foot .push { margin-left: auto; }
+.info-file { display: inline-flex; align-items: center; min-height: 36px; padding: 0 6px; }
+.info-file svg.glyph { width: 15px; height: 15px; margin-right: 4px; }
+.btn.remove { border-color: color-mix(in srgb, var(--failed) 45%, transparent); background: transparent;
+  color: var(--failed); }
+.btn.remove svg.glyph { color: var(--failed); }
+.btn.remove:hover { border-color: var(--failed); background: var(--failed-bg); }
+
+/* A thumb's targets: every chip, download, button and close of the card, 44 px. */
+@media (pointer: coarse) {
+  .vchip, .dl, .prog, .vrow .btn, .inuse, .info-file { min-height: 44px; }
+  .dl { min-width: 44px; justify-content: center; }
+  .drawer-head { padding-right: 60px; }
+  .drawer-close { top: 1px; width: 44px; height: 44px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .vchip svg.glyph { transition: transform .15s; }
+}

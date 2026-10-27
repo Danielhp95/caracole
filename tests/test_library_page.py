@@ -1251,7 +1251,7 @@ def test_the_served_page_offers_a_remove_on_every_line(conn, cfg, tmp_path):
     forms = re.findall(r'<form[^>]*action="/remove"[^>]*>(.*?)</form>', shown, re.S)
     assert sorted(re.search(r'name="song" value="(\d+)"', f).group(1) for f in forms) == sorted(
         str(s.id) for s in (wanted, found, ignored))
-    assert all('name="csrf" value="tok"' in f and "Remove…" in f for f in forms)
+    assert all('name="csrf" value="tok"' in f and ">Remove</button>" in f for f in forms)
     assert 'aria-label="Remove Creep by Radiohead from caracole"' in shown
     going = line_of(shown, "Wonderwall")
     assert "Removing…" in going and "/remove" not in going
@@ -1377,15 +1377,18 @@ def test_a_screen_reader_hears_each_artist_and_song_and_a_jump_moves_the_focus(c
 def test_the_written_pages_guitar_pro_links_name_their_song_in_their_download_attribute(conn, cfg, tmp_path):
     # The attribute alone: Chromium ignores it on a page opened as a file (docs/usage.md says so); served, the
     # header names the file (test_web_downloads.py).
-    from html import unescape
-
     s = add_song(conn, "宋冬野", "斑马，斑马")
     put(cfg, s, "sheet.pdf", "guitar-1.gp5", "guitar-2.ptb", "score-1.mscz", "score-1.pdf")
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
-    links = {unescape(label): unescape(saved) if saved else None for saved, label in re.findall(
-        r'<a class="btn small[^"]*" href="[^"]*"(?: download="([^"]*)")?[^>]*>([^<]*)<', line_of(shown, "斑马，斑马"))}
-    assert links == {"Open PDF": None, "Guitar Pro 1": "宋冬野 - 斑马，斑马.gp5", "Power Tab 2": "宋冬野 - 斑马，斑马 (2).ptb",
-                     "Score 1 (MuseScore)": "宋冬野 - 斑马，斑马.mscz", "Score 1 (PDF)": None}, links
+    script = """openCard("斑马，斑马");
+chipOf("斑马，斑马", "", "guitar").click();  // its two files, put there by hand: from no site
+note("saved", Array.from(lineOf("斑马，斑马").querySelectorAll("a[download]")).map((a) =>
+  [a.getAttribute("href").split("/").pop(), a.getAttribute("download")]));"""
+    saved = {unquote(name): name_saved for name, name_saved in card_notes(conn, cfg, tmp_path, script, "saved")}
+    assert {name: saved[name] for name in ("guitar-1.gp5", "guitar-2.ptb", "score-1.mscz")} == {
+        "guitar-1.gp5": "宋冬野 - 斑马，斑马.gp5", "guitar-2.ptb": "宋冬野 - 斑马，斑马 (2).ptb",
+        "score-1.mscz": "宋冬野 - 斑马，斑马.mscz"}, saved
+    # A PDF saves under its own name.
+    assert saved["score-1.pdf"] == "" and saved["sheet.pdf"] == "", saved
 
 
 # Notes how an artist's header looks beside their song's line, and what base.css's tokens resolve to.
@@ -1647,7 +1650,7 @@ def test_the_progression_line_and_a_songs_progressions_fit_a_touch_phone(conn, c
     media = {"prefers-color-scheme": "dark"} if dark else None
     dom = dump_dom(path, tmp_path, "#prog=" + quote("I V vi IV"), size="390,844", touch=True, media=media)
     assert prog_line(dom).startswith("Songs with I–V–vi–IV")
-    assert 'class="row-group progressions"' in listing(dom)  # a line's "⋯", unfolded, is measured too
+    assert 'class="progressions"' in listing(dom)  # a line's card, unfolded, is measured too
     short, weak = noted(dom, "data-short"), noted(dom, "data-weak")
     assert short == [] and weak == [], (short, weak)
     wide, page_width = noted(dom, "data-wide")
@@ -1902,6 +1905,7 @@ MARKS = """
     name: m.getAttribute("alt") || m.getAttribute("aria-label"), role: m.getAttribute("role"),
     loaded: m.tagName === "IMG" ? m.complete && m.naturalWidth > 0 : null,
     link: m.closest("a") ? m.closest("a").textContent : null,
+    where: m.closest(".vchip") ? "chip" : m.closest("a") ? "link" : m.closest(".line-panel") ? "panel" : "line",
     width: m.getBoundingClientRect().width, font: parseFloat(getComputedStyle(m).fontSize),
     colour: getComputedStyle(m).color, text_colour: getComputedStyle(document.body).color,
   }));
@@ -1963,11 +1967,11 @@ def test_each_file_shows_its_sites_icon_or_badge_in_a_real_browser(conn, cfg, tm
     marks = marks_of(dump_dom(path, tmp_path))
     ug = [m for m in marks if m["source"] == "ug"]
     assert ug and all(m["tag"] == "img" and m["loaded"] and m["name"] == "from Ultimate Guitar" for m in ug), ug
-    # A song's line holds glyphs, not marks: each file under its chevron says where it came from, as the link's last
-    # word, the sheet's own files too ("Sheet text from Ultimate Guitar", "Lyrics from LRCLIB").
-    assert all(m["link"] is not None for m in marks), marks
-    assert [m["link"] for m in ug] == ["Sheet text"], ug
-    assert any(m["source"] == "lrclib" and m["link"] == "LyricsLR" for m in marks), marks
+    # A song's line holds glyphs, not marks: under its chevron, the chips of each tile say where what it holds came
+    # from ("From [UG] Ultimate Guitar", "From [LR] LRCLIB"), and a link elsewhere names its site.
+    assert all(m["where"] in ("chip", "link") for m in marks), marks
+    assert {m["where"] for m in ug} == {"chip"}, ug
+    assert any(m["source"] == "lrclib" and m["where"] == "chip" for m in marks), marks
     lc = [m for m in marks if m["source"] == "lacuerda"]
     assert lc and all(m["tag"] == "span" and m["role"] == "img" and m["text"] == "LC" and
                       m["name"] == "from LaCuerda" for m in lc), lc
@@ -2014,6 +2018,14 @@ def served_auto_sheet(conn, cfg):
 
 
 AUTO_VIEWER = r'href="[^"]*/sheet%20%28auto%29\.html"'
+
+
+def card_notes(conn, cfg, tmp_path, script: str, name: str, **dumped):
+    """What ``script`` notes (test_library_card.py's KIT ``note(name, …)``), run on the file page after its own."""
+    from test_library_card import KIT
+
+    html = with_script(page(conn, cfg), "(() => {\n" + KIT + script + "\n})();")
+    return attribute_of(dump_dom(write_library_page(cfg.library_dir, html), tmp_path, **dumped), "data-" + name)
 
 
 def link_texts(html: str) -> list[str]:
@@ -2106,7 +2118,8 @@ def test_a_wanted_songs_auto_sheet_opens_from_its_title_and_leads_its_files_unde
     assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', line), line
     assert line.count("btn primary") == 1, line
     assert re.search(r'<a class="line-title" ' + AUTO_VIEWER + r' tabindex="-1">', line), line
-    assert link_texts(panel_of(line))[:1] == ["Auto sheet viewer"], line
+    first = re.search(r'<div class="tile ([^"]*)"><a class="tile-open" ([^>]*)>', panel_of(line))
+    assert first and first.group(1).split() == ["tile-sheet", "auto"] and re.search(AUTO_VIEWER, first.group(2)), line
 
 
 # The row renderer's title link, as another list uses it: a relative link, a site's, and one that isn't safe.
@@ -2149,26 +2162,28 @@ def test_a_line_opens_its_sheet_from_one_button_and_its_other_files_wait_under_i
     top, menu = creep.split('class="line-panel"', 1)
     # One button opens the viewer, as the title does.
     assert link_texts(top) == ["Open"], top
-    # Every other file under "⋯": closed, small, after the UG version its sheet is. No Guitar Pro version to
-    # download: caracole picks none on UG.
+    # Every file of its folder under its chevron, closed: its card's tiles open and download them, info.json at its
+    # foot. No Guitar Pro version of UG's: caracole picks none there.
     assert re.search(r'<button class="line-more"[^>]*aria-expanded="false"', top) and re.search(r'^[^>]*hidden', menu)
-    assert link_texts(menu) == ["Ver 1 · 4.50★ (12) · the one", "Sheet PDF", "Sheet text", "ChordPro", "Lyrics",
-                                "Timed lyrics", "Guitar Pro 1", "Tab", "Info"], menu
-    assert '<p class="subhead">Files</p>' in menu and "Guitar Pro to download" not in menu
-    assert all(cls.startswith("btn small") for cls in re.findall(r'<a class="([^"]*)"', menu)), menu
-    # A sheet with no viewer opens its PDF; nothing else to list.
+    reached = {unquote(h).rsplit("/", 1)[1] for h in re.findall(r'<a [^>]*href="(Radiohead/Creep/[^"]*)"', menu)}
+    assert reached == {"sheet.html", "sheet.pdf", "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc", "guitar-1.gp5",
+                       "tab.txt", "info.json"}, reached
+    assert re.findall(r'<span class="tile-name">([^<]*)</span>', menu) == ["Chord sheet", "Guitar Pro", "Lyrics"]
+    assert '<p class="subhead">Files</p>' not in menu  # nothing left over
+    # A sheet with no viewer opens its PDF, its tile too; nothing else to list.
     wonderwall = line_of(shown, "Wonderwall")
     assert link_texts(wonderwall.split('class="line-panel"', 1)[0]) == ["Open PDF"]
-    assert link_texts(panel_of(wonderwall)) == [] and '<p class="subhead">Files</p>' not in wonderwall
+    assert set(re.findall(r'<a [^>]*href="(Oasis/Wonderwall/[^"]*)"', panel_of(wonderwall))) == {
+        "Oasis/Wonderwall/sheet.pdf"}
     # A song with no file has nothing to open.
     yesterday = line_of(shown, "Yesterday")
-    assert ">Open" not in yesterday and '<p class="subhead">Files</p>' not in yesterday
+    assert ">Open" not in yesterday and "tile" not in yesterday
 
 
 @in_chromium
 def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, tmp_path):
     # The PDFs caracole made of the sheet in other versions (Export PDF of this version) are the song's PDF exports:
-    # under its "⋯", by their versions, before its other files, which no longer list them.
+    # its sheet tile's downloads, by their versions, after the sheet's own formats.
     from caracole.render import EXPORT_KV
 
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
@@ -2187,14 +2202,11 @@ def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, 
 
     soda = line_of(shown, "De Música Ligera")
     assert link_texts(soda.split('class="line-panel"', 1)[0]) == ["Open"]
-    groups = re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>', panel_of(soda), re.S)
-    assert [(heading, link_texts(links)) for heading, links in groups][:3] == [
-        ("Sheet versions", ["Ver 1 · 4.50★ (12) · the one"]), ("PDF exports", ["B Minor, capo 2", "G Dorian, capo 0"]),
-        ("Files", ["Sheet PDF", "Sheet text"])], groups
-    versions = dict(groups)["PDF exports"]
-    assert 'href="Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"' in versions
-    # A song with no export has no PDF exports.
-    assert '<p class="subhead">PDF exports</p>' not in line_of(shown, "Creep")
+    downloads = re.findall(r'<a class="dl" href="([^"]*)"[^>]*>.*?</svg>([^<]*)</a>', panel_of(soda), re.S)
+    assert [label for _, label in downloads] == ["PDF", "Text", "PDF · B Minor, capo 2", "PDF · G Dorian, capo 0"]
+    assert downloads[3][0] == "Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"
+    # A song with no export has none.
+    assert "PDF · " not in line_of(shown, "Creep")
 
 
 def wonderwall(conn, cfg, *, pages=("sheet.html", "version-39144.html")):
@@ -2418,17 +2430,19 @@ def test_a_lines_menu_lists_its_kept_versions_each_opening_its_page_and_the_titl
     put(cfg, s, "sheet (G Dorian, capo 0).pdf")
     db.kv_set_json(conn, f"{EXPORT_KV}{s.id}", {
         "G Dorian, capo 0": {"pdf": "sheet (G Dorian, capo 0).pdf", "query": "t=0&mode=dorian"}})
+    drawer = card_notes(conn, cfg, tmp_path, 'chipOf("Wonderwall", "ug").click();\nnote("drawer", noteDrawer("Wonderwall"));',
+                        "drawer")
+    assert drawer["said"] == "4 versions on the site · 3 kept in your library"
+    assert [(r["ver"], r["stars"], r["acts"]) for r in drawer["rows"]] == [
+        ("Ver 3", "4.86★ · 408 votes", ["In use", "Open"]), ("Ver 1", "4.85★ · 12,629 votes", ["Open"]),
+        ("Ver 2", "4.70★ · 3,000 votes", ["Open"])], drawer
+    assert [r["open"] for r in drawer["rows"]] == ["Oasis/Wonderwall/sheet.html", "Oasis/Wonderwall/version-39144.html",
+                                                   "Oasis/Wonderwall/version-27596.txt"]
+    # The title still opens the one, sheet.html, and the export is the sheet's.
     shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
     line = line_of(shown, "Wonderwall")
-    groups = re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>', panel_of(line), re.S)
-    assert [heading for heading, _ in groups][:3] == ["Sheet versions", "PDF exports", "Files"], groups
-    kept = dict(groups)["Sheet versions"]
-    assert link_texts(kept) == ["Ver 3 · 4.86★ (408) · the one", "Ver 1 · 4.85★ (12,629)", "Ver 2 · 4.70★ (3,000)"]
-    hrefs = re.findall(r'<a class="btn[^"]*" href="([^"]*)"', kept)
-    assert hrefs == ["Oasis/Wonderwall/sheet.html", "Oasis/Wonderwall/version-39144.html",
-                     "Oasis/Wonderwall/version-27596.txt"]
-    # The title still opens the one, sheet.html.
     assert re.search(r'<a class="line-title" href="Oasis/Wonderwall/sheet.html"', line), line
+    assert ">PDF · G Dorian, capo 0</a>" in line
 
 
 @in_chromium
@@ -2447,10 +2461,15 @@ def test_a_song_whose_sheet_is_lacuerdas_names_it_the_one_over_its_kept_ug_versi
                         now="x")
     keep_file(conn, cfg.library_dir, song=s, version_id=ug, name=version_names("85053")[0], data=b"ug", rank=2)
     put(cfg, s, "sheet.html", "version-85053.html")
-    shown = listing(dump_dom(write_library_page(cfg.library_dir, page(conn, cfg)), tmp_path))
-    groups = dict(re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>',
-                             panel_of(line_of(shown, "De Música Ligera")), re.S))
-    assert link_texts(groups["Sheet versions"]) == ["The one: LaCuerda's sheet", "Ver 2 · 4.80★ (90)"]
+    script = """const card = noteCard("De Música Ligera");
+chipOf("De Música Ligera", "ug").click();
+const ug = noteDrawer("De Música Ligera");
+chipOf("De Música Ligera", "lacuerda").click();
+note("one", { from: card.tiles[0].from, ug, lc: noteDrawer("De Música Ligera") });"""
+    one = card_notes(conn, cfg, tmp_path, script, "one")
+    assert one["from"] == "LaCuerda"
+    assert [(r["ver"], r["acts"]) for r in one["ug"]["rows"]] == [("Ver 2", ["Open"])]
+    assert [(r["ver"], r["acts"]) for r in one["lc"]["rows"]] == [("Version 1", ["In use", "Its page ↗"])]
 
 
 @in_chromium
@@ -2473,8 +2492,9 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_ski
         phone.click(line + " .line-more")
         assert phone.wait(f"!{q}.querySelector('.line-panel').hidden")
         heights = phone.js(f"Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.getBoundingClientRect().height)")
-        # The eight files filed_library keeps, and the UG version its sheet is.
-        assert len(heights) == 9 and min(heights) >= 44, heights
+        files = phone.js(f"new Set(Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.href)).size")
+        # The nine files filed_library keeps, each reached from the card, each a thumb's target.
+        assert files == 9 and min(heights) >= 44, (files, heights)
         # From the line, Tab goes to Open: the title opens the same, and isn't a stop of its own.
         phone.js(f"{q}.focus()")
         phone.press("Tab")
@@ -2800,7 +2820,7 @@ LINE_CLICKS_MENU = """
   more.click();
   const panel = document.getElementById(more.getAttribute("aria-controls"));
   notes.opened = { expanded: more.getAttribute("aria-expanded"), hidden: panel.hidden,
-                   links: Array.from(panel.querySelectorAll("a")).map((a) => a.firstChild.textContent) };
+                   tiles: Array.from(panel.querySelectorAll(".tile-name")).map((n) => n.textContent) };
   more.click();
   notes.closed = { expanded: more.getAttribute("aria-expanded"), hidden: panel.hidden };
   line.closest("section.artist").querySelector("h2 button.artist").click();
@@ -2822,7 +2842,7 @@ def test_a_lines_menu_opens_and_closes_and_its_artists_name_shows_their_songs(co
     path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), LINE_CLICKS_MENU))
     dom = dump_dom(path, tmp_path)
     notes = json.loads(html_module.unescape(re.search(r'data-notes="([^"]*)"', dom).group(1)))
-    assert notes["opened"] == {"expanded": "true", "hidden": False, "links": ["Lyrics", "Tab"]}, notes
+    assert notes["opened"] == {"expanded": "true", "hidden": False, "tiles": ["Chord sheet", "Guitar tab", "Lyrics"]}, notes
     assert notes["closed"] == {"expanded": "false", "hidden": True}, notes
     assert notes["artist"]["hash"] == "#artist=radiohead", notes
     assert sorted(notes["artist"]["titles"]) == ["Creep", "Lucky"], notes
@@ -3667,21 +3687,22 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     assert re.search(rf'href="/review\?song={s["lost"].id}"[^>]*>Look in the index</a>', menu)
     assert "Scores on MuseScore" in menu and "Find the chords" in menu and "yesterday-680101 (possible match)" in menu
     # Found: Open, what it holds and its key on the line, and no badge; its files, its key in words, its
-    # transposition, Add to a songbook… and Remove… under its chevron.
+    # transposition, Add to a songbook… and Remove under its chevron.
     soda = line_of(shown, "De Música Ligera")
     assert re.search(r'<div class="line-action"><a class="btn small primary"[^>]*>Open PDF</a>', soda), soda
     assert re.search(r'<span class="line-key"[^>]*>', soda) and "Key A minor (from the tab)" in soda
     top = soda.split('class="line-panel"', 1)[0]
     assert 'aria-label="Chord sheet"' in top and 'aria-label="Lyrics"' in top and 'class="badge' not in top
     menu = soda.split('class="line-panel"', 1)[1]
-    assert "Sheet text" in menu and "Lyrics" in menu and "−2" in menu and "Guitar Pro to download" not in menu
+    assert 'aria-label="Download the Text of De Música Ligera"' in menu and "−2" in menu
+    assert 'aria-label="Open the lyrics of De Música Ligera"' in menu and "Guitar Pro" not in menu
     assert ">Add to a songbook…</button>" in menu and re.search(r'<form[^>]*action="/remove"', menu)
 
     clicks = noted(dom, "data-clicks")
     assert clicks["pick"] == {"panel": True, "open": True, "expanded": "true", "focus": "radiohead/creep"}, clicks
     assert clicks["countdown"]["text"].startswith("Removing in 5 s") and clicks["countdown"]["focus"] == "Undo", clicks
     assert clicks["countdown"]["waits"] is True
-    assert clicks["undone"] == {"text": "Not removed", "focus": "Remove…", "sends": True}, clicks
+    assert clicks["undone"] == {"text": "Not removed", "focus": "Remove", "sends": True}, clicks
     assert clicks["select"] == {"boxes": 5, "lines": 5, "size": [44, 44]}, clicks
     assert clicks["book"] == {"selecting": True, "count": "1 selected", "picked": True}, clicks
 

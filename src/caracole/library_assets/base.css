@@ -20,6 +20,10 @@
   --artist: #3448b0;
   --focus: #1f6feb;
   --shadow: 0 1px 2px rgb(31 30 28 / 6%), 0 6px 18px rgb(31 30 28 / 5%);
+  /* A song opened in the library, a card over the list, and what is sunk in it (its chips, its tiles' downloads). */
+  --card: #faf9f6;
+  --sunk: #f3f1ec;
+  --card-shadow: 0 8px 24px rgb(31 30 28 / 12%);
   --found: #1d6b43; --found-bg: #def1e5;
   --wanted: #7a4c00; --wanted-bg: #fbeed2;
   --ignored: #5c5c5c; --ignored-bg: #ebebeb;
@@ -44,6 +48,9 @@
     --artist: #a5b4fc;
     --focus: #6ea8fe;
     --shadow: none;
+    --card: #211f1e;
+    --sunk: #181716;
+    --card-shadow: 0 8px 24px rgb(0 0 0 / 28%);
     --found: #83d6a6; --found-bg: #133222;
     --wanted: #f2c46e; --wanted-bg: #36290d;
     --ignored: #b8b8b8; --ignored-bg: #2d2d2d;

@@ -37,18 +37,21 @@ nothing), what it holds, a glyph each (its sheet, a Guitar Pro file or a tab, a
 harmonica tab, its lyrics, a score: rows.js ``glyph``, read from its files and
 ``instruments``), its key as a chip and its main action: Open, or, served, Fetch
 now or Pick the match. Everything else a song has is under its chevron, which
-unfolds it in place: its facts (the key in words
+unfolds it in place as a card (library_assets/card.js): its facts (the key in words
 and where it came from, the transposition, the lyrics, when it came), its
-review's picker, where its audio comes from, its Sheet versions (the Ultimate
-Guitar versions it keeps, the one and those beside it, sheet_versions.py's, each
-opening its viewer page, the one its title opens said so: ``versions``, which also
-counts those not kept, and ``lacuerdaVersions`` LaCuerda's), its PDF exports (the
-sheet's PDFs in other versions, each file's ``version``), its other files, its MuseScore
-pages, its search and buy links, Add
-to a songbook… (the Select mode, the song picked) and, served, Fetch again and Use
-LaCuerda's sheet (``lacuerdaSheet``, or the search's LaCuerda row of it: each the
-``POST /lookup`` the lookup page sends for the song) and Remove…. Served, each Guitar Pro file caracole serve shows
-in the browser (its ``guitarPage``, ``guitar_pages``) is a group of its own there, Open in the browser and Download
+review's picker, where its audio comes from; a tile for each thing it holds, read
+from its ``files``: its sheet, its Guitar Pro file or text tab, its harmonica tab,
+its lyrics, a score you filed, each with its formats as downloads (the sheet's PDF
+exports among them, each file's ``version``) and its versions per source as chips,
+which open a drawer: Ultimate Guitar's (``versions``: those kept, the one and those
+beside it, sheet_versions.py's, each opening its viewer page, and those not kept
+counted), LaCuerda's (``lacuerdaVersions``), the auto sheet beside a human one
+(``autoSheet``), a source's files; its progressions, its MuseScore pages, its search
+and buy links, Add to a songbook… (the Select mode, the song picked) and, served,
+Fetch again and Use LaCuerda's sheet (``lacuerdaSheet``, or the search's LaCuerda
+row of it: each the ``POST /lookup`` the lookup page sends for the song) and
+Remove. Served, a Guitar Pro file caracole serve shows in the browser (its
+``guitarPage``, ``guitar_pages``) opens there from its tile and its drawer
 (web/guitar_routes.py); without alphaTab there (``WebControls.guitar``), a note says they are downloads. An
 artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows that
 artist's songs alone. An A-Z strip jumps to the first group (or line) of a letter
@@ -158,7 +161,7 @@ run gets it (``lacuerda``), and isn't a song not found (``notFound``). The
 request form sits under the results, filled in from the query.
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): the
-search of the sites as you type, a form to request a song, a "Fetch now" button on each wanted song, a "Remove…"
+search of the sites as you type, a form to request a song, a "Fetch now" button on each wanted song, a "Remove"
 button under each song's "⋯" (it counts down five seconds, with Undo, before it sends anything), and a
 CSP that lets the forms post to the server (``form-action 'self'``) and the script
 ask it how its requests go (``connect-src 'self'``). The script posts the forms
@@ -171,17 +174,17 @@ under the bar, and two requests or more also show in a corner, folded to one lin
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
 
-Remove… stays on the page: one tap and the song's own line says "Removing in 5 s
+Remove stays on the page: one tap and the song's own line says "Removing in 5 s
 · Undo", the focus on Undo, with what goes in one sentence under it (the
 server's answer to the question, ``removal.brief``: caracole's files of the
 song, its record, its wanted.txt line; never Music/). Nothing else is sent for
 those five seconds, and Undo stops it ("Not removed", the focus back on
-Remove…); then the page posts the removal with the song's key, and the line
+Remove); then the page posts the removal with the song's key, and the line
 follows it ("Removing…", "Removing from caracole…", then "Removed"), as tall as
 it was. The song's line is then a ``gone`` one, its name alone, as tall as it was and
 its request line where it was, until the page is loaded again. Without JavaScript,
-Remove…'s question is a page of the server's; Remove it, and Keep it, come back
-to this page as it was left (Remove… sends the address after # along, ``back``),
+Remove's question is a page of the server's; Remove it, and Keep it, come back
+to this page as it was left (Remove sends the address after # along, ``back``),
 at the song's line: ``song=ID`` in the address, which the script scrolls to and
 focuses, then drops.
 
@@ -1024,9 +1027,9 @@ def _haystack(texts: list[str]) -> str:
 # index.html's one stylesheet and one script: the files of library_assets/, in this order (what each one
 # is: its __init__.py). BASE_STYLE, PICKER_STYLE, ROWS_STYLE and ROWS_SCRIPT, the ones caracole serve's own
 # pages share, are importable from here too.
-STYLESHEETS = ("base.css", "picker.css", "library.css", "rows.css", "steps.css", "library-screens.css",
+STYLESHEETS = ("base.css", "picker.css", "library.css", "rows.css", "card.css", "steps.css", "library-screens.css",
                "songbooks.css")
-SCRIPTS = ("rows.js", "library.js", "select.js", "songbooks.js", "drawn.js")
+SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "songbooks.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)
 _PAGE_SCRIPT = "".join(read_asset(name) for name in SCRIPTS)

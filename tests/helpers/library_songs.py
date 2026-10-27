@@ -1,12 +1,17 @@
 """Songs as the library holds them, for index.html's tests: their files in their folders and their records, as the
 fetch, the inbox and the render steps leave them, with no request and no chordpro::
 
-    from helpers.library_songs import hotel_california
+    from helpers.library_songs import hotel_california, with_versions
 
 ``hotel_california(conn, cfg)``: Eagles - Hotel California, found, in B minor (from the tab), which holds one of
 everything a song's line shows: its chord sheet from Ultimate Guitar (viewer, PDF, text and ChordPro), two Guitar Pro
 files (gtptabs.com's, then one filed from your inbox) and a text tab, a harmonica tab of harptabs.com's, its lyrics
 (plain and timed, LRCLIB's) and a MusicXML score filed from your inbox. Its files' bytes are stand-ins.
+
+``with_versions(conn, cfg, song)``: what a song's card counts and lists besides, for one whose sheet is Ultimate
+Guitar's (``hotel_california``'s): twelve more of UG's chords versions (13 in all, ``TABS`` in rank order), the next
+two kept beside the sheet (``version-<tab>.txt`` and ``.json``, the first with its viewer page), two LaCuerda sheets
+caracole met (``LACUERDA``, best first), an auto sheet beside the human one, and a PDF export in another key.
 """
 
 from __future__ import annotations
@@ -20,6 +25,11 @@ from caracole.versions import upsert_version
 from conftest import add_song
 
 HOTEL = "[ch]Bm[/ch] [ch]F#[/ch]\nOn a dark desert highway\n"
+SHEET_TAB = "46190"  # hotel_california's sheet
+TABS = (SHEET_TAB, *(str(46191 + n) for n in range(12)))  # with_versions': UG's chords versions in rank order
+LACUERDA = ("https://acordes.lacuerda.net/eagles/hotel_california.shtml",
+            "https://acordes.lacuerda.net/eagles/hotel_california-2.shtml")
+EXPORT = "sheet (G Dorian, capo 0).pdf"
 
 
 def _version(conn, song, provider, tab_id, slot, kind, *, raw=None, url=""):
@@ -31,8 +41,8 @@ def _version(conn, song, provider, tab_id, slot, kind, *, raw=None, url=""):
 def hotel_california(conn, cfg):
     """Eagles - Hotel California, holding a file of every kind a line shows (the module's docstring)."""
     song = add_song(conn, "Eagles", "Hotel California", added_at="2026-10-19T00:00:00Z")
-    ug = _version(conn, song, "ug", 46190, "sheet", "chords", raw={"tonality_name": "Bm"},
-                  url="https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46190")
+    ug = _version(conn, song, "ug", SHEET_TAB, "sheet", "chords", raw={"tonality_name": "Bm"},
+                  url=f"https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-{SHEET_TAB}")
     keep_file(conn, cfg.library_dir, song=song, version_id=ug, name="sheet.json",
               data=json.dumps({"content": HOTEL}).encode(), rank=1)
     keep_file(conn, cfg.library_dir, song=song, version_id=ug, name="sheet.txt", data=HOTEL.encode(), rank=1)
@@ -53,3 +63,35 @@ def hotel_california(conn, cfg):
         (folder / name).write_bytes(b"x")
     update_song(conn, song.id, status="found", lyrics_status="found")
     return song
+
+
+def with_versions(conn, cfg, song):
+    """The versions a card counts and lists, for ``song``, a ``hotel_california`` (the module's docstring)."""
+    from caracole.db import kv_set_json
+    from caracole.render import EXPORT_KV
+    from caracole.sheet_versions import version_names
+    from caracole.versions import set_coverage
+
+    sheet = conn.execute("SELECT id FROM versions WHERE song_id = ? AND tab_id = ?", (song.id, SHEET_TAB)).fetchone()[0]
+    set_coverage(conn, sheet, 1.0)
+    for n, tab in enumerate(TABS[1:], start=1):
+        vid = upsert_version(conn, provider="ug", tab_id=tab, song_id=song.id, slot="sheet", kind="chords",
+                             rating=round(4.8 - n / 20, 2), votes=900 - 50 * n, version=n + 3, label=None,
+                             url=f"https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-{tab}", raw={},
+                             now="2026-10-19T00:00:00Z")
+        if n <= 2:  # the next two, kept beside the sheet
+            set_coverage(conn, vid, 0.8 if n == 1 else 0.5)
+            text, doc, viewer = version_names(tab)
+            keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=text, data=tab.encode(), rank=n + 1)
+            keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=doc, data=b"{}", rank=n + 1)
+            if n == 1:
+                (song_dir(cfg.library_dir, song) / viewer).write_bytes(b"x")
+    for url, coverage in zip(LACUERDA, (0.9, 0.6), strict=True):
+        vid = upsert_version(conn, provider="lacuerda", tab_id=url.split("/", 3)[3].removesuffix(".shtml"),
+                             song_id=song.id, slot="sheet", kind="acordes", rating=0, votes=0, version=1, label=None,
+                             url=url, raw={}, now="2026-10-19T00:00:00Z")
+        set_coverage(conn, vid, coverage)
+    folder = song_dir(cfg.library_dir, song)
+    for name in ("sheet (auto).html", "sheet (auto).pdf", "sheet (auto).txt", "sheet (auto).cho", EXPORT):
+        (folder / name).write_bytes(b"x")
+    kv_set_json(conn, f"{EXPORT_KV}{song.id}", {"G Dorian, capo 0": {"pdf": EXPORT, "query": "t=-4&mode=dorian"}})

@@ -131,8 +131,8 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   var(--border-strong); border-radius: 7px; color: var(--text); font-size: .8rem; font-weight: 700; line-height: 1.3;
   text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .line-holds { display: none; align-items: center; gap: 5px; min-width: 0; overflow: hidden; color: var(--faint); }
-.line-holds .glyph { flex: none; width: 16px; height: 16px; }
-.line-holds .glyph.auto { color: var(--auto); }
+.line-holds svg.glyph { flex: none; width: 16px; height: 16px; }
+.line-holds svg.glyph.auto { color: var(--auto); }
 .line-sources { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
 .line-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .line-action form { margin: 0; }
@@ -149,8 +149,8 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .line-more:hover, .line-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
   color: var(--text); }
-.line-more .glyph { width: 18px; height: 18px; }
-.line-more[aria-expanded="true"] .glyph { transform: rotate(180deg); }
+.line-more svg.glyph { width: 18px; height: 18px; }
+.line-more[aria-expanded="true"] svg.glyph { transform: rotate(180deg); }
 /* A request's line, a lookup's steps under it, and what its chevron holds: each across the whole line, under the
    rest. */
 .line > .progress { grid-column: 1 / -1; font-size: .85rem; }
@@ -179,7 +179,7 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   .line-more { height: 24px; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .line-more .glyph { transition: transform .15s; }
+  .line-more svg.glyph { transition: transform .15s; }
 }
 /* A thumb's targets: a row's or a line's button, its "⋯" or chevron, a row's artist (on a phone the title's line and
    the artist's, two thumbs high), and a version's page on UG beside its button; a mouse keeps the compact sizes. */

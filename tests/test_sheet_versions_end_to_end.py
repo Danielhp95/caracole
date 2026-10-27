@@ -22,7 +22,7 @@ from helpers.browser import Browser, BrowserError, dump_dom, in_chromium
 from helpers.ug_pages import make_tab_page_html, version_dict
 import test_commands_versions
 from test_get import LINES, NOW, TAB, Sites, sheet
-from test_library_page import line_of, link_texts, listing, panel_of, songs_of
+from test_library_page import attribute_of, songs_of, with_script
 from typer.testing import CliRunner
 
 from caracole.cli import build_app
@@ -174,12 +174,18 @@ def test_the_switcher_steps_through_the_kept_versions_pages_and_lists_them_all(
 def test_the_library_pages_menu_lists_the_kept_versions(config, sites, conn, tmp_path):
     looked_up(config, sites, conn, tmp_path)
 
-    shown = listing(dump_dom((tmp_path / "library" / "index.html").as_uri(), (1280, 800)))
-    groups = dict(re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>',
-                             panel_of(line_of(shown, "Creep")), re.S))
-    kept = groups["Sheet versions"]
-    assert link_texts(kept) == ["Ver 2 · 4.60★ (50) · the one", "Ver 3 · 4.20★ (50)", "Ver 1 · 4.90★ (100)"]
-    assert re.findall(r'href="([^"]*)"', kept) == [
+    # Its card's Ultimate Guitar chip opens its drawer: a row a kept version, the one in use, each opening its page.
+    from test_library_card import KIT
+
+    index = tmp_path / "library" / "index.html"
+    script = 'chipOf("Creep", "ug").click();\nnote("drawer", noteDrawer("Creep"));'
+    index.write_text(with_script(index.read_text(encoding="utf-8"), "(() => {\n" + KIT + script + "\n})();"),
+                     encoding="utf-8")
+    drawer = attribute_of(dump_dom(index.as_uri(), (1280, 800)), "data-drawer")
+    assert [(r["ver"], r["stars"], r["acts"]) for r in drawer["rows"]] == [
+        ("Ver 2", "4.60★ · 50 votes", ["In use", "Open"]), ("Ver 3", "4.20★ · 50 votes", ["Open"]),
+        ("Ver 1", "4.90★ · 100 votes", ["Open"])], drawer
+    assert [r["open"] for r in drawer["rows"]] == [
         "Radiohead/Creep/sheet.html", "Radiohead/Creep/version-103.html", "Radiohead/Creep/version-101.html"]
 
 

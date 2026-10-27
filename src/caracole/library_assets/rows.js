@@ -1044,8 +1044,8 @@ const caracoleRows = (icons, does) => {
     if (why) line.appendChild(why);
     return line;
   };
-  return { resultRow, sourceMark, glyph, link, titleLink, artistFilter, artistSearch, artistOnly, button, many, counts,
-    opener, instrumentBadges, ugHit, artistHit,
+  return { resultRow, sourceMark, glyph, link, safeHref, titleLink, artistFilter, artistSearch, artistOnly, button, many,
+    counts, opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
     didYouMean, lookedChips, nothingFound, lookedLine };
 };

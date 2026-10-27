@@ -65,7 +65,9 @@ def test_a_guitar_pro_file_saves_under_its_songs_name(served, tmp_path, label, n
         page.open(served)
         assert page.wait("!!document.querySelector('.line-more')", 15)
         page.click(".line-more")
-        link = f"[...document.querySelectorAll('.line-panel a')].find((a) => a.textContent.startsWith({label!r}))"
+        page.click(".tile-guitar button.vchip")  # its files, in the card's drawer: each one's Download
+        link = (f"[...document.querySelectorAll('.drawer a[download]')]"
+                f".find((a) => a.getAttribute('aria-label').startsWith('Download ' + {label!r}))")
         assert page.wait(f"!!{link}")
         assert page.js(f"{link}.getAttribute('download')") == name
         page.js(f"{link}.click()")

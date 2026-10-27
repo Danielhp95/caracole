@@ -220,10 +220,11 @@
   // Where each file came from (icons.py): its site's own icon, inlined as a data: URI, else its lettered
   // badge; a glyph for the audio model and the inbox. Each is named for a screen reader: "from LaCuerda".
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
-  // ROWS_SCRIPT's, which the lookup page shares
-  const { sourceMark, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine, titleLine,
-    readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } =
-    caracoleRows(ICONS);
+  // ROWS_SCRIPT's, which the lookup page shares; and a song's card (card.js), drawn with them.
+  const rowKit = caracoleRows(ICONS);
+  const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine,
+    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } = rowKit;
+  const card = caracoleCard(ICONS, rowKit);
   // The file a song opens with, from its title and its line's button: its viewer, else its PDF, else its text
   // (the data marks it primary).
   const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
@@ -321,6 +322,7 @@
     const form = songForm("again", "/lookup", s);
     if (lacuerda) form.appendChild(hidden("lacuerda", lacuerda));
     const go = el("button", "btn small", label);
+    go.prepend(glyph("refresh"));
     go.type = "submit";
     go.setAttribute("aria-label", aria);
     go.title = title;
@@ -364,7 +366,7 @@
     held.title = "caracole review settles this match; then it can be fetched";
     return held;
   };
-  // Every line's "Remove…", under its chevron: one tap counts down REMOVE_WAIT seconds on the song's own line,
+  // Every line's "Remove", under its chevron: one tap counts down REMOVE_WAIT seconds on the song's own line,
   // "Removing in 5 s · Undo", with what goes (the server's answer to the question, ``removal.brief``), and sends
   // nothing else meanwhile; then the removal, whose line the song's follows to Removed, never leaving the page.
   // Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose answers
@@ -380,7 +382,8 @@
       e.preventDefault();
       startRemoval(s, form.closest("article"));
     });
-    const go = el("button", "btn small quiet", "Remove…");
+    const go = el("button", "btn small remove", "Remove");
+    go.prepend(glyph("trash"));
     go.type = "submit";
     go.setAttribute("aria-label", "Remove " + String(s.title) + " by " + String(s.artist) + " from caracole");
     go.title = "Delete the files caracole wrote for it, and keep caracole from bringing it back; Undo, for " +
@@ -667,8 +670,15 @@
   };
   // The line old, drawn again as fresh (lineFor's) where it is, around its own request line, which never leaves
   // the page, and its steps under it, which the request's next view draws again; returns old. The focus, if it was on
-  // something of old's that goes, moves to that line.
+  // something of old's that goes, moves to that line. Opened, it stays open, a drawer of its card closed.
   const refill = (old, fresh) => {
+    const was = old.querySelector(":scope > .line-more");
+    const more = fresh.querySelector(":scope > .line-more");
+    const panel = fresh.querySelector(":scope > .line-panel");
+    if (was && was.getAttribute("aria-expanded") === "true" && more && panel) {
+      more.setAttribute("aria-expanded", "true");
+      panel.hidden = false;
+    }
     const kept = old.querySelector(".progress");
     if (!kept) {
       if (old.parentNode) old.replaceWith(fresh);
@@ -856,22 +866,9 @@
       input.focus();
     }, "Show every song, not only those with " + progNumerals(state.prog)));
   };
-  // Under a line's chevron: the song's progressions, as it plays them; each shows the songs that play it too.
-  const progressionsOf = (s) => {
-    const found = progsOf(s);
-    if (!found.length) return null;
-    const box = el("div", "row-group progressions");
-    box.appendChild(el("p", "subhead", "Progressions"));
-    const row = el("div", "actions");
-    for (const p of found) {
-      const go = button(String(p.plays || progLabel(p.key)), "small", () => setProg(p.key),
-        "Songs with " + progSaid(p.key));
-      go.title = "Your songs with " + progSaid(p.key);
-      row.appendChild(go);
-    }
-    box.appendChild(row);
-    return box;
-  };
+  // The song's progressions, as it plays them, for its card: each shows the songs that play it too.
+  const progressionsOf = (s) => card.progressions(progsOf(s).map((p) => ({ text: String(p.plays || progLabel(p.key)),
+    said: "Your songs with " + progSaid(p.key), go: () => setProg(p.key) })));
 
   // Lines: a song a line (resultRow's dense form, from ROWS_SCRIPT: the seam the module docstring describes), in
   // its artist's group. A line is an article titled by its h3; the A-Z strip moves the focus to its group.
@@ -947,31 +944,6 @@
     if (others.length) facts.appendChild(el("span", "with", "With " + others.join(", ")));
     return facts.childNodes.length ? facts : null;
   };
-  // A kept version's name under a line's chevron: UG's version number, its rating and votes, and whether it is the
-  // one, "Ver 3 · 4.86★ (408) · the one".
-  const versionLabel = (v) => {
-    const parts = ["Ver " + (Number(v.number) || "?")];
-    if (typeof v.rating === "number") {
-      parts.push(v.rating.toFixed(2) + "★" + (typeof v.votes === "number" ? " (" + v.votes.toLocaleString("en") + ")" : ""));
-    }
-    if (v.chosen === true) parts.push("the one");
-    return parts.join(" · ");
-  };
-  // A song's Ultimate Guitar versions kept beside its sheet (the data's ``versions``: sheet_versions.py's, the kept
-  // ones in rank order), each a link to its viewer page; the one its title opens says so. When the one is another
-  // site's sheet (LaCuerda's) or the auto sheet, it leads the list by that name, opening what the title opens.
-  const keptVersions = (s, primary) => {
-    const data = s.versions && typeof s.versions === "object" ? s.versions : null;
-    const kept = listOf(data && data.list).filter((v) => v && typeof v === "object" && typeof v.href === "string" && v.href);
-    if (!kept.length) return [];
-    const links = kept.map((v) => ({ label: versionLabel(v), href: v.href, source: v.source }));
-    if (!kept.some((v) => v.chosen === true) && primary) {
-      const site = typeof s.source === "string" && own.call(ICONS, s.source) && ICONS[s.source] ? ICONS[s.source].name : "";
-      const name = s.auto === true ? "the auto sheet" : site ? String(site) + "'s sheet" : "its sheet";
-      links.unshift({ label: "The one: " + name, href: primary.href, source: s.source });
-    }
-    return links;
-  };
   // Under a line's chevron: Select, the song picked, and its bar to put it in a songbook there is or a new one
   // (select.js, which hears "caracole:pick"). Select knows the songs the page was loaded with: a song new to the
   // library since (Get it, a request) has none until the page is loaded again, as it would do nothing.
@@ -979,21 +951,26 @@
     const go = button("Add to a songbook…", "small", () => {
       document.dispatchEvent(new CustomEvent("caracole:pick", { detail: { id: Number(s.id) } }));
     }, "Add " + String(s.title) + " by " + String(s.artist) + " to a songbook");
+    go.prepend(glyph("book"));
     go.title = "Pick it, and any other songs, for a songbook";
     return go;
   };
+  // What a card's drawers do with a song's versions (card.js ``acts``): from the file, which can ask nothing, the
+  // command that fetches the versions not kept.
+  const drawerActs = (s) => (server ? {} : {
+    keepMoreCommand: "caracole versions --keep-more " + shellNames(String(s.display)),
+  });
   // A song's line: its title (which opens its sheet), its status when it needs something, what it holds, its key, its
-  // main action; and under its chevron its facts, its picker or what to do about its match, where its audio comes
-  // from, its sheet's versions, its other files, the links to find or buy it, Add to a songbook… and Remove….
+  // main action; and under its chevron, its card (card.js): its facts, then what needs you (its picker or what to do
+  // about its match, where its audio comes from, a LaCuerda pick, Look in the index), what you play from it as tiles
+  // and their versions' drawer, its progressions, where else to find it, and its foot (Fetch again, Use LaCuerda's
+  // sheet, Add to a songbook…, info.json, Remove).
   const lineFor = (s) => {
     const id = Number(s.id);
-    const files = listOf(s.files);
     const primary = primaryOf(s);
     const more = [];
     const facts = factsOf(s);
     if (facts) more.push(facts);
-    const progs = progressionsOf(s);
-    if (progs) more.push(progs);
     // The picker, or the note that says why there is none.
     const picker = SHOWS.review(s) && listOf(s.candidates).length > 0 ? makePicker(s) : null;
     if (picker) {
@@ -1015,42 +992,31 @@
       look.appendChild(lookLink(s, "btn small"));
       more.push(look);
     }
-    const asked = server ? jobOfSong(id) : null;
-    if (server && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked))) {
-      const again = againActions(s);
-      if (again) more.push(again);
-    }
-    // The sheet is the line's button unless the server's control has its place (Fetch now beside an auto
-    // sheet): then it leads the files, and the title opens it all the same.
-    const control = serverAction(s, picker);
-    const action = control.held ? control.action : primary ? openButton(s, primary) : null;
-    const listed = control.held ? files : files.filter((f) => f !== primary);
-    // The sheet's PDFs in other versions (Export PDF of this version), by their versions, before the other files.
-    const isVersion = (f) => f && typeof f.version === "string" && f.version;
-    const versions = listed.filter(isVersion).map((f) => Object.assign({}, f, { label: f.version }));
-    // Served, a Guitar Pro file caracole serve shows (``guitarPage``) gets a group of its own: Open in the browser,
-    // and Download; without alphaTab there, a note says why it is a download alone. From a file, a file like any.
-    const shownInBrowser = (f) => Boolean(server) && typeof f.guitarPage === "string" && f.guitarPage !== "";
-    const others = listed.filter((f) => !isVersion(f) && !(shownInBrowser(f) && server.guitar));
-    more.push({ heading: "Sheet versions", links: keptVersions(s, primary) },
-      { heading: "PDF exports", links: versions },
-      { heading: "Files", links: others });
-    if (server && server.guitar) {
-      for (const f of listed.filter(shownInBrowser)) {
-        more.push({ heading: String(f.label || f.name), links: [{ label: "Open in the browser", href: f.guitarPage },
-          { label: "Download", href: f.href, download: f.download }] });
-      }
-    } else if (listed.some(shownInBrowser)) {
+    // What you play from it, and every file a tile shows: the rest, any, a group of their own.
+    const claimed = new Set();
+    const shown = card.tiles(s, { guitar: Boolean(server && server.guitar), acts: drawerActs(s), claimed });
+    if (shown) more.push(shown);
+    const info = listOf(s.files).find((f) => f && f.name === "info.json") || null;
+    const others = listOf(s.files).filter((f) => f && !claimed.has(f) && f !== info);
+    if (others.length) more.push({ heading: "Files", links: others });
+    if (server && !server.guitar && listOf(s.files).some((f) => f && typeof f.guitarPage === "string" && f.guitarPage)) {
       more.push(el("p", "note", "caracole serve can show Guitar Pro files in the browser once it has alphaTab " +
         "(CARACOLE_ALPHATAB_DIR): until then they are downloads."));
     }
-    more.push({ heading: "Scores on MuseScore", links: listOf(s.museScore) },
-      { heading: "Find the chords", links: listOf(s.links) },
-      { heading: "Buy the track for an auto sheet", links: listOf(s.buy) });
-    const foot = el("div", "foot");
-    if (byIndex.has(id)) foot.appendChild(bookButton(s));
-    if (server && !removing.has(id)) foot.appendChild(removeForm(s));  // removing: its action says so
-    more.push(foot);
+    const progs = progressionsOf(s);
+    if (progs) more.push(progs);
+    const elsewhere = card.findElsewhere([{ heading: "Find the chords", links: s.links },
+      { heading: "Scores on MuseScore", links: s.museScore }, { heading: "Buy the track for an auto sheet", links: s.buy }]);
+    if (elsewhere) more.push(elsewhere);
+    // The sheet is the line's button unless the server's control has its place (Fetch now beside an auto
+    // sheet): its tile opens it all the same, as the title does.
+    const control = serverAction(s, picker);
+    const action = control.held ? control.action : primary ? openButton(s, primary) : null;
+    const asked = server ? jobOfSong(id) : null;
+    const again = server && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked)) ? againActions(s) : null;
+    const foot = card.foot(s, { actions: [again], book: byIndex.has(id) ? bookButton(s) : null, info,
+      remove: server && !removing.has(id) ? removeForm(s) : null });  // removing: its action says so
+    if (foot) more.push(foot);
     const artists = listOf(s.artists);
     const keyed = typeof s.key === "string" && s.key;
     const status = statusOf(s);
@@ -1723,16 +1689,10 @@
     if (!lines.has(i) || lacuerdaOf(songs[i]) === before) return;
     const old = lines.get(i);
     const more = old.querySelector(":scope > .line-more");
-    const open = Boolean(more && more.getAttribute("aria-expanded") === "true");
     const focused = Boolean(more && more === document.activeElement);
     const drawn = refill(old, lineFor(songs[i]));
     lines.set(i, drawn);
     const fresh = drawn.querySelector(":scope > .line-more");
-    const panel = drawn.querySelector(":scope > .line-panel");
-    if (open && fresh && panel) {
-      fresh.setAttribute("aria-expanded", "true");
-      panel.hidden = false;
-    }
     if (focused && fresh && fresh.isConnected) fresh.focus();
   };
   const lineOfItem = (model, item) => {
@@ -2475,6 +2435,8 @@
     const gone = (old) => {
       const fresh = goneItem(songs[i]);
       if (!old) return fresh;
+      // An opened card keeps its box, its margins and edge (card.css), as it keeps its height.
+      if (old.matches('.line:not(.hit):has(> .line-more[aria-expanded="true"])')) fresh.classList.add("card-gone");
       const tall = old.isConnected ? old.getBoundingClientRect().height : 0;
       const line = old.querySelector(".progress");
       const top = line && old.isConnected ? line.getBoundingClientRect().top : null;

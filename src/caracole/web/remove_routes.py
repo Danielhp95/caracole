@@ -4,12 +4,12 @@
                           back to the library, at the song's card (to the page's script: what it takes,
                           as data, then the job)
 
-A removal is asked on the song's card by the page's script: Remove… there
+A removal is asked on the song's card by the page's script: Remove there
 counts down five seconds, with Undo, while the card says what goes (the
 question, answered as data: ``removal``), and only then sends the
 confirmation, answered with the job, whose line the card shows, as a
 fetch's: the job names its song even once the song is gone. Without
-JavaScript, Remove… opens the question as a page, and the removal, confirmed,
+JavaScript, Remove opens the question as a page, and the removal, confirmed,
 goes back to the library page as it was left (``back``: its search, filters
 and view, the part of its address after #, which the form sends along), at
 the song's card (``song=ID``). The job's key is the song's after

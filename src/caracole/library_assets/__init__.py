@@ -18,6 +18,11 @@ file, and none of it loads anything from the network.
   with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
   and its search's results, and those of caracole serve's lookup page (web/lookup_page.py), which runs
   rows.js before its own script.
+- card.css and card.js (``caracoleCard``): a song of yours opened on index.html, a card under its line (library.js
+  ``lineFor`` puts its parts in the line's panel): what you play from it as tiles, each source's versions of each as
+  chips that open one drawer under the row of tiles that holds its tile, its progressions, where else to find it, and
+  its foot, Remove at its end. Drawn from the page's data alone: a chip or a drawer asks nothing of anyone; what a
+  drawer's versions do (Use this one, Fetch them, Back to caracole's pick) library.js makes, served.
 - library.css, library-screens.css and library.js: index.html's own. library-screens.css comes
   after rows.css, as its scroll margin and its thumb's targets are a line's too.
 - songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.

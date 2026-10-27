@@ -423,10 +423,10 @@ def test_the_served_library_page_opens_it(served, tmp_path):
     try:
         assert page.wait("!!document.querySelector('.line-more')", 15)
         page.click(".line-more")
-        opener = "[...document.querySelectorAll('a')].find((a) => a.textContent === 'Open in the browser')"
+        opener = "document.querySelector('.tile-guitar a.tile-open')"  # the card's Guitar Pro tile
         assert page.wait(f"!!{opener}")
         assert page.js(f"{opener}.href") == url
-        assert page.js("[...document.querySelectorAll('a')].some((a) => a.textContent === 'Download' && "
+        assert page.js("[...document.querySelectorAll('.tile-guitar a.dl')].some((a) => "
                        "a.getAttribute('href').endsWith('guitar-1.gp'))")
         page.js(f"{opener}.click()")
         assert page.wait("location.pathname === '/guitar'", 15)
