@@ -579,6 +579,34 @@ def test_cli_songbook_set_plays_a_song_on_an_instrument(setup):
 
 
 @pytest.mark.slow
+def test_cli_songbook_set_another_instrument_keeps_the_pitch_the_song_plays_at(setup):
+    # As the Songbooks tab's menus set it: between an instrument that takes a capo and one that takes none, the key
+    # is the key the song sounds in now, and no capo on the one that takes one
+    soda = "Soda Stereo - De Música Ligera"
+
+    def setting():
+        return books(setup)[0].songs[0].setting
+
+    def said(*args) -> list[str]:
+        out = run(setup, "set", "Gig", soda, *args)
+        assert out.exit_code == 0, out.output
+        return out.output.splitlines()
+
+    assert run(setup, "make", "Gig", soda).exit_code == 0
+    assert "In the songbook: G Minor, capo 2" in said("--key", "G", "--capo", "2")  # sounds A minor
+    assert "In the songbook: A Minor, piano" in said("--instrument", "piano")
+    assert setting() == Setting("A", capo=2, instrument="piano")  # a capo the piano leaves alone, as the tab does
+    assert "In the songbook: A Minor" in said("--instrument", "guitar")  # A minor shapes, no capo
+    assert setting() == Setting("A", capo=0, instrument="guitar")
+    assert "In the songbook: A Minor, ukulele" in said("--instrument", "ukulele")  # its key means the same there
+    assert setting() == Setting("A", capo=0, instrument="ukulele")
+    # a key or a capo given is as given
+    assert "In the songbook: C Minor, piano" in said("--instrument", "piano", "--key", "C")
+    assert "In the songbook: C Minor, capo 3" in said("--instrument", "guitar", "--capo", "3")  # sounds Eb minor
+    assert setting() == Setting("C", capo=3, instrument="guitar")
+
+
+@pytest.mark.slow
 def test_show_says_where_the_songbook_plays_a_song_with_a_setting_or_a_version_of_its_own(setup):
     _, cfg, conn = setup
     keyless = add_song(conn, "Placeholder Band", "Keyless Song")  # no chord caracole can read: no key

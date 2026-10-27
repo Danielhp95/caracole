@@ -103,13 +103,14 @@ from caracole.render import (
 )
 from caracole.viewer.page import viewer_key
 from caracole.viewer.sheet import directive, parse_sheet
-from caracole.viewer.theory import Key
+from caracole.viewer.theory import Key, spelling
 from caracole.viewer.version import (
     CAPO_MAX,
     Setting,
     Version,
     apply_version,
     in_setting,
+    instrument_of,
     places,
     played_key,
     played_label,
@@ -760,6 +761,28 @@ def with_capo(entry: Entry, setting: Setting, overrides: Overrides) -> Setting:
         log.warning("%s: cannot say at which capo its songbook plays it", entry.text, exc_info=True)
         return setting
     return replace(setting, capo=capo) if capo <= CAPO_MAX else setting
+
+
+def on_instrument(entry: Entry, setting: Setting, *, key_given: bool = False, capo_given: bool = False) -> Setting:
+    """``setting``, which moves the song of ``entry`` to its instrument (``caracole songbook set --instrument``), with
+    the key and the capo that keep the song at the pitch it plays at now, ``entry`` being where the songbook plays it
+    now. As the Songbooks tab's menus set them (songbooks.js, from ``where_played``'s key and capo, its set list's
+    ``at``): from an instrument that takes a capo to one that takes none, or the other way, the key is the key the
+    song sounds in now, and the capo none on the one that takes a capo. A key or a capo given (``key_given``,
+    ``capo_given``) stays as given. As given for a setting with no key (the song's own key and capo then keep its
+    pitch on either), between two instruments that both take a capo or both take none (a key means the same on
+    either), and for a song without a sheet, or with one that has no key caracole can read."""
+    if key_given or setting.key is None or setting.instrument is None or entry.cho is None:
+        return setting
+    now, then = played_on(entry.version), instrument_of(setting.instrument)
+    if then is None or bool(now.capo) == bool(then.capo):
+        return setting
+    _, played = where_played(entry)
+    if played is None or played[0] is None:
+        return setting
+    key, capo = played
+    sounds = spelling(None)[(key.tonic + capo) % 12]
+    return replace(setting, key=sounds, capo=setting.capo if capo_given or not then.capo else 0)
 
 
 KEY_UNKNOWN = "key unknown, as written"  # what plays_in says of a setting or a key a sheet with no key can't take

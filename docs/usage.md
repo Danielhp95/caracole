@@ -4079,7 +4079,12 @@ song's chip sets where it plays.
   is the key the song sounds in, with no capo taken from where it plays now
   (`--key B --instrument piano`: `B Minor, piano`); `--instrument guitar` plays
   it on the guitar even where its own version is on another, and its phone
-  page opens it on the guitar whatever instrument you keep. The parts you
+  page opens it on the guitar whatever instrument you keep. Another
+  instrument with no `--key` keeps the song at the pitch it plays at, as the
+  Songbooks tab's menus do: from one that takes a capo to one that takes none,
+  or back, the key becomes the key it sounds in now, with no capo on the one
+  that takes a capo (`key G, capo 2` sounds A: `--instrument piano` makes it
+  `key A`, and `--instrument guitar` after that `key A, no capo`). The parts you
   give change; the others stay. A key or a mode
   given with no capo keeps the capo the song plays at now, and the setting
   names it (`key G, dorian, no capo`). It says where the songbook plays the

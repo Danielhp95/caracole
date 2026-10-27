@@ -185,8 +185,9 @@ def register(app: typer.Typer) -> None:
                 clear: bool = typer.Option(False, "--clear", help="Take its setting off: the sheet's own.")) -> None:
         """Set the key, mode, capo or instrument a song is played in within a songbook (the parts you give change;
         the others stay), or --clear its setting. A key or a mode with no capo keeps the capo it plays at now; on an
-        instrument with no capo (the piano, the harmonica, the winds) the key is the key it sounds in."""
-        from caracole.songbook import Setting, check_setting, plays_in, set_song_setting, with_capo
+        instrument with no capo (the piano, the harmonica, the winds) the key is the key it sounds in, and another
+        instrument with no --key keeps the pitch it plays at."""
+        from caracole.songbook import Setting, check_setting, on_instrument, plays_in, set_song_setting, with_capo
 
         given = key is not None or mode is not None or capo is not None or instrument is not None
         if clear == given:
@@ -203,6 +204,9 @@ def register(app: typer.Typer) -> None:
                                                           mode.lower() if mode else old.mode,
                                                           old.capo if capo is None else capo,
                                                           instrument.lower() if instrument else old.instrument))
+                if instrument is not None:  # at the pitch it plays at now, as the Songbooks tab's menus keep it
+                    given_setting = on_instrument(_played(conn, cfg, overrides, b, entry, old or None), given_setting,
+                                                  key_given=key is not None, capo_given=capo is not None)
                 new = with_capo(_played(conn, cfg, overrides, b, entry, None), given_setting, overrides)
             _do(lambda: set_song_setting(_file(cfg), b.name, entry, new))
             played = _played(conn, cfg, overrides, b, entry, new)
