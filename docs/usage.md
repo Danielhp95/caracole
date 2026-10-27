@@ -2539,12 +2539,23 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   vii°, and a minor key's ♭VII) purple; a chord from outside the key
   (borrowed, as B♭ in C from C minor; a secondary dominant; or plainly
   outside) is underlined with dots. The **Role colours** switch turns the colours off.
-  Hover over a numeral with the mouse, or tap it, for its line: "vi: the 6th
-  chord of C major, minor (lower case)", "♭VII: built on the lowered 7th
-  degree of C major, major (upper case); borrowed from C minor", with the key
-  it is read in and where that key came from (an estimated key read wrong
-  gives every numeral another meaning), and a button to the chord's shapes;
-  Escape, a tap elsewhere or the mouse moving away closes it. With numerals
+  Hover over a numeral with the mouse, or tap it, for its tooltip: the chord,
+  its numeral and its role (home, away, pull, or outside the key); its line,
+  "vi: the 6th chord of C major, minor (lower case)", "♭VII: built on the
+  lowered 7th degree of C major, major (upper case); borrowed from C minor",
+  with the key it is read in and where that key came from (an estimated key
+  read wrong gives every numeral another meaning); the chord's notes on a
+  circle of the twelve notes, C at the top, the key's seven ringed and the
+  chord's joined into a shape in its role's colour, the root filled, beside
+  the notes listed with their intervals (D7: D root, F# 3, A 5, C ♭7), a note
+  from outside the key dashed in red and named under them ("F isn't in G
+  major (it has F#)."). **Keyboard ›** under the circle shows the notes as
+  tiles over a keyboard instead, stacked up from the root (D7: D, then the F#,
+  A and C above it), and **‹ Circle** goes back; ← and → do too while the
+  focus is in the tooltip. The view you chose is kept for every sheet and
+  songbook (the circle where the browser keeps nothing). ▶ Hear it strums the
+  chord as its card plays it (none with the strum Off), and Shapes opens its
+  card. Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
   chord's name opens its card, which names the numeral too ("Bb · ♭VII").
   A song whose key caracole can't tell offers chords alone (the numerals

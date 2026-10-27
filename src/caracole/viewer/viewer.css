@@ -27,6 +27,9 @@
   --pull: #973b9d;
   --kb-white: #fdfcfa;
   --kb-black: #2b2926;
+  --off: #a3261b;  /* a note from outside the key, in a numeral's tooltip */
+  --off-bg: #fbe1dd;
+  --kb-lit: #8a8378;  /* a key lit for a chord from outside the key: apart from the white keys and the black */
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -56,6 +59,9 @@
     --home: #6fd08f;
     --away: #8ab8ff;
     --pull: #e5a3ef;
+    --off: #ff9d92;
+    --off-bg: #3d1713;
+    --kb-lit: #7d786f;
   }
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -150,14 +156,93 @@ html[data-roles="off"][data-nm="numerals"] .c .nm { color: var(--accent); }
 .nm-x, .nm-b { font-size: .86em; }
 .c .nm::after { content: ""; position: absolute; inset: -10px -8px -10px -3px; }
 html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
-/* A numeral's line, by it (placed in the page by the script: --tip-top, --tip-left). */
-.tip { position: absolute; z-index: 9; top: var(--tip-top, 0px); left: var(--tip-left, 0px); width: max-content;
-  max-width: min(320px, calc(100vw - 16px)); padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px;
-  background: var(--surface); color: var(--text); box-shadow: 0 6px 22px rgb(0 0 0 / .18); font-size: .9rem;
-  line-height: 1.35; }
+/* A numeral's tooltip, by it (placed in the page by the script: --tip-top, --tip-left), one width whatever it shows:
+   the chord, its numeral as the sheet draws it and its role in its colour (--role, by the numeral's family; muted for
+   a chord from outside the key, or with the colours off; --role-key, the keys it lights, a grey both kinds of key
+   stand apart from there); its line and its key; the chord's notes on a twelve-note circle (viewer.js clock: .tc)
+   beside their list, which goes under it on a screen too narrow for both, or as tiles over a keyboard (data-view);
+   a line for a note from outside the key; the button to the other view and the dots that mark the one shown; ▶ Hear
+   it and Shapes, a finger's 44 px where a pointer is coarse. A view fades in, unless motion is reduced. */
+.tip { --role: var(--muted); --role-key: var(--kb-lit); position: absolute; z-index: 9; top: var(--tip-top, 0px);
+  left: var(--tip-left, 0px); width: min(340px, calc(100vw - 16px)); padding: 12px; border: 1px solid var(--border-strong);
+  border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgb(0 0 0 / .22);
+  font-size: .9rem; line-height: 1.35; }
+.tip[data-role="h"] { --role: var(--home); --role-key: var(--home); }
+.tip[data-role="a"] { --role: var(--away); --role-key: var(--away); }
+.tip[data-role="p"] { --role: var(--pull); --role-key: var(--pull); }
+html[data-roles="off"] .tip { --role: var(--muted); --role-key: var(--kb-lit); }
 .tip p { margin: 0; }
-.tip .tip-key { margin-top: 4px; color: var(--muted); font-size: .8rem; }
-.tip .chip { margin-top: 8px; }
+.tip-head { display: flex; align-items: center; gap: 10px; }
+.tip-chord { font-size: 1.5rem; font-weight: 750; letter-spacing: -.01em; line-height: 1.1; overflow-wrap: anywhere; }
+.tip-nm .nm { display: inline-block; padding: 3px 8px; border-radius: 8px; font-weight: 750; font-size: .9rem;
+  background: color-mix(in srgb, currentColor 14%, transparent); }
+html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
+.tip-role { margin-left: auto; color: var(--role); font-size: .8rem; font-weight: 700; text-align: end; }
+.tip .tip-line { margin-top: 8px; font-size: .86rem; }
+.tip .tip-key { margin-top: 2px; color: var(--muted); font-size: .78rem; }
+.tip-pic { margin-top: 10px; }
+.tip-circle { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.tip-clock { flex: none; width: 150px; height: 150px; }
+.tc { display: block; width: 100%; height: 100%; overflow: visible; }
+.tc-ring { fill: none; stroke: var(--border-strong); stroke-width: 1; }
+.tc-shape { fill: var(--role); fill-opacity: .18; stroke: var(--role); stroke-width: 1.5; stroke-linejoin: round; }
+.tc-dot { fill: var(--bg); stroke: var(--border); stroke-width: 1; }
+.tc-dot.in { fill: var(--raised); stroke: var(--muted); }
+.tc-dot.on { fill: var(--surface); stroke: var(--role); stroke-width: 1.5; }
+.tc-dot.root { fill: var(--accent); stroke: var(--accent); }
+.tc-dot.off { fill: var(--off-bg); stroke: var(--off); stroke-width: 1.5; stroke-dasharray: 3 2; }
+.tc-name { fill: var(--muted); opacity: .6; font: 500 7.5px system-ui, sans-serif; text-anchor: middle;
+  dominant-baseline: central; }
+.tc-name.in { opacity: 1; }
+.tc-name.on { fill: var(--text); opacity: 1; font-size: 9px; font-weight: 750; }
+.tc-name.root { fill: var(--on-accent); }
+.tip-notes { flex: 1 1 120px; display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: .86rem; }
+.tip-notes li { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 3px 8px;
+  border: 1px solid transparent; border-radius: 7px; background: var(--sunk); }
+.tip-notes b { font-weight: 750; }
+.tip-notes span { color: var(--muted); font-size: .76rem; font-weight: 600; }
+.tip-notes .root { background: var(--accent-soft); }
+.tip-notes .root span { color: var(--accent); }
+.tip-notes .off { border: 1px dashed var(--off); background: transparent; }
+.tip-notes .off span { color: var(--off); }
+.tip-tiles { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tip-tiles li { flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 1px; padding: 7px 2px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--sunk); }
+.tip-tiles b { font-size: 1.15rem; font-weight: 750; line-height: 1.1; }
+.tip-tiles small { color: var(--muted); font-size: .72rem; font-weight: 650; }
+.tip-tiles .root { border-color: var(--accent); background: var(--accent-soft); }
+.tip-tiles .root small { color: var(--accent); }
+.tip-tiles .off { border-style: dashed; border-color: var(--off); }
+.tip-tiles .off small { color: var(--off); }
+.tip-kb { margin-top: 10px; }
+.tip-kb svg { width: 100%; height: 64px; }
+.tip-kb rect { stroke-width: 1; vector-effect: non-scaling-stroke; }
+.tip-kb .kb-white.kb-on, .tip-kb .kb-black.kb-on { fill: var(--role-key); stroke: var(--kb-black); }
+.tip-kb .kb-white.kb-bass, .tip-kb .kb-black.kb-bass { fill: var(--accent); stroke: var(--kb-black); }
+.tip-kb .kb-white.off, .tip-kb .kb-black.off { fill: var(--off-bg); stroke: var(--off); stroke-width: 1.5;
+  stroke-dasharray: 3 2; }
+.tip-circle:not([hidden]), .tip-keys:not([hidden]) { animation: tip-in .16s ease-out; }
+@keyframes tip-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .tip-circle:not([hidden]), .tip-keys:not([hidden]) { animation: none; }
+}
+.tip .tip-off { margin-top: 8px; color: var(--off); font-size: .8rem; }
+.tip-switch { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px; }
+.tip[data-view="keys"] .tip-switch { flex-direction: row-reverse; }
+.tip-dots { display: inline-flex; gap: 5px; }
+.tip-dots > span { width: 7px; height: 7px; border: 1px solid var(--muted); border-radius: 50%; }
+.tip[data-view="circle"] .tip-dots > span:first-child, .tip[data-view="keys"] .tip-dots > span:last-child {
+  background: var(--muted); }
+.tip-foot { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border); }
+.tip-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px;
+  border: 1px solid var(--border-strong); border-radius: 9px; background: none; color: var(--text); font: inherit;
+  font-size: .82rem; font-weight: 650; cursor: pointer; }
+.tip-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round;
+  stroke-linejoin: round; }
+.tip-hear { border-color: var(--accent); color: var(--accent); }
+.tip-hear svg { fill: currentColor; stroke: none; }
+#tip-card { margin-left: auto; }
 /* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
    ▶ beside it, and its songs, and those of each named progression it contains; the numeral playing marked. A
    section's heading names its progression. */
@@ -479,12 +564,13 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   #panel .stepper button:hover, .undo:hover { background: var(--raised); }
   #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
   .seg > button:not([aria-pressed="true"]):not(:disabled):hover { color: var(--text); }
-  .goto:hover, .quiet:hover { background: var(--raised); }
+  .goto:hover, .quiet:hover, .tip-btn:hover { background: var(--raised); }
 }
 /* A finger's target, 44 px either way, wherever a pointer is coarse: the steppers taller, a Reset's target reaching
    over the line round it, the line no taller. */
 @media (pointer: coarse) {
   #panel .stepper button { height: 44px; }
+  .tip-btn { min-height: 44px; min-width: 44px; }
   .undo { min-height: 44px; margin: -10px -2px; padding: 0 6px; }
   #panel .chip { min-width: 44px; min-height: 44px; }
   .seg > button { min-height: 44px; }
