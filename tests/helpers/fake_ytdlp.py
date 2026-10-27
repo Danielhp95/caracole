@@ -11,7 +11,8 @@ was given, and its process id.
   --dump-single-json`` prints: the entries the plan lists for the query, at most N.
 - A download (a watch URL) writes the video's bytes where ``-o`` says, the extension
   filled in, and prints the fields of its ``--print after_move:`` template as JSON.
-- Either can instead fail as yt-dlp does (``ERROR: ...`` on stderr, exit 1), or hang.
+- Either can instead fail as yt-dlp does (``ERROR: ...`` on stderr, exit 1), or hang a while
+  (``sleep``): a run that sleeps it out says so (``woke``), one stopped first never does.
 """
 
 from __future__ import annotations
@@ -38,6 +39,8 @@ target = argv[argv.index("--") + 1] if "--" in argv else argv[-1]
 def answer(spec):
     if spec.get("sleep"):
         time.sleep(spec["sleep"])
+        with open(here / "woke.jsonl", "a", encoding="utf-8") as log:
+            log.write(json.dumps({"pid": os.getpid()}) + "\n")
     if spec.get("stderr"):
         sys.stderr.write(spec["stderr"] + "\n")
     if spec.get("exit"):
@@ -116,6 +119,13 @@ class FakeYtDlp:
 
     def argvs(self) -> list[list[str]]:
         return [c["argv"] for c in self.calls()]
+
+    def woke(self) -> list[int]:
+        """The process ids of the runs that slept their ``sleep`` out: none that was stopped before."""
+        log = self.root / "woke.jsonl"
+        if not log.exists():
+            return []
+        return [json.loads(line)["pid"] for line in log.read_text(encoding="utf-8").splitlines() if line]
 
 
 def route_on(cfg, tmp_path: Path, monkeypatch, fake: FakeYtDlp | None = None):
