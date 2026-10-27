@@ -1463,7 +1463,7 @@ def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(co
     dom = dump_dom(path, tmp_path)
     after = json.loads(html_module.unescape(re.search(r'data-after="([^"]*)"', dom).group(1)))
     assert sorted(after["titles"]) == ["Bohemian Rhapsody", "Don't Stop Me Now"], after
-    assert after["chip"].startswith("Queen") and after["q"] == "" and "artist=queen" in after["hash"]
+    assert after["chip"] == "by Queen" and after["q"] == "" and "artist=queen" in after["hash"]
     assert re.search(r'data-cleared="4"', dom)  # the chip takes the filter off
     # From a file, which can't search the sites, the name is the funnel's: no name that searches, no funnel apart.
     assert "artist-search" not in listing(dom) and "artist-only" not in listing(dom)
@@ -1474,7 +1474,7 @@ def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(co
     assert shown.count("<article") == 2 and "Dancing Queen" not in shown
     # A search that only another artist's songs answer says the filter is on, and offers to take it off.
     shown = listing(dump_dom(plain, tmp_path, "#artist=queen&q=dancing"))
-    assert "No songs of Queen match “dancing”" in shown and "every artist" in shown
+    assert "No songs of Queen match “dancing”" in shown and "Show all 1 match" in shown
     assert "caracole search" not in shown
 
 
@@ -1490,9 +1490,9 @@ document.body.setAttribute("data-now", JSON.stringify({
 
 @in_chromium
 @pytest.mark.parametrize("by,titles,chip,hash", [
-    ("Queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "Queen ×", "#artist=queen"),
-    ("queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "Queen ×", "#artist=queen"),  # however it is written
-    ("宋冬野", ["斑马，斑马"], "宋冬野 ×", "#artist=song-dong-ye"),
+    ("Queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "by Queen", "#artist=queen"),
+    ("queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "by Queen", "#artist=queen"),  # however it is written
+    ("宋冬野", ["斑马，斑马"], "by 宋冬野", "#artist=song-dong-ye"),
 ])
 def test_from_a_file_an_artist_a_sheet_links_to_shows_their_songs_alone(conn, cfg, tmp_path, by, titles, chip, hash):
     # A sheet viewer's artist line (#by= and their name): from a file, which can't search the sites, and in the Android
@@ -1523,7 +1523,7 @@ def test_from_a_file_a_sheets_artist_opens_their_songs_and_back_returns_to_the_s
     driven.click(".head .artist a")
     assert driven.wait("location.pathname.endsWith('/index.html') && document.readyState === 'complete'")
     assert driven.wait(f"{SHOWN_TITLES}.join() === 'Bohemian Rhapsody'"), driven.js(SHOWN_TITLES)
-    assert driven.js("document.getElementById('artist').textContent") == "Queen ×"
+    assert driven.js("document.getElementById('artist').textContent") == "by Queen"
     assert driven.js("location.hash") == "#artist=queen"
     assert driven.js("performance.getEntriesByType('resource').length") == 0  # nothing asked of anyone
     driven.js("history.back()")

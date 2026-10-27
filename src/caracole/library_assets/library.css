@@ -58,7 +58,7 @@
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 .results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
-/* What the status buttons, the Key menu and an artist's chip leave of your songs, hidden with them while the sites'
+/* What the filters (the Filter panel's, an artist's) leave of your songs, hidden with the toolbar while the sites'
    results show: "Your songs here: wanted", and Show all of yours. */
 .filtered { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; color: var(--muted);
   font-size: .85rem; }

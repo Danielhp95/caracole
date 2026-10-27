@@ -140,7 +140,7 @@ Rules a change there keeps (the Invariants below are the others):
   (`artistFilter`). A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`)
   is a plain link to `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a
   file, then writes its own address in its place (Back is the sheet). Your
-  songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
+  songs there keep to the Filter panel's filters and the artist's tag (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a
   songbook… for those alone. songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id;
   library.js knows a song gone by its removal done on the page, or by a view or a card of `/jobs.json` that names

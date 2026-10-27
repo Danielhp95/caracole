@@ -832,6 +832,8 @@ def test_the_instruments_filter_your_songs_in_the_results_never_the_sites(cfg, l
     [(artist, lines)] = browser.js(LINES)
     assert artist == "Eagles" and ["Hotel California", "yours"] in lines and ["Take It Easy", "ug"] in lines, lines
     assert "Desperado" not in [title for title, _ in lines], lines  # yours, with no harmonica tab
+    assert browser.js("document.querySelector('#results p.filtered > span').textContent") == (
+        "Your songs here: with a harmonica tab")  # the results' head says it, as the toolbar steps aside
 
 
 def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):

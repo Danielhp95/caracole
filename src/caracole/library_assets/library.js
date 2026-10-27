@@ -98,7 +98,6 @@
     // Not a song removed since the page loaded, which counts nowhere (counted, below), as found and wanted have it.
     review: (s) => Boolean(s.review) && s.status !== "ignored" && s.status !== "removed",
   };
-  const CHIP_TEXT = { found: "found songs", wanted: "wanted songs", review: "songs that need review" };
   const SORTS = ["artist", "title", "recent"];
   const LETTERS = { artist: "artistLetter", title: "titleLetter" };  // the A-Z strip's letter, by sort
   // A key is "A minor" or "C" (keys.py); where it came from, as keys.SOURCES says.
@@ -973,6 +972,11 @@
   };
   // A list of them as the address writes it: the known ones, in the panel's order, each once.
   const instList = (names) => INSTRUMENTS.filter((x) => names.indexOf(x) >= 0).join(",");
+  // Each as a tag names it, and as a sentence does ("with a harmonica tab or a score").
+  const INST_TAG = { sheet: "Chord sheet", guitar: "Guitar tab", ukulele: "Ukulele", harmonica: "Harmonica",
+    score: "Score" };
+  const INST_SAID = { sheet: "a chord sheet", guitar: "a guitar tab", ukulele: "ukulele chords",
+    harmonica: "a harmonica tab", score: "a score" };
   // A song's facts, under its line's chevron: the key in words and where it came from, the PDF's transposition, the
   // lyrics, when the song came, and its other artists.
   const factsOf = (s) => {
@@ -1253,6 +1257,26 @@
   // The key chosen in words: "A minor" (both), "a minor key" (the mode), "E major or minor" (the tonic).
   const keySaid = () => (state.mode && state.tonic ? keyNamed(Number(state.tonic), state.mode)
     : state.mode ? "a " + state.mode + " key" : tonicName(Number(state.tonic), "") + " major or minor");
+  // The filters the songs list keeps to, the search aside: the panel's and the artist's. Clear (the toolbar's), Clear
+  // all (the panel's) and an empty list's Show all let every one go; the search stays.
+  const filtered = () => filtersOn() > 0 || Boolean(state.artist);
+  const clearFilters = () => {
+    state.show = "all";
+    state.inst = "";
+    state.mode = "";
+    state.tonic = "";
+    state.artist = "";
+  };
+  // Them in words, for an empty list: "wanted songs of Eagles with a harmonica tab in B minor", "songs needing review".
+  const STATUS_SAID = { found: "found songs", wanted: "wanted songs" };
+  const filtersSaid = () => {
+    const words = [label(STATUS_SAID, state.show) || "songs"];
+    if (state.artist) words.push("of " + artistName(state.artist));
+    if (state.inst) words.push("with " + instsChosen().map((x) => INST_SAID[x]).join(" or "));
+    if (keyChosen()) words.push("in " + keySaid());
+    if (state.show === "review") words.push("needing review");
+    return words.join(" ");
+  };
   const filterCount = byId("filter-count");
   const filterLive = byId("filter-live");
   const showN = byId("show-n");
@@ -1407,9 +1431,7 @@
     sort.value = state.sort;
     if (Boolean(server) && state.all) closePanel(false);  // the sites' results take the list's place, its tools too
     clear.hidden = !state.q;
-    artistChip.hidden = !state.artist;
-    artistChip.textContent = state.artist ? artistName(state.artist) + " ×" : "";
-    artistChip.setAttribute("aria-label", state.artist ? "Show every artist, not only " + artistName(state.artist) : "");
+    drawTags();
     drawProg();
     // Searching the sites, served: the results take the list's place, its tools with it, until Escape.
     const searchingAll = Boolean(server) && state.all;
@@ -1482,43 +1504,18 @@
       hint.appendChild(el("code", null, "caracole add ARTIST TITLE"));
       hint.appendChild(document.createTextNode("; the next run lists the song here."));
       list.appendChild(hint);
-    } else if (!shown.length && matching.length) {
-      // The words match songs that the status filter hides: offer them.
-      list.appendChild(el("p", "empty", "No " + CHIP_TEXT[state.show] + " match “" + state.q + "”."));
-      const n = matching.length;
-      const all = el("button", "btn", "Show all " + n + " match" + (n === 1 ? "" : "es"));
+    } else if (!shown.length && filtered() && (loose(fits) || !state.q)) {
+      // The filters hide what the search finds (or every song): say which, every one, and offer them all.
+      list.appendChild(el("p", "empty", "No " + filtersSaid() + (state.q ? " match “" + state.q + "”." : ".")));
+      const n = loose(fits);
+      const all = el("button", "btn", state.q ? "Show all " + n + " match" + (n === 1 ? "" : "es") : "Show all");
       all.type = "button";
       all.addEventListener("click", () => {
-        state.show = "all";
+        clearFilters();
         render();
         save();
       });
       list.appendChild(all);
-    } else if (!shown.length && state.artist) {
-      // The artist filter hides what the search finds: say so, and offer every artist.
-      const who = artistName(state.artist);
-      list.appendChild(el("p", "empty", state.q ? "No songs of " + who + " match “" + state.q + "”."
-        : "No songs of " + who + " here."));
-      const every = el("button", "btn", "Look in every artist's songs");
-      every.type = "button";
-      every.addEventListener("click", () => {
-        state.artist = "";
-        render();
-        save();
-      });
-      list.appendChild(every);
-    } else if (!shown.length && keyChosen()) {
-      // The key filter hides them: offer every key.
-      list.appendChild(el("p", "empty", "No songs in " + keySaid() + (state.q ? " match “" + state.q + "”." : ".")));
-      const any = el("button", "btn", "Any key");
-      any.type = "button";
-      any.addEventListener("click", () => {
-        state.mode = "";
-        state.tonic = "";
-        render();
-        save();
-      });
-      list.appendChild(any);
     } else if (!shown.length && state.prog) {
       // The progression hides them: the line above says which, with Show all.
       list.appendChild(el("p", "empty", state.q ? "No songs with " + progNumerals(state.prog) + " match “" + state.q + "”."
@@ -1539,6 +1536,67 @@
     tell();
     drawResults(query, answerInList);
   };
+
+  // How many songs the search and the progression find, the filters aside: an empty list's Show all brings them.
+  const loose = (fits) => order.filter((i) => counted(songs[i]) && (!state.prog || playsProg(songs[i], state.prog)) &&
+    fits(i)).length;
+  // The filters on, as tags before Filter: the status, each instrument (its glyph), the key, the artist (#artist,
+  // body.html's), each a button that lets it go, then Clear. Drawn again only when they change.
+  const tags = byId("tags");
+  const clearTags = byId("clear-filters");
+  const tag = (text, drop, glyphName) => {
+    const b = el("button", "tag");
+    b.type = "button";
+    b.dataset.filter = text;
+    if (glyphName) b.appendChild(glyphFor(glyphName));
+    b.append(el("span", null, text), cross());
+    b.setAttribute("aria-label", "Remove the filter: " + text);
+    b.addEventListener("click", () => letGo(b, drop));
+    return b;
+  };
+  const cross = () => {
+    const x = el("span", "x");
+    x.appendChild(glyphFor("close"));
+    return x;
+  };
+  // A tag pressed: its filter goes, and the focus to the tag that takes its place, else Clear's, else Filter.
+  const letGo = (pressed, drop) => {
+    const shown = () => Array.from(tags.querySelectorAll(".tag")).filter((t) => !t.hidden);
+    const at = shown().indexOf(pressed);
+    drop();
+    render();
+    save();
+    const left = shown();
+    (left[Math.min(at, left.length - 1)] || filterButton).focus({ preventScroll: true });
+  };
+  let tagsDrawn = "";
+  const drawTags = () => {
+    const on = [];
+    if (state.show !== "all") on.push([state.show === "review" ? "Needs review" : label(STATUS_TEXT, state.show),
+      () => { state.show = "all"; }]);
+    for (const x of instsChosen()) on.push([INST_TAG[x], () => { state.inst = instList(instsChosen().filter((y) => y !== x)); }, x]);
+    if (keyChosen()) on.push([state.mode && state.tonic ? keyNamed(Number(state.tonic), state.mode)
+      : state.mode ? (state.mode === "major" ? "Major" : "Minor") : tonicName(Number(state.tonic), ""),
+    () => { state.mode = ""; state.tonic = ""; }]);
+    const drawn = JSON.stringify([on.map((t) => t[0]), state.artist]);
+    if (drawn === tagsDrawn) return;
+    tagsDrawn = drawn;
+    for (const old of tags.querySelectorAll(".tag[data-filter]")) old.remove();
+    for (const [text, drop, glyphName] of on) artistChip.before(tag(text, drop, glyphName));
+    const who = artistName(state.artist);
+    artistChip.hidden = !state.artist;
+    artistChip.replaceChildren(...(state.artist ? [el("span", null, "by " + who), cross()] : []));
+    artistChip.setAttribute("aria-label", state.artist ? "Remove the filter: by " + who : "");
+    artistChip.title = state.artist ? "Show every artist, not only " + who : "";
+    clearTags.hidden = !filtered();
+    tags.hidden = !filtered();
+  };
+  clearTags.addEventListener("click", () => {
+    clearFilters();
+    render();
+    save();
+    filterButton.focus({ preventScroll: true });
+  });
 
   let frame = 0;
   const update = () => {
@@ -1608,11 +1666,7 @@
       render();
     }
   });
-  artistChip.addEventListener("click", () => {
-    state.artist = "";
-    render();
-    save();
-  });
+  artistChip.addEventListener("click", () => letGo(artistChip, () => { state.artist = ""; }));
   setProg = (key) => {
     state.prog = key;
     setQuery("");
@@ -1728,10 +1782,7 @@
   filterButton.addEventListener("click", () => (panel.open ? closePanel() : openPanel()));
   showN.addEventListener("click", () => closePanel());
   byId("clear-all").addEventListener("click", () => {
-    state.show = "all";
-    state.inst = "";
-    state.mode = "";
-    state.tonic = "";
+    clearFilters();
     render();
     save();
   });
@@ -1748,12 +1799,13 @@
   }, true);
   // A click outside the popover closes it; on the sheet, a tap on the page dimmed behind it.
   document.addEventListener("click", (e) => {
-    if (!panel.open || !(e.target instanceof Node) || !e.target.isConnected) return;
+    if (!panel.open) return;
+    const path = e.composedPath();  // as the click found it: what it pressed may be drawn again since
     if (panel.matches(":modal")) {
       const box = panel.getBoundingClientRect();
       const outside = e.clientY < box.top || e.clientY > box.bottom || e.clientX < box.left || e.clientX > box.right;
       if (e.target === panel && outside) closePanel();
-    } else if (!panel.contains(e.target) && !filterButton.contains(e.target)) {
+    } else if (path.indexOf(panel) < 0 && path.indexOf(filterButton) < 0) {
       closePanel();
     }
   });
@@ -2125,32 +2177,30 @@
     });
   };
 
-  // Of your songs, those the status buttons, the Key menu and an artist's chip show, in the list as in the results
-  // (the sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which
-  // hides the buttons: "Your songs here: wanted · by Soda Stereo · in A minor", or nothing when they show every song.
+  // Of your songs, those the filters show (the Filter panel's and the artist's), in the list as in the results (the
+  // sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which hides
+  // the toolbar: "Your songs here: wanted · by Soda Stereo · with a harmonica tab · in A minor", or nothing when they
+  // show every song.
   const kept = (i) => (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
     keyFits(i) && (!state.prog || playsProg(songs[i], state.prog)) && instFits(i) && SHOWS[state.show](songs[i]);
   const SHOW_WORD = { found: "found", wanted: "wanted", review: "needing review" };
   const keptSaid = () => {
     const parts = [label(SHOW_WORD, state.show), state.artist ? "by " + artistName(state.artist) : "",
+      state.inst ? "with " + instsChosen().map((x) => INST_SAID[x]).join(" or ") : "",
       keyChosen() ? "in " + keySaid() : "",
       state.prog ? "with " + progNumerals(state.prog) : ""].filter(Boolean);
     return parts.length ? "Your songs here: " + parts.join(" · ") : "";
   };
-  // Show all of yours: every status, key, artist and progression, here and in the list; the focus to the box, as the
-  // button goes with its note.
+  // Show all of yours: every status, instrument, key, artist and progression, here and in the list; the focus to the
+  // box, as the button goes with its note.
   const keptNote = el("p", "filtered");
   keptNote.append(el("span"), button("Show all of yours", "small", () => {
-    state.show = "all";
-    state.inst = "";
-    state.artist = "";
-    state.mode = "";
-    state.tonic = "";
+    clearFilters();
     state.prog = "";
     render();
     save();
     input.focus();
-  }, "Show all of yours: every status, key, artist and progression"));
+  }, "Show all of yours: every status, instrument, key, artist and progression"));
   keptNote.hidden = true;
   // A progression typed or named (/api/search's ``progression``: "vi IV I V", "andalusian"): how many of your songs
   // play it, and Show them, the list of those songs alone (#prog=). The first few are among the results already.

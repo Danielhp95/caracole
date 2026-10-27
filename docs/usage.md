@@ -1893,7 +1893,10 @@ the address remembers which (`#tab=songbooks`). Its header is short, so that on
 a phone the first song starts well within the first screen: the library's
 numbers beside its title (served, the Requests link on the line above), the
 tabs, the search box, then the toolbar: **Filter**, **Sort** and, set apart
-after a divider, **Select** (see below), at the right, one row on a phone too.
+after a divider, **Select** (see below), at the right, one row on a phone too;
+before them, the filters on, each a tag ("Wanted ×", "Harmonica ×", "A minor
+×", "by Queen ×") that lets it go, then **Clear**, which lets them all go, never
+the search (on a phone the tags go under the buttons).
 The search box stays at the top as the page scrolls under it, with an edge to
 show it.
 
@@ -1962,7 +1965,7 @@ line opens, which is the sheet. A sheet from Ultimate Guitar's Ukulele Chords
 
 An artist's name, over their songs and marked with a funnel, shows only that
 artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
-chip off. On the page `caracole serve` serves, the name searches for the artist
+tag ("by Queen ×") off. On the page `caracole serve` serves, the name searches for the artist
 instead (see below), and the funnel is a button of its own beside it ("Only
 Queen's songs"), which shows their songs alone as the name does from the
 folder. Sorted by title, or by when the songs were added, the lines stand
@@ -2038,7 +2041,9 @@ address keeps an exact key as before (`#key=A%20minor`), a mode alone as
 `#mode=minor` and a tonic alone as `#tonic=E`.
 **Clear all** lets them all go, and the panel says how many songs show
 ("4 songs"). Filter says how many of its filters are on (Filter 1), in the
-accent. **Sort** sorts by artist, by title or by when songs were added.
+accent. When the filters leave no song, the list says which ("No wanted songs
+of Eagles with a harmonica tab in B minor match “hotel”."), with Show all
+(Show all 1 match), which lets them all go. **Sort** sorts by artist, by title or by when songs were added.
 Sorted by artist or title, with more than 40 songs shown, a row of letters
 jumps to the first artist under each (by title, the first song). A line under the box says what typing and Enter do.
 On the file on disk, which can ask nothing of anyone, **Enter** searches the
