@@ -839,18 +839,36 @@ def test_the_estimate_of_a_lines_height_is_chordpros(kinds_drawn, pdf_fonts, kin
     assert estimate == pytest.approx(top - bottom - shape.lyrics, abs=0.01)
 
 
+def _played_on(inst: str, chords: list[str]) -> str:
+    """The song config of the instrument ``inst`` and a {define} of each of ``chords`` there, as a version's PDF
+    text starts (pdf_text.py)."""
+    from caracole.pdf_text import instrument_config
+    from caracole.viewer.instruments import instrument
+
+    on = instrument(inst)
+    shape = "keys 0 4 7" if on.kind == "keys" else "base-fret 1 frets 0 0 0 3 fingers 0 0 0 3"
+    return "\n".join([*instrument_config(on), *(f"{{define: {c} {shape}}}" for c in chords)]) + "\n"
+
+
+_NINE = ["C", "D", "E", "F", "G", "A", "B", "Am", "Dm"]
+
+
 @pytest.mark.chordpro
 @real_chordpro
-@pytest.mark.parametrize(("chords", "header"), [
-    (["C", "G"], ""),
-    (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], ""),
-    (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], "{diagrams: off}\n"),  # a numerals chart
-], ids=["a row of diagrams", "two rows", "no diagrams"])
-def test_the_estimate_of_the_first_pages_column_is_chordpros(tmp_path, pdf_fonts, chords, header):
+@pytest.mark.parametrize(("chords", "header", "config"), [
+    (["C", "G"], "", ""),
+    (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], "", ""),
+    (["C", "D", "E", "F", "G", "A", "B", "Am", "Dm", "Em"], "{diagrams: off}\n", ""),  # a numerals chart
+    (_NINE, "", _played_on("ukulele", _NINE)),  # four strings: one row, where a guitar's nine take two
+    (_NINE[:6], "", _played_on("piano", _NINE[:6])),  # keyboards: two rows of five, then one
+    (_NINE, "", _played_on("piano", [])),  # chordpro works out any chord's keys
+], ids=["a row of diagrams", "two rows", "no diagrams", "a ukulele's row", "a piano's two rows",
+        "a piano's chords undefined"])
+def test_the_estimate_of_the_first_pages_column_is_chordpros(tmp_path, pdf_fonts, chords, header, config):
     from caracole.pdf_text import column_height, layout, line_heights
 
     lines = [f"[{chords[i % len(chords)]}]Line {i:02d}" for i in range(60)]
-    text = "{title: Estimate}\n" + header + "{columns: 2}\n" + "\n".join(lines) + "\n"
+    text = config + "{title: Estimate}\n" + header + "{columns: 2}\n" + "\n".join(lines) + "\n"
     shape = layout(pdf_fonts)
     room, held = column_height(text.splitlines(), shape), 0
     for height in line_heights(lines, shape):
@@ -862,11 +880,11 @@ def test_the_estimate_of_the_first_pages_column_is_chordpros(tmp_path, pdf_fonts
         f"Line {i:02d}" for i in range(held)]
 
 
-def level_song(lyric: str = "Made up words to sing") -> str:
+def level_song(lyric: str = "Made up words to sing", counts: tuple[int, ...] = (4, 4, 4, 8, 5)) -> str:
     """宋冬野's 斑马斑马 in shape (synthetic words): chordpro filled the first column and left one line
-    alone in the second."""
+    alone in the second. ``counts``: each part's lines."""
     out = ["{title: Level}", "{artist: The Placeholders}"]
-    for n, count in enumerate([4, 4, 4, 8, 5], 1):
+    for n, count in enumerate(counts, 1):
         out += ["", f"{{comment: Part {n}}}"]
         out += [f"[C]{lyric} [D]{n}.{i} [Bm]and [Em]more" for i in range(count)]
     return "\n".join(out) + "\n"
@@ -917,3 +935,83 @@ def test_a_numbered_songs_two_columns_each_hold_a_fair_share_its_legend_too(tmp_
     assert len(pages) == 1 and len(left) + len(right) == 25
     assert min(len(left), len(right)) >= 10, (left, right)
     assert "THE NUMERALS, IN C MAJOR" in [s.strip() for x, y, s in pages[0]]
+
+
+# --- on another instrument (pdf_text.py, viewer/version.py) --------------------------------------------------
+
+def instrument_text(inst: str, cho: str, fonts=None) -> str:
+    """The PDF text of the sheet ``cho`` on ``inst``, as an export makes it (render._version_text)."""
+    from caracole.render import _version_text
+    from caracole.viewer.page import viewer_key
+    from caracole.viewer.sheet import parse_sheet
+    from caracole.viewer.version import Version
+
+    return _version_text(cho, Version(inst=inst), viewer_key(cho), parse_sheet(cho).capo, fonts=fonts)
+
+
+def chordpro_says(tmp_path: Path, text: str) -> tuple[Path, str]:
+    """The PDF chordpro makes of ``text`` in caracole's style, and what it says on stderr."""
+    cho, pdf = tmp_path / "song.cho", tmp_path / "song.pdf"
+    cho.write_text(text, encoding="utf-8")
+    run = subprocess.run([CHORDPRO, "--nodefaultconfigs", f"--config={STYLE_FILE}", f"--output={pdf}", str(cho)],
+                         capture_output=True, encoding="utf-8", timeout=120)
+    assert run.returncode == 0, run.stderr
+    return pdf, run.stderr
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@pytest.mark.parametrize("inst", ["ukulele", "ukulele-low-g", "baritone", "piano", "harmonica", "flute", "recorder"])
+def test_render_real_draws_each_instruments_pdf_with_every_chord_it_defines(tmp_path, inst):
+    # Every {define} fits the instrument's strings or keys: chordpro says nothing of a chord it can't draw.
+    cho = (FIXTURES / "ug_sheet.cho").read_text(encoding="utf-8")  # G shapes, capo 2: sounds A
+    pdf, said = chordpro_says(tmp_path, instrument_text(inst, cho))
+    if inst in ("harmonica", "flute", "recorder"):  # no diagrams: a slash chord is only a name chordpro lacks
+        assert {line.rsplit(", ", 1)[-1] for line in said.splitlines() if not line.startswith("\t")} == {
+            "Unknown chord: A/C#"}, said
+    else:
+        assert said == ""
+    text = pdf_text(pdf)
+    assert "Synthetic Test Song" in text and "Tiny test" in text
+    if inst == "harmonica":
+        assert "Harmonica: A harp (1st position) · D harp (2nd)" in text and "A: blow 1–3" in text
+    elif inst in ("flute", "recorder"):
+        assert "A major scale: A B C# D E F# G# A" in text and f"The Placeholders · {inst.title()} · Key A" in text
+    elif inst == "piano":
+        assert "The Placeholders · Piano · Key A" in text and "A/C#" in text
+    else:
+        assert "G shapes · capo 2 · sounds A" in text and "G/B" in text
+
+
+@pytest.mark.chordpro
+@real_chordpro
+def test_render_real_draws_a_ukuleles_four_strings_where_a_six_string_define_would_be_refused(tmp_path):
+    # The song config sets chordpro's tuning: a guitar's shape is then the one refused.
+    from caracole.pdf_text import instrument_config
+    from caracole.viewer.instruments import UKULELE
+
+    head = "\n".join(instrument_config(UKULELE)) + "\n{title: T}\n"
+    _, said = chordpro_says(tmp_path, head + "{define: C base-fret 1 frets 0 0 0 3 fingers 0 0 0 3}\n[C]la\n")
+    assert said == ""
+    _, said = chordpro_says(tmp_path, head + "{define: C base-fret 1 frets x 3 2 0 1 0 fingers 0 3 2 0 1 0}\n[C]la\n")
+    assert "Invalid chord definition" in said and 'No chord diagram defined for "C"' in said
+
+
+@pytest.mark.chordpro
+@real_chordpro
+@pytest.mark.parametrize("inst", ["ukulele", "piano", "harmonica"])
+def test_a_mid_length_songs_two_columns_each_hold_a_fair_share_on_another_instrument(tmp_path, pdf_fonts, inst):
+    from caracole.pdf_text import layout
+
+    # Its diagrams' rows (a keyboard's are lower, the harmonica draws none but starts with its holes) are its own:
+    # two lines more than the guitar's song, and the columns end level
+    printed = instrument_text(inst, level_song(counts=(4, 4, 4, 8, 7)), fonts=pdf_fonts)
+    pages = drawn_at(tmp_path, printed, fonts=pdf_fonts)
+    left, right = columns_of(pages[0], layout(pdf_fonts), "Made up words")
+    assert len(pages) == 1 and len(left) + len(right) == 27
+    assert min(len(left), len(right)) >= 10, (left, right)
+    if inst == "piano":  # the guitar's song: the piano's lower row of keyboards leaves room for it in one column
+        printed = instrument_text(inst, level_song(), fonts=pdf_fonts)
+        assert "{column_break}" not in printed
+        left, right = columns_of(drawn_at(tmp_path, printed, fonts=pdf_fonts)[0], layout(pdf_fonts), "Made up")
+        assert (len(left), len(right)) == (25, 0)

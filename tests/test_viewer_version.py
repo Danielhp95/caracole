@@ -287,7 +287,10 @@ def swapped(cho: str, song_key: str | None) -> Version:
 
 
 VERSIONS = (Version(t=3), Version(t=-3, capo=0), Version(mode="dorian"), Version(t=-3, mode="mixolydian", capo=3),
-            Version(t=3, mode="phrygian", capo=0))
+            Version(t=3, mode="phrygian", capo=0),
+            # on an instrument: the piano's chords named as they sound, the capo folded in; the ukulele's capo kept
+            Version(t=3, inst="piano"), Version(mode="dorian", capo=3, inst="piano"),
+            Version(t=-3, capo=0, inst="ukulele"))
 
 
 @in_chromium
@@ -475,3 +478,118 @@ def test_an_entry_round_trips_with_any_chords_name():
     # a key in a mode a tab names, as it names it
     assert version.KeyVersion(Key(10, "dorian")).query() == "key=Bb dorian"
     assert version.key_version("key=Bb dorian") == version.KeyVersion(Key(10, "dorian"))
+
+
+# --- on another instrument ---------------------------------------------------------------------------
+
+def test_a_version_names_its_instrument_in_its_address_as_the_viewer_does():
+    v = Version(t=2, capo=0, at={1: 1}, inst="ukulele")
+    assert version_query(v) == "t=2&capo=0&at=1.1&inst=ukulele"  # last, as the viewer's save() keeps it
+    assert version_from_query(version_query(v)) == v and hash(version_from_query(version_query(v))) == hash(v)
+    assert version_from_query("inst=piano") == Version(inst="piano")
+    # the harmonica and the winds, which a PDF prints before the viewer draws them
+    assert {version_from_query(f"inst={i}").inst for i in ("harmonica", "flute", "recorder")} == {
+        "harmonica", "flute", "recorder"}
+    # the guitar is none, and so is an instrument caracole hasn't got
+    assert version_from_query("inst=guitar") == Version() and version_from_query("inst=banjo") == Version()
+    assert Version(inst="piano") != Version()
+    assert version.instrument_ids()[0] == "guitar" and "piano" in version.instrument_ids()
+
+
+def test_an_instrument_with_no_capo_is_named_by_the_key_it_sounds_in():
+    g_capo_2 = Key(7, "ionian")
+    assert version_label(Version(inst="piano"), g_capo_2, 2) == "A Major, piano"
+    # a capo moves the shapes, never the sound (F shapes, capo 4, sound A): the harmonica plays A all the same
+    assert version_label(Version(capo=4), g_capo_2, 2) == "F Major, capo 4"
+    assert version_label(Version(capo=4, inst="harmonica"), g_capo_2, 2) == "A Major, harmonica"
+    assert version_label(Version(inst="ukulele"), g_capo_2, 2) == "G Major, capo 2, ukulele"
+    assert version_label(Version(inst="ukulele-low-g"), g_capo_2, 2) == "G Major, capo 2, low-G ukulele"
+    assert version.played_label(Version(capo=0, inst="baritone"), g_capo_2, 2) == "A Major, baritone ukulele"
+    assert version.played_label(Version(inst="flute"), g_capo_2, 2) == "A Major, flute"
+    # a sheet with no key: how far it sounds from the shapes as written
+    assert version_label(Version(inst="piano"), None, 3) == "Transposed +3, piano"
+    assert version_label(Version(t=-3, capo=0, inst="recorder"), None, 3) == "As written, recorder"
+    # its key line: the key it sounds in, no capo; the guitar keeps its own
+    assert version.played_key(Version(inst="piano"), g_capo_2, 2) == (Key(9, "ionian"), 0)
+    assert version.played_key(Version(inst="ukulele"), g_capo_2, 2) == (g_capo_2, 2)
+
+
+def test_a_ukuleles_version_defines_its_four_strings_shapes():
+    from caracole.viewer.instruments import BARITONE, UKULELE, chord_shapes
+
+    for inst, at in ((UKULELE, {}), (BARITONE, {}), (UKULELE, {0: 1})):
+        out = applied(UG, Version(at=at, inst=inst.id))
+        assert played(out) == played(applied(UG, Version())), inst  # the same chords: a ukulele takes the capo
+        defines = directives(out, "define")
+        assert len(defines) == len(set(played(out)))
+        for name in set(played(out)):
+            shapes = chord_shapes(inst, parse_chord(name), 0, shapes_of(parse_sheet(UG)))
+            n = at.get(parse_sheet(UG).chords.index(name), 0) if name in parse_sheet(UG).chords else 0
+            assert define_of(name, shapes[n]) in defines, (inst, name)
+            assert len(define_of(name, shapes[n]).split("frets ")[1].split(" fingers")[0].split()) == 4
+    assert directives(applied(UG, Version(inst="ukulele")), "capo") == ["2"]
+
+
+def test_a_pianos_version_names_the_chords_as_they_sound_and_defines_their_keys():
+    from caracole.viewer.instruments import PIANO, chord_shapes
+
+    out = applied(UG, Version(inst="piano"))  # G shapes, capo 2: the piano plays A
+    assert played(out)[:4] == ["A", "E", "F#m", "D"] and "G/B" not in played(out) and "A/C#" in played(out)
+    assert directives(out, "key") == ["A"] and directives(out, "capo") == []
+    defines = directives(out, "define")
+    assert len(defines) == len(set(played(out)))
+    first = chord_shapes(PIANO, parse_chord("A/C#"), 0)[0]  # [bass, *right hand], MIDI notes
+    assert f"A/C# keys {' '.join(str(n - (first[0] - 4)) for n in first)}" in defines  # C# 4 above A
+    assert "A keys 0 12 16 19" in defines  # A2, then A3 C#4 E4
+    # a chosen inversion is its define
+    a = parse_sheet(UG).chords.index("G")
+    assert "A keys 0 16 19 24" in directives(applied(UG, Version(at={a: 1}, inst="piano")), "define")
+    assert version.define_keys([48, 60, 64, 67], 0) == [0, 12, 16, 19]
+    assert version.define_keys([52, 60, 64, 67], 0) == [4, 12, 16, 19]  # C/E: E lowest, four above C
+
+
+def test_the_harmonica_and_the_winds_define_no_shapes():
+    for inst in ("harmonica", "flute", "recorder"):
+        out = applied(UG, Version(inst=inst))
+        assert directives(out, "define") == [] and directives(out, "capo") == [], inst
+        assert played(out)[:4] == ["A", "E", "F#m", "D"], inst
+
+
+def test_a_setting_plays_the_song_on_its_instrument():
+    shapes, capo = viewer_key(UG), 2  # G shapes, capo 2: sounds A
+    own = Version(t=1, at={0: 1})
+    on = version.in_setting
+    # the instrument alone: the own version on it, its shapes chosen gone (they were the guitar's)
+    assert on(own, version.Setting(instrument="ukulele"), shapes, capo) == Version(t=1, inst="ukulele")
+    # on an instrument with no capo the key is the key it sounds in: placed with no capo
+    piano = on(own, version.Setting(key="C", instrument="piano"), shapes, capo)
+    assert piano.capo == 0 and version.played_key(piano, shapes, capo) == (Key(0, "ionian"), 0)
+    # a setting on the guitar takes the song off its own version's instrument
+    assert on(Version(inst="piano"), version.Setting(instrument="guitar"), shapes, capo) == Version()
+    assert on(Version(inst="piano"), version.Setting(key="G"), shapes, capo).inst == "piano"
+    assert on(Version(inst="piano"), version.Setting(key="G"), None, None) == Version(inst="piano")
+    assert version.setting_problem(instrument="banjo").startswith("instrument must be one of guitar, ukulele")
+    assert version.setting_problem(instrument="harmonica") is None
+
+
+def test_my_version_keeps_its_instrument_and_the_capo_the_guitar_plays_at():
+    from caracole.viewer.instruments import UKULELE, chord_shapes
+    from caracole.viewer.voicings import frets_from_nut
+
+    assert entry_of(Version(t=-2, inst="piano"), IN_A_MINOR) == "key=Gm&capo=0&inst=piano"
+    assert entry_of(Version(inst="piano"), IN_D_MINOR_CAPO_3) == "key=Dm&capo=3&inst=piano"  # the guitar's capo
+    assert kept_on("key=Dm&capo=3&inst=piano", IN_D_MINOR_CAPO_3) == Version(capo=3, inst="piano")
+    assert version.key_version("key=Dm&capo=3&inst=piano").label() == "D Minor, piano"
+    assert version.key_version("key=Dm&capo=3&inst=ukulele").label() == "D Minor, capo 3, ukulele"
+    # a ukulele's chosen shape is kept by its four strings' frets, and found again on a sheet in another key
+    am = parse_sheet(IN_A_MINOR).chords.index("Am")
+    second = chord_shapes(UKULELE, parse_chord("Gm"), 0)[1]
+    entry = entry_of(Version(t=-2, at={am: 1}, inst="ukulele"), IN_A_MINOR)
+    assert entry == f"key=Gm&capo=0&at=Gm.{'-'.join(map(str, frets_from_nut(second)))}&inst=ukulele"
+    assert kept_on(entry, IN_D_MINOR_CAPO_3) == Version(t=2, capo=0, at={0: 1}, inst="ukulele")
+    assert kept_on(entry, NO_KEY) == Version(inst="ukulele")
+    # a shape of six strings is none on a ukulele, and none is kept on the piano
+    assert version.key_version("key=G&at=G.3-2-0-0-0-3&inst=ukulele").at == ()
+    assert version.key_version("key=G&at=G.0-2-3-2&inst=piano").at == ()
+    with pytest.raises(ValueError, match="instrument must be one of"):
+        version.key_version("key=G&inst=banjo")

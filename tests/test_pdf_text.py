@@ -428,3 +428,119 @@ def test_a_chord_wraps_by_the_name_chordpro_displays():
     shape = layout()
     assert line_heights([line], shape) == [shape.chords + shape.lyrics]
     assert line_heights([define, line], shape) == [0.0, 2 * (shape.chords + shape.lyrics)]
+
+
+# --- on another instrument ---------------------------------------------------------------------------
+
+def on(inst: str | None, cho: str = UG_CHO, *, diagrams: bool = True, **v) -> str:
+    """The PDF text of ``cho`` on ``inst`` (a version's: render._version_text's)."""
+    from caracole.viewer.version import Version, apply_version, played_key, played_on
+
+    version = Version(inst=inst, **v)
+    shapes, capo = viewer_key(cho), parse_sheet(cho).capo
+    key, played_capo = played_key(version, shapes, capo)
+    return pdf_text(apply_version(cho, version, key=shapes, capo_sheet=capo), key=key, capo=played_capo,
+                    defined=True, instrument=played_on(version), diagrams=diagrams)
+
+
+def define_frets(text: str) -> dict[str, list[str]]:
+    return {m.group(1): m.group(2).split() for m in re.finditer(r"\{define: (\S+) base-fret \d+ frets ([^f]+?) fingers",
+                                                                text)}
+
+
+def test_a_ukuleles_pdf_names_its_tuning_and_draws_four_strings():
+    from caracole.pdf_text import song_config
+
+    text = on("ukulele")
+    lines = text.splitlines()
+    assert lines[0] == "##config: json"
+    assert song_config(lines) == {"instrument": {"type": "ukulele", "description": "Ukulele"},
+                                  "tuning": ["G4", "C4", "E4", "A4"]}
+    assert "{subtitle: The Placeholders · Ukulele · G shapes · capo 2 · sounds A}" in lines
+    frets = define_frets(text)
+    assert set(frets) == {"G", "D", "Em", "C", "G/B", "Am", "F"} and {len(f) for f in frets.values()} == {4}
+    assert "{diagrams: off}" not in lines
+    assert song_config(on("ukulele-low-g").splitlines())["tuning"] == ["G3", "C4", "E4", "A4"]
+    assert song_config(on("baritone").splitlines())["tuning"] == ["D3", "G3", "B3", "E4"]
+    # the guitar's text starts as it always did
+    assert not on(None).startswith("##") and "Guitar" not in on(None)
+
+
+def test_a_pianos_pdf_draws_keyboards_of_each_chords_keys_in_the_key_it_sounds_in():
+    from caracole.pdf_text import KEYBOARD, song_config
+
+    lines = on("piano").splitlines()
+    assert song_config(lines) == {"instrument": {"type": "keyboard", "description": "Piano"},
+                                  "pdf": {"kbdiagrams": KEYBOARD}}
+    assert "{subtitle: The Placeholders · Piano · Key A}" in lines
+    keys = [line for line in lines if line.startswith("{define:")]
+    assert "{define: A keys 0 12 16 19}" in keys and len(keys) == 7 and all(" keys " in k for k in keys)
+    assert not define_frets("\n".join(lines))
+
+
+def test_a_harmonicas_pdf_starts_with_its_harps_and_each_chords_holes():
+    from caracole.viewer.theory import spelling as spelled
+
+    spelling = spelled(Key(7, "aeolian"))
+    lines = on("harmonica").splitlines()
+    assert "{diagrams: off}" in lines and not any(line.startswith(("##", "{define")) for line in lines)
+    assert "{subtitle: The Placeholders · Key A}" in lines  # its first line names the instrument
+    start = lines.index("Harmonica: A harp (1st position) · D harp (2nd)")
+    assert lines[start + 1:start + 10] == ["{comment: ON THE A HARP}", "A: blow 1–3", "E: draw 2–4",
+                                           "F#m: not on this harp", "D: not on this harp", "A/C#: blow 2–4",
+                                           "Bm: draw 4–6", "G: not on this harp", ""]
+    assert lines.index("{columns: 2}") < start < lines.index("{comment: INTRO}")
+    # harp.py's harps for the song as it sounds, and each chord's holes on the first, as the viewer shows them
+    from caracole.viewer import harp
+    from caracole.viewer.theory import parse_chord
+
+    g = "{title: T}\n{artist: A}\n{key: Em}\n{capo: 3}\n[Em]la [C]lo [D7]li [Bm]le\n"  # sounds G minor
+    chords = [parse_chord(c) for c in ("Gm", "Eb", "F7", "Dm")]
+    lines = on("harmonica", g).splitlines()
+    best = harp.choices(Key(7, "aeolian"), chords)[0]
+    assert lines[lines.index(harp.header_line(Key(7, "aeolian"), chords)) + 1:][:6] == [
+        f"{{comment: ON THE {best.name.upper()} HARP}}",
+        *(f"{c}: {harp.play(chord, best.harp).text(spelling)}" for c, chord in zip(("Gm", "Eb", "F7", "Dm"), chords,
+                                                                                    strict=True)), ""]
+
+
+def test_a_flutes_or_a_recorders_pdf_starts_with_the_keys_scale():
+    for inst, name in (("flute", "Flute"), ("recorder", "Recorder")):
+        lines = on(inst).splitlines()
+        assert "{diagrams: off}" in lines and f"{{subtitle: The Placeholders · {name} · Key A}}" in lines
+        assert "A major scale: A B C# D E F# G# A" in lines, inst
+    assert "D Dorian scale: D E F G A B C D" in on("flute", "{title: T}\n{artist: A}\n{key: Dm}\n[Dm]la [G]lo\n",
+                                                   mode="dorian")
+
+
+def test_a_fretted_instruments_shapes_not_drawn_are_written_as_frets():
+    from caracole.viewer.instruments import UKULELE, chord_shapes
+    from caracole.viewer.theory import parse_chord
+    from caracole.viewer.voicings import frets_from_nut
+
+    lines = on("ukulele", diagrams=False).splitlines()
+    assert "{diagrams: off}" in lines and not lines[0].startswith("##") and not define_frets("\n".join(lines))
+    shown = next(line for line in lines if line.startswith("Ukulele: "))
+    g = "".join("x" if f is None else str(f) for f in frets_from_nut(chord_shapes(UKULELE, parse_chord("G"), 0)[0]))
+    assert shown.startswith(f"Ukulele: G {g} · D ")
+    guitar = on(None, diagrams=False).splitlines()
+    assert next(line for line in guitar if line.startswith("Guitar: ")).startswith("Guitar: G 320003 · D xx0232")
+
+
+def test_the_rows_of_diagrams_are_the_instruments():
+    shape = layout()
+    page = shape.height - shape.top - shape.bottom
+    nine = ["C", "D", "E", "F", "G", "A", "B", "Am", "Dm"]
+    body = ["{columns: 2}", *(f"[{c}]la" for c in nine)]
+    guitar = column_height(["{title: T}", *body], shape)
+    assert guitar == page - 2 * shape.diagram_row and shape.per_row == 8
+    from caracole.pdf_text import instrument_config
+    from caracole.viewer.instruments import PIANO, UKULELE
+
+    uke = [*instrument_config(UKULELE), "{title: T}", *(f"{{define: {c} base-fret 1 frets 0 0 0 3}}" for c in nine)]
+    assert shape.strings_per_row(4) == 11 and column_height([*uke, *body], shape) == page - shape.diagram_row
+    # a ukulele draws the chords the text defines alone: chordpro's own are a guitar's
+    assert column_height([*uke[:3], *body], shape) == page
+    keys = [*instrument_config(PIANO), "{title: T}"]
+    assert shape.keyboard_per_row == 5 and column_height([*keys, *body], shape) == page - 2 * shape.keyboard_row
+    assert column_height([*keys, "{diagrams: off}", *body], shape) == page

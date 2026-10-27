@@ -6,8 +6,8 @@
     caracole songbook add NAME SONG...           songs at its end
     caracole songbook remove NAME SONG...        songs out of it
     caracole songbook move NAME SONG POSITION    a song to a place, 1 the first
-    caracole songbook set NAME SONG [--key K] [--mode M] [--capo N] | --clear
-                                                 where it plays a song: its key, mode and capo
+    caracole songbook set NAME SONG [--key K] [--mode M] [--capo N] [--instrument I] | --clear
+                                                 where it plays a song: its key, mode, capo and instrument
     caracole songbook rename NAME NEW            another name, and its files to its new folder
     caracole songbook delete NAME                the songbook, and the files caracole made of it
     caracole songbook render [NAME] [--force]    its files (every songbook's), when they need it
@@ -178,14 +178,19 @@ def register(app: typer.Typer) -> None:
                 key: str | None = typer.Option(None, "--key", help='The key it is played in here: "G", "F#", "Bb".'),
                 mode: str | None = typer.Option(None, "--mode", help="Its mode: ionian, dorian, ..., aeolian, locrian."),
                 capo: int | None = typer.Option(None, "--capo", min=0, max=11, help="The fret of its capo."),
+                instrument: str | None = typer.Option(
+                    None, "--instrument",
+                    help="The instrument it is played on: guitar, ukulele, ukulele-low-g, baritone, piano, harmonica, "
+                         "flute or recorder. Its PDF draws that instrument's chords, and its phone page opens there."),
                 clear: bool = typer.Option(False, "--clear", help="Take its setting off: the sheet's own.")) -> None:
-        """Set the key, mode or capo a song is played in within a songbook (the parts you give change; the
-        others stay), or --clear its setting. A key or a mode with no capo keeps the capo it plays at now."""
+        """Set the key, mode, capo or instrument a song is played in within a songbook (the parts you give change;
+        the others stay), or --clear its setting. A key or a mode with no capo keeps the capo it plays at now; on an
+        instrument with no capo (the piano, the harmonica, the winds) the key is the key it sounds in."""
         from caracole.songbook import Setting, check_setting, plays_in, set_song_setting, with_capo
 
-        given = key is not None or mode is not None or capo is not None
+        given = key is not None or mode is not None or capo is not None or instrument is not None
         if clear == given:
-            fail("Give --key, --mode or --capo to set, or --clear to take the setting off.", 2)
+            fail("Give --key, --mode, --capo or --instrument to set, or --clear to take the setting off.", 2)
         cfg = load_cfg(ctx)
         with exclusive(cfg, "songbook set", interactive=True), closing(open_db(cfg)) as conn:
             overrides = load_ovr(cfg)
@@ -196,7 +201,8 @@ def register(app: typer.Typer) -> None:
             if not clear:
                 given_setting = _do(lambda: check_setting(key[:1].upper() + key[1:] if key else old.key,
                                                           mode.lower() if mode else old.mode,
-                                                          old.capo if capo is None else capo))
+                                                          old.capo if capo is None else capo,
+                                                          instrument.lower() if instrument else old.instrument))
                 new = with_capo(_played(conn, cfg, overrides, b, entry, None), given_setting, overrides)
             _do(lambda: set_song_setting(_file(cfg), b.name, entry, new))
             played = _played(conn, cfg, overrides, b, entry, new)
@@ -340,10 +346,15 @@ def _say_found(texts: list[str], found: list[Found]) -> None:
 
 
 def _setting_line(setting) -> str:
-    """The setting as songbooks.toml holds it, in words: "key G, dorian, capo 2"; "no capo" for a capo of 0, a
-    setting's choice, as its menu names it (where it plays then says nothing of a capo: ``songbook.plays_in``)."""
+    """The setting as songbooks.toml holds it, in words: "key G, dorian, capo 2", "on the ukulele"; "no capo" for a
+    capo of 0, a setting's choice, as its menu names it (where it plays then says nothing of a capo:
+    ``songbook.plays_in``)."""
+    from caracole.viewer.version import instrument_of, instrument_words
+
     capo = "" if setting.capo is None else "no capo" if setting.capo == 0 else f"capo {setting.capo}"
-    parts = [p for p in (f"key {setting.key}" if setting.key else "", setting.mode or "", capo) if p]
+    played = instrument_of(setting.instrument)
+    on = f"on the {instrument_words(played)}" if played is not None else ""
+    parts = [p for p in (f"key {setting.key}" if setting.key else "", setting.mode or "", capo, on) if p]
     return ", ".join(parts) or "the sheet's own setting"
 
 

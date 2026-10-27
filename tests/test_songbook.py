@@ -415,6 +415,21 @@ def test_set_and_clear_keep_comments_and_plain_entries_plain(tmp_path):
         set_song_setting(path, "Campfire", "Muse - Hysteria", Setting("G"))
 
 
+def test_a_song_set_on_an_instrument_keeps_it_in_the_file(tmp_path):
+    path = write(tmp_path, HAND_WRITTEN)
+    set_song_setting(path, "Campfire", "Soda Stereo - De Música Ligera", Setting(instrument="ukulele"))
+    assert '{song = "Soda Stereo - De Música Ligera", instrument = "ukulele"}' in path.read_text(encoding="utf-8")
+    assert load_songbooks(path)[0].songs[0].setting == Setting(instrument="ukulele")
+    set_song_setting(path, "Campfire", "Soda Stereo - De Música Ligera", Setting("G", capo=0, instrument="piano"))
+    assert ('{song = "Soda Stereo - De Música Ligera", key = "G", capo = 0, instrument = "piano"}'
+            in path.read_text(encoding="utf-8"))
+    assert "# For the wedding in June" in path.read_text(encoding="utf-8")
+    set_song_setting(path, "Campfire", "Soda Stereo - De Música Ligera", None)
+    assert path.read_text(encoding="utf-8") == HAND_WRITTEN
+    with pytest.raises(SongbookError, match="instrument must be one of"):
+        set_song_setting(path, "Campfire", "Soda Stereo - De Música Ligera", Setting(instrument="banjo"))
+
+
 @pytest.mark.parametrize("fields,message", [
     ('key = "H"', "key must be a tonic"),
     ('key = "g"', "key must be a tonic"),
@@ -423,6 +438,8 @@ def test_set_and_clear_keep_comments_and_plain_entries_plain(tmp_path):
     ("capo = -1", "capo must be a fret"),
     ('capo = "2"', "capo must be a fret"),
     ("tempo = 3", "unknown key"),
+    ('instrument = "banjo"', "instrument must be one of guitar, ukulele"),
+    ("instrument = 1", "instrument must be one of"),
 ])
 def test_a_bad_setting_is_an_error_naming_the_line(tmp_path, fields, message):
     path = write(tmp_path, f'["Gig"]\nsongs = [{{ song = "Radiohead - Creep", {fields} }}]\n')

@@ -2,10 +2,16 @@
 
 The viewer (viewer.js) keeps where a song is played in its address: ``t``, the semitones it moved; ``mode``, one
 of ``theory.MODES``; ``capo``, the fret the capo is on; ``alt``, the chords played instead of others
-(``alt=<mode>.<chord>.<root>.<suffix>.<bass>,…``); and ``at``, the shape chosen for a chord
-(``at=<chord>.<shape>,…``), each chord by its index in the sheet (``Sheet.chords``). ``Version`` is that,
-``version_from_query`` reads it from an address as the viewer reads it, and ``version_query`` writes it as the
-viewer's ``save()`` does. ``version_label`` names it: "G Dorian, capo 0".
+(``alt=<mode>.<chord>.<root>.<suffix>.<bass>,…``); ``at``, the shape chosen for a chord
+(``at=<chord>.<shape>,…``), each chord by its index in the sheet (``Sheet.chords``); and ``inst``, the instrument
+it is played on (``inst=ukulele``; none for the guitar). ``Version`` is that, ``version_from_query`` reads it from
+an address as the viewer reads it, and ``version_query`` writes it as the viewer's ``save()`` does.
+``version_label`` names it: "G Dorian, capo 0", "A Major, piano".
+
+**The instruments** a version is played on are the viewer's (``instruments.INSTRUMENTS``); ``instrument_of``
+reads an id. On an instrument with no capo (the piano, the harmonica, the winds) the capo is
+folded in wherever the version is shown or printed (``for_instrument``): its key is the key it sounds in, its
+chords named as they sound; the version itself keeps its capo, which the guitar plays again.
 
 A ``Setting`` is where a song is played by the key of the shapes played, its mode and its capo, rather than by a
 move from its sheet: a songbook's setting for a song. ``in_setting`` makes it a version of a sheet, whatever key
@@ -17,10 +23,10 @@ reads one, and ``in_key`` plays it on any sheet, the song's or another in its pl
 
 ``apply_version`` makes a ChordPro sheet that version, as its viewer shows it, by the viewer's own rules, in
 Python: each chord named as viewer.js names it (``shift``, ``names``, ``nameOf``, from ``theory.spelling``,
-``theory.map_chord`` and a swap among ``theory.alternatives``), and given the shape it shows for it as a
-``{define}`` (``shapesOf``: the sheet's own shapes for that very chord, ``page.shapes_of``, else chords-db's), so a
-PDF of the text has the chords and the shapes the viewer showed (test_viewer_version.py compares the two in
-Chromium).
+``theory.map_chord`` and a swap among ``theory.alternatives``), and given the shape it shows for it on the
+instrument as a ``{define}`` (``shapesOf``, ``instruments.chord_shapes``: on the guitar the sheet's own shapes for
+that very chord, ``page.shapes_of``, else chords-db's; a ukulele's four strings; the piano's keys), so a PDF of the
+text has the chords and the shapes the viewer showed (test_viewer_version.py compares the two in Chromium).
 """
 
 from __future__ import annotations
@@ -50,8 +56,8 @@ from caracole.viewer.theory import (
     scale,
     spelling,
 )
-from caracole.viewer.instruments import GUITAR, Instrument, chord_shapes
-from caracole.viewer.voicings import TUNING, Position, frets_from_nut, parse_define
+from caracole.viewer.instruments import GUITAR, INSTRUMENTS, Instrument, chord_shapes
+from caracole.viewer.voicings import TUNING, frets_from_nut, parse_define
 
 Swap = tuple[int, str, int | None]  # a chord played instead: its root, suffix and bass, before any move
 
@@ -67,6 +73,8 @@ class Version:
     (by its index in the sheet, the shape's in the list the viewer shows, 0 its first); ``alt``, by mode, a
     chord played instead of one (by its index), as long as the viewer offers it in that mode.
 
+    ``inst``, the instrument it is played on (an id of ``instrument_of``'s), None for the guitar.
+
     ``at`` and ``alt`` are kept as read-only copies, so a version is a value, hashed by what it holds."""
 
     t: int = 0
@@ -74,6 +82,7 @@ class Version:
     capo: int | None = None
     at: Mapping[int, int] = field(default_factory=dict)
     alt: Mapping[str, Mapping[int, Swap]] = field(default_factory=dict)
+    inst: str | None = None
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "at", MappingProxyType(dict(self.at)))
@@ -83,7 +92,39 @@ class Version:
 
     def __hash__(self) -> int:
         return hash((self.t, self.mode, self.capo, frozenset(self.at.items()),
-                     frozenset((mode, frozenset(swaps.items())) for mode, swaps in self.alt.items())))
+                     frozenset((mode, frozenset(swaps.items())) for mode, swaps in self.alt.items()), self.inst))
+
+
+# --- the instruments ---------------------------------------------------------------------------
+
+# How a version's name says each instrument but the guitar ("A Major, piano"; version_label).
+_SAID = {"ukulele-low-g": "low-G ukulele"}
+
+
+def instrument_of(name: str | None) -> Instrument | None:
+    """The instrument an address or a setting names by its id (``inst=ukulele``), one of the viewer's
+    (``instruments.INSTRUMENTS``); None for a name of none."""
+    return next((inst for inst in INSTRUMENTS if inst.id == name), None)
+
+
+def instrument_ids() -> tuple[str, ...]:
+    """Every instrument's id ``instrument_of`` reads, in the viewer's menu's order, the guitar's first."""
+    return tuple(inst.id for inst in INSTRUMENTS)
+
+
+def played_on(v: Version) -> Instrument:
+    """The instrument the version is played on: the guitar for none."""
+    return instrument_of(v.inst) or GUITAR
+
+
+def instrument_words(inst: Instrument) -> str:
+    """The instrument as a version's name says it: "piano", "baritone ukulele", "low-G ukulele"."""
+    return _SAID.get(inst.id, inst.name[:1].lower() + inst.name[1:])
+
+
+def _inst_of(name: str | None) -> str | None:
+    """An instrument named in an address, as a version keeps it: None for the guitar or a name of none."""
+    return name if name != GUITAR.id and instrument_of(name) is not None else None
 
 
 # --- the address ---------------------------------------------------------------------------------
@@ -103,7 +144,8 @@ def version_from_query(query: str) -> Version:
     as the viewer reads its own: the rest of it (``fs``, ``speed``, ``chord``, …) left out, ``t`` rounded
     to within 11 semitones, a capo below the nut, a mode or a part of ``alt`` or ``at`` it can't read dropped.
 
-    The viewer leaves ``t`` out of its address where the song's ``[transpose]`` puts it: without one, it is 0."""
+    The viewer leaves ``t`` out of its address where the song's ``[transpose]`` puts it: without one, it is 0.
+    ``inst`` names the instrument (one ``instrument_of`` reads; the guitar is none)."""
     if query[:1] in ("#", "?"):
         query = query[1:]
     params: dict[str, str] = {}
@@ -117,7 +159,8 @@ def version_from_query(query: str) -> Version:
         capo = _round(min(fret, 99.0))  # a number, not infinity: apply_version keeps it to the viewer's frets
     mode = params.get("mode")
     return Version(t=t, mode=mode if mode in MODES else None, capo=capo,
-                   at=_positions(params.get("at", "")), alt=_swaps(params.get("alt", "")))
+                   at=_positions(params.get("at", "")), alt=_swaps(params.get("alt", "")),
+                   inst=_inst_of(params.get("inst")))
 
 
 def _number(text: str) -> float | None:
@@ -161,7 +204,8 @@ def _positions(text: str) -> dict[int, int]:
 
 def version_query(v: Version) -> str:
     """The version as the viewer's ``save()`` writes it in its address, in its order (``t``, ``mode``,
-    ``capo``, ``alt``, ``at``), each left out where it says nothing; "" for the sheet as written."""
+    ``capo``, ``alt``, ``at``, ``inst``), each left out where it says nothing; "" for the sheet as written on the
+    guitar."""
     params: list[tuple[str, str]] = []
     if v.t:
         params.append(("t", str(v.t)))
@@ -175,6 +219,8 @@ def version_query(v: Version) -> str:
         params.append(("alt", swaps))
     if v.at:
         params.append(("at", ",".join(f"{i}.{n}" for i, n in sorted(v.at.items()))))
+    if v.inst is not None:
+        params.append(("inst", v.inst))
     return "&".join(f"{_form(name)}={_form(value)}" for name, value in params)
 
 
@@ -214,8 +260,9 @@ def _played(v: Version, key: Key | None, capo_sheet: int | None) -> _Played:
 
 def played_key(v: Version, key: Key | None, capo_sheet: int | None) -> tuple[Key | None, int]:
     """The key of the shapes the version plays (None for a sheet with no key) and its capo, for a PDF's
-    key line (``page.key_line_text``); ``key`` and ``capo_sheet`` as for ``apply_version``."""
-    played = _played(v, key, capo_sheet)
+    key line (``page.key_line_text``); ``key`` and ``capo_sheet`` as for ``apply_version``. On an instrument with
+    no capo, the key it sounds in and no capo (``for_instrument``)."""
+    played = _played(for_instrument(v, played_on(v)), key, capo_sheet)
     if key is None or played.mode is None:
         return None, played.capo
     return Key((key.tonic + played.shift) % 12, played.mode), played.capo
@@ -233,26 +280,33 @@ def version_label(v: Version, key: Key | None, capo_sheet: int | None) -> str:
     """The version in words: the key of the shapes it plays, in the viewer's names of the modes, and its capo
     ("G Dorian, capo 0", "E Minor, capo 2"). A sheet with no key says how far it moved ("Transposed +2, capo 0",
     "As written, capo 3"). ``key`` is the key of the sheet's shapes, ``capo_sheet`` its capo, as for
-    ``apply_version``. An export is named and recorded by it (``render.render_version``)."""
+    ``apply_version``. An export is named and recorded by it (``render.render_version``). On another instrument
+    than the guitar, the instrument after it ("G Major, capo 2, ukulele"), and on one with no capo the key it sounds
+    in and no capo ("A Major, piano")."""
     return _label(v, key, capo_sheet, no_capo=True)
 
 
 def played_label(v: Version, key: Key | None, capo_sheet: int | None) -> str:
     """Where the version plays, in words, as a songbook's set list says it (``songbook.plays_in``):
     ``version_label``'s words, with nothing of a capo it plays without ("G Dorian", "E Minor, capo 2";
-    "Transposed +2", "As written, capo 3")."""
+    "Transposed +2", "As written, capo 3"; "A Major, piano")."""
     return _label(v, key, capo_sheet, no_capo=False)
 
 
 def _label(v: Version, key: Key | None, capo_sheet: int | None, *, no_capo: bool) -> str:
-    """``version_label``'s words, and its capo when it plays with one or ``no_capo`` names none ("capo 0")."""
-    played = _played(v, key, capo_sheet)
+    """``version_label``'s words, and its capo when it plays with one or ``no_capo`` names none ("capo 0"), never
+    on an instrument with no capo; then the instrument, but the guitar."""
+    inst = played_on(v)
+    played = _played(for_instrument(v, inst), key, capo_sheet)
     if key is None or played.mode is None:
-        words = f"Transposed {v.t:+d}" if v.t else "As written"
+        moved = played.shift if not inst.capo else v.t  # as it sounds: the capo folded in
+        words = f"Transposed {moved:+d}" if moved else "As written"
     else:
         shapes = Key((key.tonic + played.shift) % 12, played.mode)
         words = f"{spelling(shapes)[shapes.tonic]} {MODE_NAMES[shapes.mode]}"
-    return f"{words}, capo {played.capo}" if played.capo or no_capo else words
+    if inst.capo and (played.capo or no_capo):
+        words = f"{words}, capo {played.capo}"
+    return words if inst is GUITAR else f"{words}, {instrument_words(inst)}"
 
 
 # --- where a setting plays it: by the key of its shapes ------------------------------------------
@@ -265,19 +319,21 @@ _TONIC = re.compile(r"[A-G][#b]?")
 class Setting:
     """Where a song is played by the key of the shapes played rather than by a move from its sheet, each part
     None where it says nothing: ``key``, the tonic of those shapes, as written ("G", "F#", "Bb"); ``mode``, one of
-    ``theory.MODES``; ``capo``, a fret up to ``CAPO_MAX``. A songbook's setting for a song (songbook.py).
-    ``in_setting`` makes it a version of a sheet; the song's own version kept by its key (``KeyVersion``) is placed
-    by the same rule."""
+    ``theory.MODES``; ``capo``, a fret up to ``CAPO_MAX``; ``instrument``, the id of the instrument it is played on
+    (``instrument_of``: "ukulele", "piano"; "guitar" too, which a song's own version on another instrument gives
+    way to). A songbook's setting for a song (songbook.py). ``in_setting`` makes it a version of a sheet; the song's
+    own version kept by its key (``KeyVersion``) is placed by the same rule."""
 
     key: str | None = None
     mode: str | None = None
     capo: int | None = None
+    instrument: str | None = None
 
     def __bool__(self) -> bool:
-        return self.key is not None or self.mode is not None or self.capo is not None
+        return self.key is not None or self.mode is not None or self.capo is not None or self.instrument is not None
 
 
-def setting_problem(key: Any = None, mode: Any = None, capo: Any = None) -> str | None:
+def setting_problem(key: Any = None, mode: Any = None, capo: Any = None, instrument: Any = None) -> str | None:
     """Why these parts make no ``Setting``, in words, or None when they make one."""
     if key is not None and not (isinstance(key, str) and _TONIC.fullmatch(key)):
         return f'key must be a tonic such as "G", "F#" or "Bb", got {key!r}'
@@ -285,6 +341,8 @@ def setting_problem(key: Any = None, mode: Any = None, capo: Any = None) -> str 
         return f"mode must be one of {', '.join(MODES)}, got {mode!r}"
     if capo is not None and (isinstance(capo, bool) or not isinstance(capo, int) or not 0 <= capo <= CAPO_MAX):
         return f"capo must be a fret from 0 to {CAPO_MAX}, got {capo!r}"
+    if instrument is not None and not (isinstance(instrument, str) and instrument_of(instrument) is not None):
+        return f"instrument must be one of {', '.join(instrument_ids())}, got {instrument!r}"
     return None
 
 
@@ -303,13 +361,21 @@ def in_setting(own: Version, setting: Setting | None, shapes: Key | None, capo_s
     semitones), and another capo moves the shapes, as on a guitar. A setting with a key or a mode is the sheet
     as written (``Version()``) for a sheet with no key (no chord caracole can read): nothing places it there.
     Shapes chosen in the song's own version (``at``) are for the chords that plays, so they go when the setting
-    plays others; its chords played instead (``alt``) are kept by mode, as the viewer keeps them."""
+    plays others, or on another instrument; its chords played instead (``alt``) are kept by mode, as the viewer
+    keeps them.
+
+    The setting's instrument is the version's (``inst``; "guitar" the guitar's, whatever the song's own version is
+    played on), else the own version's. On an instrument with no capo, the key the setting names is the key the
+    song sounds in: it is placed with no capo."""
     if not setting:
         return own
+    inst = own.inst if setting.instrument is None else _inst_of(setting.instrument)
     if places(setting) and shapes is None:
-        return Version()
+        return Version(inst=inst)
     tonic = None if setting.key is None else note_pc(setting.key[0], setting.key[1:])
-    return _placed(own, tonic, setting.mode, setting.capo, shapes, capo_sheet)
+    capo = 0 if tonic is not None and not (instrument_of(inst) or GUITAR).capo else setting.capo
+    placed = _placed(own, tonic, setting.mode, capo, shapes, capo_sheet)
+    return placed if inst == placed.inst else replace(placed, inst=inst, at={})
 
 
 def _placed(own: Version, tonic: int | None, mode: str | None, capo: int | None, shapes: Key | None,
@@ -347,9 +413,14 @@ def apply_version(cho: str, v: Version, *, key: Key | None, capo_sheet: int | No
     dorian) and its capo, and after it comes a ``{define}`` of each chord's chosen shape, once a name, in place of
     the sheet's own ``{define}``s that the viewer reads. No ``{transpose}`` is left: the chords are where the
     version plays them.
+
+    On another instrument (``v.inst``), each ``{define}`` is its shape there: a ukulele's four strings, the piano's
+    keys (``{define: C keys 0 12 16 19}``, ``define_keys``); the harmonica and the winds draw none. On one with no
+    capo, the chords are named as they sound and the header names no capo (``for_instrument``).
     """
     sheet = parse_sheet(cho)
-    played = _played(v, key, capo_sheet)
+    inst = played_on(v)
+    played = _played(for_instrument(v, inst), key, capo_sheet)
     chords = _chords(sheet.chords, v, key, played)
     names = _names(sheet.chords, chords, key, played)
     index = {name: i for i, name in enumerate(sheet.chords)}
@@ -392,7 +463,7 @@ def apply_version(cho: str, v: Version, *, key: Key | None, capo_sheet: int | No
     notice = next((n for n in range(head) if _notice(out[n])), head)  # to_chordpro's order: the key, the capo, it
     out[notice:notice] = stated
     head += len(stated)
-    out[head:head] = _defines(sheet, chords, names, played.shift, v.at)
+    out[head:head] = _defines(sheet, chords, names, played.shift, v.at, inst)
     return "\n".join(out) + "\n"
 
 
@@ -453,9 +524,12 @@ def _names(sheet_chords: list[str], chords: list[tuple[Chord | None, bool]], key
 
 
 def _defines(sheet: Sheet, chords: list[tuple[Chord | None, bool]], names: list[str], shift: int,
-             at: Mapping[int, int]) -> list[str]:
-    """A ``{define}`` of the shape played for each chord (``at``, else its first), once a name (its first
-    place's, as the viewer's rail of necks draws it), for a chord the viewer has a shape for."""
+             at: Mapping[int, int], inst: Instrument = GUITAR) -> list[str]:
+    """A ``{define}`` of the shape played on ``inst`` for each chord (``at``, else its first), once a name (its
+    first place's, as the viewer's rail of necks draws it), for a chord the viewer has a shape for: frets on a
+    fretted instrument, keys on the piano (``define_keys``), none on another."""
+    if inst.kind not in ("strings", "keys"):
+        return []
     given = shapes_of(sheet)
     out, seen = [], set()
     for i, (chord, _) in enumerate(chords):
@@ -463,20 +537,34 @@ def _defines(sheet: Sheet, chords: list[tuple[Chord | None, bool]], names: list[
         if chord is None or name in seen or not _NAMEABLE.fullmatch(name):
             continue
         seen.add(name)
-        shapes = _shapes(chord, shift, given)
+        shapes = _shapes(chord, shift, given, inst)
         if not shapes:
             continue
         n = at.get(i, 0)
-        frets, fingers, base, _ = shapes[n if 0 < n < len(shapes) else 0]
+        shape = shapes[n if 0 < n < len(shapes) else 0]
+        if inst.kind == "keys":
+            out.append(f"{{define: {name} keys {' '.join(map(str, define_keys(shape, (chord.root + shift) % 12)))}}}")
+            continue
+        frets, fingers, base, _ = shape
         out.append(f"{{define: {name} base-fret {base} frets {' '.join(frets)} fingers {' '.join(fingers)}}}")
     return out
 
 
-def _shapes(chord: Chord, shift: int, given: dict[str, dict[str, Any]]) -> list[Position]:
-    """The shapes the viewer shows for ``chord`` moved ``shift`` semitones on the guitar (viewer.js ``shapesOf``,
-    ``instruments.chord_shapes``): those the sheet gives that very chord first, else chords-db's for its slash
-    chord, else for its quality."""
-    return chord_shapes(GUITAR, chord, shift, given)
+def define_keys(position: list[int], root: int) -> list[int]:
+    """A piano position (``[bass, *right hand]``, MIDI notes: ``instruments.piano_positions``) as a ``{define}``'s
+    ``keys``: each note in semitones above the chord's root (pitch class ``root``) at or below its lowest, the
+    lowest first. chordpro draws the lowest in its keyboard's first octave and the rest up from it, as the notes
+    stand (its 21 keys hold three octaves: pdf_text.py's ``KEYBOARD``)."""
+    lowest = min(position)
+    below = lowest - (lowest - root) % 12
+    return [note - below for note in position]
+
+
+def _shapes(chord: Chord, shift: int, given: dict[str, dict[str, Any]], inst: Instrument = GUITAR) -> list[Any]:
+    """The shapes the viewer shows for ``chord`` moved ``shift`` semitones on ``inst`` (viewer.js ``shapesOf``,
+    ``instruments.chord_shapes``): on the guitar those the sheet gives that very chord first, else chords-db's for
+    its slash chord, else for its quality; a ukulele's for its quality; the piano's positions."""
+    return chord_shapes(inst, chord, shift, given)
 
 
 # --- a version kept by its key ([version], "Make this my version") ----------------------------------------
@@ -496,34 +584,41 @@ class KeyVersion:
     chords were read in (G minor for an A minor sheet played two down), whose notes another sheet's chords are read
     in, whatever key it names for them (C major's are A minor's); ``mode``, a mode chosen to play it in (dorian),
     None for that key's own; ``capo``, None for the sheet's; the chords played instead (``alt``: each chord as the
-    version names it, then the chord played in its place); and the shapes chosen (``at``: each chord as the version
-    names it, then that shape's frets). ``in_key`` plays it on a sheet; ``query`` writes it, and ``key_version``
-    reads it back."""
+    version names it, then the chord played in its place); the shapes chosen (``at``: each chord as the version
+    names it, then that shape's frets, on the instrument's strings); and the instrument (``inst``, None for the
+    guitar), which the song's viewer opens it on (its ``start``) and its songbooks play it on, its capo kept for
+    the guitar. ``in_key`` plays it on a sheet; ``query`` writes it, and ``key_version`` reads it back."""
 
     key: Key
     mode: str | None = None
     capo: int | None = None
     alt: tuple[tuple[str, str], ...] = ()
     at: tuple[tuple[str, Frets], ...] = ()
+    inst: str | None = None
 
     def query(self) -> str:
         """The entry as caracole writes it: ``key`` (as a sheet names one: "Gm", "F#", "A dorian"), ``mode``,
-        ``capo``, ``alt`` and ``at`` (a shape's frets from the nut, low E first, "x" for a string not played:
-        "x-x-5-7-8-6"), each left out where it says nothing. In a chord's name, "%", "&", "=", ",", "." and space are
+        ``capo``, ``alt``, ``at`` (a shape's frets from the nut, low E first, "x" for a string not played:
+        "x-x-5-7-8-6"; a ukulele's four, its G string first) and ``inst``, each left out where it says nothing. In a chord's name, "%", "&", "=", ",", "." and space are
         escaped ("C6%2E9"), the rest of it written as it is ("F#m", "C#7(b9)"), so that the entry reads well in
         overrides.toml."""
         params = [("key", key_name(self.key)), ("mode", self.mode),
                   ("capo", None if self.capo is None else str(self.capo)),
                   ("alt", ",".join(f"{_escape(a)}.{_escape(b)}" for a, b in self.alt)),
-                  ("at", ",".join(f"{_escape(name)}.{_frets_text(frets)}" for name, frets in self.at))]
+                  ("at", ",".join(f"{_escape(name)}.{_frets_text(frets)}" for name, frets in self.at)),
+                  ("inst", self.inst)]
         return "&".join(f"{name}={value}" for name, value in params if value)
 
     def label(self) -> str:
         """The version in words, as ``version_label`` names it on the sheet it was made on ("G Dorian, capo 0";
-        "G Dorian" with the sheet's capo)."""
+        "G Dorian" with the sheet's capo; "G Major, capo 2, ukulele"). On an instrument with no capo, the key of the
+        shapes and the instrument ("G Major, piano"): the key it sounds in depends on the capo of the sheet."""
         played = Key(self.key.tonic, self.mode or self.key.mode)
         words = f"{spelling(played)[played.tonic]} {MODE_NAMES[played.mode]}"
-        return words if self.capo is None else f"{words}, capo {self.capo}"
+        inst = instrument_of(self.inst) or GUITAR
+        if self.capo is not None and inst.capo:
+            words = f"{words}, capo {self.capo}"
+        return words if inst is GUITAR else f"{words}, {instrument_words(inst)}"
 
 
 def _escape(name: str) -> str:
@@ -534,11 +629,11 @@ def _frets_text(frets: Frets) -> str:
     return "-".join("x" if fret is None else str(fret) for fret in frets)
 
 
-def _frets(text: str) -> Frets | None:
-    """A shape's frets as an entry writes them ("x-x-5-7-8-6"), or None for text that is none: a fret a string,
-    from the nut, and at least one string played."""
+def _frets(text: str, strings: int = len(TUNING)) -> Frets | None:
+    """A shape's frets as an entry writes them ("x-x-5-7-8-6"), or None for text that is none: a fret a string of
+    the ``strings``, from the nut, and at least one string played."""
     parts = text.split("-")
-    if len(parts) != len(TUNING) or not all(p == "x" or (p.isascii() and p.isdigit() and len(p) <= 2) for p in parts):
+    if len(parts) != strings or not all(p == "x" or (p.isascii() and p.isdigit() and len(p) <= 2) for p in parts):
         return None
     frets = tuple(None if p == "x" else int(p) for p in parts)
     return None if all(fret is None for fret in frets) else frets
@@ -570,9 +665,10 @@ def key_version(text: str) -> KeyVersion | None:
     ``[version]`` before it kept a key (``version_from_query`` reads that). A "#" or a "?" before it is dropped,
     and of a name given twice the first counts, as in an address.
 
-    Raises ValueError, saying why, for a key that is none as a sheet names one ("G", "F#m", "Bb dorian"), a mode or
-    a capo that can't be one (``setting_problem``: a blank mode or capo is none), or a key beside a ``t``. A swap
-    or a shape it can't read is dropped, as the viewer drops one from its address."""
+    Raises ValueError, saying why, for a key that is none as a sheet names one ("G", "F#m", "Bb dorian"), a mode, a
+    capo or an instrument that can't be one (``setting_problem``: a blank one is none), or a key beside a ``t``. A
+    swap or a shape it can't read is dropped, as the viewer drops one from its address, and so is a shape on an
+    instrument with no strings."""
     if text[:1] in ("#", "?"):
         text = text[1:]
     params: dict[str, str] = {}
@@ -591,8 +687,10 @@ def key_version(text: str) -> KeyVersion | None:
     mode = _text(params.get("mode", "")) or None
     capo_text = _text(params.get("capo", ""))
     capo: Any = int(capo_text) if capo_text.isascii() and capo_text.isdigit() else capo_text or None
-    if (problem := setting_problem(None, mode, capo)) is not None:
+    inst_name = _text(params.get("inst", "")) or None
+    if (problem := setting_problem(None, mode, capo, inst_name)) is not None:
         raise ValueError(problem)
+    inst = instrument_of(inst_name) or GUITAR
     swaps: dict[str, str] = {}
     for part in params.get("alt", "").split(","):
         names = [_chord_name(piece) for piece in part.split(".")]
@@ -601,9 +699,10 @@ def key_version(text: str) -> KeyVersion | None:
     shapes: dict[str, Frets] = {}
     for part in params.get("at", "").split(","):
         pieces = part.split(".")
-        if len(pieces) == 2 and (name := _chord_name(pieces[0])) and (frets := _frets(pieces[1])) is not None:
+        if inst.kind == "strings" and len(pieces) == 2 and (name := _chord_name(pieces[0])) \
+                and (frets := _frets(pieces[1], len(inst.tuning))) is not None:
             shapes.setdefault(name, frets)
-    return KeyVersion(key, mode, capo, tuple(swaps.items()), tuple(shapes.items()))
+    return KeyVersion(key, mode, capo, tuple(swaps.items()), tuple(shapes.items()), _inst_of(inst_name))
 
 
 def _sound(chord: Chord, shift: int = 0) -> tuple[int, frozenset[int], int | None]:
@@ -657,9 +756,12 @@ def in_key(kept: KeyVersion, cho: str, *, key: Key | None, capo_sheet: int | Non
 
     A sheet whose chords are more of them in its tonic's key in the kept key's mode than in the key it names (an A
     minor sheet that names A, as a key read from audio can) is read from its own tonic instead, the kept key's
-    tonic, and plays there as a move from it (``t``, with the mode chosen), as a ``t=`` entry did."""
+    tonic, and plays there as a move from it (``t``, with the mode chosen), as a ``t=`` entry did.
+
+    It is played on the version's instrument (``inst``), its shapes those of that instrument's strings."""
+    inst = instrument_of(kept.inst) or GUITAR
     if key is None:
-        return Version()
+        return Version(inst=kept.inst)
     sheet = parse_sheet(cho)
     parallel = Key(key.tonic, kept.key.mode)
     if parallel != key and _fitting(parallel, sheet.chords) > _fitting(key, sheet.chords):
@@ -684,7 +786,7 @@ def in_key(kept: KeyVersion, cho: str, *, key: Key | None, capo_sheet: int | Non
         found = next((a for a in offered if _sound(a, played.shift) == wanted), None)
         if found is not None:
             swaps[i] = (found.root, found.suffix, found.bass)
-    version = replace(placed, alt={played.mode: swaps}) if swaps else placed
+    version = replace(placed, alt={played.mode: swaps}, inst=kept.inst) if swaps else replace(placed, inst=kept.inst)
     chosen = dict(zip(_sounds(name for name, _ in kept.at), (frets for _, frets in kept.at), strict=True))
     given = shapes_of(sheet)
     positions = {}
@@ -692,7 +794,7 @@ def in_key(kept: KeyVersion, cho: str, *, key: Key | None, capo_sheet: int | Non
         frets = None if chord is None else chosen.get(_sound(chord, played.shift))
         if frets is None:
             continue
-        listed = _shapes(chord, played.shift, given)
+        listed = _shapes(chord, played.shift, given, inst) if inst.kind == "strings" else []
         n = next((n for n, shape in enumerate(listed) if frets_from_nut(shape) == frets), None)
         if n:  # the first is the one played anyway
             positions[i] = n
@@ -706,12 +808,15 @@ def version_entry(v: Version, cho: str, *, key: Key | None, capo_sheet: int | No
     another, chosen ("dorian"), and its capo (none past ``CAPO_MAX``: the sheet's), then the chords it plays instead
     and the shapes it chose, each chord by its name there, in its mode alone: what its PDF shows. So "G Dorian,
     capo 0" on an A minor sheet is ``key=Gm&mode=dorian&capo=0``, and "B Minor, capo 0" there ``key=Bm&capo=0``.
+    Then its instrument (``inst=ukulele``), with the capo it keeps for the guitar, even on one that takes none, and
+    the shapes it chose there on a fretted one's strings (a piano's inversion is none).
 
     None for a sheet with no key: there's none to keep (render.py writes the version as an address, a move from the
     sheet)."""
     played = _played(v, key, capo_sheet)
     if key is None or played.mode is None:
         return None
+    inst = played_on(v)
     shapes = Key((key.tonic + played.shift) % 12, key.mode)
     capo = played.capo if played.capo <= CAPO_MAX else None
     sheet = parse_sheet(cho)
@@ -730,9 +835,9 @@ def version_entry(v: Version, cho: str, *, key: Key | None, capo_sheet: int | No
             continue
         seen.add(names[i])
         n = v.at.get(i, 0)
-        listed = _shapes(chord, played.shift, given)
+        listed = _shapes(chord, played.shift, given, inst) if inst.kind == "strings" else []
         if 0 < n < len(listed):
             shown[names[i]] = frets_from_nut(listed[n])
     kept = KeyVersion(shapes, None if played.as_written else played.mode, capo, tuple(swaps.items()),
-                      tuple(shown.items()))
+                      tuple(shown.items()), v.inst)
     return kept.query()
