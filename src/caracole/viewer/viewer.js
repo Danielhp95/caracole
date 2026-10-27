@@ -365,8 +365,8 @@
     return nameOf(rep, s);
   };
   // The frets where a guitar's open shapes play the key (page.py's ``capo``): on an instrument with shapes of its own
-  // (a ukulele), its Easy keys instead.
-  const capoHints = () => (key && !inst().shapes ? data.capo[modeNow()][mod12(state.t)] : []);
+  // (a ukulele), its Easy keys instead; on one with no capo (the harmonica, the winds), none.
+  const capoHints = () => (key && takesCapo() && !inst().shapes ? data.capo[modeNow()][mod12(state.t)] : []);
   // Where the song is played, as Cifra Club's key line says it: with a capo, the key of the
   // shapes, the capo and the key the song sounds in ("Em shapes · capo 2 · sounds F#m"), as
   // "Key Em" alone would read as the song's key; with none, the key. Each part is

@@ -2416,7 +2416,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   above it, the keys whose chords sit well under the fingers (on a ukulele
   C, F, G, Bb, Am and Dm; on the baritone G, C, D, F, Em and Am), nearest the
   key you play first: tap one to move the song there, as Transpose does (the
-  guitar's capo suggestions are the guitar's alone). The piano draws each
+  guitar's capo suggestions are the guitar's alone: the harmonica, the flute
+  and the recorder, which take no capo, have none). The piano draws each
   chord on a keyboard, its notes lit and its bass marked: root position, then
   the first and second inversions (‹ ›), the right hand around middle C and
   the bass, the root or a slash chord's, for the left hand below it. The rail

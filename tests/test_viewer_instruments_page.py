@@ -221,6 +221,17 @@ def test_the_guitars_capo_hints_are_the_guitars_alone(tmp_path):
     assert uke[0] == [] and uke[1]["chips"][0] == ["Bb", "now", "true"]  # Bb is easy on a ukulele
 
 
+@pytest.mark.parametrize("name", ["Harmonica", "Flute", "Recorder"])
+def test_an_instrument_with_no_capo_is_offered_no_capo_hint(tmp_path, name):
+    # None takes a capo: no Capo row, and no capo to press that would move the guitar's while you play it.
+    in_bb = "{title: In Bb}\n{artist: Synthetic}\n{key: Bb}\n{comment: Verse}\n[Bb]la la [Eb]la la [F]la\n"
+    with open_viewer(tmp_path, written(tmp_path, in_bb)) as b:
+        choose(b, name)
+        seen = [b.js(SETTINGS), b.js("!document.getElementById('capo-opts').hidden"),
+                b.js("[...document.querySelectorAll('#capo .chip')].map((c) => c.textContent)")]
+    assert not seen[0]["capo"] and seen[1] is False and seen[2] == []
+
+
 # --- the rail of necks --------------------------------------------------------------------------------------
 
 RAIL = """(() => ({ shown: !document.getElementById('necks').hidden,
