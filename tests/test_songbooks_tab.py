@@ -530,9 +530,9 @@ def test_a_new_songs_pending_line_shows_its_lookup_while_that_waits(serve, cfg, 
                      ".findIndex((l) => l.querySelector('h3').textContent === 'Wonderwall')")
             assert page.wait(f"{found} >= 0", timeout=10)
             page.click(f"#songbooks .add-results .line:nth-child({page.js(found) + 1}) .line-action button")
-            assert page.wait(f"{line} !== '' && {line} !== 'Sending…'", timeout=10), page.js(line)
-            # the lookup's own line (it runs, held), never the songbook change's "Queued behind 1 request…"
-            assert not page.js(line).startswith("Queued"), page.js(line)
+            # the lookup's own line as it runs, held ("Queued…" until the queue takes it up), never the songbook
+            # change's "Queued behind 1 request…"
+            assert page.wait(f"{line} === 'Adding to the library…'", timeout=10), page.js(line)
     finally:
         hold.set()
 
