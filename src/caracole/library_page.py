@@ -1033,8 +1033,8 @@ def _haystack(texts: list[str]) -> str:
 # index.html's one stylesheet and one script: the files of library_assets/, in this order (what each one
 # is: its __init__.py). BASE_STYLE, PICKER_STYLE, ROWS_STYLE and ROWS_SCRIPT, the ones caracole serve's own
 # pages share, are importable from here too.
-STYLESHEETS = ("base.css", "picker.css", "library.css", "filter.css", "rows.css", "card.css", "steps.css", "library-screens.css",
-               "songbooks.css")
+STYLESHEETS = ("base.css", "picker.css", "library.css", "filter.css", "rows.css", "card.css", "steps.css",
+               "library-screens.css", "songbooks.css")
 SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "songbooks.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)
