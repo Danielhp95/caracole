@@ -10,6 +10,7 @@ marks carry their string and fret (data-string, data-fret), a keyboard's keys th
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 
 import pytest
 
@@ -344,6 +345,42 @@ def test_a_songbook_song_on_its_own_instrument_opens_on_it(tmp_path):
     assert easy["shown"] and easy["chips"][0] == ["F", "+1", "false"]
     assert again["chips"][0][1] == "true" and "inst=guitar" in again["hash"]
     assert one["chips"][0][1] == "true"  # the player's own, now the guitar
+
+
+THREE = "{title: Three}\n{artist: Synthetic}\n{key: G}\n{comment: Verse}\n[G]la la [C]la la [D]la\n"
+
+
+@pytest.mark.parametrize("where", ["file", "served"])
+def test_the_song_after_one_on_its_own_instrument_is_on_the_players_again(tmp_path, where):
+    # A set list's song on the ukulele, the player on the piano: the songs after it, and back before it, are the
+    # player's, from a file (the browser keeps the piano) and in caracole serve's sandbox (the address alone does).
+    songs = [BookSong("One", "Synthetic", cho=SONG, id="aaaa"),
+             BookSong("Two", "Synthetic", cho=IN_E, id="bbbb", start="t=0&inst=ukulele"),
+             BookSong("Three", "Synthetic", cho=THREE, id="cccc")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(songbook(songs), encoding="utf-8")
+    pages = {"/_songbooks/Campfire/songbook.html": (songbook(songs), songbook_csp)}
+    with served(pages) if where == "served" else nullcontext() as site:
+        page = site + "/_songbooks/Campfire/songbook.html" if site else path.as_uri()
+        with open_viewer(tmp_path, page + "#song-1") as b:
+            choose(b, "Piano")
+            to_song(b, 2)
+            two = b.js(SETTINGS)
+            to_song(b, 3)
+            three = b.js(SETTINGS)
+            to_song(b, 1)
+            one = b.js(SETTINGS)
+            to_song(b, 2)
+            choose(b, "Baritone ukulele")  # the player's now, chosen on the song by hand
+            b.click("#reset-all")  # the song's own again
+            reset = b.js(SETTINGS)
+            to_song(b, 3)
+            after = b.js(SETTINGS)
+    assert two["chips"][1][1] == "true"  # its own: the ukulele
+    assert three["chips"][4][1] == "true" and "inst=piano" in three["hash"]
+    assert one["chips"][4][1] == "true" and "inst=piano" in one["hash"]
+    assert reset["chips"][1][1] == "true" and after["chips"][3][1] == "true" and "inst=baritone" in after["hash"]
 
 
 # --- a phone's width ------------------------------------------------------------------------------------------

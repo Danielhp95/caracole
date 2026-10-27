@@ -2455,7 +2455,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`, `harmonica`, `flute`,
   `recorder`) while it is another
   than the guitar, for a page served by `caracole serve`; ‹ and › to another
-  version keep it, and so does every step to another song in a songbook.
+  version keep it, and so does every step to another song in a songbook (a
+  song the songbook plays on an instrument of its own keeps that one to
+  itself: the songs after it are on yours again, the last you chose).
   **Reset everything** leaves it as it is. **Export PDF** makes the PDF on
   the instrument shown, and **Make this my version** keeps it, so the song
   opens there (`caracole render --version`'s `inst=`); a songbook may play a

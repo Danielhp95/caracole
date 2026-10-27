@@ -222,7 +222,8 @@ Rules a change there keeps (the Invariants below are the others):
   kept by every column, so a chord stays over its character's column, on or off, at 390 px too
   (test_viewer_pinyin.py). So is the Instrument (`state.inst`, the guitar at first: localStorage
   `caracole-viewer-instrument`, `inst=` in the address while it is another, which `carryScreen` takes on
-  too; a songbook song's own version may name one, where it starts), which never moves the song: every
+  too; a songbook song's own version may name one, where it starts, and the songs after it on the player's (the one
+  it came with, or the last chosen there by hand: book.js `player`), which never moves the song: every
   instrument's shapes are instruments.py's, per root in the data's `voicings` (viewer.js looks them up),
   one with no capo (the piano) names the chords as they sound (viewer.js `capoNow`, version.py
   `for_instrument`), and the menu offers only what the page draws, an instrument of another kind once its
