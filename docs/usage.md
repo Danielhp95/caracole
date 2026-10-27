@@ -1942,7 +1942,10 @@ instead (see below), and the funnel is a button of its own beside it ("Only
 Queen's songs"), which shows their songs alone as the name does from the
 folder. Sorted by title, or by when the songs were added, the lines stand
 alone, without the artists' names over them, each with its own (which does the
-same). A request's line (see [caracole serve](#caracole-serve)) shows under
+same). `#by=` in the address, an artist's name as a sheet viewer's artist line
+links to it (`index.html#by=Soda%20Stereo`), does what pressing their name does:
+from the folder, their songs alone (else the songs the name finds); served, the
+search for them. A request's line (see [caracole serve](#caracole-serve)) shows under
 the song's, a line of its own. The search, the status buttons, the Key menu,
 the sort and the letters all work on the lines, and the address remembers
 them, as it does the rest: a bookmark opens the page as you left it. (An
@@ -2095,6 +2098,17 @@ caracole records each viewer it writes, so that a server can tell its pages
 from anyone else's. It is made at render time from the song's own
 `.cho`, and stays in the song's folder: nothing of the sheet is copied
 anywhere else. It links back to `index.html` and to the PDF beside it.
+
+- **The artist's name**, under the title, opens the library page on their
+  songs, as their name there does: served by `caracole serve`, the search for
+  them, your songs of theirs and every index's (Ultimate Guitar, LaCuerda,
+  gtptabs.com, harptabs.com…) under their header, which asks no site; from the
+  folder, or in caracole's Android app, your songs of theirs alone, with their
+  chip on. It is a plain link (`index.html#by=Soda%20Stereo`), which the
+  server's sandbox follows too, and the browser's Back returns to the sheet
+  where you were. It reads as the line it was, muted,
+  underlined under the pointer or the keyboard's focus; on a phone it is a
+  thumb's target. A kept version's page and a songbook's songs have it too.
 
 - **Chords over the lyrics**, in bold rust. A long line wraps between words,
   never between a chord and its syllable, and a chord reaches over the words
@@ -3629,7 +3643,8 @@ in `Library/_songbooks/<name>/`:
   where the songbook plays it); tap
   a song to open it in the sheet viewer, with everything the viewer does
   (chord shapes, transposition, chords to play instead, modes, scrolling by
-  itself), each song opening where the songbook plays it and keeping its own settings, its scroll
+  itself, the artist's name that opens the library page on their songs), each
+  song opening where the songbook plays it and keeping its own settings, its scroll
   speed, text size and chosen shapes among them. Previous and Next name the
   songs they go to ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
   cut short with "…"), above each song and again at its end, where on a phone

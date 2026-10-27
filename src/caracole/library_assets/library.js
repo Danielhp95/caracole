@@ -1131,6 +1131,12 @@
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
   };
+  // The key of the artist named ``name`` (their sortArtist): the songs' artist as written, else as fold reads it.
+  const artistKey = (name) => {
+    const s = songs.find((song) => String(song.artist) === name) ||
+      songs.find((song) => fold(String(song.artist)) === fold(name));
+    return s ? String(s.sortArtist || "") : "";
+  };
   // What the address says of the list (save() writes it): what the page opens on, and what Back brings again.
   const addressed = () => {
     const at = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
@@ -1143,6 +1149,21 @@
       if (keyGroup(params.get("key"))) at.key = keyGroup(params.get("key")).value;  // any spelling of it
       at.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
       at.all = params.get("all") === "1" && sitesCan(at.q) && (!server || typedEnough(at.q));
+      // by: an artist's name, as a sheet viewer's artist line links here (viewer/page.py artist_line), for what
+      // pressing their name here does: served, the search for them (searchFor's, which asks no site); from a file and
+      // in the Android app's copy, which can't search the sites, their songs alone (the funnel's), else the songs the
+      // name finds. Read once: the page then writes its own address for it (``cameBy``, below).
+      const by = normal(params.get("by") || "");
+      if (by && !at.q && !at.artist && !at.prog) {
+        if (server) {
+          at.q = by;
+          at.all = searchesAsYouType(by);
+        } else if (artistKey(by)) {
+          at.artist = artistKey(by);
+        } else {
+          at.q = by;
+        }
+      }
     } catch (err) {
       // A malformed address: the defaults.
     }
@@ -2757,6 +2778,15 @@
   }
   summarize();
   render();
+  // Come from a sheet's artist line (#by=): the address the page writes for what it shows, in place of the link's, with
+  // no step of its own, so Back goes to the sheet and a reload or a bookmark keeps the search, or the artist's songs.
+  let cameBy = false;
+  try {
+    cameBy = new URLSearchParams(location.hash.slice(1)).has("by");
+  } catch (err) {
+    // A malformed address: nothing to write again.
+  }
+  if (cameBy) save();
   // Back from a page of caracole serve's about a song (Remove's question): its line in view, and the focus
   // on it, as the A-Z strip leaves a group; the address keeps the rest. In the next frame, once every script
   // has drawn what it draws (the Songbooks tab, shown as it was left).

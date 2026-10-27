@@ -68,6 +68,16 @@ a { color: inherit; }
   text-decoration: none; }
 .head h1 { margin: 0; font-size: 1.55rem; line-height: 1.2; letter-spacing: -0.01em; overflow-wrap: anywhere; }
 .artist { margin: 2px 0 0; color: var(--muted); overflow-wrap: anywhere; }
+/* The artist's name, a link to the library page on their songs (page.py artist_line): the line as it was, underlined
+   in the text's colour under the pointer or the focus; a thumb's target, 44 px either way, that reaches over the gaps
+   above and below its line and moves nothing (its padding and margins cancel out), over the lines beside it for a
+   finger (positioned: the key line under it would take a touch at its foot). The focus ring goes round the name
+   alone, as round the whole target it would cross the title. */
+.artist a { position: relative; display: inline-block; min-width: 44px; padding: calc((44px - 1lh) / 2) 0;
+  margin: calc((1lh - 44px) / 2) 0; text-decoration: none; text-underline-offset: 2px; }
+.artist a:hover, .artist a:focus-visible { color: var(--text); text-decoration: underline; }
+.artist a:focus-visible { outline: none; }
+.artist a:focus-visible > span { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 2px; }
 .facts { margin: 8px 0 0; color: var(--muted); font-size: .88rem; }
 .facts:empty { display: none; }
 .facts b { color: var(--text); font-weight: 650; }

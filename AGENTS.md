@@ -131,7 +131,9 @@ Rules a change there keeps (the Invariants below are the others):
   artist's name (a header's, a line's, a lookup row's) searches for them as typing it would (library.js
   `searchFor`, a step of the browser's history; lookup_page.py `searchArtist`), which asks no site, and the funnel
   beside it (rows.js `artistOnly`) shows your songs of theirs alone; from a file the name is the funnel's
-  (`artistFilter`). Your
+  (`artistFilter`). A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`)
+  is a plain link to `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a
+  file, then writes its own address in its place (Back is the sheet). Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a
   songbook… for those alone. songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id;
