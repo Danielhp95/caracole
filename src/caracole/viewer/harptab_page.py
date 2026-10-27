@@ -269,7 +269,8 @@ def _legend(facts: Mapping[str, Any]) -> str:
         said.append(escape(facts["difficulty"].strip()))
     views = facts.get("views")
     if isinstance(views, int) and not isinstance(views, bool) and views > 0:
-        said.append(f"{views / 1000:.0f}k views" if views < 1_000_000 else f"{views / 1e6:.1f}M views")
+        said.append(f"{views} views" if views < 1000 else f"{views / 1000:.0f}k views" if views < 999_500
+                    else f"{views / 1e6:.1f}M views")
     rating = facts.get("rating")
     if isinstance(rating, (int, float)) and not isinstance(rating, bool) and rating > 0:
         said.append(f"{rating:.1f}★")
