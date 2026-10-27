@@ -180,6 +180,26 @@ def test_a_lookup_keys_a_table_keyed_before_again_from_its_paths_and_meets_the_t
     assert stats.kept == 1 and site.requests == [f"{BASE}/tab/1690/you-ain-t-goin-nowhere"]
 
 
+def test_the_tabs_of_the_title_the_artists_page_lists_are_tried_first(conn, tmp_path):
+    # Billy Joel's page read: his tabs of the title, those whose slug the sitemap's title doesn't meet among them
+    # ("piano-man-c-harmonica"), come before the sitemap's, the most viewed first, and the most viewed of his is kept.
+    from caracole.harptabs import parse_artist_page
+    from caracole.harptabs_index import store_artist_page
+
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    store_artist_page(conn, "artist/1178/billy-joel", parse_artist_page(fixture("artist_1178_billy-joel.html")), NOW)
+    site = FakeHarpTabs()  # 9925 and 1256 gone (404), as the sitemap's 29525
+    c_harp = f"{BASE}/tab/23862/piano-man-c-harmonica"
+    site.page("tab/23862/piano-man-c-harmonica", tab_page("Piano Man (C Harmonica)", "billy joel", views="2.5M",
+                                                         body="6 6 6\nin C\n"))
+
+    stats = run(site, conn, tmp_path)
+
+    assert site.requests == [SITEMAP, PIANO_MAN, c_harp, f"{BASE}/tab/9925/piano-man-harmonica-intro",
+                             f"{BASE}/tab/1256/piano-man-harp-intro", f"{BASE}/tab/29525/piano-man"]
+    assert stats.kept == 1 and get_version(conn, kept_files(conn, song.id)[0].version_id).tab_id == "23862"
+
+
 def test_a_song_whose_artist_the_sitemap_doesnt_list_costs_no_page(conn, tmp_path):
     # "Silent Night" is a tab there, but by no artist named as the song's: no page is read for it.
     add_song(conn, "Mariah Carey", "Silent Night")

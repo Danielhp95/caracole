@@ -1267,8 +1267,11 @@ and cache.
   artists by name. It never uses the site's search or its API. A song is looked
   up only when the sitemap lists a tab of its title (an apostrophe slugged as
   nothing or as a hyphen, `dont` or `don-t`) and an artist of its
-  artist's name; then the pages of the tabs of that title are read, lowest id
-  first, eight at most, each for the artist it names, and of those by your
+  artist's name; then the pages of the tabs of that title are read, eight at
+  most: first those your song's artist's page lists, once caracole has read it
+  (`caracole harptabs --index`), the most viewed first ("Piano Man (C
+  Harmonica)" too), then the sitemap's, lowest id first, each for the artist it
+  names, and of those by your
   song's artist the most viewed is kept, as the song's `harmonica-N.txt`, the
   page's tab as it is: hole numbers over the lyrics. A tab of no known artist
   ("by Unknown") is no one's, as a tab by another artist is. A song none of
