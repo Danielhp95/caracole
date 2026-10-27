@@ -57,8 +57,9 @@ from caracole.versions import get_version
 
 log = logging.getLogger(__name__)
 
-# What refresh_info_keys last brought every info.json up to: 2 reads a tab's letter alone with its chords (a minor key)
-INFO_VERSION = 2
+# What refresh_info_keys last brought every info.json up to: 2 reads a tab's letter alone with its chords (a minor key),
+# 3 reads it so with capo 9 too (C major, a capo below A, has A minor's notes)
+INFO_VERSION = 3
 INFO_VERSION_KEY = "keys:info_version"  # kv
 SHEET_DOC = "sheet.json"  # the human sheet's markup, beside it
 SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
@@ -320,7 +321,7 @@ def refresh_info_keys(conn: sqlite3.Connection, library_dir: Path) -> int:
     An info.json changes whenever its song's files do, so this only brings those an older
     caracole wrote up to date: their ``key`` was the song's identity key, and they had no
     ``key_source``, or read a tab's letter alone as its major key whatever its chords (version 2 reads
-    it with them). Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
+    it with them, version 3 with capo 9 too). Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
     haven't (a better estimate, say). An info.json that can't be written is logged and tried
     again next time, which leaves the others, written already, as they are; the pages go on.
     """

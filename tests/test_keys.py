@@ -342,9 +342,11 @@ HOTEL = (
         ({"tonality_name": "Am"}, HOTEL, 2, "A minor"),
         ({"tonality_name": "G"}, "[ch]G[/ch] [ch]C[/ch] [ch]D[/ch] [ch]Em[/ch] [ch]G[/ch]\nwords\n", None, "G"),
         ({"tonality_name": "C"}, "[ch]C[/ch] [ch]F[/ch] [ch]G[/ch] [ch]Am[/ch] [ch]C[/ch]\nwords\n", 3, "C"),
+        # capo 9: C major, the major key a capo below A, has A minor's notes too, but the chords play A minor
+        ({"tonality_name": "A"}, "[ch]Am[/ch] [ch]F[/ch] [ch]C[/ch] [ch]G[/ch] [ch]Am[/ch]\nwords\n", 9, "A minor"),
     ],
     ids=("hotel-california", "named-by-the-sound", "no-capo", "stated", "stated-major", "named-minor", "G-major",
-         "C-capo-3"),
+         "C-capo-3", "A-capo-9"),
 )
 def test_a_key_the_tab_names_by_its_letter_alone_is_minor_when_its_chords_say_the_parallel_minor(
         conn, cfg, raw, content, capo, key):
@@ -457,6 +459,21 @@ def test_info_json_an_older_caracole_wrote_gets_a_key_read_as_now_once(conn, cfg
     info = song_dir(cfg.library_dir, s) / "info.json"
     info.write_text(json.dumps({"key": "A", "key_source": "tab"}))
     kv_set_json(conn, INFO_VERSION_KEY, 1)
+    assert refresh_info_keys(conn, cfg.library_dir) == 1
+    assert json.loads(info.read_text())["key"] == "A minor"
+
+
+def test_info_json_of_a_letter_alone_with_capo_9_gets_its_minor_key_once(conn, cfg):
+    # until INFO_VERSION 3, a tab's "A" over A minor's chords with capo 9 was read as A major (C major shapes)
+    from caracole.db import kv_set_json
+    from caracole.keys import INFO_VERSION_KEY
+
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "A"}, meta={"capo": 9},
+               content="[ch]Am[/ch] [ch]F[/ch] [ch]C[/ch] [ch]G[/ch] [ch]Am[/ch]\nwords\n")
+    info = song_dir(cfg.library_dir, s) / "info.json"
+    info.write_text(json.dumps({"key": "A", "key_source": "tab"}))
+    kv_set_json(conn, INFO_VERSION_KEY, 2)
     assert refresh_info_keys(conn, cfg.library_dir) == 1
     assert json.loads(info.read_text())["key"] == "A minor"
 

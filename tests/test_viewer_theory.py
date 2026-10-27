@@ -494,6 +494,10 @@ HOTEL = ("Am", "E7", "G", "D", "F", "C", "Dm", "E", "Am", "E7", "G", "D", "F", "
         ("E", 0, ("Em", "C", "G", "D", "Em"), "Em", "Em"),  # its chords G major's notes, E minor's
         ("G", 0, ("G", "C", "D", "Em", "G"), "G", "G"),  # chords that fit the major key stay in it
         ("C", 3, ("C", "F", "G", "Am", "C"), "C", "Eb"),  # A minor, a capo below C minor, has C major's notes
+        # Capo 9 puts the major key a capo below on the relative major: C major has A minor's notes, but the chords
+        # play A minor, on the letter the tab names, so A minor shapes, never C major's sounding A
+        ("A", 9, ("Am", "F", "C", "G", "Am"), "Am", "F#m"),
+        ("A", 9, ("C", "F", "G", "C"), "C", "A"),  # chords on C: the sound, as "F#" with capo 6 below
         ("F#", 6, ("C", "Em", "F", "G", "Am", "C"), "C", "F#"),  # the sound, in C shapes
         ("Am", 2, HOTEL, "Am", "Bm"),  # named with its mode: as named
         ("A major", 2, HOTEL, "A", "B"),

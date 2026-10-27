@@ -4552,9 +4552,11 @@ notes (or those of the minor key a capo lower, for a tab that names the key the
 song sounds in) and not the major key's, and the sheet never plays that
 letter's major chord (A, A7, Amaj7). Ultimate Guitar names Hotel
 California's key `A`, with capo 2 over Am E7 G D F C Dm E: caracole reads A
-minor, A minor shapes that sound B minor. A key named with its mode (`Am`, `A
-major`, `A minor`) is as named, and a letter whose chords fit its major key is
-that major key. A sheet's own `{key: A}` with no key from the tab is read so
+minor, A minor shapes that sound B minor. Chords whose key is that very minor
+key are read so first: `A` over Am F C G with capo 9 is A minor, though C
+major, the major key a capo lower, has their notes too. A key named with its
+mode (`Am`, `A major`, `A minor`) is as named, and a letter whose chords fit
+its major key is that major key. A sheet's own `{key: A}` with no key from the tab is read so
 too. Either is the sheet's key before any `[transpose]`.
 
 `info.json` holds it in two fields, for anything that reads the library:
@@ -4573,7 +4575,7 @@ too. Either is the sheet's key before any `[transpose]`.
 - `identity_key` is caracole's own key for the song, which info.json called
   `key` before. The first command that rewrites the pages after an upgrade
   rewrites every song's info.json once, with these fields (and once more
-  after the upgrade that reads a tab's letter alone with its chords). caracole never
+  after each upgrade that reads a tab's letter alone with its chords otherwise). caracole never
   rewrites an info.json that holds the same text already, so Syncthing has
   nothing to sync for it.
 

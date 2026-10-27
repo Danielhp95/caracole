@@ -373,20 +373,29 @@ def bare_key(named: Key, capo: int, played: list[Chord]) -> Key:
     A major's, so A minor (the shapes; the song sounds B minor), and its "B" is B minor (the sound). "G" over G C D
     Em stays G, and "C" over C F G Am with capo 3 stays C, though A minor, a capo below C minor, has those notes too:
     the major key that fits comes first. "A" over A E Em C stays A: C major's notes, but it plays A. Without a capo
-    the two tests are one. Without chords to tell, major."""
+    the two tests are one. Without chords to tell, major.
+
+    Their key on the letter itself comes before either test, as most tabs name the shapes' key: "A" over Am F C G
+    with capo 9 is A minor, though C major, a capo below A, has those notes too (the relative major sits a capo
+    of 9 below)."""
     if named.mode != "ionian":
         return named
     found = estimate_key(played)
     if found is None:
         return named
+
+    def plays_major(tonic: int) -> bool:
+        return any(chord.root == tonic and 4 in chord.intervals for chord in played)
+
+    if found.tonic == named.tonic:  # the chords' own tonic is the letter's: the shapes' key, in their mode
+        return Key(named.tonic, "aeolian") if found.mode == "aeolian" and not plays_major(named.tonic) else named
     notes = scale(found)
     lowered = (named.tonic - capo) % 12
     if notes in (scale(named), scale(Key(lowered, "ionian"))):
         return named
     for tonic in (named.tonic, lowered):
         if notes == scale(Key(tonic, "aeolian")):
-            plays_major = any(chord.root == tonic and 4 in chord.intervals for chord in played)
-            return named if plays_major else Key(named.tonic, "aeolian")
+            return named if plays_major(tonic) else Key(named.tonic, "aeolian")
     return named
 
 
