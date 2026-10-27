@@ -58,6 +58,8 @@ const caracoleCard = (icons, rows) => {
   const AUTO = /^sheet [(]auto[)][.](html|pdf|txt|cho)$/;
   const GUITAR = /^guitar-\d+[.]([A-Za-z0-9]+)$/;
   const HARMONICA = /^harmonica-\d+[.]txt$/;
+  // A harmonica tab's page beside it (``harmonicaPage``: render.py's harmonica-N.html), which its tile and its row open.
+  const harpPage = (f) => (f && f.harmonicaPage && typeof f.harmonicaPage.href === "string" ? f.harmonicaPage.href : "");
   const SCORE = /^score-\d+[.]([a-z]+)$/;
   const SCORE_FORMATS = { mscz: "MuseScore", mxl: "MusicXML", musicxml: "MusicXML", pdf: "PDF", mid: "MIDI",
     midi: "MIDI" };
@@ -362,10 +364,10 @@ const caracoleCard = (icons, rows) => {
       harp.forEach(claim);
       const first = harp[0];
       const t = { kind: "harmonica", glyph: "harmonica", name: "Harmonica tab", plural: "harmonica tabs", unit: "tab",
-        open: { href: first.href }, said: "Open the harmonica tab of " + title,
+        open: { href: harpPage(first) || first.href }, said: "Open the harmonica tab of " + title,
         from: plainLabel(first).replace(/^Harmonica tab/, "Tab"), lead: "Tabs",
         downloads: [downloadLink(first, "Text", "Download " + plainLabel(first) + " of " + title)],
-        opener: (f) => ({ href: f.href }) };
+        opener: (f) => ({ href: harpPage(f) || f.href }) };
       t.chips = bySource(harp).map((g) => ({ source: g.source, count: g.files.length, unit: "tab",
         fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
       made.push(t);

@@ -23,7 +23,7 @@ night, on these terms (youtube_fetch.py runs it, AGENTS.md says why):
 yt-dlp runs as a program, its arguments a list and never a shell, and whatever comes from
 a song's name follows ``--``, so it is never read as an option. A run that takes too long,
 or that caracole is interrupted in (Ctrl-C reaches caracole alone), is stopped with its
-whole process group (yt-dlp, ffmpeg, deno).
+whole process group (yt-dlp, ffmpeg, deno), even one interrupted as it starts (``_CtrlCHeld``).
 
 YouTube's player needs JavaScript solved, which yt-dlp does with deno. Its JIT dies under
 systemd's MemoryDenyWriteExecute, which caracole's units keep, so deno gets
@@ -550,14 +550,20 @@ class YtDlp:
         self._pause()
         argv = [self.binary, *_BASE_ARGS, "--cache-dir", str(self.cache_dir), *args, "--", target]
         env = ytdlp_env(os.environ)
+        held = _CtrlCHeld()  # until caracole holds the process, which a Ctrl-C then stops with it
         try:
             proc = subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                     env=env, start_new_session=True)
         except OSError as e:  # no yt-dlp there: nothing was sent
+            held.give_back()
             raise ProviderError(PROVIDER, target, None, f"can't run yt-dlp ({self.binary}): {e.strerror or e}") from e
+        except BaseException:
+            held.give_back()
+            raise
         try:
             self.requests_made += 1
             self._last = self._clock()
+            held.give_back()
             out, err = proc.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
             _stop(proc)
@@ -626,6 +632,34 @@ def ytdlp_env(environ: Mapping[str, str]) -> dict[str, str]:
            if k in _KEPT_ENV or k.startswith("LC_") or k.lower() in _PROXY_ENV}
     env.setdefault("DENO_V8_FLAGS", "--jitless")
     return env
+
+
+class _CtrlCHeld:
+    """A Ctrl-C held while yt-dlp starts, and given back once caracole holds its process (``give_back``, where a
+    Ctrl-C stops it): heard as Popen returns, it would leave yt-dlp running in a session of its own, which no Ctrl-C
+    reaches. The main thread alone hears one, its SIGINT handler swapped meanwhile for one that notes it."""
+
+    def __init__(self) -> None:
+        self.heard = False
+        self._was: Any = None
+        if signal.getsignal(signal.SIGINT) is None:  # a handler Python didn't set: none to give back
+            return
+        try:
+            self._was = signal.signal(signal.SIGINT, self._note)
+        except ValueError:  # not the main thread: nothing to hold
+            self._was = None
+
+    def _note(self, signum: int, frame: object) -> None:
+        self.heard = True
+
+    def give_back(self) -> None:
+        """The handler as it was, and a Ctrl-C heard meanwhile, now."""
+        if self._was is None:
+            return
+        signal.signal(signal.SIGINT, self._was)
+        self._was = None
+        if self.heard:
+            signal.raise_signal(signal.SIGINT)
 
 
 def _stop(proc: subprocess.Popen) -> None:

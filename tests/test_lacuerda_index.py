@@ -8,11 +8,11 @@ conditional requests are the client's real behaviour.
 
 from __future__ import annotations
 
-import time
 from datetime import timedelta
 
 import pytest
 from helpers.lacuerda_site import BASE, NOW, LaCuerdaSite, artist_page, fixture
+from helpers.reads import Reads
 
 from caracole import lacuerda_index as li
 from caracole import normalize
@@ -420,10 +420,15 @@ def test_find_reads_no_more_than_the_query_needs_on_a_table_lacuerdas_size(conn)
     conn.executemany("INSERT INTO lacuerda_index VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", rows)
     li.store_artists(conn, "tabs/e/index0.html", [LCArtist("estopa", "Estopa", 159)])
     for query in ("estopa", "cancion 4242 del amor", "artista numero 77"):
-        started = time.perf_counter()
-        found = li.find(conn, query)
-        assert time.perf_counter() - started < 1.0, query
+        with Reads(conn) as read:
+            found = li.find(conn, query)
         assert found.artists or found.songs, query
+        # One pass over the table, the prefilter's (letters inside a key: no index finds them); every other row
+        # by an index.
+        assert len(read.scans("lacuerda_index")) <= 1, (query, read.scans("lacuerda_index"))
+        # Into Python, the prefilter's best rows and a few more for its hits: never every row that holds the
+        # query's words, as "cancion" is in 50,000 rows here and "artista numero" in all 75,001.
+        assert read.rows <= len(rows) // 10, (query, read.rows)
 
 
 

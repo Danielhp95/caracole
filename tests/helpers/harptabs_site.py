@@ -1,14 +1,19 @@
 """A fake harptabs.com behind a real ``PoliteClient``.
 
 The pages are the ones caracole's own user agent got on 27 October 2026, in tests/fixtures/harptabs/:
-robots.txt, the sitemap trimmed to 17 of its 37,598 URLs (no ETag, as the live one sends none), and two
-tab pages trimmed to their head, header, chips and tab (Piano Man's lyric lines synthetic). Other tab
-pages are made from Piano Man's (:func:`tab_page`).
+robots.txt, the sitemap trimmed to 17 of its 37,598 URLs (no ETag, as the live one sends none), three
+tab pages trimmed to their head, header, chips and tab (Piano Man's lyric lines synthetic; Knockin' on
+Heaven's Door's, 29910, a tab "by Unknown", its words synthetic, which no fake site serves unasked), and two
+artist pages trimmed to their header and a few cards (Billy Joel's, 7 of the 30 it lists, and the
+site's catch-all "?"). Other tab pages are made from Piano Man's (:func:`tab_page`), other artist
+pages from Billy Joel's (:func:`artist_page`).
 """
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime
+from html import escape
 from pathlib import Path
 
 import httpx
@@ -43,15 +48,40 @@ def tab_page(title: str, artist: str, *, views: str = "1.1M", key: str = "C", bo
             + "<code>" + body + "</code>" + tail)
 
 
+_CARD = '<div class="group relative block rounded-lg'
+_FOOT = '<div class="flex justify-center py-8'
+
+
+def artist_page(name: str, tabs: Sequence[tuple], *, count: int | None = None) -> str:
+    """An artist page in the captured one's markup (Billy Joel's), named ``name``, its header saying ``count`` tabs
+    (those listed, by default), and a card a tab of ``tabs``, each ``(id, slug, title)`` or ``(id, slug, title,
+    views)`` ("57k"), with the first captured card's other chips (key C, rated 4.0, Beginner)."""
+    page = fixture("artist_1178_billy-joel.html")
+    head, _, rest = page.partition(_CARD)
+    card, _, _ = rest.partition(_CARD)
+    tail = page[page.index(_FOOT):]
+    cards = []
+    for tab in tabs:
+        tab_id, slug, title, views = (*tab, "1.1M")[:4]
+        cards.append(_CARD + card.replace('href="/tab/25/piano-man">piano man</a>',
+                                          f'href="/tab/{tab_id}/{slug}">{escape(title)}</a>')
+                     .replace("</svg>1.1M</span>", f"</svg>{views}</span>"))
+    n = len(tabs) if count is None else count
+    return (head.replace(">billy joel</h1>", f">{escape(name)}</h1>")
+            .replace(">98 tabs</p>", f">{n} tab{'' if n == 1 else 's'}</p>") + "".join(cards) + tail)
+
+
 class FakeHarpTabs:
-    """harptabs.com: pages by URL, every request recorded. By default it has the captured sitemap and its two
-    captured tab pages; any other URL of the site answers 404, as a tab taken down does."""
+    """harptabs.com: pages by URL, every request recorded. By default it has the captured sitemap, its two
+    captured tab pages and Billy Joel's artist page; any other URL of the site answers 404, as a tab taken down
+    does."""
 
     def __init__(self, pages: dict[str, tuple[int, str, dict[str, str]]] | None = None):
         self.pages: dict[str, tuple[int, str, dict[str, str]]] = {
             SITEMAP: (200, fixture("sitemap.xml"), XML),
             f"{BASE}/tab/25/piano-man": (200, fixture("tab_25_piano-man.html"), HTML),
             f"{BASE}/tab/89/la-bamba": (200, fixture("tab_89_la-bamba.html"), HTML),
+            f"{BASE}/artist/1178/billy-joel": (200, fixture("artist_1178_billy-joel.html"), HTML),
         }
         self.pages.update(pages or {})
         self.requests: list[str] = []

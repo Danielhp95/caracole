@@ -10,7 +10,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   ``caracole add`` adds it, then synced; the Ultimate Guitar song you picked
   recorded under ``[match]`` in overrides.toml, and the tab under ``[pin]``,
   in place of the song's pin of its kind group alone (``_other_pins``); the
-  LaCuerda song or version you picked under ``[lacuerda]``.
+  LaCuerda song or version you picked under ``[lacuerda]``, and the harptabs.com tab
+  under ``[harptabs]``.
 - ``match``: matched against the offline index, alone.
 - ``sheet``: the LaCuerda sheet you picked, first (its version's page, and its
   artist's page when the index doesn't name its best version). Else, or when
@@ -38,7 +39,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``gtptabs``: a Guitar Pro file from gtptabs.com, from the index the nightly
   run keeps.
 - ``harptabs``: a harmonica tab from harptabs.com, from the index the nightly run
-  keeps: the song's candidates read at the lookup pace (harptabs_fetch.py).
+  keeps: the song's candidates read at the lookup pace (harptabs_fetch.py), or the
+  tab you picked, recorded under ``[harptabs]``.
 - ``pages``: the PDF again if the sheet changed, then _todo.md and index.html,
   whose MuseScore links come from the local index.
 - ``songbooks``: the songbooks of songbooks.toml that list the song, made again
@@ -113,7 +115,7 @@ NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn'
 class LookupRequest:
     """A song to look up now, by name; ``songbooks`` False leaves the stage that makes its songbooks again; ``ug`` ("artist-key/song-key") is the Ultimate Guitar song you
     picked, ``tab`` the tab (its page's address, or its id), ``lacuerda`` the LaCuerda song or version
-    (its page's address)."""
+    (its page's address), ``harptabs`` the harptabs.com tab (its page's address)."""
 
     artist: str
     title: str
@@ -122,6 +124,7 @@ class LookupRequest:
     ug: str | None = None
     tab: str | None = None
     lacuerda: str | None = None
+    harptabs: str | None = None
     songbooks: bool = True  # False: leave the songbooks to a job that makes them once (Get the missing songs)
 
     @property
@@ -389,9 +392,11 @@ class _Lookup:
         from caracole.normalize import identity_key
         from caracole.overrides import (
             OverridesError,
+            add_harptabs,
             add_lacuerda,
             add_match,
             add_pin,
+            harptabs_pick_from_url,
             lacuerda_pick_from_url,
             load_overrides,
             tab_id_from_url,
@@ -435,6 +440,10 @@ class _Lookup:
                 add_lacuerda(self.cfg.overrides_file, song.display, pick.url)
                 update_song(self.conn, song.id, lacuerda_checked_at=None)  # a new pick is asked for at once
                 picked.append(f"[lacuerda] {pick.url}")
+            if req.harptabs:
+                harp = harptabs_pick_from_url(req.harptabs)
+                add_harptabs(self.cfg.overrides_file, song.display, harp.url)
+                picked.append(f"[harptabs] {harp.url}")
             if picked:
                 self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:

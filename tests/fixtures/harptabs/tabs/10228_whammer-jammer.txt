@@ -1,0 +1,108 @@
+Tnarsel Midbop - V Fuazt Nors - E Limd
+
+AB...pav eifo zu tan ro selim, dab A pvefz I’to nur as.  Lomedb pi vfaz at ners iloumd ba povefi ztan ar seilm dbouap vofez itaa nre slimdb.  Op U’va fozten risalmadb, ep ivfoz tunarsolm, ed iaa bepv fzitn rosulmadb op vfezt, nir sa lmad – E'bi pov fzutn rsal omd E’b pivfaz tnar se limdobp.
+
+Vuafztoner isa lamed ib pvofzutn, a.o., {-4 -5}
+Reslia mdabep ivo fuzat on rseila mdabpevf, i.o., [-2 -5]
+Ztunrs alo medib ap vafeztniros, u.a., (1 2)
+Lomed bi pa vafz eti norus lamd bopeivf, a.a., -1....
+Ez tni rosualom 9 dbepv, I faazten ir solm U daobp...
+
+
+-4b -4 {-4 -5} 9b 9 10b 10 9
+
+-1 2 3 2 (-1 -2) (-1 -2) (-1 -2) (-1 -2)
+
+-3 -3 -1 2 3 2 3 (-1 -2) (-1 -2) (-1 -2) (-1 -2)
+
+-3 -3 -1 2 3 2 3 (-1 -2) (-1 -2) (-1 -2) (-1 -2)
+
+-3 -3 -1 -1 2 4 -3b 3 2 4 -3b -1 2 3 2  3 
+
+(-1 -2) (-1 -2) (-1 -2) (-1 -2) -3 -1 -1 2 
+
+(-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2)
+
+(1 2) 3 3 3 3 2
+
+(-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2)
+
+(1 2) 3 -3b 3 2
+
+(-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2)
+
+(1 2) 3 3 3 3 2
+
+(-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2) (-1 -2)
+
+(1 2) 3 3 3 3 2
+
+-1 -4 4 4 1 4 -3b -1 2 3 -3 4 4 3 -2bb -1 -1 -1 2
+
+-3 -4 -4 -3 5 -3 -3 -4 -3 5
+
+-3 -4 -4 -3 5 -3 -3 -4 -3 5
+
+1 2 -2bb 3 2 -2bb 3 3 -3 -4 -3 5 3 3 -3 -4 5
+
+-5 5 -4 4 -3 -2 -2bb -1 1 -2 3 -3 3 2 -2 -2bb -1 -1
+
+{-3 -4} {-3 -4} {-3b -4b} {-3 -4}
+
+-3 -3 3 3 3 3 -2 -2bb -1 -1
+
+[-2 -5] [-2 -5] {-2 -3} {-5 -6} {5 6} -4
+
+[-2 -5] [-2 -5] {-2 -3} {-5 -6} {5 6} -4
+
+[1 4] [1 4] {1 2} -3b -3bb 3
+
+[-2 -5] [-2 -5] {-2 -3} {-5 -6} {5 6} -4
+
+{-4 -5} -5 3 -3 6 -5 -4 4 -2 -2bb -1 -1
+
+{-4 -5} {5 6} {-5 -6} {5 6}
+
+{-4 -5} {5 6} {-5 -6} {5 6}
+
+{-4 -5} {5 6} {-5 -6} {5 6}
+
+10b 9 9 9 9 9 9 9 9 9 9 9 9 9 9 9
+
+4 -4 -4 -4b -4 3 4 3 4 -3b
+
+-1 2 3 -3 4 4 -2 -2bb -1 -1
+
+6 -5 -4 -5 6 6 -5 -4 -5 6 6 -5 -4 -5 6
+
+10b 9 9 9 9 9 9 9 9 9 9
+
+-4b -4 -3 3 3 4 -4 5 -5 5 -3b -3 
+
+-4 3 3 2 -2 -2bb -1 -1
+
+4 -4b -4
+
+4 -4b -4
+
+4 -4b -4 4 -4b -4 4 -4b -4 -4b -3 -4b -4
+
+3 -3b........2 3 3 2 -2 -2bb -1 -1
+
+4 -4 5 -5 5 -5 5 3 3 2 -2 -2bb -1 -1
+
+(Vfez it nrasa Lemid Bopv fztuanr/soelm dbpiavf zat ners ilmo dub pav)
+
+3 -3b........2 3 3 2 -2 -2bb -1 -1 -4 -1 -2
+
+2 -2 -2 2 -2 -2 2 -2 -2 2 -2 -2
+
+2 -2 -2 2 -2 -2 2 -2 -2 2 -2 -2
+
+3 -3b 2 -2 -2 3 -3b 2 -2 -2
+
+2 -2 -2 2 -2 -2 2 -2 -2 2 -2 -2
+
+4 -4 -4 2 -2 -2 2 -2 -2 2 -2 -2
+
+6 5 -4 4 -3 -4 5 6 10b 9...........

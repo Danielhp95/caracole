@@ -69,6 +69,12 @@ names, and the page names a harp ``harpKeys[(tonic + shift + offset) % 12]``, wh
 And, the same on every page, ``layouts()``: each harp's notes by its key's pitch class, ``[blow, draw]``, each its
 ten holes' MIDI notes (``layout``), for the sound of a chord's holes (page.py carries it in ``winds``, as ``harps``).
 
+**A hole's note** (``hole_note``), for a harmonica tab's page (harptab_page.py), whose holes play the same on any
+harp but sound in its key: a hole blown or drawn, bent down a semitone at a time on the reed that bends (the draw on
+holes 1 to 6, the blow on 7 to 10, never 5 or 7: ``Layout.bends``), or overblown (holes 1 to 6, a semitone above the
+draw) and overdrawn (7 to 10, a semitone above the blow). ``hole_tables`` is every such note of each harp, which
+the page's script looks up; ``position_text`` the position a harp plays a song in, in words.
+
 An **entry** is null for a chord not on that harp, else ``[kind, breath, first, last]`` ("yes": its own notes,
 breath "blow" or "draw", holes ``first`` to ``last``) or ``[kind, breath, first, last, suffix]`` ("part" or
 "minor": the chord played there is the chord's root, named as the page names it, and ``suffix``): ``entry_text``
@@ -384,3 +390,56 @@ def tables(key: Key | None, mapped: dict[str, Sequence[Chord | None]],
 def layouts() -> list[list[list[int]]]:
     """Each harp's notes, by its key's pitch class: ``[blow, draw]``, its ten holes' MIDI notes each."""
     return [[list(layout(h).blow), list(layout(h).draw)] for h in range(12)]
+
+
+# --- a hole's note, for a harmonica tab's page (harptab_page.py) -----------------------------------
+
+
+def hole_note(harp: int, hole: int, breath: str, bend: int = 0, over: bool = False) -> int | None:
+    """The MIDI note hole ``hole`` (1 to 10) sounds on the harp in the key of pitch class ``harp``, blown or drawn
+    (``breath``), bent down ``bend`` semitones, or overblown (``over``: on the breath of the hole's lower reed, a
+    semitone above its higher one, an overblow on holes 1 to 6, an overdraw on 7 to 10); None for what the harp
+    can't play: a bend on the reed that doesn't bend or deeper than it goes (none on 5 and 7), an overblow on the
+    breath of the higher reed, a hole past 10."""
+    if not 1 <= hole <= HOLES or breath not in ("blow", "draw"):
+        return None
+    harp_layout = layout(harp % 12)
+    i = hole - 1
+    blow, draw = harp_layout.blow[i], harp_layout.draw[i]
+    if over:
+        lower = "blow" if draw > blow else "draw"
+        return max(blow, draw) + 1 if breath == lower else None
+    if bend:
+        bends = harp_layout.bends[i]
+        if harp_layout.bend_breath[i] != breath or bend > len(bends):
+            return None
+        return bends[bend - 1]
+    return blow if breath == "blow" else draw
+
+
+def hole_tables() -> list[dict[str, Any]]:
+    """Each harp's every note, by its key's pitch class, for a harmonica tab's page to look up (``hole_note`` is the
+    same): ``blow[i]`` and ``draw[i]``, hole ``i + 1``'s note on that breath, then each bend down it has there, a
+    semitone at a time (``[note]`` alone where it bends on the other breath); ``over[i]``, ``[breath, note]``: the
+    breath its overblow (or overdraw) is played on and the note."""
+    found = []
+    for harp in range(12):
+        table: dict[str, Any] = {"blow": [], "draw": [], "over": []}
+        for hole in range(1, HOLES + 1):
+            for breath in ("blow", "draw"):
+                notes = [hole_note(harp, hole, breath)]
+                while (bent := hole_note(harp, hole, breath, len(notes))) is not None:
+                    notes.append(bent)
+                table[breath].append(notes)
+            breath = next(b for b in ("blow", "draw") if hole_note(harp, hole, b, over=True) is not None)
+            table["over"].append([breath, hole_note(harp, hole, breath, over=True)])
+        found.append(table)
+    return found
+
+
+def position_text(tonic: int, harp: int) -> str:
+    """The position a harp in ``harp`` plays a song on ``tonic`` in, in words, with its mode past the 2nd: "1st
+    position", "2nd position", "4th position, aeolian", "7th position"."""
+    position = position_of(tonic, harp)
+    mode = position_mode(position)
+    return ordinal(position) + " position" + (f", {mode}" if mode and position not in (1, 2) else "")

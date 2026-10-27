@@ -200,11 +200,15 @@ def put(browser, text):
 
 def type_and_enter(browser, text, *after):
     """``text`` typed into the search box and Enter pressed in one go, then the keys ``after`` (Escape): before the
-    query's answer, which the page asks for only once its timer, after the last key, has run."""
-    browser.js("(() => { const q = document.getElementById('q'); q.focus(); q.value = " + json.dumps(text) + "; "
-               "q.dispatchEvent(new Event('input', {bubbles: true})); "
-               "for (const key of " + json.dumps(["Enter", *after]) + ") "
-               "q.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true})); })()")
+    query's answer, which the page asks for only once its timer, after the last key, has run. Gives the query whose
+    answer the library page shows the moment the keys are pressed, read in the same go: none yet, however busy the
+    machine (read by an evaluation of its own, after, it may be the answer, in by then)."""
+    return browser.js(
+        "(() => { const q = document.getElementById('q'); q.focus(); q.value = " + json.dumps(text) + "; "
+        "q.dispatchEvent(new Event('input', {bubbles: true})); "
+        "for (const key of " + json.dumps(["Enter", *after]) + ") "
+        "q.dispatchEvent(new KeyboardEvent('keydown', {key, bubbles: true, cancelable: true})); "
+        "const found = document.getElementById('found'); return found ? found.dataset.query : null; })()")
 
 
 def keys_once(browser, ready, keys, seen="null"):
@@ -282,8 +286,8 @@ def test_enter_before_the_answer_sends_it_with_the_answer_and_moves_to_the_first
     lacuerda(cfg)
     sites(cfg, ug=[("los-imaginarios", "corazon-de-tiza", 2)])
     browser.open(base)
-    type_and_enter(browser, "corazon de tiza", "Enter")  # twice, before the answer
-    assert browser.js("document.getElementById('found').dataset.query") != "corazon de tiza"  # on its way
+    # twice, before the answer: on its way
+    assert type_and_enter(browser, "corazon de tiza", "Enter") != "corazon de tiza"
     assert browser.wait("!!(document.activeElement && document.activeElement.closest('#found article'))")
     assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
     time.sleep(2)  # long past the 1.5 s a settled query waits

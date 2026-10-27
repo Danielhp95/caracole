@@ -43,7 +43,9 @@ ran. So a job of other commands reads the same way:
   read: …" for a cooldown, a block, a spent budget or an error), and a query
   of LaCuerda's search (``jobs.LACUERDA_SEARCH``) in the words ``caracole
   lacuerda --search`` ends with ("Searched: …", "Found already: …", "Nothing
-  found: …", or "Not searched: …"); while it runs, "Searching LaCuerda…". An add of a
+  found: …", or "Not searched: …"); while it runs, "Searching LaCuerda…"; and a
+  harptabs.com artist page's read (``jobs.HARPTABS_ARTIST``), as a LaCuerda
+  one's, in the words ``caracole harptabs --artist`` ends with. An add of a
   song whose sheet you picked on LaCuerda says that tonight's run gets that sheet.
 
 A line that ends in a failure or a wait also links to the job's output on
@@ -61,7 +63,7 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.web.jobs import EXPORTING, LACUERDA_READS, MINE, REMOVING, Job, Stage, Step
+from caracole.web.jobs import EXPORTING, INDEX_READS, MINE, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -187,7 +189,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
             return Line("removed", DONE[action])
         opens = songbook_page if action in OPENS else None  # moved, set or renamed: its set list is right there
         return Line("ready", DONE[action], ("Open songbook", opens) if opens else None)
-    if job.song_key.startswith(LACUERDA_READS):  # no song's: its command's last word says what LaCuerda answered
+    if job.song_key.startswith(INDEX_READS):  # no song's: its command's last word says what the site answered
         return _artist_read(job.steps, details)
     if song is not None and song.sheet:
         return Line("ready", READY, ("Open sheet", song.sheet))
@@ -212,8 +214,9 @@ def song_line(line: Line) -> Line:
 
 
 def _artist_read(steps: list[Step], details: str) -> Line:
-    """A LaCuerda artist page's read, or a query of its search, over: the sentence ``caracole lacuerda --artist``
-    (or ``--search``) ends with (commands/lyrics.py), up to its first "; " or bracket. "Read: …", "Searched: …" and
+    """A LaCuerda artist page's read, or a query of its search, or a harptabs.com artist page's read, over: the
+    sentence ``caracole lacuerda --artist`` (or ``--search``, or ``caracole harptabs --artist``) ends with
+    (commands/lyrics.py), up to its first "; " or bracket. "Read: …", "Searched: …" and
     "Found already: …" are done, "Not found: …" and "Nothing found: …" LaCuerda's answer that it has no such page or
     song, and "Not read: …" and "Not searched: …" a cooldown, a block, a spent budget or an error, each a wait; any
     other ending, "Done"."""

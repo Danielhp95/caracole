@@ -158,6 +158,8 @@ the state folder is yours to delete). A file you dropped into `_inbox/` that an 
 filed under a Guitar Pro pick on Ultimate Guitar stays, as the song's own inbox file. It takes
 a few seconds more than the copy. Schema 10 adds harptabs.com's index, empty until the nightly
 run, or `caracole harptabs`, reads its sitemap (see [caracole harptabs](#one-step-at-a-time)).
+Schema 11 adds the tabs of harptabs.com's artist pages, empty until `caracole harptabs --index`,
+or the nightly run, reads them.
 The ukulele chords need no change of schema: an index built before reads Ultimate Guitar's
 ukulele sitemaps at its next refresh (see [caracole index build](#caracole-index-build)). A state
 folder caracole can't use ends a command with status
@@ -216,12 +218,18 @@ and ukulele chords alone.
 each song you want that has none, caracole matches its title against the
 site's sitemap, reads the pages of the tabs titled so, and keeps the most
 viewed one by your song's artist as `harmonica-1.txt` (`caracole harptabs`, in
-[One step at a time](#one-step-at-a-time)). Its site terms ask that nothing be
+[One step at a time](#one-step-at-a-time)), and the render gives it a page beside
+it, `harmonica-1.html`, its holes over the words (see [The harmonica tab
+page](#the-harmonica-tab-page)). Its site terms ask that nothing be
 copied, and its API's that the tabs not be mirrored: caracole keeps the tabs of
-your own songs alone, for you, never a tab of a song nobody asked for. It asks
-with caracole's own user agent, as it asks every site, and an HTTP 403, a 429 or
-a challenge from harptabs.com is a block like any site's: a cooldown and one
-alert, never a way around it (see [caracole run](#caracole-run)).
+your own songs alone, for you, never a tab of a song nobody asked for. So that
+a search finds its tabs by artist as well as by title, as it finds Ultimate
+Guitar's, caracole reads harptabs.com's artist pages into a local index (the
+names of an artist's tabs, never the tabs themselves): `caracole harptabs
+--index`, a budget at a time, and the nightly run with what its harptabs budget
+leaves. It asks with caracole's own user agent, as it asks every site, and an
+HTTP 403, a 429 or a challenge from harptabs.com is a block like any site's: a
+cooldown and one alert, never a way around it (see [caracole run](#caracole-run)).
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -444,7 +452,10 @@ In order:
    tab.
 7. **LaCuerda**, for a Spanish song without a complete sheet,
    **gtptabs.com**, for a Guitar Pro file, and **harptabs.com**, for a
-   harmonica tab, from the indexes the nightly run keeps.
+   harmonica tab, from the indexes the nightly run keeps: the harptabs.com tab
+   you picked (`--harptabs URL`, its page's address, recorded under
+   `[harptabs]`), else the most viewed by the song's artist. A tab you picked is
+   kept beside the song's other harmonica tabs, never in place of one.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
    sheet changed, and MuseScore's pages matched from its local index.
 9. **The songbooks it is in**: each songbook of songbooks.toml that lists the
@@ -604,7 +615,8 @@ say), nothing is removed and it exits 1.
   `sheet (G Dorian, capo 0).pdf` exports of `caracole render --version` too),
   every file of a version kept beside the sheet (`version-<tab>.txt`,
   `.json`, and the viewer `version-<tab>.html` a render wrote, a version's
-  page the last fetch let go too), `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
+  page the last fetch let go too), each harmonica tab and the page a render
+  wrote of it (`harmonica-1.txt`, `harmonica-1.html`), `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
   Then the folder, and the artist's folder, once empty. Syncthing then
   deletes them on every device. And the song's record: its match, its
   versions, its lyrics and what caracole remembered about it, and the audio
@@ -819,7 +831,9 @@ resume.
 
 **`caracole index stats`** prints the number of tabs of each type, of artists
 and of sitemaps, the newest tab id, and when the index was built and last
-refreshed.
+refreshed; then, once harptabs.com's sitemap is read, how far its artist index
+has got: `harptabs.com: 1204 of 10428 artist pages read, 5130 tabs; caracole
+harptabs --index reads the rest.`
 
 ### caracole match --dry-run
 
@@ -932,7 +946,10 @@ configuration it would take, and why it waits.
    cause's line; sitemaps it couldn't read get a line of their own.
 10. **harptabs**: keep a harmonica tab from harptabs.com for each song that has
     none and a tab there by its artist (see [caracole
-    harptabs](#one-step-at-a-time)).
+    harptabs](#one-step-at-a-time)). What its budget leaves reads artist pages
+    into harptabs.com's local index, for searches: your songs' artists first,
+    then the others, each again after 30 days (`artist index: 18 pages read,
+    1204 of 10428 artists`). Only once the library has a song.
 11. **musescore**: read MuseScore's song sitemaps into a local index, for the
     to-do page's links to its pages. It downloads nothing.
 12. **youtube**: take the audio of a few songs no human sheet was found for from
@@ -1005,7 +1022,10 @@ spends one on its sitemap, a single 6.4 MB file with no validators, read again
 after 30 days. Then a song costs the pages of the tabs titled as it is (only
 when the sitemap lists an artist by its artist's name), eight at most, each
 read once and cached for good: most songs cost one or two, a common title a few
-more.
+more. Its artist pages, for searches, cost one request each, and are read again
+after 30 days: what the budget leaves reads about 15 a night, so the whole
+index (about 10,400 artists) is `caracole harptabs --index`'s, which at 10–20
+seconds a request takes some 44 hours of requests, a `--budget` at a time.
 
 MuseScore gets at most 10 requests a run, 10–20 seconds apart, all for its song
 sitemaps: an index and 18 files of about 40,000 song pages each, read over two
@@ -1033,7 +1053,7 @@ run's ("caracole: Ultimate Guitar blocked"), its text the line the command
 prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
-lacuerda --artist`) sends none: it says so where you asked. A run, a command
+lacuerda --artist`, `caracole harptabs --artist`) sends none: it says so where you asked. A run, a command
 or a lookup the site answers without a block starts the count again; one the
 site answered with nothing but errors doesn't, and neither does a run that let
 a lookup go first which was blocked meanwhile: that block's cooldown stands.
@@ -1248,13 +1268,46 @@ and cache.
   artist's name; then the pages of the tabs of that title are read, lowest id
   first, eight at most, each for the artist it names, and of those by your
   song's artist the most viewed is kept, as the song's `harmonica-N.txt`, the
-  page's tab as it is: hole numbers over the lyrics. A song none of whose tabs
-  is by its artist is asked about again after 30 days; a song with an error,
-  next run. It prints `harptabs.com: 2 tried, 1 harmonica tab kept, 1 not on
+  page's tab as it is: hole numbers over the lyrics. A tab of no known artist
+  ("by Unknown") is no one's, as a tab by another artist is. A song none of
+  whose tabs is by its artist is asked about again after 30 days; a song with an
+  error, next run. It prints `harptabs.com: 2 tried, 1 harmonica tab kept, 1 not on
   harptabs.com, 0 errors`, after `Index: 1 sitemap read.` when it read it. A
   song that has a harmonica tab gets no other, and no file is ever replaced.
   With harptabs.com turned off it asks nothing and says so. A cooldown, a block
   or a spent budget exits 0.
+
+  **`caracole harptabs --index`** reads harptabs.com's artist pages into its
+  local index instead, for searches, even for an empty library: the sitemap first, when it never was read or last
+  was 30 days ago, then each artist page not read in 30 days, your songs'
+  artists first, then the others in the sitemap's order. An artist page lists
+  the artist's 30 most viewed tabs and says how many they have; the rest come
+  from the site's API, which robots.txt closes, so caracole knows those 30. It
+  asks at the bulk pace (10–20 s apart) with a budget of its own: `--budget N`
+  requests, 100 by default, and goes on where the last one stopped. It prints
+  `Index: harptabs.com's sitemap read.`, `harptabs.com: 99 artist pages read;
+  99 of 10428 artists read, 412 tabs in the index.` and, with the budget spent,
+  `The budget of 100 requests is spent: caracole harptabs --index reads the
+  next 10329 artists, about 43 h of requests at this pace.`; or `harptabs.com's
+  artist index is up to date: …` when nothing was due. A page that answers 404
+  keeps no tab (`1 gone`); one that won't parse, or any other error, leaves what
+  the index held of that artist, and is asked for again next time. It holds
+  caracole's lock while it runs, as the nightly run does, letting a lookup go
+  first in its pauses: a nightly run waits for it, so give it a budget that
+  ends before night (2000 requests are about 8 hours). A cooldown, a block or a
+  spent budget exits 0; `--budget` goes with `--index` alone (exit 2).
+
+  **`caracole harptabs --artist NAME`** reads one artist's page into the index
+  now: NAME is their name, or their page's address (`artist/1178/billy-joel`, as
+  the sitemap lists it). It asks at the lookup pace, as `caracole get` does,
+  within a lookup's budgets: one request, and none when caracole read the page
+  within 30 days. Its last line starts as `caracole lacuerda --artist`'s does:
+  `Read: harptabs.com's page of billy joel lists 30 of their 98 tabs, in the
+  index now.`, `Not found: harptabs.com's sitemap lists no artist named NAME.`
+  (no request), or `Not read: …` for the site turned off, its index still
+  empty, a cooldown, a block, a spent budget or an error, all of which exit 0,
+  nothing changed. It can't go with `--index` (exit 2). An artist's Read their
+  page on the pages `caracole serve` serves runs it.
 - **`caracole musescore`** reads MuseScore's song sitemaps into the local index
   the to-do page's MuseScore links come from, when it never has, or last did 30
   days ago; it asks for nothing else, and downloads nothing. It prints
@@ -2003,7 +2056,8 @@ sheet, as Use LaCuerda's sheet does; while your choice on Ultimate Guitar is in
 use, it says so, with Back to caracole's pick, as a `[pin]` outranks a LaCuerda
 pick. The **auto sheet** beside a human one: its viewer, its PDF, text and
 ChordPro. A Guitar Pro file's, a harmonica tab's or a score's source: a row a
-file, Open where the page shows it, and Download.
+file, Open where the page shows it, and Download. A harmonica tab with its page
+beside it opens that page, from its tile and its row, its text a download.
 
 Then its progressions, as it plays them ("vi–IV–I–V"), each a chip that shows
 your songs with that progression (below); where else to find it, links that
@@ -2332,8 +2386,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   seventh or ninth where the harp has only that ("blow 1–3 (as C)"), the minor
   chord a harp plays for a major one it lacks ("draw 4–6 (as Dm, minor
   substitute)"), or "not on this harp"; and the song's harmonica tabs from
-  harptabs.com, a link each, with the harp's key its page named. A chord's card
-  and the strip draw the harp's ten holes, those it plays lit. The **Flute**
+  harptabs.com, a link each to its page (see [The harmonica tab
+  page](#the-harmonica-tab-page)) with its text beside it, and the key its
+  harptabs.com page named, `key C (harptabs.com)`: the song's key on some tabs,
+  the harp's on others, so never a harp. A chord's card and the strip draw the harp's ten holes, those it
+  plays lit. The **Flute**
   (concert pitch) and the **Recorder** (soprano, sounding an octave above the
   notes it reads) show each chord's notes, each with its fingering: on the
   card, and in their row with the key's scale. That row switches the note
@@ -2595,6 +2652,49 @@ On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
 opens the file directly, works.
 
+### The harmonica tab page
+
+Each harmonica tab a song keeps, `harmonica-1.txt`, gets a page beside it at
+render time, `harmonica-1.html`, in the sheet viewer's look: a file that opens
+from the synced folder with no server and loads nothing, recorded as the
+viewers are, so `caracole serve` sends it only while it is the page caracole
+wrote (in a sandbox, as a viewer), and `caracole remove` deletes it with the
+song. The Harmonica row of the sheet viewer's settings and the song's line on
+the library page link it, the tab's text beside it.
+
+- **The holes over the words**, each over the syllable it is blown on, as a
+  chord sits over its syllable in the viewer: a blow in the sheet's rust
+  ("4"), a draw in blue ("−4"), a bend's ′ in purple ("−3′"), holes together
+  in their brackets ("(4 5)" a chord, "{−4 −5}" a shake, "[−2 −5]" a split). A
+  phone wraps a line between its words, never parting a hole from its
+  syllable. Rows played alone, later verses sung to the same tune and the
+  tabber's notes come as the tab gives them. caracole reads what harptabs.com's
+  tabbers write ("-4", "4D", "-3b", "b-3", "(5)" for a draw in a tab that
+  writes no "-", "7,8B"…); a tab in a notation of its tabber's own, or for a
+  chromatic harmonica, is its text as written, and the page says so.
+- **The harp**, in the header and the bar. A tab's holes are the same on any
+  harp, and sound in its key: caracole starts on the harp that plays with the
+  record, the one that puts the most of the tab's sung notes on the chords the
+  song's sheet plays under the same words ("D harp with the record (4th
+  position, aeolian)", and how well it fits); else the harp the tab's words
+  name ("I use an A harp": "A harp, as the tab says"); else the key
+  harptabs.com's page names, which is the harp's on some tabs and the song's
+  on others; else the first harp for the song's key, as the viewer's Harmonica
+  row lists them; else a C harp. With a sheet that has a key, each harp says
+  its position.
+- **The bar**: − and + change the harp a semitone (the holes stay; the sound
+  and the notes' names change); ♪, **Notes**, shows each hole's note on that
+  harp in its place ("F#6"); **Aa** the text size, and ▶ scrolls by itself,
+  as in the viewer.
+- **A hole tapped** is heard, a harmonica's reed; **▶ at a line's end** plays
+  the line hole by hole, a beat each, lighting each hole as it sounds, and
+  stops when pressed again (no rhythm: the tab has none).
+- **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
+  with none), and **The tab as text**, at the foot, opens `harmonica-1.txt`.
+
+The page keeps the harp, Notes, the text size and the scroll speed in its
+address too (`harmonica-1.html#harp=A&notes=1&fs=20`).
+
 ### Where each file came from
 
 Each source has a mark: the site's own icon for Ultimate Guitar, LaCuerda,
@@ -2635,8 +2735,8 @@ old, with no request.
 ### caracole search
 
 `caracole search [QUERY]... [--limit N] [--add N] [--key KEY] [--artist NAME]
-[--title TITLE] [--progression NUMERALS]` looks in three places, and sends no request: your library, the
-offline Ultimate Guitar index and LaCuerda's (see below):
+[--title TITLE] [--progression NUMERALS]` looks in four places, and sends no request: your library, the
+offline Ultimate Guitar index, LaCuerda's and harptabs.com's (see below):
 
     $ caracole search creep
     In your library
@@ -2652,6 +2752,11 @@ offline Ultimate Guitar index and LaCuerda's (see below):
 
     On LaCuerda (offline index)
       nothing matches
+
+    On harptabs.com (offline index)
+      [harptabs] radiohead - Creep · 2 tabs, key C
+         https://www.harptabs.com/tab/3310/creep
+         caracole get --harptabs https://www.harptabs.com/tab/3310/creep "radiohead" "Creep"
 
 - **In your library**: every song, whatever its status, with its key when it
   has one (`Key G major (from the tab)`) and its folder. A song with a sheet
@@ -2926,6 +3031,28 @@ the rest.` (the artists counted include those of a letter read in part).
 table, which also holds what LaCuerda's own search answered when it was asked
 (`caracole lacuerda --search`, or the search bar of `caracole serve`).
 
+**On harptabs.com** comes last, unnumbered, from its local index: the artists of
+its sitemap, and the tabs of their pages caracole has read (`caracole harptabs
+--index`, or the nightly run with what its budget leaves; see [caracole
+harptabs](#one-step-at-a-time)). An artist the query names, whole or by a word of
+their name, is a line with the tabs their page says they have and how many the
+index holds, then their most viewed songs (`billy joel · harptabs.com · 98 tabs,
+30 in the index. The most viewed:`), or, when caracole never read their page,
+the line that reads it (`caracole harptabs --artist artist/1178/billy-joel`, one
+request). A song is the tabs of one title by one artist, the title less what it
+says in brackets ("Piano Man (C Harmonica)" and "Piano Man (Harp Intro)" are
+Piano Man), the most viewed first: its line names how many there are and the
+key the first's page names, its page, and the `caracole get --harptabs` line that
+looks the song up now keeping that tab (`[harptabs]` in overrides.toml). A tab
+whose artist no page read names yet is listed by its title alone, as a possible
+match (`same title, maybe another song`). `--artist NAME` lists the songs the
+index holds of the artist NAME names, the most viewed first, and `--title TITLE`
+its songs of that title. While its artist pages aren't all read, the group ends
+with how far it has got (`harptabs.com's artist pages are still being read: 1,204
+of 10,428 artists so far; caracole harptabs --index reads the rest.`); turned
+off, or before its sitemap is read, it says so. An artist page lists their 30
+most viewed tabs: a prolific artist's others are found by their title alone.
+
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
 songs in the key, by name. It lists up to `--limit` of them, and says how many
@@ -3057,8 +3184,19 @@ Who can reach it, below).
   song of that title in the Ultimate Guitar index, gtptabs.com's or your
   library ("oasis wonderwall" finds the Wonderwall pages, and "oasis live
   forever" never a page titled Oasis or Forever), each a possible match.
-  **harptabs.com**'s harmonica tabs come after them, the same way: its sitemap
-  names a tab's title alone (none while harptabs.com is turned off).
+  **harptabs.com**'s artists and songs share the artist groups and lines too,
+  with its mark (`Harmonica 98` in an artist's header: the tabs their page says
+  they have; `harmonica tab ×4` on a line): a song's harmonica tabs by an artist
+  whose page caracole has read, the most viewed first under its "⋯", each a
+  Get it that keeps that tab, and the line's own Get it, on a song the other
+  sites don't have, keeps the most viewed (a lookup with `--harptabs`, recorded
+  under `[harptabs]`). An artist's group ends with "+ 1 more by billy joel on
+  harptabs.com" for the rest of the songs the index holds of theirs, or, when
+  caracole never read their page, the offer to read it: one request to
+  harptabs.com at a lookup's pace (`caracole harptabs --artist`, a request in
+  the queue), then their songs in their group. A tab whose artist no page read
+  names comes after MuseScore's pages, by its title alone, the same way (none
+  while harptabs.com is turned off).
   **Instruments.** A row for one instrument says which, in an outlined badge
   beside its marks: **Ukulele** for an Ultimate Guitar song that has Ukulele
   Chords (its counts say "ukulele chords ×2"), **Harmonica** for a tab of
@@ -3540,8 +3678,9 @@ Who can reach it, below).
     into wanted.txt, is looked up now as Get it does (`caracole get`), then
     added. Nothing is queued unless both fit in the queue (a lookup that joins
     one already queued needs no room of its own);
-  - **Rename or delete** renames the songbook or, once you tick the box,
-    deletes it and the files caracole made of it.
+  - **Rename or delete** renames the songbook (its new name over the set list
+    at once) or, once you tick the box, deletes it and the files caracole made
+    of it.
 
   The songbook's status line, under its name, says how its change goes
   ("Queued…", "Moving the song…", then "Moved"; "Changed", "Renamed", "Taken
@@ -3558,8 +3697,9 @@ Who can reach it, below).
   after your tap. Select's Make songbook (or Add to a songbook there is) runs
   `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
   in the order you ticked them, ends Select once the server has it, and opens
-  the Songbooks tab on the songbook, its songs there at once ("Making the
-  songbook…", then "Made · Open songbook"). A change that can't be made, such
+  the Songbooks tab on the songbook, its songs there at once, and its files'
+  buttons too, to use once it is made ("Making the songbook…", then "Made ·
+  Open songbook"). A change that can't be made, such
   as a name another songbook has, a song no longer in the library or a
   songbook deleted since the page was made, is refused at once, and nothing
   runs: the songbook's status line, or the Select bar, says why, and the bar
@@ -3681,8 +3821,8 @@ and the `headers` the server sends it with, its Content-Security-Policy among
 them). It lists `index.html` first, as caracole wrote it into the library (the
 page that opens from the folder, with no forms), at `/offline/index.html`, then,
 by path, every file that page links to that the server sends: the sheet
-viewers, kept versions' pages and songbook pages while each is still as
-caracole wrote it, and the PDFs, sheets' text, ChordPro, lyrics, info.json,
+viewers, kept versions' pages, harmonica tabs' pages and songbook pages while
+each is still as caracole wrote it, and the PDFs, sheets' text, ChordPro, lyrics, info.json,
 Guitar Pro files and scores. Never Music/, `_inbox/`, a hidden name or a file
 no page links. caracole records `index.html` each time it writes the pages; one
 changed since, or written by a caracole older than that record, isn't sent, and
@@ -3958,6 +4098,9 @@ tab_ids = [1601668]
 
 [lacuerda]     # the LaCuerda song (or version) a song's sheet comes from
 "Estopa - Como Camarón" = "https://acordes.lacuerda.net/estopa/como_camaron"
+
+[harptabs]     # the harptabs.com tab a song's harmonica tab comes from
+"Billy Joel - Piano Man" = "https://www.harptabs.com/tab/23862/piano-man-c-harmonica"
 ```
 
 - **Song keys** are written `"Artist - Title"`. They match the way songs
@@ -4098,6 +4241,14 @@ tab_ids = [1601668]
   sheet wins over it. An entry you write by hand is asked for at the next pass
   unless LaCuerda answered for the song in the last 30 days;
   `caracole get --lacuerda` asks at once.
+- **`[harptabs]`** names the harptabs.com tab you picked for the song: its page
+  (`https://www.harptabs.com/tab/23862/piano-man-c-harmonica`, or as your browser
+  shows it). The nightly harptabs pass reads that page alone, in place of the
+  song's candidates, and keeps its tab whoever the page names as its artist, as
+  the song's next `harmonica-N.txt`, beside any it has: never in place of one. A
+  tab you name is asked for at once; one gone from the site (404) is asked for
+  again after 30 days. Get it on a harptabs.com row of caracole serve's search,
+  and `caracole get --harptabs`, write it.
 
 Each table may appear only once in the file: add lines under a table it has
 already, as the to-do page's lines say. An unknown table, a key other than
@@ -4224,6 +4375,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       guitar-1.gp5          Guitar Pro or Power Tab files: filed from _inbox/, or from gtptabs.com
       score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
       harmonica-1.txt       a harmonica tab from harptabs.com: hole numbers over the lyrics
+      harmonica-1.html      its page, for the phone: each hole over its syllable, heard on a tap
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, or caracole took from YouTube,
       sheet (auto).cho      when no human sheet exists; it stays, with its ChordPro,

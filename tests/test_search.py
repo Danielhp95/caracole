@@ -3,10 +3,10 @@ import random
 import re
 import socket
 import sqlite3
-import time
 from pathlib import Path
 
 import pytest
+from helpers.reads import Reads
 from typer.testing import CliRunner
 
 from caracole import db
@@ -312,16 +312,18 @@ def test_the_prefilter_reads_the_trigram_index_not_every_row(conn):
     assert plans and all("VIRTUAL TABLE INDEX" in p for p in plans)
 
 
-def test_index_search_is_fast_on_a_large_index(conn):
+def test_index_search_reads_no_more_than_it_needs_on_a_large_index(conn):
     conn.execute("BEGIN")
     index(conn, synthetic_rows(50_000) + ROWS + PINYIN_ROWS)
     conn.execute("COMMIT")
     for query in ("radiohead creep", "radiohed creep", "persiana americana", "宋冬野 斑马", "love", "AC/DC"):
-        start = time.perf_counter()
-        hits = search_index(conn, query)
-        elapsed = time.perf_counter() - start
+        with Reads(conn) as read:
+            hits = search_index(conn, query)
         assert hits, query
-        assert elapsed < 0.5, f"{query!r} took {elapsed:.2f} s"
+        # Its rows come by the keys' trigram index (ug/key_search.py), never a pass over every row or key; and into
+        # Python a few of them, never all a common word is in ("love" is in thousands here).
+        assert read.scans("ug_index", "ug_keys") == [], query
+        assert read.rows <= 50_000 // 10, (query, read.rows)
     assert keys(search_index(conn, "radiohead creep"))[0] == ("radiohead", "creep")
 
 
@@ -465,21 +467,103 @@ def test_musescore_pages_are_found_by_their_whole_title_alone(conn):
 
 
 
-def test_harptabs_tabs_are_found_by_their_title_alone_as_musescores_pages_are(conn):
-    # Its sitemap names a tab's title alone: a possible match, a harmonica tab of a song of that title.
+def harptabs_index(conn) -> None:
+    """harptabs.com's index: the captured sitemap's rows, Billy Joel's captured artist page (7 of his 98 tabs), and a
+    page of the Beatles' listing two of their 40; Ritchie Valens's page not read."""
+    from datetime import UTC, datetime
+
+    from helpers.harptabs_site import fixture
+
+    from caracole.harptabs import ArtistPage, ListedTab, parse_artist_page, parse_page_url
+    from caracole.harptabs_index import store_artist_page
+    from caracole.ug.sitemap import iter_locs
+
+    rows = [r for r in map(parse_page_url, iter_locs(fixture("sitemap.xml").encode())) if r is not None]
+    conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                     rows)
+    now = datetime(2026, 10, 27, tzinfo=UTC)
+    store_artist_page(conn, "artist/1178/billy-joel", parse_artist_page(fixture("artist_1178_billy-joel.html")), now)
+    store_artist_page(conn, "artist/50/the-beatles", ArtistPage("the beatles", 40, (
+        ListedTab(926, "tab/926/yesterday", "Yesterday (intro)", key="C", views=9_000),
+        ListedTab(172, "tab/172/yesterday", "yesterday", key="G", views=20_000, rating=4.5))), now)
+
+
+def test_harptabs_finds_an_artists_tabs_a_song_a_hit_once_their_page_is_read(conn):
+    # As Ultimate Guitar's index: by title, by artist and title, in either order; the tabs of one song by one artist
+    # are one hit, the most viewed first ("Piano Man (C Harmonica)" and "((((Piano Man (Harmonica Intro)" are Piano Man).
+    from caracole.search import search_harptabs
+
+    harptabs_index(conn)
+    artists, songs = search_harptabs(conn, "billy joel piano man")
+    assert artists == []
+    hit = songs[0]
+    assert [(h.title, h.score) for h in songs] == [("piano man", 100.0), ("Vienna!", 75.0)]  # another of theirs, weaker
+    assert (hit.source, hit.artist, hit.title, hit.url, hit.uploads, hit.via, hit.page) == (
+        "harptabs", "billy joel", "piano man", "https://www.harptabs.com/tab/25/piano-man", 4, "both",
+        "artist/1178/billy-joel")
+    assert [(t.title, t.views, t.key) for t in hit.tabs] == [
+        ("piano man", 1_100_000, "C"), ("Piano Man (C Harmonica)", 574_000, "C"),
+        ("((((Piano Man (Harmonica Intro)", 177_000, None), ("Piano Man (Harp Intro)", 75_000, "C")]
+    assert (hit.artist_key, hit.title_key) == ("billy-joel", "piano-man")
+    # By its title alone: the artist's song, then a tab of that title whose artist no page read names, a possible match.
+    _, songs = search_harptabs(conn, "piano man")
+    assert [(h.artist, h.url, h.via) for h in songs] == [
+        ("billy joel", "https://www.harptabs.com/tab/25/piano-man", "title"),
+        ("", "https://www.harptabs.com/tab/29525/piano-man", "title")]
+    _, songs = search_harptabs(conn, "vienna billy joel")
+    assert [(h.artist, h.title, h.via) for h in songs][0] == ("billy joel", "Vienna!", "both")
+    assert {h.via for h in songs[1:]} == {"artist"} and all(h.score < 90 for h in songs[1:])  # theirs, weaker
+
+
+def test_harptabs_names_an_artist_with_their_most_viewed_songs_and_the_tabs_their_page_says(conn):
+    from caracole.search import search_harptabs
+
+    harptabs_index(conn)
+    [joel], songs = search_harptabs(conn, "billy joel")
+    assert (joel.source, joel.artist, joel.slug, joel.url, joel.score, joel.songs, joel.known, joel.part) == (
+        "harptabs", "billy joel", "artist/1178/billy-joel", "https://www.harptabs.com/artist/1178/billy-joel", 100.0,
+        98, 7, False)
+    assert [t.title for t in joel.top] == ["piano man", "Vienna!", "She's Always a Woman"]
+    assert songs == []  # the songs only their name matched are in their row
+    # Before their page is read, an artist is named from the sitemap's slug: no tab known yet.
+    [valens], _ = search_harptabs(conn, "ritchie valens")
+    assert (valens.artist, valens.songs, valens.known, valens.top) == ("Ritchie Valens", 0, 0, ())
+    # A word of the name names them too, in part.
+    [joel], _ = search_harptabs(conn, "joel")
+    assert (joel.artist, joel.score, joel.part) == ("billy joel", 90.0, True)
+    [beatles], _ = search_harptabs(conn, "the beatles")
+    assert (beatles.artist, beatles.known, beatles.songs) == ("the beatles", 2, 40)
+    assert [t.title for t in beatles.top] == ["yesterday"]
+
+
+def test_harptabs_gives_an_artists_songs_and_one_artist_by_their_page(conn):
+    from caracole.search import harptabs_artist, harptabs_songs
+
+    harptabs_index(conn)
+    assert [(h.title, h.uploads) for h in harptabs_songs(conn, "artist/1178/billy-joel")] == [
+        ("piano man", 4), ("Vienna!", 1), ("She's Always a Woman", 1), ("New York State Of Mind", 1)]
+    assert [h.title for h in harptabs_songs(conn, "artist/1178/billy-joel", title="vienna")] == ["Vienna!"]
+    assert harptabs_songs(conn, "artist/7829/ritchie-valens") == []
+    assert harptabs_artist(conn, "artist/1178/billy-joel").known == 7
+    assert harptabs_artist(conn, "artist/7829/ritchie-valens").artist == "Ritchie Valens"
+    assert harptabs_artist(conn, "artist/9/nobody") is None
+
+
+def test_harptabs_tabs_are_found_by_their_title_alone_until_their_artist_is_known(conn):
+    # The sitemap names a tab's title alone: a possible match, a harmonica tab of a song of that title.
     from caracole.harptabs import parse_page_url
     from caracole.search import search_harptabs
 
     index(conn, [(1, "billy-joel", "piano-man", "chords")])
     conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
                      [tuple(parse_page_url(f"https://www.harptabs.com/{p}")) for p in
-                      ("tab/29525/piano-man", "tab/25/piano-man", "artist/1178/billy-joel", "tab/6/silent-night")])
-    assert [(h.source, h.title, h.artist, h.url) for h in search_harptabs(conn, "piano man")] == [
+                      ("tab/29525/piano-man", "tab/25/piano-man", "tab/6/silent-night")])
+    _, songs = search_harptabs(conn, "piano man")
+    assert [(h.source, h.title, h.artist, h.url) for h in songs] == [
         ("harptabs", "Piano Man", "", "https://www.harptabs.com/tab/25/piano-man"),
         ("harptabs", "Piano Man", "", "https://www.harptabs.com/tab/29525/piano-man")]
-    assert [h.title for h in search_harptabs(conn, "billy joel piano man")] == ["Piano Man", "Piano Man"]
-    assert search_harptabs(conn, "billy joel") == []  # an artist's page is no tab
-    assert search_harptabs(conn, "piano") == []
+    assert [h.title for h in search_harptabs(conn, "billy joel piano man")[1]] == ["Piano Man", "Piano Man"]
+    assert search_harptabs(conn, "piano") == ([], [])
 
 
 def test_a_musescore_title_is_never_a_word_of_the_query_that_leaves_no_known_song(conn):
@@ -2136,3 +2220,74 @@ def test_a_lacuerda_name_the_query_is_only_inside_of_leaves_room_for_a_suggestio
     # LaCuerda's whole name is the query: nothing to suggest.
     lc_artists(conn, ("adelle", "Adelle", 3))
     assert suggestions(conn, "adelle", find_index(conn, "adelle"), search_lacuerda(conn, "adelle")[0]) == []
+
+
+# --- caracole search: harptabs.com's offline index ---------------------------------------------
+
+
+def harp_part(output: str) -> str:
+    return output.partition("On harptabs.com (offline index)")[2]
+
+
+def harptabs_seed(tmp_path):
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    conn = seed(tmp_path)
+    harptabs_index(conn)
+    conn.commit()
+    return conn
+
+
+HARP = "https://www.harptabs.com/"
+
+
+def test_cli_lists_harptabs_coms_artists_and_songs_after_lacuerdas(tmp_path):
+    harptabs_seed(tmp_path)
+    out = run(tmp_path, "search", "billy joel").output
+    assert out.index("On LaCuerda (offline index)") < out.index("On harptabs.com (offline index)")
+    hp = harp_part(out)
+    assert "  billy joel · harptabs.com · 98 tabs, 7 in the index. The most viewed:\n" in hp
+    assert (f"  [harptabs] billy joel - piano man · 4 tabs, key C\n     {HARP}tab/25/piano-man\n"
+            f'     caracole get --harptabs {HARP}tab/25/piano-man "billy joel" "piano man"\n') in hp
+    assert f'  [harptabs] billy joel - Vienna! · 1 tab, key Bb\n     {HARP}tab/8767/vienna\n' in hp
+    assert '     All 4 songs the index holds: caracole search --artist "billy joel"\n' in hp
+    # 2 of the sitemap's 3 artists read: the index says so (wrapped, as LaCuerda's notes are).
+    assert ("harptabs.com's artist pages are still being read: 2 of 3 artists so far; caracole harptabs --index "
+            "reads the rest.") in " ".join(hp.split())
+
+
+def test_cli_a_harptabs_artist_whose_page_caracole_never_read_says_how_to_read_it(tmp_path):
+    harptabs_seed(tmp_path)
+    hp = harp_part(run(tmp_path, "search", "ritchie valens").output)
+    assert ("  Ritchie Valens · harptabs.com\n     caracole hasn't read their page: caracole harptabs --artist "
+            "artist/7829/ritchie-valens reads it (one request)\n") in hp
+
+
+def test_cli_a_harptabs_tab_whose_artist_no_page_names_is_a_title_alone(tmp_path):
+    harptabs_seed(tmp_path)
+    hp = harp_part(run(tmp_path, "search", "piano man").output)
+    assert f"  [harptabs] billy joel - piano man · 4 tabs, key C\n     {HARP}tab/25/piano-man\n" in hp
+    assert f"  [harptabs] Piano Man · same title, maybe another song\n     {HARP}tab/29525/piano-man\n" in hp
+
+
+def test_cli_an_artists_songs_on_harptabs_com_and_by_title(tmp_path):
+    harptabs_seed(tmp_path)
+    hp = harp_part(run(tmp_path, "search", "--artist", "billy joel").output)
+    assert "  billy joel · harptabs.com · 4 of their songs in the index (7 of their 98 tabs), the most viewed first:" in hp
+    assert hp.count("[harptabs] billy joel - ") == 4
+    titled = harp_part(run(tmp_path, "search", "--artist", "billy joel", "vienna").output)
+    assert titled.count("[harptabs] ") == 1 and "Vienna!" in titled
+    nobody = harp_part(run(tmp_path, "search", "--artist", "nobody known").output)
+    assert "  No artist named nobody known in harptabs.com's index" in nobody
+    by_title = harp_part(run(tmp_path, "search", "--title", "yesterday").output)
+    assert "[harptabs] the beatles - yesterday · 2 tabs, key G" in by_title
+
+
+def test_cli_with_harptabs_com_off_or_empty_says_so(tmp_path):
+    seed(tmp_path).close()
+    assert ("  Nothing yet: harptabs.com's index is empty: the nightly run reads its sitemap (caracole harptabs "
+            "--index reads it now, then its artist pages).") in harp_part(run(tmp_path, "search", "piano man").output)
+    path = config(tmp_path)
+    path.write_text(path.read_text(encoding="utf-8") + "[providers.harptabs]\nenabled = false\n", encoding="utf-8")
+    result = CliRunner().invoke(build_app(), ["--config", str(path), "search", "piano man"])
+    assert "  harptabs.com is turned off in caracole.toml.\n" in harp_part(result.output)

@@ -419,8 +419,39 @@ def test_the_harptabs_step_keeps_a_tab_and_says_so(conn, cfg):
     svc = Services(clients={"harptabs": FakeHarpTabs().client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
     steps = [s for s in default_steps() if s.name == "harptabs"]
     report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
-    assert report.steps["harptabs"] == "1 sitemap indexed, 1 tried, 1 harmonica tab kept, 0 not on harptabs.com, 0 errors"
-    assert "harptabs.com: 1 harmonica tab kept." in report.summary().splitlines()
+    # What the budget leaves goes to the artist pages, for searches: Billy Joel's, and two gone (404).
+    assert report.steps["harptabs"] == ("1 sitemap indexed, 1 tried, 1 harmonica tab kept, 0 not on harptabs.com, "
+                                        "0 errors; artist index: 3 pages read, 3 of 3 artists")
+    assert "harptabs.com: 1 harmonica tab kept, 3 artist pages read." in report.summary().splitlines()
+
+
+def test_the_harptabs_step_reads_artist_pages_with_what_the_budget_leaves_your_songs_artists_first(conn, cfg):
+    from conftest import add_song
+    from helpers.harptabs_site import BASE, SITEMAP, FakeHarpTabs
+
+    from caracole.harptabs_index import index_state
+    from caracole.pipeline import default_steps
+
+    add_song(conn, "Billy Joel", "Vienna")  # no tab of that title in the sitemap: no tab page asked for
+    site = FakeHarpTabs()
+    svc = Services(clients={"harptabs": site.client(cfg.cache_dir, budget=2, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "harptabs"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert site.requests == [SITEMAP, f"{BASE}/artist/1178/billy-joel"]
+    assert report.steps["harptabs"].endswith("; artist index: 1 page read, 1 of 3 artists (budget spent)")
+    assert index_state(conn).tabs == 7
+
+
+def test_the_harptabs_step_asks_nothing_for_an_empty_library(conn, cfg):
+    from helpers.harptabs_site import FakeHarpTabs
+
+    from caracole.pipeline import default_steps
+
+    site = FakeHarpTabs()
+    svc = Services(clients={"harptabs": site.client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "harptabs"]
+    run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert site.requests == []
 
 
 def musescore_run(conn, cfg, site, *, budget=10, now=NOW, config=None):

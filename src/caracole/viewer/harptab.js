@@ -1,0 +1,410 @@
+(() => {
+  "use strict";
+  // A harmonica tab's page (harptab_page.py): the harp chosen (−/+ in the bar), each hole's note on it in Notes (♪),
+  // a hole tapped or a line's ▶ sounding it with strum.js's reed voice (window.caracoleSound, inlined before this
+  // script), the text size (Aa) and scrolling by itself, as the sheet viewer has them. It computes no music theory:
+  // each hole's note is looked up in the page's data, which Python made (harptab_page.py says what it holds):
+  //
+  //   data.holes[harp].blow[hole - 1][bend], .draw[…][bend]   the note a hole sounds, bent or not (null past its bends)
+  //   data.holes[harp].over[hole - 1]                         [the breath its overblow takes, its note]
+  //   data.names[harp][pitch class]                           the note's name, as the harp's key spells it
+  //
+  // Where the page is (the harp, Notes, the text size, the scroll's speed) is kept in the address (#harp=A&notes=1)
+  // and, where the browser keeps anything, for this page. Every element is made with createElement and textContent;
+  // nothing is loaded, and nothing sounds but on a tap.
+  const $ = (id) => document.getElementById(id);
+  const doc = document.documentElement;
+  let data;
+  try {
+    data = JSON.parse($("harp-data").textContent);
+  } catch (err) {
+    doc.dataset.error = "data";
+    return;
+  }
+  const sound = window.caracoleSound && window.caracoleSound.available ? window.caracoleSound : null;
+  const FS = { min: 13, max: 30, step: 2, start: 18 };
+  const SPEED = { min: 1, max: 30, start: 6, px: 2 };
+  const read = Array.isArray(data.groups) && Array.isArray(data.rows);  // a tab shown as written has neither
+  const groups = read ? data.groups : [];
+  const rows = read ? data.rows : [];
+  const keys = Array.isArray(data.harpKeys) ? data.harpKeys : [];
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+
+  // --- where the page is ---------------------------------------------------------------------------------------
+  const harpOf = (v) => (typeof v === "string" && keys.indexOf(v) >= 0 ? keys.indexOf(v) : null);
+  const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
+  const speedOf = (v) => (Number(v) >= SPEED.min && Number(v) <= SPEED.max ? Math.round(Number(v)) : null);
+  const start = Number.isInteger(data.start) && data.start >= 0 && data.start < 12 ? data.start : 0;
+  const state = { harp: start, notes: false, fs: FS.start, speed: SPEED.start };
+  const store = "caracole-harmonica:" + location.pathname;
+  try {
+    const saved = JSON.parse(localStorage.getItem(store) || "null");
+    if (saved && typeof saved === "object") {
+      if (harpOf(saved.harp) !== null) state.harp = harpOf(saved.harp);
+      state.notes = saved.notes === true;
+      if (sizeOf(saved.fs) !== null) state.fs = sizeOf(saved.fs);
+      if (speedOf(saved.speed) !== null) state.speed = speedOf(saved.speed);
+    }
+  } catch (err) { /* no storage: the address keeps it */ }
+  const hash = new URLSearchParams(location.hash.slice(1));
+  if (harpOf(hash.get("harp")) !== null) state.harp = harpOf(hash.get("harp"));
+  if (hash.has("notes")) state.notes = hash.get("notes") === "1";
+  if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
+  if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
+  const save = () => {
+    try {
+      localStorage.setItem(store, JSON.stringify({ harp: keys[state.harp], notes: state.notes, fs: state.fs,
+        speed: state.speed }));
+    } catch (err) { /* private mode, or a server's sandbox */ }
+    try {
+      const params = new URLSearchParams(location.hash.slice(1));
+      const keep = (name, value, kept) => (kept ? params.set(name, String(value)) : params.delete(name));
+      keep("harp", keys[state.harp], state.harp !== start);
+      keep("notes", "1", state.notes);
+      keep("fs", state.fs, state.fs !== FS.start);
+      keep("speed", state.speed, state.speed !== SPEED.start);
+      const fragment = params.toString();
+      if (fragment !== location.hash.slice(1)) {
+        history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
+      }
+    } catch (err) { /* an address the page can't change */ }
+  };
+
+  // --- a hole's note on the harp chosen --------------------------------------------------------------------------
+  // A hole as the data writes it: [hole, "b" or "d", bend, overblown]; its MIDI note, or null where the harp can't.
+  const noteOf = (h) => {
+    const table = data.holes && data.holes[state.harp];
+    const i = Number(h[0]) - 1, breath = h[1] === "d" ? "draw" : "blow", bend = Number(h[2]) || 0;
+    if (!table || !(i >= 0 && i < 10)) return null;
+    if (h[3]) {
+      const over = table.over[i];
+      return Array.isArray(over) && over[0] === breath ? over[1] : null;
+    }
+    const list = table[breath][i];
+    return Array.isArray(list) && bend < list.length ? list[bend] : null;
+  };
+  const nameOf = (n) => data.names[state.harp][((n % 12) + 12) % 12];
+  const notesOf = (i) => (groups[i] ? groups[i][1].map(noteOf).filter((n) => n !== null) : []);
+  const BRACKETS = { chord: ["(", ")"], shake: ["{", "}"], split: ["[", "]"] };
+  const holeEls = Array.from(document.querySelectorAll("#sheet .h[data-i]"));
+  // A group drawn again: its holes, or with Notes their notes on the harp chosen ("?" for one it can't play).
+  const drawGroup = (node) => {
+    const g = groups[Number(node.dataset.i)];
+    if (!g) return;
+    const [open, close] = BRACKETS[g[0]] || ["", ""];
+    node.textContent = "";
+    if (open) node.append(open);
+    const said = [];
+    g[1].forEach((h, k) => {
+      if (k) node.append(" ");
+      const span = el("span", h[1] === "d" ? "d" : "b");
+      const n = noteOf(h);
+      if (state.notes) {
+        span.textContent = n === null ? "?" : nameOf(n);
+        if (n !== null) span.appendChild(el("small", "", String(Math.floor(n / 12) - 1)));
+      } else {
+        if (h[1] === "d") span.appendChild(el("span", "sg", "−"));
+        span.append(String(h[0]));
+        if (h[2]) span.appendChild(el("span", "bd", "′".repeat(Number(h[2]))));
+        if (h[3]) span.appendChild(el("span", "bd", "°"));
+      }
+      node.appendChild(span);
+      said.push((h[1] === "d" ? "draw " : "blow ") + h[0] + (h[2] ? " bent " + h[2] : "") + (h[3] ? " overblown" : "")
+        + ", " + (n === null ? "not on this harp" : nameOf(n) + (Math.floor(n / 12) - 1)));
+    });
+    if (close) node.append(close);
+    node.setAttribute("aria-label", said.join(" and "));
+    node.classList.toggle("off", g[1].every((h) => noteOf(h) === null));
+  };
+  const drawHarp = () => {
+    if (!$("harp-name")) return;
+    $("harp-name").textContent = keys[state.harp] + " harp";
+    const why = data.why && typeof data.why[String(state.harp)] === "string" ? data.why[String(state.harp)] : "";
+    const where = Array.isArray(data.positions) ? data.positions[state.harp] || "" : "";
+    $("harp-why").textContent = [why, where.split(",")[0]].filter(Boolean).join(" · ");
+    $("notes").setAttribute("aria-pressed", state.notes ? "true" : "false");
+  };
+  const render = () => {
+    holeEls.forEach(drawGroup);
+    drawHarp();
+    doc.style.setProperty("--fs", state.fs + "px");
+    $("fs-now").textContent = state.fs + " px";
+    $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
+    $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
+    $("pill-speed").textContent = String(state.speed);
+  };
+
+  // --- a hole tapped, a line played ------------------------------------------------------------------------------
+  let playing = null, lit = 0;
+  const unlight = () => document.querySelectorAll("#sheet .h.on").forEach((n) => n.classList.remove("on"));
+  const stop = () => {
+    const was = playing;
+    playing = null;
+    if (was) was.stop();
+    clearTimeout(lit);
+    unlight();
+    document.querySelectorAll('#sheet .rp[aria-pressed="true"]').forEach((b) => b.setAttribute("aria-pressed", "false"));
+  };
+  const tapHole = (node) => {
+    stop();
+    const notes = notesOf(Number(node.dataset.i));
+    if (!sound || !notes.length || !sound.strum(notes, { voice: "reed" })) return;
+    node.classList.add("on");
+    lit = setTimeout(unlight, 450);
+  };
+  const playRow = (button) => {
+    const was = button.getAttribute("aria-pressed") === "true";
+    stop();
+    if (was || !sound) return;
+    const list = rows[Number(button.dataset.row)] || [];
+    const nodes = list.map((i) => document.querySelector('#sheet .h[data-i="' + i + '"]'));
+    const handle = sound.play(list.map((i) => ({ position: notesOf(i), voice: "reed" })), {
+      bpm: Number(data.bpm) || 132, beats: 1, every: 1,
+      onChord: (k) => {
+        unlight();
+        if (nodes[k]) nodes[k].classList.add("on");
+      },
+      onEnd: () => {
+        if (playing !== handle) return;
+        playing = null;
+        unlight();
+        button.setAttribute("aria-pressed", "false");
+      },
+    });
+    if (!handle.playing) return;
+    playing = handle;
+    button.setAttribute("aria-pressed", "true");
+  };
+  const sheet = $("sheet");
+  sheet.addEventListener("click", (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    const hole = target && target.closest(".h[data-i]");
+    const line = target && target.closest(".rp");
+    if (hole) tapHole(hole);
+    else if (line) playRow(line);
+  });
+  sheet.addEventListener("keydown", (e) => {
+    if ((e.key === "Enter" || e.key === " ") && e.target instanceof Element && e.target.matches(".h[data-i]")) {
+      e.preventDefault();
+      tapHole(e.target);
+    }
+  });
+  if (!sound) document.querySelectorAll("#sheet .rp").forEach((b) => { b.hidden = true; });
+
+  // --- the bar: the harp, Notes, Aa -----------------------------------------------------------------------------
+  const step = (by) => {
+    stop();
+    state.harp = (state.harp + by + 12) % 12;
+    render();
+    save();
+  };
+  if ($("h-down")) {
+    $("h-down").addEventListener("click", () => step(-1));
+    $("h-up").addEventListener("click", () => step(1));
+    $("notes").addEventListener("click", () => {
+      state.notes = !state.notes;
+      render();
+      save();
+    });
+  }
+  const sizes = $("sizes"), sizeButton = $("size");
+  const showSizes = (on) => {
+    sizes.hidden = !on;
+    sizeButton.setAttribute("aria-expanded", on ? "true" : "false");
+  };
+  sizeButton.addEventListener("click", () => showSizes(sizes.hidden));
+  document.addEventListener("pointerdown", (e) => {
+    if (!sizes.hidden && !(e.target instanceof Node && $("size-box").contains(e.target))) showSizes(false);
+  }, true);
+  $("size-box").addEventListener("focusout", (e) => {
+    if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) showSizes(false);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !sizes.hidden) {
+      showSizes(false);
+      sizeButton.focus({ preventScroll: true });
+    }
+  });
+  const setSize = (to) => {
+    state.fs = Math.max(FS.min, Math.min(FS.max, to));
+    render();
+    save();
+  };
+  $("smaller").addEventListener("click", () => setSize(state.fs - FS.step));
+  $("bigger").addEventListener("click", () => setSize(state.fs + FS.step));
+
+  // --- scrolling by itself, as the viewer does -------------------------------------------------------------------
+  // Off, counting down (3 s, for your hands to get to the harp; pressed again, it starts at once), running, or
+  // paused; the pill steers it, above the bar's place. A finger on the page, the wheel, a key that scrolls, a scroll
+  // by hand or the end of the tab pauses it.
+  const bar = $("bar"), pill = $("pill"), go = $("go");
+  const COUNTDOWN = 3000;
+  const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
+  const moving = () => scroll.state === "counting" || scroll.state === "running";
+  const pace = () => (state.speed * SPEED.px * state.fs) / FS.start;
+  const LABELS = { counting: "Start now", running: "Pause", paused: "Resume" };
+  const showScroll = (said) => {
+    pill.hidden = scroll.state === "off";
+    if (scroll.state === "off") delete doc.dataset.pill;
+    else doc.dataset.pill = scroll.state;
+    bar.classList.toggle("away", moving());
+    pill.dataset.state = scroll.state;
+    go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
+    $("tick").textContent = scroll.state === "counting"
+      ? String(Math.max(1, Math.ceil((scroll.ends - performance.now()) / 1000))) : "";
+    if (said !== undefined) $("scroll-status").textContent = said;
+  };
+  let wake = null;
+  const holdScreen = () => {
+    if (wake || !navigator.wakeLock) return;
+    try {
+      navigator.wakeLock.request("screen").then((lock) => {
+        if (!moving()) {
+          lock.release().catch(() => {});
+          return;
+        }
+        wake = lock;
+        lock.addEventListener("release", () => { if (wake === lock) wake = null; });
+      }, () => {});
+    } catch (err) { /* no wake lock here */ }
+  };
+  const letScreenSleep = () => {
+    const lock = wake;
+    wake = null;
+    if (lock) lock.release().catch(() => {});
+  };
+  const run = () => {
+    clearTimeout(scroll.timer);
+    scroll.state = "running";
+    scroll.from = scroll.at = window.scrollY;
+    scroll.travelled = 0;
+    scroll.last = 0;
+    const loop = ++scroll.loop;
+    const frame = (now) => {
+      if (scroll.state !== "running" || loop !== scroll.loop) return;
+      if (Math.abs(window.scrollY - scroll.at) > 3) {  // moved some other way: yours to read
+        pauseScroll();
+        return;
+      }
+      if (scroll.last) {
+        scroll.travelled += (Math.min(now - scroll.last, 250) / 1000) * pace();
+        const y = Math.round(scroll.from + scroll.travelled);
+        if (y !== Math.round(scroll.at)) {
+          window.scrollTo(0, y);
+          scroll.at = window.scrollY;
+        }
+        if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) {
+          pauseScroll("Paused at the end of the tab");
+          return;
+        }
+      }
+      scroll.last = now;
+      requestAnimationFrame(frame);
+    };
+    showScroll("Scrolling");
+    holdScreen();
+    requestAnimationFrame(frame);
+  };
+  const countdown = () => {
+    clearTimeout(scroll.timer);
+    scroll.state = "counting";
+    scroll.ends = performance.now() + COUNTDOWN;
+    const tick = () => {
+      const left = scroll.ends - performance.now();
+      if (left <= 0) {
+        run();
+        return;
+      }
+      showScroll();
+      scroll.timer = setTimeout(tick, left % 1000 || 1000);
+    };
+    tick();
+    showScroll("Scrolling in " + COUNTDOWN / 1000 + " seconds");
+    holdScreen();
+  };
+  function pauseScroll(said) {
+    if (!moving()) return;
+    clearTimeout(scroll.timer);
+    scroll.state = "paused";
+    showScroll(said || "Paused");
+    letScreenSleep();
+  }
+  const endScroll = () => {
+    const mine = pill.contains(document.activeElement);
+    clearTimeout(scroll.timer);
+    scroll.state = "off";
+    showScroll("");
+    letScreenSleep();
+    if (mine) $("scroll").focus({ preventScroll: true });
+  };
+  $("scroll").addEventListener("click", () => {
+    showSizes(false);
+    countdown();
+    go.focus({ preventScroll: true });
+  });
+  go.addEventListener("click", () => {
+    if (scroll.state === "counting") run();
+    else if (scroll.state === "running") pauseScroll();
+    else countdown();
+  });
+  $("pill-end").addEventListener("click", endScroll);
+  for (const b of document.querySelectorAll("[data-speed]")) {
+    b.addEventListener("click", () => {
+      state.speed = Math.max(SPEED.min, Math.min(SPEED.max, state.speed + Number(b.dataset.speed)));
+      render();
+      save();
+    });
+  }
+  window.addEventListener("touchstart", (e) => {
+    if (!(e.target instanceof Element && e.target.closest("#pill"))) pauseScroll();
+  }, { passive: true });
+  window.addEventListener("wheel", () => pauseScroll(), { passive: true });
+  const SCROLL_KEYS = ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End"];
+  document.addEventListener("keydown", (e) => {
+    const control = e.target instanceof Element && e.target.closest("button, a, [role=button], summary, input");
+    if (SCROLL_KEYS.indexOf(e.key) >= 0 || (e.key === " " && !control)) pauseScroll();
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible" && moving()) holdScreen();
+  });
+
+  // --- the bar: away as you read down the tab, back when you want it ---------------------------------------------
+  const reveal = { y: window.scrollY, touched: false };
+  for (const kind of ["touchstart", "pointerdown", "wheel", "keydown"]) {
+    window.addEventListener(kind, () => { reveal.touched = true; }, { passive: true, capture: true });
+  }
+  window.addEventListener("scroll", () => {
+    const y = window.scrollY, dy = y - reveal.y;
+    if (moving()) {
+      reveal.y = y;
+      return;
+    }
+    if (y <= 0 || window.innerHeight + y >= document.documentElement.scrollHeight - 2) {
+      bar.classList.remove("away");
+      reveal.y = y;
+      return;
+    }
+    if (!reveal.touched || !sizes.hidden || bar.contains(document.activeElement)) {
+      reveal.y = y;
+      return;
+    }
+    if (Math.abs(dy) < 8) return;
+    bar.classList.toggle("away", dy > 0);
+    reveal.y = y;
+  }, { passive: true });
+  document.addEventListener("click", (e) => {
+    const target = e.target instanceof Element ? e.target : null;
+    if (target && !target.closest("#bar, #pill, a, button, summary, [role=button]")) bar.classList.remove("away");
+  });
+  bar.addEventListener("focusin", () => bar.classList.remove("away"));
+
+  bar.hidden = false;
+  showScroll();
+  render();
+  doc.dataset.ready = "1";
+})();

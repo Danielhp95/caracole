@@ -328,22 +328,25 @@ def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set
 
     Its kept files; the ChordPro, PDF and page it makes from a kept sheet, or
     that a render record names (``render.py``: the record goes with the outputs);
-    the page of a version kept beside the sheet, ``version-<tab>.html``, that render.py
-    recorded writing (kv ``render:files:``; a version the fetch let go keeps its page
-    until the next render, and one no render wrote is yours); the PDFs it exported in
+    the page of a version kept beside the sheet, ``version-<tab>.html``, and of a harmonica
+    tab, ``harmonica-N.html``, that render.py recorded writing (kv ``render:files:``; a
+    version the fetch let go keeps its page until the next render, and one no render wrote
+    is yours); the PDFs it exported in
     other versions (kv ``render:export:``); the lyrics, when LRCLIB's were written;
     info.json. A ``sheet.pdf`` or a ``lyrics.txt`` of yours, in a folder caracole
     made none in, isn't one.
     """
+    from caracole.inbox import HARMONICA_PAGE
     from caracole.render import EXPORT_KV, FILES_KEY
 
     ours = set(kept_here) | {_INFO}
     for sheet, outputs in SHEET_OUTPUTS.items():  # its ChordPro, its PDF and its viewer
         if sheet in kept_here:
             ours.update(outputs)
-    written = kv_get_json(conn, f"{FILES_KEY}{song.id}")  # a version's page: only one a render wrote
+    written = kv_get_json(conn, f"{FILES_KEY}{song.id}")  # a version's or a tab's page: only one a render wrote
     ours.update(name for name in (written if isinstance(written, dict) else ())
-                if (tab := tab_of(name)) is not None and name == version_names(tab)[2])
+                if ((tab := tab_of(name)) is not None and name == version_names(tab)[2])
+                or HARMONICA_PAGE.fullmatch(name))
     for key in (f"render:{song.id}", f"render:{song.id}:auto"):
         record = kv_get_json(conn, key)
         pdf = record.get("pdf") if isinstance(record, dict) else None

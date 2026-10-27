@@ -460,6 +460,28 @@ def test_cli_index_stats(tmp_path):
     assert any(line.startswith("Built: 20") and line.endswith("refreshed: never") for line in lines)
 
 
+def test_cli_index_stats_says_how_far_harptabs_coms_artist_index_has_got(tmp_path):
+    conn = connect(tmp_path)
+    try:
+        conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, 'artist', ?, ?, "
+                         "'sitemap')", [("artist/1178/billy-joel", 1178, "billy-joel"), ("artist/50/the-beatles", 50,
+                                                                                         "beatles")])
+        conn.execute("INSERT INTO harptabs_artists (path, page_id, key, name, tabs, read_at) VALUES "
+                     "('artist/1178/billy-joel', 1178, 'billy-joel', 'billy joel', 98, '2026-10-27T03:30:00Z')")
+        conn.executemany("INSERT INTO harptabs_artist_tabs (artist, tab_id, path, title, song_key, place) VALUES "
+                         "('artist/1178/billy-joel', ?, ?, 'piano man', 'piano-man', ?)",
+                         [(n, f"tab/{n}/piano-man", n) for n in range(3)])
+        conn.commit()
+    finally:
+        conn.close()
+    result = run(tmp_path, "index", "stats")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        "The index is empty: run `caracole index build`.",
+        "harptabs.com: 1 of 2 artist pages read, 3 tabs; caracole harptabs --index reads the rest.",
+    ]
+
+
 # --- caracole match ---------------------------------------------------------------------------------
 
 

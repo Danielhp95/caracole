@@ -19,6 +19,8 @@ Tables (plan §5, plus ``kv``):
   word of an artist's name and by a close spelling of one (schema 8, search.py).
 - ``harptabs_index``: the tab and artist pages harptabs.com's sitemap lists (schema 10,
   harptabs_fetch.py).
+- ``harptabs_artists`` and ``harptabs_artist_tabs``: the artist pages of harptabs.com caracole read, and the
+  tabs each listed, for searches (schema 11, harptabs_index.py).
 - ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
   file or score it keeps (gtptabs.com's, your inbox's).
 - ``files``: files kept in the library, with their SHA-256.
@@ -39,7 +41,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -379,10 +381,43 @@ CREATE INDEX IF NOT EXISTS harptabs_index_key ON harptabs_index(kind, key);
 CREATE INDEX IF NOT EXISTS harptabs_index_sitemap ON harptabs_index(sitemap);
 """
 
+# harptabs.com's artist pages caracole read (harptabs_index.py): one row a page, by its path ("artist/1178/billy-joel"),
+# with the site's id, its slug's key (harptabs_index's key of the artist), the name as the page heads it ("" for a page
+# gone, 404), how many tabs it says the artist has, and when it was read; and the tabs it listed (its first 30, the
+# most viewed first: place 0, 1, ...), each with its page, its title as the card writes it, the key of the song its
+# title names (harptabs.song_key, made again from the title when caracole's keys change), the key (the song's or
+# the harp's), the difficulty, the views and the rating it showed.
+_SCHEMA_V11 = """
+CREATE TABLE IF NOT EXISTS harptabs_artists (
+  path TEXT PRIMARY KEY,
+  page_id INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  name TEXT NOT NULL,
+  tabs INTEGER NOT NULL DEFAULT 0,
+  read_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS harptabs_artists_key ON harptabs_artists(key);
+CREATE TABLE IF NOT EXISTS harptabs_artist_tabs (
+  artist TEXT NOT NULL,
+  tab_id INTEGER NOT NULL,
+  path TEXT NOT NULL,
+  title TEXT NOT NULL,
+  song_key TEXT NOT NULL,
+  harp_key TEXT,
+  difficulty TEXT,
+  views INTEGER NOT NULL DEFAULT 0,
+  rating REAL,
+  place INTEGER NOT NULL,
+  PRIMARY KEY (artist, tab_id)
+);
+CREATE INDEX IF NOT EXISTS harptabs_artist_tabs_song ON harptabs_artist_tabs(song_key);
+CREATE INDEX IF NOT EXISTS harptabs_artist_tabs_tab ON harptabs_artist_tabs(tab_id);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
-               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10}
+               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

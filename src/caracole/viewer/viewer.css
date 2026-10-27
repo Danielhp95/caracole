@@ -513,6 +513,7 @@ a.ver-main .ver-name { color: var(--accent); }
 .wd-row .wd-tones { justify-content: flex-start; }
 .wd-tabs { margin: 0; padding: 0; list-style: none; }
 .wd-tabs .wd-key { margin-left: 4px; color: var(--muted); font-size: .85rem; }
+.wd-tabs .wd-text { margin-left: 8px; color: var(--muted); font-size: .85rem; }  /* the tab's text, beside its page */
 
 /* A wide screen: one column, centred, in larger text; two side by side only for a song the window
    shows whole that way (viewer.js measures it, and says so in data-columns). A longer song would

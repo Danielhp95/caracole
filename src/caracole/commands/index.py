@@ -144,19 +144,26 @@ def _refresh(cfg: Config) -> None:
 
 
 def _stats(cfg: Config) -> None:
+    """The UG index's counts, then how far harptabs.com's artist index has got, once its sitemap is read."""
+    from caracole.harptabs_index import index_state
     from caracole.ug.index import index_stats
 
     with closing(open_db(cfg)) as conn:
         s = index_stats(conn)
+        harp = index_state(conn)
     if not s["rows"]:
         typer.echo("The index is empty: run `caracole index build`.")
-        return
-    types = ", ".join(f"{kind} {n:,}" for kind, n in s["types"].items())
-    typer.echo(f"Tabs: {s['rows']:,} ({types})")
-    typer.echo(f"Artists: {s['artists']:,}")
-    typer.echo(f"Sitemaps indexed: {s['sitemaps']}")
-    typer.echo(f"Newest tab id: {s['newest_tab_id']}")
-    typer.echo(f"Built: {s['built_at'] or 'never'}; refreshed: {s['refreshed_at'] or 'never'}")
+    else:
+        types = ", ".join(f"{kind} {n:,}" for kind, n in s["types"].items())
+        typer.echo(f"Tabs: {s['rows']:,} ({types})")
+        typer.echo(f"Artists: {s['artists']:,}")
+        typer.echo(f"Sitemaps indexed: {s['sitemaps']}")
+        typer.echo(f"Newest tab id: {s['newest_tab_id']}")
+        typer.echo(f"Built: {s['built_at'] or 'never'}; refreshed: {s['refreshed_at'] or 'never'}")
+    if harp.artists:
+        rest = "" if harp.complete else "; caracole harptabs --index reads the rest"
+        typer.echo(f"harptabs.com: {harp.read:,} of {harp.artists:,} artist pages read, "
+                   f"{harp.tabs:,} tab{'' if harp.tabs == 1 else 's'}{rest}.")
 
 
 # --- shared ------------------------------------------------------------------------------------

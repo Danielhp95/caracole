@@ -1130,7 +1130,8 @@
     }
     const said = [mine ? "you have " + mine : "", Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
       Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "",
-      Number(c.gtptabs) ? "Guitar Pro " + Number(c.gtptabs).toLocaleString("en") : "", c.note ? String(c.note) : ""]
+      Number(c.gtptabs) ? "Guitar Pro " + Number(c.gtptabs).toLocaleString("en") : "",
+      Number(c.harptabs) ? "Harmonica " + Number(c.harptabs).toLocaleString("en") : "", c.note ? String(c.note) : ""]
       .filter(Boolean);
     if (said.length) heading.appendChild(el("span", "artist-counts", " · " + said.join(" · ")));
     section.appendChild(heading);
@@ -1645,18 +1646,23 @@
   // The answer's artists and songs, put together by artist and by song, in the order the answer ranks them: the
   // removed songs it matches first (songs you had), then LaCuerda's artists and songs when it alone has the artist the
   // query names (``lacuerda_leads``), the artists the query names when one leads, Ultimate Guitar's songs, its
-  // artists otherwise, LaCuerda's, gtptabs.com's songs; MuseScore's pages and harptabs.com's tabs, titles alone, apart. An artist's group is
+  // artists otherwise, LaCuerda's, gtptabs.com's songs, harptabs.com's artists and songs (by an artist whose page
+  // caracole read); MuseScore's pages and harptabs.com's tabs whose artist no page names, titles alone, apart. An artist's group is
   // keyed by the artist part of its rows' identity keys (``artist_key``; an artist's ``group_key``), a row of a song of
   // yours by your song's artist (``song``, ``same_artist``) putting its artist's rows under your artist (UG's "Song
   // Dongye (宋冬野)" is your 宋冬野); within it, a song (``title_key``) is one item, which each site's row of it is on.
   const mergeSites = (data) => {
     const model = { groups: new Map(), order: [], items: new Map(), lines: new Map(), alias: new Map(),
-      titles: objects(data.musescore), harps: objects(data.harptabs), unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
+      titles: objects(data.musescore), harps: objects(data.harptabs).filter((h) => !h.artist),
+      unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
         ? data.lacuerda_unlisted : null, meant: undefined, card: undefined, line: undefined };
     const ugArtists = objects(data.artists);
     const lcArtists = objects(data.lacuerda_artists);
-    for (const row of [...objects(data.index), ...objects(data.gtptabs), ...objects(data.lacuerda),
-      ...ugArtists.flatMap((a) => objects(a.top)), ...lcArtists.flatMap((a) => objects(a.top))]) {
+    const htArtists = objects(data.harptabs_artists);
+    const htSongs = objects(data.harptabs).filter((h) => h.artist);
+    for (const row of [...objects(data.index), ...objects(data.gtptabs), ...objects(data.lacuerda), ...htSongs,
+      ...ugArtists.flatMap((a) => objects(a.top)), ...lcArtists.flatMap((a) => objects(a.top)),
+      ...htArtists.flatMap((a) => objects(a.top))]) {
       const i = yourSong(row);
       if (i !== undefined && row.same_artist === true && row.artist_key && !model.alias.has(String(row.artist_key))) {
         model.alias.set(String(row.artist_key), artistKeyOf(songs[i]));
@@ -1674,6 +1680,8 @@
       ...(data.lead === "artist" ? [] : named),
       ...(leads ? [] : lacuerda),
       ...objects(data.gtptabs).map((h) => ["song", "gtptabs", h]),
+      ...htArtists.map((a) => ["artist", "harptabs", a]),
+      ...htSongs.map((h) => ["song", "harptabs", h]),
     ]) {
       if (kind === "artist") addArtist(model, source, row);
       else addSong(model, source, row);
@@ -1684,8 +1692,8 @@
   const groupOf = (model, key, name) => {
     let g = model.groups.get(key);
     if (!g) {
-      g = { key, name: String(name || ""), ug: null, lacuerda: null, items: [], ugListed: 0, ugOffset: 0,
-        lcListed: false, tail: null };
+      g = { key, name: String(name || ""), ug: null, lacuerda: null, harptabs: null, items: [], ugListed: 0, ugOffset: 0,
+        lcListed: false, htListed: false, tail: null };
       model.groups.set(key, g);
       model.order.push(key);
     }
@@ -1708,7 +1716,7 @@
     const key = g.key + "/" + (i !== undefined ? titleKeyOf(songs[i]) : String(row.title_key || ""));
     let item = model.items.get(key);
     if (!item) {
-      item = { key, mine: undefined, ug: null, lacuerda: null, gtptabs: null, removed: null };
+      item = { key, mine: undefined, ug: null, lacuerda: null, gtptabs: null, harptabs: null, removed: null };
       model.items.set(key, item);
       g.items.push(item);
     }
@@ -1744,11 +1752,12 @@
   };
 
   // An artist's group's foot, made once: "+ 57 more by Estopa" (the rest of their songs on Ultimate Guitar, fifty at a
-  // time, from /api/artist), "+ 3 more by Estopa on LaCuerda" (the rest the index holds of theirs), or, for an artist
-  // whose page caracole has never read, the offer to read it. None when there is nothing more: null.
+  // time, from /api/artist), "+ 3 more by Estopa on LaCuerda" (the rest the index holds of theirs), the same on
+  // harptabs.com, or, for an artist whose page caracole has never read there, the offer to read it. None when there is
+  // nothing more: null.
   const tailOf = (m) => {
     if (!m.tail) {
-      m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null };
+      m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null, ht: null, htOffer: null };
       if (m.ug) {
         m.tail.ug = button("", "small more-by", () => moreOf(m, "ug"));
         m.tail.box.appendChild(m.tail.ug);
@@ -1759,6 +1768,13 @@
       } else if (m.lacuerda) {
         m.tail.offer = readOffer(m);
         m.tail.box.appendChild(m.tail.offer);
+      }
+      if (m.harptabs && Number(m.harptabs.known) > 0) {
+        m.tail.ht = button("", "small more-by", () => moreOf(m, "harptabs"));
+        m.tail.box.appendChild(m.tail.ht);
+      } else if (m.harptabs) {
+        m.tail.htOffer = harpOffer(m);
+        m.tail.box.appendChild(m.tail.htOffer);
       }
     }
     const listed = (source) => m.items.filter((item) => item[source]).length;
@@ -1775,17 +1791,20 @@
       " on Ultimate Guitar");
     more(m.tail.lc, m.lcListed ? 0 : Number(m.lacuerda && m.lacuerda.known) - listed("lacuerda"), m.name + " on LaCuerda",
       (n) => "List " + n + " more songs by " + m.name + " on LaCuerda");
+    more(m.tail.ht, m.htListed ? 0 : Number(m.harptabs && m.harptabs.held) - listed("harptabs"),
+      m.name + " on harptabs.com", (n) => "List " + n + " more songs by " + m.name + " on harptabs.com");
     return m.tail.box.childNodes.length ? m.tail.box : null;
   };
   // "+ N more": the artist's next songs, in their group, each a line as the others are; the focus stays on the button,
   // or, once it is gone, goes to the first song it listed.
   const moreOf = (m, source) => {
     const was = answer;
-    const go = source === "ug" ? m.tail.ug : m.tail.lc;
+    const go = source === "ug" ? m.tail.ug : source === "harptabs" ? m.tail.ht : m.tail.lc;
     const before = new Set(m.items);
     go.disabled = true;
     say("Listing " + m.name + "'s songs…");
     const listing = source === "ug" ? artistPage(String(m.ug.artist_key || ""), m.ugOffset)
+      : source === "harptabs" ? sitePage({ harptabs: String(m.harptabs.path || "") })
       : sitePage({ slug: String(m.lacuerda.slug || "") });
     listing.then((page) => {
       go.disabled = false;
@@ -1796,6 +1815,8 @@
         m.ugOffset += got.length;
         m.ugListed = got.length ? Math.max(m.ugListed, m.ugOffset) : Number(m.ug.songs);
         say(m.name + ": " + many(page.total, "song") + " on Ultimate Guitar");
+      } else if (source === "harptabs") {
+        listHarptabs(m, page);
       } else {
         listLaCuerda(m, page);
       }
@@ -1815,6 +1836,30 @@
       m.tail.offer = null;
     }
     say(String(page.artist) + ": " + many(page.total, "song") + " on LaCuerda");
+  };
+  // A harptabs.com artist's songs the index holds (/api/artist?harptabs=), all of them, in their group.
+  const listHarptabs = (m, page) => {
+    for (const h of objects(page.songs)) addSong(answer.model, "harptabs", h, m);
+    m.htListed = true;
+    if (m.tail && m.tail.htOffer) {
+      m.tail.htOffer.remove();
+      m.tail.htOffer = null;
+    }
+    say(String(page.artist) + ": " + many(objects(page.songs).length, "song") + " on harptabs.com");
+  };
+  // A harptabs.com artist whose page caracole has never read: the button that reads it (a request, a job of its own),
+  // then lists their songs in their group.
+  const harpOffer = (m) => {
+    const name = String(m.harptabs.artist || m.name);
+    const box = el("div", "read-page");
+    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on harptabs.com yet. Reading it is one " +
+      "request to harptabs.com, at a lookup's pace."));
+    box.appendChild(button("Read their page", "small primary", (e) => readThenShow(
+      { harptabs: String(m.harptabs.path || "") }, e.currentTarget, box, (page) => {
+        listHarptabs(m, page);
+        drawGroups();
+      }), "Read the page of " + name + " on harptabs.com"));
+    return box;
   };
   // An artist whose page caracole has never read: how many songs LaCuerda lists, and the button that reads it (a
   // request, a job of its own), then lists them in their group.
@@ -1978,9 +2023,10 @@
       const you = theirs.length ? songs[theirs[0]] : named.get(key) || null;
       const ug = (g.model && g.model.ug) || {};  // the artists the query names there, if any
       const lc = (g.model && g.model.lacuerda) || {};
+      const ht = (g.model && g.model.harptabs) || {};
       const section = artistGroup({ key, name: you ? you.artist : g.model.name, filter: you ? you.sortArtist : "" },
         [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
-          gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0) });
+          gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0), harptabs: ht.songs });
       if (tail) section.appendChild(tail);
       box.appendChild(section);
     }
@@ -2147,6 +2193,7 @@
     const gtp = objects(data.gtptabs);
     const ms = objects(data.musescore);
     const harps = objects(data.harptabs);
+    const htArtists = objects(data.harptabs_artists);
     const lcArtists = objects(data.lacuerda_artists);
     const lc = objects(data.lacuerda);
     const parts = [];
@@ -2156,7 +2203,7 @@
     }
     if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
     if (ms.length) parts.push(ms.length + " on MuseScore");
-    if (harps.length) parts.push(harps.length + " on harptabs.com");
+    if (harps.length || htArtists.length) parts.push((harps.length + htArtists.length) + " on harptabs.com");
     const meant = objects(data.suggest).filter((x) => x.artist);
     say(parts.length ? parts.join(" · ") : meant.length ? "Nothing on the sites: did you mean " + String(meant[0].artist) + "?"
       : "Nothing on the sites: request it by name below");
@@ -2188,8 +2235,10 @@
       return null;
     });
   // A LaCuerda artist's songs the index holds (/api/artist?lacuerda=): ``who`` names them by the slug of their page
-  // ({ slug }) or by a name ({ name }: a page read by name); ``quiet``, a 404 isn't said.
-  const sitePage = (who) => fetch("api/artist?" + (who.slug ? "lacuerda=" + encodeURIComponent(String(who.slug))
+  // ({ slug }) or by a name ({ name }: a page read by name); a harptabs.com artist's (?harptabs=), by their page's path
+  // ({ harptabs }); ``quiet``, a 404 isn't said.
+  const sitePage = (who) => fetch("api/artist?" + (who.harptabs ? "harptabs=" + encodeURIComponent(String(who.harptabs))
+    : who.slug ? "lacuerda=" + encodeURIComponent(String(who.slug))
     : "lacuerda_name=" + encodeURIComponent(String(who.name || ""))),
     { headers: { Accept: "application/json" } })
     .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
@@ -2203,8 +2252,9 @@
       say(UNREACHABLE.line.text);
       return null;
     });
-  // Read a LaCuerda page (``who``: { slug } or { name }) from the button ``go`` in ``offer``, then ``done(page)`` with
-  // the artist's songs; a read that leaves none to list says what LaCuerda answered, under the offer.
+  // Read a LaCuerda page (``who``: { slug } or { name }), or a harptabs.com one ({ harptabs }), from the button ``go`` in
+  // ``offer``, then ``done(page)`` with the artist's songs; a read that leaves none to list says what the site
+  // answered, under the offer.
   const readThenShow = (who, go, offer, done) => {
     const was = answer;
     go.disabled = true;
@@ -2650,8 +2700,8 @@
         });
     };
     // Get it: the song looked up now (POST /lookup, one caracole get), to its sheet; a version picked under its chevron too.
-    getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "artist", "title", "ug", "tab", "lacuerda"], row,
-      go, (answer) => answer.view);
+    getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "artist", "title", "ug", "tab", "lacuerda",
+      "harptabs"], row, go, (answer) => answer.view);
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title", "lacuerda"], row, go,
       (answer) => answer.job);
