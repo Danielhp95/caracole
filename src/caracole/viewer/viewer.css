@@ -524,6 +524,10 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .roles .r-a { color: var(--away); }
 .roles .r-p { color: var(--pull); }
 #pinyin-row .hint { margin: -6px 0 4px; }
+/* The Chinese characters, Simplified or Traditional, as the chord names are chosen, above Pinyin: each segment named
+   in English, then in its own characters, muted. */
+#hanzi-row .seg { margin: 6px 0 4px; }
+#hanzi .zh { margin-left: 4px; color: var(--muted); font-weight: 500; }
 /* The instrument, a menu (the platform's own, its arrow drawn), and the strum's loudness, four speakers in a
    segmented control, on one line; on a screen too narrow for both, the speakers under the menu. An instrument's own
    rows (instruments.js) right under the line. */
