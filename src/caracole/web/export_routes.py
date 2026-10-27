@@ -12,7 +12,9 @@ capo 0).pdf", download_names.py). Nothing is written into the library and nothin
 PDF exports entry, as the owner asked ("Just download"). Nothing here asks a site for anything: the PDF is made from
 the sheet the library keeps. A PDF that can't be made (chordpro failing, a CJK font needed and missing) is refused
 with the reason, never a broken PDF. An address naming no version is the song's own, as the viewer reads its own
-(render.py ``export_version``).
+(render.py ``export_version``). A Chinese sheet's PDF is in the characters its viewer shows its Chinese in:
+Simplified ones, or Traditional ones where its address says ``trad=1`` (render.py ``export_traditional``), its name
+then saying so ("… (A Major, capo 0, Traditional).pdf").
 
 With ``mine=1`` it also queues ``caracole render --song=… --version=… --mine``, under the song's key
 (``jobs.EXPORTING``, ``jobs.MINE``), which writes the song's ``[version]`` in overrides.toml under caracole's lock (the
@@ -63,7 +65,7 @@ def export_pdf(app: WebApp, target: str, *, change: bool = True) -> Response:
     False, for a HEAD) Make this my version queued."""
     from caracole.download_names import content_disposition, download_name
     from caracole.normalize import clean_title
-    from caracole.render import RenderError, export_query, version_pdf
+    from caracole.render import RenderError, export_query, export_traditional, version_pdf
 
     query = urlsplit(target).query
     try:
@@ -74,10 +76,11 @@ def export_pdf(app: WebApp, target: str, *, change: bool = True) -> Response:
         raise _NOT_A_VERSION
     sheet = next((v for k, v in params if k == "sheet"), "")
     mine = next((v for k, v in params if k == "mine"), "") == "1"
-    song, v = _version(app, sheet, urlencode([(k, v) for k, v in params if k not in ("sheet", "mine")]))
+    asked = urlencode([(k, v) for k, v in params if k not in ("sheet", "mine")])
+    song, v = _version(app, sheet, asked)
     try:
         with app.db() as conn:
-            label, data = version_pdf(conn, app.cfg, song, v)
+            label, data = version_pdf(conn, app.cfg, song, v, traditional=export_traditional(asked))
     except (RenderError, OSError) as e:
         raise Refused(500, "No PDF", f"The PDF couldn't be made: {e}") from e
     if mine and change:

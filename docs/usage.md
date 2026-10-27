@@ -3737,7 +3737,9 @@ Who can reach it, below).
   in a private folder in the cache and written nowhere else, so nothing is
   added to the library, the song's PDF exports or the requests, and it takes
   no lock. A PDF that can't be made (chordpro failing, a CJK font needed and
-  not set) is refused with the reason (500). With `&mine=1` (Download and
+  not set) is refused with the reason (500). A Chinese sheet's PDF is in the
+  characters the viewer shows: Simplified, or Traditional with `trad=1` in its
+  address, named so (`… (A Major, capo 0, Traditional).pdf`). With `&mine=1` (Download and
   make it mine) it also queues `caracole render --song … --version …
   --mine`, which makes that version your version, as a request of its own
   ("Your version now"). The auto sheet's viewer kept beside a human sheet and

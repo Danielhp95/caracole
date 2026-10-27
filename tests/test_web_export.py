@@ -225,3 +225,26 @@ def test_two_downloads_at_once_each_render_in_a_folder_of_its_own(app, conn, cfg
         ask.join(20)
     assert sorted(a.status for a in answers) == [200, 200] and len(set(folders)) == 2
     assert not any(folder.exists() for folder in folders)
+
+
+def test_the_pdf_is_in_the_characters_the_viewer_shows_the_chinese_in(app, queue, conn, cfg, printed, tmp_path):
+    # The viewer's address says trad=1 while its Chinese is in Traditional characters: the PDF is in them, and named
+    # so; without it, in Simplified ones, as the viewer starts. A sheet in no Chinese is the same PDF either way.
+    from dataclasses import replace
+
+    from test_render_all import fake_font
+    from test_render_hanzi import TRADITIONAL
+
+    zh = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    app = WebApp(zh, queue, allowed=ALLOWED, csrf="tok")
+    rendered_song(conn, zh, "宋冬野", "斑馬斑馬", content=TRADITIONAL)
+    sheet = "宋冬野/斑馬斑馬/sheet.html"
+    traditional = get(app, pdf_url(sheet, "t=2&trad=1"))
+    simplified = get(app, pdf_url(sheet, "t=2"))
+    assert traditional.status == simplified.status == 200
+    names = [unquote(header(r, "content-disposition").split("filename*=UTF-8''")[1]) for r in (traditional, simplified)]
+    assert names[0].endswith(", Traditional).pdf") and names[1] == names[0].replace(", Traditional", "")
+    assert "斑馬斑馬" in printed[0][0] and "斑马斑马" in printed[1][0] and "斑馬" not in printed[1][0]
+    rendered_song(conn, cfg)  # in Spanish
+    latin = get(app, pdf_url(query="t=2&capo=0&trad=1"))
+    assert unquote(header(latin, "content-disposition").split("filename*=UTF-8''")[1]) == NAME
