@@ -2129,7 +2129,33 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
-  "Key Em". Each says where the key came from.
+  "Key Em". Each says where the key came from. On the piano, which takes no
+  capo, it names the key the song sounds in ("Key F#m"), and the chords are
+  named as they sound (F#m, not Em): the guitar's capo comes back with the
+  guitar.
+- **Instrument**, in the settings: Guitar (the default), Ukulele (G C E A, the
+  G string high), Ukulele, low G, Baritone ukulele (D G B E) and Piano. It
+  changes how every chord is drawn and heard, never the song: the chord names
+  stay, each drawn its own way. A ukulele's chords are four-string boxes, up to
+  four shapes each, from chords-db's ukulele data (MIT, as the guitar's);
+  low G plays the same shapes, the baritone the same shapes a fourth lower (a
+  ukulele's C shape is its G). A chord it has no shape for shows the closest
+  (C5 as C, G9 as G7), saying so, and a slash chord its plain chord ("Shown
+  without its bass, E"). A ukulele keeps the capo, and offers **Easy keys**
+  above it, the keys whose chords sit well under the fingers (on a ukulele
+  C, F, G, Bb, Am and Dm; on the baritone G, C, D, F, Em and Am), nearest the
+  key you play first: tap one to move the song there, as Transpose does (the
+  guitar's capo suggestions are the guitar's alone). The piano draws each
+  chord on a keyboard, its notes lit and its bass marked: root position, then
+  the first and second inversions (‹ ›), the right hand around middle C and
+  the bass, the root or a slash chord's, for the left hand below it. The rail
+  of necks (below) draws a ukulele's four strings, and the piano has none.
+  Like the rail of necks, the choice is the player's, not a song's: the
+  browser keeps it once for every sheet and songbook, and the address keeps
+  `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`) while it is another
+  than the guitar, for a page served by `caracole serve`; ‹ and › to another
+  version keep it, and so does every step to another song in a songbook.
+  **Reset everything** leaves it as it is.
 - **The versions** of a song Ultimate Guitar has several of: under the key
   line, the sheet's viewer and each version kept beside it say which of UG's
   chords versions they are, with its rating and votes: "Ver 3 of 13 ·
@@ -2344,10 +2370,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 The viewer remembers its settings for each song in the browser, the scroll
 speed, the text size, the volume and the shape chosen for each chord among them: a chord
 named otherwise when the page opens (an address with another key, mode or
-capo) starts at its first shape. It keeps the transposition, the mode, the
+capo), or on another instrument, starts at its first shape. It keeps the transposition, the mode, the
 capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
-(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), and so the shape chosen for a
+(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the instrument
+(`inst=piano`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or

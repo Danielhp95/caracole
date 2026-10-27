@@ -5,7 +5,8 @@ key and capo on a line under its title; a song without a sheet is named there as
 and has no page. Each song with a sheet is a section
 built the way ``page.build_viewer`` builds a sheet.html, with its own data block (its
 key, its ``[transpose]``, the version it starts in, its chords in every mode); the fingerings,
-which most songs share, are one block for the page (``voicings``).
+which most songs share, are one block for the page (``voicings``), and so are the easy keys of each
+instrument (``easy``), the same for every song with a key.
 
 Without a script, the page is every song one after the other, with links between them,
 and prints. With it (book.js), it shows the contents or one song, chosen by the address
@@ -18,7 +19,7 @@ they go to, a swipe or the arrow keys go from song to song, skipping the missing
 each step reloads the page, so the viewer starts afresh on each song.
 
 The page is self-contained and loads nothing, as a sheet.html: a Content-Security-Policy
-with the hashes of its three scripts (book.js, the viewer's strum.js and viewer.js) and
+with the hashes of its four scripts (book.js, the viewer's strum.js, instruments.js and viewer.js) and
 two stylesheets. A server serves it only while it is the page caracole wrote, with
 ``songbook_csp(page)``.
 """
@@ -39,6 +40,7 @@ from caracole.viewer.page import (
     HERE,
     LIBRARY_PAGE,
     _assets,
+    _instruments,
     _sound,
     _facts,
     _footer,
@@ -103,6 +105,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
     book_style, book_script = _book_assets()
     playable = [(n, song.title) for n, song in enumerate(songs, start=1) if song.cho is not None]
     voicings: dict[str, Any] = {}
+    easy: dict[str, Any] | None = None  # every song's alike: one block for the page
     sections = []
     about: dict[int, str] = {}
     for i, (n, _) in enumerate(playable):
@@ -110,6 +113,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         nxt = playable[i + 1] if i + 1 < len(playable) else None
         html, data, about[n] = _song(songs[n - 1], n, len(songs), prev, nxt)
         voicings.update(data.pop("voicings"))
+        easy = data.pop("easy", easy)
         sections.append(html + json_block(f"data-{n}", data) + "</section>\n")
     count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
     files = "".join(f'<a class="pdf" href="{escape(quote(f))}">{label}</a>\n'
@@ -121,11 +125,13 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         + _contents(songs, about, files)
         + "".join(sections)
         + json_block("voicings", voicings)
+        + (json_block("easy", easy) if easy is not None else "")
         + _footer(files)
         + "</div>\n"
         + _CONTROLS
     )
-    return _page(f"{name} · songbook", body, styles=(style, book_style), scripts=(book_script, _sound(), script))
+    return _page(f"{name} · songbook", body, styles=(style, book_style),
+                 scripts=(book_script, _sound(), _instruments(), script))
 
 
 def _contents(songs: list[BookSong], about: dict[int, str], files: str) -> str:

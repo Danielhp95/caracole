@@ -115,9 +115,10 @@ def test_the_synthesis_is_a_script_of_its_own_inlined_and_hashed_before_the_view
     csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     strum = (page.HERE / "strum.js").read_text(encoding="utf-8")
+    instruments = (page.HERE / "instruments.js").read_text(encoding="utf-8")
     viewer = (page.HERE / "viewer.js").read_text(encoding="utf-8")
-    assert scripts == [strum, viewer]
-    assert f"script-src {sha256_source(strum)} {sha256_source(viewer)};" in csp
+    assert scripts == [strum, instruments, viewer]
+    assert f"script-src {sha256_source(strum)} {sha256_source(instruments)} {sha256_source(viewer)};" in csp
     assert page.HERE / "strum.js" in page.BUILD_FILES
     # It loads nothing: no worklet module, no sample, no fetch.
     for word in ("addModule", "fetch(", "XMLHttpRequest", "import(", "new Audio(", "innerHTML", "eval("):

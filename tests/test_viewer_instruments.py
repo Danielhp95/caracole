@@ -4,9 +4,12 @@ for an instrument that takes none."""
 
 from __future__ import annotations
 
+import json
+import re
+
 import pytest
 
-from caracole.viewer import instruments, page
+from caracole.viewer import build_viewer, instruments, page
 from caracole.viewer.instruments import (
     BARITONE,
     GUITAR,
@@ -27,6 +30,10 @@ from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import QUALITIES, Chord, Key, parse_chord
 from caracole.viewer.version import Version, _shapes, for_instrument, played_key
 from caracole.viewer.voicings import LICENSE_FILE, load_voicings, notes_of, plays, subset_chords_db
+
+
+def data_of(html: str) -> dict:
+    return json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>', html, re.S).group(1))
 
 
 # --- the instruments --------------------------------------------------------------------------------------
@@ -235,6 +242,54 @@ def test_the_guitars_shapes_are_versions():
         for shift in (0, 2):
             assert chord_shapes(GUITAR, parse_chord(name), shift, given) == _shapes(parse_chord(name), shift, given)
     assert chord_shapes(GUITAR, parse_chord("G"), 0, given)[0][0] == "320033"  # the sheet's own first
+
+
+# --- the page's data ----------------------------------------------------------------------------------------
+
+SHEET = ("{title: Instruments}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
+         "[C]made [Am]up [F/A]words [G7]here [C5]and [Cmaj9]there\n")
+
+
+def test_a_page_carries_the_instruments_and_their_shapes_for_its_chords():
+    data = data_of(build_viewer(SHEET))
+    assert [i["id"] for i in data["instruments"]] == [i.id for i in INSTRUMENTS]
+    uke = next(i for i in data["instruments"] if i["id"] == "ukulele")
+    assert uke["tuning"] == [67, 60, 64, 69] and uke["shapes"] == "ukulele:" and uke["offset"] == 0
+    assert uke["easy"] == "ukulele" and uke["voice"] == "ukulele" and uke["capo"] is True
+    # What the ukulele shows for the guitar's C5 and Cmaj9, and for a chord offered instead (G9: G7).
+    assert uke["near"]["5"] == "" and uke["near"]["maj9"] == "maj7"
+    assert uke["near"] == {k: ukulele_quality(k) for k in uke["near"]} and "" not in uke["near"]
+    baritone = next(i for i in data["instruments"] if i["id"] == "baritone")
+    assert baritone["shapes"] == "ukulele:" and baritone["offset"] == 5
+    piano = next(i for i in data["instruments"] if i["id"] == "piano")
+    assert piano["capo"] is False and piano["kind"] == "keys" and "tuning" not in piano
+    voicings = data["voicings"]
+    for quality in ("", "m", "7", "maj7"):
+        assert voicings["ukulele:" + quality] == load_voicings("ukulele")[quality]
+    assert "ukulele:5" not in voicings and "ukulele:/9" not in voicings
+    # The piano: every kind of chord the page may show (as written, in another mode, an alternative), on every root.
+    for name in ("C", "Am", "F/A", "G7", "C5", "Cmaj9"):
+        chord = parse_chord(name)
+        assert voicings[piano_key(chord)] == [piano_positions(instruments.on_root(chord, r)) for r in range(12)]
+    assert voicings["piano:m7|"] and voicings["piano:maj7|"]  # alternatives: Am7, Cmaj7, Fmaj7
+    assert data["easy"]["ukulele"]["ionian"] == easy_keys("ukulele")["ionian"]
+    assert set(data["easy"]) == {"ukulele", "baritone"}
+
+
+def test_a_page_without_a_key_has_no_easy_keys():
+    data = data_of(build_viewer("{title: T}\n[N.C.]la\n"))
+    assert "easy" not in data and [i["id"] for i in data["instruments"]][0] == "guitar"
+
+
+def test_the_viewer_is_made_from_the_instruments_too():
+    for name in ("instruments.py", "voicings-ukulele.json", "instruments.js"):
+        assert page.HERE / name in page.BUILD_FILES
+    script = (page.HERE / "instruments.js").read_text(encoding="utf-8")
+    html = build_viewer(SHEET)
+    assert f"<script>{script}</script>" in html
+    assert html.index(script) < html.index((page.HERE / "viewer.js").read_text(encoding="utf-8"))
+    for word in ("innerHTML", "fetch(", "XMLHttpRequest", "import(", "eval(", "new Function"):
+        assert word not in script, word
 
 
 # --- the capo, folded in for an instrument that takes none ----------------------------------------------------
