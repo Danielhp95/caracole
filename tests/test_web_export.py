@@ -292,3 +292,28 @@ def test_a_song_with_braces_in_its_name_opens_its_export_page(app, queue, record
         page = get(app, export_url(sheet=sheet, query="fs=20"))  # kept as a move: the other button
         assert page.status == 200 and ">Keep it in this key<" in text(page), (artist, title)
         cfg.overrides_file.unlink()
+
+
+def test_an_export_from_the_viewer_on_another_instrument_is_made_there_and_made_my_version_there(
+        app, queue, recorder, conn, cfg):
+    # The viewer's address names its instrument (inst=piano): the export page says it, the PDF is made on it, and
+    # Make this my version keeps it
+    song = rendered_song(conn, cfg)  # in G
+    page = get(app, export_url(query="t=2&capo=0&inst=piano"))
+    assert page.status == 200 and "A Major, piano" in shown(page)
+    assert f'href="/{quote(SHEET)}#t=2&amp;capo=0&amp;inst=piano"' in text(page)  # back where it was
+    post(app, "/export", {"sheet": SHEET, "v": "t=2&capo=0&inst=piano"})
+    post(app, "/export", {"sheet": SHEET, "v": "t=2&capo=0&inst=piano", "mine": "1"})
+    queue.run_pending()
+    assert recorder.calls == [["render", f"--song={song.display}", "--version=t=2&capo=0&inst=piano"],
+                              ["render", f"--song={song.display}", "--version=t=2&capo=0&inst=piano", "--mine"]]
+    render_version(conn, cfg, Overrides(), get_song(conn, song.id), version_from_query("t=2&capo=0&inst=piano"),
+                   runner=fake_chordpro)
+    assert (cfg.library_dir / "Soda Stereo" / "De Música Ligera" / "sheet (A Major, piano).pdf").is_file()
+    # the song's own on the piano: the guitar's address names it by name, and is another version
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[version]\n"{song.display}" = "key=A&capo=0&inst=piano"\n', encoding="utf-8")
+    assert "It is your version" in shown(get(app, export_url(query="t=2&capo=0&inst=piano")))
+    assert "It is your version" in shown(get(app, export_url(query="fs=20")))  # names none: the song's own
+    guitar = get(app, export_url(query="t=2&capo=0&inst=guitar"))
+    assert "A Major, capo 0" in shown(guitar) and ">Make this my version<" in text(guitar)

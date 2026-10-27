@@ -1363,7 +1363,23 @@ and cache.
   the version (no `t`, `mode`, `capo`, `alt` or `at`), they are the song's
   own version, where the viewer starts; without a `t`, the version is at the
   song's own `t` (where its `[version]` puts the sheet, else its
-  `[transpose]`), which the viewer leaves out of its address. An export with the same name replaces the last one. Exports are
+  `[transpose]`), which the viewer leaves out of its address.
+  `inst=` names the instrument the viewer was on (`ukulele`, `ukulele-low-g`,
+  `baritone`, `piano`, `harmonica`, `flute`, `recorder`; `guitar` too): the
+  PDF is made for it, and named after it, `sheet (G Major, capo 2,
+  ukulele).pdf`, `sheet (A Major, piano).pdf`. A ukulele's has four-string
+  diagrams of the viewer's shapes (low G and baritone alike); the piano's, a
+  keyboard of three octaves for each chord, its keys in the chords' colour:
+  the viewer's first position, the left hand's bass and the right hand's
+  chord; the harmonica's, no diagram but, before the song, the harps for it
+  ("Harmonica: C harp (2nd position) · G harp (1st)") and each chord's holes
+  on the first (`G7: draw 2–5`, `F: not on this harp`); a flute's or a
+  recorder's, the key's scale (`G major scale: G A B C D E F# G`). Under the
+  title the instrument is named (`The Placeholders · Piano · Key A`), and one
+  with no capo (the piano, the harmonica, the winds) plays the chords as they
+  sound, the capo folded in: `Key A`, never `G shapes · capo 2`. Without
+  `inst=`, the song's own version's instrument when the words name nothing of
+  the version, else the guitar. An export with the same name replaces the last one. Exports are
   caracole's files: every render makes them again when the sheet, the style or
   the PDF's text changes (and says nothing when they are up to date), and
   `caracole remove` deletes them. One a new sheet names otherwise (a sheet in
@@ -1381,10 +1397,13 @@ and cache.
   in (as the sheet reads its chords: `Gm` for an A minor sheet played two
   down), the mode you chose, if you chose one, and its capo, with the chords
   it plays instead and the shapes it chose by their names
-  (`key=Gm&mode=dorian&capo=0&at=Gm.x-x-5-7-8-6`), says so
+  (`key=Gm&mode=dorian&capo=0&at=Gm.x-x-5-7-8-6`), and the instrument the
+  viewer was on (`&inst=piano`, with the capo the guitar plays at), says so
   (`Your version of Soda Stereo - De Música Ligera: G Dorian, capo 0`), then
   renders the song as `--song` does: its `sheet.pdf` is in that version, its
-  viewer starts there, its exports and its songbooks follow. The key is a
+  viewer starts there (on its instrument), its exports and its songbooks
+  follow. `sheet.pdf` stays the guitar's: another instrument's PDF is an
+  export's, or a songbook's. The key is a
   key, not a move: a sheet in another key or with another capo that takes
   the song's place later plays in G dorian with no capo too, and one that
   reads the same chords in the relative key (C major for A minor's), or
@@ -2254,7 +2273,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `recorder`) while it is another
   than the guitar, for a page served by `caracole serve`; ‹ and › to another
   version keep it, and so does every step to another song in a songbook.
-  **Reset everything** leaves it as it is.
+  **Reset everything** leaves it as it is. **Export PDF** makes the PDF on
+  the instrument shown, and **Make this my version** keeps it, so the song
+  opens there (`caracole render --version`'s `inst=`); a songbook may play a
+  song on its own (`caracole songbook set --instrument`).
 - **The versions** of a song Ultimate Guitar has several of: under the key
   line, the sheet's viewer and each version kept beside it say which of UG's
   chords versions they are, with its rating and votes: "Ver 3 of 13 ·
@@ -3902,7 +3924,11 @@ tab_ids = [1601668]
   key (`alt=F.Fmaj7`: Fmaj7 for every F; `at=Gm.x-x-5-7-8-6`: Gm in that
   shape, its frets from the nut, low E first, `x` for a string not played,
   wherever the new sheet's card lists it; a `%`, `&`, `=`, `,` or `.` in a
-  chord's name is written `%25`, `%26`, `%3D`, `%2C`, `%2E`). The song's `sheet.pdf` is
+  chord's name is written `%25`, `%26`, `%3D`, `%2C`, `%2E`; a ukulele's shape
+  by its four strings, its G string first). Last, `inst=` names the instrument
+  it is played on (`inst=piano`): its viewer opens there, and its songbooks
+  play it there, but its `sheet.pdf` stays the guitar's; its capo is the one
+  the guitar plays at. The song's `sheet.pdf` is
   made in it, its viewer starts in it, and its songbooks play it there, unless
   a songbook sets its own; it wins over the song's `[transpose]`, which stays
   in the file. The key is a key, not a move, as a songbook's setting is: a

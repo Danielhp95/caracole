@@ -189,6 +189,7 @@ from caracole.viewer.version import (
     in_key,
     key_version,
     played_key,
+    played_on,
     version_entry,
     version_from_query,
     version_label,
@@ -864,6 +865,12 @@ def pdf_transpose(conn: sqlite3.Connection, overrides: Overrides, song: Song) ->
     return t if isinstance(t, int) and not isinstance(t, bool) else 0
 
 
+def on_the_guitar(v: Version) -> Version:
+    """The version ``v`` as the song's own PDF plays it: on the guitar, whatever instrument ``v`` is on (its viewer
+    starts there; another instrument's PDF is an export's or a songbook's), without the shapes chosen on that one."""
+    return v if v.inst is None else replace(v, inst=None, at={})
+
+
 def _names(query: str) -> set[str]:
     """The names an address's query or fragment holds, as the viewer's URLSearchParams reads them."""
     return {name for name, _ in parse_qsl(query[1:] if query[:1] in ("#", "?") else query, keep_blank_values=True)}
@@ -873,11 +880,14 @@ def export_version(query: str, own: Version) -> Version:
     """The version an address ``query`` holds (``version_from_query``), for an export, as the viewer reads its
     own address: one that names none of the version (its ``t``, ``mode``, ``capo``, ``alt`` or ``at``) is the
     song's own, ``own`` (``ExportSheet.own``), where the viewer starts, and one that names no ``t`` is at the own
-    version's, which the viewer leaves out of its address."""
+    version's, which the viewer leaves out of its address. Its instrument is the one ``inst`` names (the guitar's
+    too: ``inst=guitar``, which the viewer writes when the song's own is on another); with none named, the own
+    version's where the address names none of the version, else the guitar."""
     names = _names(query)
-    if not names & _VERSION_NAMES:
-        return own
     version = version_from_query(query)
+    if not names & _VERSION_NAMES:
+        return own if "inst" not in names else replace(own, inst=version.inst, at={} if version.inst != own.inst
+                                                       else own.at)
     return version if "t" in names else replace(version, t=own.t)
 
 
@@ -1158,7 +1168,7 @@ def _render_sheet(
         return data is not None
 
     try:
-        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, version, key=key,
+        done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, on_the_guitar(version), key=key,
                                  cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
     except RenderError:
         viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
@@ -1227,29 +1237,32 @@ def _render_sheet_pdf(
 
 
 def _sheet_text(text: str, *, key: str | None, version: Version, key_source: str | None = None,
-                fonts: PdfFonts | None = None) -> str:
+                fonts: PdfFonts | None = None, diagrams: bool = True) -> str:
     """The text chordpro prints of the sheet ``text`` in ``version``: the sheet as written (``Version()``) as it
-    is (``_printed``), else in that version as its viewer shows it (``_version_text``). ``key`` is the sheet's
-    (``keys.sheet_keys``), and ``key_source`` where it came from; ``fonts``, the PDF fonts its columns are
-    levelled in (``pdf_text``)."""
-    if version == Version():
+    is (``_printed``), else in that version as its viewer shows it (``_version_text``), on its instrument.
+    ``key`` is the sheet's (``keys.sheet_keys``), and ``key_source`` where it came from; ``fonts``, the PDF fonts
+    its columns are levelled in (``pdf_text``); ``diagrams``, whether a fretted instrument's are drawn."""
+    if version == Version() and diagrams:
         return _printed(text, key=key, key_source=key_source, capo=parse_sheet(text).capo, fonts=fonts)
-    return _version_text(text, version, viewer_key(text, key, key_source), parse_sheet(text).capo, fonts=fonts)
+    return _version_text(text, version, viewer_key(text, key, key_source), parse_sheet(text).capo, fonts=fonts,
+                         diagrams=diagrams)
 
 
 def _version_text(text: str, v: Version, shapes: Key | None, capo: int | None, *,
-                  fonts: PdfFonts | None = None) -> str:
+                  fonts: PdfFonts | None = None, diagrams: bool = True) -> str:
     """The text chordpro prints of the sheet ``text`` in the version ``v``: each chord named and shaped as the
     viewer shows it there (``apply_version``), then the PDF's own text of that (``pdf_text``), each chord's diagram
     the shape its ``{define}`` gives, with the key line of the shapes the version plays and its capo. A capo the
     sheet's notes name is printed only where the version plays its chords where the sheet writes them, at the
     sheet's capo: one that moves them or the capo plays them elsewhere (A shapes with the capo off a sheet whose
     notes say capo 2 sound A). ``shapes`` and ``capo`` are the sheet's, as its viewer reads them
-    (``page.viewer_key``, its ``{capo}``)."""
+    (``page.viewer_key``, its ``{capo}``). On the version's instrument (``v.inst``: pdf_text.py), its fretted
+    shapes drawn unless not ``diagrams`` (a songbook's PDF draws one number of strings)."""
     played, played_capo = played_key(v, shapes, capo)
     in_place = v.t == 0 and played_capo == (capo or 0)  # no move: the chords' shift is t less the capo's move
     return _as_latin(pdf_text(apply_version(text, v, key=shapes, capo_sheet=capo), key=played, capo=played_capo,
-                              notes_capo=in_place, defined=True, fonts=fonts))
+                              notes_capo=in_place, defined=True, fonts=fonts, instrument=played_on(v),
+                              diagrams=diagrams))
 
 
 def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | None = None,
