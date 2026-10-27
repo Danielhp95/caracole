@@ -67,9 +67,15 @@ The viewers run sandboxed, with the same Content-Security-Policy and sandbox hea
 
 ## Try it on an emulator
 
-`nix develop ./android#emulator` adds the emulator and an Android 36 x86_64 image. On the emulator, the host's
-`127.0.0.1` is `10.0.2.2`. The instrumented test syncs from a running caracole serve, opens the library page and a
-viewer, transposes, and hands off a PDF and a Guitar Pro file:
+`nix develop ./android#emulator` adds the emulator, `adb`, `avdmanager` and an Android 36 x86_64 image:
+
+    avdmanager create avd -n caracole -k "system-images;android-36;google_apis;x86_64" -d pixel_6
+    LD_LIBRARY_PATH=/run/opengl-driver/lib emulator -avd caracole -gpu host
+
+Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),
+emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
+the host's `127.0.0.1` is `10.0.2.2`. The instrumented test syncs from a running caracole serve, opens the
+library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file:
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk

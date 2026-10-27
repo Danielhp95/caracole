@@ -27,6 +27,9 @@
         includeEmulator = emulator;
         includeSystemImages = emulator;
       } // lib.optionalAttrs emulator {
+        # The emulator the end-to-end test passed on, with -gpu host: its software renderers, and 37.1.11's
+        # (the repo's "latest"), crashed in the emulator's render thread (README.md).
+        emulatorVersion = "37.2.4";
         systemImageTypes = [ "google_apis" ];
         abiVersions = [ "x86_64" ];
       });
