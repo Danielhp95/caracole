@@ -1,17 +1,21 @@
-"""Guitar fingerings for the sheet viewer, from chords-db (MIT; see LICENSE-chords-db).
+"""Guitar and ukulele fingerings for the sheet viewer, from chords-db (MIT; see LICENSE-chords-db).
 
-``voicings.json`` is a subset of chords-db's ``lib/guitar.json`` (commit df06fa7b,
-https://github.com/tombatossals/chords-db), made by ``subset_chords_db``: the qualities
-the viewer names (``theory.QUALITIES``), and the major and minor slash chords, each
-position checked against the notes it sounds (``notes_of``) and dropped when it plays a
-note outside its chord. To make it again::
+``voicings.json`` is a subset of chords-db's ``lib/guitar.json``, and ``voicings-ukulele.json`` of its
+``lib/ukulele.json`` (both at commit df06fa7b, https://github.com/tombatossals/chords-db), made by
+``subset_chords_db``: the qualities the viewer names (``theory.QUALITIES``), and the major and minor
+slash chords (the guitar's: the ukulele file has none), each position checked against the notes it
+sounds in the file's own standard tuning (``notes_of``: E2 A2 D3 G3 B3 E4; G4 C4 E4 A4, re-entrant)
+and dropped when it plays a note outside its chord. To make them again::
 
     python -m caracole.viewer.voicings guitar.json src/caracole/viewer/voicings.json
+    python -m caracole.viewer.voicings ukulele.json src/caracole/viewer/voicings-ukulele.json
 
 A position is ``[frets, fingers, base fret, barres]``: ``frets`` has one character per
-string, low E first, "x" for a muted one, "0" for an open one, else the fret counted
+string, as a chord box draws them left to right (a guitar's low E first, a ukulele's 4th string,
+G, first), "x" for a muted one, "0" for an open one, else the fret counted
 from the base fret (1 is the base fret itself); ``fingers`` likewise, 0 for none; and
-``barres`` lists the frets (counted the same way) a finger lays across.
+``barres`` lists the frets (counted the same way) a finger lays across. ``notes_of`` and ``plays``
+read one on any tuning (``tuning``: each string's open note, as MIDI, in that order).
 
 The data is filed by quality and root: ``data[quality][root]`` is the root's positions
 (pitch class 0, C, first). A slash chord's quality is "<quality>/<bass interval>", so
@@ -35,6 +39,8 @@ from typing import Any
 from caracole.viewer.theory import QUALITIES, Chord, note_pc, parse_chord
 
 DATA_FILE = Path(__file__).with_name("voicings.json")
+# Each instrument's file of fingerings, by its table's name (``load_voicings``).
+DATA_FILES = {"guitar": DATA_FILE, "ukulele": Path(__file__).with_name("voicings-ukulele.json")}
 LICENSE_FILE = Path(__file__).with_name("LICENSE-chords-db")
 
 TUNING = (40, 45, 50, 55, 59, 64)  # E2 A2 D3 G3 B3 E4, as MIDI notes
@@ -50,17 +56,20 @@ _SUFFIXES = {
     "madd9": "madd9", "add11": "add11",
 }
 _SLASH = re.compile(r"(m?)/([A-G])(#|b)?")
-_ROOTS = {"C": 0, "Csharp": 1, "D": 2, "Eb": 3, "E": 4, "F": 5, "Fsharp": 6, "G": 7, "Ab": 8,
-          "A": 9, "Bb": 10, "B": 11}
+# A root as chords-db files it: "Csharp" in the guitar's file, "Db" in the ukulele's.
+_DB_ROOT = re.compile(r"([A-G])(sharp|b)?")
+# A note as chords-db names one in a tuning: "E2", "G4".
+_DB_NOTE = re.compile(r"([A-G])(#|b)?(-?\d)")
 
 Position = list[Any]  # [frets, fingers, base fret, barres]
 
 
-def notes_of(position: Position) -> list[int]:
-    """The MIDI notes a position sounds, low string first."""
+def notes_of(position: Position, tuning: tuple[int, ...] = TUNING) -> list[int]:
+    """The MIDI notes a position sounds on ``tuning`` (the guitar's standard one unless given), string by
+    string in the position's order (the guitar's low string first)."""
     frets, _, base, _ = position
     notes = []
-    for string, fret in zip(TUNING, frets, strict=True):
+    for string, fret in zip(tuning, frets, strict=True):
         if fret == "x":
             continue
         n = int(fret)
@@ -69,10 +78,12 @@ def notes_of(position: Position) -> list[int]:
 
 
 def subset_chords_db(doc: dict[str, Any]) -> dict[str, list[list[Position]]]:
-    """chords-db's guitar data as the viewer files it (see the module's docstring)."""
+    """chords-db's data for an instrument as the viewer files it (see the module's docstring), each position
+    checked on the file's own standard tuning (the guitar's when it names none)."""
+    tuning = _db_tuning(doc)
     data: dict[str, list[list[Position]]] = {}
     for db_root, entries in doc["chords"].items():
-        root = _ROOTS[db_root]
+        root = _db_root(db_root)
         for entry in entries:
             key = _key(entry["suffix"], root)
             if key is None:
@@ -81,12 +92,35 @@ def subset_chords_db(doc: dict[str, Any]) -> dict[str, list[list[Position]]]:
             bass = None if not interval else (root + int(interval)) % 12
             chord = Chord(root, quality, bass)
             positions: list[Position] = []
-            for p in map(_compact, entry["positions"]):
-                if p and plays(p, chord) and all(p[0] != q[0] for q in positions):
+            for p in (_compact(found, len(tuning)) for found in entry["positions"]):
+                if p and plays(p, chord, tuning) and all(p[0] != q[0] for q in positions):
                     positions.append(p)  # the first fingering of the same frets
             if positions:
                 data.setdefault(key, [[] for _ in range(12)])[root] = positions[:MAX_POSITIONS]
     return data
+
+
+def _db_tuning(doc: dict[str, Any]) -> tuple[int, ...]:
+    """The file's standard tuning as MIDI notes ("G4" is 67), or the guitar's when it names none."""
+    names = doc.get("tunings", {}).get("standard")
+    if not names:
+        return TUNING
+    notes = []
+    for name in names:
+        m = _DB_NOTE.fullmatch(name)
+        if m is None:
+            raise ValueError(f"not a note: {name!r}")
+        letter, accidental, octave = m.groups()
+        notes.append(note_pc(letter, accidental or "") + 12 * (int(octave) + 1))
+    return tuple(notes)
+
+
+def _db_root(name: str) -> int:
+    m = _DB_ROOT.fullmatch(name)
+    if m is None:
+        raise ValueError(f"not a root: {name!r}")
+    letter, accidental = m.groups()
+    return note_pc(letter, {"sharp": "#", "b": "b"}.get(accidental or "", ""))
 
 
 def _key(suffix: str, root: int) -> str | None:
@@ -98,9 +132,9 @@ def _key(suffix: str, root: int) -> str | None:
     return None
 
 
-def _compact(position: dict[str, Any]) -> Position | None:
+def _compact(position: dict[str, Any], strings: int = len(TUNING)) -> Position | None:
     frets, fingers = position.get("frets"), position.get("fingers")
-    if not (isinstance(frets, list) and isinstance(fingers, list) and len(frets) == len(TUNING)):
+    if not (isinstance(frets, list) and isinstance(fingers, list) and len(frets) == len(fingers) == strings):
         return None
     if any(not isinstance(f, int) or f > 9 for f in frets + fingers):
         return None
@@ -112,9 +146,10 @@ def _compact(position: dict[str, Any]) -> Position | None:
     ]
 
 
-def plays(position: Position, chord: Chord) -> bool:
-    """Whether the position sounds its chord: no other note, the root, and a slash chord's bass lowest."""
-    notes = notes_of(position)
+def plays(position: Position, chord: Chord, tuning: tuple[int, ...] = TUNING) -> bool:
+    """Whether the position sounds its chord on ``tuning`` (the guitar's unless given): no other note, the
+    root, and a slash chord's bass lowest."""
+    notes = notes_of(position, tuning)
     pcs = {n % 12 for n in notes}
     if not notes or not pcs <= chord.pitch_classes or chord.root not in pcs:
         return False
@@ -249,10 +284,11 @@ def frets_from_nut(position: Position) -> tuple[int | None, ...]:
     return tuple(None if f == "x" else int(f) + base - 1 if int(f) else 0 for f in frets)
 
 
-@lru_cache(maxsize=1)
-def load_voicings() -> dict[str, list[list[Position]]]:
-    """The vendored fingerings (``voicings.json``)."""
-    return json.loads(DATA_FILE.read_text(encoding="utf-8"))
+@lru_cache(maxsize=2)
+def load_voicings(table: str = "guitar") -> dict[str, list[list[Position]]]:
+    """The vendored fingerings of an instrument (``DATA_FILES``): the guitar's (``voicings.json``) unless
+    another is named."""
+    return json.loads(DATA_FILES[table].read_text(encoding="utf-8"))
 
 
 @lru_cache(maxsize=4096)

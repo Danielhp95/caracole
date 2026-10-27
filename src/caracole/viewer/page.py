@@ -130,8 +130,8 @@ _OF_THE_SHAPES = frozenset({"chords", "audio"})
 # A module the viewer comes to import goes here too (test_viewer_book.py checks).
 BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "harmony_tables.py",
-                               "voicings.py", "voicings.json", "version.py", "pinyin.py", "viewer.js",
-                               "viewer.css", "LICENSE-chords-db")),
+                               "voicings.py", "voicings.json", "voicings-ukulele.json", "instruments.py",
+                               "version.py", "pinyin.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "download_names.py",  # download_name, a Guitar Pro link's download attribute

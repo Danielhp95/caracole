@@ -4,6 +4,7 @@
 - sheet.py reads that file back; theory.py names chords and keys, changes modes
   and finds alternatives; harmony.py, on top of it, tells what each chord does in its key
   (numerals, relations, progressions, scales); voicings.py holds the fingerings (chords-db, MIT);
+  instruments.py, the instruments the viewer draws chords for (guitar, ukuleles, piano) and their shapes;
 - version.py applies a version of the page (its key, capo, mode, shapes and swaps) to the
   sheet in Python, for a PDF of what the page shows;
 - pinyin.py reads each Chinese character's pinyin in context, for the page's Pinyin;

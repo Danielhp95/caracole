@@ -50,7 +50,8 @@ from caracole.viewer.theory import (
     scale,
     spelling,
 )
-from caracole.viewer.voicings import TUNING, Position, frets_from_nut, load_voicings, parse_define, voicing_keys
+from caracole.viewer.instruments import GUITAR, Instrument, chord_shapes
+from caracole.viewer.voicings import TUNING, Position, frets_from_nut, parse_define
 
 Swap = tuple[int, str, int | None]  # a chord played instead: its root, suffix and bass, before any move
 
@@ -218,6 +219,14 @@ def played_key(v: Version, key: Key | None, capo_sheet: int | None) -> tuple[Key
     if key is None or played.mode is None:
         return None, played.capo
     return Key((key.tonic + played.shift) % 12, played.mode), played.capo
+
+
+def for_instrument(v: Version, inst: Instrument) -> Version:
+    """The version as ``inst`` plays it: as it is on an instrument that takes a capo; with no capo on one that takes
+    none (the piano), its transposition kept, so its chords are named as they sound and its key is the key it sounds
+    in (``played_key``: F#m, where the guitar plays Em shapes with capo 2), as the viewer folds the capo in
+    (viewer.js ``capoNow``). The guitar's own version, capo and all, is ``v`` still."""
+    return v if inst.capo else replace(v, capo=0)
 
 
 def version_label(v: Version, key: Key | None, capo_sheet: int | None) -> str:
@@ -448,14 +457,13 @@ def _defines(sheet: Sheet, chords: list[tuple[Chord | None, bool]], names: list[
     """A ``{define}`` of the shape played for each chord (``at``, else its first), once a name (its first
     place's, as the viewer's rail of necks draws it), for a chord the viewer has a shape for."""
     given = shapes_of(sheet)
-    data = load_voicings()
     out, seen = [], set()
     for i, (chord, _) in enumerate(chords):
         name = names[i]
         if chord is None or name in seen or not _NAMEABLE.fullmatch(name):
             continue
         seen.add(name)
-        shapes = _shapes(chord, shift, given, data)
+        shapes = _shapes(chord, shift, given)
         if not shapes:
             continue
         n = at.get(i, 0)
@@ -464,18 +472,11 @@ def _defines(sheet: Sheet, chords: list[tuple[Chord | None, bool]], names: list[
     return out
 
 
-def _shapes(chord: Chord, shift: int, given: dict[str, dict[str, Any]],
-            data: dict[str, list[list[Position]]]) -> list[Position]:
-    """The shapes the viewer shows for ``chord`` moved ``shift`` semitones (viewer.js ``shapesOf``): those the
-    sheet gives that very chord first, else chords-db's for its slash chord, else for its quality."""
-    root = (chord.root + shift) % 12
-    shown = f"{root},{chord.suffix},{'' if chord.bass is None else (chord.bass + shift) % 12}"
-    if shown in given:
-        return given[shown]["list"]
-    fingering, _, slash = voicing_keys(chord)
-    if slash is not None and slash in data and data[slash][root]:
-        return data[slash][root]
-    return data[fingering][root] if fingering in data else []
+def _shapes(chord: Chord, shift: int, given: dict[str, dict[str, Any]]) -> list[Position]:
+    """The shapes the viewer shows for ``chord`` moved ``shift`` semitones on the guitar (viewer.js ``shapesOf``,
+    ``instruments.chord_shapes``): those the sheet gives that very chord first, else chords-db's for its slash
+    chord, else for its quality."""
+    return chord_shapes(GUITAR, chord, shift, given)
 
 
 # --- a version kept by its key ([version], "Make this my version") ----------------------------------------
@@ -685,13 +686,13 @@ def in_key(kept: KeyVersion, cho: str, *, key: Key | None, capo_sheet: int | Non
             swaps[i] = (found.root, found.suffix, found.bass)
     version = replace(placed, alt={played.mode: swaps}) if swaps else placed
     chosen = dict(zip(_sounds(name for name, _ in kept.at), (frets for _, frets in kept.at), strict=True))
-    given, data = shapes_of(sheet), load_voicings()
+    given = shapes_of(sheet)
     positions = {}
     for i, (chord, _) in enumerate(_chords(sheet.chords, version, key, played)):
         frets = None if chord is None else chosen.get(_sound(chord, played.shift))
         if frets is None:
             continue
-        listed = _shapes(chord, played.shift, given, data)
+        listed = _shapes(chord, played.shift, given)
         n = next((n for n, shape in enumerate(listed) if frets_from_nut(shape) == frets), None)
         if n:  # the first is the one played anyway
             positions[i] = n
@@ -721,7 +722,7 @@ def version_entry(v: Version, cho: str, *, key: Key | None, capo_sheet: int | No
     for i, ((was, _), (now, _)) in enumerate(zip(plain, chords, strict=True)):
         if now is not None and now != was:
             swaps.setdefault(before[i], names[i])
-    given, data = shapes_of(sheet), load_voicings()
+    given = shapes_of(sheet)
     shown: dict[str, Frets] = {}
     seen: set[str] = set()
     for i, (chord, _) in enumerate(chords):  # a shape a name, its first place's, as _defines draws it
@@ -729,7 +730,7 @@ def version_entry(v: Version, cho: str, *, key: Key | None, capo_sheet: int | No
             continue
         seen.add(names[i])
         n = v.at.get(i, 0)
-        listed = _shapes(chord, played.shift, given, data)
+        listed = _shapes(chord, played.shift, given)
         if 0 < n < len(listed):
             shown[names[i]] = frets_from_nut(listed[n])
     kept = KeyVersion(shapes, None if played.as_written else played.mode, capo, tuple(swaps.items()),
