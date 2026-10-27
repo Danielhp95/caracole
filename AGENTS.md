@@ -216,7 +216,9 @@ Rules a change there keeps (the Invariants below are the others):
   song, `songbook.songbooks_listing`, made again by `render_songbooks(only=…)`, then `write_pages` again once one was, as `caracole songbook render` writes the pages after; `--progress`, a
   JSON line per event, for caracole serve), versions_cmd.py is `caracole versions` (a song's UG
   chords versions listed from sheet_versions.py with no request; `--keep`, one tab page at the
-  lookup pace, `ug.fetch.keep_version`, noted as yours in `sheet_versions.kept_by_you`; `--choose`,
+  lookup pace, `ug.fetch.keep_version`, noted as yours in `sheet_versions.kept_by_you`; `--keep-more`, the
+  versions `sheet_versions.may_keep` gives, kept so in rank order through one client until the lookup's budget
+  or the hour's is spent, those it can't keep noted (`note_unkeepable`) and never read again; `--choose`,
   get's `--tab`; `--clear`, `overrides.remove_pin` then get), lacuerda_search.py is `caracole lacuerda
   --search` (LaCuerda's own search, one query, one request at the lookup pace), and review.py, search.py,
   removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local
@@ -464,7 +466,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com, MuseScore and
     harptabs.com, 1–2 s for LRCLIB).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
-    lookups run it), `caracole versions --keep`, one tab page asked for now (`--choose` and
+    lookups run it), `caracole versions --keep`, one tab page asked for now, and `--keep-more`, as
+    many as one lookup's budget lets (`--choose` and
     `--clear` run get), `caracole lacuerda --artist`, one artist's page (an artist's Songs), and
     `caracole lacuerda --search`, one query of LaCuerda's search (one request; a query at most once
     in 30 days, kv `lacuerda:search:<key>`, its words' key in alphabetical order; none once your library or
@@ -713,7 +716,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `exclusive(..., interactive=True)` announces it in `state_dir/caracole.lock.waiting/` (a
   file per waiting process, touched every `TICKET_BEAT` s while it tries for the lock, and
   dropped once it holds it; one its process left, or untouched for `TICKET_STALE` s, a
-  lookup killed while it waited, no longer counts). `caracole versions --keep` and `--clear` (which
+  lookup killed while it waited, no longer counts). `caracole versions --keep`, `--keep-more` and `--clear` (which
   writes overrides.toml under it) wait so too, and `--choose` through get. Every changing `caracole songbook`
   command (make, add, remove, move, set, rename, delete, render: commands/songbook.py) waits the
   same way, as a songbook is asked for now

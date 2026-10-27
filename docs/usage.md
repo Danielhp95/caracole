@@ -542,6 +542,23 @@ says so, and no version is the one.
   already sends nothing, and stays kept from then on. A version whose text
   is the very text of the song's text tab (`tab.txt`) isn't kept: one text
   has one file in the folder.
+- `--keep-more` keeps the versions not kept yet, as `--keep` would one by
+  one, in caracole's order, as many as one lookup may: their pages are read at
+  the lookup pace, until the lookup's six requests or the hour's sixty are
+  spent; the rest stay for the next `--keep-more`. It passes over the sheet,
+  the versions kept already, those Ultimate Guitar took down, those under
+  `[block]`, and those a keep found it can't keep (a page with no sheet on
+  it, or the very text of another file in the folder), which it never reads
+  again. A block or a site's error stops it: what it kept before stays kept.
+  Then the song's pages are made and the library page written, once, and it
+  says how many it kept and how many are left:
+
+      $ caracole versions "Oasis - Wonderwall" --keep-more
+      …
+      Kept 6 versions of Oasis - Wonderwall; 4 more not kept: ask again.
+
+  With nothing left to keep it says so and sends nothing. It exits 0 in every
+  one of those cases.
 - `--choose TAB` makes a version the sheet: it is `caracole get --tab` for
   that version's page, so it is recorded under `[pin]` in overrides.toml, and
   the title, the PDF, the viewer and the songbooks use it. caracole's top
@@ -556,7 +573,7 @@ says so, and no version is the one.
 
 A tab that isn't one of the song's chords versions, or one Ultimate Guitar
 took down, exits 1; so does a song not in the library. Two of `--keep`,
-`--choose` and `--clear` at once exit 2.
+`--keep-more`, `--choose` and `--clear` at once exit 2.
 
 ### caracole remove
 
@@ -1081,8 +1098,8 @@ and cache.
   can't be read keeps its files until it can. A pinned sheet keeps the top
   versions by rating beside it, read from the cache alone. A version whose
   text is the sheet's very text gets no files: the sheet stands for it. A
-  version you keep with [`caracole versions --keep`](#caracole-versions)
-  stays kept whatever the ranking.
+  version you keep with [`caracole versions --keep` or
+  `--keep-more`](#caracole-versions) stays kept whatever the ranking.
   A song Ultimate Guitar has no chords for (none in the index, none on its
   artist's page) takes its sheet from UG's Ukulele Chords versions, rated and
   scored as chords are: the same chord-over-lyrics sheet with ukulele shapes,
