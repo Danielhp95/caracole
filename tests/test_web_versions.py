@@ -14,7 +14,7 @@ from caracole.versions import mark_gone, set_coverage, upsert_version
 from caracole.viewer import build_viewer
 from caracole.web.status import details_href
 
-from helpers.rendered import FETCHED, rendered_song
+from helpers.rendered import FETCHED, fake_chordpro, rendered_song
 from test_web_app import ALLOWED, HOST, JSON, META_POLICY, Recorder, get, header, post, text
 
 FOLDER = "Soda Stereo/De Música Ligera"
@@ -574,13 +574,17 @@ def test_keep_more_has_no_page_of_its_own(app, conn, cfg):
 # --- an export from a version page -------------------------------------------------------------
 
 
-def test_an_export_from_a_kept_versions_page_is_refused_and_says_what_to_do(app, queue, conn, cfg):
+def test_an_export_from_a_kept_versions_page_is_refused_and_says_what_to_do(app, queue, conn, cfg, monkeypatch):
+    from caracole import render
+
+    real = render.version_pdf
+    monkeypatch.setattr(render, "version_pdf", lambda *a, **k: real(*a, runner=fake_chordpro, **k))
     versioned_song(conn, cfg)
     page = f"{FOLDER}/version-{KEPT}.html"
-    refused = get(app, f"/export?sheet={quote(page)}&t=2")
+    refused = get(app, f"/export.pdf?sheet={quote(page)}&t=2")
     assert refused.status == 409 and "make this version the one first" in shown(refused)
-    assert post(app, "/export", {"sheet": page, "v": "t=2"}).status == 409
-    assert get(app, f"/export?sheet={quote(SHEET)}&t=2").status == 200
+    assert get(app, f"/export.pdf?sheet={quote(page)}&t=2&mine=1").status == 409
+    assert get(app, f"/export.pdf?sheet={quote(SHEET)}&t=2").status == 200
     assert queue.active_count() == 0
 
 

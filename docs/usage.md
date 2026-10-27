@@ -3587,7 +3587,7 @@ Who can reach it, below).
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
     one that is over stays). A cancelled request is over, never run: it stays
     in the history as **Cancelled**, and the pages that follow it (the library
-    page on another device, the lookup, export and versions pages) say so, the
+    page on another device, the lookup and versions pages) say so, the
     song's line getting its Fetch now back. Cancelling a request leaves its wanted.txt line:
     the song is in your library's list from the moment you asked, and the
     nightly run looks for it; remove it from the library if you don't want it.
@@ -3631,10 +3631,9 @@ Who can reach it, below).
       **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda
       artist page's **Read**, **Not found** or **Not read** (Try again), each
       in a word and a sentence;
-    - an export's **PDF made** · **Open the PDF** (or **Failed**, no PDF was
-      found, with Try again), and Make this my version's **Your version now**
-      · **Open sheet**: never its song's request, whose line on the library
-      page stays its own.
+    - Make this my version's **Your version now** · **Open sheet** (Export
+      PDF's Download and make it mine): never its song's request, whose line
+      on the library page stays its own.
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and
@@ -3659,6 +3658,19 @@ Who can reach it, below).
   line on `/jobs`, its output open; a pick, to its line; a lookup, to the
   lookup page, which follows it (one from the requests page's Get it from
   there, back to `/jobs`).
+- **A sheet's PDF.** The sheet viewer's Export PDF is a link to
+  `/export.pdf?sheet=<the viewer's path in the library>&<its address after
+  #>`, which makes the PDF of that version now and sends it as a download,
+  named for the song and the version (`Soda Stereo - De Música Ligera (A
+  Major, capo 0).pdf`): the PDF `caracole render --version` would write, made
+  in a private folder in the cache and written nowhere else, so nothing is
+  added to the library, the song's PDF exports or the requests, and it takes
+  no lock. A PDF that can't be made (chordpro failing, a CJK font needed and
+  not set) is refused with the reason (500). With `&mine=1` (Download and
+  make it mine) it also queues `caracole render --song … --version …
+  --mine`, which makes that version your version, as a request of its own
+  ("Your version now"). The auto sheet's viewer kept beside a human sheet and
+  a kept version's page get none (409), as above.
 - **A sheet's versions.** The sheet viewer's Make this the one and Keep it
   open `/versions?sheet=…&tab=…&do=choose|keep` in the same tab (the viewer
   runs in a sandbox, with no way to send a form), and `do=clear` is Back to
@@ -3900,7 +3912,11 @@ tailnet, never the internet.
 - Every form must come from the server's own page: it carries a token the
   server makes when it starts, and a request from another site is refused
   (403). A form posted from a page older than the server's last start is
-  refused too; reload the page. `/jobs.json`, which the page's script reads,
+  refused too; reload the page. The one exception, your choice: Export PDF's
+  Download and make it mine is a plain link (`/export.pdf?…&mine=1`), with no
+  token, so a page on another site could change a song's saved version with a
+  link of its own. Nothing is lost: Reset, or another version made yours,
+  undoes it. `/jobs.json`, which the page's script reads,
   is refused the same way, and needs the same token in an
   `X-Caracole-Form-Token` header: a song's line then says the server has restarted.
   Only the served page may ask the server anything from its script (its

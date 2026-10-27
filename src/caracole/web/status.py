@@ -29,10 +29,9 @@ ran. So a job of other commands reads the same way:
   fetched yet", for one it didn't (a cooldown, a block, a spent budget or an
   error, all of which exit 0): an error is never a miss. A removal
   (``jobs.REMOVING``), whose song is gone once it is done, says "Removed";
-  an export (``jobs.EXPORTING``, export_routes.py), none of its song's own
-  requests, what it made: "PDF made", with a link to it ("Open the PDF"), or
-  "No PDF was found" when it isn't there, and Make this my version "Your
-  version now";
+  Make this my version (``jobs.EXPORTING``, export_routes.py), none of its
+  song's own requests, what it made: "Your version now", with a link to the
+  song's sheet;
   a songbook's change (songbooks.py), which has no song, what it did:
   "Made", "Moved", "Changed", "Renamed"…, "Made" and "Added" with a link to
   the songbook's page ("Open songbook") once caracole has written it (a move,
@@ -63,7 +62,7 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.web.jobs import EXPORTING, INDEX_READS, MINE, REMOVING, Job, Stage, Step
+from caracole.web.jobs import EXPORTING, INDEX_READS, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -114,8 +113,7 @@ class SongFacts:
     source and its page: ``outcome.elsewhere``), and ``asked_ug`` that the fetch
     itself asked Ultimate Guitar (``checked_since``), so that what the song lacks, UG
     lacks; both the requests page alone says, and the line here never reads them.
-    ``pdf`` is, for an export that is over, the link to the PDF it made, once it is
-    there (``export_routes.made_pdf``). ``sheet_from`` is where its sheet came from,
+    ``sheet_from`` is where its sheet came from,
     the site's tag ("UG", "LaCuerda": ``icons.tag``, its kept sheet's version), for a
     lookup's Sheet step (outcome.py); "" without a sheet.
     """
@@ -129,7 +127,6 @@ class SongFacts:
     lacuerda: bool = False
     elsewhere: tuple[str, str] | None = None
     asked_ug: bool = False
-    pdf: str | None = None
     sheet_from: str = ""
 
 
@@ -176,12 +173,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
-    if job.song_key.startswith(EXPORTING):  # none of the song's own requests: what it made
-        if job.song_key.endswith(MINE):
-            return Line("ready", "Your version now", ("Open sheet", song.sheet) if song and song.sheet else None)
-        if song is not None and song.pdf:
-            return Line("ready", "PDF made", ("Open the PDF", song.pdf))
-        return Line("failed", "No PDF was found: make it again.", details=details)
+    if job.song_key.startswith(EXPORTING):  # Make this my version, none of the song's own requests: what it made
+        return Line("ready", "Your version now", ("Open sheet", song.sheet) if song and song.sheet else None)
     songbook = songbook_of(job.song_key)
     if songbook is not None:  # a songbook's change: no song at all; a deletion says so as a removal does
         action = str(songbook["action"])

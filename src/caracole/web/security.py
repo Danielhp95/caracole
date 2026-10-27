@@ -10,7 +10,12 @@
   the one Go's ``net/http.CrossOriginProtection`` makes, with ``Sec-Fetch-Site``
   and, where a browser sends no such header (plain HTTP to a LAN address),
   ``Origin`` against ``Host``. Every form also carries a token the server made
-  when it started, which another site can't read.
+  when it started, which another site can't read. The one exception, the
+  owner's explicit choice: Export PDF's Download and make it mine, a plain link
+  the sandboxed viewer follows (``GET /export.pdf?…&mine=1``, export_routes.py),
+  queues the song's version saved with neither check. A site could change a
+  song's saved version so; nothing is lost, and Reset or another version
+  undoes it. The host-name check holds for it as for every request.
 
 There is no sign-in: whoever can reach the server may use it, so it listens only
 where you say (127.0.0.1 unless ``--address`` says otherwise), on a network you trust.
