@@ -1684,6 +1684,41 @@ def test_the_search_lists_gtptabs_and_musescore_pages_each_capped(app, conn):
                                 "why": "its index is empty: the nightly run reads its listings of every artist"}]
 
 
+def test_the_search_lists_harptabs_tabs_by_title_and_none_while_it_is_turned_off(app, cfg, conn):
+    import dataclasses
+
+    from caracole.config import ProviderPolicy
+    from caracole.harptabs import parse_page_url
+
+    creep_index(conn)
+    conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                     [tuple(parse_page_url(f"https://www.harptabs.com/tab/{n}/creep")) for n in (7, 3)])
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=creep"))
+    assert data["harptabs"] == [
+        {"source": "harptabs", "title": "Creep", "url": "https://www.harptabs.com/tab/3/creep", "score": 100.0},
+        {"source": "harptabs", "title": "Creep", "url": "https://www.harptabs.com/tab/7/creep", "score": 100.0}]
+    assert [s["source"] for s in data["looked"]] == ["ug", "gtptabs", "lacuerda", "musescore"]  # no chip of its own
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "harptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=creep"))
+    assert data["harptabs"] == []
+
+
+def test_a_song_of_yours_in_the_search_says_what_it_holds_for_one_instrument(app, cfg, conn):
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    creep_index(conn)
+    mine = add_song(conn, "Radiohead", "Creep")
+    tab = upsert_version(conn, provider="harptabs", tab_id="3", song_id=mine.id, slot="guitar", kind="harmonica",
+                         rating=0, votes=0, version=1, label=None, url="https://www.harptabs.com/tab/3/creep", raw={},
+                         now="2026-10-19T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=mine, version_id=tab, name="harmonica-1.txt", data=b"4 5\n", rank=1)
+    conn.commit()
+    [song] = as_json(get(app, "/api/search?q=radiohead%20creep"))["library"]
+    assert song["instruments"] == ["harmonica"]
+
+
 def test_every_search_row_carries_its_artist_and_title_keys(app, conn):
     from caracole.normalize import identity_key
     from caracole.ug.index import mark_built, upsert_rows

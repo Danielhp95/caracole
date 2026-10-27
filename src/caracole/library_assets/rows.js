@@ -298,8 +298,20 @@ const caracoleRows = (icons, does) => {
     new MutationObserver(mirror).observe(item, { subtree: true, childList: true, attributes: true,
       attributeFilter: ["disabled"] });
   };
-  const KINDS = { chords: "Chords", tabs: "Tab" };
-  const COUNTED = { chords: "chords", tabs: "tabs" };
+  const KINDS = { chords: "Chords", tabs: "Tab", ukulele: "Ukulele chords" };
+  const COUNTED = { chords: "chords", tabs: "tabs", ukulele: "ukulele chords" };
+  // What a row is for, when it is one instrument's (``instruments``: "ukulele", UG's Ukulele Chords; "harmonica",
+  // a harmonica tab of harptabs.com; "score", MuseScore's pages and the scores you filed): a badge each, as a source
+  // has its mark. Nothing is left out for it: a chord sheet is every instrument's, and says nothing.
+  const INSTRUMENTS = { ukulele: "Ukulele", harmonica: "Harmonica", score: "Score" };
+  const instrumentBadges = (instruments) => listOf(instruments)
+    .filter((x, n, all) => own.call(INSTRUMENTS, x) && all.indexOf(x) === n)
+    .map((x) => ({ kind: "instrument " + x, text: INSTRUMENTS[x] }));
+  // The sites whose index names a title alone, and the instrument their pages are for.
+  const TITLE_SITES = { musescore: { name: "MuseScore", instrument: "score" },
+    harptabs: { name: "harptabs.com", instrument: "harmonica" } };
+  // An Ultimate Guitar song's instruments, by its tabs per type: ukulele, when UG has its Ukulele Chords.
+  const ugInstruments = (c) => (c && typeof c === "object" && Number(c.ukulele) > 0 ? ["ukulele"] : []);
   const counts = (c) => Object.entries(c && typeof c === "object" ? c : {})
     .map(([kind, n]) => n + " " + (own.call(COUNTED, kind) ? COUNTED[kind] : kind)).join(" · ");
   // A song's sheet viewer or PDF, as its line opens it: a link of the library's, relative to the page.
@@ -362,7 +374,8 @@ const caracoleRows = (icons, does) => {
     // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
     if (later && !mine && !hit.no_ones) more.push(laterGroup(later, { artist, title }, display, () => row));
     row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "ug", facts: counts(hit.counts),
-      badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
+      badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(ugInstruments(hit.counts))],
+      action: main, more });
     row.classList.add("hit");
     row.dataset.ug = String(hit.ug || "");
     row.dataset.source = "ug";
@@ -414,11 +427,12 @@ const caracoleRows = (icons, does) => {
         facts: many(Number(hit.versions) || 1, "version") + (chords ? "" : " · no chords"),
         badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
       nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
-    } else if (hit.source === "musescore") {
-      row = resultRow({ title, artist: "Same title: maybe another song", source: "musescore",
-        action: { label: "Open", href: hit.url } });
+    } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's or harptabs.com's: a title alone
+      const site = TITLE_SITES[hit.source];
+      row = resultRow({ title, artist: "Same title: maybe another song", source: hit.source,
+        badges: instrumentBadges([site.instrument]), action: { label: "Open", href: hit.url } });
       const open = row.querySelector(".row-action a");
-      if (open) open.setAttribute("aria-label", "Open " + title + " on MuseScore, in a new tab");
+      if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", in a new tab");
     } else {
       const mine = yours(hit);
       const artist = String(hit.artist || "");
@@ -443,7 +457,7 @@ const caracoleRows = (icons, does) => {
   // --- index.html's search: a song of the sites a dense line, under its artist's header --------------------
   // "chords ×9 · tabs ×2": an Ultimate Guitar song's tabs per type, as a line counts them. The index holds no
   // ratings (only the sheets caracole fetched have them), so a line never shows stars.
-  const TIMES = { chords: "chords", tabs: "tabs" };
+  const TIMES = { chords: "chords", tabs: "tabs", ukulele: "ukulele chords" };
   const tabCounts = (c) => Object.entries(c && typeof c === "object" ? c : {})
     .map(([kind, n]) => (own.call(TIMES, kind) ? TIMES[kind] : kind) + " ×" + Number(n || 0)).join(" · ");
   const https = (url) => /^https:[/][/]/i.test(String(url || ""));
@@ -517,7 +531,8 @@ const caracoleRows = (icons, does) => {
     const badges = gone ? [{ kind: "removed", text: "Removed " + String(gone.removed_at || "").slice(0, 10) }]
       : mine ? [{ kind: "found", text: "In your library" }] : [];
     line = resultRow({ dense: true, title, artist, sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs"].filter(Boolean),
-      facts: facts.filter(Boolean).join(" · "), badges, action: main, more, status: gone ? "removed" : "" });
+      facts: facts.filter(Boolean).join(" · "), badges: [...badges, ...instrumentBadges(ug ? ugInstruments(ug.counts) : [])],
+      action: main, more, status: gone ? "removed" : "" });
     line.classList.add("hit");
     if (gone) line.classList.add("removed-hit");
     line.dataset.hit = String(it.key || "");
@@ -526,18 +541,20 @@ const caracoleRows = (icons, does) => {
     nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Get " + display + " again" : "Get " + display);
     return line;
   };
-  // A MuseScore page, its title alone (its sitemaps name no artist), so a possible match: a link to open, as caracole
-  // never fetches from MuseScore.
+  // A page of a site whose index names a title alone (MuseScore's, a score; harptabs.com's, a harmonica tab: its
+  // ``source``, MuseScore's when none), so a possible match: a link to open, as a search fetches nothing from either.
   const titleLine = (h) => {
     const hit = h && typeof h === "object" ? h : {};
     const title = String(hit.title || "");
-    const line = resultRow({ dense: true, title, sources: ["musescore"], facts: "same title, maybe another song",
-      action: { label: "Open", href: hit.url } });
+    const source = own.call(TITLE_SITES, String(hit.source)) ? String(hit.source) : "musescore";
+    const site = TITLE_SITES[source];
+    const line = resultRow({ dense: true, title, sources: [source], facts: "same title, maybe another song",
+      badges: instrumentBadges([site.instrument]), action: { label: "Open", href: hit.url } });
     const open = line.querySelector(".line-action a");
-    if (open) open.setAttribute("aria-label", "Open " + title + " on MuseScore, in a new tab");
+    if (open) open.setAttribute("aria-label", "Open " + title + " on " + site.name + ", in a new tab");
     line.classList.add("hit");
-    line.dataset.source = "musescore";
-    line.dataset.hit = "musescore:" + String(hit.url || "");
+    line.dataset.source = source;
+    line.dataset.hit = source + ":" + String(hit.url || "");
     return line;
   };
   // An artist of LaCuerda's index, with their most popular songs said: ``open(a)`` lists the songs the index
@@ -895,7 +912,8 @@ const caracoleRows = (icons, does) => {
     if (why) line.appendChild(why);
     return line;
   };
-  return { resultRow, sourceMark, link, titleLink, artistFilter, artistSearch, artistOnly, button, many, counts, opener, ugHit, artistHit,
+  return { resultRow, sourceMark, link, titleLink, artistFilter, artistSearch, artistOnly, button, many, counts, opener,
+    instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
     didYouMean, lookedChips, nothingFound, lookedLine };
 };

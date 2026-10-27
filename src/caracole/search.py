@@ -77,7 +77,8 @@ listings, never a site; the pages say "Did you mean" them.
 alone: a page there is one whose whole title is the query, or the query less
 an artist's name on either side, where that artist has a song of that title in
 the Ultimate Guitar index, gtptabs.com's or your library; a possible match,
-never more. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
+never more. ``search_harptabs`` reads harptabs.com's tab pages (``harptabs_index``)
+the same way: its sitemap names a tab's title alone. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
 artist, for an artist the query names. They only read the local tables: nothing here asks gtptabs.com or MuseScore
 anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
 LaCuerda's (``lacuerda_index``, from its listings of every artist and the artist pages
@@ -115,7 +116,7 @@ import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterable, Iterator, Mapping, NamedTuple, Sequence
+from typing import TYPE_CHECKING, Callable, Iterable, Iterator, Mapping, NamedTuple, Sequence
 
 from rapidfuzz import fuzz
 
@@ -300,7 +301,8 @@ class SiteHit:
     ``source`` is "gtptabs" (a song page of gtptabs.com: an artist and a title,
     named from its slugs, its uploads of the title counted in ``uploads``),
     "musescore" (a song page of MuseScore: a title alone, as its sitemaps give
-    it, so ``artist`` is "" and the page a possible match) or "lacuerda" (a song
+    it, so ``artist`` is "" and the page a possible match), "harptabs" (a
+    harmonica tab of harptabs.com: a title alone too, its sitemap's) or "lacuerda" (a song
     of LaCuerda's, named as LaCuerda names it, its versions counted in
     ``uploads``, and ``sheet`` the page of its best Letra y Acordes version, the
     sheet a lookup keeps; None for a song without chords there). ``url`` is the
@@ -796,6 +798,34 @@ def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROW
     never every row."""
     from caracole.musescore import SongPage, title_key
 
+    def pages(key: str, n: int) -> list[str]:
+        rows = conn.execute("SELECT page_id, path, title_key FROM musescore_index WHERE title_key = ? "
+                            "ORDER BY page_id LIMIT ?", (key, n)).fetchall()
+        return [SongPage(*row).url for row in rows]
+
+    return _title_pages(conn, query, limit, "musescore", title_key, pages)
+
+
+def search_harptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
+    """harptabs.com's tab pages whose title is the query, or the query with an artist's name on either side, as
+    ``search_musescore`` finds MuseScore's: its sitemap names a tab's title alone (harptabs.py), so each is a
+    possible match, a harmonica tab of a song of that title. Exact keys alone, by the table's key index."""
+    from caracole.harptabs import TAB, page_url, title_key
+
+    def pages(key: str, n: int) -> list[str]:
+        rows = conn.execute("SELECT path FROM harptabs_index WHERE kind = ? AND key = ? ORDER BY page_id LIMIT ?",
+                            (TAB, key, n)).fetchall()
+        return [page_url(row[0]) for row in rows]
+
+    return _title_pages(conn, query, limit, "harptabs", title_key, pages)
+
+
+def _title_pages(conn: sqlite3.Connection, query: str, limit: int, source: str, title_key: Callable[[str], str],
+                 pages: Callable[[str, int], list[str]]) -> list[SiteHit]:
+    """A site's pages by title alone (MuseScore's, harptabs.com's: ``pages(key, n)``, their addresses), whose title
+    is the query or the query less an artist's name on either side, that artist having a song of that title in
+    the Ultimate Guitar index, gtptabs.com's or your library (``_known_song``). The whole query first, then the
+    longer titles."""
     words = name_words(query)
     runs = [(words, [])] + [(words[:n], words[n:]) for n in range(len(words) - 1, 0, -1)] + \
         [(words[-n:], words[:-n]) for n in range(len(words) - 1, 0, -1)]
@@ -808,14 +838,12 @@ def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROW
         for key in (title_key(text), title_key(romanize(text)) if has_han(text) else ""):  # its slugs are ASCII
             if not key or key in seen:
                 continue
-            rows = conn.execute("SELECT page_id, path, title_key FROM musescore_index WHERE title_key = ? "
-                                "ORDER BY page_id LIMIT ?", (key, max(limit, 0))).fetchall()
-            if not rows or (rest and not _known_song(conn, " ".join(rest), key, mine)):
+            urls = pages(key, max(limit, 0))
+            if not urls or (rest and not _known_song(conn, " ".join(rest), key, mine)):
                 continue
             seen.add(key)
-            for row in rows:
-                page = SongPage(*row)
-                hits.append(SiteHit("musescore", _title_words(key), page.url, 100.0, title_key=key,
+            for url in urls:
+                hits.append(SiteHit(source, _title_words(key), url, 100.0, title_key=key,
                                     via="both" if rest else "title"))
         if len(hits) >= limit:
             break

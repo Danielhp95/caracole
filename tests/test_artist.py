@@ -66,7 +66,7 @@ def test_kinds_and_labels():
     tabs = {t.tab_id: t for t in soda_page().tabs}
     assert [tabs[i].kind for i in (2213253, 1271959, 3505940, 578349, 311923)] == [
         None,
-        None,
+        "ukulele",  # Ukulele Chords: the sheet of a song with no chords (ug/fetch.py)
         None,
         None,  # a Guitar Pro file: a type caracole doesn't use on Ultimate Guitar
         None,  # a Power Tab file: neither

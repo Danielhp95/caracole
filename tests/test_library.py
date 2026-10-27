@@ -218,8 +218,8 @@ def test_set_picks_ranks_and_clears(conn):
 
 
 def test_sheet_kinds_are_every_kind_the_sheet_slot_holds():
-    # UG's chords, LaCuerda's acordes and the auto-chords sheet: keeping one makes it the only pick.
-    assert SHEET_KINDS == ("chords", "acordes", "auto")
+    # UG's chords and ukulele chords, LaCuerda's acordes and the auto-chords sheet: keeping one makes it the only pick.
+    assert SHEET_KINDS == ("chords", "ukulele", "acordes", "auto")
 
 
 def test_set_picks_over_every_sheet_kind_leaves_one_pick(conn):

@@ -11,13 +11,13 @@ For each song (plan §3, Task 15, amendment A6):
    one whose page UG redirects to such a URL (``caracole.http.RobotsClosed``),
    or one at a link that isn't a URL. A not-found song is looked up on its
    artist's UG page, which also lists the bare-id tabs the index can't see (A6).
-   Only UG's chords and text tabs are candidates (ug/page.py ``KINDS``): its
-   Guitar Pro and Power Tab files are never rated or picked (gtptabs.com's
+   Only UG's chords, text tabs and ukulele chords are candidates (ug/page.py
+   ``KINDS``): its Guitar Pro and Power Tab files are never rated or picked (gtptabs.com's
    are downloaded for you, gtptabs_fetch.py, and you file your own from the
    inbox), and a ``[pin]`` of one pins nothing: its page is read once, as any
    pin's is, for its type, which the index no longer holds.
 2. **Ratings.** A tab page lists the other versions of its type and part, so
-   for each kind group (chords; tabs) caracole reads
+   for each kind group (chords; tabs; ukulele) caracole reads
    the page of the lowest id it has no rating for, up to
    ``max_pages_per_group`` pages, recording the page's own tab and the
    versions it lists. Official, non-public and blocked versions are skipped.
@@ -29,6 +29,15 @@ For each song (plan §3, Task 15, amendment A6):
      ``version-<tab>.txt`` and ``.json`` (sheet_versions.py; no request more);
      a complete one retires ``sheet (auto).txt``;
    - tabs: the best is kept as ``tab.txt`` and ``tab.json``.
+
+   A song with no chords version on UG (none in the index, none on its
+   artist's page) takes its sheet from UG's "Ukulele Chords" versions instead,
+   rated and scored as chords are: the same markup, with ukulele shapes, kept as
+   ``sheet.txt`` with ``"type": "Ukulele Chords"`` in ``sheet.json``. A song with
+   chords keeps those (the viewer draws ukulele shapes on any sheet), and the
+   ukulele group isn't rated for it; a chords version found later replaces a
+   ukulele sheet. A ``[pin]`` of a ukulele version is your choice of sheet, as a
+   chords pin is (a chords pin first).
 4. Only when every slot is done is the song marked checked and clean, so a
    song interrupted by the budget resumes from the HTTP cache next run.
 
@@ -98,6 +107,7 @@ from caracole.sheet_versions import (
     note_kept_by_you,
     same_key,
     same_pages,
+    sheet_kind,
     tab_of,
     version_names,
 )
@@ -144,7 +154,8 @@ PROVIDER = "ug"
 _PAGE_ACCEPT = (200, 404)
 CHORDS_KINDS = ("chords",)  # UG's kinds for the sheet slot, which holds every site's SHEET_KINDS
 TAB_KINDS = ("tabs",)
-_GROUPS = (CHORDS_KINDS, TAB_KINDS)  # every kind caracole uses (ug/page.py KINDS), by slot
+UKULELE_KINDS = ("ukulele",)  # the sheet slot's for a song with no chords: UG's "Ukulele Chords"
+_GROUPS = (CHORDS_KINDS, TAB_KINDS, UKULELE_KINDS)  # every kind caracole uses (ug/page.py KINDS), by group
 _GROUP_OF = {kind: group for group in _GROUPS for kind in group}
 SHEET_FILES = (HUMAN_SHEET, "sheet.json")
 TAB_FILES = ("tab.txt", "tab.json")
@@ -750,6 +761,12 @@ def _kept_version(conn: sqlite3.Connection, song_id: int, name: str) -> VersionR
     return None
 
 
+def sheet_group(conn: sqlite3.Connection, song_id: int) -> tuple[str, ...]:
+    """The UG kinds the song's sheet comes from (``sheet_versions.sheet_kind``): ukulele chords when its kept sheet
+    is a UG ukulele version, else chords; the versions kept beside it are of the same group."""
+    return UKULELE_KINDS if sheet_kind(conn, song_id) in UKULELE_KINDS else CHORDS_KINDS
+
+
 def _retire_auto_sheet(conn: sqlite3.Connection, library_dir: Path, song: Song) -> None:
     """A complete human sheet is kept: the auto-chords sheet, which only stands in for one, goes."""
     auto = _kept_version(conn, song.id, AUTO_SHEET)
@@ -934,7 +951,7 @@ def keep_version(ctx: FetchContext, song: Song, tab_id: int) -> str:
     or ``unknown`` (not a chords version of the song caracole may use). Only ``kept`` and ``same`` note it
     as yours. A block, a spent budget or an error raises, keeping nothing."""
     run = _SongRun(ctx, song)
-    row = next((r for r in _rows(run, CHORDS_KINDS) if r.tab_id == str(tab_id)), None)
+    row = next((r for r in _rows(run, sheet_group(run.conn, song.id)) if r.tab_id == str(tab_id)), None)
     if row is None:
         return "unknown"
     page = _text_page(run, row)
@@ -968,8 +985,10 @@ def _lyric_lines(song: Song) -> list[str]:
     return coverage.lyric_lines(lyrics.plain) if lyrics is not None else []
 
 
-def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
+def _sheet_slot(run: _SongRun, pinned: list[int] | None, kinds: tuple[str, ...] = CHORDS_KINDS) -> int | None:
     """Score the top sheets for lyric coverage, rank them, and keep the best (or the first pin).
+
+    ``kinds`` is the group the sheet comes from: chords, or, for a song with none, ukulele chords.
 
     A sheet another site gave (LaCuerda's) is replaced only as the shared rule
     says (``versions.replaces_sheet``): ratings can't be compared across sites,
@@ -982,7 +1001,7 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     sheet keeps the top versions by rating beside it, from the cache alone (``_beside_a_pin``).
     """
     policy = run.ctx.rank
-    rows = _rows(run, CHORDS_KINDS)
+    rows = _rows(run, kinds)
     lines = _lyric_lines(run.song)
     by_id = {r.id: r for r in rows}
     pages: dict[int, UGTabPage] = {}
@@ -1022,7 +1041,7 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
 
     best = _first_with_text(run, ranked, rows, pages)
     if best is None:
-        set_picks(run.conn, run.song.id, CHORDS_KINDS, [])
+        set_picks(run.conn, run.song.id, kinds, [])
         _drop_left_over(run, SHEET_FILES)
         keep_beside(None)
         return None
@@ -1033,7 +1052,7 @@ def _sheet_slot(run: _SongRun, pinned: list[int] | None) -> int | None:
     if (kept is not None and kept.provider != PROVIDER and pinned is None
             and ((chosen is not None and kept.provider == "lacuerda" and chosen.holds(kept.tab_id))
                  or not replaces_sheet(c.coverage, kept.coverage, policy.coverage_threshold))):
-        set_picks(run.conn, run.song.id, CHORDS_KINDS, [])  # the other site's sheet stays the pick
+        set_picks(run.conn, run.song.id, kinds, [])  # the other site's sheet stays the pick
         keep_beside(None)
         return None
     _make_way(run, c.tab_id, page)
@@ -1582,17 +1601,26 @@ def process_song(ctx: FetchContext, song: Song, *, guitar: bool = True) -> SongF
 
     def rated(group: tuple[str, ...]) -> list[int] | None:
         if group not in pinned:
-            pages = ctx.max_pages_per_group if group == CHORDS_KINDS else ctx.guitar_pages_per_group
+            pages = ctx.guitar_pages_per_group if group == TAB_KINDS else ctx.max_pages_per_group
             for kind in group:  # UG lists versions per type
                 _rate_group(run, [t for t in tabs if t.type == kind], pages)
         return pinned.get(group)
 
-    sheet_pins = rated(CHORDS_KINDS)
-    if sheet_pins is None and song.match_step != ARTIST_PAGE and not _live_chords(ctx.conn, song, tabs):
-        own = [t for t in tabs if t.type not in CHORDS_KINDS]
-        if not _artist_page_versions(run, CHORDS_KINDS, own):
-            return unfinished()
-    sheet = _sheet_slot(run, sheet_pins)
+    sheet_kinds = CHORDS_KINDS
+    if UKULELE_KINDS in pinned and CHORDS_KINDS not in pinned:  # your ukulele pin chooses the sheet
+        sheet_pins, sheet_kinds = pinned[UKULELE_KINDS], UKULELE_KINDS
+    else:
+        sheet_pins = rated(CHORDS_KINDS)
+        if sheet_pins is None and song.match_step != ARTIST_PAGE and not _live_chords(ctx.conn, song, tabs):
+            own = [t for t in tabs if t.type not in CHORDS_KINDS]
+            if not _artist_page_versions(run, CHORDS_KINDS, own):
+                return unfinished()
+        if sheet_pins is None and not _rows(run, CHORDS_KINDS) and not _live_chords(ctx.conn, song, tabs):
+            # No chords on UG (an unreadable chords page is no "none": the song waits): its ukulele chords, if any.
+            rated(UKULELE_KINDS)
+            if _rows(run, UKULELE_KINDS):
+                sheet_kinds = UKULELE_KINDS
+    sheet = _sheet_slot(run, sheet_pins, sheet_kinds)
     if not guitar:
         # The sheet pass of fetch_songs: the song stays dirty until its tab slot is done.
         return SongFetchOutcome(song.id, sheet, None, ctx.client.requests_made - start, settled=True,
@@ -2034,7 +2062,7 @@ def _unranked_rivals(conn: sqlite3.Connection, song_id: int, kept_id: int) -> bo
     """Whether the song has live UG sheets besides the kept one that lyric coverage hasn't ranked."""
     return any(
         r.provider == PROVIDER and r.id != kept_id and r.coverage is None
-        for r in song_versions(conn, song_id, kinds=CHORDS_KINDS)
+        for r in song_versions(conn, song_id, kinds=sheet_group(conn, song_id))
     )
 
 

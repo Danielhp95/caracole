@@ -1,9 +1,13 @@
 """The local Ultimate Guitar index, built from UG's sitemaps (plan §2).
 
-``caracole index build`` reads every tab sitemap once (about 42 requests, or
-local files with ``from_dir``). The nightly refresh asks again only for the
-sitemap index, ``sitemap_last``, the highest-numbered sitemap and any numbered
-sitemap this database has never indexed, because new tabs appear only there.
+``caracole index build`` reads every tab sitemap once (about 46 requests, or
+local files with ``from_dir``): the numbered ones, the ukulele ones
+(``sitemap_ukulele1``–``N``, UG's "Ukulele Chords") and ``sitemap_last``. The
+nightly refresh asks again only for the sitemap index, ``sitemap_last``, the
+highest-numbered sitemap of each run (``sitemapN``, ``sitemap_ukuleleN``) and any
+tab sitemap this database has never indexed, because new tabs appear only there.
+A database indexed before caracole kept ukulele tabs reads the ukulele sitemaps at
+its next refresh, as sitemaps it never indexed.
 
 Every sitemap is fetched with a conditional GET. A 304 skips parsing only when
 this database indexed exactly that copy; otherwise the cached body is parsed.
@@ -58,6 +62,7 @@ from caracole.ug.sitemap import (
     iter_locs,
     sitemap_label,
     sitemap_name,
+    sitemap_order,
     tab_sitemaps,
 )
 
@@ -69,7 +74,7 @@ _SITEMAPS_KEY = "ug:sitemaps"
 _LISTED_KEY = "ug:index:listed"
 _BUILT_KEY = "ug:index:built_at"
 _REFRESHED_KEY = "ug:index:refreshed_at"
-_SITEMAP_FILE = re.compile(r"sitemap(\d+|_last)\.xml(?:\.gz)?")
+_SITEMAP_FILE = re.compile(r"sitemap(\d+|_last|_ukulele\d+)\.xml(?:\.gz)?")
 _NO_VALIDATORS = {"etag": None, "last_modified": None}
 
 _CREATE_BATCH = (
@@ -239,26 +244,27 @@ def _tell(progress: Progress | None, event: IndexPlan | SitemapRead) -> None:
 def describe_sitemaps(names: Sequence[str], *, most: int = 4) -> str:
     """Tab sitemaps by short name, for people: "sitemap1.xml to sitemap40.xml and sitemap_last.xml".
 
-    A run of three or more consecutive numbers is a range. Past ``most`` parts,
-    the rest are counted: "..., sitemap12.xml and 2 more".
+    A run of three or more consecutive numbers (of the numbered sitemaps, or of the ukulele ones) is a
+    range. Past ``most`` parts, the rest are counted: "..., sitemap12.xml and 2 more".
     """
     parts: list[str] = []
-    run: list[int] = []
+    run: list[str] = []
 
     def close_run() -> None:
         if len(run) >= 3:
-            parts.append(f"{sitemap_label(str(run[0]))} to {sitemap_label(str(run[-1]))}")
+            parts.append(f"{sitemap_label(run[0])} to {sitemap_label(run[-1])}")
         else:
-            parts.extend(sitemap_label(str(n)) for n in run)
+            parts.extend(sitemap_label(n) for n in run)
         run.clear()
 
     for name in names:
-        if name.isdigit() and run and int(name) == run[-1] + 1:
-            run.append(int(name))
+        group, number = sitemap_order(name)
+        if group < 2 and run and sitemap_order(run[-1]) == (group, number - 1):
+            run.append(name)
             continue
         close_run()
-        if name.isdigit():
-            run.append(int(name))
+        if group < 2:
+            run.append(name)
         else:
             parts.append(sitemap_label(name))
     close_run()
@@ -491,9 +497,9 @@ def _sitemap_files(directory: Path) -> list[tuple[str, Path]]:
         if m and p.is_file():
             found.setdefault(m.group(1).lstrip("_"), p)
     if not found:
-        raise FileNotFoundError(f"no sitemap files (sitemapN.xml[.gz], sitemap_last.xml[.gz]) in {directory}")
-    numbered = sorted((n for n in found if n != "last"), key=int)
-    return [(n, found[n]) for n in [*numbered, *(["last"] if "last" in found else [])]]
+        raise FileNotFoundError(
+            f"no sitemap files (sitemapN.xml[.gz], sitemap_ukuleleN.xml[.gz], sitemap_last.xml[.gz]) in {directory}")
+    return [(n, found[n]) for n in sorted(found, key=sitemap_order)]
 
 
 def _index_files(conn: sqlite3.Connection, files: list[tuple[str, Path]], now: datetime,
@@ -518,11 +524,15 @@ def _index_files(conn: sqlite3.Connection, files: list[tuple[str, Path]], now: d
 
 
 def _refresh_names(listed: Sequence[str], indexed: Collection[str]) -> list[str]:
-    """What a refresh reads, in listed order: ``sitemap_last``, the highest-numbered sitemap,
-    and every numbered one not indexed yet."""
-    numbered = [n for n in listed if n != "last"]
-    highest = numbered[-1] if numbered else None
-    return [n for n in listed if n == "last" or n == highest or n not in indexed]
+    """What a refresh reads, in listed order: ``sitemap_last``, the highest-numbered sitemap of each run
+    (``sitemapN``, ``sitemap_ukuleleN``), and every one not indexed yet."""
+    highest: dict[int, tuple[int, str]] = {}
+    for n in listed:
+        group, number = sitemap_order(n)
+        if group < 2 and number >= highest.get(group, (-1, ""))[0]:
+            highest[group] = (number, n)
+    tops = {n for _, n in highest.values()}
+    return [n for n in listed if n == "last" or n in tops or n not in indexed]
 
 
 # --- the public steps ---------------------------------------------------------------
@@ -647,8 +657,7 @@ def index_coverage(conn: sqlite3.Connection) -> Coverage:
     entries = _indexed(conn)
     tabs = sum((TabCounts.from_json(e["tabs"]) for e in entries.values() if isinstance(e.get("tabs"), dict)),
                TabCounts())
-    numbered = sorted((n for n in entries if n.isdigit()), key=int)
-    known = (*numbered, *(n for n in entries if not n.isdigit()))
+    known = tuple(sorted(entries, key=sitemap_order))
     listed = kv_get_json(conn, _LISTED_KEY)
     if not isinstance(listed, list):
         return Coverage(None, known, (), (), tabs)

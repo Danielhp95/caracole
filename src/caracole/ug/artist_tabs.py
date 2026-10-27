@@ -10,7 +10,7 @@ included), so that a search finds those tabs too, with no request (search.py ``f
 
 - ``store``: a list page's tabs, added or brought up to date; an older read never overwrites a
   newer one (``read_at``, when UG gave the list). Only public tabs of the kinds caracole uses
-  (chords and tabs: ug/page.py ``KINDS``), at a tab page, are kept.
+  (chords, tabs and ukulele chords: ug/page.py ``KINDS``), at a tab page, are kept.
 - ``keep_only``: a list of one kind read whole: the page's tabs of that kind it no longer lists
   go (a tab UG dropped). A list the page cap cut short only adds.
 - ``forget``: an artist page UG answers 404 for: its tabs go.

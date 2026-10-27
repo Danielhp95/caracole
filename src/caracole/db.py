@@ -17,6 +17,8 @@ Tables (plan §5, plus ``kv``):
 - ``ug_artists``, ``ug_artists_fts`` and ``ug_artist_words``: every artist key of ``ug_index``,
   indexed by its words, and those words with how many artists hold each, for searches by a
   word of an artist's name and by a close spelling of one (schema 8, search.py).
+- ``harptabs_index``: the tab and artist pages harptabs.com's sitemap lists (schema 10,
+  harptabs_fetch.py).
 - ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
   file or score it keeps (gtptabs.com's, your inbox's).
 - ``files``: files kept in the library, with their SHA-256.
@@ -37,7 +39,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -362,10 +364,25 @@ DELETE FROM kv WHERE key IN ('source:spotify', 'spotify:top_tracks', 'spotify:re
 DELETE FROM kv WHERE key = 'keys:info_version';
 """
 
+# harptabs.com's one sitemap, read by harptabs_fetch.py: one row per tab or artist page, keyed by its path
+# ("tab/25/piano-man", "artist/1178/billy-joel"). kind is 'tab' or 'artist', page_id the site's id, key the title's
+# key of a tab (its slug is its title alone) or the name's of an artist.
+_SCHEMA_V10 = """
+CREATE TABLE IF NOT EXISTS harptabs_index (
+  path TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  page_id INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  sitemap TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS harptabs_index_key ON harptabs_index(kind, key);
+CREATE INDEX IF NOT EXISTS harptabs_index_sitemap ON harptabs_index(sitemap);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
-               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9}
+               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

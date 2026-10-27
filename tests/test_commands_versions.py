@@ -147,6 +147,24 @@ def test_versions_lists_every_version_in_rank_order(config, conn, tmp_path):
     assert len(lines) == 5  # no pin: nothing to clear
 
 
+def test_versions_of_a_ukulele_sheet_list_its_ukulele_chords_versions(config, conn, tmp_path):
+    # A song with no chords on UG took its sheet from UG's Ukulele Chords (ug/fetch.py).
+    song = add_song(conn, "Vance Joy", "Riptide")
+    uke = upsert_version(conn, provider="ug", tab_id="1391193", song_id=song.id, slot="sheet", kind="ukulele",
+                         rating=4.89, votes=12745, version=1, label=None,
+                         url=f"{TAB}vance-joy/riptide-ukulele-1391193", raw={}, now="2026-10-20T00:00:00Z")
+    upsert_version(conn, provider="ug", tab_id="1419102", song_id=song.id, slot="sheet", kind="ukulele", rating=4.5,
+                   votes=40, version=2, label=None, url=f"{TAB}vance-joy/riptide-ukulele-1419102", raw={},
+                   now="2026-10-20T00:00:00Z")
+    keep_file(conn, tmp_path / "library", song=song, version_id=uke, name="sheet.txt", data=b"uke", rank=1)
+
+    result = versions(config, "Vance Joy - Riptide")
+
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[0] == ("Vance Joy - Riptide: 2 Ukulele Chords versions on Ultimate Guitar; "
+                                             "the title opens tab 1391193, caracole's pick.")
+
+
 def test_versions_names_another_sites_sheet_as_the_one(config, conn, tmp_path):
     song = add_song(conn, "Soda Stereo", "De Música Ligera")
     theirs = upsert_version(conn, provider="lacuerda", tab_id="soda_stereo/de_musica_ligera", song_id=song.id,
