@@ -225,3 +225,100 @@ def test_scrolling_by_itself_counts_down_then_scrolls_and_stops(tmp_path):
         b.click("#pill-end")
         assert b.js("[document.getElementById('pill').hidden, document.getElementById('bar').classList.contains('away')]") \
             == [True, False]
+
+
+# --- the overlay, from 1200 px: Harmonica first, its harp the page's, then Guitar (overlay.js) ------------------
+
+WIDE_SCREEN = {"width": 1400, "height": 1000, "mobile": False}
+
+
+def with_sheet(tmp_path, **given) -> str:
+    """The page of a tab whose words name a D harp, beside a sheet in Am shapes with the capo on 2 (it sounds Bm)."""
+    from test_viewer_harptab_page import TAB_D, a_song
+
+    return written(tmp_path, TAB_D, **({"cho": a_song(), "key": "Am", "key_source": "tab"} | given))
+
+
+def bar_harp(b) -> str:
+    return b.js("document.getElementById('harp-name').textContent")
+
+
+def test_on_a_wide_screen_the_overlay_opens_on_harmonica_on_the_pages_harp(tmp_path):
+    from test_viewer_overlay import SHAPES, seen
+
+    with opened(tmp_path, with_sheet(tmp_path), **WIDE_SCREEN) as b:
+        first = seen(b)
+        bar = bar_harp(b)
+        named = b.js("document.getElementById('necks').getAttribute('aria-label')")
+        rail = b.js("[document.getElementById('necks').getBoundingClientRect().width, "
+                    "document.getElementById('sheet').getBoundingClientRect().left, "
+                    "document.getElementById('bar').getBoundingClientRect().left]")
+        b.click("#necks [role=tab][data-tab=guitar]")
+        assert b.wait("document.querySelector('#necks .ov-pane').dataset.tab === 'guitar'")
+        guitar = seen(b)
+        keyneck = b.js("document.querySelector('#necks .kn-name').textContent")
+    assert first["tabs"] == [["Harmonica", "true"], ["Guitar", "false"]] and first["pane"] == "harmonica"
+    assert first["centre"] == "Bm" and first["chosen"] == ["D harp, 4th position, aeolian"]
+    assert (first["name"], first["tag"]) == ("D harp", "the tab's") and bar == "D harp"
+    assert first["plays"] == "Plays A, D and Em; E as Em." and first["card"] == "Bm on a D harp4th position, aeolian"
+    assert named == "Chord necks" and rail[0] == 345 and rail[1] >= 345 + 16 and rail[2] == 345
+    assert guitar["necks"] == SHAPES and keyneck == "Am scale"  # the sheet's chords as written, on the guitar
+
+
+def test_a_harp_tapped_on_the_circle_is_the_one_the_page_plays_and_its_bar_moves_the_circle(tmp_path):
+    from test_viewer_overlay import harp, seen
+
+    with opened(tmp_path, with_sheet(tmp_path), **WIDE_SCREEN) as b:
+        b.click("#notes")
+        before = b.js(HOLES % 3)
+        harp(b, "A")
+        tapped_on = [bar_harp(b), b.js(HOLES % 3), b.js("location.hash"), seen(b)]
+        b.click("#h-up")
+        assert b.wait("document.querySelector('#necks .hw-name').textContent === 'Bb harp'")
+        stepped = [seen(b), bar_harp(b)]
+        b.click('#sheet .h[data-i="0"]')  # a hole tapped: the page's harp is the circle's
+        heard = b.wait("document.documentElement.dataset.heard !== undefined")
+    assert before == ["D5", "F#5", "A5"]  # the tab's 4 5 6 blown, named on the D harp
+    assert tapped_on[0] == "A harp" and tapped_on[1] != before and "harp=A" in tapped_on[2]
+    assert tapped_on[3]["chosen"] == ["A harp, 3rd position, dorian"] and tapped_on[3]["tag"] is None
+    assert stepped[0]["chosen"] == ["Bb harp, 8th position"] and stepped[1] == "Bb harp" and heard
+
+
+def test_a_song_with_no_sheet_has_no_guitar_tab_and_shows_the_pages_harp(tmp_path):
+    from test_viewer_harptab_page import TAB_D
+    from test_viewer_overlay import seen
+
+    with opened(tmp_path, written(tmp_path, TAB_D), **WIDE_SCREEN) as b:
+        first = seen(b)
+        title = b.js("document.querySelector('#necks .nk-title').textContent")
+        b.click("#h-up")
+        assert b.wait("document.querySelector('#necks .hk-name').textContent === 'Eb harp'")
+        up = seen(b)
+    assert first["tabs"] == [] and title == "Harmonica" and first["pane"] == "harmonica"
+    assert first["none"].startswith("With no chord sheet") and first["centre"] is None and first["chords"] == []
+    assert first["card"] == "D harp" and [n for n, _ in first["blow"]] == "D F# A D F# A D F# A D".split()
+    assert {role for _, role in first["blow"] + first["draw"]} == {"plain"}
+    assert [n for n, _ in up["blow"]][:3] == ["Eb", "G", "Bb"]
+
+
+def test_the_rail_hidden_is_the_screens_choice_here_too(tmp_path):
+    from test_viewer_overlay import seen
+
+    with opened(tmp_path, with_sheet(tmp_path) + "#necks=0", **WIDE_SCREEN) as b:
+        hidden = [b.js("document.getElementById('necks').hidden"), b.js("document.body.style.paddingLeft"),
+                  b.js("document.getElementById('necks-toggle').getAttribute('aria-pressed')")]
+        b.click("#necks-toggle")
+        shown = [seen(b), b.js("location.hash")]
+        b.click("#necks .nk-hide")
+        again = [b.js("document.getElementById('necks').hidden"), b.js("location.hash"),
+                 b.js("document.activeElement.id")]
+    assert hidden == [True, "", "false"]
+    assert shown[0]["shown"] and shown[0]["pane"] == "harmonica" and shown[1] == ""
+    assert again == [True, "#necks=0", "necks-toggle"]
+
+
+def test_on_a_phone_there_is_no_overlay(tmp_path):
+    with opened(tmp_path, with_sheet(tmp_path)) as b:
+        found = b.js("[document.getElementById('necks').hidden, document.getElementById('necks-toggle').hidden, "
+                     "document.documentElement.scrollWidth]")
+    assert found == [True, True, 390]

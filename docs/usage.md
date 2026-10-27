@@ -2350,8 +2350,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   settings, sets the volume: Off (crossed out), Soft, Medium (the default) or
   Loud (one, two and three waves). With it off, a tap opens the card alone. A
   phone set to silent may keep it silent.
-- **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
-  left lists each chord of the song once, in the order it first comes, with a
+- **The overlay**, on a laptop (1200 px wide or more): a rail on the left
+  with two tabs, **Guitar** and **Harmonica**; a sheet opens on Guitar, and
+  the tab you choose holds for that page alone. **Guitar** is a neck per
+  chord: it lists each chord of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
   a colour of its own, the tab's own ringed (a note several shapes play is a
   smaller dot for each, side by side in the fret, the first shape leftmost,
@@ -2364,7 +2366,27 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   keeps it, as the card's ‹ › do (and the rail follows the card's). In a
   legend the arrow keys go from shape to shape; Tab stops once a chord. The
   necks follow the key, the capo and the mode, and two chords shown by one
-  name (A# and Bb, transposed to B) share one neck. The rail scrolls on its
+  name (A# and Bb, transposed to B) share one neck. With a ukulele or a
+  baritone chosen (below), the necks are theirs and the tab is named so; with
+  an instrument that has no neck (the piano, the harmonica, the flute, the
+  recorder), they are the guitar's, at its capo. **Harmonica** picks the harp:
+  a small circle of fifths with the key the song sounds in at its middle
+  ("Bm") and the 12 harps round it, each at its position (the 1st, the harp in
+  the song's key, at the top, then counted round the other way), the ones that
+  play the song's chords shaded and marked with their position; tap one (or
+  use the arrow keys). Beside it, the harp chosen, its position and mode ("D
+  harp, 4th position, aeolian"), "the tab's" on the harp the song's harmonica
+  tab plays on, and what it plays ("Plays A, D and Em; E as Em."). Under it,
+  the key on that harp: Scale, the pentatonic or Blues over its ten holes,
+  blow above, draw below, the bends beyond, the tonic in rust, the key's
+  notes dark, the rest faint, and the harp's notes outside the key ("Outside B
+  minor: C."); then a card per chord, the holes that play it lit ("draw 4–6",
+  "draw 4–6 · as Em, the minor stand-in") or "no chord here". It follows the
+  song as it sounds: a harmonica takes no capo, and a transposition moves
+  every harp. It starts on the harp the song's harmonica tab plays on (with the
+  record, or as its words say), else on the first harp for the song's key.
+  Once the circle has scrolled away, a slim bar at the rail's top names the
+  harp, with **Change harp** to go back up to it. The rail scrolls on its
   own, the song and the bar move over for it, and it isn't printed; on a
   narrower screen or a phone, the chord's card is where the shapes are.
   **Showing and hiding it**: the button at the rail's top (a sidebar, "Hide
@@ -2629,7 +2651,24 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset everything, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
-  the viewer starts them, shows the rail of necks again and hides the pinyin.
+  the viewer starts them, shows the rail of necks again, hides the pinyin and
+  shows the Chinese in Simplified characters.
+- **Simplified 简体 · Traditional 繁體**, right above Pinyin in the settings of a
+  sheet with Chinese lyrics: the characters the sheet's Chinese is shown in,
+  Simplified as the viewer starts, whichever the sheet is written in. A sheet in
+  Traditional characters shows in Simplified ones until you choose Traditional,
+  and a sheet in Simplified ones shows in Traditional ones (Taiwan's: 為, 裡, 著)
+  once you do: its lines, the notes before the song and the sections' headings,
+  never the title. Each text is converted when the page is made, word by word
+  (by OpenCC, as one Simplified character may be two Traditional ones: 头发 is
+  頭髮, 发现 發現; 睡著 is 睡着, 著名 stays), a character for a character, so each
+  chord stays over its character and each reading of the Pinyin over its own.
+  A sheet is written in the script most of its own characters are; in that
+  script it shows as written. OpenCC is not always right (我是只会 comes out as
+  我是隻會 in Traditional), so a sheet UG has in either script reads best in its
+  own. Kept as Pinyin is: once for every sheet and songbook, and in the address
+  (`trad=1`) while it is Traditional. The PDFs and the library page show the
+  sheet as written.
 - **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
   each Chinese character's reading over it, in pinyin with its tone marks
   (zhǐ), smaller and muted, between its chord and it; off, as the viewer starts,
@@ -2682,7 +2721,8 @@ named otherwise when the page opens (an address with another key, mode or
 capo), or on another instrument, starts at its first shape. It keeps the transposition, the mode, the
 capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
-(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the instrument
+(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the Chinese in
+Traditional characters (`trad=1`, kept so too), the instrument
 (`inst=piano`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
@@ -2745,6 +2785,14 @@ the library page link it, the tab's text beside it.
   stops when pressed again (no rhythm: the tab has none).
 - **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
   with none), and **The tab as text**, at the foot, opens `harmonica-1.txt`.
+- **The overlay**, from 1200 px, as on the sheet viewer, with Harmonica first
+  and shown: its harp is the page's, both ways (a harp tapped on the circle is
+  the one the page plays and names its notes on, and − and + move the
+  circle's choice). **Guitar** shows the song's sheet as written: its key's
+  neck and its chords' necks. A song with no sheet has no Guitar tab, and with
+  no key to place the harps in, its Harmonica tab shows the page's harp's
+  notes alone. Its Hide and the bar's button are the viewer's, and so is the
+  choice: hidden here, hidden on every sheet.
 
 The page keeps the harp, Notes, the text size and the scroll speed in its
 address too (`harmonica-1.html#harp=A&notes=1&fs=20`).
@@ -3520,7 +3568,9 @@ Who can reach it, below).
   failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
   UG**, drawn plain (dashed), never as a failure: the sheet may come from
   LaCuerda. A step that turns out not to apply drops out, and the count with
-  it (no PDF without a sheet, no Songbooks when no songbook lists the song).
+  it (no PDF without a sheet, no Songbooks when no songbook lists the song);
+  the Sheet a cooldown, a block or a spent budget stopped stays, red, as one a
+  site's error stopped, so a lookup that ends Not fetched yet shows it.
   A request that looks nothing up (an add for tonight, a removal, a songbook's
   change) keeps its one line. How it ended:
   - **Ready**: the steps fold away and nothing takes their place; the line is
@@ -3584,7 +3634,8 @@ Who can reach it, below).
     step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
-    of a song with no sheet); for a request of other commands, its commands.
+    of a song with no sheet, but never the Sheet a cooldown, a block or a spent
+    budget stopped, drawn failed); for a request of other commands, its commands.
     Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and

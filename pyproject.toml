@@ -19,6 +19,8 @@ dependencies = [
   "mutagen",
   "tomlkit",
   "pypinyin",
+  # The viewer's Chinese characters, Simplified or Traditional (viewer/hanzi.py).
+  "opencc",
 ]
 
 [project.urls]

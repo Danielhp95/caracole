@@ -12,6 +12,12 @@
   // Where the page is (the harp, Notes, the text size, the scroll's speed) is kept in the address (#harp=A&notes=1)
   // and, where the browser keeps anything, for this page. Every element is made with createElement and textContent;
   // nothing is loaded, and nothing sounds but on a tap.
+  //
+  // From 1200 px, the overlay on the left (overlay.js, inlined before this script): Harmonica first, its harp this
+  // page's both ways (a harp tapped on its circle is the one the page plays; −/+ move the circle's choice), and
+  // Guitar, the song's sheet's necks; data.overlay holds what it draws, as overlay.js's rail takes it. Whether it
+  // shows is the screen's choice, as the sheet viewer's rail: kept for every page (overlay.js's NECKS) and in the
+  // address while hidden (necks=0).
   const $ = (id) => document.getElementById(id);
   const doc = document.documentElement;
   let data;
@@ -40,7 +46,7 @@
   const sizeOf = (v) => (Number(v) >= FS.min && Number(v) <= FS.max ? Math.round(Number(v)) : null);
   const speedOf = (v) => (Number(v) >= SPEED.min && Number(v) <= SPEED.max ? Math.round(Number(v)) : null);
   const start = Number.isInteger(data.start) && data.start >= 0 && data.start < 12 ? data.start : 0;
-  const state = { harp: start, notes: false, fs: FS.start, speed: SPEED.start };
+  const state = { harp: start, notes: false, fs: FS.start, speed: SPEED.start, necks: true, kn: "scale" };
   const store = "caracole-harmonica:" + location.pathname;
   try {
     const saved = JSON.parse(localStorage.getItem(store) || "null");
@@ -56,6 +62,16 @@
   if (hash.has("notes")) state.notes = hash.get("notes") === "1";
   if (sizeOf(hash.get("fs")) !== null) state.fs = sizeOf(hash.get("fs"));
   if (speedOf(hash.get("speed")) !== null) state.speed = speedOf(hash.get("speed"));
+  const kit = window.caracoleOverlay || null;
+  try {
+    if (kit && localStorage.getItem(kit.NECKS) === "hidden") state.necks = false;
+  } catch (err) { /* no storage: shown, unless the address says otherwise */ }
+  if (hash.get("necks") === "0") state.necks = false;
+  const keepNecks = () => {
+    try {
+      if (kit) localStorage.setItem(kit.NECKS, state.necks ? "shown" : "hidden");
+    } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
+  };
   const save = () => {
     try {
       localStorage.setItem(store, JSON.stringify({ harp: keys[state.harp], notes: state.notes, fs: state.fs,
@@ -68,6 +84,7 @@
       keep("notes", "1", state.notes);
       keep("fs", state.fs, state.fs !== FS.start);
       keep("speed", state.speed, state.speed !== SPEED.start);
+      keep("necks", "0", !state.necks);
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
@@ -137,7 +154,69 @@
     $("smaller").setAttribute("aria-disabled", state.fs <= FS.min ? "true" : "false");
     $("bigger").setAttribute("aria-disabled", state.fs >= FS.max ? "true" : "false");
     $("pill-speed").textContent = String(state.speed);
+    drawRail();
   };
+
+  // --- the overlay: Harmonica and Guitar, on a wide screen ------------------------------------------------------
+  const over = data.overlay && typeof data.overlay === "object" && data.overlay.harp ? data.overlay : null;
+  const aside = $("necks"), necksButton = $("necks-toggle");
+  const wide = window.matchMedia("(min-width: 1200px)");
+  const mod12 = (n) => ((n % 12) + 12) % 12;
+  const picks = {};  // a shape picked on a chord's neck: the page's alone
+  const guitarTab = () => {
+    const g = over.guitar;
+    if (!g) return null;
+    const neck = g.key ? Object.assign({}, g.key, { box: state.kn === "penta", onSwitch: (which) => {
+      state.kn = which;
+      drawRail();
+    } }) : null;
+    return Object.assign({}, g, { key: neck, chords: g.chords.map((c) => Object.assign({}, c, { chosen: picks[c.name] || 0 })) });
+  };
+  const harmonicaTab = () => {
+    const h = over.harp;
+    if (!h.key) {
+      return { key: null, none: h.none, plain: { name: keys[state.harp] + " harp", tonic: state.harp,
+        names: data.names[state.harp], holes: h.holes } };
+    }
+    return Object.assign({}, h, { harpKeys: keys, chosen: mod12(state.harp - h.tonic) });
+  };
+  const rail = kit && aside && over ? kit.rail(aside, {
+    first: "harmonica",
+    guitar: guitarTab,
+    harmonica: harmonicaTab,
+    pick: (name, p) => {
+      picks[name] = p;
+      drawRail();
+    },
+    chooseHarp: (offset) => {
+      stop();
+      state.harp = mod12(over.harp.tonic + offset);
+      render();
+      save();
+    },
+    hide: () => {
+      showRail(false);
+      necksButton.focus();  // the focus where the rail comes back from, not lost with it
+    },
+  }) : null;
+  function drawRail() {
+    const can = Boolean(rail) && wide.matches, on = can && state.necks;
+    necksButton.hidden = !can;
+    necksButton.setAttribute("aria-pressed", on ? "true" : "false");
+    aside.hidden = !on;
+    if (on) doc.dataset.necks = "1";  // the tab and the bar move over for it
+    else delete doc.dataset.necks;
+    if (on) rail.draw();
+    else aside.textContent = "";
+  }
+  const showRail = (on) => {
+    state.necks = on;
+    keepNecks();
+    drawRail();
+    save();
+  };
+  necksButton.addEventListener("click", () => showRail(!state.necks));
+  wide.addEventListener("change", drawRail);
 
   // --- a hole tapped, a line played ------------------------------------------------------------------------------
   let playing = null, lit = 0;

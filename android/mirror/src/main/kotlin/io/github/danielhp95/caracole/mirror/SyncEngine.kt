@@ -62,18 +62,19 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
     }
 
     /**
-     * Syncs the mirror with [address]'s list ([fetched], or fetched now). [progress] hears how many files are
-     * downloaded; [cancelled] is asked between two pieces of work, and stops the sync when true.
+     * Syncs the mirror with [address]'s list, asked for once the sync holds the mirror's lock: a sync that waited
+     * for another syncs the list as it is then, never one older than the other's. [progress] hears how many
+     * files are downloaded; [cancelled] is asked between two files and between two chunks of one, and stops the
+     * sync when true, leaving no temporary file.
      */
     fun sync(
         address: ServerAddress,
-        fetched: Fetched? = null,
         progress: (Progress) -> Unit = {},
         cancelled: () -> Boolean = { false },
     ): SyncReport {
         mirror.syncLock.lock()
         try {
-            val list = fetched ?: fetchManifest(address)
+            val list = fetchManifest(address)
             val manifest = list.manifest
             val before = mirror.reload()
             var downloaded = 0
@@ -87,7 +88,7 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
                 progress(Progress(0, missing.size))
                 missing.forEachIndexed { i, entry ->
                     if (cancelled()) throw SyncError.Cancelled()
-                    download(address, entry)
+                    download(address, entry, cancelled)
                     downloaded++
                     progress(Progress(i + 1, missing.size))
                 }
@@ -120,7 +121,7 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
     }
 
     /** Downloads [entry] to its blob, checked: [SyncError.Changed] when its bytes aren't the listed ones. */
-    private fun download(address: ServerAddress, entry: Entry) {
+    private fun download(address: ServerAddress, entry: Entry, cancelled: () -> Boolean) {
         val tmp = mirror.newTemporary()
         try {
             http.get(address, address.resolve(entry.url)) { answer ->
@@ -134,8 +135,11 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
                 storage { tmp.outputStream() }.use { out ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
-                        // One byte more than listed at most: enough to know it is longer.
-                        val room = (entry.size + 1 - total).coerceAtMost(buffer.size.toLong()).toInt()
+                        // A stopped worker lets go of the lock now, not once a big file has all come.
+                        if (cancelled()) throw SyncError.Cancelled()
+                        // One byte more than listed at most: enough to know it is longer. (total is never more
+                        // than the size here, so this never overflows, even for the largest size a list gives.)
+                        val room = (entry.size - total).coerceAtMost(buffer.size.toLong() - 1).toInt() + 1
                         val n = answer.body.read(buffer, 0, room)
                         if (n < 0) break
                         total += n

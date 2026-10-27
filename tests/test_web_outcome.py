@@ -158,6 +158,40 @@ def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_othe
         {"name": "Song", "source": "", "state": "failed"}]}
 
 
+COOLING = "Ultimate Guitar is cooling down after a block, until 2026-10-28 14:00 UTC"
+WAITS = (COOLING,
+         "Ultimate Guitar blocked caracole (ug: 403: https://x): no more requests to it until 2026-10-28 14:00 UTC. "
+         "Nothing was marked not found.",
+         "this hour's 60 lookup requests to Ultimate Guitar are spent; the nightly run does the rest")
+
+
+def test_a_sheet_a_block_a_cooldown_or_a_spent_budget_stopped_stays_to_show_which_step_stopped():
+    # Skipped for a wait, the sheet had something to do for the song: its step is drawn as one a site's error ended
+    # is, never dropped as a step with nothing to do (the PDF of a song with no sheet), so a lookup that ends Not
+    # fetched yet shows which step stopped.
+    for detail in WAITS:
+        waited = ended({"sheet": ("skipped", detail), "pdf": ("skipped", "no sheet yet"),
+                        "songbooks": ("skipped", "no songbook lists it")})
+        facts = SongFacts()
+        line = job_line(waited, facts)
+        assert line.text == "Not fetched yet"
+        assert progress(waited, line, facts) == {"steps": [
+            {"name": "Song", "source": "", "state": "done"}, {"name": "Match", "source": "UG", "state": "done"},
+            {"name": "Sheet", "source": "", "state": "failed"}, {"name": "Lyrics", "source": "", "state": "done"},
+            {"name": "Extras", "source": "", "state": "done"}]}, detail
+    # While it runs, the step stays in the count: over, and not done.
+    running = lookup(stages={"song": ("done", ""), "match": ("done", "matched to muse/hysteria"),
+                             "sheet": ("skipped", COOLING), "pdf": ("skipped", "no sheet yet"),
+                             "lyrics": ("running", "")})
+    assert Chip("Sheet", "failed") in steps(running)
+    assert progress(running, job_line(running, None), None)["count"] == "2 of 6 done"
+    # A block met while it asked names the site it asked.
+    blocked = lookup(stages={"song": ("done", ""), "match": ("done", "matched to muse/hysteria")})
+    blocked.heard({"stage": "sheet", "state": "running", "detail": SHEET_FROM["ug"]})
+    blocked.heard({"stage": "sheet", "state": "skipped", "detail": WAITS[1]})
+    assert steps(blocked)[2] == Chip("Sheet", "failed", "UG")
+
+
 def test_a_request_that_runs_no_lookup_or_hasnt_run_has_no_steps_on_the_library_page():
     queued = lookup(state="queued")
     assert progress(queued, job_line(queued, None), None) == {}  # its line says its place in the queue

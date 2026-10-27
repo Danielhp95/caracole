@@ -271,7 +271,8 @@ def test_the_rail_and_everything_in_it_is_fifteen_percent_larger_than_it_was(tmp
               keyName: px(q('.kn-name'), 'fontSize'), legend: px(radio, 'fontSize'),
               button: radio.getBoundingClientRect().height, swatch: w(q('.sw')),
               chip: px(q('.kn-switch .chip'), 'fontSize'), chipHeight: q('.kn-switch .chip').getBoundingClientRect().height,
-              title: px(q('.nk-title'), 'fontSize')}; })()"""
+              title: px(q('.ov-tabs [role=tab]'), 'fontSize'),
+              tabHeight: q('.ov-tabs [role=tab]').getBoundingClientRect().height}; })()"""
     # Tall enough for the whole rail: no scroll bar takes its width from the necks.
     with open_viewer(tmp_path, written(tmp_path, IN_C), width=1280, height=1600, mobile=False) as b:
         seen = b.js(sizes)
@@ -282,7 +283,8 @@ def test_the_rail_and_everything_in_it_is_fifteen_percent_larger_than_it_was(tmp
            "chip": 15.2, "chipHeight": 44}
     for what, size in was.items():
         assert seen[what] == pytest.approx(size * 1.15, abs=1), (what, seen)
-    assert seen["title"] == pytest.approx(0.72 * 16 * 1.15, abs=0.5), seen  # the rail's own heading too
+    # The rail's own heading too: its tabs, Guitar and Harmonica (the overlay), a finger's target and more.
+    assert seen["title"] == pytest.approx(0.8 * 16 * 1.15, abs=0.5) and seen["tabHeight"] >= 43.5, seen
 
 
 # --- showing and hiding the rail -----------------------------------------------------------------------

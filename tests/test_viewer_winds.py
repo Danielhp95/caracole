@@ -323,7 +323,9 @@ def test_answers_are_frozen_and_a_list_handed_out_is_a_copy():
 
 IN_G = ("{title: In G}\n{artist: Synthetic}\n{key: G}\n{comment: Verse}\n"
         "[G]made [C]up [D7]words [Em]here\n[G/B]and [Am7]some [Cmaj7]more [Bb]there\n")
-HARP_KEYS = ("harpKeys", "harps", "harpForms", "harpChords", "harpAlts")
+# The harmonica's (winds.js) and the overlay's Harmonica tab's (overlay.js), harp.py's tables both.
+OVERLAY_KEYS = ("harpRing", "harpHoles", "harpScales", "harpOutside", "harpNotes", "harpAltNotes")
+HARP_KEYS = ("harpKeys", "harps", "harpForms", "harpChords", "harpAlts", *OVERLAY_KEYS)
 WIND_KEYS = ("windForms", "windChords", "windAlts")
 
 
@@ -363,8 +365,10 @@ def test_what_the_tables_add_to_a_page_is_small():
 
     cho = (Path(__file__).parent / "fixtures" / "chordpro" / "legend_sheet.cho").read_text(encoding="utf-8")
     data = data_of(build_viewer(cho))
-    added = {k: data[k] for k in (*HARP_KEYS, *WIND_KEYS, "winds") if k in data}
-    assert len(_json.dumps(added, ensure_ascii=False, separators=(",", ":"))) < 16_000
+    size = lambda keys: len(_json.dumps({k: data[k] for k in keys if k in data}, ensure_ascii=False,  # noqa: E731
+                                        separators=(",", ":")))
+    assert size(k for k in (*HARP_KEYS, *WIND_KEYS, "winds") if k not in OVERLAY_KEYS) < 16_000
+    assert size(OVERLAY_KEYS) < 14_000  # the overlay's: the circle, every harp's holes, the key, each chord's notes
 
 
 def test_the_winds_script_is_inlined_after_the_instruments_and_before_the_viewer():

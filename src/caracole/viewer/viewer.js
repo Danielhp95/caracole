@@ -55,12 +55,13 @@
   // through a transposition, as on a guitar: the shapes move instead.
   // nm: the chord names as numerals beside them ("both") or in their place ("numerals"), null for the
   // chords alone; roles: the numerals in their families' colours; necks: the rail of necks shown, on a screen
-  // wide enough for it; py: each Chinese character's reading over it (pinyin), on a sheet with Chinese.
+  // wide enough for it; py: each Chinese character's reading over it (pinyin), on a sheet with Chinese; trad: its
+  // Chinese in Traditional characters, else in Simplified ones.
   // inst: the instrument the chords are drawn and heard for (data.instruments' id), the player's: kept once for every
   // page, as the rail of necks is.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
     speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true, py: false,
-    inst: "guitar" };
+    trad: false, inst: "guitar" };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -145,9 +146,11 @@
       state.strip = saved.strip === true;
     }
   } catch (err) { /* no storage: the page still works */ }
-  // The rail of necks is the screen's choice, not a song's: kept once for every sheet and songbook (a name no
-  // page's own settings have, as theirs end in its path), and in the address too, where there is no storage.
-  const NECKS = "caracole-viewer-necks";
+  // The rail of necks is the screen's choice, not a song's: kept once for every sheet, songbook and harmonica tab's
+  // page (a name no page's own settings have, as theirs end in its path: overlay.js's), and in the address too, where
+  // there is no storage.
+  const overlay = window.caracoleOverlay || null;
+  const NECKS = overlay ? overlay.NECKS : "caracole-viewer-necks";
   try {
     if (localStorage.getItem(NECKS) === "hidden") state.necks = false;
   } catch (err) { /* no storage: shown, unless the address says otherwise */ }
@@ -167,6 +170,18 @@
   const keepPinyin = () => {
     try {
       localStorage.setItem(PINYIN, state.py ? "shown" : "hidden");
+    } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
+  };
+  // So are the characters the Chinese is shown in (the settings' Chinese characters): kept once for every page, and
+  // in the address while they are Traditional (trad=1, as they start Simplified).
+  const HANZI = "caracole-viewer-hanzi";
+  try {
+    if (localStorage.getItem(HANZI) === "traditional") state.trad = true;
+  } catch (err) { /* no storage: Simplified, unless the address says otherwise */ }
+  if (hash.get("trad") === "1") state.trad = true;
+  const keepHanzi = () => {
+    try {
+      localStorage.setItem(HANZI, state.trad ? "traditional" : "simplified");
     } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
   };
   // And so is the instrument (the settings' Instrument menu): the player's, kept once for every page, and in the address
@@ -222,6 +237,7 @@
       keep("vol", state.vol, state.vol !== VOL);
       keep("necks", "0", !state.necks);
       keep("py", "1", state.py);
+      keep("trad", "1", state.trad);
       keep("inst", state.inst, state.inst !== "guitar" || Boolean(startInst));
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
@@ -244,7 +260,7 @@
     const version = new URLSearchParams(location.hash.slice(1));
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks", "py", "trad"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -417,10 +433,12 @@
     const n = names(s);
     return n[mod12(rep[0] + s)] + rep[1] + (rep[2] === null ? "" : "/" + n[mod12(rep[2] + s)]);
   };
-  const label = (i, rep) => {
+  // A chord named ``s`` semitones from the sheet's key (by default, where the chords are named: shift()): as written
+  // when it is the chord as written, unmoved.
+  const label = (i, rep, s = shift()) => {
     if (!rep) return written[i];
-    if (shift() === 0 && asWritten() && rep === data.chords[i]) return written[i];
-    return nameOf(rep, shift());
+    if (s === 0 && asWritten() && rep === data.chords[i]) return written[i];
+    return nameOf(rep, s);
   };
   // The frets where a guitar's open shapes play the key (page.py's ``capo``): on an instrument with shapes of its own
   // (a ukulele), its Easy keys instead.
@@ -590,7 +608,7 @@
     for (const d of [SPEAKER].concat(WAVES[v])) svg("path", { d }, icon);
     return icon;
   };
-  // A chord's shapes on the instrument played. On the guitar: those the sheet gives that very chord first (page.py's
+  // A chord's shapes on the instrument played (``it``: another, the overlay's guitar). On the guitar: those the sheet gives that very chord first (page.py's
   // "shapes", "mine" of them: the first so many), then chords-db's; the note goes with chords-db's. On a ukulele: its
   // table's for the quality the guitar files the chord under (data.voicings[shapes + quality], the instrument's
   // ``near`` naming the one it shows instead, read ``offset`` roots on: the baritone's), a slash chord's bass left
@@ -599,11 +617,10 @@
   const pianoKey = (rep) => "piano:" + rep[1] + "|" + (rep[2] === null ? "" : mod12(rep[2] - rep[0]));
   const INVERSIONS = ["Root position", "1st inversion", "2nd inversion"];
   const qualityName = (q) => (own.call(data.qualities, q) ? data.qualities[q] : q);
-  const shapesOf = (rep, s) => {
+  const shapesOf = (rep, s, it = inst()) => {
     if (!rep) return { list: [], note: "", mine: 0 };
     const pc = mod12(rep[0] + s);
     const n = names(s);
-    const it = inst();
     if (it.kind === "keys") {
       const table = data.voicings[pianoKey(rep)];
       const list = table ? table[pc] || [] : [];
@@ -635,105 +652,6 @@
   // small to read there.
   const diagram = (position, title, bare, span) => (inst().kind === "keys"
     ? kit.keyboard(position, title, bare, span) : kit.box(position, title, bare));
-
-  // A neck's strings, frets, nut and inlays (the 12th fret's two), ``strings`` across, the first on top: a chord's
-  // neck and the key's.
-  const fretboard = (root, strings, frets) => {
-    const left = 14, top = 9, cell = 19, gap = 9, last = strings - 1;
-    for (let s = 0; s < strings; s++) {
-      svg("line", { class: "nk-string", x1: left, y1: top + s * gap, x2: left + cell * frets, y2: top + s * gap }, root);
-    }
-    for (let f = 1; f <= frets; f++) {
-      svg("line", { class: "nk-fret", x1: left + f * cell, y1: top, x2: left + f * cell, y2: top + gap * last }, root);
-    }
-    svg("rect", { class: "nk-nut", x: left - 1.5, y: top - 1, width: 3, height: gap * last + 2 }, root);
-    for (const f of [3, 5, 7, 9, 12, 15]) {
-      if (f > frets) continue;
-      const x = left + (f - 0.5) * cell, mid = top + gap * last / 2;
-      for (const dy of f === 12 ? [-0.3, 0.3] : [0]) svg("circle", { class: "nk-inlay", cx: x, cy: mid + dy * gap * last, r: 1.8 }, root);
-    }
-  };
-  // A chord's positions along the neck of the instrument played (``strings`` of them, six on a guitar, four on a
-  // ukulele), frets 0 to ``frets``, the first string (the high e) on top: each position's dots
-  // at absolute frets (a position's fret n is n + base - 1 up the neck), in its own colour (p0 to p3,
-  // round again after four; the first ``mine`` are the tab's own, marked), open strings as rings at the nut, muted strings nothing. ``chosen``
-  // is drawn bolder, last. Every dot carries its position (data-p) and fret (data-fret).
-  // A note several positions play is a smaller dot for each, side by side along the string in the order of
-  // the positions (the first on the left), so none hides another and each is its own to click: inside its
-  // fret's cell, shrunk to fit for three or more, their outlines thinner (few); at the nut, left of it, the neck
-  // widened to the left for them, and drawn that much wider, so its frets stay under the other necks' frets.
-  const neck = (positions, opts) => {
-    const frets = opts.frets || 15;
-    const strings = opts.strings || 6, last = strings - 1;
-    const left = 14, top = 9, cell = 19, gap = 9;
-    const notes = positions.map(([shape, , base]) => {
-      const up = (Number(base) || 1) - 1, out = [];
-      for (let s = 0; s < strings; s++) if (shape[s] !== "x") out.push([s, shape[s] === "0" ? 0 : Number(shape[s]) + up]);
-      return out;
-    });
-    const sharing = new Map();  // "string.fret": the positions that play it, in order
-    notes.forEach((list, p) => list.forEach(([s, fret]) => {
-      const k = s + "." + fret;
-      if (!sharing.has(k)) sharing.set(k, []);
-      sharing.get(k).push(p);
-    }));
-    // n dots on one note: 6.4 apart, 2.9 across (3.6 the chosen one); for more than two, smaller and outlined
-    // thinner (viewer.css: half the chosen's outline, 1 or 0.6, beyond its radius), so the outermost stays 8
-    // from the middle: inside the cell, clear of the nut.
-    const sizes = (n) => {
-      const few = n > 2, out = few ? 0.6 : 1, k = Math.min(1, (8 - out) / (3.2 * (n - 1) + 3.6));
-      return { step: 6.4 * k, r: 2.9 * k, bold: 3.6 * k, out, few };
-    };
-    const openRight = left - 2;  // where shared open strings end, short of the nut
-    let margin = 0;  // the room shared open strings take left of the picture
-    for (const [k, ps] of sharing) {
-      if (ps.length < 2 || !k.endsWith(".0")) continue;
-      const z = sizes(ps.length);
-      margin = Math.max(margin, Math.ceil(1 + (z.bold + z.out) * 2 + z.step * (ps.length - 1) - openRight));
-    }
-    const width = left + cell * frets + 4, height = top * 2 + gap * last;
-    const label = (positions.length === 1 ? "1 position" : positions.length + " positions");
-    const root = svg("svg", { class: "neck", viewBox: -margin + " 0 " + (width + margin) + " " + height, role: "img",
-      "aria-label": (opts.name || "") + ": " + label });
-    if (margin) {
-      root.style.width = "calc(100% * " + (width + margin) / width + ")";
-      root.style.marginLeft = "calc(-100% * " + margin / width + ")";
-    }
-    fretboard(root, strings, frets);
-    const order = positions.map((_, p) => p).filter((p) => p !== opts.chosen);
-    if (opts.chosen >= 0 && opts.chosen < positions.length) order.push(opts.chosen);
-    for (const p of order) {
-      const bold = p === opts.chosen;
-      for (const [s, fret] of notes[p]) {
-        const attrs = { class: (fret === 0 ? "nk-open" : "nk-dot") + " p" + (p % 4) + (bold ? " chosen" : "") + (p < (opts.mine || 0) ? " tabs" : ""),
-          cy: top + (last - s) * gap, r: bold ? 4.2 : 3.2, "data-p": p, "data-fret": fret };
-        attrs.cx = fret === 0 ? left - 7 : left + (fret - 0.5) * cell;
-        const ps = sharing.get(s + "." + fret), n = ps.length, i = ps.indexOf(p);
-        if (n > 1) {
-          const z = sizes(n);
-          attrs.r = bold ? z.bold : z.r;
-          if (z.few) attrs.class += " few";
-          attrs.cx = fret === 0 ? openRight - (z.bold + z.out) - (n - 1 - i) * z.step : attrs.cx + (i - (n - 1) / 2) * z.step;
-        }
-        svg("circle", attrs, root);
-      }
-    }
-    return root;
-  };
-  // What each position is called in the neck's legend: its number, as the card counts them ("2 of 4"), then
-  // "the tab's" for the first ``mine`` of them, "open" for one with open strings at the nut, else the fret
-  // its lowest finger is on. Numbered, two at one fret ("1 · fret 1", "2 · fret 1") have names of their own,
-  // and are told apart by more than their colour.
-  const neckLabels = (positions, mine) => positions.map((position, p) => {
-    const n = p + 1 + " · ";
-    if (p < mine) return n + "the tab's";
-    const up = (Number(position[2]) || 1) - 1;
-    const fretted = Array.from(position[0]).filter((c) => c !== "x" && c !== "0").map((c) => Number(c) + up);
-    return n + (up === 0 && position[0].includes("0") ? "open" : "fret " + Math.min(...fretted));
-  });
-  // The highest fret a position reaches up the neck (0 for open strings alone).
-  const topFret = (position) => Math.max(0, ...Array.from(String(position[0])).filter((c) => c !== "x" && c !== "0")
-    .map((c) => Number(c) + (Number(position[2]) || 1) - 1));
 
   // --- the instrument: what the chords are drawn and heard for ------------------------------------------
   // The settings' Instrument menu offers each instrument of data.instruments the page draws (``drawn``); one drawn by
@@ -1033,7 +951,7 @@
     drawSpeed();
     drawStrip();
     drawNecks();  // before layout(), which measures the song beside the rail
-    drawPinyin();  // and the words with their readings
+    drawWords();  // and the words in the characters chosen, with their readings
     layout();  // fit() too
     drawHeadings();
     if (!harmony.hidden) drawHarmony();
@@ -1153,40 +1071,17 @@
   };
 
   // --- the key's neck: its scale, or its pentatonic box, across the frets, the tonic marked ------------
-  // In the key shown, of the shapes played: with a capo, the frets count from it, as the chords' necks do.
-  // The rail's first neck; on a phone, the Harmony panel's. Scale or Pentatonic switches it.
-  const keyNeck = () => {
-    const box = state.kn === "penta";
-    const steps = (box ? table("pentatonic") : table("keyScale")) || [];
-    const tonic = mod12(key.tonic + shift());
-    const group = document.createElement("section");
-    group.className = "kn";
-    const head = group.appendChild(document.createElement("p"));
-    head.className = "kn-name";
-    const penta = String(table("pentatonicName") || "pentatonic");
-    head.textContent = keyName(shift()) + " " + (box ? penta : "scale");
-    const chips = group.appendChild(document.createElement("div"));
-    chips.className = "chips kn-switch";
-    chips.appendChild(button("Scale", !box, () => setKeyNeck("scale")));
-    chips.appendChild(button(penta.charAt(0).toUpperCase() + penta.slice(1), box, () => setKeyNeck("penta")));
+  // In the key shown, of the shapes played on the instrument ``it`` (``s`` semitones from the sheet's key): with a
+  // capo, the frets count from it, as the chords' necks do. The rail's first neck (overlay.js draws it); on a phone,
+  // the Harmony panel's. Scale or Pentatonic switches it.
+  const keySpec = (s = shift(), it = inst()) => ({
+    name: keyName(s), tonic: mod12(key.tonic + s), tonicName: names(s)[mod12(key.tonic + s)],
+    scale: table("keyScale") || [], pentatonic: table("pentatonic") || [],
+    pentaName: String(table("pentatonicName") || "pentatonic"),
     // The instrument's strings, each open note's pitch class (data.instruments' tuning, as MIDI notes).
-    const tuning = Array.isArray(inst().tuning) && inst().tuning.length ? inst().tuning : data.tuning;
-    const strings = tuning.length, last = strings - 1;
-    const frets = 15, left = 14, top = 9, cell = 19, gap = 9;
-    const root = svg("svg", { class: "neck key-neck", viewBox: "0 0 " + (left + cell * frets + 4) + " " + (top * 2 + gap * last),
-      role: "img", "aria-label": head.textContent + ": the tonic, " + names(shift())[tonic] + ", marked" }, group);
-    fretboard(root, strings, frets);
-    for (let s = 0; s < strings; s++) {
-      for (let f = 0; f <= frets; f++) {
-        const step = mod12(tuning[s] + f - tonic);
-        if (steps.indexOf(step) < 0) continue;
-        svg("circle", { class: "kn-dot" + (step === 0 ? " tonic" : "") + (f === 0 ? " open" : ""),
-          cx: f === 0 ? left - 7 : left + (f - 0.5) * cell, cy: top + (last - s) * gap, r: step === 0 ? 4.2 : 3.2,
-          "data-string": s, "data-fret": f }, root);
-      }
-    }
-    return group;
-  };
+    tuning: Array.isArray(it.tuning) && it.tuning.length ? it.tuning : data.tuning,
+    box: state.kn === "penta", onSwitch: (which) => setKeyNeck(which) });
+  const keyNeck = () => overlay.keyNeck(keySpec());
   const setKeyNeck = (which) => {
     const active = document.activeElement;
     const from = active && active.closest ? active.closest(".kn") : null;
@@ -1197,36 +1092,24 @@
     if (to) to.focus({ preventScroll: true });
   };
 
-  // --- the rail of necks: a wide screen's, on the left -----------------------------------------------
-  // From 1200 px wide (viewer.css), each chord the sheet shows, once, in the order it first comes (two
-  // chords shown by one name are one), with every position of it along a neck and a legend naming them.
-  // Picking one, on the neck or in the legend, makes it the shape the strip and the chord's card show, at
-  // every place of that chord, kept with the rest (state.at). A legend is a group of radio buttons: one
-  // Tab stop a chord, on the shape played, and the arrows go from shape to shape. Narrower, the card alone.
-  // Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the settings' Chord necks row
-  // show it or hide it (state.necks), the three always in step; hidden, the song has the whole width.
+  // --- the overlay: a wide screen's rail, on the left, Guitar and Harmonica ---------------------------
+  // From 1200 px wide (viewer.css), overlay.js draws it, its Guitar tab first and shown when the page opens. Guitar:
+  // the key's neck, then each chord the sheet shows, once, in the order it first comes (two chords shown by one name
+  // are one), with every position of it along a neck and a legend naming them, on the instrument played (a ukulele's
+  // four strings), or the guitar's on one with no neck (the piano, the harmonica, the winds: then at the guitar's
+  // capo). Picking one, on the neck or in the legend, makes it the shape the strip and the chord's card show, at
+  // every place of that chord, kept with the rest (state.at); one of the guitar's for another instrument holds for
+  // the rail alone. Harmonica: the harps for the song as it sounds (a harmonica takes no capo; a transposition moves
+  // every harp), the harp chosen (harpAt, above the tonic; until one is tapped, the one the song's harmonica tab
+  // plays on, else the first harp.py's choices pick), the key on it and each chord's holes, harp.py's tables looked
+  // up. Narrower, the card alone. Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the
+  // settings' Chord necks row show it or hide it (state.necks), the three always in step; hidden, the song has the
+  // whole width.
   const necksEl = $("necks");
   const railWide = window.matchMedia("(min-width: 1200px)");
   const necksButton = $("necks-toggle"), necksChip = $("necks-chip");
-  const railCan = () => Boolean(necksEl) && count > 0 && railWide.matches && inst().kind === "strings";
+  const railCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && railWide.matches;
   const railOn = () => railCan() && state.necks;
-  const SIDEBAR = "M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8"
-    + "a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z";  // as the bar's button draws it
-  const railHead = () => {
-    const head = document.createElement("header");  // not a div: the chords' necks are the rail's divs
-    head.className = "nk-head";
-    const title = head.appendChild(document.createElement("p"));
-    title.className = "nk-title";
-    title.textContent = "Chord necks";
-    const hide = head.appendChild(document.createElement("button"));
-    hide.type = "button";
-    hide.className = "nk-hide";
-    hide.setAttribute("aria-label", "Hide chord necks");
-    hide.setAttribute("aria-controls", necksEl.id);
-    const icon = svg("svg", { viewBox: "0 0 16 16", "aria-hidden": "true" }, hide);
-    svg("path", { d: SIDEBAR, "fill-rule": "evenodd" }, icon);
-    return head;
-  };
   const shownAs = (name) => {  // the chords the sheet shows by this name, by index
     const out = [];
     for (let i = 0; i < count; i++) {
@@ -1235,6 +1118,83 @@
     }
     return out;
   };
+  // The chords the sheet shows, once a name, in the order they first come (named ``s`` from the sheet's key): [index,
+  // its chord as played, its name].
+  const shownOnce = (s = shift()) => {
+    const out = [], seen = new Set();
+    for (let i = 0; i < count; i++) {
+      const c = String(i);
+      const rep = own.call(written, c) ? current(c) : null;
+      if (!rep) continue;  // a chord caracole can't read: nothing to play
+      const name = label(c, rep, s);
+      if (seen.has(name)) continue;
+      seen.add(name);
+      out.push([c, rep, name]);
+    }
+    return out;
+  };
+  const GUITAR = instOf("guitar") || INSTRUMENTS[0];
+  const railAt = {};  // a shape picked on the guitar's necks while another instrument is played: the rail's alone
+  const necksOf = () => (inst().kind === "strings" ? inst() : GUITAR);
+  // The guitar at its capo (the one set, else the sheet's), as the chords would be named were it played.
+  const guitarShift = () => state.t - ((state.capo === null ? sheetCapo : state.capo) - sheetCapo);
+  const guitarTab = () => {
+    const it = necksOf(), played = it === inst(), s = played ? shift() : guitarShift();
+    const chords = shownOnce(s).map(([c, rep, name]) => {
+      const shapes = shapesOf(rep, s, it);
+      return { name, list: shapes.list, mine: shapes.mine, chosen: played ? state.at[c] || 0 : railAt[name] || 0 };
+    });
+    return { name: String(it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
+      key: key && data.keyScale ? keySpec(s, it) : null };
+  };
+  // A chord's row in one of harp.py's tables by chord: the sheet's in the mode played, else its alternative's.
+  const sameRep = (a, b) => Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  const harpRow = (byChord, byAlt, i, rep) => {
+    const mode = modeNow();
+    if (!byChord || !byChord[mode]) return null;
+    if (sameRep(data.mapped[mode][i], rep)) return byChord[mode][i];
+    const j = alts(i).findIndex((a) => sameRep(a, rep));
+    return j >= 0 && byAlt && byAlt[mode] && byAlt[mode][i] ? byAlt[mode][i][j] : null;
+  };
+  let harpAt = null;  // the harp tapped on the circle, semitones above the tonic as it sounds; null: none yet
+  const harmonicaTab = () => {
+    if (!key || !data.harpRing || !data.harps || !data.harps[modeNow()]) {
+      return { key: null, none: "With no key, caracole can't tell which harp plays the song.", plain: null };
+    }
+    const s = state.t + sheetCapo;  // the song as it sounds: a harmonica takes no capo
+    const mode = modeNow(), n = names(s), choices = data.harps[mode] || [];
+    const tabs = Array.isArray(data.harpTabs) ? data.harpTabs : [];
+    const chords = shownOnce().map(([c, rep, shape]) => {
+      const sounds = label(c, rep, s), f = harpRow(data.harpChords, data.harpAlts, c, rep);
+      return { name: sounds, shape: shape === sounds ? "" : shape, root: n[mod12(rep[0] + s)],
+        entries: f === null || f === undefined ? null : data.harpForms[f] || null,
+        notes: harpRow(data.harpNotes, data.harpAltNotes, c, rep) };
+    });
+    return { key: keyName(s), tonic: mod12(key.tonic + s), names: n, harpKeys: data.harpKeys, ring: data.harpRing,
+      holes: data.harpHoles, scales: data.harpScales[mode], outside: data.harpOutside[mode], choices, chords, tabs,
+      chosen: harpAt !== null ? harpAt : tabs.length ? tabs[0] : choices.length ? choices[0][1] : 0 };
+  };
+  const rail = overlay && necksEl ? overlay.rail(necksEl, {
+    first: "guitar",
+    guitar: guitarTab,
+    harmonica: harmonicaTab,
+    pick: (name, p) => {
+      if (necksOf() === inst()) {
+        pickPosition(name, p);
+        return;
+      }
+      railAt[name] = p;
+      drawNecks();
+    },
+    chooseHarp: (offset) => {
+      harpAt = offset;
+      drawNecks();
+    },
+    hide: () => {
+      showNecks(false);
+      if (necksButton) necksButton.focus();  // the focus where the rail comes back from, not lost with it
+    },
+  }) : null;
   const drawNecks = () => {
     const can = railCan(), on = railOn();
     if (necksButton) {
@@ -1249,57 +1209,8 @@
     necksEl.hidden = !on;
     if (on) doc.dataset.necks = "1";  // the song and the bar move over for it
     else delete doc.dataset.necks;
-    const active = necksEl.contains(document.activeElement) ? document.activeElement.closest(".nk") : null;
-    const focused = active ? Array.prototype.indexOf.call(necksEl.children, active) : -1;
-    necksEl.textContent = "";
-    if (!on) return;
-    necksEl.appendChild(railHead());
-    if (key && data.keyScale) necksEl.appendChild(keyNeck());
-    const drawn = new Set();
-    for (let i = 0; i < count; i++) {
-      const c = String(i);
-      const rep = own.call(written, c) ? current(c) : null;
-      if (!rep) continue;  // a chord caracole can't read: nothing to play
-      const name = label(c, rep);
-      if (drawn.has(name)) continue;
-      drawn.add(name);
-      const group = necksEl.appendChild(document.createElement("div"));
-      group.className = "nk";
-      group.dataset.name = name;
-      const head = group.appendChild(document.createElement("p"));
-      head.className = "nk-name";
-      head.textContent = name;
-      const shapes = shapesOf(rep, shift());
-      if (!shapes.list.length) {
-        const none = group.appendChild(document.createElement("p"));
-        none.className = "nk-none";
-        none.textContent = "No shape to show for this chord.";
-        continue;
-      }
-      const chosen = Math.min(state.at[c] || 0, shapes.list.length - 1);
-      group.appendChild(neck(shapes.list, { name, chosen, mine: shapes.mine, strings: (inst().tuning || []).length || 6,
-        frets: Math.max(15, ...shapes.list.map(topFret)) }));
-      const legend = group.appendChild(document.createElement("div"));
-      legend.className = "nk-legend";
-      legend.setAttribute("role", "radiogroup");
-      legend.setAttribute("aria-label", name);
-      neckLabels(shapes.list, shapes.mine).forEach((words, p) => {
-        const b = legend.appendChild(document.createElement("button"));
-        b.type = "button";
-        b.setAttribute("role", "radio");
-        b.setAttribute("aria-checked", p === chosen ? "true" : "false");
-        b.tabIndex = p === chosen ? 0 : -1;
-        b.dataset.p = String(p);
-        const swatch = b.appendChild(document.createElement("span"));
-        swatch.className = "sw p" + (p % 4) + (p < shapes.mine ? " tabs" : "");
-        swatch.setAttribute("aria-hidden", "true");
-        b.appendChild(document.createTextNode(words));
-      });
-    }
-    // Drawn anew under the focus: it goes to the shape now played of the same chord.
-    const back = focused >= 0 ? necksEl.children[focused] : null;
-    const to = back && back.querySelector('[aria-checked="true"]');
-    if (to) to.focus({ preventScroll: true });
+    if (on) rail.draw();
+    else necksEl.textContent = "";
   };
   // A position picked for a chord: every place the sheet shows it plays it, and its card, when it shows
   // that chord as it is played, turns to it.
@@ -1312,19 +1223,6 @@
     if (!card.hidden) drawCard();
     save();
   };
-  // The neck clicked: the position of the dot nearest to the pointer, within a fingertip of it.
-  const nearestPosition = (group, x, y) => {
-    let best = -1, reach = 20;
-    for (const dot of group.querySelectorAll("svg.neck circle[data-p]")) {
-      const r = dot.getBoundingClientRect();
-      const d = Math.hypot(r.left + r.width / 2 - x, r.top + r.height / 2 - y);
-      if (d < reach) {
-        reach = d;
-        best = Number(dot.dataset.p);
-      }
-    }
-    return best;
-  };
   // Shown or hidden: the song and the bar move back, or over, and the card follows its chord.
   const showNecks = (on) => {
     state.necks = on;
@@ -1335,29 +1233,6 @@
   if (necksButton) necksButton.addEventListener("click", () => showNecks(!state.necks));
   if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (necksEl) {
-    necksEl.addEventListener("click", (e) => {
-      const target = e.target instanceof Element ? e.target : null;
-      if (target && target.closest(".nk-hide")) {
-        showNecks(false);
-        if (necksButton) necksButton.focus();  // the focus where the rail comes back from, not lost with it
-        return;
-      }
-      const group = target && target.closest(".nk");
-      if (!group) return;
-      const radio = target.closest("[role=radio]");
-      const p = radio ? Number(radio.dataset.p)
-        : target.closest("svg.neck") ? nearestPosition(group, e.clientX, e.clientY) : -1;
-      if (p >= 0) pickPosition(group.dataset.name, p);
-    });
-    const STEPS = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 };
-    necksEl.addEventListener("keydown", (e) => {
-      const radio = e.target instanceof Element ? e.target.closest("[role=radio]") : null;
-      if (!radio || !own.call(STEPS, e.key) || e.altKey || e.ctrlKey || e.metaKey) return;
-      e.preventDefault();
-      e.stopPropagation();  // in a songbook the arrows go from song to song (book.js), but not from here
-      const all = radio.parentElement.children.length;
-      pickPosition(radio.closest(".nk").dataset.name, (Number(radio.dataset.p) + STEPS[e.key] + all) % all);
-    });
     // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it.
     railWide.addEventListener("change", () => {
       drawNecks();
@@ -1367,17 +1242,58 @@
     });
   }
 
-  // --- pinyin: each Chinese character's reading over it ------------------------------------------------
-  // data.pinyin (page.py, pinyin.py: read in context at render time): for each line of the song's sections, in
-  // the page's order, each of its characters' reading, "" for a letter, a space or punctuation, or null for a
-  // line with no Chinese; none for a sheet with none, which has no Pinyin row. Shown (state.py: the settings'
-  // Pinyin), each character with a reading is a ruby, the reading over it, between its chord and it
-  // (viewer.css: a chord stays over its character's column); hidden, the words are again as the page wrote them.
+  // --- the Chinese: in Simplified or Traditional characters, each character's reading over it ---------------
+  // data.hanzi (page.py, hanzi.py: converted at render time, word by word), for a sheet with Chinese: each text the
+  // sheet writes in its words (a line's, a section's label, a tab, a line of the notes' peek) in Simplified
+  // characters and in Traditional ones, where that isn't the text as written, each as long as its text. Shown
+  // (state.trad: the settings' Chinese characters, Simplified at first), each text is in the characters chosen, cut
+  // again where the page cut it (into a line's columns, under its chords), and the sheet's language says which.
+  // data.pinyin (page.py, pinyin.py: read in context at render time): for each line of the song's sections, in the
+  // page's order, each of its characters' reading, "" for a letter, a space or punctuation, or null for a line with
+  // no Chinese; none for a sheet with none, which has neither row. Shown (state.py: the settings' Pinyin), each
+  // character with a reading is a ruby, the reading over it, between its chord and it (viewer.css: a chord stays
+  // over its character's column), in either script: a character's reading is its own in both.
   const pyLines = Array.isArray(data.pinyin) ? data.pinyin : [];
   const pyCan = pyLines.some((line) => Array.isArray(line));
   const pyChip = $("pinyin-chip");
-  const pyWritten = new Map();  // each element drawn with readings: its text as the page wrote it
-  let pyDrawn = false;
+  const hanzi = data.hanzi && typeof data.hanzi === "object" ? data.hanzi : null;
+  const hanRow = $("hanzi-row");
+  // Where the sheet writes words, each with its text as the page wrote it: a line's words (its columns, .y and .w,
+  // or a line of text whole), with its readings where it is a line of the song's; and a section's label, a tab and
+  // a line of the notes' peek, each a text node (a label's progression, which the numerals name, follows it).
+  const units = [];
+  if (pyCan || hanzi) {
+    const songLines = Array.from(sheetEl.querySelectorAll(":scope > section.sec > p.l"));
+    for (const line of sheetEl.querySelectorAll("p.l:not(.chords)")) {
+      const nodes = line.querySelector(".y, .w") ? Array.from(line.querySelectorAll(".y, .w"))
+        : line.firstElementChild ? [] : [line];
+      const n = songLines.indexOf(line);
+      if (nodes.length) {
+        units.push({ line, nodes, texts: nodes.map((node) => node.textContent),
+          readings: n >= 0 && Array.isArray(pyLines[n]) ? pyLines[n] : null });
+      }
+    }
+    for (const box of sheetEl.querySelectorAll("h2.lbl, pre.tab, .peek")) {
+      for (const node of Array.from(box.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE) units.push({ line: null, nodes: [node], texts: [node.data], readings: null });
+      }
+    }
+  }
+  const chars = (text) => Array.from(text);  // a character a code point, as hanzi.py and pinyin.py count them
+  // A unit's texts in ``script``'s characters: the whole converted, then cut where the page cut it; as written where
+  // the data has none, or one of another length (not this page's).
+  const inScript = (unit, script) => {
+    const whole = unit.texts.join("");
+    const table = script && hanzi && hanzi[script] && typeof hanzi[script] === "object" ? hanzi[script] : null;
+    const shown = table && own.call(table, whole) && typeof table[whole] === "string" ? chars(table[whole]) : null;
+    if (!shown || shown.length !== chars(whole).length) return unit.texts;
+    let at = 0;
+    return unit.texts.map((text) => {
+      const part = shown.slice(at, at + chars(text).length).join("");
+      at += chars(text).length;
+      return part;
+    });
+  };
   const ruby = (character, reading) => {
     const out = document.createElement("ruby");
     out.className = "py";
@@ -1388,17 +1304,20 @@
     rt.setAttribute("aria-hidden", "true");  // a screen reader reads the characters themselves
     return out;
   };
-  // One line's words (a sung line's columns, or a line of text whole) with their characters' readings.
-  const withReadings = (line, readings) => {
-    const words = line.querySelector(".y, .w") ? Array.from(line.querySelectorAll(".y, .w")) : [line];
-    const texts = words.map((word) => Array.from(word.textContent));
-    if (texts.reduce((n, chars) => n + chars.length, 0) !== readings.length) return;  // not this page's lines
+  // A unit drawn with ``texts``, and ``readings`` (one a character, of its texts together) over its characters.
+  const drawUnit = (unit, texts, readings) => {
+    const read = readings && readings.length === texts.reduce((n, text) => n + chars(text).length, 0) ? readings : null;
     let at = 0;
-    words.forEach((word, k) => {
+    let rubies = false;
+    unit.nodes.forEach((node, k) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (node.data !== texts[k]) node.data = texts[k];
+        return;
+      }
       const parts = [];
       let plain = "";
-      for (const character of texts[k]) {
-        const reading = readings[at++];
+      for (const character of chars(texts[k])) {
+        const reading = read ? read[at++] : "";
         if (typeof reading === "string" && reading) {
           if (plain) parts.push(document.createTextNode(plain));
           plain = "";
@@ -1407,31 +1326,35 @@
           plain += character;
         }
       }
+      if (!parts.length) {
+        if (node.firstElementChild || node.textContent !== plain) node.textContent = plain;
+        return;
+      }
       if (plain) parts.push(document.createTextNode(plain));
-      if (!parts.some((part) => part.nodeName === "RUBY")) return;
-      pyWritten.set(word, word.textContent);
-      word.textContent = "";
-      for (const part of parts) word.appendChild(part);
+      node.textContent = "";
+      for (const part of parts) node.appendChild(part);
+      rubies = true;
     });
-    line.classList.add("py");  // its columns keep the readings' room (viewer.css)
+    if (unit.line) unit.line.classList.toggle("py", rubies);  // its columns keep the readings' room (viewer.css)
   };
-  function drawPinyin() {
+  let wordsDrawn = "";  // as the page wrote them
+  function drawWords() {
     if (pyChip) {
       $("pinyin-row").hidden = !pyCan;
       pyChip.setAttribute("aria-pressed", state.py ? "true" : "false");
     }
-    const on = pyCan && state.py;
-    if (on === pyDrawn) return;
-    pyDrawn = on;
-    if (on) {
-      sheetEl.querySelectorAll(":scope > section.sec > p.l").forEach((line, n) => {
-        if (Array.isArray(pyLines[n])) withReadings(line, pyLines[n]);
-      });
-      return;
+    if (hanRow) {
+      hanRow.hidden = !hanzi;
+      $("hanzi-s").setAttribute("aria-pressed", state.trad ? "false" : "true");
+      $("hanzi-t").setAttribute("aria-pressed", state.trad ? "true" : "false");
     }
-    pyWritten.forEach((text, word) => { word.textContent = text; });
-    pyWritten.clear();
-    for (const line of sheetEl.querySelectorAll(".l.py")) line.classList.remove("py");
+    const script = hanzi ? (state.trad ? "traditional" : "simplified") : "";
+    const py = pyCan && state.py;
+    const now = script + (py ? "+py" : "");
+    if (now === wordsDrawn) return;
+    wordsDrawn = now;
+    if (hanzi) sheetEl.lang = state.trad ? "zh-Hant" : "zh-Hans";
+    for (const unit of units) drawUnit(unit, inScript(unit, script), py ? unit.readings : null);
   }
   if (pyChip) {
     pyChip.addEventListener("click", () => {
@@ -1439,6 +1362,16 @@
       keepPinyin();
       render();
       place();  // an open card goes with its chord
+    });
+  }
+  for (const [id, trad] of [["hanzi-s", false], ["hanzi-t", true]]) {
+    if (!$(id)) continue;
+    $(id).addEventListener("click", () => {
+      if (state.trad === trad) return;
+      state.trad = trad;
+      keepHanzi();
+      render();
+      place();
     });
   }
 
@@ -2302,6 +2235,7 @@
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
     if (!state.necks) params.set("necks", "0");  // the rail hidden there too
     if (state.py) params.set("py", "1");  // and the pinyin shown
+    if (state.trad) params.set("trad", "1");  // and the Chinese in Traditional characters
     if (state.inst !== "guitar") params.set("inst", state.inst);  // and the instrument
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
@@ -2510,12 +2444,13 @@
   });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
-      necks: true, py: false });
+      necks: true, py: false, trad: false });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
     adopt(start);  // the song's own version, if it has one
     if (startInst) state.inst = startInst;  // and its instrument; else the instrument stays the player's
     keepNecks();  // the rail of necks back, on every sheet
     keepPinyin();  // and the pinyin off
+    keepHanzi();  // and the Chinese in Simplified characters
     render();
     place();
   });

@@ -186,6 +186,8 @@ from caracole.songs import (
 from caracole.ug.page import decode_twice, json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
+from caracole.viewer import harpfit
+from caracole.viewer.harptab import parse as parse_tab
 from caracole.viewer.harptab_page import build_harmonica_viewer
 from caracole.viewer.page import viewer_key
 from caracole.viewer.sheet import parse_sheet
@@ -688,6 +690,7 @@ def _render_song(
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     chosen = next((v.tab_id for v in versions if v.chosen), None)
     primary: list[tuple[str, tuple[str | None, str | None]]] = []  # the sheet the harmonica tabs' pages read
+    harps: dict[str, int] = {}  # each harmonica tab's harp, with that sheet: its viewers' overlay starts on it
 
     def render(kept: KeptFile, sheet: _Sheet, state_key: str, *, beside: bool = False,
                listed: dict[str, Any] | None = None) -> None:
@@ -696,6 +699,7 @@ def _render_song(
         text = _sheet_cho(song, sheet)
         if not sheet.auto or human is None:
             primary.append((text, mine))
+            harps.update(_tab_harps(cfg, song, tabs, files, text, mine))
         # Each sheet in its own place: a version kept by its key moves each by what puts it in that key
         played = own_version(overrides, song, text, *mine)
         if beside:
@@ -707,7 +711,8 @@ def _render_song(
                                   cjk_font=cjk_font, fonts=fonts, runner=runner, force=force, key=mine,
                                   export=not beside,
                                   primary=not sheet.auto or human is None, versions=listed, guitar=guitar,
-                                  harmonica=harmonica))
+                                  harmonica=tuple({**h, "harp": harps[h["name"]]} if h["name"] in harps else h
+                                                  for h in harmonica)))
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
 
@@ -810,6 +815,31 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
 
 
 # --- the harmonica tabs kept: a page each --------------------------------------------
+
+
+def _tab_harps(cfg: Config, song: Song, tabs: list[HarmonicaFile], files: Mapping[str, KeptFile], cho: str,
+               key: tuple[str | None, str | None]) -> dict[str, int]:
+    """The harp each harmonica tab the song keeps is played on, by its file's name, as its page chooses it with the
+    song's chord sheet ``cho`` (in ``key``, keys.py's, and where it came from): the one that plays with the record,
+    else the one the tab's words name (harpfit.py ``Choice.tabs_harp``). A tab with neither, or whose text can't be
+    read, has none: its sheet's overlay starts on harp.py's first harp."""
+    out: dict[str, int] = {}
+    for tab in tabs:
+        kept = files.get(tab.name)
+        if kept is None:
+            continue
+        try:
+            text = read_regular(cfg.library_dir / kept.path).decode("utf-8", errors="replace")
+            found = harpfit.choose(parse_tab(text), cho=cho, key=key[0], key_source=key[1], page_key=tab.key)
+        except OSError:
+            continue  # its page says why (_render_harmonica)
+        except Exception:  # a tab the overlay can't read must never cost the sheet's viewer
+            log.warning("%s: cannot tell the harp %s plays on", song.display, tab.name, exc_info=True)
+            continue
+        if found.tabs_harp is not None:
+            out[tab.name] = found.tabs_harp
+    return out
+
 
 
 def _render_harmonica(conn: sqlite3.Connection, cfg: Config, song: Song, folder: Path, tabs: list[HarmonicaFile],
@@ -1257,7 +1287,7 @@ def _render_sheet(
     primary: bool = False,
     versions: dict[str, Any] | None = None,
     guitar: tuple[str, ...] = (),
-    harmonica: tuple[Mapping[str, str], ...] = (),
+    harmonica: tuple[Mapping[str, Any], ...] = (),
 ) -> _Done:
     """Write one sheet's .cho, ``text`` (``_sheet_cho``), render its PDF in ``version`` unless kv ``state_key``
     says it is up to date, then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a
@@ -1396,7 +1426,7 @@ def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],
                   transpose: int, start: str | None, export: bool = True,
                   versions: dict[str, Any] | None = None, guitar: tuple[str, ...] = (),
-                  harmonica: tuple[Mapping[str, str], ...] = ()) -> bytes | None:
+                  harmonica: tuple[Mapping[str, Any], ...] = ()) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one (a version page has none: ``pdf`` None), and return the page's bytes. It starts where the
     PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's

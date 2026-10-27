@@ -391,3 +391,106 @@ def test_a_position_in_words():
     assert harp.position_text(0, 0) == "1st position"
     assert harp.position_text(2, 0) == "3rd position, dorian"
     assert harp.position_text(1, 0) == "8th position"
+
+
+# --- the overlay's tables: the harps round the circle, each harp's holes, the key on it ---------------------------
+
+BM = Key(11, "aeolian")  # Hotel California as it sounds: Am shapes, capo 2
+HOTEL = chords("Bm F#7 A E G D Em F#")
+
+
+def named(text: list, tonic: int, names: list[str]) -> str:
+    """A text of the overlay's as the page writes it: each step a note, ``tonic + step`` named with ``names``."""
+    return "".join(part if isinstance(part, str) else names[(tonic + part) % 12] for part in text)
+
+
+def test_the_ring_is_the_12_harps_by_position_round_the_circle_of_fifths():
+    ring = harp.ring()
+    assert [r[1] for r in ring] == [ordinal(p) for p in POSITIONS]
+    assert [r[0] for r in ring] == [harp_for(0, p) for p in POSITIONS]
+    assert [r[0] for r in ring] == [0, 5, 10, 3, 8, 1, 6, 11, 4, 9, 2, 7]  # each a fifth below the one before
+    assert [r[2] for r in ring] == [position_mode(p) for p in POSITIONS]
+    # Hotel California in B minor: the 4th position is a D harp (aeolian), the 3rd an A harp, the 5th a G harp.
+    by_name = {HARP_KEYS[(BM.tonic + r[0]) % 12]: (r[1], r[2]) for r in ring}
+    assert by_name["D"] == ("4th", "aeolian") and by_name["A"] == ("3rd", "dorian") and by_name["G"] == ("5th", "phrygian")
+    assert by_name["B"] == ("1st", "ionian") and by_name["E"] == ("2nd", "mixolydian") and by_name["Bb"] == ("8th", None)
+
+
+@pytest.mark.parametrize("tonic", range(12))
+def test_each_harps_holes_are_its_notes_as_steps_above_the_songs_tonic(tonic):
+    for offset in range(12):
+        holes, real = harp.holes(offset), layout((tonic + offset) % 12)
+        assert holes["blow"] == [(n - tonic) % 12 for n in real.blow]
+        assert holes["draw"] == [(n - tonic) % 12 for n in real.draw]
+        assert holes["bends"] == [[breath, [(n - tonic) % 12 for n in bent]]
+                                  for breath, bent in zip(real.bend_breath, real.bends, strict=True)]
+
+
+def test_a_d_harp_in_b_minor_as_the_key_card_names_it():
+    names = spelling(BM)
+    holes = harp.holes(3)  # the D harp, 3 above B
+    assert [names[(11 + s) % 12] for s in holes["blow"]] == "D F# A D F# A D F# A D".split()
+    assert [names[(11 + s) % 12] for s in holes["draw"]] == "E A C# E G B C# E G B".split()
+    # Bent: holes 1 to 6 on the draw (none on 5), 7 to 10 on the blow (none on 7), the shallowest first.
+    assert [[b, [names[(11 + s) % 12] for s in bent]] for b, bent in holes["bends"]] == [
+        ["draw", ["D#"]], ["draw", ["G#", "G"]], ["draw", ["C", "B", "A#"]], ["draw", ["D#"]], ["draw", []],
+        ["draw", ["A#"]], ["blow", []], ["blow", ["F"]], ["blow", ["G#"]], ["blow", ["C#", "C"]]]
+
+
+def test_the_key_cards_scales_scale_pentatonic_and_blues():
+    assert harp.key_scales("aeolian") == [["Scale", [0, 2, 3, 5, 7, 8, 10]], ["Minor pentatonic", [0, 3, 5, 7, 10]],
+                                          ["Blues", [0, 3, 5, 6, 7, 10]]]
+    assert harp.key_scales("ionian") == [["Scale", [0, 2, 4, 5, 7, 9, 11]], ["Major pentatonic", [0, 2, 4, 7, 9]],
+                                         ["Blues", [0, 2, 3, 4, 7, 9]]]
+    for mode in MODES:
+        scale, box, blues = harp.key_scales(mode)
+        assert scale[1] == sorted((pc - 0) % 12 for pc in harp.scale(Key(0, mode)))
+        assert set(box[1]) <= set(scale[1]) and len(box[1]) == 5  # the key's own pentatonic, as the necks have it
+        assert blues[1][0] == 0 and len(blues[1]) == 6
+
+
+def test_the_line_under_the_holes_names_the_harps_notes_outside_the_key():
+    names = spelling(BM)
+    said = {name: named(harp.outside("aeolian", (HARP_KEYS.index(name) - 11) % 12), 11, names) for name in "DAG"}
+    assert said == {"D": "Every note it blows or draws is in B minor.", "A": "Outside B minor: G#.",
+                    "G": "Outside B minor: C."}
+    assert named(harp.outside("ionian", 0), 7, spelling(Key(7, "ionian"))) == "Every note it blows or draws is in G major."
+    assert named(harp.outside("dorian", 5), 2, spelling(Key(2, "dorian"))) == "Outside D dorian: F#."  # a G harp
+
+
+def test_the_page_names_the_key_card_on_every_transposition_as_harp_py_plays_it():
+    """What the page does with the tables (a step named ``tonic + step`` in the key as it sounds; a step in the
+    chip's list is in that scale) gives each harp's notes and those outside the key, in every key and mode."""
+    for mode in MODES:
+        steps = harp.key_scales(mode)[0][1]
+        words = {"ionian": "major", "aeolian": "minor"}.get(mode, mode)
+        for tonic in SHIFTS:
+            key = Key(tonic, mode)
+            names = spelling(key)
+            for offset in range(12):
+                real = layout((tonic + offset) % 12)
+                holes = harp.holes(offset)
+                assert [names[(tonic + s) % 12] for s in holes["blow"]] == [names[n % 12] for n in real.blow]
+                assert [s in steps for s in holes["draw"]] == [n % 12 in harp.scale(key) for n in real.draw]
+                out = {names[n % 12] for n in real.blow + real.draw if n % 12 not in harp.scale(key)}
+                text = named(harp.outside(mode, offset), tonic, names)
+                if out:
+                    head = f"Outside {names[tonic]} {words}: "
+                    assert text.startswith(head) and set(text[len(head):-1].split(", ")) == out, text
+                else:
+                    assert text == f"Every note it blows or draws is in {names[tonic]} {words}."
+
+
+def test_the_tables_hold_the_overlays_for_every_mode():
+    key = Key(9, "aeolian")  # Am shapes; the page moves them to the key as it sounds
+    played = chords("Am E7 G D F C Dm E")
+    mapped = mapped_of(key, played)
+    alts = {mode: [[ch("C")] for _ in played] for mode in MODES}
+    data = harp.tables(key, mapped, alts)
+    assert data["harpRing"] == harp.ring() and data["harpHoles"] == [harp.holes(o) for o in range(12)]
+    for mode in MODES:
+        assert data["harpScales"][mode] == harp.key_scales(mode)
+        assert data["harpOutside"][mode] == [harp.outside(mode, o) for o in range(12)]
+        assert data["harpNotes"][mode] == [sorted((pc - 9) % 12 for pc in c.pitch_classes) for c in mapped[mode]]
+        assert data["harpAltNotes"][mode] == [[[3, 7, 10]] for _ in played]  # C E G: 3, 7 and 10 above A
+    assert data["harpNotes"]["aeolian"][1] == [2, 5, 7, 11]  # E7 in A minor: B, D, E, G#

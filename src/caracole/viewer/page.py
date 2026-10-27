@@ -1,8 +1,9 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its four
-scripts, strum.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce that)
+no server: it loads nothing (a Content-Security-Policy with the hashes of its five
+scripts, strum.js, overlay.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce
+that)
 and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
 artist's name under the title, to the library page on their songs (``artist_line``).
 A server may serve it too, only while it is the page caracole wrote, with
@@ -40,7 +41,10 @@ written ``\\u003c``:
   key, each table's easy keys in every mode (``instruments.easy_keys``: ``[tonic, name]``), which the settings' Easy
   keys row offers on an instrument that has one;
 - the harmonica's (harp.py ``tables``: ``harpKeys``, ``harps``, the harps for the song in each mode, ``harpForms``,
-  ``harpChords``, ``harpAlts``, what each chord plays on each harp) for a sheet with a key, and the flute's and the
+  ``harpChords``, ``harpAlts``, what each chord plays on each harp; and the overlay's Harmonica tab's, ``harpRing``,
+  ``harpHoles``, ``harpScales``, ``harpOutside``, ``harpNotes``, ``harpAltNotes``) for a sheet with a key, with
+  ``harpTabs``, the harps the song's harmonica tabs play on (each one's ``harp``, as harpfit.py chose it), as semitones
+  above the key the sheet sounds in (its key, the capo added), and the flute's and the
   recorder's (winds.py ``tables``: ``windForms``, ``windChords``, ``windAlts``, each chord's notes), for winds.js;
   ``winds``, the same on every page: the fingerings (winds.py ``fingering_data``) and each harp's notes (``harps``,
   harp.py ``layouts``);
@@ -70,7 +74,12 @@ written ``\\u003c``:
 - ``pinyin``, for a sheet whose song holds Chinese: each line of its sections as the page draws it (``#sheet
   section.sec > p.l``, in order: ``_drawn_lines``), the reading of each of its characters (pinyin.py: "" for a
   letter, a space or punctuation), or null for a line with none, for the settings' Pinyin row, which the script
-  shows for such a sheet alone; a sheet with none has none.
+  shows for such a sheet alone; a sheet with none has none;
+- ``hanzi``, beside it: every text the sheet writes in its words (``_written_texts``: each line's words whole, the
+  notes' before the song too, each section's label, each tab, each line of the notes' peek) in Simplified
+  characters (``simplified``) and in Traditional ones (``traditional``), by the text, where that isn't the text as
+  written (hanzi.py: as long as it, a character for a character), for the settings' Chinese characters, which the
+  script shows where it shows Pinyin's row.
 """
 
 from __future__ import annotations
@@ -89,10 +98,11 @@ from caracole.download_names import download_name
 from caracole.inline import json_block, sha256_source
 from caracole.normalize import clean_title, has_han
 from caracole.page_icon import LINK as PAGE_ICON
-from caracole.viewer import harmony_tables, harp, instruments, pinyin, winds
+from caracole.viewer import hanzi, harmony_tables, harp, instruments, pinyin, winds
 from caracole.viewer.sheet import (
     Blank,
     ChordRow,
+    Line,
     Lyrics,
     Section,
     Sheet,
@@ -149,10 +159,12 @@ _OF_THE_SHAPES = frozenset({"chords", "audio"})
 BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "harmony_tables.py",
                                "voicings.py", "voicings.json", "voicings-ukulele.json", "instruments.py",
-                               "version.py", "pinyin.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
+                               "version.py", "pinyin.py", "hanzi.py", "viewer.js", "viewer.css",
+                               "LICENSE-chords-db")),
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE / "instruments.js",  # a chord's box and keyboard, and the instruments a script registers, before viewer.js
     HERE / "harp.py", HERE / "winds.py", HERE / "winds.js",  # the harmonica, the flute and the recorder
+    HERE / "overlay.js",  # the rail on a wide screen, Guitar and Harmonica, on a sheet and a harmonica tab's page
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -167,22 +179,33 @@ BUILD_FILES = (
 def build_version() -> str:
     """What this caracole's viewer is, as a SHA-256 of the Python running it (``sys.version``:
     unicodedata, html.escape and json.dumps go with it) and of every file in ``BUILD_FILES``, in
-    their order, and of pypinyin's version, whose dictionaries read a Chinese sheet's pinyin. An upgrade
-    that could change a page changes it: a page made with another one is made again (songbook.html, through
-    ``book.assets_version``)."""
+    their order, and of pypinyin's version, whose dictionaries read a Chinese sheet's pinyin, and OpenCC's, whose
+    dictionaries write it in either script. An upgrade that could change a page changes it: a page made with
+    another one is made again (songbook.html, through ``book.assets_version``)."""
     digest = hashlib.sha256(sys.version.encode("utf-8"))
     for path in BUILD_FILES:
         digest.update(hashlib.sha256(path.read_bytes()).digest())
     digest.update(_pypinyin_version().encode("utf-8"))
+    digest.update(b"\0" + _opencc_version().encode("utf-8"))
     return digest.hexdigest()
 
 
 def _pypinyin_version() -> str:
     """pypinyin's version, read from its metadata without importing it (pinyin.py imports it to read)."""
+    return _installed("pypinyin")
+
+
+def _opencc_version() -> str:
+    """OpenCC's version, read from its metadata without importing it (hanzi.py imports it to convert)."""
+    return _installed("opencc")
+
+
+def _installed(distribution: str) -> str:
+    """The version of ``distribution`` installed, or "" for none."""
     from importlib.metadata import PackageNotFoundError, version
 
     try:
-        return version("pypinyin")
+        return version(distribution)
     except PackageNotFoundError:
         return ""
 
@@ -208,6 +231,14 @@ def _winds() -> str:
 
 
 @lru_cache(maxsize=1)
+def _overlay() -> str:
+    """overlay.js: the rail of a wide screen, its Guitar and Harmonica tabs (``window.caracoleOverlay``), inlined
+    after strum.js and before the rest, before viewer.js, which draws it, in a sheet.html and a songbook.html alike,
+    and before harptab.js in a harmonica tab's page (harptab_page.py)."""
+    return (HERE / "overlay.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
 def _instruments() -> str:
     """instruments.js: a chord's box on any fretted instrument and a piano's keyboard, and the instruments another
     script registers (``window.caracoleInstruments``), inlined after strum.js and before viewer.js, which calls it,
@@ -226,7 +257,7 @@ def build_viewer(
     export: bool = True,
     versions: dict[str, Any] | None = None,
     guitar: tuple[str, ...] | list[str] = (),
-    harmonica: tuple[Mapping[str, str], ...] | list[Mapping[str, str]] = (),
+    harmonica: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -243,14 +274,19 @@ def build_viewer(
     in its data as ``guitar``, and its settings get a Guitar Pro row (``_GUITAR_ROW``); without any, neither.
     ``harmonica``, the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: ``{"name",
     "href", "page"}`` and the ``key`` its page named, if any), goes in its data as ``harmonicaTabs``; without any,
-    the data has none.
+    the data has none. A tab's ``harp``, the pitch class of the harp it plays on (render.py, harpfit.py), is the
+    data's ``harpTabs`` instead, by the sheet's key.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     data["start"] = start
     if versions is not None:
         data["versions"] = versions
     if harmonica:
-        data["harmonicaTabs"] = [dict(tab) for tab in harmonica]
+        data["harmonicaTabs"] = [{k: v for k, v in tab.items() if k != "harp"} for tab in harmonica]
+        harps = [tab["harp"] for tab in harmonica if isinstance(tab.get("harp"), int)]
+        if song_key is not None and harps:
+            sounds = song_key.tonic + (sheet.capo or 0)  # a harmonica takes no capo: the key the song sounds in
+            data["harpTabs"] = list(dict.fromkeys((h - sounds) % 12 for h in harps))
     if guitar:
         data["guitar"] = list(guitar)
         clean = clean_title(sheet.title or "")
@@ -261,7 +297,7 @@ def build_viewer(
         f"{title} · {sheet.artist}" if sheet.artist else title,
         _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar)) + json_block("song", data),
         styles=(style,),
-        scripts=(_sound(), _instruments(), _winds(), script),
+        scripts=(_sound(), _overlay(), _instruments(), _winds(), script),
     )
 
 
@@ -439,6 +475,7 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
     data["library"] = LIBRARY_PAGE
     if (readings := pinyin.readings(_drawn_lines(sheet))) is not None:
         data["pinyin"] = readings
+        data["hanzi"] = hanzi.scripts(_written_texts(sheet))
     return data
 
 
@@ -446,16 +483,39 @@ def _drawn_lines(sheet: Sheet) -> list[str]:
     """The text of each line of the song's sections as the page draws one (a ``p.l``: a sung line's words, none
     for a line of chords alone, a line of text's), in the page's order: the lines the data's ``pinyin`` reads.
     The notes before the song are none of them."""
-    out = []
-    for section in _shown(sheet)[1]:
-        for line in section.lines:
-            if isinstance(line, Lyrics):
-                out.append("".join(text for _, text in line.parts))
-            elif isinstance(line, ChordRow):
-                out.append("")
-            elif isinstance(line, Text):
-                out.append(line.text)
+    return [_words_of(line) for section in _shown(sheet)[1] for line in section.lines
+            if isinstance(line, (Lyrics, ChordRow, Text))]
+
+
+def _words_of(line: Line) -> str:
+    """A line's words as its page writes them (a ``p.l``'s, its chords left out; a tab whole), "" for a line of
+    chords alone or a blank one."""
+    if isinstance(line, Lyrics):
+        return "".join(text for _, text in line.parts)
+    if isinstance(line, Text):
+        return line.text
+    if isinstance(line, Tab):
+        return "\n".join(line.lines)
+    return ""
+
+
+def _written_texts(sheet: Sheet) -> list[str]:
+    """Every text the sheet's page writes in its words, which the data's ``hanzi`` gives in either script: the
+    notes before the song (each line of their peek, and each line), then each section's label and each line's
+    words, a tab's whole."""
+    pre, sections = _shown(sheet)
+    out = [*_peek(pre, sheet.chords), *(_words_of(line) for line in pre.lines)] if pre else []
+    for section in sections:
+        out += [section.label] if section.label else []
+        out += [_words_of(line) for line in section.lines]
     return out
+
+
+def _peek(section: Section, names: list[str]) -> list[str]:
+    """The lines the folded notes before the song show in their summary: their first two, chords and all, for
+    notes of more than two lines; none for fewer, which aren't folded."""
+    lines = [line for line in section.lines if not isinstance(line, Blank)]
+    return [written(line, names).strip() for line in lines[:2]] if len(lines) > 2 else []
 
 
 def _shown(sheet: Sheet) -> tuple[Section | None, list[Section]]:
@@ -635,11 +695,10 @@ def _preamble_html(section: Section, names: list[str]) -> str:
     """The preamble in small, muted type, folded after its first two lines: those two as plain text
     in the summary of a ``<details>``, to read at a glance, and every line inside; open, the summary
     names it, beside Less. A preamble of two lines has nothing more to show, and isn't folded."""
-    lines = [line for line in section.lines if not isinstance(line, Blank)]
     body = "\n".join(_line_html(line, names) for line in section.lines)
-    if len(lines) <= 2:
+    if not (lines := _peek(section, names)):
         return f'<div class="pre">\n{body}\n</div>\n'
-    peek = "<br>".join(escape(written(line, names).strip()) for line in lines[:2])
+    peek = "<br>".join(escape(line) for line in lines)
     return (
         f'<details class="pre">\n<summary><span class="peek">{peek}</span><span class="named">Notes</span>'
         '<span class="more">More</span><span class="less">Less</span></summary>\n'
@@ -727,7 +786,8 @@ def _words(text: str) -> list[str]:
 # what the mode played sounds like, and a pill a mode, the song's own marked; after a rule, the chord names (Chords,
 # + Numerals, Numerals), why there are no numerals for a song with no key, and a switch for each thing on or off (a
 # toggle button, pressed while it is on): Role colours, All chord shapes (as the bar's guitar), Chord necks (where the
-# rail shows) and Pinyin (a sheet with Chinese); the instrument, a menu, and the strum's loudness, four speakers, on
+# rail shows), and on a sheet with Chinese its characters, Simplified or Traditional (a segmented control, each named
+# in its own characters too), then Pinyin; the instrument, a menu, and the strum's loudness, four speakers, on
 # one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
 # opens something here, ↗ leaves the page): Harmony, the song's Guitar Pro files (``_GUITAR_ROW``) and Export PDF
 # (``_EXPORT_ROW``, a sheet's alone); and after another, Reset everything, quiet.
@@ -810,6 +870,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="switch" id="roles" aria-pressed="true">Role colours<span class="roles" aria-hidden="true"><span class="r-h">home</span> <span class="r-a">away</span> <span class="r-p">pull</span></span></button>
 <button type="button" class="switch" id="strip-toggle" aria-pressed="false" aria-controls="strip">All chord shapes</button>
 <div id="necks-row" hidden><button type="button" class="switch" id="necks-chip" aria-pressed="true" aria-controls="necks">Chord necks</button></div>
+<div id="hanzi-row" hidden><div class="seg" id="hanzi" role="group" aria-label="Chinese characters"><button type="button" id="hanzi-s" aria-pressed="true" aria-controls="sheet"><span>Simplified <span class="zh" lang="zh-Hans">简体</span></span></button>
+<button type="button" id="hanzi-t" aria-pressed="false" aria-controls="sheet"><span>Traditional <span class="zh" lang="zh-Hant">繁體</span></span></button></div></div>
 <div id="pinyin-row" hidden><button type="button" class="switch" id="pinyin-chip" aria-pressed="false" aria-controls="sheet" aria-describedby="pinyin-hint">Pinyin</button>
 <p class="hint" id="pinyin-hint">Each Chinese character's reading, over it.</p></div>
 <div class="duo" id="inst-line"><span class="inst-pick" id="inst-row" hidden><select id="insts" aria-label="Instrument"></select></span>

@@ -19,7 +19,8 @@ they go to, a swipe or the arrow keys go from song to song, skipping the missing
 each step reloads the page, so the viewer starts afresh on each song.
 
 The page is self-contained and loads nothing, as a sheet.html: a Content-Security-Policy
-with the hashes of its five scripts (book.js, the viewer's strum.js, instruments.js, winds.js and viewer.js) and
+with the hashes of its six scripts (book.js, the viewer's strum.js, overlay.js, instruments.js, winds.js and
+viewer.js) and
 two stylesheets. A server serves it only while it is the page caracole wrote, with
 ``songbook_csp(page)``.
 """
@@ -41,6 +42,7 @@ from caracole.viewer.page import (
     LIBRARY_PAGE,
     _assets,
     _instruments,
+    _overlay,
     _winds,
     _sound,
     _facts,
@@ -136,7 +138,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         + _CONTROLS
     )
     return _page(f"{name} · songbook", body, styles=(style, book_style),
-                 scripts=(book_script, _sound(), _instruments(), _winds(), script))
+                 scripts=(book_script, _sound(), _overlay(), _instruments(), _winds(), script))
 
 
 def _contents(songs: list[BookSong], about: dict[int, str], files: str) -> str:
