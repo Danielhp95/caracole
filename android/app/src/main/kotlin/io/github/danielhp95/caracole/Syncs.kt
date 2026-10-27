@@ -49,7 +49,7 @@ object Syncs {
     /**
      * Syncs with the address in the settings, telling [Caracole.status] how far it is, and keeps the outcome.
      * With [probe] (the sync on Wi-Fi), a server that doesn't answer, or no address, does nothing and says
-     * nothing. [stopped] is asked between two files.
+     * nothing. [stopped] is asked between two files and between two chunks of one.
      */
     fun run(context: Context, probe: Boolean, stopped: () -> Boolean = { false }): Outcome? {
         val settings = Settings(context)

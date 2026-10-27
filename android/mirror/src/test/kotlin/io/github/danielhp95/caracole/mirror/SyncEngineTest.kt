@@ -215,6 +215,36 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `a sync stopped in the middle of a file stops there, and leaves no temporary file`() {
+        server.publish(library)
+        engine.sync(server.address)
+        val before = snapshot()
+        val big = ByteArray(256 * 1024) { (it % 251).toByte() }
+        val entries = server.publish(library + ("big.pdf" to big))
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+        val rest = java.util.concurrent.CountDownLatch(1)
+        server.answers[entries.first { it.path == "big.pdf" }.url] = { exchange ->
+            exchange.sendResponseHeaders(200, big.size.toLong())
+            exchange.responseBody.write(big, 0, big.size / 2)
+            exchange.responseBody.flush()
+            stop.set(true) // the worker is stopped while the file comes
+            rest.await(15, java.util.concurrent.TimeUnit.SECONDS) // the rest, slow to come
+            try {
+                exchange.responseBody.write(big, big.size / 2, big.size - big.size / 2)
+            } catch (e: java.io.IOException) { /* the app stopped reading */ }
+        }
+        val started = System.nanoTime()
+        try {
+            assertFailsWith<SyncError.Cancelled> { engine.sync(server.address, cancelled = { stop.get() }) }
+            val seconds = (System.nanoTime() - started) / 1e9
+            assertTrue(seconds < 5, "stopped after $seconds s, not at the next chunk")
+        } finally {
+            rest.countDown()
+        }
+        assertEquals(before, snapshot(), "the mirror as it was, and no temporary file")
+    }
+
+    @Test
     fun `a sync clears what an earlier one left, temporary files and blobs no entry names`() {
         server.publish(library)
         engine.sync(server.address)
