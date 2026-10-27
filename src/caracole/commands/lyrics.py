@@ -10,7 +10,7 @@ what caracole serve's Songs of a LaCuerda artist runs. ``caracole lacuerda
 --search QUERY`` asks LaCuerda's search for the songs of a query, one request at
 the same pace (lacuerda_search.py), and puts what it answers into the index: what
 caracole serve's search bar sends once a query has settled (``--auto``, within its
-share of the hour's lookups), and its Search LaCuerda button (``--progress``, a
+share of the hour's lookups), and its Ask LaCuerda button (``--progress``, a
 JSON line per event for the request's stages).
 As in the run,
 a provider cooling down after a block is left alone, and a block starts (or
@@ -350,12 +350,12 @@ def _lacuerda_search(cfg: Config, query: str, *, auto: bool, progress: bool) -> 
             return
         failure = failed(conn, key, now) if auto else None
         if failure is not None:
-            end(f"{NOT_SEARCHED}{failure.said(shown_query)}; its Search LaCuerda button, Try again or a terminal "
+            end(f"{NOT_SEARCHED}{failure.said(shown_query)}; its Ask LaCuerda button, Try again or a terminal "
                 "asks now.")
             return
         if auto and searches_used(conn, now) >= SEARCHES_PER_HOUR:
             end(f"{NOT_SEARCHED}this hour's {SEARCHES_PER_HOUR} searches of LaCuerda the page sends by itself are "
-                "spent; its Search LaCuerda button, or a terminal, asks anyway.")
+                "spent; its Ask LaCuerda button, or a terminal, asks anyway.")
             return
         run_id = _common.LOOKUP_RUN + RUN + run_id_for(now)
         client = make_client(cfg, conn, "lacuerda", run_id, policy=replace(policy, budget=1), interactive=True)

@@ -862,7 +862,7 @@ def test_lacuerda_search_that_failed_isnt_sent_by_the_page_again_within_the_hour
     assert result.exit_code == 0 and sites.lacuerda.requests == [SEARCH_URL]
     assert searched(result) == "Not searched: LaCuerda's search for “tiza corazon” failed less than an hour ago."
     assert "so the page won't send it by itself before " in result.stdout and "HTTP 500" in result.stdout
-    assert result.stdout.rstrip().endswith("its Search LaCuerda button, Try again or a terminal asks now.")
+    assert result.stdout.rstrip().endswith("its Ask LaCuerda button, Try again or a terminal asks now.")
     # By hand (its button, Try again, a terminal) it asks, and an answer clears the failure.
     assert run(tmp_path, "lacuerda", "--search", "corazon de tiza").stdout.startswith("Searched: LaCuerda has 2")
     assert sites.lacuerda.requests == [SEARCH_URL] * 2

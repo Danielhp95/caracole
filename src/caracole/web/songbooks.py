@@ -4,8 +4,8 @@
     POST /songbook/add      name, songs                        caracole songbook add NAME SONG...
     POST /songbook/move     name, song, position               caracole songbook move NAME SONG POSITION
     POST /songbook/remove   name, song                         caracole songbook remove NAME SONG
-    POST /songbook/set      name, song, key, mode, capo        caracole songbook set --key K --mode M --capo N
-                            (or clear)                         NAME SONG (or --clear)
+    POST /songbook/set      name, song, key, mode, capo,       caracole songbook set --key K --mode M --capo N
+                            instrument (or clear)              --instrument I NAME SONG (or --clear)
     POST /songbook/rename   name, new                          caracole songbook rename NAME NEW
     POST /songbook/delete   name                               caracole songbook delete NAME
     POST /songbook/get      name (and song, one song's id)     caracole get "ARTIST - TITLE", for each song
@@ -26,7 +26,8 @@ ends the command's options, so a name may start with "-".
 
 A setting (``set``) comes from a song's chip in the tab, which always sends the capo with a key or a mode, as
 ``caracole songbook set`` keeps it: the setting names where the song plays, so a sheet that takes its place
-plays there too. The page's Add a song (``add-song``, songbook_routes.py) adds a song of your library at
+plays there too; and the instrument once it is another than the one the song plays on (on one with no capo, no
+capo: its key is the key it sounds in). The page's Add a song (``add-song``, songbook_routes.py) adds a song of your library at
 once, and looks a song of the indexes up first, as Get it does (``search_routes.queue_lookup``).
 
 A job's key is its command (``KEY``, then the command's words; a setting's, its songbook and song before its
@@ -187,9 +188,9 @@ def add_job(name: str, song: str) -> SongbookJob:
 
 
 def _setting_job(name: str, entry: str, form: Mapping[str, str]) -> SongbookJob:
-    """``caracole songbook set``: the song's key, mode and capo in the songbook (``key``, ``mode``, ``capo``, each
-    left out where the form says nothing), or ``clear`` for its own version; Refused for a setting that can't be
-    one. Its options come before ``--``; its key names the songbook and the song first, as every songbook job's
+    """``caracole songbook set``: the song's key, mode, capo and instrument in the songbook (``key``, ``mode``,
+    ``capo``, ``instrument``, each left out where the form says nothing), or ``clear`` for its own version; Refused
+    for a setting that can't be one. Its options come before ``--``; its key names the songbook and the song first, as every songbook job's
     does, then the setting."""
     from caracole.songbook import SongbookError, check_setting
 
@@ -197,23 +198,31 @@ def _setting_job(name: str, entry: str, form: Mapping[str, str]) -> SongbookJob:
         options: tuple[str, ...] = ("--clear",)
         said, parts = "its own version", ("clear",)
     else:
-        key, mode, capo = (form.get(name, "").strip() for name in ("key", "mode", "capo"))
-        if not (key or mode or capo):
-            raise Refused(400, "Not a setting", "Give it a key, a mode or a capo, or play it in its own version.")
+        key, mode, capo, instrument = (form.get(name, "").strip() for name in ("key", "mode", "capo", "instrument"))
+        if not (key or mode or capo or instrument):
+            raise Refused(400, "Not a setting", "Give it a key, a mode, a capo or an instrument, or play it in its own "
+                                                "version.")
         try:
             setting = check_setting(key[:1].upper() + key[1:] if key else None, mode.lower() or None,
                                     (int(capo) if capo.isascii() and capo.isdigit() else capo) if capo else None,
-                                    where="The setting")
+                                    instrument.lower() or None, where="The setting")
         except SongbookError as e:
             raise Refused(400, "Not a setting", str(e)) from e
         named = [(flag, value) for flag, value in (("--key", setting.key), ("--mode", setting.mode),
-                                                   ("--capo", setting.capo)) if value is not None]
+                                                   ("--capo", setting.capo), ("--instrument", setting.instrument))
+                 if value is not None]
         options = tuple(str(word) for pair in named for word in pair)
         where = " ".join(str(v) for v in (setting.key, setting.mode) if v)
         capo_said = "" if setting.capo is None else "no capo" if setting.capo == 0 else f"capo {setting.capo}"
         said = ", ".join(p for p in (where, capo_said) if p)
-        said = f"in {said}" if where else f"with {said}"  # "in G dorian, no capo"; "with capo 3", a capo alone
-        parts = tuple("" if v is None else str(v) for v in (setting.key, setting.mode, setting.capo))
+        said = f"in {said}" if where else f"with {said}" if said else ""  # "in G dorian, no capo"; "with capo 3"
+        if setting.instrument is not None:
+            from caracole.viewer.version import instrument_of, instrument_words
+
+            on = f"on the {instrument_words(instrument_of(setting.instrument))}"
+            said = f"{said} {on}" if said else on  # "in G, no capo on the piano"; "on the ukulele"
+        parts = tuple("" if v is None else str(v) for v in (setting.key, setting.mode, setting.capo,
+                                                            setting.instrument))
     command = ("songbook", "set", *options, "--", name, entry)
     title = f'Play {entry} in its own version in "{name}"' if parts == ("clear",) else \
         f'Play {entry} {said}, in "{name}"'
