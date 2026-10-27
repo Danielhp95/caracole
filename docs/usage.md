@@ -4297,7 +4297,14 @@ tab_ids = [1601668]
   sheet viewer writes its address after `#` (`t=2` semitones, `mode=dorian`,
   `capo=0`, `alt=` and `at=` by the chords' places in the sheet; a `#` before
   it is dropped; without a `t`, it is at the song's `[transpose]`): it works
-  as it did, and caracole never rewrites it. Take the entry out to go back to
+  as it did, and caracole never rewrites it. An entry kept by a major key
+  named by its letter alone (`key=B&capo=2`), made while caracole read a tab's
+  letter alone as its major key whatever the chords, on a sheet it now reads
+  in a minor key (Hotel California's `A`), is rewritten once, at the first
+  render after the upgrade, in the minor key that plays the sheet where it did
+  (`key=Bm&capo=2`), the rest of the entry and of the file as they were; one
+  that still plays where it did (a sheet read in the relative minor) stays.
+  Take the entry out to go back to
   `[transpose]`, or the sheet as written. A value that is not text, holds a
   control character or is over 2000 characters, or whose key, mode or capo
   can't be one (a key as a sheet names one: `G`, `F#m`, `Bb dorian`), or with a

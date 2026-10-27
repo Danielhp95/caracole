@@ -2326,6 +2326,74 @@ def test_an_export_from_an_address_naming_no_version_is_the_songs_own(conn, cfg)
         overrides(cfg, '[version]\n"Soda Stereo - De Música Ligera" = "key=Am&mode=dorian"\n')) == Version(t=2, mode="dorian")
 
 
+# Hotel California as UG writes it: its key "A", capo 2, its chords A minor's (synthetic words)
+HOTEL_CAPO_2 = (
+    "[Intro]\n[ch]Am[/ch]  [ch]E7[/ch]  [ch]G[/ch]  [ch]D[/ch]  [ch]F[/ch]  [ch]C[/ch]  [ch]Dm[/ch]  [ch]E[/ch]\n\n"
+    "[Verse]\n[tab][ch]Am[/ch]             [ch]E7[/ch]\nmade up words to sing[/tab]\n"
+    "[tab][ch]G[/ch]                 [ch]D[/ch]\nonly for the test[/tab]\n"
+    "[tab][ch]F[/ch]                 [ch]C[/ch]\nand more of them[/tab]\n"
+    "[tab][ch]Dm[/ch]                [ch]E7[/ch]\nand back again[/tab]\n"
+)
+HOTEL_SONG = "Eagles - Hotel California"
+
+
+def kept_sheet(conn, cfg, song, content, *, tonality, capo):
+    """``human_sheet``, with its sheet.json kept as the fetch keeps it, which the song's key is read from."""
+    vid = human_sheet(conn, cfg, song, content, tonality=tonality, meta={"capo": capo} if capo else None)
+    doc = (song_dir(cfg.library_dir, song) / "sheet.json").read_bytes()
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json", data=doc, rank=1)
+
+
+@pytest.mark.parametrize(("tonality", "entry", "now"), [
+    ("A", "key=B&capo=2", "key=Bm&capo=2"),  # read as A major shapes before, A minor now: its parallel minor
+    ("B", "key=C#&capo=2&alt=E7.E", "key=Bm&capo=2&alt=E7.E"),  # B, the sound, read as B major shapes before
+])
+def test_an_own_version_kept_by_a_major_key_on_a_sheet_now_read_minor_plays_where_it_did(conn, cfg, tonality,
+                                                                                          entry, now):
+    # Made two up while caracole read the tab's letter alone as its major key: written once in the minor key that
+    # plays the sheet where it did, the rest of the entry and of the file as they were
+    song = add_song(conn, "Eagles", "Hotel California")
+    kept_sheet(conn, cfg, song, HOTEL_CAPO_2, tonality=tonality, capo=2)
+    other = add_song(conn, "Soda Stereo", "De Música Ligera")
+    kept_sheet(conn, cfg, other, GM_SHEET, tonality="Gm", capo=None)
+    text = ("# my versions\n[version]\n"
+            f'"{HOTEL_SONG}" = "{entry}"  # two up\n'
+            '"Soda Stereo - De Música Ligera" = "key=A"  # A major, on a G minor sheet\n')
+    ovr = overrides(cfg, text)
+    render(conn, cfg, ovr)
+    written = cfg.overrides_file.read_text(encoding="utf-8")
+    assert written == text.replace(entry, now)
+    assert info_json(cfg, song)["render"]["transpose"] == 2
+    assert viewer_data(viewer_of(cfg, song))["start"].startswith("t=2&capo=2")
+    # once: run again, with the copy read before or the file, it changes nothing
+    render(conn, cfg, ovr)
+    render(conn, cfg, load_overrides(cfg.overrides_file))
+    assert cfg.overrides_file.read_text(encoding="utf-8") == written
+    assert info_json(cfg, song)["render"]["transpose"] == 2
+
+
+def test_an_own_version_the_minor_reading_plays_where_it_did_is_left_as_written(conn, cfg):
+    # "A" over Am F C G with capo 9: C major shapes before, A minor now, relative keys, whose notes the version's key
+    # reads either way: it plays where it did, and its entry stays
+    song = add_song(conn, "Eagles", "Hotel California")
+    kept_sheet(conn, cfg, song, "[Verse]\n[tab][ch]Am[/ch]   [ch]F[/ch]   [ch]C[/ch]   [ch]G[/ch]   [ch]Am[/ch]\n"
+               "made up words to sing[/tab]\n", tonality="A", capo=9)
+    text = f'[version]\n"{HOTEL_SONG}" = "key=D&capo=9"\n'
+    render(conn, cfg, overrides(cfg, text))
+    assert cfg.overrides_file.read_text(encoding="utf-8") == text
+    assert info_json(cfg, song)["render"]["transpose"] == 2
+
+
+def test_an_own_version_already_rewritten_by_a_pass_cut_short_is_left_alone(conn, cfg):
+    # The file written, the pass stopped before it noted so: the next pass finds nothing to rewrite
+    song = add_song(conn, "Eagles", "Hotel California")
+    kept_sheet(conn, cfg, song, HOTEL_CAPO_2, tonality="A", capo=2)
+    text = f'[version]\n"{HOTEL_SONG}" = "key=Bm&capo=2"\n'
+    render(conn, cfg, overrides(cfg, text))
+    assert cfg.overrides_file.read_text(encoding="utf-8") == text
+    assert info_json(cfg, song)["render"]["transpose"] == 2
+
+
 def test_an_auto_sheet_beside_the_human_one_takes_the_songs_version_but_its_shapes_and_swaps(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
     auto_sheet(conn, cfg, song)

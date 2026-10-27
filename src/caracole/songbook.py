@@ -853,7 +853,10 @@ def render_songbooks(conn: sqlite3.Connection, cfg: Config, overrides: Overrides
     A songbooks.toml that can't be read is ``error``, logged, and leaves every songbook's files as
     they are. A songbook whose file can't be made is logged and ``failed``; the others go on.
     """
+    from caracole.render import own_versions_upgraded
+
     stats = SongbookStats()
+    overrides = own_versions_upgraded(conn, cfg, overrides)  # each song in its own version as it plays now
     only_keys = None if only is None else {name_key(n) for n in ([only] if isinstance(only, str) else only)}
     try:
         books = load_songbooks(songbooks_file(cfg.library_dir))

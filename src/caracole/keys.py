@@ -270,6 +270,21 @@ def _human_key(conn: sqlite3.Connection, library_dir: Path, kept: Mapping[str, K
     return sheet_key(raw, markup, capo)
 
 
+def letter_alone(conn: sqlite3.Connection, library_dir: Path, song: Song) -> str | None:
+    """The letter the song's human sheet names its key by alone, as ``sheet_key`` finds the tab's word (UG's
+    ``tonality_name``, else the key its markup states) and caracole writes a key ("A", "Bb"), which caracole read as
+    its major key, whatever the chords, until ``INFO_VERSION`` 2; None for a key named with its mode, or none."""
+    kept = {f.name: f for f in kept_files(conn, song.id)}
+    human = kept.get(HUMAN_SHEET)
+    if human is None:
+        return None
+    named = _named_in(get_version(conn, human.version_id).raw)
+    if named is None:
+        markup, _ = _markup(library_dir, kept.get(SHEET_DOC), human)
+        named = _stated(markup) if markup is not None else None
+    return named[0] if named is not None and named[1] else None
+
+
 def sheet_key(raw: Mapping[str, Any], markup: str | None, capo: int | None = None) -> SongKey | None:
     """The key of a human sheet from its version's data (``raw``), its ``markup`` and its ``capo``: UG's
     ``tonality_name``, else the key the markup states, else the one its chords suggest. A key named by

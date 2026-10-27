@@ -133,6 +133,7 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import re
 import sqlite3
 import struct
 import subprocess
@@ -146,7 +147,7 @@ from functools import lru_cache
 from itertools import pairwise
 from pathlib import Path
 from typing import Any, Literal
-from urllib.parse import parse_qsl, quote
+from urllib.parse import parse_qsl, quote, unquote
 
 from caracole import progressions
 from caracole.autochords.merge import AUTO_MARKER
@@ -167,9 +168,9 @@ from caracole.library import (
     write_atomic,
     write_info,
 )
-from caracole.keys import SongKey, sheet_capo, sheet_key, sheet_keys
+from caracole.keys import SongKey, letter_alone, sheet_capo, sheet_key, sheet_keys
 from caracole.normalize import clean_title
-from caracole.overrides import Overrides, OverridesError, load_overrides
+from caracole.overrides import Overrides, OverridesError, add_version, load_overrides
 from caracole.pdf_fonts import ROLES, PdfFonts, in_folder, metrics
 from caracole.pdf_text import PDF_TEXT_VERSION, STYLE_FILE, pdf_text
 from caracole.sheet_versions import SheetVersion, as_data, in_library, sheet_pins, tab_of, version_names
@@ -191,7 +192,7 @@ from caracole.viewer.harptab import parse as parse_tab
 from caracole.viewer.harptab_page import build_harmonica_viewer
 from caracole.viewer.page import viewer_key
 from caracole.viewer.sheet import parse_sheet
-from caracole.viewer.theory import Key
+from caracole.viewer.theory import Key, key_name
 from caracole.viewer.version import (
     KeyVersion,
     Version,
@@ -554,6 +555,7 @@ def render_all(
     font, font_problem = _cjk_font(cfg.cjk_font)
     fonts = _usable_pdf_fonts(cfg)
     handed = False
+    overrides = own_versions_upgraded(conn, cfg, overrides)
     songs = list_songs(conn) if song_ids is None else _songs_of(conn, song_ids)
     for n, listed in enumerate(songs):
         if n and between is not None and between():
@@ -923,6 +925,113 @@ def own_version(overrides: Overrides, song: Song, cho: str, key: str | None, key
     except Exception:  # a sheet the viewer's code can't read (a bug) never stops the song's other files
         log.warning("%s: cannot place it in its own version", song.display, exc_info=True)
         return Version()
+
+
+OWN_VERSIONS_KEY = "keys:own_versions"  # kv: the [version] entries rewritten for a letter alone read minor
+
+
+def own_versions_upgraded(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> Overrides:
+    """``overrides`` with the song's own versions as they play now, after the upgrade that reads a tab's letter
+    alone as its minor key where the chords say so (``keys.INFO_VERSION`` 2): once, overrides.toml's ``[version]``
+    entries kept by a major key named by its letter alone (``key=B&capo=2``), made while caracole read such a sheet
+    as major, are rewritten in the minor key that plays the sheet where they did (``key=Bm&capo=2``: its parallel
+    minor; for a tab that named the sound, a capo above the shapes, the minor key as far from the shapes as the
+    entry was), the rest of each entry, and of the file, as it was (``overrides.add_version``). Only an entry that no
+    longer plays where it did is rewritten: one whose key's notes read the sheet the same either way (a relative
+    minor) stays. kv ``keys:own_versions`` records what was rewritten, ``{song key: [entry, new entry]}``, so a copy
+    of the file read before (a caller's ``overrides``) is played as the file is now; with no record, the file is
+    read again and rewritten first. A file that can't be read or written leaves no record: the next pass tries
+    again, and finds an entry rewritten already (a pass cut short) to be as it should.
+
+    Called before every song's PDFs and viewers (``render_all``) and songbooks (``songbook.render_songbooks``), which
+    play each song in its own version."""
+    record = kv_get_json(conn, OWN_VERSIONS_KEY)
+    if not isinstance(record, Mapping):
+        rewritten = _rewrite_own_versions(conn, cfg)
+        if rewritten is None:
+            return overrides
+        record = {"rewritten": rewritten}
+        kv_set_json(conn, OWN_VERSIONS_KEY, record)
+    rewritten = record.get("rewritten")
+    if not isinstance(rewritten, Mapping):
+        return overrides
+    version = dict(overrides.version)
+    for key, pair in rewritten.items():
+        if isinstance(pair, list) and len(pair) == 2 and version.get(key) == pair[0] and isinstance(pair[1], str):
+            version[key] = pair[1]
+    return overrides if version == dict(overrides.version) else replace(overrides, version=version)
+
+
+def _rewrite_own_versions(conn: sqlite3.Connection, cfg: Config) -> dict[str, list[str]] | None:
+    """Rewrite the ``[version]`` entries ``own_versions_upgraded`` rewrites, in overrides.toml as it is now; return
+    what was rewritten, or None when the file can't be read or written."""
+    try:
+        current = load_overrides(cfg.overrides_file)
+    except (OverridesError, OSError) as e:
+        log.info("overrides.toml can't be read (%s): its own versions are looked at again next time", e)
+        return None
+    songs = {s.key: s for s in list_songs(conn)} if current.version else {}
+    rewritten: dict[str, list[str]] = {}
+    for key, entry in current.version.items():
+        song = songs.get(key)
+        new = _minor_entry(conn, cfg, song, entry) if song is not None else None
+        if new is None:
+            continue
+        try:
+            add_version(cfg.overrides_file, song.display, new)
+        except (OverridesError, OSError) as e:
+            log.warning("%s: can't write its own version in its minor key (%s): tried again next time", song.display, e)
+            return None
+        log.info("%s: your version %s is %s now, as its sheet is read in a minor key", song.display, entry, new)
+        rewritten[key] = [entry, new]
+    return rewritten
+
+
+_LETTER = re.compile(r"[A-G][#b]?")
+
+
+def _minor_entry(conn: sqlite3.Connection, cfg: Config, song: Song, entry: str) -> str | None:
+    """The song's ``[version]`` ``entry`` in the minor key that plays its human sheet where it played while caracole
+    read the tab's letter alone as major (``own_versions_upgraded``), or None for one to leave as it is."""
+    parts = entry.split("&")
+    at = next((n for n, part in enumerate(parts) if part.partition("=")[0] == "key"), None)
+    if at is None or "t" in {part.partition("=")[0] for part in parts}:
+        return None
+    named = parts[at].partition("=")[2]
+    try:
+        kept = key_version(entry)
+        if kept is None or not _LETTER.fullmatch(unquote(named, errors="strict")):
+            return None  # a key named with its mode: as named
+        letter = letter_alone(conn, cfg.library_dir, song)
+        human = next((f for f in kept_files(conn, song.id) if f.name == HUMAN_SHEET), None)
+        if letter is None or human is None:
+            return None
+        text = _sheet_cho(song, _human_sheet(conn, cfg.library_dir, human))
+        before, now = viewer_key(text, letter, "tab"), viewer_key(text, *_key_of(sheet_keys(conn, cfg.library_dir,
+                                                                                               song)[0]))
+        if before is None or now is None or (before.mode, now.mode) != ("ionian", "aeolian"):
+            return None
+        capo = parse_sheet(text).capo
+        was = in_key(kept, text, key=before, capo_sheet=capo)
+        if _where(in_key(kept, text, key=now, capo_sheet=capo)) == _where(was):
+            return None
+        tonic = (kept.key.tonic + now.tonic - before.tonic) % 12
+        parts[at] = f"key={named}m" if tonic == kept.key.tonic else f"key={key_name(Key(tonic, 'aeolian'))}"
+        new = "&".join(parts)
+        moved = key_version(new)
+        if moved is None or _where(in_key(moved, text, key=now, capo_sheet=capo)) != _where(was):
+            return None
+        return new
+    except (RenderError, ValueError, UnicodeDecodeError):
+        return None
+    except Exception:  # a sheet the viewer's code can't read (a bug) leaves the entry as it is
+        log.warning("%s: can't tell where its own version played", song.display, exc_info=True)
+        return None
+
+
+def _where(v: Version) -> tuple[int, str | None, int | None, str | None]:
+    """Where a version plays the sheet: its move, its mode, its capo and its instrument."""
+    return v.t, v.mode, v.capo, v.inst
 
 
 def _own(overrides: Overrides, song: Song) -> Version | KeyVersion:
