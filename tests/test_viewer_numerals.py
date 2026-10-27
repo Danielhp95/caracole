@@ -16,7 +16,7 @@ import re
 import pytest
 
 from caracole.viewer import build_viewer, harmony
-from caracole.viewer.harmony_tables import SHIFTS, fill, shifted
+from caracole.viewer.harmony_tables import SHIFTS, fill, page_name, pitch_class, shifted
 from caracole.viewer.theory import MODES, Key, map_chord, parse_chord, spelling
 
 from helpers.browser import in_chromium
@@ -28,6 +28,9 @@ IN_C = ("{title: In C}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n"
         "{comment: Bridge}\n[D]Five [G]six [D]seven [C]eight\n[Bb]Borrowed [F]from the [C]minor\n")
 IN_A_MINOR = ("{title: In A minor}\n{artist: Synthetic}\n{key: Am}\n{comment: Verse}\n"
               "[Am]Down the [G]stairs we [F]go and [E7]on\n[Am]down the [G]stairs we [F]go and [E7]on\n")
+# Amazing Grace's chords, made up: D7 is V7, going home; G7 is V7/IV, going to C, with an F from outside the key.
+IN_G = ("{title: In G}\n{artist: Synthetic}\n{key: G}\n{comment: Verse}\n"
+        "[G]Made up [G7]words to [C]sing a[G]long\n[G]made up [Em]words to [D7]sing a[G]long\n")
 NO_KEY = "{title: Riffs}\n{artist: Synthetic}\n{comment: Verse}\n[N.C.]Made up [Xq]words\n"
 LONG = "{title: Long}\n{artist: Synthetic}\n{key: G}\n" + "".join(
     f"{{comment: Verse {n}}}\n[G]Synthetic line [D]number {n} [Em]made up to [C]scroll by\n[G/B]and [Am]on it [F]goes\n\n"
@@ -126,9 +129,9 @@ def test_the_data_carries_no_glossary():
 
 def test_each_chord_and_each_alternative_has_its_notes_and_its_scale_for_a_solo():
     data = data_of(build_viewer(IN_C))
-    assert data["tones"]["C"] == "C E G|R 3 5"
-    assert data["tones"]["D"] == "D F# A|R 3 5"  # C, two semitones up
-    assert data["tones"]["Bb"] == "Bb D F|R 3 5"
+    assert data["tones"]["C"] == "C E G|R 3 5|0 4 7"
+    assert data["tones"]["D"] == "D F# A|R 3 5|2 6 9"  # C, two semitones up
+    assert data["tones"]["Bb"] == "Bb D F|R 3 5|10 2 5"
     word = data["scaleWords"][data["solo"]["ionian"][2]]
     assert word == "minor" and data["scales"]["A minor"] == "A minor|A B C D E F G"  # Am in C: A Aeolian
     assert data["scales"]["B minor"] == "B minor|B C# D E F# G A"
@@ -137,6 +140,25 @@ def test_each_chord_and_each_alternative_has_its_notes_and_its_scale_for_a_solo(
     name = names[alt[0]] + alt[1] + ("" if alt[2] is None else "/" + names[alt[2]])
     assert name in data["tones"] and len(data["altSolo"]["ionian"][0]) == len(data["alts"]["ionian"][0])
     assert data["altNumerals"]["ionian"][0][0][0] in "hapbslo"
+
+
+def test_tones_carry_each_notes_pitch_class():
+    # A third field, for the numeral's tooltip: each note's pitch class, so that the page draws the chord on a circle
+    # and a keyboard by looking them up. The card's notes read the first two fields, as before.
+    data = data_of(build_viewer(IN_G))
+    assert data["tones"]["D7"] == "D F# A C|R 3 5 ♭7|2 6 9 0"
+    assert data["tones"]["G7"] == "G B D F|R 3 5 ♭7|7 11 2 5"
+    for chord in {c for c in chords_of(IN_G) if c is not None}:
+        for s in SHIFTS:
+            shown = Key((7 + s) % 12, "ionian")
+            notes, steps, pcs = data["tones"][page_name(chord, spelling(shown), s)].split("|")
+            found = harmony.chord_tones(shifted(chord, s), shown)
+            assert notes.split(" ") == [n for n, _ in found] and steps.split(" ") == [t for _, t in found]
+            assert [int(pc) for pc in pcs.split(" ")] == [pitch_class(n) for n, _ in found], (chord, s)
+            assert {int(pc) for pc in pcs.split(" ")} == shifted(chord, s).pitch_classes, (chord, s)
+    for named in data["tones"].values():  # every chord the page can name, its alternatives too
+        notes, _, pcs = named.split("|")
+        assert [int(pc) for pc in pcs.split(" ")] == [pitch_class(n) for n in notes.split(" ")], named
 
 
 def test_a_song_with_no_key_has_no_numerals_but_its_chords_notes():
