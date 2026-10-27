@@ -41,7 +41,8 @@ with the same key.
    `caracole serve --address 0.0.0.0` (see docs/usage.md). It answers to any IP address. To use a name, add it
    with `--allow-host`.
 2. On the phone, open Settings (the first start opens it). Type the address, for example
-   `http://192.168.1.20:8737`. Without a scheme, `http://` is assumed.
+   `http://192.168.1.20:8737`. Without a scheme, `http://` is assumed. An IPv6 address goes in brackets when it
+   has a port (`[fd7a:115c::1]:8737`); typed without them, the app adds them.
 3. Tap **Test**. It answers "caracole answered: 312 files, 41 MB", or says what went wrong. Then tap **Sync now**.
 
 **Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network. First it checks that caracole answers

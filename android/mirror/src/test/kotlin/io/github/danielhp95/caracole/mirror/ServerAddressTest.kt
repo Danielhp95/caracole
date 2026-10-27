@@ -15,6 +15,19 @@ class ServerAddressTest {
     }
 
     @Test
+    fun `an IPv6 address typed without its brackets gets them`() {
+        assertEquals("http://[fd7a:115c:a1e0::1234]", ServerAddress.parse("fd7a:115c:a1e0::1234").toString())
+        assertEquals("http://[fd7a:115c::1]", ServerAddress.parse("http://fd7a:115c::1/").toString())
+        assertEquals("http://[::1]", ServerAddress.parse("::1").toString())
+        assertEquals("http://[fe80::1%25wlan0]", ServerAddress.parse("fe80::1%25wlan0").toString())
+        // With its brackets, it may have a port; IPv4 addresses and names keep theirs.
+        assertEquals("http://[fd7a:115c::1]:8737", ServerAddress.parse("http://[fd7a:115c::1]:8737/").toString())
+        assertEquals("http://192.168.1.20:8737", ServerAddress.parse("192.168.1.20:8737").toString())
+        assertEquals("http://my-server:8737", ServerAddress.parse("my-server:8737").toString())
+        assertFailsWith<SyncError.BadAddress> { ServerAddress.parse("fd7a::zz::1") }
+    }
+
+    @Test
     fun `an address the app can't use is refused in words`() {
         assertFailsWith<SyncError.NoAddress> { ServerAddress.parse("   ") }
         for (text in listOf("ftp://server", "http://", "http://user:pw@server:8737", "server name with spaces",
