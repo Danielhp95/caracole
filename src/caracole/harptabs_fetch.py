@@ -11,8 +11,10 @@ What the site looks like is in harptabs.py. A pass:
    sitemap lists under one of the song's artists' names (never a request). Newest first.
 3. **The candidates**, at most ``CANDIDATES``, lowest id first, each read at its page (cached
    for good, as every page is), for its artist, which is kept only when it is one of the
-   song's (``normalize.name_forms``, as Ultimate Guitar's artists are compared). Of those
-   that are, the most viewed is kept (then the best rated, then the first posted).
+   song's (``normalize.name_forms``, as Ultimate Guitar's artists are compared): a page of no
+   known artist ("by Unknown", ``harptabs.parse_tab_page``) is passed over as another
+   artist's is. Of those that are, the most viewed is kept (then the best rated, then the
+   first posted).
 4. **The tab** is kept as the song's lowest free ``harmonica-N.txt`` (``inbox.harmonica_number``),
    the page's ``<pre>`` as it is, under a version of provider ``harptabs`` and kind
    ``harmonica`` (its page the URL; its key, harp, difficulty, views and rating in ``raw``), and
@@ -21,7 +23,7 @@ What the site looks like is in harptabs.py. A pass:
 
 A tab you picked (``[harptabs]`` in overrides.toml: caracole serve's Get it on a harptabs.com
 row, ``caracole get --harptabs``) is read in place of the candidates, for a song that hasn't kept
-that tab yet, and kept whoever its page names as the artist: beside the song's other harmonica
+that tab yet, and kept whoever its page names as the artist, or none: beside the song's other harmonica
 tabs, if it has any, never in place of one.
 
 Only songs in wanted.txt are looked up (and a lookup's song): never a page for a song nobody
@@ -197,8 +199,11 @@ def _forms(song: Song) -> list[str]:
     return [form for name in song.artists or [song.artist] for form in name_forms(name) if form]
 
 
-def same_artist(song: Song, artist: str) -> bool:
-    """Whether the artist a tab page names is one of the song's: they share a form, hyphens aside."""
+def same_artist(song: Song, artist: str | None) -> bool:
+    """Whether the artist a tab page names is one of the song's: they share a form, hyphens aside. A page of no
+    known artist ("by Unknown": None) is no one's."""
+    if artist is None:
+        return False
     return not {compact(f) for f in _forms(song)}.isdisjoint(compact(f) for f in name_forms(artist) if f)
 
 

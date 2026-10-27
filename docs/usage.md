@@ -1248,9 +1248,10 @@ and cache.
   artist's name; then the pages of the tabs of that title are read, lowest id
   first, eight at most, each for the artist it names, and of those by your
   song's artist the most viewed is kept, as the song's `harmonica-N.txt`, the
-  page's tab as it is: hole numbers over the lyrics. A song none of whose tabs
-  is by its artist is asked about again after 30 days; a song with an error,
-  next run. It prints `harptabs.com: 2 tried, 1 harmonica tab kept, 1 not on
+  page's tab as it is: hole numbers over the lyrics. A tab of no known artist
+  ("by Unknown") is no one's, as a tab by another artist is. A song none of
+  whose tabs is by its artist is asked about again after 30 days; a song with an
+  error, next run. It prints `harptabs.com: 2 tried, 1 harmonica tab kept, 1 not on
   harptabs.com, 0 errors`, after `Index: 1 sitemap read.` when it read it. A
   song that has a harmonica tab gets no other, and no file is ever replaced.
   With harptabs.com turned off it asks nothing and says so. A cooldown, a block

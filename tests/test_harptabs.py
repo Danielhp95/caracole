@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from helpers.harptabs_site import BASE, fixture, tab_page
 
@@ -70,15 +72,42 @@ def test_the_header_names_the_artist_where_the_json_ld_doesnt():
     assert parse_tab_page(page).artist == "The Beatles" and parse_tab_page(page).title == "Yesterday"
 
 
+def test_a_tab_page_by_unknown_parses_and_names_no_artist():
+    # Some tabs are of no known artist: no composer in the JSON-LD, "by Unknown" in the header, linking nowhere.
+    tab = parse_tab_page(fixture("tab_29910_knockin-on-heavens-door.html"))
+    assert (tab.title, tab.artist, tab.key, tab.views) == ("KNOCKIN ON HEAVENS DOOR...", None, "C", 2_000)
+    assert tab.body.startswith("ARMONICA C\n") and "(3)la (3)lo" in tab.body
+    assert tab.raw()["artist"] is None
+
+
+@pytest.mark.parametrize("artist, path", [
+    ("Unknown", "artist/1/unknown"), ("?", "artist/4"), ("unknown", "artist/9/x"),
+])
+def test_the_sites_catch_all_artist_is_no_artist(artist, path):
+    assert parse_tab_page(tab_page("Yesterday", artist, artist_path=path)).artist is None
+
+
+def test_an_artist_the_header_names_with_no_link_is_the_artist():
+    page = tab_page("Yesterday", "").replace('<a class="font-medium text-fg transition-colors hover:text-accent-text" '
+                                             'href="/artist/1/someone"></a>',
+                                             '<span class="font-medium text-fg">The Beatles</span>')
+    assert parse_tab_page(page).artist == "The Beatles"
+
+
 @pytest.mark.parametrize("views, count", [("57k", 57_000), ("974", 974), ("2.5M", 2_500_000), ("", 0), ("lots", 0)])
 def test_views_are_counted_as_the_chip_writes_them(views, count):
     assert parse_tab_page(tab_page("Yesterday", "The Beatles", views=views)).views == count
 
 
+_BY_LINE = re.compile(r"<p[^>]*>by<!-- --> .*?</p>")
+
+
 @pytest.mark.parametrize("html", [
     "<html><body><h1>Not here</h1></body></html>",  # no tab
     tab_page("Yesterday", "The Beatles", body="   \n"),  # an empty one
-    tab_page("Yesterday", "").replace('href="/artist/1/someone"></a>', ""),  # no artist anywhere
+    _BY_LINE.sub("", tab_page("Yesterday", "")),  # no artist anywhere, nor a header saying it is unknown
+    tab_page("Yesterday", "").replace('href="/artist/1/someone"></a>', 'href="/artist/1/someone"> </a>'),  # "by" no one
+    _BY_LINE.sub("", fixture("tab_29910_knockin-on-heavens-door.html")),
 ])
 def test_a_page_without_a_tab_or_an_artist_is_an_error_never_no_tab(html):
     with pytest.raises(HarpTabsParseError):

@@ -1,8 +1,9 @@
 """A fake harptabs.com behind a real ``PoliteClient``.
 
 The pages are the ones caracole's own user agent got on 27 October 2026, in tests/fixtures/harptabs/:
-robots.txt, the sitemap trimmed to 17 of its 37,598 URLs (no ETag, as the live one sends none), two
-tab pages trimmed to their head, header, chips and tab (Piano Man's lyric lines synthetic), and two
+robots.txt, the sitemap trimmed to 17 of its 37,598 URLs (no ETag, as the live one sends none), three
+tab pages trimmed to their head, header, chips and tab (Piano Man's lyric lines synthetic; Knockin' on
+Heaven's Door's, 29910, a tab "by Unknown", its words synthetic, which no fake site serves unasked), and two
 artist pages trimmed to their header and a few cards (Billy Joel's, 7 of the 30 it lists, and the
 site's catch-all "?"). Other tab pages are made from Piano Man's (:func:`tab_page`), other artist
 pages from Billy Joel's (:func:`artist_page`).

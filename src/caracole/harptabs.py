@@ -21,9 +21,11 @@ user agent, as everywhere else:
   artists, and one song may have several tabs (the intro, the whole song).
 - **A tab page** is server-rendered: the title and the artist in its JSON-LD
   (``MusicComposition``: ``name``, ``composer.name``) and in its header ("by billy joel", a
-  link to the artist's page); the harp's key ("Key C", a link to ``/search?key=``), the
+  link to the artist's page). A tab of no known artist (tabs 28841 and 29910) has no
+  ``composer``, and its header says "by Unknown", linking nowhere: a page of no artist, never
+  one that won't parse. Its chips: the harp's key ("Key C", a link to ``/search?key=``), the
   harp's type ("Diatonic", ``/search?harp=``, not on every page), the difficulty, the views
-  ("1.1M") and the rating, each a chip; and the tab in the one ``<pre>``, hole numbers ("6",
+  ("1.1M") and the rating; and the tab in the one ``<pre>``, hole numbers ("6",
   blow; "-5", draw) over the lyrics. Its footer: "© Copyright 2004–2026 Harptabs.com · All
   rights reserved."
 - **An artist page** (``/artist/{id}/{slug}``, which robots.txt allows) is server-rendered too: the
@@ -55,7 +57,7 @@ from typing import Any, NamedTuple
 from selectolax.lexbor import LexborHTMLParser, LexborNode
 
 from caracole.http import ProviderError
-from caracole.normalize import clean_title, identity_key, romanize, slug_key, ug_slug_key
+from caracole.normalize import clean_title, identity_key, placeholder_artist, romanize, slug_key, ug_slug_key
 
 PROVIDER = "harptabs"
 HOST = "www.harptabs.com"
@@ -136,12 +138,12 @@ def song_key(title: str) -> str:
 
 @dataclass(frozen=True)
 class HarpTab:
-    """A tab page: its title and artist as the site writes them, the tab (``body``, the ``<pre>``'s text),
-    and its chips: the harp's key ("C"), its type ("Diatonic"), the difficulty, the views and the rating
-    (None when the page shows none)."""
+    """A tab page: its title and artist as the site writes them (``artist`` None for a tab of no known artist,
+    "by Unknown"), the tab (``body``, the ``<pre>``'s text), and its chips: the harp's key ("C"), its type
+    ("Diatonic"), the difficulty, the views and the rating (None when the page shows none)."""
 
     title: str
-    artist: str
+    artist: str | None
     body: str
     key: str | None = None
     harp: str | None = None
@@ -203,8 +205,19 @@ def _rating(text: str | None) -> float | None:
     return value if math.isfinite(value) and 0 <= value <= 5 else None
 
 
+def _by_line(tree: LexborHTMLParser) -> str:
+    """The artist the header's line under the title names ("by Unknown · posted by …"): its first element's
+    text, a link to the artist's page or not; "" with no such line."""
+    line = tree.css_first("header h1 + p")
+    if line is None or not _text(line).startswith("by "):
+        return ""
+    return next((_text(node) for node in line.iter() if node.tag in ("a", "span")), "")
+
+
 def parse_tab_page(html: str | bytes, url: str | None = None) -> HarpTab:
-    """A tab page's title, artist, tab and chips; ``HarpTabsParseError`` for a page without a tab or an artist."""
+    """A tab page's title, artist, tab and chips; ``HarpTabsParseError`` for a page without a tab, a title, or an
+    artist named. A page that names the site's catch-all ("Unknown", "?": ``normalize.placeholder_artist``) is of
+    no artist: ``artist`` None."""
     if isinstance(html, bytes):
         html = html.decode("utf-8", errors="replace")
     tree = LexborHTMLParser(html)
@@ -215,13 +228,13 @@ def parse_tab_page(html: str | bytes, url: str | None = None) -> HarpTab:
     work = _composition(tree)
     composer = work.get("composer")
     artist = str(composer.get("name") or "").strip() if isinstance(composer, dict) else ""
-    artist = artist or _text(tree.css_first('header a[href^="/artist/"]'))
+    artist = artist or _text(tree.css_first('header a[href^="/artist/"]')) or _by_line(tree)
     title = str(work.get("name") or "").strip() or _text(tree.css_first("header h1"))
     if not artist or not title:
         raise HarpTabsParseError("no title or artist on the page", url=url)
     key = _chip(tree, "key")
     return HarpTab(
-        title=title, artist=artist, body=body.strip("\n") + "\n",
+        title=title, artist=None if placeholder_artist(artist) else artist, body=body.strip("\n") + "\n",
         key=key.removeprefix("Key").strip() or None if key else None,
         harp=_chip(tree, "harp"), difficulty=_chip(tree, "difficulty"),
         views=_views(_counted(tree, "lucide-eye")), rating=_rating(_counted(tree, "lucide-star")),
