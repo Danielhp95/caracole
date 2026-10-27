@@ -869,10 +869,10 @@ def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, c
 
 # --- Remove ---------------------------------------------------------------------------------------------
 
-# The library in numbers, as the masthead, the buttons above the list and the count under them say it.
+# The library in numbers, as the masthead, the Filter panel's Status and the count over the list say it.
 COUNTS = """(() => ({
   summary: Array.from(document.querySelectorAll("#summary .stat")).map((s) => s.textContent),
-  chips: Object.fromEntries(Array.from(document.querySelectorAll(".chip[data-show]"))
+  chips: Object.fromEntries(Array.from(document.querySelectorAll("#filter-panel [data-show]"))
     .map((c) => [c.dataset.show, c.querySelector(".n").textContent])),
   count: document.getElementById("count").textContent }))()"""
 
@@ -1099,7 +1099,7 @@ def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_
     runner = FakeCaracole(cfg)
     url = serve(runner, "(() => {})();\n", timers=QUICK)
     item = f'#list [data-id="{creep.id}"]'
-    chip = "document.querySelector('.chip[data-show=review]')"
+    chip = "document.querySelector('#filter-panel [data-show=review]')"
     with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
         page.open(url + left)
         assert page.js(COUNTS)["chips"]["review"] == "1" and page.js(f"{chip}.hidden") is False
@@ -1108,8 +1108,8 @@ def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_
         page.click(f"{item} form.remove button")
         assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
         counts, hidden = page.js(COUNTS), page.js(f"{chip}.hidden")
-        page.click(".chip[data-show=all]")
-        page.js(f"{chip}.click()")  # pressed all the same
+        page.js("document.querySelector('#filter-panel [data-show=all]').click()")
+        page.js(f"{chip}.click()")  # chosen all the same
         listed = page.js("Array.from(document.querySelectorAll('#list article h3')).map((h) => h.textContent)")
         count = page.js("document.getElementById('count').textContent")
     assert counts["summary"] == ["1 song", "0 found", "1 wanted"]

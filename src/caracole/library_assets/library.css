@@ -58,7 +58,7 @@
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 .results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
-/* What the status buttons, the Key menu and an artist's chip leave of your songs, hidden with them while the sites'
+/* What the filters (the Filter panel's, an artist's) leave of your songs, hidden with the toolbar while the sites'
    results show: "Your songs here: wanted", and Show all of yours. */
 .filtered { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0; color: var(--muted);
   font-size: .85rem; }
@@ -86,28 +86,6 @@
 .command { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .command code { flex: 1 1 240px; padding: 8px 10px; user-select: all; }
 .empty + .btn.primary { margin-top: 4px; }
-.toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; }
-/* The buttons, then Select, Key and Sort: on a phone one row that scrolls sideways (library-screens.css); from 720px
-   they wrap, the menus at the right. Buttons out of sight: the row fades where it goes on, so it says it scrolls
-   (no fade, no more). */
-.chips { display: flex; flex: 1 1 0; flex-wrap: wrap; gap: 8px; min-width: 0; }
-.toolbar.more-end { --fade-start: #000; --fade-end: transparent; }
-.toolbar.more-start { --fade-start: transparent; }
-.toolbar.more-start, .toolbar.more-end {
-  -webkit-mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000));
-  mask-image: linear-gradient(to right, var(--fade-start, #000), #000 28px, #000 calc(100% - 28px), var(--fade-end, #000)); }
-.chip { flex: none; }
-.chip { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; border-radius: 999px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: .9rem;
-  cursor: pointer; }
-.chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
-.chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--bg); }
-.chip[aria-pressed="true"] .n { color: inherit; opacity: .75; }
-.chip.person { border-color: var(--accent); color: var(--accent); font-weight: 600; }
-.sort { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: .9rem; }
-.controls { display: flex; flex: none; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px 12px; }
-.sort select { min-height: 40px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--control-edge);
-  background: var(--surface); color: var(--text); font: inherit; font-size: .9rem; }
 .jump { display: flex; gap: 2px; margin: 10px 0 0; padding: 2px 0; overflow-x: auto; scrollbar-width: none; }
 .jump::-webkit-scrollbar { display: none; }
 .jump button { flex: none; min-width: 36px; height: 36px; padding: 0 8px; border: 0; border-radius: 10px;

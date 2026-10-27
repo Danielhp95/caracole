@@ -407,7 +407,7 @@ def test_picks_survive_a_search_and_select_mode_works_on_a_phone(library, tmp_pa
       const input = q("#q");
       input.value = "musica";
       input.dispatchEvent(new Event("input"));
-      q(".chip[data-show=all]").click();  // the list, drawn at once (typing draws it at the next frame)
+      q("[data-show=all]").click();  // the list, drawn at once (typing draws it at the next frame)
       pick("De Música Ligera");
       q("#clear").click();  // the box empties, and the list is drawn at once
       const box = q("#list .pick").getBoundingClientRect();

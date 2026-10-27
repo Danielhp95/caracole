@@ -21,8 +21,9 @@ pinyin for Chinese ("ban ma ban ma", "banma"), and its title's initials
 ("wywh", typed whole). The page folds what you type the same way, so "musica"
 finds "Música" and "ban ma" finds 斑马，斑马.
 Of a song's key, the string holds only the mode ("minor"): the script reads a
-key typed in the box ("a minor", "f#m") and compares it, as the Key menu does,
-by the tonic's pitch class and the mode, so "Gb minor" finds "F# minor".
+key typed in the box ("a minor", "f#m") and compares it, as the Filter panel's
+Key does, by the tonic's pitch class and the mode, so "Gb minor" finds "F#
+minor".
 
 The songs are dense lines (``resultRow``'s ``dense`` form, ROWS_SCRIPT's), a
 song a line on a laptop, about thirty to its screen, two lines a song on a
@@ -1032,7 +1033,7 @@ def _haystack(texts: list[str]) -> str:
 # index.html's one stylesheet and one script: the files of library_assets/, in this order (what each one
 # is: its __init__.py). BASE_STYLE, PICKER_STYLE, ROWS_STYLE and ROWS_SCRIPT, the ones caracole serve's own
 # pages share, are importable from here too.
-STYLESHEETS = ("base.css", "picker.css", "library.css", "rows.css", "card.css", "steps.css", "library-screens.css",
+STYLESHEETS = ("base.css", "picker.css", "library.css", "filter.css", "rows.css", "card.css", "steps.css", "library-screens.css",
                "songbooks.css")
 SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "songbooks.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own

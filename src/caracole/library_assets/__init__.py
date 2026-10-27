@@ -24,7 +24,10 @@ file, and none of it loads anything from the network.
   its foot, Remove at its end. Drawn from the page's data alone: a chip or a drawer asks nothing of anyone; what a
   drawer's versions do (Use this one, Fetch them, Back to caracole's pick) library.js makes, served.
 - library.css, library-screens.css and library.js: index.html's own. library-screens.css comes
-  after rows.css, as its scroll margin and its thumb's targets are a line's too.
+  after rows.css, as its scroll margin and its thumb's targets are a line's too. filter.css, after
+  library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then
+  Filter, Sort and Select) and the panel Filter opens (``#filter-panel``, a ``<dialog>``: a popover
+  from 720 px, a sheet from the bottom on a phone), which library.js fills and opens.
 - songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds

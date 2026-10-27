@@ -439,7 +439,8 @@ class Browser:
             self.send("Input.insertText", text=character)
 
     def press(self, key: str = "Enter") -> None:
-        codes = {"Enter": 13, "Escape": 27, "Tab": 9}
+        codes = {"Enter": 13, "Escape": 27, "Tab": 9, "Home": 36, "End": 35, "ArrowLeft": 37, "ArrowUp": 38,
+                 "ArrowRight": 39, "ArrowDown": 40}
         for kind in ("keyDown", "keyUp"):
             self.send("Input.dispatchKeyEvent", type=kind, key=key, code=key, windowsVirtualKeyCode=codes[key],
                       **({"text": "\r"} if key == "Enter" and kind == "keyDown" else {}))

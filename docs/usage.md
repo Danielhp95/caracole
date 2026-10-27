@@ -1963,11 +1963,13 @@ your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
 the address remembers which (`#tab=songbooks`). Its header is short, so that on
 a phone the first song starts well within the first screen: the library's
 numbers beside its title (served, the Requests link on the line above), the
-tabs, the search box, then one row of
-buttons and menus (the status buttons, then Select, Key and Sort), which
-scrolls sideways on a phone, fading at an end where more of it is out of
-sight. The search box stays at the top as the page scrolls under it, with an
-edge to show it.
+tabs, the search box, then the toolbar: **Filter**, **Sort** and, set apart
+after a divider, **Select** (see below), at the right, one row on a phone too;
+before them, the filters on, each a tag ("Wanted ×", "Harmonica ×", "A minor
+×", "by Queen ×") that lets it go, then **Clear**, which lets them all go, never
+the search (on a phone the tags go under the buttons).
+The search box stays at the top as the page scrolls under it, with an edge to
+show it.
 
 It shows your songs as dense lines, grouped by artist: each artist's name over
 their songs, artists A to Z ("The Beatles" under B, Chinese names by their
@@ -1984,8 +1986,8 @@ needs something, one word: Wanted, Needs review when caracole isn't sure of the
 match, Not found when the offline index has no such song, or Ignored (a found
 song, nearly every one, says nothing); what it holds, a small icon each, named
 by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
-own colour, for one the audio model wrote; "Ukulele chords" for Ultimate
-Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab"), a
+own colour, for one the audio model wrote; "Ukulele chords", a ukulele, for
+Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab"), a
 harmonica tab, its lyrics and a score you filed (a phone leaves them out); its
 key, in a small box ("Am"; a screen reader hears "Key A minor (from the tab)",
 see [The song's key](#the-songs-key)); its one button, Open (Open PDF, Open
@@ -2074,7 +2076,7 @@ open, its drawer closed.
 
 An artist's name, over their songs and marked with a funnel, shows only that
 artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
-chip off. On the page `caracole serve` serves, the name searches for the artist
+tag ("by Queen ×") off. On the page `caracole serve` serves, the name searches for the artist
 instead (see below), and the funnel is a button of its own beside it ("Only
 Queen's songs"), which shows their songs alone as the name does from the
 folder. Sorted by title, or by when the songs were added, the lines stand
@@ -2083,8 +2085,8 @@ same). `#by=` in the address, an artist's name as a sheet viewer's artist line
 links to it (`index.html#by=Soda%20Stereo`), does what pressing their name does:
 from the folder, their songs alone (else the songs the name finds); served, the
 search for them. A request's line (see [caracole serve](#caracole-serve)) shows under
-the song's, a line of its own. The search, the status buttons, the Key menu,
-the sort and the letters all work on the lines, and the address remembers
+the song's, a line of its own. The search, the filters, the sort and the
+letters all work on the lines, and the address remembers
 them, as it does the rest: a bookmark opens the page as you left it. (An
 address from before, with `#view=rows` in it, opens the lines.)
 
@@ -2125,12 +2127,34 @@ initials, typed whole, find it too: "wywh" finds "Wish You Were Here", "bmbm"
 斑马斑马. It finds keys too, however a sheet spells them: "a
 minor", "F# major", "bbm", and "gb minor", which also finds the songs in F#
 minor; or "minor" for every song in a minor key. A key written as a chord, such
-as "am", also finds the names with "am" in them ("I Am the Walrus"). The
-buttons show all songs, or only those found, wanted or needing review (that
-button only while a song needs review); the Key
-menu, there once a song has a key, shows only the songs in one key, with how
-many each key has, and puts the spellings of one key together ("F# / Gb
-minor"); and you can sort by artist, by title or by when songs were added.
+as "am", also finds the names with "am" in them ("I Am the Walrus").
+**Filter** opens the filters, as a panel under it on a computer (the list
+behind it filters as you tap, with nothing to apply; a click outside it,
+Escape or Filter again closes it) and as a sheet from the bottom of a phone's
+screen (over the page dimmed, it ends in **Show 4 songs**, which closes it,
+as Escape does). Its **Status** shows all songs, or only those found, wanted
+or needing review (Review only while a song needs it), each with how many
+songs it would show, the arrow keys moving between them; **Has something
+for** shows the songs that have something for any of the instruments you
+tap: a Chord sheet (a human or an auto sheet), a Guitar tab (a Guitar Pro
+file or a text tab), Ukulele (Ultimate Guitar's Ukulele Chords), Harmonica
+(a harmonica tab) or a Score you filed, each with how many songs have it
+(one no song has, greyed, can't be tapped), and while one is on, each line's
+icon of it is in the accent (the group shows once a song has something but a
+chord sheet; the search's rows of the sites stay, whatever they are for); its
+**Key**, there once a song has a key, is Any, Major or Minor, then the twelve
+tonics in circle-of-fifths order (C G D A E B F♯ D♭ A♭ E♭ B♭ F, each named
+as your songs spell the key: C♯ for a song in C# minor), a tonic no song is on
+in the mode chosen dashed: a mode alone shows the songs in it, a tonic alone
+the songs on it in either mode, and both one key, in whichever spelling ("F#
+minor" and "Gb minor" alike); the tonic chosen, tapped again, goes. The
+address keeps an exact key as before (`#key=A%20minor`), a mode alone as
+`#mode=minor` and a tonic alone as `#tonic=E`.
+**Clear all** lets them all go, and the panel says how many songs show
+("4 songs"). Filter says how many of its filters are on (Filter 1), in the
+accent. When the filters leave no song, the list says which ("No wanted songs
+of Eagles with a harmonica tab in B minor match “hotel”."), with Show all
+(Show all 1 match), which lets them all go. **Sort** sorts by artist, by title or by when songs were added.
 Sorted by artist or title, with more than 40 songs shown, a row of letters
 jumps to the first artist under each (by title, the first song). A line under the box says what typing and Enter do.
 On the file on disk, which can ask nothing of anyone, **Enter** searches the
@@ -2157,7 +2181,7 @@ their soft border, and so does the search box. The pages `caracole serve`
 writes itself (Requests, Look up and its search box, a song's pick) do the
 same.
 
-**Select**, beside the Key menu, puts a
+**Select**, at the toolbar's end, puts a
 box at the start of each song's line: tick songs in the order they go in the
 songbook (each box shows its place, and a screen reader says it: "Pick Creep by
 Radiohead, 2nd"). A tap anywhere on a line ticks it, or unticks it: while you
@@ -3120,12 +3144,12 @@ Who can reach it, below).
 - **Search as you type.** The library page's search box filters your songs as
   you type, here as on the file, and from the third letter (the second with a
   Chinese character in it) it searches the sites too, a moment after you stop:
-  no Enter, and no button. The list and its buttons make way for the results,
-  your songs among them still keeping to the status buttons, the Key menu and
-  an artist's name you pressed, which the results' head says ("Your songs
+  no Enter, and no button. The list and its toolbar make way for the results,
+  your songs among them still keeping to the filters and an artist's name you
+  pressed, which the results' head says ("Your songs
   here: wanted · by Soda Stereo · in A minor"), with Show all of yours, which
   lets every song of yours show, there and in the list; the sites' songs are
-  what the sites have, whatever the buttons show. A progression typed as
+  what the sites have, whatever the filters show. A progression typed as
   numerals ("vi IV I V", "i bVII bVI V") or named ("andalusian", "the pop
   progression", "blues"; words of fewer than five letters, "pop" or "the road",
   are words, as "minor" alone is, and "creep" the song) finds your songs

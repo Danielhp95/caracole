@@ -120,7 +120,8 @@ Rules a change there keeps (the Invariants below are the others):
   does.
   A row for one instrument says which, a badge as a source has its mark (rows.js `instrumentBadges`: Ukulele for
   UG's Ukulele Chords, Harmonica for harptabs.com's tabs, Score for MuseScore's; a song's card's `instruments`,
-  library_page.py `instruments_of`), on both pages, and nothing is ever filtered by instrument.
+  library_page.py `instruments_of`), on both pages, and no site's row is ever filtered by instrument: the Filter panel's Has something for
+  (library.js `instOf`, a line's holds read the same way) keeps to your songs, in the list and among the results.
   harptabs.com is searched as UG's index is (`search.search_harptabs`, `/api/search`'s `harptabs_artists` and
   `harptabs`): its artists, named from their page once read (harptabs_index.py), and a song's tabs by an artist
   whose page caracole read, a song a line, the most viewed first under its "⋯" (rows.js `harpTabsOf`), each Get it
@@ -147,7 +148,7 @@ Rules a change there keeps (the Invariants below are the others):
   (`artistFilter`). A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`)
   is a plain link to `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a
   file, then writes its own address in its place (Back is the sheet). Your
-  songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
+  songs there keep to the Filter panel's filters and the artist's tag (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a
   songbook… for those alone. songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id;
   library.js knows a song gone by its removal done on the page, or by a view or a card of `/jobs.json` that names

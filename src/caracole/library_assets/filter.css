@@ -1,0 +1,121 @@
+/* The toolbar over the songs: the filters on as tags, each with its ×, and Clear, at the left; Filter, Sort and, past a
+   divider, Select at the right (select.js puts it there). On a phone the buttons are one row, the tags under it. */
+:root {
+  --pop-shadow: 0 14px 36px rgb(31 30 28 / 16%), 0 2px 6px rgb(31 30 28 / 8%);
+  --seg-on: var(--surface);
+  --accent-soft: color-mix(in srgb, var(--accent) 12%, var(--surface));
+}
+@media (prefers-color-scheme: dark) {
+  :root { --pop-shadow: 0 18px 40px rgb(0 0 0 / 55%); --seg-on: var(--raised);
+    --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
+}
+.toolbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
+.tags { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.tools { display: flex; flex: none; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
+.tool { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid
+  var(--control-edge); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit;
+  font-size: .88rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.tool:hover { border-color: var(--text); }
+.tool .glyph, .tool-menu .glyph { flex: none; width: 16px; height: 16px; }
+.tool.on { border-color: var(--accent); background: var(--accent-soft); }
+.tool.on > .glyph { color: var(--accent); }
+.filter-n { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 6px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); font-size: .74rem; font-weight: 750; line-height: 1;
+  font-variant-numeric: tabular-nums; }
+/* Sort is the native menu, drawn as a button: its glyph over its left end, its order's name the menu's own. */
+.tool-menu { position: relative; display: inline-flex; min-width: 0; }  /* on the narrowest phone, the name cut short */
+.tool-menu .glyph { position: absolute; top: 50%; left: 12px; transform: translateY(-50%); pointer-events: none; }
+.tool-menu select.tool { padding-left: 35px; -webkit-appearance: none; appearance: none; field-sizing: content;
+  min-width: 0; max-width: 100%; }
+.divider { width: 1px; height: 24px; margin: 0 2px; background: var(--border-strong); }
+.tag { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 6px 0 10px; border: 1px solid
+  color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 999px; background: var(--accent-soft);
+  color: var(--text); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
+.tag .glyph { flex: none; width: 15px; height: 15px; color: var(--accent); }
+.tag .x { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; color: var(--accent); }
+.tag .x .glyph { width: 12px; height: 12px; }
+.tag:hover .x { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.clear-filters, .clear-all { min-height: 32px; padding: 0 6px; border: 0; border-radius: 8px; background: none;
+  color: var(--accent); font: inherit; font-size: .85rem; font-weight: 650; cursor: pointer; }
+.clear-filters:hover, .clear-all:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+/* The panel Filter opens. From 720 px a popover under it, the list behind it filtering as you tap; on a phone a sheet
+   from the bottom over the page dimmed, ending in Show N songs. */
+.filter-panel { position: absolute; inset: auto; z-index: 4; width: min(400px, calc(100vw - 32px)); max-width: none;
+  max-height: none; margin: 0; padding: 14px; overflow: visible; border: 1px solid var(--border-strong);
+  border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: var(--pop-shadow); }
+.filter-panel::before { content: ""; position: absolute; top: -7px; left: calc(var(--arrow, 50%) - 6px); width: 12px;
+  height: 12px; transform: rotate(45deg); border-top: 1px solid var(--border-strong);
+  border-left: 1px solid var(--border-strong); background: var(--surface); }
+.filter-panel:modal { position: fixed; inset: auto 0 0; width: 100%; max-height: calc(100% - 24px); padding: 8px 16px
+  calc(14px + env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; border-width: 1px 0 0;
+  border-radius: 20px 20px 0 0; box-shadow: 0 -16px 40px rgb(0 0 0 / 30%); }
+.filter-panel:modal::before { display: none; }
+.filter-panel::backdrop { background: rgb(0 0 0 / 45%); }
+html.sheet-open { overflow: hidden; }
+.grab { display: none; }
+.filter-panel:modal .grab { display: block; width: 40px; height: 4px; margin: 0 auto 10px; border-radius: 4px;
+  background: var(--border-strong); }
+.fsec + .fsec { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.filter-panel:modal .fsec + .fsec { margin-top: 10px; padding-top: 10px; }
+.fhead { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 8px;
+  margin: 0 0 8px; color: var(--muted); font-size: .72rem; font-weight: 750; letter-spacing: .09em;
+  text-transform: uppercase; }
+.fhead em { font-size: .74rem; font-style: normal; font-weight: 500; letter-spacing: 0; text-transform: none; }
+/* A segmented control: one of its options, the arrow keys moving between them. */
+.seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--bg); }
+.seg [role="radio"] { display: inline-flex; flex: 1 1 0; align-items: center; justify-content: center; gap: 5px;
+  min-width: 0; min-height: 30px; padding: 0 6px; border: 0; border-radius: 7px; background: none; color: var(--muted);
+  font: inherit; font-size: .84rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.seg [role="radio"]:hover { color: var(--text); }
+.seg [aria-checked="true"] { background: var(--seg-on); color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-strong), 0 1px 2px rgb(0 0 0 / 8%); }
+.seg .n, .fchip .n { color: var(--muted); font-size: .78rem; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* What a song has something for: any of them on. */
+.fchips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fchip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 11px; border: 1px solid
+  var(--border-strong); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit;
+  font-size: .84rem; font-weight: 550; white-space: nowrap; cursor: pointer; }
+.fchip .glyph { flex: none; width: 16px; height: 16px; color: var(--muted); }
+.fchip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.fchip[aria-pressed="true"] .n, .fchip[aria-pressed="true"] .glyph { color: var(--accent); }
+.fchip:disabled { opacity: .5; cursor: default; }
+/* The twelve tonics, by the circle of fifths: one with no song in the mode chosen dashed. */
+.tonics { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; margin-top: 8px; }
+.tonics button { min-height: 32px; padding: 0; border: 1px solid var(--border-strong); border-radius: 8px;
+  background: var(--surface); color: var(--text); font: inherit; font-size: .84rem; font-weight: 650; cursor: pointer; }
+.tonics button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.tonics button:disabled { border-style: dashed; color: var(--muted); opacity: .6; cursor: default; }
+.ffoot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px;
+  padding-top: 12px; border-top: 1px solid var(--border); }
+.filter-panel .live { color: var(--muted); font-size: .84rem; font-variant-numeric: tabular-nums; }
+.filter-panel .show-n, .filter-panel:modal .live { display: none; }
+.filter-panel:modal .show-n { display: inline-flex; }
+/* While a filter of instruments is on, each line's glyph of one that is on is drawn in the accent. */
+[data-lit~="sheet"] .line-holds .glyph:is(.glyph-sheet, .glyph-ukulele),
+[data-lit~="guitar"] .line-holds .glyph.glyph-guitar,
+[data-lit~="ukulele"] .line-holds .glyph.glyph-ukulele,
+[data-lit~="harmonica"] .line-holds .glyph.glyph-harmonica,
+[data-lit~="score"] .line-holds .glyph.glyph-score { color: var(--accent); }
+@media (max-width: 719px) {
+  .tools { flex: 1 1 100%; order: -1; gap: 6px; }
+  .tools .divider { display: none; }
+  .tools .pick-toggle { margin-left: auto; }
+  .tool { gap: 6px; padding: 0 9px; }
+  .tool-menu select.tool { padding-left: 31px; }
+  .tool-menu .glyph { left: 9px; }
+  .tags { flex-basis: 100%; }
+}
+/* A thumb's targets: every control of the toolbar and of the panel. */
+@media (pointer: coarse) {
+  .tool, .tag, .clear-filters, .clear-all, .fchip, .tonics button { min-height: 44px; }
+  .seg [role="radio"] { min-height: 44px; }
+  .clear-filters, .clear-all { min-width: 44px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .filter-panel:modal { animation: sheet-up .22s ease-out; }
+  .filter-panel:modal::backdrop { animation: dim-in .22s ease-out; }
+}
+@keyframes sheet-up { from { transform: translateY(100%); } }
+@keyframes dim-in { from { opacity: 0; } }

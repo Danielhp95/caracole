@@ -26,6 +26,9 @@ const caracoleRows = (icons, does) => {
     guitar: ["M10.4 9.6c-1.6-.7-3.6-.3-4.9 1-.7.7-.9 1.6-1.4 2.1-.5.5-1.5.8-1.9 1.7-.6 1.4.2 3.1 1.5 4.4 1.3 1.3 3 2.1 " +
       "4.4 1.5.9-.4 1.2-1.4 1.7-1.9.5-.5 1.4-.7 2.1-1.4 1.3-1.3 1.7-3.3 1-4.9",
     "M7.2 16.8a1.4 1.4 0 1 0 0-2.8a1.4 1.4 0 1 0 0 2.8", "M11 13l8-8", "M17.5 3.5l3 3"],
+    // a ukulele: its round body and sound hole, a short neck
+    ukulele: ["M3.8 15a5.2 5.2 0 1 0 10.4 0a5.2 5.2 0 1 0-10.4 0", "M7.7 15a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0-2.6 0",
+      "M13 11l7-7", "M18.5 2.5l3 3"],
     // a harmonica's front: its covers, and the comb's chambers between them
     harmonica: ["M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z", "M2 10h20M2 14h20",
       "M6 10v4M10 10v4M14 10v4M18 10v4"],
@@ -38,6 +41,11 @@ const caracoleRows = (icons, does) => {
     open: ["M5 12h14", "M13 6l6 6-6 6"],
     chevron: ["M6 9l6 6 6-6"],
     search: ["M4 10.5a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0", "M15.5 15.5l5 5"],
+    // the toolbar's: Filter's sliders, Sort's lines shortening by an arrow down, Select's ticked box
+    sliders: ["M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12", "M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
+      "M8 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0", "M16 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0"],
+    sort: ["M7 4v16M3 16l4 4 4-4", "M14 6h7M14 12h5M14 18h3"],
+    select: ["M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z", "M8 12l3 3 5-6"],
     refresh: ["M20 12a8 8 0 1 1-2.34-5.66L20 8.5", "M20 3.5v5h-5"],
     book: ["M5 19.5V4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5a1.5 1.5 0 0 0 1.5 1.5H19v-3",
       "M12 7v6M9 10h6"],
@@ -77,7 +85,7 @@ const caracoleRows = (icons, does) => {
   };
   // What a song of yours holds, as its line says it (``holds``): each thing's glyph and its name. Its sheet is a chord
   // sheet, the auto one, or UG's Ukulele Chords; its guitar's, a Guitar Pro file, else a text tab.
-  const HOLDS = { sheet: ["sheet", "Chord sheet"], auto: ["sheet", "Auto sheet"], ukulele: ["sheet", "Ukulele chords"],
+  const HOLDS = { sheet: ["sheet", "Chord sheet"], auto: ["sheet", "Auto sheet"], ukulele: ["ukulele", "Ukulele chords"],
     guitar: ["guitar", "Guitar Pro"], tab: ["guitar", "Guitar tab"], harmonica: ["harmonica", "Harmonica tab"],
     lyrics: ["lyrics", "Lyrics"], score: ["score", "Score"] };
   const holdsOf = (holds) => {
