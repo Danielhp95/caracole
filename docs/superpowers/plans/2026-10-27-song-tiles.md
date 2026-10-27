@@ -71,13 +71,16 @@ the main checkout's `.superpowers/brainstorm/2818486-1793122579/content/song-lin
   - `test_keep_more_stops_at_a_block_and_keeps_what_it_kept`: the 2nd page answers 403: the 1st is kept and
     rendered, `record_block` cooled UG, exit 0.
   - `test_keep_more_with_nothing_left_sends_nothing`: every version kept: says so, no request, exit 0.
+  - `test_keep_more_notes_the_versions_it_cant_keep`: a page with no sheet text: noted in `unkeepable`, so a
+    second run sends no request for it.
   - `test_keep_more_progress_counts_in_the_version_stage`: `--progress` lines: `version` done with detail
     "kept 3 of 10", then `pdf`, `pages`, `done` with `requests == {"ug": 3}`.
 - [ ] **Step 2: Run them**: `nix develop -c pytest -q tests/test_commands_versions.py -k keep_more` → FAIL
   (no such option).
 - [ ] **Step 3: Implement `keep_more`**: one client (`make_client(cfg, conn, "ug", lookup_run_id(now),
-  interactive=True)`) for the whole loop; candidates `[v for v in in_library(...) if not (v.kept or v.chosen or
-  v.gone) and int(v.tab_id) not in overrides.block]`; `keep_version(ctx, song, int(v.tab_id))` each, stopping on
+  interactive=True)`) for the whole loop; candidates `sheet_versions.may_keep(conn, song.id, in_library(...),
+  overrides.block)` (already on the branch, b47f376); an outcome `no text` or `held` is noted with
+  `note_unkeepable` (in `keep` too: add a test `test_keep_notes_a_version_it_cant_keep`); `keep_version(ctx, song, int(v.tab_id))` each, stopping on
   `BudgetExhausted`, `ProviderBlocked` (record_block), `ProviderError` (record_error) with `keep`'s words; one
   `render_all(..., song_ids={song.id})` if any kept, one `write_pages`. Share `keep`'s cooling check and
   messages rather than copying them (a helper both call).
@@ -107,7 +110,7 @@ the main checkout's `.superpowers/brainstorm/2818486-1793122579/content/song-lin
   (same argv); `test_a_post_by_song_id_needs_the_form_token_and_same_origin` (as the others).
 - [ ] **Step 2: Run** `nix develop -c pytest -q tests/test_web_versions.py` → FAIL.
 - [ ] **Step 3: Implement**: `_asked` gains a by-id branch (`songs.get_song`, the versions from `in_library`),
-  `_cant("keep-more", asked)` refuses when no version is left to keep; `DOINGS` gains `"keep-more"`.
+  `_cant("keep-more", asked)` refuses when `may_keep` is empty; `DOINGS` gains `"keep-more"`.
 - [ ] **Step 4: Run** → PASS; `nix develop -c pytest -q -m "not slow"` → PASS. Write usage.md's lines.
 - [ ] **Step 5: Commit** `feat(web): Fetch them, the versions not kept, as a queued job`.
 
@@ -123,12 +126,15 @@ the main checkout's `.superpowers/brainstorm/2818486-1793122579/content/song-lin
   - `versions`: `null` when the song has no UG version recorded in its sheet group; else
     `{"total": int, "list": [...], "rest": int, "keepMore": int, "pinned": bool}`. `total`: versions UG still
     has (not gone, not stale); `list`: the kept ones as today (each `as_data` entry with `href`, `source:"ug"`)
-    plus `complete: bool|None` and `coverage: float|None`; `rest`: not kept, not chosen, not gone;
+    plus `complete: bool|None` and `coverage: float|None`; `rest`: `len(sheet_versions.may_keep(...))`;
     `keepMore`: `min(rest, cfg.provider("ug").lookup_requests)`; `pinned`: `sheet_pins` names one.
   - `lacuerdaVersions`: `[{"href": str, "coverage": float|None, "sheet": bool}]`, best first (as
     `_lacuerda_met` orders), LaCuerda's not-gone `sheet` rows; `[]` for none.
-- Count every song's `total` and `rest` in one query (the predicate `sheet_versions.song_sheet_versions` uses);
-  call `in_library` only for songs with kept versions, as today.
+  - `autoSheet` (only for a song with both a human and an auto sheet): `{"href": viewer, "files": [{label,
+    href, download}]}` of `sheet (auto).*`, which the card shows as the sheet tile's Auto chip.
+- `in_library` for every song with UG versions recorded is a few queries a song: check the page's build time on
+  a 600-song library (a test helper, not a committed benchmark) and, if it grows by more than a fifth, count
+  `total` and `rest` in one query instead, pinned equal to `may_keep(in_library(...))` by a test.
 
 - [ ] **Step 1: Write the failing tests**: `test_versions_counts_ug_versions_for_a_song_with_none_kept`
   (total 13, list [], rest 12, keepMore 6); `test_versions_counts_match_in_library`
@@ -195,12 +201,13 @@ the main checkout's `.superpowers/brainstorm/2818486-1793122579/content/song-lin
 - [ ] **Step 1: Write the failing tests** (in Chromium, Hotel California and a wanted song as fixtures):
   `test_tiles_in_order_with_their_open_links` (Chord sheet → viewer, Guitar Pro → Guitar Pro page when served,
   Harmonica tab, Lyrics); `test_the_sheet_tile_downloads_pdf_text_chordpro_and_each_export`;
-  `test_chips_count_versions_per_source` ("13" UG, "2" LaCuerda; Files gtptabs 1 + inbox 1; Lyrics "From
+  `test_chips_count_versions_per_source` ("13" UG, "2" LaCuerda, an Auto chip beside a human sheet; Files gtptabs 1 + inbox 1; Lyrics "From
   LRCLIB" with no button); `test_a_chip_opens_its_drawer_and_another_chip_closes_it`;
   `test_escape_closes_the_drawer_and_gives_the_focus_back_to_its_chip`;
   `test_opening_a_drawer_sends_no_request` (the page's fetch log unchanged);
   `test_the_ug_drawer_lists_the_kept_versions_and_counts_the_rest`;
-  `test_a_song_with_no_sheet_has_no_tiles_but_its_notes_and_links`;
+  `test_a_song_with_no_sheet_has_no_tiles_but_its_notes_and_links`; `test_musescore_links_show_beside_a_sheet_too`;
+  `test_a_text_tab_alone_is_a_guitar_tab_tile`; `test_a_score_you_filed_is_a_tile`;
   `test_remove_says_remove_and_is_red_and_last`; `test_progressions_are_search_chips_that_filter`;
   `test_the_card_fits_390px_with_the_drawer_under_its_tile`;
   `test_a_line_drawn_again_keeps_its_card_open_and_its_drawer_closed`; and the file page (not served): no Use
@@ -229,7 +236,7 @@ the main checkout's `.superpowers/brainstorm/2818486-1793122579/content/song-lin
 - [ ] **Step 1: Write the failing tests** (served, `WebApp(timers=QUICK)`, a fake queue as test_web_page_again.py
   does): `test_use_this_one_posts_choose_with_the_tab`; `test_fetch_them_posts_keep_more_and_says_fetch_n_more`
   ("Fetch 6 more" when rest 10 > keepMore 6, "Fetch them" when rest ≤ keepMore);
-  `test_back_to_caracoles_pick_only_when_pinned`; `test_lacuerda_use_this_one_posts_the_lookup_with_its_page`;
+  `test_back_to_caracoles_pick_only_when_pinned`; `test_lacuerda_use_this_one_posts_the_lookup_with_its_page`; `test_lacuerda_use_this_one_waits_for_a_pin_to_go`;
   `test_after_keep_more_the_drawer_counts_again_from_the_jobs_view`.
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** `nix develop -c pytest -q` → PASS.
 - [ ] **Step 5: Commit** `feat(library): the versions drawer chooses, fetches and goes back`.

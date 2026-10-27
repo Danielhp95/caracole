@@ -106,8 +106,8 @@ Order inside the opened card, top to bottom; a part with nothing to show is left
    Nothing in a drawer sends a request when it opens: it reads the page's data alone.
 6. **Progressions**, "find your songs that play one": each a chip with a search mark, which filters the list
    (today's `setProg`), visibly unlike a file or an action.
-7. **Find it elsewhere**, for a song with no sheet: Find the chords, Scores on MuseScore, Buy the track for an
-   auto sheet, as links that leave caracole (↗), grouped as today.
+7. **Find it elsewhere**: Find the chords, Scores on MuseScore, Buy the track for an auto sheet, whichever
+   the song has, as links that leave caracole (↗), grouped as today.
 8. **Footer**: Fetch again / Fetch now, Use LaCuerda's sheet (today's `againActions`), Add to a songbook…;
    then, at the far end, `info.json` as a quiet download and **Remove** in red.
 
@@ -163,6 +163,24 @@ Order inside the opened card, top to bottom; a part with nothing to show is left
   Songbooks tab; the requests page.
 - Anti-goals: a request when a drawer opens; fetching past a lookup's budget; a red Remove that looks like the
   main thing to do (it stays outlined, never filled); losing anything the panel offers today.
+
+## Settled after the builder check (my calls, to be checked by the owner)
+
+- **Two kinds of choice.** A UG version chosen (Use this one) is a `[pin]`, which outranks a LaCuerda pick
+  (get.py, ug/fetch.py `_sheet_slot`). So LaCuerda's Use this one shows only while no `[pin]` chooses the sheet;
+  otherwise its drawer says "Your choice on Ultimate Guitar is in use: Back to caracole's pick first". Back to
+  caracole's pick takes the UG pins out, as `--clear` does today; no new overrides writer.
+- **What "not kept" counts**: `sheet_versions.may_keep` (b47f376), the versions a keep may still keep: neither
+  kept nor the one nor gone, not under `[block]`, not at an address robots.txt closes, and none a keep found it
+  can't keep (`no text`, `held`: `note_unkeepable`, kv `sheet_versions:unkeepable:<song id>`, in
+  `songs._PER_SONG_KV`). A page that won't parse stays counted: it waits, as any does. So the button goes once
+  nothing is left, and a press never re-reads a page it can't keep.
+- **A kept version may become the sheet** at the next nightly run when it covers more of the lyrics, as one
+  kept with `--keep` may today (caracole's ranking); Use this one (a `[pin]`) holds a choice.
+- **An auto sheet beside a human one** is a chip of its own in the chord sheet's Versions row (the auto
+  source's mark, 1); its drawer row opens the auto viewer and downloads its PDF, text and ChordPro.
+- **MuseScore's links** show for every song not ignored, as today: Find it elsewhere shows whatever links the
+  song has (Find the chords and Buy the track only come for a song with no sheet).
 
 ## Left to the builder
 
