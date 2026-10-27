@@ -58,8 +58,9 @@ object Syncs {
         val outcome = try {
             val address = ServerAddress.parse(settings.server)
             val engine = SyncEngine(Caracole.mirror(context), Caracole.http())
-            val fetched = engine.fetchManifest(address)
-            val report = engine.sync(address, fetched, progress = { status.value = SyncState.Running(it) }, cancelled = stopped)
+            // The list is asked for inside the sync, once it holds the lock: never one fetched before another
+            // sync (on Wi-Fi, or Sync now) ended.
+            val report = engine.sync(address, progress = { status.value = SyncState.Running(it) }, cancelled = stopped)
             Outcome(System.currentTimeMillis(), true, report.summary())
         } catch (e: Exception) {
             // Anything, the unexpected too (SyncError.Unexpected): a failed outcome, never "Syncing…" left up.

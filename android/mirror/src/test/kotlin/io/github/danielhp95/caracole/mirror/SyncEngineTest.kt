@@ -7,6 +7,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.net.ServerSocket
+import kotlin.concurrent.thread
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -285,8 +286,26 @@ class SyncEngineTest {
         assertEquals(4, fetched.manifest.entries.size)
         assertEquals(listOf("/api/offline"), server.requests.toList())
         assertEquals(emptyMap(), snapshot())
-        engine.sync(server.address, fetched)
-        assertEquals(1, server.requests.count { it == "/api/offline" }, "a list fetched is used, not asked for again")
-        assertMirrors(library)
+    }
+
+    @Test
+    fun `a sync that waits for another asks for the list once it holds the lock, so it never syncs an older one`() {
+        server.publish(library)
+        engine.sync(server.address)
+        server.requests.clear()
+        val next = library + ("new.pdf" to "%PDF new".toByteArray())
+        var report: SyncReport? = null
+        mirror.syncLock.lock() // another sync, running
+        val waiting = thread { report = engine.sync(server.address) }
+        try {
+            while (!mirror.syncLock.hasQueuedThreads()) Thread.sleep(5)
+            server.publish(next) // the library changes while it waits
+            assertEquals(emptyList(), server.requests.toList(), "nothing asked before the lock is held")
+        } finally {
+            mirror.syncLock.unlock()
+        }
+        waiting.join()
+        assertEquals(1, assertNotNull(report).added)
+        assertMirrors(next)
     }
 }

@@ -62,18 +62,18 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
     }
 
     /**
-     * Syncs the mirror with [address]'s list ([fetched], or fetched now). [progress] hears how many files are
-     * downloaded; [cancelled] is asked between two pieces of work, and stops the sync when true.
+     * Syncs the mirror with [address]'s list, asked for once the sync holds the mirror's lock: a sync that waited
+     * for another syncs the list as it is then, never one older than the other's. [progress] hears how many
+     * files are downloaded; [cancelled] is asked between two pieces of work, and stops the sync when true.
      */
     fun sync(
         address: ServerAddress,
-        fetched: Fetched? = null,
         progress: (Progress) -> Unit = {},
         cancelled: () -> Boolean = { false },
     ): SyncReport {
         mirror.syncLock.lock()
         try {
-            val list = fetched ?: fetchManifest(address)
+            val list = fetchManifest(address)
             val manifest = list.manifest
             val before = mirror.reload()
             var downloaded = 0
