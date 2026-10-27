@@ -263,6 +263,24 @@ def test_the_rail_of_necks_has_four_strings_on_a_ukulele_and_the_guitars_on_the_
     assert piano["names"] == guitar["names"]  # the guitar's chords, as its capo names them
 
 
+
+# Each of the rail's tabs, and whether it lies inside its segmented control, its edge and its track.
+TABS_FIT = """(() => { const control = document.querySelector('#necks .ov-tabs'), box = control.getBoundingClientRect();
+  return [...control.children].map((t) => { const r = t.getBoundingClientRect();
+    return [t.textContent, r.left >= box.left + 1 && r.right <= box.right - 1]; }); })()"""
+
+
+@pytest.mark.parametrize(("name", "tab"), [("Guitar", "Guitar"), ("Ukulele", "Ukulele"), ("Ukulele, low G", "Ukulele"),
+                                         ("Baritone ukulele", "Baritone"), ("Piano", "Guitar")])
+def test_the_rails_tabs_name_the_neck_in_short_and_fit_at_1200_px(tmp_path, name, tab):
+    # At the narrowest the rail shows, a long name ("Baritone ukulele") would overflow the control: the tab names the
+    # neck in short, as the instrument's own tab name (instruments.py ``tab``).
+    with open_viewer(tmp_path, written(tmp_path, SONG), width=1200, height=800, mobile=False) as b:
+        choose(b, name)
+        found = b.js(TABS_FIT)
+    assert found == [[tab, True], ["Harmonica", True]]
+
+
 # --- kept, carried, in the address -----------------------------------------------------------------------------
 
 

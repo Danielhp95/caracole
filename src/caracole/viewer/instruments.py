@@ -24,7 +24,9 @@ with no capo (``capo`` False: the piano) plays the chords as they sound, the cap
   viewer's Easy keys row offers before the capo; None for none;
 - ``voice``: the sound strum.js makes for it ("guitar", "ukulele", "piano", "reed", "flute", "recorder");
 - ``sounds``: how many semitones its notes sound above where its music is written (0: at concert pitch);
-- ``about``: a line on it, the title of the settings' Instrument menu.
+- ``about``: a line on it, the title of the settings' Instrument menu;
+- ``tab``: its name in short, on the overlay's tab that draws its necks ("Baritone"), where its own is too long for
+  the rail at its narrowest; "" for its ``name``.
 
 Their shapes, all from the chord's name alone:
 
@@ -67,15 +69,17 @@ class Instrument:
     sounds: int = 0
     offset: int = 0
     about: str = ""
+    tab: str = ""
 
 
 GUITAR = Instrument("guitar", "Guitar", "strings", TUNING, about="Standard tuning, E A D G B E.")
 UKULELE = Instrument("ukulele", "Ukulele", "strings", (67, 60, 64, 69), shapes="ukulele:", easy="ukulele",
                      voice="ukulele", about="G C E A, the G string high.")  # G4 C4 E4 A4: re-entrant
 UKULELE_LOW_G = Instrument("ukulele-low-g", "Ukulele, low G", "strings", (55, 60, 64, 69), shapes="ukulele:",
-                           easy="ukulele", voice="ukulele", about="G C E A, the G string low.")  # G3 C4 E4 A4
+                           easy="ukulele", voice="ukulele", about="G C E A, the G string low.",
+                           tab="Ukulele")  # G3 C4 E4 A4
 BARITONE = Instrument("baritone", "Baritone ukulele", "strings", (50, 55, 59, 64), shapes="ukulele:",
-                      easy="baritone", voice="ukulele", offset=5,
+                      easy="baritone", voice="ukulele", offset=5, tab="Baritone",
                       about="D G B E, as a guitar's top four strings: a ukulele's shapes, named a fourth lower.")
 PIANO = Instrument("piano", "Piano", "keys", capo=False, shapes="piano:", voice="piano",
                    about="The chords as they sound, any capo folded in: root position and two inversions, "
@@ -273,7 +277,7 @@ def entries(fingerings: set[str]) -> list[dict[str, Any]]:
     for inst in INSTRUMENTS:
         entry: dict[str, Any] = {"id": inst.id, "name": inst.name, "kind": inst.kind, "capo": inst.capo,
                                  "shapes": inst.shapes, "offset": inst.offset, "easy": inst.easy, "voice": inst.voice,
-                                 "sounds": inst.sounds, "about": inst.about}
+                                 "sounds": inst.sounds, "about": inst.about, "tab": inst.tab or inst.name}
         if inst.tuning:
             entry["tuning"] = list(inst.tuning)
         if inst.shapes == "ukulele:":

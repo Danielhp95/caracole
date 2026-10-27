@@ -2367,7 +2367,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   legend the arrow keys go from shape to shape; Tab stops once a chord. The
   necks follow the key, the capo and the mode, and two chords shown by one
   name (A# and Bb, transposed to B) share one neck. With a ukulele or a
-  baritone chosen (below), the necks are theirs and the tab is named so; with
+  baritone chosen (below), the necks are theirs and the tab is named so, in
+  short (Ukulele for low G too, Baritone); with
   an instrument that has no neck (the piano, the harmonica, the flute, the
   recorder), they are the guitar's, at its capo. **Harmonica** picks the harp:
   a small circle of fifths with the key the song sounds in at its middle

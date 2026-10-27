@@ -37,7 +37,8 @@ written ``\\u003c``:
   "ukulele:m7", "piano:m7|");
 - ``instruments``: the instruments the viewer offers, in its menu's order (instruments.py ``entries``: each one's
   ``id``, ``name``, ``kind``, ``tuning``, whether it takes a ``capo``, where its ``shapes`` are, its ``offset``, its
-  ``easy`` keys' table, its ``voice``, ``sounds``, ``about``, and a ukulele's ``near``); ``easy``, for a sheet with a
+  ``easy`` keys' table, its ``voice``, ``sounds``, ``about``, its ``tab`` (its name on the overlay's tab, in short),
+  and a ukulele's ``near``); ``easy``, for a sheet with a
   key, each table's easy keys in every mode (``instruments.easy_keys``: ``[tonic, name]``), which the settings' Easy
   keys row offers on an instrument that has one;
 - the harmonica's (harp.py ``tables``: ``harpKeys``, ``harps``, the harps for the song in each mode, ``harpForms``,

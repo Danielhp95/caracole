@@ -1157,7 +1157,7 @@
       const shapes = shapesOf(rep, s, it);
       return { name, list: shapes.list, mine: shapes.mine, chosen: played ? state.at[c] || 0 : railAt[name] || 0 };
     });
-    return { name: String(it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
+    return { name: String(it.tab || it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
       key: key && data.keyScale ? keySpec(s, it) : null };
   };
   // A chord's row in one of harp.py's tables by chord: the sheet's in the mode played, else its alternative's.
