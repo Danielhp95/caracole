@@ -633,6 +633,9 @@ a.ver-main .ver-name { color: var(--accent); }
 .info .sx { margin-left: .5em; color: var(--muted); }
 .card:not([hidden]) { display: grid; }
 .card .ui-head { grid-area: head; }
+/* Circle & keyboard, at the head's end before ×: the chord's notes in a numeral's tooltip (viewer.js). */
+.card-tip { flex: none; margin-left: auto; }
+.card-tip:not([hidden]) + .x { margin-left: 0; }
 .shape { grid-area: shape; display: grid; grid-template: "d d" auto "p n" auto / 44px 44px; justify-content: center;
   align-content: start; gap: 0 8px; }
 .shape .diagram { grid-area: d; }

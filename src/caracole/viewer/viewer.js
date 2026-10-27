@@ -1414,6 +1414,7 @@
     const name = label(i, rep);
     const found = numbered() ? reading(i, chordEls.indexOf(shown.el), shown.pick) : null;
     $("card-name").textContent = found ? name + " · " + found.text : name;
+    $("card-tip").hidden = !tipDraws(i, chordEls.indexOf(shown.el));
     const shapes = shapesOf(rep, shift());
     const box = $("diagram");
     box.textContent = "";
@@ -1738,7 +1739,7 @@
   // note of the chord is outside the key when it isn't one of them, and the line under the picture names it, with
   // the key's note of its letter.
   const tip = $("tip");
-  let tipOf = null, leaving = 0;
+  let tipOf = null, tipI = null, leaving = 0;  // what the tooltip is by (a chord, or the strip's button), its chord
   function hideTip() {
     clearTimeout(leaving);
     if (tip.hidden) return;
@@ -1746,7 +1747,7 @@
     tip.hidden = true;
     if (tipOf) tipOf.removeAttribute("aria-describedby");
     if (inside && tipOf && tipOf.isConnected) tipOf.focus({ preventScroll: true });  // not lost with the tooltip
-    tipOf = null;
+    tipOf = tipI = null;
   }
   const ROLES = { h: "home", a: "away", p: "pull" };
   const MODE_WORDS = { ionian: "major", aeolian: "minor" };
@@ -1920,9 +1921,10 @@
     tip.style.setProperty("--tip-top", Math.round(top + window.scrollY) + "px");
     tip.style.setProperty("--tip-left", Math.round(left + window.scrollX) + "px");
   };
-  function showTip(el) {
-    const i = el.dataset.c;
-    const found = reading(i, chordEls.indexOf(el));
+  // The chord ``i`` (by default the chord ``el``'s), read at its place on the sheet ``k``, as the one played now:
+  // its tooltip by ``el``, a chord on the sheet or the strip's button the card was opened from.
+  function showTip(el, i = el.dataset.c, k = chordEls.indexOf(el)) {
+    const found = reading(i, k);
     if (!found) return;
     clearTimeout(leaving);
     if (tipOf && tipOf !== el) tipOf.removeAttribute("aria-describedby");
@@ -1941,12 +1943,25 @@
     $("tip-switch").hidden = $("tip-view").hidden && $("tip-hear").hidden;  // nothing to switch, nothing to hear
     tip.hidden = false;
     tipOf = el;
+    tipI = i;
     el.setAttribute("aria-describedby", "tip");
     placeTip();
   }
   $("tip-hear").addEventListener("click", () => {
-    const heard = tipOf ? tipSound(tipOf.dataset.c) : null;
+    const heard = tipOf ? tipSound(tipI) : null;
     if (heard) sound.strum(heard.position, { capo: heard.capo, tuning: inst().tuning, voice: inst().voice });
+  });
+  // Whether the tooltip has the chord ``i``'s notes to draw, as it is played now (at its place ``k``): its numeral, its
+  // notes in the tables and the key's. The card offers Circle & keyboard where it has, which closes the card and opens
+  // the tooltip by the chord the card is by (its numeral where the sheet shows one, else its name), the focus on its
+  // first button: the chords' names alone have no numeral to hover or tap.
+  const tipDraws = (i, k) => Boolean(reading(i, k)) && Boolean(tonesOf(current(i))) && Boolean(keyNotes());
+  $("card-tip").addEventListener("click", () => {
+    const i = shown.i, k = chordEls.indexOf(shown.el), by = anchor();
+    close(card);
+    showTip(by, i, k);
+    const first = ["tip-view", "tip-hear"].map($).find((b) => !b.hidden && b.getClientRects().length > 0);
+    if (!tip.hidden && first) first.focus({ preventScroll: true });
   });
   document.addEventListener("pointerdown", (e) => {
     const target = e.target instanceof Element ? e.target : null;

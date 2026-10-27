@@ -2302,7 +2302,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   for a chord in the key (Dm7 in C: D Dorian), the mode of the key a borrowed
   chord comes from, Mixolydian for a secondary dominant, and by its quality
   otherwise (Locrian for m7♭5); both follow the transposition, the capo and the
-  mode, and a chord you try instead in the card. The card leaves the song in
+  mode, and a chord you try instead in the card. **Circle & keyboard**, at the
+  card's head, closes it and opens the chord's tooltip (its notes on a circle
+  or a keyboard, below), by the chord: its numeral where the sheet shows one,
+  else its name, so the chords' names alone reach it too. It shows the chord
+  played there now (one you chose instead, else the sheet's), and only where
+  the tooltip has its notes to draw (the key known, the chord one caracole
+  can read). The card leaves the song in
   view: on a phone it sits at the foot, above the bar, about 270 px tall, and
   the song scrolls
   under it (a chord tapped where the card comes up moves above it, with its
@@ -2557,7 +2563,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   button, strums the chord as its card plays it (none with the strum Off).
   Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
-  chord's name opens its card, which names the numeral too ("Bb · ♭VII").
+  chord's name opens its card, which names the numeral too ("Bb · ♭VII"), and
+  whose Circle & keyboard opens this tooltip, with the chords' names alone too.
   A song whose key caracole can't tell offers chords alone (the numerals
   greyed), and says so.
 - **Harmony ›** (in the settings, with Guitar Pro tab and Export PDF after a

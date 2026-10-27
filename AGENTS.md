@@ -224,7 +224,9 @@ Rules a change there keeps (the Invariants below are the others):
   script registers it (instruments.js documents that API): test_viewer_instruments.py,
   test_viewer_instruments_page.py, test_viewer_sound.py. So, last, is the view of a numeral's tooltip (the chord's
   notes on a twelve-note circle, or tiles over a keyboard: localStorage `caracole-viewer-tipview`, the circle with
-  none), which draws only what `tones` (with each note's pitch class) and `keyScale` give: test_viewer_numerals.py.
+  none), which draws only what `tones` (with each note's pitch class) and `keyScale` give, and which a chord's card
+  opens too, by its chord, with the chords' names alone (its Circle & keyboard, viewer.js `tipDraws`):
+  test_viewer_numerals.py.
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it

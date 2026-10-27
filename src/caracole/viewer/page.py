@@ -732,6 +732,9 @@ def _words(text: str) -> list[str]:
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 #
+# A chord's card heads with the chord, Circle & keyboard (the chord's notes in a numeral's tooltip, which the card
+# closes for; viewer.js shows it where the tooltip has notes to draw) and ×.
+#
 # A numeral's tooltip, top to bottom: the chord as the sheet names it, its numeral and its role in words; the
 # numeral's line and the key it is read in; the chord's notes (viewer.js draws them: a twelve-note circle beside
 # their list, or tiles over a keyboard), and a line naming a note from outside the key; the button to the other
@@ -817,6 +820,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
+<button type="button" class="tip-btn card-tip" id="card-tip" hidden>Circle &amp; keyboard</button>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="shape"><button type="button" class="round" id="prev" aria-label="Previous shape">‹</button>
 <div class="diagram" id="diagram"></div>
