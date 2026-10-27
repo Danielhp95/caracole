@@ -499,7 +499,8 @@ Traps:
   viewer/pinyin.py imports pypinyin in `_read` alone, and viewer/hanzi.py OpenCC in `_converter`: a page of a sheet
   with no Chinese loads neither (`test_viewer_pinyin.py::test_pypinyin_is_loaded_only_for_a_sheet_with_chinese`,
   `test_viewer_hanzi.py::test_opencc_is_loaded_only_for_a_sheet_with_chinese`).
-- Branch from `caracole-v1`, the default branch; `main` takes it by merge, when the owner asks.
+- Branch from `main`, the default branch: each piece of work on a branch of its own, merged into `main` once it
+  passes (`caracole-v1`, the default until 2026-10-27, is retired).
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:
   no Co-Authored-By trailer or "Generated with" line, in commits, code or docs.

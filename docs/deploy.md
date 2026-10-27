@@ -51,7 +51,7 @@ In your system flake's `flake.nix`:
     caracole.inputs.nixpkgs.follows = "nixpkgs";
 ```
 
-A new commit on caracole's default branch, `caracole-v1`, reaches the host
+A new commit on caracole's default branch, `main`, reaches the host
 after `nix flake update caracole` and a switch. `follows` builds caracole, and
 runs its tests, with your nixpkgs: one whose tomlkit or ChordPro is newer than
 caracole takes yet (tomlkit 0.15.1, ChordPro 6.060) fails the build, and
@@ -275,12 +275,12 @@ pyyaml==6.0.3
 EOF
 ```
 
-Then caracole, at the head of `caracole-v1`, in a virtual environment of that
+Then caracole, at the head of `main`, in a virtual environment of that
 commit, compiled ahead (the units can't write `.pyc` files there), and linked
 as `current` once it is whole:
 
 ```sh
-REV=$(git ls-remote https://github.com/Danielhp95/caracole refs/heads/caracole-v1 | cut -f1)
+REV=$(git ls-remote https://github.com/Danielhp95/caracole refs/heads/main | cut -f1)
 test -n "$REV" &&
 sudo uv venv --allow-existing --python $PY /opt/caracole/releases/$REV &&
 sudo uv pip install --compile-bytecode --python /opt/caracole/releases/$REV/bin/python \
@@ -709,7 +709,7 @@ is ready:
 
 ```sh
 PY=/opt/caracole/python/cpython-3.14.7-linux-x86_64-gnu/bin/python3.14
-REV=$(git ls-remote https://github.com/Danielhp95/caracole refs/heads/caracole-v1 | cut -f1)
+REV=$(git ls-remote https://github.com/Danielhp95/caracole refs/heads/main | cut -f1)
 VENV=/opt/caracole/releases/$REV
 test -n "$REV" &&
 sudo uv venv --allow-existing --python $PY $VENV &&
