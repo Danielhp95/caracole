@@ -1753,6 +1753,22 @@ def test_the_search_says_how_far_harptabs_coms_artist_index_has_got(app, conn):
         {**p, "why": p["why"].removeprefix("its ")} for p in data["partial"]]
 
 
+def test_the_search_says_whether_a_harptabs_artists_page_was_read_listing_no_tab_or_not(app, conn):
+    from datetime import UTC, datetime
+
+    from caracole.harptabs import ArtistPage
+    from caracole.harptabs_index import store_artist_page
+
+    harptabs_index(conn)
+    [valens] = as_json(get(app, "/api/search?q=ritchie%20valens"))["harptabs_artists"]
+    assert (valens["known"], valens["read"]) == (0, False)
+    store_artist_page(conn, "artist/7829/ritchie-valens", ArtistPage("Ritchie Valens", 0), datetime(2026, 10, 27, tzinfo=UTC))
+    conn.commit()
+    app._found.clear()
+    [valens] = as_json(get(app, "/api/search?q=ritchie%20valens"))["harptabs_artists"]
+    assert (valens["known"], valens["read"]) == (0, True)  # read, listing none: never "not read yet"
+
+
 def test_api_artist_lists_a_harptabs_artists_songs_and_yours(app, conn):
     harptabs_index(conn)
     mine = add_song(conn, "Billy Joel", "Piano Man")

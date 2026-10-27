@@ -356,8 +356,9 @@ class SiteArtist:
     most popular with chords. On harptabs.com, ``slug`` is their page's path
     (``artist/1178/billy-joel``), ``songs`` the tabs their page says they have (0 until
     it is read: the sitemap counts none), ``known`` the tabs of theirs the index holds
-    (the 30 their page lists at most), and ``top`` their most viewed songs. ``score`` and ``via`` are as
-    ``IndexHit``'s, and ``part`` as ``ArtistHit``'s (``LaCuerdaHit.part``).
+    (the 30 their page lists at most), ``top`` their most viewed songs, and ``read`` whether caracole has read
+    their page (one that lists no tab too, its ``known`` 0). ``score`` and ``via`` are as ``IndexHit``'s, and
+    ``part`` as ``ArtistHit``'s (``LaCuerdaHit.part``).
     """
 
     source: str
@@ -370,6 +371,7 @@ class SiteArtist:
     via: str = "artist"
     top: tuple[SiteHit, ...] = ()
     part: bool = False
+    read: bool = False
 
 
 @dataclass(frozen=True)
@@ -955,7 +957,7 @@ def _harp_artist(conn: sqlite3.Connection, row: _HarpArtist, score: float, *, pa
         known = _harp_known(conn, [row.path]).get(row.path, 0)
     top = tuple(_harp_grouped(conn, "t.artist = ?", [row.path])[:TOP_SONGS]) if known else ()
     return SiteArtist("harptabs", row.shown, row.path, page_url(row.path), score, songs=row.tabs or 0, known=known,
-                      top=top, part=part)
+                      top=top, part=part, read=row.read_at is not None)
 
 
 def _harp_songs(conn: sqlite3.Connection, queries: list[_Query], patterns: list[str]) -> list[SiteHit]:

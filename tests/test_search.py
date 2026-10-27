@@ -2263,6 +2263,21 @@ def test_cli_a_harptabs_artist_whose_page_caracole_never_read_says_how_to_read_i
             "artist/7829/ritchie-valens reads it (one request)\n") in hp
 
 
+def test_cli_a_harptabs_artist_whose_page_lists_no_tab_was_read_all_the_same(tmp_path):
+    # Their page read, and listing none: no tab in the index, yet nothing to read again.
+    from datetime import UTC, datetime
+
+    from caracole.harptabs import ArtistPage
+    from caracole.harptabs_index import store_artist_page
+
+    conn = harptabs_seed(tmp_path)
+    store_artist_page(conn, "artist/7829/ritchie-valens", ArtistPage("Ritchie Valens", 0), datetime(2026, 10, 27, tzinfo=UTC))
+    conn.commit()
+    for args in (("search", "ritchie valens"), ("search", "--artist", "ritchie valens")):
+        hp = harp_part(run(tmp_path, *args).output)
+        assert "hasn't read their page" not in hp and "Ritchie Valens · harptabs.com" in hp, args
+
+
 def test_cli_a_harptabs_tab_whose_artist_no_page_names_is_a_title_alone(tmp_path):
     harptabs_seed(tmp_path)
     hp = harp_part(run(tmp_path, "search", "piano man").output)
