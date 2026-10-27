@@ -2424,7 +2424,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Mode**: with C minor, switch to C major, or to any mode on C (Dorian,
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
-  the key, such as the G major chord's B in C minor, stays where it is.
+  the key, such as the G major chord's B in C minor, stays where it is. The
+  song's own mode has a thicker edge among the others, and the line over them
+  says what the mode played sounds like ("minor, with a brighter sixth").
 - **Chord names**: Chords, Chords + numerals or Numerals only. A numeral says
   what the chord is in the key, as a Roman numeral counted up the key's scale
   from its tonic: in C major, C F G Am are I IV V vi; in A minor, Am G F E7

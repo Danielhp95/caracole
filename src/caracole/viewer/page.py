@@ -711,7 +711,8 @@ def _words(text: str) -> list[str]:
 #
 # The settings, top to bottom, grouped by space rather than headings: "Settings" and a line of what is set (the key
 # and mode played, the capo, the instrument: viewer.js); Transpose and Capo side by side, each labelled over its
-# stepper, with a Reset by its label while its value differs; the easier capos and an instrument's easy keys.
+# stepper, with a Reset by its label while its value differs; the easier capos and an instrument's easy keys; Mode,
+# what the mode played sounds like, and a pill a mode, the song's own marked.
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
@@ -768,8 +769,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <div class="opts" id="capo-opts" hidden><span class="opts-lab">Easier shapes</span><span class="chips" id="capo"></span></div>
 <div class="opts" id="easy-row" hidden><span class="opts-lab">Easy keys</span><span class="chips" id="easy"></span>
 <p class="hint" id="easy-hint"></p></div>
-<div class="row" id="mode-row" hidden><span class="lab">Mode</span><span class="chips" id="modes"></span>
-<p class="hint" id="mode-hint"></p></div>
+<div class="modes" id="mode-row" hidden><p class="modeline"><span class="lab">Mode</span><span class="what" id="mode-hint"></span></p>
+<span class="chips" id="modes"></span></div>
 <div class="row" id="names-row"><span class="lab">Chord names</span><span class="chips" id="names"></span>
 <button type="button" class="chip" id="roles" aria-pressed="true">Role colours</button>
 <p class="hint" id="names-hint"></p>

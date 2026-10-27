@@ -890,16 +890,23 @@
       render();
     }, shapesKey + " shapes")));
 
+    // A pill a mode, the one played pressed, the song's own marked (orig: a thicker edge, viewer.css), and named so
+    // for a screen reader; over them, what the mode played sounds like.
     $("mode-row").hidden = !key;
-    refill($("modes"), key ? data.modes.map((mode) => button((MODES[mode] || [mode])[0], modeNow() === mode, () => {
-      state.mode = mode === key.mode ? null : mode;
-      render();
-    }, mode === key.mode ? "as written" : "")) : []);
-    if (key) {
-      const info = MODES[modeNow()] || ["", ""];
-      $("mode-hint").textContent = keyName(state.t + sheetCapo) + ": " + info[1] + "." +
-        (asWritten() ? "" : " Each chord moves to the same degree of the new scale.");
-    }
+    refill($("modes"), key ? data.modes.map((mode) => {
+      const pill = button((MODES[mode] || [mode])[0], modeNow() === mode, () => {
+        state.mode = mode === key.mode ? null : mode;
+        render();
+      });
+      if (mode === key.mode) {
+        pill.classList.add("orig");
+        const own = pill.appendChild(document.createElement("span"));
+        own.className = "vh";
+        own.textContent = ", the song's own";
+      }
+      return pill;
+    }) : []);
+    if (key) $("mode-hint").textContent = (MODES[modeNow()] || ["", ""])[1];
 
     drawNames();
     drawInstruments();

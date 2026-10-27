@@ -588,7 +588,7 @@ def test_every_song_has_a_capo_to_move(tmp_path):
     """)
     assert shown and offered == 0
     assert off == ["F#m7", "Key F#m · no capo", "0", "#capo=0", "Key F#m estimated from the chords · no capo"]
-    assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "F#m: the natural minor."]
+    assert four == ["Dm7", "Dm shapes · capo 4 · sounds F#m", "4", "#capo=4", "the natural minor"]
     assert back == ["Em7", "Em shapes · capo 2 · sounds F#m", "2", ""]
 
 

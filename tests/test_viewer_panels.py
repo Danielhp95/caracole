@@ -279,6 +279,53 @@ def test_an_instrument_without_a_capo_shows_transpose_alone(tmp_path):
     assert not seen["capo"] and seen["width"] >= seen["room"] - 1  # the whole width
 
 
+# Each mode's pill: its name, whether it is pressed and the song's own (orig), and its edge: its width and whether
+# it is the accent (the chords' colour); and the line over them: "Mode", what the mode played sounds like.
+MODES = """(() => { const accent = getComputedStyle(document.querySelector('#sheet .c')).color;
+  const pills = [...document.querySelectorAll('#modes .chip')].map((c) => { const s = getComputedStyle(c);
+    return [c.firstChild.textContent, c.getAttribute('aria-pressed'), c.classList.contains('orig'), s.borderTopWidth,
+            s.borderTopColor === accent]; });
+  const line = (el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2);
+  const label = document.querySelector('#mode-row .lab'), what = document.getElementById('mode-hint');
+  return {pills, label: label.textContent, what: what.textContent, level: Math.abs(line(label) - line(what)) <= 2,
+          said: /as written/i.test(document.getElementById('panel').textContent)}; })()"""
+
+
+@in_chromium
+def test_the_songs_own_mode_is_marked_and_says_no_as_written(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        seen = b.js(MODES)
+    names = [p[0] for p in seen["pills"]]
+    assert names == ["Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Minor", "Locrian"]
+    assert seen["pills"][0] == ["Major", "true", True, "2px", True]  # the song's, and chosen: a 2 px accent edge
+    assert all(not p[2] and p[1] == "false" and p[3] == "1px" and not p[4] for p in seen["pills"][1:])
+    assert not seen["said"]
+
+
+@in_chromium
+def test_the_chosen_mode_is_the_accent_and_the_own_one_keeps_its_mark(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        mode(b, "Dorian")
+        seen = b.js(MODES)
+    major, dorian = seen["pills"][:2]
+    assert major == ["Major", "false", True, "2px", False]  # its own, a thicker edge of another colour
+    assert dorian == ["Dorian", "true", False, "1px", True]
+    assert not seen["said"]
+
+
+@in_chromium
+def test_the_mode_line_says_what_it_sounds_like(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        major = b.js(MODES)
+        mode(b, "Dorian")
+        dorian = b.js(MODES)
+    assert [major["label"], major["what"], major["level"]] == ["Mode", "bright and settled", True]
+    assert [dorian["what"], dorian["level"]] == ["minor, with a brighter sixth", True]
+
+
 # --- a chord's card ------------------------------------------------------------------------------------
 
 
