@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import signal
+import subprocess
 import threading
 from dataclasses import dataclass, field
 
@@ -521,6 +522,26 @@ def test_an_interrupted_run_stops_yt_dlp_and_what_it_started(fake, tmp_path):
         over.set()
     assert fake.woke() == []  # stopped, never waited for to the end of its 30 s
     assert gone(fake.calls()[0]["pid"]), "yt-dlp went on running after caracole was interrupted"
+
+
+@pytest.mark.slow
+def test_a_ctrl_c_as_yt_dlp_starts_stops_it_too(fake, tmp_path, monkeypatch):
+    # Heard as Popen returns, before caracole holds the process: yt-dlp, in a session of its own, runs on unless
+    # caracole waits to hold it before it lets the Ctrl-C go on.
+    fake.search("slow", sleep=30)
+    started = []
+    real = subprocess.Popen
+
+    def popen(*args, **kwargs):
+        proc = real(*args, **kwargs)
+        started.append(proc.pid)
+        signal.pthread_kill(threading.main_thread().ident, signal.SIGINT)  # its handler runs here, at once
+        return proc
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
+    with pytest.raises(KeyboardInterrupt):
+        runner(fake, tmp_path).search("slow")
+    assert gone(started[0]), "yt-dlp went on running after caracole was interrupted"
 
 
 def test_a_missing_yt_dlp_is_an_error_naming_it(tmp_path):
