@@ -243,9 +243,11 @@ def test_typing_lists_your_songs_and_the_indexes_without_enter(cfg, live, browse
     assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
     assert browser.js(LINES) == [["Oasis", [["Wonderwall", "ug+gtptabs"]]], ["Ryan Adams", [["Wonderwall", "ug"]]],
                                  ["MuseScore", [["Wonderwall", "musescore"]]]]
-    # Where caracole looked, in one muted line under the results: LaCuerda's index is empty, the rest searched whole.
+    # Where caracole looked, in one muted line under the results: LaCuerda's and harptabs.com's indexes are empty, the
+    # rest searched whole.
     assert browser.js(CHIPS.replace("SCOPE", "#results .looked-line")) == [
-        ["UG ✓", "done"], ["gtptabs.com ✓", "done"], ["LaCuerda: empty", "empty"], ["MuseScore ✓", "done"]]
+        ["UG ✓", "done"], ["gtptabs.com ✓", "done"], ["LaCuerda: empty", "empty"], ["MuseScore ✓", "done"],
+        ["harptabs.com: empty", "empty"]]
     assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing').length") == 0
     link = browser.js("(() => { const a = document.querySelector('#results .hit[data-source=\"musescore\"] .line-action a');"
                       " return [a.href, a.target, a.rel]; })()")
@@ -1026,7 +1028,7 @@ def test_a_query_that_finds_nothing_shows_one_card_its_request_first_then_where_
         "code": ['[artist_url]\n"lynrd" = "https://www.ultimate-guitar.com/artist/…"', 'caracole add ARTIST "lynrd"']}
     assert browser.js(CHIPS.replace("SCOPE", NOTHING)) == [
         ["UG ✓", "done"], ["gtptabs.com: empty", "empty"], ["LaCuerda: up to C", "partial"],
-        ["MuseScore blocked", "blocked"]]
+        ["MuseScore blocked", "blocked"], ["harptabs.com: empty", "empty"]]
     # Each chip's detail is its tooltip, one line: today's sentence.
     titles = browser.js(f"[...document.querySelectorAll('{NOTHING} .looked li')].map((c) => c.title)")
     assert "still being read: 1 artist so far, with #, A–C read whole" in titles[2]
@@ -1071,7 +1073,7 @@ def test_a_query_with_results_says_where_caracole_looked_in_one_muted_line(cfg, 
     assert browser.wait(f"{answer_to('radiohead')} && {HITS} >= 1 && !!document.querySelector('#results .looked-line')")
     assert browser.js(CHIPS.replace("SCOPE", "#results .looked-line")) == [
         ["UG ✓", "done"], ["gtptabs.com: empty", "empty"], ["LaCuerda: up to C", "partial"],
-        ["MuseScore blocked", "blocked"]]
+        ["MuseScore blocked", "blocked"], ["harptabs.com: empty", "empty"]]
     assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing, #results .did-you-mean').length") == 0
     assert browser.js(OLD_NOTES) == 0
     line = browser.js("document.querySelector('#results .looked-line').getBoundingClientRect().height")
@@ -1318,3 +1320,57 @@ def test_back_after_an_artists_name_and_its_funnel_brings_the_whole_address_agai
     assert browser.wait("document.getElementById('artist').hidden === false")
     assert browser.wait(f"JSON.stringify({GRID}) === '[\"Demasiadas Mujeres\"]'"), browser.js(GRID)
     assert queue.snapshot() == []
+
+
+# --- a sheet's artist searches for them too -----------------------------------------------------------------------
+
+# Where a finger may press the artist's name under a sheet's title: its box, and what the screen has at its top and
+# bottom edges, a few pixels in (the name's own line is shorter than a thumb).
+ARTIST_TARGET = """(() => {
+  const a = document.querySelector(".head .artist a");
+  const r = a.getBoundingClientRect();
+  const at = (y) => document.elementFromPoint(r.x + r.width / 2, y) === a;
+  return { width: r.width, height: r.height, x: r.x + r.width / 2, top: r.top + 3,
+           edges: at(r.top + 3) && at(r.bottom - 3) };
+})()"""
+
+
+def test_a_sheets_artist_searches_for_them_on_the_library_page_and_back_returns_to_the_sheet(cfg, live, phone):
+    # The served viewer, in its sandbox: a finger on the artist's name under the title, even at the edge of its thumb's
+    # target, opens the library page searching for them as their name there does, which asks no site (their group
+    # first, your song of theirs and every index's songs of theirs); Back is the sheet again, as it was.
+    from caracole import lacuerda_index as li
+    from caracole.lacuerda import LCSong
+    from helpers.rendered import rendered_song
+
+    base, queue, asked = live
+    sites(cfg, ug=C_TANGANA, gtptabs=["https://gtptabs.com/tabs/15/c-tangana/los-tontos.html"])
+    conn = db.connect(cfg.db_path)
+    try:
+        li.store_songs(conn, "c_tangana", "C Tangana", [LCSong("nunca_estoy", "Nunca Estoy", "R", (1,))])
+        conn.commit()
+        rendered_song(conn, cfg, "C Tangana", "Demasiadas Mujeres")
+    finally:
+        conn.close()
+    phone.open(base + quote("C Tangana/Demasiadas Mujeres/sheet.html") + "#t=2")
+    assert phone.wait("document.documentElement.dataset.ready === '1'")
+    assert phone.js("document.querySelector('.head .artist').textContent") == "C Tangana"
+    assert phone.js(NO_SIDEWAYS)
+    target = phone.js(ARTIST_TARGET)
+    assert target["width"] >= 44 and target["height"] >= 44 and target["edges"], target
+    phone.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": target["x"], "y": target["top"]}])
+    phone.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+    assert phone.wait("location.pathname === '/index.html' && document.readyState === 'complete'")
+    assert phone.wait("document.getElementById('found').dataset.query === 'C Tangana'")
+    assert phone.js("document.getElementById('q').value") == "C Tangana"
+    assert phone.js(GROUPS)[0] == "C Tangana · you have 1 · UG 3 · LaCuerda 1 · Guitar Pro 1", phone.js(GROUPS)
+    assert phone.js(LINES)[0] == ["C Tangana", [
+        ["Demasiadas Mujeres", "yours"], ["Tu Me Dejaste De Querer", "ug"], ["Los Tontos", "ug+gtptabs"],
+        ["Nunca Estoy", "lacuerda"]]], phone.js(LINES)
+    assert asked.queries() == ["C Tangana"] and queue.snapshot() == []  # the indexes alone: nothing looked up
+    assert phone.js("location.hash") == "#q=C+Tangana&all=1"  # the page's own address for it: a reload keeps it
+    assert phone.js(NO_SIDEWAYS)
+    phone.js("history.back()")
+    assert phone.wait("location.pathname.endsWith('/sheet.html') && document.documentElement.dataset.ready === '1'")
+    assert phone.js("location.hash") == "#t=2"
+    assert phone.js("document.getElementById('key-now').textContent").startswith("A")  # still two semitones up

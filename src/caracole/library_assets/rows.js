@@ -354,6 +354,30 @@ const caracoleRows = (icons, does) => {
     box.appendChild(versions);
     return box;
   };
+  // A song's harmonica tabs on harptabs.com (``tabs``: each one's title, page and chips, the most viewed first), under a
+  // "⋯": each a button, ``choose(tab, button)`` what it does, with a link to look at it there.
+  const harpTabsOf = (tabs, display, choose) => {
+    const list = el("ul", "versions");
+    for (const t of tabs) {
+      const said = [t.key ? "key " + String(t.key) : "", Number(t.views) ? Number(t.views).toLocaleString("en") + " views"
+        : ""].filter(Boolean).join(" · ");
+      const name = String(t.title || "") + (said ? " · " + said : "");
+      const item = el("li", "version");
+      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Get " + display + " with the tab " +
+        String(t.title || "")));
+      const there = el("a", "on-ug", "on harptabs.com");
+      there.href = https(t.url) ? String(t.url) : "#";
+      there.target = "_blank";
+      there.rel = "noopener noreferrer";
+      there.setAttribute("aria-label", String(t.title || "") + ", " + display + ", on harptabs.com");
+      item.appendChild(there);
+      list.appendChild(item);
+    }
+    const box = el("div", "row-group");
+    box.appendChild(el("p", "subhead", "Harmonica tabs on harptabs.com"));
+    box.appendChild(list);
+    return box;
+  };
   // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), which its name does
   // too (nameDoes), and its versions under "⋯" (versionsOf).
   const ugHit = (h, get, later) => {
@@ -427,6 +451,24 @@ const caracoleRows = (icons, does) => {
         facts: many(Number(hit.versions) || 1, "version") + (chords ? "" : " · no chords"),
         badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
       nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+    } else if (hit.source === "harptabs" && hit.artist) {  // harptabs.com's song, by an artist whose page was read
+      const mine = yours(hit);
+      const artist = String(hit.artist || "");
+      const display = mine ? String(mine.display || "") : artist + " - " + title;
+      const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object" && https(t.url));
+      const pick = (url) => Object.assign(mine ? { song: mine.id } : { artist, title }, { harptabs: String(url) });
+      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick(hit.url), display, row,
+        e.currentTarget), (mine ? "Get " + display + " again" : "Get " + display) + " with its harmonica tab");
+      main.title = "Looks the song up now, and keeps this harptabs.com tab";
+      const more = [];
+      if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => get(pick(t.url), display, row, go)));
+      const opens = mine ? opener(mine.links) : null;
+      if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+      row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "harptabs",
+        facts: many(Number(hit.uploads) || 1, "harmonica tab"),
+        badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(["harmonica"])],
+        action: main, more });
+      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
     } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's or harptabs.com's: a title alone
       const site = TITLE_SITES[hit.source];
       row = resultRow({ title, artist: "Same title: maybe another song", source: hit.source,
@@ -475,15 +517,17 @@ const caracoleRows = (icons, does) => {
     const ug = rowOf(it.ug);
     const lc = rowOf(it.lacuerda);
     const gtp = rowOf(it.gtptabs);
-    const mine = [ug, lc, gtp].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
+    const ht = rowOf(it.harptabs);
+    const mine = [ug, lc, gtp, ht].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
     const gone = mine ? null : rowOf(it.removed);
-    const first = ug || lc || gtp || gone || {};
+    const first = ug || lc || gtp || ht || gone || {};
     const title = String(first.title || "");
     const artist = String(first.artist || "");
     const display = mine ? String(mine.display || "") : artist + " - " + title;
     const pick = (extra) => Object.assign(mine ? { song: mine.id } : { artist, title }, extra);
     const chords = Boolean(lc) && https(lc.sheet) && https(lc.url);
     const sheet = chords ? { lacuerda: String(lc.url) } : {};
+    const harp = ht && https(ht.url) ? { harptabs: String(ht.url) } : null;
     const a = acts && typeof acts === "object" ? acts : {};
     let line = null;
     const here = () => line;
@@ -494,12 +538,13 @@ const caracoleRows = (icons, does) => {
         "Add " + display + " again");
       main.title = "Into wanted.txt again, as Request does, and looked up now: a wanted.txt line brings it back";
     } else {
-      const chosen = ug ? pick({ ug: ug.ug }) : pick(sheet);
+      const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : harp ? pick(harp) : pick(sheet);
       main = button(mine ? "Get it again" : "Get it", "small primary", (e) => a.get(chosen, display, here(), e.currentTarget),
         (mine ? "Get " + display + " again" : "Get " + display) + (ug ? " from Ultimate Guitar" : chords ? " from LaCuerda"
-          : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
+          : harp ? " with its harmonica tab from harptabs.com" : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
       main.title = ug ? "Looks the song up now, as caracole get does, on Ultimate Guitar first"
         : chords ? "Looks the song up now, and keeps this LaCuerda sheet"
+        : harp ? "Looks the song up now, and keeps this harptabs.com tab"
         : gtp ? "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com"
         : "Looks the song up now: LaCuerda has no chords for it";
     }
@@ -521,22 +566,29 @@ const caracoleRows = (icons, does) => {
       more.push(box);
     }
     if (gtp) more.push({ heading: "On gtptabs.com", links: [{ label: "Its page", href: gtp.url, source: "gtptabs" }] });
+    if (ht) {  // its harmonica tabs, each a Get it that keeps that tab (the line's own button may be another site's)
+      const tabs = listOf(ht.tabs).filter((t) => t && typeof t === "object" && https(t.url));
+      if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => a.get(pick({ harptabs: String(t.url) }), display, here(), go)));
+    }
     const opens = mine ? opener(mine.links) : null;
     if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
     // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
     if (a.later && !mine && !(ug && ug.no_ones)) more.push(laterGroup(a.later, pick(ug ? {} : sheet), display, here));
     const facts = [ug ? tabCounts(ug.counts) : "",
       lc ? "LaCuerda ×" + (Number(lc.versions) || 1) + (chords ? "" : ", no chords") : "",
-      gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : ""];
+      gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : "",
+      ht ? "harmonica tab" + ((Number(ht.uploads) || 1) > 1 ? " ×" + Number(ht.uploads) : "") : ""];
     const badges = gone ? [{ kind: "removed", text: "Removed " + String(gone.removed_at || "").slice(0, 10) }]
       : mine ? [{ kind: "found", text: "In your library" }] : [];
-    line = resultRow({ dense: true, title, artist, sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs"].filter(Boolean),
-      facts: facts.filter(Boolean).join(" · "), badges: [...badges, ...instrumentBadges(ug ? ugInstruments(ug.counts) : [])],
+    line = resultRow({ dense: true, title, artist,
+      sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs"].filter(Boolean),
+      facts: facts.filter(Boolean).join(" · "),
+      badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : [])])],
       action: main, more, status: gone ? "removed" : "" });
     line.classList.add("hit");
     if (gone) line.classList.add("removed-hit");
     line.dataset.hit = String(it.key || "");
-    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : "removed";
+    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : "removed";
     if (ug) line.dataset.ug = String(ug.ug || "");
     nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Get " + display + " again" : "Get " + display);
     return line;
@@ -557,33 +609,43 @@ const caracoleRows = (icons, does) => {
     line.dataset.hit = source + ":" + String(hit.url || "");
     return line;
   };
-  // An artist of LaCuerda's index, with their most popular songs said: ``open(a)`` lists the songs the index
-  // holds of theirs, or offers to read their page when caracole never has.
+  // An artist of LaCuerda's index, or of harptabs.com's (``source``), with their most popular (most viewed) songs said:
+  // ``open(a)`` lists the songs the index holds of theirs, or offers to read their page when caracole never has.
   const siteArtist = (a, open) => {
     const x = a && typeof a === "object" ? a : {};
+    const harp = x.source === "harptabs";
     const name = String(x.artist || "");
     const top = listOf(x.top).map((t) => t && t.title).filter(Boolean);
-    const go = button("Songs", "small primary", () => open(x), "Songs by " + name + " on LaCuerda");
-    const row = resultRow({ title: name, artist: top.length ? "Artist · " + top.join(", ") : "Artist", source: "lacuerda",
-      facts: many(x.songs, "song"), action: go });
+    const go = button("Songs", "small primary", () => open(x), "Songs by " + name + (harp ? " on harptabs.com" : " on LaCuerda"));
+    const row = resultRow({ title: name, artist: top.length ? "Artist · " + top.join(", ") : "Artist",
+      source: harp ? "harptabs" : "lacuerda",
+      facts: harp ? (Number(x.known) ? many(x.songs, "harmonica tab") : "page not read yet") : many(x.songs, "song"),
+      badges: harp ? instrumentBadges(["harmonica"]) : [], action: go });
     row.classList.add("hit", "artist-hit");
-    row.dataset.source = "lacuerda";
-    row.dataset.slug = String(x.slug || "");
+    row.dataset.source = harp ? "harptabs" : "lacuerda";
+    row.dataset.slug = String((harp ? x.path : x.slug) || "");
     return row;
   };
-  // A LaCuerda artist's songs, as /api/artist?lacuerda= gives them, under ``group(title, rows)``; or, while
-  // caracole hasn't read their page, what it lists and the button that reads it (``read(button, box)``).
+  // A LaCuerda or harptabs.com artist's songs, as /api/artist?lacuerda= (?harptabs=) gives them, under ``group(title,
+  // rows)``; or, while caracole hasn't read their page, what it lists and the button that reads it (``read(button,
+  // box)``).
   const siteArtistSongs = (page, group, get, later, read) => {
     const p = page && typeof page === "object" ? page : {};
+    const harp = p.source === "harptabs";
+    const site = harp ? "harptabs.com" : "LaCuerda";
     const songs = listOf(p.songs).filter((h) => h && typeof h === "object");
-    if (p.read) return group("LaCuerda, the most popular first · " + many(songs.length, "song"), songs.map((h) => siteHit(h, get, later)));
+    if (p.read) {
+      return group(site + (harp ? ", the most viewed first · " : ", the most popular first · ") + many(songs.length, "song"),
+        songs.map((h) => siteHit(h, get, later)));
+    }
     const name = String(p.artist || "");
     const box = el("div", "read-page");
-    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on LaCuerda yet, which lists " +
-      many(p.listed, "song") + ". Reading it is one request to LaCuerda, at a lookup's pace."));
+    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on " + site + " yet" +
+      (harp ? "" : ", which lists " + many(p.listed, "song")) + ". Reading it is one request to " + site +
+      ", at a lookup's pace."));
     box.appendChild(button("Read their page", "small primary", (e) => read(e.currentTarget, box),
-      "Read the page of " + name + " on LaCuerda"));
-    return [el("h2", "group", "LaCuerda"), box];
+      "Read the page of " + name + " on " + site));
+    return [el("h2", "group", site), box];
   };
   // A job of LaCuerda's index queued (POST ``address``, the form ``body``), then followed until it is over;
   // ``said(text)`` hears how it goes, in ``words`` (``asking``, ``running``; ``failed``, a refusal without words).
@@ -614,10 +676,16 @@ const caracoleRows = (icons, does) => {
       }, gone);
   });
   // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
-  // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), then follow the job until it
-  // is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
+  // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), or a harptabs.com artist's (POST
+  // harptabs/artist: caracole harptabs --artist), by its path (``who.harptabs``), then follow the job until it is
+  // over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
   const readArtistPage = (csrf, who, said) => {
     const w = who && typeof who === "object" ? who : {};
+    if (w.harptabs) {
+      return queueAndFollow("harptabs/artist", new URLSearchParams({ csrf: String(csrf || ""), path: String(w.harptabs) }),
+        said, { asking: "Asking for the page…", running: "Reading the page on harptabs.com…",
+          failed: "caracole didn't read the page." });
+    }
     const body = new URLSearchParams(w.slug ? { csrf: String(csrf || ""), slug: String(w.slug) }
       : { csrf: String(csrf || ""), name: String(w.name || "") });
     return queueAndFollow("lacuerda/artist", body, said, { asking: "Asking for the page…",
@@ -639,14 +707,20 @@ const caracoleRows = (icons, does) => {
   // (``place(line)``). Enter (``enter(query, shown)``) sends it at once, by hand as the button does, when the gate
   // says "auto" or "button" (not "failed": its button asks again): for the answer on the screen (``shown``), its
   // line given back, else with the query's next answer, which ``show`` then gives; the settle's wait for it ends.
-  // ``leave()``, the results left before that answer, takes such an Enter back. Never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
-  // LaCuerda for “…” (1 request)", by hand; state "failed", its search failed lately (or three did): the gate's
-  // ``why``, and the button. While it runs the line says so ("Searching LaCuerda for “…”…"), then what LaCuerda
-  // answered, or why the search was refused, and ``done(query)`` asks the page's search again, whose answer the
-  // job's end left fresh: that query's line stays under its results, with the button when the gate offers it now
-  // (a search refused or failed: the words name it). ``show(gate, query)`` gives the line to put under them, or
-  // null.
+  // ``leave()``, the results left before that answer, takes such an Enter back. Never twice for one query in a page.
+  // State "button", the hour's share of such searches spent: "Ask LaCuerda for “…” (1 request)", by hand; state
+  // "failed", its search failed lately (or three did): the gate's ``why``, and the button. While it runs the line
+  // says so ("Searching LaCuerda for “…”…"), then what LaCuerda answered, or why the search was refused, and
+  // ``done(query)`` asks the page's search again, whose answer the job's end left fresh: that query's line stays
+  // under its results, with the button when the gate offers it now (a search refused or failed: the words name it).
+  // ``show(gate, query, asks)`` gives the line to put under them, or null. One LaCuerda button at a time: where the
+  // page shows Ask LaCuerda for a name its listings don't reach yet (``asks``), the line has no button of its own, and
+  // that one's press asks ``ask(query, go)`` first, which sends the search by hand when the gate lets one go
+  // (``searchable``) and none is on its way, else leaves the press to the name's page.
   const SETTLE = 1500;
+  // Whether a gate lets LaCuerda's search go by hand now: "auto" (the page would send it by itself) or "button".
+  const searchable = (gate) => Boolean(gate && typeof gate === "object" && (gate.state === "auto" ||
+    gate.state === "button"));
   const lacuerdaSearcher = (csrf, current, done, place) => {
     const lines = new Map();  // the line of each query's key, the same node from one draw to the next
     const keys = new Map();  // each query's key, as its first gate gave it: a later answer may have none
@@ -672,6 +746,7 @@ const caracoleRows = (icons, does) => {
       line.replaceChildren(words);
       searchLaCuerda(csrf, query, byHand, (text) => { words.textContent = text; }).then((asked) => {
         running.delete(key);
+        gates.set(query, null);  // what it lets now, the answer done() brings says
         if (asked.error) {
           words.textContent = asked.error;
         } else {
@@ -684,23 +759,32 @@ const caracoleRows = (icons, does) => {
       });
       return line;
     };
+    // A line as the page shows it: without a button of its own while Ask LaCuerda's is on the screen (``asks``); none
+    // when it says nothing.
+    const drawn = (line, asks) => {
+      const go = line.querySelector(".lacuerda-search-go");
+      if (asks && go) go.remove();
+      return line.firstChild ? line : null;
+    };
     // The button that sends it by hand, under what the line says: the gate's ``why``, or what the search this page
-    // sent said.
-    const offer = (gate, query) => {
+    // sent said; while Ask LaCuerda's is on the screen (``asks``), the words alone.
+    const offer = (gate, query, asks) => {
       const key = String(gate.key);
       const line = lineOf(key);
-      if (line.querySelector(".lacuerda-search-go")) return line;
-      const go = button("Search LaCuerda for “" + query + "” (1 request)", "small lacuerda-search-go", () => {
-        go.disabled = true;
-        send(gate, query, true);
-      }, "Search LaCuerda for “" + query + "”: one request");
-      go.title = "LaCuerda's own search, one request at a lookup's pace: its songs go into caracole's copy of its index.";
-      if (!sent.has(key)) {
+      let go = line.querySelector(".lacuerda-search-go");
+      if (!go && !sent.has(key)) {
         const why = gate.state === "failed" && typeof gate.why === "string" ? gate.why : "";
         line.replaceChildren(...(why ? [el("p", "hint lacuerda-search-said", why)] : []));
       }
-      line.appendChild(go);
-      return line;
+      if (!go && !asks) {
+        go = button("Ask LaCuerda for “" + query + "” (1 request)", "small lacuerda-search-go", () => {
+          go.disabled = true;
+          send(gate, query, true);
+        }, "Ask LaCuerda for “" + query + "”: one request");
+        go.title = "LaCuerda's own search, one request at a lookup's pace: its songs go into caracole's copy of its index.";
+        line.appendChild(go);
+      }
+      return drawn(line, asks);
     };
     const fire = () => {
       timer = 0;
@@ -718,17 +802,20 @@ const caracoleRows = (icons, does) => {
       pending = null;
       place(send(wait.gate, wait.query, false));
     };
+    // A search by hand of the key's query: the settle's wait for it ends.
+    const settled = (key) => {
+      if (!pending || pending.key !== key) return;
+      clearTimeout(timer);
+      timer = 0;
+      pending = null;
+    };
     // Enter's search, by hand, when the gate sends one (and none went for the query yet): the settle's wait ends.
     const entering = (g, query) => {
-      if (!g || (g.state !== "auto" && g.state !== "button") || sent.has(String(g.key))) return null;
-      if (pending && pending.key === String(g.key)) {
-        clearTimeout(timer);
-        timer = 0;
-        pending = null;
-      }
+      if (!searchable(g) || sent.has(String(g.key))) return null;
+      settled(String(g.key));
       return send(g, query, true);
     };
-    const show = (gate, query) => {
+    const show = (gate, query, asks) => {
       const g = gate && typeof gate === "object" && typeof gate.key === "string" && gate.key ? gate : null;
       if (!firstShown.has(query)) firstShown.set(query, performance.now());
       if (g && !keys.has(query)) keys.set(query, String(g.key));
@@ -742,10 +829,14 @@ const caracoleRows = (icons, does) => {
       const now = wanted ? entering(g, query) : null;  // Enter came before the answer
       if (now) return now;
       // Over: what it said, and the button when the gate still offers a search (refused, failed or cancelled).
-      if (key && sent.has(key)) return g && (byHand || g.state === "auto") ? offer(g, query) : lineOf(key);
-      if (key && lines.has(key) && lines.get(key).firstChild) return lineOf(key);  // offered already
+      if (key && sent.has(key)) {
+        return g && (byHand || g.state === "auto") ? offer(g, query, asks) : drawn(lineOf(key), asks);
+      }
+      if (key && !byHand && lines.has(key) && lines.get(key).firstChild) {  // offered already
+        return drawn(lineOf(key), asks);
+      }
       if (!g) return null;
-      if (byHand) return offer(g, query);
+      if (byHand) return offer(g, query, asks);
       if (g.state === "spent") {  // said afresh each time: in an hour, the same query may be sent
         const line = el("div", "lacuerda-search");
         line.appendChild(el("p", "hint lacuerda-search-said", "LaCuerda's search waits: it cools down after a " +
@@ -774,7 +865,18 @@ const caracoleRows = (icons, does) => {
     const leave = () => {
       entered = null;
     };
-    return { show, typed, enter, leave };
+    // Ask LaCuerda's button pressed (``go``), where it stands for this line's too: the search of ``query`` now, by
+    // hand, when its newest gate lets one go and none is on its way (its line put under the results, ``go``
+    // disabled: true); else false, and the button reads the name's page.
+    const ask = (query, go) => {
+      const g = gates.get(query);
+      if (!searchable(g) || running.has(String(g.key))) return false;
+      settled(String(g.key));
+      if (go) go.disabled = true;
+      place(send(g, query, true));
+      return true;
+    };
+    return { show, typed, enter, leave, ask };
   };
   // A read that left no songs to list: what LaCuerda answered, as its request's line says it ("Not read: LaCuerda is
   // cooling down…", "Not found: …"), and its output on the requests page.
@@ -864,22 +966,30 @@ const caracoleRows = (icons, does) => {
     return fold;
   };
   // The read of a name LaCuerda's listings don't reach yet (``lacuerda_unlisted``: { name, letter }), one request:
-  // ``ask(button, box)``; ``named``, the button says the name (beside results, which may name others).
-  const askLaCuerda = (unlisted, ask, box, named) => {
+  // ``ask(button, box)``; ``named``, the button says the name (beside results, which may name others). The one
+  // LaCuerda button on the screen: the page's ``ask`` sends LaCuerda's search first, while its gate lets one go
+  // (lacuerdaSearcher's ``ask``), as the tooltip says when the answer's gate does (``search``, the query).
+  const askLaCuerda = (unlisted, ask, box, named, search) => {
     const u = unlisted && typeof unlisted === "object" ? unlisted : null;
     if (!u) return null;
     const name = String(u.name || "");
+    const letter = String(u.letter || "");
     const go = button(named ? "Ask LaCuerda for “" + name + "” (1 request)" : "Ask LaCuerda (1 request)",
       "small ask-lacuerda", (e) => ask(e.currentTarget, box),
       "Ask LaCuerda for “" + name + "”: one request");
-    go.title = "LaCuerda's list doesn't reach " + String(u.letter || "") + " yet: caracole reads its page for “" +
-      name + "”, one request at a lookup's pace.";
+    go.title = search
+      ? "LaCuerda's own search for “" + search + "”, one request at a lookup's pace: its songs go into caracole's " +
+        "copy of its index. Once it is asked, caracole reads LaCuerda's page for “" + name + "” instead, as its " +
+        "list doesn't reach " + letter + " yet."
+      : "LaCuerda's list doesn't reach " + letter + " yet: caracole reads its page for “" + name + "”, one request " +
+        "at a lookup's pace.";
     return go;
   };
   // A search that found nothing (``data``, for ``query``): one card, "Not it?" under the artists it may have meant
   // (didYouMean, drawn above it), else "No song or artist matches “query”": its actions, the request by name first
   // (``does.request``, labelled ``does.requestLabel``) and, while LaCuerda's listings don't reach the name, Ask
-  // LaCuerda (``does.ask(button, card)``); where caracole looked; and why it may not see an artist, folded.
+  // LaCuerda (``does.ask(button, card)``, LaCuerda's search first while its gate, ``data.lacuerda_search``, lets one
+  // go); where caracole looked; and why it may not see an artist, folded.
   const nothingFound = (data, query, does) => {
     const d = data && typeof data === "object" ? data : {};
     const meant = listOf(d.suggest).some((s) => s && typeof s === "object" && s.artist);
@@ -891,7 +1001,8 @@ const caracoleRows = (icons, does) => {
     const actions = el("div", "nothing-actions");
     actions.appendChild(button(String(does.requestLabel || "Request “" + query + "” by name"), "small primary",
       () => does.request()));
-    const ask = d.lacuerda_unlisted && does.ask ? askLaCuerda(d.lacuerda_unlisted, does.ask, card) : null;
+    const ask = d.lacuerda_unlisted && does.ask
+      ? askLaCuerda(d.lacuerda_unlisted, does.ask, card, false, searchable(d.lacuerda_search) ? query : null) : null;
     if (ask) actions.appendChild(ask);
     card.append(head, actions, lookedChips(d.looked));
     const why = whyUnseen(d.unseen, query);
@@ -907,7 +1018,10 @@ const caracoleRows = (icons, does) => {
     if (!ask && !d.unseen && looked.every((s) => s.state === "done")) return null;
     const line = el("div", "looked-line");
     line.appendChild(lookedChips(looked));
-    if (ask) line.appendChild(askLaCuerda(d.lacuerda_unlisted, does.ask, line, true));
+    if (ask) {
+      line.appendChild(askLaCuerda(d.lacuerda_unlisted, does.ask, line, true,
+        searchable(d.lacuerda_search) ? query : null));
+    }
     const why = whyUnseen(d.unseen, query);
     if (why) line.appendChild(why);
     return line;

@@ -366,21 +366,39 @@ def _gtptabs(ctx: StepContext) -> StepResult:
 
 def _harptabs(ctx: StepContext) -> StepResult:
     from caracole.harptabs_fetch import harptabs_tabs
+    from caracole.harptabs_index import ArtistPassStats, artist_pass, index_state
 
-    s = harptabs_tabs(ctx.conn, ctx.services.client("harptabs"), ctx.cfg.library_dir, ctx.now,
-                      overrides=ctx.overrides)
-    index = f"{plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
+    client = ctx.services.client("harptabs")
+    s = harptabs_tabs(ctx.conn, client, ctx.cfg.library_dir, ctx.now, overrides=ctx.overrides)
+    # The artist pages, for searches to find harptabs.com's tabs by artist, get what the tabs left of the budget
+    # (harptabs_index.py: your songs' artists first); as LaCuerda's listings, only once the library has a song, so
+    # that an empty one asks no site. The sitemap is asked for again only when the tabs' pass didn't fail on it.
+    wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
+    ax = (artist_pass(ctx.conn, client, ctx.now, overrides=ctx.overrides, refresh_index=not s.sitemap_errors)
+          if wanted and not s.budget_exhausted else ArtistPassStats())
+    state = index_state(ctx.conn)
+    sitemaps = s.sitemaps + ax.sitemaps
+    index = f"{plural(sitemaps, 'sitemap')} indexed, " if sitemaps else ""
+    artists = (f"; artist index: {plural(ax.read, 'page')} read, {state.read:,} of {plural(state.artists, 'artist')}"
+               if ax.read or ax.errors else "")
     result = _provider_result(
-        ctx, "harptabs", errors=s.errors, error=f"{plural(s.errors, 'error')} this run", spent=s.budget_exhausted,
+        ctx, "harptabs", errors=s.errors, error=f"{plural(s.errors, 'error')} this run",
+        spent=s.budget_exhausted or ax.budget_exhausted,
         status=(f"{index}{s.tried} tried, {plural(s.kept, 'harmonica tab')} kept, {s.missing} not on harptabs.com, "
-                f"{plural(s.errors, 'error')}"),
+                f"{plural(s.errors, 'error')}{artists}"),
         failures=s.failures, title="harptabs.com",
-        done=_counted(_n(s.kept, "harmonica tab", "kept"), _n(s.missing, "song", "not there")),
+        done=_counted(_n(s.kept, "harmonica tab", "kept"), _n(s.missing, "song", "not there"),
+                      _n(ax.read, "artist page", "read")),
         retry="{songs} will be looked for on harptabs.com again on the next run",
     )
-    if s.sitemap_errors:  # a song's error is on its failure's line
+    if s.sitemap_errors or ax.sitemap_error:  # a song's error is on its failure's line
         result.problems.append(Problem("harptabs.com's sitemap couldn't be read this run; it is asked for again "
                                        "on the next run, and the log says why."))
+    pages = ax.errors - ax.sitemap_error
+    if pages:
+        record_error(ctx.conn, "harptabs", ctx.now, f"{plural(pages, 'artist page')} couldn't be read this run")
+        result.problems.append(Problem(f"{plural(pages, 'artist page')} of harptabs.com couldn't be read this run; "
+                                       "they are asked for again on the next run, and the log says why."))
     return result
 
 

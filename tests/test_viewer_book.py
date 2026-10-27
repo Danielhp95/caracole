@@ -202,6 +202,21 @@ def test_the_page_links_the_pdf_and_the_chordpro_file_when_there_are_some():
     assert 'href="../../index.html"' in html
 
 
+def test_each_songs_artist_links_to_the_library_page_for_their_songs_as_a_sheet_html_does():
+    html = page()
+    heads = re.findall(r'<section class="song" id="song-(\d+)".*?<header class="head">(.*?)</header>', html, re.DOTALL)
+    artists = {n: re.search(r'<p class="artist"><a href="([^"]*)" title="([^"]*)"><span>([^<]*)</span></a></p>',
+                            head).groups()
+               for n, head in heads}
+    assert artists == {
+        "1": ("../../index.html#by=The%20Placeholders", "Songs by The Placeholders", "The Placeholders"),
+        "3": ("../../index.html#by=Others", "Songs by Others", "Others"),
+        "5": ("../../index.html#by=%E5%AE%8B%E5%86%AC%E9%87%8E", "Songs by 宋冬野", "宋冬野"),
+    }
+    # The songbook's own line ("Songbook · 5 songs") is no artist's, and the contents' rows are links already.
+    assert '<p class="artist">Songbook · 5 songs</p>' in html and "#by=" not in contents(html)
+
+
 def test_what_the_songs_say_is_text_never_markup():
     evil = "</script><script>alert(1)</script>"
     cho = to_chordpro("[ch]G[/ch]\n" + evil, title=evil, artist="<b>x</b>")

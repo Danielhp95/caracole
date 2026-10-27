@@ -41,7 +41,7 @@ section says where things are, and the rules a change there keeps.
 | lacuerda | lacuerda.py (URLs, parsing, its search's pages), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page; `popular_pages`, the most popular artists' pages once the listings are read whole), lacuerda_index.py (its listings of every artist, for searches; `backfill_cached`, the artist pages the HTTP cache holds; `store_search`, what its search answered), lacuerda_search.py (its own search, one query at the lookup pace, `caracole lacuerda --search`; `gate`, whether the pages may send it) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
-| harptabs | harptabs.py (URLs, its sitemap's rows, a tab page read; what the site answered caracole's probe), harptabs_fetch.py (the step: a song's candidates by title, its artist confirmed on the page, the most viewed kept as `harmonica-N.txt`, provider `harptabs`, kind `harmonica`; `inbox.harmonica_files`, which library_page.py and render.py read: the viewer's data `harmonicaTabs`) |
+| harptabs | harptabs.py (URLs, its sitemap's rows, a tab page read, an artist page read: its name, the tabs it says they have and the 30 it lists, `parse_artist_page`; `song_title`, `song_key`, the song a tab's title names; what the site answered caracole's probe), harptabs_fetch.py (the step: a song's candidates by title, its artist confirmed on the page, the most viewed kept as `harmonica-N.txt`, provider `harptabs`, kind `harmonica`; `inbox.harmonica_files`, which library_page.py and render.py read: the viewer's data `harmonicaTabs`), harptabs_index.py (its artist pages read into `harptabs_artists` and `harptabs_artist_tabs`, schema 11, for searches: `artist_pass`, the step's with what its budget leaves and `caracole harptabs --index`'s, your songs' artists first, each page again after 30 days, resumed across runs; `read_artist`, one page now, `caracole harptabs --artist`; `index_state`, how far it has got) |
 | musescore | musescore.py (URLs, parsing), musescore_fetch.py (the step) |
 | youtube | youtube.py (running yt-dlp), youtube_urls.py (a video's address), youtube_fetch.py (the step; `song_states`, where each song stands for the pages: `todo.write_pages` asks once and hands it to both, a one-song card asks of its song alone) |
 | render | chordpro.py (UG markup to ChordPro), render.py (PDFs; a viewer page alone for each version kept beside the sheet, `version-<tab>.html` from its `.json`, with no Export PDF (an export is the one's), recorded in `render:files:` and dropped once the version leaves; every viewer of the song carries `versions`, `sheet_versions.as_data` with `sheet`, the one's provider, `pinned`, whether a `[pin]` chooses it (`sheet_versions.sheet_pins`, what `caracole versions --clear` takes out), and `this` on each entry, true on the page's own, and `guitar`, the song's kept Guitar Pro files caracole serve shows in the browser (`inbox.guitar_files`), linked in served settings as Guitar Pro tab; `render_version`, an export: the PDF in a viewer's version of the sheet `export_viewer` names, the human one else the auto one, on the instrument its `inst=` names (`export_version`; `sheet (A Major, piano).pdf`), while `sheet.pdf` is the guitar's (`on_the_guitar`), listed under PDF exports in its line's ⋯ on index.html, where Sheet versions lists the UG versions kept beside the sheet (`sheet_versions.in_library`, library_page.py `_versions_data`); `own_version`, the song's own on one of its sheets, overrides.toml's `[version]`: kept by the key it plays in, as Make this my version writes it (`ExportSheet.entry`, `key=Gm&mode=dorian&capo=0`: the key of the shapes in the mode the sheet's chords are read in, a mode only where one was chosen, shapes by their frets), which each sheet takes by a songbook setting's rule, its chords read in the notes of its own key, so a replaced sheet plays in that key, and one that reads the same chords in the relative key, or names the parallel one for them (`version._fitting`), plays them; or, written before, a `t=` move from the sheet, which the export page offers to keep by its key; the chordpro plumbing songbook.py shares: `run_chordpro`, a run's errors as `RenderError`s, `private_dir`, the 0700 folder chordpro works in, `pdf_font`, the font a text needs, and `written_entry`, the one reading of a file written's record), pdf_text.py (each PDF's own text; `names`, the theory edition's chord names: each chord and its numeral, or the numerals alone in a chart with no diagrams, with a legend from `harmony.glossary`; its two columns end level, at a section, by `line_heights` and `column_height`: chordpro's layout in caracole's style, chordpro-style.json's sizes and the PDF fonts' widths (pdf_fonts.py), which test_render.py pins to the real chordpro's pages in the built-in fonts and in Adwaita's; on another instrument, a version's text with a song config of its own, `##config: json` (`instrument_config`: a ukulele's `tuning`, so its four strings take each `{define}`; the piano's keyboard, `KEYBOARD`, a `{define: X keys …}` of the viewer's first position, `version.define_keys`), the harmonica's harps and each chord's holes (harp.py `header_line`, `play`) or the winds' scale in place of diagrams, the instrument and its folded capo under the title, the rows of diagrams `column_height` counts read from that config; one chordpro run draws one number of strings, chordpro 6.050.7's tuning being global, so a songbook draws its most common one and writes the others' shapes as frets, `diagrams=False`), viewer/ (sheet.html, songbook.html; version.py, a viewer's version applied to a sheet in Python, and where a key plays a sheet: `Setting`, key, mode, capo, instrument, and `in_setting`, the setting's key as the key of the shapes played (on an instrument with no capo, the key it sounds in), its mode and capo; a `Version`'s `inst`, the viewer's `inst=`, which `apply_version` shapes for (a ukulele's frets, the piano's keys, none for the harmonica and the winds) and `played_key`, `version_label` and `played_label` fold the capo in for ("A Major, piano"); `KeyVersion`, a `[version]` kept by its key, its swaps and shapes by their chords' names: `key_version` reads one, `version_entry` writes one, `in_key` plays it on any sheet; harmony.py, what each chord does in its key on top of theory.py: Roman numerals, relations, families, glossary lines, chord tones, solo scales, progressions named from its `CATALOGUE` (each row with its source; a row of `_LOOPS` from any of its chords, the others from their first; a cycle a section plays whole, or `contains`, the ones played within a longer section, within each pass of one played round) and their endings, a section's repeats folded round a pass that varies them (`_fold`), `progression_key` for searching, `name_of` and `read_typed` for numerals typed; harmony_tables.py, its answers as the tables a viewer's data carries, per mode, each text naming notes written for every transposition, for viewer.js to look up; strum.js, a chord's shape strummed in Web Audio, `window.caracoleSound`, each instrument's voice; harp.py, the Richter harmonica: its layout in every key, positions by Wikipedia's circle-of-fifths numbering, the chords a harp plays (`play`: whole, as its triad, a minor substitute, or not) and the harps for a song (`choices`, `header_line`; ranked by one rule in one place, `candidates`, `CHORD_FIT`, `TONIC_WEIGHT` and `ranking`: a major key's 1st position, then its 2nd, the owner's; any other mode by the chords each plays); winds.py, the flute's and the soprano recorder's fingerings (baroque and German), a melody's octave (`fit`), a key's scale and a chord's notes as they read them; each with its `tables` in a viewer's data, for winds.js, which registers the Harmonica, the Flute and the Recorder with instruments.js: the harmonica's line under the key line, a chord's holes on the card and the strip, its settings row (a harp of the line chosen, each chord on it, the song's `harmonicaTabs` linked), the winds' fingerings of a chord's notes and their row (A–G or Do–Si, the recorder's baroque or German, the key's scale), the notes heard in strum.js's `reed`, `flute` and `recorder` voices; instruments.py, the instruments the viewer draws chords for, `INSTRUMENTS` (guitar, ukulele high and low G, baritone, piano, harmonica, flute, recorder: tuning, capo or none, where its shapes are, easy keys), the ukuleles' shapes from chords-db (voicings-ukulele.json, filed by the guitar's keys, the baritone's a fourth lower), the piano's computed (`piano_positions`: root position and two inversions, a left-hand bass), `chord_shapes`, what the viewer shows a chord on one, and version.py's `for_instrument`, the capo folded in on one that takes none; instruments.js, their box and keyboard and `window.caracoleInstruments`, where another instrument's script registers its drawing, a header line and a settings row), songbook.py (songbooks.toml: a song is a string, or a table with its own `Setting`, `instrument` among its parts (`caracole songbook set --instrument`, the Songbooks tab's chip; `_run_strings`, the strings its PDF draws); `SongbookSong`, `Songbook.songs`, `.texts`; `set_song_setting`, and `with_capo`, the capo a key or a mode `caracole songbook set` gives plays at now, so a replaced sheet keeps the key it sounds in; its files play each song through `apply_version`, never chordpro's `{transpose}`, where `in_setting` puts it, the rest the song's `own_version`; `plays_in`, that in words, "key unknown, as written" for a sheet with no key that a setting or the song's own key can't take) |
@@ -109,13 +109,25 @@ Rules a change there keeps (the Invariants below are the others):
   failed within the hour, or three did) offer it by hand, a line under the results (rows.js
   `lacuerdaSearcher`; its rows come with the search asked again once the job is over, the focus Enter
   moved to a result staying on it, an artist's songs Enter opened on the lookup page staying open, and
-  a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). A test that drives
+  a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). One
+  LaCuerda button on the screen at a time, worded Ask LaCuerda: the search's own, "Ask LaCuerda for “…”
+  (1 request)", only where the results offer no name's page; where they do (`lacuerda_unlisted`), Ask
+  LaCuerda's on the card or in `lookedLine` stands for both, sending the search while its gate says
+  `auto` or `button` (the searcher's `ask`, which the pages' `does.ask` tries first) and reading the
+  name's page else, the search's line then its words alone. A test that drives
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
   does.
   A row for one instrument says which, a badge as a source has its mark (rows.js `instrumentBadges`: Ukulele for
-  UG's Ukulele Chords, Harmonica for harptabs.com's tabs, `search.search_harptabs`, by title alone as MuseScore's
-  pages, Score for MuseScore's; a song's card's `instruments`, library_page.py `instruments_of`), on both pages, and
-  nothing is ever filtered by instrument.
+  UG's Ukulele Chords, Harmonica for harptabs.com's tabs, Score for MuseScore's; a song's card's `instruments`,
+  library_page.py `instruments_of`), on both pages, and nothing is ever filtered by instrument.
+  harptabs.com is searched as UG's index is (`search.search_harptabs`, `/api/search`'s `harptabs_artists` and
+  `harptabs`): its artists, named from their page once read (harptabs_index.py), and a song's tabs by an artist
+  whose page caracole read, a song a line, the most viewed first under its "⋯" (rows.js `harpTabsOf`), each Get it
+  a lookup that keeps that tab (`harptabs`, `caracole get --harptabs`, `[harptabs]`); a tab no page read names is a
+  title alone, as MuseScore's pages, apart. An artist's group ends with "+ N more by … on harptabs.com"
+  (`/api/artist?harptabs=`) or, for a page never read, the offer to read it (`POST /harptabs/artist`, `caracole
+  harptabs --artist` queued, a job of no song's, `jobs.INDEX_READS`); the `looked` chip says how far its artist
+  index has got ("harptabs.com: 1,204 of 10,428 artists").
   What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
   `suggest`), `nothingFound` (one card for a query that found nothing: the request by name first, Ask LaCuerda,
   the chips of `looked`, `unseen` folded) and `lookedLine` (the chips in one muted line under results).
@@ -131,7 +143,9 @@ Rules a change there keeps (the Invariants below are the others):
   artist's name (a header's, a line's, a lookup row's) searches for them as typing it would (library.js
   `searchFor`, a step of the browser's history; lookup_page.py `searchArtist`), which asks no site, and the funnel
   beside it (rows.js `artistOnly`) shows your songs of theirs alone; from a file the name is the funnel's
-  (`artistFilter`). Your
+  (`artistFilter`). A viewer's artist line (sheet.html, a version's page, a songbook's song: page.py `artist_line`)
+  is a plain link to `index.html#by=<name>`, which library.js's `addressed` reads as the same press, served or from a
+  file, then writes its own address in its place (Back is the sheet). Your
   songs there keep to the Show buttons, the Key menu and the artist's chip (`kept`), as the list's
   do. select.js knows only the songs the page was loaded with, less those gone since: a line offers Add to a
   songbook… for those alone. songs.id has no AUTOINCREMENT, so the next song added may get a removed song's id;
@@ -214,7 +228,8 @@ Rules a change there keeps (the Invariants below are the others):
   --search` (LaCuerda's own search, one query, one request at the lookup pace), and review.py, search.py,
   removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local
   indexes alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
-  gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
+  gtptabs.com's, MuseScore's, LaCuerda's and harptabs.com's tables (its sitemap's and the artist pages read,
+  harptabs_index.py), and the tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
   and in `/api/search`'s `removed`, which the library page shows with Add again), the words of the UG index's
   artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept by triggers on `ug_index`,
@@ -445,20 +460,22 @@ Each names where it is enforced. Don't weaken one to make a test pass.
 - **Politeness** (http.py, health.py, commands/_common.py), at two paces
   (`config.ProviderPolicy`; `_common.make_client` picks one).
   - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
-    and every command but `caracole get`, `caracole versions` and `caracole lacuerda --artist`
-    and `--search`. Budgets per run:
+    and every command but `caracole get`, `caracole versions`, `caracole lacuerda --artist`
+    and `--search`, and `caracole harptabs --artist`. Budgets per run:
     `ug` 60, `lrclib` 200, `lacuerda` 30 (its sheets first, then its listings of every
     artist, then, once those are read whole, the pages of its most popular artists not read in
     30 days, `lacuerda_fetch.POPULAR_PAGES` (10) at most), `gtptabs` 20, `musescore` 10,
-    `harptabs` 20 requests (its sitemap, then a song's candidates, `harptabs_fetch.CANDIDATES` (8) at most),
+    `harptabs` 20 requests (its sitemap, then a song's candidates, `harptabs_fetch.CANDIDATES` (8) at most, then,
+    once the library has a song, artist pages with what is left, `harptabs_index.artist_pass`),
     `youtube` 6 yt-dlp runs
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
-    commands/index.py). Then `BudgetExhausted`. Between any two requests to a provider, a
+    commands/index.py), and `caracole harptabs --index` its `--budget`, `BUILD_BUDGET` by default. Then `BudgetExhausted`. Between any two requests to a provider, a
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com, MuseScore and
     harptabs.com, 1–2 s for LRCLIB).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
     lookups run it), `caracole versions --keep`, one tab page asked for now (`--choose` and
     `--clear` run get), `caracole lacuerda --artist`, one artist's page (an artist's Songs), and
+    `caracole harptabs --artist`, one artist's page (an artist's Songs, once in 30 days), and
     `caracole lacuerda --search`, one query of LaCuerda's search (one request; a query at most once
     in 30 days, kv `lacuerda:search:<key>`, its words' key in alphabetical order; none once your library or
     LaCuerda's index answers it well, `lacuerda_search.answered`, checked again after the cached artist pages
@@ -538,11 +555,15 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     terms (2004) say no one may "use, copy, or distribute any portion" of it, and its API's
     terms ask that its tabs not be bulk-mirrored, yet caracole keeps tabs from it. Provider
     `harptabs` (harptabs.py, harptabs_fetch.py) keeps them on these terms alone: for the songs
-    of wanted.txt and a lookup's song, never a page for a song nobody asked for and never a
+    of wanted.txt and a lookup's song, never a tab page for a song nobody asked for and never a
     mirror (its sitemap, then the pages of a song's candidates, `CANDIDATES` at most, each read
     once and cached); one tab a song, privately, in the library; robots.txt honoured (it closes
     `/search`, `/api/`, `/*?*_rsc=` and more); the bulk pace and budget above, a lookup's at the
-    lookup pace. caracole sends harptabs.com its own user agent, as every site
+    lookup pace. Its artist pages, which robots.txt allows, are read for the names of their tabs
+    alone, never a tab, so that a search finds its tabs by artist as UG's index does, the owner's
+    ask (harptabs_index.py: every artist the sitemap lists, once in 30 days, at the bulk pace and
+    within a budget; an artist's Songs, one page at the lookup pace); an artist's tabs past the 30
+    a page renders are the site's API's, which caracole never asks for. caracole sends harptabs.com its own user agent, as every site
     (`test_harptabs_fetch.py::test_caracole_asks_with_its_own_user_agent`): asked by hand on
     2026-10-27 (robots.txt, the sitemap and two tab pages: all 200, the sitemap after one
     Cloudflare 530, an error), it answers it. A 403, a 429 or a challenge there is a block like

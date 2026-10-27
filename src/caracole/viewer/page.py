@@ -3,7 +3,8 @@
 The page is one self-contained file. It opens from the synced library folder with
 no server: it loads nothing (a Content-Security-Policy with the hashes of its four
 scripts, strum.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce that)
-and links only to the PDF beside it and to the library's index.html two folders up.
+and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
+artist's name under the title, to the library page on their songs (``artist_line``).
 A server may serve it too, only while it is the page caracole wrote, with
 ``viewer_csp(page)`` as its header.
 
@@ -63,8 +64,9 @@ written ``\\u003c``:
   from a file (``download_names.download_name``, the title clean as caracole serve names it: "Eagles - Hotel California
   (2).gp5"), its link's ``download``;
 - ``harmonicaTabs``: the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: kept from
-  harptabs.com), each ``{"name": "harmonica-1.txt", "href": "harmonica-1.txt"}``, with the harp's ``key`` ("C")
-  when its page named one, for the harmonica's panel; a song with none has none;
+  harptabs.com), each ``{"name": "harmonica-1.txt", "href": "harmonica-1.txt"}``, with the ``key`` its page's
+  Key chip named ("C": the song's on some tabs, the harp's on others), if any, for the harmonica's panel; a song
+  with none has none;
 - ``pinyin``, for a sheet whose song holds Chinese: each line of its sections as the page draws it (``#sheet
   section.sec > p.l``, in order: ``_drawn_lines``), the reading of each of its characters (pinyin.py: "" for a
   letter, a space or punctuation), or null for a line with none, for the settings' Pinyin row, which the script
@@ -237,7 +239,7 @@ def build_viewer(
     names of the song's Guitar Pro files beside the page that caracole serve shows in the browser (render.py), goes
     in its data as ``guitar``, and its settings get a Guitar Pro row (``_GUITAR_ROW``); without any, neither.
     ``harmonica``, the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: ``{"name",
-    "href"}`` and the harp's ``key`` when its page named one), goes in its data as ``harmonicaTabs``; without any,
+    "href"}`` and the ``key`` its page named, if any), goes in its data as ``harmonicaTabs``; without any,
     the data has none.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
@@ -536,7 +538,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         '<div class="page">\n<header class="head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(title)}</h1>\n"
-        + (f'<p class="artist">{escape(sheet.artist)}</p>\n' if sheet.artist else "")
+        + artist_line(sheet.artist)
         + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'
         + _VERSIONS
         + "</header>\n"
@@ -546,6 +548,20 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + _with_guitar(_SHEET_CONTROLS if export else _CONTROLS, guitar)
         + _VERSION_LIST
     )
+
+
+def artist_line(artist: str) -> str:
+    """The artist's line under a song's title, on sheet.html, a kept version's page and a songbook's song alike, as
+    HTML: their name, a link to the library page on their songs (``LIBRARY_PAGE``, with ``#by=`` and the name, every
+    character of it but a letter, a digit and -._~ percent-encoded), as pressing their name there does: served by
+    caracole serve, the search for them, which asks no site; from a file and in the Android app's copy, their songs
+    alone (library.js reads ``by``). A plain link, which a sandbox, a file and the app follow with no script; the name
+    in a span of its own, which the focus ring goes round (viewer.css). None for a sheet that names no artist."""
+    if not artist:
+        return ""
+    href = f"{LIBRARY_PAGE}#by={quote(artist, safe='')}"
+    return (f'<p class="artist"><a href="{escape(href)}" title="{escape(f"Songs by {artist}")}">'
+            f"<span>{escape(artist)}</span></a></p>\n")
 
 
 def _song_html(sheet: Sheet, suffix: str = "", named: str = "") -> str:

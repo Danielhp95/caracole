@@ -107,7 +107,8 @@ def guitar_files(conn: sqlite3.Connection, song_id: int | None = None, *,
 @dataclass(frozen=True)
 class HarmonicaFile:
     """A harmonica tab caracole keeps for a song (``harmonica-N.txt``, harptabs_fetch.py): its name, where it is
-    (relative to the library), its N, and the harp's key its page names ("C"), or None."""
+    (relative to the library), its N, and the key its page's Key chip names ("C": the song's on some tabs, the
+    harp's on others), or None."""
 
     song_id: int
     name: str

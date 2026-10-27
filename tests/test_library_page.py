@@ -1474,6 +1474,73 @@ def test_an_artists_name_shows_that_artist_alone_not_every_song_with_the_word(co
     assert "caracole search" not in shown
 
 
+# What the page shows once its script ran: the titles, the artist's chip, the box and the address.
+SHOWN_NOW = """
+document.body.setAttribute("data-now", JSON.stringify({
+  titles: Array.from(document.querySelectorAll("#list article h3")).map((h) => h.textContent),
+  chip: document.getElementById("artist").hidden ? null : document.getElementById("artist").textContent,
+  q: document.getElementById("q").value, hash: location.hash,
+  results: !document.getElementById("results").hidden}));
+"""
+
+
+@in_chromium
+@pytest.mark.parametrize("by,titles,chip,hash", [
+    ("Queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "Queen ×", "#artist=queen"),
+    ("queen", ["Bohemian Rhapsody", "Don't Stop Me Now"], "Queen ×", "#artist=queen"),  # however it is written
+    ("宋冬野", ["斑马，斑马"], "宋冬野 ×", "#artist=song-dong-ye"),
+])
+def test_from_a_file_an_artist_a_sheet_links_to_shows_their_songs_alone(conn, cfg, tmp_path, by, titles, chip, hash):
+    # A sheet viewer's artist line (#by= and their name): from a file, which can't search the sites, and in the Android
+    # app's copy, what the name over their songs does here, the funnel, never every song with the word (ABBA's "Dancing
+    # Queen"); the address then says it as the funnel writes it, in place of the link's.
+    import html as html_module
+
+    for artist, title in (("Queen", "Bohemian Rhapsody"), ("Queen", "Don't Stop Me Now"), ("ABBA", "Dancing Queen"),
+                          ("Queens of the Stone Age", "No One Knows"), ("宋冬野", "斑马，斑马")):
+        add_song(conn, artist, title)
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), SHOWN_NOW))
+    dom = dump_dom(path, tmp_path, "#by=" + quote(by, safe=""))
+    now = json.loads(html_module.unescape(re.search(r'data-now="([^"]*)"', dom).group(1)))
+    assert now == {"titles": titles, "chip": chip, "q": "", "hash": hash, "results": False}, now
+
+
+@in_chromium
+def test_from_a_file_a_sheets_artist_opens_their_songs_and_back_returns_to_the_sheet(conn, cfg, driven):
+    # The viewer and the library page as files, as the synced folder and the Android app's copy have them: the artist's
+    # name under the title opens the library page on their songs alone; Back is the sheet again, where it was.
+    from helpers.rendered import rendered_song
+
+    song = rendered_song(conn, cfg, "Queen", "Bohemian Rhapsody")
+    add_song(conn, "ABBA", "Dancing Queen")
+    write_library_page(cfg.library_dir, page(conn, cfg))
+    driven.open((song_dir(cfg.library_dir, song) / "sheet.html").as_uri() + "#t=2")
+    assert driven.wait("document.documentElement.dataset.ready === '1'")
+    driven.click(".head .artist a")
+    assert driven.wait("location.pathname.endsWith('/index.html') && document.readyState === 'complete'")
+    assert driven.wait(f"{SHOWN_TITLES}.join() === 'Bohemian Rhapsody'"), driven.js(SHOWN_TITLES)
+    assert driven.js("document.getElementById('artist').textContent") == "Queen ×"
+    assert driven.js("location.hash") == "#artist=queen"
+    assert driven.js("performance.getEntriesByType('resource').length") == 0  # nothing asked of anyone
+    driven.js("history.back()")
+    assert driven.wait("location.pathname.endsWith('/sheet.html') && document.documentElement.dataset.ready === '1'")
+    assert driven.js("location.hash") == "#t=2"
+
+
+@in_chromium
+def test_from_a_file_an_artist_with_no_song_of_yours_is_searched_for_in_your_songs(conn, cfg, tmp_path):
+    # Their songs gone from the library since the sheet was written: the songs the name finds, none here, and the line
+    # that searches the sites, to run, as the box typed into says.
+    import html as html_module
+
+    add_song(conn, "Radiohead", "Creep")
+    path = write_library_page(cfg.library_dir, with_script(page(conn, cfg), SHOWN_NOW))
+    dom = dump_dom(path, tmp_path, "#by=" + quote("Guns N' Roses", safe=""))
+    now = json.loads(html_module.unescape(re.search(r'data-now="([^"]*)"', dom).group(1)))
+    assert now == {"titles": [], "chip": None, "q": "Guns N' Roses", "hash": "#q=Guns+N%27+Roses", "results": False}
+    assert "<code>caracole search 'Guns N'\\'' Roses'</code>" in html_module.unescape(listing(dom))
+
+
 # Sheets for the progressions: in C, a verse vi IV I V, a bridge IV V I and an outro on one chord; the same
 # verse read in A minor; a blues I IV V; and one with none.
 PROGRESSIONS = {

@@ -12,6 +12,11 @@ Musicals". LaCuerda's group comes after UG's, numbered on: its artists (each
 with their most popular songs with chords, or, when caracole never read their
 page, the ``caracole lacuerda --artist`` line that reads it) and its songs, whose
 line, and ``--add``, record the song as your pick there (``--lacuerda``).
+harptabs.com's group comes last, unnumbered: its artists (with their most viewed songs, or,
+when caracole never read their page, the ``caracole harptabs --artist`` line that reads it),
+its songs by an artist whose page caracole read, each with the ``caracole get --harptabs``
+line that looks the song up keeping that tab, and its tabs by title alone, whose artist no
+page read names (search.py ``search_harptabs``); then how far its artist index has got.
 
 A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
@@ -43,6 +48,7 @@ from caracole.commands import sources
 from caracole.commands._common import exclusive, fail, load_cfg, open_db
 
 LACUERDA = "On LaCuerda (offline index)"
+HARPTABS = "On harptabs.com (offline index)"
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -242,6 +248,9 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
     typer.echo(f"\n{LACUERDA}")
     lacuerda = _lacuerda_listing(conn, ask, limit, ug)
     _print_listing(lacuerda, known, start=shown)
+    typer.echo(f"\n{HARPTABS}")
+    for line in _harptabs_listing(cfg, conn, ask, limit):
+        typer.echo(line)
     if ug is not None and ask.artist is None and ask.title is None:
         _print_suggestions(conn, ask, ug, lacuerda, [hit for hit, _ in library])
     if hint:  # Ultimate Guitar's bare ids: after every place's hits
@@ -508,6 +517,81 @@ def _lacuerda_lines(n: int, hit: SiteHit, known: set[tuple[str, str]]) -> str:
         return f"{head}\n     in your library"
     pick = f"--lacuerda {hit.url} " if hit.sheet else ""
     return f"{head}\n     caracole add {pick}{_quote(hit.artist)} {_quote(hit.title)}"
+
+
+def _harptabs_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[str]:
+    """harptabs.com's index's answer as the search prints it, unnumbered: the artists the query names, each with their
+    most viewed songs, then its songs, at most ``limit``, and its tabs by title alone; with ``--artist``, that
+    artist's songs; with ``--title``, the songs of that title. Then how far its artist index has got, while it isn't
+    whole. Nothing but why, while harptabs.com is turned off or its index is empty."""
+    from caracole.harptabs_index import index_state
+    from caracole.search import STRONG, harptabs_songs, search_harptabs
+
+    if not cfg.provider("harptabs").enabled:
+        return ["  harptabs.com is turned off in caracole.toml."]
+    if conn.execute("SELECT 1 FROM harptabs_index LIMIT 1").fetchone() is None:
+        return ["  Nothing yet: harptabs.com's index is empty: the nightly run reads its sitemap (caracole harptabs "
+                "--index reads it now, then its artist pages)."]
+    lines: list[str] = []
+    if ask.artist is not None:
+        named = [a for a in search_harptabs(conn, ask.artist, songs=0, artists=1)[0] if a.score >= STRONG]
+        if not named:
+            lines.append(f"  No artist named {ask.artist} in harptabs.com's index")
+        elif not named[0].known:
+            lines += _harptabs_artist_head(named[0], False)
+        else:
+            a = named[0]
+            songs = harptabs_songs(conn, a.slug, title=ask.text or None)
+            whole = len(harptabs_songs(conn, a.slug))
+            lines.append(f"  {a.artist} · harptabs.com · their songs titled like {ask.text}:" if ask.text else
+                         f"  {a.artist} · harptabs.com · {whole:,} of their songs in the index ({a.known:,} of their "
+                         f"{_count(a.songs, 'tab')}), the most viewed first:")
+            lines += [_harptabs_lines(h) for h in songs[:limit]] or ["  nothing matches"]
+            if len(songs) > limit:
+                lines.append(f"  … and {len(songs) - limit} more: see them with --limit {len(songs)}")
+    elif ask.title is not None:
+        songs = [h for h in search_harptabs(conn, ask.title, songs=limit, artists=0)[1] if h.via == "title"]
+        lines += [_harptabs_lines(h) for h in songs] or ["  nothing matches"]
+    else:
+        artists, songs = search_harptabs(conn, ask.text, songs=limit)
+        for a in artists:
+            lines += _harptabs_artist_head(a, bool(a.top))
+            lines += [_harptabs_lines(t) for t in a.top]
+            whole = len(harptabs_songs(conn, a.slug)) if a.known else 0
+            if whole > len(a.top):
+                lines.append(f"     All {_count(whole, 'song')} the index holds: caracole search --artist "
+                             f"{_quote(a.artist)}")
+        if artists and songs:
+            lines += ["", "  Other songs:"]
+        lines += [_harptabs_lines(h) for h in songs]
+        if not lines:
+            lines.append("  nothing matches")
+    state = index_state(conn)
+    if state.read < state.artists:
+        lines += ["", _fill(f"harptabs.com's artist pages are still being read: {state.read:,} of "
+                            f"{state.artists:,} artists so far; caracole harptabs --index reads the rest.")]
+    return lines
+
+
+def _harptabs_artist_head(a: SiteArtist, top: bool) -> list[str]:
+    """An artist's line in harptabs.com's group: the tabs their page says they have, and their most viewed songs, or
+    the line that reads their page."""
+    if not a.known:
+        return [f"  {a.artist} · harptabs.com",
+                f"     caracole hasn't read their page: caracole harptabs --artist {a.slug} reads it (one request)"]
+    head = f"  {a.artist} · harptabs.com · {_count(a.songs, 'tab')}, {a.known:,} in the index"
+    return [head + (". The most viewed:" if top else "")]
+
+
+def _harptabs_lines(hit: SiteHit) -> str:
+    """A harptabs.com song: its names, its tabs and the key of the most viewed, its page, and the line that
+    looks it up keeping that tab; a tab by its title alone, its page."""
+    if not hit.artist:
+        return f"  {_tag('harptabs')}{hit.title} · same title, maybe another song\n     {hit.url}"
+    key = hit.tabs[0].key if hit.tabs else None
+    said = _count(hit.uploads, "tab") + (f", key {key}" if key else "")
+    return (f"  {_tag('harptabs')}{hit.artist} - {hit.title} · {said}\n     {hit.url}\n"
+            f"     caracole get --harptabs {hit.url} {_quote(hit.artist)} {_quote(hit.title)}")
 
 
 def _count(n: int, thing: str) -> str:

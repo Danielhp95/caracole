@@ -782,3 +782,55 @@ def test_a_file_nested_too_deep_is_an_overrides_error_and_is_left_alone(tmp_path
         with pytest.raises(OverridesError, match=r"overrides\.toml: "):
             add()
     assert p.read_text(encoding="utf-8") == deep
+
+
+def test_harptabs_names_the_tab_you_picked_there(tmp_path):
+    from caracole.overrides import HarpTabsPick
+
+    o = load_overrides(write(tmp_path, '''
+[harptabs]   # the harptabs.com tab a song's harmonica tab comes from
+"Billy Joel - Piano Man" = "https://www.harptabs.com/tab/23862/piano-man-c-harmonica"
+"Ritchie Valens - La Bamba" = "harptabs.com/tab/89/la-bamba/?ref=1"
+'''))
+    assert o.harptabs == {"billy-joel/piano-man": HarpTabsPick(23862, "piano-man-c-harmonica"),
+                          "ritchie-valens/la-bamba": HarpTabsPick(89, "la-bamba")}
+    assert o.harptabs["ritchie-valens/la-bamba"].url == "https://www.harptabs.com/tab/89/la-bamba"
+    assert o.harptabs["ritchie-valens/la-bamba"].path == "tab/89/la-bamba"
+    assert Overrides().harptabs == {}
+
+
+@pytest.mark.parametrize("value", [
+    "https://www.harptabs.com/artist/1178/billy-joel", "https://www.harptabs.com/tab/25", "https://www.harptabs.com/",
+    "https://www.harptabs.com/tab/25/piano-man/edit", "https://www.harptabs.com/tab/0/x",
+    "https://www.harptabs.com/tab/25/Piano Man", "https://example.com/tab/25/piano-man",
+    "ftp://www.harptabs.com/tab/25/piano-man", "piano man", ""])
+def test_a_harptabs_entry_that_is_no_tab_page_says_what_it_takes(tmp_path, value):
+    from caracole.overrides import harptabs_pick_from_url
+
+    with pytest.raises(OverridesError, match="harptabs.com tab"):
+        harptabs_pick_from_url(value)
+    p = write(tmp_path, f'[harptabs]\n"Billy Joel - Piano Man" = "{value}"\n')
+    with pytest.raises(OverridesError, match=r"\[harptabs\] 'Billy Joel - Piano Man': expected a harptabs.com tab"):
+        load_overrides(p)
+    with pytest.raises(OverridesError, match="a string"):
+        load_overrides(write(tmp_path, '[harptabs]\n"Billy Joel - Piano Man" = 25\n'))
+
+
+def test_add_harptabs_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
+    from caracole.overrides import HarpTabsPick, add_harptabs
+
+    p = write(tmp_path, '# mine\n[harptabs]\n"billy joel - piano man" = "https://www.harptabs.com/tab/1/x"  # old\n')
+    add_harptabs(p, "Billy Joel - Piano Man", "www.harptabs.com/tab/23862/piano-man-c-harmonica?ref=1")
+    add_harptabs(p, "Ritchie Valens - La Bamba", "https://www.harptabs.com/tab/89/la-bamba")
+    before, inode = p.read_text(encoding="utf-8"), p.stat().st_ino
+    add_harptabs(p, "Billy Joel - Piano Man", "https://www.harptabs.com/tab/23862/piano-man-c-harmonica")  # the same
+    text = p.read_text(encoding="utf-8")
+    assert text == before and p.stat().st_ino == inode
+    assert "# mine" in text and text.lower().count("piano man") == 1 and "# old" in text
+    assert '"billy joel - piano man" = "https://www.harptabs.com/tab/23862/piano-man-c-harmonica"' in text
+    assert load_overrides(p).harptabs == {"billy-joel/piano-man": HarpTabsPick(23862, "piano-man-c-harmonica"),
+                                          "ritchie-valens/la-bamba": HarpTabsPick(89, "la-bamba")}
+    with pytest.raises(OverridesError, match="harptabs.com tab"):
+        add_harptabs(p, "Billy Joel - Piano Man", "https://www.harptabs.com/artist/1178/billy-joel")
+    with pytest.raises(OverridesError, match="Artist - Title"):
+        add_harptabs(p, "Piano Man", "https://www.harptabs.com/tab/25/piano-man")

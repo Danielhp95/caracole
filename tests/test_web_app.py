@@ -1681,7 +1681,9 @@ def test_the_search_lists_gtptabs_and_musescore_pages_each_capped(app, conn):
     assert len(ms) == 5 and {h["title"] for h in ms} == {"Creep"}
     assert ms[0]["url"] == "https://musescore.com/song/creep-1" and "artist" not in ms[0]  # a title alone
     assert data["skipped"] == [{"source": "lacuerda", "name": "LaCuerda",
-                                "why": "its index is empty: the nightly run reads its listings of every artist"}]
+                                "why": "its index is empty: the nightly run reads its listings of every artist"},
+                               {"source": "harptabs", "name": "harptabs.com",
+                                "why": "its index is empty: the nightly run reads its sitemap"}]
 
 
 def test_the_search_lists_harptabs_tabs_by_title_and_none_while_it_is_turned_off(app, cfg, conn):
@@ -1698,10 +1700,101 @@ def test_the_search_lists_harptabs_tabs_by_title_and_none_while_it_is_turned_off
     assert data["harptabs"] == [
         {"source": "harptabs", "title": "Creep", "url": "https://www.harptabs.com/tab/3/creep", "score": 100.0},
         {"source": "harptabs", "title": "Creep", "url": "https://www.harptabs.com/tab/7/creep", "score": 100.0}]
-    assert [s["source"] for s in data["looked"]] == ["ug", "gtptabs", "lacuerda", "musescore"]  # no chip of its own
+    assert data["harptabs_artists"] == []
+    [chip] = [s for s in data["looked"] if s["source"] == "harptabs"]
+    assert (chip["state"], chip["label"]) == ("done", "harptabs.com ✓")  # no artist to read: its tabs, whole
     off = dataclasses.replace(cfg, providers={**cfg.providers, "harptabs": ProviderPolicy(20, (10.0, 20.0), False)})
     data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=creep"))
-    assert data["harptabs"] == []
+    assert data["harptabs"] == [] and data["harptabs_artists"] == []
+    [chip] = [s for s in data["looked"] if s["source"] == "harptabs"]
+    assert (chip["state"], chip["label"]) == ("off", "harptabs.com: off")
+
+
+def harptabs_index(conn) -> None:
+    """harptabs.com's index as test_search.py makes it: the captured sitemap, Billy Joel's page and the Beatles'."""
+    from test_search import harptabs_index as made
+
+    made(conn)
+    conn.commit()
+
+
+def test_the_search_lists_harptabs_artists_and_their_songs_in_the_groups_and_lines_of_the_other_sites(app, conn):
+    harptabs_index(conn)
+    mine = add_song(conn, "Billy Joel", "Vienna")
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=billy%20joel"))
+    [joel] = data["harptabs_artists"]
+    assert {k: joel[k] for k in ("source", "artist", "path", "url", "songs", "known", "score", "part", "group_key")} == {
+        "source": "harptabs", "artist": "billy joel", "path": "artist/1178/billy-joel",
+        "url": "https://www.harptabs.com/artist/1178/billy-joel", "songs": 98, "known": 7, "score": 100.0,
+        "part": False, "group_key": "billy-joel"}
+    assert joel["held"] == 4  # the songs those 7 tabs are of
+    piano, vienna, _ = joel["top"]
+    assert {k: piano[k] for k in ("source", "artist", "title", "url", "uploads", "artist_key", "title_key", "song")} == {
+        "source": "harptabs", "artist": "billy joel", "title": "piano man", "url": "https://www.harptabs.com/tab/25/piano-man",
+        "uploads": 4, "artist_key": "billy-joel", "title_key": "piano-man", "song": None}
+    assert [t["title"] for t in piano["tabs"]][:2] == ["piano man", "Piano Man (C Harmonica)"]
+    assert piano["tabs"][0] == {"title": "piano man", "url": "https://www.harptabs.com/tab/25/piano-man",
+                                "views": 1_100_000, "rating": 4.0, "key": "C", "difficulty": "Beginner"}
+    assert (vienna["song"], vienna["same_artist"], vienna["library"]["id"]) == (mine.id, True, mine.id)  # yours
+    data = as_json(get(app, "/api/search?q=piano%20man"))
+    assert [(h.get("artist"), h["url"]) for h in data["harptabs"]] == [
+        ("billy joel", "https://www.harptabs.com/tab/25/piano-man"), (None, "https://www.harptabs.com/tab/29525/piano-man")]
+
+
+def test_the_search_says_how_far_harptabs_coms_artist_index_has_got(app, conn):
+    harptabs_index(conn)  # 2 of the sitemap's 3 artists read
+    data = as_json(get(app, "/api/search?q=piano%20man"))
+    [chip] = [s for s in data["looked"] if s["source"] == "harptabs"]
+    assert (chip["state"], chip["label"]) == ("partial", "harptabs.com: 2 of 3 artists")
+    assert chip["detail"] == ("harptabs.com's artist pages are still being read: 2 of 3 artists so far; caracole "
+                              "harptabs --index reads the rest.")
+    assert {"source": "harptabs", "name": "harptabs.com", "why": chip["detail"][len("harptabs.com's "):-1]} in [
+        {**p, "why": p["why"].removeprefix("its ")} for p in data["partial"]]
+
+
+def test_api_artist_lists_a_harptabs_artists_songs_and_yours(app, conn):
+    harptabs_index(conn)
+    mine = add_song(conn, "Billy Joel", "Piano Man")
+    conn.commit()
+    data = as_json(get(app, "/api/artist?harptabs=artist/1178/billy-joel"))
+    assert {k: data[k] for k in ("source", "path", "artist", "url", "group_key", "listed", "total", "read")} == {
+        "source": "harptabs", "path": "artist/1178/billy-joel", "artist": "billy joel",
+        "url": "https://www.harptabs.com/artist/1178/billy-joel", "group_key": "billy-joel", "listed": 98, "total": 7,
+        "read": True}
+    assert [h["title"] for h in data["songs"]] == ["piano man", "Vienna!", "She's Always a Woman",
+                                                    "New York State Of Mind"]
+    assert data["songs"][0]["song"] == mine.id and [s["id"] for s in data["library"]] == [mine.id]
+    unread = as_json(get(app, "/api/artist?harptabs=artist/7829/ritchie-valens"))
+    assert (unread["artist"], unread["read"], unread["songs"], unread["listed"]) == ("Ritchie Valens", False, [], 0)
+    assert get(app, "/api/artist?harptabs=artist/9/nobody").status == 404
+
+
+def test_reading_a_harptabs_artists_page_is_one_command_in_the_queue(app, conn, queue):
+    harptabs_index(conn)
+    response = post(app, "/harptabs/artist", {"path": "artist/7829/ritchie-valens"}, accept="application/json")
+    assert response.status == 202
+    data = as_json(response)
+    assert data["url"] == f"/api/jobs/{data['job']}"
+    [job] = queue.snapshot()
+    assert [s.args for s in job.steps] == [("harptabs", "--artist=artist/7829/ritchie-valens")]
+    assert job.display == "Ritchie Valens on harptabs.com"
+    assert job.song_key == "harptabs-artist:artist/7829/ritchie-valens"
+    again = as_json(post(app, "/harptabs/artist", {"path": "artist/7829/ritchie-valens"}, accept="application/json"))
+    assert again["job"] == data["job"] and len(queue.snapshot()) == 1  # asked twice, read once
+    assert post(app, "/harptabs/artist", {"path": "artist/9/nobody"}).status == 404
+    assert post(app, "/harptabs/artist", {"path": "tab/25/piano-man"}).status == 400
+    assert post(app, "/harptabs/artist", {"path": "artist/7829/ritchie-valens"}, csrf="old").status == 403
+
+
+def test_get_it_on_a_harptabs_tab_keeps_that_tab(app, cfg, queue, conn):
+    url = "https://www.harptabs.com/tab/23862/piano-man-c-harmonica"
+    response = lookup(app, {"artist": "billy joel", "title": "Piano Man", "harptabs": url})
+    assert response.status == 202
+    [job] = queue.snapshot()
+    assert job.steps[0].args == ("get", "--progress", f"--harptabs={url}", "--", "billy joel", "Piano Man")
+    assert lookup(app, {"artist": "Billy Joel", "title": "Piano Man",
+                        "harptabs": "https://www.harptabs.com/artist/1178/billy-joel"}).status == 400
 
 
 def test_a_song_of_yours_in_the_search_says_what_it_holds_for_one_instrument(app, cfg, conn):
@@ -1864,10 +1957,11 @@ def test_the_search_says_where_it_looked_a_chip_a_site_with_its_detail(app, conn
     lacuerda_index(conn, letters=("_num", "a", "b", "c"))
     record_block(conn, "musescore", datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
     looked = as_json(get(app, "/api/search?q=lynrd"))["looked"]
-    # UG, gtptabs.com, LaCuerda, MuseScore: done, done, partial (the letters read whole run up to C), blocked.
+    # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com: done, done, partial (the letters read whole run up to C),
+    # blocked, empty.
     assert [(s["source"], s["state"], s["label"]) for s in looked] == [
         ("ug", "done", "UG ✓"), ("gtptabs", "done", "gtptabs.com ✓"), ("lacuerda", "partial", "LaCuerda: up to C"),
-        ("musescore", "blocked", "MuseScore blocked")]
+        ("musescore", "blocked", "MuseScore blocked"), ("harptabs", "empty", "harptabs.com: empty")]
     detail = {s["source"]: s["detail"] for s in looked}
     assert detail["lacuerda"] == ("LaCuerda's index is still being read: 2 artists so far, with #, A–C read whole; "
                                   "the nightly run reads the rest.")
@@ -1890,7 +1984,8 @@ def test_the_search_says_where_it_looked_a_chip_a_site_with_its_detail(app, conn
 def test_the_search_says_a_site_whose_index_is_empty_is_empty(app, conn):
     looked = {s["source"]: (s["state"], s["label"]) for s in as_json(get(app, "/api/search?q=creep"))["looked"]}
     assert looked == {"ug": ("empty", "UG: empty"), "gtptabs": ("empty", "gtptabs.com: empty"),
-                      "lacuerda": ("empty", "LaCuerda: empty"), "musescore": ("empty", "MuseScore: empty")}
+                      "lacuerda": ("empty", "LaCuerda: empty"), "musescore": ("empty", "MuseScore: empty"),
+                      "harptabs": ("empty", "harptabs.com: empty")}
 
 
 def test_a_search_the_ug_index_answers_badly_says_what_to_paste_for_an_artist_it_cant_see(app, conn):
@@ -2893,7 +2988,7 @@ def test_lacuerdas_search_route_refuses_what_its_gates_refuse(app, conn, queue):
     assert status == 409 and "within 30 days" in error
     lacuerda_events(conn, "lookup:lacuerda-search:x", 20)
     status, error = refused({"q": "corazon de papel"})  # the page's share spent: not by itself
-    assert status == 429 and "Search LaCuerda" in error
+    assert status == 429 and "press Ask LaCuerda" in error
     assert queue.snapshot() == []
     response = post(app, "/lacuerda/search", {"q": "corazon de papel", "by_hand": "1"}, accept="application/json")
     assert response.status == 202  # by hand, the button: within the hour's lookups
@@ -2922,7 +3017,7 @@ def test_a_search_that_failed_lately_is_offered_by_hand_and_never_sent_by_the_pa
     assert tiza["why"].startswith("LaCuerda's search for “tiza corazón” failed less than an hour ago "
                                   "(LaCuerda failed: HTTP 500), so the page won't send it by itself before ")
     response = post(app, "/lacuerda/search", {"q": "corazon de tiza"}, accept="application/json")
-    assert response.status == 429 and "press Search LaCuerda" in as_json(response)["error"]
+    assert response.status == 429 and "press Ask LaCuerda" in as_json(response)["error"]
     assert queue.snapshot() == []
     response = post(app, "/lacuerda/search", {"q": "corazon de tiza", "by_hand": "1"}, accept="application/json")
     assert response.status == 202  # by hand: a person asks

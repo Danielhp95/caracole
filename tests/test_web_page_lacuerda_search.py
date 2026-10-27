@@ -10,6 +10,10 @@ offers it as a button (which Enter presses too), as it does under a search the r
 one that failed (``FakeSearch.fails``), which no page sends by itself again within the hour. How many searches a
 page sent is what the server heard (``heard``, ``searches``), not the queue's jobs: the route joins a search still
 running and refuses one asked already, which would hide a page sending it twice.
+
+One LaCuerda button at a time, Ask LaCuerda: for a name LaCuerda's listings don't reach yet (Bunbury's B, which
+``FakeSearch`` reads as ``caracole lacuerda --artist`` would), it sends LaCuerda's search while a search may go by
+hand, and reads the name's page once it may not (asked, or failed lately); for a query alone, its search.
 """
 
 from __future__ import annotations
@@ -24,10 +28,11 @@ import pytest
 from conftest import add_song
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.lacuerda_site import search_page
-from test_web_page_lacuerda import LC_ROWS, LOOKUP_TITLES, TITLES, lacuerda
+from test_web_page_lacuerda import BUNBURY, LC_ROWS, LOOKUP_TITLES, TITLES, lacuerda
 from test_web_page_search import sites
 
 from caracole import db, stamps
+from caracole import lacuerda_index as li
 from caracole.db import kv_set_json
 from caracole.get import PROGRESS_PREFIX
 from caracole.health import record_block
@@ -43,6 +48,11 @@ pytestmark = CHROMIUM_MARKS
 
 LINE = "((document.querySelector('.lacuerda-search') || {}).textContent || '')"
 GO = ".lacuerda-search button.lacuerda-search-go"
+ASK = ".ask-lacuerda"  # Ask LaCuerda, under the results or on the card of a search that found nothing
+# The LaCuerda buttons on the screen, by their words.
+BUTTONS = ("[...document.querySelectorAll('button')].filter((b) => /^(Ask|Search) LaCuerda/.test(b.textContent) && "
+           "b.getClientRects().length).map((b) => b.textContent)")
+GTP_BUNBURY = "https://gtptabs.com/tabs/2/bunbury/el-extranjero.html"  # a result for "bunbury": Ask under the results
 BY_HAND = ("lacuerda", "--search=corazon de tiza", "--progress")  # the button's, and Enter's: no --auto
 AUTO = (*BY_HAND, "--auto")  # the page's own, once the query has settled
 SENT_BY_HAND = [("corazon de tiza", True)]  # what the server heard of it: one request, by hand
@@ -66,7 +76,21 @@ class FakeSearch:
 
     def __call__(self, args, emit):
         self.ran.append(tuple(args))
-        assert args[0] == "lacuerda" and args[1].startswith("--search="), args
+        assert args[0] == "lacuerda" and args[1].startswith(("--search=", "--artist=")), args
+        if args[1].startswith("--artist="):  # a page read by name: Bunbury's, whose B the listings haven't reached
+            time.sleep(0.3)
+            name = args[1].removeprefix("--artist=")
+            if name != "bunbury":
+                emit(f"Not found: LaCuerda has no artist page for {name}.")
+                return 0
+            conn = db.connect(self.cfg.db_path)
+            try:
+                li.store_artist_page(conn, "bunbury", BUNBURY)
+                conn.commit()
+            finally:
+                conn.close()
+            emit("Read: LaCuerda's page lists 2 songs, in the index now.")
+            return 0
         emit(PROGRESS_PREFIX + json.dumps({"stage": "search", "state": "running", "detail": "asking LaCuerda"}))
         time.sleep(0.4)  # long enough for the page to say it searches
         conn = db.connect(self.cfg.db_path)
@@ -152,9 +176,26 @@ def searches(heard) -> list[tuple[str, bool]]:
             if method == "POST" and target.split("?")[0] == "/lacuerda/search"]
 
 
+def until(check, timeout=10.0):
+    """Whether ``check()`` holds within ``timeout`` seconds."""
+    deadline = time.monotonic() + timeout
+    while not check():
+        if time.monotonic() > deadline:
+            return False
+        time.sleep(0.05)
+    return True
+
+
 def type_into(browser, field, text):
     browser.js(f"document.getElementById('{field}').focus()")
     browser.type(text)
+
+
+def put(browser, text):
+    """``text`` put into the search box in one go, as a paste: no answer for a part of it ("bunb") on the way, whose
+    Ask LaCuerda would be another name's."""
+    browser.js("(() => { const q = document.getElementById('q'); q.focus(); q.value = " + json.dumps(text) + "; "
+               "q.dispatchEvent(new Event('input', {bubbles: true})); })()")
 
 
 def type_and_enter(browser, text, *after):
@@ -354,6 +395,7 @@ def test_with_the_hours_share_spent_the_page_offers_the_button(cfg, live, browse
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=5)
     time.sleep(2)
     assert jobs(queue) == [] and searches(heard) == []
+    assert browser.js(BUTTONS) == ["Ask LaCuerda for “corazon de tiza” (1 request)"]  # the one button, its search
     browser.click(GO)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
     assert jobs(queue) == [BY_HAND] and searches(heard) == SENT_BY_HAND
@@ -366,11 +408,12 @@ def test_a_search_the_route_refuses_for_the_spent_share_offers_the_button_its_re
     browser.open(base)
     type_into(browser, "q", "corazon de tiza")
     assert browser.wait("document.getElementById('found').dataset.query === 'corazon de tiza'")
-    # The share is spent between the answer's gate and the page's request, which the route refuses: "press Search
-    # LaCuerda", and the page shows it.
+    # The share is spent between the answer's gate and the page's request, which the route refuses: "press Ask
+    # LaCuerda", and the page shows it, with that button.
     spend_the_share(cfg)
     assert browser.wait(f"!!document.querySelector('{GO}')", timeout=6)
-    assert "press Search LaCuerda" in browser.js(LINE) and jobs(queue) == []
+    assert "press Ask LaCuerda" in browser.js(LINE) and jobs(queue) == []
+    assert browser.js(BUTTONS) == ["Ask LaCuerda for “corazon de tiza” (1 request)"]
     browser.click(GO)
     assert browser.wait(f"{TITLES}.includes('Corazón de Tiza')", timeout=10)
     assert jobs(queue) == [BY_HAND]
@@ -392,6 +435,79 @@ def test_a_search_that_failed_offers_the_button_and_no_page_sends_it_again_by_it
     assert browser.js(LINE).startswith("LaCuerda's search for “corazon de tiza” failed less than an hour ago")
     time.sleep(2)
     assert len(jobs(queue)) == 1 and searches(heard) == SENT_BY_ITSELF
+
+
+@pytest.mark.parametrize("page, query, label", [
+    ("", "bunbury", "Ask LaCuerda for “bunbury” (1 request)"),  # under the results: gtptabs.com has a song of theirs
+    ("", "caifanes", "Ask LaCuerda (1 request)"),  # on the card of a search that found nothing
+    ("lookup", "bunbury", "Ask LaCuerda (1 request)"),
+], ids=["library", "library-card", "lookup"])
+def test_a_query_that_offers_its_search_and_a_names_page_shows_one_button_whose_press_sends_the_search(
+        cfg, live, browser, heard, page, query, label):
+    base, queue, runner = live
+    lacuerda(cfg, complete=False)  # LaCuerda's listings read to E and J only: the name's page may say
+    sites(cfg, gtptabs=[GTP_BUNBURY])
+    spend_the_share(cfg)  # a search goes by hand alone
+    browser.open(base + page)
+    put(browser, query)
+    assert browser.wait(f"!!document.querySelector('{ASK}')", timeout=5)
+    time.sleep(0.5)
+    assert browser.js(BUTTONS) == [label]  # one LaCuerda button, Ask LaCuerda's, where it was
+    assert jobs(queue) == []
+    browser.click(ASK)  # LaCuerda's search, which answers artists and songs both
+    assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
+    assert jobs(queue) == [("lacuerda", f"--search={query}", "--progress")] and searches(heard) == [(query, True)]
+    # Asked: the one button reads the name's page now, as Ask LaCuerda did.
+    assert browser.wait(f"!!document.querySelector('{ASK}:not([disabled])')", timeout=5)
+    assert browser.js(BUTTONS) == [label]
+    browser.click(ASK)
+    assert until(lambda: len(runner.ran) == 2 and not queue.snapshot()[-1].active)
+    # The queue's newest first: the page's read, after the search.
+    assert jobs(queue) == [("lacuerda", f"--artist={query}"), ("lacuerda", f"--search={query}", "--progress")]
+    assert searches(heard) == [(query, True)]
+
+
+def test_the_one_button_pressed_before_the_query_settles_sends_the_search_by_hand_once(cfg, live, browser, heard):
+    base, queue, _ = live
+    lacuerda(cfg, complete=False)
+    sites(cfg, gtptabs=[GTP_BUNBURY])
+    browser.open(base)
+    put(browser, "bunbury")
+    # Pressed the moment it shows, long before the query settles: LaCuerda's search, by hand; the page's own then
+    # sends nothing.
+    pressed = browser.js(
+        "new Promise((done) => { const until = performance.now() + 10000; const go = () => { "
+        f"const ask = document.querySelector('{ASK}'); "
+        "if (!ask) { if (performance.now() > until) done(null); else setTimeout(go, 5); return; } "
+        f"const shown = {BUTTONS}; ask.click(); done(shown); }}; go(); }})")
+    assert pressed == ["Ask LaCuerda for “bunbury” (1 request)"]
+    assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
+    time.sleep(2)  # long past the 1.5 s a settled query waits
+    assert jobs(queue) == [("lacuerda", "--search=bunbury", "--progress")]
+    assert searches(heard) == [("bunbury", True)]
+
+
+@pytest.mark.parametrize("page, titles, label", [
+    ("", TITLES, "Ask LaCuerda for “bunbury” (1 request)"), ("lookup", LOOKUP_TITLES, "Ask LaCuerda (1 request)")],
+    ids=["library", "lookup"])
+def test_with_its_search_failed_lately_the_one_button_reads_the_names_page(cfg, live, browser, heard, page, titles,
+                                                                            label):
+    base, queue, _ = live
+    lacuerda(cfg, complete=False)
+    sites(cfg, gtptabs=[GTP_BUNBURY])
+    conn = db.connect(cfg.db_path)
+    record_failure(conn, query_key("bunbury"), datetime.now(UTC), "LaCuerda failed: cut short")
+    conn.commit()
+    conn.close()
+    browser.open(base + page)
+    put(browser, "bunbury")
+    assert browser.wait(f"!!document.querySelector('{ASK}')", timeout=5)
+    assert browser.wait(f"{LINE}.startsWith('LaCuerda\\'s search for “bunbury” failed less than an hour ago')")
+    assert browser.js(BUTTONS) == [label]  # why the search waits, and one button: the name's page
+    browser.click(ASK)
+    assert browser.wait(f"{titles}.length === 2", timeout=10)
+    assert sorted(browser.js(titles)) == ["Infinito", "Lady Blue"]
+    assert jobs(queue) == [("lacuerda", "--artist=bunbury")] and searches(heard) == []
 
 
 def test_a_query_whose_song_lacuerdas_index_has_sends_nothing(cfg, live, browser, heard):

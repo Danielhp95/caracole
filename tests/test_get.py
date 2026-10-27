@@ -676,6 +676,24 @@ def test_a_lookup_keeps_a_harmonica_tab_from_the_index_the_nightly_run_keeps(cfg
     assert '"harmonicaTabs":[{"name":"harmonica-1.txt","href":"harmonica-1.txt","key":"G"}]' in data
 
 
+def test_a_lookup_with_the_harptabs_tab_you_picked_keeps_it_and_records_the_pick(cfg, conn, sites):
+    from helpers.harptabs_site import tab_page
+
+    from caracole.overrides import HarpTabsPick
+
+    serve_creep(sites, conn)
+    picked = "https://www.harptabs.com/tab/701/creep-intro"  # in no index: the pick alone names it
+    sites.pages[picked] = (200, tab_page("Creep (Intro)", "radiohead", key="G", body="-4 5\nintro\n"))
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep", harptabs=picked)
+
+    assert progress.states()["harptabs"] == "done" and result.details["harptabs"] == "harmonica tab kept"
+    assert "[harptabs] https://www.harptabs.com/tab/701/creep-intro" in result.details["song"]
+    assert load_overrides(cfg.overrides_file).harptabs == {"radiohead/creep": HarpTabsPick(701, "creep-intro")}
+    assert (folder(cfg, "Radiohead", "Creep") / "harmonica-1.txt").read_text(encoding="utf-8") == "-4 5\nintro\n"
+    assert [u for u in sites.requests if "harptabs" in u] == [picked]
+
+
 def test_a_lookup_of_a_song_harptabs_com_has_nothing_for_asks_it_nothing(cfg, conn, sites):
     serve_creep(sites, conn)
 

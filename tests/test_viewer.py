@@ -10,6 +10,7 @@ import re
 import threading
 from html import unescape
 from pathlib import Path
+from urllib.parse import parse_qs
 
 import pytest
 from helpers import browser
@@ -189,6 +190,88 @@ def test_the_page_credits_the_fingerings():
 def test_an_auto_sheet_says_it_is_unverified():
     html = build_viewer(to_chordpro("[ch]Am[/ch]\nla", title="T", artist="A", auto=True))
     assert "auto-generated, unverified" in html.lower() or "Auto-generated, unverified" in html
+
+
+# --- the artist's name: their songs in the library ---------------------------------------------
+
+
+ARTIST_LINE = re.compile(r'<p class="artist"><a href="([^"]*)" title="([^"]*)"><span>([^<]*)</span></a></p>')
+
+
+@pytest.mark.parametrize("artist", ["Soda Stereo", "Guns N' Roses", "宋冬野", "AC/DC", "C+C Music Factory",
+                                    'Tom & "Jerry" <b>'])
+def test_the_artists_name_links_to_the_library_page_for_their_songs(artist):
+    # A plain link, followed with no script, in a sandbox, from a file and in the Android app's copy alike: the library
+    # page two folders up, with the name in the fragment it reads (``#by=``), every character of it but a letter, a
+    # digit and -._~ percent-encoded (a "+" would read as a space, a "/", a "&" or a "#" as the address's own), the
+    # whole escaped. A kept version's page (no export, its versions) says the same.
+    from helpers.version_pages import WONDERWALL
+
+    cho = f"{{title: Song}}\n{{artist: {artist}}}\n[Am]words\n"
+    for html in (build_viewer(cho), build_viewer(cho, export=False, versions=WONDERWALL)):
+        lines = ARTIST_LINE.findall(html)
+        assert len(lines) == 1, html[:4000]
+        href, title, name = (unescape(part) for part in lines[0])
+        page, _, fragment = href.partition("#")
+        assert page == "../../index.html" and fragment.startswith("by=")
+        assert re.fullmatch(r"[A-Za-z0-9%._~-]+", fragment.removeprefix("by=")), fragment
+        assert parse_qs(fragment) == {"by": [artist]}  # as the page's URLSearchParams reads it
+        assert name == artist and title == f"Songs by {artist}"  # as text: no "<" or '"' of theirs is markup
+
+
+def test_a_sheet_that_names_no_artist_has_no_artist_line():
+    html = build_viewer("{title: Song}\n[Am]words\n")
+    assert '<p class="artist">' not in html and "#by=" not in html
+
+
+# The artist's line as the page lays it out: the link's box and look, the line's, and where the key line starts.
+ARTIST_LOOK = """(() => {
+  const a = document.querySelector(".head .artist a");
+  const line = document.querySelector(".head .artist");
+  const box = a.getBoundingClientRect();
+  const style = getComputedStyle(a);
+  const muted = getComputedStyle(document.querySelector(".facts")).color;
+  return { width: box.width, height: box.height, colour: style.color, muted, line: style.textDecorationLine,
+           lineHeight: parseFloat(getComputedStyle(line).lineHeight), tall: line.getBoundingClientRect().height,
+           gap: document.querySelector(".facts").getBoundingClientRect().top - document.querySelector("h1")
+             .getBoundingClientRect().bottom,
+           sideways: document.documentElement.scrollWidth > document.documentElement.clientWidth };
+})()"""
+
+
+@in_chromium
+@pytest.mark.parametrize("artist", ["U2", "The Synthetic Placeholder Orchestra of the Longest Made-up Name Ever"])
+def test_the_artists_name_reads_as_before_and_shows_it_is_a_link_under_the_pointer_and_the_focus(tmp_path, artist):
+    # Muted, as the line was, and taking no more room than its line of text did: on a phone a thumb's target, 44 px
+    # either way, for "U2" too, that reaches over the gaps above and below it; under the pointer, or reached with
+    # Tab, it is underlined in the text's colour, the focus ring round the name, not across the title. A name that
+    # wraps wraps, and the page never scrolls sideways.
+    from helpers.viewer_pages import viewer, written
+
+    cho = to_chordpro("[ch]Am[/ch]   [ch]C[/ch]\nwords", title="Song", artist=artist)
+    with viewer(tmp_path, written(tmp_path, cho)) as b:
+        look = b.js(ARTIST_LOOK)
+        box = b.js("(() => { const r = document.querySelector('.head .artist a').getBoundingClientRect();"
+                   " return [r.x + r.width / 2, r.y + r.height / 2]; })()")
+        b.send("Input.dispatchMouseEvent", type="mouseMoved", x=box[0], y=box[1])
+        assert b.wait("document.querySelector('.head .artist a').matches(':hover')")
+        hovered = b.js(ARTIST_LOOK)
+        b.send("Input.dispatchMouseEvent", type="mouseMoved", x=5, y=800)
+        assert b.wait("!document.querySelector('.head .artist a').matches(':hover')")
+        b.js("document.querySelector('.head .back').focus()")
+        b.press("Tab")
+        assert b.wait("document.activeElement === document.querySelector('.head .artist a')")
+        focused = b.js(ARTIST_LOOK)
+        rings = b.js("[getComputedStyle(document.activeElement).outlineStyle,"
+                     " getComputedStyle(document.activeElement.firstElementChild).outlineStyle]")
+    assert look["colour"] == look["muted"] and look["line"] == "none", look
+    assert look["width"] >= 44 and look["height"] >= 44, look
+    lines = round(look["tall"] / look["lineHeight"])
+    assert look["tall"] == pytest.approx(lines * look["lineHeight"], abs=1) and lines == (1 if artist == "U2" else 2)
+    assert look["gap"] == pytest.approx(2 + look["tall"] + 8, abs=1)  # its margin, its line(s), the key line's margin
+    assert not look["sideways"]
+    assert hovered["line"] == "underline" and hovered["colour"] != look["muted"], hovered
+    assert focused["line"] == "underline" and rings == ["none", "solid"], (focused, rings)  # round the name alone
 
 
 # --- the key ------------------------------------------------------------------------------------

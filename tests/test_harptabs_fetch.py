@@ -90,6 +90,61 @@ def test_a_title_by_other_artists_alone_is_a_miss_asked_again_after_30_days(conn
     assert run(site, conn, tmp_path, NOW + timedelta(days=31)).missing == 1
 
 
+KNOCKIN = f"{BASE}/tab/1247/knockin-on-heavens-door"
+UNKNOWNS = f"{BASE}/tab/29910/knockin-on-heavens-door"  # a tab "by Unknown", of no artist
+
+
+def with_knockin(site: FakeHarpTabs, *, dylans: bool = True) -> None:
+    """The site with Bob Dylan's artist page and the tabs titled Knockin' on Heaven's Door: his (1247, unless not
+    ``dylans``) and one of no artist (29910), as the live sitemap lists them."""
+    paths = ["artist/1283/bob-dylan", "tab/1247/knockin-on-heavens-door", "tab/29910/knockin-on-heavens-door"]
+    urls = "".join(f"<url><loc>{BASE}/{p}</loc></url>" for p in paths)
+    site.pages[SITEMAP] = (200, fixture("sitemap.xml").replace("</urlset>", urls + "</urlset>"),
+                           {"Content-Type": "application/xml"})
+    if dylans:
+        site.page("tab/1247/knockin-on-heavens-door", tab_page("Knockin' On Heaven's Door", "Bob Dylan", views="57k",
+                                                              body="-4 -4 4\nmine\n"))
+    site.page("tab/29910/knockin-on-heavens-door", fixture("tab_29910_knockin-on-heavens-door.html"))
+
+
+def test_a_tab_page_of_no_artist_is_passed_over_as_another_artists_is(conn, tmp_path):
+    song = add_song(conn, "Bob Dylan", "Knockin' on Heaven's Door")
+    site = FakeHarpTabs()
+    with_knockin(site)
+
+    stats = run(site, conn, tmp_path)
+
+    assert stats == HarpTabsStats(sitemaps=1, tried=1, kept=1)  # no error: the song isn't left for the next run
+    assert site.requests == [SITEMAP, KNOCKIN, UNKNOWNS]
+    assert get_version(conn, kept_files(conn, song.id)[0].version_id).tab_id == "1247"
+    assert (folder(tmp_path, song) / "harmonica-1.txt").read_text(encoding="utf-8") == "-4 -4 4\nmine\n"
+
+
+def test_a_title_whose_one_tab_is_of_no_artist_is_a_miss_and_its_page_read_from_the_cache(conn, tmp_path):
+    song = add_song(conn, "Bob Dylan", "Knockin' on Heaven's Door")
+    site = FakeHarpTabs()
+    with_knockin(site, dylans=False)  # 1247 answers 404, gone
+
+    stats = run(site, conn, tmp_path)
+
+    assert stats == HarpTabsStats(sitemaps=1, tried=1, missing=1) and checked(conn, song) is not None
+    site.requests.clear()
+    assert run(site, conn, tmp_path, NOW + timedelta(days=31)).missing == 1
+    assert site.requests == [SITEMAP]  # the tabs' pages, a 404 and one that parses, both from the cache
+
+
+def test_a_tab_of_no_artist_you_picked_is_kept(conn, tmp_path):
+    song = add_song(conn, "Bob Dylan", "Knockin' on Heaven's Door")
+    site = FakeHarpTabs()
+    with_knockin(site)
+
+    stats = run(site, conn, tmp_path, overrides=picked(song, UNKNOWNS))
+
+    assert stats == HarpTabsStats(sitemaps=1, tried=1, kept=1) and site.requests == [SITEMAP, UNKNOWNS]
+    version = get_version(conn, kept_files(conn, song.id)[0].version_id)
+    assert version.tab_id == "29910" and version.raw["artist"] is None and version.raw["key"] == "C"
+
+
 def test_a_song_whose_artist_the_sitemap_doesnt_list_costs_no_page(conn, tmp_path):
     # "Silent Night" is a tab there, but by no artist named as the song's: no page is read for it.
     add_song(conn, "Mariah Carey", "Silent Night")
@@ -239,3 +294,53 @@ def test_the_sitemap_is_read_again_after_30_days_and_not_before(conn, tmp_path):
     assert site.requests == [SITEMAP]
     assert run(site, conn, tmp_path, NOW + timedelta(days=31)).sitemaps == 1
     assert site.requests == [SITEMAP, SITEMAP]
+
+
+# --- a tab you picked ([harptabs]) -----------------------------------------------------------------------------
+
+
+def picked(song, url: str) -> Overrides:
+    from caracole.overrides import harptabs_pick_from_url
+
+    return Overrides(harptabs={song.key: harptabs_pick_from_url(url)})
+
+
+def test_the_tab_you_picked_is_kept_whoever_its_page_names(conn, tmp_path):
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    site = FakeHarpTabs()
+    site.page("tab/23862/piano-man-c-harmonica", tab_page("Piano Man (C Harmonica)", "Pharm Gal", body="6 6 6\npick\n"))
+
+    stats = run(site, conn, tmp_path, overrides=picked(song, f"{BASE}/tab/23862/piano-man-c-harmonica"))
+
+    assert stats == HarpTabsStats(sitemaps=1, tried=1, kept=1)
+    assert site.requests == [SITEMAP, f"{BASE}/tab/23862/piano-man-c-harmonica"]  # the pick alone: no candidate
+    assert (folder(tmp_path, song) / "harmonica-1.txt").read_text(encoding="utf-8") == "6 6 6\npick\n"
+    [kept] = kept_files(conn, song.id)
+    assert get_version(conn, kept.version_id).tab_id == "23862"
+
+
+def test_a_pick_is_kept_beside_the_tab_the_song_has_and_asked_for_no_more(conn, tmp_path):
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    site = FakeHarpTabs()
+    run(site, conn, tmp_path)  # the most viewed by its artist: Piano Man, tab 25
+    site.page("tab/23862/piano-man-c-harmonica", tab_page("Piano Man (C Harmonica)", "billy joel", body="pick\n"))
+    overrides = picked(song, f"{BASE}/tab/23862/piano-man-c-harmonica")
+
+    stats = run(site, conn, tmp_path, NOW + timedelta(hours=1), overrides=overrides)
+
+    assert stats.kept == 1
+    assert [f.name for f in harmonica_files(conn, song.id)] == ["harmonica-1.txt", "harmonica-2.txt"]
+    assert (folder(tmp_path, song) / "harmonica-2.txt").read_text(encoding="utf-8") == "pick\n"
+    site.requests.clear()
+    assert run(site, conn, tmp_path, NOW + timedelta(days=40), overrides=overrides).tried == 0
+    assert site.requests == []
+
+
+def test_a_pick_gone_is_a_miss_asked_about_again_after_30_days(conn, tmp_path):
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    site = FakeHarpTabs()
+    overrides = picked(song, f"{BASE}/tab/404/gone")
+
+    assert run(site, conn, tmp_path, overrides=overrides) == HarpTabsStats(sitemaps=1, tried=1, missing=1)
+    assert checked(conn, song) == "2026-10-27T03:30:00Z" and kept_files(conn, song.id) == []
+    assert run(site, conn, tmp_path, NOW + timedelta(days=10), overrides=overrides).tried == 0

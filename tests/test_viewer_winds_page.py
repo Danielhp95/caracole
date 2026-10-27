@@ -49,7 +49,8 @@ PANEL = """(() => {
       .map((t) => [t.querySelector('svg').dataset.note | 0, t.querySelector('svg').dataset.fingering,
                    t.querySelector('.wd-name').textContent])]),
     tabs: [...box.querySelectorAll('.wd-tabs li')].map((li) => [li.querySelector('a').textContent,
-      li.querySelector('a').getAttribute('href'), li.querySelector('.wd-key') ? li.querySelector('.wd-key').textContent : null]),
+      li.querySelector('a').getAttribute('href'), li.querySelector('.wd-key') ? li.querySelector('.wd-key').textContent : null,
+      li.querySelector('.wd-key') ? li.querySelector('.wd-key').title : null]),
   };
 })()"""
 FACTS = "document.getElementById('facts').textContent"
@@ -143,7 +144,10 @@ def test_the_harmonica_row_links_the_songs_harmonica_tabs(tmp_path):
         assert b.wait("location.href.endsWith('harmonica-1.txt')")
         text = b.js("document.body.textContent")
     assert found["title"] == ["Harmonica tabs"]
-    assert found["tabs"] == [["harmonica-1.txt", "harmonica-1.txt", "C harp"], ["harmonica-2.txt", "harmonica-2.txt", None]]
+    # harptabs.com's Key chip is the song's key on some tabs and the harp's on others: never named a harp here.
+    said = "The key harptabs.com's page names: the song's on some tabs, the harp's on others"
+    assert found["tabs"] == [["harmonica-1.txt", "harmonica-1.txt", "key C (harptabs.com)", said],
+                             ["harmonica-2.txt", "harmonica-2.txt", None, None]]
     assert "6 6 6 -5 5" in text
 
 
