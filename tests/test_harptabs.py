@@ -80,6 +80,14 @@ def test_a_tab_page_by_unknown_parses_and_names_no_artist():
     assert tab.raw()["artist"] is None
 
 
+def test_a_line_the_page_breaks_with_a_tag_is_a_line_of_the_tab():
+    # The site's editor writes a line as a <p> and breaks one with <br> (Love Me Do's, tab 53: "go to:<br><a>…"), which
+    # its <pre> shows as lines apart: a row of holes so broken from its words is two lines, never one.
+    page = tab_page("Love Me Do", "Beatles",
+                    body="<p>Tabbed by someone<br>-4 -4 5<br/>Love, love me</p><p>4 5</p><p>do</p>\n<p>4</p>")
+    assert parse_tab_page(page).body == "Tabbed by someone\n-4 -4 5\nLove, love me\n4 5\ndo\n4\n"
+
+
 @pytest.mark.parametrize("artist, path", [
     ("Unknown", "artist/1/unknown"), ("?", "artist/4"), ("unknown", "artist/9/x"),
 ])

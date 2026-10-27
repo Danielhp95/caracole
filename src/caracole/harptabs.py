@@ -215,6 +215,18 @@ def _by_line(tree: LexborHTMLParser) -> str:
     return next((_text(node) for node in line.iter() if node.tag in ("a", "span")), "")
 
 
+def _pre_text(pre: LexborNode) -> str:
+    """The tab's ``<pre>`` as its lines show: a ``<br>`` breaks a line, and so does the end of a line its site's
+    editor writes as a ``<p>`` (or a ``<div>``) where no line break follows it in the page."""
+    for node in pre.css("br"):
+        node.replace_with("\n")
+    for node in pre.css("p, div"):
+        after = node.next
+        if after is not None and not (after.is_text_node and (after.text_content or "").startswith("\n")):
+            node.insert_after("\n")
+    return pre.text(deep=True)
+
+
 def parse_tab_page(html: str | bytes, url: str | None = None) -> HarpTab:
     """A tab page's title, artist, tab and chips; ``HarpTabsParseError`` for a page without a tab, a title, or an
     artist named. A page that names the site's catch-all ("Unknown", "?": ``normalize.placeholder_artist``) is of
@@ -223,7 +235,7 @@ def parse_tab_page(html: str | bytes, url: str | None = None) -> HarpTab:
         html = html.decode("utf-8", errors="replace")
     tree = LexborHTMLParser(html)
     pre = tree.css_first('[role="region"][aria-label="Harmonica tab notation"] pre') or tree.css_first("pre")
-    body = pre.text(deep=True) if pre is not None else None
+    body = _pre_text(pre) if pre is not None else None
     if body is None or not body.strip():
         raise HarpTabsParseError("no tab (<pre>) on the page", url=url)
     work = _composition(tree)
