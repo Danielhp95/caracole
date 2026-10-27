@@ -448,6 +448,129 @@ def test_a_versions_progress_is_its_jobs_stages_as_a_lookups_is(conn, cfg):
     assert "Done, but it wasn't kept: budget spent; nothing kept. See the request's output" in shown(get(app, where))
 
 
+# --- posts by song, from the library page's card -----------------------------------------------
+
+
+def test_keep_more_queues_one_job_under_the_songs_key(app, queue, recorder, conn, cfg):
+    song = versioned_song(conn, cfg)
+    first = post(app, "/versions/keep-more", {"song": str(song.id)})
+    again = post(app, "/versions/keep-more", {"song": str(song.id)})
+    assert first.status == again.status == 303
+    assert header(first, "location") == header(again, "location") == f"/{details_href(1)}"  # one job
+    assert queue.active_count() == 1 and song.key in queue.fetching_keys()  # it asks Ultimate Guitar for pages
+    job = queue.job(1)
+    assert job.song_key == song.key and job.title == f"Fetch the other versions of {DISPLAY}"
+    assert [step.label for step in job.steps] == ["Fetching versions from Ultimate Guitar"]
+    assert [stage.name for stage in job.stages] == ["song", "version", "pdf", "pages"]
+    queue.run_pending()
+    assert recorder.calls == [["versions", "--keep-more", "--progress", "--", *NAMES]]
+
+
+def test_keep_more_is_answered_to_the_pages_script_with_its_job(app, queue, conn, cfg):
+    import json
+
+    song = versioned_song(conn, cfg)
+    response = post(app, "/versions/keep-more", {"song": str(song.id)}, accept=JSON)
+    assert response.status == 200
+    job = json.loads(response.body)["job"]
+    assert job["display"] == DISPLAY and job["state"] == "queued"
+
+
+def test_keep_more_is_refused_with_nothing_left_to_keep(app, queue, conn, cfg):
+    from caracole.sheet_versions import note_unkeepable
+
+    song = versioned_song(conn, cfg)
+    note_unkeepable(conn, song.id, OTHER)  # the one left: a keep found it can't keep it
+    refused = post(app, "/versions/keep-more", {"song": str(song.id)})
+    assert refused.status == 409 and "Nothing is left to keep" in shown(refused)
+    assert queue.active_count() == 0
+
+
+def test_keep_more_is_refused_for_an_ignored_song(app, queue, conn, cfg):
+    from caracole.overrides import add_ignore
+
+    song = versioned_song(conn, cfg)
+    add_ignore(cfg.overrides_file, DISPLAY)
+    assert post(app, "/versions/keep-more", {"song": str(song.id)}).status == 409
+    assert queue.active_count() == 0
+
+
+def test_keep_more_joins_a_waiting_lookup_and_a_lookup_joins_it(app, queue, recorder, conn, cfg):
+    # It never looks the song up, as Keep it never does: neither vanishes into the other.
+    song = versioned_song(conn, cfg)
+    assert post(app, "/fetch", {"song": str(song.id)}).status == 303
+    post(app, "/versions/keep-more", {"song": str(song.id)})
+    assert queue.active_count() == 1
+    queue.run_pending()
+    assert recorder.calls == [["get", "--progress", "--", *NAMES], ["versions", "--keep-more", "--progress", "--",
+                                                                    *NAMES]]
+    recorder.calls.clear()
+    post(app, "/versions/keep-more", {"song": str(song.id)})
+    post(app, "/fetch", {"song": str(song.id)})
+    queue.run_pending()
+    assert recorder.calls == [["versions", "--keep-more", "--progress", "--", *NAMES],
+                              ["get", "--progress", "--", *NAMES]]
+
+
+@pytest.mark.parametrize("do,fields", [("choose", {"tab": OTHER}), ("keep", {"tab": OTHER}), ("clear", {})])
+def test_a_post_by_song_id_queues_what_the_post_by_sheet_does(app, queue, recorder, conn, cfg, do, fields):
+    song = versioned_song(conn, cfg)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
+    by_sheet = post(app, f"/versions/{do}", {"sheet": SHEET} | fields)
+    queue.run_pending()
+    by_song = post(app, f"/versions/{do}", {"song": str(song.id)} | fields)
+    assert by_song.status == 303 and header(by_song, "location") == f"/{details_href(2)}"
+    assert header(by_sheet, "location").startswith("/versions?")  # the versions page, as before
+    queue.run_pending()
+    assert len(recorder.calls) == 2 and recorder.calls[0] == recorder.calls[1]
+    assert queue.job(2).title == queue.job(1).title
+
+
+def test_a_post_by_song_id_is_refused_as_one_by_sheet_is(app, queue, conn, cfg):
+    song = versioned_song(conn, cfg)
+    sheet_tab = conn.execute("SELECT v.tab_id FROM files f JOIN versions v ON v.id = f.version_id "
+                             "WHERE f.name = 'sheet.txt'").fetchone()[0]
+    cases = [
+        ("choose", {"song": str(song.id), "tab": sheet_tab}, 409),  # the one already
+        ("keep", {"song": str(song.id), "tab": KEPT}, 409),  # kept already
+        ("choose", {"song": str(song.id), "tab": GONE}, 409),
+        ("clear", {"song": str(song.id)}, 409),  # no pin
+        ("choose", {"song": str(song.id), "tab": "424242"}, 404),
+        ("choose", {"song": str(song.id), "tab": ""}, 400),
+        ("choose", {"song": "999", "tab": OTHER}, 404),  # no such song
+        ("keep-more", {"song": "999"}, 404),
+        ("keep-more", {"song": "one"}, 400),
+        ("keep-more", {}, 404),  # names no song, nor a sheet
+    ]
+    for do, fields, status in cases:
+        assert post(app, f"/versions/{do}", fields).status == status, (do, fields)
+    assert queue.active_count() == 0
+
+
+@pytest.mark.parametrize("path", ["/versions/choose", "/versions/keep", "/versions/clear", "/versions/keep-more"])
+def test_a_post_by_song_id_needs_the_form_token_and_the_same_origin(app, queue, recorder, conn, cfg, path):
+    from caracole.web.app import Request
+
+    song = versioned_song(conn, cfg)
+    cfg.overrides_file.parent.mkdir(parents=True, exist_ok=True)
+    cfg.overrides_file.write_text(f'[pin]\n"{DISPLAY}" = ["{SLUGGED.format(KEPT)}"]\n', encoding="utf-8")
+    form = {"song": str(song.id), "tab": OTHER}
+    assert post(app, path, form, csrf="wrong").status == 403
+    assert post(app, path, form, csrf=None).status == 403
+    assert post(app, path, form, **{"sec-fetch-site": "cross-site", "origin": "http://evil.example"}).status == 403
+    sent = {"host": HOST, "content-type": "text/plain", "sec-fetch-site": "same-origin", "origin": f"http://{HOST}"}
+    assert app.handle(Request("POST", path, sent, f"csrf=tok&song={song.id}".encode())).status == 415
+    queue.run_pending()
+    assert recorder.calls == []
+
+
+def test_keep_more_has_no_page_of_its_own(app, conn, cfg):
+    # The library page's card posts it: the viewer's versions page offers the three it always did.
+    versioned_song(conn, cfg)
+    assert get(app, versions_url(OTHER, "keep-more")).status == 400
+
+
 # --- an export from a version page -------------------------------------------------------------
 
 
@@ -469,17 +592,21 @@ def test_the_commands_queued_are_ones_caracole_versions_reads(app, queue, record
     from caracole.cli import build_app
     from caracole.overrides import add_pin
 
-    versioned_song(conn, cfg)
+    song = versioned_song(conn, cfg)
     add_pin(cfg.overrides_file, DISPLAY, [SLUGGED.format(KEPT)])
     post(app, "/versions/keep", {"sheet": SHEET, "tab": OTHER})
     post(app, "/versions/clear", {"sheet": SHEET})
     queue.run_pending()
+    post(app, "/versions/keep-more", {"song": str(song.id)})
+    queue.run_pending()
     heard = []
     monkeypatch.setattr(versions_cmd, "keep", lambda cfg, display, tab, *, progress: heard.append(("keep", display, tab, progress)))
     monkeypatch.setattr(versions_cmd, "clear", lambda cfg, display, *, progress: heard.append(("clear", display, progress)))
+    monkeypatch.setattr(versions_cmd, "keep_more",
+                        lambda cfg, display, *, progress: heard.append(("keep-more", display, progress)))
     config = tmp_path / "caracole.toml"
     config.write_text(f'library_dir = "{cfg.library_dir}"\n', encoding="utf-8")
     for args in recorder.calls:
         result = CliRunner().invoke(build_app(), ["--config", str(config), *args])
         assert result.exit_code == 0, (args, result.output)
-    assert heard == [("keep", DISPLAY, int(OTHER), True), ("clear", DISPLAY, True)]
+    assert heard == [("keep", DISPLAY, int(OTHER), True), ("clear", DISPLAY, True), ("keep-more", DISPLAY, True)]

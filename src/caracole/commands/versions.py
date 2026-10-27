@@ -2,11 +2,12 @@
 
     caracole versions "Oasis - Wonderwall"                  # every version, in rank order
     caracole versions "Oasis - Wonderwall" --keep 39144     # keep one beside the sheet, fetched now
+    caracole versions "Oasis - Wonderwall" --keep-more      # keep the next ones not kept, one lookup's worth
     caracole versions "Oasis - Wonderwall" --choose 39144   # make it the sheet: caracole get --tab
     caracole versions "Oasis - Wonderwall" --clear          # back to caracole's pick
 
-The list only reads, and never waits for caracole's lock; ``--keep``, ``--choose`` and ``--clear``
-are lookups (one song, now, at the interactive pace). ``--progress`` adds a JSON line per event, as
+The list only reads, and never waits for caracole's lock; ``--keep``, ``--keep-more``, ``--choose`` and
+``--clear`` are lookups (one song, now, at the interactive pace). ``--progress`` adds a JSON line per event, as
 ``caracole get --progress`` does, for caracole serve. The logic is imported inside the command, as
 every command module is imported on every start.
 """
@@ -25,15 +26,18 @@ def register(app: typer.Typer) -> None:
         song: list[str] = typer.Argument(..., metavar='"ARTIST - TITLE"', help='"Artist - Title", or ARTIST TITLE.'),
         keep: str | None = typer.Option(None, "--keep", metavar="TAB",
                                         help="Keep this version beside the sheet, fetched now (its id or address)."),
+        keep_more: bool = typer.Option(False, "--keep-more",
+                                       help="Keep the versions not kept yet, fetched now: as many as one lookup may."),
         choose: str | None = typer.Option(None, "--choose", metavar="TAB",
                                           help="Make this version the sheet: recorded under \\[pin] in overrides.toml."),
         clear: bool = typer.Option(False, "--clear",
                                    help="Take the song's chords pin out of \\[pin]: caracole's pick is the sheet again."),
         progress: bool = typer.Option(False, "--progress", help="A JSON line per event too, for caracole serve."),
     ) -> None:
-        """List a song's Ultimate Guitar chords versions; keep one beside the sheet, choose one, or clear your choice."""
-        if sum(x is not None for x in (keep, choose)) + clear > 1:
-            fail("caracole versions takes one of --keep, --choose and --clear", 2)
+        """List a song's Ultimate Guitar chords versions; keep one or more beside the sheet, choose one, or clear your
+        choice."""
+        if sum(x is not None for x in (keep, choose)) + keep_more + clear > 1:
+            fail("caracole versions takes one of --keep, --keep-more, --choose and --clear", 2)
         artist, title = _artist_title(song)
         display = f"{artist} - {title}"
         cfg = load_cfg(ctx)
@@ -41,6 +45,8 @@ def register(app: typer.Typer) -> None:
 
         if keep is not None:
             versions_cmd.keep(cfg, display, _tab(keep, "--keep"), progress=progress)
+        elif keep_more:
+            versions_cmd.keep_more(cfg, display, progress=progress)
         elif choose is not None:
             versions_cmd.choose(cfg, display, _tab(choose, "--choose"), progress=progress)
         elif clear:

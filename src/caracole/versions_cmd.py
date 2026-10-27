@@ -8,14 +8,21 @@
   takes it; then its page is rendered and the library page written again. It is noted as yours, so
   the nightly fetch keeps it whatever the ranking. A block, a spent budget or a site's error keeps
   nothing, says so and exits 0, as in every command.
+- ``keep_more``: ``keep`` for each version a keep may still keep (``sheet_versions.may_keep``: neither kept
+  nor the one nor gone, not under ``[block]``, none a keep found it can't keep), in rank order, through one
+  client at the lookup pace, until the lookup's budget or the hour's is spent, Ultimate Guitar blocks caracole
+  or fails: as many as one lookup may, what it kept before that kept, and the rest counted for the next press.
+  A version whose page has no sheet, or the very text of another kept file, is noted so
+  (``note_unkeepable``, as ``keep`` notes it) and never read again. Then the song is rendered and the library
+  page written, once. With nothing left to keep it sends nothing.
 - ``choose``: ``caracole get --tab`` for one of the song's versions: recorded under ``[pin]``, it
   becomes the sheet, and the title, the PDF, the viewer and the songbooks use it.
 - ``clear``: the song's chords pins out of ``[pin]`` (``overrides.remove_pin``), then ``caracole get``
   again, so caracole's pick is the sheet.
 
 ``--progress`` writes ``caracole get --progress`` lines (get.py ``progress_line``): ``choose`` and
-``clear`` are lookups, and ``keep`` reports the stages ``song``, ``version``, ``pdf`` and ``pages``
-and its ``done`` the same way, for caracole serve.
+``clear`` are lookups, and ``keep`` and ``keep_more`` report the stages ``song``, ``version`` (``keep_more``'s
+counting, "kept 3 of 10"), ``pdf`` and ``pages`` and their ``done`` the same way, for caracole serve.
 """
 
 from __future__ import annotations
@@ -40,6 +47,8 @@ from caracole.commands._common import (
 )
 
 if TYPE_CHECKING:
+    from datetime import datetime
+
     from caracole.config import Config
     from caracole.overrides import Overrides
     from caracole.sheet_versions import SheetVersion
@@ -160,11 +169,61 @@ class _Events:
         self({"stage": name, "state": state, "detail": detail})
 
 
+def _cooling(conn: sqlite3.Connection, now: datetime) -> str | None:
+    """Why Ultimate Guitar may not be asked now, its cooldown after a block, in a keep's words; None when it may."""
+    from caracole.health import get_state, is_cooling
+
+    if not is_cooling(conn, PROVIDER, now):
+        return None
+    until = get_state(conn, PROVIDER).cooldown_until
+    return (f"Ultimate Guitar is cooling down after a block, until "
+            f"{until.strftime('%Y-%m-%d %H:%M UTC') if until else 'later'}; nothing kept.")
+
+
+def _stopped(cfg: Config, conn: sqlite3.Connection, e: Exception, now: datetime) -> tuple[str, str, bool]:
+    """A block, a spent budget or a site's error that stopped a keep, recorded as health.py keeps each (a block
+    cools Ultimate Guitar down, an error is counted): the version stage's state, why in words, and whether to ask
+    again later (not after a block: its cooldown says until when)."""
+    from caracole.health import record_block, record_error
+    from caracole.http import ProviderBlocked, ProviderError
+
+    if isinstance(e, ProviderBlocked):
+        state = record_block(conn, e.provider, now, str(e))
+        until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
+        return "skipped", f"Ultimate Guitar blocked caracole ({e}): no more requests to it until {until}", False
+    if isinstance(e, ProviderError):
+        record_error(conn, e.provider, now, str(e))
+        return "failed", f"Ultimate Guitar failed ({e})", True
+    p = cfg.provider(PROVIDER)  # BudgetExhausted
+    return ("skipped", f"The lookup requests to Ultimate Guitar are spent ({p.lookup_requests} a lookup, "
+                       f"{p.lookup_per_hour} an hour)", True)
+
+
+def _nothing_kept(why: str, again: bool) -> str:
+    return f"{why}; nothing kept." + (" Ask again later." if again else "")
+
+
+def _came_to(cfg: Config, conn: sqlite3.Connection, song: Song, tab: str, outcome: str) -> str:
+    """What ``ug.fetch.keep_version`` came to for one version, in a sentence. A version it can't keep (``no text``,
+    ``held``) is noted so (``sheet_versions.note_unkeepable``): ``--keep-more`` never reads its page again, and the
+    library page counts it no more."""
+    from caracole.library import song_dir
+    from caracole.sheet_versions import note_unkeepable, same_pages, version_names
+
+    if outcome in ("no text", "held"):
+        note_unkeepable(conn, song.id, tab)
+    if outcome == "kept":
+        txt = song_dir(cfg.library_dir, song) / version_names(tab)[0]
+        return f"Kept tab {tab} beside the sheet of {song.display}: {txt}"
+    page = same_pages(conn, song.id).get(tab, "another kept version") if outcome == "same" else "another kept version"
+    return f"Tab {tab} of {song.display}: " + KEPT_WORDS.get(outcome, outcome).format(page=page) + "."
+
+
 def keep(cfg: Config, display: str, tab: int, *, progress: bool = False) -> None:
     import time
 
-    from caracole.health import get_state, is_cooling, record_block, record_error, record_ok
-    from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
+    from caracole.health import record_ok
+    from caracole.http import BudgetExhausted, ProviderError
     from caracole.library import song_dir
     from caracole.overrides import load_overrides
     from caracole.render import render_all
@@ -201,12 +260,10 @@ def keep(cfg: Config, display: str, tab: int, *, progress: bool = False) -> None
             typer.echo(said)
             return done()
         now = utcnow()
-        if is_cooling(conn, PROVIDER, now):
-            until = get_state(conn, PROVIDER).cooldown_until
-            said = (f"Ultimate Guitar is cooling down after a block, until "
-                    f"{until.strftime('%Y-%m-%d %H:%M UTC') if until else 'later'}; nothing kept.")
-            events.stage("version", "skipped", said)
-            typer.echo(said)
+        cooling = _cooling(conn, now)
+        if cooling is not None:
+            events.stage("version", "skipped", cooling)
+            typer.echo(cooling)
             return done()
         client = make_client(cfg, conn, PROVIDER, lookup_run_id(now), interactive=True)
         ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank, library_dir=cfg.library_dir,
@@ -214,18 +271,9 @@ def keep(cfg: Config, display: str, tab: int, *, progress: bool = False) -> None
         refused: tuple[str, str] | None = None  # the version stage's state and line, when nothing was kept
         try:
             outcome = keep_version(ctx, song, tab)
-        except ProviderBlocked as e:
-            state = record_block(conn, e.provider, now, str(e))
-            until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
-            refused = ("skipped",
-                       f"Ultimate Guitar blocked caracole ({e}): no more requests to it until {until}; nothing kept.")
-        except BudgetExhausted:
-            p = cfg.provider(PROVIDER)
-            refused = ("skipped", f"The lookup requests to Ultimate Guitar are spent ({p.lookup_requests} a lookup, "
-                                  f"{p.lookup_per_hour} an hour); nothing kept. Ask again later.")
-        except ProviderError as e:
-            record_error(conn, e.provider, now, str(e))
-            refused = ("failed", f"Ultimate Guitar failed ({e}); nothing kept. Ask again later.")
+        except (BudgetExhausted, ProviderError) as e:
+            state, why, again = _stopped(cfg, conn, e, now)
+            refused = (state, _nothing_kept(why, again))
         finally:
             requests = client.requests_made
             client.close()
@@ -235,25 +283,105 @@ def keep(cfg: Config, display: str, tab: int, *, progress: bool = False) -> None
             return done()  # the requests sent before it count
         if requests:
             record_ok(conn, PROVIDER, now)
-        txt = song_dir(cfg.library_dir, song) / version_names(str(tab))[0]
-        if outcome == "kept":
-            said = f"Kept tab {tab} beside the sheet of {song.display}: {txt}"
-        else:
-            page = "another kept version"
-            if outcome == "same":
-                from caracole.sheet_versions import same_pages
-
-                page = same_pages(conn, song.id).get(str(tab), page)
-            said = f"Tab {tab} of {song.display}: " + KEPT_WORDS.get(outcome, outcome).format(page=page) + "."
+        said = _came_to(cfg, conn, song, str(tab), outcome)
         events.stage("version", "done" if outcome in ("kept", "same", "sheet") else "skipped", said)
         typer.echo(said)
         if outcome == "kept":
             events.stage("pdf", "running")
             render_all(conn, cfg, overrides, now=now, song_ids={song.id})
             events.stage("pdf", "done", "the version's page made")
-            viewer = txt.with_name(version_names(str(tab))[2])
+            viewer = song_dir(cfg.library_dir, song) / version_names(str(tab))[2]
             if viewer.is_file():
                 typer.echo(f"Viewer: {viewer}")
+        events.stage("pages", "running")
+        write_pages(conn, cfg, overrides, utcnow())
+        events.stage("pages", "done", "_todo.md and index.html rewritten")
+    done()
+
+
+def keep_more(cfg: Config, display: str, *, progress: bool = False) -> None:
+    """The song's versions not kept yet, kept in rank order, as many as one lookup may (the module's docstring);
+    exits 0 on a block, a spent budget or a site's error, as ``keep`` does."""
+    import time
+
+    from caracole.health import record_ok
+    from caracole.http import BudgetExhausted, ProviderError
+    from caracole.logs import plural
+    from caracole.overrides import load_overrides
+    from caracole.render import render_all
+    from caracole.sheet_versions import in_library, may_keep
+    from caracole.ug.fetch import FetchContext, keep_version
+
+    events = _Events(progress)
+    started = time.monotonic()
+    overrides = load_ovr(cfg)
+    events.stage("song", "running")
+    requests = 0
+
+    def done() -> None:
+        events({"done": {"seconds": round(time.monotonic() - started, 3), "requests": {PROVIDER: requests},
+                         "ok": True, "refused": None}})
+
+    with exclusive(cfg, f"versions {display} --keep-more", interactive=True), closing(open_db(cfg)) as conn:
+        song = song_named(conn, display, overrides)
+        events({"song": {"id": song.id, "display": song.display}})
+        events.stage("song", "done", "in the library")
+        events.stage("version", "running")
+        todo = may_keep(conn, song.id, in_library(conn, song.id, cfg.rank), overrides.block)
+        if not todo:
+            said = (f"Nothing more to keep of {song.display}: every Ultimate Guitar version caracole may keep is "
+                    "kept already, or can't be.")
+            events.stage("version", "skipped", said)
+            typer.echo(said)
+            return done()
+        now = utcnow()
+        cooling = _cooling(conn, now)
+        if cooling is not None:
+            events.stage("version", "skipped", cooling)
+            typer.echo(cooling)
+            return done()
+        client = make_client(cfg, conn, PROVIDER, lookup_run_id(now), interactive=True)
+        ctx = FetchContext(conn=conn, client=client, overrides=overrides, rank=cfg.rank, library_dir=cfg.library_dir,
+                           now=now, reload_overrides=lambda: load_overrides(cfg.overrides_file))
+        kept, files, changed = 0, False, False  # kept (a file, or a kept one's text); a file written; a count moved
+        stopped: tuple[str, str, bool] | None = None  # what stopped it: _stopped's
+        spent = False  # the budget: how a press ends while versions are left
+        try:
+            for v in todo:
+                outcome = keep_version(ctx, song, int(v.tab_id))
+                kept += outcome in ("kept", "same")
+                files = files or outcome == "kept"
+                changed = changed or outcome in ("kept", "same", "no text", "held", "gone")
+                typer.echo(_came_to(cfg, conn, song, v.tab_id, outcome))
+                events.stage("version", "running", f"kept {kept} of {len(todo)}")
+        except (BudgetExhausted, ProviderError) as e:
+            stopped, spent = _stopped(cfg, conn, e, now), isinstance(e, BudgetExhausted)
+        finally:
+            requests = client.requests_made
+            client.close()
+        if requests and (stopped is None or spent):
+            record_ok(conn, PROVIDER, now)
+        if stopped is not None and not kept:
+            state, why, again = stopped
+            said = _nothing_kept(why, again)
+            events.stage("version", state, said)
+            typer.echo(said)
+        else:
+            counted = f"kept {kept} of {len(todo)}"
+            if stopped is not None and not spent:  # a block or an error after some were kept: say it
+                counted += f"; {stopped[1]}"
+                typer.echo(f"{stopped[1]}.")
+            events.stage("version", "done" if kept else "skipped", counted)
+            left = len(may_keep(conn, song.id, in_library(conn, song.id, cfg.rank), overrides.block))
+            again = ": ask again" if stopped is None or stopped[2] else ""  # not after a block: it cools down
+            typer.echo(f"Kept {plural(kept, 'version') if kept else 'no version'} of {song.display}; "
+                       + (f"{left} more not kept{again}." if left else "none is left to keep."))
+        if stopped is not None and not changed:
+            return done()  # nothing to write, as keep's refusals
+        if files:
+            events.stage("pdf", "running")
+            render_all(conn, cfg, overrides, now=now, song_ids={song.id})
+            events.stage("pdf", "done", "the versions' pages made")
         events.stage("pages", "running")
         write_pages(conn, cfg, overrides, utcnow())
         events.stage("pages", "done", "_todo.md and index.html rewritten")

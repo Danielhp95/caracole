@@ -238,3 +238,47 @@ def test_unkeepable_versions_are_noted_once_and_go_with_the_song(conn):
 
     assert unkeepable(conn, song.id) == ("60",)
     assert UNKEEPABLE_KV in _PER_SONG_KV  # a merge or a removal deletes it
+
+
+def test_in_library_of_lists_each_song_as_in_library_does(conn, cfg):
+    # The library page reads every song's versions at once (in_library_of): the same lists in_library gives each,
+    # the one, the kept ones, those a kept one's text, gone ones, notes and a variant's ranking among them.
+    from caracole.db import kv_set_json
+    from caracole.sheet_versions import in_library_of, same_key
+    from caracole.songs import update_song
+
+    lib = cfg.library_dir
+    kept = add_song(conn, "Oasis", "Wonderwall")
+    one = chords(conn, kept.id, "1", rating=4.9, coverage=0.9, raw={"version_description": " Capo 2\n  slowly "})
+    two = chords(conn, kept.id, "2", rating=4.8, raw={"version_description": {"not": "a note"}})
+    chords(conn, kept.id, "3", rating=4.7)
+    mark_gone(conn, chords(conn, kept.id, "4", rating=4.95))
+    keep_file(conn, lib, song=kept, version_id=one, name="sheet.txt", data=b"one", rank=1)
+    keep_file(conn, lib, song=kept, version_id=two, name="version-2.txt", data=b"two", rank=2)
+    kv_set_json(conn, same_key(kept.id), {"3": "version-2.html", "9": "version-9.html"})
+    elsewhere = add_song(conn, "Soda Stereo", "De Música Ligera")
+    theirs = chords(conn, elsewhere.id, "lc-1", provider="lacuerda", kind="acordes")
+    chords(conn, elsewhere.id, "5", rating=4.1, votes=10)
+    chords(conn, elsewhere.id, "6", rating=4.0, votes=900, raw={"version_description": "live"})
+    keep_file(conn, lib, song=elsewhere, version_id=theirs, name="sheet.txt", data=b"lc", rank=1)
+    uke = add_song(conn, "Vance Joy", "Riptide")
+    chords(conn, uke.id, "301", kind="ukulele")
+    stale = add_song(conn, "Radiohead", "Creep")
+    chords(conn, stale.id, "7")
+    mark_stale(conn, stale.id, "ug")
+    acoustic = add_song(conn, "Radiohead", "Nude")
+    update_song(conn, acoustic.id, variant="acoustic")
+    chords(conn, acoustic.id, "8", rating=4.9, votes=500)
+    chords(conn, acoustic.id, "81", rating=4.2, votes=50)
+    conn.execute("UPDATE versions SET label = 'Acoustic' WHERE tab_id = '81'")
+    none = add_song(conn, "Nobody", "Nothing")
+    ids = [kept.id, elsewhere.id, uke.id, stale.id, acoustic.id, none.id]
+
+    each = {song_id: listed for song_id in ids if (listed := in_library(conn, song_id, POLICY))}
+
+    assert in_library_of(conn, ids, POLICY) == each
+    assert set(each) == {kept.id, elsewhere.id, uke.id, acoustic.id}
+    assert [(v.tab_id, v.kept, v.page, v.note) for v in each[kept.id]] == [
+        ("1", True, "sheet.html", "Capo 2 slowly"), ("2", True, "version-2.html", None),
+        ("3", True, "version-2.html", None), ("4", False, None, None)]
+    assert in_library_of(conn, [], POLICY) == {}

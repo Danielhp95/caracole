@@ -1,5 +1,6 @@
 """caracole serve's versions page: one of Ultimate Guitar's chords versions of a song's sheet, made the one the
-title opens, kept beside the sheet, or the song taken back to caracole's pick.
+title opens, kept beside the sheet, or the song taken back to caracole's pick; and the versions not kept yet,
+fetched.
 
     GET  /versions?sheet=&tab=&do=   the version (``sheet``: the library path of the viewer it was asked from;
                           ``tab``: its UG tab; ``do``: choose, keep or clear) with the one form that does it,
@@ -10,18 +11,25 @@ title opens, kept beside the sheet, or the song taken back to caracole's pick.
                           pace)
     POST /versions/clear   Back to caracole's pick: ``caracole versions --clear --progress`` queued, for a
                           song with a ``[pin]`` that chooses its sheet
+    POST /versions/keep-more  Fetch them: ``caracole versions --keep-more --progress`` queued (the versions not
+                          kept yet, as many as one lookup may), for a song with some left to keep
+
+Each post names the version's song by the viewer it came from (``sheet``), or by its id (``song``), as the library
+page's song card posts it, ``tab`` the version; Fetch them, which only the card posts, has no page of its own. A
+post by ``sheet`` goes to the versions page that shows how it goes; one by ``song`` answers as the library page's
+other requests do (``WebApp.queued``: its line on /jobs, or the job to the page's script).
 
 A sheet viewer served from the library runs in a sandbox, with no way to post a form to the server, so its
 switcher links ``GET /versions?…``, a page of the server's own with no script, whose form ``POST``s with the
 form token like the others. Each post is one command queued under the song's key, as a lookup's is, so the
-song's card shows it and its jobs join (jobs.py: a version made the one or kept, or the pin taken out, is a pick
-of the song's as a lookup's ``--tab`` is): the same version asked twice is one job, Make this the one takes the place of the
-song's lookup that still waits. The server writes no overrides.toml and keeps no file itself: the command does,
-under caracole's lock, at the lookup pace and within its budgets. Its progress lines are the job's stages, as a
-lookup's are. Once the job is done, the page says what it came to from the song's state, read again, never from
-the command's exit (a block, a spent budget or the hour's cap exits 0, the sheet as it was): the version the
-one, else its ``[pin]`` recorded for the nightly run, else nothing changed; a version kept or not; the ``[pin]``
-gone or still there.
+song's card shows it and its jobs join (jobs.py: a version made the one or kept, the versions not kept fetched,
+or the pin taken out, is a pick of the song's as a lookup's ``--tab`` is): the same version asked twice is one
+job, Make this the one takes the place of the song's lookup that still waits. The server writes no overrides.toml
+and keeps no file itself: the command does, under caracole's lock, at the lookup pace and within its budgets.
+Its progress lines are the job's stages, as a lookup's are. Once the job is done, the page says what it came to
+from the song's state, read again, never from the command's exit (a block, a spent budget or the hour's cap
+exits 0, the sheet as it was): the version the one, else its ``[pin]`` recorded for the nightly run, else
+nothing changed; a version kept or not; the ``[pin]`` gone or still there.
 
 Each refusal is a ``Refused``: a sheet that is no viewer caracole wrote for a song of the library (404; a
 version's page that went once that version became the one still names its song, and Back to the sheet opens
@@ -29,9 +37,10 @@ sheet.html), a tab
 that isn't a number (400) or isn't one of the song's chords versions on Ultimate Guitar (404), and, posted, what
 can't be done (409): Make this the one on the one, Keep it on a version kept already, either on a version UG no
 longer has or one under ``[block]`` (as ``caracole versions`` refuses it), Back to caracole's pick on a song
-with no ``[pin]`` of its sheet (any other pin stays, a tab's, as ``caracole versions --clear`` leaves it), and an
-ignored song. The page itself says
-so for those, and offers no form.
+with no ``[pin]`` of its sheet (any other pin stays, a tab's, as ``caracole versions --clear`` leaves it), Fetch
+them on a song with nothing left to keep (``sheet_versions.may_keep``: what the card counts as not kept), and an
+ignored song. A ``song`` that isn't a number is refused (400), and one the library hasn't got (404). The page
+itself says so for those, and offers no form.
 """
 
 from __future__ import annotations
@@ -48,16 +57,19 @@ from caracole.web.pages import Refused
 from caracole.web.status import details_href
 
 if TYPE_CHECKING:
+    from caracole.overrides import Overrides
     from caracole.sheet_versions import SheetVersion
     from caracole.songs import Song
 
-DOINGS = ("choose", "keep", "clear")
+DOINGS = ("choose", "keep", "clear")  # the versions page's
+POSTS = (*DOINGS, "keep-more")  # Fetch them: the library page's card alone posts it
+TABLESS = ("clear", "keep-more")  # what names no version
 MAX_TAB = 12  # digits: UG's tab ids are seven or eight
 
 ROUTES = (
     Route("GET", "/versions", lambda app, asked: versions_page(app, asked.target)),
     *(Route("POST", f"/versions/{do}", lambda app, asked, form, do=do: versions_post(app, do, form),
-            page="the version's page") for do in DOINGS),
+            page="the version's page" if do in DOINGS else "the library") for do in POSTS),
 )
 
 _NOT_AN_ADDRESS = Refused(400, "Not an address", "That address can't be read.")
@@ -67,11 +79,12 @@ _SOURCES = {"lacuerda": "LaCuerda's sheet", "auto": "the auto-chords sheet"}
 
 @dataclass(frozen=True)
 class _Asked:
-    """What a versions page or post names: the song, the viewer it came from (its library path) and its folder (as
-    a quoted address), the version (None for Back to caracole's pick), every version, what the song's sheet is
-    now, in words, the song's ``[pin]`` tabs that choose its sheet (``caracole versions --clear`` takes out those
-    alone, never another pin, a tab's) and every one it has, the tabs under ``[block]``, and the viewer Back to
-    the sheet opens."""
+    """What a versions page or post names: the song, the viewer it came from (its library path; a post by song,
+    the song's sheet.html) and its folder (as a quoted address), the version (None for Back to caracole's pick
+    and Fetch them), every version, what the song's sheet is now, in words, the song's ``[pin]`` tabs that choose
+    its sheet (``caracole versions --clear`` takes out those alone, never another pin, a tab's) and every one it
+    has, the tabs under ``[block]``, the viewer Back to the sheet opens, and the versions a keep may still keep
+    (``sheet_versions.may_keep``, what Fetch them keeps)."""
 
     song: Song
     sheet: str
@@ -83,6 +96,7 @@ class _Asked:
     pins: tuple[int, ...]
     blocked: frozenset[int]
     back: str  # the viewer to go back to: ``sheet``, or sheet.html once the version whose page that was is the one
+    to_keep: tuple[SheetVersion, ...]
 
     @property
     def pinned(self) -> bool:
@@ -110,32 +124,45 @@ def versions_page(app: WebApp, target: str) -> Response:
 
 
 def versions_post(app: WebApp, do: str, form: dict[str, str]) -> Response:
-    """``POST /versions/<do>``: queue the command, and go to the page that shows how it goes."""
-    asked = _asked(app, form.get("sheet", ""), form.get("tab", ""), do)
+    """``POST /versions/<do>``: queue the command, and go to the page that shows how it goes (a post by song: as
+    the library page's requests go)."""
+    by_song = bool(form.get("song", "").strip())
+    if by_song:
+        asked = _asked_song(app, form["song"], form.get("tab", ""), do)
+    else:
+        asked = _asked(app, form.get("sheet", ""), form.get("tab", ""), do)
     why = _cant(do, asked)
     if why is not None:
         raise Refused(409, "Nothing to do", why)
     not_ignored(asked.song, app.overrides())
     song = asked.song
     titles = {"choose": f"Make a version the one: {song.display}", "keep": f"Keep a version of {song.display}",
-              "clear": f"Back to caracole's pick: {song.display}"}
+              "clear": f"Back to caracole's pick: {song.display}",
+              "keep-more": f"Fetch the other versions of {song.display}"}
     job, _ = app.submit(titles[do], song.key, _steps(do, asked), fetching=True, display=song.display)
+    if by_song or do not in DOINGS:
+        return app.queued(job)
     return app.queued(job, f"/versions?{_query(do, asked, job=job.id)}")
 
 
 # --- what a page or a post names ---------------------------------------------------------------
 
 
+def _a_tab(tab: str, do: str) -> None:
+    """Refused (400) when ``do`` names a version and ``tab`` names no UG tab."""
+    if do not in TABLESS and not (tab.isascii() and tab.isdigit() and len(tab) <= MAX_TAB):
+        raise Refused(400, "Not a version", "Which version? The address names no Ultimate Guitar tab.")
+
+
 def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
     """The song a viewer's library path names, as caracole wrote that viewer for it, and its version ``tab`` (not
-    for ``clear``); raises Refused."""
+    for ``clear`` and ``keep-more``); raises Refused."""
     from caracole.library import songs_in_folder
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS, written_file
-    from caracole.sheet_versions import SHEET_PAGE, in_library, sheet_pins
+    from caracole.sheet_versions import SHEET_PAGE, in_library
     from caracole.web.app import version_page_tab
 
-    if do != "clear" and not (tab.isascii() and tab.isdigit() and len(tab) <= MAX_TAB):
-        raise Refused(400, "Not a version", "Which version? The address names no Ultimate Guitar tab.")
+    _a_tab(tab, do)
     parts = tuple(sheet.split("/"))
     if len(parts) < 2 or any(p in ("", ".", "..") for p in parts) or not (
             parts[-1] in (HUMAN_OUTPUTS[2], AUTO_OUTPUTS[2]) or version_page_tab(parts[-1]) is not None):
@@ -155,16 +182,45 @@ def _asked(app: WebApp, sheet: str, tab: str, do: str) -> _Asked:
             back = sheet
         if song is None:
             raise _NO_SHEET
-        versions = in_library(conn, song.id, app.cfg.rank)
-        the_one = _the_one(conn, song.id, versions)
-        pins = tuple(sheet_pins(conn, song.id, overrides.pin.get(song.key, ())))
+        return _of(conn, app, overrides, song, tab, do, sheet, "/".join(quote(p) for p in parts[:-1]), back)
+
+
+def _asked_song(app: WebApp, song_text: str, tab: str, do: str) -> _Asked:
+    """The song a post names by its id (the library page's card), and its version ``tab`` (not for ``clear`` and
+    ``keep-more``); raises Refused."""
+    from caracole.library import song_folder
+    from caracole.sheet_versions import SHEET_PAGE
+    from caracole.songs import get_song
+    from caracole.web.app import no_such_song, song_id
+
+    _a_tab(tab, do)
+    asked = song_id(song_text)
+    overrides = app.overrides()
+    with no_such_song(), app.db() as conn:
+        song = get_song(conn, asked)
+    folder = song_folder(song.artist, song.title)
+    sheet = "/".join((*folder, SHEET_PAGE))
+    with app.db() as conn:
+        return _of(conn, app, overrides, song, tab, do, sheet, "/".join(quote(p) for p in folder), sheet)
+
+
+def _of(conn, app: WebApp, overrides: Overrides, song: Song, tab: str, do: str, sheet: str, folder: str,
+        back: str) -> _Asked:
+    """What a page or a post names, once its song is found; Refused (404) for a ``tab`` that isn't one of the song's
+    versions."""
+    from caracole.sheet_versions import in_library, may_keep, sheet_pins
+
+    versions = in_library(conn, song.id, app.cfg.rank)
+    the_one = _the_one(conn, song.id, versions)
+    pins = tuple(sheet_pins(conn, song.id, overrides.pin.get(song.key, ())))
+    to_keep = tuple(may_keep(conn, song.id, versions, overrides.block))
     version = None
-    if do != "clear":
+    if do not in TABLESS:
         version = next((v for v in versions if v.tab_id == tab), None)
         if version is None:
             raise Refused(404, "No such version", f"Ultimate Guitar lists no such chords version of {song.display}.")
-    return _Asked(song, sheet, "/".join(quote(p) for p in parts[:-1]), version, versions, the_one, pins,
-                  tuple(overrides.pin.get(song.key, ())), overrides.block, back)
+    return _Asked(song, sheet, folder, version, versions, the_one, pins, tuple(overrides.pin.get(song.key, ())),
+                  overrides.block, back, to_keep)
 
 
 def _the_one(conn, song_id: int, versions: list[SheetVersion]) -> str | None:
@@ -190,6 +246,9 @@ def _cant(do: str, asked: _Asked) -> str | None:
     if do == "clear":
         return None if asked.pinned else (f"caracole picks the sheet of {asked.song.display} already: no version "
                                           "of yours is pinned in overrides.toml.")
+    if do == "keep-more":
+        return None if asked.to_keep else (f"Nothing is left to keep of {asked.song.display}: every Ultimate "
+                                           "Guitar version caracole may keep is kept already, or can't be.")
     assert v is not None
     if v.gone:
         return "Ultimate Guitar no longer has this version: it stays listed until the next fetch drops it."
@@ -207,11 +266,12 @@ def _cant(do: str, asked: _Asked) -> str | None:
 def _steps(do: str, asked: _Asked) -> list[tuple[str, tuple[str, ...]]]:
     """The command ``do`` queues, ``caracole versions``: Make this the one runs ``caracole get --tab`` with the
     tab's own page (UG answers a slugged tab at its slugged address alone), and checks again, when it runs, that
-    the tab is still one of the song's versions, UG still has it and it isn't under ``[block]``."""
+    the tab is still one of the song's versions, UG still has it and it isn't under ``[block]``; Fetch them reads
+    again, when it runs, which are left to keep."""
     song, v = asked.song, asked.version
     tab = v.tab_id if v is not None else None
     return version_steps(song.artist, song.title, keep=tab if do == "keep" else None,
-                         choose=tab if do == "choose" else None)
+                         choose=tab if do == "choose" else None, keep_more=do == "keep-more")
 
 
 def _runs(job: Job, steps: list[tuple[str, tuple[str, ...]]]) -> bool:

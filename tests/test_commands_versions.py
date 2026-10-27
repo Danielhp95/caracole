@@ -14,7 +14,7 @@ from pathlib import Path
 
 import httpx
 import pytest
-from helpers.ug_pages import make_tab_page_html
+from helpers.ug_pages import make_tab_page_html, version_dict
 from test_commands_get import FAKE_CHORDPRO, OUTSIDE_SETTINGS, get
 from test_get import LINES, NOW, TAB, Sites, creep_tab, sheet
 from typer.testing import CliRunner
@@ -24,7 +24,7 @@ from caracole.cli import build_app
 from caracole.commands import _common
 from caracole.library import keep_file
 from caracole.overrides import load_overrides
-from caracole.sheet_versions import kept_by_you
+from caracole.sheet_versions import kept_by_you, unkeepable
 from caracole.songs import find_song
 from caracole.ug.index import mark_built, upsert_rows
 from caracole.versions import upsert_version
@@ -76,11 +76,13 @@ def url(tab_id: int) -> str:
     return f"{TAB}radiohead/creep-chords-{tab_id}"
 
 
-def serve_four(sites, conn) -> None:
-    """Creep's four chords versions: 101 the best rated, a verse alone; 102, 103 and 104 the song."""
+def serve_four(sites, conn, more: int = 0) -> None:
+    """Creep's four chords versions: 101 the best rated, a verse alone; 102, 103 and 104 the song. ``more`` adds
+    that many after them (105, 106, ...), the song too, each rated below the one before."""
     tabs = [creep_tab(101, rating=4.9, votes=100), creep_tab(102, rating=4.6), creep_tab(103, rating=4.2),
             creep_tab(104, rating=3.5, votes=20)]
-    texts = {101: LINES[:2], 102: LINES, 103: LINES, 104: LINES}
+    tabs += [creep_tab(105 + n, rating=round(3.4 - n / 10, 1), votes=20) for n in range(more)]
+    texts = {101: LINES[:2]} | {t["id"]: LINES for t in tabs[1:]}
     for tab in tabs:
         others = [t for t in tabs if t is not tab]
         sites.pages[tab["tab_url"]] = (200, make_tab_page_html(tab, others, content=sheet(f"sheet {tab['id']}",
@@ -99,8 +101,8 @@ def version_files(tmp_path) -> list[str]:
     return sorted(p.name for p in folder(tmp_path).glob("version-*.txt"))
 
 
-def looked_up(config, sites, conn, tmp_path):
-    serve_four(sites, conn)
+def looked_up(config, sites, conn, tmp_path, more: int = 0):
+    serve_four(sites, conn, more)
     result = get(config, CREEP)
     assert result.exit_code == 0, result.output
     assert "sheet 102" in (folder(tmp_path) / "sheet.txt").read_text()
@@ -195,7 +197,9 @@ def test_versions_of_a_song_not_in_the_library_exits_1(config, conn):
 
 
 @pytest.mark.parametrize("args", [["Oasis - Wonderwall", "--keep", "1", "--clear"], ["Wonderwall"],
-                                  ["Oasis - Wonderwall", "--keep", "not a tab"]])
+                                  ["Oasis - Wonderwall", "--keep", "not a tab"],
+                                  ["Oasis - Wonderwall", "--keep-more", "--keep", "1"],
+                                  ["Oasis - Wonderwall", "--keep-more", "--clear"]])
 def test_versions_usage_errors_exit_2(config, conn, args):
     assert versions(config, *args).exit_code == 2
 
@@ -299,6 +303,182 @@ def test_keep_blocked_counts_the_request_it_sent_in_its_progress(config, sites, 
                for e in events)
     assert events[-1]["done"]["requests"] == {"ug": 1}
     assert version_files(tmp_path) == ["version-101.txt", "version-103.txt"]
+
+
+def textless(sites, tab_id: int) -> None:
+    """Version ``tab_id``'s page answers with no sheet caracole can keep: UG's page there is a Guitar Pro file's
+    now, which parses, with no text. (A chords page with no text won't parse: an error, which waits.)"""
+    pro = version_dict(tab_id, type="Pro", song="Creep", artist="Radiohead", tab_url=url(tab_id))
+    sites.pages[url(tab_id)] = (200, make_tab_page_html(pro, [], content=None))
+
+
+@pytest.mark.slow
+def test_keep_notes_a_version_it_cant_keep(config, sites, conn, tmp_path):
+    looked_up(config, sites, conn, tmp_path)
+    textless(sites, 104)
+
+    result = versions(config, CREEP, "--keep", "104")
+
+    assert result.exit_code == 0, result.output
+    assert "has no sheet caracole can keep" in result.output
+    assert unkeepable(conn, find_song(conn, "radiohead/creep").id) == ("104",)
+    assert version_files(tmp_path) == ["version-101.txt", "version-103.txt"]
+
+
+# --- --keep-more -------------------------------------------------------------------------------------
+
+
+@pytest.mark.slow
+def test_keep_more_keeps_the_next_versions_in_rank_order_within_the_lookups_budget(config, sites, conn, tmp_path):
+    looked_up(config, sites, conn, tmp_path, more=9)  # 104 to 113 not kept, in that order
+    write_config(tmp_path, "lookup_requests = 3\n")
+
+    result = versions(config, CREEP, "--keep-more")
+
+    assert result.exit_code == 0, result.output
+    assert sites.ug() == [url(104), url(105), url(106)]
+    assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-104.txt", "version-105.txt",
+                                       "version-106.txt"]
+    assert (folder(tmp_path) / "version-105.html").is_file()  # each kept one's viewer page made
+    assert kept_by_you(conn, find_song(conn, "radiohead/creep").id) == ("104", "105", "106")
+    assert f"Kept 3 versions of {CREEP}; 7 more not kept: ask again." in result.output
+
+    # The nightly fetch keeps them, whatever the ranking, from the cache.
+    sites.requests.clear()
+    fetched = CliRunner().invoke(build_app(), ["--config", str(config), "fetch", "--song", CREEP])
+    assert fetched.exit_code == 0, fetched.output
+    assert "version-106.txt" in version_files(tmp_path)
+
+
+@pytest.mark.slow
+def test_keep_more_takes_the_lock_as_a_lookup_does(config, sites, conn, tmp_path, monkeypatch):
+    looked_up(config, sites, conn, tmp_path)
+    from caracole import versions_cmd
+
+    locks = []
+    real = versions_cmd.exclusive
+
+    def exclusive(cfg, what, **kw):
+        locks.append((what, kw.get("interactive")))
+        return real(cfg, what, **kw)
+
+    monkeypatch.setattr(versions_cmd, "exclusive", exclusive)
+
+    result = versions(config, CREEP, "--keep-more")
+
+    assert result.exit_code == 0, result.output
+    assert locks == [(f"versions {CREEP} --keep-more", True)]
+    assert f"Kept 1 version of {CREEP}; none is left to keep." in result.output
+
+
+@pytest.mark.slow
+def test_keep_more_passes_over_the_sheet_gone_and_blocked_versions(config, sites, conn, tmp_path):
+    from caracole.versions import mark_gone
+
+    looked_up(config, sites, conn, tmp_path)
+    song = find_song(conn, "radiohead/creep")
+    vids = {}
+    for tab in (105, 106):  # rated above 104
+        vids[tab] = upsert_version(conn, provider="ug", tab_id=str(tab), song_id=song.id, slot="sheet",
+                                   kind="chords", rating=4.95, votes=900, version=tab - 100, label=None, url=url(tab),
+                                   raw={}, now="2026-10-20T00:00:00Z")
+    mark_gone(conn, vids[105])
+    (tmp_path / "library" / "overrides.toml").write_text("[block]\ntab_ids = [106]\n", encoding="utf-8")
+
+    result = versions(config, CREEP, "--keep-more")
+
+    assert result.exit_code == 0, result.output
+    assert sites.ug() == [url(104)]  # never the sheet's (102), the gone one's or the blocked one's
+    assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-104.txt"]
+
+
+@pytest.mark.slow
+def test_keep_more_stops_at_a_block_and_keeps_what_it_kept(config, sites, conn, tmp_path):
+    from caracole.health import get_state
+
+    looked_up(config, sites, conn, tmp_path, more=3)
+    sites.pages[url(105)] = (403, "Forbidden")
+
+    result = versions(config, CREEP, "--keep-more")
+
+    assert result.exit_code == 0, result.output
+    assert sites.ug() == [url(104), url(105)]  # nothing more once blocked
+    assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-104.txt"]
+    assert (folder(tmp_path) / "version-104.html").is_file()  # what it kept is rendered
+    assert get_state(conn, "ug").cooldown_until is not None  # recorded as a block, cooling UG down
+    assert "Ultimate Guitar blocked caracole" in result.output
+    assert f"Kept 1 version of {CREEP}; 3 more not kept." in result.output  # not "ask again": UG cools down
+
+    sites.requests.clear()
+    cooling = versions(config, CREEP, "--keep-more")
+    assert cooling.exit_code == 0 and "cooling down" in cooling.output and sites.requests == []
+
+
+@pytest.mark.slow
+def test_keep_more_stops_at_a_page_that_wont_parse_and_counts_it_still(config, sites, conn, tmp_path):
+    looked_up(config, sites, conn, tmp_path, more=2)
+    chords_page = creep_tab(105, rating=3.4, votes=20)
+    sites.pages[url(105)] = (200, make_tab_page_html(chords_page, [], content=None))  # a chords page, no text
+
+    result = versions(config, CREEP, "--keep-more")
+
+    assert result.exit_code == 0, result.output
+    assert sites.ug() == [url(104), url(105)]
+    assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-104.txt"]
+    assert (folder(tmp_path) / "version-104.html").is_file()
+    assert "Ultimate Guitar failed" in result.output
+    assert f"Kept 1 version of {CREEP}; 2 more not kept: ask again." in result.output  # 105 waits, as any page
+    assert unkeepable(conn, find_song(conn, "radiohead/creep").id) == ()
+
+
+@pytest.mark.slow
+def test_keep_more_with_nothing_left_sends_nothing(config, sites, conn, tmp_path):
+    looked_up(config, sites, conn, tmp_path)
+    assert versions(config, CREEP, "--keep", "104").exit_code == 0
+    sites.requests.clear()
+
+    result = versions(config, CREEP, "--keep-more", "--progress")
+
+    assert result.exit_code == 0, result.output
+    assert f"Nothing more to keep of {CREEP}" in result.output
+    assert sites.requests == []
+
+
+@pytest.mark.slow
+def test_keep_more_notes_the_versions_it_cant_keep(config, sites, conn, tmp_path):
+    looked_up(config, sites, conn, tmp_path, more=1)
+    textless(sites, 104)
+
+    result = versions(config, CREEP, "--keep-more")
+
+    assert result.exit_code == 0, result.output
+    assert sites.ug() == [url(104), url(105)]  # past the one it can't keep, to the next
+    assert "Tab 104 of Radiohead - Creep: its page has no sheet caracole can keep." in result.output
+    assert unkeepable(conn, find_song(conn, "radiohead/creep").id) == ("104",)
+    assert version_files(tmp_path) == ["version-101.txt", "version-103.txt", "version-105.txt"]
+
+    sites.requests.clear()
+    again = versions(config, CREEP, "--keep-more")
+    assert again.exit_code == 0 and f"Nothing more to keep of {CREEP}" in again.output
+    assert sites.requests == []  # never that page again
+
+
+@pytest.mark.slow
+def test_keep_more_progress_counts_in_the_version_stage(config, sites, conn, tmp_path):
+    from caracole.get import read_progress_line
+
+    looked_up(config, sites, conn, tmp_path, more=9)
+    write_config(tmp_path, "lookup_requests = 3\n")
+
+    result = versions(config, CREEP, "--keep-more", "--progress")
+
+    assert result.exit_code == 0, result.output
+    events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    ended = [(e["stage"], e["state"], e["detail"]) for e in events if "stage" in e and e["state"] != "running"]
+    assert ended[0] == ("song", "done", "in the library")
+    assert ended[1] == ("version", "done", "kept 3 of 10")
+    assert [name for name, _, _ in ended[2:]] == ["pdf", "pages"]
+    assert events[-1]["done"]["ok"] is True and events[-1]["done"]["requests"] == {"ug": 3}
 
 # --- --choose and --clear --------------------------------------------------------------------------------
 

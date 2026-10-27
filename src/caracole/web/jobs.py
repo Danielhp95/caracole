@@ -19,9 +19,10 @@ by ``caracole lacuerda --artist`` (``lacuerda_artist_steps``), a job of its own
 query of LaCuerda's search is ``caracole lacuerda --search --progress``
 (``lacuerda_search_steps``), a job of its own too (``LACUERDA_SEARCH`` and the
 query's key), whose one stage is ``SEARCH_STAGES``. A version of a song's sheet made the
-one, kept, or its pin taken out, is ``caracole versions --progress`` (``version_steps``), a pick of the song's as a
-lookup's ``--tab`` is, so the song's jobs join it as they would that; its JSON lines are the job's stages too (Keep
-it's ``KEEP_STAGES``, and a lookup's for ``--choose`` and ``--clear``, which run one). Each command takes caracole's lock (a
+one, kept, its versions not kept fetched (Fetch them, ``--keep-more``), or its pin taken out, is ``caracole versions
+--progress`` (``version_steps``), a pick of the song's as a lookup's ``--tab`` is, so the song's jobs join it as they
+would that; its JSON lines are the job's stages too (Keep it's and Fetch them's ``KEEP_STAGES``, and a lookup's for
+``--choose`` and ``--clear``, which run one). Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -222,7 +223,7 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
 VERSIONS = "versions"  # the command that makes a song's version the one, keeps one, or takes its pin out
 
 
-# Keep it's stages, as ``caracole versions --keep --progress`` reports them (versions_cmd.py)
+# Keep it's stages, as ``caracole versions --keep --progress`` reports them (versions_cmd.py), and ``--keep-more``'s
 KEEP_STAGES = (
     ("song", "Find the song"),
     ("version", "The version from Ultimate Guitar"),
@@ -232,17 +233,21 @@ KEEP_STAGES = (
 
 
 def version_steps(artist: str, title: str, *, keep: str | None = None,
-                  choose: str | None = None) -> list[tuple[str, tuple[str, ...]]]:
+                  choose: str | None = None, keep_more: bool = False) -> list[tuple[str, tuple[str, ...]]]:
     """``caracole versions --progress``: make the Ultimate Guitar tab ``choose`` the song's sheet (``--choose``:
     ``caracole get --tab`` with its own page, recorded under ``[pin]``, a lookup's stages), keep the tab ``keep``
-    beside it (one tab page, at the lookup pace), or, with neither, take the song's ``[pin]`` out and look it up
-    again (``--clear``, a lookup's stages). The song is its artist and title as two words, so a " - " in either
-    stays where it is."""
+    beside it (one tab page, at the lookup pace), keep the versions not kept yet (``keep_more``: as many as one
+    lookup may, Keep it's stages too), or, with none, take the song's ``[pin]`` out and look it up again
+    (``--clear``, a lookup's stages). The song is its artist and title as two words, so a " - " in either stays
+    where it is."""
     if choose is not None:
         return [("Making it the one", (VERSIONS, f"--choose={choose}", "--progress", "--", artist, title))]
     if keep is not None:
         return [("Fetching the version from Ultimate Guitar",
                  (VERSIONS, f"--keep={keep}", "--progress", "--", artist, title))]
+    if keep_more:
+        return [("Fetching versions from Ultimate Guitar",
+                 (VERSIONS, "--keep-more", "--progress", "--", artist, title))]
     return [("Going back to caracole's pick", (VERSIONS, "--clear", "--progress", "--", artist, title))]
 
 
@@ -259,7 +264,8 @@ def _looks_up(args: Sequence[str]) -> bool:
 
 def _fetches(steps: Sequence[Step]) -> bool:
     """Whether a job looks its song up (``_looks_up``) or fetches it (``caracole fetch``): Keep it, which asks
-    Ultimate Guitar for one tab page and keeps it beside the sheet, does neither."""
+    Ultimate Guitar for one tab page and keeps it beside the sheet, does neither, nor does Fetch them
+    (``--keep-more``), which asks it for the pages of the versions not kept."""
     return any(_looks_up(step.args) or step.args[:1] == ("fetch",) for step in steps)
 
 
@@ -295,15 +301,16 @@ def _searches(args: Sequence[str]) -> bool:
 
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
     """The Ultimate Guitar song and tab, and the LaCuerda song, a lookup's ``caracole get`` was given (``--ug``,
-    ``--tab``, ``--lacuerda``), and what a ``caracole versions`` does (``--choose``, ``--keep``, ``--clear``), if
-    any."""
+    ``--tab``, ``--lacuerda``), and what a ``caracole versions`` does (``--choose``, ``--keep``, ``--keep-more``,
+    ``--clear``), if any."""
     picked: list[str] = []
     for step in steps:
         options = _options(step.args)
         if step.args[:1] == (LOOKUP,):
             picked += [arg for arg in options if arg.startswith(("--ug=", "--tab=", "--lacuerda="))]
         elif step.args[:1] == (VERSIONS,):
-            picked += [arg for arg in options if arg.startswith(("--choose=", "--keep=")) or arg == "--clear"]
+            picked += [arg for arg in options
+                       if arg.startswith(("--choose=", "--keep=")) or arg in ("--clear", "--keep-more")]
     return tuple(picked)
 
 

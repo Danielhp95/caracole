@@ -40,8 +40,9 @@ now or Pick the match. Everything else a song has is under its chevron, which
 unfolds it in place: its facts (the key in words
 and where it came from, the transposition, the lyrics, when it came), its
 review's picker, where its audio comes from, its Sheet versions (the Ultimate
-Guitar versions kept beside its sheet, sheet_versions.py's, each opening its
-viewer page, the one its title opens said so: ``versions``), its PDF exports (the
+Guitar versions it keeps, the one and those beside it, sheet_versions.py's, each
+opening its viewer page, the one its title opens said so: ``versions``, which also
+counts those not kept, and ``lacuerdaVersions`` LaCuerda's), its PDF exports (the
 sheet's PDFs in other versions, each file's ``version``), its other files, its MuseScore
 pages, its search and buy links, Add
 to a songbook… (the Select mode, the song picked) and, served, Fetch again and Use
@@ -271,7 +272,7 @@ from caracole.overrides import Overrides
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.progressions import catalogue, library_progressions
 from caracole.songbook_section import songbooks_data
-from caracole.songs import Song, is_export, list_songs
+from caracole.songs import HUMAN_SHEET, Song, is_export, list_songs
 from caracole.todo import search_links, songs_to_buy
 from caracole.youtube_fetch import (
     BLOCKED,
@@ -423,13 +424,13 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
     musescore = cfg.provider("musescore").enabled
     asked = None if songs is None else {s.id for s in songs}  # a card or a few: their rows alone
-    met = _lacuerda_met(conn, asked)
-    kept = _kept_versions(conn, cfg, {s.id for s in library})
+    met = _lacuerda_versions(conn, asked)
+    ug = _ug_versions(conn, cfg, overrides, library)
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), s.id in to_buy,
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
-                   transpose=pdf_transpose(conn, overrides, s), lacuerda_met=met.get(s.id),
-                   versions=kept.get(s.id), guitar=browsable.get(s.id), ukulele=s.id in ukulele)
+                   transpose=pdf_transpose(conn, overrides, s), lacuerda=met.get(s.id, []),
+                   versions=ug.get(s.id), guitar=browsable.get(s.id), ukulele=s.id in ukulele)
              for s in library]
     _add_picks(conn, library, cards)
     played = library_progressions(conn)  # each song's, as its last render read its sheet
@@ -632,56 +633,89 @@ def _lacuerda_pick(song: Song, overrides: Overrides, status: str) -> dict[str, s
     return {"label": "the sheet you picked on LaCuerda", "href": pick.url}
 
 
-def _kept_versions(conn: sqlite3.Connection, cfg: Config, ids: set[int]) -> dict[int, list[SheetVersion]]:
-    """The UG chords versions of each song that has some kept beside its sheet (``version-<tab>.txt``, recorded in
-    ``files``), in rank order (``sheet_versions.in_library``), by song id: a song without, which is most, asks
-    nothing more."""
-    from caracole.sheet_versions import PREFIX, in_library, tab_of
+@dataclass(frozen=True)
+class _UgVersions:
+    """A song's Ultimate Guitar versions as the page counts them (``_ug_versions``): ``listed``, every one
+    ``sheet_versions.in_library`` lists, in rank order, gone ones last; ``rest``, how many a keep may still keep
+    (``sheet_versions.may_keep``); ``keep_more``, how many of those one press of Fetch them keeps (``caracole
+    versions --keep-more``, a lookup: its ``lookup_requests`` at most); ``pinned``, whether a ``[pin]`` chooses its
+    sheet (``sheet_versions.sheet_pins``)."""
 
-    with_kept = {song_id for song_id, name in conn.execute(
-        "SELECT song_id, name FROM files WHERE substr(name, 1, ?) = ?", (len(PREFIX), PREFIX))
-        if song_id in ids and tab_of(name) is not None}
-    return {song_id: in_library(conn, song_id, cfg.rank) for song_id in sorted(with_kept)}
+    listed: list[SheetVersion]
+    rest: int
+    keep_more: int
+    pinned: bool
 
 
-def _versions_data(versions: list[SheetVersion] | None, names: set[str], base: str) -> dict[str, Any] | None:
-    """A song's kept versions as its line's "⋯" lists them, under Sheet versions: ``as_data``'s, the kept ones alone,
-    in rank order, each with the link that opens it (its viewer page, else its text while render hasn't written
-    the page; the one, else its PDF, as its title opens it) and where it came from (Ultimate Guitar); ``total``,
-    every chords version UG has. None for a song with none kept beside its sheet.
+def _ug_versions(conn: sqlite3.Connection, cfg: Config, overrides: Overrides,
+                 songs: list[Song]) -> dict[int, _UgVersions]:
+    """The UG versions of each of ``songs`` that has some listed for its sheet (``sheet_versions.in_library_of``: as
+    its viewer lists them, read for every song at once), by song id, and ``may_keep``'s count of those a keep may
+    still keep. A song with none recorded (or found under an earlier match alone) is none."""
+    from caracole.sheet_versions import PROVIDER, in_library_of, may_keep, sheet_pins
 
-    Not ``as_data``'s shape, which the viewer pages' ``versions`` is (every version, gone ones too): the library
-    page's lists what its folder holds, for library.js alone."""
+    listings = in_library_of(conn, [s.id for s in songs], cfg.rank)
+    budget = cfg.provider(PROVIDER).lookup_requests
+    found: dict[int, _UgVersions] = {}
+    for song in songs:
+        listed = listings.get(song.id)
+        if listed is None:
+            continue
+        rest = len(may_keep(conn, song.id, listed, overrides.block))
+        found[song.id] = _UgVersions(listed=listed, rest=rest, keep_more=min(rest, budget),
+                                     pinned=bool(sheet_pins(conn, song.id, overrides.pin.get(song.key, ()))))
+    return found
+
+
+def _versions_data(versions: _UgVersions | None, names: set[str], base: str) -> dict[str, Any] | None:
+    """A song's Ultimate Guitar versions as its card shows them (``_ug_versions``), for library.js alone:
+
+    - ``list``, the kept ones (the one and those kept beside it) in rank order, as ``as_data`` gives each, with the
+      link that opens it (its viewer page, else its text while render hasn't written the page; the one, else its
+      PDF, as its title opens it), where it came from (``source``, Ultimate Guitar), and what its lyric score was,
+      ``coverage`` and ``complete`` (None for one never scored);
+    - ``total``, the chords versions UG still has (neither gone nor found under an earlier match);
+    - ``rest``, how many of those a keep may still keep, and ``keepMore``, how many one press of Fetch them keeps;
+    - ``pinned``, whether a ``[pin]`` chooses its sheet (Back to caracole's pick).
+
+    None for a song with no UG version recorded for its sheet. Not ``as_data``'s shape, which the viewer pages'
+    ``versions`` is (every version, gone ones too): the library page lists what its folder holds, and counts the
+    rest."""
     from caracole.sheet_versions import as_data, version_names
 
-    if not versions:
+    if versions is None:
         return None
-    data = as_data(versions, len(versions))
+    data = as_data(versions.listed, len(versions.listed))
     listed = []
-    for entry in data["list"]:
+    for version, entry in zip(versions.listed, data["list"], strict=True):
         if not entry["kept"]:
             continue
         opens = ((entry["page"], "sheet.txt", "sheet.pdf") if entry["chosen"]
                  else (entry["page"], version_names(entry["tab"])[0]))
         name = next((n for n in opens if n in names), None)
         if name is not None:
-            listed.append({**entry, "href": f"{base}/{quote(name, safe='')}", "source": "ug"})
-    return {"total": data["total"], "list": listed}
+            listed.append({**entry, "href": f"{base}/{quote(name, safe='')}", "source": "ug",
+                           "complete": version.complete, "coverage": version.coverage})
+    return {"total": sum(not v.gone for v in versions.listed), "list": listed, "rest": versions.rest,
+            "keepMore": versions.keep_more, "pinned": versions.pinned}
 
 
-def _lacuerda_met(conn: sqlite3.Connection, ids: set[int] | None = None) -> dict[int, str]:
-    """The best LaCuerda sheet caracole met for each song (lacuerda_fetch.py records each, kept or not): the one
-    that covers the most of its lyrics, of those LaCuerda still has; its page, by song id. ``ids``: of these songs
-    alone, else of every song."""
-    only = "" if ids is None else " AND song_id IN (SELECT value FROM json_each(?))"
+def _lacuerda_versions(conn: sqlite3.Connection, ids: set[int] | None = None) -> dict[int, list[dict[str, Any]]]:
+    """The LaCuerda sheets caracole met for each song (lacuerda_fetch.py records each, kept or not) that LaCuerda
+    still has, the one that covers the most of its lyrics first, by song id: each its page (``href``), its
+    ``coverage`` (None for one never scored), and whether it is the song's kept sheet (``sheet``). ``ids``: of these
+    songs alone, else of every song."""
+    only = "" if ids is None else " AND v.song_id IN (SELECT value FROM json_each(?))"
     rows = conn.execute(
-        "SELECT song_id, url FROM versions WHERE provider = 'lacuerda' AND slot = 'sheet' AND gone = 0"
-        + only + " ORDER BY song_id, coverage IS NULL, coverage DESC, id",
-        () if ids is None else (json.dumps(sorted(ids)),),
+        "SELECT v.song_id, v.url, v.coverage, f.id IS NOT NULL FROM versions v "
+        "LEFT JOIN files f ON f.version_id = v.id AND f.song_id = v.song_id AND f.name = ? "
+        "WHERE v.provider = 'lacuerda' AND v.slot = 'sheet' AND v.gone = 0"
+        + only + " ORDER BY v.song_id, v.coverage IS NULL, v.coverage DESC, v.id",
+        (HUMAN_SHEET,) if ids is None else (HUMAN_SHEET, json.dumps(sorted(ids))),
     )
-    met: dict[int, str] = {}
-    for song_id, url in rows:
-        met.setdefault(song_id, url)
+    met: dict[int, list[dict[str, Any]]] = {}
+    for song_id, url, coverage, sheet in rows:
+        met.setdefault(song_id, []).append({"href": url, "coverage": coverage, "sheet": bool(sheet)})
     return met
 
 
@@ -689,7 +723,8 @@ def _lacuerda_sheet(song: Song, overrides: Overrides, status: str, origins: Mapp
                     met: str | None) -> str | None:
     """The LaCuerda sheet a song of yours could be looked up with now (its served line's "Use LaCuerda's sheet",
     ``POST /lookup`` with it, as ``caracole get --lacuerda`` takes it): your pick on LaCuerda, else the best one
-    caracole met for it (``_lacuerda_met``); None when its kept sheet is LaCuerda's already, or the song is ignored."""
+    caracole met for it (``_lacuerda_versions``' first); None when its kept sheet is LaCuerda's already, or the song
+    is ignored."""
     if status == "ignored" or origins.get("sheet.txt") == "lacuerda":
         return None
     pick = overrides.lacuerda.get(song.key)
@@ -711,8 +746,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
           for_buying: bool, sources: dict[str, str],
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
           origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
-          transpose: int = 0, lacuerda_met: str | None = None,
-          versions: list[SheetVersion] | None = None, guitar: Mapping[str, str] | None = None,
+          transpose: int = 0, lacuerda: list[dict[str, Any]] | None = None,
+          versions: _UgVersions | None = None, guitar: Mapping[str, str] | None = None,
           ukulele: bool = False) -> dict[str, Any]:
     """One song's data; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
@@ -722,11 +757,14 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     ``origins`` is where each of its kept files came from (``icons.kept_sources``): each file gets
     its ``source``, and the song its primary file's. ``exports``: the PDFs caracole made of its sheet in
     other versions, by file name, each with its version's label (``_exports``); ``transpose``, how many semitones
-    its PDF is moved by (``render.pdf_transpose``). ``lacuerda_met``: the best LaCuerda sheet caracole met for it
-    (``_lacuerda_met``), for ``lacuerdaSheet`` (``_lacuerda_sheet``). ``versions``: its UG chords versions in rank
-    order, when some are kept beside its sheet (``_kept_versions``), for ``versions`` (``_versions_data``). ``guitar``:
-    the address of caracole serve's Guitar Pro page of each of its Guitar Pro files, by name (``guitar_pages``).
-    ``ukulele``: its sheet is UG's Ukulele Chords version (``ukulele_sheets``), which its sheet's files say.
+    its PDF is moved by (``render.pdf_transpose``). ``lacuerda``: the LaCuerda sheets caracole met for it, best first
+    (``_lacuerda_versions``), its ``lacuerdaVersions``, the first of which is the one ``lacuerdaSheet`` may name
+    (``_lacuerda_sheet``). ``versions``: its UG versions as the page counts them, for a song with some recorded for
+    its sheet (``_ug_versions``), its ``versions`` (``_versions_data``): its card's Versions chip of Ultimate Guitar
+    and that chip's drawer, kept ones listed and the rest counted. ``guitar``: the address of caracole serve's Guitar
+    Pro page of each of its Guitar Pro files, by name (``guitar_pages``). ``ukulele``: its sheet is UG's Ukulele
+    Chords version (``ukulele_sheets``), which its sheet's files say. ``autoSheet``: an auto sheet beside its human
+    one (``_auto_sheet``), the sheet tile's Auto chip.
     """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
@@ -758,14 +796,17 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
         "files": files,
         "instruments": instruments_of(names, ukulele=ukulele),  # what it holds for one instrument, its line's marks
-        "versions": _versions_data(versions, names, _folder_href(library_dir, song)),  # its kept versions
+        "versions": _versions_data(versions, names, _folder_href(library_dir, song)),  # UG's: kept, and counted
+        "autoSheet": _auto_sheet(library_dir, song, names),
         "source": next((f["source"] for f in files if f["primary"]), None),  # where its sheet came from
         "museScore": musescore,
         "links": links,
         "buy": buy,
         "youtube": youtube if status != "ignored" else None,
         "lacuerda": _lacuerda_pick(song, overrides, status),
-        "lacuerdaSheet": _lacuerda_sheet(song, overrides, status, origins or {}, lacuerda_met),
+        "lacuerdaVersions": lacuerda or [],
+        "lacuerdaSheet": _lacuerda_sheet(song, overrides, status, origins or {},
+                                         lacuerda[0]["href"] if lacuerda else None),
         # Its identity key (normalize.identity_key): the served search puts it, and the sites' rows of its artist and
         # of it, under one header by the artist's part, as /api/search keys its rows.
         "identity": song.key,
@@ -779,6 +820,28 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
                              *([key_name(key.key).rpartition(" ")[2]] if key else [])]),
         **({"initials": initials} if (initials := _initials(title)) else {}),
     }
+
+
+# An auto sheet's files beside a human sheet, as its chip's drawer offers them, by the labels it shows.
+_AUTO_OPENS = ("sheet (auto).html", "sheet (auto).pdf", "sheet (auto).txt")
+_AUTO_FILES = (("sheet (auto).pdf", "PDF"), ("sheet (auto).txt", "Text"), ("sheet (auto).cho", "ChordPro"))
+
+
+def _auto_sheet(library_dir: Path, song: Song, names: set[str]) -> dict[str, Any] | None:
+    """The auto sheet of a song that has a human sheet too, which is its sheet: its viewer (else its PDF, else its
+    text, as a line's title opens a sheet) as ``href``, and its PDF, text and ChordPro that exist, each with the name
+    it downloads under ("Eagles - Hotel California (auto).pdf", download_names.py's with "(auto)" after the title,
+    so it never takes the human sheet's name). None for any other song: an auto sheet alone is the song's sheet,
+    which its files and its title give."""
+    if not (any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS)):
+        return None
+    base = _folder_href(library_dir, song)
+    opens = next(n for n in _AUTO_OPENS if n in names)
+    title = f"{clean_title(song.title)} (auto)"
+    return {"href": f"{base}/{quote(opens, safe='')}",
+            "files": [{"label": label, "href": f"{base}/{quote(n, safe='')}",
+                       "download": download_name(song.artist, title, n)}
+                      for n, label in _AUTO_FILES if n in names]}
 
 
 def _file_names(folder: Path) -> set[str]:
