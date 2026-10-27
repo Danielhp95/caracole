@@ -30,6 +30,8 @@ Every text is data, which the script puts in the page with ``textContent``.
   None for a Power Tab file, which alphaTab can't read), one the browser shows first; else None. The songbook's
   files never show it: it is the tab's, a set list's as a playlist's;
 - ``error``: why songbooks.toml can't be read (then no songbooks), else None;
+- ``fileLabels``: the labels of a songbook's files, in their order, which the tab shows a songbook Select is making
+  with before they are made;
 - ``keys``, ``modes``, ``capoMax`` and ``instruments``: what a setting's menus offer: each pitch class's name as
   chord sheets write it most (``theory.spelling``), the modes with the viewer's names ("Major", "Dorian"...), the
   highest capo (``songbook.CAPO_MAX``), and the viewer's instruments, each ``[id, name, capo]``, whether it takes
@@ -72,7 +74,8 @@ def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) 
     from caracole.viewer.version import MODE_NAMES
 
     shared: dict[str, Any] = {"keys": spelling(None), "modes": [[m, MODE_NAMES[m]] for m in MODES],
-                              "capoMax": CAPO_MAX, "instruments": [[i.id, i.name, i.capo] for i in INSTRUMENTS]}
+                              "capoMax": CAPO_MAX, "instruments": [[i.id, i.name, i.capo] for i in INSTRUMENTS],
+                              "fileLabels": [label for _, label in FILES]}
     try:
         books = load_songbooks(songbooks_file(cfg.library_dir))
     except SongbookError as e:

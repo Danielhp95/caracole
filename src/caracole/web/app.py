@@ -15,8 +15,8 @@ app copies of the library, and the library page it starts from). A new route, or
 nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
-                          a sheet viewer or a kept version's, while it is as written (``written_page``),
-                          in a sandbox
+                          a sheet viewer, a kept version's or a harmonica tab's, while it is as written
+                          (``written_page``), in a sandbox
 
 There is no sign-in: whoever can reach the server may use it (security.py).
 Every request must name the server by a name it answers to (421 otherwise).
@@ -459,7 +459,8 @@ def written_pages() -> dict[str, WrittenPage]:
     the policy it holds and no sandbox (``library_page.page_csp``): ``/`` and ``/index.html`` are the page
     caracole serve makes itself, so the file is sent at ``/offline/index.html`` alone (offline_routes.py).
     A new kind of page joins here with its own record. A kept version's page, named by its tab, is a viewer
-    too (``written_page``)."""
+    too, and a harmonica tab's page (``harmonica-N.html``, render.py), recorded as a viewer is, is served as one,
+    in a sandbox with its own policy (``written_page``): their names are numbered."""
     from caracole import library_page, songbook
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
     from caracole.viewer import viewer_csp
@@ -478,18 +479,35 @@ _VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (i
 _VERSION_REFUSED = ("This version's viewer isn't the page caracole last wrote here (it was changed on a synced "
                     "device, say), so the server won't send it: the next caracole render writes it again. "
                     "The song's own sheet.html is beside it.")
+_HARMONICA_REFUSED = ("This harmonica tab's page isn't the page caracole last wrote here (it was changed on a synced "
+                      "device, say), so the server won't send it: the next caracole render writes it again. "
+                      "The tab's text is beside it.")
 
 
 def written_page(name: str) -> WrittenPage | None:
     """The kind of page caracole writes into the library under the file name ``name``: one of
     ``written_pages``, or, for a kept version's page (sheet_versions.py, ``version-<tab>.html``), a
-    sheet viewer, recorded as the others are (render.py); None for any other name."""
+    sheet viewer, and for a harmonica tab's page (``inbox.HARMONICA_PAGE``, ``harmonica-N.html``:
+    viewer/harptab_page.py), a page of its own served as a viewer is, in a sandbox with the policy it holds
+    (``viewer_csp``), each recorded as the others are (render.py); None for any other name."""
     page = written_pages().get(name)
     if page is None and version_page_tab(name) is not None:
         from caracole.viewer import viewer_csp
 
         page = WrittenPage(_viewers_written, viewer_csp, _VERSION_REFUSED)
+    if page is None and harmonica_page_number(name) is not None:
+        from caracole.viewer import viewer_csp
+
+        page = WrittenPage(_viewers_written, viewer_csp, _HARMONICA_REFUSED)
     return page
+
+
+def harmonica_page_number(name: str) -> int | None:
+    """The N of a harmonica tab's page by its name ("harmonica-2.html"), else None."""
+    from caracole.inbox import HARMONICA_PAGE
+
+    found = HARMONICA_PAGE.fullmatch(name)
+    return int(found.group(1)) if found else None
 
 
 def version_page_tab(name: str) -> str | None:

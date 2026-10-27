@@ -53,6 +53,7 @@ _VERSION = re.compile(r"\(\s*ver\.?\s*(\d+)[^)]*\)", re.IGNORECASE)
 _PARENS = re.compile(r"\s*\([^)]*\)")
 _GUITAR_FILE = re.compile(r"guitar-(\d+)\.", re.IGNORECASE)
 HARMONICA_FILE = re.compile(r"harmonica-(\d+)\.txt")  # a harmonica tab caracole kept (harptabs_fetch.py)
+HARMONICA_PAGE = re.compile(r"harmonica-(\d+)\.html")  # its page, written beside it (render.py)
 HARMONICA_KIND = "harmonica"  # its version's kind
 _SCORE_FILE = re.compile(r"score-(\d+)(\.[A-Za-z0-9]+)")
 _KEPT_GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
@@ -115,6 +116,18 @@ class HarmonicaFile:
     path: str
     number: int
     key: str | None = None
+
+    @property
+    def page(self) -> str:
+        """Its page, written beside it at render time (render.py, viewer/harptab_page.py): "harmonica-1.html"."""
+        return harmonica_page(self.name) or ""
+
+
+def harmonica_page(name: str) -> str | None:
+    """The page of the harmonica tab ``name`` ("harmonica-1.txt" → "harmonica-1.html"), or None for a name that is
+    no kept tab's."""
+    m = HARMONICA_FILE.fullmatch(name)
+    return f"harmonica-{m.group(1)}.html" if m else None
 
 
 def harmonica_files(conn: sqlite3.Connection, song_id: int | None = None) -> list[HarmonicaFile]:

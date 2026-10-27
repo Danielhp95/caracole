@@ -7,7 +7,10 @@ reaches YouTube.
 from __future__ import annotations
 
 import json
-import time
+import os
+import signal
+import subprocess
+import threading
 from dataclasses import dataclass, field
 
 import pytest
@@ -478,45 +481,67 @@ def test_any_other_failure_is_an_error_that_names_yt_dlps_reason(fake, tmp_path)
     assert [ev.decision for ev in events] == ["error"]
 
 
+def gone(pid: int) -> bool:
+    """Whether the process ``pid`` is over; one that runs on is killed, with its group."""
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    os.killpg(pid, signal.SIGKILL)
+    return False
+
+
 @pytest.mark.slow
 def test_a_run_that_takes_too_long_is_stopped_and_is_an_error(fake, tmp_path):
     fake.search("slow", sleep=30)
-    started = time.monotonic()
     with pytest.raises(ProviderError, match="took longer than 1 s") as e:
         runner(fake, tmp_path, timeouts=(1.0, 1.0)).search("slow")
-    assert time.monotonic() - started < 15
     assert isinstance(e.value.__cause__, TimeoutError)
+    assert fake.woke() == []  # stopped, never waited for to the end of its 30 s
 
 
 @pytest.mark.slow
 def test_an_interrupted_run_stops_yt_dlp_and_what_it_started(fake, tmp_path):
     # Ctrl-C reaches caracole alone: yt-dlp runs in a session of its own, so its process group
     # (ffmpeg, deno) would go on downloading after caracole has let go of its lock.
-    import os
-    import signal
-    import threading
-
     fake.search("slow", sleep=30)
     main = threading.main_thread().ident
+    over = threading.Event()
 
-    def interrupt():
-        deadline = time.monotonic() + 10
-        while not fake.calls() and time.monotonic() < deadline:
-            time.sleep(0.05)
+    def interrupt():  # once yt-dlp runs, however long it took to start; never once the run is over
+        while not fake.calls():
+            if over.wait(0.01):
+                return
         signal.pthread_kill(main, signal.SIGINT)
 
     threading.Thread(target=interrupt, daemon=True).start()
-    started = time.monotonic()
+    try:
+        with pytest.raises(KeyboardInterrupt):
+            runner(fake, tmp_path).search("slow")
+    finally:
+        over.set()
+    assert fake.woke() == []  # stopped, never waited for to the end of its 30 s
+    assert gone(fake.calls()[0]["pid"]), "yt-dlp went on running after caracole was interrupted"
+
+
+@pytest.mark.slow
+def test_a_ctrl_c_as_yt_dlp_starts_stops_it_too(fake, tmp_path, monkeypatch):
+    # Heard as Popen returns, before caracole holds the process: yt-dlp, in a session of its own, runs on unless
+    # caracole waits to hold it before it lets the Ctrl-C go on.
+    fake.search("slow", sleep=30)
+    started = []
+    real = subprocess.Popen
+
+    def popen(*args, **kwargs):
+        proc = real(*args, **kwargs)
+        started.append(proc.pid)
+        signal.pthread_kill(threading.main_thread().ident, signal.SIGINT)  # its handler runs here, at once
+        return proc
+
+    monkeypatch.setattr(subprocess, "Popen", popen)
     with pytest.raises(KeyboardInterrupt):
         runner(fake, tmp_path).search("slow")
-    assert time.monotonic() - started < 15
-    pid = fake.calls()[0]["pid"]
-    try:
-        os.kill(pid, 0)
-    except ProcessLookupError:
-        return
-    os.killpg(pid, signal.SIGKILL)
-    pytest.fail("yt-dlp went on running after caracole was interrupted")
+    assert gone(started[0]), "yt-dlp went on running after caracole was interrupted"
 
 
 def test_a_missing_yt_dlp_is_an_error_naming_it(tmp_path):

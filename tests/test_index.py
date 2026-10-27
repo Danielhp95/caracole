@@ -1,6 +1,5 @@
 import gzip
 import hashlib
-import time
 from datetime import UTC, datetime
 
 import httpx
@@ -376,12 +375,31 @@ def test_upsert_rows_returns_new_ids_keeps_first_seen_and_dedupes(conn):
     ]
 
 
-def test_upsert_rows_handles_a_full_sitemap_quickly(conn):
+class Asked:
+    """A connection that counts what it is asked: each ``execute`` and ``executemany``, a round trip each."""
+
+    def __init__(self, conn):
+        self._conn = conn
+        self.calls = 0
+
+    def execute(self, *args):
+        self.calls += 1
+        return self._conn.execute(*args)
+
+    def executemany(self, *args):
+        self.calls += 1
+        return self._conn.executemany(*args)
+
+    def __getattr__(self, name):
+        return getattr(self._conn, name)
+
+
+def test_upsert_rows_handles_a_full_sitemap_in_a_handful_of_statements(conn):
     batch = [row(i, f"artist-{i % 3000}", f"song-{i}") for i in range(1, 50_001)]
-    started = time.perf_counter()
-    assert len(upsert_rows(conn, batch, "40", NOW)) == 50_000
-    assert upsert_rows(conn, batch, "last", NOW) == []
-    assert time.perf_counter() - started < 10  # about 1 s; a per-row round trip would take minutes
+    asked = Asked(conn)
+    assert len(upsert_rows(asked, batch, "40", NOW)) == 50_000
+    assert upsert_rows(asked, batch, "last", NOW) == []
+    assert asked.calls < 30  # a handful each: never a round trip a row, which would take minutes on a disk
     assert index_count(conn) == 50_000
 
 

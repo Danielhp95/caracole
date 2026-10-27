@@ -19,7 +19,7 @@ from datetime import UTC, datetime
 import pytest
 from helpers.browser import CHROMIUM_MARKS, Browser, BrowserError
 from helpers.lacuerda_site import artist_page
-from test_web_page_search import GROUPS, FakeGet, library, posted, sites
+from test_web_page_search import GROUPS, FakeGet, answer_to, library, posted, sites
 
 from caracole import db
 from caracole import lacuerda_index as li
@@ -125,7 +125,7 @@ def test_estopa_is_lacuerdas_artist_with_their_songs_whose_get_it_keeps_that_she
     sites(cfg, ug=[("radiohead", "creep", 4)])
     lacuerda(cfg)
     search(browser, base, "estopa")
-    assert browser.wait(f"{LC_ROWS}.length === 2")
+    assert browser.wait(f"{answer_to('estopa')} && {LC_ROWS}.length === 2")
     # Their group: how many songs LaCuerda lists, and the songs the index holds of theirs, the most popular first.
     assert browser.js(GROUPS) == ["Estopa · LaCuerda 159"]
     assert sorted(browser.js(TITLES)) == ["Como Camarón", "Tu Calorro"]
@@ -162,7 +162,8 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     sites(cfg, ug=[("radiohead", "creep", 4)])
     lacuerda(cfg, complete=False)
     search(browser, base, "joaquin sabina")
-    assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
+    assert browser.wait(f"{answer_to('joaquin sabina')} && "
+                        "!!document.querySelector('#results section.artist .read-page button')")
     assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
     chip = browser.js("(() => { const c = document.querySelector('#results .looked-line li[data-state=partial]'); "
                       "return [c.textContent, c.title]; })()")
@@ -199,7 +200,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     lacuerda(cfg, complete=False)
     search(browser, base, "bunbury")
     ask = "#results .looked-line .ask-lacuerda"  # gtptabs.com has a song of theirs: under the results
-    assert browser.wait(f"!!document.querySelector('{ask}')")
+    assert browser.wait(f"{answer_to('bunbury')} && !!document.querySelector('{ask}')")
     offer = browser.js(f"document.querySelector('{ask}').title")
     assert offer.startswith("LaCuerda's list doesn't reach B yet") and "“bunbury”" in offer
     assert browser.js(f"document.querySelector('{ask}').textContent") == "Ask LaCuerda for “bunbury” (1 request)"
@@ -215,7 +216,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     # answered, in the card, and rests.
     search(browser, base, "caifanes")
     ask = "#results .nothing .ask-lacuerda"
-    assert browser.wait(f"!!document.querySelector('{ask}')")
+    assert browser.wait(f"{answer_to('caifanes')} && !!document.querySelector('{ask}')")
     browser.click(ask)
     assert browser.wait("!!document.querySelector('#results .nothing .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
@@ -240,7 +241,7 @@ def test_a_lacuerda_song_can_be_added_for_tonights_run_with_its_pick(cfg, live, 
     lacuerda(cfg)
     library(cfg, ("Estopa", "Tu Calorro"))
     search(browser, base, "estopa como camaron")
-    assert browser.wait(f"{TITLES}.includes('Como Camarón')")
+    assert browser.wait(f"{answer_to('estopa como camaron')} && {TITLES}.includes('Como Camarón')")
     row = "#results .hit[data-source='lacuerda'][data-hit$='/como-camaron']"
     assert browser.js(f"document.querySelector(\"{row} .line-facts\").textContent") == "LaCuerda ×3"
     # Your Tu Calorro, which LaCuerda's Estopa lists too, is your own line in their group.
@@ -283,7 +284,7 @@ def test_lacuerda_comes_first_with_the_artist_it_alone_has_by_that_name(cfg, liv
     base, _, _ = live
     calamaro(cfg)
     search(browser, base, "andres calamaro")
-    assert browser.wait("!!document.querySelector('#results section.artist .read-page')")
+    assert browser.wait(f"{answer_to('andres calamaro')} && !!document.querySelector('#results section.artist .read-page')")
     assert [g.split(" · ")[0] for g in browser.js(GROUPS)] == ["Andrés Calamaro", "Javier Calamaro"]
 
 
@@ -312,7 +313,8 @@ def test_lacuerdas_rows_and_the_offer_to_read_a_page_fit_a_phone(cfg, live, tmp_
         pytest.skip(f"chromium couldn't run: {e}")
     try:
         search(phone, base, "joaquin sabina")
-        assert phone.wait("!!document.querySelector('#results section.artist .read-page button')")
+        assert phone.wait(f"{answer_to('joaquin sabina')} && "
+                          "!!document.querySelector('#results section.artist .read-page button')")
         assert phone.js("document.documentElement.scrollWidth <= innerWidth")
         assert phone.js("document.querySelector('#results .read-page button').getBoundingClientRect().height") >= 44
         # The request form is filled in with the artist LaCuerda alone knows.

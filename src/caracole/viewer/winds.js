@@ -16,8 +16,9 @@
   //                   picture of a chord: the harp's ten holes, those it plays lit, and what to play ("draw 2–5",
   //                   "draw 4–6 (as Dm, minor substitute)", "not on this harp"), on the harp chosen in its settings
   //                   row (Harp: the harps of the header line, the first by default; this page's choice alone),
-  //                   which lists the song's harmonica tabs too (data.harmonicaTabs: a link each to the text beside
-  //                   the page, with the key its harptabs.com page named, "key C (harptabs.com)", never a harp's).
+  //                   which lists the song's harmonica tabs too (data.harmonicaTabs: a link each to its page beside
+  //                   the page, harmonica-N.html, its holes over the words, and to its text, with the key its
+  //                   harptabs.com page named, "key C (harptabs.com)", never a harp's).
   //   the flute and   winds.py's tables: data.windForms[f], a chord's notes as steps above its root, its form ``f``
   //   the recorder    by its index (data.windChords[mode][i], data.windAlts[mode][i][j]; mode "" for a sheet with no
   //                   key); each note read is data.winds.low + the root's pitch class as shown + a step, and the key's
@@ -140,9 +141,9 @@
     }
     return root;
   };
-  // The song's harmonica tabs beside the page (data.harmonicaTabs: harptabs.com's, kept), a link each, with the key
-  // its page's Key chip named, if any, as harptabs.com's: the song's key on some tabs and the harp's on others, so
-  // never called a harp.
+  // The song's harmonica tabs beside the page (data.harmonicaTabs: harptabs.com's, kept), a link each to its page
+  // (``page``: harmonica-N.html, render.py) and one to its text, with the key its page's Key chip named, if any, as
+  // harptabs.com's: the song's key on some tabs and the harp's on others, so never called a harp.
   const tabs = (view, box) => {
     const list = Array.isArray(view.data.harmonicaTabs) ? view.data.harmonicaTabs : [];
     if (!list.length) return;
@@ -152,7 +153,15 @@
     for (const tab of list) {
       if (!tab || typeof tab.href !== "string") continue;
       const item = el("li", "", links);
-      el("a", "link", item, String(tab.name || tab.href)).href = tab.href;
+      const name = String(tab.name || tab.href);
+      if (typeof tab.page === "string" && tab.page) {
+        el("a", "link", item, name.replace(/\.txt$/, "")).href = tab.page;
+        const text = el("a", "wd-text", item, "text");
+        text.href = tab.href;
+        text.setAttribute("aria-label", name + ", as text");
+      } else {
+        el("a", "link", item, name).href = tab.href;
+      }
       if (tab.key) {
         el("span", "wd-key", item, "key " + tab.key + " (harptabs.com)").title =
           "The key harptabs.com's page names: the song's on some tabs, the harp's on others";

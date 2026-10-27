@@ -218,7 +218,9 @@ and ukulele chords alone.
 each song you want that has none, caracole matches its title against the
 site's sitemap, reads the pages of the tabs titled so, and keeps the most
 viewed one by your song's artist as `harmonica-1.txt` (`caracole harptabs`, in
-[One step at a time](#one-step-at-a-time)). Its site terms ask that nothing be
+[One step at a time](#one-step-at-a-time)), and the render gives it a page beside
+it, `harmonica-1.html`, its holes over the words (see [The harmonica tab
+page](#the-harmonica-tab-page)). Its site terms ask that nothing be
 copied, and its API's that the tabs not be mirrored: caracole keeps the tabs of
 your own songs alone, for you, never a tab of a song nobody asked for. So that
 a search finds its tabs by artist as well as by title, as it finds Ultimate
@@ -596,7 +598,8 @@ say), nothing is removed and it exits 1.
   `sheet (G Dorian, capo 0).pdf` exports of `caracole render --version` too),
   every file of a version kept beside the sheet (`version-<tab>.txt`,
   `.json`, and the viewer `version-<tab>.html` a render wrote, a version's
-  page the last fetch let go too), `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
+  page the last fetch let go too), each harmonica tab and the page a render
+  wrote of it (`harmonica-1.txt`, `harmonica-1.html`), `lyrics.txt` and `lyrics.lrc` when they are LRCLIB's, and `info.json`.
   Then the folder, and the artist's folder, once empty. Syncthing then
   deletes them on every device. And the song's record: its match, its
   versions, its lyrics and what caracole remembered about it, and the audio
@@ -2001,8 +2004,9 @@ since has it once the page is loaded again); and, served, **Fetch again**
 (below), **Use LaCuerda's sheet**, Look in the index and Remove…. When Fetch now has the line's button,
 the sheet is the first of its files there, and its title opens it all the same.
 A Guitar Pro file caracole downloaded names its site, as `Guitar Pro 1 ·
-gtptabs.com`, a harmonica tab its site, as `Harmonica tab 1 · harptabs.com`,
-and a score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
+gtptabs.com`, a harmonica tab its site, as `Harmonica tab 1 · harptabs.com`
+(with its page, a group of its own: **Open**, the tab's page, and **Download**,
+its text), and a score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
 line opens, which is the sheet. A sheet from Ultimate Guitar's Ukulele Chords
 (a song UG has no chords for) says so: `Sheet viewer · Ukulele Chords`.
 
@@ -2322,9 +2326,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   seventh or ninth where the harp has only that ("blow 1–3 (as C)"), the minor
   chord a harp plays for a major one it lacks ("draw 4–6 (as Dm, minor
   substitute)"), or "not on this harp"; and the song's harmonica tabs from
-  harptabs.com, a link each, with the key its page named, `key C
-  (harptabs.com)`: the song's key on some tabs, the harp's on others, so never
-  a harp. A chord's card and the strip draw the harp's ten holes, those it
+  harptabs.com, a link each to its page (see [The harmonica tab
+  page](#the-harmonica-tab-page)) with its text beside it, and the key its
+  harptabs.com page named, `key C (harptabs.com)`: the song's key on some tabs,
+  the harp's on others, so never a harp. A chord's card and the strip draw the harp's ten holes, those it
   plays lit. The **Flute**
   (concert pitch) and the **Recorder** (soprano, sounding an octave above the
   notes it reads) show each chord's notes, each with its fingering: on the
@@ -2593,6 +2598,49 @@ transposition, or a capo).
 On Android, a file manager that opens the page through a `content://` address
 can break its links to the songs' files. A browser, or an HTML viewer that
 opens the file directly, works.
+
+### The harmonica tab page
+
+Each harmonica tab a song keeps, `harmonica-1.txt`, gets a page beside it at
+render time, `harmonica-1.html`, in the sheet viewer's look: a file that opens
+from the synced folder with no server and loads nothing, recorded as the
+viewers are, so `caracole serve` sends it only while it is the page caracole
+wrote (in a sandbox, as a viewer), and `caracole remove` deletes it with the
+song. The Harmonica row of the sheet viewer's settings and the song's line on
+the library page link it, the tab's text beside it.
+
+- **The holes over the words**, each over the syllable it is blown on, as a
+  chord sits over its syllable in the viewer: a blow in the sheet's rust
+  ("4"), a draw in blue ("−4"), a bend's ′ in purple ("−3′"), holes together
+  in their brackets ("(4 5)" a chord, "{−4 −5}" a shake, "[−2 −5]" a split). A
+  phone wraps a line between its words, never parting a hole from its
+  syllable. Rows played alone, later verses sung to the same tune and the
+  tabber's notes come as the tab gives them. caracole reads what harptabs.com's
+  tabbers write ("-4", "4D", "-3b", "b-3", "(5)" for a draw in a tab that
+  writes no "-", "7,8B"…); a tab in a notation of its tabber's own, or for a
+  chromatic harmonica, is its text as written, and the page says so.
+- **The harp**, in the header and the bar. A tab's holes are the same on any
+  harp, and sound in its key: caracole starts on the harp that plays with the
+  record, the one that puts the most of the tab's sung notes on the chords the
+  song's sheet plays under the same words ("D harp with the record (4th
+  position, aeolian)", and how well it fits); else the harp the tab's words
+  name ("I use an A harp": "A harp, as the tab says"); else the key
+  harptabs.com's page names, which is the harp's on some tabs and the song's
+  on others; else the first harp for the song's key, as the viewer's Harmonica
+  row lists them; else a C harp. With a sheet that has a key, each harp says
+  its position.
+- **The bar**: − and + change the harp a semitone (the holes stay; the sound
+  and the notes' names change); ♪, **Notes**, shows each hole's note on that
+  harp in its place ("F#6"); **Aa** the text size, and ▶ scrolls by itself,
+  as in the viewer.
+- **A hole tapped** is heard, a harmonica's reed; **▶ at a line's end** plays
+  the line hole by hole, a beat each, lighting each hole as it sounds, and
+  stops when pressed again (no rhythm: the tab has none).
+- **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
+  with none), and **The tab as text**, at the foot, opens `harmonica-1.txt`.
+
+The page keeps the harp, Notes, the text size and the scroll speed in its
+address too (`harmonica-1.html#harp=A&notes=1&fs=20`).
 
 ### Where each file came from
 
@@ -3571,8 +3619,9 @@ Who can reach it, below).
     into wanted.txt, is looked up now as Get it does (`caracole get`), then
     added. Nothing is queued unless both fit in the queue (a lookup that joins
     one already queued needs no room of its own);
-  - **Rename or delete** renames the songbook or, once you tick the box,
-    deletes it and the files caracole made of it.
+  - **Rename or delete** renames the songbook (its new name over the set list
+    at once) or, once you tick the box, deletes it and the files caracole made
+    of it.
 
   The songbook's status line, under its name, says how its change goes
   ("Queued…", "Moving the song…", then "Moved"; "Changed", "Renamed", "Taken
@@ -3589,8 +3638,9 @@ Who can reach it, below).
   after your tap. Select's Make songbook (or Add to a songbook there is) runs
   `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
   in the order you ticked them, ends Select once the server has it, and opens
-  the Songbooks tab on the songbook, its songs there at once ("Making the
-  songbook…", then "Made · Open songbook"). A change that can't be made, such
+  the Songbooks tab on the songbook, its songs there at once, and its files'
+  buttons too, to use once it is made ("Making the songbook…", then "Made ·
+  Open songbook"). A change that can't be made, such
   as a name another songbook has, a song no longer in the library or a
   songbook deleted since the page was made, is refused at once, and nothing
   runs: the songbook's status line, or the Select bar, says why, and the bar
@@ -3712,8 +3762,8 @@ and the `headers` the server sends it with, its Content-Security-Policy among
 them). It lists `index.html` first, as caracole wrote it into the library (the
 page that opens from the folder, with no forms), at `/offline/index.html`, then,
 by path, every file that page links to that the server sends: the sheet
-viewers, kept versions' pages and songbook pages while each is still as
-caracole wrote it, and the PDFs, sheets' text, ChordPro, lyrics, info.json,
+viewers, kept versions' pages, harmonica tabs' pages and songbook pages while
+each is still as caracole wrote it, and the PDFs, sheets' text, ChordPro, lyrics, info.json,
 Guitar Pro files and scores. Never Music/, `_inbox/`, a hidden name or a file
 no page links. caracole records `index.html` each time it writes the pages; one
 changed since, or written by a caracole older than that record, isn't sent, and
@@ -4266,6 +4316,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       guitar-1.gp5          Guitar Pro or Power Tab files: filed from _inbox/, or from gtptabs.com
       score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
       harmonica-1.txt       a harmonica tab from harptabs.com: hole numbers over the lyrics
+      harmonica-1.html      its page, for the phone: each hole over its syllable, heard on a tap
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, or caracole took from YouTube,
       sheet (auto).cho      when no human sheet exists; it stays, with its ChordPro,

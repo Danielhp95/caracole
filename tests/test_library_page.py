@@ -14,7 +14,7 @@ from typer.testing import CliRunner
 from caracole import db
 from caracole.cli import build_app
 from caracole.library import keep_file, song_dir
-from caracole.library_page import build_library_page, write_library_page
+from caracole.library_page import build_library_page, linked_files, write_library_page
 from caracole.normalize import fold
 from caracole.overrides import Overrides
 from caracole.songs import update_song
@@ -384,6 +384,25 @@ def test_a_harmonica_tab_from_harptabs_is_listed_after_the_scores_and_says_where
     assert [(f["name"], f["label"], f["source"]) for f in files] == [
         ("sheet.html", "Sheet viewer", None), ("score-1.pdf", "Score 1 (PDF)", None),
         ("harmonica-1.txt", "Harmonica tab 1 · harptabs.com", "harptabs"), ("tab.txt", "Tab", None)]
+
+
+def test_a_harmonica_tab_with_its_page_beside_it_links_the_page(conn, cfg):
+    # render.py writes harmonica-N.html beside each kept harmonica-N.txt: the tab's line opens it, a link the
+    # library page's data holds, so the Android app's copy takes it (linked_files)
+    s = add_song(conn, "Ritchie Valens", "La Bamba")
+    for number in (1, 2):
+        tab = upsert_version(conn, provider="harptabs", tab_id=str(88 + number), song_id=s.id, slot="guitar",
+                             kind="harmonica", rating=0, votes=1, version=1, label=None, url="", raw={},
+                             now="2026-10-27T03:30:00Z")
+        keep_file(conn, cfg.library_dir, song=s, version_id=tab, name=f"harmonica-{number}.txt",
+                  data=f"4 {number}\n".encode(), rank=number)
+    put(cfg, s, "harmonica-1.html")  # the second's page not written yet
+    html = page(conn, cfg)
+    files = {f["name"]: f for f in songs_of(html)[s.display]["files"]}
+    assert files["harmonica-1.txt"]["harmonicaPage"] == {"href": "Ritchie%20Valens/La%20Bamba/harmonica-1.html"}
+    assert "harmonicaPage" not in files["harmonica-2.txt"]
+    assert "harmonica-1.html" not in files
+    assert "Ritchie Valens/La Bamba/harmonica-1.html" in linked_files(html.encode("utf-8"))
 
 
 def test_a_songs_card_says_what_it_holds_for_one_instrument(conn, cfg):

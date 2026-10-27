@@ -1,0 +1,12 @@
+4B     6B     5D     5B     4D     4B     3B
+6B     7B     6D     6B     6D     6B     5B
+4B     4B     4B     5B     5B     5B     5B     5B
+5D     5B     4B
+
+4B     6B     6B     5D     5B     4D     4B     3B
+7B     8B     6D     6B     6D     6B     6D     6B     5B
+7,8B     7,8B     7,8B     6,7B     6,7B
+4,5B     4,5B     4,5B
+4B     4D     4B     4D     5B     5B     4D     4B
+
+(7,8T naers iou lmao debip 7 avf 8 zatenris)
