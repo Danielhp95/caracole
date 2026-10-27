@@ -134,8 +134,9 @@ class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
                 storage { tmp.outputStream() }.use { out ->
                     val buffer = ByteArray(64 * 1024)
                     while (true) {
-                        // One byte more than listed at most: enough to know it is longer.
-                        val room = (entry.size + 1 - total).coerceAtMost(buffer.size.toLong()).toInt()
+                        // One byte more than listed at most: enough to know it is longer. (total is never more
+                        // than the size here, so this never overflows, even for the largest size a list gives.)
+                        val room = (entry.size - total).coerceAtMost(buffer.size.toLong() - 1).toInt() + 1
                         val n = answer.body.read(buffer, 0, room)
                         if (n < 0) break
                         total += n

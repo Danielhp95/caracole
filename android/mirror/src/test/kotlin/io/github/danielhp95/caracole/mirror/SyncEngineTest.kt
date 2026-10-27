@@ -149,6 +149,23 @@ class SyncEngineTest {
         assertTrue("longer than 8 bytes" in error.message!!, error.message)
     }
 
+    @Test(timeout = 20_000)
+    fun `the largest size a list can give still ends the sync, never spins on it`() {
+        server.publish(library)
+        engine.sync(server.address)
+        val before = snapshot()
+        val entries = server.publish(library)
+        val huge = """{"path": "huge.pdf", "url": "/huge.pdf", "size": ${Long.MAX_VALUE}, "sha256": "${"a".repeat(64)}", "type": "application/pdf"}"""
+        server.manifest = FakeCaracole.manifestJson("index.html", entries.map { FakeCaracole.entryJson(it) } + huge).toByteArray()
+        server.answers["/huge.pdf"] = { exchange ->
+            exchange.sendResponseHeaders(200, 0) // chunked: no length said
+            exchange.responseBody.write("%PDF".toByteArray())
+        }
+        val error = assertFailsWith<SyncError.Changed> { engine.sync(server.address) }
+        assertTrue("it is 4 bytes, not ${Long.MAX_VALUE}" in error.message!!, error.message)
+        assertEquals(before, snapshot())
+    }
+
     @Test
     fun `a length said that isn't the listed size fails before reading`() {
         val error = failsAndKeepsTheMirror<SyncError.Changed> { entries ->
