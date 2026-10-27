@@ -972,14 +972,14 @@ const caracoleRows = (icons, does) => {
     };
     return { show, typed, enter, leave, ask };
   };
-  // A read that left no songs to list: what LaCuerda answered, as its request's line says it ("Not read: LaCuerda is
-  // cooling down…", "Not found: …"), and its output on the requests page.
-  const readOutcome = (job) => {
+  // A read that left no songs to list: what the site answered (LaCuerda's, or harptabs.com's: ``harp``), as its
+  // request's line says it ("Not read: LaCuerda is cooling down…", "Not found: …"), and its output on the requests page.
+  const readOutcome = (job, harp) => {
     const j = job && typeof job === "object" ? job : {};
     const line = j.line && typeof j.line === "object" && typeof j.line.text === "string" ? j.line.text : "";
     const said = /^(Read|Not read|Not found|Searched|Not searched|Nothing found|Found already): /.test(line)
       ? line + " "
-      : "LaCuerda gave caracole no songs of theirs this time. ";
+      : (harp ? "harptabs.com" : "LaCuerda") + " gave caracole no songs of theirs this time. ";
     const why = el("p", "hint read-outcome", said);
     const id = Number(j.id);
     if (Number.isInteger(id) && id > 0) {

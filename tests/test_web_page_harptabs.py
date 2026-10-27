@@ -40,9 +40,13 @@ class FakeCaracole(FakeGet):
     def __init__(self, cfg):
         super().__init__(cfg)
         self.ran: list[tuple[str, ...]] = []
+        self.fails = False  # ``harptabs --artist`` ends in an error, as a bug would, and reads nothing
 
     def __call__(self, args, emit):
         self.ran.append(tuple(args))
+        if args[0] == "harptabs" and self.fails:
+            emit("error: harptabs.com's page couldn't be read.")
+            return 1
         if args[0] == "harptabs":
             time.sleep(0.3)  # long enough for the page to say it reads
             conn = db.connect(self.cfg.db_path)
@@ -165,6 +169,28 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert ("harptabs", "--artist=artist/7829/ritchie-valens") in runner.ran
     assert browser.js(TITLES) == ["La Bamba", "Donna"]
     assert browser.js("document.querySelector('#results .read-page')") is None
+
+
+def test_a_read_that_left_no_songs_names_harptabs_com_never_lacuerda(cfg, live, browser):
+    # A read that ended in an error, and left no songs to list: what the line under the offer says names the site it
+    # read, as the library page's and the lookup page's.
+    base, queue, runner = live
+    runner.fails = True
+    harptabs(cfg)
+    search(browser, base, "ritchie valens")
+    assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
+    browser.click("#results .read-page button")
+    assert browser.wait("!!document.querySelector('#results .read-outcome')", timeout=20)
+    said = browser.js("document.querySelector('#results .read-outcome').textContent")
+    assert "LaCuerda" not in said and said.startswith("harptabs.com "), said
+    browser.open(base + "lookup?q=ritchie%20valens")
+    assert browser.wait(f"{HT_ROWS}.length === 1")
+    browser.click("#results .hit[data-slug='artist/7829/ritchie-valens'] .row-action button")
+    assert browser.wait("!!document.querySelector('#results .read-page button')")
+    browser.click("#results .read-page button")
+    assert browser.wait("!!document.querySelector('#results .read-outcome')", timeout=20)
+    said = browser.js("document.querySelector('#results .read-outcome').textContent")
+    assert "LaCuerda" not in said and said.startswith("harptabs.com "), said
 
 
 def test_the_lookup_page_lists_harptabs_com_last_and_its_artists_songs(cfg, live, browser):

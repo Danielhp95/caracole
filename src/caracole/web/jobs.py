@@ -37,7 +37,8 @@ skipped. The queue holds ``limit`` jobs waiting or running, one per song (a
 lookup takes the place of the song's waiting add, since ``caracole get`` adds
 the song itself, or follows it once it runs; a version you pick meanwhile
 takes the place of the song's waiting lookup, or follows the running one, and a
-lookup joins the song's Keep it, which never looks it up, or follows it),
+lookup joins the song's Keep it, which never looks it up, or follows it: its
+stages, which share names with Keep it's, start afresh when it does),
 and remembers the last ``keep``
 finished ones, in memory only (``cancel`` takes one that hasn't started out of the queue, never one
 that runs, and keeps it among those, cancelled): a request is in wanted.txt from the moment it's
@@ -326,6 +327,18 @@ def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
     return tuple(picked)
 
 
+def _afresh(stages: Sequence[Stage]) -> None:
+    """A lookup's stages (get.py's ``STAGES``) as they are before it starts, all waiting: a lookup that joined the
+    song's Keep it (``JobQueue.submit``) runs after it, and Keep it says its song, its PDF and the library page under
+    the same names."""
+    from caracole.get import STAGES
+
+    names = {name for name, _ in STAGES}
+    for stage in stages:
+        if stage.name in names:
+            stage.state, stage.detail, stage.running_detail = "waiting", "", ""
+
+
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
     it's it hasn't, and a search of LaCuerda's (``SEARCH_STAGES``); none for other commands."""
@@ -342,8 +355,8 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
 
 
 REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it never joins the song's add or fetch
-EXPORTING = "export:"  # an export's song_key (export_routes.py): the song's key and the version, never the song's own
-MINE = ":mine"  # after an export's song_key: making that version the song's own
+EXPORTING = "export:"  # Make this my version's song_key (export_routes.py): the song's key and the version, then MINE,
+MINE = ":mine"  # never the song's own key, so it joins no request of the song's
 
 
 def remove_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:
@@ -570,6 +583,8 @@ class JobQueue:
                     step.state = "skipped"
                     continue
                 step.state = "running"
+                if _looks_up(step.args):  # after Keep it, whose stages share its stages' names: its own, afresh
+                    _afresh(job.stages)
 
             def emit(line: str, step: Step = step) -> None:
                 event = read_progress_line(line) if _reports(step.args) else None

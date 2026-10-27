@@ -10,6 +10,7 @@ marks carry their string and fret (data-string, data-fret), a keyboard's keys th
 from __future__ import annotations
 
 import json
+from contextlib import nullcontext
 
 import pytest
 
@@ -221,6 +222,17 @@ def test_the_guitars_capo_hints_are_the_guitars_alone(tmp_path):
     assert uke[0] == [] and uke[1]["chips"][0] == ["Bb", "now", "true"]  # Bb is easy on a ukulele
 
 
+@pytest.mark.parametrize("name", ["Harmonica", "Flute", "Recorder"])
+def test_an_instrument_with_no_capo_is_offered_no_capo_hint(tmp_path, name):
+    # None takes a capo: no Capo row, and no capo to press that would move the guitar's while you play it.
+    in_bb = "{title: In Bb}\n{artist: Synthetic}\n{key: Bb}\n{comment: Verse}\n[Bb]la la [Eb]la la [F]la\n"
+    with open_viewer(tmp_path, written(tmp_path, in_bb)) as b:
+        choose(b, name)
+        seen = [b.js(SETTINGS), b.js("!document.getElementById('capo-opts').hidden"),
+                b.js("[...document.querySelectorAll('#capo .chip')].map((c) => c.textContent)")]
+    assert not seen[0]["capo"] and seen[1] is False and seen[2] == []
+
+
 # --- the rail of necks --------------------------------------------------------------------------------------
 
 RAIL = """(() => ({ shown: !document.getElementById('necks').hidden,
@@ -353,21 +365,40 @@ def test_a_songbook_song_set_on_the_guitar_opens_on_it_whatever_the_players_inst
     assert three["chips"][4][1] == "true"  # the player's own again
 
 
-@pytest.mark.parametrize("arrived", [None, "piano"])
-def test_a_songs_own_instrument_is_never_carried_to_the_next_song(tmp_path, arrived):
-    # The songbook plays Two on the guitar: it opens on the instrument One arrived with (the player's), never on
-    # the ukulele the songbook sets for One alone, served as from the folder
-    songs = [BookSong("One", "Synthetic", cho=SONG, id="aaaa", start="t=0&inst=ukulele"),
-             BookSong("Two", "Synthetic", cho=IN_E, id="bbbb")]
-    page = "/_songbooks/Campfire/songbook.html"
-    start = "#song-1" + (f"&inst={arrived}" if arrived else "")
-    with served({page: (songbook(songs), songbook_csp)}) as site, open_viewer(tmp_path, site + page + start) as b:
-        one = b.js(SETTINGS)
-        follow(b, "document.querySelector('#song-1 a[rel=next]').click()")
-        two = b.js(SETTINGS)
-    chosen = [name for name, on in two["chips"] if on == "true"]
-    assert "inst=ukulele" in one["hash"]
-    assert chosen == ["Piano" if arrived else "Guitar"], two["hash"]
+THREE = "{title: Three}\n{artist: Synthetic}\n{key: G}\n{comment: Verse}\n[G]la la [C]la la [D]la\n"
+
+
+@pytest.mark.parametrize("where", ["file", "served"])
+def test_the_song_after_one_on_its_own_instrument_is_on_the_players_again(tmp_path, where):
+    # A set list's song on the ukulele, the player on the piano: the songs after it, and back before it, are the
+    # player's, from a file (the browser keeps the piano) and in caracole serve's sandbox (the address alone does).
+    songs = [BookSong("One", "Synthetic", cho=SONG, id="aaaa"),
+             BookSong("Two", "Synthetic", cho=IN_E, id="bbbb", start="t=0&inst=ukulele"),
+             BookSong("Three", "Synthetic", cho=THREE, id="cccc")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(songbook(songs), encoding="utf-8")
+    pages = {"/_songbooks/Campfire/songbook.html": (songbook(songs), songbook_csp)}
+    with served(pages) if where == "served" else nullcontext() as site:
+        page = site + "/_songbooks/Campfire/songbook.html" if site else path.as_uri()
+        with open_viewer(tmp_path, page + "#song-1") as b:
+            choose(b, "Piano")
+            to_song(b, 2)
+            two = b.js(SETTINGS)
+            to_song(b, 3)
+            three = b.js(SETTINGS)
+            to_song(b, 1)
+            one = b.js(SETTINGS)
+            to_song(b, 2)
+            choose(b, "Baritone ukulele")  # the player's now, chosen on the song by hand
+            b.click("#reset-all")  # the song's own again
+            reset = b.js(SETTINGS)
+            to_song(b, 3)
+            after = b.js(SETTINGS)
+    assert two["chips"][1][1] == "true"  # its own: the ukulele
+    assert three["chips"][4][1] == "true" and "inst=piano" in three["hash"]
+    assert one["chips"][4][1] == "true" and "inst=piano" in one["hash"]
+    assert reset["chips"][1][1] == "true" and after["chips"][3][1] == "true" and "inst=baritone" in after["hash"]
 
 
 # --- a phone's width ------------------------------------------------------------------------------------------

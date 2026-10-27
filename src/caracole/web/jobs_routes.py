@@ -274,10 +274,9 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     requests page, it says whether that fetch asked Ultimate Guitar at all
     (``asked_ug``: not for a song the offline index lacks whose artist's page isn't
     known) and what the local indexes have of the song elsewhere
-    (``outcome.elsewhere``). An export (``jobs.EXPORTING``) is about the song its
-    job names (``Job.song_id``) and is none of its requests: no id, and, once it is
-    over, the PDF it made (``SongFacts.pdf``). A job that is over doesn't change, so
-    its answer is worked out once (``app._ended``).
+    (``outcome.elsewhere``). Make this my version (``jobs.EXPORTING``) is about the
+    song its job names (``Job.song_id``) and is none of its requests: no id. A job
+    that is over doesn't change, so its answer is worked out once (``app._ended``).
     """
     over = not job.active
     if over:
@@ -313,14 +312,9 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
             from caracole.web.outcome import elsewhere as other_sites
 
             elsewhere = other_sites(conn, app.cfg, song, job, datetime.now(UTC))
-        pdf = None
-        if over and export:
-            from caracole.web.export_routes import made_pdf
-
-            pdf = made_pdf(conn, app.cfg.library_dir, song, job)
         facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
                           checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked,
-                          elsewhere=elsewhere, asked_ug=asked_ug, pdf=pdf, sheet_from=sheet_from)
+                          elsewhere=elsewhere, asked_ug=asked_ug, sheet_from=sheet_from)
     # A removal's song is gone once it is done: the job knows which it was.
     answer = (None if export else song.id if song is not None else job.song_id if removal else None, facts)
     if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known

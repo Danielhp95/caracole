@@ -2259,6 +2259,41 @@ def test_an_export_without_a_sheet_is_a_render_error(conn, cfg):
         export(conn, cfg, song, "t=2")
 
 
+def test_a_download_is_the_exports_pdf_made_in_a_private_folder_and_written_nowhere_else(conn, cfg):
+    # caracole serve's Export PDF: the PDF an export would be, as bytes, from a folder of its own under the cache
+    # (0700, gone once done), and nothing written into the library or recorded in the database
+    from caracole.render import RenderError, export_sheet, export_version, version_pdf
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    files = {p.name: p.read_bytes() for p in folder.iterdir()}
+    kv = conn.execute("SELECT key, value FROM kv ORDER BY key").fetchall()
+    run = FakeChordPro()
+    modes = []
+
+    def runner(cmd, **kwargs):
+        modes.append(stat.S_IMODE(output_of(cmd).parent.stat().st_mode))
+        return run(cmd, **kwargs)
+
+    v = export_version("t=2", export_sheet(conn, cfg, song).own(Overrides()))
+    label, data = version_pdf(conn, cfg, song, v, runner=runner)
+    out = output_of(run.calls[-1])
+    assert label == "A Minor, capo 0" and data.startswith(b"%PDF")
+    assert out.name == "sheet (A Minor, capo 0).pdf" and out.parent.parent == cfg.cache_dir and modes == [0o700]
+    assert not out.parent.exists()  # gone once done
+    assert {p.name: p.read_bytes() for p in folder.iterdir()} == files
+    assert conn.execute("SELECT key, value FROM kv ORDER BY key").fetchall() == kv
+    printed = run.printed[-1]
+    _, again = export(conn, cfg, song, "t=2")  # what the export prints, to the byte
+    assert again.printed[-1] == printed and "[Am]" in printed.decode("utf-8")
+    with pytest.raises(RenderError, match="chordpro failed"):
+        version_pdf(conn, cfg, song, v, runner=FakeChordPro(fail=("A Minor",)))
+    with pytest.raises(RenderError, match="keeps no sheet"):
+        version_pdf(conn, cfg, add_song(conn, "Nobody", "Nothing"), v, runner=run)
+
+
 def test_a_query_without_a_t_key_starts_at_the_songs_transpose_even_with_at_or_alt(conn, cfg):
     from caracole.render import export_sheet, export_version
 

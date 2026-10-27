@@ -159,7 +159,8 @@ def _data(tab: Tab, choice: harpfit.Choice) -> dict[str, Any]:
 
 # --- the overlay: Harmonica and Guitar --------------------------------------------------------------------------
 
-_NO_KEY = "With no chord sheet, caracole doesn't know the song's key, so it can't tell which harp plays it."
+_NO_SHEET = "With no chord sheet, caracole doesn't know the song's key, so it can't tell which harp plays it."
+_NO_KEY = "With no key in its chord sheet, caracole can't tell which harp plays the song."
 
 
 def _overlay_data(choice: harpfit.Choice, cho: str | None, key: str | None, key_source: str | None) -> dict[str, Any]:
@@ -170,7 +171,7 @@ def _overlay_data(choice: harpfit.Choice, cho: str | None, key: str | None, key_
     shapes = viewer_key(cho, key, key_source) if cho else None
     if sheet is None or shapes is None:
         return {"guitar": _guitar_data(sheet, None) if sheet else None,
-                "harp": {"key": None, "none": _NO_KEY, "holes": holes}}
+                "harp": {"key": None, "none": _NO_KEY if sheet else _NO_SHEET, "holes": holes}}
     sounds = sounding(shapes, sheet.capo or 0)
     names = spelling(sounds)
     capo = (sounds.tonic - shapes.tonic) % 12

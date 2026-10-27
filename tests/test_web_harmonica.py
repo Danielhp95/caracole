@@ -51,7 +51,7 @@ def test_it_is_served_as_written_in_a_sandbox_with_its_own_policy(app, library):
     page = (library / "harmonica-1.html").read_bytes()
     assert response.body == page
     own = META_POLICY.search(page.decode("utf-8")).group(1)
-    assert header(response, "content-security-policy") == f"sandbox allow-scripts; {own}; frame-ancestors 'none'"
+    assert header(response, "content-security-policy") == f"sandbox allow-scripts allow-downloads; {own}; frame-ancestors 'none'"
     assert header(response, "content-type") == "text/html; charset=utf-8"
 
 
@@ -73,7 +73,7 @@ def test_the_library_page_links_it_and_the_apps_copy_takes_it(app, library, cfg)
     listed = {entry["path"]: entry for entry in json.loads(response.body)["files"]}
     assert {f"{FOLDER}/harmonica-1.html", f"{FOLDER}/harmonica-1.txt"} <= set(listed)
     entry = listed[f"{FOLDER}/harmonica-1.html"]
-    assert entry["headers"]["Content-Security-Policy"].startswith("sandbox allow-scripts; default-src 'none'")
+    assert entry["headers"]["Content-Security-Policy"].startswith("sandbox allow-scripts allow-downloads; default-src 'none'")
     assert entry["url"] == "/Placeholder%20Band/Synthetic%20Song/harmonica-1.html"
 
 

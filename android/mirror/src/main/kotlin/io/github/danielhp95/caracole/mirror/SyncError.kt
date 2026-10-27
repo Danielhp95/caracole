@@ -2,6 +2,12 @@ package io.github.danielhp95.caracole.mirror
 
 /** Why a sync or a test of the server failed, as one plain sentence ([message]) the app shows as it is. */
 sealed class SyncError(message: String, cause: Throwable? = null) : Exception(message, cause) {
+    /**
+     * Whether it says there is no caracole at the address: none typed, nothing answering there, or something
+     * else answering (another network's device, a Wi-Fi login page). The sync on Wi-Fi keeps quiet about these.
+     */
+    val noCaracole: Boolean get() = this is NoAddress || this is BadAddress || this is NoAnswer || this is NotCaracole
+
     /** No address typed yet. */
     class NoAddress : SyncError("No server address yet: type caracole serve's address in Settings.")
 
@@ -40,4 +46,15 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
 
     /** The sync was stopped before it ended; the mirror is as it was. */
     class Cancelled : SyncError("The sync was stopped before it ended; the copy on the phone is as it was.")
+
+    /** Anything else that went wrong, which the app didn't expect: said as it is, rather than a crash. */
+    class Unexpected(cause: Throwable) : SyncError(
+        "Something went wrong that the app didn't expect (${cause.javaClass.simpleName}${cause.message?.let { ": $it" } ?: ""}).",
+        cause,
+    )
+
+    companion object {
+        /** [e] as a SyncError: itself, or [Unexpected]. */
+        fun of(e: Throwable): SyncError = e as? SyncError ?: Unexpected(e)
+    }
 }
