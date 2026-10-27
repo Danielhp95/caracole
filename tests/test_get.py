@@ -83,7 +83,7 @@ def sites(monkeypatch) -> Sites:
 
 def write_cfg(tmp_path: Path, extra: str = ""):
     providers = "".join(f"[providers.{p}]\ndelay = [0, 0]\nlookup_delay = [0, 0]\n{extra if p == 'ug' else ''}"
-                        for p in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore"))
+                        for p in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs"))
     path = tmp_path / "caracole.toml"
     path.write_text(f'data_dir = "{tmp_path}"\n{providers}', encoding="utf-8")
     return load_config(path, env={"HOME": str(tmp_path / "home")})
@@ -188,7 +188,8 @@ def test_the_sheet_is_readable_after_one_ug_request_and_the_rest_fills_in_after(
     first = next(e for e in progress.events if e[0] == "readable")
     assert first[1]["sheet"] == "Radiohead/Creep/sheet.txt"
     order = list(dict.fromkeys(e[1] for e in progress.events if e[0] == "stage" and e[2] == "running"))
-    assert order == ["song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs", "pages", "songbooks"]
+    assert order == ["song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs", "harptabs", "pages",
+                     "songbooks"]
     assert progress.events.index(first) < progress.events.index(("stage", "lyrics", "running"))
     # Then the lyrics, and with them the sheets are scored: 102 charts the whole song.
     assert "sheet 102" in (folder(cfg, "Radiohead", "Creep") / "sheet.txt").read_text(encoding="utf-8")
@@ -411,7 +412,7 @@ def test_a_page_of_another_type_asked_for_as_the_tab_is_refused_and_nothing_is_w
         result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=tab)
 
         assert progress.states()["song"] == "failed" and sites.requests == []
-        assert result.details["song"] == f"tab {tab_id_from_url(tab)} is not a chords or tabs page"
+        assert result.details["song"] == f"tab {tab_id_from_url(tab)} is not a chords, tabs or ukulele chords page"
     assert not cfg.wanted_file.exists() and not cfg.overrides_file.exists()
 
 
@@ -651,6 +652,36 @@ def test_a_gtptabs_error_says_what_the_site_did_as_the_lyrics_stage_does(cfg, co
     assert result.details["gtptabs"].startswith("gtptabs.com failed (gtptabs: 502")
     assert "502" in get_state(conn, "gtptabs").last_error and result.ok  # an error, as at night: never a miss
     assert get_song(conn, find_song(conn, "radiohead/creep").id).status == "found"
+
+
+def harptabs_index(conn, *rows) -> None:
+    """harptabs.com's index as the nightly run reads its sitemap: (path, kind, id, key) rows."""
+    conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                     rows)
+
+
+def test_a_lookup_keeps_a_harmonica_tab_from_the_index_the_nightly_run_keeps(cfg, conn, sites):
+    from helpers.harptabs_site import tab_page
+
+    serve_creep(sites, conn)
+    harptabs_index(conn, ("artist/9/radiohead", "artist", 9, "radiohead"), ("tab/700/creep", "tab", 700, "creep"))
+    sites.pages["https://www.harptabs.com/tab/700/creep"] = (200, tab_page("Creep", "Radiohead", key="G"))
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["harptabs"] == "done" and result.details["harptabs"] == "harmonica tab kept"
+    assert "https://www.harptabs.com/sitemap.xml" not in sites.requests  # the sitemap is the nightly run's
+    assert (folder(cfg, "Radiohead", "Creep") / "harmonica-1.txt").is_file()
+    data = (folder(cfg, "Radiohead", "Creep") / "sheet.html").read_text(encoding="utf-8")
+    assert '"harmonicaTabs":[{"name":"harmonica-1.txt","href":"harmonica-1.txt","key":"G"}]' in data
+
+
+def test_a_lookup_of_a_song_harptabs_com_has_nothing_for_asks_it_nothing(cfg, conn, sites):
+    serve_creep(sites, conn)
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["harptabs"] == "skipped" and not [u for u in sites.requests if "harptabs" in u]
 
 
 def test_the_sheet_stage_says_which_site_it_asks(cfg, conn, sites):

@@ -52,6 +52,8 @@ _MUSICXML = (".mxl", ".musicxml")
 _VERSION = re.compile(r"\(\s*ver\.?\s*(\d+)[^)]*\)", re.IGNORECASE)
 _PARENS = re.compile(r"\s*\([^)]*\)")
 _GUITAR_FILE = re.compile(r"guitar-(\d+)\.", re.IGNORECASE)
+HARMONICA_FILE = re.compile(r"harmonica-(\d+)\.txt")  # a harmonica tab caracole kept (harptabs_fetch.py)
+HARMONICA_KIND = "harmonica"  # its version's kind
 _SCORE_FILE = re.compile(r"score-(\d+)(\.[A-Za-z0-9]+)")
 _KEPT_GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
 MATCH_CUTOFF = 90  # music.Names.score is exact from 82 up (test_inbox.py)
@@ -102,6 +104,34 @@ def guitar_files(conn: sqlite3.Connection, song_id: int | None = None, *,
     return sorted(found, key=lambda f: (f.song_id, f.number, f.name))
 
 
+@dataclass(frozen=True)
+class HarmonicaFile:
+    """A harmonica tab caracole keeps for a song (``harmonica-N.txt``, harptabs_fetch.py): its name, where it is
+    (relative to the library), its N, and the harp's key its page names ("C"), or None."""
+
+    song_id: int
+    name: str
+    path: str
+    number: int
+    key: str | None = None
+
+
+def harmonica_files(conn: sqlite3.Connection, song_id: int | None = None) -> list[HarmonicaFile]:
+    """The harmonica tabs caracole keeps, of the song ``song_id`` or every song's; by song, then N."""
+    sql = ("SELECT f.song_id, f.name, f.path, CASE WHEN json_valid(v.raw) THEN json_extract(v.raw, '$.key') END "
+           "FROM files f JOIN versions v ON v.id = f.version_id WHERE v.kind = ?")
+    args: list[object] = [HARMONICA_KIND]
+    if song_id is not None:
+        sql += " AND f.song_id = ?"
+        args.append(song_id)
+    found = []
+    for row_song, name, at, key in conn.execute(sql, args):
+        m = HARMONICA_FILE.fullmatch(name)
+        if m:
+            found.append(HarmonicaFile(row_song, name, at, int(m.group(1)), key if isinstance(key, str) else None))
+    return sorted(found, key=lambda f: (f.song_id, f.number))
+
+
 def parse_download_name(name: str) -> tuple[str | None, str, int | None]:
     """``"Artist - Title (ver 2).gp5"`` → ("Artist", "Title", 2).
 
@@ -142,6 +172,13 @@ def guitar_number(conn: sqlite3.Connection, library_dir: Path, song: Song) -> in
     replaced: a number is taken by any kept file, or any file in the folder, named ``guitar-N.*``, whatever its
     extension (one you put there yourself, say)."""
     taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song) if (m := _GUITAR_FILE.match(n))}
+    return next(n for n in itertools.count(1) if n not in taken)
+
+
+def harmonica_number(conn: sqlite3.Connection, library_dir: Path, song: Song) -> int:
+    """The N of a new ``harmonica-N.txt``, a harmonica tab (harptabs_fetch.py): the lowest number no file of the
+    song holds, kept or put in its folder by hand, so that no file is ever replaced."""
+    taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song) if (m := HARMONICA_FILE.fullmatch(n))}
     return next(n for n in itertools.count(1) if n not in taken)
 
 

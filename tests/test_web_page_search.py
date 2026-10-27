@@ -247,6 +247,56 @@ def test_typing_lists_your_songs_and_the_indexes_without_enter(cfg, live, browse
     assert queue.snapshot() == []
 
 
+# Each hit's instrument marks (rows.js instrumentBadges), by its title and its first site's mark.
+MARKS = ("[...document.querySelectorAll('#results article.line')].map((a) => [a.querySelector('h3').textContent, "
+         "[...a.querySelectorAll('.badge.instrument')].map((b) => b.textContent)])")
+
+
+def test_a_hit_for_one_instrument_says_which_and_nothing_is_left_out_for_it(cfg, live, browser):
+    # UG's Ukulele Chords, a harmonica tab of harptabs.com, a MuseScore page; a song of yours with a harmonica tab and
+    # a score: each says the instrument it is for, and every chord sheet stays, with no mark.
+    from caracole.harptabs import parse_page_url as harp_row
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    base, queue, asked = live
+    sites(cfg, ug=[("oasis", "wonderwall", 2), ("ryan-adams", "wonderwall", 1)],
+          musescore=["https://musescore.com/song/wonderwall-1524"])
+    conn = db.connect(cfg.db_path)
+    upsert_rows(conn, [(3001, "oasis", "wonderwall", "ukulele", "oasis/wonderwall-ukulele-3001")], "ukulele1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    conn.execute("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                 tuple(harp_row("https://www.harptabs.com/tab/77/wonderwall")))
+    [mine] = [add_song(conn, "Blur", "Wonderwall Remix")]
+    tab = upsert_version(conn, provider="harptabs", tab_id="5", song_id=mine.id, slot="guitar", kind="harmonica",
+                         rating=0, votes=0, version=1, label=None, url="https://www.harptabs.com/tab/5/x", raw={},
+                         now="2026-10-19T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=mine, version_id=tab, name="harmonica-1.txt", data=b"4 5 6\n", rank=1)
+    (song_dir(cfg.library_dir, mine) / "score-1.pdf").write_bytes(b"%PDF-1.4")
+    conn.commit()
+    conn.close()
+    browser.open(base)
+    search(browser, "wonderwall")
+    assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
+    assert browser.wait("document.querySelectorAll('#results article.line').length >= 5")
+    marks = dict(browser.js(MARKS))
+    assert marks["Wonderwall Remix"] == ["Harmonica", "Score"]
+    lines = browser.js(LINES)
+    assert ["Oasis", [["Wonderwall", "ug"]]] in lines and ["Ryan Adams", [["Wonderwall", "ug"]]] in lines
+    rows = browser.js(MARKS)
+    assert ["Wonderwall", ["Ukulele"]] in rows and ["Wonderwall", []] in rows  # Oasis's has UG's ukulele chords
+    assert browser.js(GROUPS)[-2:] == ["MuseScore · 1 page by that title", "harptabs.com · 1 harmonica tab by that title"]
+    harp = browser.js("[...document.querySelectorAll('#results .hit[data-source=\"harptabs\"]')].map((a) => "
+                      "[a.querySelector('h3').textContent, a.querySelector('.badge.instrument').textContent, "
+                      "a.querySelector('.line-action a').href])")
+    assert harp == [["Wonderwall", "Harmonica", "https://www.harptabs.com/tab/77/wonderwall"]]
+    score = browser.js("document.querySelector('#results .hit[data-source=\"musescore\"] .badge.instrument')"
+                       ".textContent")
+    assert score == "Score"
+    assert "1 on harptabs.com" in browser.js(STATUS)
+    assert queue.snapshot() == []
+
+
 def test_one_song_from_two_sites_is_one_line_with_two_icons(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, ug=[("oasis", "wonderwall", 9), ("oasis", "live-forever", 2)],

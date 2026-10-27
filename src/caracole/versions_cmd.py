@@ -100,7 +100,7 @@ def _the_one(conn: sqlite3.Connection, song: Song, versions: Sequence[SheetVersi
 
 
 def show(cfg: Config, display: str) -> None:
-    from caracole.sheet_versions import in_library
+    from caracole.sheet_versions import in_library, sheet_kind
 
     overrides = load_ovr(cfg)
     with closing(open_db(cfg)) as conn:
@@ -111,7 +111,9 @@ def show(cfg: Config, display: str) -> None:
                        "is matched: caracole get, or the nightly run.")
             return
         n = len(versions)
-        typer.echo(f"{song.display}: {n} chords version{'' if n == 1 else 's'} on Ultimate Guitar; "
+        # The versions of the group the sheet comes from: UG's Ukulele Chords for a song with no chords there.
+        kind = "Ukulele Chords version" if sheet_kind(conn, song.id) == "ukulele" else "chords version"
+        typer.echo(f"{song.display}: {n} {kind}{'' if n == 1 else 's'} on Ultimate Guitar; "
                    f"{_the_one(conn, song, versions, overrides)}.")
         for v in versions:
             typer.echo(f"  {line(v, n)}")

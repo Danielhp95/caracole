@@ -6,6 +6,7 @@ from caracole.sheet_versions import (
     as_data,
     in_library,
     library_state,
+    sheet_kind,
     song_sheet_versions,
     tab_of,
     version_names,
@@ -173,3 +174,26 @@ def test_a_sheet_from_another_site_is_no_chosen_ug_version(conn, cfg):
 
     assert library_state(conn, song.id) == (None, ())
     assert [v.chosen for v in in_library(conn, song.id, POLICY)] == [False]
+
+
+def test_a_ukulele_sheet_lists_the_ukulele_versions_alone(conn, cfg):
+    # A song with no chords on UG takes its sheet from its Ukulele Chords versions (ug/fetch.py); one that had
+    # once and has chords now lists those.
+    song = add_song(conn, "Vance Joy", "Riptide")
+    uke = chords(conn, song.id, "301", kind="ukulele", rating=4.9)
+    chords(conn, song.id, "302", kind="ukulele", rating=4.5)
+    chords(conn, song.id, "101", rating=4.0)
+    keep_file(conn, cfg.library_dir, song=song, version_id=uke, name="sheet.txt", data=b"uke", rank=1)
+
+    assert sheet_kind(conn, song.id) == "ukulele"
+    assert library_state(conn, song.id) == ("301", ())
+    assert tabs(in_library(conn, song.id, POLICY)) == ["301", "302"]
+    assert tabs(song_sheet_versions(conn, song.id, POLICY, chosen_tab=None, kept_tabs=())) == ["101"]
+
+
+def test_with_no_chords_the_ukulele_versions_are_listed(conn):
+    song = add_song(conn, "Vance Joy", "Riptide")
+    chords(conn, song.id, "301", kind="ukulele")
+
+    assert tabs(song_sheet_versions(conn, song.id, POLICY, chosen_tab=None, kept_tabs=())) == ["301"]
+    assert sheet_kind(conn, song.id) == "chords"  # no sheet kept yet

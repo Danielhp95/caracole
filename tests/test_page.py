@@ -27,6 +27,18 @@ def pro_page():
     return parse_tab_page((FIXTURES / "tab_pro.html").read_text(encoding="utf-8"))
 
 
+def test_a_ukulele_chords_page_is_read_as_a_chords_page_is():
+    # UG's "Ukulele Chords" (Vance Joy, Riptide, 2026-10-27): the same [ch]/[tab] markup, ukulele shapes beside it,
+    # and the versions of its own type alone (with the Official).
+    page = parse_tab_page((FIXTURES / "tab_ukulele.html").read_text(encoding="utf-8"))
+    assert (page.tab.tab_id, page.tab.type, page.tab.kind) == (1391193, "Ukulele Chords", "ukulele")
+    assert page.tab.url == "https://tabs.ultimate-guitar.com/tab/vance-joy/riptide-ukulele-1391193"
+    assert [v.kind for v in page.versions] == [None, "ukulele", "ukulele"]
+    assert page.meta["tuning"]["name"] == "G C E A" and page.meta["capo"] == 1
+    assert page.content is not None and "[ch]Am[/ch]" in page.content
+    assert page.raw["tab_view"]["chord_type"] == "ukulele"
+
+
 def test_chords_page_tab_and_versions():
     page = chords_page()
     assert (page.tab.tab_id, page.tab.version, page.tab.kind) == (85053, 2, "chords")
@@ -117,7 +129,7 @@ def test_artist_url_missing_is_none():
         ("Power", None),  # a Power Tab file, neither
         ("Official", None),
         ("Bass Tabs", None),
-        ("Ukulele Chords", None),
+        ("Ukulele Chords", "ukulele"),
         ("Video", None),
         ("Drum Tabs", None),
         ("Lyrics", None),

@@ -84,7 +84,8 @@ NOT_FOUND = (
     '<!DOCTYPE html>\n<html><head><meta charset="utf-8"><title>Oops! We couldn\'t find that page.</title>'
     "</head><body><h1>Oops!</h1></body></html>\n"
 )
-UG_TYPES = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Pro", "power": "Power", "official": "Official"}
+UG_TYPES = {"chords": "Chords", "tabs": "Tabs", "guitar-pro": "Pro", "power": "Power", "official": "Official",
+            "ukulele": "Ukulele Chords"}
 
 # Synthetic lyrics: ten distinct lines, in two stanzas.
 LINES = [
@@ -3248,3 +3249,101 @@ def test_a_song_a_lookup_fetched_in_the_middle_of_its_fetch_is_fetched_again_nex
     fetch_songs(context(conn, client, tmp_path), [song])
 
     assert get_song(conn, song.id).ug_dirty is True
+
+
+# --- UG's Ukulele Chords: the sheet of a song with no chords --------------------------------------------------
+
+
+def two_ukulele(ug):
+    """301 is the best rated but charts only the first verse; 302 is complete. A page lists its own type alone."""
+    a = v(301, "ukulele", version=1, rating=4.9, votes=100)
+    b = v(302, "ukulele", version=2, rating=4.5, votes=30)
+    ug.tab(a, [b], content=sheet("ukulele 301", LINES[:3]), meta={"tuning": {"name": "G C E A"}})
+    ug.tab(b, [a], content=sheet("ukulele 302", LINES), meta={"tuning": {"name": "G C E A"}})
+
+
+def test_a_song_with_no_chords_on_ug_takes_its_ukulele_chords_as_its_sheet(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (301, "soda-stereo", "persiana-americana", "ukulele"), (302, "soda-stereo", "persiana-americana", "ukulele"))
+    ug = FakeUG()
+    two_ukulele(ug)
+    soda_chords(ug)  # its artist's chords list has no Persiana Americana either
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    # The chords looked for first (on the artist page its own tab page names, for bare ids), then the ukulele
+    # group rated and scored as chords.
+    assert ug.requests[:2] == [slugged(301, "ukulele"), artist_list(SODA_URL)]
+    assert out.sheet == 302 and "ukulele 302" in read(tmp_path, song, "sheet.txt")
+    doc = json.loads(read(tmp_path, song, "sheet.json"))
+    assert doc["version"]["type"] == "Ukulele Chords" and doc["meta"]["tuning"] == {"name": "G C E A"}
+    assert pick_ids(conn, song, "ukulele") == [302] and pick_ids(conn, song, "chords") == []
+    assert {r.kind for r in song_versions(conn, song.id)} == {"ukulele"}
+    assert coverages(conn, song) == {301: pytest.approx(0.3), 302: 1.0}
+    # The runner-up is kept beside it, as a chords sheet's would be.
+    assert "ukulele 301" in read(tmp_path, song, "version-301.txt")
+    assert get_song(conn, song.id).status == "found"
+
+
+def test_a_song_with_chords_keeps_them_and_its_ukulele_versions_are_never_read(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)],
+          (301, "soda-stereo", "persiana-americana", "ukulele"))
+    ug = FakeUG()
+    three_chords(ug)
+    two_ukulele(ug)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+
+    assert out.sheet == 102
+    assert not [u for u in ug.requests if "-ukulele-" in u]
+
+
+def test_a_chords_version_found_later_replaces_a_ukulele_sheet(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (301, "soda-stereo", "persiana-americana", "ukulele"), (302, "soda-stereo", "persiana-americana", "ukulele"))
+    ug = FakeUG()
+    two_ukulele(ug)
+    soda_chords(ug)
+    process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), song)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)])
+    three_chords(ug)
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path), get_song(conn, song.id))
+
+    assert out.sheet == 102 and "sheet 102" in read(tmp_path, song, "sheet.txt")
+    assert pick_ids(conn, song, "chords") == [102] and pick_ids(conn, song, "ukulele") == []
+    folder = song_dir(tmp_path / "lib", song)
+    assert not (folder / "version-301.txt").exists()  # the ukulele versions left with their sheet
+
+
+def test_a_pin_of_a_ukulele_version_chooses_the_sheet_even_with_chords(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, *[(t, "soda-stereo", "persiana-americana", "chords") for t in (101, 102, 103)],
+          (301, "soda-stereo", "persiana-americana", "ukulele"))
+    ug = FakeUG()
+    three_chords(ug)
+    two_ukulele(ug)
+    overrides = Overrides(pin={song.key: (301,)})
+
+    out = process_song(context(conn, ug.client(tmp_path / "cache"), tmp_path, overrides), song)
+
+    assert out.sheet == 301 and "ukulele 301" in read(tmp_path, song, "sheet.txt")
+    assert pick_ids(conn, song, "ukulele") == [301]
+
+
+def test_an_unreadable_chords_page_is_no_reason_to_take_the_ukulele_sheet(conn, tmp_path):
+    song = accepted(conn)
+    index(conn, (101, "soda-stereo", "persiana-americana", "chords"),
+          (301, "soda-stereo", "persiana-americana", "ukulele"))
+    ug = FakeUG()
+    ug.add(slugged(101), "<html><body>Something went wrong</body></html>")  # no js-store: unreadable
+    two_ukulele(ug)
+    fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [song])  # a parse error: the song waits
+
+    # Read again from the cache, then from UG, and still unreadable: the page waits for its retry date.
+    stats = fetch_songs(context(conn, ug.client(tmp_path / "cache"), tmp_path), [get_song(conn, song.id)])
+
+    assert stats.songs_failed == 0 and not (song_dir(tmp_path / "lib", song) / "sheet.txt").exists()
+    assert not [u for u in ug.requests if "-ukulele-" in u]
+    assert get_song(conn, song.id).ug_dirty  # an error is never a miss: it waits for the next run

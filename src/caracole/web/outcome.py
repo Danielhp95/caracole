@@ -6,7 +6,8 @@ the job and what the library knows of its song:
 
 - **Steps** (``steps``), for the request that runs: a lookup's stages (get.py's ``STAGES``) as a few steps
   in plain words, Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored
-  and its tab, LaCuerda's sheet and gtptabs.com's Guitar Pro file, from the first to the last) and
+  and its tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's harmonica tab, from the
+  first to the last) and
   Songbooks; a request of other commands, its commands, each by what it does ("Sheet" for ``caracole
   fetch``), else by its step's label. A step is running while one of its stages runs, or once some ran and
   others wait; done once all are over, failed when one failed. A step the request doesn't use is not drawn:
@@ -68,7 +69,7 @@ LOOKUP_STEPS = (
     ("Sheet", ("sheet",)),
     ("PDF", ("pdf",)),
     ("Lyrics", ("lyrics",)),
-    ("Extras", ("ug", "lacuerda", "gtptabs")),
+    ("Extras", ("ug", "lacuerda", "gtptabs", "harptabs")),
     ("Songbooks", ("songbooks",)),
 )
 # A request of other commands: each command's step, by what it does; any other by its step's label.
@@ -82,7 +83,7 @@ _ASKS = {said: tag(provider) for provider, said in SHEET_FROM.items()}  # a runn
 # What a stage leaves for tonight's run, when it ends in a wait or an error: its name, and its verb.
 _WHAT = {"sheet": ("the sheet", "waits"), "lyrics": ("the lyrics", "wait"),
          "ug": ("its other versions and its tab", "wait"), "lacuerda": ("LaCuerda's sheet", "waits"),
-         "gtptabs": ("the Guitar Pro file", "waits")}
+         "gtptabs": ("the Guitar Pro file", "waits"), "harptabs": ("the harmonica tab", "waits")}
 # How get.py words them (``_Lookup.asking``, ``_usable``).
 _FAILED = re.compile(r"^(?P<site>.+?) failed \((?P<why>.*)\); the nightly run tries again$")
 _STATUS = re.compile(r"^[\w.-]+: (\d{3})(?::|$)")  # http.ProviderError: "provider: status: url: message"

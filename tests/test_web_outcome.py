@@ -56,6 +56,18 @@ def test_a_lookup_in_progress_shows_its_stages_as_steps_in_plain_words():
     assert Chip("Extras", "running") in steps(later) and Chip("Lyrics", "done") in steps(later)
 
 
+def test_harptabs_coms_stage_is_part_of_the_extras_step_and_says_what_waits_in_its_words():
+    # The lookup's last site, after gtptabs.com: Extras runs until it is over, and a spent budget says its harmonica tab.
+    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs")}
+    running = lookup(stages=extras | {"harptabs": ("running", "")})
+    assert Chip("Extras", "running") in steps(running)
+    assert Chip("Extras", "done") in steps(lookup(stages=extras | {"harptabs": ("done", "harmonica tab kept")}))
+    spent = ended({"harptabs": ("skipped", "the lookup's 6 requests to harptabs.com are spent; the nightly run does "
+                                           "the rest")})
+    assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
+        "The lookup's 6 requests to harptabs.com are spent: the harmonica tab waits for tonight's run.")
+
+
 def test_a_step_the_request_doesnt_use_is_not_drawn():
     # Its songbooks left to a later job (Get the missing songs): no Songbooks step.
     job = lookup(args=lookup_steps("Muse", "Hysteria", songbooks=False)[0][1])

@@ -1,11 +1,11 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → icons → index → match → lyrics → fetch → lacuerda →
-scan → gtptabs → musescore → youtube → render → todo. Each step runs even if an earlier
-one failed, so the to-do page is always rewritten.
+scan → gtptabs → harptabs → musescore → youtube → render → todo. Each step runs even if an
+earlier one failed, so the to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. So are gtptabs, musescore and youtube when caracole.toml
+  the run once it blocks. So are gtptabs, harptabs, musescore and youtube when caracole.toml
   turns one off: it gets no client then. A block records a cooldown (24 h, doubling)
   and sends one ntfy message; it is expected behaviour, not a failed run.
 - The youtube step runs yt-dlp (youtube.py, youtube_fetch.py) only in a caracole
@@ -364,6 +364,26 @@ def _gtptabs(ctx: StepContext) -> StepResult:
     return result
 
 
+def _harptabs(ctx: StepContext) -> StepResult:
+    from caracole.harptabs_fetch import harptabs_tabs
+
+    s = harptabs_tabs(ctx.conn, ctx.services.client("harptabs"), ctx.cfg.library_dir, ctx.now,
+                      overrides=ctx.overrides)
+    index = f"{plural(s.sitemaps, 'sitemap')} indexed, " if s.sitemaps else ""
+    result = _provider_result(
+        ctx, "harptabs", errors=s.errors, error=f"{plural(s.errors, 'error')} this run", spent=s.budget_exhausted,
+        status=(f"{index}{s.tried} tried, {plural(s.kept, 'harmonica tab')} kept, {s.missing} not on harptabs.com, "
+                f"{plural(s.errors, 'error')}"),
+        failures=s.failures, title="harptabs.com",
+        done=_counted(_n(s.kept, "harmonica tab", "kept"), _n(s.missing, "song", "not there")),
+        retry="{songs} will be looked for on harptabs.com again on the next run",
+    )
+    if s.sitemap_errors:  # a song's error is on its failure's line
+        result.problems.append(Problem("harptabs.com's sitemap couldn't be read this run; it is asked for again "
+                                       "on the next run, and the log says why."))
+    return result
+
+
 def _musescore(ctx: StepContext) -> StepResult:
     from caracole.musescore_fetch import index_size, musescore_index
 
@@ -502,6 +522,7 @@ def default_steps() -> list[Step]:
         Step("scan", _scan),
         # After the scan: a file you dropped into _inbox/ is filed first, so its song gets no other.
         Step("gtptabs", _gtptabs, provider="gtptabs"),
+        Step("harptabs", _harptabs, provider="harptabs"),
         Step("musescore", _musescore, provider="musescore"),
         # After the scan, so a purchase dropped into Music/ is linked first and nothing is downloaded for it.
         Step("youtube", _youtube, provider="youtube"),

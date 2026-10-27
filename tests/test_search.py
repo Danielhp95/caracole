@@ -465,6 +465,23 @@ def test_musescore_pages_are_found_by_their_whole_title_alone(conn):
 
 
 
+def test_harptabs_tabs_are_found_by_their_title_alone_as_musescores_pages_are(conn):
+    # Its sitemap names a tab's title alone: a possible match, a harmonica tab of a song of that title.
+    from caracole.harptabs import parse_page_url
+    from caracole.search import search_harptabs
+
+    index(conn, [(1, "billy-joel", "piano-man", "chords")])
+    conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                     [tuple(parse_page_url(f"https://www.harptabs.com/{p}")) for p in
+                      ("tab/29525/piano-man", "tab/25/piano-man", "artist/1178/billy-joel", "tab/6/silent-night")])
+    assert [(h.source, h.title, h.artist, h.url) for h in search_harptabs(conn, "piano man")] == [
+        ("harptabs", "Piano Man", "", "https://www.harptabs.com/tab/25/piano-man"),
+        ("harptabs", "Piano Man", "", "https://www.harptabs.com/tab/29525/piano-man")]
+    assert [h.title for h in search_harptabs(conn, "billy joel piano man")] == ["Piano Man", "Piano Man"]
+    assert search_harptabs(conn, "billy joel") == []  # an artist's page is no tab
+    assert search_harptabs(conn, "piano") == []
+
+
 def test_a_musescore_title_is_never_a_word_of_the_query_that_leaves_no_known_song(conn):
     from caracole.search import search_musescore
 

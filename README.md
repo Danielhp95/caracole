@@ -2,9 +2,11 @@
 
 caracole builds a private library of sing-along chord sheets, chords over the full
 lyrics, for the songs you list. Every night it finds each new song's sheet (Ultimate
-Guitar, LaCuerda), its lyrics (LRCLIB) and a Guitar Pro file where gtptabs.com has
-one, and makes a PDF and a phone-friendly page of the sheet; for a song nobody has
-charted, the optional auto-chords package works the chords out from the audio.
+Guitar, its Ukulele Chords for a song it has no chords for, LaCuerda), its lyrics
+(LRCLIB), a Guitar Pro file where gtptabs.com has one and a harmonica tab where
+harptabs.com has one, and makes a PDF and a phone-friendly page of the sheet; for a
+song nobody has charted, the optional auto-chords package works the chords out from
+the audio.
 `caracole serve` puts the library, its search and your songbooks on your network.
 
 ![The library page searching for "traditional": four songs of the library and three that Ultimate Guitar has, under one artist, each with Open or Get it](docs/screenshots/library.png)

@@ -212,9 +212,14 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
 
 # The Disallow lines of the "User-agent: *" group of each host's robots.txt, as fetched
 # on 2026-10-18 (docs/spike-2026-10-18.md), gtptabs.com's and musescore.com's on 2026-10-19
-# (tests/fixtures/gtptabs/robots.txt, tests/fixtures/musescore/robots.txt). LaCuerda's
+# (tests/fixtures/gtptabs/robots.txt, tests/fixtures/musescore/robots.txt), harptabs.com's on 2026-10-27
+# (tests/fixtures/harptabs/robots.txt, which allows "/" first: its Disallow lines are longer, so they win). LaCuerda's
 # robots.txt is empty (tests/fixtures/lacuerda/robots.txt, 2026-10-20) and LRCLIB is an API,
 # so their hosts have none.
+_HARPTABS = (
+    "/login", "/signup", "/recover", "/settings", "/submit", "/admin/", "/messages/", "/favorites", "/following",
+    "/tab/*/edit", "/tab/*/upload", "/api/", "/search", "/*?*_rsc=",
+)
 ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # /storage/ holds each artist's "Download all" archive; /ru/ is half of every sitemap.
     "gtptabs.com": (
@@ -239,6 +244,9 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
         "/courses/section", "/tab/applicature/transpose", "/tab-pro/download", "/books?*",
         "/user/tab/view?*", "/explore*song_id[]=*",
     ),
+    # /api/ is its API (keys on request); /search its search; /*?*_rsc= a page's React data.
+    "www.harptabs.com": _HARPTABS,
+    "harptabs.com": _HARPTABS,
     "tabs.ultimate-guitar.com": (
         "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
         "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",

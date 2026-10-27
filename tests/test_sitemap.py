@@ -42,7 +42,6 @@ def test_guitar_pro_and_power_tab_files_are_left_out_by_their_whole_type():
     "path",
     [
         "china-crisis/arizona-sky-bass-6228233",
-        "rainbow/man-on-the-silver-mountain-ukulele-6573122",
         "green-day/21-guns-official-1910535",
         "nirvana/about-a-girl-video-1041731",
         "nat-adderley/work-song-musescore-5955137",
@@ -151,6 +150,7 @@ def test_fixture_sitemap_rows():
         (6236009, "ella-langley", "froggy-went-a-courtin-intro", "chords"),
         (1506192, "soda-stereo", "persiana-americana", "chords"),
         (52384, "soda-stereo", "persiana-americana", "tabs"),
+        (6573122, "rainbow", "man-on-the-silver-mountain", "ukulele"),
         (1042515, "r-e-m", "pale-blue-eyes", "tabs"),
         (2766562, "feast", "jerusalem", "chords"),
         (1041823, "noah-the-whale", "give-it-all-back", "tabs"),
@@ -170,15 +170,23 @@ def test_parse_sitemap_index_lists_children_in_order():
     ]
 
 
-def test_tab_sitemaps_numeric_order_then_last():
+def test_tab_sitemaps_numeric_order_then_ukulele_then_last():
     children = parse_sitemap_index((FIXTURES / "sitemap_index.xml").read_bytes())
     assert tab_sitemaps(children) == [
         WWW + "sitemap1.xml",
         WWW + "sitemap2.xml",
         WWW + "sitemap10.xml",
         WWW + "sitemap40.xml",
+        WWW + "sitemap_ukulele1.xml",
+        WWW + "sitemap_ukulele4.xml",
         WWW + "sitemap_last.xml",
     ]
+
+
+def test_a_ukulele_chords_url_is_a_row_of_its_own_type():
+    # UG's "Ukulele Chords" (2026-10-27: 151,769 URLs in sitemap_ukulele1–4, and the newest in sitemap_last).
+    assert parse_tab_url(TAB + "vance-joy/riptide-ukulele-1391193") == IndexRow(
+        1391193, "vance-joy", "riptide", "ukulele", "vance-joy/riptide-ukulele-1391193")
 
 
 def test_tab_sitemaps_lists_each_once():
@@ -190,12 +198,14 @@ def test_tab_sitemaps_lists_each_once():
 
 def test_sitemap_name():
     assert sitemap_name(WWW + "sitemap40.xml") == "40"
+    assert sitemap_name(WWW + "sitemap_ukulele3.xml") == "ukulele3"
     assert sitemap_name(WWW + "sitemap_last.xml") == "last"
 
 
 def test_sitemap_name_rejects_non_tab_sitemaps():
-    with pytest.raises(ValueError):
-        sitemap_name(WWW + "sitemap_ukulele1.xml")
+    for name in ("sitemap_news.xml", "sitemap_wiki_1.xml", "sitemap_forum_threads_3.xml"):
+        with pytest.raises(ValueError):
+            sitemap_name(WWW + name)
 
 
 def test_parse_tab_url_keeps_the_raw_path():
@@ -208,7 +218,7 @@ def test_parse_tab_url_keeps_the_raw_path():
 
 
 def test_sitemap_label_is_the_file_name_in_the_url():
-    for url in (WWW + "sitemap40.xml", WWW + "sitemap_last.xml"):
+    for url in (WWW + "sitemap40.xml", WWW + "sitemap_ukulele2.xml", WWW + "sitemap_last.xml"):
         assert sitemap_label(sitemap_name(url)) == url.rsplit("/", 1)[1]
 
 
@@ -223,7 +233,6 @@ def test_sitemap_label_is_the_file_name_in_the_url():
         (TAB + "china-crisis/arizona-sky-bass-6228233", "bass"),
         (TAB + "the-rifles/the-general-guitar-pro-6228251", "guitar-pro"),
         (TAB + "queen/the-miracle-power-1041631", "power"),
-        (TAB + "rainbow/man-on-the-silver-mountain-ukulele-6573122", "ukulele"),
         (TAB + "green-day/wake-me-up-when-september-ends-drums-1045015", "drums"),
         (TAB + "nat-adderley/work-song-musescore-5955137", "musescore"),
         (TAB + "some-artist/some-song-123", "unrecognized"),  # no type

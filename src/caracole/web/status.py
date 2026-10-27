@@ -80,6 +80,7 @@ STAGE_LINES = {
     "ug": "Fetching from Ultimate Guitar",
     "lacuerda": "Fetching from LaCuerda",
     "gtptabs": "Fetching from gtptabs.com",
+    "harptabs": "Fetching from harptabs.com",
     "pages": "Writing the library page",
     "songbooks": "Remaking its songbooks",
     "search": "Searching LaCuerda",  # caracole lacuerda --search's (jobs.SEARCH_STAGES)

@@ -377,6 +377,36 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert queue.snapshot() == []  # opening it asked for nothing
 
 
+@in_chromium
+def test_a_row_for_one_instrument_says_which_on_the_lookup_page_too(cfg, live, browser):
+    # UG's Ukulele Chords of a song, and a song of yours with a harmonica tab: each says its instrument, as the library
+    # page's search does; a UG song of chords alone says nothing.
+    from conftest import add_song
+
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    base, queue = live
+    index_songs(cfg, [("radiohead", "creep", 2), ("radiohead", "high-and-dry", 1)])
+    conn = db.connect(cfg.db_path)
+    upsert_rows(conn, [(9001, "radiohead", "creep", "ukulele", "radiohead/creep-ukulele-9001")], "ukulele1",
+                datetime(2026, 10, 19, tzinfo=UTC))
+    song = add_song(conn, "Radiohead", "Creep (Acoustic)")
+    tab = upsert_version(conn, provider="harptabs", tab_id="5", song_id=song.id, slot="guitar", kind="harmonica",
+                         rating=0, votes=0, version=1, label=None, url="https://www.harptabs.com/tab/5/creep", raw={},
+                         now="2026-10-19T00:00:00Z")
+    keep_file(conn, cfg.library_dir, song=song, version_id=tab, name="harmonica-1.txt", data=b"4 5 6\n", rank=1)
+    conn.commit()
+    conn.close()
+    browser.open(base + "/lookup")
+    browser.type("radiohead creep")
+    assert browser.wait(f"{HITS} >= 2")
+    marks = browser.js("[...document.querySelectorAll('#results .hit')].map(a => [a.querySelector('h2').textContent, "
+                       "[...a.querySelectorAll('.badge.instrument')].map(b => b.textContent)])")
+    assert ["Creep (Acoustic)", ["Harmonica"]] in marks and ["Creep", ["Ukulele"]] in marks
+    assert queue.snapshot() == []
+
+
 # The page's fetch, each POST noted (its path and form) and never sent.
 NOTE_POSTS = ("(() => { window.posts = []; const real = window.fetch; window.fetch = (url, init) => { "
               "if (init && init.method === 'POST') { window.posts.push([String(url), String(init.body)]); "

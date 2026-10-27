@@ -1,7 +1,7 @@
 """The ``versions`` table: every sheet or tab version seen for a song, and each kept file's.
 
 A version belongs to a slot ("sheet" or "guitar") and has a kind (chords,
-acordes, auto; tabs; and guitar-pro, power or score for a file gtptabs.com gave
+ukulele, acordes, auto; tabs; harmonica; and guitar-pro, power or score for a file gtptabs.com gave
 or you filed from the inbox, never a pick). ``pick_rank`` marks the versions
 currently chosen for a slot: 1 is the best.
 
@@ -24,9 +24,9 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from caracole.db import savepoint
 
-# Every kind the sheet slot holds: UG chords, LaCuerda acordes, auto-chords. A kept
-# sheet becomes the slot's only pick, so picks are cleared across all of them.
-SHEET_KINDS = ("chords", "acordes", "auto")
+# Every kind the sheet slot holds: UG chords, UG ukulele chords (a song with no chords: ug/fetch.py), LaCuerda
+# acordes, auto-chords. A kept sheet becomes the slot's only pick, so picks are cleared across all of them.
+SHEET_KINDS = ("chords", "ukulele", "acordes", "auto")
 
 # ``versions.gone``: a live version, one the provider says is gone, one an earlier match found.
 LIVE, GONE, STALE = 0, 1, 2

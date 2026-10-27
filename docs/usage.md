@@ -81,6 +81,10 @@ delay = [10, 20]
 enabled = true                    # false: caracole asks MuseScore nothing
 budget = 10
 delay = [10, 20]
+[providers.harptabs]              # harmonica tabs, kept for your songs
+enabled = true                    # false: caracole asks harptabs.com nothing
+budget = 20
+delay = [10, 20]
 [providers.youtube]               # the audio of songs nobody has charted, with auto-chords
 enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
 budget = 6                        # yt-dlp runs per run, each a search or a download
@@ -131,7 +135,7 @@ it at a time (a lock on `caracole.sqlite.migrating`, beside it): `caracole
 serve`'s first requests after an upgrade, or the nightly run starting with
 them, wait the few seconds it takes, then find it migrated. A database a newer
 caracole migrated, after a rollback say, stops every command that uses it with
-status 2: `database: … is at schema version 10, but this caracole knows up to 9:
+status 2: `database: … is at schema version 11, but this caracole knows up to 10:
 a newer caracole migrated it.` The message ends by naming that copy to restore,
 when there is one. Schema 4 keeps the songs you removed. Schema 5 adds an index of the UG index's names, for
 searching as you type: the first command after the upgrade builds it from the
@@ -152,7 +156,10 @@ about 270,000 of a full index's 1.6 million, with the artists and names they alo
 what Spotify left (its ids among a song's sources, its state; an old `spotify_token.json` in
 the state folder is yours to delete). A file you dropped into `_inbox/` that an older caracole
 filed under a Guitar Pro pick on Ultimate Guitar stays, as the song's own inbox file. It takes
-a few seconds more than the copy. A state
+a few seconds more than the copy. Schema 10 adds harptabs.com's index, empty until the nightly
+run, or `caracole harptabs`, reads its sitemap (see [caracole harptabs](#one-step-at-a-time)).
+The ukulele chords need no change of schema: an index built before reads Ultimate Guitar's
+ukulele sitemaps at its next refresh (see [caracole index build](#caracole-index-build)). A state
 folder caracole can't use ends a command with status
 1 and `can't open the database …` (or `can't open …/caracole.lock: …`).
 `caracole add` is the exception to both: it keeps its line and warns (see
@@ -165,8 +172,8 @@ machine can read. And `caracole serve` has no sign-in (see [caracole serve](#car
 under `[ntfy]`, which an older caracole read, is now an unknown key like any
 other: delete it, and the token.
 
-**Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`
-and `youtube`. Any other `[providers.…]` table is an error, like any other
+**Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`,
+`harptabs` and `youtube`. Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
 (YouTube's go unused: a lookup runs no yt-dlp).
 
@@ -187,9 +194,9 @@ for the nightly run. Either
 pace sends one request at a time to a site, never less than its robots.txt's
 `Crawl-delay` apart (none of the sites caracole reads sets one for every
 robot), and keeps everything else below: robots.txt, the cache, the blocks and
-cooldowns. Only gtptabs.com, MuseScore and YouTube can be turned off: with
-`enabled = false` under `[providers.gtptabs]`, `[providers.musescore]` or
-`[providers.youtube]`, caracole sends that site nothing, the nightly run skips
+cooldowns. Only gtptabs.com, MuseScore, harptabs.com and YouTube can be turned
+off: with `enabled = false` under `[providers.gtptabs]`, `[providers.musescore]`,
+`[providers.harptabs]` or `[providers.youtube]`, caracole sends that site nothing, the nightly run skips
 its step, and the to-do page's Provider health says it is off. The other three
 are what caracole is built on, so `enabled` in their tables is an unknown key.
 YouTube is on only where caracole can make chords of what it downloads (see
@@ -201,8 +208,20 @@ downloads open, so caracole downloads a file there for each song that has none
 (`caracole gtptabs`, in [One step at a time](#one-step-at-a-time)); and one you
 get anywhere yourself, dropped into `_inbox/` named as the song is, is filed
 under its song (`caracole scan`). caracole takes none from Ultimate Guitar, whose
-robots.txt closes its downloads to bots: from there it takes chords and text
-tabs alone.
+robots.txt closes its downloads to bots: from there it takes chords, text tabs
+and ukulele chords alone.
+
+**Harmonica tabs** come from harptabs.com, the one large free site of them
+(about 27,000 tabs: hole numbers over the lyrics, "6" a blow, "-5" a draw). For
+each song you want that has none, caracole matches its title against the
+site's sitemap, reads the pages of the tabs titled so, and keeps the most
+viewed one by your song's artist as `harmonica-1.txt` (`caracole harptabs`, in
+[One step at a time](#one-step-at-a-time)). Its site terms ask that nothing be
+copied, and its API's that the tabs not be mirrored: caracole keeps the tabs of
+your own songs alone, for you, never a tab of a song nobody asked for. It asks
+with caracole's own user agent, as it asks every site, and an HTTP 403, a 429 or
+a challenge from harptabs.com is a block like any site's: a cooldown and one
+alert, never a way around it (see [caracole run](#caracole-run)).
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -423,9 +442,9 @@ In order:
    the others scored are kept beside it, said as `kept beside it: tab 4169,
    tab 4171` (see [caracole versions](#caracole-versions)); then the text
    tab.
-7. **LaCuerda**, for a Spanish song without a complete sheet, and
-   **gtptabs.com**, for a Guitar Pro file, from the index the nightly run
-   keeps.
+7. **LaCuerda**, for a Spanish song without a complete sheet,
+   **gtptabs.com**, for a Guitar Pro file, and **harptabs.com**, for a
+   harmonica tab, from the indexes the nightly run keeps.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
    sheet changed, and MuseScore's pages matched from its local index.
 9. **The songbooks it is in**: each songbook of songbooks.toml that lists the
@@ -458,11 +477,11 @@ Options:
   under `[match]` in overrides.toml, so the matcher never asks you about it.
 - `--tab URL` is the tab to use, its page's address or its id: it is
   recorded under `[pin]`, in place of the song's pin of the same kind (a
-  chords sheet or a text tab, by the offline index), and beside its pins of
-  the other kind: a text tab picked after a chords sheet keeps the sheet you
-  chose. A page of another type (a Guitar Pro file's, a bass tab's), when its
-  address says so, is refused before anything is added or recorded: `tab
-  301 is not a chords or tabs page`.
+  sheet, chords or ukulele chords, or a text tab, by the offline index), and
+  beside its pins of the other kind: a text tab picked after a chords sheet
+  keeps the sheet you chose. A page of another type (a Guitar Pro file's, a
+  bass tab's), when its address says so, is refused before anything is added
+  or recorded: `tab 301 is not a chords, tabs or ukulele chords page`.
 - `--lacuerda URL` is the LaCuerda song to keep the sheet of, its page's
   address (its best Letra y Acordes version) or a version's
   (`https://acordes.lacuerda.net/estopa/como_camaron-2.shtml`): it is recorded
@@ -489,7 +508,9 @@ Ultimate Guitar keeps several chords versions of a song (Wonderwall has 13),
 and caracole keeps the three it scores against the lyrics: the best as
 `sheet.txt`, the title's, and the other two beside it as `version-<tab>.txt`
 (see [the library folder](#the-library-folder)). `caracole versions "ARTIST -
-TITLE"` lists them all, in caracole's order: the versions that cover the
+TITLE"` lists them all, in caracole's order (a song whose sheet is one of UG's
+Ukulele Chords, as it has no chords there, lists those: "2 Ukulele Chords
+versions on Ultimate Guitar"): the versions that cover the
 lyrics first, then by the rating weighed by its votes; those never scored
 after, by that rating; those Ultimate Guitar took down last. It only reads:
 no request, and no wait for another caracole.
@@ -673,12 +694,16 @@ With some songs listed:
 
 Caracole never searches Ultimate Guitar, whose robots.txt disallows its search
 page. It reads the sitemaps UG publishes for crawlers instead, and keeps a
-local index of every chords and text tabs page, well over a million. Tabs of
-the other types are counted and left out, Guitar Pro and Power Tab files among
-them: caracole uses none of UG's, so a song UG has only as one of those is not
-found there. `caracole index build` reads the sitemap index and its 41 tab sitemaps,
-one request at a time, 10–20 seconds apart: about 42 requests, 70 MB and 10
-minutes. Its budget is 100 requests, more than a night's, so one build is
+local index of every chords, text tabs and ukulele chords page, well over a
+million. Tabs of the other types are counted and left out, Guitar Pro and
+Power Tab files among them: caracole uses none of UG's, so a song UG has only
+as one of those is not found there. UG's "Ukulele Chords" (about 150,000
+pages, in their own sitemaps, `sitemap_ukulele1.xml` to `sitemap_ukulele4.xml`)
+are the same chord-over-lyrics sheets with ukulele shapes beside them: a song
+with no chords on UG takes its sheet from them (see [caracole
+fetch](#one-step-at-a-time)). `caracole index build` reads the sitemap index
+and its 45 tab sitemaps, one request at a time, 10–20 seconds apart: about 46
+requests, 80 MB and 12 minutes. Its budget is 100 requests, more than a night's, so one build is
 enough. A block or a spent budget keeps the sitemaps read so far, and the next
 refresh reads the rest. Until then the index is incomplete, and no song is
 matched against it: a song in a sitemap not read yet isn't missing from UG.
@@ -741,8 +766,9 @@ why, sums up what it read, and says how to resume and where. Blocked at the
     To resume, run `caracole index refresh` after 2026-10-20 22:54 UTC: it reads the 29 sitemaps left, sitemap13.xml to sitemap40.xml and sitemap_last.xml (30 requests, about 7 min). The nightly run does the same.
 
 **`caracole index build --from DIR`** builds the index offline, from sitemap
-files you already have: `sitemap1.xml` to `sitemap40.xml` and
-`sitemap_last.xml`, gzipped or not. It sends no requests. The 41 files take
+files you already have: `sitemap1.xml` to `sitemap40.xml`,
+`sitemap_ukulele1.xml` to `sitemap_ukulele4.xml` and `sitemap_last.xml`,
+gzipped or not. It sends no requests. The 41 files of guitar tabs take
 about 22 seconds and make a 303 MB database. It prints the same, with the
 files it found in place of the sitemap index. A file that isn't a sitemap
 stops it, exiting 1: the files before it are kept, and running it again reads
@@ -755,8 +781,10 @@ Sabina, Maná or 宋冬野. The to-do page asks you for those artists' pages onc
 or for any of their tab pages (see [the to-do page](#the-to-do-page)).
 
 **`caracole index refresh`** re-reads `sitemap_last`, the highest-numbered
-sitemap and any numbered one not indexed yet, whether new or left by a stopped
-build. These are conditional requests, which usually answer "unchanged". A
+sitemap of each kind (`sitemap40.xml`, `sitemap_ukulele4.xml`) and any tab
+sitemap not indexed yet, whether new, left by a stopped build, or one an older
+caracole didn't read: an index built before caracole kept ukulele chords reads
+the four ukulele sitemaps at its next refresh. These are conditional requests, which usually answer "unchanged". A
 new tab for a song you want marks that song to be fetched again. The nightly
 run does this; the command does it by hand. In the journal or piped, it
 prints a line for each sitemap that changed, then one line for it all (on a
@@ -885,9 +913,12 @@ configuration it would take, and why it waits.
    filed first, and that song gets none from gtptabs.com. As for the other
    sites, the summary counts the songs an error left for the next run on the
    cause's line; sitemaps it couldn't read get a line of their own.
-10. **musescore**: read MuseScore's song sitemaps into a local index, for the
+10. **harptabs**: keep a harmonica tab from harptabs.com for each song that has
+    none and a tab there by its artist (see [caracole
+    harptabs](#one-step-at-a-time)).
+11. **musescore**: read MuseScore's song sitemaps into a local index, for the
     to-do page's links to its pages. It downloads nothing.
-11. **youtube**: take the audio of a few songs no human sheet was found for from
+12. **youtube**: take the audio of a few songs no human sheet was found for from
     YouTube, for auto-chords (see [Audio from YouTube](#audio-from-youtube)).
     Skipped in a caracole without auto-chords.
 12. **render**: write ChordPro files and PDFs.
@@ -952,6 +983,13 @@ after 30 days, when each unchanged one costs a request. Then each song costs
 its artist's page, which serves every song by that artist for 30 days, and a
 download for its file.
 
+harptabs.com gets at most 20 requests a run, 10–20 seconds apart. The first run
+spends one on its sitemap, a single 6.4 MB file with no validators, read again
+after 30 days. Then a song costs the pages of the tabs titled as it is (only
+when the sitemap lists an artist by its artist's name), eight at most, each
+read once and cached for good: most songs cost one or two, a common title a few
+more.
+
 MuseScore gets at most 10 requests a run, 10–20 seconds apart, all for its song
 sitemaps: an index and 18 files of about 40,000 song pages each, read over two
 nights, the second going on where the first stopped, then again each month with
@@ -976,7 +1014,7 @@ and the next four after a third. A block in a command counts the same way,
 from when the command started, and sends one ntfy message too, titled as the
 run's ("caracole: Ultimate Guitar blocked"), its text the line the command
 prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
-`musescore` and `youtube` alike. So does a tab picked on caracole serve's review
+`harptabs`, `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
 lacuerda --artist`) sends none: it says so where you asked. A run, a command
 or a lookup the site answers without a block starts the count again; one the
@@ -989,7 +1027,7 @@ other error from a site marks a song not found or its lyrics missing: the
 song waits for the next run. An answer that won't read but was cached all the
 same (a maintenance notice served as a page, say) is asked for once more,
 past the cache, by the next run that needs it: from UG, LaCuerda,
-gtptabs.com and LRCLIB alike. Caracole never works around a block: no proxies,
+gtptabs.com, harptabs.com and LRCLIB alike. Caracole never works around a block: no proxies,
 no retries from elsewhere. A tab page UG keeps serving without its data is
 asked for again after 7 days, then twice as long each time, up to 90 days;
 meanwhile the song is filled from its other versions.
@@ -997,7 +1035,8 @@ meanwhile the song is filled from its other versions.
 Nor does caracole ask for a page robots.txt closes to bots, or follow a
 redirect to one: UG's search, download and print pages, and a few tab pages
 (`/tab/track/…`); gtptabs.com's search, its Russian copy of every page
-(`/ru/`) and each artist's "Download all" archive (`/storage/`); MuseScore's
+(`/ru/`) and each artist's "Download all" archive (`/storage/`); harptabs.com's
+search, its API and its pages' data for scripts (`/*?*_rsc=`); MuseScore's
 search, downloads, oEmbed endpoint and `/api/jmuse`, which serves a score's
 pages, audio and MIDI. A tab at such a page, or at a page UG redirects to one, is
 no candidate, and neither is a link in UG's data that isn't a valid address:
@@ -1044,6 +1083,15 @@ and cache.
   text is the sheet's very text gets no files: the sheet stands for it. A
   version you keep with [`caracole versions --keep`](#caracole-versions)
   stays kept whatever the ranking.
+  A song Ultimate Guitar has no chords for (none in the index, none on its
+  artist's page) takes its sheet from UG's Ukulele Chords versions, rated and
+  scored as chords are: the same chord-over-lyrics sheet with ukulele shapes,
+  its files labelled "Ukulele Chords" on the library page, its versions those
+  `caracole versions` lists. A song with chords keeps them, and its ukulele
+  versions are never read (the sheet viewer draws ukulele shapes on any
+  sheet); a chords version found later replaces a ukulele sheet. A chords
+  page that can't be read is no reason to take the ukulele one: the song waits.
+  A `[pin]` of a ukulele version makes it the sheet, as a chords pin does.
   Songs the index can't settle are looked up on their artist's UG page, when
   it is known, at most once in 30 days: songs not found, songs reviewed on
   their title alone (only other artists' songs of it) or on names that
@@ -1173,6 +1221,22 @@ and cache.
   that started asking for a login costs three requests. With gtptabs.com
   turned off it asks nothing and says so. A cooldown, a block or a spent
   budget exits 0.
+- **`caracole harptabs`** keeps a harmonica tab from harptabs.com for each song
+  that has none, newest songs first. It reads harptabs.com's one sitemap into a
+  local index when it never has, or last did 30 days ago: its tabs by title
+  (the address of a tab names its title alone, `/tab/25/piano-man`) and its
+  artists by name. It never uses the site's search or its API. A song is looked
+  up only when the sitemap lists a tab of its title and an artist of its
+  artist's name; then the pages of the tabs of that title are read, lowest id
+  first, eight at most, each for the artist it names, and of those by your
+  song's artist the most viewed is kept, as the song's `harmonica-N.txt`, the
+  page's tab as it is: hole numbers over the lyrics. A song none of whose tabs
+  is by its artist is asked about again after 30 days; a song with an error,
+  next run. It prints `harptabs.com: 2 tried, 1 harmonica tab kept, 1 not on
+  harptabs.com, 0 errors`, after `Index: 1 sitemap read.` when it read it. A
+  song that has a harmonica tab gets no other, and no file is ever replaced.
+  With harptabs.com turned off it asks nothing and says so. A cooldown, a block
+  or a spent budget exits 0.
 - **`caracole musescore`** reads MuseScore's song sitemaps into the local index
   the to-do page's MuseScore links come from, when it never has, or last did 30
   days ago; it asks for nothing else, and downloads nothing. It prints
@@ -1417,7 +1481,7 @@ rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync`, `autochords` and every `songbook`
 command but `list` and `show`; `review` when an
 answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
-`musescore` and `youtube` when they did something or were blocked, so that
+`harptabs`, `musescore` and `youtube` when they did something or were blocked, so that
 Provider health shows the cooldown (`youtube` also when it let go of audio no
 song needs any more, with nothing to download).
 A page caracole can't write ends the command with status 1 and
@@ -1428,7 +1492,7 @@ A page caracole can't write ends the command with status 1 and
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
 `get`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
-`musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
+`harptabs`, `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
 `search --add`, `autochords` and the `songbook` commands that change a songbook
 or render one. A
 second one waits for the first, and says which it is:
@@ -1460,7 +1524,7 @@ sends no request lets a lookup go first between two songs:
 the PDF pass of the run and of `caracole render`, which reads each song and
 overrides.toml again after it, and makes the songbooks and the pages from
 overrides.toml as the lookup left it. `caracole fetch`, `lyrics`, `lacuerda`,
-`gtptabs`, `musescore`, `youtube` and `icons` let a lookup go first in their
+`gtptabs`, `harptabs`, `musescore`, `youtube` and `icons` let a lookup go first in their
 pauses as the run does, and make the pages they write at their end from
 overrides.toml as the lookup left it too. The waiting lookup announces itself with a file
 in `caracole.lock.waiting/` in the state folder, which it touches every second
@@ -1710,9 +1774,9 @@ when it has something in it:
   read; for a wanted.txt it couldn't read at all, the error, as
   `wanted.txt: error at <time>: …`; before it exists, how to create it.
 - **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda, gtptabs.com,
-  MuseScore and YouTube: OK, errors (nothing has worked since the last error),
+  MuseScore, harptabs.com and YouTube: OK, errors (nothing has worked since the last error),
   cooling down until when, or off (`[providers.gtptabs] enabled = false`, and
-  the same for `musescore` and `youtube`; for YouTube also `off:` and why, as in
+  the same for `musescore`, `harptabs` and `youtube`; for YouTube also `off:` and why, as in
   a caracole without auto-chords); the last success; the last error; the
   requests of the last run (for YouTube, its yt-dlp runs).
 
@@ -1866,8 +1930,10 @@ since has it once the page is loaded again); and, served, **Fetch again**
 (below), **Use LaCuerda's sheet**, Look in the index and Remove…. When Fetch now has the line's button,
 the sheet is the first of its files there, and its title opens it all the same.
 A Guitar Pro file caracole downloaded names its site, as `Guitar Pro 1 ·
-gtptabs.com`, and a score its format, as `Score 1 (MuseScore)`; a score's PDF
-is never what a line opens, which is the sheet.
+gtptabs.com`, a harmonica tab its site, as `Harmonica tab 1 · harptabs.com`,
+and a score its format, as `Score 1 (MuseScore)`; a score's PDF is never what a
+line opens, which is the sheet. A sheet from Ultimate Guitar's Ukulele Chords
+(a song UG has no chords for) says so: `Sheet viewer · Ukulele Chords`.
 
 An artist's name, over their songs and marked with a funnel, shows only that
 artist's songs ("Queen" leaves out ABBA's "Dancing Queen"), until you take its
@@ -2402,7 +2468,7 @@ opens the file directly, works.
 ### Where each file came from
 
 Each source has a mark: the site's own icon for Ultimate Guitar, LaCuerda,
-LRCLIB (lyrics), gtptabs.com, MuseScore and YouTube, a ♪ for a sheet the
+LRCLIB (lyrics), gtptabs.com, MuseScore, harptabs.com and YouTube, a ♪ for a sheet the
 audio model wrote (auto-chords) from audio you bought, YouTube's for one it
 wrote from the audio caracole took from YouTube, and a ↓ for a file you filed
 from `_inbox/`.
@@ -2484,8 +2550,8 @@ offline Ultimate Guitar index and LaCuerda's (see below):
   `caracole add` brings it back, it is in your library and not in this group.
 
 - **On Ultimate Guitar**: numbered hits from the offline index, each tagged
-  `[UG]`, with its tabs per type (chords and text tabs, the types the index
-  keeps), one of its pages, and the `caracole add` line to paste. The UG artist pages caracole has read (see
+  `[UG]`, with its tabs per type (chords, text tabs and ukulele chords, the
+  types the index keeps), one of its pages, and the `caracole add` line to paste. The UG artist pages caracole has read (see
   [caracole fetch](#one-step-at-a-time)) are searched too: every tab each one
   listed, bare ids included, which UG's sitemaps list without names. Their
   names are compared in each script UG writes them in ("Song Dongye (宋冬野)"
@@ -2859,8 +2925,17 @@ Who can reach it, below).
   you typed less an artist's name before or after it, when that artist has a
   song of that title in the Ultimate Guitar index, gtptabs.com's or your
   library ("oasis wonderwall" finds the Wonderwall pages, and "oasis live
-  forever" never a page titled Oasis or Forever), each a possible match. The
-  results follow what you type; a search typed over stops at once, and only
+  forever" never a page titled Oasis or Forever), each a possible match.
+  **harptabs.com**'s harmonica tabs come after them, the same way: its sitemap
+  names a tab's title alone (none while harptabs.com is turned off).
+  **Instruments.** A row for one instrument says which, in an outlined badge
+  beside its marks: **Ukulele** for an Ultimate Guitar song that has Ukulele
+  Chords (its counts say "ukulele chords ×2"), **Harmonica** for a tab of
+  harptabs.com, **Score** for a MuseScore page; and a song of yours says what it
+  holds for one (a ukulele sheet, a harmonica tab, a score you filed), on the
+  library page's lines and the lookup page's rows alike. Nothing is left out for
+  an instrument: every chord sheet is listed as always, with no badge, as a
+  chord sheet is every instrument's. The results follow what you type; a search typed over stops at once, and only
   the newest query's answer is shown, the older one staying until then. Only
   your own typing stops a search: two people searching at the same moment (on
   two phones, or the library page and the lookup page) each wait their turn
@@ -3175,7 +3250,8 @@ Who can reach it, below).
     Song, Match UG (or Match: not on UG, plain), Sheet (Sheet UG or Sheet
     LaCuerda once it asks a site, then where the sheet came from), PDF,
     Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
-    tab, LaCuerda's sheet and gtptabs.com's Guitar Pro file) and Songbooks,
+    tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's
+    harmonica tab) and Songbooks,
     the same chips the library page draws under a song's line, leaving out a
     step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
@@ -3981,6 +4057,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       lyrics.lrc            the timed lyrics, when LRCLIB has them
       guitar-1.gp5          Guitar Pro or Power Tab files: filed from _inbox/, or from gtptabs.com
       score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed
+      harmonica-1.txt       a harmonica tab from harptabs.com: hole numbers over the lyrics
       tab.txt  tab.json     the best text tab
       sheet (auto).txt      made from audio you bought, or caracole took from YouTube,
       sheet (auto).cho      when no human sheet exists; it stays, with its ChordPro,
