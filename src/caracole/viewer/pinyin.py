@@ -35,10 +35,16 @@ def readings(lines: list[str]) -> list[list[str] | None] | None:
     """For each of a sheet's ``lines`` (each line's words whole), each character's reading, "" for one with
     none (a letter, a digit, a space, punctuation), or None for a line with no Chinese; None for a sheet whose
     lines have none at all, or have kana (Japanese)."""
-    if not any(has_han(line) for line in lines) or any(_KANA.search(line) for line in lines):
+    if not is_chinese(lines):
         return None
     traditional = any(simplified(line) != line for line in lines)
     return [_read(line, traditional) if has_han(line) else None for line in lines]
+
+
+def is_chinese(lines: list[str]) -> bool:
+    """Whether a sheet's ``lines`` are Chinese: some have Chinese characters, and none has kana (Japanese). The
+    viewer's rule for its Pinyin and its Chinese characters (hanzi.py), and its PDFs' (render.py)."""
+    return any(has_han(line) for line in lines) and not any(_KANA.search(line) for line in lines)
 
 
 def _read(line: str, traditional: bool) -> list[str]:

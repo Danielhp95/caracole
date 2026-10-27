@@ -228,7 +228,12 @@ Rules a change there keeps (the Invariants below are the others):
   `simplified` and `traditional` by the text (a sheet is written in the script most of its own characters are, and
   shows as written in it: a Traditional sheet's Simplified is `tw2s`'s, a Simplified one's Traditional `s2tw`'s),
   each a character for a character (one of another length made again a character at a time), which viewer.js cuts
-  where the page cut the text, each reading over the character shown (test_viewer_hanzi.py). So is the Instrument (`state.inst`, the guitar at first: localStorage
+  where the page cut the text, each reading over the character shown; and the song's title, its artist's name and
+  the page's title, each judged alone (`hanzi.names`), in a `song-names` block on a page whose sheet is Chinese
+  (page.py `names_table`, `is_chinese`), each element that shows one marked with it as written (`zh_attr`,
+  `data-zh`): sheet.html's and a version's header, a songbook's contents, pagers and headings (book.js draws them
+  on its contents, viewer.js on a song), a harmonica tab's page's heading (harptab.js reads the choice kept, no
+  row) (test_viewer_hanzi.py). So is the Instrument (`state.inst`, the guitar at first: localStorage
   `caracole-viewer-instrument`, `inst=` in the address while it is another, which `carryScreen` takes on
   too; a songbook song's own version may name one, where it starts), which never moves the song: every
   instrument's shapes are instruments.py's, per root in the data's `voicings` (viewer.js looks them up),

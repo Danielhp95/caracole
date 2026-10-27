@@ -13,7 +13,9 @@ on its own, otherwise in Simplified) than Simplified's alone. Its Simplified is 
 from Traditional (``t2s``), which leaves Simplified as written and changes a stray Traditional character. A Simplified
 sheet's Traditional is Taiwan's standard (``s2tw``: 為, 裡, 著); a Traditional sheet's is as written, as converting
 into Traditional changes some Traditional texts (是只會 is 是隻會, 鄰里 鄰裡). A text the same in either script, or
-with no Chinese, has none.
+with no Chinese, has none. A song's title and its artist's name are each judged alone (``names``), as a title from
+wanted.txt may be written in the other script than its sheet. Only Chinese characters change: whatever else a text
+holds (a chord, a letter, punctuation) stays as written.
 
 A conversion keeps a text's length, a character for a character, as each of OpenCC's phrases is as long as what it
 becomes: the viewer cuts it where the page cut the text (into its columns, under its chords), and each reading of the
@@ -33,12 +35,22 @@ from functools import cache
 from caracole.normalize import has_han
 
 
+def names(texts: list[str]) -> dict[str, dict[str, str]]:
+    """``scripts`` of each of ``texts`` alone: a song's title and its artist's name, each written in the script most
+    of its own characters are, which may be the other one than its sheet's (a title from wanted.txt)."""
+    shown: dict[str, dict[str, str]] = {"simplified": {}, "traditional": {}}
+    for text in dict.fromkeys(texts):
+        for script, table in scripts([text]).items():
+            shown[script].update(table)
+    return shown
+
+
 def scripts(texts: list[str]) -> dict[str, dict[str, str]]:
     """For a sheet's ``texts`` (each as its page writes it: a line's words whole, a section's label, a tab), each
     text with Chinese in Simplified characters (``simplified``) and in Traditional ones (``traditional``), where
     that isn't the text as written, each as long as its text."""
     chinese = [text for text in dict.fromkeys(texts) if has_han(text)]
-    traditional = _written_in_traditional(chinese)
+    traditional = written_in_traditional(chinese)
     shown: dict[str, dict[str, str]] = {"simplified": {}, "traditional": {}}
     for script, config in (("simplified", "tw2s" if traditional else "t2s"),
                            ("traditional", None if traditional else "s2tw")):
@@ -50,7 +62,7 @@ def scripts(texts: list[str]) -> dict[str, dict[str, str]]:
     return shown
 
 
-def _written_in_traditional(texts: list[str]) -> bool:
+def written_in_traditional(texts: list[str]) -> bool:
     """Whether more of ``texts``' characters are Traditional's alone than Simplified's alone, each read on its own."""
     characters = [c for text in texts for c in text if has_han(c)]
     alone = {c: (_converted("t2s", c) != c, _converted("s2tw", c) != c) for c in set(characters)}
@@ -58,12 +70,13 @@ def _written_in_traditional(texts: list[str]) -> bool:
 
 
 def _converted(config: str, text: str) -> str:
-    """``text`` as OpenCC's ``config`` converts it, as long as it is."""
+    """``text`` as OpenCC's ``config`` converts it, as long as it is, its Chinese characters alone: whatever else
+    it holds (letters, a chord, punctuation) stays as written."""
     convert = _converter(config)
     whole = convert(text)
-    if len(whole) == len(text):
-        return whole
-    return "".join(one if len(one := convert(c)) == 1 else c for c in text)
+    if len(whole) != len(text):
+        whole = "".join(one if len(one := convert(c)) == 1 else c for c in text)
+    return "".join(after if has_han(before) else before for before, after in zip(text, whole))
 
 
 @cache

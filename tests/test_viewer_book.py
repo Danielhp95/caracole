@@ -63,7 +63,7 @@ def sha(text: str) -> str:
 def test_the_contents_list_every_song_in_order_and_name_the_missing_ones():
     html = page()
     toc = contents(html)
-    titles = re.findall(r'<span class="t">([^<]*)</span>', toc)
+    titles = re.findall(r'<span class="t"(?: data-zh="[^"]*")?>([^<]*)</span>', toc)  # a Chinese song's marked
     assert titles == ["Synthetic Test Song", "Hysteria", "Minor Song", "Removed Song", "斑马斑马"]
     assert re.findall(r'<a class="row" href="#song-(\d+)"', toc) == ["1", "3", "5"]
     missing = re.findall(r'<li class="missing">(.*?)</li>', toc, re.DOTALL)
@@ -155,8 +155,8 @@ def test_the_pager_names_the_song_before_and_the_song_after():
 def toc_rows(html: str) -> list[str]:
     """Each row of the contents as a reader sees it, its parts apart: number, title, the line under it."""
     rows = re.findall(r"<li[^>]*>(.*?)</li>", contents(html), re.DOTALL)
-    return [" | ".join(seen(part) for part in re.findall(r'<span class="(?:n|t|a|why)">(.*?)</span>(?=<span|</a>|</span>)',
-                                                       row)) for row in rows]
+    part = r'<span class="(?:n|t|a|why)"(?: data-zh="[^"]*")?>(.*?)</span>(?=<span|</a>|</span>)'  # a name marked
+    return [" | ".join(seen(found) for found in re.findall(part, row)) for row in rows]
 
 
 def test_the_contents_give_each_songs_key_and_capo_under_its_title():

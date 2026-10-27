@@ -2649,7 +2649,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Traditional characters shows in Simplified ones until you choose Traditional,
   and a sheet in Simplified ones shows in Traditional ones (Taiwan's: 為, 裡, 著)
   once you do: its lines, the notes before the song and the sections' headings,
-  never the title. Each text is converted when the page is made, word by word
+  and the song's title and its artist's name, each of those judged in its own
+  script (a title from wanted.txt may be in the other one), in the browser's tab
+  too. A songbook's contents and its Next and Previous follow it for each of its
+  Chinese songs, and so does the heading of a song's harmonica tab's page, which
+  has no row of its own: it reads the choice the browser keeps, or `trad=1` in
+  its address. A Chinese title over lyrics in no Chinese (or a Japanese sheet's
+  kanji) stays as written. Each text is converted when the page is made, word by word
   (by OpenCC, as one Simplified character may be two Traditional ones: 头发 is
   頭髮, 发现 發現; 睡著 is 睡着, 著名 stays), a character for a character, so each
   chord stays over its character and each reading of the Pinyin over its own.

@@ -1275,8 +1275,29 @@
     });
     if (unit.line) unit.line.classList.toggle("py", rubies);  // its columns keep the readings' room (viewer.css)
   };
+  // The song's names (its title, its artist's, the page's title; in a songbook, every Chinese song's, in its pagers
+  // too) follow the choice, on any song: page.py's song-names block (book.py's), by each name as written (data-zh).
+  const songNames = (() => {
+    try {
+      const found = JSON.parse($("song-names") ? $("song-names").textContent : "null");
+      return found && typeof found === "object" ? found : null;
+    } catch (err) { return null; }
+  })();
+  let namesDrawn = null;  // as the page wrote them
+  const drawNamesShown = () => {
+    if (!songNames || namesDrawn === state.trad) return;
+    namesDrawn = state.trad;
+    const table = songNames[state.trad ? "traditional" : "simplified"];
+    for (const el of document.querySelectorAll("[data-zh]")) {
+      const written = el.getAttribute("data-zh");
+      const shown = table && typeof table === "object" && own.call(table, written) && typeof table[written] === "string"
+        ? table[written] : written;
+      if (el.textContent !== shown) el.textContent = shown;
+    }
+  };
   let wordsDrawn = "";  // as the page wrote them
   function drawWords() {
+    drawNamesShown();
     if (pyChip) {
       $("pinyin-row").hidden = !pyCan;
       pyChip.setAttribute("aria-pressed", state.py ? "true" : "false");

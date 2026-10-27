@@ -14,7 +14,9 @@ The header names the harp the page starts on and why (harpfit.py ``choose``: wit
 harptabs.com's key, for the song's key, or the usual C harp), and the position it plays the song in when the song's
 sheet has a key. The bar at the foot is the viewer's (Aa, ▶ scrolling by itself with its pill), with the harp a
 semitone down or up in place of the transposition (the holes stay: the sound and the notes' names change) and ♪,
-Notes, each hole's note on that harp in its place. A tap on a hole sounds it (strum.js's reed voice); ▶ at a line's
+Notes, each hole's note on that harp in its place. The song's title and its artist's name follow the sheet viewer's
+Chinese characters where its chord sheet is Chinese (page.py ``names_table``: a ``song-names`` block), read from
+the browser's storage or ``trad=1`` in the address, with no row of the page's own. A tap on a hole sounds it (strum.js's reed voice); ▶ at a line's
 end plays it hole by hole, a hole a beat, lighting each (``caracoleSound.play``). ‹ Chord sheet goes back to the
 song's viewer (‹ Library for a song with none), and the tab's text is a tap away at the foot.
 
@@ -68,8 +70,11 @@ from caracole.viewer.page import (
     _sound,
     _words,
     artist_line,
+    is_chinese,
+    names_table,
     shapes_of,
     viewer_key,
+    zh_attr,
 )
 from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import Chord, Key, key_name, parse_chord, sounding, spelling
@@ -115,7 +120,10 @@ def build_harmonica_viewer(
     choice = harpfit.choose(tab, cho=cho, key=key, key_source=key_source, page_key=page_key)
     data = _data(tab, choice)
     data["overlay"] = _overlay_data(choice, cho, key, key_source)
-    head = _header(title, artist, tab, choice, facts or {}, back)
+    page_title = f"{title or 'Untitled'} · harmonica tab"
+    # The song's names in the characters its viewer shows its Chinese in, for a song whose sheet is Chinese
+    names = names_table(cho is not None and is_chinese(cho), [title or "Untitled", artist, page_title])
+    head = _header(title, artist, tab, choice, facts or {}, back, names)
     article = _tab_html(tab, data) if tab.readable else _raw_html(text)
     style, _ = _assets()
     own_style, script = _own_assets()
@@ -129,9 +137,9 @@ def build_harmonica_viewer(
         + (_BAR if tab.readable else _BAR_RAW)
         + _PILL
         + json_block("harp-data", data)
+        + (json_block("song-names", names) if names else "")
     )
-    return _page(f"{title or 'Untitled'} · harmonica tab", body, styles=(style, own_style),
-                 scripts=(_sound(), _overlay(), script))
+    return _page(page_title, body, styles=(style, own_style), scripts=(_sound(), _overlay(), script), names=names)
 
 
 # --- the data ----------------------------------------------------------------------------------------------------
@@ -227,14 +235,14 @@ def _a(name: str) -> str:
 
 
 def _header(title: str, artist: str, tab: Tab, choice: harpfit.Choice, facts: Mapping[str, Any],
-            back: str | None) -> str:
+            back: str | None, names: dict[str, dict[str, str]] | None = None) -> str:
     link = (f'<a class="back" href="{escape(quote(back))}">‹ Chord sheet</a>\n' if back
             else f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n')
     return (
         '<header class="head">\n'
         + link
-        + f"<h1>{escape(title or 'Untitled')}</h1>\n"
-        + artist_line(artist)
+        + f"<h1{zh_attr(title or 'Untitled', names)}>{escape(title or 'Untitled')}</h1>\n"
+        + artist_line(artist, names)
         + (_harp_lines(choice) if tab.readable else
            '<p class="facts" id="facts">Harmonica tab, as its tabber wrote it: caracole can\'t read its notation.</p>\n')
         + (_legend(facts) if tab.readable else "")
