@@ -4078,7 +4078,8 @@ song's chip sets where it plays.
   `In the songbook: A Minor, ukulele`). On an instrument with no capo the key
   is the key the song sounds in, with no capo taken from where it plays now
   (`--key B --instrument piano`: `B Minor, piano`); `--instrument guitar` plays
-  it on the guitar even where its own version is on another. The parts you
+  it on the guitar even where its own version is on another, and its phone
+  page opens it on the guitar whatever instrument you keep. The parts you
   give change; the others stay. A key or a mode
   given with no capo keeps the capo the song plays at now, and the setting
   names it (`key G, dorian, no capo`). It says where the songbook plays the

@@ -956,7 +956,7 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
 
     present = {name for name in (PDF_NAME, CHO_NAME) if _holds(folder / name, record["files"].get(name))}
     book_songs = [BookSong(e.title, e.artist, cho=e.cho, key=e.key, key_source=e.key_source, transpose=e.transpose,
-                           missing=e.missing, id=_song_id(e), start=_start(e.version)) for e in entries]
+                           missing=e.missing, id=_song_id(e), start=_start(e)) for e in entries]
     page_inputs = {"name": book.name, "songs": [list(vars(s).values()) for s in book_songs],
                    "files": sorted(present), "assets": assets_version()}
 
@@ -972,10 +972,16 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
     make(HTML_NAME, page_inputs, page)
 
 
-def _start(version: Version) -> str | None:
-    """The version as the viewer's address writes it, where the phone page starts the song (``export_query``);
-    None for one that only moves it, where its ``transpose`` starts it."""
-    return None if version == Version(t=version.t) else export_query(version)
+def _start(entry: Entry) -> str | None:
+    """Where the phone page starts the song: its version as the viewer's address writes it (``export_query``), None
+    for one that only moves it, where its ``transpose`` starts it. A setting that names the guitar, which a version
+    holds as no instrument, names it there too (``inst=guitar``), so the song opens on the guitar its PDF draws,
+    whatever instrument the player keeps."""
+    version = entry.version
+    on_guitar = entry.setting is not None and entry.setting.instrument is not None and version.inst is None
+    if version == Version(t=version.t) and not on_guitar:
+        return None
+    return export_query(version) + ("&inst=guitar" if on_guitar else "")
 
 
 def _song_id(entry: Entry) -> str:

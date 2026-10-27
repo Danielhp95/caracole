@@ -1195,6 +1195,9 @@ def test_a_song_on_an_instrument_with_no_capo_plays_the_key_it_sounds_in(conn, c
     own = overrides(cfg, f'[version]\n"{WONDERWALL}" = "key=Em&capo=2&inst=harmonica"\n')
     (entry,) = entries_of(conn, cfg, own)
     assert plays_in(entry) == "E Minor, capo 2"
+    # and its phone page opens it there, named, so the player's own instrument doesn't win, as the PDF draws it
+    render(conn, cfg, own)
+    assert page_data(cfg, 1)["start"] == "t=0&capo=2&inst=guitar"
     set_setting(cfg, WONDERWALL, None)
     (entry,) = entries_of(conn, cfg, own)
     assert plays_in(entry) == "F# Minor, harmonica"  # the own version's instrument
