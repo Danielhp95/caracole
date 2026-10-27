@@ -33,7 +33,9 @@
   const table = data.fold && typeof data.fold === "object" ? data.fold : {};
   const own = Object.prototype.hasOwnProperty;
   const listOf = (value) => (Array.isArray(value) ? value : []);
-  // Served by caracole serve: its forms' token, and the songs it is fetching already.
+  // Served by caracole serve: its forms' token, and the songs it is fetching already. The one place the page tells
+  // the two apart: the file on disk has no ``server``, and nor has caracole's Android app's offline copy, which is
+  // that file (web/offline_routes.py), so both ask nothing of anyone, wherever they are opened.
   const server = data.server && typeof data.server === "object" ? data.server : null;
   const busy = new Set(listOf(server && server.busy).map(Number));
   const removing = new Set(listOf(server && server.removing).map(Number));
