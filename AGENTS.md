@@ -244,8 +244,9 @@ Rules a change there keeps (the Invariants below are the others):
   `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
   shows is status.py's, read from the job's steps and the song's state, never from which commands
   ran: a step's label is that line while it runs ("Adding to the library…"). The requests page
-  (/jobs) says that line its own way (outcome.py), and the library page's lines never read it: the
-  running request's steps, a finished one's outcome, a reason from its stages and its song's state
+  (/jobs) says that line its own way (outcome.py), and the library page's lines read only its steps
+  (`outcome.progress`: a lookup's chips under its line while it runs, kept when it ends otherwise than
+  Ready), never the rest: a finished one's outcome, a reason from its stages and its song's state
   (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step; Cancel takes a request that hasn't started out of the
   queue (`JobQueue.cancel`, never one that runs, with the jobs `submit_all` queued `together` with
