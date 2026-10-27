@@ -39,6 +39,18 @@
   const songs = Array.isArray(data.songs) ? data.songs : [];
   const table = data.fold && typeof data.fold === "object" ? data.fold : {};
   const own = Object.prototype.hasOwnProperty;
+  // A Chinese song's title and its artist's name in the characters the sheet viewer shows Chinese in: the choice it
+  // keeps for every page (localStorage), Simplified when there is none to read; each card's hanzi
+  // (library_page.py), by the name. Searching is the same either way: it folds the two scripts.
+  let traditional = false;
+  try {
+    traditional = localStorage.getItem("caracole-viewer-hanzi") === "traditional";
+  } catch (err) { /* no storage: Simplified, as the viewer starts */ }
+  const shownName = (s, text) => {
+    const names = s && s.hanzi && typeof s.hanzi === "object" ? s.hanzi[traditional ? "traditional" : "simplified"]
+      : null;
+    return names && typeof names === "object" && own.call(names, String(text)) ? String(names[String(text)]) : text;
+  };
   const listOf = (value) => (Array.isArray(value) ? value : []);
   // Served by caracole serve: its forms' token, and the songs it is fetching already. The one place the page tells
   // the two apart: the file on disk has no ``server``, and nor has caracole's Android app's offline copy, which is
@@ -1113,9 +1125,9 @@
     const status = statusOf(s);
     const line = resultRow({
       dense: true,
-      title: s.title,
+      title: shownName(s, s.title),
       href: primary ? primary.href : "",
-      artist: artists.length > 1 ? artists.join(", ") : s.artist,  // shown where no group names it
+      artist: artists.length > 1 ? artists.join(", ") : shownName(s, s.artist),  // shown where no group names it
       holds: holdingsOf(s),  // its glyphs, in place of where each came from: the card says that
       status: s.status,
       key: keyed ? s.key : "",
@@ -1477,7 +1489,8 @@
       }
       const groups = el("div", "groups");
       for (const { key, items } of runs) {
-        const group = artistGroup({ key, name: String(songs[items[0]].artist) }, items.map(lineOf),
+        const head = songs[items[0]];
+        const group = artistGroup({ key, name: String(shownName(head, head.artist)) }, items.map(lineOf),
           { mine: yours.get(key) || 0 });
         first(String(songs[items[0]].artistLetter || "#"), group);
         groups.appendChild(group);
@@ -2328,7 +2341,8 @@
       const ug = (g.model && g.model.ug) || {};  // the artists the query names there, if any
       const lc = (g.model && g.model.lacuerda) || {};
       const ht = (g.model && g.model.harptabs) || {};
-      const section = artistGroup({ key, name: you ? you.artist : g.model.name, filter: you ? you.sortArtist : "" },
+      const section = artistGroup({ key, name: you ? shownName(you, you.artist) : g.model.name,
+        filter: you ? you.sortArtist : "" },
         [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
           gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0), harptabs: ht.songs });
       if (tail) section.appendChild(tail);

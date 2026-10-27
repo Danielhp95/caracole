@@ -233,7 +233,9 @@ Rules a change there keeps (the Invariants below are the others):
   (page.py `names_table`, `is_chinese`), each element that shows one marked with it as written (`zh_attr`,
   `data-zh`): sheet.html's and a version's header, a songbook's contents, pagers and headings (book.js draws them
   on its contents, viewer.js on a song), a harmonica tab's page's heading (harptab.js reads the choice kept, no
-  row) (test_viewer_hanzi.py). So is the Instrument (`state.inst`, the guitar at first: localStorage
+  row); the library page's lines and artist headers, by each card's `hanzi` (library_page.py, a song whose sheet's PDF
+  record names its `script`: `render.chinese_songs`), library.js reading the choice kept (test_viewer_hanzi.py,
+  test_library_page_hanzi.py). So is the Instrument (`state.inst`, the guitar at first: localStorage
   `caracole-viewer-instrument`, `inst=` in the address while it is another, which `carryScreen` takes on
   too; a songbook song's own version may name one, where it starts, and the songs after it on the player's (the one
   it came with, or the last chosen there by hand: book.js `player`), which never moves the song: every

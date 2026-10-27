@@ -1477,6 +1477,15 @@ def _render_sheet_pdf(
     return _Done("rendered")
 
 
+def chinese_songs(conn: sqlite3.Connection) -> set[int]:
+    """The songs whose sheet's PDF (their human sheet's, else their auto sheet's) is a Chinese sheet's: its record
+    names the characters it is in (``script``). The library page shows their names in the characters the viewer
+    shows Chinese in (library_page.py), as their viewers do; another song's are as written."""
+    rows = conn.execute("SELECT key FROM kv WHERE key GLOB 'render:[0-9]*' AND key NOT GLOB 'render:*:*' "
+                        "AND json_valid(value) AND json_type(value, '$.script') = 'text'")
+    return {int(key.removeprefix("render:")) for (key,) in rows if key.removeprefix("render:").isdigit()}
+
+
 def _in_script(printed: str, written: str | None, script: str) -> str:
     """A PDF's text ``printed`` with its Chinese in ``script``'s characters, as its sheet's viewer shows it there
     (``hanzi.chordpro``), its sheet written in ``written`` (``page.written_script``); as it is for a sheet in no

@@ -2026,7 +2026,8 @@ the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ 
 in use`, `LaCuerda`, `from the recording`); its versions, a chip a source with
 how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
 one source with one version, `From` it; and its formats, downloads: the sheet's
-PDF, Text and ChordPro, then its PDF exports, each by its version (`PDF · G
+PDF (and a Chinese sheet's in Traditional characters, `PDF, Traditional`), Text
+and ChordPro, then its PDF exports, each by its version (`PDF · G
 Dorian, capo 0`: see `caracole render --version` and Export PDF of this
 version); a Guitar Pro file's, and the text tab; the lyrics' Text and Timed
 (.lrc); each score's format. A tile with more than one version is drawn as a
@@ -2676,7 +2677,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   script it shows as written. OpenCC is not always right (我是只会 comes out as
   我是隻會 in Traditional), so a sheet UG has in either script reads best in its
   own. Kept as Pinyin is: once for every sheet and songbook, and in the address
-  (`trad=1`) while it is Traditional. The PDFs follow it too: a Chinese
+  (`trad=1`) while it is Traditional. The library page shows a Chinese song's
+  title and artist in the characters the browser keeps from the viewer
+  (Simplified where it keeps none: a page `caracole serve` serves keeps
+  nothing, as its viewers are sandboxed); searching finds either. The PDFs follow it too: a Chinese
   sheet's `sheet.pdf` is in Simplified characters (a sheet in Traditional ones
   is converted, word by word, as the viewer converts it, at the next render: its
   record names the characters it is in, and its text printed changes), and

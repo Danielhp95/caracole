@@ -62,7 +62,8 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 # A songbook's files, as its tab links them: the PDF, the page for the phone, the ChordPro file.
-FILES = (("songbook.pdf", "PDF"), ("songbook.html", "Phone page"), ("songbook.cho", "ChordPro"))
+FILES = (("songbook.pdf", "PDF"), ("songbook (Traditional).pdf", "PDF, Traditional"), ("songbook.html", "Phone page"),
+         ("songbook.cho", "ChordPro"))
 
 
 def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) -> dict[str, Any]:
