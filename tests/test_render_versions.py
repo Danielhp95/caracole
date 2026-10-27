@@ -131,6 +131,23 @@ def test_a_version_page_takes_its_own_key_and_links_no_pdf(conn, cfg):
     assert "sheet.pdf" not in (folder / version_names(str(B))[2]).read_text("utf-8")
 
 
+def test_a_version_page_shows_its_own_chinese_in_either_script(conn, cfg):
+    # UG has 斑马斑马 in Simplified characters and in Traditional ones: each page carries its own words converted,
+    # a Simplified sheet's into Traditional, a Traditional version's into Simplified (test_viewer_hanzi.py).
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    for tab, number, words, names in ((SHEET_TAB, 1, "斑马斑马 你不要睡着啦", ("sheet.txt", "sheet.json")),
+                                      (B, 2, "斑馬斑馬 你不要睡著啦", version_names(str(B))[:2])):
+        vid, raw = ug_version(conn, song, tab, rating=4.9 - number / 10, votes=40, number=number)
+        keep_text(conn, cfg, song, vid, raw, f"[Verse]\r\n[tab][ch]C[/ch]    [ch]D[/ch]\r\n{words}[/tab]\r\n", names,
+                  number)
+    render(conn, cfg)
+    folder = folder_of(cfg, song)
+    assert page_data(folder / "sheet.html")["hanzi"] == {
+        "simplified": {}, "traditional": {"斑马斑马 你不要睡着啦": "斑馬斑馬 你不要睡著啦"}}
+    assert page_data(folder / version_names(str(B))[2])["hanzi"] == {
+        "simplified": {"斑馬斑馬 你不要睡著啦": "斑马斑马 你不要睡着啦"}, "traditional": {}}
+
+
 def test_a_tabs_key_named_by_its_letter_alone_over_minor_chords_is_minor_on_the_sheet_and_a_versions_page(conn, cfg):
     # UG's Hotel California: tonality "A", capo 2, Am E7 G D F C Dm E. A minor shapes, sounding B minor.
     song = add_song(conn, "Placeholder Band", "Synthetic Hotel")

@@ -106,6 +106,7 @@ python3Packages.buildPythonApplication (finalAttrs: {
       mutagen
       tomlkit
       pypinyin
+      opencc
     ]
     ++ lib.optionals withAutochords finalAttrs.passthru.optional-dependencies.autochords;
 

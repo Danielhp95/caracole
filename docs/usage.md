@@ -2641,7 +2641,24 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset everything, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
-  the viewer starts them, shows the rail of necks again and hides the pinyin.
+  the viewer starts them, shows the rail of necks again, hides the pinyin and
+  shows the Chinese in Simplified characters.
+- **Simplified 简体 · Traditional 繁體**, right above Pinyin in the settings of a
+  sheet with Chinese lyrics: the characters the sheet's Chinese is shown in,
+  Simplified as the viewer starts, whichever the sheet is written in. A sheet in
+  Traditional characters shows in Simplified ones until you choose Traditional,
+  and a sheet in Simplified ones shows in Traditional ones (Taiwan's: 為, 裡, 著)
+  once you do: its lines, the notes before the song and the sections' headings,
+  never the title. Each text is converted when the page is made, word by word
+  (by OpenCC, as one Simplified character may be two Traditional ones: 头发 is
+  頭髮, 发现 發現; 睡著 is 睡着, 著名 stays), a character for a character, so each
+  chord stays over its character and each reading of the Pinyin over its own.
+  A sheet is written in the script most of its own characters are; in that
+  script it shows as written. OpenCC is not always right (我是只会 comes out as
+  我是隻會 in Traditional), so a sheet UG has in either script reads best in its
+  own. Kept as Pinyin is: once for every sheet and songbook, and in the address
+  (`trad=1`) while it is Traditional. The PDFs and the library page show the
+  sheet as written.
 - **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
   each Chinese character's reading over it, in pinyin with its tone marks
   (zhǐ), smaller and muted, between its chord and it; off, as the viewer starts,
@@ -2694,7 +2711,8 @@ named otherwise when the page opens (an address with another key, mode or
 capo), or on another instrument, starts at its first shape. It keeps the transposition, the mode, the
 capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
-(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the instrument
+(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the Chinese in
+Traditional characters (`trad=1`, kept so too), the instrument
 (`inst=piano`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
