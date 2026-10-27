@@ -226,6 +226,8 @@ class MainActivity : Activity() {
         backRegistered = want
     }
 
+    // Android 8 to 12 alone: from 13 the manifest's enableOnBackInvokedCallback sends Back to backCallback's.
+    @SuppressLint("GestureBackNavigation")
     @Deprecated("Android 13 and later use backCallback")
     override fun onBackPressed() {
         if (web.canGoBack()) web.goBack() else @Suppress("DEPRECATION") super.onBackPressed()

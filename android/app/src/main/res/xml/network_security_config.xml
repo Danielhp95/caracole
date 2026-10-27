@@ -2,6 +2,8 @@
 <!-- caracole serve is plain HTTP, at whatever address the user types (a LAN or tailnet IP, a name):
      a per-domain rule can't name it, so cleartext is allowed for the app. The WebView's own pages
      come from the copy on the phone (https://appassets.androidplatform.net), never from the network. -->
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
+<network-security-config xmlns:tools="http://schemas.android.com/tools">
+    <base-config
+        cleartextTrafficPermitted="true"
+        tools:ignore="InsecureBaseConfiguration" />
 </network-security-config>

@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole
 
 import android.content.Context
+import androidx.core.content.edit
 
 /** The settings and the last sync's outcome, in the app's own preferences. */
 class Settings(context: Context) {
@@ -9,22 +10,20 @@ class Settings(context: Context) {
     /** caracole serve's address, as typed. */
     var server: String
         get() = prefs.getString(SERVER, "") ?: ""
-        set(value) = prefs.edit().putString(SERVER, value).apply()
+        set(value) = prefs.edit { putString(SERVER, value) }
 
     /** Whether the app syncs on Wi-Fi by itself. */
     var syncOnWifi: Boolean
         get() = prefs.getBoolean(WIFI, false)
-        set(value) = prefs.edit().putBoolean(WIFI, value).apply()
+        set(value) = prefs.edit { putBoolean(WIFI, value) }
 
     var lastOutcome: Outcome?
         get() = if (prefs.contains(LAST_AT)) {
             Outcome(prefs.getLong(LAST_AT, 0), prefs.getBoolean(LAST_OK, false), prefs.getString(LAST_TEXT, "") ?: "")
         } else null
-        set(value) {
-            val edit = prefs.edit()
-            if (value == null) edit.remove(LAST_AT).remove(LAST_OK).remove(LAST_TEXT)
-            else edit.putLong(LAST_AT, value.at).putBoolean(LAST_OK, value.ok).putString(LAST_TEXT, value.text)
-            edit.apply()
+        set(value) = prefs.edit {
+            if (value == null) remove(LAST_AT).remove(LAST_OK).remove(LAST_TEXT)
+            else putLong(LAST_AT, value.at).putBoolean(LAST_OK, value.ok).putString(LAST_TEXT, value.text)
         }
 
     private companion object {
