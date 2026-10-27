@@ -220,7 +220,15 @@ Rules a change there keeps (the Invariants below are the others):
   table, its 著 as 着 but in a word Simplified writes with 著) into the data's `pinyin`, a reading per
   character of each `section.sec > p.l`, and viewer.js draws each as a `<ruby>`, its row of the line
   kept by every column, so a chord stays over its character's column, on or off, at 390 px too
-  (test_viewer_pinyin.py). So is the Instrument (`state.inst`, the guitar at first: localStorage
+  (test_viewer_pinyin.py). So are the settings' Chinese characters, Simplified or Traditional, a segmented control
+  right above Pinyin, where Pinyin's row shows (`state.trad`, Simplified at first: localStorage
+  `caracole-viewer-hanzi`, `trad=1` in the address, which `carryScreen` takes on too): hanzi.py converts every text
+  the sheet writes in its words (page.py `_written_texts`: its lines, the notes before the song and their peek, the
+  sections' labels, its tabs) at render time with OpenCC, word by word (发 發 or 髮), into the data's `hanzi`,
+  `simplified` and `traditional` by the text (a sheet is written in the script most of its own characters are, and
+  shows as written in it: a Traditional sheet's Simplified is `tw2s`'s, a Simplified one's Traditional `s2tw`'s),
+  each a character for a character (one of another length made again a character at a time), which viewer.js cuts
+  where the page cut the text, each reading over the character shown (test_viewer_hanzi.py). So is the Instrument (`state.inst`, the guitar at first: localStorage
   `caracole-viewer-instrument`, `inst=` in the address while it is another, which `carryScreen` takes on
   too, but for a songbook song's own, which its version names and where it starts: the next song gets the one it arrived with), which never moves the song: every
   instrument's shapes are instruments.py's, per root in the data's `voicings` (viewer.js looks them up),
@@ -462,8 +470,9 @@ Traps:
   music.py imports mutagen in `read_audio` alone, and lyrics.py (`expected_seconds`) in `_matches`:
   inbox.py, which the pages import, scores names with its `Names`
   (`test_music.py::test_the_pages_load_no_tag_reader`, `::test_the_inbox_loads_no_http_client`).
-  viewer/pinyin.py imports pypinyin in `_read` alone: a page of a sheet with no Chinese loads none
-  (`test_viewer_pinyin.py::test_pypinyin_is_loaded_only_for_a_sheet_with_chinese`).
+  viewer/pinyin.py imports pypinyin in `_read` alone, and viewer/hanzi.py OpenCC in `_converter`: a page of a sheet
+  with no Chinese loads neither (`test_viewer_pinyin.py::test_pypinyin_is_loaded_only_for_a_sheet_with_chinese`,
+  `test_viewer_hanzi.py::test_opencc_is_loaded_only_for_a_sheet_with_chinese`).
 - Branch from `caracole-v1`, the default branch; `main` takes it by merge, when the owner asks.
   Conventional commits, scoped by area: `fix(fetch): …`, `feat(lacuerda): …`,
   `test(commands): …`, `docs: …`, `build(nix): …`. No Claude or AI attribution anywhere:

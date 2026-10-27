@@ -260,6 +260,7 @@ click==8.3.3
 mutagen==1.48.1
 tomlkit==0.15.0
 pypinyin==0.55.0
+opencc==1.4.1
 # Auto-chords' (section 12).
 torch==2.13.0
 torchaudio==2.11.0
