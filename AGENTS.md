@@ -113,9 +113,16 @@ Rules a change there keeps (the Invariants below are the others):
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
   does.
   A row for one instrument says which, a badge as a source has its mark (rows.js `instrumentBadges`: Ukulele for
-  UG's Ukulele Chords, Harmonica for harptabs.com's tabs, `search.search_harptabs`, by title alone as MuseScore's
-  pages, Score for MuseScore's; a song's card's `instruments`, library_page.py `instruments_of`), on both pages, and
-  nothing is ever filtered by instrument.
+  UG's Ukulele Chords, Harmonica for harptabs.com's tabs, Score for MuseScore's; a song's card's `instruments`,
+  library_page.py `instruments_of`), on both pages, and nothing is ever filtered by instrument.
+  harptabs.com is searched as UG's index is (`search.search_harptabs`, `/api/search`'s `harptabs_artists` and
+  `harptabs`): its artists, named from their page once read (harptabs_index.py), and a song's tabs by an artist
+  whose page caracole read, a song a line, the most viewed first under its "⋯" (rows.js `harpTabsOf`), each Get it
+  a lookup that keeps that tab (`harptabs`, `caracole get --harptabs`, `[harptabs]`); a tab no page read names is a
+  title alone, as MuseScore's pages, apart. An artist's group ends with "+ N more by … on harptabs.com"
+  (`/api/artist?harptabs=`) or, for a page never read, the offer to read it (`POST /harptabs/artist`, `caracole
+  harptabs --artist` queued, a job of no song's, `jobs.INDEX_READS`); the `looked` chip says how far its artist
+  index has got ("harptabs.com: 1,204 of 10,428 artists").
   What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
   `suggest`), `nothingFound` (one card for a query that found nothing: the request by name first, Ask LaCuerda,
   the chips of `looked`, `unseen` folded) and `lookedLine` (the chips in one muted line under results).
@@ -213,7 +220,8 @@ Rules a change there keeps (the Invariants below are the others):
   --search` (LaCuerda's own search, one query, one request at the lookup pace), and review.py, search.py,
   removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local
   indexes alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
-  gtptabs.com's, MuseScore's and LaCuerda's tables, and the tombstones of removed songs
+  gtptabs.com's, MuseScore's, LaCuerda's and harptabs.com's tables (its sitemap's and the artist pages read,
+  harptabs_index.py), and the tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
   and in `/api/search`'s `removed`, which the library page shows with Add again), the words of the UG index's
   artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept by triggers on `ug_index`,

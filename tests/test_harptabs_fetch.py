@@ -239,3 +239,53 @@ def test_the_sitemap_is_read_again_after_30_days_and_not_before(conn, tmp_path):
     assert site.requests == [SITEMAP]
     assert run(site, conn, tmp_path, NOW + timedelta(days=31)).sitemaps == 1
     assert site.requests == [SITEMAP, SITEMAP]
+
+
+# --- a tab you picked ([harptabs]) -----------------------------------------------------------------------------
+
+
+def picked(song, url: str) -> Overrides:
+    from caracole.overrides import harptabs_pick_from_url
+
+    return Overrides(harptabs={song.key: harptabs_pick_from_url(url)})
+
+
+def test_the_tab_you_picked_is_kept_whoever_its_page_names(conn, tmp_path):
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    site = FakeHarpTabs()
+    site.page("tab/23862/piano-man-c-harmonica", tab_page("Piano Man (C Harmonica)", "Pharm Gal", body="6 6 6\npick\n"))
+
+    stats = run(site, conn, tmp_path, overrides=picked(song, f"{BASE}/tab/23862/piano-man-c-harmonica"))
+
+    assert stats == HarpTabsStats(sitemaps=1, tried=1, kept=1)
+    assert site.requests == [SITEMAP, f"{BASE}/tab/23862/piano-man-c-harmonica"]  # the pick alone: no candidate
+    assert (folder(tmp_path, song) / "harmonica-1.txt").read_text(encoding="utf-8") == "6 6 6\npick\n"
+    [kept] = kept_files(conn, song.id)
+    assert get_version(conn, kept.version_id).tab_id == "23862"
+
+
+def test_a_pick_is_kept_beside_the_tab_the_song_has_and_asked_for_no_more(conn, tmp_path):
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    site = FakeHarpTabs()
+    run(site, conn, tmp_path)  # the most viewed by its artist: Piano Man, tab 25
+    site.page("tab/23862/piano-man-c-harmonica", tab_page("Piano Man (C Harmonica)", "billy joel", body="pick\n"))
+    overrides = picked(song, f"{BASE}/tab/23862/piano-man-c-harmonica")
+
+    stats = run(site, conn, tmp_path, NOW + timedelta(hours=1), overrides=overrides)
+
+    assert stats.kept == 1
+    assert [f.name for f in harmonica_files(conn, song.id)] == ["harmonica-1.txt", "harmonica-2.txt"]
+    assert (folder(tmp_path, song) / "harmonica-2.txt").read_text(encoding="utf-8") == "pick\n"
+    site.requests.clear()
+    assert run(site, conn, tmp_path, NOW + timedelta(days=40), overrides=overrides).tried == 0
+    assert site.requests == []
+
+
+def test_a_pick_gone_is_a_miss_asked_about_again_after_30_days(conn, tmp_path):
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    site = FakeHarpTabs()
+    overrides = picked(song, f"{BASE}/tab/404/gone")
+
+    assert run(site, conn, tmp_path, overrides=overrides) == HarpTabsStats(sitemaps=1, tried=1, missing=1)
+    assert checked(conn, song) == "2026-10-27T03:30:00Z" and kept_files(conn, song.id) == []
+    assert run(site, conn, tmp_path, NOW + timedelta(days=10), overrides=overrides).tried == 0

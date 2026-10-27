@@ -24,7 +24,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from caracole.web.app import FRAMES, Response, Route, WebApp, html_response, no_such_song, not_ignored, song_id
-from caracole.web.jobs import LACUERDA_READS, REMOVING, add_steps, lookup_steps
+from caracole.web.jobs import INDEX_READS, REMOVING, add_steps, lookup_steps
 from caracole.web.jobs_routes import views
 from caracole.web.pages import Refused
 from caracole.web.review_routes import review_first
@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from caracole.wanted import WantedLine
 
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
-PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600}
+PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600, "harptabs": 600}
 
 
 ROUTES = (
@@ -60,9 +60,10 @@ def library(app: WebApp) -> Response:
                                     if job.active and job.song_key.startswith(REMOVING)})
         # Every request on its way, which the page's script shows where it belongs (``kind``): a
         # song's on its card, a removal's on its song's, a songbook's change on its songbook's. A
-        # LaCuerda artist page's read, or a query of its search, is no song's: what asked for it follows it.
+        # LaCuerda artist page's read, a query of its search, or a harptabs.com artist page's read, is no song's:
+        # what asked for it follows it.
         active = tuple(views(app, conn, overrides, jobs, only=[
-            j for j in jobs if j.active and not j.song_key.startswith(LACUERDA_READS)]))
+            j for j in jobs if j.active and not j.song_key.startswith(INDEX_READS)]))
         controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
                                timers=app.timers, guitar=available(app.cfg.alphatab_dir))
         html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
@@ -149,6 +150,22 @@ def wanted_line(app: WebApp, form: dict[str, str]) -> tuple[WantedLine, str]:
         except OSError as e:
             raise Refused(500, "Not added", f"wanted.txt can't be written: {e.strerror or e}") from e
     return line, f"{'Already in' if listed else 'Added to'} wanted.txt, line {line.line_no}."
+
+
+def harptabs_field(form: dict[str, str]) -> str | None:
+    """A form's ``harptabs``, the harptabs.com tab picked, written as caracole asks for it; None for none; Refused for
+    one that is no harptabs.com tab's page."""
+    from caracole.overrides import OverridesError, harptabs_pick_from_url
+
+    value = form.get("harptabs", "").strip()
+    if not value:
+        return None
+    if len(value) > PICK_LIMITS["harptabs"]:
+        raise Refused(400, "Too long", f"The harptabs is too long: {PICK_LIMITS['harptabs']} characters at most.")
+    try:
+        return harptabs_pick_from_url(value).url
+    except OverridesError as e:
+        raise Refused(400, "Not a pick", f"That isn't a harptabs.com tab: {e}") from e
 
 
 def lacuerda_field(form: dict[str, str]) -> str | None:

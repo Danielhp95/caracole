@@ -77,8 +77,15 @@ listings, never a site; the pages say "Did you mean" them.
 alone: a page there is one whose whole title is the query, or the query less
 an artist's name on either side, where that artist has a song of that title in
 the Ultimate Guitar index, gtptabs.com's or your library; a possible match,
-never more. ``search_harptabs`` reads harptabs.com's tab pages (``harptabs_index``)
-the same way: its sitemap names a tab's title alone. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
+never more. ``search_harptabs`` reads harptabs.com's index as the Ultimate Guitar index is
+read: its artists (the sitemap's, named from their page once caracole has read it,
+harptabs_index.py), the query as their whole name or a word of it (``SiteArtist``, with
+the tabs their page says they have and their most viewed songs), and the tabs of the
+artist pages read, a song a hit (``SiteHit``: the tabs of one title by one artist, the
+title less what it says in brackets, ``harptabs.song_title``, the most viewed first, in
+``tabs``), by any reading; then the sitemap's tabs whose artist no page read names, by
+their title alone, as MuseScore's pages. ``harptabs_artist`` and ``harptabs_songs`` give
+one of its artists and their songs. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
 artist, for an artist the query names. They only read the local tables: nothing here asks gtptabs.com or MuseScore
 anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
 LaCuerda's (``lacuerda_index``, from its listings of every artist and the artist pages
@@ -116,7 +123,7 @@ import re
 import sqlite3
 from collections import Counter
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Iterable, Iterator, Mapping, NamedTuple, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Iterator, Mapping, NamedTuple, Sequence
 
 from rapidfuzz import fuzz
 
@@ -295,14 +302,29 @@ class Found:
 
 
 @dataclass(frozen=True)
+class HarpTabHit:
+    """One tab of a song on harptabs.com: its title as the site writes it, its page, and the chips its artist's
+    page showed (the views, the rating, the harp's key, the difficulty)."""
+
+    title: str
+    url: str
+    views: int = 0
+    rating: float | None = None
+    key: str | None = None
+    difficulty: str | None = None
+
+
+@dataclass(frozen=True)
 class SiteHit:
     """A page of another site's offline index the query matches.
 
     ``source`` is "gtptabs" (a song page of gtptabs.com: an artist and a title,
     named from its slugs, its uploads of the title counted in ``uploads``),
     "musescore" (a song page of MuseScore: a title alone, as its sitemaps give
-    it, so ``artist`` is "" and the page a possible match), "harptabs" (a
-    harmonica tab of harptabs.com: a title alone too, its sitemap's) or "lacuerda" (a song
+    it, so ``artist`` is "" and the page a possible match), "harptabs" (a song's
+    harmonica tabs on harptabs.com, the most viewed first in ``tabs``, ``url`` the
+    first's, by the artist whose page caracole read, ``page``; or a tab of its sitemap
+    whose artist no page read names, a title alone, as MuseScore's) or "lacuerda" (a song
     of LaCuerda's, named as LaCuerda names it, its versions counted in
     ``uploads``, and ``sheet`` the page of its best Letra y Acordes version, the
     sheet a lookup keeps; None for a song without chords there). ``url`` is the
@@ -319,17 +341,22 @@ class SiteHit:
     uploads: int = 1
     via: str = "title"
     sheet: str | None = None
+    tabs: tuple[HarpTabHit, ...] = ()
+    page: str = ""
 
 
 @dataclass(frozen=True)
 class SiteArtist:
-    """An artist of another site's offline index the query names: LaCuerda's (``source``).
+    """An artist of another site's offline index the query names: LaCuerda's or harptabs.com's (``source``).
 
     ``artist`` is the name the site writes, ``slug`` its own name for their page,
     ``url`` the page; ``songs`` counts their songs as the site's listing does, and
     ``known`` how many of them the index holds from their page, 0 until caracole has
     read it (the songs LaCuerda's search brought alone leave it 0); ``top`` holds the
-    most popular with chords. ``score`` and ``via`` are as
+    most popular with chords. On harptabs.com, ``slug`` is their page's path
+    (``artist/1178/billy-joel``), ``songs`` the tabs their page says they have (0 until
+    it is read: the sitemap counts none), ``known`` the tabs of theirs the index holds
+    (the 30 their page lists at most), and ``top`` their most viewed songs. ``score`` and ``via`` are as
     ``IndexHit``'s, and ``part`` as ``ArtistHit``'s (``LaCuerdaHit.part``).
     """
 
@@ -806,18 +833,174 @@ def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROW
     return _title_pages(conn, query, limit, "musescore", title_key, pages)
 
 
-def search_harptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
-    """harptabs.com's tab pages whose title is the query, or the query with an artist's name on either side, as
-    ``search_musescore`` finds MuseScore's: its sitemap names a tab's title alone (harptabs.py), so each is a
-    possible match, a harmonica tab of a song of that title. Exact keys alone, by the table's key index."""
+def search_harptabs(conn: sqlite3.Connection, query: str, *, songs: int = SITE_ROWS,
+                    artists: int = ARTIST_ROWS) -> tuple[list[SiteArtist], list[SiteHit]]:
+    """harptabs.com's artists and songs in its index that match ``query``, as the Ultimate Guitar index answers it:
+    the artists the query names whole (``STRONG`` or more) or by a word of their name (``PART``), beside one named
+    whole only those named whole or in part; then the songs of the artist pages caracole read, by any reading, best
+    first (a song only its artist's name matched is in that artist's row), at most ``songs``; then, at most ``songs``
+    more, the sitemap's tabs whose artist no page read names, whose title is the query or the query less an artist's
+    name (``_title_pages``), possible matches. It reads the tables alone."""
     from caracole.harptabs import TAB, page_url, title_key
 
+    queries = _queries(query)
+    patterns = _patterns(name_words(query))
+    named: list[SiteArtist] = []
+    hits: list[SiteHit] = []
+    if queries and patterns:
+        named = _harp_artists(conn, query, queries, patterns, artists)
+        theirs = {a.slug for a in named}
+        hits = [h for h in _harp_songs(conn, queries, patterns) if not (h.via == "artist" and h.page in theirs)]
+
     def pages(key: str, n: int) -> list[str]:
-        rows = conn.execute("SELECT path FROM harptabs_index WHERE kind = ? AND key = ? ORDER BY page_id LIMIT ?",
-                            (TAB, key, n)).fetchall()
+        rows = conn.execute(
+            "SELECT path FROM harptabs_index i WHERE kind = ? AND key = ? AND NOT EXISTS "
+            "(SELECT 1 FROM harptabs_artist_tabs t WHERE t.tab_id = i.page_id) ORDER BY page_id LIMIT ?",
+            (TAB, key, n)).fetchall()
         return [page_url(row[0]) for row in rows]
 
-    return _title_pages(conn, query, limit, "harptabs", title_key, pages)
+    return named, hits[:max(songs, 0)] + _title_pages(conn, query, songs, "harptabs", title_key, pages)
+
+
+def harptabs_artist(conn: sqlite3.Connection, path: str) -> SiteArtist | None:
+    """One artist of harptabs.com's index, by their page's path, as ``search_harptabs`` gives them (score 100); None
+    for one its sitemap doesn't list, or whose page is gone."""
+    row = conn.execute(
+        "SELECT i.path, i.page_id, i.key, a.name, a.tabs, a.read_at FROM harptabs_index i LEFT JOIN harptabs_artists a "
+        "ON a.path = i.path WHERE i.path = ? AND i.kind = 'artist'", (path,)).fetchone()
+    return _harp_artist(conn, _HarpArtist(*row), 100.0) if row is not None and (row[5] is None or row[3]) else None
+
+
+def harptabs_songs(conn: sqlite3.Connection, path: str, *, title: str | None = None) -> list[SiteHit]:
+    """The songs harptabs.com's index holds of an artist (their page's path), most viewed first: none until caracole
+    has read their page. With ``title``, only those whose title it matches, best first."""
+    from dataclasses import replace
+
+    hits = _harp_grouped(conn, "t.artist = ?", [path])
+    queries = _queries(title or "")
+    if not queries:
+        return hits
+    scored = [(max(q.score("", h.title_key.replace("-", " ")) for q in queries), n, h) for n, h in enumerate(hits)]
+    return [replace(h, score=round(score, 1), via="title")
+            for score, _, h in sorted((s for s in scored if s[0] >= MIN_SCORE), key=lambda s: (-s[0], s[1]))]
+
+
+class _HarpArtist(NamedTuple):
+    """An artist row of harptabs.com's index, with what their page said once read (``name`` "" before, and for a
+    page gone)."""
+
+    path: str
+    page_id: int
+    key: str
+    name: str | None
+    tabs: int | None
+    read_at: str | None
+
+    @property
+    def shown(self) -> str:
+        return self.name or _title_words(self.key)
+
+    def forms(self) -> list[str]:
+        """The name's words to score: the slug's key, and the page's name once read."""
+        forms = [self.key.replace("-", " ")]
+        if self.name:
+            forms.append(" ".join(name_words(self.name)))
+        return [f for f in dict.fromkeys(forms) if f]
+
+
+def _harp_artists(conn: sqlite3.Connection, query: str, queries: list[_Query], patterns: list[str],
+                  limit: int) -> list[SiteArtist]:
+    """The artists the query names: as their whole name, scored, else by words of their name among others (``PART``),
+    unless more than ``WORD_ARTISTS`` names hold them; beside one named whole, only those named whole or in part."""
+    where = " OR ".join("i.key LIKE ?" for _ in patterns)
+    rows = [_HarpArtist(*r) for r in conn.execute(
+        "SELECT i.path, i.page_id, i.key, a.name, a.tabs, a.read_at FROM harptabs_index i LEFT JOIN harptabs_artists a "
+        f"ON a.path = i.path WHERE i.kind = 'artist' AND ({where}) LIMIT ?", (*patterns, SITE_ROWS_READ))]
+    rows = [r for r in rows if r.read_at is None or r.name]  # a page gone names no one
+    words = set(name_words(query))
+    whole: list[tuple[float, _HarpArtist]] = []
+    parts: list[_HarpArtist] = []
+    for row in rows:
+        score = max(q.name(f) for q in queries for f in row.forms())
+        if score >= STRONG:
+            whole.append((round(score, 1), row))
+        elif all(len(w) >= WORD_LETTERS for w in words) and any(words <= set(f.split()) for f in row.forms()):
+            parts.append(row)
+    if len(parts) > WORD_ARTISTS:  # a common word ("band", "john") names no one in part
+        parts = []
+    found = [(score, False, row) for score, row in whole] + [(PART, True, row) for row in parts]
+    if any(score >= 100 for score, _, _ in found):
+        found = [f for f in found if f[0] >= 100 or f[1]]
+    known = _harp_known(conn, [row.path for _, _, row in found])
+    found.sort(key=lambda f: (-f[0], -known.get(f[2].path, 0), -(f[2].tabs or 0), f[2].page_id))
+    return [_harp_artist(conn, row, score, part=part, known=known.get(row.path, 0)) for score, part, row in
+            found[:max(limit, 0)]]
+
+
+def _harp_known(conn: sqlite3.Connection, paths: Sequence[str]) -> dict[str, int]:
+    """How many tabs the index holds of each artist (their page's path)."""
+    if not paths:
+        return {}
+    marks = ", ".join("?" for _ in paths)
+    return {r[0]: r[1] for r in conn.execute(
+        f"SELECT artist, COUNT(*) FROM harptabs_artist_tabs WHERE artist IN ({marks}) GROUP BY artist", list(paths))}
+
+
+def _harp_artist(conn: sqlite3.Connection, row: _HarpArtist, score: float, *, part: bool = False,
+                 known: int | None = None) -> SiteArtist:
+    """An artist row as ``SiteArtist``, with their ``TOP_SONGS`` most viewed songs."""
+    from caracole.harptabs import page_url
+
+    if known is None:
+        known = _harp_known(conn, [row.path]).get(row.path, 0)
+    top = tuple(_harp_grouped(conn, "t.artist = ?", [row.path])[:TOP_SONGS]) if known else ()
+    return SiteArtist("harptabs", row.shown, row.path, page_url(row.path), score, songs=row.tabs or 0, known=known,
+                      top=top, part=part)
+
+
+def _harp_songs(conn: sqlite3.Connection, queries: list[_Query], patterns: list[str]) -> list[SiteHit]:
+    """The songs of the artist pages read that the query matches by any reading, best first, then most viewed."""
+    from dataclasses import replace
+
+    where = " OR ".join("t.song_key LIKE ? OR a.key LIKE ?" for _ in patterns)
+    hits = _harp_grouped(conn, where, [p for p in patterns for _ in (0, 1)], SITE_ROWS_READ)
+    pages = sorted({h.page for h in hits})
+    slugs = dict(conn.execute(f"SELECT path, key FROM harptabs_artists WHERE path IN ({', '.join('?' * len(pages))})",
+                              pages).fetchall()) if pages else {}
+    scored = []
+    for n, hit in enumerate(hits):
+        names = {(slugs.get(hit.page, "").replace("-", " "), hit.title_key.replace("-", " ")),
+                 (" ".join(name_words(hit.artist)), hit.title_key.replace("-", " "))}
+        score, via = _reading(q.readings(a, t) for q in queries for a, t in names)
+        if score >= MIN_SCORE:
+            scored.append((round(score, 1), n, replace(hit, score=round(score, 1), via=via)))
+    scored.sort(key=lambda s: (-s[0], s[1]))
+    return [hit for _, _, hit in scored]
+
+
+def _harp_grouped(conn: sqlite3.Connection, where: str, args: Sequence[Any], limit: int | None = None) -> list[SiteHit]:
+    """The tabs of the artist pages read that ``where`` keeps (``t``, the tab; ``a``, its artist), a song a hit: the
+    tabs of one title by one artist, the most viewed first; the songs most viewed first."""
+    from caracole.harptabs import page_url, song_title
+    from caracole.normalize import identity_key
+
+    rows = conn.execute(
+        "SELECT t.artist, t.path, t.title, t.song_key, t.views, t.rating, t.harp_key, t.difficulty, a.name "
+        "FROM harptabs_artist_tabs t JOIN harptabs_artists a ON a.path = t.artist "
+        f"WHERE {where} ORDER BY t.views DESC, t.place" + (" LIMIT ?" if limit is not None else ""),
+        (*args, *(() if limit is None else (limit,)))).fetchall()
+    songs: dict[tuple[str, str], list] = {}
+    for row in rows:
+        songs.setdefault((row[0], row[3]), []).append(row)
+    hits = []
+    for (page, key), tabs in songs.items():
+        best = tabs[0]
+        name = best[8]
+        hits.append(SiteHit(
+            "harptabs", song_title(best[2]), page_url(best[1]), 100.0, artist=name,
+            artist_key=identity_key(name, "").partition("/")[0], title_key=key, uploads=len(tabs), via="title",
+            tabs=tuple(HarpTabHit(t[2], page_url(t[1]), t[4], t[5], t[6], t[7]) for t in tabs), page=page))
+    return hits
 
 
 def _title_pages(conn: sqlite3.Connection, query: str, limit: int, source: str, title_key: Callable[[str], str],

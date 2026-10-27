@@ -33,6 +33,9 @@ Tables:
 - ``[lacuerda]``: "Artist - Title" → the LaCuerda song (its page) or version (its
   sheet's page) you picked (``LaCuerdaPick``): lacuerda_fetch.py keeps that sheet,
   whatever its coverage, and Ultimate Guitar's fetch never replaces it.
+- ``[harptabs]``: "Artist - Title" → the harptabs.com tab (its page) you picked
+  (``HarpTabsPick``): harptabs_fetch.py keeps that tab for the song, as its next
+  ``harmonica-N.txt`` beside any it has, whoever the page names as its artist.
 
 Keys are canonicalized when loaded, so they're matched the same way songs are.
 Writers use tomlkit, so your comments and layout survive.
@@ -76,7 +79,7 @@ _ARTIST_HOST = "https://www.ultimate-guitar.com"
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda",
-           "version"}
+           "harptabs", "version"}
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
 NO_VIDEO = "none"
@@ -86,6 +89,10 @@ _LACUERDA_HOST = re.compile(r"(?:(?:acordes|www)\.)?lacuerda\.net")
 _LACUERDA_PATH = re.compile(r"/([a-z0-9_]+)/([a-z0-9_]+?)(?:(?:-([1-9][0-9]*))?(\.shtml))?")
 LACUERDA_BASE = "https://acordes.lacuerda.net"
 LACUERDA_PAGE_SHAPE = f"{LACUERDA_BASE}/<artist>/<song>"
+_HARPTABS_HOST = re.compile(r"(?:www\.)?harptabs\.com")
+_HARPTABS_PATH = re.compile(r"/tab/([1-9][0-9]{0,8})/([a-z0-9-]{1,200})")
+HARPTABS_BASE = "https://www.harptabs.com"
+HARPTABS_PAGE_SHAPE = f"{HARPTABS_BASE}/tab/<id>/<slug>"
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 # A version as a viewer's address writes it, and how long one may be: every chord's shape and swap is a few hundred.
 VERSION_SHAPE = "t=2&mode=dorian&capo=0"
@@ -117,6 +124,7 @@ class Overrides:
     artist_url_names: Mapping[str, str] = field(default_factory=dict)
     youtube: Mapping[str, str | None] = field(default_factory=dict)
     lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
+    harptabs: Mapping[str, HarpTabsPick] = field(default_factory=dict)
     version: Mapping[str, str] = field(default_factory=dict)
     tables: frozenset[str] = frozenset()
 
@@ -150,6 +158,42 @@ class LaCuerdaPick:
         song, dash, n = rest.rpartition("-")
         return (dash == "-" and artist == self.artist and song == self.song
                 and (self.version is None or n == str(self.version)))
+
+
+@dataclass(frozen=True)
+class HarpTabsPick:
+    """A harptabs.com tab you picked (``[harptabs]``): the site's id of it and its page's slug."""
+
+    tab_id: int
+    slug: str
+
+    @property
+    def path(self) -> str:
+        """Its page's path, as harptabs.com's index keeps it (``tab/25/piano-man``)."""
+        return f"tab/{self.tab_id}/{self.slug}"
+
+    @property
+    def url(self) -> str:
+        """Its page: as caracole writes the pick and asks for it."""
+        return f"{HARPTABS_BASE}/{self.path}"
+
+
+def harptabs_pick_from_url(url: Any) -> HarpTabsPick:
+    """The harptabs.com tab a page's address names (``HarpTabsPick``), written as an address bar shows it:
+    without ``https://``, without ``www.``, with a query or a trailing slash."""
+    text = url.strip() if isinstance(url, str) else ""
+    if text and not _SCHEME.match(text):
+        text = f"https://{text}"
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        parts = None
+    found = None
+    if parts is not None and parts.scheme in ("http", "https") and _HARPTABS_HOST.fullmatch(parts.netloc.lower()):
+        found = _HARPTABS_PATH.fullmatch(parts.path.rstrip("/"))
+    if found is None:
+        raise OverridesError(f"expected a harptabs.com tab's page ({HARPTABS_PAGE_SHAPE}), got {url!r}")
+    return HarpTabsPick(int(found.group(1)), found.group(2))
 
 
 def lacuerda_pick_from_url(url: Any) -> LaCuerdaPick:
@@ -426,12 +470,22 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         except OverridesError as e:
             raise OverridesError(f"{where}: {e}") from e
 
+    harptabs: dict[str, HarpTabsPick] = {}
+    for k, v in table("harptabs").items():
+        where = f"[harptabs] {k!r}"
+        if not isinstance(v, str):
+            raise OverridesError(f"{where}: expected a string, the address of a harptabs.com tab's page")
+        try:
+            harptabs[_song_key(k, where)] = harptabs_pick_from_url(v)
+        except OverridesError as e:
+            raise OverridesError(f"{where}: {e}") from e
+
     version = {_song_key(k, f"[version] {k!r}"): _version(v, f"[version] {k!r}") for k, v in table("version").items()}
 
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
-        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, version=version,
+        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, version=version,
         tables=frozenset(data),
     )
 
@@ -599,6 +653,30 @@ def add_lacuerda(path: Path, display: str, url: str) -> None:
 
     def change(doc) -> None:
         t = _table_of(doc, "lacuerda")
+        key = next((k for k in reversed(list(t)) if same_song(k)), None)
+        if key is None:
+            t[display] = pick.url
+        elif t[key] != pick.url:
+            t[key] = pick.url
+
+    _edit(path, change)
+
+
+def add_harptabs(path: Path, display: str, url: str) -> None:
+    """Set the song's ``[harptabs]`` entry: the harptabs.com tab at ``url``, written as caracole asks for it
+    (``HarpTabsPick.url``). The song's entry is found by its key, as the table is read, so the song written
+    another way changes the entry it has; the same pick again writes nothing."""
+    wanted = override_key(display)
+    pick = harptabs_pick_from_url(url)
+
+    def same_song(key: str) -> bool:
+        try:
+            return override_key(key) == wanted
+        except OverridesError:
+            return False
+
+    def change(doc) -> None:
+        t = _table_of(doc, "harptabs")
         key = next((k for k in reversed(list(t)) if same_song(k)), None)
         if key is None:
             t[display] = pick.url

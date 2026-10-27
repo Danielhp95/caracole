@@ -236,9 +236,11 @@ def test_typing_lists_your_songs_and_the_indexes_without_enter(cfg, live, browse
     assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
     assert browser.js(LINES) == [["Oasis", [["Wonderwall", "ug+gtptabs"]]], ["Ryan Adams", [["Wonderwall", "ug"]]],
                                  ["MuseScore", [["Wonderwall", "musescore"]]]]
-    # Where caracole looked, in one muted line under the results: LaCuerda's index is empty, the rest searched whole.
+    # Where caracole looked, in one muted line under the results: LaCuerda's and harptabs.com's indexes are empty, the
+    # rest searched whole.
     assert browser.js(CHIPS.replace("SCOPE", "#results .looked-line")) == [
-        ["UG ✓", "done"], ["gtptabs.com ✓", "done"], ["LaCuerda: empty", "empty"], ["MuseScore ✓", "done"]]
+        ["UG ✓", "done"], ["gtptabs.com ✓", "done"], ["LaCuerda: empty", "empty"], ["MuseScore ✓", "done"],
+        ["harptabs.com: empty", "empty"]]
     assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing').length") == 0
     link = browser.js("(() => { const a = document.querySelector('#results .hit[data-source=\"musescore\"] .line-action a');"
                       " return [a.href, a.target, a.rel]; })()")
@@ -1016,7 +1018,7 @@ def test_a_query_that_finds_nothing_shows_one_card_its_request_first_then_where_
         "code": ['[artist_url]\n"lynrd" = "https://www.ultimate-guitar.com/artist/…"', 'caracole add ARTIST "lynrd"']}
     assert browser.js(CHIPS.replace("SCOPE", NOTHING)) == [
         ["UG ✓", "done"], ["gtptabs.com: empty", "empty"], ["LaCuerda: up to C", "partial"],
-        ["MuseScore blocked", "blocked"]]
+        ["MuseScore blocked", "blocked"], ["harptabs.com: empty", "empty"]]
     # Each chip's detail is its tooltip, one line: today's sentence.
     titles = browser.js(f"[...document.querySelectorAll('{NOTHING} .looked li')].map((c) => c.title)")
     assert "still being read: 1 artist so far, with #, A–C read whole" in titles[2]
@@ -1061,7 +1063,7 @@ def test_a_query_with_results_says_where_caracole_looked_in_one_muted_line(cfg, 
     assert browser.wait(f"{HITS} >= 1 && !!document.querySelector('#results .looked-line')")
     assert browser.js(CHIPS.replace("SCOPE", "#results .looked-line")) == [
         ["UG ✓", "done"], ["gtptabs.com: empty", "empty"], ["LaCuerda: up to C", "partial"],
-        ["MuseScore blocked", "blocked"]]
+        ["MuseScore blocked", "blocked"], ["harptabs.com: empty", "empty"]]
     assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing, #results .did-you-mean').length") == 0
     assert browser.js(OLD_NOTES) == 0
     line = browser.js("document.querySelector('#results .looked-line').getBoundingClientRect().height")

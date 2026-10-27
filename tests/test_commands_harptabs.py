@@ -197,6 +197,16 @@ def quick(monkeypatch):
     monkeypatch.setattr(_common, "sleep", lambda seconds: None)  # the lookup pace's second, between two runs
 
 
+def served(result) -> str:
+    """What caracole serve's request line says of a read that printed this (web/status.py reads its last word)."""
+    from caracole.web.jobs import HARPTABS_ARTIST, Job, Step
+    from caracole.web.status import job_line
+
+    step = Step("Reading harptabs.com's page", ("harptabs", "--artist=x"), state="done",
+                output=result.output.splitlines())
+    return job_line(Job(1, "Read", HARPTABS_ARTIST + "x", [step], state="done"), None).text
+
+
 def indexed(tmp_path, sites) -> None:
     """The sitemap read, as the nightly run reads it: the artists it lists."""
     result = run(tmp_path, "--index", "--budget", "1")
@@ -211,6 +221,7 @@ def test_artist_reads_one_page_now_at_the_lookup_pace_and_once_in_30_days(tmp_pa
 
     assert result.exit_code == 0, result.output
     assert result.stdout == "Read: harptabs.com's page of billy joel lists 7 of their 98 tabs, in the index now.\n"
+    assert served(result) == "Read: harptabs.com's page of billy joel lists 7 of their 98 tabs, in the index now."
     assert sites.harptabs.requests == [BILLY]
     conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     try:
@@ -228,6 +239,7 @@ def test_artist_the_sitemap_lists_no_page_of_is_not_found_and_asks_nothing(tmp_p
     result = run(tmp_path, "--artist", "Nobody Known")
     assert result.exit_code == 0, result.output
     assert result.stdout == "Not found: harptabs.com's sitemap lists no artist named Nobody Known.\n"
+    assert served(result) == "Not found: harptabs.com's sitemap lists no artist named Nobody Known."
     assert sites.harptabs.requests == []
 
 
@@ -246,6 +258,7 @@ def test_artist_gone_block_and_error_exit_0(tmp_path, sites, quick):
     sites.harptabs.page("artist/7829/ritchie-valens", "oops", status=500)
     result = run(tmp_path, "--artist", "Ritchie Valens")
     assert result.exit_code == 0 and result.stdout.startswith("Not read: harptabs.com failed (")
+    assert served(result) == "Not read: harptabs.com failed."
     sites.harptabs.page("artist/7829/ritchie-valens", "Forbidden", status=403)
     result = run(tmp_path, "--artist", "Ritchie Valens")
     assert result.exit_code == 0 and result.stdout.startswith("Not read: harptabs.com blocked caracole (")

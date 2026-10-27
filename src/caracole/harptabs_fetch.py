@@ -19,10 +19,16 @@ What the site looks like is in harptabs.py. A pass:
    info.json is rewritten. The library page lists it under the song's files, and its viewer's
    data names it (``harmonicaTabs``).
 
+A tab you picked (``[harptabs]`` in overrides.toml: caracole serve's Get it on a harptabs.com
+row, ``caracole get --harptabs``) is read in place of the candidates, for a song that hasn't kept
+that tab yet, and kept whoever its page names as the artist: beside the song's other harmonica
+tabs, if it has any, never in place of one.
+
 Only songs in wanted.txt are looked up (and a lookup's song): never a page for a song nobody
 asked for, never a mirror of the site. Errors are never misses: only candidates that all
 answered, none by the song's artist (or each gone, 404), make the song a miss, asked about again
-after 30 days (kv ``harptabs:checked:<song id>``). A block propagates, and a spent budget ends
+after 30 days (kv ``harptabs:checked:<song id>``); a tab you picked that is gone too, unless you
+pick another (kv ``harptabs:checked:<song id>:pick``, the tab asked for). A block propagates, and a spent budget ends
 the pass. Any other provider error, a page that won't parse even fetched again included, leaves
 the song for the next run. No file is ever replaced or deleted: a song that has a harmonica tab
 gets no other.
@@ -65,7 +71,7 @@ from caracole.http import (
 from caracole.inbox import HARMONICA_KIND, harmonica_number
 from caracole.library import keep_file, write_info
 from caracole.normalize import compact, name_forms
-from caracole.overrides import Overrides
+from caracole.overrides import HarpTabsPick, Overrides
 from caracole.provider_pass import PassStats, each_song
 from caracole.site_index import Site
 from caracole.songs import Song, get_song, list_songs
@@ -79,6 +85,7 @@ CANDIDATES = 8  # a title's tabs read for one song at most, lowest id first
 _ACCEPT = (200, 404)  # a 404 is an answer: the tab is gone
 
 CHECKED_PREFIX = "harptabs:checked:"  # + song id: when its candidates last answered for it
+PICKED = ":pick"  # CHECKED_PREFIX + song id + this: the tab you picked that was asked for then
 
 KEPT, MISSING = "kept", "missing"
 
@@ -141,7 +148,7 @@ def harptabs_tabs(
     except ProviderUnavailable as e:
         log.info("harptabs.com is unavailable for the rest of this run: %s", e)
         index = _Index(conn)
-        stats.failures += [(song, e) for song in wanting if index.candidates(song)]
+        stats.failures += [(song, e) for song in wanting if _pick(overrides, song) or index.candidates(song)]
         return stats
     except ProviderError as e:
         stats.errors += 1
@@ -149,9 +156,9 @@ def harptabs_tabs(
     index = _Index(conn)
     run = _Pass(conn, client, Path(library_dir), now)
     # Each song is checked just before its turn: a lookup let in during a pause may have given it a tab.
-    songs = (s for s in wanting if index.candidates(s) and s.id not in songs_with_a_harmonica_tab(conn))
-    for _, outcome in each_song(songs, stats, lambda song: _look_up(run, song, index), site="harptabs.com",
-                                level=logging.WARNING):
+    songs = (s for s in wanting if (_pick(overrides, s) or index.candidates(s)) and _wants(conn, s, overrides))
+    for _, outcome in each_song(songs, stats, lambda song: _look_up(run, song, index, _pick(overrides, song)),
+                                site="harptabs.com", level=logging.WARNING):
         stats.kept += outcome == KEPT
         stats.missing += outcome == MISSING
     return stats
@@ -199,16 +206,39 @@ def same_artist(song: Song, artist: str) -> bool:
 
 
 def _songs_wanting_a_tab(conn: sqlite3.Connection, now: datetime, overrides: Overrides | None) -> list[Song]:
-    """The songs, newest first, that are not ignored, have no harmonica tab, and weren't looked up on
-    harptabs.com in the last 30 days."""
+    """The songs, newest first, that are not ignored, have no harmonica tab (or not the one you picked), and
+    weren't looked up on harptabs.com in the last 30 days."""
     ignored = overrides.ignore if overrides is not None else frozenset()
     with_tab = songs_with_a_harmonica_tab(conn)
     cutoff = now - RECHECK_AFTER
     return [
         song for song in list_songs(conn)
-        if song.status != "ignored" and song.key not in ignored and song.id not in with_tab
-        and stamps.before(kv_get(conn, f"{CHECKED_PREFIX}{song.id}"), cutoff)
+        if song.status != "ignored" and song.key not in ignored
+        and (song.id not in with_tab if _pick(overrides, song) is None else _wants(conn, song, overrides))
+        and (stamps.before(kv_get(conn, f"{CHECKED_PREFIX}{song.id}"), cutoff) or _newly_picked(conn, song, overrides))
     ]
+
+
+def _newly_picked(conn: sqlite3.Connection, song: Song, overrides: Overrides | None) -> bool:
+    """Whether you picked a tab for the song that wasn't asked for yet: it is, at once."""
+    pick = _pick(overrides, song)
+    return pick is not None and kv_get(conn, f"{CHECKED_PREFIX}{song.id}{PICKED}") != str(pick.tab_id)
+
+
+def _pick(overrides: Overrides | None, song: Song) -> HarpTabsPick | None:
+    """The harptabs.com tab you picked for the song (``[harptabs]``), or None."""
+    return overrides.harptabs.get(song.key) if overrides is not None else None
+
+
+def _wants(conn: sqlite3.Connection, song: Song, overrides: Overrides | None) -> bool:
+    """Whether the song still wants a tab: the one you picked, while it hasn't kept it; else any, while it has none."""
+    pick = _pick(overrides, song)
+    if pick is None:
+        return song.id not in songs_with_a_harmonica_tab(conn)
+    return conn.execute(
+        "SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id WHERE f.song_id = ? AND v.provider = ? "
+        "AND v.kind = ? AND v.tab_id = ? LIMIT 1", (song.id, PROVIDER, HARMONICA_KIND, str(pick.tab_id))
+    ).fetchone() is None
 
 
 def songs_with_a_harmonica_tab(conn: sqlite3.Connection) -> set[int]:
@@ -234,8 +264,16 @@ class _Pass:
         return stamps.stamp(self.now)
 
 
-def _look_up(run: _Pass, song: Song, index: _Index) -> str:
-    """Read the song's candidates and keep the most viewed by its artist: ``KEPT``; ``MISSING`` when none is."""
+def _look_up(run: _Pass, song: Song, index: _Index, pick: HarpTabsPick | None = None) -> str:
+    """Read the song's candidates and keep the most viewed by its artist: ``KEPT``; ``MISSING`` when none is. With
+    ``pick``, read that tab alone and keep it, whoever its page names: ``MISSING`` when the site no longer has it."""
+    if pick is not None:
+        tab = _tab(run, pick.url)
+        if tab is not None:
+            _keep(run, song, pick.tab_id, pick.path, tab)
+        kv_set(run.conn, f"{CHECKED_PREFIX}{song.id}", run.stamp)
+        kv_set(run.conn, f"{CHECKED_PREFIX}{song.id}{PICKED}", str(pick.tab_id))
+        return KEPT if tab is not None else MISSING
     found: list[tuple[int, str, HarpTab]] = []
     for page_id, path in index.candidates(song):
         tab = _tab(run, page_url(path))

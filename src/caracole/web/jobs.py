@@ -18,7 +18,11 @@ by ``caracole lacuerda --artist`` (``lacuerda_artist_steps``), a job of its own
 (``LACUERDA_ARTIST`` and the page's slug), one request at the lookup pace, and a
 query of LaCuerda's search is ``caracole lacuerda --search --progress``
 (``lacuerda_search_steps``), a job of its own too (``LACUERDA_SEARCH`` and the
-query's key), whose one stage is ``SEARCH_STAGES``. A version of a song's sheet made the
+query's key), whose one stage is ``SEARCH_STAGES``. A harptabs.com tab you pick goes to
+``caracole get`` with ``--harptabs``, and a harptabs.com artist's page is read by
+``caracole harptabs --artist`` (``harptabs_artist_steps``), a job of its own
+(``HARPTABS_ARTIST`` and the page's path). Those reads of a site's index are no song's
+(``INDEX_READS``). A version of a song's sheet made the
 one, kept, or its pin taken out, is ``caracole versions --progress`` (``version_steps``), a pick of the song's as a
 lookup's ``--tab`` is, so the song's jobs join it as they would that; its JSON lines are the job's stages too (Keep
 it's ``KEEP_STAGES``, and a lookup's for ``--choose`` and ``--clear``, which run one). Each command takes caracole's lock (a
@@ -198,8 +202,8 @@ LOOKUP = "get"  # the command of a lookup
 
 
 def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_ms: int | None = None,
-                 ug: str | None = None, tab: str | None = None,
-                 lacuerda: str | None = None, songbooks: bool = True) -> list[tuple[str, tuple[str, ...]]]:
+                 ug: str | None = None, tab: str | None = None, lacuerda: str | None = None,
+                 harptabs: str | None = None, songbooks: bool = True) -> list[tuple[str, tuple[str, ...]]]:
     """Look one song up now: ``caracole get --progress``, one process for every stage (get.py)."""
     from caracole.wanted import format_duration
 
@@ -216,6 +220,8 @@ def lookup_steps(artist: str, title: str, *, album: str | None = None, duration_
         args.append(f"--tab={tab}")
     if lacuerda:
         args.append(f"--lacuerda={lacuerda}")
+    if harptabs:
+        args.append(f"--harptabs={harptabs}")
     return [("Look it up now", (*args, "--", artist, title))]
 
 
@@ -278,7 +284,8 @@ def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ..
 
 
 LACUERDA_SEARCH = "lacuerda-search:"  # a query of LaCuerda's search: its job's key, the query's key after it
-LACUERDA_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH)  # what LaCuerda's index reads: jobs of no song's
+HARPTABS_ARTIST = "harptabs-artist:"  # a harptabs.com artist page's read: its job's key, the page's path after it
+INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST)  # what a site's index reads: jobs of no song's
 SEARCH_STAGES = (("search", "Search LaCuerda"),)  # ``caracole lacuerda --search --progress``'s one stage
 
 
@@ -288,20 +295,25 @@ def lacuerda_search_steps(query: str, *, auto: bool) -> list[tuple[str, tuple[st
     return [("Searching LaCuerda", ("lacuerda", f"--search={query}", "--progress", *(("--auto",) if auto else ())))]
 
 
+def harptabs_artist_steps(path: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Read a harptabs.com artist's page into its index now: ``caracole harptabs --artist``, one request."""
+    return [(f"Reading harptabs.com's page for {name}", ("harptabs", f"--artist={path}"))]
+
+
 def _searches(args: Sequence[str]) -> bool:
     """Whether a step's command is a query of LaCuerda's search."""
     return args[:1] == ("lacuerda",) and any(arg.startswith("--search=") for arg in args)
 
 
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
-    """The Ultimate Guitar song and tab, and the LaCuerda song, a lookup's ``caracole get`` was given (``--ug``,
-    ``--tab``, ``--lacuerda``), and what a ``caracole versions`` does (``--choose``, ``--keep``, ``--clear``), if
-    any."""
+    """The Ultimate Guitar song and tab, the LaCuerda song and the harptabs.com tab, a lookup's ``caracole get`` was
+    given (``--ug``, ``--tab``, ``--lacuerda``, ``--harptabs``), and what a ``caracole versions`` does (``--choose``,
+    ``--keep``, ``--clear``), if any."""
     picked: list[str] = []
     for step in steps:
         options = _options(step.args)
         if step.args[:1] == (LOOKUP,):
-            picked += [arg for arg in options if arg.startswith(("--ug=", "--tab=", "--lacuerda="))]
+            picked += [arg for arg in options if arg.startswith(("--ug=", "--tab=", "--lacuerda=", "--harptabs="))]
         elif step.args[:1] == (VERSIONS,):
             picked += [arg for arg in options if arg.startswith(("--choose=", "--keep=")) or arg == "--clear"]
     return tuple(picked)

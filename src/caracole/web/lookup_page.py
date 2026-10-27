@@ -8,7 +8,11 @@ Ultimate Guitar's, with LaCuerda's mark: a song's Get it keeps that LaCuerda
 sheet (``lacuerda``), and an artist's Songs lists those the index holds, or,
 while caracole hasn't read their page, offers to (``POST /lacuerda/artist``,
 one request, a job the page follows on ``/api/jobs``), as it does for a name
-under a letter LaCuerda's listings aren't read to yet. LaCuerda's own search,
+under a letter LaCuerda's listings aren't read to yet. harptabs.com's artists and
+songs come last, with its mark and the Harmonica badge: a song's Get it keeps that
+harmonica tab (``harptabs``), its other tabs under "⋯", and an artist's Songs lists
+the tabs the index holds of theirs, or offers to read their page (``POST
+/harptabs/artist``, one request, a job followed the same way). LaCuerda's own search,
 which finds the songs of an artist whose page caracole hasn't read, is one
 request too (``POST /lacuerda/search``): the page sends it by itself once the
 query has settled, the box unchanged for 1.5 s, when ``/api/search`` says so
@@ -220,7 +224,9 @@ function show(data, text) {
   const artists = Array.isArray(data.artists) ? data.artists : [];
   const objects = (value) => (Array.isArray(value) ? value : []).filter(x => x && typeof x === "object");
   const lcArtists = objects(data.lacuerda_artists), lc = objects(data.lacuerda);
-  const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length;
+  const htArtists = objects(data.harptabs_artists), ht = objects(data.harptabs);
+  const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length + htArtists.length +
+    ht.length;
   status.textContent = n ? "" : "Nothing matches.";
   if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
   // LaCuerda's: its artists, then its songs (the index holds every artist, and the songs of the pages caracole read);
@@ -234,6 +240,10 @@ function show(data, text) {
   if (data.index.length) results.append(...group("On Ultimate Guitar", data.index.map(ugSong)));
   if (data.lead !== "artist") results.append(...named);
   if (data.lacuerda_leads !== true) results.append(...lcGroup);
+  // harptabs.com's: its artists, then its songs (a song's harmonica tabs by an artist whose page caracole read; a tab
+  // by its title alone, a possible match, to open), with its mark and the Harmonica badge.
+  if (htArtists.length || ht.length) results.append(...group("On harptabs.com", [...htArtists.map(siteArtistRow),
+                                                                                ...ht.map(htSong)]));
   // What the search says beside its results, as the library page's bar says it (ROWS_SCRIPT's): nothing found, the
   // artists it may have meant first, then one card (look it up by name; Ask LaCuerda for a name under a letter its
   // listings aren't read to yet, whose page may say; where caracole looked; why it may not see an artist); else where
@@ -418,13 +428,19 @@ function ugSong(h) { return rowKit.ugHit(h, (pick, display) => lookUp(pick, disp
 // A song of LaCuerda's index, with its mark: Get it looks it up and keeps that LaCuerda sheet (ROWS_SCRIPT's row).
 function lcSong(h) { return rowKit.siteHit(h, (pick, display) => lookUp(pick, display)); }
 
-// A LaCuerda artist: Songs lists those the index holds, or offers to read their page (ROWS_SCRIPT's rows).
+// A song of harptabs.com's index: Get it looks it up and keeps that harmonica tab, its other tabs under "⋯"; a tab by
+// its title alone, a link to open (ROWS_SCRIPT's row).
+function htSong(h) { return rowKit.siteHit(h, (pick, display) => lookUp(pick, display)); }
+
+// A LaCuerda or harptabs.com artist: Songs lists those the index holds, or offers to read their page (ROWS_SCRIPT's
+// rows).
 function siteArtistRow(a) { return rowKit.siteArtist(a, () => openSiteArtist(a, true)); }
 
-// A LaCuerda artist, by the slug of their page ({slug}) or by a name ({name}: a page read by name); ``quiet``, a 404
-// isn't said.
+// A LaCuerda artist, by the slug of their page ({slug}) or by a name ({name}: a page read by name), or a harptabs.com
+// artist by their page's path ({harptabs}); ``quiet``, a 404 isn't said.
 function getSiteArtist(who, signal) {
-  const asked = who.slug ? "lacuerda=" + encodeURIComponent(who.slug) : "lacuerda_name=" + encodeURIComponent(who.name || "");
+  const asked = who.harptabs ? "harptabs=" + encodeURIComponent(who.harptabs)
+    : who.slug ? "lacuerda=" + encodeURIComponent(who.slug) : "lacuerda_name=" + encodeURIComponent(who.name || "");
   return fetch("/api/artist?" + asked, {signal, headers: {"Accept": "application/json"}})
     .then(r => r.json().then(data => ({status: r.status, data})))
     .then(({status: code, data}) => {
@@ -438,8 +454,10 @@ function openSiteArtist(a, focus) {
   const mine = ++typed;
   if (inflight) inflight.abort();
   inflight = new AbortController();
-  status.textContent = "Listing the songs of " + a.artist + " on LaCuerda…";
-  getSiteArtist({slug: a.slug}, inflight.signal).then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
+  const harp = a.source === "harptabs";
+  status.textContent = "Listing the songs of " + a.artist + (harp ? " on harptabs.com…" : " on LaCuerda…");
+  getSiteArtist(harp ? {harptabs: a.path} : {slug: a.slug}, inflight.signal)
+    .then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
 }
 
 // Read a LaCuerda page ({slug} or {name}) from the button ``go`` in ``offer``, then list the artist's songs; a read
@@ -464,18 +482,20 @@ function readThenShow(who, go, offer) {
 }
 
 function showSiteArtist(data, focus) {
+  const harp = data.source === "harptabs";
+  const site = harp ? "harptabs.com" : "LaCuerda";
   results.replaceChildren();
-  artistOpen = "lacuerda:" + data.slug;
+  artistOpen = harp ? "harptabs:" + data.path : "lacuerda:" + data.slug;
   const head = el("div", "artist-head");
   const name = el("h2", null, data.artist);
   name.tabIndex = -1;
   head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
   results.append(head);
-  status.textContent = data.artist + ": " + (data.read ? many(data.total, "song") + " on LaCuerda." :
-    "caracole hasn't read their page on LaCuerda yet.");
+  status.textContent = data.artist + ": " + (data.read ? many(harp ? data.songs.length : data.total, "song") + " on " +
+    site + "." : "caracole hasn't read their page on " + site + " yet.");
   if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
   results.append(...rowKit.siteArtistSongs(data, group, (pick, display) => lookUp(pick, display), null,
-    (go, offer) => readThenShow({slug: data.slug}, go, offer)));
+    (go, offer) => readThenShow(harp ? {harptabs: data.path} : {slug: data.slug}, go, offer)));
   if (focus) name.focus();
 }
 
@@ -522,7 +542,7 @@ backToResults.addEventListener("click", () => { expand(); window.scrollTo({top: 
 
 function lookUp(pick, display) {
   const body = new URLSearchParams({csrf});
-  for (const name of ["song", "artist", "title", "ug", "tab", "lacuerda"]) if (pick[name]) body.set(name, pick[name]);
+  for (const name of ["song", "artist", "title", "ug", "tab", "lacuerda", "harptabs"]) if (pick[name]) body.set(name, pick[name]);
   openReader(display, "Asking for it…");
   const mine = reading;
   fetch("/lookup", {method: "POST", body, headers: {"Accept": "application/json"}})

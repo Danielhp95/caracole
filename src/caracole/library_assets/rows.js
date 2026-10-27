@@ -354,6 +354,30 @@ const caracoleRows = (icons, does) => {
     box.appendChild(versions);
     return box;
   };
+  // A song's harmonica tabs on harptabs.com (``tabs``: each one's title, page and chips, the most viewed first), under a
+  // "⋯": each a button, ``choose(tab, button)`` what it does, with a link to look at it there.
+  const harpTabsOf = (tabs, display, choose) => {
+    const list = el("ul", "versions");
+    for (const t of tabs) {
+      const said = [t.key ? "key " + String(t.key) : "", Number(t.views) ? Number(t.views).toLocaleString("en") + " views"
+        : ""].filter(Boolean).join(" · ");
+      const name = String(t.title || "") + (said ? " · " + said : "");
+      const item = el("li", "version");
+      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Get " + display + " with the tab " +
+        String(t.title || "")));
+      const there = el("a", "on-ug", "on harptabs.com");
+      there.href = https(t.url) ? String(t.url) : "#";
+      there.target = "_blank";
+      there.rel = "noopener noreferrer";
+      there.setAttribute("aria-label", String(t.title || "") + ", " + display + ", on harptabs.com");
+      item.appendChild(there);
+      list.appendChild(item);
+    }
+    const box = el("div", "row-group");
+    box.appendChild(el("p", "subhead", "Harmonica tabs on harptabs.com"));
+    box.appendChild(list);
+    return box;
+  };
   // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), which its name does
   // too (nameDoes), and its versions under "⋯" (versionsOf).
   const ugHit = (h, get, later) => {
@@ -427,6 +451,24 @@ const caracoleRows = (icons, does) => {
         facts: many(Number(hit.versions) || 1, "version") + (chords ? "" : " · no chords"),
         badges: mine ? [{ kind: "found", text: "In your library" }] : [], action: main, more });
       nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+    } else if (hit.source === "harptabs" && hit.artist) {  // harptabs.com's song, by an artist whose page was read
+      const mine = yours(hit);
+      const artist = String(hit.artist || "");
+      const display = mine ? String(mine.display || "") : artist + " - " + title;
+      const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object" && https(t.url));
+      const pick = (url) => Object.assign(mine ? { song: mine.id } : { artist, title }, { harptabs: String(url) });
+      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick(hit.url), display, row,
+        e.currentTarget), (mine ? "Get " + display + " again" : "Get " + display) + " with its harmonica tab");
+      main.title = "Looks the song up now, and keeps this harptabs.com tab";
+      const more = [];
+      if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => get(pick(t.url), display, row, go)));
+      const opens = mine ? opener(mine.links) : null;
+      if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+      row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "harptabs",
+        facts: many(Number(hit.uploads) || 1, "harmonica tab"),
+        badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(["harmonica"])],
+        action: main, more });
+      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
     } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's or harptabs.com's: a title alone
       const site = TITLE_SITES[hit.source];
       row = resultRow({ title, artist: "Same title: maybe another song", source: hit.source,
@@ -475,15 +517,17 @@ const caracoleRows = (icons, does) => {
     const ug = rowOf(it.ug);
     const lc = rowOf(it.lacuerda);
     const gtp = rowOf(it.gtptabs);
-    const mine = [ug, lc, gtp].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
+    const ht = rowOf(it.harptabs);
+    const mine = [ug, lc, gtp, ht].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
     const gone = mine ? null : rowOf(it.removed);
-    const first = ug || lc || gtp || gone || {};
+    const first = ug || lc || gtp || ht || gone || {};
     const title = String(first.title || "");
     const artist = String(first.artist || "");
     const display = mine ? String(mine.display || "") : artist + " - " + title;
     const pick = (extra) => Object.assign(mine ? { song: mine.id } : { artist, title }, extra);
     const chords = Boolean(lc) && https(lc.sheet) && https(lc.url);
     const sheet = chords ? { lacuerda: String(lc.url) } : {};
+    const harp = ht && https(ht.url) ? { harptabs: String(ht.url) } : null;
     const a = acts && typeof acts === "object" ? acts : {};
     let line = null;
     const here = () => line;
@@ -494,12 +538,13 @@ const caracoleRows = (icons, does) => {
         "Add " + display + " again");
       main.title = "Into wanted.txt again, as Request does, and looked up now: a wanted.txt line brings it back";
     } else {
-      const chosen = ug ? pick({ ug: ug.ug }) : pick(sheet);
+      const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : harp ? pick(harp) : pick(sheet);
       main = button(mine ? "Get it again" : "Get it", "small primary", (e) => a.get(chosen, display, here(), e.currentTarget),
         (mine ? "Get " + display + " again" : "Get " + display) + (ug ? " from Ultimate Guitar" : chords ? " from LaCuerda"
-          : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
+          : harp ? " with its harmonica tab from harptabs.com" : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
       main.title = ug ? "Looks the song up now, as caracole get does, on Ultimate Guitar first"
         : chords ? "Looks the song up now, and keeps this LaCuerda sheet"
+        : harp ? "Looks the song up now, and keeps this harptabs.com tab"
         : gtp ? "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com"
         : "Looks the song up now: LaCuerda has no chords for it";
     }
@@ -521,22 +566,29 @@ const caracoleRows = (icons, does) => {
       more.push(box);
     }
     if (gtp) more.push({ heading: "On gtptabs.com", links: [{ label: "Its page", href: gtp.url, source: "gtptabs" }] });
+    if (ht) {  // its harmonica tabs, each a Get it that keeps that tab (the line's own button may be another site's)
+      const tabs = listOf(ht.tabs).filter((t) => t && typeof t === "object" && https(t.url));
+      if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => a.get(pick({ harptabs: String(t.url) }), display, here(), go)));
+    }
     const opens = mine ? opener(mine.links) : null;
     if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
     // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
     if (a.later && !mine && !(ug && ug.no_ones)) more.push(laterGroup(a.later, pick(ug ? {} : sheet), display, here));
     const facts = [ug ? tabCounts(ug.counts) : "",
       lc ? "LaCuerda ×" + (Number(lc.versions) || 1) + (chords ? "" : ", no chords") : "",
-      gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : ""];
+      gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : "",
+      ht ? "harmonica tab" + ((Number(ht.uploads) || 1) > 1 ? " ×" + Number(ht.uploads) : "") : ""];
     const badges = gone ? [{ kind: "removed", text: "Removed " + String(gone.removed_at || "").slice(0, 10) }]
       : mine ? [{ kind: "found", text: "In your library" }] : [];
-    line = resultRow({ dense: true, title, artist, sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs"].filter(Boolean),
-      facts: facts.filter(Boolean).join(" · "), badges: [...badges, ...instrumentBadges(ug ? ugInstruments(ug.counts) : [])],
+    line = resultRow({ dense: true, title, artist,
+      sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs"].filter(Boolean),
+      facts: facts.filter(Boolean).join(" · "),
+      badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : [])])],
       action: main, more, status: gone ? "removed" : "" });
     line.classList.add("hit");
     if (gone) line.classList.add("removed-hit");
     line.dataset.hit = String(it.key || "");
-    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : "removed";
+    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : "removed";
     if (ug) line.dataset.ug = String(ug.ug || "");
     nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Get " + display + " again" : "Get " + display);
     return line;
@@ -557,33 +609,43 @@ const caracoleRows = (icons, does) => {
     line.dataset.hit = source + ":" + String(hit.url || "");
     return line;
   };
-  // An artist of LaCuerda's index, with their most popular songs said: ``open(a)`` lists the songs the index
-  // holds of theirs, or offers to read their page when caracole never has.
+  // An artist of LaCuerda's index, or of harptabs.com's (``source``), with their most popular (most viewed) songs said:
+  // ``open(a)`` lists the songs the index holds of theirs, or offers to read their page when caracole never has.
   const siteArtist = (a, open) => {
     const x = a && typeof a === "object" ? a : {};
+    const harp = x.source === "harptabs";
     const name = String(x.artist || "");
     const top = listOf(x.top).map((t) => t && t.title).filter(Boolean);
-    const go = button("Songs", "small primary", () => open(x), "Songs by " + name + " on LaCuerda");
-    const row = resultRow({ title: name, artist: top.length ? "Artist · " + top.join(", ") : "Artist", source: "lacuerda",
-      facts: many(x.songs, "song"), action: go });
+    const go = button("Songs", "small primary", () => open(x), "Songs by " + name + (harp ? " on harptabs.com" : " on LaCuerda"));
+    const row = resultRow({ title: name, artist: top.length ? "Artist · " + top.join(", ") : "Artist",
+      source: harp ? "harptabs" : "lacuerda",
+      facts: harp ? (Number(x.known) ? many(x.songs, "harmonica tab") : "page not read yet") : many(x.songs, "song"),
+      badges: harp ? instrumentBadges(["harmonica"]) : [], action: go });
     row.classList.add("hit", "artist-hit");
-    row.dataset.source = "lacuerda";
-    row.dataset.slug = String(x.slug || "");
+    row.dataset.source = harp ? "harptabs" : "lacuerda";
+    row.dataset.slug = String((harp ? x.path : x.slug) || "");
     return row;
   };
-  // A LaCuerda artist's songs, as /api/artist?lacuerda= gives them, under ``group(title, rows)``; or, while
-  // caracole hasn't read their page, what it lists and the button that reads it (``read(button, box)``).
+  // A LaCuerda or harptabs.com artist's songs, as /api/artist?lacuerda= (?harptabs=) gives them, under ``group(title,
+  // rows)``; or, while caracole hasn't read their page, what it lists and the button that reads it (``read(button,
+  // box)``).
   const siteArtistSongs = (page, group, get, later, read) => {
     const p = page && typeof page === "object" ? page : {};
+    const harp = p.source === "harptabs";
+    const site = harp ? "harptabs.com" : "LaCuerda";
     const songs = listOf(p.songs).filter((h) => h && typeof h === "object");
-    if (p.read) return group("LaCuerda, the most popular first · " + many(songs.length, "song"), songs.map((h) => siteHit(h, get, later)));
+    if (p.read) {
+      return group(site + (harp ? ", the most viewed first · " : ", the most popular first · ") + many(songs.length, "song"),
+        songs.map((h) => siteHit(h, get, later)));
+    }
     const name = String(p.artist || "");
     const box = el("div", "read-page");
-    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on LaCuerda yet, which lists " +
-      many(p.listed, "song") + ". Reading it is one request to LaCuerda, at a lookup's pace."));
+    box.appendChild(el("p", null, "caracole hasn't read the page of " + name + " on " + site + " yet" +
+      (harp ? "" : ", which lists " + many(p.listed, "song")) + ". Reading it is one request to " + site +
+      ", at a lookup's pace."));
     box.appendChild(button("Read their page", "small primary", (e) => read(e.currentTarget, box),
-      "Read the page of " + name + " on LaCuerda"));
-    return [el("h2", "group", "LaCuerda"), box];
+      "Read the page of " + name + " on " + site));
+    return [el("h2", "group", site), box];
   };
   // A job of LaCuerda's index queued (POST ``address``, the form ``body``), then followed until it is over;
   // ``said(text)`` hears how it goes, in ``words`` (``asking``, ``running``; ``failed``, a refusal without words).
@@ -614,10 +676,16 @@ const caracoleRows = (icons, does) => {
       }, gone);
   });
   // Read a LaCuerda artist's page now (POST lacuerda/artist: caracole lacuerda --artist, a job in the queue), by
-  // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), then follow the job until it
-  // is over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
+  // the slug of a page the index lists (``who.slug``) or by a name (``who.name``), or a harptabs.com artist's (POST
+  // harptabs/artist: caracole harptabs --artist), by its path (``who.harptabs``), then follow the job until it is
+  // over; ``said(text)`` hears how it goes. Resolves with the job, or with why there is none.
   const readArtistPage = (csrf, who, said) => {
     const w = who && typeof who === "object" ? who : {};
+    if (w.harptabs) {
+      return queueAndFollow("harptabs/artist", new URLSearchParams({ csrf: String(csrf || ""), path: String(w.harptabs) }),
+        said, { asking: "Asking for the page…", running: "Reading the page on harptabs.com…",
+          failed: "caracole didn't read the page." });
+    }
     const body = new URLSearchParams(w.slug ? { csrf: String(csrf || ""), slug: String(w.slug) }
       : { csrf: String(csrf || ""), name: String(w.name || "") });
     return queueAndFollow("lacuerda/artist", body, said, { asking: "Asking for the page…",

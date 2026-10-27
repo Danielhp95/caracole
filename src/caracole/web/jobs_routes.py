@@ -45,7 +45,7 @@ from caracole.web.app import (
     query,
     redirect,
 )
-from caracole.web.jobs import EXPORTING, LACUERDA_READS, LACUERDA_SEARCH, LOOKUP, REMOVING, Job, JobStarted
+from caracole.web.jobs import EXPORTING, INDEX_READS, LACUERDA_SEARCH, LOOKUP, REMOVING, Job, JobStarted
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import SongFacts, details_href, job_line, song_line
@@ -138,7 +138,7 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
     picked = any(step.args[:1] == ("review",) for step in job.steps)  # a pick comes after the song's own request
     queued, _ = app.submit(job.title, job.song_key, steps, fetching=job.fetching, note=job.note,
                            display=job.display, join=not picked, song_id=job.song_id)
-    if job.song_key.startswith(LACUERDA_READS):  # once read, the searches' answers kept go, as a first read's
+    if job.song_key.startswith(INDEX_READS):  # once read, the searches' answers kept go, as a first read's
         with app._searching:
             app._reads.add(queued.id)
     return app.queued(queued, "/jobs")
@@ -181,7 +181,7 @@ def api_job(app: WebApp, number: str) -> Response:
     job = app.queue.job(int(number)) if number.isascii() and number.isdigit() else None
     if job is None:
         return json_response(404, {"error": "no such request"})
-    if job.song_key.startswith(LACUERDA_READS):  # no song's: its line says what LaCuerda answered
+    if job.song_key.startswith(INDEX_READS):  # no song's: its line says what the site answered
         return json_response(200, job.as_json() | {"line": job_line(job, None).as_json()})
     return json_response(200, job.as_json())
 
@@ -205,7 +205,7 @@ def views(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None, jo
         song_id, facts = song_of(app, conn, overrides, job)
         seen = view(job, jobs, song_id, facts, songbook_page=_songbook_page(conn, job))
         if (job.id in cards and not job.active and overrides is not None
-                and not job.song_key.startswith(LACUERDA_READS)):
+                and not job.song_key.startswith(INDEX_READS)):
             section = section or _songbooks(app, conn, overrides)
             seen["songbooks"] = section
         if job.id in cards and not job.active and song_id is not None and overrides is not None:
