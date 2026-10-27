@@ -167,7 +167,7 @@ from caracole.library import (
     write_atomic,
     write_info,
 )
-from caracole.keys import SongKey, sheet_key, sheet_keys
+from caracole.keys import SongKey, sheet_capo, sheet_key, sheet_keys
 from caracole.normalize import clean_title
 from caracole.overrides import Overrides, OverridesError, load_overrides
 from caracole.pdf_fonts import ROLES, PdfFonts, in_folder, metrics
@@ -183,7 +183,7 @@ from caracole.songs import (
     is_export,
     list_songs,
 )
-from caracole.ug.page import decode_twice, json_int
+from caracole.ug.page import decode_twice
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
 from caracole.viewer import harpfit
@@ -1557,10 +1557,8 @@ def _key(raw: Mapping[str, Any]) -> str | None:
 
 
 def _capo(meta: Any) -> int | None:
-    """The capo fret in UG's ``tab_view.meta``: a number or a digit string, else no capo."""
-    value = meta.get("capo") if isinstance(meta, Mapping) else None
-    fret = None if isinstance(value, bool) else json_int(value)
-    return fret if fret is not None and fret > 0 else None
+    """The capo fret in UG's ``tab_view.meta``, as the sheet's key is read with it (``keys.sheet_capo``)."""
+    return sheet_capo(meta)
 
 
 def _auto_sheet(library_dir: Path, kept: KeptFile) -> _Sheet:

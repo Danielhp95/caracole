@@ -355,6 +355,18 @@ def test_a_key_the_tab_names_by_its_letter_alone_is_minor_when_its_chords_say_th
     assert song_key(conn, cfg.library_dir, s) == SongKey(key, "tab")
 
 
+@pytest.mark.parametrize("capo", [2, "2", "2.0", 2.0])
+def test_the_capo_is_read_from_sheet_json_as_the_sheets_chordpro_file_reads_it(conn, cfg, capo):
+    # render.py's .cho takes UG's capo as any whole number, so the key is read with that capo too: "B" names the
+    # sound of Hotel California's A minor shapes only with the capo on fret 2
+    from caracole.render import _capo
+
+    assert _capo({"capo": capo}) == 2
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "B"}, content=HOTEL, meta={"capo": capo})
+    assert song_key(conn, cfg.library_dir, s) == SongKey("B minor", "tab")
+
+
 def test_a_lacuerda_sheets_tono_named_by_its_letter_alone_is_minor_when_its_chords_say_so(conn, cfg):
     s = add_song(conn)
     keep_sheet(conn, cfg, s, provider="lacuerda", content="Tono: La\n\n" + AM_F_C_G)

@@ -357,7 +357,7 @@ def _named_in(raw: Mapping[str, Any], field: str = "tonality_name") -> tuple[str
 
 def _markup(library_dir: Path, doc: KeptFile | None, sheet: KeptFile) -> tuple[str | None, int | None]:
     """The human sheet's markup and its capo: the ``content`` of the sheet.json kept with it, and the
-    capo in its ``meta`` (UG's: a number or a digit string; none, or 0, for no capo).
+    capo in its ``meta`` (``sheet_capo``).
 
     Any synced device can write that file, so whatever it holds gives None at worst
     (``library.read_json``).
@@ -371,14 +371,18 @@ def _markup(library_dir: Path, doc: KeptFile | None, sheet: KeptFile) -> tuple[s
     if not isinstance(data, dict):
         return None, None
     content = data.get("content")
-    meta = data.get("meta")
-    capo = meta.get("capo") if isinstance(meta, dict) else None
-    if isinstance(capo, str) and capo.strip().isdecimal() and capo.strip().isascii():
-        capo = int(capo.strip())
-    elif isinstance(capo, float) and capo.is_integer():
-        capo = int(capo)
-    fret = capo if isinstance(capo, int) and not isinstance(capo, bool) and capo > 0 else None
-    return (content if isinstance(content, str) else None), fret
+    return (content if isinstance(content, str) else None), sheet_capo(data.get("meta"))
+
+
+def sheet_capo(meta: Any) -> int | None:
+    """The capo fret in UG's ``meta`` (sheet.json's, a version's JSON): a whole number, written as a number or a
+    string ("2", "2.0"), else no capo, as for 0. The key is read with it, and render.py writes it in the sheet's .cho
+    (``render._capo``), so the two read one capo."""
+    from caracole.ug.page import json_int  # a number as UG's JSON writes one
+
+    value = meta.get("capo") if isinstance(meta, Mapping) else None
+    fret = None if isinstance(value, bool) else json_int(value)
+    return fret if fret is not None and fret > 0 else None
 
 
 def _text(path: Path) -> str | None:
