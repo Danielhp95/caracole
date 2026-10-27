@@ -32,7 +32,7 @@ SONG_CHORDS = ["C", "Am", "F", "G7", "Dm7", "Bb", "C/E", "E"]
 CAPO_2 = ("{title: Capo}\n{artist: Synthetic}\n{key: Em}\n{capo: 2}\n{comment: Verse}\n"
           "[Em]la la [C]la la [G]la la [D]la\n")
 IN_E = "{title: In E}\n{artist: Synthetic}\n{key: E}\n{comment: Verse}\n[E]la la [A]la la [B7]la la [E]la\n"
-NAMES = ["Guitar", "Ukulele", "Ukulele, low G", "Baritone ukulele", "Piano"]
+NAMES = ["Guitar", "Ukulele", "Ukulele, low G", "Baritone ukulele", "Piano", "Harmonica", "Flute", "Recorder"]
 
 # Each box of ``boxes``, read back: [frets as the position writes them, base fret].
 BOXES = """((boxes) => [...boxes].map((svg) => {
@@ -85,7 +85,7 @@ def test_the_settings_offer_each_instrument_the_viewer_draws_the_guitar_first(tm
         uke = b.js(SETTINGS)
     assert seen["row"] and seen["chips"] == [[n, "true" if n == "Guitar" else "false"] for n in NAMES]
     assert seen["hint"] == "Standard tuning, E A D G B E." and seen["hash"] == ""
-    assert [c[1] for c in uke["chips"]] == ["false", "true", "false", "false", "false"]
+    assert [c[1] for c in uke["chips"]] == ["false", "true"] + ["false"] * 6
     assert uke["hint"] == "G C E A, the G string high." and uke["hash"] == "#inst=ukulele"
 
 

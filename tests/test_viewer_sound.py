@@ -116,9 +116,11 @@ def test_the_synthesis_is_a_script_of_its_own_inlined_and_hashed_before_the_view
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     strum = (page.HERE / "strum.js").read_text(encoding="utf-8")
     instruments = (page.HERE / "instruments.js").read_text(encoding="utf-8")
+    winds = (page.HERE / "winds.js").read_text(encoding="utf-8")
     viewer = (page.HERE / "viewer.js").read_text(encoding="utf-8")
-    assert scripts == [strum, instruments, viewer]
-    assert f"script-src {sha256_source(strum)} {sha256_source(instruments)} {sha256_source(viewer)};" in csp
+    assert scripts == [strum, instruments, winds, viewer]
+    assert (f"script-src {sha256_source(strum)} {sha256_source(instruments)} {sha256_source(winds)} "
+            f"{sha256_source(viewer)};") in csp
     assert page.HERE / "strum.js" in page.BUILD_FILES
     # It loads nothing: no worklet module, no sample, no fetch.
     for word in ("addModule", "fetch(", "XMLHttpRequest", "import(", "new Audio(", "innerHTML", "eval("):
@@ -854,7 +856,7 @@ def test_the_notes_of_a_voicing_on_any_tuning_and_a_pianos_as_they_are(tmp_path)
         assert b.js(notes % ('["1343", "1243", 5, []]', 0, "[55, 60, 64, 69]")) == [60, 67, 72, 76]  # from fret 5
         assert b.js(notes % ('["0003", "0003", 1, []]', 0, "null")) == []  # four frets: no guitar's
         assert b.js(notes % ("[48, 60, 64, 67]", 0, "null")) == [48, 60, 64, 67]
-        assert b.js("window.caracoleSound.voices") == ["guitar", "ukulele", "piano"]
+        assert b.js("window.caracoleSound.voices") == ["guitar", "ukulele", "piano", "reed", "flute", "recorder"]
 
 
 @in_chromium
@@ -909,3 +911,73 @@ def test_a_progression_on_the_piano_strikes_each_chord_at_once_and_stops(tmp_pat
     firsts = [whens for _, whens in sorted(struck.items())][:6]
     assert all(len(whens) == 4 and max(whens) == min(whens) for whens in firsts)  # bass and triad, together
     assert heard in {heard_for(PIANO, name) for name in ("C", "G", "Am", "F")}
+
+
+# --- the harmonica, the flute and the recorder (winds.js): a breath, not a pluck ------------------------------------
+
+
+@in_chromium
+def test_a_reeds_and_a_flutes_note_is_in_tune_held_and_ends_silent(tmp_path):
+    # Held as long as it is blown, as a plucked string is not: as loud after half a second as as it began, then
+    # faded out, never ending on a click; in tune within three cents (a flute's vibrato comes later).
+    measure = """((hz, rate, voice) => {
+      const s = window.caracoleSound.blow(hz, rate, 1.0, voice);
+      const from = Math.round(rate * 0.2), n = Math.round(rate * 0.25);
+      const at = (lag) => { let sum = 0; for (let i = from; i < from + n; i++) sum += s[i] * s[i + lag]; return sum; };
+      const period = rate / hz;
+      let best = 0, lag = 0;
+      for (let l = Math.floor(period * 0.9); l <= Math.ceil(period * 1.1); l++) { const v = at(l); if (v > best) { best = v; lag = l; } }
+      const a = at(lag - 1), b = at(lag), c = at(lag + 1);
+      const exact = lag + (a - c) / (2 * (a - 2 * b + c));
+      const rms = (t0, t1) => { let m = 0; const i0 = Math.round(rate * t0), i1 = Math.round(rate * t1);
+        for (let i = i0; i < i1; i++) m += s[i] * s[i]; return Math.sqrt(m / (i1 - i0)); };
+      return { cents: 1200 * Math.log2((rate / exact) / hz), early: rms(0.12, 0.22), held: rms(0.42, 0.52),
+               last: Math.abs(s[s.length - 1]), length: s.length, top: Math.max(...s.map(Math.abs)) };
+    })(%s, %s, %s)"""
+    with opened(tmp_path, written(tmp_path, build_viewer(SONG))) as b:
+        for voice in ("reed", "flute", "recorder"):
+            for hz in (261.63, 392.0, 587.33, 1046.5):
+                for rate in (44100, 48000):
+                    found = b.js(measure % (hz, rate, json.dumps(voice)))
+                    assert abs(found["cents"]) < 3, (voice, hz, rate, found)
+                    assert found["length"] == rate and found["last"] < 1e-3 and found["top"] <= 1.0001
+                    assert found["held"] > 0.8 * found["early"], (voice, hz, found)
+        plucked = b.js(measure.replace("blow(hz, rate, 1.0, voice)", "pluck(hz, rate, 1.0)") % (587.33, 48000, '"guitar"'))
+        assert plucked["held"] < 0.8 * plucked["early"]  # a plucked string dies away
+
+
+@in_chromium
+@pytest.mark.parametrize(("inst", "heard"), [
+    ("harmonica", "261.63 329.63 392.00"),  # a song in C: a C harp, 1st position; C is blow 1–3, C4 E4 G4
+    ("flute", "261.63 329.63 392.00"),  # C4 E4 G4, as read and as it sounds
+    ("recorder", "523.25 659.26 783.99"),  # read C4 E4 G4, sounding an octave higher
+])
+def test_the_harmonica_and_the_winds_play_their_own_notes(tmp_path, inst, heard):
+    with opened(tmp_path, written(tmp_path, build_viewer(SONG)) + "#inst=" + inst) as b:
+        tap(b, '#sheet .c[data-c="0"]')
+        assert b.wait("document.documentElement.dataset.heard !== undefined")
+        assert look(b)["heard"] == heard
+
+
+@in_chromium
+def test_a_progression_on_the_harmonica_blows_or_draws_each_chord_at_once_and_stops(tmp_path):
+    from caracole.viewer import harp
+    from caracole.viewer.theory import parse_chord
+
+    with scheduled(tmp_path, SECTIONS, "#inst=harmonica") as b:
+        harmony_at_200_bpm(b)
+        tapped(b, PLAY % 0)  # the verse: C G Am F, on a C harp
+        assert b.wait("notesNow().length >= 9")
+        notes = b.js("notesNow()")
+        _, t = when_ahead(b, "document.querySelector('#harmony [data-close]').click()")
+        time.sleep(0.6)
+        for note in b.js("notesNow()"):  # nothing due after it is heard, and what rang fades out
+            assert not sounds(note) if note["when"] > t + 0.01 else ends(note) <= t + FADE + 1e-6, (t, note)
+        assert b.wait("log.context.state === 'suspended'", 8)
+        assert strum_timers(b) == []
+    blown: dict[int, list[float]] = {}
+    for note in notes:
+        blown.setdefault(note["strum"], []).append(note["when"])
+    # C, blow 1–3, and G, draw 2–4, each three holes at once; Am and F, not on a C harp: bars of silence.
+    assert blown and all(len(whens) == 3 and max(whens) == min(whens) for whens in blown.values())
+    assert [harp.play(parse_chord(c), 0).kind for c in ("C", "G", "Am", "F")] == ["yes", "yes", "no", "no"]

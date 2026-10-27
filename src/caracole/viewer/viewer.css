@@ -465,6 +465,44 @@ a.ver-main .ver-name { color: var(--accent); }
 .strip svg.kb { width: 132px; }
 .facts .inst-line { display: block; margin-top: 2px; }
 .inst-panel:empty { display: none; }
+/* The harmonica and the winds (winds.js): a harp's ten holes, those a chord plays lit; a flute's keys or a
+   recorder's holes down its length for each note, pressed or covered filled. As wide as a keyboard on the card. */
+.hp { display: block; width: 100%; height: auto; }
+.hp-hole { fill: var(--surface); stroke: var(--muted); stroke-width: .7; }
+.hp-hole.hp-on { fill: var(--accent); stroke: var(--accent); }
+.hp-num { fill: var(--muted); font: 600 6px system-ui, sans-serif; text-anchor: middle; }
+.hp-card { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; }
+.hp-card p { margin: 0; }
+.hp-text { color: var(--text); font-size: .9rem; font-weight: 650; }
+.hp-harp { font-size: .75rem; }
+.wd { display: block; width: 26px; height: auto; }
+.wd-key { fill: var(--surface); stroke: var(--text); stroke-width: .8; }
+.wd-key.wd-on, .wd-half, .wd-bell.wd-on { fill: var(--text); }
+.wd-bell { fill: var(--surface); stroke: var(--text); stroke-width: .6; }
+.wd-split { stroke: var(--muted); stroke-width: .6; }
+.wd-tones { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 6px; }
+.wd-tone { display: flex; flex-direction: column; align-items: center; color: var(--text); font-size: .8rem;
+  font-weight: 650; }
+.wd-names { font-size: .78rem; font-weight: 600; color: var(--muted); }
+.diagram[data-kind="harmonica"], .diagram[data-kind="wind"] { width: 176px; }
+.diagram svg.hp { width: 100%; }
+.diagram svg.wd { width: 26px; }  /* six notes (a 13th) in a row, in the card's 176 px */
+.diagram .wd-tones { gap: 4px; }
+.card[data-kind="harmonica"] .shape, .card[data-kind="wind"] .shape { grid-template-columns: 84px 84px; }
+.card[data-kind="harmonica"] .shape .round, .card[data-kind="wind"] .shape .round { justify-self: center; width: 44px; }
+.strip svg.hp { width: 76px; }
+.inst-panel .wd-line { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.inst-panel .wd-part { flex-basis: 100%; }
+.wd-title { margin: 4px 0; color: var(--muted); font-size: .85rem; font-weight: 600; }
+.wd-part .wd-tones { justify-content: flex-start; }
+.wl { flex-basis: 100%; min-width: 0; margin: 0; padding: 0; list-style: none; }
+.wl-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 6px 0; border-top: 1px solid var(--border); }
+.wl-row .hp { flex: none; width: 76px; }
+.wl-name { min-width: 3.2em; }
+.wl-text { flex: 1 1 10em; min-width: 0; color: var(--muted); font-size: .88rem; }
+.wd-row .wd-tones { justify-content: flex-start; }
+.wd-tabs { margin: 0; padding: 0; list-style: none; }
+.wd-tabs .wd-key { margin-left: 4px; color: var(--muted); font-size: .85rem; }
 
 /* A wide screen: one column, centred, in larger text; two side by side only for a song the window
    shows whole that way (viewer.js measures it, and says so in data-columns). A longer song would
@@ -489,7 +527,11 @@ a.ver-main .ver-name { color: var(--accent); }
     width: 340px; height: auto; max-width: none; max-height: none; margin: 0; padding-bottom: 14px; overflow: visible;
     border-bottom: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
   .card #alts { flex-wrap: wrap; margin: 0; padding: 0; overflow: visible; }
-  .sheet-ui.card[data-kind="keys"] { width: 470px; }
+  .sheet-ui.card[data-kind="keys"], .sheet-ui.card[data-kind="harmonica"], .sheet-ui.card[data-kind="wind"] {
+    width: 470px; }
+  .card[data-kind="harmonica"] .shape, .card[data-kind="wind"] .shape { grid-template-columns: 106px 106px; }
+  .diagram[data-kind="harmonica"], .diagram[data-kind="wind"] { width: 220px; }
+  .diagram svg.wd { width: 32px; }
   .card[data-kind="keys"] .shape { grid-template-columns: 106px 106px; }
   .diagram[data-kind="keys"], .diagram[data-kind="keys"] svg { width: 220px; }
 }

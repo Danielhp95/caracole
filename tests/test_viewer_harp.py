@@ -194,15 +194,15 @@ def names_of(found: list[HarpChoice]) -> list[tuple[str, int]]:
 
 
 @pytest.mark.parametrize(("key", "progression", "harps"), [
-    # A major song: 1st and 2nd. With a IV chord the cross harp wins (the I–IV–V of most songs).
-    (Key(7, "ionian"), "G C D", [("C", 2), ("G", 1)]),
-    (Key(7, "ionian"), "G D Em C", [("C", 2), ("G", 1)]),
-    (Key(7, "ionian"), "G7 C7 D7", [("C", 2), ("G", 1)]),  # a blues in G: a C harp
-    # With a ii chord and no IV, the straight harp wins.
-    (Key(7, "ionian"), "G Am D7", [("G", 1), ("C", 2)]),
-    # Only the tonic: the position whose scale is the song's comes first.
+    # A song in a major key: the 1st position, then the 2nd, whatever its chords (the owner's rule).
+    (Key(7, "ionian"), "G C D", [("G", 1), ("C", 2)]),
+    (Key(7, "ionian"), "G D Em C", [("G", 1), ("C", 2)]),
+    (Key(7, "ionian"), "G7 C7 D7", [("G", 1), ("C", 2)]),
+    (Key(0, "ionian"), "C G Am F", [("C", 1), ("F", 2)]),
     (Key(7, "ionian"), "G", [("G", 1), ("C", 2)]),
+    # Any other mode by the chords each plays: Mixolydian's own position, the 2nd, plays its tonic too.
     (Key(7, "mixolydian"), "G", [("C", 2), ("G", 1)]),
+    (Key(7, "mixolydian"), "G F C", [("C", 2), ("G", 1)]),
     # A minor song: 3rd, 4th and 5th; the 3rd plays the i chord (draw 4–6), so it leads.
     (Key(9, "aeolian"), "Am F C G", [("G", 3), ("F", 5), ("C", 4)]),
     (Key(9, "aeolian"), "Am Dm Em", [("G", 3), ("C", 4), ("F", 5)]),
@@ -217,10 +217,25 @@ def test_the_harps_for_a_song_by_its_mode_then_the_chords_they_play(key, progres
 
 
 def test_a_choice_says_what_it_plays():
-    cross, straight = choices(Key(7, "ionian"), chords("G C D G"))
+    straight, cross = choices(Key(7, "ionian"), chords("G C D G"))
     assert (cross.position, cross.mode, cross.chords, cross.plays, cross.substitutes) == (2, "mixolydian", 3, 2, 1)
     assert (straight.position, straight.mode, straight.plays, straight.substitutes) == (1, "ionian", 2, 0)
     assert cross.fit == 3.5 and straight.fit == 3  # the tonic chord counts twice, a substitute half
+
+
+@pytest.fixture
+def fresh_choices():
+    harp._choices.cache_clear()
+    yield
+    harp._choices.cache_clear()
+
+
+def test_the_ranking_is_one_rule_in_one_place(monkeypatch, fresh_choices):
+    assert names_of(choices(Key(0, "aeolian"), chords("Cm"))) == [("Bb", 3), ("Eb", 4), ("Ab", 5)]
+    harp._choices.cache_clear()
+    monkeypatch.setattr(harp, "ranking", lambda key, order, choice: (-choice.position,))
+    assert names_of(choices(Key(0, "aeolian"), chords("Cm"))) == [("Ab", 5), ("Eb", 4), ("Bb", 3)]
+    assert names_of(choices(Key(7, "ionian"), chords("G C D"))) == [("C", 2), ("G", 1)]
 
 
 def test_unreadable_chords_and_repeats_count_once_or_not_at_all():
@@ -239,10 +254,11 @@ def test_the_harps_follow_the_transposition():
 
 
 @pytest.mark.parametrize(("key", "progression", "line"), [
-    (Key(7, "ionian"), "G C D", "Harmonica: C harp (2nd position) · G harp (1st)"),
+    (Key(7, "ionian"), "G C D", "Harmonica: G harp (1st position) · C harp (2nd)"),
+    (Key(7, "mixolydian"), "G F C", "Harmonica: C harp (2nd position) · G harp (1st)"),
     (Key(9, "aeolian"), "Am F C G", "Harmonica: G harp (3rd position, dorian) · F harp (5th, phrygian) · "
                                     "C harp (4th, aeolian)"),
-    (Key(1, "ionian"), "Db Gb Ab", "Harmonica: F# harp (2nd position) · Db harp (1st)"),
+    (Key(1, "ionian"), "Db Gb Ab", "Harmonica: Db harp (1st position) · F# harp (2nd)"),
     (Key(5, "lydian"), "F G", "Harmonica: F harp (1st position) · Bb harp (2nd) · C harp (12th, lydian)"),
 ])
 def test_the_header_line_names_each_harp_and_its_position(key, progression, line):
@@ -312,6 +328,11 @@ def test_the_page_builds_the_header_line_and_the_chords_holes_on_every_transposi
 
 def test_no_key_no_harps():
     assert harp.tables(None, {}) == {}
+
+
+def test_each_harps_notes_for_the_sound_of_its_holes():
+    assert harp.layouts() == [[list(layout(h).blow), list(layout(h).draw)] for h in range(12)]
+    assert harp.layouts()[0] == [[60, 64, 67, 72, 76, 79, 84, 88, 91, 96], [62, 67, 71, 74, 77, 81, 83, 86, 89, 93]]
 
 
 def test_answers_are_frozen_and_a_list_handed_out_is_a_copy():

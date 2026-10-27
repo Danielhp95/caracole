@@ -61,6 +61,8 @@
       song.voicings = JSON.parse(document.getElementById("voicings").textContent);
       const easy = document.getElementById("easy");  // every instrument's easy keys, for a song with a key
       if (easy && song.key) song.easy = JSON.parse(easy.textContent);
+      const winds = document.getElementById("winds");  // the winds' fingerings and the harps' notes, every song's
+      if (winds) song.winds = JSON.parse(winds.textContent);
       data.textContent = JSON.stringify(song);
     } catch (err) { /* the viewer says so */ }
     const title = current.querySelector("h2.title");

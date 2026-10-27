@@ -4,10 +4,14 @@ in, the notes of a key's scale and of a chord as a wind player reads them, with 
 from __future__ import annotations
 
 import dataclasses
+import json
+import re
 
 import pytest
 
-from caracole.viewer import harmony, harmony_tables, winds
+from caracole.inline import sha256_source
+from caracole.viewer import build_viewer, harmony, harmony_tables, harp, page, winds
+from caracole.viewer.book import BookSong, build_songbook
 from caracole.viewer.harmony_tables import SHIFTS, shifted
 from caracole.viewer.theory import MODES, QUALITIES, Chord, Key, alternatives, map_chord, parse_chord, spelling
 from caracole.viewer.winds import FLUTE, RECORDER, chord_notes, chord_steps, fingerings, fit, scale_notes, solfege
@@ -313,3 +317,67 @@ def test_answers_are_frozen_and_a_list_handed_out_is_a_copy():
     assert len(fingerings(FLUTE, 70)) == 2
     assert scale_notes(Key(0, "ionian"))[0] == 60 and chord_notes(parse_chord("C")) == [60, 64, 67]
     assert chord_steps(parse_chord("C")) == [0, 4, 7] and winds.fingering_data()["flute"]["notes"]
+
+
+# --- what a sheet's page carries: the harmonica's tables and the winds' (page.py) -----------------------------
+
+IN_G = ("{title: In G}\n{artist: Synthetic}\n{key: G}\n{comment: Verse}\n"
+        "[G]made [C]up [D7]words [Em]here\n[G/B]and [Am7]some [Cmaj7]more [Bb]there\n")
+HARP_KEYS = ("harpKeys", "harps", "harpForms", "harpChords", "harpAlts")
+WIND_KEYS = ("windForms", "windChords", "windAlts")
+
+
+def data_of(html: str) -> dict:
+    return json.loads(re.search(r'<script type="application/json" id="song">(.*?)</script>', html, re.S).group(1))
+
+
+def read(rep) -> Chord | None:
+    """A chord as the page's data has it, [root, suffix, bass, ...], read back."""
+    if rep is None:
+        return None
+    bass = "" if rep[2] is None else "/" + NAMES[rep[2]]
+    return parse_chord(NAMES[rep[0]] + rep[1] + bass, strict=False)
+
+
+def test_a_page_carries_the_harmonicas_and_the_winds_tables_as_python_makes_them():
+    data = data_of(build_viewer(IN_G))
+    key = Key(7, "ionian")
+    chords = [read(r) for r in data["chords"]]
+    mapped = {mode: [read(r) for r in data["mapped"][mode]] for mode in MODES}
+    alts = {mode: [[read(a) for a in options] for options in data["alts"][mode]] for mode in MODES}
+    assert {k: data[k] for k in HARP_KEYS} == harp.tables(key, mapped, alts)
+    assert {k: data[k] for k in WIND_KEYS} == winds.tables(chords, key, mapped, alts)
+    assert data["winds"] == {**winds.fingering_data(), "harps": harp.layouts()}  # the same on every page
+    assert [h[:2] for h in data["harps"]["ionian"]] == [[1, 0], [2, 5]]  # G harp, then C harp
+
+
+def test_a_sheet_with_no_key_carries_no_harps_and_its_chords_notes():
+    data = data_of(build_viewer("{title: T}\n{artist: A}\n[N.C.]la [Xq]la\n"))
+    assert data["key"] is None and not any(k in data for k in HARP_KEYS)
+    assert data["windChords"] == {"": [None, None]} and data["winds"]["low"] == 60
+
+
+def test_what_the_tables_add_to_a_page_is_small():
+    import json as _json
+    from pathlib import Path
+
+    cho = (Path(__file__).parent / "fixtures" / "chordpro" / "legend_sheet.cho").read_text(encoding="utf-8")
+    data = data_of(build_viewer(cho))
+    added = {k: data[k] for k in (*HARP_KEYS, *WIND_KEYS, "winds") if k in data}
+    assert len(_json.dumps(added, ensure_ascii=False, separators=(",", ":"))) < 16_000
+
+
+def test_the_winds_script_is_inlined_after_the_instruments_and_before_the_viewer():
+    script = (page.HERE / "winds.js").read_text(encoding="utf-8")
+    assert page.HERE / "winds.js" in page.BUILD_FILES
+    book = build_songbook("B", [BookSong("A", "X", cho=IN_G, key="G"), BookSong("B", "X", cho=IN_G, key="G")])
+    assert book.count('"flute":{"keys"') == 1 or book.count('"flute": {"keys"') == 1  # once for every song
+    for html in (build_viewer(IN_G), book):
+        scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
+        at = scripts.index(script)
+        assert scripts[at - 1] == (page.HERE / "instruments.js").read_text(encoding="utf-8")
+        assert scripts[at + 1] == (page.HERE / "viewer.js").read_text(encoding="utf-8")
+        csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
+        assert sha256_source(script) in csp
+    for word in ("innerHTML", "fetch(", "XMLHttpRequest", "import(", "eval(", "new Function", "localStorage.clear"):
+        assert word not in script, word

@@ -14,7 +14,8 @@
   viewer.js, strums the shape a chord's card shows in Web Audio (``window.caracoleSound``: a chord,
   or a progression at a tempo, on the instrument chosen), only on a tap; instruments.js, inlined after
   it, draws a chord's box on any fretted instrument and a piano's keyboard, and is where another
-  instrument's script registers its drawing (``window.caracoleInstruments``);
+  instrument's script registers its drawing (``window.caracoleInstruments``); winds.js, inlined after it,
+  registers the harmonica, the flute and the recorder, drawn from harp.py's and winds.py's tables;
 - book.py builds ``songbook.html``, a songbook's songs in one page, from page.py's pieces, with
   book.js and book.css beside the viewer's own.
 

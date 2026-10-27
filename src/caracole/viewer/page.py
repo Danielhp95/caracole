@@ -1,8 +1,8 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its three
-scripts, strum.js, instruments.js and viewer.js, and its stylesheet makes the browser enforce that)
+no server: it loads nothing (a Content-Security-Policy with the hashes of its four
+scripts, strum.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce that)
 and links only to the PDF beside it and to the library's index.html two folders up.
 A server may serve it too, only while it is the page caracole wrote, with
 ``viewer_csp(page)`` as its header.
@@ -38,6 +38,11 @@ written ``\\u003c``:
   ``easy`` keys' table, its ``voice``, ``sounds``, ``about``, and a ukulele's ``near``); ``easy``, for a sheet with a
   key, each table's easy keys in every mode (``instruments.easy_keys``: ``[tonic, name]``), which the settings' Easy
   keys row offers on an instrument that has one;
+- the harmonica's (harp.py ``tables``: ``harpKeys``, ``harps``, the harps for the song in each mode, ``harpForms``,
+  ``harpChords``, ``harpAlts``, what each chord plays on each harp) for a sheet with a key, and the flute's and the
+  recorder's (winds.py ``tables``: ``windForms``, ``windChords``, ``windAlts``, each chord's notes), for winds.js;
+  ``winds``, the same on every page: the fingerings (winds.py ``fingering_data``) and each harp's notes (``harps``,
+  harp.py ``layouts``);
 - ``shapes``: the fingerings the sheet gives its chords (its chord legend, its ``{define}``),
   first, before chords-db's (``voicings.sheet_shapes``: ``{"mine": how many are the sheet's,
   "list": positions}``), by the chord as shown: the script shows them for that very chord
@@ -82,7 +87,7 @@ from caracole.download_names import download_name
 from caracole.inline import json_block, sha256_source
 from caracole.normalize import clean_title, has_han
 from caracole.page_icon import LINK as PAGE_ICON
-from caracole.viewer import harmony_tables, instruments, pinyin
+from caracole.viewer import harmony_tables, harp, instruments, pinyin, winds
 from caracole.viewer.sheet import (
     Blank,
     ChordRow,
@@ -144,7 +149,7 @@ BUILD_FILES = (
                                "version.py", "pinyin.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE / "instruments.js",  # a chord's box and keyboard, and the instruments a script registers, before viewer.js
-    HERE / "harp.py", HERE / "winds.py",  # the harmonica's and the winds' tables
+    HERE / "harp.py", HERE / "winds.py", HERE / "winds.js",  # the harmonica, the flute and the recorder
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "download_names.py",  # download_name, a Guitar Pro link's download attribute
     HERE.parent / "normalize.py",  # has_han, clean_title
@@ -187,6 +192,14 @@ def _sound() -> str:
     """strum.js: a chord's shape strummed in Web Audio (``window.caracoleSound``), inlined before viewer.js,
     which calls it, in a sheet.html and a songbook.html alike."""
     return (HERE / "strum.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _winds() -> str:
+    """winds.js: the harmonica, the flute and the recorder, registered with instruments.js (their header line,
+    their chords' pictures, their settings row and their notes), inlined after instruments.js and before viewer.js,
+    in a sheet.html and a songbook.html alike."""
+    return (HERE / "winds.js").read_text(encoding="utf-8")
 
 
 @lru_cache(maxsize=1)
@@ -243,7 +256,7 @@ def build_viewer(
         f"{title} · {sheet.artist}" if sheet.artist else title,
         _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar)) + json_block("song", data),
         styles=(style,),
-        scripts=(_sound(), _instruments(), script),
+        scripts=(_sound(), _instruments(), _winds(), script),
     )
 
 
@@ -406,6 +419,9 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
         data["easy"] = {table: instruments.easy_keys(table) for table in instruments.EASY}
     data["shapes"] = shapes_of(sheet)
     data.update(harmony_tables.tables(chords, key, _places(sheet), mapped_by_mode, alts_by_mode))
+    data.update(harp.tables(key, mapped_by_mode, alts_by_mode))
+    data.update(winds.tables(chords, key, mapped_by_mode, alts_by_mode))
+    data["winds"] = {**winds.fingering_data(), "harps": harp.layouts()}
     data["library"] = LIBRARY_PAGE
     if (readings := pinyin.readings(_drawn_lines(sheet))) is not None:
         data["pinyin"] = readings

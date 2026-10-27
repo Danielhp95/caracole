@@ -43,13 +43,15 @@ def test_the_instruments_the_viewer_offers_in_its_menus_order():
     assert [(i.id, i.name, i.kind) for i in INSTRUMENTS] == [
         ("guitar", "Guitar", "strings"), ("ukulele", "Ukulele", "strings"),
         ("ukulele-low-g", "Ukulele, low G", "strings"), ("baritone", "Baritone ukulele", "strings"),
-        ("piano", "Piano", "keys")]
+        ("piano", "Piano", "keys"), ("harmonica", "Harmonica", "harmonica"), ("flute", "Flute", "wind"),
+        ("recorder", "Recorder", "wind")]
     assert GUITAR.tuning == (40, 45, 50, 55, 59, 64)  # E2 A2 D3 G3 B3 E4
     assert UKULELE.tuning == (67, 60, 64, 69)  # G4 C4 E4 A4: the G string high, re-entrant
     assert UKULELE_LOW_G.tuning == (55, 60, 64, 69)  # G3
     assert BARITONE.tuning == (50, 55, 59, 64)  # D3 G3 B3 E4: the guitar's top four
-    assert [i.capo for i in INSTRUMENTS] == [True, True, True, True, False]
-    assert PIANO.tuning == () and all(i.sounds == 0 for i in INSTRUMENTS)  # all at concert pitch
+    assert [i.capo for i in INSTRUMENTS] == [True, True, True, True, False, False, False, False]
+    assert PIANO.tuning == () and [i.sounds for i in INSTRUMENTS] == [0] * 7 + [12]  # the recorder an octave up
+    assert [i.voice for i in INSTRUMENTS[5:]] == ["reed", "flute", "recorder"]
     assert all(i.about for i in INSTRUMENTS)
 
 

@@ -1,4 +1,5 @@
-"""The instruments the sheet viewer draws a sheet's chords for: guitar, ukulele (high G, low G, baritone) and piano.
+"""The instruments the sheet viewer draws a sheet's chords for: guitar, ukulele (high G, low G, baritone), piano,
+harmonica, flute and recorder.
 
 The instrument is one setting of the viewer, the player's rather than a song's (viewer.js ``state.inst``, kept once
 for every page as the rail of necks is, and in the address as ``inst=``). Switching it never moves the song: a
@@ -13,14 +14,15 @@ with no capo (``capo`` False: the piano) plays the chords as they sound, the cap
   ``tuning`` is each string's open note as MIDI, in the order a box draws them left to right (a guitar's low E
   first, a ukulele's 4th string first: G4, an octave above its C4 string, re-entrant); "keys", a keyboard strip
   (instruments.js ``keyboard``); any other kind is drawn by a script that registers it (instruments.js
-  ``register``), and the viewer offers it only then;
+  ``register``), and the viewer offers it only then: "harmonica" and "wind" (the flute, the recorder) by
+  winds.js, from harp.py's and winds.py's tables;
 - ``capo``: whether it takes a capo;
 - ``shapes``: where the page's ``voicings`` file its chord shapes: "" for the guitar's own keys (voicings.py),
   else the prefix of its table's keys ("ukulele:", "piano:"); ``offset``: its shapes for a root are its table's
   for the root this many semitones up (the baritone's, the ukulele's a fourth lower: 5);
 - ``easy``: the name of its table of easy keys (``EASY``), whose chords sit well under the fingers, which the
   viewer's Easy keys row offers before the capo; None for none;
-- ``voice``: the sound strum.js makes for it ("guitar", "ukulele", "piano");
+- ``voice``: the sound strum.js makes for it ("guitar", "ukulele", "piano", "reed", "flute", "recorder");
 - ``sounds``: how many semitones its notes sound above where its music is written (0: at concert pitch);
 - ``about``: a line on it, under the settings' Instrument row.
 
@@ -79,7 +81,18 @@ PIANO = Instrument("piano", "Piano", "keys", capo=False, shapes="piano:", voice=
                    about="The chords as they sound, any capo folded in: root position and two inversions, "
                          "with a bass for the left hand.")
 
-INSTRUMENTS: tuple[Instrument, ...] = (GUITAR, UKULELE, UKULELE_LOW_G, BARITONE, PIANO)
+# Drawn by viewer/winds.js, from harp.py's and winds.py's tables (page.py): none takes a capo.
+HARMONICA = Instrument("harmonica", "Harmonica", "harmonica", capo=False, voice="reed",
+                       about="A 10-hole diatonic harp, Richter tuned: the harps for the song in their positions, "
+                             "and each chord's holes on the one chosen.")
+FLUTE = Instrument("flute", "Flute", "wind", capo=False, voice="flute",
+                   about="The concert flute, as the song sounds: the key's scale and each chord's notes, "
+                         "with their fingerings.")
+RECORDER = Instrument("recorder", "Recorder", "wind", capo=False, voice="recorder", sounds=12,
+                      about="The soprano recorder, baroque or German fingering: it sounds an octave above the notes "
+                            "it reads.")
+
+INSTRUMENTS: tuple[Instrument, ...] = (GUITAR, UKULELE, UKULELE_LOW_G, BARITONE, PIANO, HARMONICA, FLUTE, RECORDER)
 _BY_ID = {i.id: i for i in INSTRUMENTS}
 
 

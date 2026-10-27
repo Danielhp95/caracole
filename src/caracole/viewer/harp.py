@@ -33,17 +33,20 @@ chord's bass, else its root, else any, the narrowest, then the lowest. Otherwise
 So the 1st position offers I, V7 and ii but no clean IV or vi; the 2nd I7, IV and a minor v; the 3rd i, IV and
 ♭VII, which suits a Dorian song.
 
-**The harps for a song** (``choices``), at most three, best first. The candidates are the positions for the
-song's mode (the 1st and 2nd for a mode with a major third, the 3rd, 4th and 5th for one with a minor third, and
-the position whose own mode is the song's: the 12th for Lydian, the 6th for Locrian). They are ranked by how
-well each plays the song's chords as they sound (each distinct chord: 1 when the harp plays it whole or as its
-triad, ½ as a minor substitute, nothing otherwise; a chord on the song's tonic counts twice, the chord a song
-rests on), then by how few notes the position's mode changes from the song's, then in the order above. A song in
-G with a IV chord (G C D) takes a C harp in the 2nd position before a G harp in the 1st; a song in A minor takes
-a G harp in the 3rd, whose draw 4–6 is its Am. Everything is relative to the song's tonic, so the choices follow
-a transposition (and a capo, which a harmonica never takes: its player plays the key the song sounds in).
+**The harps for a song** (``choices``), at most three, best first, by one rule kept in one place (``candidates``,
+``CHORD_FIT``, ``TONIC_WEIGHT`` and ``ranking``), so that it changes there alone. The candidates are the positions
+for the song's mode: the 1st and 2nd for a mode with a major third, the 3rd, 4th and 5th for one with a minor third,
+and the position whose own mode is the song's (the 12th for Lydian, the 6th for Locrian). Each one's ``fit`` is how
+well it plays the song's chords as they sound: each distinct chord counts 1 when the harp plays it whole or as its
+triad, ½ as a minor substitute, nothing otherwise, and a chord on the song's tonic, the chord a song rests on, twice.
+A song in a major key (Ionian) takes the 1st position, then the 2nd, whatever its chords (the owner's rule: G C D
+in G is a G harp, then a C harp). Any other mode ranks them by their fit, then by how few notes the position's mode
+changes from the song's, then in the order above: a Mixolydian song in G takes a C harp, the 2nd position, whose
+mode is its own; a song in A minor a G harp in the 3rd, whose draw 4–6 is its Am. Everything is relative to the
+song's tonic, so the choices follow a transposition (and a capo, which a harmonica never takes: its player plays the
+key the song sounds in).
 
-**The header line** (``header_line``): "Harmonica: C harp (2nd position) · G harp (1st)", the mode after the
+**The header line** (``header_line``): "Harmonica: G harp (1st position) · C harp (2nd)", the mode after the
 position for any but the 1st and the 2nd ("G harp (3rd position, dorian)").
 
 **The tables** a viewer's data carries (``tables``), for viewer.js to look up: it computes no theory of its own.
@@ -54,13 +57,17 @@ names, and the page names a harp ``harpKeys[(tonic + shift + offset) % 12]``, wh
 - ``harpKeys``: the 12 harps' names, by the key's pitch class (``HARP_KEYS``);
 - ``harps[mode]``: the harps for the song in that mode, best first (``choices`` of ``data.mapped[mode]``), each
   ``[position, offset, label]``: ``offset`` the harp's key in semitones above the song's tonic (0 to 11), ``label``
-  what the header line writes in its brackets ("2nd position", "1st", "4th, aeolian"), so the line is "Harmonica: "
+  what the header line writes in its brackets ("1st position", "2nd", "4th, aeolian"), so the line is "Harmonica: "
   and each "<name> harp (<label>)", joined with " · ";
+
 - ``harpForms``: what a chord plays on each of the 12 harps, a list of 12 **entries** by the harp's ``offset``
   above the song's tonic; each form once, shared by the chords that play alike;
 - ``harpChords[mode][i]``: chord ``i``'s form (by its index in ``harpForms``), as ``data.mapped[mode]`` has it, or
   null for a chord caracole can't read; ``harpAlts[mode][i][j]``: the form of each chord ``data.alts[mode][i]``
   offers instead.
+
+And, the same on every page, ``layouts()``: each harp's notes by its key's pitch class, ``[blow, draw]``, each its
+ten holes' MIDI notes (``layout``), for the sound of a chord's holes (page.py carries it in ``winds``, as ``harps``).
 
 An **entry** is null for a chord not on that harp, else ``[kind, breath, first, last]`` ("yes": its own notes,
 breath "blow" or "draw", holes ``first`` to ``last``) or ``[kind, breath, first, last, suffix]`` ("part" or
@@ -271,7 +278,32 @@ class HarpChoice:
         return HARP_KEYS[self.harp]
 
 
+# --- the ranking: the one rule the harps for a song are chosen by (the module's docstring) ---------------
+
 _OWN = {position_mode(p): p for p in POSITIONS if position_mode(p) is not None}
+# What a chord the harp plays counts for its fit, by how it plays it; and a chord on the song's tonic, times this.
+CHORD_FIT = {"yes": 1.0, "part": 1.0, "minor": 0.5, "no": 0.0}
+TONIC_WEIGHT = 2
+
+
+def candidates(key: Key) -> list[int]:
+    """The positions a song in ``key`` may take, in their order: the 1st and the 2nd for a mode with a major third,
+    the 3rd, the 4th and the 5th for one with a minor third, and the position whose own mode is the song's."""
+    found = [1, 2] if 4 in SCALES[key.mode] else [3, 4, 5]
+    if _OWN[key.mode] not in found:
+        found.append(_OWN[key.mode])
+    return found
+
+
+def ranking(key: Key, order: int, choice: HarpChoice) -> tuple[float, ...]:
+    """The rule the harps for a song in ``key`` are ranked by, as a sort key, the least first; ``order`` is the
+    choice's place in ``candidates``. A major key (Ionian): the 1st position, then the 2nd, whatever the chords (the
+    owner's rule). Any other mode: the most fit, then the position whose mode changes the fewest of the song's
+    notes, then the candidates' order."""
+    if key.mode == "ionian":
+        return (order,)
+    changed = len(scale(Key(key.tonic, choice.mode)) ^ scale(key)) // 2 if choice.mode else 7
+    return (-choice.fit, changed, order)
 
 
 def choices(key: Key, chords: Sequence[Chord | None]) -> list[HarpChoice]:
@@ -286,29 +318,23 @@ def choices(key: Key, chords: Sequence[Chord | None]) -> list[HarpChoice]:
 
 @functools.lru_cache(maxsize=1024)
 def _choices(key: Key, chords: tuple[Chord, ...]) -> tuple[HarpChoice, ...]:
-    candidates = [1, 2] if 4 in SCALES[key.mode] else [3, 4, 5]
-    if _OWN[key.mode] not in candidates:
-        candidates.append(_OWN[key.mode])
     found = []
-    for order, position in enumerate(candidates):
+    for order, position in enumerate(candidates(key)):
         harp = harp_for(key.tonic, position)
         fit, plays, substitutes = 0.0, 0, 0
         for chord in chords:
-            weight = 2 if chord.root == key.tonic else 1
             kind = play(chord, harp).kind
-            if kind in ("yes", "part"):
-                fit, plays = fit + weight, plays + 1
-            elif kind == "minor":
-                fit, substitutes = fit + weight / 2, substitutes + 1
-        mode = position_mode(position)
-        changed = len(scale(Key(key.tonic, mode)) ^ scale(key)) // 2 if mode else 7
-        found.append(((-fit, changed, order), HarpChoice(position, harp, mode, fit, len(chords), plays, substitutes)))
+            fit += CHORD_FIT[kind] * (TONIC_WEIGHT if chord.root == key.tonic else 1)
+            plays += kind in ("yes", "part")
+            substitutes += kind == "minor"
+        choice = HarpChoice(position, harp, position_mode(position), fit, len(chords), plays, substitutes)
+        found.append((ranking(key, order, choice), choice))
     found.sort(key=lambda f: f[0])
     return tuple(choice for _, choice in found[:3])
 
 
 def _label(n: int, choice: HarpChoice) -> str:
-    """What the header line writes in the brackets of the ``n``th harp: "2nd position", "1st", "4th, aeolian"."""
+    """What the header line writes in the brackets of the ``n``th harp: "1st position", "2nd", "4th, aeolian"."""
     label = ordinal(choice.position) + (" position" if n == 0 else "")
     if choice.position not in (1, 2) and choice.mode:
         label += ", " + choice.mode
@@ -316,7 +342,7 @@ def _label(n: int, choice: HarpChoice) -> str:
 
 
 def header_line(key: Key, chords: Sequence[Chord | None]) -> str:
-    """"Harmonica: C harp (2nd position) · G harp (1st)": the harps for a song in ``key`` whose chords (as they
+    """"Harmonica: G harp (1st position) · C harp (2nd)": the harps for a song in ``key`` whose chords (as they
     sound) are ``chords``."""
     return "Harmonica: " + " · ".join(
         f"{choice.name} harp ({_label(n, choice)})" for n, choice in enumerate(choices(key, chords)))
@@ -353,3 +379,8 @@ def tables(key: Key | None, mapped: dict[str, Sequence[Chord | None]],
         out["harpChords"][mode] = [form(c) for c in mapped[mode]]
         out["harpAlts"][mode] = [[form(a) for a in options] for options in (alts or {}).get(mode, [])]
     return out
+
+
+def layouts() -> list[list[list[int]]]:
+    """Each harp's notes, by its key's pitch class: ``[blow, draw]``, its ten holes' MIDI notes each."""
+    return [[list(layout(h).blow), list(layout(h).draw)] for h in range(12)]
