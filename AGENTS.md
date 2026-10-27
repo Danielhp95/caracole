@@ -162,7 +162,12 @@ Rules a change there keeps (the Invariants below are the others):
   what it took away says so where it was until the next click or key (test_songbooks_tab.py).
 - index.html's stylesheets, scripts and markup are the .css, .js and .html files of
   library_assets/, inlined byte for byte in the order of `library_page.STYLESHEETS`, `SCRIPTS`
-  and `TEMPLATES`, where a new file is listed (test_library_assets.py).
+  and `TEMPLATES`, where a new file is listed (test_library_assets.py). A song of yours closes to
+  a line of what it holds (rows.js `holds`, each a `glyph`: inline SVG made with `createElementNS`, the
+  one address the page names) and opens as a card (card.js `caracoleCard`, card.css): a tile for each
+  thing to play from, each source's versions a chip whose drawer reads the page's data alone, never a
+  request; its UG versions not kept are counted (`versions.rest`, `sheet_versions.may_keep`), and
+  Fetch them keeps them, `caracole versions --keep-more`, within a lookup's budget (test_library_card.py).
 - viewer/: what a page is made from is `page.BUILD_FILES`, hashed into `page.build_version`: a
   module the viewer comes to import goes there (test_viewer_book.py checks). theory.py, harmony.py
   and `voicings.voicing_keys` keep their answers, so `Chord` and `Key` stay frozen with every field
