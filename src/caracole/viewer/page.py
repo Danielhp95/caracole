@@ -133,6 +133,7 @@ BUILD_FILES = (
                                "voicings.py", "voicings.json", "version.py", "pinyin.py", "viewer.js",
                                "viewer.css", "LICENSE-chords-db")),
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
+    HERE / "harp.py", HERE / "winds.py",  # the harmonica's and the winds' tables
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "download_names.py",  # download_name, a Guitar Pro link's download attribute
     HERE.parent / "normalize.py",  # has_han, clean_title

@@ -7,6 +7,8 @@
 - version.py applies a version of the page (its key, capo, mode, shapes and swaps) to the
   sheet in Python, for a PDF of what the page shows;
 - pinyin.py reads each Chinese character's pinyin in context, for the page's Pinyin;
+- harp.py and winds.py hold the harmonica and the flute and recorder: harp layouts, positions, the chords a
+  harp plays and the harps for a song; fingerings and the notes a wind player reads off a sheet;
 - viewer.js and viewer.css are the page's script and stylesheet, inlined; strum.js, inlined before
   viewer.js, strums the shape a chord's card shows in Web Audio (``window.caracoleSound``: a chord,
   or a progression at a tempo), only on a tap;
