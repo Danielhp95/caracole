@@ -653,6 +653,18 @@
   const diagram = (position, title, bare, span) => (inst().kind === "keys"
     ? kit.keyboard(position, title, bare, span) : kit.box(position, title, bare));
 
+  // The screen's choices, kept once for every page (the rail of necks hidden, the pinyin shown, the Chinese in
+  // Traditional characters, the instrument), set in ``params`` as the address keeps them: a link to another page of the
+  // song takes them on (a version's ‹ ›, a harmonica tab's page, and back), so that where the browser keeps nothing
+  // (caracole serve's sandbox) they go with it.
+  function screenChoices(params) {
+    if (!state.necks) params.set("necks", "0");
+    if (state.py) params.set("py", "1");
+    if (state.trad) params.set("trad", "1");
+    if (state.inst !== "guitar") params.set("inst", state.inst);
+    return params;
+  }
+
   // --- the instrument: what the chords are drawn and heard for ------------------------------------------
   // The settings' Instrument menu offers each instrument of data.instruments the page draws (``drawn``); one drawn by
   // its own script (instruments.js register) draws its chords, a line under the key line, and a row of the settings.
@@ -669,8 +681,9 @@
       chords.push(Object.freeze({ i: c, name, rep: Object.freeze(rep.slice()), root: mod12(rep[0] + s),
         bass: rep[2] === null ? null : mod12(rep[2] + s) }));
     }
+    const carry = screenChoices(new URLSearchParams()).toString();
     return Object.freeze({ data, instrument: inst(), mode: modeNow(), shift: s, key: key ? keyName(s) : "",
-      names: Object.freeze(names(s)), chords: Object.freeze(chords) });
+      names: Object.freeze(names(s)), chords: Object.freeze(chords), carry: carry ? "#" + carry : "" });
   };
   const partsOf = () => (kit && inst().kind !== "strings" && inst().kind !== "keys" ? kit.registered(inst().id) : null);
   // A chord as its instrument's script draws it (``bare``: the strip's), or null; and the notes it sounds there.
@@ -2233,10 +2246,7 @@
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
-    if (!state.necks) params.set("necks", "0");  // the rail hidden there too
-    if (state.py) params.set("py", "1");  // and the pinyin shown
-    if (state.trad) params.set("trad", "1");  // and the Chinese in Traditional characters
-    if (state.inst !== "guitar") params.set("inst", state.inst);  // and the instrument
+    screenChoices(params);  // the rail, the pinyin, the characters and the instrument there too
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };

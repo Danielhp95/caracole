@@ -82,7 +82,7 @@ def test_a_kept_tab_gets_its_page_beside_it_recorded_and_linked_from_the_songs_v
     assert written_file(conn, song.id, page.name) == (hashlib.sha256(data).hexdigest(), len(data))
     # the sheet plays D under every line the tab blows C E G on: a D harp with the record, in B minor the 4th position
     assert facts(page) == "Harmonica tab · D harp with the record (4th position, aeolian)"
-    assert '<a class="back" href="sheet.html">‹ Chord sheet</a>' in page.read_text("utf-8")
+    assert '<a class="back" href="sheet.html" data-sheet>‹ Chord sheet</a>' in page.read_text("utf-8")
     assert f'<a href="{TAB_URL}">harptabs.com</a>' in page.read_text("utf-8")
     assert data_of(page, "harp-data")["why"] == {"2": "with the record", "0": "harptabs.com's key"}
     assert data_of(folder / "sheet.html", "song")["harmonicaTabs"] == [

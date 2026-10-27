@@ -142,7 +142,7 @@
     return root;
   };
   // The song's harmonica tabs beside the page (data.harmonicaTabs: harptabs.com's, kept), a link each to its page
-  // (``page``: harmonica-N.html, render.py) and one to its text, with the key its page's Key chip named, if any, as
+  // (``page``: harmonica-N.html, render.py; the screen's choices with it, ``view.carry``) and one to its text, with the key its page's Key chip named, if any, as
   // harptabs.com's: the song's key on some tabs and the harp's on others, so never called a harp.
   const tabs = (view, box) => {
     const list = Array.isArray(view.data.harmonicaTabs) ? view.data.harmonicaTabs : [];
@@ -155,7 +155,7 @@
       const item = el("li", "", links);
       const name = String(tab.name || tab.href);
       if (typeof tab.page === "string" && tab.page) {
-        el("a", "link", item, name.replace(/\.txt$/, "")).href = tab.page;
+        el("a", "link", item, name.replace(/\.txt$/, "")).href = tab.page + String(view.carry || "");
         const text = el("a", "wd-text", item, "text");
         text.href = tab.href;
         text.setAttribute("aria-label", name + ", as text");

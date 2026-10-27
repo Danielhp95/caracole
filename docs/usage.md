@@ -2397,7 +2397,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   screen's, not a song's: the browser keeps it once for every sheet and
   songbook, and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: ‹ and › to another
-  version keep it, and in a songbook so does every step to another song (the
+  version keep it, so do a harmonica tab's link in the Harmonica row and its
+  page's ‹ Chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset everything** shows the rail again. Hidden, the
@@ -2464,7 +2465,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`, `harmonica`, `flute`,
   `recorder`) while it is another
   than the guitar, for a page served by `caracole serve`; ‹ and › to another
-  version keep it, and so does every step to another song in a songbook (a
+  version keep it, so does the trip to a harmonica tab's page and back, and so
+  does every step to another song in a songbook (a
   song the songbook plays on an instrument of its own keeps that one to
   itself: the songs after it are on yours again, the last you chose).
   **Reset everything** leaves it as it is. **Export PDF** makes the PDF on
@@ -2787,7 +2789,10 @@ the library page link it, the tab's text beside it.
   the line hole by hole, a beat each, lighting each hole as it sounds, and
   stops when pressed again (no rhythm: the tab has none).
 - **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
-  with none), and **The tab as text**, at the foot, opens `harmonica-1.txt`.
+  with none), with the rail hidden, the pinyin, the Chinese characters and the
+  instrument as they came (served, where the browser keeps nothing, the
+  address carries them both ways), and **The tab as text**, at the foot, opens
+  `harmonica-1.txt`.
 - **The overlay**, from 1200 px, as on the sheet viewer, with Harmonica first
   and shown: its harp is the page's, both ways (a harp tapped on the circle is
   the one the page plays and names its notes on, and − and + move the

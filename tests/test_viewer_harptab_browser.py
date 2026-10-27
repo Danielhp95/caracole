@@ -322,3 +322,41 @@ def test_on_a_phone_there_is_no_overlay(tmp_path):
         found = b.js("[document.getElementById('necks').hidden, document.getElementById('necks-toggle').hidden, "
                      "document.documentElement.scrollWidth]")
     assert found == [True, True, 390]
+
+
+def test_served_with_no_storage_the_screens_choices_go_to_the_tabs_page_and_back(tmp_path):
+    # In caracole serve's sandbox the address alone keeps them: the Harmonica row's link to the tab's page takes on the
+    # rail hidden, the pinyin, the Chinese characters and the instrument, as a version's ‹ › do, and ‹ Chord sheet
+    # brings them back.
+    from caracole.viewer import build_viewer, viewer_csp
+    from test_viewer_harptab_page import TAB_D, a_song
+    from test_viewer_necks import served
+
+    sheet = build_viewer(a_song(), key="Am", key_source="tab", harmonica=[
+        {"name": "harmonica-1.txt", "href": "harmonica-1.txt", "page": "harmonica-1.html", "harp": 2}])
+    harp = build_harmonica_viewer(TAB_D, title="Synthetic Song", artist="Placeholder Band",
+                                  tab_file="harmonica-1.txt", cho=a_song(), key="Am", key_source="tab",
+                                  back="sheet.html")
+    folder = "/Placeholder%20Band/Synthetic%20Song/"
+    ready = "!window.before && document.documentElement.dataset.ready === '1'"
+    with served({folder + "sheet.html": (sheet, viewer_csp), folder + "harmonica-1.html": (harp, viewer_csp)}) as site, \
+            Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), **WIDE_SCREEN) as b:
+        b.open(site + folder + "sheet.html#py=1&trad=1")
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        b.click("#necks .nk-hide")
+        b.js("(() => { document.getElementById('more').click(); const m = document.getElementById('insts');"
+             " m.value = 'harmonica'; m.dispatchEvent(new Event('change')); })()")
+        link = b.js("document.querySelector('.wd-tabs a.link').getAttribute('href')")
+        b.js("window.before = true; document.querySelector('.wd-tabs a.link').click()")
+        assert b.wait(ready)
+        there = [b.js("location.pathname.endsWith('harmonica-1.html')"), b.js("document.getElementById('necks').hidden")]
+        back = b.js("document.querySelector('a.back').getAttribute('href')")
+        b.js("window.before = true; document.querySelector('a.back').click()")
+        assert b.wait(ready)
+        home = [b.js("location.pathname.endsWith('sheet.html')"), b.js("document.getElementById('necks').hidden"),
+                b.js("document.getElementById('insts').value"), b.js("location.hash")]
+    assert link == "harmonica-1.html#necks=0&py=1&trad=1&inst=harmonica"
+    assert there == [True, True]
+    assert back == "sheet.html#necks=0&py=1&trad=1&inst=harmonica"
+    assert home[:3] == [True, True, "harmonica"]
+    assert all(part in home[3] for part in ("necks=0", "py=1", "trad=1", "inst=harmonica"))

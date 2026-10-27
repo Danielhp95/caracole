@@ -39,7 +39,9 @@
   //                                     tables are by it), key (the key shown, by name, "" for none), names (each pitch
   //                                     class's name in that key), chords (each chord the page shows, once, in the
   //                                     order it first comes: {i, name, rep}, its index in data.chords, its name as
-  //                                     shown, and [root, suffix, bass, ...] as played, at ``shift``)}; ``chord`` is
+  //                                     shown, and [root, suffix, bass, ...] as played, at ``shift``), carry (the
+  //                                     screen's choices a link to another page of the song takes on, as the
+  //                                     address writes them: "#necks=0&inst=harmonica", or "" for none)}; ``chord`` is
   //                                     one of those
   //   registered(id)                    its ``parts``, or null
   const NS = "http://www.w3.org/2000/svg";
