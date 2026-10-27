@@ -2,7 +2,7 @@
   "use strict";
   // The harmonica, the flute and the recorder, for the sheet viewer and a songbook: registered with instruments.js
   // (window.caracoleInstruments.register; inlined after it and before viewer.js), which offers them in the settings'
-  // Instrument row. None takes a capo, so the viewer names the chords as they sound (the capo folded in) and the
+  // Instrument menu. None takes a capo, so the viewer names the chords as they sound (the capo folded in) and the
   // tables are read at the shift that includes it (``view.shift``). Every element is made with createElement,
   // createElementNS and textContent; nothing is loaded; nothing here computes music theory: it looks each answer up
   // in the page's data, which Python made (page.py):

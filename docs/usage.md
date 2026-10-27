@@ -1466,8 +1466,9 @@ and cache.
   that plays the sheet where the song plays without one (its `[transpose]`,
   else as written) takes the song's `[version]` out instead, and the song
   follows its sheet again. `--mine` needs `--version` (exit 2).
-  In the sheet viewer, ⋯ has **Export PDF of this version**, but for the auto
-  sheet's viewer kept beside a human sheet: its chords are other ones, and an
+  In the sheet viewer, ⋯ has **Export PDF**, with the version in words at its
+  right ("D Dorian, capo 2"; from the folder, the row unfolds this command,
+  with Copy), but for the auto sheet's viewer kept beside a human sheet: its chords are other ones, and an
   export would be the human sheet's (caracole serve refuses one from it, 409).
   caracole serve refuses one from a kept version's page (`version-<tab>.html`)
   too, for the same reason: make that version the one first, then export it
@@ -2457,7 +2458,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   chord's name opens its card, which names the numeral too ("Bb · ♭VII").
   A song whose key caracole can't tell offers chords alone (the numerals
   greyed), and says so.
-- **Harmony** (in the settings) opens a panel in their place, docked at the
+- **Harmony ›** (in the settings, with Guitar Pro tab and Export PDF after a
+  rule, near their foot) opens a panel in their place, docked at the
   foot on a phone and a rail on the right from 900 px wide: the key the
   numerals are read in and where it came from, the key's neck on a phone (on
   a laptop it heads the rail of necks), and each section's progression in
@@ -2513,7 +2515,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - Every chord's shape in a strip above the song (the guitar in the bar, or
   All chord shapes in the settings; kept for the page, as the text size is): the
   shapes alone, large enough to read at a glance; tap one for its card,
-  with the fingers. Reset everything, at the foot of the settings, puts the
+  with the fingers. Reset everything, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
   the viewer starts them, shows the rail of necks again and hides the pinyin.
 - **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
@@ -2539,11 +2541,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   songbook's) have none. Copied, the lyrics leave the readings out. A sheet
   without chords has no settings, so no Pinyin row, but shows the readings
   when another page turned them on.
-- **Guitar Pro**, in the settings of a song with a Guitar Pro file (not a
-  Power Tab one): served by caracole serve, **Guitar Pro tab** opens the file
-  drawn and played in the browser (see
-  [Guitar Pro files in the browser](#caracole-serve)); from the folder, the
-  file's name links the file itself.
+- **Guitar Pro tab ↗**, in the settings of a song with a Guitar Pro file (not a
+  Power Tab one), a row a file: served by caracole serve, it opens the file
+  drawn and played "in the browser" (see
+  [Guitar Pro files in the browser](#caracole-serve)); from the folder, it is
+  a "download", the file itself.
 - **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the

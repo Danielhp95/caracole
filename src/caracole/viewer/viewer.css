@@ -411,8 +411,9 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .modeline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
 .modeline .lab { min-width: 0; font-size: .84rem; }
 .what { color: var(--muted); font-size: .8rem; text-align: end; }
-/* A rule between the groups. */
-.ruled { padding-top: 10px; border-top: 1px solid var(--border); }
+/* A rule between the groups, across the whole panel (--pad: the panel's own padding at the side). */
+#panel { --pad: 16px; }
+.ruled { margin-inline: calc(-1 * var(--pad)); padding: 10px var(--pad) 0; border-top: 1px solid var(--border); }
 /* The chord names, one of three: segments in a sunken track, the one chosen raised; a segment greyed where it has
    nothing to show (no numerals for a song with no key). */
 .seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--sunk); }
@@ -434,7 +435,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   background: radial-gradient(circle at 12px 50%, var(--knob) 8.5px, transparent 9px) var(--border-strong); }
 .switch[aria-pressed="true"]::after { background-color: var(--accent);
   background-image: radial-gradient(circle at 30px 50%, #fff 8.5px, transparent 9px); }
-.switch .roles { flex: 1 1 auto; margin-left: 8px; font-size: .74rem; font-weight: 700; }
+.switch .roles { flex: 1 1 auto; display: flex; gap: 8px; margin-left: 8px; font-size: .74rem; font-weight: 700; }
 .roles .r-h { color: var(--home); }
 .roles .r-a { color: var(--away); }
 .roles .r-p { color: var(--pull); }
@@ -455,10 +456,30 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .icons svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round;
   stroke-linejoin: round; }
 .inst-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 6px 0 2px; }
+/* After a rule, the places to go, a full-width row each: its words, and at its right what it holds or where it goes,
+   then › (something here: the Harmony panel, Export PDF's page or, from a file, its command, unfolded) or ↗ (away
+   from the page: a Guitar Pro file). Its hover reaches a little past the panel's text on either side. */
+.places { margin-top: 10px; padding-top: 4px; padding-bottom: 4px; }
+.goto { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% + 16px);
+  min-height: 44px; margin: 0 -8px; padding: 0 8px; border: 0; border-radius: 9px; background: none; color: var(--text);
+  font: inherit; font-size: .92rem; text-align: start; text-decoration: none; cursor: pointer; }
+.goto-lab { flex: none; }
+.goto-v { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; color: var(--muted);
+  font-size: .85rem; text-align: end; }
+.goto svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9;
+  stroke-linecap: round; stroke-linejoin: round; }
+.goto[aria-expanded="true"] svg { transform: rotate(90deg); }
+.export-file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 8px; }
+.export-file .hint { margin: 0; }
+/* Reset everything, after the last rule: quiet, centred. */
+.panel-end { display: flex; justify-content: center; margin-top: 4px; padding-top: 8px; }
+.quiet { min-height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: none; color: var(--muted);
+  font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
 @media (hover: hover) {
   #panel .stepper button:hover, .undo:hover { background: var(--raised); }
   #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
   .seg > button:not([aria-pressed="true"]):not(:disabled):hover { color: var(--text); }
+  .goto:hover, .quiet:hover { background: var(--raised); }
 }
 /* A finger's target, 44 px either way, wherever a pointer is coarse: the steppers taller, a Reset's target reaching
    over the line round it, the line no taller. */
@@ -468,6 +489,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   #panel .chip { min-width: 44px; min-height: 44px; }
   .seg > button { min-height: 44px; }
   #insts { height: 44px; }
+  .quiet { min-height: 44px; }
   .icons > button { width: 44px; }
 }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0;
@@ -634,6 +656,7 @@ a.ver-main .ver-name { color: var(--accent); }
   .sheet-ui.panel { top: 0; bottom: 0; left: auto; right: 0; width: var(--rail); max-width: none; max-height: none;
     margin: 0; padding: 14px 20px calc(18px + env(safe-area-inset-bottom)); border: 0; border-left: 1px solid var(--border);
     border-radius: 0; box-shadow: -2px 0 14px rgb(0 0 0 / .06); }
+  #panel { --pad: 20px; }
   html[data-panel] body { padding-right: var(--rail); }
   html[data-panel] .bar { right: var(--rail); }
   html[data-panel] .pill { right: calc(var(--rail) + 16px); }

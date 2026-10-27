@@ -472,6 +472,111 @@ def test_the_instrument_and_the_strum_share_a_line_and_its_own_rows_follow_it(tm
     assert harp["panel"] >= harp["menu"]["bottom"]  # the harmonica's own rows right under the line
 
 
+# The places to go, in order, as each row says them: its id, its words, the words at its right, and its address.
+PLACES = """(() => { const shown = (el) => el.getClientRects().length > 0;
+  const rows = [...document.querySelectorAll('#places .goto')].filter(shown).map((g) => [g.id,
+    g.querySelector('.goto-lab').textContent, g.querySelector('.goto-v').textContent, g.getAttribute('href'),
+    g.getAttribute('download')]);
+  const r = (s) => document.querySelector(s).getBoundingClientRect();
+  return {rows, after: r('#places').top >= r('#inst-line').bottom,
+          file: shown(document.getElementById('export-file')) ? [document.getElementById('export-cmd').textContent,
+            shown(document.getElementById('export-copy'))] : null,
+          expanded: (document.getElementById('export-fold') || {getAttribute() { return null; }}).getAttribute('aria-expanded'),
+          page: document.documentElement.scrollWidth}; })()"""
+
+
+def with_files(tmp_path: Path, cho: str = IN_E, name: str = "Files", **options) -> Path:
+    """The viewer of ``cho`` with the song's two Guitar Pro files beside it, as Artist/<name>/sheet.html."""
+    page = tmp_path / "Artist" / name / "sheet.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(build_viewer(cho, guitar=("guitar-1.gp5", "guitar-2.gpx"), **options), encoding="utf-8")
+    return page
+
+
+@in_chromium
+def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with viewer(tmp_path, with_files(tmp_path).as_uri() + "#mode=dorian&capo=2") as b:
+        b.click("#more")
+        folded = b.js(PLACES)
+        b.click("#export-fold")
+        unfolded = b.js(PLACES)
+        b.click("#harmony-open")
+        harmony = b.js("[document.getElementById('harmony').hidden, document.getElementById('panel').hidden]")
+    sheet = "/Artist/Files/sheet.html"
+    with served({sheet: (build_viewer(IN_E, guitar=("guitar-1.gp5",)), viewer_csp)}) as site, \
+            viewer(tmp_path, site + sheet + "#t=-2") as b:
+        b.click("#more")
+        served_rows = b.js(PLACES)
+    assert folded["rows"] == [
+        ["harmony-open", "Harmony", "progressions, scale", None, None],
+        ["", "Guitar Pro tab 1", "download", "guitar-1.gp5", "Synthetic - In E.gp5"],
+        ["", "Guitar Pro tab 2", "download", "guitar-2.gpx", "Synthetic - In E (2).gpx"],
+        ["export-fold", "Export PDF", "D Dorian, capo 2", None, None]]  # the version in words
+    assert folded["after"] and folded["file"] is None and folded["expanded"] == "false" and folded["page"] <= 390
+    assert unfolded["expanded"] == "true" and unfolded["file"][1]  # the command, and Copy
+    assert unfolded["file"][0] == "caracole render --song 'Synthetic - In E' --version 'mode=dorian&capo=2'"
+    assert harmony == [False, True]  # Harmony › opens its panel in the settings' place
+    assert [row[:3] for row in served_rows["rows"]] == [
+        ["harmony-open", "Harmony", "progressions, scale"], ["", "Guitar Pro tab", "in the browser"],
+        ["export", "Export PDF", "D Major"]]
+    assert served_rows["rows"][1][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
+    assert served_rows["rows"][2][3].startswith("/export?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
+
+
+@in_chromium
+def test_reset_everything_is_last_and_quiet(tmp_path):
+    with viewer(tmp_path, with_files(tmp_path).as_uri() + "#t=3&mode=lydian") as b:
+        b.click("#more")
+        seen = b.js("""(() => { const q = (s) => document.querySelector(s), reset = q('#reset-all');
+          const shown = [...q('#panel').querySelectorAll('a[href], button, select')].filter((e) => e.getClientRects().length);
+          const r = reset.getBoundingClientRect(), panel = q('#panel').getBoundingClientRect();
+          return {last: shown[shown.length - 1] === reset, centred: Math.abs((r.left + r.right) - (panel.left + panel.right)) <= 2,
+                  quiet: getComputedStyle(reset).color === getComputedStyle(q('#panel-sum')).color,
+                  ruled: getComputedStyle(reset.parentElement).borderTopStyle === 'solid'}; })()""")
+        b.click("#reset-all")
+        after = [b.js(SHIFT), b.js("location.hash"), b.js(HEAD)[1]]
+    assert seen == {"last": True, "centred": True, "quiet": True, "ruled": True}
+    assert after == ["0", "", "E Major · Guitar"]
+
+
+@in_chromium
+def test_the_songbook_has_the_same_panel_without_export(tmp_path):
+    from test_viewer_necks import to_song
+
+    songs = [BookSong("Long Song", "Synthetic", cho=LONG, id="aaaa"), BookSong("In E", "Synthetic", cho=IN_E, id="bbbb")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    parts = """(() => { const shown = (id) => { const e = document.getElementById(id); return Boolean(e) && e.getClientRects().length > 0; };
+      return ['t-row', 'capo-row', 'mode-row', 'names', 'roles', 'strip-toggle', 'insts', 'volumes', 'harmony-open',
+              'export-row', 'export', 'export-fold', 'reset-all'].filter(shown); })()"""
+    with viewer(tmp_path, path.as_uri() + "#song-1") as b:
+        b.click("#more")
+        first = [b.js(parts), b.js(HEAD)[1]]
+        to_song(b, 2)
+        b.click("#more")
+        second = [b.js(parts), b.js(HEAD)[1]]
+    every = ["t-row", "capo-row", "mode-row", "names", "roles", "strip-toggle", "insts", "volumes", "harmony-open", "reset-all"]
+    assert first == [every, "G Major · capo 2 · Guitar"]
+    assert second == [every, "E Major · Guitar"]  # the head follows the song shown
+
+
+@in_chromium
+def test_on_a_phone_every_control_of_the_settings_is_a_thumbs_target(tmp_path):
+    cho = ZH.replace("{key: C}", "{key: C}\n{capo: 1}")
+    with viewer(tmp_path, with_files(tmp_path, cho).as_uri() + "#t=1&capo=3") as b:  # both Resets, capo pills
+        b.click("#more")
+        b.click("#export-fold")
+        small = b.js(small_targets(":not(#panel *)"))
+        shown = b.js("[...document.querySelectorAll('#panel button, #panel a[href], #panel select')]"
+                     ".filter((e) => e.checkVisibility()).length")
+        sideways = b.js("document.documentElement.scrollWidth > innerWidth")
+    assert small == [] and shown > 30 and not sideways
+
+
 # --- a chord's card ------------------------------------------------------------------------------------
 
 
@@ -954,6 +1059,8 @@ def test_the_file_viewer_shows_the_command_to_export(tmp_path):
     # A page opened from the disk has no server to ask: the settings say what to run, with Copy.
     with viewer(tmp_path, written(tmp_path) + "#t=2&capo=1&fs=20") as b:
         b.js("document.querySelector('#more').click()")
+        folded = b.js("[document.getElementById('export-file').hidden, document.getElementById('export-fold').textContent]")
+        b.click("#export-fold")  # Export PDF's row unfolds it
         shown = b.js("""(() => {
           const q = (s) => document.querySelector(s);
           const box = (el) => { const r = el.getBoundingClientRect(); return [r.width, r.height]; };
@@ -963,6 +1070,7 @@ def test_the_file_viewer_shows_the_command_to_export(tmp_path):
         })()""")
         b.js("document.querySelector('#t-up').click()")
         moved = b.js("document.querySelector('#export-cmd').textContent")
+    assert folded == [True, "Export PDFBb Major, capo 1"]  # G shapes with capo 2, up two, on capo 1: Bb shapes
     assert shown["cmd"] == "caracole render --song 'Synthetic - Long Song' --version 't=2&capo=1'"
     assert shown["link"] is True and shown["cmdSeen"] and not shown["sideways"]
     assert "--mine" in shown["hint"]  # and how to make it the song's own version

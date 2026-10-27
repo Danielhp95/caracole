@@ -702,7 +702,7 @@ def _words(text: str) -> list[str]:
 # where there is a rail: pressed while it shows, as the settings' Chord necks row says; a sidebar, drawn as a
 # path); the song a semitone down or up, its key in short between them (for the eye; whole for a screen
 # reader); a guitar, the strip of the song's chord
-# shapes shown or hidden (a toggle, pressed while it shows, as the settings' Show all chip is, the two
+# shapes shown or hidden (a toggle, pressed while it shows, as the settings' All chord shapes switch is, the two
 # always in step; the body with its waist and sound hole, the neck and the headstock, drawn as paths);
 # Aa, the text size in a box beside it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
 # above the bar's place, the bar out of the way while the song moves: its first button counts down (a
@@ -716,15 +716,25 @@ def _words(text: str) -> list[str]:
 # + Numerals, Numerals), why there are no numerals for a song with no key, and a switch for each thing on or off (a
 # toggle button, pressed while it is on): Role colours, All chord shapes (as the bar's guitar), Chord necks (where the
 # rail shows) and Pinyin (a sheet with Chinese); the instrument, a menu, and the strum's loudness, four speakers, on
-# one line, and the instrument's own rows (instruments.js) under it.
+# one line, and the instrument's own rows (instruments.js) under it; after a rule, the places to go, a row each (›
+# opens something here, ↗ leaves the page): Harmony, the song's Guitar Pro files (``_GUITAR_ROW``) and Export PDF
+# (``_EXPORT_ROW``, a sheet's alone); and after another, Reset everything, quiet.
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
          '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
-_EXPORT_ROW = """<div class="row" id="export-row"><a class="link" id="export" href="/export">Export PDF of this version</a>
-<p class="hint" id="export-hint"></p>
-<code class="cmd" id="export-cmd" hidden></code><button type="button" class="chip" id="export-copy" hidden>Copy</button></div>
-"""
+_GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'  # ›, a place here
+_HARMONY_ROW = ('<div id="harmony-row" hidden><button type="button" class="goto" id="harmony-open" aria-haspopup="dialog" '
+                'aria-controls="harmony"><span class="goto-lab">Harmony</span><span class="goto-v">progressions, scale'
+                + _GO + '</span></button></div>\n')
+# Export PDF of this version, in words at its right: served, a link to caracole serve's export page (viewer.js); from a
+# file, a row that unfolds the command that makes it, with Copy.
+_EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export" href="/export"><span class="goto-lab">Export PDF</span>"""
+               """<span class="goto-v"><span class="export-v"></span>""" + _GO + """</span></a>
+<button type="button" class="goto" id="export-fold" hidden aria-expanded="false" aria-controls="export-file"><span class="goto-lab">Export PDF</span><span class="goto-v"><span class="export-v"></span>""" + _GO + """</span></button>
+<div class="export-file" id="export-file" hidden><p class="hint" id="export-hint"></p>
+<code class="cmd" id="export-cmd" hidden></code><button type="button" class="chip" id="export-copy" hidden>Copy</button></div></div>
+""")
 
 
 _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
@@ -786,9 +796,9 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <span id="sound-row" hidden><span class="seg icons" id="volumes" role="group" aria-label="Strum" aria-describedby="strum-hint"></span>
 <span class="vh" id="strum-hint">Tap a chord, or its shape on its card, to hear it strummed.</span></span></div>
 <div class="inst-panel" id="inst-panel" hidden></div></div>
-<div class="row" id="harmony-row" hidden><span class="lab">Harmony</span>
-<button type="button" class="chip" id="harmony-open" aria-haspopup="dialog" aria-controls="harmony">Progressions, the key's scale</button></div>
-<div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
+<div class="places ruled" id="places">
+""" + _HARMONY_ROW + """</div>
+<div class="panel-end ruled"><button type="button" class="quiet" id="reset-all">Reset everything</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
@@ -839,20 +849,17 @@ _VERSION_LIST = """<section class="sheet-ui panel vlist" id="version-list" hidde
 </section>
 """
 
-# A sheet viewer's Guitar Pro files, in its settings, for a song that has some: the script fills in a link to each
+# A sheet viewer's Guitar Pro files, in its settings, for a song that has some: the script fills in a row for each
 # (viewer.js: caracole serve's Guitar Pro page, served; the file itself, from a file).
-_GUITAR_ROW = """<div class="row" id="guitar-row" hidden><span class="lab">Guitar Pro</span><span class="chips" id="guitar-links"></span>
-<p class="hint" id="guitar-hint"></p></div>
-"""
-_RESET_ROW = '<div class="row"><button type="button" class="link" id="reset-all">'
+_GUITAR_ROW = '<div id="guitar-row" hidden><div id="guitar-links"></div></div>\n'
+_PLACES_END = '</div>\n<div class="panel-end ruled">'  # where the places to go end, before Reset everything
 
 
 def _with_guitar(controls: str, guitar: bool) -> str:
-    """``controls`` with the Guitar Pro row before Reset everything, when the song has Guitar Pro files."""
-    return controls.replace(_RESET_ROW, _GUITAR_ROW + _RESET_ROW, 1) if guitar else controls
+    """``controls`` with the Guitar Pro row after Harmony's, when the song has Guitar Pro files."""
+    return controls.replace(_HARMONY_ROW, _HARMONY_ROW + _GUITAR_ROW, 1) if guitar else controls
 
 
-# The sheet viewer's controls: the shared ones and the export row. The songbook has none: no song owns it.
-_SHEET_CONTROLS = _CONTROLS.replace(
-    '</section>\n<section class="sheet-ui card" id="card"',
-    _EXPORT_ROW + '</section>\n<section class="sheet-ui card" id="card"', 1)
+# The sheet viewer's controls: the shared ones and the export row, the last place to go. The songbook has none: no
+# song owns it.
+_SHEET_CONTROLS = _CONTROLS.replace(_PLACES_END, _EXPORT_ROW + _PLACES_END, 1)

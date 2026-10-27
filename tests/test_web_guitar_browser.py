@@ -454,7 +454,8 @@ def test_the_served_sheet_viewer_offers_the_guitar_pro_tab_in_its_settings(cfg, 
         page.click("#more")
         assert page.wait("!document.getElementById('guitar-row').hidden")
         link = "document.querySelector('#guitar-links a')"
-        assert page.js(f"{link}.textContent") == "Guitar Pro tab"
+        assert page.js(f"{link}.querySelector('.goto-lab').textContent") == "Guitar Pro tab"
+        assert page.js(f"{link}.querySelector('.goto-v').textContent") == "in the browser"
         assert page.js(f"{link}.href") == base + "guitar?file=" + quote(path, safe="")
         page.js(f"{link}.click()")
         assert page.wait("location.pathname === '/guitar'", 15)

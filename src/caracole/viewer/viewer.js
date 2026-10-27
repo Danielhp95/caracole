@@ -169,7 +169,7 @@
       localStorage.setItem(PINYIN, state.py ? "shown" : "hidden");
     } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
   };
-  // And so is the instrument (the settings' Instrument row): the player's, kept once for every page, and in the address
+  // And so is the instrument (the settings' Instrument menu): the player's, kept once for every page, and in the address
   // (inst=ukulele) while it is another than the guitar, or always for a song whose own version names one (a songbook's
   // entry played on another instrument): that song starts on it when its address names no version, as it starts in
   // that version, whatever instrument the page before it was on.
@@ -232,12 +232,15 @@
     versionLinks();
   };
 
-  // Export PDF of this version: served, a link to the server's export page for this very address, followed in
-  // this tab (the sandbox has no popups); from a file, the command that makes it, with Copy.
+  // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the server's export page
+  // for this very address, followed in this tab (the sandbox has no popups); from a file, a row that unfolds the
+  // command that makes it, with Copy.
   const exportLink = () => {
     const link = $("export");
     const cmd = $("export-cmd");
     if (!link || !cmd) return;
+    const words = versionWords().filter(Boolean).join(", ");
+    for (const v of $("export-row").querySelectorAll(".export-v")) v.textContent = words;
     const version = new URLSearchParams(location.hash.slice(1));
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
@@ -245,6 +248,7 @@
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
+      $("export-fold").hidden = false;
       cmd.hidden = false;
       $("export-copy").hidden = false;
       $("export-hint").textContent = "Run this where caracole is installed; the PDF is written beside the sheet. "
@@ -269,6 +273,13 @@
     const artist = (document.querySelector(".artist") || {}).textContent || "";
     return "'" + (artist ? artist + " - " + title : title).replace(/'/g, "'\\''") + "'";
   };
+  if ($("export-fold")) {
+    $("export-fold").addEventListener("click", () => {
+      const open = $("export-file").hidden;
+      $("export-file").hidden = !open;
+      $("export-fold").setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
   if ($("export-copy")) {
     $("export-copy").addEventListener("click", () => {
       const done = () => { $("export-copy").textContent = "Copied"; };
@@ -278,9 +289,10 @@
     });
   }
 
-  // The song's Guitar Pro files (``guitar``: their names, beside the sheet), in the settings: served, each opens
-  // caracole serve's Guitar Pro page for it (/guitar?file=…), in this tab, as Export does; from a file, each is
-  // the file itself, saved under the song's name (``guitarDownload``: "Eagles - Hotel California (2).gp5").
+  // The song's Guitar Pro files (``guitar``: their names, beside the sheet), in the settings, a row each, ↗: served,
+  // each opens caracole serve's Guitar Pro page for it (/guitar?file=…, "in the browser"), in this tab, as Export
+  // does; from a file, each is the file itself, a download saved under the song's name (``guitarDownload``: "Eagles -
+  // Hotel California (2).gp5").
   (() => {
     const row = $("guitar-row");
     const box = $("guitar-links");
@@ -289,17 +301,24 @@
     const saved = Array.isArray(data.guitarDownload) && data.guitarDownload.length === names.length
       ? data.guitarDownload : [];
     const folder = served ? sheetPath().split("/").slice(0, -1).join("/") : "";
+    const OUT = ["M7 17 17 7", "M8 7h9v9"];  // ↗, a place away from the page
     names.forEach((name, i) => {
-      const a = document.createElement("a");
-      a.className = "link";
-      a.textContent = served ? "Guitar Pro tab" + (names.length > 1 ? " " + (i + 1) : "") : name;
+      const a = box.appendChild(document.createElement("a"));
+      a.className = "goto";
+      const words = a.appendChild(document.createElement("span"));
+      words.className = "goto-lab";
+      words.textContent = "Guitar Pro tab" + (names.length > 1 ? " " + (i + 1) : "");
+      const where = a.appendChild(document.createElement("span"));
+      where.className = "goto-v";
+      where.textContent = served ? "in the browser" : "download";
+      const icon = where.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "svg"));
+      icon.setAttribute("viewBox", "0 0 24 24");
+      icon.setAttribute("aria-hidden", "true");
+      for (const d of OUT) icon.appendChild(document.createElementNS("http://www.w3.org/2000/svg", "path")).setAttribute("d", d);
       a.setAttribute("href", served ? "/guitar?file=" + encodeURIComponent(folder + "/" + name)
         : encodeURIComponent(name));
       if (!served && typeof saved[i] === "string" && saved[i]) a.setAttribute("download", saved[i]);
-      box.appendChild(a);
     });
-    $("guitar-hint").textContent = served ? "Drawn and played in the browser."
-      : "Served by caracole serve, it opens in the browser, drawn and played.";
     row.hidden = false;
   })();
 
@@ -655,7 +674,7 @@
     .map((c) => Number(c) + (Number(position[2]) || 1) - 1));
 
   // --- the instrument: what the chords are drawn and heard for ------------------------------------------
-  // The settings' Instrument row offers each instrument of data.instruments the page draws (``drawn``); one drawn by
+  // The settings' Instrument menu offers each instrument of data.instruments the page draws (``drawn``); one drawn by
   // its own script (instruments.js register) draws its chords, a line under the key line, and a row of the settings.
   // Where the page is played, for such a script (its ``view``, documented in instruments.js).
   const view = () => {
@@ -932,6 +951,8 @@
 
     drawNames();
     drawInstruments();
+    // The places to go, after their rule, only where there is one (a songbook's song with no key has none).
+    $("places").hidden = !Array.prototype.some.call($("places").children, (row) => !row.hidden);
     $("sound-row").hidden = !sound || count === 0;
     if (sound) sound.setVolume(VOLUMES[state.vol][1]);
     refill($("volumes"), sound ? VOLUMES.map(([name], v) => {
