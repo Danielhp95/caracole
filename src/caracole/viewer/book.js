@@ -43,6 +43,10 @@
     }
   }
   harvest();
+  // The instrument the songbook plays this song on (its start's inst=), and the one the address arrived with, before
+  // the viewer writes it: the player's, which the next song gets (carryScreen), never this song's own.
+  let ownInst = null;
+  const arrivedInst = new URLSearchParams(hash).get("inst");
 
   if (current) {
     const n = current.dataset.n;
@@ -58,6 +62,7 @@
     const data = document.getElementById("song");
     try {
       const song = JSON.parse(data.textContent);
+      ownInst = new URLSearchParams(typeof song.start === "string" ? song.start : "").get("inst");
       song.voicings = JSON.parse(document.getElementById("voicings").textContent);
       const easy = document.getElementById("easy");  // every instrument's easy keys, for a song with a key
       if (easy && song.key) song.easy = JSON.parse(easy.textContent);
@@ -94,7 +99,8 @@
   };
   // The rail of necks, the pinyin and the instrument are the screen's choices, not a song's: where there is no
   // storage (caracole serve's sandbox), the address the viewer keeps them in ("necks=0", "py=1", "inst=ukulele")
-  // goes on with every step, to the next song or the contents.
+  // goes on with every step, to the next song or the contents. The instrument the songbook sets for this song alone
+  // is no choice of the screen's: the one it arrived with goes on in its place, unless a hand chose another here.
   const SCREEN = ["necks", "py", "inst"];
   const carryScreen = (from) => {
     const at = String(from || "").indexOf("#");
@@ -102,7 +108,8 @@
     const to = new URLSearchParams(location.hash.slice(1));
     let changed = false;
     for (const name of SCREEN) {
-      const kept = was.get(name);
+      let kept = was.get(name);
+      if (name === "inst" && ownInst !== null && kept === ownInst) kept = arrivedInst !== ownInst ? arrivedInst : null;
       if (to.get(name) === kept) continue;
       if (kept !== null) to.set(name, kept);
       else to.delete(name);

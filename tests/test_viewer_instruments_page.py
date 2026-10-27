@@ -335,6 +335,23 @@ def test_a_songbook_song_on_its_own_instrument_opens_on_it(tmp_path):
     assert one["chips"][0][1] == "true"  # the player's own, now the guitar
 
 
+@pytest.mark.parametrize("arrived", [None, "piano"])
+def test_a_songs_own_instrument_is_never_carried_to_the_next_song(tmp_path, arrived):
+    # The songbook plays Two on the guitar: it opens on the instrument One arrived with (the player's), never on
+    # the ukulele the songbook sets for One alone, served as from the folder
+    songs = [BookSong("One", "Synthetic", cho=SONG, id="aaaa", start="t=0&inst=ukulele"),
+             BookSong("Two", "Synthetic", cho=IN_E, id="bbbb")]
+    page = "/_songbooks/Campfire/songbook.html"
+    start = "#song-1" + (f"&inst={arrived}" if arrived else "")
+    with served({page: (songbook(songs), songbook_csp)}) as site, open_viewer(tmp_path, site + page + start) as b:
+        one = b.js(SETTINGS)
+        follow(b, "document.querySelector('#song-1 a[rel=next]').click()")
+        two = b.js(SETTINGS)
+    chosen = [name for name, on in two["chips"] if on == "true"]
+    assert "inst=ukulele" in one["hash"]
+    assert chosen == ["Piano" if arrived else "Guitar"], two["hash"]
+
+
 # --- a phone's width ------------------------------------------------------------------------------------------
 
 
