@@ -29,8 +29,9 @@ script's ``#sheet .c``):
   ``name``, as ``[name, times, key]``, its key the one ``#prog=`` finds it by);
 
 and, for every mode alike, ``tones``: each chord the page can name (base or alternative, on every
-transposition) by its name as viewer.js writes it (``nameOf``), as "C E G Bb|R 3 5 ♭7"
-(``harmony.chord_tones``).
+transposition) by its name as viewer.js writes it (``nameOf``), as "C E G Bb|R 3 5 ♭7|0 4 7 10"
+(``harmony.chord_tones``): its notes, their intervals, and each note's pitch class (``pitch_class``), which
+the numeral's tooltip draws on a circle and a keyboard (the card's notes read the first two fields).
 
 A **text** names notes, so it is written for every transposition of the key: a string where it names none
 (the same in every key); a list of strings and pitch classes, a pitch class (in the key as written) to be
@@ -65,6 +66,12 @@ def shifted(chord: Chord | None, s: int) -> Chord | None:
     if chord is None or s == 0:
         return chord
     return replace(chord, root=(chord.root + s) % 12, bass=None if chord.bass is None else (chord.bass + s) % 12)
+
+
+def pitch_class(note: str) -> int:
+    """The pitch class of a note as ``harmony.chord_tones`` spells it: its letter's, and a semitone for each
+    sharp or flat after it ("B#" 0, "Fbb" 3)."""
+    return (note_pc(note[0]) + note.count("#") + note.count("♯") - note[1:].count("b") - note.count("♭")) % 12
 
 
 def page_name(chord: Chord, names: Sequence[str], s: int = 0) -> str:
@@ -133,7 +140,8 @@ def tables(chords: Sequence[Chord | None], key: Key | None, places: Sequence[tup
             name = page_name(chord, spelling(shown), s)
             if name not in tones:
                 found = harmony.chord_tones(shifted(chord, s), shown)
-                tones[name] = " ".join(n for n, _ in found) + "|" + " ".join(t for _, t in found)
+                tones[name] = "|".join((" ".join(n for n, _ in found), " ".join(t for _, t in found),
+                                        " ".join(str(pitch_class(n)) for n, _ in found)))
 
     out: dict[str, Any] = {"tones": tones}
     if key is None:

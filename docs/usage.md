@@ -2561,11 +2561,22 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   vii°, and a minor key's ♭VII) purple; a chord from outside the key
   (borrowed, as B♭ in C from C minor; a secondary dominant; or plainly
   outside) is underlined with dots. The **Role colours** switch turns the colours off.
-  Hover over a numeral with the mouse, or tap it, for its line: "vi: the 6th
-  chord of C major, minor (lower case)", "♭VII: built on the lowered 7th
-  degree of C major, major (upper case); borrowed from C minor", with the key
-  it is read in and where that key came from (an estimated key read wrong
-  gives every numeral another meaning), and a button to the chord's shapes;
+  Hover over a numeral with the mouse, or tap it, for its tooltip: the chord,
+  its numeral and its role (home, away, pull, or outside the key); its line,
+  "vi: the 6th chord of C major, minor (lower case)", "♭VII: built on the
+  lowered 7th degree of C major, major (upper case); borrowed from C minor",
+  with the key it is read in and where that key came from (an estimated key
+  read wrong gives every numeral another meaning); the chord's notes on a
+  circle of the twelve notes, C at the top, the key's seven ringed and the
+  chord's joined into a shape in its role's colour, the root filled, beside
+  the notes listed with their intervals (D7: D root, F# 3, A 5, C ♭7), a note
+  from outside the key dashed in red and named under them ("F isn't in G
+  major (it has F#)."). **Keyboard ›** under the circle shows the notes as
+  tiles over a keyboard instead, stacked up from the root (D7: D, then the F#,
+  A and C above it), and **‹ Circle** goes back; ← and → do too while the
+  focus is in the tooltip. The view you chose is kept for every sheet and
+  songbook (the circle where the browser keeps nothing). ▶ Hear it, beside that
+  button, strums the chord as its card plays it (none with the strum Off).
   Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
   chord's name opens its card, which names the numeral too ("Bb · ♭VII").
@@ -4535,7 +4546,16 @@ from. It takes the first of these that gives one:
 
 An estimate is the key of the chords as the sheet writes them, the shapes you
 play: with a capo, the song sounds higher. A key from the tab is as its
-transcriber gives it. Either is the sheet's key before any `[transpose]`.
+transcriber gives it, but for a letter alone (`A`, `F#`, `La`), which says no
+mode: that is the minor key on that letter when the sheet's chords have its
+notes (or those of the minor key a capo lower, for a tab that names the key the
+song sounds in) and not the major key's, and the sheet never plays that
+letter's major chord (A, A7, Amaj7). Ultimate Guitar names Hotel
+California's key `A`, with capo 2 over Am E7 G D F C Dm E: caracole reads A
+minor, A minor shapes that sound B minor. A key named with its mode (`Am`, `A
+major`, `A minor`) is as named, and a letter whose chords fit its major key is
+that major key. A sheet's own `{key: A}` with no key from the tab is read so
+too. Either is the sheet's key before any `[transpose]`.
 
 `info.json` holds it in two fields, for anything that reads the library:
 
@@ -4552,7 +4572,8 @@ transcriber gives it. Either is the sheet's key before any `[transpose]`.
   `null` with no key.
 - `identity_key` is caracole's own key for the song, which info.json called
   `key` before. The first command that rewrites the pages after an upgrade
-  rewrites every song's info.json once, with these fields. caracole never
+  rewrites every song's info.json once, with these fields (and once more
+  after the upgrade that reads a tab's letter alone with its chords). caracole never
   rewrites an info.json that holds the same text already, so Syncthing has
   nothing to sync for it.
 

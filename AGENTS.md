@@ -71,7 +71,7 @@ Shared by the steps and the commands:
 | site_index.py | a site's sitemaps into a table, resumed across runs |
 | stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`, in UTC; `local=True`, the requests page's, in the server's zone, named); a stored time missing or unreadable is older than any (`before`); the standard library alone |
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
-| keys.py | a song's musical key and where it came from |
+| keys.py | a song's musical key and where it came from; a key named by its letter alone (UG's `A`, a sheet's `Key: A`, LaCuerda's `Tono: La`) is its parallel minor where the sheet's chords say so, one rule for every reader (`theory.bare_key`: their key has that minor's notes, or the minor's a capo lower, and neither major's, and no chord plays that tonic major, A or A7; keys.py reads sheet.json's capo, page.py's `_song_key` a sheet's `{key}` by `theory.named_key` and trusts a keys.py source's key as given): Hotel California's `A`, capo 2, is A minor, sounding B minor (test_keys.py, test_viewer_theory.py) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
 | progress.py | a command's output: a live line on a terminal, plain lines elsewhere |
 | progressions.py | each song's progressions, read by render.py as it renders the song's sheet (its human one, else its auto one: `test_progressions.py::test_a_song_that_keeps_both_sheets_is_found_by_its_human_sheet_never_the_auto_one`) into kv `render:progressions:<song id>` (`record`; harmony.py's `progressions` and `progression_key`), so that index.html's data (each song's `progressions`, the page's `catalogue`), `#prog=` (any rotation of it, made the key by library.js's `progKeyOf` as `progression_key` makes one), `/api/search`'s `progression` and `caracole search --progression` read one row a song, never a sheet; `read_progression`, numerals or a catalogue name typed; a named progression stands for every reading of its name (the pop progression in a major key and in its relative minor) and finds a section that plays it within it (a record's `contains`) |
@@ -227,7 +227,9 @@ Rules a change there keeps (the Invariants below are the others):
   one with no capo (the piano) names the chords as they sound (viewer.js `capoNow`, version.py
   `for_instrument`), and the menu offers only what the page draws, an instrument of another kind once its
   script registers it (instruments.js documents that API): test_viewer_instruments.py,
-  test_viewer_instruments_page.py, test_viewer_sound.py.
+  test_viewer_instruments_page.py, test_viewer_sound.py. So, last, is the view of a numeral's tooltip (the chord's
+  notes on a twelve-note circle, or tiles over a keyboard: localStorage `caracole-viewer-tipview`, the circle with
+  none), which draws only what `tones` (with each note's pitch class) and `keyScale` give: test_viewer_numerals.py.
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it

@@ -117,6 +117,7 @@ from caracole.viewer.theory import (
     estimate_key,
     key_name,
     map_chord,
+    named_key,
     parse_chord,
     parse_key,
     shapes_key,
@@ -367,12 +368,19 @@ def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
               source: str | None) -> tuple[Key | None, str | None]:
     """The key of the shapes the sheet's chords are, and where it came from in words. A key named
     for a sheet with a capo may be the one the song sounds in (``theory.shapes_key``); one the chords
-    gave (``_OF_THE_SHAPES``) is their shapes', whatever the capo."""
+    gave (``_OF_THE_SHAPES``) is their shapes', whatever the capo. A letter alone, the sheet's ``{key}`` or
+    one from no source keys.py names, is its parallel minor where the chords say so (``theory.named_key``);
+    keys.py has read a tab's so already (``keys.sheet_key``), and its "A" is A major, as "A major" is."""
     played = [chords[i] for i in _played(sheet) if chords[i] is not None]
+    capo = sheet.capo or 0
     if (found := parse_key(key)) is not None:
-        return found if source in _OF_THE_SHAPES else shapes_key(found, sheet.capo or 0, played), _origin(source)
-    if (found := parse_key(sheet.key)) is not None:
-        return shapes_key(found, sheet.capo or 0, played), "from the sheet"
+        if source in _OF_THE_SHAPES:
+            return found, _origin(source)
+        if source not in _SOURCES:
+            found = named_key(key, capo, played) or found
+        return shapes_key(found, capo, played), _origin(source)
+    if (found := named_key(sheet.key, capo, played)) is not None:
+        return shapes_key(found, capo, played), "from the sheet"
     found = estimate_key(played)
     return found, "estimated from the chords" if found else None
 
@@ -741,6 +749,11 @@ def _words(text: str) -> list[str]:
 # (``_EXPORT_ROW``, a sheet's alone); and after another, Reset everything, quiet.
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
+#
+# A numeral's tooltip, top to bottom: the chord as the sheet names it, its numeral and its role in words; the
+# numeral's line and the key it is read in; the chord's notes (viewer.js draws them: a twelve-note circle beside
+# their list, or tiles over a keyboard), and a line naming a note from outside the key; the button to the other
+# view, its two dots beside it marking the one shown, and ▶ Hear it after them, on the same row.
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
          '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
 _GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'  # ›, a place here
@@ -844,8 +857,14 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <ol class="progs" id="progs"></ol>
 <p class="hint" id="progs-none" hidden>No chords here caracole can read.</p>
 </section>
-<div class="tip" id="tip" role="tooltip" hidden><p id="tip-line"></p><p class="tip-key" id="tip-key"></p>
-<button type="button" class="chip" id="tip-card"></button></div>
+<div class="tip" id="tip" role="tooltip" hidden>
+<div class="tip-head"><span class="tip-chord" id="tip-chord"></span><span class="tip-nm" id="tip-nm"></span><span class="tip-role" id="tip-role"></span></div>
+<p class="tip-line" id="tip-line"></p><p class="tip-key" id="tip-key"></p>
+<div class="tip-pic" id="tip-pic"><div class="tip-circle" id="tip-circle"><div class="tip-clock" id="tip-clock" aria-hidden="true"></div><ul class="tip-notes" id="tip-notes"></ul></div>
+<div class="tip-keys" id="tip-keys" hidden><ul class="tip-tiles" id="tip-tiles"></ul><div class="tip-kb" id="tip-kb" aria-hidden="true"></div></div></div>
+<p class="tip-off" id="tip-off" hidden></p>
+<div class="tip-switch" id="tip-switch"><span class="tip-dots" id="tip-dots" aria-hidden="true"><span></span><span></span></span><button type="button" class="tip-btn tip-view" id="tip-view"></button>
+<button type="button" class="tip-btn tip-hear" id="tip-hear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Hear it</button></div></div>
 <noscript><p class="noscript">Turn on JavaScript to transpose, change the mode and see chord shapes.</p></noscript>
 """
 

@@ -5,7 +5,10 @@ A key is written as its tonic, a letter with ``#`` or ``b``, followed by
 the source's ("Gb" stays "Gb"); ``same_key`` compares keys by sound. An
 estimate is the key of the chords as the sheet writes them, the shapes you
 play: with a capo, the song sounds higher, as ChordPro's ``{key}`` has it. A
-tab's own key is as its transcriber gives it.
+tab's own key is as its transcriber gives it (the shapes' or the sound's), but for
+a letter alone ("A", "La"): that is the parallel minor where the sheet's chords say
+so, as ``viewer.theory.bare_key`` reads them, with the capo in sheet.json's ``meta``
+(UG's "A" for Hotel California, capo 2, over Am E7 G D F C Dm E, is "A minor").
 
 ``song_key`` gives a song's key and where it came from, its ``source``, from
 the sheets the library keeps, most trusted first:
@@ -13,7 +16,7 @@ the sheets the library keeps, most trusted first:
 - ``"tab"``: the human sheet's own word. UG's key for the version
   (``tonality_name``), else a key the sheet states (``key_in_text``): a
   ChordPro ``{key: Am}``, or a note such as "Key: G" or LaCuerda's
-  "Tono: La menor".
+  "Tono: La menor". A letter alone is read with the sheet's chords (above).
 - ``"chords"``: estimated from the human sheet's chords (``estimate_key``).
 - ``"audio"``: for an auto-chords sheet, the key of the chords the model heard,
   weighted by how long each sounds, which auto-chords records with the sheet
@@ -54,7 +57,8 @@ from caracole.versions import get_version
 
 log = logging.getLogger(__name__)
 
-INFO_VERSION = 1  # what refresh_info_keys last brought every info.json up to
+# What refresh_info_keys last brought every info.json up to: 2 reads a tab's letter alone with its chords (a minor key)
+INFO_VERSION = 2
 INFO_VERSION_KEY = "keys:info_version"  # kv
 SHEET_DOC = "sheet.json"  # the human sheet's markup, beside it
 SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
@@ -108,8 +112,15 @@ def parse_key(text: str) -> str | None:
     """A key as caracole writes it, from the ways tabs write one; None if ``text`` is no key.
 
     "Am", "A min" and "La menor" are "A minor"; "C", "C major" and "Do" are "C";
-    "E♭" is "Eb". A chord that isn't a triad ("Am7") is no key.
+    "E♭" is "Eb". A chord that isn't a triad ("Am7") is no key. A letter alone is
+    its major key here: ``sheet_key`` reads a tab's again with its chords.
     """
+    found = _named(text)
+    return found[0] if found else None
+
+
+def _named(text: str) -> tuple[str, bool] | None:
+    """``parse_key``'s key, and whether ``text`` named it by its letter alone, with no mode ("A", "La")."""
     m = _KEY_HEAD.fullmatch(text.strip())
     return _canonical(m) if m else None
 
@@ -132,12 +143,19 @@ def key_in_text(sheet: str) -> str | None:
     "Key: G", "Key of Bb", "Tono: La menor", "Tonalidad: Re". The chords start at a
     line of chords, or at any line with a chord tag ("Intro: [ch]Am[/ch]"), which
     can still state the key itself ("Key: [ch]F#m[/ch]"). Later notes are left
-    alone, as they often describe a key change.
+    alone, as they often describe a key change. A letter alone is its major key here,
+    as for ``parse_key``.
     """
+    found = _stated(sheet)
+    return found[0] if found else None
+
+
+def _stated(sheet: str) -> tuple[str, bool] | None:
+    """``key_in_text``'s key, and whether the sheet named it by its letter alone (``_named``)."""
     for raw in sheet.splitlines():
         directive = _DIRECTIVE.fullmatch(raw)
         if directive:
-            found = parse_key(directive.group(1))
+            found = _named(directive.group(1))
             if found:
                 return found
     for raw in sheet.splitlines():
@@ -244,24 +262,43 @@ def _human_key(conn: sqlite3.Connection, library_dir: Path, kept: Mapping[str, K
     if human is None:
         return None
     raw = get_version(conn, human.version_id).raw
-    markup = None if _tonality(raw) is not None else _markup(library_dir, kept.get(SHEET_DOC), human)
-    return sheet_key(raw, markup)
+    named = _named_in(raw)
+    if named is not None and not named[1]:  # a key with its mode: neither its markup nor its capo is needed
+        return SongKey(named[0], "tab")
+    markup, capo = _markup(library_dir, kept.get(SHEET_DOC), human)
+    return sheet_key(raw, markup, capo)
 
 
-def sheet_key(raw: Mapping[str, Any], markup: str | None) -> SongKey | None:
-    """The key of a human sheet from its version's data (``raw``) and its ``markup``: UG's
-    ``tonality_name``, else the key the markup states, else the one its chords suggest. A
-    version kept beside the sheet (render.py's ``version-<tab>.html``) takes its own so."""
-    tab = _tonality(raw)
-    if tab is not None:
-        return SongKey(tab, "tab")
+def sheet_key(raw: Mapping[str, Any], markup: str | None, capo: int | None = None) -> SongKey | None:
+    """The key of a human sheet from its version's data (``raw``), its ``markup`` and its ``capo``: UG's
+    ``tonality_name``, else the key the markup states, else the one its chords suggest. A key named by
+    its letter alone is the parallel minor where the chords say so (``_read_bare``). A version kept beside
+    the sheet (render.py's ``version-<tab>.html``) takes its own so."""
+    named = _named_in(raw)
+    if named is None and markup is not None:
+        named = _stated(markup)
+    if named is not None:
+        key, bare = named
+        return SongKey(_read_bare(key, markup, capo) if bare else key, "tab")
     if markup is None:
         return None
-    stated = key_in_text(markup)
-    if stated is not None:
-        return SongKey(stated, "tab")
     estimated = estimate_key(chords_in_sheet(markup))
     return SongKey(estimated, "chords") if estimated is not None else None
+
+
+def _read_bare(key: str, markup: str | None, capo: int | None) -> str:
+    """A key a tab names by its letter alone (``key``, read as major), as ``viewer.theory.bare_key`` reads it with the
+    sheet's chords (its ``markup``) and its capo: "A minor" for Hotel California's "A"; ``key`` as it is without
+    chords to tell. The viewer reads a sheet's ``{key}`` so too (``page.viewer_key``), so the two agree."""
+    if not markup:
+        return key
+    from caracole.viewer.theory import Key, bare_key, parse_chord  # the viewer's music, for the same answer
+
+    played = [c for c in (parse_chord(name, strict=False) for name in chords_in_sheet(markup)) if c is not None]
+    pitch = _pitch(key)
+    if pitch is None or bare_key(Key(pitch[0], "ionian"), capo or 0, played).mode != "aeolian":
+        return key
+    return f"{key} minor"
 
 
 def _auto_key(conn: sqlite3.Connection, library_dir: Path, kept: Mapping[str, KeptFile]) -> SongKey | None:
@@ -282,7 +319,8 @@ def refresh_info_keys(conn: sqlite3.Connection, library_dir: Path) -> int:
 
     An info.json changes whenever its song's files do, so this only brings those an older
     caracole wrote up to date: their ``key`` was the song's identity key, and they had no
-    ``key_source``. Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
+    ``key_source``, or read a tab's letter alone as its major key whatever its chords (version 2 reads
+    it with them). Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
     haven't (a better estimate, say). An info.json that can't be written is logged and tried
     again next time, which leaves the others, written already, as they are; the pages go on.
     """
@@ -306,24 +344,40 @@ def refresh_info_keys(conn: sqlite3.Connection, library_dir: Path) -> int:
 
 def _tonality(raw: Mapping[str, Any], field: str = "tonality_name") -> str | None:
     """The key a version's data gives (UG's ``tonality_name``, often empty), if it is a key."""
+    found = _named_in(raw, field)
+    return found[0] if found else None
+
+
+def _named_in(raw: Mapping[str, Any], field: str = "tonality_name") -> tuple[str, bool] | None:
+    """``_tonality``'s key, and whether it is a letter alone (``_named``)."""
     value = raw.get(field)
-    return parse_key(value) if isinstance(value, str) else None
+    return _named(value) if isinstance(value, str) else None
 
 
-def _markup(library_dir: Path, doc: KeptFile | None, sheet: KeptFile) -> str | None:
-    """The human sheet's markup: the ``content`` of the sheet.json kept with it.
+def _markup(library_dir: Path, doc: KeptFile | None, sheet: KeptFile) -> tuple[str | None, int | None]:
+    """The human sheet's markup and its capo: the ``content`` of the sheet.json kept with it, and the
+    capo in its ``meta`` (UG's: a number or a digit string; none, or 0, for no capo).
 
     Any synced device can write that file, so whatever it holds gives None at worst
     (``library.read_json``).
     """
     if doc is None or doc.version_id != sheet.version_id:
-        return None
+        return None, None
     try:
         data = read_json(library_dir / doc.path)
     except (OSError, ValueError):
-        return None
-    content = data.get("content") if isinstance(data, dict) else None
-    return content if isinstance(content, str) else None
+        return None, None
+    if not isinstance(data, dict):
+        return None, None
+    content = data.get("content")
+    meta = data.get("meta")
+    capo = meta.get("capo") if isinstance(meta, dict) else None
+    if isinstance(capo, str) and capo.strip().isdecimal() and capo.strip().isascii():
+        capo = int(capo.strip())
+    elif isinstance(capo, float) and capo.is_integer():
+        capo = int(capo)
+    fret = capo if isinstance(capo, int) and not isinstance(capo, bool) and capo > 0 else None
+    return (content if isinstance(content, str) else None), fret
 
 
 def _text(path: Path) -> str | None:
@@ -337,13 +391,14 @@ def _text(path: Path) -> str | None:
 # --- helpers -----------------------------------------------------------------------------
 
 
-def _canonical(m: re.Match[str]) -> str:
+def _canonical(m: re.Match[str]) -> tuple[str, bool]:
+    """The key a match names, as caracole writes it, and whether it named no mode (a letter alone)."""
     root = m.group("root")
     letter = _SOLFEGE.get(root.lower(), root)
     tonic = letter + _ACCIDENTALS[m.group("acc") or ""]
     word = (m.group("word") or "").lower()
     minor = bool(m.group("m")) or word in ("minor", "menor", "min")
-    return f"{tonic} minor" if minor else tonic
+    return (f"{tonic} minor" if minor else tonic), not (m.group("m") or word)
 
 
 def _pitch(key: str) -> tuple[int, bool] | None:
