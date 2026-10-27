@@ -713,7 +713,7 @@ const caracoleRows = (icons, does) => {
     const go = button("Songs", "small primary", () => open(x), "Songs by " + name + (harp ? " on harptabs.com" : " on LaCuerda"));
     const row = resultRow({ title: name, artist: top.length ? "Artist · " + top.join(", ") : "Artist",
       source: harp ? "harptabs" : "lacuerda",
-      facts: harp ? (Number(x.known) ? many(x.songs, "harmonica tab") : "page not read yet") : many(x.songs, "song"),
+      facts: harp ? (x.read || Number(x.known) ? many(x.songs, "harmonica tab") : "page not read yet") : many(x.songs, "song"),
       badges: harp ? instrumentBadges(["harmonica"]) : [], action: go });
     row.classList.add("hit", "artist-hit");
     row.dataset.source = harp ? "harptabs" : "lacuerda";

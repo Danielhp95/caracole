@@ -74,6 +74,8 @@ _COUNT = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM]?)")
 _TAB_PATH = re.compile(r"/(tab/(\d{1,9})/[a-z0-9-]{1,200})")  # a card's link: a tab's page, as the sitemap lists it
 _TABS_SAID = re.compile(r"([\d,]+)\s+tabs?")  # an artist page's header: "98 tabs", "1 tab"
 _BRACKETED = re.compile(r"\([^()]*\)|\[[^\[\]]*\]")  # a part of a title in brackets, the innermost first
+_APOSTROPHE = re.compile(r"['’ʼ]")  # which a slug writes as nothing ("dont") or as a hyphen ("don-t")
+_CONTRACTED = frozenset({"t", "s", "ll", "re", "ve", "d", "m"})  # a contraction's or a possessive's end, as a slug word
 
 
 class HarpTabsParseError(ProviderError):
@@ -93,8 +95,8 @@ def page_url(path: str) -> str:
 
 class IndexRow(NamedTuple):
     """One page of the sitemap, as ``harptabs_index`` keeps it: its path, its kind (``TAB`` or ``ARTIST``),
-    the site's id and its key: a tab's title's (``title_key``), an artist's name's, as Ultimate Guitar's slugs
-    are keyed (``ug_slug_key``)."""
+    the site's id and its key, its slug's as Ultimate Guitar's slugs are keyed (``ug_slug_key``): a tab's title's,
+    each contraction's end ``joined`` to its word, an artist's name's."""
 
     path: str
     kind: str
@@ -108,13 +110,35 @@ def parse_page_url(url: str) -> IndexRow | None:
     if m is None:
         return None
     path, kind, page_id, slug = m.groups()
-    key = ug_slug_key(slug)
+    key = joined(ug_slug_key(slug)) if kind == TAB else ug_slug_key(slug)
     return IndexRow(path, kind, int(page_id), key) if key else None
+
+
+def joined(key: str) -> str:
+    """A slug's key with each contraction's or possessive's end, a word of its own there ("can-t", "heaven-s",
+    "i-m"), joined to the word before it ("cant", "heavens", "im"): a tab's key whichever way its slug writes the
+    apostrophe, as nothing or as a hyphen, which a title's key, its apostrophe dropped, meets."""
+    words: list[str] = []
+    for word in key.split("-"):
+        if words and word in _CONTRACTED:
+            words[-1] += word
+        else:
+            words.append(word)
+    return "-".join(words)
 
 
 def title_key(title: str) -> str:
     """The key a song's title meets the tabs' titles with: its version suffixes go first (clean_title)."""
     return slug_key(clean_title(title))
+
+
+def title_keys(title: str) -> list[str]:
+    """The keys a song's title meets the sitemap's tabs with (``parse_page_url``: a contraction's end ``joined`` to
+    its word, as most of its later tabs slug it as a word of its own, "can-t-help-falling-in-love"): ``title_key``'s,
+    and for a title with an apostrophe that ends no contraction ("O'Brien"), that of the slug that writes it as a
+    hyphen ("o-brien")."""
+    keys = (title_key(title), title_key(_APOSTROPHE.sub(" ", title)))
+    return [key for key in dict.fromkeys(joined(k) for k in keys) if key]
 
 
 def song_title(title: str) -> str:
@@ -215,6 +239,18 @@ def _by_line(tree: LexborHTMLParser) -> str:
     return next((_text(node) for node in line.iter() if node.tag in ("a", "span")), "")
 
 
+def _pre_text(pre: LexborNode) -> str:
+    """The tab's ``<pre>`` as its lines show: a ``<br>`` breaks a line, and so does the end of a line its site's
+    editor writes as a ``<p>`` (or a ``<div>``) where no line break follows it in the page."""
+    for node in pre.css("br"):
+        node.replace_with("\n")
+    for node in pre.css("p, div"):
+        after = node.next
+        if after is not None and not (after.is_text_node and (after.text_content or "").startswith("\n")):
+            node.insert_after("\n")
+    return pre.text(deep=True)
+
+
 def parse_tab_page(html: str | bytes, url: str | None = None) -> HarpTab:
     """A tab page's title, artist, tab and chips; ``HarpTabsParseError`` for a page without a tab, a title, or an
     artist named. A page that names the site's catch-all ("Unknown", "?": ``normalize.placeholder_artist``) is of
@@ -223,7 +259,7 @@ def parse_tab_page(html: str | bytes, url: str | None = None) -> HarpTab:
         html = html.decode("utf-8", errors="replace")
     tree = LexborHTMLParser(html)
     pre = tree.css_first('[role="region"][aria-label="Harmonica tab notation"] pre') or tree.css_first("pre")
-    body = pre.text(deep=True) if pre is not None else None
+    body = _pre_text(pre) if pre is not None else None
     if body is None or not body.strip():
         raise HarpTabsParseError("no tab (<pre>) on the page", url=url)
     work = _composition(tree)
@@ -296,7 +332,8 @@ def _card(card: LexborNode) -> ListedTab | None:
 
 def parse_artist_page(html: str | bytes, url: str | None = None) -> ArtistPage:
     """An artist page's name, the tabs it says they have and those it lists; ``HarpTabsParseError`` for a page
-    without its header (the name in its ``<h1>``)."""
+    without its header (the name in its ``<h1>``), or one that says they have tabs and lists none caracole can
+    read (its cards changed, say: never an artist without tabs)."""
     if isinstance(html, bytes):
         html = html.decode("utf-8", errors="replace")
     tree = LexborHTMLParser(html)
@@ -306,4 +343,6 @@ def parse_artist_page(html: str | bytes, url: str | None = None) -> ArtistPage:
     listed = tuple(tab for card in tree.css("main div.group") if (tab := _card(card)) is not None)
     said = _TABS_SAID.search(_text(tree.css_first("main header p")))
     tabs = int(said.group(1).replace(",", "")) if said is not None else len(listed)
+    if tabs and not listed:  # its cards changed, say: no tab read is no artist without tabs
+        raise HarpTabsParseError(f"the page says {tabs} tabs and lists none caracole can read", url=url)
     return ArtistPage(name, max(tabs, len(listed)), tuple(dict((t.tab_id, t) for t in listed).values()))

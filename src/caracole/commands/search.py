@@ -537,7 +537,7 @@ def _harptabs_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: i
         named = [a for a in search_harptabs(conn, ask.artist, songs=0, artists=1)[0] if a.score >= STRONG]
         if not named:
             lines.append(f"  No artist named {ask.artist} in harptabs.com's index")
-        elif not named[0].known:
+        elif not named[0].read:
             lines += _harptabs_artist_head(named[0], False)
         else:
             a = named[0]
@@ -574,9 +574,9 @@ def _harptabs_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: i
 
 
 def _harptabs_artist_head(a: SiteArtist, top: bool) -> list[str]:
-    """An artist's line in harptabs.com's group: the tabs their page says they have, and their most viewed songs, or
-    the line that reads their page."""
-    if not a.known:
+    """An artist's line in harptabs.com's group: the tabs their page says they have, and their most viewed songs, or,
+    while caracole hasn't read their page, the line that reads it."""
+    if not a.read:
         return [f"  {a.artist} · harptabs.com",
                 f"     caracole hasn't read their page: caracole harptabs --artist {a.slug} reads it (one request)"]
     head = f"  {a.artist} · harptabs.com · {_count(a.songs, 'tab')}, {a.known:,} in the index"

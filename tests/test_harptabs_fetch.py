@@ -145,6 +145,61 @@ def test_a_tab_of_no_artist_you_picked_is_kept(conn, tmp_path):
     assert version.tab_id == "29910" and version.raw["artist"] is None and version.raw["key"] == "C"
 
 
+def test_a_title_with_an_apostrophe_meets_the_slug_that_writes_it_as_a_hyphen(conn, tmp_path):
+    # harptabs.com slugs an apostrophe either way: "knockin-on-heavens-door", but "you-ain-t-goin-nowhere",
+    # "can-t-help-falling-in-love", "isn-t-she-lovely-…" (most of its later tabs, as the live sitemap lists them).
+    song = add_song(conn, "Bob Dylan", "You Ain't Goin' Nowhere")
+    site = FakeHarpTabs()
+    paths = ["artist/1283/bob-dylan", "tab/1690/you-ain-t-goin-nowhere"]
+    site.pages[SITEMAP] = (200, fixture("sitemap.xml").replace(
+        "</urlset>", "".join(f"<url><loc>{BASE}/{p}</loc></url>" for p in paths) + "</urlset>"),
+        {"Content-Type": "application/xml"})
+    site.page("tab/1690/you-ain-t-goin-nowhere", tab_page("You Ain't Goin' Nowhere", "Bob Dylan", body="4 5\nmine\n"))
+
+    stats = run(site, conn, tmp_path)
+
+    assert stats == HarpTabsStats(sitemaps=1, tried=1, kept=1)
+    assert site.requests == [SITEMAP, f"{BASE}/tab/1690/you-ain-t-goin-nowhere"]
+    assert (folder(tmp_path, song) / "harmonica-1.txt").read_text(encoding="utf-8") == "4 5\nmine\n"
+
+
+def test_a_lookup_keys_a_table_keyed_before_again_from_its_paths_and_meets_the_tab(conn, tmp_path):
+    # The sitemap read before slugs were keyed as now: a lookup, which reads no sitemap, keys them again first.
+    from caracole.db import kv_set
+
+    song = add_song(conn, "Bob Dylan", "You Ain't Goin' Nowhere")
+    conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                     [("artist/1283/bob-dylan", "artist", 1283, "bob-dylan"),
+                      ("tab/1690/you-ain-t-goin-nowhere", "tab", 1690, "you-ain-t-goin-nowhere")])
+    kv_set(conn, "harptabs:index:keys", "0")
+    site = FakeHarpTabs()
+    site.page("tab/1690/you-ain-t-goin-nowhere", tab_page("You Ain't Goin' Nowhere", "Bob Dylan", body="4 5\nmine\n"))
+
+    stats = run(site, conn, tmp_path, only={song.id}, refresh_index=False)
+
+    assert stats.kept == 1 and site.requests == [f"{BASE}/tab/1690/you-ain-t-goin-nowhere"]
+
+
+def test_the_tabs_of_the_title_the_artists_page_lists_are_tried_first(conn, tmp_path):
+    # Billy Joel's page read: his tabs of the title, those whose slug the sitemap's title doesn't meet among them
+    # ("piano-man-c-harmonica"), come before the sitemap's, the most viewed first, and the most viewed of his is kept.
+    from caracole.harptabs import parse_artist_page
+    from caracole.harptabs_index import store_artist_page
+
+    song = add_song(conn, "Billy Joel", "Piano Man")
+    store_artist_page(conn, "artist/1178/billy-joel", parse_artist_page(fixture("artist_1178_billy-joel.html")), NOW)
+    site = FakeHarpTabs()  # 9925 and 1256 gone (404), as the sitemap's 29525
+    c_harp = f"{BASE}/tab/23862/piano-man-c-harmonica"
+    site.page("tab/23862/piano-man-c-harmonica", tab_page("Piano Man (C Harmonica)", "billy joel", views="2.5M",
+                                                         body="6 6 6\nin C\n"))
+
+    stats = run(site, conn, tmp_path)
+
+    assert site.requests == [SITEMAP, PIANO_MAN, c_harp, f"{BASE}/tab/9925/piano-man-harmonica-intro",
+                             f"{BASE}/tab/1256/piano-man-harp-intro", f"{BASE}/tab/29525/piano-man"]
+    assert stats.kept == 1 and get_version(conn, kept_files(conn, song.id)[0].version_id).tab_id == "23862"
+
+
 def test_a_song_whose_artist_the_sitemap_doesnt_list_costs_no_page(conn, tmp_path):
     # "Silent Night" is a tab there, but by no artist named as the song's: no page is read for it.
     add_song(conn, "Mariah Carey", "Silent Night")
@@ -176,6 +231,19 @@ def test_a_song_with_a_harmonica_tab_gets_no_other_and_a_number_held_is_never_re
     assert (folder(tmp_path, song) / "harmonica-1.txt").read_bytes() == b"mine"
     assert (folder(tmp_path, other) / "harmonica-1.txt").read_text() == "put there by hand"
     assert (folder(tmp_path, other) / "harmonica-2.txt").exists()
+
+
+def test_a_page_of_yours_by_a_tabs_page_name_holds_its_number_too(conn, tmp_path):
+    # The page render.py writes beside a tab takes the tab's number (harmonica-1.txt, harmonica-1.html): one of yours
+    # by that name, say a page caracole wrote that you changed, then let go with its tab, would be written over.
+    song = add_song(conn, "Ritchie Valens", "La Bamba")
+    folder(tmp_path, song).mkdir(parents=True)
+    (folder(tmp_path, song) / "harmonica-1.html").write_text("my own notes")
+
+    assert run(FakeHarpTabs(), conn, tmp_path).kept == 1
+
+    assert [f.name for f in harmonica_files(conn, song.id)] == ["harmonica-2.txt"]
+    assert (folder(tmp_path, song) / "harmonica-1.html").read_text() == "my own notes"
 
 
 def test_a_page_that_wont_parse_is_an_error_never_a_miss(conn, tmp_path):
@@ -294,6 +362,23 @@ def test_the_sitemap_is_read_again_after_30_days_and_not_before(conn, tmp_path):
     assert site.requests == [SITEMAP]
     assert run(site, conn, tmp_path, NOW + timedelta(days=31)).sitemaps == 1
     assert site.requests == [SITEMAP, SITEMAP]
+
+
+def test_a_sitemap_cut_short_is_an_error_and_the_index_stays_whole(conn, tmp_path):
+    # A 200 whose body stops before its </urlset> (the server cut it short, say) lists fewer pages than the site has:
+    # stored, the tabs past the cut would leave the index for 30 days.
+    add_song(conn, "Mariah Carey", "Silent Night")  # wants a tab, and has no candidate: the sitemap alone
+    site = FakeHarpTabs()
+    run(site, conn, tmp_path)
+    rows = conn.execute("SELECT COUNT(*) FROM harptabs_index").fetchone()[0]
+    whole = fixture("sitemap.xml")
+    cut = whole[:whole.index("<loc>https://www.harptabs.com/tab/")]  # its artists and the site's pages alone
+    site.pages[SITEMAP] = (200, cut, {"Content-Type": "application/xml"})
+
+    stats = run(site, conn, tmp_path, NOW + timedelta(days=31))
+
+    assert (stats.sitemaps, stats.errors, stats.sitemap_errors) == (0, 1, 1)
+    assert conn.execute("SELECT COUNT(*) FROM harptabs_index").fetchone()[0] == rows
 
 
 # --- a tab you picked ([harptabs]) -----------------------------------------------------------------------------

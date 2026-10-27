@@ -41,7 +41,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``harptabs``: a harmonica tab from harptabs.com, from the index the nightly run
   keeps: the song's candidates read at the lookup pace (harptabs_fetch.py), or the
   tab you picked, recorded under ``[harptabs]``.
-- ``pages``: the PDF again if the sheet changed, then _todo.md and index.html,
+- ``pages``: the PDF again if the sheet changed, and the page of each harmonica
+  tab the song keeps (a song with no sheet's too), then _todo.md and index.html,
   whose MuseScore links come from the local index.
 - ``songbooks``: the songbooks of songbooks.toml that list the song, made again
   as ``caracole songbook render`` does (a songbook whose inputs did not change
@@ -741,10 +742,12 @@ class _Lookup:
         return self.asking("harptabs", ask)
 
     def pages(self) -> str:
+        from caracole.inbox import harmonica_files
         from caracole.render import render_all
         from caracole.todo import write_pages
 
-        if self._kept_sheet() is not None:
+        # A harmonica tab's page is made by the render too, a song with no sheet's among them
+        if self._kept_sheet() is not None or harmonica_files(self.conn, self.song.id):
             render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
                        song_ids={self.song.id})
         write_pages(self.conn, self.cfg, self.overrides, self.now)

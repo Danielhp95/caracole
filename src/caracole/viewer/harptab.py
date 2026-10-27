@@ -12,7 +12,7 @@ sung under it, the syllable each hole is blown on, and the words around them. Th
 - holes together: ``(4 5 6)`` or ``(456)`` a chord, ``{-4 -5}`` a head shake, ``[-2 -5]`` a tongue split, ``7,8B``
   holes 7 and 8 blown;
 - what a line of holes holds besides: holds (``----``, ``....``, ``___``, ``(hold)``), bars, ``~``, repeat marks
-  (``x2``), a leading label (``Intro:``, ``FILL 1 :``).
+  (``x2``, ``(x2)``, ``2x``, ``(2x)``), a leading label (``Intro:``, ``FILL 1 :``).
 
 **The lines.** A line is a row of holes when at least ``HOLE_SHARE`` of its characters read as holes, holes together
 or holds (``scan``). The line under a row is its words when it is a line of text that is no section's name and no
@@ -55,14 +55,15 @@ _HOLE = re.compile(r"""
     (?P<sign>[-+−–])?
     (?P<num>10|[1-9])
     (?P<bd>[BD](?![A-Za-z]))?            # 4B blow, 5D draw
-    (?P<bend>(?:'|’|`|b(?![a-z]{2})){1,3})?   # -3' -3'' -3b -3bb (a b, not a word's start)
+    (?P<bend>(?:'|’|`|b(?!b*[ac-z])){1,3})?   # -3' -3'' -3b -3bbb (a b, not a word's start)
     (?P<ob>o(?![a-z]))?                  # 6o: an overblow, an overdraw on 7 to 10
     (?P<btn2>[<*](?!\S*[a-z]))?          # 4< 4*: the slide
 """, re.X)
 _INNER = r"(?:b{1,3})?<?[-+−–]?(?:10|[1-9])[BD]?(?:'|’|`|b){0,3}o?[<*]?"
 _GROUP = re.compile(r"(?P<open>[(\[{])\s*(?P<body>" + _INNER + r"(?:[\s,]*" + _INNER + r")*)\s*(?P<close>[)\]}])")
 _COMMA_CHORD = re.compile(r"(?P<body>(?:10|[1-9])(?:,(?:10|[1-9]))+)(?P<bd>[BD])")
-_DECOR = re.compile(r"-{2,}|_+|\.{2,}|~+|\|+|\^|\*|,|;|/|\\|:|\(x\s?\d+\)|x\s?\d+\b|\(hold\)|hold\b|>|=", re.I)
+_DECOR = re.compile(r"-{2,}|_+|\.{2,}|~+|\|+|\^|\*|,|;|/|\\|:|\(x\s?\d+\)|x\s?\d+\b|\(\d+x\)|\b\d+x\b|\(hold\)|hold\b|>|=",
+                    re.I)
 _HOLD = re.compile(r"-{2,}|\.{2,}|_+|\(hold\)|hold", re.I)
 _LEAD_LABEL = re.compile(r"^\s*(?P<label>\(?[A-Za-z][A-Za-z ]{0,14}(?:\d{1,2})?\)?)\s*[:;]+\s*")
 _LABEL_WORDS = re.compile(

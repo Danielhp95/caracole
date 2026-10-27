@@ -566,6 +566,27 @@ def test_harptabs_tabs_are_found_by_their_title_alone_until_their_artist_is_know
     assert search_harptabs(conn, "piano") == ([], [])
 
 
+def test_harptabs_tab_titled_with_an_apostrophe_is_found_whichever_way_its_slug_or_the_query_writes_it(conn):
+    # harptabs.com slugs an apostrophe as nothing or as a hyphen; a query drops it, typed or not.
+    from caracole.harptabs import parse_page_url
+    from caracole.harptabs_fetch import ensure_current_keys
+    from caracole.search import search_harptabs
+
+    can_t, knockin = (f"https://www.harptabs.com/{p}" for p in ("tab/30906/can-t-help-falling-in-love",
+                                                                "tab/1247/knockin-on-heavens-door"))
+    conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                     [tuple(parse_page_url(url)) for url in (can_t, knockin)])
+    for query, url in (("can't help falling in love", can_t), ("cant help falling in love", can_t),
+                       ("knockin' on heaven's door", knockin), ("knockin on heavens door", knockin)):
+        assert [h.url for h in search_harptabs(conn, query)[1]] == [url], query
+    # A table keyed before is keyed again from its paths, with no request, by the next harptabs.com pass.
+    conn.execute("UPDATE harptabs_index SET key = 'can-t-help-falling-in-love' WHERE page_id = 30906")
+    conn.execute("DELETE FROM kv WHERE key = 'harptabs:index:keys'")
+    assert search_harptabs(conn, "cant help falling in love")[1] == []
+    assert ensure_current_keys(conn) == 1 and ensure_current_keys(conn) == 0
+    assert [h.url for h in search_harptabs(conn, "cant help falling in love")[1]] == [can_t]
+
+
 def test_a_musescore_title_is_never_a_word_of_the_query_that_leaves_no_known_song(conn):
     from caracole.search import search_musescore
 
@@ -2261,6 +2282,21 @@ def test_cli_a_harptabs_artist_whose_page_caracole_never_read_says_how_to_read_i
     hp = harp_part(run(tmp_path, "search", "ritchie valens").output)
     assert ("  Ritchie Valens · harptabs.com\n     caracole hasn't read their page: caracole harptabs --artist "
             "artist/7829/ritchie-valens reads it (one request)\n") in hp
+
+
+def test_cli_a_harptabs_artist_whose_page_lists_no_tab_was_read_all_the_same(tmp_path):
+    # Their page read, and listing none: no tab in the index, yet nothing to read again.
+    from datetime import UTC, datetime
+
+    from caracole.harptabs import ArtistPage
+    from caracole.harptabs_index import store_artist_page
+
+    conn = harptabs_seed(tmp_path)
+    store_artist_page(conn, "artist/7829/ritchie-valens", ArtistPage("Ritchie Valens", 0), datetime(2026, 10, 27, tzinfo=UTC))
+    conn.commit()
+    for args in (("search", "ritchie valens"), ("search", "--artist", "ritchie valens")):
+        hp = harp_part(run(tmp_path, *args).output)
+        assert "hasn't read their page" not in hp and "Ritchie Valens · harptabs.com" in hp, args
 
 
 def test_cli_a_harptabs_tab_whose_artist_no_page_names_is_a_title_alone(tmp_path):

@@ -409,6 +409,21 @@ def test_a_sitemap_index_that_fails_leaves_the_index_as_it_was(conn, tmp_path):
     assert [f.name for f in kept_files(conn, song.id)] == ["guitar-1.gp3"]
 
 
+def test_a_sitemap_index_cut_short_is_an_error_never_fewer_sitemaps(conn, tmp_path):
+    # Its body stops before </sitemapindex>: the sitemaps past the cut would leave the index with their rows.
+    song = add_song(conn, "Blur", "Beetlebum")
+    site = FakeGtpTabs(files={26: gp_file(b"v3.00")})
+    run(site, conn, tmp_path, budget=3)  # the index is read, then the budget is spent
+    rows = conn.execute("SELECT COUNT(*) FROM gtptabs_index").fetchone()[0]
+    status, body, headers = site.pages[INDEX]
+    cut = body[:body.index("</sitemap>") + len("</sitemap>")]  # its first sitemap alone
+    site.pages[INDEX] = (200, cut, {**headers, "ETag": 'W/"cut-short"'})  # changed since: no 304
+    stats = run(site, conn, tmp_path, NOW + timedelta(days=31))
+    assert stats.errors == 1 and stats.kept == 1
+    assert conn.execute("SELECT COUNT(*) FROM gtptabs_index").fetchone()[0] == rows
+    assert [f.name for f in kept_files(conn, song.id)] == ["guitar-1.gp3"]
+
+
 # --- the index -----------------------------------------------------------------------------------------------
 
 

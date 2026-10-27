@@ -26,7 +26,8 @@ what the index held of that artist, to be asked for again on the next pass: an e
 without tabs. ``index_state`` says how far the index has got, for ``caracole index stats`` and the
 pages' "where caracole looked". After a change to caracole's keys (``normalize.KEY_VERSION``) the songs'
 keys are made again from the tabs' titles, with no request (``ensure_current_keys``); the slugs' keys
-are the sitemap's, made again with it.
+are the sitemap's, made again with it (and, after a change to how harptabs.py keys a slug, from the paths the
+table holds, with no request, before a pass: ``harptabs_fetch.ensure_current_keys``).
 """
 
 from __future__ import annotations
@@ -213,10 +214,11 @@ def artist_pass(conn: sqlite3.Connection, client: Client, now: datetime, *, over
     ``ProviderBlocked`` propagates. A spent budget ends the pass (``budget_exhausted``), and so does a client that
     gives up on the site for the run. Any other ``ProviderError`` counts in ``errors``: the sitemap's leaves the
     index as it was, and the pass reads the artists it lists; a page's leaves that artist as the index has them."""
-    from caracole.harptabs_fetch import SITE
+    from caracole.harptabs_fetch import SITE, ensure_current_keys
 
     stats = ArtistPassStats()
     now = stamps.utc(now)
+    ensure_current_keys(conn)
 
     def sitemap_read() -> None:
         stats.sitemaps += 1

@@ -171,6 +171,23 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert browser.js("document.querySelector('#results .read-page')") is None
 
 
+def test_an_artist_whose_page_was_read_listing_no_tab_is_never_offered_to_read_it(cfg, live, browser):
+    # Their page read, and listing none: no tab in the index, yet read, as /api/artist says. Neither page says it
+    # wasn't, nor offers to read it again.
+    base, queue, runner = live
+    harptabs(cfg)
+    conn = db.connect(cfg.db_path)
+    store_artist_page(conn, "artist/7829/ritchie-valens", ArtistPage("Ritchie Valens", 0), datetime.now(UTC))
+    conn.commit()
+    conn.close()
+    browser.open(base + "lookup?q=ritchie%20valens")
+    assert browser.wait(f"{HT_ROWS}.length === 1")
+    assert "page not read yet" not in browser.js(f"{HT_ROWS}[0].textContent")
+    search(browser, base, "ritchie valens")
+    assert browser.wait("document.getElementById('bar-status').textContent.includes('on harptabs.com')")  # answered
+    assert browser.js("document.querySelector('#results .read-page')") is None
+
+
 def test_a_read_that_left_no_songs_names_harptabs_com_never_lacuerda(cfg, live, browser):
     # A read that ended in an error, and left no songs to list: what the line under the offer says names the site it
     # read, as the library page's and the lookup page's.

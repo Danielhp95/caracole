@@ -115,6 +115,8 @@ def test_the_harp_as_the_tab_says_or_its_key_or_the_songs_or_the_usual():
 def test_how_to_read_the_holes_and_what_harptabs_com_says_of_the_tab():
     assert text_of(page(facts=FACTS), "legend") == "4 blow −4 draw −3′ bent (4 5) together · Beginner · 224k views · 3.3★"
     assert text_of(page(facts={"views": 1_100_000, "rating": None}), "legend").endswith("together · 1.1M views")
+    # as harptabs.com writes a count under a thousand: 400, never "0k"
+    assert text_of(page(facts={"views": 400}), "legend").endswith("together · 400 views")
     assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("together")
 
 

@@ -496,12 +496,14 @@ def _harptabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit
 
 def _harptabs_artist_json(app: WebApp, conn: sqlite3.Connection, a: SiteArtist, songs: list[Song]) -> dict[str, Any]:
     """A harptabs.com artist as the pages draw them: the tabs their page says they have (``songs``, 0 until it is
-    read), those the index holds (``known``) and the songs they are of (``held``), their most viewed songs (``top``,
-    as ``_harptabs_rows``), their page's ``path``, and the group the library page puts them in (``group_key``)."""
+    read), those the index holds (``known``) and the songs they are of (``held``), whether caracole has read their
+    page (``read``, one that lists no tab too), their most viewed songs (``top``, as ``_harptabs_rows``), their page's
+    ``path``, and the group the library page puts them in (``group_key``)."""
     held = conn.execute("SELECT COUNT(DISTINCT song_key) FROM harptabs_artist_tabs WHERE artist = ?",
                         (a.slug,)).fetchone()[0]
     return {"source": a.source, "artist": a.artist, "path": a.slug, "url": a.url, "songs": a.songs, "known": a.known,
-            "held": held, "score": a.score, "via": a.via, "part": a.part, "group_key": _group_key(a.artist),
+            "held": held, "read": a.read, "score": a.score, "via": a.via, "part": a.part,
+            "group_key": _group_key(a.artist),
             "top": _harptabs_rows(app, conn, a.top, songs)}
 
 

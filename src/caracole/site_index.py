@@ -10,6 +10,8 @@ caracole's keys (``normalize.KEY_VERSION``), always with conditional requests:
   rows were made with older keys: then the cache's copy, which the 304 brings, is parsed.
 - A refresh the budget cuts short goes on where it stopped: a sitemap read or found
   unchanged in this round isn't asked for again until ``max_age`` has passed.
+- A sitemap that answers 200 cut short, before its closing ``</urlset>`` (``</sitemapindex>``),
+  is an error that leaves what the table held, never fewer rows.
 - Each sitemap is stored in one transaction, its rows in place of the ones it gave
   before, and a sitemap the index no longer lists leaves the table.
 
@@ -21,6 +23,8 @@ rows, keys and when it was last checked) and ``<provider>:index:complete_at``.
 
 from __future__ import annotations
 
+import gzip
+import re
 import sqlite3
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -38,6 +42,9 @@ def _as_is(url: str) -> str:
 
 
 ONE = "sitemap"  # the name of a site's one sitemap, when it has no index
+_GZIP_MAGIC = b"\x1f\x8b"
+_CLOSED = re.compile(rb"</(?:[\w.-]+:)?(?:urlset|sitemapindex)\s*>")  # a sitemap's last tag, read whole
+_TAIL = 4096  # the bytes at a sitemap's end its last tag is looked for in: past it, comments and spaces alone
 
 
 @dataclass(frozen=True)
@@ -132,12 +139,18 @@ def _children(site: Site, resp: Response) -> dict[str, str]:
 
 
 def _locs(site: Site, data: bytes, url: str, status: int) -> list[str]:
+    """Every ``<loc>`` of a sitemap or a sitemap index; ProviderError for one that won't read: a corrupt gzip body, no
+    ``<loc>``, or a body cut short before its closing ``</urlset>`` (``</sitemapindex>``), which would list fewer
+    pages than the site has, and their rows would leave the table."""
     try:
-        locs = list(iter_locs(data))
+        text = gzip.decompress(data) if data[:2] == _GZIP_MAGIC else data
+        locs = list(iter_locs(text))
     except (OSError, EOFError, ValueError) as e:  # a truncated or corrupt gzip body
         raise ProviderError(site.provider, url, status, f"unreadable sitemap: {e}") from e
     if not locs:
         raise ProviderError(site.provider, url, status, "not a sitemap (no <loc> entries)")
+    if _CLOSED.search(text[-_TAIL:]) is None:
+        raise ProviderError(site.provider, url, status, "a sitemap cut short (no closing </urlset> or </sitemapindex>)")
     return locs
 
 

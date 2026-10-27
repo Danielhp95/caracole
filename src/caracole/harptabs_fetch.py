@@ -9,7 +9,9 @@ What the site looks like is in harptabs.py. A pass:
    or not you deleted it since); not looked up in the last 30 days; and with a candidate: a tab
    whose title is the song's (the sitemap's slugs carry the title alone), by an artist the
    sitemap lists under one of the song's artists' names (never a request). Newest first.
-3. **The candidates**, at most ``CANDIDATES``, lowest id first, each read at its page (cached
+3. **The candidates**, at most ``CANDIDATES``: first the tabs of the title the page of the song's
+   artist lists, once caracole has read it (harptabs_index.py), the most viewed first; then the
+   sitemap's, lowest id first. Each is read at its page (cached
    for good, as every page is), for its artist, which is kept only when it is one of the
    song's (``normalize.name_forms``, as Ultimate Guitar's artists are compared): a page of no
    known artist ("by Unknown", ``harptabs.parse_tab_page``) is passed over as another
@@ -46,7 +48,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from caracole import site_index, stamps
-from caracole.db import kv_get, kv_set
+from caracole.db import kv_get, kv_set, savepoint
 from caracole.harptabs import (
     ARTIST,
     PROVIDER,
@@ -58,7 +60,8 @@ from caracole.harptabs import (
     page_url,
     parse_page_url,
     parse_tab_page,
-    title_key,
+    song_key,
+    title_keys,
 )
 from caracole.http import (
     BudgetExhausted,
@@ -86,6 +89,8 @@ RECHECK_AFTER = timedelta(days=30)  # a song whose candidates were none of its a
 CANDIDATES = 8  # a title's tabs read for one song at most, lowest id first
 _ACCEPT = (200, 404)  # a 404 is an answer: the tab is gone
 
+KEYS_KEY = "harptabs:index:keys"  # how the sitemap's rows in harptabs_index are keyed (ROW_KEYS)
+ROW_KEYS = "1"  # a tab's key joins a contraction's end to its word (harptabs.joined)
 CHECKED_PREFIX = "harptabs:checked:"  # + song id: when its candidates last answered for it
 PICKED = ":pick"  # CHECKED_PREFIX + song id + this: the tab you picked that was asked for then
 
@@ -132,6 +137,7 @@ def harptabs_tabs(
     """
     stats = HarpTabsStats()
     now = stamps.utc(now)
+    ensure_current_keys(conn)
     wanting = [s for s in _songs_wanting_a_tab(conn, now, overrides) if only is None or s.id in only]
     if not wanting:
         return stats
@@ -175,23 +181,65 @@ SITE = Site(
 )
 
 
+def ensure_current_keys(conn: sqlite3.Connection) -> int:
+    """Key the sitemap's rows again from their paths (``parse_page_url``) after a change to how harptabs.py keys them
+    (``ROW_KEYS``), once and with no request, as the next read of the sitemap would; the step, a lookup and the artist
+    pages' pass do it first. Returns how many rows changed."""
+    if kv_get(conn, KEYS_KEY) == ROW_KEYS:
+        return 0
+    changed = 0
+    with savepoint(conn, "harptabs_index_keys"):
+        for path, key in conn.execute("SELECT path, key FROM harptabs_index").fetchall():
+            row = parse_page_url(page_url(path))
+            if row is not None and row.key != key:
+                conn.execute("UPDATE harptabs_index SET key = ? WHERE path = ?", (row.key, path))
+                changed += 1
+        kv_set(conn, KEYS_KEY, ROW_KEYS)
+    return changed
+
+
 class _Index:
-    """``harptabs_index`` as a pass reads it: the artists' keys, hyphens aside, loaded once."""
+    """``harptabs_index`` as a pass reads it: the artists' keys, hyphens aside, loaded once; and the artist pages read
+    (``harptabs_artists``, harptabs_index.py), by their slug's key, hyphens aside."""
 
     def __init__(self, conn: sqlite3.Connection):
         self.conn = conn
         self.artists = {compact(r[0]) for r in conn.execute("SELECT key FROM harptabs_index WHERE kind = ?",
                                                             (ARTIST,))}
+        self.pages: dict[str, list[str]] = {}
+        for path, key in conn.execute("SELECT path, key FROM harptabs_artists WHERE name != '' ORDER BY page_id"):
+            self.pages.setdefault(compact(key), []).append(path)
 
     def candidates(self, song: Song) -> list[tuple[int, str]]:
-        """The tabs titled as the song is, ``(id, path)`` lowest id first, at most ``CANDIDATES``; none when
-        the sitemap lists no artist by one of the song's artists' names, as then no tab there is theirs."""
-        key = title_key(song.title)
-        if not key or not any(compact(form) in self.artists for form in _forms(song)):
+        """The tabs titled as the song is, ``(id, path)``, at most ``CANDIDATES``: first those of the title the page
+        of one of the song's artists lists, once caracole has read it (``harptabs_artist_tabs``: the song its title
+        names, ``harptabs.song_key``, "Piano Man (C Harmonica)" too), the most viewed first; then the sitemap's
+        (``harptabs.title_keys``: an apostrophe slugged as nothing or as a hyphen, ``harptabs.joined``), lowest id
+        first. None when the sitemap lists no artist by one of the song's artists' names, as then no tab there is
+        theirs."""
+        keys = title_keys(song.title)
+        forms = {compact(form) for form in _forms(song)}
+        if not keys or forms.isdisjoint(self.artists):
             return []
+        found = list(dict.fromkeys(self._theirs(song, forms)))
+        marks = ", ".join("?" for _ in keys)
+        for page_id, path in self.conn.execute(
+                f"SELECT page_id, path FROM harptabs_index WHERE kind = ? AND key IN ({marks}) ORDER BY page_id "
+                "LIMIT ?", (TAB, *keys, CANDIDATES)):
+            if (page_id, path) not in found:
+                found.append((page_id, path))
+        return found[:CANDIDATES]
+
+    def _theirs(self, song: Song, forms: set[str]) -> list[tuple[int, str]]:
+        """The tabs of the song's title the read page of one of its artists lists, the most viewed first."""
+        paths = [path for form in sorted(forms) for path in self.pages.get(form, ())]
+        key = song_key(song.title)
+        if not paths or not key:
+            return []
+        marks = ", ".join("?" for _ in paths)
         return [(r[0], r[1]) for r in self.conn.execute(
-            "SELECT page_id, path FROM harptabs_index WHERE kind = ? AND key = ? ORDER BY page_id LIMIT ?",
-            (TAB, key, CANDIDATES))]
+            f"SELECT tab_id, path FROM harptabs_artist_tabs WHERE artist IN ({marks}) AND song_key = ? "
+            "ORDER BY views DESC, place LIMIT ?", (*paths, key, CANDIDATES))]
 
 
 def _forms(song: Song) -> list[str]:

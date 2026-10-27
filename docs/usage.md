@@ -457,7 +457,8 @@ In order:
    `[harptabs]`), else the most viewed by the song's artist. A tab you picked is
    kept beside the song's other harmonica tabs, never in place of one.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
-   sheet changed, and MuseScore's pages matched from its local index.
+   sheet changed, the page of each harmonica tab the song keeps (`harmonica-N.html`,
+   for a song with no sheet too), and MuseScore's pages matched from its local index.
 9. **The songbooks it is in**: each songbook of songbooks.toml that lists the
    song is made again, as `caracole songbook render NAME` does (one whose
    songs and settings did not change is left as it is: "up to date"), then
@@ -1264,9 +1265,13 @@ and cache.
   local index when it never has, or last did 30 days ago: its tabs by title
   (the address of a tab names its title alone, `/tab/25/piano-man`) and its
   artists by name. It never uses the site's search or its API. A song is looked
-  up only when the sitemap lists a tab of its title and an artist of its
-  artist's name; then the pages of the tabs of that title are read, lowest id
-  first, eight at most, each for the artist it names, and of those by your
+  up only when the sitemap lists a tab of its title (an apostrophe slugged as
+  nothing or as a hyphen, `dont` or `don-t`) and an artist of its
+  artist's name; then the pages of the tabs of that title are read, eight at
+  most: first those your song's artist's page lists, once caracole has read it
+  (`caracole harptabs --index`), the most viewed first ("Piano Man (C
+  Harmonica)" too), then the sitemap's, lowest id first, each for the artist it
+  names, and of those by your
   song's artist the most viewed is kept, as the song's `harmonica-N.txt`, the
   page's tab as it is: hole numbers over the lyrics. A tab of no known artist
   ("by Unknown") is no one's, as a tab by another artist is. A song none of
@@ -1290,7 +1295,8 @@ and cache.
   `The budget of 100 requests is spent: caracole harptabs --index reads the
   next 10329 artists, about 43 h of requests at this pace.`; or `harptabs.com's
   artist index is up to date: …` when nothing was due. A page that answers 404
-  keeps no tab (`1 gone`); one that won't parse, or any other error, leaves what
+  keeps no tab (`1 gone`); one that won't parse (one that says the artist has
+  tabs and lists none caracole can read among them), or any other error, leaves what
   the index held of that artist, and is asked for again next time. It holds
   caracole's lock while it runs, as the nightly run does, letting a lookup go
   first in its pauses: a nightly run waits for it, so give it a budget that
@@ -3150,7 +3156,9 @@ Piano Man), the most viewed first: its line names how many there are and the
 key the first's page names, its page, and the `caracole get --harptabs` line that
 looks the song up now keeping that tab (`[harptabs]` in overrides.toml). A tab
 whose artist no page read names yet is listed by its title alone, as a possible
-match (`same title, maybe another song`). `--artist NAME` lists the songs the
+match (`same title, maybe another song`), its whole title the query's, an
+apostrophe typed or not, whichever way its address writes it (`can-t-help-…` or
+`cant-help-…`). `--artist NAME` lists the songs the
 index holds of the artist NAME names, the most viewed first, and `--title TITLE`
 its songs of that title. While its artist pages aren't all read, the group ends
 with how far it has got (`harptabs.com's artist pages are still being read: 1,204

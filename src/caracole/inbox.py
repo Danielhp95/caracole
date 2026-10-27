@@ -191,8 +191,10 @@ def guitar_number(conn: sqlite3.Connection, library_dir: Path, song: Song) -> in
 
 def harmonica_number(conn: sqlite3.Connection, library_dir: Path, song: Song) -> int:
     """The N of a new ``harmonica-N.txt``, a harmonica tab (harptabs_fetch.py): the lowest number no file of the
-    song holds, kept or put in its folder by hand, so that no file is ever replaced."""
-    taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song) if (m := HARMONICA_FILE.fullmatch(n))}
+    song holds, kept or put in its folder by hand, the tab or its page (``harmonica-N.html``, which render.py writes
+    beside it), so that no file is ever replaced."""
+    taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song)
+             if (m := HARMONICA_FILE.fullmatch(n) or HARMONICA_PAGE.fullmatch(n))}
     return next(n for n in itertools.count(1) if n not in taken)
 
 

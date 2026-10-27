@@ -698,6 +698,24 @@ def test_a_lookup_with_the_harptabs_tab_you_picked_keeps_it_and_records_the_pick
     assert [u for u in sites.requests if "harptabs" in u] == [picked]
 
 
+def test_a_lookup_that_keeps_a_harmonica_tab_for_a_song_with_no_sheet_makes_its_page_too(cfg, conn, sites):
+    # Ultimate Guitar has no sheet of the song: the tab's page is the song's one page, made by the lookup as the
+    # nightly run's render would, not left for the night.
+    from helpers.harptabs_site import tab_page
+
+    upsert_rows(conn, [(7, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-7")], "1", NOW)
+    mark_built(conn, NOW)
+    picked = "https://www.harptabs.com/tab/702/juke"
+    sites.pages[picked] = (200, tab_page("Juke", "Little Walter", key="E", body="-4 5\nla la\n"))
+
+    result, progress = look_up(cfg, sites=sites, artist="Little Walter", title="Juke", harptabs=picked)
+
+    here = folder(cfg, "Little Walter", "Juke")
+    assert progress.states()["harptabs"] == "done" and not (here / "sheet.txt").exists()
+    assert (here / "harmonica-1.txt").is_file()
+    assert "<title>Juke · harmonica tab</title>" in (here / "harmonica-1.html").read_text(encoding="utf-8")
+
+
 def test_a_lookup_of_a_song_harptabs_com_has_nothing_for_asks_it_nothing(cfg, conn, sites):
     serve_creep(sites, conn)
 

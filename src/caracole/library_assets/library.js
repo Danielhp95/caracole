@@ -2077,7 +2077,7 @@
       if (m.harptabs && Number(m.harptabs.known) > 0) {
         m.tail.ht = button("", "small more-by", () => moreOf(m, "harptabs"));
         m.tail.box.appendChild(m.tail.ht);
-      } else if (m.harptabs) {
+      } else if (m.harptabs && !m.harptabs.read) {  // a page read that lists no tab is offered no read again
         m.tail.htOffer = harpOffer(m);
         m.tail.box.appendChild(m.tail.htOffer);
       }

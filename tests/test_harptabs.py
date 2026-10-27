@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from helpers.harptabs_site import BASE, fixture, tab_page
+from helpers.harptabs_site import BASE, artist_page, fixture, tab_page
 
 from caracole.harptabs import (
     HarpTab,
@@ -31,6 +31,17 @@ def test_the_sitemap_gives_its_tabs_by_title_and_its_artists_by_name():
     # The site's own pages, its genres, and an artist with no slug (a name in another script) are no rows.
     assert len(rows) == 11
     assert [r.page_id for r in rows if r.key == "piano-man"] == [25, 29525]
+
+
+def test_a_tabs_key_joins_a_contractions_end_to_its_word_whichever_way_the_slug_wrote_it():
+    # "can-t-help-falling-in-love" and "cant-help-falling-in-love" are one title's slugs: the key is the second,
+    # which the title's own key ("Can't Help Falling in Love") and a query typed either way meet.
+    for slug in ("can-t-help-falling-in-love", "cant-help-falling-in-love"):
+        assert parse_page_url(f"{BASE}/tab/1/{slug}").key == "cant-help-falling-in-love"
+    assert parse_page_url(f"{BASE}/tab/2/knockin-on-heaven-s-door").key == "knockin-on-heavens-door"
+    assert parse_page_url(f"{BASE}/tab/3/i-m-confessin").key == title_key("I'm Confessin'") == "im-confessin"
+    assert parse_page_url(f"{BASE}/tab/4/you-ain-t-goin-nowhere").key == title_key("You Ain't Goin' Nowhere")
+    assert parse_page_url(f"{BASE}/artist/5/guns-n-roses").key == "guns-n-roses"  # an artist's: compared hyphens aside
 
 
 @pytest.mark.parametrize("url", [
@@ -78,6 +89,14 @@ def test_a_tab_page_by_unknown_parses_and_names_no_artist():
     assert (tab.title, tab.artist, tab.key, tab.views) == ("KNOCKIN ON HEAVENS DOOR...", None, "C", 2_000)
     assert tab.body.startswith("ARMONICA C\n") and "(3)la (3)lo" in tab.body
     assert tab.raw()["artist"] is None
+
+
+def test_a_line_the_page_breaks_with_a_tag_is_a_line_of_the_tab():
+    # The site's editor writes a line as a <p> and breaks one with <br> (Love Me Do's, tab 53: "go to:<br><a>…"), which
+    # its <pre> shows as lines apart: a row of holes so broken from its words is two lines, never one.
+    page = tab_page("Love Me Do", "Beatles",
+                    body="<p>Tabbed by someone<br>-4 -4 5<br/>Love, love me</p><p>4 5</p><p>do</p>\n<p>4</p>")
+    assert parse_tab_page(page).body == "Tabbed by someone\n-4 -4 5\nLove, love me\n4 5\ndo\n4\n"
 
 
 @pytest.mark.parametrize("artist, path", [
@@ -190,6 +209,17 @@ def test_an_artist_with_no_tab_is_a_page_with_none():
     empty = head.replace("41 tabs", "0 tabs") + "</div></main></body></html>"
     page = parse_artist_page(empty)
     assert (page.name, page.tabs, page.listed) == ("?", 0, ())
+
+
+def test_an_artist_page_that_says_they_have_tabs_and_lists_none_it_can_read_is_an_error_never_no_tabs():
+    # Its cards changed, say: read as no tab, each page read again would empty the artist's tabs from the index.
+    from caracole.harptabs import parse_artist_page
+
+    with pytest.raises(HarpTabsParseError):
+        parse_artist_page(artist_page("billy joel", [], count=98), f"{BASE}/artist/1178/billy-joel")
+    unreadable = fixture("artist_1178_billy-joel.html").replace('href="/tab/', 'href="/tabs/')
+    with pytest.raises(HarpTabsParseError):
+        parse_artist_page(unreadable, f"{BASE}/artist/1178/billy-joel")
 
 
 def test_a_card_that_links_to_no_tab_page_is_left_out():
