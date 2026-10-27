@@ -499,6 +499,9 @@ HOTEL = ("Am", "E7", "G", "D", "F", "C", "Dm", "E", "Am", "E7", "G", "D", "F", "
         ("A major", 2, HOTEL, "A", "B"),
         ("A minor", 0, ("G", "C", "D", "G"), "Am", "Am"),
         ("A", 2, (), "A", "B"),  # no chords to tell: major
+        ("A", 0, ("A", "E", "Em", "C", "A", "E", "Em", "C"), "A", "A"),  # C major's notes, but it plays A: major
+        ("A", 2, ("A7", "E", "Em", "C", "Am", "E7", "Em", "C"), "A", "B"),  # an A7 is A major's tonic too
+        ("B", 2, ("A", "E", "Em", "C", "A", "E", "Em", "C"), "B", "Db"),  # named by the sound: A is the shapes' tonic
         ("A dorian", 0, HOTEL, "A dorian", "A dorian"),
     ],
 )

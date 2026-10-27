@@ -4519,7 +4519,8 @@ play: with a capo, the song sounds higher. A key from the tab is as its
 transcriber gives it, but for a letter alone (`A`, `F#`, `La`), which says no
 mode: that is the minor key on that letter when the sheet's chords have its
 notes (or those of the minor key a capo lower, for a tab that names the key the
-song sounds in) and not the major key's. Ultimate Guitar names Hotel
+song sounds in) and not the major key's, and the sheet never plays that
+letter's major chord (A, A7, Amaj7). Ultimate Guitar names Hotel
 California's key `A`, with capo 2 over Am E7 G D F C Dm E: caracole reads A
 minor, A minor shapes that sound B minor. A key named with its mode (`Am`, `A
 major`, `A minor`) is as named, and a letter whose chords fit its major key is

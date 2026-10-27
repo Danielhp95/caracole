@@ -366,12 +366,14 @@ def named_key(text: object, capo: int, played: list[Chord]) -> Key | None:
 def bare_key(named: Key, capo: int, played: list[Chord]) -> Key:
     """The key a tab names by its letter alone, ``named`` (read as major), its sheet's chords ``played`` with the
     capo on fret ``capo``: its parallel minor when their key (``estimate_key``) has the notes of that minor, or of the
-    minor a capo lower (a tab that names the sound, as ``shapes_key`` reads it), and those of neither major key.
+    minor a capo lower (a tab that names the sound, as ``shapes_key`` reads it), and those of neither major key, and
+    they never play that minor's tonic as a major chord (A, A7, Amaj7: a major third on it), which says major.
 
     UG's "A" for Hotel California, capo 2, over Am E7 G D F C Dm E: their key, A minor, has A minor's notes and not
     A major's, so A minor (the shapes; the song sounds B minor), and its "B" is B minor (the sound). "G" over G C D
     Em stays G, and "C" over C F G Am with capo 3 stays C, though A minor, a capo below C minor, has those notes too:
-    the major key that fits comes first. Without a capo the two tests are one. Without chords to tell, major."""
+    the major key that fits comes first. "A" over A E Em C stays A: C major's notes, but it plays A. Without a capo
+    the two tests are one. Without chords to tell, major."""
     if named.mode != "ionian":
         return named
     found = estimate_key(played)
@@ -381,8 +383,10 @@ def bare_key(named: Key, capo: int, played: list[Chord]) -> Key:
     lowered = (named.tonic - capo) % 12
     if notes in (scale(named), scale(Key(lowered, "ionian"))):
         return named
-    if notes in (scale(Key(named.tonic, "aeolian")), scale(Key(lowered, "aeolian"))):
-        return Key(named.tonic, "aeolian")
+    for tonic in (named.tonic, lowered):
+        if notes == scale(Key(tonic, "aeolian")):
+            plays_major = any(chord.root == tonic and 4 in chord.intervals for chord in played)
+            return named if plays_major else Key(named.tonic, "aeolian")
     return named
 
 

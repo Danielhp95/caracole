@@ -124,8 +124,7 @@ def test_a_version_page_takes_its_own_key_and_links_no_pdf(conn, cfg):
     folder = folder_of(cfg, song)
     b = page_data(folder / version_names(str(B))[2])
     c = page_data(folder / version_names(str(C))[2])
-    # its tonality_name, "A": a letter alone, over chords (A E Em C) in C major's notes, A minor's (theory.bare_key)
-    assert b["key"] == {"tonic": 9, "mode": "aeolian", "from": "from the tab"}
+    assert b["key"] == {"tonic": 9, "mode": "ionian", "from": "from the tab"}  # its tonality_name
     assert c["key"]["tonic"] == 0  # no tonality_name: from its chords, as the sheet's would be
     assert c["key"]["from"] == "estimated from the chords"
     assert page_data(folder / "sheet.html")["key"]["tonic"] == 7
