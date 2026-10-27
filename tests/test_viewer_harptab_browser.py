@@ -360,3 +360,12 @@ def test_served_with_no_storage_the_screens_choices_go_to_the_tabs_page_and_back
     assert back == "sheet.html#necks=0&py=1&trad=1&inst=harmonica"
     assert home[:3] == [True, True, "harmonica"]
     assert all(part in home[3] for part in ("necks=0", "py=1", "trad=1", "inst=harmonica"))
+
+
+def test_the_window_narrowed_with_the_focus_in_the_rail_puts_it_on_the_bar(tmp_path):
+    with opened(tmp_path, with_sheet(tmp_path), **WIDE_SCREEN) as b:
+        b.js("document.querySelector('#necks .hw-harp[aria-checked=true]').focus()")
+        b.send("Emulation.setDeviceMetricsOverride", width=1100, height=1000, deviceScaleFactor=1, mobile=False)
+        assert b.wait("document.getElementById('necks').hidden")
+        focus = b.js("document.activeElement.id")
+    assert focus == "h-down"  # the bar's first control, where the rail's button was

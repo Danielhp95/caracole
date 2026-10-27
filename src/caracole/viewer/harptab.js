@@ -230,7 +230,16 @@
     save();
   };
   necksButton.addEventListener("click", () => showRail(!state.necks));
-  wide.addEventListener("change", drawRail);
+  // The window narrowed below 1200 px with the keyboard's focus in the rail: it goes to the bar's first control, where
+  // the rail's button was.
+  wide.addEventListener("change", () => {
+    const had = aside.contains(document.activeElement);
+    drawRail();
+    if (had && !aside.contains(document.activeElement)) {
+      const first = Array.from($("bar").querySelectorAll("button")).find((b) => b.getClientRects().length > 0);
+      if (first) first.focus({ preventScroll: true });
+    }
+  });
 
   // --- a hole tapped, a line played ------------------------------------------------------------------------------
   let playing = null, lit = 0;

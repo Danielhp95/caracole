@@ -1247,11 +1247,18 @@
   if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (necksEl) {
     // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it.
+    // Narrowed with the keyboard's focus in the rail, the focus goes to the bar's first control, where the rail's
+    // button was.
     railWide.addEventListener("change", () => {
+      const had = necksEl.contains(document.activeElement);
       drawNecks();
       if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
       layout();
       place();
+      if (had && !necksEl.contains(document.activeElement)) {
+        const first = Array.from(bar.querySelectorAll("button")).find((b) => b.getClientRects().length > 0);
+        if (first) first.focus({ preventScroll: true });
+      }
     });
   }
 

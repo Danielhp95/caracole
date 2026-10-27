@@ -2404,7 +2404,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset everything** shows the rail again. Hidden, the
   Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
-  there is no rail and no button for it.
+  there is no rail and no button for it (narrowed with the keyboard's focus
+  in the rail, the focus goes to the bar).
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
