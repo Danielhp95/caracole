@@ -2,8 +2,8 @@
 page in the sheet viewer's look, written beside it at render time (render.py) and recorded as the viewers are.
 
 It is sheet.html's kind of page (page.py ``_page``): one self-contained file that loads nothing, its policy allowing
-its two scripts (strum.js, then harptab.js) and its two stylesheets (viewer.css, then harptab.css) by their hashes,
-and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole over the syllable it is blown
+its three scripts (strum.js, overlay.js, then harptab.js) and its two stylesheets (viewer.css, then harptab.css) by
+their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by harptab.py: each hole over the syllable it is blown
 on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w`` columns: a line wraps between its
 words, never parting a hole from its syllable), a blow in the accent colour, a draw in blue with its "−", a bend's
 ″ in purple, holes together in their brackets; rows played alone, words sung to the same tune and the tabber's notes
@@ -18,6 +18,13 @@ Notes, each hole's note on that harp in its place. A tap on a hole sounds it (st
 end plays it hole by hole, a hole a beat, lighting each (``caracoleSound.play``). ‹ Chord sheet goes back to the
 song's viewer (‹ Library for a song with none), and the tab's text is a tap away at the foot.
 
+From 1200 px, the sheet viewer's overlay (overlay.js) is on the left, Harmonica first and shown: the harps round the
+circle of fifths for the song as its chord sheet sounds, the one chosen the page's own harp both ways (a harp tapped
+there is the one the page plays; −/+ move the circle's choice), the key on it and each chord's holes; and Guitar, the
+sheet's key and chords on the guitar's neck, as the sheet is written. A song with no sheet has no Guitar tab, and
+with no key to place a harp in, its Harmonica tab shows the page's harp's notes alone. Its Hide, the bar's button and
+``necks=0`` are the viewer's, the choice one for every page.
+
 The script (harptab.js) computes no music theory: the page's data, a JSON block (``harp-data``, each ``<`` escaped),
 holds every answer, made here:
 
@@ -30,7 +37,13 @@ holds every answer, made here:
   (``theory.spelling`` of its major key);
 - ``groups``: each group of holes on the page, by its ``data-i``: ``[kind, [[hole, "b" or "d", bend, over], ...]]``;
   ``rows``: each row's groups, by its ▶'s ``data-row``; ``bpm``, a hole a beat when a line plays. A tab shown as
-  written has no ``groups`` and no ``rows``.
+  written has no ``groups`` and no ``rows``;
+- ``overlay``: what the overlay draws (``_overlay``), as overlay.js's ``rail`` takes it: ``guitar``, the Guitar tab
+  (the sheet's chords as written, each with its positions, ``instruments.chord_shapes``, and the key's neck), or null
+  for a song with no sheet; ``harp``, the Harmonica tab: with the sheet's key, the key as it sounds (``key``,
+  ``tonic``, ``names``), harp.py's tables for its mode (``ring``, ``holes``, ``scales``, ``outside``, ``choices``), each
+  chord as it sounds with its entries and its notes, and ``tabs``, the page's harp when the record or the tab's words
+  chose it; with none, ``key`` null, the line that says so and ``holes``, each harp's notes for the page's harp's.
 """
 
 from __future__ import annotations
@@ -42,10 +55,24 @@ from typing import Any
 from urllib.parse import quote
 
 from caracole.inline import json_block
-from caracole.viewer import harp, harpfit
+from caracole.viewer import harmony, harp, harpfit
+from caracole.viewer.harmony_tables import page_name
 from caracole.viewer.harptab import Gap, Group, Hole, Prose, Row, Section, Tab, Words, parse
-from caracole.viewer.page import HERE, LIBRARY_PAGE, _assets, _page, _sound, _words, artist_line
-from caracole.viewer.theory import Key, spelling
+from caracole.viewer.instruments import GUITAR, chord_shapes
+from caracole.viewer.page import (
+    HERE,
+    LIBRARY_PAGE,
+    _assets,
+    _overlay,
+    _page,
+    _sound,
+    _words,
+    artist_line,
+    shapes_of,
+    viewer_key,
+)
+from caracole.viewer.sheet import parse_sheet
+from caracole.viewer.theory import Chord, Key, key_name, parse_chord, sounding, spelling
 
 BPM = 132  # a line played: a hole a beat
 SITE = "https://www.harptabs.com/"
@@ -87,12 +114,14 @@ def build_harmonica_viewer(
     tab = parse(text)
     choice = harpfit.choose(tab, cho=cho, key=key, key_source=key_source, page_key=page_key)
     data = _data(tab, choice)
+    data["overlay"] = _overlay_data(choice, cho, key, key_source)
     head = _header(title, artist, tab, choice, facts or {}, back)
     article = _tab_html(tab, data) if tab.readable else _raw_html(text)
     style, _ = _assets()
     own_style, script = _own_assets()
     body = (
-        '<div class="page">\n'
+        '<aside class="necks" id="necks" hidden aria-label="Chord necks"></aside>\n'
+        + '<div class="page">\n'
         + head
         + article
         + _footer(tab_file, url, placed=tab.readable)
@@ -102,7 +131,7 @@ def build_harmonica_viewer(
         + json_block("harp-data", data)
     )
     return _page(f"{title or 'Untitled'} · harmonica tab", body, styles=(style, own_style),
-                 scripts=(_sound(), script))
+                 scripts=(_sound(), _overlay(), script))
 
 
 # --- the data ----------------------------------------------------------------------------------------------------
@@ -126,6 +155,67 @@ def _data(tab: Tab, choice: harpfit.Choice) -> dict[str, Any]:
         data["groups"] = []
         data["rows"] = []
     return data
+
+
+# --- the overlay: Harmonica and Guitar --------------------------------------------------------------------------
+
+_NO_KEY = "With no chord sheet, caracole doesn't know the song's key, so it can't tell which harp plays it."
+
+
+def _overlay_data(choice: harpfit.Choice, cho: str | None, key: str | None, key_source: str | None) -> dict[str, Any]:
+    """What the page's overlay draws (the module's docstring): the song's chord sheet ``cho`` as written, in its key
+    (``key``, ``key_source``: keys.py's, as its viewer reads them), with the harp ``choice`` the page starts on."""
+    holes = [harp.holes(offset) for offset in range(12)]
+    sheet = parse_sheet(cho) if cho else None
+    shapes = viewer_key(cho, key, key_source) if cho else None
+    if sheet is None or shapes is None:
+        return {"guitar": _guitar_data(sheet, None) if sheet else None,
+                "harp": {"key": None, "none": _NO_KEY, "holes": holes}}
+    sounds = sounding(shapes, sheet.capo or 0)
+    names = spelling(sounds)
+    capo = (sounds.tonic - shapes.tonic) % 12
+    found = harp.tables(shapes, {shapes.mode: [parse_chord(name, strict=False) for name in sheet.chords]})
+    chords = []
+    for i, name, chord in _once(sheet):
+        form, notes = found["harpChords"][shapes.mode][i], found["harpNotes"][shapes.mode][i]
+        sound = name if capo == 0 else page_name(chord, names, capo)
+        chords.append({"name": sound, "shape": "" if sound == name else name, "root": names[(chord.root + capo) % 12],
+                       "entries": found["harpForms"][form], "notes": notes})
+    return {"guitar": _guitar_data(sheet, shapes), "harp": {
+        "key": key_name(sounds), "tonic": sounds.tonic, "names": names, "ring": found["harpRing"], "holes": holes,
+        "scales": found["harpScales"][shapes.mode], "outside": found["harpOutside"][shapes.mode],
+        "choices": found["harps"][shapes.mode], "chords": chords,
+        "tabs": [] if choice.tabs_harp is None else [(choice.tabs_harp - sounds.tonic) % 12]}}
+
+
+def _once(sheet) -> list[tuple[int, str, Chord]]:
+    """The sheet's chords as its viewer's rail lists them: each it can read, once a name, in the order they come."""
+    out, seen = [], set()
+    for i, name in enumerate(sheet.chords):
+        chord = parse_chord(name, strict=False)
+        if chord is None or name in seen:
+            continue
+        seen.add(name)
+        out.append((i, name, chord))
+    return out
+
+
+def _guitar_data(sheet, shapes: Key | None) -> dict[str, Any]:
+    """The Guitar tab: each chord of the sheet as written with its positions on the guitar (the sheet's own first:
+    ``mine``), and the key's neck (none for a sheet with no key)."""
+    given = shapes_of(sheet)
+    chords = []
+    for _, name, chord in _once(sheet):
+        bass = "" if chord.bass is None else chord.bass
+        chords.append({"name": name, "list": chord_shapes(GUITAR, chord, 0, given),
+                       "mine": given.get(f"{chord.root},{chord.suffix},{bass}", {}).get("mine", 0)})
+    neck = None
+    if shapes is not None:
+        box = [(pc - shapes.tonic) % 12 for pc in harmony.pentatonic(shapes)]
+        neck = {"name": key_name(shapes), "tonic": shapes.tonic, "tonicName": spelling(shapes)[shapes.tonic],
+                "scale": [(pc - shapes.tonic) % 12 for pc in harmony.key_scale(shapes)], "pentatonic": box,
+                "pentaName": "major pentatonic" if 4 in box else "minor pentatonic", "tuning": list(GUITAR.tuning)}
+    return {"name": GUITAR.name, "strings": len(GUITAR.tuning), "chords": chords, "key": neck}
 
 
 # --- the header --------------------------------------------------------------------------------------------------
@@ -299,11 +389,13 @@ def _footer(tab_file: str, url: str | None, *, placed: bool) -> str:
     )
 
 
-# The bar, hidden until the script runs, in the order a keyboard reaches it: the harp a semitone down or up, its name
+# The bar, hidden until the script runs, in the order a keyboard reaches it: the overlay shown or hidden (from 1200 px,
+# as the viewer's: page.py's _CONTROLS); the harp a semitone down or up, its name
 # and why it was chosen between them; ♪, each hole's note on it in its place (pressed while it shows); Aa, the text
 # size in a box beside it; ▶, scrolling by itself. A tab shown as written has Aa and ▶ alone.
 _BAR = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">
+<button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
 <span class="keys" id="harps" role="group" aria-label="Harp">
 <button type="button" class="step" id="h-down" aria-label="The harp a semitone down">−</button>
 <output class="now" id="harp-now" for="h-down h-up"><span class="k" id="harp-name"></span><span class="d" id="harp-why"></span></output>

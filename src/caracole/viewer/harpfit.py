@@ -59,6 +59,13 @@ class Choice:
     page: int | None = None
     tonic: int | None = None
 
+    @property
+    def tabs_harp(self) -> int | None:
+        """The harp the tab is played on, as far as caracole can tell: the one that plays with the record, else the
+        one its words name; None where the page's harp is a guess (harptabs.com's key, the song's key, a C harp).
+        The overlay marks it "the tab's", and a chord sheet's starts on it (page.py ``harpTabs``)."""
+        return self.harp if self.why in ("record", "tab") else None
+
 
 def pitch(name: str | None) -> int | None:
     """A key's name, as a tab or harptabs.com writes it ("A", "Bb", "F#"), as a pitch class; None for none."""

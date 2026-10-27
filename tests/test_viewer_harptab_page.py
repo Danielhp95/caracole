@@ -9,12 +9,13 @@ from html import unescape
 from pathlib import Path
 
 from caracole.inline import sha256_source
-from caracole.viewer import harp, viewer_csp
+from caracole.viewer import build_viewer, harp, viewer_csp
 from caracole.viewer.harptab_page import build_harmonica_viewer
+from caracole.viewer.instruments import GUITAR, chord_shapes
 from caracole.viewer.page import HERE
-from caracole.viewer.theory import Key, spelling
+from caracole.viewer.theory import Key, parse_chord, spelling
 
-from test_viewer_harpfit import a_sheet, a_tab
+from test_viewer_harpfit import LINES, a_sheet, a_tab
 
 TABS = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
 HOTEL = (TABS / "588_hotel-california.txt").read_text(encoding="utf-8")
@@ -44,7 +45,7 @@ def test_it_loads_nothing_and_allows_exactly_its_scripts_and_styles():
     html = page()
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     styles = re.findall(r"<style>(.*?)</style>", html, re.S)
-    assert scripts == [(HERE / "strum.js").read_text("utf-8"), (HERE / "harptab.js").read_text("utf-8")]
+    assert scripts == [(HERE / name).read_text("utf-8") for name in ("strum.js", "overlay.js", "harptab.js")]
     assert styles == [(HERE / "viewer.css").read_text("utf-8"), (HERE / "harptab.css").read_text("utf-8")]
     policy = unescape(re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]*)">', html).group(1))
     assert policy == (f"default-src 'none'; script-src {' '.join(map(sha256_source, scripts))}; "
@@ -56,8 +57,9 @@ def test_it_loads_nothing_and_allows_exactly_its_scripts_and_styles():
 
 
 def test_its_script_builds_every_element_and_writes_no_markup():
-    script = (HERE / "harptab.js").read_text("utf-8")
-    assert "innerHTML" not in script and "outerHTML" not in script and "insertAdjacentHTML" not in script
+    for name in ("harptab.js", "overlay.js"):
+        script = (HERE / name).read_text("utf-8")
+        assert "innerHTML" not in script and "outerHTML" not in script and "insertAdjacentHTML" not in script
     assert "fetch(" not in script and "XMLHttpRequest" not in script
 
 
@@ -145,8 +147,82 @@ def test_everything_it_was_given_is_escaped():
     html = page("4 5\n<b>la</b> & <script>\n", title="<i>Song</i>", artist="A & B")
     assert "<b>la</b>" not in html and "&lt;b&gt;la&lt;/b&gt;" in html
     assert "<h1>&lt;i&gt;Song&lt;/i&gt;</h1>" in html and "A &amp; B" in html
-    assert page("4 5\n</script><script>x</script>\n").count("</script>") == 3  # data, strum.js, harptab.js
+    assert page("4 5\n</script><script>x</script>\n").count("</script>") == 4  # data, strum.js, overlay.js, harptab.js
 
 
 def test_the_pages_title():
     assert "<title>Synthetic Song · harmonica tab</title>" in page()
+
+
+# --- the overlay: Harmonica first, then Guitar (overlay.js) --------------------------------------------------------
+
+SHAPES = ("Am", "E7", "G", "D", "F", "C", "Dm", "E")
+SOUNDS = ("Bm", "F#7", "A", "E", "G", "D", "Em", "F#")  # with the capo on 2
+
+
+def a_song(chords: tuple[str, ...] = SHAPES, *, key: str = "Am", capo: int = 2) -> str:
+    """A ChordPro sheet, as caracole writes one, over the tab's lines (``a_tab``), two chords a line."""
+    lines = []
+    for n, line in enumerate(LINES[:4]):
+        words = line.split(" ")
+        lines.append(f"[{chords[2 * n]}]{' '.join(words[:3])} [{chords[2 * n + 1]}]{' '.join(words[3:])}\n")
+    return (f"{{title: Synthetic}}\n{{artist: Placeholder Band}}\n{{key: {key}}}\n"
+            + (f"{{capo: {capo}}}\n" if capo else "") + "".join(lines))
+
+
+TAB_D = a_tab(3, before="We play it, so I use a D harp\n\n")  # too few notes for the record: its words name the harp
+
+
+def test_the_overlays_harmonica_is_the_songs_key_as_it_sounds_with_the_viewers_tables():
+    data = data_of(page(TAB_D, cho=a_song(), key="Am", key_source="tab"))
+    assert data["start"] == 2  # a D harp, as the tab says
+    part = data["overlay"]["harp"]
+    sheet = re.search(r'<script type="application/json" id="song">(.*?)</script>',
+                      build_viewer(a_song(), key="Am", key_source="tab"), re.S)
+    viewer = json.loads(sheet.group(1))
+    assert (part["key"], part["tonic"], part["names"]) == ("Bm", 11, spelling(Key(11, "aeolian")))
+    assert part["tabs"] == [3]  # the D harp, three above B: the tab's
+    assert part["choices"] == viewer["harps"]["aeolian"]  # the harps the sheet's viewer offers, as it sounds
+    for name in ("ring", "holes"):
+        assert part[name] == viewer["harp" + name.capitalize()]
+    assert part["scales"] == viewer["harpScales"]["aeolian"] and part["outside"] == viewer["harpOutside"]["aeolian"]
+    assert [c["name"] for c in part["chords"]] == list(SOUNDS)
+    assert [c["shape"] for c in part["chords"]] == list(SHAPES)
+    assert [c["root"] for c in part["chords"]] == ["B", "F#", "A", "E", "G", "D", "E", "F#"]
+    for i, chord in enumerate(part["chords"]):
+        assert chord["entries"] == viewer["harpForms"][viewer["harpChords"]["aeolian"][i]]
+        assert chord["notes"] == viewer["harpNotes"]["aeolian"][i]
+    by_name = {c["name"]: c["entries"][3] for c in part["chords"]}  # on the D harp
+    assert by_name["A"] == ["yes", "draw", 2, 4] and by_name["E"] == ["minor", "draw", 4, 6, "m"]
+    assert by_name["Bm"] is None
+
+
+def test_the_overlays_guitar_is_the_sheet_as_written():
+    guitar = data_of(page(TAB_D, cho=a_song(), key="Am", key_source="tab"))["overlay"]["guitar"]
+    assert guitar["name"] == "Guitar" and guitar["strings"] == 6
+    assert [c["name"] for c in guitar["chords"]] == list(SHAPES)
+    assert guitar["chords"][1]["list"] == chord_shapes(GUITAR, parse_chord("E7"))
+    assert all(c["mine"] == 0 for c in guitar["chords"])
+    assert guitar["key"] == {"name": "Am", "tonic": 9, "tonicName": "A", "scale": [0, 2, 3, 5, 7, 8, 10],
+                             "pentatonic": [0, 3, 5, 7, 10], "pentaName": "minor pentatonic",
+                             "tuning": [40, 45, 50, 55, 59, 64]}
+
+
+def test_with_no_sheet_the_overlay_has_no_guitar_and_no_key_for_the_harps():
+    overlay = data_of(page(TAB_D))["overlay"]
+    assert overlay["guitar"] is None
+    assert overlay["harp"]["key"] is None and "chord sheet" in overlay["harp"]["none"]
+    assert overlay["harp"]["holes"] == [harp.holes(o) for o in range(12)]
+
+
+def test_a_harp_its_page_guesses_is_no_tabs():
+    # harptabs.com's key, with no record and no word of the tab's: the page starts there, but no harp is the tab's.
+    part = data_of(page(a_tab(3), cho=a_song(), key="Am", key_source="tab", page_key="C"))["overlay"]["harp"]
+    assert part["tabs"] == []
+
+
+def test_the_page_has_the_overlays_rail_and_its_bars_button():
+    html = page(TAB_D, cho=a_song(), key="Am", key_source="tab")
+    assert '<aside class="necks" id="necks" hidden aria-label="Chord necks"></aside>' in html
+    assert re.search(r'<div class="bar-in">\n<button type="button" class="tool necks-toggle" id="necks-toggle" hidden',
+                     html)

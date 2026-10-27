@@ -1,8 +1,9 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its four
-scripts, strum.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce that)
+no server: it loads nothing (a Content-Security-Policy with the hashes of its five
+scripts, strum.js, overlay.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce
+that)
 and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
 artist's name under the title, to the library page on their songs (``artist_line``).
 A server may serve it too, only while it is the page caracole wrote, with
@@ -40,7 +41,10 @@ written ``\\u003c``:
   key, each table's easy keys in every mode (``instruments.easy_keys``: ``[tonic, name]``), which the settings' Easy
   keys row offers on an instrument that has one;
 - the harmonica's (harp.py ``tables``: ``harpKeys``, ``harps``, the harps for the song in each mode, ``harpForms``,
-  ``harpChords``, ``harpAlts``, what each chord plays on each harp) for a sheet with a key, and the flute's and the
+  ``harpChords``, ``harpAlts``, what each chord plays on each harp; and the overlay's Harmonica tab's, ``harpRing``,
+  ``harpHoles``, ``harpScales``, ``harpOutside``, ``harpNotes``, ``harpAltNotes``) for a sheet with a key, with
+  ``harpTabs``, the harps the song's harmonica tabs play on (each one's ``harp``, as harpfit.py chose it), as semitones
+  above the key the sheet sounds in (its key, the capo added), and the flute's and the
   recorder's (winds.py ``tables``: ``windForms``, ``windChords``, ``windAlts``, each chord's notes), for winds.js;
   ``winds``, the same on every page: the fingerings (winds.py ``fingering_data``) and each harp's notes (``harps``,
   harp.py ``layouts``);
@@ -152,6 +156,7 @@ BUILD_FILES = (
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE / "instruments.js",  # a chord's box and keyboard, and the instruments a script registers, before viewer.js
     HERE / "harp.py", HERE / "winds.py", HERE / "winds.js",  # the harmonica, the flute and the recorder
+    HERE / "overlay.js",  # the rail on a wide screen, Guitar and Harmonica, on a sheet and a harmonica tab's page
     # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
     *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
@@ -207,6 +212,14 @@ def _winds() -> str:
 
 
 @lru_cache(maxsize=1)
+def _overlay() -> str:
+    """overlay.js: the rail of a wide screen, its Guitar and Harmonica tabs (``window.caracoleOverlay``), inlined
+    after strum.js and before the rest, before viewer.js, which draws it, in a sheet.html and a songbook.html alike,
+    and before harptab.js in a harmonica tab's page (harptab_page.py)."""
+    return (HERE / "overlay.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
 def _instruments() -> str:
     """instruments.js: a chord's box on any fretted instrument and a piano's keyboard, and the instruments another
     script registers (``window.caracoleInstruments``), inlined after strum.js and before viewer.js, which calls it,
@@ -225,7 +238,7 @@ def build_viewer(
     export: bool = True,
     versions: dict[str, Any] | None = None,
     guitar: tuple[str, ...] | list[str] = (),
-    harmonica: tuple[Mapping[str, str], ...] | list[Mapping[str, str]] = (),
+    harmonica: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -242,14 +255,19 @@ def build_viewer(
     in its data as ``guitar``, and its settings get a Guitar Pro row (``_GUITAR_ROW``); without any, neither.
     ``harmonica``, the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: ``{"name",
     "href", "page"}`` and the ``key`` its page named, if any), goes in its data as ``harmonicaTabs``; without any,
-    the data has none.
+    the data has none. A tab's ``harp``, the pitch class of the harp it plays on (render.py, harpfit.py), is the
+    data's ``harpTabs`` instead, by the sheet's key.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     data["start"] = start
     if versions is not None:
         data["versions"] = versions
     if harmonica:
-        data["harmonicaTabs"] = [dict(tab) for tab in harmonica]
+        data["harmonicaTabs"] = [{k: v for k, v in tab.items() if k != "harp"} for tab in harmonica]
+        harps = [tab["harp"] for tab in harmonica if isinstance(tab.get("harp"), int)]
+        if song_key is not None and harps:
+            sounds = song_key.tonic + (sheet.capo or 0)  # a harmonica takes no capo: the key the song sounds in
+            data["harpTabs"] = list(dict.fromkeys((h - sounds) % 12 for h in harps))
     if guitar:
         data["guitar"] = list(guitar)
         clean = clean_title(sheet.title or "")
@@ -260,7 +278,7 @@ def build_viewer(
         f"{title} · {sheet.artist}" if sheet.artist else title,
         _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar)) + json_block("song", data),
         styles=(style,),
-        scripts=(_sound(), _instruments(), _winds(), script),
+        scripts=(_sound(), _overlay(), _instruments(), _winds(), script),
     )
 
 

@@ -89,6 +89,25 @@ def test_a_kept_tab_gets_its_page_beside_it_recorded_and_linked_from_the_songs_v
         {"name": "harmonica-1.txt", "href": "harmonica-1.txt", "page": "harmonica-1.html", "key": "C"}]
 
 
+def test_the_songs_viewer_starts_its_overlay_on_the_harp_its_tab_plays_on(conn, cfg):
+    song = song_with_a_tab(conn, cfg)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    # the D harp, with the record: three semitones above B, the key the sheet sounds in, on the viewer and the tab's page
+    assert data_of(folder / "sheet.html", "song")["harpTabs"] == [3]
+    assert data_of(folder / "harmonica-1.html", "harp-data")["overlay"]["harp"]["tabs"] == [3]
+
+
+def test_a_tab_whose_harp_the_page_only_guesses_marks_no_harp_on_the_songs_viewer(conn, cfg):
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    keep_sheet(conn, cfg, song)
+    keep_tab(conn, cfg, song, "4 5 6\nwords no line of the sheet has\n")  # harptabs.com's key, C: a guess
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert "harpTabs" not in data_of(folder / "sheet.html", "song")
+    assert data_of(folder / "harmonica-1.html", "harp-data")["start"] == 0
+
+
 def test_a_song_with_a_tab_and_no_sheet_gets_its_page_and_goes_back_to_the_library(conn, cfg):
     song = song_with_a_tab(conn, cfg, sheet=False)
     render(conn, cfg)
