@@ -39,6 +39,12 @@
   // A chord heard (strum.js), as loud as this: the setting's names and caracoleSound's volumes.
   const VOLUMES = [["Off", 0], ["Soft", 0.3], ["Medium", 0.6], ["Loud", 1]];
   const VOL = 2;
+  // Whether caracole serve sent this page, so that its controls may link to the server's own pages: Export PDF
+  // (/export), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
+  // file they show the command to run, or the file itself, instead; and so in caracole's Android app, whose offline
+  // copy of the library (androidx.webkit's WebViewAssetLoader, always at appassets.androidplatform.net) reads like
+  // a file: no server answers there. The one place the page tells the two apart.
+  const served = location.protocol !== "file:" && location.hostname !== "appassets.androidplatform.net";
 
   // --- the state: where the song is played, kept per page ------------------------------------
   // capo: the fret the capo is on (0 for none), or null for the sheet's own. It stays there
@@ -202,7 +208,7 @@
     const cmd = $("export-cmd");
     if (!link || !cmd) return;
     const version = new URLSearchParams(location.hash.slice(1));
-    if (location.protocol === "file:") {
+    if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
       for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
@@ -251,7 +257,6 @@
     if (!row || !box || !names.length) return;
     const saved = Array.isArray(data.guitarDownload) && data.guitarDownload.length === names.length
       ? data.guitarDownload : [];
-    const served = location.protocol !== "file:";
     const folder = served ? sheetPath().split("/").slice(0, -1).join("/") : "";
     names.forEach((name, i) => {
       const a = document.createElement("a");
@@ -1871,7 +1876,6 @@
     clear: "the title opens caracole's pick again: the best rated of the versions with the lyrics.",
   };
   // Served, a link to caracole serve's page that asks for it; from a file, a button that shows the command.
-  const served = location.protocol !== "file:";
   const vCommand = (box, what, tab) => {
     for (const old of vList.querySelectorAll(".vcmd")) old.remove();
     const shown = make("div", "vcmd");

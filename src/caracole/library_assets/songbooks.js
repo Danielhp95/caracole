@@ -33,6 +33,7 @@
     if (onclick) b.addEventListener("click", onclick);
     return b;
   };
+  // Served by caracole serve (the data's ``server``), else the file on disk, or the Android app's copy of it.
   const server = data.server && typeof data.server === "object" ? data.server : null;
   const lib = window.caracoleLibrary || null;  // library.js: track a job, write a request's line
   const rows = window.caracole || null;  // rows.js, through library.js: a dense line

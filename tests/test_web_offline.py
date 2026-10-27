@@ -7,8 +7,10 @@ import hashlib
 import json
 import re
 import threading
+from contextlib import contextmanager
 from datetime import UTC, datetime
-from urllib.parse import quote
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import quote, unquote, urlsplit
 
 import pytest
 
@@ -341,3 +343,128 @@ def test_the_library_page_runs_under_the_policy_it_is_sent_with(app, library):
         server.server_close()
     shown = re.search(r'<main[^>]*id="list"[^>]*>(.*?)</main>', dom, re.S).group(1)
     assert re.search(r"<h3[^>]*>De Música Ligera</h3>", shown) and re.search(r"<h3[^>]*>Synthetic Song</h3>", shown)
+
+
+# --- in the app's copy -----------------------------------------------------------------------------------------
+
+APP_HOST = "appassets.androidplatform.net"  # androidx.webkit's WebViewAssetLoader: where the app's WebView reads it
+# What a page offers that only caracole serve answers, as the page shows it: a viewer's Export PDF, its versions'
+# actions, its Guitar Pro links, any link to an address of the server's; the library page's lines, forms and
+# command lines; and what the page asked for besides itself.
+VIEWER_CONTROLS = """JSON.stringify({
+  export: [...document.querySelectorAll('#export, #export-cmd, #export-copy')].map((e) =>
+    [e.id, e.hidden, e.getAttribute('href'), e.id === 'export-cmd' ? e.textContent : null]),
+  guitar: [...document.querySelectorAll('#guitar-links a')].map((a) =>
+    [a.textContent, a.getAttribute('href'), a.getAttribute('download')]),
+  hint: (document.getElementById('guitar-hint') || {}).textContent,
+  versions: [...document.querySelectorAll('#ver-acts > *, #ver-items .ver-acts > *')].map((e) =>
+    [e.tagName, e.textContent, e.getAttribute('href')]),
+  server: [...document.querySelectorAll('a[href^="/"]')].map((a) => a.getAttribute('href')),
+  fetched: performance.getEntriesByType('resource').map((r) => r.name),
+})"""
+LIBRARY_CONTROLS = """JSON.stringify({
+  lines: document.querySelectorAll('main#list article.line').length,
+  commands: [...document.querySelectorAll('code')].map((c) => c.textContent).filter((t) => t.startsWith('caracole ')),
+  forms: document.forms.length,
+  server: [...document.querySelectorAll('a[href^="/"]')].map((a) => a.getAttribute('href')),
+  fetched: performance.getEntriesByType('resource').map((r) => r.name),
+})"""
+
+
+@contextmanager
+def app_copy(app):
+    """The Android app's copy of the library as its WebView reads it, the app's PathHandler in small: each file of
+    the manifest at ``/library/<path>`` on APP_HOST (over plain HTTP here: the pages go by the host's name), with
+    its type and its headers, 404 for anything else. Yields the copy's address and every path asked for."""
+    files = {}
+    for entry in manifest(app)["files"]:
+        files[entry["path"]] = (get(app, entry["url"]).body, entry["type"], entry["headers"])
+    asked: list[str] = []
+
+    class Copy(BaseHTTPRequestHandler):
+        def do_GET(self):
+            path = unquote(urlsplit(self.path).path)
+            asked.append(path)
+            found = files.get(path.removeprefix("/library/")) if path.startswith("/library/") else None
+            if found is None:
+                self.send_error(404)
+                return
+            body, kind, headers = found
+            self.send_response(200)
+            self.send_header("Content-Type", kind)
+            for name, value in headers.items():
+                self.send_header(name, value)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Copy)
+    thread = threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True)
+    thread.start()
+    try:
+        yield f"http://{APP_HOST}:{server.server_address[1]}/library/", asked
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+@pytest.fixture
+def versioned(conn, cfg):
+    """A sheet with two versions kept beside it and a third UG lists, and a Guitar Pro file, rendered as the
+    nightly run leaves them; the pages written."""
+    from test_render_versions import render, song_with_versions
+
+    song = song_with_versions(conn, cfg)
+    keep_guitar(conn, cfg, song, GP5, name="guitar-1.gp5")
+    render(conn, cfg)
+    write_pages(conn, cfg)
+    return cfg.library_dir
+
+
+@in_chromium
+def test_in_the_apps_copy_a_viewer_offers_what_it_offers_from_a_file(app, versioned, tmp_path):
+    # The copy is read like the folder: no caracole serve answers there, so the viewer shows the commands, and the
+    # Guitar Pro files themselves, never a link to the server's Export, versions or Guitar Pro pages.
+    from helpers.chromium import Chromium
+
+    pages = (f"{AUTO}/sheet.html", f"{AUTO}/version-39144.html")
+    with app_copy(app) as (copy, asked), Chromium(tmp_path / "profile", local=[APP_HOST]) as browser:
+        for path in pages:
+            seen = {}
+            for where, url in (("copy", copy + quote(path)), ("file", (versioned / path).as_uri())):
+                tab = browser.open(url)
+                tab.wait_for("document.documentElement.dataset.ready === '1'")
+                tab.eval("document.getElementById('t-up').click()")  # a semitone up: Export names that version
+                seen[where] = json.loads(tab.eval(VIEWER_CONTROLS))
+            assert seen["copy"] == seen["file"], path
+            controls = seen["copy"]
+            if path.endswith("/sheet.html"):  # a version's page exports nothing: the sheet's PDF is the one's
+                assert [(name, hidden) for name, hidden, _, _ in controls["export"]] == [
+                    ("export", True), ("export-cmd", False), ("export-copy", False)]
+                assert controls["export"][1][3].startswith("caracole render --song 'Placeholder Band - Synthetic Song'")
+            assert controls["guitar"] == [["guitar-1.gp5", "guitar-1.gp5", "Placeholder Band - Synthetic Song.gp5"]]
+            assert controls["versions"] and all(tag == "BUTTON" or href.startswith("https://tabs.ultimate-guitar.com/")
+                                                for tag, _, href in controls["versions"])
+            assert controls["server"] in ([], ["/export"]) and controls["fetched"] == []  # /export: its link, hidden
+    assert asked == ["/library/" + path for path in pages]
+
+
+@in_chromium
+def test_in_the_apps_copy_the_library_page_asks_nothing_as_from_a_file(app, versioned, tmp_path):
+    # Its served script's forms, its search of the sites and its requests' lines come with caracole serve's own
+    # page alone: the copy's, as the file, names the command to run and asks nothing of anyone.
+    from helpers.chromium import Chromium
+
+    with app_copy(app) as (copy, asked), Chromium(tmp_path / "profile", local=[APP_HOST]) as browser:
+        seen = {}
+        for where, url in (("copy", copy + "index.html"), ("file", (versioned / "index.html").as_uri())):
+            tab = browser.open(url + "#q=" + quote("wonderwall"))
+            tab.wait_for("[...document.querySelectorAll('code')].some((c) => c.textContent.startsWith('caracole search'))")
+            seen[where] = json.loads(tab.eval(LIBRARY_CONTROLS))
+    assert seen["copy"] == seen["file"]
+    assert "caracole search 'wonderwall'" in seen["copy"]["commands"]
+    assert seen["copy"]["server"] == [] and seen["copy"]["fetched"] == []
+    assert asked == ["/library/index.html"]

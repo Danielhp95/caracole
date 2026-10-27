@@ -3411,7 +3411,9 @@ no page links. caracole records `index.html` each time it writes the pages; one
 changed since, or written by a caracole older than that record, isn't sent, and
 `/api/offline` answers 503 until `caracole todo` (or any command that writes the
 pages) writes it again. It is a read and needs nothing on the server: no
-option, no lock, no request to a site. Another site's page can't read it.
+option, no lock, no request to a site. Another site's page can't read it. In
+the app the pages behave as they do opened from the folder: a viewer shows the
+command to run for Export PDF or a version, and the Guitar Pro files themselves.
 
 Who can reach it: there is no sign-in, no access token and no cookie, so
 whoever can reach the server can read the library, request songs and change
