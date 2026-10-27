@@ -1072,7 +1072,7 @@ def seed_progressions(tmp_path):
             ("Another Band", "Minor Song", "[Am]a [F]b [C]c [G]d\n", "Am"),
             ("Third Band", "Blues", "{comment: Verse}\n[C]a [F]b [G]c\n", "C")):
         song = add_song(conn, artist, title)
-        kv_set_json(conn, f"{KV}{song.id}", sheet_progressions("{title: X}\n" + sheet, key))
+        kv_set_json(conn, f"{KV}{song.id}", sheet_progressions("{title: X}\n" + sheet, key, "tab"))  # keys.py's
     return conn
 
 
@@ -1102,7 +1102,7 @@ def test_cli_search_by_progression_finds_a_song_that_plays_it_within_a_section(t
     # In C: ii, then the pop progression twice, the second after a ♭VII; and a bridge on the Andalusian cadence.
     sheet = ("{title: X}\n{comment: Verse}\n[Dm]a [C]b [G]c [Am]d [F]e [Bb]f [C]g [G]h [Am]i [F]j\n"
              "{comment: Bridge}\n[C]k [Am]l [G]m [F]n [E7]o\n")
-    kv_set_json(conn, f"{KV}{song.id}", sheet_progressions(sheet, "C"))
+    kv_set_json(conn, f"{KV}{song.id}", sheet_progressions(sheet, "C", "tab"))
     pop = run(tmp_path, "search", "--progression", "the pop progression")
     assert pop.exit_code == 0, pop.output
     assert "  Fourth Band - Within · wanted, no sheet yet · Verse · in C major · " in pop.output

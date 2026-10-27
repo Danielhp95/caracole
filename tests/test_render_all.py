@@ -2372,13 +2372,14 @@ def test_an_own_version_kept_by_a_major_key_on_a_sheet_now_read_minor_plays_wher
     assert info_json(cfg, song)["render"]["transpose"] == 2
 
 
-def test_an_own_version_the_minor_reading_plays_where_it_did_is_left_as_written(conn, cfg):
-    # "A" over Am F C G with capo 9: C major shapes before, A minor now, relative keys, whose notes the version's key
-    # reads either way: it plays where it did, and its entry stays
+@pytest.mark.parametrize(("tonality", "capo", "entry"), [("A", 9, "key=D&capo=9"), ("C", 3, "key=D&capo=3")])
+def test_an_own_version_the_minor_reading_plays_where_it_did_is_left_as_written(conn, cfg, tonality, capo, entry):
+    # "A" over Am F C G with capo 9, "C" with capo 3: C major shapes before, A minor now, relative keys, whose notes
+    # the version's key reads either way: it plays where it did, and its entry stays
     song = add_song(conn, "Eagles", "Hotel California")
     kept_sheet(conn, cfg, song, "[Verse]\n[tab][ch]Am[/ch]   [ch]F[/ch]   [ch]C[/ch]   [ch]G[/ch]   [ch]Am[/ch]\n"
-               "made up words to sing[/tab]\n", tonality="A", capo=9)
-    text = f'[version]\n"{HOTEL_SONG}" = "key=D&capo=9"\n'
+               "made up words to sing[/tab]\n", tonality=tonality, capo=capo)
+    text = f'[version]\n"{HOTEL_SONG}" = "{entry}"\n'
     render(conn, cfg, overrides(cfg, text))
     assert cfg.overrides_file.read_text(encoding="utf-8") == text
     assert info_json(cfg, song)["render"]["transpose"] == 2

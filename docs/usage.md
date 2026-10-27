@@ -4589,7 +4589,11 @@ Hotel California's key `A`, with capo 2 over Am E7 G D F C Dm E: caracole reads
 A minor, A minor shapes that sound B minor; named `B`, the key it sounds in, it
 is B minor, as long as the sheet plays no A, A7 or Amaj7. Chords whose key is that very minor
 key are read so first: `A` over Am F C G with capo 9 is A minor, though C
-major, the major key a capo lower, has their notes too. A key named with its
+major, the major key a capo lower, has their notes too. So are chords that
+centre on the relative minor of that letter's major key, which a tab may name
+by its major: `C` over Am F C G Am is A minor, and with capo 3 A minor shapes
+that sound C minor; `C` over C F G Am stays C, and so does a sheet that plays
+A, A7 or Amaj7. A key named with its
 mode (`Am`, `A major`, `A minor`) is as named, and a letter whose chords fit
 its major key is that major key. A sheet's own `{key: A}` with no key from the tab is read so
 too. Either is the sheet's key before any `[transpose]`.

@@ -311,7 +311,9 @@ def test_python_and_the_viewer_name_every_chord_alike(cho, key, tmp_path):
 
 IN_A_MINOR = "{title: T}\n{artist: A}\n{key: Am}\n[Am]una [F]can[C]ción [G]más\n"
 IN_D_MINOR_CAPO_3 = "{title: T}\n{artist: A}\n{key: Dm}\n{capo: 3}\n[Dm]otra [Bb]le[F]tra [C]más\n"  # a 4th up
-IN_C_MAJOR = IN_A_MINOR.replace("{key: Am}", "{key: C}")  # its chords, as a tabber who reads them in C names them
+# its chords, as a tabber who reads them in C names them: with its mode, as "C" alone over chords that centre on A minor
+# is A minor (theory.bare_key)
+IN_C_MAJOR = IN_A_MINOR.replace("{key: Am}", "{key: C major}")
 NO_KEY = "{title: T}\n{artist: A}\n[N.C.]la [Hm]lo\n"  # no chord caracole can read: no key
 
 
@@ -395,7 +397,7 @@ def test_a_sheet_tagged_in_the_parallel_key_plays_my_versions_chords():
         # a mode chosen moves it as the t= with that mode did
         assert on("key=Gm&mode=dorian&capo=0", key) == Version(t=-2, mode="dorian", capo=0), key
     # and a C major song's tab tagged C minor
-    tagged_cm = IN_C_MAJOR.replace("{key: C}", "{key: Cm}")
+    tagged_cm = IN_C_MAJOR.replace("{key: C major}", "{key: Cm}")
     assert played(applied(tagged_cm, kept_on(entry_of(Version(t=2), IN_C_MAJOR), tagged_cm))) == ["Bm", "G", "D", "A"]
     # A sheet whose chords are its key's is read in that key's notes, whatever mode the version's key is in
     assert played(applied(IN_C_MAJOR, kept_on("key=Bm&capo=0", IN_C_MAJOR))) == ["Bm", "G", "D", "A"]

@@ -58,8 +58,9 @@ from caracole.versions import get_version
 log = logging.getLogger(__name__)
 
 # What refresh_info_keys last brought every info.json up to: 2 reads a tab's letter alone with its chords (a minor key),
-# 3 reads it so with capo 9 too (C major, a capo below A, has A minor's notes)
-INFO_VERSION = 3
+# 3 reads it so with capo 9 too (C major, a capo below A, has A minor's notes), 4 reads "C" over chords that centre on
+# A minor as that relative minor
+INFO_VERSION = 4
 INFO_VERSION_KEY = "keys:info_version"  # kv
 SHEET_DOC = "sheet.json"  # the human sheet's markup, beside it
 SOURCES = {"tab": "from the tab", "chords": "estimated from the chords", "audio": "from the audio"}
@@ -304,17 +305,24 @@ def sheet_key(raw: Mapping[str, Any], markup: str | None, capo: int | None = Non
 
 def _read_bare(key: str, markup: str | None, capo: int | None) -> str:
     """A key a tab names by its letter alone (``key``, read as major), as ``viewer.theory.bare_key`` reads it with the
-    sheet's chords (its ``markup``) and its capo: "A minor" for Hotel California's "A"; ``key`` as it is without
-    chords to tell. The viewer reads a sheet's ``{key}`` so too (``page.viewer_key``), so the two agree."""
+    sheet's chords (its ``markup``) and its capo: "A minor" for Hotel California's "A", and for a "C" over chords
+    that centre on A minor, C major's relative minor (its tonic spelled as the chords spell it, as an estimate's
+    is); ``key`` as it is without chords to tell. The viewer reads a sheet's ``{key}`` so too (``page.viewer_key``),
+    so the two agree."""
     if not markup:
         return key
     from caracole.viewer.theory import Key, bare_key, parse_chord  # the viewer's music, for the same answer
 
-    played = [c for c in (parse_chord(name, strict=False) for name in chords_in_sheet(markup)) if c is not None]
+    names = chords_in_sheet(markup)
+    played = [c for c in (parse_chord(name, strict=False) for name in names) if c is not None]
     pitch = _pitch(key)
-    if pitch is None or bare_key(Key(pitch[0], "ionian"), capo or 0, played).mode != "aeolian":
+    read = bare_key(Key(pitch[0], "ionian"), capo or 0, played) if pitch is not None else None
+    if read is None or read.mode != "aeolian":
         return key
-    return f"{key} minor"
+    if read.tonic == pitch[0]:
+        return f"{key} minor"
+    spellings = Counter(chord[1] for name in names if (chord := _chord(name)) is not None and chord[0] == read.tonic)
+    return f"{spellings.most_common(1)[0][0] if spellings else _MINOR_NAMES[read.tonic]} minor"
 
 
 def _auto_key(conn: sqlite3.Connection, library_dir: Path, kept: Mapping[str, KeptFile]) -> SongKey | None:
@@ -336,7 +344,7 @@ def refresh_info_keys(conn: sqlite3.Connection, library_dir: Path) -> int:
     An info.json changes whenever its song's files do, so this only brings those an older
     caracole wrote up to date: their ``key`` was the song's identity key, and they had no
     ``key_source``, or read a tab's letter alone as its major key whatever its chords (version 2 reads
-    it with them, version 3 with capo 9 too). Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
+    it with them, version 3 with capo 9 too, version 4 as the relative minor its chords centre on). Bump ``INFO_VERSION`` when what ``song_key`` gives can change for files that
     haven't (a better estimate, say). An info.json that can't be written is logged and tried
     again next time, which leaves the others, written already, as they are; the pages go on.
     """

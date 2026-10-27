@@ -344,9 +344,13 @@ HOTEL = (
         ({"tonality_name": "C"}, "[ch]C[/ch] [ch]F[/ch] [ch]G[/ch] [ch]Am[/ch] [ch]C[/ch]\nwords\n", 3, "C"),
         # capo 9: C major, the major key a capo below A, has A minor's notes too, but the chords play A minor
         ({"tonality_name": "A"}, "[ch]Am[/ch] [ch]F[/ch] [ch]C[/ch] [ch]G[/ch] [ch]Am[/ch]\nwords\n", 9, "A minor"),
+        # the chords centre on A minor, which has C major's notes: that minor (A minor shapes, sounding C minor)
+        ({"tonality_name": "C"}, "[ch]Am[/ch] [ch]F[/ch] [ch]C[/ch] [ch]G[/ch] [ch]Am[/ch]\nwords\n", 3, "A minor"),
+        ({"tonality_name": "Eb"}, "[ch]Cm[/ch] [ch]Ab[/ch] [ch]Eb[/ch] [ch]Bb[/ch] [ch]Cm[/ch]\nwords\n", None,
+         "C minor"),
     ],
     ids=("hotel-california", "named-by-the-sound", "no-capo", "stated", "stated-major", "named-minor", "G-major",
-         "C-capo-3", "A-capo-9"),
+         "C-capo-3", "A-capo-9", "relative-minor-capo-3", "relative-minor-flats"),
 )
 def test_a_key_the_tab_names_by_its_letter_alone_is_minor_when_its_chords_say_the_parallel_minor(
         conn, cfg, raw, content, capo, key):
@@ -471,6 +475,21 @@ def test_info_json_an_older_caracole_wrote_gets_a_key_read_as_now_once(conn, cfg
     info = song_dir(cfg.library_dir, s) / "info.json"
     info.write_text(json.dumps({"key": "A", "key_source": "tab"}))
     kv_set_json(conn, INFO_VERSION_KEY, 1)
+    assert refresh_info_keys(conn, cfg.library_dir) == 1
+    assert json.loads(info.read_text())["key"] == "A minor"
+
+
+def test_info_json_of_a_letter_alone_over_its_relative_minor_gets_that_minor_once(conn, cfg):
+    # until INFO_VERSION 4, a tab's "C" over A minor's chords with capo 3 was read as C major
+    from caracole.db import kv_set_json
+    from caracole.keys import INFO_VERSION_KEY
+
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "C"}, meta={"capo": 3},
+               content="[ch]Am[/ch] [ch]F[/ch] [ch]C[/ch] [ch]G[/ch] [ch]Am[/ch]\nwords\n")
+    info = song_dir(cfg.library_dir, s) / "info.json"
+    info.write_text(json.dumps({"key": "C", "key_source": "tab"}))
+    kv_set_json(conn, INFO_VERSION_KEY, 3)
     assert refresh_info_keys(conn, cfg.library_dir) == 1
     assert json.loads(info.read_text())["key"] == "A minor"
 

@@ -377,7 +377,10 @@ def bare_key(named: Key, capo: int, played: list[Chord]) -> Key:
 
     Their key on the letter itself comes before either test, as most tabs name the shapes' key: "A" over Am F C G
     with capo 9 is A minor, though C major, a capo below A, has those notes too (the relative major sits a capo
-    of 9 below)."""
+    of 9 below). So does their key in the relative minor of the letter's major, which a tab names by its major:
+    that minor is the key of the shapes, whatever the capo ("C" over Am F C G Am is A minor; with capo 3, A minor
+    shapes sounding C minor), unless they play its tonic as a major chord. The key returned is then that minor,
+    on another tonic than the letter's."""
     if named.mode != "ionian":
         return named
     found = estimate_key(played)
@@ -389,6 +392,8 @@ def bare_key(named: Key, capo: int, played: list[Chord]) -> Key:
 
     if found.tonic == named.tonic:  # the chords' own tonic is the letter's: the shapes' key, in their mode
         return Key(named.tonic, "aeolian") if found.mode == "aeolian" and not plays_major(named.tonic) else named
+    if found.mode == "aeolian" and scale(found) == scale(named):  # the relative minor of the letter's major
+        return named if plays_major(found.tonic) else found
     notes = scale(found)
     lowered = (named.tonic - capo) % 12
     if notes in (scale(named), scale(Key(lowered, "ionian"))):
