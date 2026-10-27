@@ -336,3 +336,112 @@ def test_counts_follow_the_other_filters_and_the_search(shelf, laptop):
     assert laptop.js(counts) == {"sheet": "2", "guitar": "0", "ukulele": "0", "harmonica": "2", "score": "0"}
     laptop.open(shelf.as_uri() + "#artist=eagles")
     assert laptop.js(counts) == {"sheet": "1", "guitar": "1", "ukulele": "0", "harmonica": "1", "score": "1"}
+
+
+# --- the key: a mode, a tonic, or both -----------------------------------------------------------------------------
+
+# The Key's mode chosen, and each tonic of its grid: its name, whether it is chosen, whether it can be pressed, its
+# edge, and what a screen reader hears.
+KEYS = """({ mode: document.querySelector('#filter-panel [data-mode][aria-checked=true]').dataset.mode,
+  tonics: [...document.querySelectorAll('#tonics button')].map((b) => ({ name: b.textContent, pc: b.dataset.pc,
+    on: b.getAttribute('aria-pressed') === 'true', off: b.disabled, edge: getComputedStyle(b).borderTopStyle,
+    said: b.getAttribute('aria-label'), top: Math.round(b.getBoundingClientRect().top) })) })"""
+
+
+def rewritten(conn, cfg, *songs):
+    """The shelf's page written again with these songs more, each (artist, title, key)."""
+    for n, (artist, title, key) in enumerate(songs, start=40):
+        song = add_song(conn, artist, title)
+        sheet(conn, cfg, song, key, tab_id=n)
+        update_song(conn, song.id, status="found")
+    return write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
+
+
+def tonic(page, name):
+    page.js(f"[...document.querySelectorAll('#tonics button')].find((b) => b.textContent === {json.dumps(name)}).click()")
+
+
+def test_the_tonics_are_in_circle_of_fifths_order(conn, cfg, shelf, laptop):
+    laptop.open(shelf.as_uri())
+    laptop.click("#filter")  # laid out
+    assert laptop.wait(f"{PANEL}.open")
+    keys = laptop.js(KEYS)
+    assert [t["name"] for t in keys["tonics"]] == ["C", "G", "D", "A", "E", "B", "F♯", "D♭", "A♭", "E♭", "B♭", "F"]
+    assert len({t["top"] for t in keys["tonics"][:6]}) == 1 and len({t["top"] for t in keys["tonics"][6:]}) == 1
+    assert keys["tonics"][6]["top"] > keys["tonics"][0]["top"]  # two rows of six
+    # Each named as the library spells its key: C# minor's tonic is C♯ in the minor, D♭ in the major.
+    laptop.open(rewritten(conn, cfg, ("Muse", "Hysteria (live)", "C#m"), ("Queen", "Somebody to Love", "Ab")).as_uri())
+    assert [t["name"] for t in laptop.js(KEYS)["tonics"]][7:9] == ["C♯", "A♭"]
+    laptop.js("document.querySelector('[data-mode=minor]').click()")
+    assert [t["name"] for t in laptop.js(KEYS)["tonics"]][7:9] == ["C♯", "G♯"]
+    laptop.js("document.querySelector('[data-mode=major]').click()")
+    assert [t["name"] for t in laptop.js(KEYS)["tonics"]][7:9] == ["D♭", "A♭"]
+
+
+def test_mode_alone_filters_by_mode(shelf, laptop):
+    laptop.open(shelf.as_uri() + "#mode=minor")
+    assert laptop.js(TITLES) == ["Hotel California", "Heart of Gold", "De Música Ligera"]
+    assert laptop.js(KEYS)["mode"] == "minor"
+    laptop.click("#filter")
+    assert laptop.wait(f"{PANEL}.open")
+    laptop.click("#filter-panel [data-mode=major]")
+    assert laptop.wait(f"JSON.stringify({TITLES}) === "
+                       "'[\"Blowin\\' in the Wind\",\"Like a Rolling Stone\",\"Creep\"]'"), laptop.js(TITLES)
+    assert "mode=major" in laptop.js("location.hash") and "key=" not in laptop.js("location.hash")
+    laptop.press("ArrowLeft")  # a segmented control too: Any
+    assert laptop.wait(f"{TITLES}.length === 9")
+    assert laptop.js(f"{FILTER}.textContent.trim()") == "Filter"
+
+
+def test_a_tonic_alone_is_that_tonic_in_either_mode(conn, cfg, shelf, laptop):
+    from urllib.parse import parse_qs
+
+    page = rewritten(conn, cfg, ("The Beatles", "Don't Let Me Down", "E"))
+    laptop.open(page.as_uri())
+    tonic(laptop, "E")
+    assert laptop.js(TITLES) == ["Don't Let Me Down", "Heart of Gold"]  # theirs in E, Neil Young's in E minor
+    assert parse_qs(laptop.js("location.hash.slice(1)")) == {"tonic": ["E"]}
+    laptop.open(page.as_uri() + "#tonic=" + "F%E2%99%AF")  # one no song has: none shows
+    assert laptop.js(TITLES) == []
+    laptop.open(page.as_uri() + "#tonic=Gb")  # however it is written
+    assert [t["name"] for t in laptop.js(KEYS)["tonics"] if t["on"]] == ["F♯"]
+
+
+def test_mode_and_tonic_is_todays_exact_key_and_writes_key(shelf, laptop):
+    from urllib.parse import parse_qs
+
+    laptop.open(shelf.as_uri())
+    laptop.js("document.querySelector('[data-mode=minor]').click()")
+    tonic(laptop, "A")
+    assert laptop.js(TITLES) == ["De Música Ligera"]
+    assert parse_qs(laptop.js("location.hash.slice(1)")) == {"key": ["A minor"]}  # an exact key, as before
+    assert laptop.js(f"{FILTER}.textContent.trim().replace(/\\s+/g, ' ')") == "Filter 1"
+    tonic(laptop, "A")  # pressed again, it goes: the mode stays
+    assert laptop.js(TITLES) == ["Hotel California", "Heart of Gold", "De Música Ligera"]
+    assert parse_qs(laptop.js("location.hash.slice(1)")) == {"mode": ["minor"]}
+
+
+def test_an_old_key_address_opens_as_mode_and_tonic(shelf, laptop):
+    for address, mode, name, titles in (("#key=A%20minor", "minor", "A", ["De Música Ligera"]),
+                                        ("#key=G&show=found", "major", "G", ["Creep"]),
+                                        ("#key=Bm", "minor", "B", ["Hotel California"])):
+        laptop.open(shelf.as_uri() + address)
+        keys = laptop.js(KEYS)
+        assert (keys["mode"], [t["name"] for t in keys["tonics"] if t["on"]]) == (mode, [name]), address
+        assert laptop.js(TITLES) == titles, address
+
+
+def test_a_tonic_with_no_song_is_dashed_and_disabled(shelf, laptop):
+    def playable(fragment=""):
+        laptop.open(shelf.as_uri() + fragment)
+        tonics = laptop.js(KEYS)["tonics"]
+        assert all(t["off"] == (t["edge"] == "dashed") for t in tonics), tonics
+        return [t["name"] for t in tonics if not t["off"]]
+
+    assert playable() == ["C", "G", "D", "A", "E", "B"]
+    assert playable("#mode=minor") == ["A", "E", "B"]
+    assert playable("#mode=major") == ["C", "G", "D"]
+    assert playable("#mode=minor&inst=harmonica") == ["E", "B"]  # the other filters as they are
+    assert playable("#mode=minor&tonic=D") == ["D", "A", "E", "B"]  # chosen, it can be let go
+    tonics = laptop.js(KEYS)["tonics"]
+    assert [t["said"] for t in tonics if t["name"] in ("A", "D")] == ["D minor: no songs", "A minor: 1 song"]

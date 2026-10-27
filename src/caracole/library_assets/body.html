@@ -75,7 +75,12 @@ __REQUEST__</section>
     </div>
     <div class="fsec" id="keys" hidden>
       <p class="fhead" id="f-key">Key</p>
-      <select id="key" class="tool" aria-labelledby="f-key"><option value="">Any</option></select>
+      <div class="seg" role="radiogroup" aria-labelledby="f-key">
+        <button type="button" role="radio" data-mode="" aria-checked="true">Any</button>
+        <button type="button" role="radio" data-mode="major" aria-checked="false" tabindex="-1">Major</button>
+        <button type="button" role="radio" data-mode="minor" aria-checked="false" tabindex="-1">Minor</button>
+      </div>
+      <div class="tonics" id="tonics" role="group" aria-label="Tonic"></div>
     </div>
     <div class="ffoot">
       <button type="button" class="clear-all" id="clear-all">Clear all</button>

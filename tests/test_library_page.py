@@ -1122,7 +1122,7 @@ def test_keys_show_with_their_source_and_filter_in_a_real_browser(conn, cfg, tmp
     dom = dump_dom(path, tmp_path)
     shown = listing(dom)
     assert "Key A minor (estimated from the chords)" in shown and "Key G major (from the tab)" in shown
-    assert re.search(r'<option value="A minor"[^>]*>A minor', dom) and re.search(r'<option value="G"[^>]*>G major', dom)
+    assert 'aria-label="A: 1 song"' in dom and 'aria-label="G: 1 song"' in dom  # the Filter panel's tonics
 
     shown = listing(dump_dom(path, tmp_path, "#key=" + quote("A minor")))
     assert shown.count("<article") == 1 and "De Música Ligera" in shown
@@ -1164,7 +1164,7 @@ def test_a_key_typed_in_the_search_box_finds_that_key_only_in_a_real_browser(con
 
 
 @in_chromium
-def test_the_key_menu_puts_the_spellings_of_one_key_together_in_a_real_browser(conn, cfg, tmp_path):
+def test_a_tonic_puts_the_spellings_of_its_key_together_in_a_real_browser(conn, cfg, tmp_path):
     keyed = {("Muse", "Hysteria"): "F#m", ("Radiohead", "Lucky"): "Gbm", ("Daft Punk", "Get Lucky"): "Fm",
              ("Queen", "Bohemian Rhapsody"): "Bb", ("Oasis", "Wonderwall"): "A#"}
     for tab_id, ((artist, title), key) in enumerate(keyed.items(), start=1):
@@ -1173,10 +1173,11 @@ def test_the_key_menu_puts_the_spellings_of_one_key_together_in_a_real_browser(c
     path = write_library_page(cfg.library_dir, page(conn, cfg))
 
     dom = dump_dom(path, tmp_path)
-    menu = re.search(r'<select id="key"[^>]*>(.*?)</select>', dom, re.S).group(1)
-    options = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', menu)
-    assert options == [("", "Any"), ("A#", "A# / Bb major · 2"), ("F minor", "F minor · 1"),
-                       ("F# minor", "F# / Gb minor · 2")]
+    grid = re.search(r'<div class="tonics" id="tonics"[^>]*>(.*?)</div>', dom, re.S).group(1)
+    tonics = re.findall(r'<button[^>]*aria-label="([^"]*)"[^>]*>([^<]*)</button>', grid)
+    # In the circle's order, each as the library spells it, with how many songs are on it, in either spelling.
+    assert [said for said, _ in tonics if "no songs" not in said] == ["F♯: 2 songs", "A♯: 2 songs", "F: 1 song"]
+    assert [name for _, name in tonics] == ["C", "G", "D", "A", "E", "B", "F♯", "D♭", "A♭", "E♭", "A♯", "F"]
     # Each song keeps its own spelling.
     shown = listing(dom)
     assert "Key Gb minor (from the tab)" in shown and "Key F# minor (from the tab)" in shown

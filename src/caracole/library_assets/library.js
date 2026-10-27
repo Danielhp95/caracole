@@ -24,6 +24,7 @@
   const panel = byId("filter-panel");
   const statusButtons = Array.from(panel.querySelectorAll("[data-show]"));
   const instChips = Array.from(panel.querySelectorAll("[data-inst]"));
+  const modeButtons = Array.from(panel.querySelectorAll("[data-mode]"));
   const libraryView = byId("library-view");
   const progLine = byId("prog");
   const JUMP_FROM = 40;  // songs shown before the A-Z strip is worth its room: fewer, and a thumb scrolls
@@ -195,8 +196,8 @@
   };
 
   const compare = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
-  // The Key menu: one entry per key the library has, its spellings together ("F# / Gb minor"), with how
-  // many songs it has. Its commonest spelling stands for it in the menu and in the address.
+  // Each key the library has, its spellings together ("F# / Gb minor"), with how many songs it has. Its commonest
+  // spelling stands for it in the address (``key=``), and its tonic for the tonic in the Filter panel.
   const keyGroups = new Map();
   songs.forEach((s, i) => {
     if (!songKeys[i]) return;
@@ -212,6 +213,24 @@
     group.name = spelled.map((k) => k.replace(/ minor$/, "")).join(" / ") + id.replace(/^\d+/, "");
   }
   const keyGroup = (spelling) => keyGroups.get(keyId(spelling));
+  // The Filter panel's Key: a mode (major or minor), a tonic (a pitch class, 0 for C), or both, an exact key. Its
+  // twelve tonics in circle-of-fifths order, each named as the page names keys: as the library spells the key in the
+  // mode chosen (in either, with none chosen), else as the circle does, in a minor key the way minor keys are spelt.
+  const MODES = ["major", "minor"];
+  const CIRCLE = [0, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10, 5];
+  const NAMED = { major: ["C", "D♭", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"],
+    minor: ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "G♯", "A", "B♭", "B"] };
+  const signed = (text) => String(text).replace(/([A-G])#/g, "$1♯").replace(/([A-G])b/g, "$1♭");
+  const tonicName = (pc, mode) => {
+    const groups = (mode ? [mode] : ["major", "minor"]).map((m) => keyGroups.get(pc + " " + m)).filter(Boolean)
+      .sort((a, b) => b.n - a.n);
+    return groups.length ? signed(groups[0].value.replace(/ minor$/, "")) : NAMED[mode || "major"][pc];
+  };
+  // A key's name in words: "A minor", "F♯ / G♭ minor", "G major".
+  const keyNamed = (pc, mode) => (keyGroups.has(pc + " " + mode) ? signed(keyGroups.get(pc + " " + mode).name)
+    : tonicName(pc, mode) + " " + mode);
+  const pitchOf = (i) => (songKeys[i] ? Number(songKeys[i].split(" ")[0]) : -1);
+  const modeOf = (i) => (songKeys[i] ? songKeys[i].split(" ")[1] : "");
   const order = songs.map((_, i) => i);
   const sortedBy = (first, second) => order.slice().sort((i, j) =>
     compare(String(songs[i][first]), String(songs[j][first])) ||
@@ -1160,12 +1179,13 @@
 
   // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
   // ("Queen" also finds "Dancing Queen").
+  // mode, tonic: the songs in a mode, on a tonic (its pitch class, "9" for A), or both, in one key.
   // inst: the songs that have something for any of these (INSTRUMENTS, comma-separated), in the panel's order.
   // all: the search of the sites under the bar: served, as you type (searchesAsYouType); on the file, the line that
   // searches them, on Enter.
   // prog: the songs that play a progression alone, by its key (#prog=, from under a song's chevron, a viewer's Harmony
   // panel or the served search).
-  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", inst: "", prog: "", all: false };
+  const state = { q: "", show: "all", sort: "artist", artist: "", mode: "", tonic: "", inst: "", prog: "", all: false };
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
@@ -1178,14 +1198,22 @@
   };
   // What the address says of the list (save() writes it): what the page opens on, and what Back brings again.
   const addressed = () => {
-    const at = { q: "", show: "all", sort: "artist", artist: "", key: "", inst: "", prog: "", all: false };
+    const at = { q: "", show: "all", sort: "artist", artist: "", mode: "", tonic: "", inst: "", prog: "", all: false };
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       at.q = params.get("q") || "";
       if (artistName(params.get("artist") || "")) at.artist = params.get("artist");
       if (own.call(SHOWS, params.get("show"))) at.show = params.get("show");
       if (SORTS.indexOf(params.get("sort")) >= 0) at.sort = params.get("sort");
-      if (keyGroup(params.get("key"))) at.key = keyGroup(params.get("key")).value;  // any spelling of it
+      // key: an exact key, as the Key menu wrote it once, in any spelling the library has; else a mode, a tonic.
+      const exact = keyId(params.get("key"));
+      const tonicAt = keyId(params.get("tonic"));
+      if (keyGroups.has(exact)) {
+        [at.tonic, at.mode] = exact.split(" ");
+      } else {
+        if (MODES.indexOf(params.get("mode")) >= 0) at.mode = params.get("mode");
+        if (tonicAt) at.tonic = tonicAt.split(" ")[0];
+      }
       at.inst = instList(String(params.get("inst") || "").split(","));
       at.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
       at.all = params.get("all") === "1" && sitesCan(at.q) && (!server || typedEnough(at.q));
@@ -1210,16 +1238,21 @@
     return at;
   };
   Object.assign(state, addressed());
-  const keySelect = byId("key");
-  for (const group of Array.from(keyGroups.values()).sort((a, b) => compare(a.name, b.name))) {
-    const option = el("option", null, group.name + " · " + group.n);
-    option.value = group.value;
-    keySelect.appendChild(option);
-  }
-  byId("keys").hidden = keyGroups.size === 0;
+  const tonicButtons = CIRCLE.map((pc) => {
+    const b = el("button");
+    b.type = "button";
+    b.dataset.pc = String(pc);
+    b.setAttribute("aria-pressed", "false");
+    byId("tonics").appendChild(b);
+    return b;
+  });
   // The filters of the panel that are on, as Filter counts them: the status, each instrument, and the key.
   const instsChosen = () => (state.inst ? state.inst.split(",") : []);
-  const filtersOn = () => (state.show !== "all" ? 1 : 0) + instsChosen().length + (state.key ? 1 : 0);
+  const keyChosen = () => Boolean(state.mode || state.tonic);
+  const filtersOn = () => (state.show !== "all" ? 1 : 0) + instsChosen().length + (keyChosen() ? 1 : 0);
+  // The key chosen in words: "A minor" (both), "a minor key" (the mode), "E major or minor" (the tonic).
+  const keySaid = () => (state.mode && state.tonic ? keyNamed(Number(state.tonic), state.mode)
+    : state.mode ? "a " + state.mode + " key" : tonicName(Number(state.tonic), "") + " major or minor");
   const filterCount = byId("filter-count");
   const filterLive = byId("filter-live");
   const showN = byId("show-n");
@@ -1240,7 +1273,13 @@
     if (state.show !== "all") params.set("show", state.show);
     if (state.sort !== "artist") params.set("sort", state.sort);
     if (state.artist) params.set("artist", state.artist);
-    if (state.key) params.set("key", state.key);
+    // An exact key, as the address had it before (the library's commonest spelling); else its mode and its tonic.
+    if (state.mode && state.tonic && keyGroups.has(state.tonic + " " + state.mode)) {
+      params.set("key", keyGroups.get(state.tonic + " " + state.mode).value);
+    } else {
+      if (state.mode) params.set("mode", state.mode);
+      if (state.tonic) params.set("tonic", tonicName(Number(state.tonic), state.mode));
+    }
     if (state.inst) params.set("inst", state.inst);
     if (state.prog) params.set("prog", state.prog);
     if (state.all) params.set("all", "1");
@@ -1282,19 +1321,42 @@
   // filters aside.
   let matchingNow = [];
   let shownNow = [];
-  const keyFits = (i) => !state.key || songKeys[i] === keyId(state.key);
+  const keyFits = (i) => (!state.mode || modeOf(i) === state.mode) && (!state.tonic || pitchOf(i) === Number(state.tonic));
   const instFits = (i) => !state.inst || instsChosen().some((x) => instOf(songs[i]).has(x));
   // An option's count: the songs it would show chosen, the panel's other groups as they are.
   const tallyChips = () => {
     const tally = { all: 0, found: 0, wanted: 0, review: 0 };
     const having = { sheet: 0, guitar: 0, ukulele: 0, harmonica: 0, score: 0 };
+    const onTonic = CIRCLE.map(() => 0);  // by pitch class: the songs on it in the mode chosen
     for (const i of matchingNow) {
-      if (!counted(songs[i]) || !keyFits(i)) continue;
-      if (instFits(i)) {
+      if (!counted(songs[i])) continue;
+      const keyed = keyFits(i);
+      const held = instFits(i);
+      const shows = SHOWS[state.show](songs[i]);
+      if (keyed && held) {
         tally.all += 1;
         for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
       }
-      if (SHOWS[state.show](songs[i])) for (const x of instOf(songs[i])) having[x] += 1;
+      if (keyed && shows) for (const x of instOf(songs[i])) having[x] += 1;
+      if (held && shows && pitchOf(i) >= 0 && (!state.mode || modeOf(i) === state.mode)) onTonic[pitchOf(i)] += 1;
+    }
+    // The Key, there once a song has one: the mode chosen, then each tonic, dashed and not to be pressed where no song
+    // is on it in that mode (one chosen can always be let go).
+    byId("keys").hidden = keyGroups.size === 0 && !keyChosen();
+    for (const b of modeButtons) {
+      const on = b.dataset.mode === state.mode;
+      b.setAttribute("aria-checked", String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    for (const b of tonicButtons) {
+      const pc = Number(b.dataset.pc);
+      const on = state.tonic === b.dataset.pc;
+      const n = onTonic[pc];
+      b.textContent = tonicName(pc, state.mode);
+      b.setAttribute("aria-pressed", String(on));
+      b.setAttribute("aria-label", b.textContent + (state.mode ? " " + state.mode : "") + ": " +
+        (n ? plural(n, "song") : "no songs"));
+      b.disabled = !on && n === 0;
     }
     // An instrument no song has here is greyed and can't be pressed, unless it is on: pressed again, it goes. The
     // group shows once a song has something but a chord sheet, and each line's glyph of one that is on is lit.
@@ -1343,7 +1405,6 @@
     const matching = matchingNow.filter((i) => keyFits(i) && instFits(i));
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
     sort.value = state.sort;
-    keySelect.value = state.key;
     if (Boolean(server) && state.all) closePanel(false);  // the sites' results take the list's place, its tools too
     clear.hidden = !state.q;
     artistChip.hidden = !state.artist;
@@ -1446,14 +1507,14 @@
         save();
       });
       list.appendChild(every);
-    } else if (!shown.length && state.key) {
+    } else if (!shown.length && keyChosen()) {
       // The key filter hides them: offer every key.
-      list.appendChild(el("p", "empty", "No songs in " + keyGroup(state.key).name +
-        (state.q ? " match “" + state.q + "”." : ".")));
+      list.appendChild(el("p", "empty", "No songs in " + keySaid() + (state.q ? " match “" + state.q + "”." : ".")));
       const any = el("button", "btn", "Any key");
       any.type = "button";
       any.addEventListener("click", () => {
-        state.key = "";
+        state.mode = "";
+        state.tonic = "";
         render();
         save();
       });
@@ -1604,11 +1665,20 @@
     render();
     save();
   });
-  keySelect.addEventListener("change", () => {
-    state.key = keyGroup(keySelect.value) ? keyGroup(keySelect.value).value : "";
-    render();
-    save();
-  });
+  for (const b of modeButtons) {
+    b.addEventListener("click", () => {
+      state.mode = b.dataset.mode;
+      render();
+      save();
+    });
+  }
+  for (const b of tonicButtons) {
+    b.addEventListener("click", () => {  // the tonic chosen, pressed again, goes
+      state.tonic = state.tonic === b.dataset.pc ? "" : b.dataset.pc;
+      render();
+      save();
+    });
+  }
 
   // --- Filter's panel: a popover under it from 720 px, a sheet from the bottom on a phone ------------------------
   // On a computer a dialog of its own (show(), not modal): the list behind it filters as you tap, with no Apply; a
@@ -1660,7 +1730,8 @@
   byId("clear-all").addEventListener("click", () => {
     state.show = "all";
     state.inst = "";
-    state.key = "";
+    state.mode = "";
+    state.tonic = "";
     render();
     save();
   });
@@ -2058,12 +2129,11 @@
   // (the sites' songs are what the sites have, whatever they show); and that in words, for the results' head, which
   // hides the buttons: "Your songs here: wanted · by Soda Stereo · in A minor", or nothing when they show every song.
   const kept = (i) => (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
-    (!state.key || songKeys[i] === keyId(state.key)) && (!state.prog || playsProg(songs[i], state.prog)) &&
-    instFits(i) && SHOWS[state.show](songs[i]);
+    keyFits(i) && (!state.prog || playsProg(songs[i], state.prog)) && instFits(i) && SHOWS[state.show](songs[i]);
   const SHOW_WORD = { found: "found", wanted: "wanted", review: "needing review" };
   const keptSaid = () => {
     const parts = [label(SHOW_WORD, state.show), state.artist ? "by " + artistName(state.artist) : "",
-      state.key && keyGroup(state.key) ? "in " + keyGroup(state.key).name : "",
+      keyChosen() ? "in " + keySaid() : "",
       state.prog ? "with " + progNumerals(state.prog) : ""].filter(Boolean);
     return parts.length ? "Your songs here: " + parts.join(" · ") : "";
   };
@@ -2074,7 +2144,8 @@
     state.show = "all";
     state.inst = "";
     state.artist = "";
-    state.key = "";
+    state.mode = "";
+    state.tonic = "";
     state.prog = "";
     render();
     save();

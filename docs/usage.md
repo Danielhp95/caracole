@@ -2028,9 +2028,14 @@ file or a text tab), Ukulele (Ultimate Guitar's Ukulele Chords), Harmonica
 (one no song has, greyed, can't be tapped), and while one is on, each line's
 icon of it is in the accent (the group shows once a song has something but a
 chord sheet; the search's rows of the sites stay, whatever they are for); its
-**Key** menu,
-there once a song has a key, shows only the songs in one key, with how many
-each key has, and puts the spellings of one key together ("F# / Gb minor");
+**Key**, there once a song has a key, is Any, Major or Minor, then the twelve
+tonics in circle-of-fifths order (C G D A E B F♯ D♭ A♭ E♭ B♭ F, each named
+as your songs spell the key: C♯ for a song in C# minor), a tonic no song is on
+in the mode chosen dashed: a mode alone shows the songs in it, a tonic alone
+the songs on it in either mode, and both one key, in whichever spelling ("F#
+minor" and "Gb minor" alike); the tonic chosen, tapped again, goes. The
+address keeps an exact key as before (`#key=A%20minor`), a mode alone as
+`#mode=minor` and a tonic alone as `#tonic=E`.
 **Clear all** lets them all go, and the panel says how many songs show
 ("4 songs"). Filter says how many of its filters are on (Filter 1), in the
 accent. **Sort** sorts by artist, by title or by when songs were added.
