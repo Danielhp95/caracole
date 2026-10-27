@@ -48,6 +48,31 @@
   // it opens on (viewer.js), its own alone.
   let player = new URLSearchParams(hash).get("inst"), ownInst = null;
 
+  // The songs' names (their titles, their artists') in the characters the viewer shows the Chinese in, Simplified at
+  // first: its Chinese characters, kept for every page (localStorage), else trad=1 in the address, which carryScreen
+  // takes on. book.py's song-names block converts each by its text as written (data-zh); on a song, viewer.js draws
+  // them again when the choice changes there.
+  const namesEl = document.getElementById("song-names");
+  let names = null;
+  try {
+    names = JSON.parse(namesEl ? namesEl.textContent : "null");
+  } catch (err) { /* none: as written */ }
+  let trad = new URLSearchParams(location.hash.slice(1)).get("trad") === "1";
+  try {
+    if (localStorage.getItem("caracole-viewer-hanzi") === "traditional") trad = true;
+  } catch (err) { /* no storage: the address says */ }
+  const named = (text) => {
+    const table = names && typeof names === "object" ? names[trad ? "traditional" : "simplified"] : null;
+    return table && typeof table === "object" && Object.prototype.hasOwnProperty.call(table, text)
+      && typeof table[text] === "string" ? table[text] : text;
+  };
+  for (const el of document.querySelectorAll("[data-zh]")) el.textContent = named(el.getAttribute("data-zh"));
+  // On the contents, the songbook's PDF in Traditional characters while they are chosen (book.py's data-trad); on a
+  // song, viewer.js links it, as it does its own.
+  if (!current && trad) {
+    for (const link of document.querySelectorAll("a.pdf[data-trad]")) link.setAttribute("href", link.getAttribute("data-trad"));
+  }
+
   if (current) {
     const n = current.dataset.n;
     doc.dataset.view = "song";
@@ -76,6 +101,19 @@
     const title = current.querySelector("h2.title");
     const name = document.querySelector(".book-head h1");
     if (title && name) document.title = title.textContent + " · " + name.textContent;
+    // A Chinese song's tab title follows the choice too: its name as written, converted as its title is.
+    const head = document.querySelector("title");
+    if (title && name && head && title.hasAttribute("data-zh") && names && typeof names === "object" && namesEl) {
+      const own = title.getAttribute("data-zh"), written = own + " · " + name.textContent;
+      for (const script of ["simplified", "traditional"]) {
+        const table = names[script];
+        if (table && typeof table === "object" && Object.prototype.hasOwnProperty.call(table, own)) {
+          table[written] = table[own] + " · " + name.textContent;
+        }
+      }
+      head.setAttribute("data-zh", written);
+      namesEl.textContent = JSON.stringify(names);
+    }
     const returning = book.at === current.dataset.id;
     try {
       const mine = book.songs[current.dataset.id];

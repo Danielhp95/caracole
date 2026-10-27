@@ -35,7 +35,8 @@ def register(app: typer.Typer) -> None:
         version: str | None = typer.Option(
             None, "--version", metavar="QUERY",
             help="With --song: export the sheet's PDF in this version (the viewer's address: "
-                 "'t=2&mode=dorian&capo=0'), as 'sheet (G Dorian, capo 0).pdf'.",
+                 "'t=2&mode=dorian&capo=0'), as 'sheet (G Dorian, capo 0).pdf'; with trad=1, a Chinese sheet's in "
+                 "Traditional characters, as 'sheet (G Dorian, capo 0, Traditional).pdf'.",
         ),
         mine: bool = typer.Option(
             False, "--mine",
@@ -116,13 +117,13 @@ def _make_mine(conn, cfg, overrides, song_name: str, query: str) -> None:
 
 def _export(cfg, overrides, song_name: str, query: str) -> None:
     """``--version``: the one export, then the pages, which list it."""
-    from caracole.render import RenderError, export_sheet, export_version, render_version
+    from caracole.render import RenderError, export_sheet, export_traditional, export_version, render_version
 
     with exclusive(cfg, "render"), closing(open_db(cfg)) as conn:
         song = song_named(conn, song_name, overrides)
         try:
             v = export_version(query, export_sheet(conn, cfg, song).own(overrides))
-            path = render_version(conn, cfg, overrides, song, v)
+            path = render_version(conn, cfg, overrides, song, v, traditional=export_traditional(query))
         except (RenderError, OSError) as e:
             _common.fail(f"no export for {song.display}: {e}")
         write_pages(conn, cfg, overrides, utcnow())

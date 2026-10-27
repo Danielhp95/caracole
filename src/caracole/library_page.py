@@ -304,7 +304,8 @@ WRITTEN_KEY = "library_page:written"  # kv: the SHA-256 and the length of the in
 # Kept files, in the order a song's line lists them: the sheets' viewers and PDFs, then the song's exports (the
 # sheet's PDF in other versions, by their versions), the rest of the first group; guitar-N.* goes between the two
 # groups.
-_SHEET_PAGES = ("sheet.html", "sheet.pdf", "sheet (auto).html", "sheet (auto).pdf")
+_SHEET_PAGES = ("sheet.html", "sheet.pdf", "sheet (Traditional).pdf", "sheet (auto).html", "sheet (auto).pdf",
+                "sheet (auto, Traditional).pdf")  # a Chinese sheet's PDF in Traditional characters beside its own
 _FIRST = (*_SHEET_PAGES, "sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc")
 _LAST = ("tab.txt", "sheet (auto).txt", "sheet (auto).cho", "info.json")
 _GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
@@ -319,6 +320,8 @@ _LABELS = {
     "sheet (auto).html": "Auto sheet viewer",
     "sheet.pdf": "Sheet PDF",
     "sheet (auto).pdf": "Auto sheet PDF",
+    "sheet (Traditional).pdf": "Sheet PDF, Traditional",  # render.py: a Chinese sheet's, beside its own Simplified
+    "sheet (auto, Traditional).pdf": "Auto sheet PDF, Traditional",
     "sheet.txt": "Sheet text",
     "sheet.cho": "ChordPro",
     "lyrics.txt": "Lyrics",
@@ -411,7 +414,8 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     each file with where it came from. ``youtube``: where each song stands on the YouTube route
     (``song_states``; empty with the route off), when the caller has it already, else asked of these
     songs alone."""
-    from caracole.render import pdf_transpose
+    from caracole.render import chinese_songs, pdf_transpose
+    from caracole.viewer.hanzi import names as in_either
 
     browsable = guitar_pages(conn)
     sources = _downloaded(conn)
@@ -439,8 +443,12 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
              for s in library]
     _add_picks(conn, library, cards)
     played = library_progressions(conn)  # each song's, as its last render read its sheet
+    chinese = chinese_songs(conn)
     for song, card in zip(library, cards, strict=True):
         card["progressions"] = played.get(song.id, [])
+        # A Chinese song's title and artist in either script, as its viewer shows them (library.js: the choice kept)
+        if song.id in chinese and any((names := in_either([card["title"], card["artist"]])).values()):
+            card["hanzi"] = names
     return cards
 
 
@@ -829,7 +837,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
 
 # An auto sheet's files beside a human sheet, as its chip's drawer offers them, by the labels it shows.
 _AUTO_OPENS = ("sheet (auto).html", "sheet (auto).pdf", "sheet (auto).txt")
-_AUTO_FILES = (("sheet (auto).pdf", "PDF"), ("sheet (auto).txt", "Text"), ("sheet (auto).cho", "ChordPro"))
+_AUTO_FILES = (("sheet (auto).pdf", "PDF"), ("sheet (auto, Traditional).pdf", "PDF, Traditional"),
+               ("sheet (auto).txt", "Text"), ("sheet (auto).cho", "ChordPro"))
 
 
 def _auto_sheet(library_dir: Path, song: Song, names: set[str]) -> dict[str, Any] | None:

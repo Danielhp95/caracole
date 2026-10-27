@@ -481,7 +481,7 @@ def test_a_viewer_needs_no_cjk_font(conn, cfg, tmp_path):
     html = viewer_of(cfg, song)
     assert ">这</span>" in html and not re.search(r'href="[^"]*\.pdf"', html)  # no PDF to link yet
     cfg = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
-    assert render(conn, cfg).rendered == 1
+    assert render(conn, cfg).rendered == 2  # sheet.pdf, and sheet (Traditional).pdf beside it (test_render_hanzi.py)
     assert 'href="sheet.pdf"' in viewer_of(cfg, song)  # and now there is
 
 
@@ -899,8 +899,9 @@ def test_cjk_font_used_only_where_needed(conn, cfg, tmp_path):
     latin = add_song(conn, "Soda Stereo", "De Música Ligera")
     human_sheet(conn, cfg, latin, tab_id=2)
     stats = render(conn, cfg)
-    assert stats.rendered == 2 and stats.font_error is None
+    assert stats.rendered == 3 and stats.font_error is None  # the Chinese sheet's in Traditional characters too
     assert f"--define=pdf.fonts.text.file={font}".encode() in pdf_of(cfg, zh).read_bytes()
+    assert f"--define=pdf.fonts.text.file={font}".encode() in pdf_of(cfg, zh, "sheet (Traditional).pdf").read_bytes()
     assert b"pdf.fonts" not in pdf_of(cfg, latin).read_bytes()
 
 
@@ -912,7 +913,7 @@ def test_new_cjk_font_rerenders_only_sheets_that_use_it(conn, cfg, tmp_path):
     render(conn, replace(cfg, cjk_font=fake_font(tmp_path / "A.otf")))
     other = fake_font(tmp_path / "B.otf")
     stats = render(conn, replace(cfg, cjk_font=other))
-    assert (stats.rendered, stats.skipped) == (1, 1)
+    assert (stats.rendered, stats.skipped) == (2, 1)  # the Chinese sheet's two PDFs (test_render_hanzi.py)
     assert f"--define=pdf.fonts.text.file={other}".encode() in pdf_of(cfg, zh).read_bytes()
 
 
@@ -1058,7 +1059,7 @@ def test_with_pdf_fonts_a_chinese_sheet_takes_the_cjk_font_for_its_words_alone(c
     human_sheet(conn, cfg, zh, ZH_SHEET, tonality="")
     stats = render(conn, replace(cfg, cjk_font=kai, pdf_fonts=folder))
     data = pdf_of(cfg, zh).read_bytes()
-    assert stats.rendered == 1 and stats.font_error is None
+    assert stats.rendered == 2 and stats.font_error is None  # sheet.pdf, and its Traditional one
     assert font_defined("text", kai) in data and font_defined("title", kai) in data
     assert font_defined("chord", folder / "bold.ttf") in data and font_defined("tab", folder / "mono.ttf") in data
 
@@ -1376,7 +1377,8 @@ def test_render_record_says_what_the_pdf_was_made_from(conn, cfg, tmp_path):
         "style": hashlib.sha256(STYLE_FILE.read_bytes()).hexdigest(),  # the look of the PDF
         "pdf": "sheet.pdf",
         "pdf_text": PDF_TEXT_VERSION,  # how the PDF's own text was made from sheet.cho
-        "printed_sha": hashlib.sha256(run.printed[-1]).hexdigest(),  # that text, its key line and all
+        "printed_sha": hashlib.sha256(run.printed[0]).hexdigest(),  # that text, its key line and all
+        "script": "simplified",  # a Chinese sheet's: its Chinese in Simplified characters (test_render_hanzi.py)
         "pdf_sha256": hashlib.sha256(pdf).hexdigest(),  # what was written, to tell it is still there
         "pdf_size": len(pdf),
     }
@@ -1943,7 +1945,7 @@ def test_real_auto_sheet(conn, real):
 def test_real_chinese_sheet_with_the_cjk_font(conn, real):
     song = add_song(conn, "宋冬野", "斑马斑马")
     human_sheet(conn, real, song, ZH_SHEET, tonality="")
-    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=2)  # and its PDF in Traditional characters
     pdf = pdf_of(real, song)
     assert font_name(real.cjk_font) in pdf.read_bytes()
     assert {b"C", b"G", b"Am", b"F"} <= drawn_strings(pdf)
@@ -1951,6 +1953,11 @@ def test_real_chinese_sheet_with_the_cjk_font(conn, real):
         for shown in ("斑马斑马", "宋冬野", "这是一个合成的例子", "测试歌词第二行"):
             assert shown in text
         assert set(CHORD.findall(text)) == {"C", "G", "Am", "F"}
+    twin = pdf_of(real, song, "sheet (Traditional).pdf")  # the CJK font has Traditional characters too
+    assert font_name(real.cjk_font) in twin.read_bytes()
+    if (text := pdf_text(twin)) is not None:
+        for shown in ("斑馬斑馬", "宋冬野", "這是一個合成的例子", "測試歌詞第二行"):
+            assert shown in text
 
 
 def base_fonts(pdf: Path) -> set[str]:
@@ -1985,7 +1992,7 @@ def test_real_chinese_sheet_takes_the_cjk_font_for_its_words_and_adwaita_for_its
     real = replace(real, pdf_fonts=PDF_FONTS)
     song = add_song(conn, "宋冬野", "斑马斑马")
     human_sheet(conn, real, song, ZH_SHEET, tonality="")
-    assert render_all(conn, real, Overrides()) == RenderStats(rendered=1)
+    assert render_all(conn, real, Overrides()) == RenderStats(rendered=2)  # and its PDF in Traditional characters
     fonts = base_fonts(pdf_of(real, song))
     assert any(f.startswith(font_name(real.cjk_font).decode()) for f in fonts) and "AdwaitaSansBold" in fonts
     if (text := pdf_text(pdf_of(real, song))) is not None:

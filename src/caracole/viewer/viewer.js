@@ -255,12 +255,15 @@
     const link = $("export");
     const cmd = $("export-cmd");
     if (!link || !cmd) return;
-    const words = versionWords().filter(Boolean).join(", ");
+    // A Chinese sheet's export is in the characters its Chinese is shown in (render.py: trad=1, its label says so)
+    const traditional = Boolean(data.hanzi) && state.trad;
+    const words = versionWords().filter(Boolean).concat(traditional ? ["Traditional"] : []).join(", ");
     for (const v of $("export-row").querySelectorAll(".export-v")) v.textContent = words;
     const version = new URLSearchParams(location.hash.slice(1));
+    if (!traditional) version.delete("trad");
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol", "necks", "py", "trad"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -1357,8 +1360,34 @@
     });
     if (unit.line) unit.line.classList.toggle("py", rubies);  // its columns keep the readings' room (viewer.css)
   };
+  // The song's names (its title, its artist's, the page's title; in a songbook, every Chinese song's, in its pagers
+  // too) follow the choice, on any song: page.py's song-names block (book.py's), by each name as written (data-zh).
+  const songNames = (() => {
+    try {
+      const found = JSON.parse($("song-names") ? $("song-names").textContent : "null");
+      return found && typeof found === "object" ? found : null;
+    } catch (err) { return null; }
+  })();
+  // So does the PDF the page links (its foot's; a songbook's), the one in Traditional characters beside it (render.py,
+  // songbook.py; page.py pdf_line: data-trad) while they are chosen.
+  const pdfLinks = Array.from(document.querySelectorAll("a.pdf[data-trad]")).map((a) => [a, a.getAttribute("href")]);
+  let namesDrawn = null;  // as the page wrote them
+  const drawNamesShown = () => {
+    if (namesDrawn === state.trad) return;
+    namesDrawn = state.trad;
+    for (const [link, href] of pdfLinks) link.setAttribute("href", state.trad ? link.getAttribute("data-trad") : href);
+    if (!songNames) return;
+    const table = songNames[state.trad ? "traditional" : "simplified"];
+    for (const el of document.querySelectorAll("[data-zh]")) {
+      const written = el.getAttribute("data-zh");
+      const shown = table && typeof table === "object" && own.call(table, written) && typeof table[written] === "string"
+        ? table[written] : written;
+      if (el.textContent !== shown) el.textContent = shown;
+    }
+  };
   let wordsDrawn = "";  // as the page wrote them
   function drawWords() {
+    drawNamesShown();
     if (pyChip) {
       $("pinyin-row").hidden = !pyCan;
       pyChip.setAttribute("aria-pressed", state.py ? "true" : "false");

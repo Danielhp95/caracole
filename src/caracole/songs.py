@@ -42,10 +42,17 @@ SHEET_OUTPUTS = {
 }
 
 
+# The PDF in Traditional characters render.py makes beside a kept sheet's own, which is in Simplified ones, when the
+# sheet's words are Chinese (viewer/hanzi.py); caracole remove and the icons read them too.
+TRADITIONAL_PDFS = {HUMAN_SHEET: "sheet (Traditional).pdf", AUTO_SHEET: "sheet (auto, Traditional).pdf"}
+
+
 def is_export(name: str) -> bool:
     """Whether ``name`` is a PDF of a sheet in another version (render.py ``render_version``):
-    "sheet (G Dorian, capo 0).pdf", not the auto sheet's own "sheet (auto).pdf"."""
-    return name.startswith("sheet (") and name.endswith(").pdf") and name not in SHEET_OUTPUTS[AUTO_SHEET]
+    "sheet (G Dorian, capo 0).pdf", "sheet (E Minor, Traditional).pdf", not the auto sheet's own "sheet (auto).pdf"
+    or a sheet's own in Traditional characters (``TRADITIONAL_PDFS``)."""
+    return (name.startswith("sheet (") and name.endswith(").pdf") and name not in SHEET_OUTPUTS[AUTO_SHEET]
+            and name not in TRADITIONAL_PDFS.values())
 
 
 KEY_VERSION_KV = "songs:key_version"  # the normalize.KEY_VERSION the stored keys were made with

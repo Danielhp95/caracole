@@ -81,6 +81,11 @@ written ``\\u003c``:
   characters (``simplified``) and in Traditional ones (``traditional``), by the text, where that isn't the text as
   written (hanzi.py: as long as it, a character for a character), for the settings' Chinese characters, which the
   script shows where it shows Pinyin's row.
+
+Beside the song's data, for a sheet whose song holds Chinese, a block ``song-names`` (``names_table``): its title, its
+artist's name and the page's title (the browser's tab's) in Simplified characters and in Traditional ones, each
+judged alone (``hanzi.names``), where that isn't the name as written; each element that shows one of them carries it
+as written (``data-zh``), and the script shows it in the characters chosen, as it shows the words.
 """
 
 from __future__ import annotations
@@ -259,6 +264,7 @@ def build_viewer(
     versions: dict[str, Any] | None = None,
     guitar: tuple[str, ...] | list[str] = (),
     harmonica: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
+    pdf_traditional: str | None = None,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -266,7 +272,8 @@ def build_viewer(
     of ``keys.SOURCES``), else from the sheet's own ``{key}``, else it is estimated from
     the chords. ``transpose`` is where the viewer starts, and ``start`` the song's own version
     (``t=2&mode=dorian&capo=0``), in which it starts when its address names none; ``pdf`` names
-    the PDF beside the page, linked when given. Without ``export``, its settings offer no Export PDF of
+    the PDF beside the page, linked when given, and ``pdf_traditional`` the one in Traditional characters beside it
+    (render.py), which the link opens while the page shows its Chinese so (its ``data-trad``). Without ``export``, its settings offer no Export PDF of
     this version (an auto sheet kept beside a human one, or a version's page, whose exports are the
     sheet's: render.py ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
     ``sheet_versions.as_data`` with ``sheet``, the provider of the one, and ``this`` on each entry,
@@ -294,12 +301,51 @@ def build_viewer(
         data["guitarDownload"] = [download_name(sheet.artist or "", clean, name) for name in guitar]
     style, script = _assets()
     title = sheet.title or "Untitled"
+    page_title = f"{title} · {sheet.artist}" if sheet.artist else title
+    names = names_table("hanzi" in data, [title, sheet.artist, page_title])
     return _page(
-        f"{title} · {sheet.artist}" if sheet.artist else title,
-        _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar)) + json_block("song", data),
+        page_title,
+        _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar), names=names,
+              pdf_traditional=pdf_traditional)
+        + json_block("song", data) + (json_block("song-names", names) if names else ""),
         styles=(style,),
         scripts=(_sound(), _overlay(), _instruments(), _winds(), script),
+        names=names,
     )
+
+
+def names_table(chinese: bool, texts: list[str]) -> dict[str, dict[str, str]] | None:
+    """The page's ``names`` block: ``texts`` (a song's title, its artist's name, the page's title) in either script
+    (``hanzi.names``), for a page whose sheet is Chinese (``chinese``: its data has ``hanzi``); None for any other
+    page, or one whose names are the same in either script."""
+    if not chinese:
+        return None
+    found = hanzi.names([text for text in texts if text])
+    return found if any(found.values()) else None
+
+
+def written_script(cho: str) -> str | None:
+    """"simplified" or "traditional": the characters a ChordPro sheet's Chinese is written in, as its page judges them
+    (``hanzi.written_in_traditional`` of the texts it writes, ``_written_texts``), for its PDFs in either (render.py);
+    None for a sheet in no Chinese (``is_chinese``)."""
+    sheet = parse_sheet(cho)
+    if not pinyin.is_chinese(_drawn_lines(sheet)):
+        return None
+    return "traditional" if hanzi.written_in_traditional(_written_texts(sheet)) else "simplified"
+
+
+def is_chinese(cho: str) -> bool:
+    """Whether a ChordPro sheet's words are Chinese, as its page judges them for its Pinyin and its Chinese characters
+    (``pinyin.is_chinese`` of the lines it draws): the rule for its names (``names_table``) and its PDFs too."""
+    return pinyin.is_chinese(_drawn_lines(parse_sheet(cho)))
+
+
+def zh_attr(text: str, names: Mapping[str, Mapping[str, str]] | None) -> str:
+    """`` data-zh="…"``, the name ``text`` as written, on an element that shows it, where the page's ``names``
+    convert it; "" elsewhere, and on every page whose names they don't."""
+    if names is None or not any(text in table for table in names.values()):
+        return ""
+    return f' data-zh="{escape(text)}"'
 
 
 def viewer_csp(page: bytes) -> str:
@@ -340,11 +386,12 @@ _HEADER_TEXT = re.compile(r"[ -~]+")
 _NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
 
 
-def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str, ...]) -> str:
+def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str, ...],
+          names: Mapping[str, Mapping[str, str]] | None = None) -> str:
     """A whole page, sheet.html or songbook.html: its head (``title``, the icon, the stylesheets, and the
     policy that allows exactly them and the scripts, an image from a data: URI, the icon, and nothing to
     load, no form to send, no base to change), ``body``, then the scripts, which run once the page is
-    read, in their order."""
+    read, in their order. The title is marked as a name the page's ``names`` convert (``zh_attr``)."""
     policy = (
         f"default-src 'none'; script-src {' '.join(map(sha256_source, scripts))}; "
         f"style-src {' '.join(map(sha256_source, styles))}; img-src data:; base-uri 'none'; form-action 'none'"
@@ -356,7 +403,7 @@ def _page(title: str, body: str, *, styles: tuple[str, ...], scripts: tuple[str,
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
         f'<meta http-equiv="Content-Security-Policy" content="{policy}">\n',
         PAGE_ICON,
-        f"<title>{escape(title)}</title>\n",
+        f"<title{zh_attr(title, names)}>{escape(title)}</title>\n",
         *(f"<style>{style}</style>\n" for style in styles),
         "</head>\n<body>\n",
         body,
@@ -605,13 +652,14 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
 
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
-          export: bool = True, guitar: bool = False) -> str:
-    pdf_link = f'<a class="pdf" href="{escape(quote(pdf))}">PDF</a>\n' if pdf else ""
+          export: bool = True, guitar: bool = False, names: Mapping[str, Mapping[str, str]] | None = None,
+          pdf_traditional: str | None = None) -> str:
+    pdf_link = pdf_line([(pdf, "PDF", pdf_traditional)]) if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
-        f"<h1>{escape(title)}</h1>\n"
-        + artist_line(sheet.artist)
+        f"<h1{zh_attr(title, names)}>{escape(title)}</h1>\n"
+        + artist_line(sheet.artist, names)
         + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'
         + _VERSIONS
         + "</header>\n"
@@ -623,18 +671,28 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
     )
 
 
-def artist_line(artist: str) -> str:
+def pdf_line(files: list[tuple[str, str, str | None]]) -> str:
+    """The links to the files beside a page, as its foot lists them: each ``(name, label, the name of its twin in
+    Traditional characters or None)``, the twin as the link's ``data-trad``, which the script follows while the page
+    shows its Chinese in Traditional characters."""
+    return "".join(f'<a class="pdf" href="{escape(quote(name))}"'
+                   + (f' data-trad="{escape(quote(twin))}"' if twin else "") + f">{label}</a>\n"
+                   for name, label, twin in files)
+
+
+def artist_line(artist: str, names: Mapping[str, Mapping[str, str]] | None = None) -> str:
     """The artist's line under a song's title, on sheet.html, a kept version's page and a songbook's song alike, as
     HTML: their name, a link to the library page on their songs (``LIBRARY_PAGE``, with ``#by=`` and the name, every
     character of it but a letter, a digit and -._~ percent-encoded), as pressing their name there does: served by
     caracole serve, the search for them, which asks no site; from a file and in the Android app's copy, their songs
     alone (library.js reads ``by``). A plain link, which a sandbox, a file and the app follow with no script; the name
-    in a span of its own, which the focus ring goes round (viewer.css). None for a sheet that names no artist."""
+    in a span of its own, which the focus ring goes round (viewer.css), marked as a name the page's ``names`` convert
+    (``zh_attr``). None for a sheet that names no artist."""
     if not artist:
         return ""
     href = f"{LIBRARY_PAGE}#by={quote(artist, safe='')}"
     return (f'<p class="artist"><a href="{escape(href)}" title="{escape(f"Songs by {artist}")}">'
-            f"<span>{escape(artist)}</span></a></p>\n")
+            f"<span{zh_attr(artist, names)}>{escape(artist)}</span></a></p>\n")
 
 
 def _song_html(sheet: Sheet, suffix: str = "", named: str = "") -> str:

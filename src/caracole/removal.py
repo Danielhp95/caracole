@@ -37,7 +37,7 @@ from caracole.db import kv_delete, kv_get_json, savepoint
 from caracole.logs import plural
 from caracole.library import song_dir, song_folder, songs_in_folder
 from caracole.sheet_versions import tab_of, version_names
-from caracole.songs import SHEET_OUTPUTS, Song, delete_song_kv, is_export, mark_removed
+from caracole.songs import SHEET_OUTPUTS, TRADITIONAL_PDFS, Song, delete_song_kv, is_export, mark_removed
 
 _LYRICS = ("lyrics.txt", "lyrics.lrc")
 _INFO = "info.json"
@@ -326,8 +326,9 @@ def _kept_files(conn: sqlite3.Connection, song: Song, folder: PurePosixPath) -> 
 def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set[str]:
     """The names of the files caracole wrote in the song's folder.
 
-    Its kept files; the ChordPro, PDF and page it makes from a kept sheet, or
-    that a render record names (``render.py``: the record goes with the outputs);
+    Its kept files; the ChordPro, PDF and page it makes from a kept sheet, and its PDF
+    in Traditional characters (``songs.TRADITIONAL_PDFS``), or that a render record names (``render.py``: the
+    record goes with the outputs; a Traditional PDF's, ``render:<id>:trad``, its PDF alone);
     the page of a version kept beside the sheet, ``version-<tab>.html``, and of a harmonica
     tab, ``harmonica-N.html``, that render.py recorded writing (kv ``render:files:``; a
     version the fetch let go keeps its page until the next render, and one no render wrote
@@ -340,9 +341,9 @@ def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set
     from caracole.render import EXPORT_KV, FILES_KEY
 
     ours = set(kept_here) | {_INFO}
-    for sheet, outputs in SHEET_OUTPUTS.items():  # its ChordPro, its PDF and its viewer
+    for sheet, outputs in SHEET_OUTPUTS.items():  # its ChordPro, its PDF and its viewer, its Traditional PDF
         if sheet in kept_here:
-            ours.update(outputs)
+            ours.update((*outputs, TRADITIONAL_PDFS[sheet]))
     written = kv_get_json(conn, f"{FILES_KEY}{song.id}")  # a version's or a tab's page: only one a render wrote
     ours.update(name for name in (written if isinstance(written, dict) else ())
                 if ((tab := tab_of(name)) is not None and name == version_names(tab)[2])
@@ -353,6 +354,10 @@ def _caracoles(conn: sqlite3.Connection, song: Song, kept_here: set[str]) -> set
         if isinstance(pdf, str):
             stem = pdf.removesuffix(".pdf")
             ours.update((pdf, f"{stem}.cho", f"{stem}.html"))
+        twin = kv_get_json(conn, f"{key}:trad")  # the sheet's PDF in Traditional characters, beside it
+        pdf = twin.get("pdf") if isinstance(twin, dict) else None
+        if pdf in TRADITIONAL_PDFS.values():
+            ours.add(pdf)
     exports = kv_get_json(conn, f"{EXPORT_KV}{song.id}")  # render_version's PDFs in other versions
     for entry in exports.values() if isinstance(exports, dict) else ():
         pdf = entry.get("pdf") if isinstance(entry, dict) else None

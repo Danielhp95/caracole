@@ -6,7 +6,9 @@ and has no page. Each song with a sheet is a section
 built the way ``page.build_viewer`` builds a sheet.html, with its own data block (its
 key, its ``[transpose]``, the version it starts in, its chords in every mode); the fingerings,
 which most songs share, are one block for the page (``voicings``), and so are the easy keys of each
-instrument (``easy``), the same for every song with a key.
+instrument (``easy``), the same for every song with a key, and the names of its songs whose sheets are Chinese
+(``song-names``, page.py ``names_table``: their titles and their artists' names, in the contents, the pagers and their
+pages), which the page shows in the characters the viewer's Chinese characters chose.
 
 Without a script, the page is every song one after the other, with links between them,
 and prints. With it (book.js), it shows the contents or one song, chosen by the address
@@ -32,7 +34,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 from html import escape
 from typing import Any
-from urllib.parse import parse_qsl, quote
+from urllib.parse import parse_qsl
 
 from caracole.inline import json_block
 from caracole.viewer import page as viewer_page
@@ -51,7 +53,11 @@ from caracole.viewer.page import (
     _read_song,
     _song_html,
     artist_line,
+    is_chinese,
+    names_table,
+    pdf_line,
     viewer_csp,
+    zh_attr,
 )
 from caracole.viewer.theory import Key, key_name
 from caracole.viewer.version import Version, played_key, version_from_query
@@ -100,14 +106,20 @@ def assets_version() -> str:
 songbook_csp = viewer_csp
 
 
-def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, cho: str | None = None) -> str:
+def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, cho: str | None = None,
+                   pdf_traditional: str | None = None) -> str:
     """The page of a songbook called ``name``: its contents, then each song with a sheet.
 
-    ``pdf`` and ``cho`` name the songbook's PDF and ChordPro file beside the page, linked when given.
+    ``pdf`` and ``cho`` name the songbook's PDF and ChordPro file beside the page, linked when given, and
+    ``pdf_traditional`` its PDF in Traditional characters, which the PDF's link opens while the page shows its
+    Chinese so (page.py ``pdf_line``).
     """
     style, script = _assets()
     book_style, book_script = _book_assets()
     playable = [(n, song.title) for n, song in enumerate(songs, start=1) if song.cho is not None]
+    chinese = [name for song in songs if song.cho is not None and is_chinese(song.cho)
+               for name in (song.title, song.artist)]
+    names = names_table(bool(chinese), chinese)
     voicings: dict[str, Any] = {}
     easy: dict[str, Any] | None = None  # every song's alike: one block for the page
     wind_facts: dict[str, Any] | None = None  # so are the winds' fingerings and the harps' notes
@@ -116,23 +128,24 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
     for i, (n, _) in enumerate(playable):
         prev = playable[i - 1] if i > 0 else None
         nxt = playable[i + 1] if i + 1 < len(playable) else None
-        html, data, about[n] = _song(songs[n - 1], n, len(songs), prev, nxt)
+        html, data, about[n] = _song(songs[n - 1], n, len(songs), prev, nxt, names)
         voicings.update(data.pop("voicings"))
         easy = data.pop("easy", easy)
         wind_facts = data.pop("winds", wind_facts)
         sections.append(html + json_block(f"data-{n}", data) + "</section>\n")
     count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
-    files = "".join(f'<a class="pdf" href="{escape(quote(f))}">{label}</a>\n'
-                    for f, label in ((pdf, "PDF"), (cho, "ChordPro, for a songbook app")) if f)
+    files = pdf_line([(f, label, twin) for f, label, twin in
+                      ((pdf, "PDF", pdf_traditional), (cho, "ChordPro, for a songbook app", None)) if f])
     body = (
         '<div class="page">\n<header class="head book-head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
         f"<h1>{escape(name)}</h1>\n<p class=\"artist\">Songbook · {count}</p>\n</header>\n"
-        + _contents(songs, about, files)
+        + _contents(songs, about, files, names)
         + "".join(sections)
         + json_block("voicings", voicings)
         + (json_block("easy", easy) if easy is not None else "")
         + (json_block("winds", wind_facts) if wind_facts is not None else "")
+        + (json_block("song-names", names) if names else "")
         + _footer(files)
         + "</div>\n"
         + _CONTROLS
@@ -141,13 +154,16 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
                  scripts=(book_script, _sound(), _overlay(), _instruments(), _winds(), script))
 
 
-def _contents(songs: list[BookSong], about: dict[int, str], files: str) -> str:
+def _contents(songs: list[BookSong], about: dict[int, str], files: str,
+              shown: dict[str, dict[str, str]] | None = None) -> str:
     """The contents: each song's number and title, and on a line under it, its artist and, for a song
-    with a sheet, its key and capo (``about``, by number)."""
+    with a sheet, its key and capo (``about``, by number); a name the page's names convert marked so (``shown``)."""
     items = []
     for n, song in enumerate(songs, start=1):
-        line = " · ".join(part for part in (escape(song.artist), about.get(n, "")) if part)
-        names = (f'<span class="n">{n}</span><span class="t">{escape(song.title)}</span>'
+        artist = (f"<span{mark}>{escape(song.artist)}</span>" if (mark := zh_attr(song.artist, shown))
+                  else escape(song.artist))
+        line = " · ".join(part for part in (artist, about.get(n, "")) if part)
+        names = (f'<span class="n">{n}</span><span class="t"{zh_attr(song.title, shown)}>{escape(song.title)}</span>'
                  + (f'<span class="a">{line}</span>' if line else ""))
         if song.cho is None:
             why = escape(song.missing or "no sheet yet")
@@ -164,21 +180,23 @@ def _contents(songs: list[BookSong], about: dict[int, str], files: str) -> str:
 
 
 def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
-          nxt: tuple[int, str] | None) -> tuple[str, dict[str, Any], str]:
+          nxt: tuple[int, str] | None, names: dict[str, dict[str, str]] | None = None
+          ) -> tuple[str, dict[str, Any], str]:
     """A song's section, without its closing tag, its data (with its fingerings), and its key and capo
-    as the contents give them. ``prev`` and ``nxt`` are the songs with a sheet around it: number, title."""
+    as the contents give them. ``prev`` and ``nxt`` are the songs with a sheet around it: number, title; a name
+    the page's ``names`` convert is marked so (page.py ``zh_attr``)."""
     sheet, key, origin, data = _read_song(song.cho or "", song.key, song.key_source, song.transpose)
     data["start"] = song.start  # where the viewer starts when the address names no version (as sheet.html)
     html = (
         f'<section class="song" id="song-{n}" data-n="{n}" data-id="{escape(song.id)}" '
         f'aria-labelledby="title-{n}">\n<header class="head">\n'
-        + _pager("Songs", prev, nxt)
+        + _pager("Songs", prev, nxt, names)
         + f'<p class="pos">Song {n} of {total}</p>\n'
-        + f'<h2 class="title" id="title-{n}">{escape(song.title)}</h2>\n'
-        + artist_line(song.artist)
+        + f'<h2 class="title" id="title-{n}"{zh_attr(song.title, names)}>{escape(song.title)}</h2>\n'
+        + artist_line(song.artist, names)
         + f'<p class="facts" id="facts-{n}">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
         + _song_html(sheet, f"-{n}", song.title)
-        + _pager("Songs, after the sheet", prev, nxt)  # at the end of a long sheet, no scrolling back up
+        + _pager("Songs, after the sheet", prev, nxt, names)  # at the end of a long sheet, no scrolling back up
     )
     return html, data, _key_and_capo(key, _opens_in(song), sheet.capo)
 
@@ -206,18 +224,20 @@ def _key_and_capo(key: Key | None, version: Version, capo_sheet: int | None) -> 
     return " · ".join(parts)
 
 
-def _pager(label: str, prev: tuple[int, str] | None, nxt: tuple[int, str] | None) -> str:
+def _pager(label: str, prev: tuple[int, str] | None, nxt: tuple[int, str] | None,
+           names: dict[str, dict[str, str]] | None = None) -> str:
     """Previous, Contents and Next, above a song's sheet and again after it, each named for a screen reader:
     "‹ Title" and "Next: Title ›", the songs they go to, a title too long for the phone cut short ("…")
     by book.css. The arrows are hidden from a screen reader, which hears "Previous: Title"."""
     return (
         f'<nav class="pager" aria-label="{escape(label)}">'
         + (f'<a href="#song-{prev[0]}" rel="prev"><span class="arrow" aria-hidden="true">‹ </span>'
-           f'<span class="vh">Previous: </span><span class="name">{escape(prev[1])}</span></a>'
+           f'<span class="vh">Previous: </span><span class="name"{zh_attr(prev[1], names)}>{escape(prev[1])}</span></a>'
            if prev else '<span class="none"></span>')
         + '<a href="#contents">Contents</a>'
         + (f'<a href="#song-{nxt[0]}" rel="next"><span class="lead">Next: </span>'
-           f'<span class="name">{escape(nxt[1])}</span><span class="arrow" aria-hidden="true"> ›</span></a>'
+           f'<span class="name"{zh_attr(nxt[1], names)}>{escape(nxt[1])}</span>'
+           '<span class="arrow" aria-hidden="true"> ›</span></a>'
            if nxt else '<span class="none"></span>')
         + "</nav>\n"
     )

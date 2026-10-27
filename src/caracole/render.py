@@ -66,6 +66,16 @@ sheet's; an extra, as the viewer is). kv ``render:files:<song id>`` keeps the SH
 length of each .cho and viewer written (``written_file``), PDF or no PDF: a
 server serves a viewer only while it is still those bytes.
 
+A sheet whose words are Chinese (``page.written_script``, its viewer's rule) has its PDF in Simplified characters,
+as its viewer starts, and one in Traditional characters beside it, ``sheet (Traditional).pdf`` (``sheet (auto,
+Traditional).pdf`` for an auto sheet: ``songs.TRADITIONAL_PDFS``), each printed from the same text converted as the
+viewer converts the page (``hanzi.chordpro``: its words, its title and its artist, its chords where they were); its
+.cho stays as written, which the viewer reads. The Traditional one is recorded as the sheet's own is, under kv
+``render:<song id>:trad`` (``:auto:trad``), and goes, while it is still as written, once the sheet's words are no
+Chinese or the sheet goes. A Chinese sheet's record names the characters its PDF is in (``script``), so one an older
+caracole printed as written is made again, in Simplified characters; another sheet's record is as it was, and
+nothing is made again for it. An export is in the characters its viewer showed (``trad=1``: ``render_version``).
+
 Each UG version the fetch keeps beside the sheet (sheet_versions.py: ``version-<tab>.txt``
 and ``.json``) gets a viewer of its own, ``version-<tab>.html``, made from its JSON as the
 sheet's is from sheet.json, in its own key and as written, with no .cho or PDF and no
@@ -178,6 +188,7 @@ from caracole.songs import (
     AUTO_SHEET,
     HUMAN_SHEET,
     SHEET_OUTPUTS,
+    TRADITIONAL_PDFS,
     Song,
     ensure_current_keys,
     get_song,
@@ -186,11 +197,11 @@ from caracole.songs import (
 )
 from caracole.ug.page import decode_twice
 from caracole.versions import get_version
-from caracole.viewer import build_viewer
+from caracole.viewer import build_viewer, hanzi
 from caracole.viewer import harpfit
 from caracole.viewer.harptab import parse as parse_tab
 from caracole.viewer.harptab_page import build_harmonica_viewer
-from caracole.viewer.page import viewer_key
+from caracole.viewer.page import viewer_key, written_script
 from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import Key, key_name
 from caracole.viewer.version import (
@@ -708,13 +719,14 @@ def _render_song(
             # Beside the human sheet, the version's shapes and swaps were chosen on that sheet, and an export is
             # that sheet's (export_viewer): its viewer offers none
             played = replace(played, at={}, alt={})
-        done.append(_render_sheet(conn, cfg, song, folder, kept, text, state_key, played,
+        own, twin = _render_sheet(conn, cfg, song, folder, kept, text, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
                                   cjk_font=cjk_font, fonts=fonts, runner=runner, force=force, key=mine,
                                   export=not beside,
                                   primary=not sheet.auto or human is None, versions=listed, guitar=guitar,
                                   harmonica=tuple({**h, "harp": harps[h["name"]]} if h["name"] in harps else h
-                                                  for h in harmonica)))
+                                                  for h in harmonica))
+        done.extend([twin, own] if twin is not None else [own])  # the sheet's own last: done[-1] below
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
 
@@ -723,9 +735,10 @@ def _render_song(
             render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id),
                    listed=_on_page(listed, chosen))
             if auto is None and done[-1].outcome != "no font":  # its PDF is in place
-                for name in AUTO_OUTPUTS:
+                for name in (*AUTO_OUTPUTS, TRADITIONAL_PDFS[AUTO_SHEET]):
                     (folder / name).unlink(missing_ok=True)
                 kv_delete(conn, _state_key(song.id, auto=True))
+                kv_delete(conn, _state_key(song.id, auto=True, traditional=True))
                 _forget_written(conn, song.id, AUTO_OUTPUTS)
         else:
             _drop_human_outputs(conn, cfg.library_dir, song, folder)
@@ -1124,9 +1137,22 @@ class ExportSheet:
         """The song's own version (``own_version``) on this sheet, where its viewer starts."""
         return own_version(overrides, self.song, self.text, *_key_of(self.found))
 
-    def label(self, v: Version) -> str:
-        """The name of the version ``v`` of this sheet ("G Dorian, capo 0"), as its export is recorded under."""
-        return self._read(lambda: version_label(v, self.shapes, self.capo))
+    def label(self, v: Version, *, traditional: bool = False) -> str:
+        """The name of the version ``v`` of this sheet ("G Dorian, capo 0"), as its export is recorded under; in
+        Traditional characters (``traditional``), for a sheet whose words are Chinese, it says so ("G Dorian, capo 0,
+        Traditional")."""
+        named = self._read(lambda: version_label(v, self.shapes, self.capo))
+        return f"{named}, {TRADITIONAL}" if traditional and self.chinese() else named
+
+    def chinese(self) -> bool:
+        """Whether this sheet's words are Chinese, so that an export of it is in the characters its viewer shows them
+        in (``page.written_script``)."""
+        return self._read(lambda: written_script(self.text) is not None)
+
+    def query(self, v: Version, *, traditional: bool = False) -> str:
+        """The version ``v`` as an export's address (``export_query``), ``trad=1`` in it for one in Traditional
+        characters of a sheet whose words are Chinese."""
+        return export_query(v, traditional=traditional and self.chinese())
 
     def entry(self, v: Version) -> str:
         """The ``[version]`` entry Make this my version writes for the version ``v`` of this sheet: ``v`` kept by its
@@ -1163,10 +1189,22 @@ def export_sheet(conn: sqlite3.Connection, cfg: Config, song: Song) -> ExportShe
     return ExportSheet(song, text, found, shapes, capo)
 
 
-def export_query(v: Version) -> str:
-    """The version as an address that always says its ``t``, so reading it back needs no song."""
+def export_query(v: Version, *, traditional: bool = False) -> str:
+    """The version as an address that always says its ``t``, so reading it back needs no song; with
+    ``traditional``, an export's in Traditional characters, ``trad=1`` last, as the viewer's address says it."""
     rest = [part for part in version_query(v).split("&") if part and not part.startswith("t=")]
-    return "&".join([f"t={v.t}", *rest])
+    return "&".join([f"t={v.t}", *rest, *(["trad=1"] if traditional else [])])
+
+
+TRADITIONAL = "Traditional"  # what an export's label says of one in Traditional characters
+
+
+def export_traditional(query: str) -> bool:
+    """Whether a viewer's address ``query`` shows its Chinese in Traditional characters (``trad=1``, the first
+    ``trad`` as URLSearchParams.get reads it), for an export in them."""
+    found = [value for name, value in parse_qsl(query[1:] if query[:1] in ("#", "?") else query,
+                                                keep_blank_values=True) if name == "trad"]
+    return bool(found) and found[0] == "1"
 
 
 def export_viewer(conn: sqlite3.Connection, song: Song) -> str | None:
@@ -1215,9 +1253,12 @@ def render_version(
     runner: Runner = subprocess.run,
     force: bool = False,
     pdf_fonts: Any = _CONFIG,
+    traditional: bool = False,
 ) -> Path:
     """Render the song's sheet in the version ``v`` (its key, capo, mode, chosen shapes and swaps, as the
-    viewer shows it: ``apply_version``) to ``sheet (<label>).pdf`` in its folder, and return the path.
+    viewer shows it: ``apply_version``) to ``sheet (<label>).pdf`` in its folder, and return the path. A sheet whose
+    words are Chinese is in Simplified characters, or in Traditional ones with ``traditional`` (its label then says
+    so, ``ExportSheet.label``, and its query ``trad=1``), as its viewer showed them; another sheet is as written.
 
     The sheet is the human one, else the auto one. The export is recorded in kv ``render:export:<song id>``
     under its label (``version_label``): {"pdf", "query", "source_sha", "style", "printed_sha", "pdf_text",
@@ -1228,11 +1269,11 @@ def render_version(
     Raises RenderError: no sheet kept, a sheet that can't be read or made, a CJK font needed and missing, or
     chordpro failing.
     """
-    made = _export_text(conn, cfg, song, v, pdf_fonts)
+    made = _export_text(conn, cfg, song, v, pdf_fonts, traditional=traditional)
     pdf = song_dir(cfg.library_dir, song) / made.name
     state = {
         "pdf": pdf.name,
-        "query": export_query(v),
+        "query": export_query(v, traditional=made.traditional),
         "source_sha": hashlib.sha256(made.text.encode("utf-8")).hexdigest(),
         "style": _style(),
         "pdf_text": PDF_TEXT_VERSION,
@@ -1263,12 +1304,14 @@ def version_pdf(
     *,
     runner: Runner = subprocess.run,
     pdf_fonts: Any = _CONFIG,
+    traditional: bool = False,
 ) -> tuple[str, bytes]:
-    """The PDF ``render_version`` makes of the song's sheet in the version ``v``, as its label ("A Major, capo 0")
+    """The PDF ``render_version`` makes of the song's sheet in the version ``v`` (in Traditional characters with
+    ``traditional``, a Chinese sheet's), as its label ("A Major, capo 0", "A Major, capo 0, Traditional")
     and its bytes, for caracole serve's Export PDF to download at once: made in a private folder under the cache
     (``_render_bytes``) and written nowhere else, recorded nowhere, no lock taken, so two at once never meet. Raises
     RenderError as ``render_version`` does."""
-    made = _export_text(conn, cfg, song, v, pdf_fonts)
+    made = _export_text(conn, cfg, song, v, pdf_fonts, traditional=traditional)
     data = _render_bytes(made.printed, made.name, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin,
                          font_file=made.font, fonts=made.fonts, runner=runner)
     return made.label, data
@@ -1277,35 +1320,42 @@ def version_pdf(
 @dataclass(frozen=True)
 class _ExportText:
     """What an export's PDF is made from (``_export_text``): the sheet's ChordPro text, the version's label and the
-    PDF's name by it, the text chordpro prints, and the fonts it prints it in."""
+    PDF's name by it, the text chordpro prints, and the fonts it prints it in; and whether it is in Traditional
+    characters (a Chinese sheet's, asked so)."""
 
     text: str
     label: str
     printed: str
     font: Path | None
     fonts: PdfFonts | None
+    traditional: bool = False
 
     @property
     def name(self) -> str:
         return f"sheet ({safe_name(self.label)}).pdf"
 
 
-def _export_text(conn: sqlite3.Connection, cfg: Config, song: Song, v: Version, pdf_fonts: Any) -> _ExportText:
+def _export_text(conn: sqlite3.Connection, cfg: Config, song: Song, v: Version, pdf_fonts: Any, *,
+                 traditional: bool = False) -> _ExportText:
     """The text an export of the song's sheet in the version ``v`` prints, in the PDF fonts ``pdf_fonts`` hands over,
-    else ``cfg``'s when chordpro can use them (``render_version``, ``version_pdf``). RenderError: no sheet kept, a
-    sheet that can't be read or made, or a CJK font needed and missing."""
+    else ``cfg``'s when chordpro can use them (``render_version``, ``version_pdf``); a Chinese sheet's in Simplified
+    characters, or in Traditional ones with ``traditional``, its label then saying so; another sheet's as written.
+    RenderError: no sheet kept, a sheet that can't be read or made, or a CJK font needed and missing."""
     _, text, found = _export_source(conn, cfg, song)
     fonts = _pdf_fonts(cfg.pdf_fonts)[0] if pdf_fonts is _CONFIG else pdf_fonts
     try:
         shapes = viewer_key(text, *_key_of(found))
         capo = parse_sheet(text).capo
-        label = version_label(v, shapes, capo)
-        printed = _version_text(text, v, shapes, capo, fonts=fonts)
+        written = written_script(text)
+        traditional = traditional and written is not None
+        label = version_label(v, shapes, capo) + (f", {TRADITIONAL}" if traditional else "")
+        printed = _in_script(_version_text(text, v, shapes, capo, fonts=fonts), written,
+                             "traditional" if traditional else "simplified")
     except Exception as e:  # a sheet the viewer's code can't read
         log.warning("%s: cannot make the export %s", song.display, version_query(v), exc_info=True)
         raise RenderError(f"cannot make the export: {type(e).__name__}: {e}") from e
     font, lost = pdf_font(printed, _cjk_font(cfg.cjk_font)[0], fonts)
-    made = _ExportText(text, label, printed, font, fonts)
+    made = _ExportText(text, label, printed, font, fonts, traditional)
     if lost is not None:
         raise RenderError(f"{made.name} needs a CJK font: {FONT_HINT}")
     return made
@@ -1328,7 +1378,7 @@ def _remake_exports(conn: sqlite3.Connection, cfg: Config, overrides: Overrides,
             continue
         try:
             pdf = render_version(conn, cfg, overrides, song, version_from_query(query), runner=runner, force=force,
-                                 pdf_fonts=fonts)
+                                 pdf_fonts=fonts, traditional=export_traditional(query))
         except (RenderError, OSError) as e:
             log.warning("no export for %s (%s): %s", song.display, query, e)
             continue
@@ -1397,10 +1447,12 @@ def _render_sheet(
     versions: dict[str, Any] | None = None,
     guitar: tuple[str, ...] = (),
     harmonica: tuple[Mapping[str, Any], ...] = (),
-) -> _Done:
+) -> tuple[_Done, _Done | None]:
     """Write one sheet's .cho, ``text`` (``_sheet_cho``), render its PDF in ``version`` unless kv ``state_key``
-    says it is up to date, then write its viewer (``_write_viewer``), which needs no PDF: a failed render, or a
-    sheet waiting for a CJK font, still gets one. ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
+    says it is up to date, and, for a sheet whose words are Chinese, its PDF in Traditional characters beside it
+    (``_render_traditional``: the sheet's own is in Simplified ones), then write its viewer (``_write_viewer``), which
+    needs no PDF: a failed render, or a sheet waiting for a CJK font, still gets one. Return what came of the PDF,
+    and of the Traditional one (None for a sheet in no Chinese). ``key`` is the sheet's (``keys.sheet_keys``); ``start``, the
     song's own version as the viewer's address writes it, where the viewer starts, or None for none;
     ``export``, whether the viewer offers an export (``export_viewer``); ``primary``, whether this is the
     song's sheet the library finds it by (its human one, else its auto one: ``_note_progressions``);
@@ -1417,11 +1469,12 @@ def _render_sheet(
     if primary:
         _note_progressions(conn, song, text, *key)
     pdf = folder / f"{stem}.pdf"
+    twin = folder / TRADITIONAL_PDFS[kept.name]
 
     def viewer() -> bool:
         page = folder / f"{stem}.html"
         data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start, export=export,
-                             versions=versions, guitar=guitar, harmonica=harmonica)
+                             versions=versions, guitar=guitar, harmonica=harmonica, twin=twin)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
@@ -1429,10 +1482,42 @@ def _render_sheet(
     try:
         done = _render_sheet_pdf(conn, cfg, song, text, pdf, state_key, on_the_guitar(version), key=key,
                                  cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
+        traditional = _render_traditional(conn, cfg, song, text, twin, state_key, on_the_guitar(version), key=key,
+                                          cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
     except RenderError:
         viewer()  # the PDF's error is the song's; the viewer's own, if any, is logged
         raise
-    return done if viewer() else replace(done, viewer_failed=True)
+    return (done if viewer() else replace(done, viewer_failed=True)), traditional
+
+
+def _render_traditional(conn: sqlite3.Connection, cfg: Config, song: Song, text: str, twin: Path, state_key: str,
+                        version: Version, *, key: tuple[str | None, str | None], cjk_font: Path | None,
+                        runner: Runner, force: bool, fonts: PdfFonts | None = None) -> _Done | None:
+    """The sheet ``text``'s PDF in Traditional characters, ``twin`` (``songs.TRADITIONAL_PDFS``), for a sheet whose
+    words are Chinese (``page.written_script``), recorded as its own PDF is, under kv ``<state_key>:trad``; for any
+    other sheet, None, and a Traditional PDF caracole made of it before goes while it is as written."""
+    traditional_key = f"{state_key}:trad"
+    if written_script(text) is None:
+        _drop_traditional(conn, twin.parent, traditional_key)
+        return None
+    return _render_sheet_pdf(conn, cfg, song, text, twin, traditional_key, version, key=key, cjk_font=cjk_font,
+                             fonts=fonts, runner=runner, force=force, script="traditional")
+
+
+def _drop_traditional(conn: sqlite3.Connection, folder: Path, key: str,
+                      names: Collection[str] = tuple(TRADITIONAL_PDFS.values())) -> None:
+    """Forget the Traditional PDF kv ``key`` records, and delete it while it holds what caracole wrote: only one of
+    ``names`` (a record naming another is left alone). One changed since, on a synced device, is yours and stays."""
+    record = kv_get_json(conn, key)
+    if record is None:
+        return
+    name = record.get("pdf") if isinstance(record, Mapping) else None
+    if isinstance(name, str) and name not in names:
+        return
+    if isinstance(name, str) and isinstance(sha := record.get("pdf_sha256"), str) and holds(
+            folder / name, sha, record.get("pdf_size") if isinstance(record.get("pdf_size"), int) else None):
+        (folder / name).unlink(missing_ok=True)
+    kv_delete(conn, key)
 
 
 def _note_progressions(conn: sqlite3.Connection, song: Song, text: str, key: str | None,
@@ -1461,13 +1546,17 @@ def _render_sheet_pdf(
     runner: Runner,
     force: bool,
     fonts: PdfFonts | None = None,
+    script: str = "simplified",
 ) -> _Done:
     """Render the ChordPro ``text`` to ``pdf`` in ``version`` unless kv ``state_key`` says it is up to date:
-    chordpro prints the PDF's own text (``_sheet_text``, in ``key``: the sheet's and where it came from), in the
+    chordpro prints the PDF's own text (``_sheet_text``, in ``key``: the sheet's and where it came from), its Chinese
+    in ``script``'s characters (``_in_script``), in the
     PDF fonts ``fonts``, and the CJK font is there when that text needs it (``pdf_font``). A text that can't be made (a bug in the viewer's code it runs) is a
     RenderError, logged with its traceback: this PDF fails, and the pass goes on."""
     try:
-        printed = _sheet_text(text, key=key[0], key_source=key[1], version=version, fonts=fonts)
+        written = written_script(text)
+        printed = _in_script(_sheet_text(text, key=key[0], key_source=key[1], version=version, fonts=fonts),
+                             written, script)
     except Exception as e:  # a sheet the viewer's code can't read must never cost the other PDFs
         log.warning("%s: cannot make the text of %s", song.display, pdf.name, exc_info=True)
         raise RenderError(f"cannot make the text of {pdf.name}: {type(e).__name__}: {e}") from e
@@ -1485,6 +1574,8 @@ def _render_sheet_pdf(
         # What chordpro prints, made from more than the .cho: the sheet's key (an auto sheet's is
         # heard, in its version's data) and the viewer's theory and shapes, which a newer caracole changes
         "printed_sha": hashlib.sha256(printed.encode("utf-8")).hexdigest(),
+        # A Chinese sheet's PDF, in the characters it is in; none for another, whose record is as it was
+        **({"script": script} if written is not None else {}),
     }
     if not force and _up_to_date(pdf, kv_get_json(conn, state_key), state):
         return _Done("skipped")
@@ -1493,6 +1584,22 @@ def _render_sheet_pdf(
     kv_set_json(conn, state_key, {**state, "pdf_sha256": sha, "pdf_size": size})
     write_info(conn, cfg.library_dir, song)  # its "render" entry: the PDF, the transposition
     return _Done("rendered")
+
+
+def chinese_songs(conn: sqlite3.Connection) -> set[int]:
+    """The songs whose sheet's PDF (their human sheet's, else their auto sheet's) is a Chinese sheet's: its record
+    names the characters it is in (``script``). The library page shows their names in the characters the viewer
+    shows Chinese in (library_page.py), as their viewers do; another song's are as written."""
+    rows = conn.execute("SELECT key FROM kv WHERE key GLOB 'render:[0-9]*' AND key NOT GLOB 'render:*:*' "
+                        "AND json_valid(value) AND json_type(value, '$.script') = 'text'")
+    return {int(key.removeprefix("render:")) for (key,) in rows if key.removeprefix("render:").isdigit()}
+
+
+def _in_script(printed: str, written: str | None, script: str) -> str:
+    """A PDF's text ``printed`` with its Chinese in ``script``'s characters, as its sheet's viewer shows it there
+    (``hanzi.chordpro``), its sheet written in ``written`` (``page.written_script``); as it is for a sheet in no
+    Chinese (``written`` None)."""
+    return printed if written is None else hanzi.chordpro(printed, script, traditional=written == "traditional")
 
 
 def _sheet_text(text: str, *, key: str | None, version: Version, key_source: str | None = None,
@@ -1535,23 +1642,26 @@ def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],
                   transpose: int, start: str | None, export: bool = True,
                   versions: dict[str, Any] | None = None, guitar: tuple[str, ...] = (),
-                  harmonica: tuple[Mapping[str, Any], ...] = ()) -> bytes | None:
+                  harmonica: tuple[Mapping[str, Any], ...] = (), twin: Path | None = None) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one (a version page has none: ``pdf`` None), and return the page's bytes. It starts where the
     PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's
     key (``keys.sheet_keys``) when it has one; with ``export``, it offers Export PDF of this version;
     ``versions`` lists the song's versions, and ``guitar`` its Guitar Pro files caracole serve shows in the
-    browser (``inbox.guitar_files``), and ``harmonica`` its harmonica tabs (``inbox.harmonica_files``). A viewer that
-    hasn't changed isn't written again.
+    browser (``inbox.guitar_files``), and ``harmonica`` its harmonica tabs (``inbox.harmonica_files``); ``twin``, the
+    sheet's PDF in Traditional characters, which the PDF's link opens while the viewer shows them, when it is there.
+    A viewer that hasn't changed isn't written again.
 
     The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
     with its traceback) or written (a link or a FIFO in its place), and the song's PDFs and
     its other sheet go on all the same.
     """
     linked = pdf.name if pdf is not None and pdf.is_file() and not pdf.is_symlink() else None
+    traditional = twin.name if linked and twin is not None and twin.is_file() and not twin.is_symlink() else None
     try:
         html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked,
-                            export=export, versions=versions, guitar=guitar, harmonica=harmonica)
+                            export=export, versions=versions, guitar=guitar, harmonica=harmonica,
+                            pdf_traditional=traditional)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None
@@ -1638,6 +1748,7 @@ def _drop_human_outputs(conn: sqlite3.Connection, library_dir: Path, song: Song,
     stays. A sheet that never got a PDF (waiting for a font, or chordpro failed on it) still had
     its .cho and viewer written: each goes while it is still as written (``_forget_written``)."""
     _forget_written(conn, song.id, (HUMAN_OUTPUTS[0], HUMAN_OUTPUTS[2]), folder)
+    _drop_traditional(conn, folder, _state_key(song.id, traditional=True), (TRADITIONAL_PDFS[HUMAN_SHEET],))
     key = _state_key(song.id)
     record = kv_get_json(conn, key)
     if not isinstance(record, Mapping) or record.get("pdf") != HUMAN_OUTPUTS[1]:
@@ -1648,12 +1759,13 @@ def _drop_human_outputs(conn: sqlite3.Connection, library_dir: Path, song: Song,
     write_info(conn, library_dir, song)  # its "render" entry is gone too
 
 
-def _state_key(song_id: int, *, auto: bool = False) -> str:
+def _state_key(song_id: int, *, auto: bool = False, traditional: bool = False) -> str:
     """kv: what a PDF was made from (written here; ``library.write_info`` reads the song's own).
 
-    ``auto`` names the record of an auto sheet's PDF rendered beside a human sheet's.
+    ``auto`` names the record of an auto sheet's PDF rendered beside a human sheet's; ``traditional``, that of the
+    sheet's PDF in Traditional characters (``_render_traditional``).
     """
-    return f"render:{song_id}:auto" if auto else f"render:{song_id}"
+    return (f"render:{song_id}:auto" if auto else f"render:{song_id}") + (":trad" if traditional else "")
 
 
 # --- where a sheet comes from ----------------------------------------------------------

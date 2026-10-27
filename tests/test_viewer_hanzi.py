@@ -8,9 +8,12 @@ The conversions are OpenCC's: what it writes is what these tests write (头发 �
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -101,6 +104,27 @@ def test_a_conversion_that_changed_the_length_is_made_again_a_character_at_a_tim
 
     monkeypatch.setattr(hanzi, "_converter", converter)
     assert hanzi.scripts(["我的头发 后来", "回来"])["traditional"] == {"我的头发 后来": "我的頭发 後來", "回来": "回來"}
+
+
+# --- a ChordPro text, for a PDF ------------------------------------------------------------------------------
+
+PRINTED = ("{title: 斑馬斑馬}\n{artist: 张学友}\n{subtitle: Key C}\n{comment: 副歌（重複）}\n"
+           "[C]斑馬[D]斑[Bm]馬 你[Em]不要睡著啦\n{start_of_tab}\ne|---0---| 頭髮\n{end_of_tab}\n{define: C base-fret 1}\n")
+
+
+def test_a_chordpro_text_in_simplified_keeps_its_chords_where_they_are():
+    # As the viewer shows the sheet: a line's words whole (斑馬斑馬 one word across its chords), each directive's
+    # text, the title and the artist each judged alone; what is no Chinese character stays as written.
+    assert hanzi.chordpro(PRINTED, "simplified", traditional=True) == (
+        "{title: 斑马斑马}\n{artist: 张学友}\n{subtitle: Key C}\n{comment: 副歌（重复）}\n"
+        "[C]斑马[D]斑[Bm]马 你[Em]不要睡着啦\n{start_of_tab}\ne|---0---| 头发\n{end_of_tab}\n{define: C base-fret 1}\n")
+
+
+def test_a_traditional_sheets_chordpro_text_in_traditional_is_as_written_but_its_names():
+    assert hanzi.chordpro(PRINTED, "traditional", traditional=True) == PRINTED.replace("张学友", "張學友")
+    simplified = "{title: 头发}\n[C]我的[G]头发 发现\n"
+    assert hanzi.chordpro(simplified, "traditional", traditional=False) == "{title: 頭髮}\n[C]我的[G]頭髮 發現\n"
+    assert hanzi.chordpro(simplified, "simplified", traditional=False) == simplified
 
 
 # --- in the page's data ------------------------------------------------------------------------------
@@ -458,11 +482,13 @@ def test_the_row_is_a_segmented_control_like_the_chord_names_right_above_the_pin
     from helpers.targets import small_targets
 
     look = """(() => {
-      const box = (id) => { const r = document.getElementById(id).getBoundingClientRect(); return {top: r.top, bottom: r.bottom}; };
+      const box = (id) => { const r = document.getElementById(id).getBoundingClientRect();
+        return {top: r.top, bottom: r.bottom}; };
       const style = (el) => { const s = getComputedStyle(el);
         return [s.backgroundColor, s.borderTopColor, s.borderRadius, s.color, s.fontSize, s.fontWeight]; };
       const names = document.querySelector('#names'), mine = document.getElementById('hanzi');
-      const on = (seg) => seg.querySelector('[aria-pressed=true]'), off = (seg) => seg.querySelector('[aria-pressed=false]');
+      const on = (seg) => seg.querySelector('[aria-pressed=true]');
+      const off = (seg) => seg.querySelector('[aria-pressed=false]');
       return {track: [style(names), style(mine)], on: [style(on(names)), style(on(mine))],
         off: [style(off(names)), style(off(mine))], row: box('hanzi-row'), pinyin: box('pinyin-row'),
         necks: document.getElementById('necks-row').hidden ? null : box('necks-row'),
@@ -478,3 +504,186 @@ def test_the_row_is_a_segmented_control_like_the_chord_names_right_above_the_pin
     assert seen["row"]["bottom"] <= seen["pinyin"]["top"] + 1 and seen["pinyin"]["top"] - seen["row"]["bottom"] < 16
     assert all(44 <= h < 60 for h in seen["heights"])  # a thumb's, its words on one line
     assert small == []
+
+
+# --- the song's title and its artist's name -----------------------------------------------------------------------
+
+
+def names_of(html: str) -> dict | None:
+    found = re.search(r'<script type="application/json" id="song-names">(.*?)</script>', html, re.S)
+    return json.loads(found.group(1)) if found else None
+
+
+def test_a_name_is_converted_by_the_script_it_is_written_in_itself():
+    # A title from wanted.txt may be in the other script than its sheet: each name is judged alone.
+    assert hanzi.names(["斑馬斑馬", "斑马斑马", "宋冬野", "la la"]) == {
+        "simplified": {"斑馬斑馬": "斑马斑马"}, "traditional": {"斑马斑马": "斑馬斑馬"}}
+
+
+def test_a_chinese_sheets_title_artist_and_page_title_follow_the_choice():
+    html = build_viewer(SHEET)
+    assert names_of(html) == {"simplified": {"斑馬斑馬": "斑马斑马", "斑馬斑馬 · 宋冬野": "斑马斑马 · 宋冬野"},
+                              "traditional": {}}
+    assert '<title data-zh="斑馬斑馬 · 宋冬野">斑馬斑馬 · 宋冬野</title>' in html
+    assert '<h1 data-zh="斑馬斑馬">斑馬斑馬</h1>' in html
+    assert '<span>宋冬野</span>' in html  # the same in either script: as written, unmarked
+    cho = "{title: 斑马}\n{artist: 伍佰}\n{comment: Verse}\n[C]我的頭髮\n"  # a Simplified title, a Traditional sheet
+    assert names_of(build_viewer(cho)) == {"simplified": {},
+                                           "traditional": {"斑马": "斑馬", "斑马 · 伍佰": "斑馬 · 伍佰"}}
+
+
+def test_names_are_converted_only_on_a_sheet_with_chinese_words():
+    # A Chinese title over words in no Chinese, or a Japanese sheet's kanji, stay as written: no table, no mark.
+    for cho in ("{title: 斑馬}\n{artist: 宋冬野}\n{comment: V}\n[C]la la\n",
+                "{title: 東京}\n{artist: 椎名林檎}\n{comment: V}\n[C]夢を見た\n"):
+        html = build_viewer(cho)
+        assert names_of(html) is None and ' data-zh="' not in html
+
+
+def test_a_songbook_converts_its_chinese_songs_names_in_its_contents_pagers_and_pages():
+    songs = [BookSong("斑馬斑馬", "宋冬野", cho=SHEET, id="aaaa"),
+             BookSong("東京", "椎名林檎", cho="{title: 東京}\n{artist: 椎名林檎}\n[C]夢を見た\n", id="bbbb"),
+             BookSong("头发", "伍佰", cho="{title: 头发}\n{artist: 伍佰}\n[C]我的头发\n", id="cccc")]
+    html = build_songbook("Campfire", songs)
+    assert names_of(html) == {"simplified": {"斑馬斑馬": "斑马斑马"}, "traditional": {"头发": "頭髮"}}
+    toc = re.search(r'<nav class="toc".*?</nav>', html, re.S).group(0)
+    assert '<span class="t" data-zh="斑馬斑馬">斑馬斑馬</span>' in toc and '<span class="t">東京</span>' in toc
+    assert '<span class="t" data-zh="头发">头发</span>' in toc
+    assert '<h2 class="title" id="title-1" data-zh="斑馬斑馬">斑馬斑馬</h2>' in html
+    assert '<span class="name" data-zh="头发">头发</span>' in html  # song 2's Next: 头发
+    assert '<span class="name">東京</span>' in html  # a Japanese song's, as written
+
+
+def test_a_harmonica_tabs_page_converts_its_songs_names_by_its_chord_sheet():
+    from caracole.viewer.harptab_page import build_harmonica_viewer
+
+    text = "Verse\n 4  -4  5\n斑馬 斑\n"
+    chinese = build_harmonica_viewer(text, title="斑馬斑馬", artist="宋冬野", tab_file="harmonica-1.txt", cho=SHEET)
+    assert names_of(chinese)["simplified"]["斑馬斑馬"] == "斑马斑马"
+    assert '<h1 data-zh="斑馬斑馬">斑馬斑馬</h1>' in chinese
+    alone = build_harmonica_viewer(text, title="斑馬斑馬", artist="宋冬野", tab_file="harmonica-1.txt")
+    assert names_of(alone) is None and ' data-zh="' not in alone  # no sheet to tell its language by
+
+
+# The names a page shows: its title (the tab's), its heading, its artist's, a songbook's contents and Next.
+NAMES = """(() => { const all = (s) => [...document.querySelectorAll(s)].filter((e) => e.getClientRects().length)
+  .map((e) => e.textContent.trim());
+  return {title: document.title, heads: all('h1, h2.title'), artists: all('p.artist span'),
+    contents: all('#contents .t'), next: all('a[rel=next] .name')}; })()"""
+
+
+@in_chromium
+def test_the_title_and_the_artist_follow_the_choice(tmp_path):
+    cho = SHEET.replace("{artist: 宋冬野}", "{artist: 張學友}")
+    with open_viewer(tmp_path, written(tmp_path, cho), **DESKTOP) as b:
+        first = b.js(NAMES)
+        choose(b, "#hanzi-t", "斑馬")
+        traditional = b.js(NAMES)
+    assert first["title"] == "斑马斑马 · 张学友" and first["heads"][0] == "斑马斑马" and first["artists"] == ["张学友"]
+    assert traditional["title"] == "斑馬斑馬 · 張學友" and traditional["heads"][0] == "斑馬斑馬"
+    assert traditional["artists"] == ["張學友"]
+
+
+@contextmanager
+def contents_of(tmp_path: Path, url: str):
+    """A songbook opened on its contents, where the viewer's script doesn't run (book.js alone)."""
+    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), **DESKTOP) as b:
+        b.open(url)
+        assert b.wait("document.documentElement.dataset.view === 'contents'")
+        yield b
+
+
+@in_chromium
+def test_a_songbooks_contents_pagers_and_headings_follow_the_choice(tmp_path):
+    songs = [BookSong("斑馬斑馬", "宋冬野", cho=SHEET, id="aaaa"),
+             BookSong("头发", "伍佰", cho="{title: 头发}\n{artist: 伍佰}\n{comment: V}\n[C]我的头发\n", id="cccc")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    contents = "document.documentElement?.dataset.view === 'contents'"
+    with contents_of(tmp_path, path.as_uri() + "#contents") as b:
+        listed = b.js(NAMES)
+        follow(b, "document.querySelector('#contents a[href=\"#song-1\"]').click()")
+        one = b.js(NAMES)
+        choose(b, "#hanzi-t", "斑馬")
+        chosen = b.js(NAMES)
+        follow(b, "document.querySelector('#song-1 a[href=\"#contents\"]').click()", contents)
+        again = b.js(NAMES)
+    assert listed["contents"] == ["斑马斑马", "头发"]  # Simplified at first
+    assert one["heads"][-1] == "斑马斑马" and one["next"][0] == "头发" and one["title"] == "斑马斑马 · Campfire"
+    assert chosen["heads"][-1] == "斑馬斑馬" and chosen["next"][0] == "頭髮" and chosen["title"] == "斑馬斑馬 · Campfire"
+    assert again["contents"] == ["斑馬斑馬", "頭髮"]
+
+
+@in_chromium
+def test_a_served_songbooks_contents_take_the_choice_from_the_address(tmp_path):
+    songs = [BookSong("斑马斑马", "宋冬野", cho=LONG, id="aaaa")]
+    page = "/_songbooks/Campfire/songbook.html"
+    html = build_songbook("Campfire", songs, pdf="songbook.pdf", pdf_traditional="songbook (Traditional).pdf")
+    with served({page: (html, songbook_csp)}) as site, \
+            contents_of(tmp_path, site + page + "#contents=&trad=1") as b:
+        listed = b.js(NAMES)
+        pdf = b.js("[...document.querySelectorAll('a.pdf')].map((a) => a.getAttribute('href'))")
+    assert listed["contents"] == ["斑馬斑馬"]
+    assert pdf == ["songbook%20%28Traditional%29.pdf"] * 2  # its PDF in them too: the contents' link, the foot's
+
+
+@in_chromium
+def test_a_harmonica_tabs_page_takes_the_stored_choice_for_its_heading(tmp_path):
+    from caracole.viewer.harptab_page import build_harmonica_viewer
+
+    sheet = written(tmp_path, SHEET)
+    page = Path(sheet.removeprefix("file://").replace("%20", " ")).with_name("harmonica-1.html")
+    page.write_text(build_harmonica_viewer("Verse\n 4  -4  5\nla la la\n", title="斑馬斑馬", artist="張學友",
+                                           tab_file="harmonica-1.txt", cho=SHEET), encoding="utf-8")
+    with open_viewer(tmp_path, page.as_uri(), **DESKTOP) as b:
+        first = b.js(NAMES)
+        reopen(b, sheet)
+        choose(b, "#hanzi-t", "斑馬")
+        reopen(b, page.as_uri())
+        stored = b.js(NAMES)
+    with open_viewer(tmp_path, page.as_uri() + "#trad=1", **DESKTOP) as b:
+        addressed = b.js(NAMES)
+    assert first["heads"] == ["斑马斑马"] and first["artists"] == ["张学友"]
+    assert first["title"] == "斑马斑马 · harmonica tab"
+    assert stored["heads"] == ["斑馬斑馬"] and stored["artists"] == ["張學友"]
+    assert addressed["heads"] == ["斑馬斑馬"]
+
+
+# --- the PDFs it links and exports -------------------------------------------------------------------------------
+
+LINKS = """(() => ({pdf: [...document.querySelectorAll('a.pdf')].map((a) => a.getAttribute('href')),
+  cmd: document.getElementById('export-cmd') ? document.getElementById('export-cmd').textContent : null,
+  export: document.getElementById('export') ? document.getElementById('export').getAttribute('href') : null,
+  words: document.querySelector('#export-row .export-v') ? document.querySelector('#export-row .export-v').textContent
+    : null}))()"""
+
+
+@in_chromium
+def test_the_pdf_link_and_the_export_follow_the_choice(tmp_path):
+    page = tmp_path / "宋冬野" / "斑馬斑馬" / "sheet.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(build_viewer(SHEET, pdf="sheet.pdf", pdf_traditional="sheet (Traditional).pdf"), encoding="utf-8")
+    with open_viewer(tmp_path, page.as_uri(), **DESKTOP) as b:
+        first = b.js(LINKS)
+        choose(b, "#hanzi-t", "斑馬")
+        chosen = b.js(LINKS)
+    assert first["pdf"] == ["sheet.pdf"] and "trad" not in first["cmd"]
+    assert chosen["pdf"] == ["sheet%20%28Traditional%29.pdf"]
+    assert "trad=1" in chosen["cmd"] and chosen["words"].endswith(", Traditional")  # an export in them
+
+
+@in_chromium
+def test_served_export_pdf_is_asked_for_the_characters_shown(tmp_path):
+    sheet = "/Artist/Title/sheet.html"
+    with served({sheet: (build_viewer(SHEET), viewer_csp)}) as site, \
+            open_viewer(tmp_path, site + sheet + "#trad=1", **DESKTOP) as b:
+        seen = b.js(LINKS)
+    assert seen["export"].startswith("/export.pdf?sheet=") and seen["export"].endswith("&trad=1")
+
+
+@in_chromium
+def test_a_sheet_in_no_chinese_exports_with_no_word_of_the_characters(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, "{title: T}\n{artist: A}\n[C]la la\n") + "#trad=1", **DESKTOP) as b:
+        seen = b.js(LINKS)
+    assert "trad" not in seen["cmd"] and not seen["words"].endswith("Traditional")

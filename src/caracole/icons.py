@@ -50,7 +50,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from caracole.library import open_regular, write_atomic
-from caracole.songs import AUTO_SHEET, SHEET_FILE_NAMES, SHEET_OUTPUTS, is_export
+from caracole.songs import AUTO_SHEET, SHEET_FILE_NAMES, SHEET_OUTPUTS, TRADITIONAL_PDFS, is_export
 
 if TYPE_CHECKING:
     from caracole.http import Client
@@ -112,7 +112,7 @@ SOURCES: Mapping[str, Source] = {
 
 
 # Files caracole makes from another it kept, which come from where that one came from.
-_MADE_FROM = {output: sheet for sheet, outputs in SHEET_OUTPUTS.items() for output in outputs}
+_MADE_FROM = {output: sheet for sheet, outputs in SHEET_OUTPUTS.items() for output in (*outputs, TRADITIONAL_PDFS[sheet])}
 _LYRICS_FILES = ("lyrics.txt", "lyrics.lrc")
 SHEETS = SHEET_FILE_NAMES  # a song's sheet, the human one first
 

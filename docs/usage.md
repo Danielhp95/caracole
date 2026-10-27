@@ -2032,7 +2032,8 @@ the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ 
 in use`, `LaCuerda`, `from the recording`); its versions, a chip a source with
 how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
 one source with one version, `From` it; and its formats, downloads: the sheet's
-PDF, Text and ChordPro, then its PDF exports, each by its version (`PDF · G
+PDF (and a Chinese sheet's in Traditional characters, `PDF, Traditional`), Text
+and ChordPro, then its PDF exports, each by its version (`PDF · G
 Dorian, capo 0`: see `caracole render --version` and Export PDF of this
 version); a Guitar Pro file's, and the text tab; the lyrics' Text and Timed
 (.lrc); each score's format. A tile with more than one version is drawn as a
@@ -2672,7 +2673,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Traditional characters shows in Simplified ones until you choose Traditional,
   and a sheet in Simplified ones shows in Traditional ones (Taiwan's: 為, 裡, 著)
   once you do: its lines, the notes before the song and the sections' headings,
-  never the title. Each text is converted when the page is made, word by word
+  and the song's title and its artist's name, each of those judged in its own
+  script (a title from wanted.txt may be in the other one), in the browser's tab
+  too. A songbook's contents and its Next and Previous follow it for each of its
+  Chinese songs, and so does the heading of a song's harmonica tab's page, which
+  has no row of its own: it reads the choice the browser keeps, or `trad=1` in
+  its address. A Chinese title over lyrics in no Chinese (or a Japanese sheet's
+  kanji) stays as written. Each text is converted when the page is made, word by word
   (by OpenCC, as one Simplified character may be two Traditional ones: 头发 is
   頭髮, 发现 發現; 睡著 is 睡着, 著名 stays), a character for a character, so each
   chord stays over its character and each reading of the Pinyin over its own.
@@ -2680,8 +2687,19 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   script it shows as written. OpenCC is not always right (我是只会 comes out as
   我是隻會 in Traditional), so a sheet UG has in either script reads best in its
   own. Kept as Pinyin is: once for every sheet and songbook, and in the address
-  (`trad=1`) while it is Traditional. The PDFs and the library page show the
-  sheet as written.
+  (`trad=1`) while it is Traditional. The library page shows a Chinese song's
+  title and artist in the characters the browser keeps from the viewer
+  (Simplified where it keeps none: a page `caracole serve` serves keeps
+  nothing, as its viewers are sandboxed); searching finds either. The PDFs follow it too: a Chinese
+  sheet's `sheet.pdf` is in Simplified characters (a sheet in Traditional ones
+  is converted, word by word, as the viewer converts it, at the next render: its
+  record names the characters it is in, and its text printed changes), and
+  `sheet (Traditional).pdf` is beside it (`sheet (auto, Traditional).pdf` for an
+  auto sheet), as `songbook (Traditional).pdf` is beside a songbook's PDF when
+  one of its songs is Chinese. A sheet or a songbook in no Chinese gets no
+  second file. The viewer's PDF link opens the one in the characters on
+  screen, and Export PDF makes the export in them (`trad=1` in its version; its
+  name says ", Traditional"). The sheet's `.cho` stays as written.
 - **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
   each Chinese character's reading over it, in pinyin with its tone marks
   (zhǐ), smaller and muted, between its chord and it; off, as the viewer starts,
@@ -3738,7 +3756,9 @@ Who can reach it, below).
   in a private folder in the cache and written nowhere else, so nothing is
   added to the library, the song's PDF exports or the requests, and it takes
   no lock. A PDF that can't be made (chordpro failing, a CJK font needed and
-  not set) is refused with the reason (500). With `&mine=1` (Download and
+  not set) is refused with the reason (500). A Chinese sheet's PDF is in the
+  characters the viewer shows: Simplified, or Traditional with `trad=1` in its
+  address, named so (`… (A Major, capo 0, Traditional).pdf`). With `&mine=1` (Download and
   make it mine) it also queues `caracole render --song … --version …
   --mine`, which makes that version your version, as a request of its own
   ("Your version now"). The auto sheet's viewer kept beside a human sheet and
@@ -4510,6 +4530,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   _songbooks/
     Campfire/
       songbook.pdf          every sheet of the songbook, after a title page and the contents
+      songbook (Traditional).pdf  the same in Traditional characters, when a song is Chinese
       songbook.html         the songbook for the phone, in the sheet viewer
       songbook.cho          every sheet in ChordPro, for a songbook app
   _inbox/                   Guitar Pro and MuseScore downloads waiting to be filed
@@ -4517,7 +4538,8 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
       sheet.json            the same version as the source gave it
-      sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
+      sheet.cho  sheet.pdf  ChordPro, and a PDF in your key (Chinese in Simplified characters)
+      sheet (Traditional).pdf  a Chinese sheet's PDF in Traditional characters
       sheet.html            the sheet viewer, for the phone
       version-39144.txt     another Ultimate Guitar version caracole scored for the sheet,
       version-39144.json    kept beside it (by its tab id), the runners-up: its text, the
