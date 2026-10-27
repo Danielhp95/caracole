@@ -1517,9 +1517,9 @@
   // until it comes. Enter moves the focus to the first result: it never asks for a song, only a result's Get it
   // does. LaCuerda's own search, which finds the songs of artists whose page caracole hasn't read, is one request:
   // sent by itself once the query has settled, when /api/search says so (``lacuerda_search``), at once by Enter
-  // when its gate sends one, or offered as a button, a line under the results (rows.js lacuerdaSearcher, lcBox); its
-  // rows come in a new answer once it is over. On the file, which can ask nothing, Enter shows the line that
-  // searches the sites.
+  // when its gate sends one, or offered as a button, a line under the results (rows.js lacuerdaSearcher, lcBox), or by
+  // Ask LaCuerda's, the one LaCuerda button, where the results offer a name's page too; its rows come in a new answer
+  // once it is over. On the file, which can ask nothing, Enter shows the line that searches the sites.
   const say = (text) => {
     if (barStatus.textContent === text) return;
     barStatus.textContent = text;
@@ -1981,12 +1981,18 @@
   // Under the groups, what the search says beside them (rows.js): for a query that found nothing (``nothing``), one card,
   // its request by name first, then Ask LaCuerda for a name under a letter its listings don't reach yet, where caracole
   // looked, and why it may not see an artist; under results, where it looked in one muted line, when a site wasn't
-  // searched whole. Each made once an answer, Ask LaCuerda's state kept from one draw to the next.
+  // searched whole. Each made once an answer, Ask LaCuerda's state kept from one draw to the next. Ask LaCuerda is the
+  // one LaCuerda button: it sends LaCuerda's search while its gate lets one go by hand (the searcher's ``ask``), else
+  // reads the name's page.
   const notesOf = (model, nothing) => {
     const data = Object.assign({}, answer.data, { lacuerda_unlisted: model.unlisted });
+    const q = answer.q;
     const does = {
       request: requestByName,
-      ask: (go, box) => readThenShow({ name: String(model.unlisted.name || "") }, go, box, readByName(model)),
+      ask: (go, box) => {
+        if (searcher && searcher.ask(q, go)) return;
+        readThenShow({ name: String(model.unlisted.name || "") }, go, box, readByName(model));
+      },
     };
     if (nothing) {
       if (!model.card) model.card = nothingFound(data, answer.q, does);
@@ -2092,7 +2098,8 @@
     }
     drawGroups();
     if (going.size) settleSpots(true);
-    const lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q) : null;  // sent, if Enter came first
+    // Sent, if Enter came first; with no button of its own beside Ask LaCuerda's, which sends it then.
+    const lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q, Boolean(answer.model.unlisted)) : null;
     lcBox.replaceChildren(...(lcLine ? [lcLine] : []));
     if (data.short) {
       say("Type three letters or more to search the sites");

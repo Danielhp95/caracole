@@ -109,7 +109,12 @@ Rules a change there keeps (the Invariants below are the others):
   failed within the hour, or three did) offer it by hand, a line under the results (rows.js
   `lacuerdaSearcher`; its rows come with the search asked again once the job is over, the focus Enter
   moved to a result staying on it, an artist's songs Enter opened on the lookup page staying open, and
-  a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). A test that drives
+  a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). One
+  LaCuerda button on the screen at a time, worded Ask LaCuerda: the search's own, "Ask LaCuerda for “…”
+  (1 request)", only where the results offer no name's page; where they do (`lacuerda_unlisted`), Ask
+  LaCuerda's on the card or in `lookedLine` stands for both, sending the search while its gate says
+  `auto` or `button` (the searcher's `ask`, which the pages' `does.ask` tries first) and reading the
+  name's page else, the search's line then its words alone. A test that drives
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
   does.
   A row for one instrument says which, a badge as a source has its mark (rows.js `instrumentBadges`: Ukulele for

@@ -1167,7 +1167,8 @@ and cache.
   try again later.`), all of which exit 0, nothing changed. It can't go with
   `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
   runs it, and so does Ask LaCuerda (1 request) for a name its listings
-  haven't reached yet.
+  haven't reached yet, once LaCuerda's search for the query can't go by hand
+  (that button sends the search first: see the library page below).
 
   **`caracole lacuerda --search QUERY`** asks LaCuerda's own search for the
   songs of QUERY now, one request at the lookup pace, and puts every song it
@@ -1196,7 +1197,7 @@ and cache.
   isn't sent for an hour after its query's search failed, nor at all while three
   searches failed in the last hour (`Not searched: LaCuerda's search for “…”
   failed less than an hour ago (…), so the page won't send it by itself before
-  …`); by hand (the page's button, or Enter in its search box), it asks.
+  …`); by hand (the page's Ask LaCuerda, or Enter in its search box), it asks.
   `--progress` prints a JSON line per event,
   for caracole serve's request page. It goes with neither `--index` nor
   `--artist` (exit 2).
@@ -2920,7 +2921,8 @@ Who can reach it, below).
   artist by, while the nightly run hasn't read the listing of its letter whole,
   the results offer Ask LaCuerda for “estopa” (1 request) under the groups
   (the button's tooltip says the letter its listings don't reach yet), which
-  queues `caracole lacuerda --artist estopa` (a request for
+  sends LaCuerda's own search for the query while it may go by hand (below), and
+  otherwise queues `caracole lacuerda --artist estopa` (a request for
   each spelling of the name tried, usually one), then lists their songs in a
   group of their own, first, or says what LaCuerda answered: `Not found:
   LaCuerda has no artist page for estopa.`, or, for a cooldown, a block, a
@@ -2990,7 +2992,8 @@ Who can reach it, below).
   with no request. Then the card, headed "Not it?" under them, else "No song or artist
   matches “lynrd”": Request “lynrd” by name, which opens the request form
   below, filled in from the query; Ask LaCuerda (1 request), only while
-  LaCuerda's listings don't reach the name's letter; the chips of where
+  LaCuerda's listings don't reach the name's letter (LaCuerda's search first,
+  as under results); the chips of where
   caracole looked; and "Why can't caracole find it?", folded: Ultimate
   Guitar's sitemaps name some artists only by a number (Joaquín Sabina, Maná,
   宋冬野), so caracole can't see their tabs, with the `[artist_url]` lines to
@@ -3022,14 +3025,18 @@ Who can reach it, below).
   go: your library or LaCuerda's index already answers the query, it was asked
   in the last 30 days, the hour's lookups are spent, or LaCuerda cools down.
   Nor does it after a search failed lately: only the button below asks then.
-  Once the hour's 20 are spent, the line offers **Search
+  Once the hour's 20 are spent, the line offers **Ask
   LaCuerda for “…” (1 request)**, which asks by hand, within the hour's lookups;
   when those are spent, or LaCuerda cools down, it says LaCuerda's search waits.
   A search that failed (LaCuerda erred, or answered a page caracole can't read)
   isn't sent by itself again for an hour, and none is while three failed in the
   last hour: the line says so, with the button. A search refused or failed has
   the button under what it said. A query is sent once a page, and once in 30
-  days. The Look up page does the same.
+  days. The Look up page does the same. **One LaCuerda button at a time**:
+  where the results offer Ask LaCuerda for a name its listings don't reach yet
+  (above), the line has no button of its own, and that one sends the search
+  while the search may go by hand (before the query settles too, in its place),
+  then, once it is asked, or after it failed lately, reads the name's page.
   **Enter never asks for a song**, however clear the best result (LaCuerda's
   search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes

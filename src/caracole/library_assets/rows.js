@@ -639,14 +639,20 @@ const caracoleRows = (icons, does) => {
   // (``place(line)``). Enter (``enter(query, shown)``) sends it at once, by hand as the button does, when the gate
   // says "auto" or "button" (not "failed": its button asks again): for the answer on the screen (``shown``), its
   // line given back, else with the query's next answer, which ``show`` then gives; the settle's wait for it ends.
-  // ``leave()``, the results left before that answer, takes such an Enter back. Never twice for one query in a page. State "button", the hour's share of such searches spent: "Search
-  // LaCuerda for “…” (1 request)", by hand; state "failed", its search failed lately (or three did): the gate's
-  // ``why``, and the button. While it runs the line says so ("Searching LaCuerda for “…”…"), then what LaCuerda
-  // answered, or why the search was refused, and ``done(query)`` asks the page's search again, whose answer the
-  // job's end left fresh: that query's line stays under its results, with the button when the gate offers it now
-  // (a search refused or failed: the words name it). ``show(gate, query)`` gives the line to put under them, or
-  // null.
+  // ``leave()``, the results left before that answer, takes such an Enter back. Never twice for one query in a page.
+  // State "button", the hour's share of such searches spent: "Ask LaCuerda for “…” (1 request)", by hand; state
+  // "failed", its search failed lately (or three did): the gate's ``why``, and the button. While it runs the line
+  // says so ("Searching LaCuerda for “…”…"), then what LaCuerda answered, or why the search was refused, and
+  // ``done(query)`` asks the page's search again, whose answer the job's end left fresh: that query's line stays
+  // under its results, with the button when the gate offers it now (a search refused or failed: the words name it).
+  // ``show(gate, query, asks)`` gives the line to put under them, or null. One LaCuerda button at a time: where the
+  // page shows Ask LaCuerda for a name its listings don't reach yet (``asks``), the line has no button of its own, and
+  // that one's press asks ``ask(query, go)`` first, which sends the search by hand when the gate lets one go
+  // (``searchable``) and none is on its way, else leaves the press to the name's page.
   const SETTLE = 1500;
+  // Whether a gate lets LaCuerda's search go by hand now: "auto" (the page would send it by itself) or "button".
+  const searchable = (gate) => Boolean(gate && typeof gate === "object" && (gate.state === "auto" ||
+    gate.state === "button"));
   const lacuerdaSearcher = (csrf, current, done, place) => {
     const lines = new Map();  // the line of each query's key, the same node from one draw to the next
     const keys = new Map();  // each query's key, as its first gate gave it: a later answer may have none
@@ -672,6 +678,7 @@ const caracoleRows = (icons, does) => {
       line.replaceChildren(words);
       searchLaCuerda(csrf, query, byHand, (text) => { words.textContent = text; }).then((asked) => {
         running.delete(key);
+        gates.set(query, null);  // what it lets now, the answer done() brings says
         if (asked.error) {
           words.textContent = asked.error;
         } else {
@@ -684,23 +691,32 @@ const caracoleRows = (icons, does) => {
       });
       return line;
     };
+    // A line as the page shows it: without a button of its own while Ask LaCuerda's is on the screen (``asks``); none
+    // when it says nothing.
+    const drawn = (line, asks) => {
+      const go = line.querySelector(".lacuerda-search-go");
+      if (asks && go) go.remove();
+      return line.firstChild ? line : null;
+    };
     // The button that sends it by hand, under what the line says: the gate's ``why``, or what the search this page
-    // sent said.
-    const offer = (gate, query) => {
+    // sent said; while Ask LaCuerda's is on the screen (``asks``), the words alone.
+    const offer = (gate, query, asks) => {
       const key = String(gate.key);
       const line = lineOf(key);
-      if (line.querySelector(".lacuerda-search-go")) return line;
-      const go = button("Search LaCuerda for “" + query + "” (1 request)", "small lacuerda-search-go", () => {
-        go.disabled = true;
-        send(gate, query, true);
-      }, "Search LaCuerda for “" + query + "”: one request");
-      go.title = "LaCuerda's own search, one request at a lookup's pace: its songs go into caracole's copy of its index.";
-      if (!sent.has(key)) {
+      let go = line.querySelector(".lacuerda-search-go");
+      if (!go && !sent.has(key)) {
         const why = gate.state === "failed" && typeof gate.why === "string" ? gate.why : "";
         line.replaceChildren(...(why ? [el("p", "hint lacuerda-search-said", why)] : []));
       }
-      line.appendChild(go);
-      return line;
+      if (!go && !asks) {
+        go = button("Ask LaCuerda for “" + query + "” (1 request)", "small lacuerda-search-go", () => {
+          go.disabled = true;
+          send(gate, query, true);
+        }, "Ask LaCuerda for “" + query + "”: one request");
+        go.title = "LaCuerda's own search, one request at a lookup's pace: its songs go into caracole's copy of its index.";
+        line.appendChild(go);
+      }
+      return drawn(line, asks);
     };
     const fire = () => {
       timer = 0;
@@ -718,17 +734,20 @@ const caracoleRows = (icons, does) => {
       pending = null;
       place(send(wait.gate, wait.query, false));
     };
+    // A search by hand of the key's query: the settle's wait for it ends.
+    const settled = (key) => {
+      if (!pending || pending.key !== key) return;
+      clearTimeout(timer);
+      timer = 0;
+      pending = null;
+    };
     // Enter's search, by hand, when the gate sends one (and none went for the query yet): the settle's wait ends.
     const entering = (g, query) => {
-      if (!g || (g.state !== "auto" && g.state !== "button") || sent.has(String(g.key))) return null;
-      if (pending && pending.key === String(g.key)) {
-        clearTimeout(timer);
-        timer = 0;
-        pending = null;
-      }
+      if (!searchable(g) || sent.has(String(g.key))) return null;
+      settled(String(g.key));
       return send(g, query, true);
     };
-    const show = (gate, query) => {
+    const show = (gate, query, asks) => {
       const g = gate && typeof gate === "object" && typeof gate.key === "string" && gate.key ? gate : null;
       if (!firstShown.has(query)) firstShown.set(query, performance.now());
       if (g && !keys.has(query)) keys.set(query, String(g.key));
@@ -742,10 +761,14 @@ const caracoleRows = (icons, does) => {
       const now = wanted ? entering(g, query) : null;  // Enter came before the answer
       if (now) return now;
       // Over: what it said, and the button when the gate still offers a search (refused, failed or cancelled).
-      if (key && sent.has(key)) return g && (byHand || g.state === "auto") ? offer(g, query) : lineOf(key);
-      if (key && lines.has(key) && lines.get(key).firstChild) return lineOf(key);  // offered already
+      if (key && sent.has(key)) {
+        return g && (byHand || g.state === "auto") ? offer(g, query, asks) : drawn(lineOf(key), asks);
+      }
+      if (key && !byHand && lines.has(key) && lines.get(key).firstChild) {  // offered already
+        return drawn(lineOf(key), asks);
+      }
       if (!g) return null;
-      if (byHand) return offer(g, query);
+      if (byHand) return offer(g, query, asks);
       if (g.state === "spent") {  // said afresh each time: in an hour, the same query may be sent
         const line = el("div", "lacuerda-search");
         line.appendChild(el("p", "hint lacuerda-search-said", "LaCuerda's search waits: it cools down after a " +
@@ -774,7 +797,18 @@ const caracoleRows = (icons, does) => {
     const leave = () => {
       entered = null;
     };
-    return { show, typed, enter, leave };
+    // Ask LaCuerda's button pressed (``go``), where it stands for this line's too: the search of ``query`` now, by
+    // hand, when its newest gate lets one go and none is on its way (its line put under the results, ``go``
+    // disabled: true); else false, and the button reads the name's page.
+    const ask = (query, go) => {
+      const g = gates.get(query);
+      if (!searchable(g) || running.has(String(g.key))) return false;
+      settled(String(g.key));
+      if (go) go.disabled = true;
+      place(send(g, query, true));
+      return true;
+    };
+    return { show, typed, enter, leave, ask };
   };
   // A read that left no songs to list: what LaCuerda answered, as its request's line says it ("Not read: LaCuerda is
   // cooling down…", "Not found: …"), and its output on the requests page.
@@ -864,22 +898,30 @@ const caracoleRows = (icons, does) => {
     return fold;
   };
   // The read of a name LaCuerda's listings don't reach yet (``lacuerda_unlisted``: { name, letter }), one request:
-  // ``ask(button, box)``; ``named``, the button says the name (beside results, which may name others).
-  const askLaCuerda = (unlisted, ask, box, named) => {
+  // ``ask(button, box)``; ``named``, the button says the name (beside results, which may name others). The one
+  // LaCuerda button on the screen: the page's ``ask`` sends LaCuerda's search first, while its gate lets one go
+  // (lacuerdaSearcher's ``ask``), as the tooltip says when the answer's gate does (``search``, the query).
+  const askLaCuerda = (unlisted, ask, box, named, search) => {
     const u = unlisted && typeof unlisted === "object" ? unlisted : null;
     if (!u) return null;
     const name = String(u.name || "");
+    const letter = String(u.letter || "");
     const go = button(named ? "Ask LaCuerda for “" + name + "” (1 request)" : "Ask LaCuerda (1 request)",
       "small ask-lacuerda", (e) => ask(e.currentTarget, box),
       "Ask LaCuerda for “" + name + "”: one request");
-    go.title = "LaCuerda's list doesn't reach " + String(u.letter || "") + " yet: caracole reads its page for “" +
-      name + "”, one request at a lookup's pace.";
+    go.title = search
+      ? "LaCuerda's own search for “" + search + "”, one request at a lookup's pace: its songs go into caracole's " +
+        "copy of its index. Once it is asked, caracole reads LaCuerda's page for “" + name + "” instead, as its " +
+        "list doesn't reach " + letter + " yet."
+      : "LaCuerda's list doesn't reach " + letter + " yet: caracole reads its page for “" + name + "”, one request " +
+        "at a lookup's pace.";
     return go;
   };
   // A search that found nothing (``data``, for ``query``): one card, "Not it?" under the artists it may have meant
   // (didYouMean, drawn above it), else "No song or artist matches “query”": its actions, the request by name first
   // (``does.request``, labelled ``does.requestLabel``) and, while LaCuerda's listings don't reach the name, Ask
-  // LaCuerda (``does.ask(button, card)``); where caracole looked; and why it may not see an artist, folded.
+  // LaCuerda (``does.ask(button, card)``, LaCuerda's search first while its gate, ``data.lacuerda_search``, lets one
+  // go); where caracole looked; and why it may not see an artist, folded.
   const nothingFound = (data, query, does) => {
     const d = data && typeof data === "object" ? data : {};
     const meant = listOf(d.suggest).some((s) => s && typeof s === "object" && s.artist);
@@ -891,7 +933,8 @@ const caracoleRows = (icons, does) => {
     const actions = el("div", "nothing-actions");
     actions.appendChild(button(String(does.requestLabel || "Request “" + query + "” by name"), "small primary",
       () => does.request()));
-    const ask = d.lacuerda_unlisted && does.ask ? askLaCuerda(d.lacuerda_unlisted, does.ask, card) : null;
+    const ask = d.lacuerda_unlisted && does.ask
+      ? askLaCuerda(d.lacuerda_unlisted, does.ask, card, false, searchable(d.lacuerda_search) ? query : null) : null;
     if (ask) actions.appendChild(ask);
     card.append(head, actions, lookedChips(d.looked));
     const why = whyUnseen(d.unseen, query);
@@ -907,7 +950,10 @@ const caracoleRows = (icons, does) => {
     if (!ask && !d.unseen && looked.every((s) => s.state === "done")) return null;
     const line = el("div", "looked-line");
     line.appendChild(lookedChips(looked));
-    if (ask) line.appendChild(askLaCuerda(d.lacuerda_unlisted, does.ask, line, true));
+    if (ask) {
+      line.appendChild(askLaCuerda(d.lacuerda_unlisted, does.ask, line, true,
+        searchable(d.lacuerda_search) ? query : null));
+    }
     const why = whyUnseen(d.unseen, query);
     if (why) line.appendChild(why);
     return line;
