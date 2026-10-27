@@ -1292,7 +1292,8 @@ and cache.
   `The budget of 100 requests is spent: caracole harptabs --index reads the
   next 10329 artists, about 43 h of requests at this pace.`; or `harptabs.com's
   artist index is up to date: …` when nothing was due. A page that answers 404
-  keeps no tab (`1 gone`); one that won't parse, or any other error, leaves what
+  keeps no tab (`1 gone`); one that won't parse (one that says the artist has
+  tabs and lists none caracole can read among them), or any other error, leaves what
   the index held of that artist, and is asked for again next time. It holds
   caracole's lock while it runs, as the nightly run does, letting a lookup go
   first in its pauses: a nightly run waits for it, so give it a budget that

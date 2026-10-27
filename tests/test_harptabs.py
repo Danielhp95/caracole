@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 import pytest
-from helpers.harptabs_site import BASE, fixture, tab_page
+from helpers.harptabs_site import BASE, artist_page, fixture, tab_page
 
 from caracole.harptabs import (
     HarpTab,
@@ -198,6 +198,17 @@ def test_an_artist_with_no_tab_is_a_page_with_none():
     empty = head.replace("41 tabs", "0 tabs") + "</div></main></body></html>"
     page = parse_artist_page(empty)
     assert (page.name, page.tabs, page.listed) == ("?", 0, ())
+
+
+def test_an_artist_page_that_says_they_have_tabs_and_lists_none_it_can_read_is_an_error_never_no_tabs():
+    # Its cards changed, say: read as no tab, each page read again would empty the artist's tabs from the index.
+    from caracole.harptabs import parse_artist_page
+
+    with pytest.raises(HarpTabsParseError):
+        parse_artist_page(artist_page("billy joel", [], count=98), f"{BASE}/artist/1178/billy-joel")
+    unreadable = fixture("artist_1178_billy-joel.html").replace('href="/tab/', 'href="/tabs/')
+    with pytest.raises(HarpTabsParseError):
+        parse_artist_page(unreadable, f"{BASE}/artist/1178/billy-joel")
 
 
 def test_a_card_that_links_to_no_tab_page_is_left_out():

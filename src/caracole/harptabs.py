@@ -316,7 +316,8 @@ def _card(card: LexborNode) -> ListedTab | None:
 
 def parse_artist_page(html: str | bytes, url: str | None = None) -> ArtistPage:
     """An artist page's name, the tabs it says they have and those it lists; ``HarpTabsParseError`` for a page
-    without its header (the name in its ``<h1>``)."""
+    without its header (the name in its ``<h1>``), or one that says they have tabs and lists none caracole can
+    read (its cards changed, say: never an artist without tabs)."""
     if isinstance(html, bytes):
         html = html.decode("utf-8", errors="replace")
     tree = LexborHTMLParser(html)
@@ -326,4 +327,6 @@ def parse_artist_page(html: str | bytes, url: str | None = None) -> ArtistPage:
     listed = tuple(tab for card in tree.css("main div.group") if (tab := _card(card)) is not None)
     said = _TABS_SAID.search(_text(tree.css_first("main header p")))
     tabs = int(said.group(1).replace(",", "")) if said is not None else len(listed)
+    if tabs and not listed:  # its cards changed, say: no tab read is no artist without tabs
+        raise HarpTabsParseError(f"the page says {tabs} tabs and lists none caracole can read", url=url)
     return ArtistPage(name, max(tabs, len(listed)), tuple(dict((t.tab_id, t) for t in listed).values()))
