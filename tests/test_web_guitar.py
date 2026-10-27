@@ -267,7 +267,7 @@ def test_the_library_page_served_says_where_the_alphatab_is(app, conn, cfg):
 def test_each_viewer_of_a_song_with_a_guitar_pro_file_names_it(conn, cfg):
     song = rendered_song(conn, cfg)
     sheet = song_dir(cfg.library_dir, song) / "sheet.html"
-    assert 'id="guitar-row"' not in sheet.read_text() and '"guitar"' not in sheet.read_text()
+    assert 'id="guitar-row"' not in sheet.read_text() and '"guitar":' not in sheet.read_text()  # no such data key
     keep_guitar(conn, cfg, song, SYNTHETIC.read_bytes(), name="guitar-1.gpx")
     keep_guitar(conn, cfg, song, b"ptab", name="guitar-2.ptb", tab="13")
     from helpers.rendered import fake_chordpro

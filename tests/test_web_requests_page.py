@@ -14,7 +14,7 @@ from helpers import browser
 from helpers.browser import Browser, in_chromium
 from helpers.targets import UNFOLD, noted, noting, small_targets
 
-from caracole.get import STAGES, progress_line
+from caracole.get import MATCH_NOT_FOUND, SHEET_FROM, STAGES, progress_line
 from caracole.library import song_dir
 from caracole.songs import update_song
 from caracole.web.app import WebApp
@@ -63,9 +63,9 @@ def lookup(job_id: int, display: str, said: dict[str, tuple[str, str]], *, state
                finished_at=finished, stages=[Stage(name, label, *every[name]) for name, label in STAGES])
 
 
-def mockup() -> tuple[list[Job], dict, dict]:
+def mockup() -> tuple[list[Job], dict, dict, dict]:
     """The mockup's requests: Muse - Hysteria running, one queued, two not found, one ready whose lyrics wait,
-    a songbook deleted. Newest first, with their lines and outcomes, as jobs_routes.py gives them."""
+    a songbook deleted. Newest first, with their lines, outcomes and songs' facts, as jobs_routes.py gives them."""
     running = lookup(6, "Muse - Hysteria", {"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
                                             "pdf": ("running", "")}, state="running")
     running.started_at = NOW - timedelta(seconds=12)
@@ -84,18 +84,30 @@ def mockup() -> tuple[list[Job], dict, dict]:
     # Both Horse The Band songs are matched, and Ultimate Guitar was asked: it has no chords for them.
     facts = {5: SongFacts(checked_now=True, asked_ug=True,
                           elsewhere=("gtptabs", "https://gtptabs.com/tabs/h/horse-the-band/new-york-city.html")),
-             4: SongFacts(checked_now=True, asked_ug=True), 3: SongFacts(sheet="Radiohead/Creep/sheet.html")}
+             4: SongFacts(checked_now=True, asked_ug=True), 3: SongFacts(sheet="Radiohead/Creep/sheet.html"),
+             6: SongFacts(sheet="Muse/Hysteria/sheet.html", sheet_from="UG")}  # its sheet, from Ultimate Guitar
     songs = {5: 15, 4: 14, 3: 13}
     jobs = [queued, running, nyc, pizza, creep, book]
     lines = {job.id: job_line(job, facts.get(job.id), ahead=1 if job is queued else 0) for job in jobs}
     outcomes = {job.id: outcome(job, lines[job.id], facts.get(job.id), song_id=songs.get(job.id))
                 for job in jobs if not job.active}
-    return jobs, lines, outcomes
+    return jobs, lines, outcomes, facts
 
 
 def mockup_page(*, refresh: bool = False) -> str:
-    jobs, lines, outcomes = mockup()
-    return jobs_page(jobs, lines, outcomes=outcomes, csrf="tok", now=NOW, refresh=refresh)
+    jobs, lines, outcomes, facts = mockup()
+    return jobs_page(jobs, lines, outcomes=outcomes, facts=facts, csrf="tok", now=NOW, refresh=refresh)
+
+
+# A step of the running card: its state, whether it is the current one, its mark, its name and its site.
+CHIP = re.compile(r'<li class="step-chip (\w+)"( aria-current="step")?>(?:<span aria-hidden="true">([^<]*)</span>)?'
+                  r'([^<]+)(?:<b>([^<]*)</b>)?(?:<span class="visually-hidden">[^<]*</span>)?</li>')
+
+
+def chips(card: str) -> list[tuple[str, str, bool]]:
+    """The running card's steps: each one's state, its words as shown (its mark, its name, its site), and whether
+    it is the current one."""
+    return [(state, mark + name + source, bool(current)) for state, current, mark, name, source in CHIP.findall(card)]
 
 
 # --- now: the running request and those queued ---------------------------------------------------------------
@@ -108,12 +120,22 @@ def test_the_running_lookup_is_a_card_with_its_stages_as_steps():
     card = dict(JOB_ITEM.findall(now))["6"]
     assert '<span class="song">Muse - Hysteria</span>' in card and "started 12 s ago" in card
     assert '<span class="says running">Rendering the sheet…</span>' in card
-    chips = re.findall(r'<li class="chip (\w+)"( aria-current="step")?><span aria-hidden="true">([^<]*)</span>'
-                       r"([^<]+)<span", card)
-    assert [(state, mark + name, bool(current)) for state, current, mark, name in chips] == [
-        ("done", "✓ Song", False), ("done", "✓ Match", False), ("done", "✓ Sheet", False),
+    assert '<ol class="step-chips" aria-label="Steps">' in card
+    assert chips(card) == [
+        ("done", "✓ Song", False), ("done", "✓ Match UG", False), ("done", "✓ Sheet UG", False),
         ("running", "PDF", True), ("waiting", "Lyrics", False), ("waiting", "Extras", False),
         ("waiting", "Songbooks", False)]
+
+
+def test_the_running_cards_steps_say_a_song_ultimate_guitars_index_lacks_plainly_and_where_the_sheet_comes_from():
+    estopa = lookup(8, "Estopa - Tu Calorro", {"song": ("done", "in the library"),
+                                              "match": ("done", MATCH_NOT_FOUND),
+                                              "sheet": ("running", SHEET_FROM["lacuerda"])}, state="running")
+    card = dict(JOB_ITEM.findall(jobs_page([estopa], {8: job_line(estopa, None)}, csrf="tok", now=NOW)))["8"]
+    assert '<span class="says running">Fetching from LaCuerda…</span>' in card
+    assert chips(card)[:3] == [("done", "✓ Song", False), ("plain", "Match: not on UG", False),
+                               ("running", "Sheet LaCuerda", True)]
+    assert '<li class="step-chip plain">Match: not on UG</li>' in card  # over, never a failure: nothing to add
 
 
 def test_queued_requests_say_their_place_and_each_can_be_cancelled():
@@ -382,23 +404,47 @@ def test_a_song_not_found_requests_it_by_name_or_gets_it_where_the_indexes_have_
         "Como Camarón")
 
 
-def test_a_song_ready_opens_its_sheet_and_its_line_on_the_library_page_is_unchanged(cfg, conn, queue, app):
+def test_a_song_ready_opens_its_sheet_and_its_line_on_the_library_page_says_ready_alone(cfg, conn, queue, app):
     lookup_ran(cfg, conn, queue, app, "Radiohead", "Creep", sheet=True)
     item = dict(JOB_ITEM.findall(text(get(app, "/jobs"))))["1"]
     assert '<a class="btn act primary" href="/Radiohead/Creep/sheet.pdf">Open</a>' in item
+    # The song's line opens its sheet itself (its title, its Open): no link of the request's, and no steps.
     [view] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
-    assert view["line"] == {"tone": "ready", "text": "Ready",
-                            "link": {"label": "Open sheet", "href": "Radiohead/Creep/sheet.pdf"}, "details": None}
+    assert view["line"] == {"tone": "ready", "text": "Ready", "link": None, "details": None}
+    assert view["sheet"] == "Radiohead/Creep/sheet.pdf" and "steps" not in view and "count" not in view
 
 
-def test_a_lookups_progress_shows_on_the_running_card(cfg, conn):
-    seen = []
+def kept_sheet_from(cfg, conn, song, provider: str) -> None:
+    """The song's sheet kept, as a fetch from ``provider`` keeps one: its version, its text and its PDF."""
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    vid = upsert_version(conn, provider=provider, tab_id="1", song_id=song.id, slot="sheet", kind="chords",
+                         rating=4.5, votes=12, version=1, label=None, url="https://example.com/1", raw={}, now="x")
+    keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt", data=b"Words\n", rank=1)
+    (song_dir(cfg.library_dir, song) / "sheet.pdf").write_bytes(b"%PDF-1.4")
+    update_song(conn, song.id, status="found")
+
+
+def test_a_lookups_progress_shows_on_the_running_card_and_on_its_songs_line(cfg, conn):
+    # The requests page draws the running card's steps; /jobs.json gives the library page the same steps, as data,
+    # and how many are over, for the song's line.
+    creep = add_song(conn, "Radiohead", "Creep")
+    seen, views = [], []
 
     def runner(args, emit):
         emit(progress_line({"stage": "song", "state": "done", "detail": "in the library"}))
-        emit(progress_line({"stage": "match", "state": "done", "detail": "matched"}))
+        emit(progress_line({"stage": "match", "state": "done", "detail": "matched to radiohead/creep"}))
         emit(progress_line({"stage": "sheet", "state": "running"}))
+        emit(progress_line({"stage": "sheet", "state": "running", "detail": SHEET_FROM["ug"]}))
         seen.append(text(get(app, "/jobs")))
+        views.append(answer(get_json(app, "/jobs.json"))["jobs"][0])
+        kept_sheet_from(cfg, conn, creep, "ug")
+        emit(progress_line({"stage": "sheet", "state": "done", "detail": "tab 1 from Ultimate Guitar"}))
+        emit(progress_line({"stage": "pdf", "state": "done", "detail": "made"}))
+        emit(progress_line({"stage": "lyrics", "state": "running"}))
+        seen.append(text(get(app, "/jobs")))
+        views.append(answer(get_json(app, "/jobs.json"))["jobs"][0])
         return 0
 
     queue = JobQueue(runner)
@@ -407,9 +453,23 @@ def test_a_lookups_progress_shows_on_the_running_card(cfg, conn):
     queue.run_pending()
     card = dict(JOB_ITEM.findall(section(seen[0], "now")))["1"]
     assert '<span class="says running">Fetching from Ultimate Guitar…</span>' in card
-    assert '<li class="chip running" aria-current="step"><span aria-hidden="true"></span>Sheet' in card
-    assert '<li class="chip done"><span aria-hidden="true">✓ </span>Match' in card
+    assert chips(card)[:3] == [("done", "✓ Song", False), ("done", "✓ Match UG", False),
+                               ("running", "Sheet UG", True)]
     assert re.search(r'<span class="ago">started \d+ s ago</span>', card)
+    asking, lyrics = views
+    assert asking["line"]["text"] == "Fetching from Ultimate Guitar…" and asking["count"] == "2 of 7 done"
+    assert asking["steps"] == [
+        {"name": "Song", "source": "", "state": "done"}, {"name": "Match", "source": "UG", "state": "done"},
+        {"name": "Sheet", "source": "UG", "state": "running"}, {"name": "PDF", "source": "", "state": "waiting"},
+        {"name": "Lyrics", "source": "", "state": "waiting"}, {"name": "Extras", "source": "", "state": "waiting"},
+        {"name": "Songbooks", "source": "", "state": "waiting"}]
+    # Once done, the sheet says where the song's sheet came from: its version's site, as the library has it.
+    assert lyrics["line"]["text"] == "Fetching the lyrics from LRCLIB…" and lyrics["count"] == "4 of 7 done"
+    assert lyrics["steps"][2] == {"name": "Sheet", "source": "UG", "state": "done"}
+    assert chips(dict(JOB_ITEM.findall(section(seen[1], "now")))["1"])[2] == ("done", "✓ Sheet UG", False)
+    # Over, and Ready: the steps fold away.
+    [over] = answer(get_json(app, "/jobs.json"))["jobs"]
+    assert over["line"]["text"] == "Ready" and "steps" not in over and "count" not in over
 
 
 # --- in Chromium: on a phone it stacks; every control a thumb's size; light and dark -------------------------

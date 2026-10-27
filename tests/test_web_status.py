@@ -1,7 +1,7 @@
 """caracole/web/status.py: the one line a request shows, on its card and on /jobs."""
 
 from caracole.web.jobs import Job, Step
-from caracole.web.status import Line, SongFacts, details_href, job_line
+from caracole.web.status import Line, SongFacts, details_href, job_line, song_line
 
 FETCH = [("Adding to the library", ("add", "--", "Radiohead", "Creep")),
          ("Looking it up", ("match",)),
@@ -78,6 +78,19 @@ def test_a_done_request_whose_song_has_a_sheet_is_ready_with_a_link_to_it():
     # Asked only to add it, a song with a sheet already is ready too.
     added = job("done", FETCH[:1], fetching=False, states=["done"])
     assert job_line(added, READY).tone == "ready"
+
+
+def test_a_songs_line_says_ready_alone_as_the_song_opens_its_sheet_itself():
+    # On the library page, the song's line (its title, its Open) opens the sheet: its request's Ready has no link.
+    # The requests page's outcome reads the line with its link (outcome.py: Open).
+    done = job("done", states=["done"] * 4)
+    assert song_line(job_line(done, READY)) == Line("ready", "Ready")
+    # Any other line keeps its link: the next step is elsewhere.
+    for line in (Line("review", "Needs review", ("Pick the match", "review?song=3")),
+                 Line("missing", "Not found", ("see the to-do page", "_todo.md")),
+                 Line("ready", "Your version now", ("Open sheet", "a/b.html")),
+                 Line("ready", "Made", ("Open songbook", "_songbooks/Campfire/songbook.html"))):
+        assert song_line(line) == line
 
 
 def test_a_done_fetch_without_a_sheet_says_why_and_never_calls_a_wait_a_miss():

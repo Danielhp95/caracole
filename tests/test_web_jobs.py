@@ -366,6 +366,21 @@ def test_a_lookups_progress_becomes_its_stages_and_stays_out_of_its_output():
     assert job.steps[0].output == ["Sheet: tab 101 from Ultimate Guitar: /lib/Radiohead/Creep/sheet.txt"]
 
 
+def test_a_stage_keeps_what_it_said_last_while_it_ran_once_it_ends():
+    # The site a sheet stage asked when it failed (get.SHEET_FROM): its Sheet step names it (outcome.py).
+    queue = JobQueue(FakeRunner())
+    job, _ = queue.submit("Get A - B", "a|b", lookup_steps("A", "B"), fetching=True)
+    job = queue.job(job.id)
+    job.heard({"stage": "sheet", "state": "running", "detail": ""})
+    job.heard({"stage": "sheet", "state": "running", "detail": "from LaCuerda"})
+    job.heard({"stage": "sheet", "state": "failed", "detail": "LaCuerda failed (lacuerda: 503); the nightly run "
+                                                              "tries again"})
+    sheet = next(s for s in job.stages if s.name == "sheet")
+    assert (sheet.state, sheet.running_detail) == ("failed", "from LaCuerda")
+    assert sheet.detail.startswith("LaCuerda failed")
+    assert "running_detail" not in json.dumps(job.as_json())  # the request as data says what it ended with
+
+
 def test_a_job_is_data_its_steps_each_with_a_state():
     queue = JobQueue(FakeRunner(lines={"get": lookup_output()}))
     job, _ = queue.submit("Get Radiohead - Creep", "radiohead|creep", lookup_steps("Radiohead", "Creep"),
