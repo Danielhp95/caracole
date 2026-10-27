@@ -64,8 +64,9 @@ written ``\\u003c``:
   from a file (``download_names.download_name``, the title clean as caracole serve names it: "Eagles - Hotel California
   (2).gp5"), its link's ``download``;
 - ``harmonicaTabs``: the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: kept from
-  harptabs.com), each ``{"name": "harmonica-1.txt", "href": "harmonica-1.txt"}``, with the harp's ``key`` ("C")
-  when its page named one, for the harmonica's panel; a song with none has none;
+  harptabs.com), each ``{"name": "harmonica-1.txt", "href": "harmonica-1.txt"}``, with the ``key`` its page's
+  Key chip named ("C": the song's on some tabs, the harp's on others), if any, for the harmonica's panel; a song
+  with none has none;
 - ``pinyin``, for a sheet whose song holds Chinese: each line of its sections as the page draws it (``#sheet
   section.sec > p.l``, in order: ``_drawn_lines``), the reading of each of its characters (pinyin.py: "" for a
   letter, a space or punctuation), or null for a line with none, for the settings' Pinyin row, which the script
@@ -238,7 +239,7 @@ def build_viewer(
     names of the song's Guitar Pro files beside the page that caracole serve shows in the browser (render.py), goes
     in its data as ``guitar``, and its settings get a Guitar Pro row (``_GUITAR_ROW``); without any, neither.
     ``harmonica``, the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: ``{"name",
-    "href"}`` and the harp's ``key`` when its page named one), goes in its data as ``harmonicaTabs``; without any,
+    "href"}`` and the ``key`` its page named, if any), goes in its data as ``harmonicaTabs``; without any,
     the data has none.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)

@@ -584,7 +584,7 @@ def _harptabs_artist_head(a: SiteArtist, top: bool) -> list[str]:
 
 
 def _harptabs_lines(hit: SiteHit) -> str:
-    """A harptabs.com song: its names, its tabs and the harp's key of the most viewed, its page, and the line that
+    """A harptabs.com song: its names, its tabs and the key of the most viewed, its page, and the line that
     looks it up keeping that tab; a tab by its title alone, its page."""
     if not hit.artist:
         return f"  {_tag('harptabs')}{hit.title} · same title, maybe another song\n     {hit.url}"

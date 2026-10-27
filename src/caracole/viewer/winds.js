@@ -17,7 +17,7 @@
   //                   "draw 4–6 (as Dm, minor substitute)", "not on this harp"), on the harp chosen in its settings
   //                   row (Harp: the harps of the header line, the first by default; this page's choice alone),
   //                   which lists the song's harmonica tabs too (data.harmonicaTabs: a link each to the text beside
-  //                   the page, with its harp's key where given).
+  //                   the page, with the key its harptabs.com page named, "key C (harptabs.com)", never a harp's).
   //   the flute and   winds.py's tables: data.windForms[f], a chord's notes as steps above its root, its form ``f``
   //   the recorder    by its index (data.windChords[mode][i], data.windAlts[mode][i][j]; mode "" for a sheet with no
   //                   key); each note read is data.winds.low + the root's pitch class as shown + a step, and the key's
@@ -140,8 +140,9 @@
     }
     return root;
   };
-  // The song's harmonica tabs beside the page (data.harmonicaTabs: harptabs.com's, kept), a link each, with the
-  // harp's key where its page named one.
+  // The song's harmonica tabs beside the page (data.harmonicaTabs: harptabs.com's, kept), a link each, with the key
+  // its page's Key chip named, if any, as harptabs.com's: the song's key on some tabs and the harp's on others, so
+  // never called a harp.
   const tabs = (view, box) => {
     const list = Array.isArray(view.data.harmonicaTabs) ? view.data.harmonicaTabs : [];
     if (!list.length) return;
@@ -152,7 +153,10 @@
       if (!tab || typeof tab.href !== "string") continue;
       const item = el("li", "", links);
       el("a", "link", item, String(tab.name || tab.href)).href = tab.href;
-      if (tab.key) el("span", "wd-key", item, tab.key + " harp");
+      if (tab.key) {
+        el("span", "wd-key", item, "key " + tab.key + " (harptabs.com)").title =
+          "The key harptabs.com's page names: the song's on some tabs, the harp's on others";
+      }
     }
   };
   const harmonica = {

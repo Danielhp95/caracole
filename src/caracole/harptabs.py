@@ -23,14 +23,15 @@ user agent, as everywhere else:
   (``MusicComposition``: ``name``, ``composer.name``) and in its header ("by billy joel", a
   link to the artist's page). A tab of no known artist (tabs 28841 and 29910) has no
   ``composer``, and its header says "by Unknown", linking nowhere: a page of no artist, never
-  one that won't parse. Its chips: the harp's key ("Key C", a link to ``/search?key=``), the
+  one that won't parse. Its chips: a key ("Key C", a link to ``/search?key=``), the song's on
+  some tabs and the harp's on others (Juke's says E, its notes "I use an A harp"), the
   harp's type ("Diatonic", ``/search?harp=``, not on every page), the difficulty, the views
   ("1.1M") and the rating; and the tab in the one ``<pre>``, hole numbers ("6",
   blow; "-5", draw) over the lyrics. Its footer: "© Copyright 2004–2026 Harptabs.com · All
   rights reserved."
 - **An artist page** (``/artist/{id}/{slug}``, which robots.txt allows) is server-rendered too: the
   name as the site spells it ("billy joel") in its ``<h1>``, how many tabs the artist has ("98
-  tabs") under it, and a card a tab: its page and title, the harp's key ("Key C") and a genre
+  tabs") under it, and a card a tab: its page and title, the key ("Key C") and a genre
   ("Rock"), either, both or neither, the views ("1.1M"), the rating (on rated tabs alone) and
   the difficulty (not on every card). It renders the first
   ``PAGE_TABS`` (30) of them, the most viewed first; the rest come from ``/api/artist/{id}/tabs``
@@ -139,8 +140,8 @@ def song_key(title: str) -> str:
 @dataclass(frozen=True)
 class HarpTab:
     """A tab page: its title and artist as the site writes them (``artist`` None for a tab of no known artist,
-    "by Unknown"), the tab (``body``, the ``<pre>``'s text), and its chips: the harp's key ("C"), its type
-    ("Diatonic"), the difficulty, the views and the rating (None when the page shows none)."""
+    "by Unknown"), the tab (``body``, the ``<pre>``'s text), and its chips: the key ("C": the song's or the
+    harp's, the page doesn't say), the harp's type ("Diatonic"), the difficulty, the views and the rating (None when the page shows none)."""
 
     title: str
     artist: str | None

@@ -2320,8 +2320,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   seventh or ninth where the harp has only that ("blow 1–3 (as C)"), the minor
   chord a harp plays for a major one it lacks ("draw 4–6 (as Dm, minor
   substitute)"), or "not on this harp"; and the song's harmonica tabs from
-  harptabs.com, a link each, with the harp's key its page named. A chord's card
-  and the strip draw the harp's ten holes, those it plays lit. The **Flute**
+  harptabs.com, a link each, with the key its page named, `key C
+  (harptabs.com)`: the song's key on some tabs, the harp's on others, so never
+  a harp. A chord's card and the strip draw the harp's ten holes, those it
+  plays lit. The **Flute**
   (concert pitch) and the **Recorder** (soprano, sounding an octave above the
   notes it reads) show each chord's notes, each with its fingering: on the
   card, and in their row with the key's scale. That row switches the note
@@ -2930,7 +2932,7 @@ the line that reads it (`caracole harptabs --artist artist/1178/billy-joel`, one
 request). A song is the tabs of one title by one artist, the title less what it
 says in brackets ("Piano Man (C Harmonica)" and "Piano Man (Harp Intro)" are
 Piano Man), the most viewed first: its line names how many there are and the
-harp's key of the first, its page, and the `caracole get --harptabs` line that
+key the first's page names, its page, and the `caracole get --harptabs` line that
 looks the song up now keeping that tab (`[harptabs]` in overrides.toml). A tab
 whose artist no page read names yet is listed by its title alone, as a possible
 match (`same title, maybe another song`). `--artist NAME` lists the songs the

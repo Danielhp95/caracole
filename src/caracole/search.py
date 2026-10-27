@@ -304,7 +304,7 @@ class Found:
 @dataclass(frozen=True)
 class HarpTabHit:
     """One tab of a song on harptabs.com: its title as the site writes it, its page, and the chips its artist's
-    page showed (the views, the rating, the harp's key, the difficulty)."""
+    page showed (the views, the rating, the key, the difficulty)."""
 
     title: str
     url: str

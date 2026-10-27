@@ -385,8 +385,8 @@ CREATE INDEX IF NOT EXISTS harptabs_index_sitemap ON harptabs_index(sitemap);
 # with the site's id, its slug's key (harptabs_index's key of the artist), the name as the page heads it ("" for a page
 # gone, 404), how many tabs it says the artist has, and when it was read; and the tabs it listed (its first 30, the
 # most viewed first: place 0, 1, ...), each with its page, its title as the card writes it, the key of the song its
-# title names (harptabs.song_key, made again from the title when caracole's keys change), the harp's key, the
-# difficulty, the views and the rating it showed.
+# title names (harptabs.song_key, made again from the title when caracole's keys change), the key (the song's or
+# the harp's), the difficulty, the views and the rating it showed.
 _SCHEMA_V11 = """
 CREATE TABLE IF NOT EXISTS harptabs_artists (
   path TEXT PRIMARY KEY,
