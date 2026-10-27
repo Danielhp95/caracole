@@ -316,6 +316,41 @@ def test_a_lookup_asked_for_while_the_songs_keep_it_waits_joins_it():
     assert [call[0] for call in queue._runner.calls] == ["versions", "get"]
 
 
+def test_a_lookup_that_joined_a_keep_it_starts_its_stages_afresh():
+    # Keep it's stages share names with a lookup's (the song, the PDF, the library page): once it is over, the lookup
+    # after it says each of its own from the start, never Keep it's PDF done while its own sheet is asked for.
+    from caracole.web.outcome import progress
+    from caracole.web.status import job_line
+
+    seen = []
+
+    def runner(args, emit):
+        said = [("song", "running", ""), ("song", "done", "in the library")]
+        said += ([("version", "running", ""), ("version", "done", "tab 3 kept"), ("pdf", "running", ""),
+                  ("pdf", "done", "made"), ("pages", "running", ""), ("pages", "done", "")]
+                 if args[0] == "versions" else
+                 [("match", "running", ""), ("match", "done", "matched to a/t"), ("sheet", "running", "")])
+        for stage, state, detail in said:
+            emit(PROGRESS + json.dumps({"stage": stage, "state": state, "detail": detail}))
+        if args[0] == "get":
+            job = queue.snapshot()[0]
+            seen.append({s.name: s.state for s in job.stages})
+            seen.append(progress(job, job_line(job, None), None))
+        return 0
+
+    queue = JobQueue(runner)
+    queue.submit("Keep it", "a|t", version_steps("A", "T", keep="3"), fetching=True)
+    queue.submit("Fetch A - T", "a|t", lookup_steps("A", "T"), fetching=True)
+    queue.run_pending()
+    stages, shown = seen
+    assert {name: stages[name] for name in ("song", "match", "sheet", "pdf", "lyrics", "pages")} == {
+        "song": "done", "match": "done", "sheet": "running", "pdf": "waiting", "lyrics": "waiting",
+        "pages": "waiting"}
+    assert [(c["name"], c["state"]) for c in shown["steps"]][:4] == [
+        ("Song", "done"), ("Match", "done"), ("Sheet", "running"), ("PDF", "waiting")]
+    assert shown["count"] == "2 of 7 done"
+
+
 def test_a_lookup_asked_for_while_the_songs_keep_it_runs_comes_after_it():
     asked = []
 

@@ -9,9 +9,10 @@ import java.io.FileInputStream
 import java.io.IOException
 
 /**
- * Answers the WebView's requests under `/library/` from the mirror ([Mirror.respond]): each file with the type
- * caracole listed and the headers caracole serve sends with it (a page's Content-Security-Policy, with its
- * sandbox, which a page's own `<meta>` policy can't set), and a 404 for anything the list doesn't name.
+ * Answers the WebView's requests at the root of `https://appassets.androidplatform.net/` ([Links.PREFIX]) from
+ * the mirror ([Mirror.respond]): each file with the type caracole listed and the headers caracole serve sends
+ * with it (a page's Content-Security-Policy, with its sandbox, which a page's own `<meta>` policy can't set),
+ * and a 404 for anything the list doesn't name.
  */
 class MirrorPathHandler(private val mirror: Mirror) : WebViewAssetLoader.PathHandler {
     override fun handle(path: String): WebResourceResponse {

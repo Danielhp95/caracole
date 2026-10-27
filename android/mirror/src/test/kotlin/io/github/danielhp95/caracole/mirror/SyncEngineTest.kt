@@ -7,6 +7,7 @@ import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.net.ServerSocket
+import kotlin.concurrent.thread
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -149,6 +150,23 @@ class SyncEngineTest {
         assertTrue("longer than 8 bytes" in error.message!!, error.message)
     }
 
+    @Test(timeout = 20_000)
+    fun `the largest size a list can give still ends the sync, never spins on it`() {
+        server.publish(library)
+        engine.sync(server.address)
+        val before = snapshot()
+        val entries = server.publish(library)
+        val huge = """{"path": "huge.pdf", "url": "/huge.pdf", "size": ${Long.MAX_VALUE}, "sha256": "${"a".repeat(64)}", "type": "application/pdf"}"""
+        server.manifest = FakeCaracole.manifestJson("index.html", entries.map { FakeCaracole.entryJson(it) } + huge).toByteArray()
+        server.answers["/huge.pdf"] = { exchange ->
+            exchange.sendResponseHeaders(200, 0) // chunked: no length said
+            exchange.responseBody.write("%PDF".toByteArray())
+        }
+        val error = assertFailsWith<SyncError.Changed> { engine.sync(server.address) }
+        assertTrue("it is 4 bytes, not ${Long.MAX_VALUE}" in error.message!!, error.message)
+        assertEquals(before, snapshot())
+    }
+
     @Test
     fun `a length said that isn't the listed size fails before reading`() {
         val error = failsAndKeepsTheMirror<SyncError.Changed> { entries ->
@@ -194,6 +212,36 @@ class SyncEngineTest {
         assertEquals(before.keys + "blobs/${sha256("%PDF x".toByteArray())}", snapshot().keys, "the blob checked waits for the next sync")
         engine.sync(server.address)
         assertMirrors(library + ("x.pdf" to "%PDF x".toByteArray()) + ("y.pdf" to "%PDF y".toByteArray()))
+    }
+
+    @Test
+    fun `a sync stopped in the middle of a file stops there, and leaves no temporary file`() {
+        server.publish(library)
+        engine.sync(server.address)
+        val before = snapshot()
+        val big = ByteArray(256 * 1024) { (it % 251).toByte() }
+        val entries = server.publish(library + ("big.pdf" to big))
+        val stop = java.util.concurrent.atomic.AtomicBoolean(false)
+        val rest = java.util.concurrent.CountDownLatch(1)
+        server.answers[entries.first { it.path == "big.pdf" }.url] = { exchange ->
+            exchange.sendResponseHeaders(200, big.size.toLong())
+            exchange.responseBody.write(big, 0, big.size / 2)
+            exchange.responseBody.flush()
+            stop.set(true) // the worker is stopped while the file comes
+            rest.await(15, java.util.concurrent.TimeUnit.SECONDS) // the rest, slow to come
+            try {
+                exchange.responseBody.write(big, big.size / 2, big.size - big.size / 2)
+            } catch (e: java.io.IOException) { /* the app stopped reading */ }
+        }
+        val started = System.nanoTime()
+        try {
+            assertFailsWith<SyncError.Cancelled> { engine.sync(server.address, cancelled = { stop.get() }) }
+            val seconds = (System.nanoTime() - started) / 1e9
+            assertTrue(seconds < 5, "stopped after $seconds s, not at the next chunk")
+        } finally {
+            rest.countDown()
+        }
+        assertEquals(before, snapshot(), "the mirror as it was, and no temporary file")
     }
 
     @Test
@@ -268,8 +316,26 @@ class SyncEngineTest {
         assertEquals(4, fetched.manifest.entries.size)
         assertEquals(listOf("/api/offline"), server.requests.toList())
         assertEquals(emptyMap(), snapshot())
-        engine.sync(server.address, fetched)
-        assertEquals(1, server.requests.count { it == "/api/offline" }, "a list fetched is used, not asked for again")
-        assertMirrors(library)
+    }
+
+    @Test
+    fun `a sync that waits for another asks for the list once it holds the lock, so it never syncs an older one`() {
+        server.publish(library)
+        engine.sync(server.address)
+        server.requests.clear()
+        val next = library + ("new.pdf" to "%PDF new".toByteArray())
+        var report: SyncReport? = null
+        mirror.syncLock.lock() // another sync, running
+        val waiting = thread { report = engine.sync(server.address) }
+        try {
+            while (!mirror.syncLock.hasQueuedThreads()) Thread.sleep(5)
+            server.publish(next) // the library changes while it waits
+            assertEquals(emptyList(), server.requests.toList(), "nothing asked before the lock is held")
+        } finally {
+            mirror.syncLock.unlock()
+        }
+        waiting.join()
+        assertEquals(1, assertNotNull(report).added)
+        assertMirrors(next)
     }
 }

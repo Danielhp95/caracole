@@ -48,8 +48,9 @@ object Syncs {
 
     /**
      * Syncs with the address in the settings, telling [Caracole.status] how far it is, and keeps the outcome.
-     * With [probe] (the sync on Wi-Fi), a server that doesn't answer, or no address, does nothing and says
-     * nothing. [stopped] is asked between two files.
+     * With [probe] (the sync on Wi-Fi), no caracole at the address ([SyncError.noCaracole]: no address, nothing
+     * answering, or something else answering, such as a Wi-Fi login page) does nothing, says nothing, and keeps
+     * the last outcome; Sync now says it. [stopped] is asked between two files and between two chunks of one.
      */
     fun run(context: Context, probe: Boolean, stopped: () -> Boolean = { false }): Outcome? {
         val settings = Settings(context)
@@ -58,15 +59,18 @@ object Syncs {
         val outcome = try {
             val address = ServerAddress.parse(settings.server)
             val engine = SyncEngine(Caracole.mirror(context), Caracole.http())
-            val fetched = engine.fetchManifest(address)
-            val report = engine.sync(address, fetched, progress = { status.value = SyncState.Running(it) }, cancelled = stopped)
+            // The list is asked for inside the sync, once it holds the lock: never one fetched before another
+            // sync (on Wi-Fi, or Sync now) ended.
+            val report = engine.sync(address, progress = { status.value = SyncState.Running(it) }, cancelled = stopped)
             Outcome(System.currentTimeMillis(), true, report.summary())
-        } catch (e: SyncError) {
-            if (probe && (e is SyncError.NoAnswer || e is SyncError.NoAddress || e is SyncError.BadAddress)) {
+        } catch (e: Exception) {
+            // Anything, the unexpected too (SyncError.Unexpected): a failed outcome, never "Syncing…" left up.
+            val error = SyncError.of(e)
+            if (probe && error.noCaracole) {
                 status.value = SyncState.Idle
                 return null
             }
-            Outcome(System.currentTimeMillis(), false, e.message ?: e.javaClass.simpleName)
+            Outcome(System.currentTimeMillis(), false, error.message ?: error.javaClass.simpleName)
         }
         settings.lastOutcome = outcome
         status.value = SyncState.Ended(outcome)
