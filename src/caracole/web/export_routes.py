@@ -16,7 +16,9 @@ Make this my version, unless the version is the song's own already, is the same 
 ``caracole render --song=… --version=… --mine``, which writes the song's ``[version]`` in overrides.toml
 under caracole's lock (the server writes no overrides.toml itself), as the key it plays in (render.py
 ``ExportSheet.entry``), and renders the song in it: its PDF, its viewer and its songbooks then start there, on
-whichever sheet the song has. An address naming no version is the song's own, as the viewer reads its own
+whichever sheet the song has. A viewer showing its Chinese in Traditional characters says ``trad=1``: the export is
+in them, its label saying so (render.py ``ExportSheet.label``), and Make this my version's PDF is the sheet's own
+in them (``sheet (Traditional).pdf``). An address naming no version is the song's own, as the viewer reads its own
 (render.py ``export_version``), and one that plays the sheet as the song's own does is the song's own too. The
 song's own kept as a move from the sheet (a ``t=`` entry, as caracole wrote one before it kept a key) is offered
 as Keep it in this key, the same form: a sheet in another key in its place would move it.
@@ -83,7 +85,8 @@ def export_page(app: WebApp, target: str) -> Response:
         job = None  # another export's: not this page's to show
     pdf = None
     if job is not None and job.state == "done":
-        pdf = _own_pdf(app, song, sheet) if job.song_key.endswith(MINE) else _pdf(app, song, label)
+        pdf = _own_pdf(app, song, sheet, traditional=_traditional(shown)) if job.song_key.endswith(MINE) \
+            else _pdf(app, song, label)
     return html_response(200, _body(app.csrf, song, sheet, shown, label, job, pdf, folder, mine))
 
 
@@ -100,6 +103,13 @@ def export_post(app: WebApp, form: dict[str, str]) -> Response:
     job, _ = app.submit(title, key, steps, display=song.display, song_id=song.id)
     query = urlencode([("sheet", sheet), *parse_qsl(asked, keep_blank_values=True), ("job", str(job.id))])
     return redirect(f"/export?{query}")
+
+
+def _traditional(query: str) -> bool:
+    """Whether the viewer's address ``query`` shows its Chinese in Traditional characters (render.py)."""
+    from caracole.render import export_traditional
+
+    return export_traditional(query)
 
 
 def _unreadable(text: str) -> bool:
@@ -121,8 +131,8 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
     from caracole.render import (
         AUTO_OUTPUTS,
         RenderError,
-        export_query,
         export_sheet,
+        export_traditional,
         export_version,
         export_viewer,
         keeps_key,
@@ -159,7 +169,8 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
             source = export_sheet(conn, app.cfg, song)
             own = source.own(overrides)
             v = export_version(query, own)
-            label = source.label(v)
+            traditional = export_traditional(query)  # the viewer's Chinese in Traditional characters
+            label = source.label(v, traditional=traditional)
             # where the song plays now: what Make this my version would keep of it is what its own is
             mine = YOURS if source.entry(own) == source.entry(v) else None
             if mine and song.key in overrides.version and not keeps_key(overrides, song) \
@@ -167,7 +178,7 @@ def _version(app: WebApp, sheet: str, query: str) -> tuple[Song, str, str, str, 
                 mine = AS_A_MOVE
         except RenderError as e:
             raise Refused(404, "No sheet to export", str(e)) from e
-    return song, export_query(v), label, "/".join(quote(p) for p in parts[:-1]), mine
+    return song, source.query(v, traditional=traditional), label, "/".join(quote(p) for p in parts[:-1]), mine
 
 
 def _pdf(app: WebApp, song: Song, label: str) -> str | None:
@@ -188,13 +199,19 @@ def _pdf(app: WebApp, song: Song, label: str) -> str | None:
     return None
 
 
-def _own_pdf(app: WebApp, song: Song, sheet: str) -> str | None:
+def _own_pdf(app: WebApp, song: Song, sheet: str, *, traditional: bool = False) -> str | None:
     """The PDF beside the sheet's viewer (``sheet.pdf`` beside ``sheet.html``) once it is there: the song's own,
-    made in its version."""
+    made in its version; with ``traditional``, the one in Traditional characters beside it (``sheet (Traditional).pdf``)
+    when there is one."""
     from caracole.library import song_dir
+    from caracole.songs import AUTO_SHEET, HUMAN_SHEET, SHEET_OUTPUTS, TRADITIONAL_PDFS
 
+    folder = song_dir(app.cfg.library_dir, song)
     name = sheet.rsplit("/", 1)[-1].removesuffix(".html") + ".pdf"
-    return name if (song_dir(app.cfg.library_dir, song) / name).is_file() else None
+    twins = {SHEET_OUTPUTS[s][1]: TRADITIONAL_PDFS[s] for s in (HUMAN_SHEET, AUTO_SHEET)}
+    if traditional and name in twins and (folder / twins[name]).is_file():
+        return twins[name]
+    return name if (folder / name).is_file() else None
 
 
 def made_pdf(conn: sqlite3.Connection, library_dir: Path, song: Song, job: Job) -> str | None:

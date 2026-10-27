@@ -263,6 +263,7 @@ def build_viewer(
     versions: dict[str, Any] | None = None,
     guitar: tuple[str, ...] | list[str] = (),
     harmonica: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
+    pdf_traditional: str | None = None,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -270,7 +271,8 @@ def build_viewer(
     of ``keys.SOURCES``), else from the sheet's own ``{key}``, else it is estimated from
     the chords. ``transpose`` is where the viewer starts, and ``start`` the song's own version
     (``t=2&mode=dorian&capo=0``), in which it starts when its address names none; ``pdf`` names
-    the PDF beside the page, linked when given. Without ``export``, its settings offer no Export PDF of
+    the PDF beside the page, linked when given, and ``pdf_traditional`` the one in Traditional characters beside it
+    (render.py), which the link opens while the page shows its Chinese so (its ``data-trad``). Without ``export``, its settings offer no Export PDF of
     this version (an auto sheet kept beside a human one, or a version's page, whose exports are the
     sheet's: render.py ``export_viewer``). ``versions``, the song's UG chords versions (render.py ``_versions_data``:
     ``sheet_versions.as_data`` with ``sheet``, the provider of the one, and ``this`` on each entry,
@@ -302,7 +304,8 @@ def build_viewer(
     names = names_table("hanzi" in data, [title, sheet.artist, page_title])
     return _page(
         page_title,
-        _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar), names=names)
+        _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar), names=names,
+              pdf_traditional=pdf_traditional)
         + json_block("song", data) + (json_block("song-names", names) if names else ""),
         styles=(style,),
         scripts=(_sound(), _overlay(), _instruments(), _winds(), script),
@@ -318,6 +321,16 @@ def names_table(chinese: bool, texts: list[str]) -> dict[str, dict[str, str]] | 
         return None
     found = hanzi.names([text for text in texts if text])
     return found if any(found.values()) else None
+
+
+def written_script(cho: str) -> str | None:
+    """"simplified" or "traditional": the characters a ChordPro sheet's Chinese is written in, as its page judges them
+    (``hanzi.written_in_traditional`` of the texts it writes, ``_written_texts``), for its PDFs in either (render.py);
+    None for a sheet in no Chinese (``is_chinese``)."""
+    sheet = parse_sheet(cho)
+    if not pinyin.is_chinese(_drawn_lines(sheet)):
+        return None
+    return "traditional" if hanzi.written_in_traditional(_written_texts(sheet)) else "simplified"
 
 
 def is_chinese(cho: str) -> bool:
@@ -636,8 +649,9 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
 
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
-          export: bool = True, guitar: bool = False, names: Mapping[str, Mapping[str, str]] | None = None) -> str:
-    pdf_link = f'<a class="pdf" href="{escape(quote(pdf))}">PDF</a>\n' if pdf else ""
+          export: bool = True, guitar: bool = False, names: Mapping[str, Mapping[str, str]] | None = None,
+          pdf_traditional: str | None = None) -> str:
+    pdf_link = pdf_line([(pdf, "PDF", pdf_traditional)]) if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'
@@ -652,6 +666,15 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + _with_guitar(_SHEET_CONTROLS if export else _CONTROLS, guitar)
         + _VERSION_LIST
     )
+
+
+def pdf_line(files: list[tuple[str, str, str | None]]) -> str:
+    """The links to the files beside a page, as its foot lists them: each ``(name, label, the name of its twin in
+    Traditional characters or None)``, the twin as the link's ``data-trad``, which the script follows while the page
+    shows its Chinese in Traditional characters."""
+    return "".join(f'<a class="pdf" href="{escape(quote(name))}"'
+                   + (f' data-trad="{escape(quote(twin))}"' if twin else "") + f">{label}</a>\n"
+                   for name, label, twin in files)
 
 
 def artist_line(artist: str, names: Mapping[str, Mapping[str, str]] | None = None) -> str:

@@ -106,6 +106,27 @@ def test_a_conversion_that_changed_the_length_is_made_again_a_character_at_a_tim
     assert hanzi.scripts(["我的头发 后来", "回来"])["traditional"] == {"我的头发 后来": "我的頭发 後來", "回来": "回來"}
 
 
+# --- a ChordPro text, for a PDF ------------------------------------------------------------------------------
+
+PRINTED = ("{title: 斑馬斑馬}\n{artist: 张学友}\n{subtitle: Key C}\n{comment: 副歌（重複）}\n"
+           "[C]斑馬[D]斑[Bm]馬 你[Em]不要睡著啦\n{start_of_tab}\ne|---0---| 頭髮\n{end_of_tab}\n{define: C base-fret 1}\n")
+
+
+def test_a_chordpro_text_in_simplified_keeps_its_chords_where_they_are():
+    # As the viewer shows the sheet: a line's words whole (斑馬斑馬 one word across its chords), each directive's
+    # text, the title and the artist each judged alone; what is no Chinese character stays as written.
+    assert hanzi.chordpro(PRINTED, "simplified", traditional=True) == (
+        "{title: 斑马斑马}\n{artist: 张学友}\n{subtitle: Key C}\n{comment: 副歌（重复）}\n"
+        "[C]斑马[D]斑[Bm]马 你[Em]不要睡着啦\n{start_of_tab}\ne|---0---| 头发\n{end_of_tab}\n{define: C base-fret 1}\n")
+
+
+def test_a_traditional_sheets_chordpro_text_in_traditional_is_as_written_but_its_names():
+    assert hanzi.chordpro(PRINTED, "traditional", traditional=True) == PRINTED.replace("张学友", "張學友")
+    simplified = "{title: 头发}\n[C]我的[G]头发 发现\n"
+    assert hanzi.chordpro(simplified, "traditional", traditional=False) == "{title: 頭髮}\n[C]我的[G]頭髮 發現\n"
+    assert hanzi.chordpro(simplified, "simplified", traditional=False) == simplified
+
+
 # --- in the page's data ------------------------------------------------------------------------------
 
 # A sheet in Traditional characters: notes before the song (folded after two lines), a section's label in Chinese,
@@ -598,10 +619,13 @@ def test_a_songbooks_contents_pagers_and_headings_follow_the_choice(tmp_path):
 def test_a_served_songbooks_contents_take_the_choice_from_the_address(tmp_path):
     songs = [BookSong("斑马斑马", "宋冬野", cho=LONG, id="aaaa")]
     page = "/_songbooks/Campfire/songbook.html"
-    with served({page: (build_songbook("Campfire", songs), songbook_csp)}) as site, \
+    html = build_songbook("Campfire", songs, pdf="songbook.pdf", pdf_traditional="songbook (Traditional).pdf")
+    with served({page: (html, songbook_csp)}) as site, \
             contents_of(tmp_path, site + page + "#contents=&trad=1") as b:
         listed = b.js(NAMES)
+        pdf = b.js("[...document.querySelectorAll('a.pdf')].map((a) => a.getAttribute('href'))")
     assert listed["contents"] == ["斑馬斑馬"]
+    assert pdf == ["songbook%20%28Traditional%29.pdf"] * 2  # its PDF in them too: the contents' link, the foot's
 
 
 @in_chromium
@@ -624,3 +648,42 @@ def test_a_harmonica_tabs_page_takes_the_stored_choice_for_its_heading(tmp_path)
     assert first["title"] == "斑马斑马 · harmonica tab"
     assert stored["heads"] == ["斑馬斑馬"] and stored["artists"] == ["張學友"]
     assert addressed["heads"] == ["斑馬斑馬"]
+
+
+# --- the PDFs it links and exports -------------------------------------------------------------------------------
+
+LINKS = """(() => ({pdf: [...document.querySelectorAll('a.pdf')].map((a) => a.getAttribute('href')),
+  cmd: document.getElementById('export-cmd') ? document.getElementById('export-cmd').textContent : null,
+  export: document.getElementById('export') ? document.getElementById('export').getAttribute('href') : null,
+  words: document.querySelector('#export-row .export-v') ? document.querySelector('#export-row .export-v').textContent
+    : null}))()"""
+
+
+@in_chromium
+def test_the_pdf_link_and_the_export_follow_the_choice(tmp_path):
+    page = tmp_path / "宋冬野" / "斑馬斑馬" / "sheet.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(build_viewer(SHEET, pdf="sheet.pdf", pdf_traditional="sheet (Traditional).pdf"), encoding="utf-8")
+    with open_viewer(tmp_path, page.as_uri(), **DESKTOP) as b:
+        first = b.js(LINKS)
+        choose(b, "#hanzi-t", "斑馬")
+        chosen = b.js(LINKS)
+    assert first["pdf"] == ["sheet.pdf"] and "trad" not in first["cmd"]
+    assert chosen["pdf"] == ["sheet%20%28Traditional%29.pdf"]
+    assert "trad=1" in chosen["cmd"] and chosen["words"].endswith(", Traditional")  # an export in them
+
+
+@in_chromium
+def test_served_the_export_page_is_asked_for_the_characters_shown(tmp_path):
+    sheet = "/Artist/Title/sheet.html"
+    with served({sheet: (build_viewer(SHEET), viewer_csp)}) as site, \
+            open_viewer(tmp_path, site + sheet + "#trad=1", **DESKTOP) as b:
+        seen = b.js(LINKS)
+    assert seen["export"].startswith("/export?sheet=") and seen["export"].endswith("&trad=1")
+
+
+@in_chromium
+def test_a_sheet_in_no_chinese_exports_with_no_word_of_the_characters(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, "{title: T}\n{artist: A}\n[C]la la\n") + "#trad=1", **DESKTOP) as b:
+        seen = b.js(LINKS)
+    assert "trad" not in seen["cmd"] and not seen["words"].endswith("Traditional")

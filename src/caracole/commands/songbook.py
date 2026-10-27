@@ -362,7 +362,7 @@ def _files(cfg: Config, folder: str) -> list[str]:
     from caracole.songbook import FOLDER, OUTPUTS
 
     where = cfg.library_dir / FOLDER / folder
-    order = ("songbook.pdf", "songbook.html", "songbook.cho")
+    order = ("songbook.pdf", "songbook (Traditional).pdf", "songbook.html", "songbook.cho")
     return [name for name in order if name in OUTPUTS and (where / name).is_file() and not (where / name).is_symlink()]
 
 

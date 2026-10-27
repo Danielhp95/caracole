@@ -34,7 +34,7 @@ from dataclasses import dataclass, replace
 from functools import lru_cache
 from html import escape
 from typing import Any
-from urllib.parse import parse_qsl, quote
+from urllib.parse import parse_qsl
 
 from caracole.inline import json_block
 from caracole.viewer import page as viewer_page
@@ -55,6 +55,7 @@ from caracole.viewer.page import (
     artist_line,
     is_chinese,
     names_table,
+    pdf_line,
     viewer_csp,
     zh_attr,
 )
@@ -105,10 +106,13 @@ def assets_version() -> str:
 songbook_csp = viewer_csp
 
 
-def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, cho: str | None = None) -> str:
+def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, cho: str | None = None,
+                   pdf_traditional: str | None = None) -> str:
     """The page of a songbook called ``name``: its contents, then each song with a sheet.
 
-    ``pdf`` and ``cho`` name the songbook's PDF and ChordPro file beside the page, linked when given.
+    ``pdf`` and ``cho`` name the songbook's PDF and ChordPro file beside the page, linked when given, and
+    ``pdf_traditional`` its PDF in Traditional characters, which the PDF's link opens while the page shows its
+    Chinese so (page.py ``pdf_line``).
     """
     style, script = _assets()
     book_style, book_script = _book_assets()
@@ -130,8 +134,8 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         wind_facts = data.pop("winds", wind_facts)
         sections.append(html + json_block(f"data-{n}", data) + "</section>\n")
     count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
-    files = "".join(f'<a class="pdf" href="{escape(quote(f))}">{label}</a>\n'
-                    for f, label in ((pdf, "PDF"), (cho, "ChordPro, for a songbook app")) if f)
+    files = pdf_line([(f, label, twin) for f, label, twin in
+                      ((pdf, "PDF", pdf_traditional), (cho, "ChordPro, for a songbook app", None)) if f])
     body = (
         '<div class="page">\n<header class="head book-head">\n'
         f'<a class="back" href="{LIBRARY_PAGE}">‹ Library</a>\n'

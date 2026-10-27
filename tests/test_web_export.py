@@ -317,3 +317,31 @@ def test_an_export_from_the_viewer_on_another_instrument_is_made_there_and_made_
     assert "It is your version" in shown(get(app, export_url(query="fs=20")))  # names none: the song's own
     guitar = get(app, export_url(query="t=2&capo=0&inst=guitar"))
     assert "A Major, capo 0" in shown(guitar) and ">Make this my version<" in text(guitar)
+
+
+def test_an_export_from_a_viewer_showing_traditional_characters_is_made_in_them(app, queue, recorder, conn, cfg,
+                                                                                    tmp_path):
+    # The viewer's address says trad=1 while its Chinese is in Traditional characters: the export is in them, its
+    # label says so (its own PDF beside the Simplified one), and Make this my version's PDF is the sheet's Traditional.
+    from dataclasses import replace
+
+    from caracole.render import export_traditional
+    from test_render_all import fake_font
+    from test_render_hanzi import TRADITIONAL
+
+    song = rendered_song(conn, cfg, "宋冬野", "斑馬斑馬", content=TRADITIONAL)
+    sheet = "宋冬野/斑馬斑馬/sheet.html"
+    page = get(app, export_url(sheet, "t=2&trad=1"))
+    assert page.status == 200
+    label = unescape(re.search(r"<strong>(.*?)</strong>", text(page)).group(1))
+    assert label.endswith(", Traditional")
+    made = post(app, "/export", {"sheet": sheet, "v": "t=2&trad=1"})
+    queue.run_pending()
+    assert recorder.calls == [["render", f"--song={song.display}", "--version=t=2&trad=1"]]
+    zh = replace(cfg, cjk_font=fake_font(tmp_path / "Kai.otf"))
+    render_version(conn, zh, Overrides(), get_song(conn, song.id), version_from_query("t=2"), runner=fake_chordpro,
+                   traditional=export_traditional("t=2&trad=1"))
+    done = text(get(app, header(made, "location")))
+    assert quote(f"sheet ({label}).pdf") in done and "Open the PDF" in done
+    simplified = get(app, export_url(sheet, "t=2"))
+    assert "Traditional" not in shown(simplified)  # the same version in Simplified: another label, another file

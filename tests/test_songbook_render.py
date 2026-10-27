@@ -61,7 +61,8 @@ def render(conn, cfg, ovr=None, runner=None, **kwargs) -> SongbookStats:
 
 
 def pdf_call(fake: FakeChordPro) -> list[str]:
-    calls = [c for c in fake.calls if output_of(c).suffix == ".pdf"]
+    """songbook.pdf's chordpro run (a songbook with Chinese has another, its Traditional one: test_render_hanzi.py)."""
+    calls = [c for c in fake.calls if output_of(c).name == "songbook.pdf"]
     assert len(calls) == 1, fake.calls
     return calls[0]
 

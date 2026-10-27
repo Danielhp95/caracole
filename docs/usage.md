@@ -2663,8 +2663,16 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   script it shows as written. OpenCC is not always right (我是只会 comes out as
   我是隻會 in Traditional), so a sheet UG has in either script reads best in its
   own. Kept as Pinyin is: once for every sheet and songbook, and in the address
-  (`trad=1`) while it is Traditional. The PDFs and the library page show the
-  sheet as written.
+  (`trad=1`) while it is Traditional. The PDFs follow it too: a Chinese
+  sheet's `sheet.pdf` is in Simplified characters (a sheet in Traditional ones
+  is converted, word by word, as the viewer converts it, at the next render: its
+  record names the characters it is in, and its text printed changes), and
+  `sheet (Traditional).pdf` is beside it (`sheet (auto, Traditional).pdf` for an
+  auto sheet), as `songbook (Traditional).pdf` is beside a songbook's PDF when
+  one of its songs is Chinese. A sheet or a songbook in no Chinese gets no
+  second file. The viewer's PDF link opens the one in the characters on
+  screen, and Export PDF makes the export in them (`trad=1` in its version; its
+  name says ", Traditional"). The sheet's `.cho` stays as written.
 - **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
   each Chinese character's reading over it, in pinyin with its tone marks
   (zhǐ), smaller and muted, between its chord and it; off, as the viewer starts,
@@ -4456,6 +4464,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
   _songbooks/
     Campfire/
       songbook.pdf          every sheet of the songbook, after a title page and the contents
+      songbook (Traditional).pdf  the same in Traditional characters, when a song is Chinese
       songbook.html         the songbook for the phone, in the sheet viewer
       songbook.cho          every sheet in ChordPro, for a songbook app
   _inbox/                   Guitar Pro and MuseScore downloads waiting to be filed
@@ -4463,7 +4472,8 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
     斑马斑马/
       sheet.txt             the chosen chord sheet, as plain text
       sheet.json            the same version as the source gave it
-      sheet.cho  sheet.pdf  ChordPro, and a PDF in your key
+      sheet.cho  sheet.pdf  ChordPro, and a PDF in your key (Chinese in Simplified characters)
+      sheet (Traditional).pdf  a Chinese sheet's PDF in Traditional characters
       sheet.html            the sheet viewer, for the phone
       version-39144.txt     another Ultimate Guitar version caracole scored for the sheet,
       version-39144.json    kept beside it (by its tab id), the runners-up: its text, the

@@ -63,6 +63,11 @@
       && typeof table[text] === "string" ? table[text] : text;
   };
   for (const el of document.querySelectorAll("[data-zh]")) el.textContent = named(el.getAttribute("data-zh"));
+  // On the contents, the songbook's PDF in Traditional characters while they are chosen (book.py's data-trad); on a
+  // song, viewer.js links it, as it does its own.
+  if (!current && trad) {
+    for (const link of document.querySelectorAll("a.pdf[data-trad]")) link.setAttribute("href", link.getAttribute("data-trad"));
+  }
 
   if (current) {
     const n = current.dataset.n;
