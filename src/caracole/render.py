@@ -74,6 +74,13 @@ recorded like the sheet's viewer, and goes, while it is still as written, once t
 is no longer kept. Every viewer of the song (the one's, and each
 version's) lists the song's UG chords versions in its data's ``versions`` (``_versions_data``).
 
+Each harmonica tab the song keeps (harptabs_fetch.py: ``harmonica-N.txt``) gets a page of its own,
+``harmonica-N.html`` (viewer/harptab_page.py), made from its text with the song's chord sheet (its human
+one, else its auto one), whose chords tell the harp that plays with the record (``_render_harmonica``),
+whatever came of the sheet's PDF; it is recorded like a viewer, linked from the sheet's viewers (their data's
+``harmonicaTabs``, each with its ``page``), and goes, while it is still as written, once the tab is no longer
+kept or its text is gone from the folder.
+
 A human sheet the song no longer keeps (the fetch drops one whose UG match was
 undone when nothing replaces it) takes the ``sheet.cho``, ``sheet.pdf`` and
 ``sheet.html`` rendered from it along, at the next pass. Only what the records
@@ -146,7 +153,7 @@ from caracole.autochords.merge import AUTO_MARKER
 from caracole.chordpro import to_chordpro
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
-from caracole.inbox import guitar_files, harmonica_files
+from caracole.inbox import HARMONICA_PAGE, HarmonicaFile, guitar_files, harmonica_files
 from caracole.library import (
     KeptFile,
     NotRegularFile,
@@ -179,6 +186,7 @@ from caracole.songs import (
 from caracole.ug.page import decode_twice, json_int
 from caracole.versions import get_version
 from caracole.viewer import build_viewer
+from caracole.viewer.harptab_page import build_harmonica_viewer
 from caracole.viewer.page import viewer_key
 from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import Key
@@ -645,7 +653,8 @@ def _render_song(
     fonts: PdfFonts | None = None,
 ) -> list[_Done]:
     """Render every sheet the song keeps, the human one first, after the pages of the versions kept beside
-    it: their ``_Done("pages")`` is always the first, so a song that keeps no sheet has that alone.
+    it, then the pages of its harmonica tabs: theirs are the first ``_Done("pages")`` and the last, so a song that
+    keeps no sheet has those alone.
 
     ``cjk_font`` is a usable font or None, and ``fonts`` the PDF fonts (``_pdf_fonts``) or None. The auto sheet is kept, and so
     rendered, until the fetch steps retire it for a complete human sheet; its
@@ -659,6 +668,8 @@ def _render_song(
     The versions kept beside the sheet get their pages first (``_render_versions``), so a sheet
     whose PDF fails costs them nothing. The song's UG chords versions are in the viewer of the
     one (the human sheet's, else an auto sheet's standing alone) and in each version page.
+    Its harmonica tabs get theirs last (``_render_harmonica``), whatever came of the sheets, with the
+    text of the sheet it reads (the human one, else the auto one) when that was read.
     """
     files = {f.name: f for f in kept_files(conn, song.id)}
     human, auto = files.get(HUMAN_SHEET), files.get(AUTO_SHEET)
@@ -668,18 +679,23 @@ def _render_song(
                             pinned=bool(sheet_pins(conn, song.id, overrides.pin.get(song.key, ()))))
     # Its Guitar Pro files caracole serve shows in the browser, which each of its viewers links (viewer/page.py).
     guitar = tuple(f.name for f in guitar_files(conn, song.id) if f.in_browser)
-    # Its harmonica tabs (harptabs_fetch.py), which its sheet's viewers name for the harmonica's panel.
-    harmonica = tuple({"name": f.name, "href": quote(f.name, safe=""), **({"key": f.key} if f.key else {})}
-                      for f in harmonica_files(conn, song.id))
+    # Its harmonica tabs (harptabs_fetch.py), which its sheet's viewers name for the harmonica's panel, each with the
+    # page written beside it (_render_harmonica).
+    tabs = harmonica_files(conn, song.id)
+    harmonica = tuple({"name": f.name, "href": quote(f.name, safe=""), "page": quote(f.page, safe=""),
+                       **({"key": f.key} if f.key else {})} for f in tabs)
     done: list[_Done] = [_render_versions(conn, cfg, song, files, versions, listed, guitar)]
     human_key, auto_key = sheet_keys(conn, cfg.library_dir, song) if human or auto else (None, None)
     chosen = next((v.tab_id for v in versions if v.chosen), None)
+    primary: list[tuple[str, tuple[str | None, str | None]]] = []  # the sheet the harmonica tabs' pages read
 
     def render(kept: KeptFile, sheet: _Sheet, state_key: str, *, beside: bool = False,
                listed: dict[str, Any] | None = None) -> None:
         found = auto_key if sheet.auto else human_key
         mine = (found.key, found.source) if found is not None else (None, None)
         text = _sheet_cho(song, sheet)
+        if not sheet.auto or human is None:
+            primary.append((text, mine))
         # Each sheet in its own place: a version kept by its key moves each by what puts it in that key
         played = own_version(overrides, song, text, *mine)
         if beside:
@@ -695,24 +711,28 @@ def _render_song(
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
 
-    if human is not None:
-        render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id),
-               listed=_on_page(listed, chosen))
-        if auto is None and done[-1].outcome != "no font":  # its PDF is in place
-            for name in AUTO_OUTPUTS:
-                (folder / name).unlink(missing_ok=True)
-            kv_delete(conn, _state_key(song.id, auto=True))
-            _forget_written(conn, song.id, AUTO_OUTPUTS)
-    else:
-        _drop_human_outputs(conn, cfg.library_dir, song, folder)
-        if auto is None:
-            progressions.forget(conn, song.id)
-    if auto is not None:
-        beside = human is not None
-        render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside), beside=beside,
-               listed=None if beside else _on_page(listed, None))
-    if human is not None or auto is not None:
-        _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
+    try:
+        if human is not None:
+            render(human, _human_sheet(conn, cfg.library_dir, human), _state_key(song.id),
+                   listed=_on_page(listed, chosen))
+            if auto is None and done[-1].outcome != "no font":  # its PDF is in place
+                for name in AUTO_OUTPUTS:
+                    (folder / name).unlink(missing_ok=True)
+                kv_delete(conn, _state_key(song.id, auto=True))
+                _forget_written(conn, song.id, AUTO_OUTPUTS)
+        else:
+            _drop_human_outputs(conn, cfg.library_dir, song, folder)
+            if auto is None:
+                progressions.forget(conn, song.id)
+        if auto is not None:
+            beside = human is not None
+            render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside), beside=beside,
+                   listed=None if beside else _on_page(listed, None))
+        if human is not None or auto is not None:
+            _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
+    finally:  # the tabs' pages, whatever came of the sheet's PDF: with the sheet's text read, if it was
+        back = HUMAN_OUTPUTS[2] if human is not None else AUTO_OUTPUTS[2] if auto is not None else None
+        done.append(_render_harmonica(conn, cfg, song, folder, tabs, files, primary[0] if primary else None, back))
     return done
 
 
@@ -787,6 +807,63 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
         return False
     _note_written(conn, song.id, page, data)
     return True
+
+
+# --- the harmonica tabs kept: a page each --------------------------------------------
+
+
+def _render_harmonica(conn: sqlite3.Connection, cfg: Config, song: Song, folder: Path, tabs: list[HarmonicaFile],
+                      files: Mapping[str, KeptFile], sheet: tuple[str, tuple[str | None, str | None]] | None,
+                      back: str | None) -> _Done:
+    """Write a page for each harmonica tab the song keeps (harptabs_fetch.py), ``harmonica-N.html`` beside its
+    ``harmonica-N.txt`` (viewer/harptab_page.py), from the tab's text and what its version says of it (its page, its
+    key, its difficulty, its views, its rating), with the song's chord sheet ``sheet`` (its ChordPro and its key as
+    keys.py found it: the human one, else the auto one), for the harp that plays with the record. ``back`` names the
+    song's sheet viewer, which its ‹ Chord sheet opens. Each page is recorded (``_note_written``) and written only
+    when its bytes change.
+
+    The page of a tab no longer kept, or whose text is no longer in the folder (deleted on a synced device), goes
+    while it still holds what caracole wrote (``_forget_written``). A page that can't be made or written (its text
+    read through a link, a bug) is logged as "no viewer for" and fails the song, as a sheet's viewer does; the last
+    one written stays."""
+    cho, (key, key_source) = sheet if sheet is not None else (None, (None, None))
+    ok = True
+    pages: set[str] = set()
+    for tab in tabs:
+        kept = files.get(tab.name)
+        if kept is None or not tab.page:
+            continue
+        try:
+            text = read_regular(cfg.library_dir / kept.path).decode("utf-8", errors="replace")
+        except FileNotFoundError:  # deleted from the folder: its page goes too
+            continue
+        except OSError as e:
+            log.warning("no viewer for %s: cannot read %s: %s", song.display, tab.name, e)
+            pages.add(tab.page)
+            ok = False
+            continue
+        pages.add(tab.page)
+        version = get_version(conn, kept.version_id)
+        raw = version.raw if isinstance(version.raw, dict) else {}
+        try:
+            html = build_harmonica_viewer(
+                text, title=clean_title(song.title), artist=song.artist, tab_file=tab.name, url=version.url,
+                page_key=tab.key, facts=raw, cho=cho, key=key, key_source=key_source, back=back)
+        except Exception:  # a tab the page can't read must never cost the song's other pages
+            log.warning("no viewer for %s: cannot build %s", song.display, tab.page, exc_info=True)
+            ok = False
+            continue
+        data = html.encode("utf-8")
+        try:
+            _write_if_changed(folder / tab.page, data)
+        except (RenderError, OSError) as e:
+            log.warning("no viewer for %s: %s", song.display, e)
+            ok = False
+            continue
+        _note_written(conn, song.id, tab.page, data)
+    left = tuple(name for name in _written(conn, song.id) if HARMONICA_PAGE.fullmatch(name) and name not in pages)
+    _forget_written(conn, song.id, left, folder)
+    return _Done("pages", viewer_failed=not ok)
 
 
 # --- an export: the sheet's PDF in another version ------------------------------------

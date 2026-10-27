@@ -14,9 +14,9 @@ the songbooks' pages, the PDFs), from a copy on the phone that it brings up to d
         {"path": "Estopa/Tu calorro/sheet.html", "url": "/Estopa/Tu%20calorro/sheet.html", ...}, ...]}
 
 ``format`` changes only with the manifest's shape. The files: the library page (``start``) first, then, by path,
-each file it links to (``library_page.linked_files``: every song's files and its kept versions' pages, every
-songbook's files) that caracole serve sends now: a page caracole wrote (app.py's ``written_pages``: a sheet viewer,
-a kept version's, a songbook's) only while it holds the bytes caracole recorded, any other file only of a kind
+each file it links to (``library_page.linked_files``: every song's files, its kept versions' pages and its harmonica
+tabs' pages, every songbook's files) that caracole serve sends now: a page caracole wrote (app.py's ``written_pages``:
+a sheet viewer, a kept version's, a harmonica tab's, a songbook's) only while it holds the bytes caracole recorded, any other file only of a kind
 files.py sends (PDFs, text, ChordPro, lyrics, info.json, Guitar Pro files and scores). The viewers and the
 songbooks' pages link nothing more of the library: their PDFs and the versions' pages are the library page's
 links too. Never a file in Music/ or _inbox/ (should a song's folder be there), at an address another route

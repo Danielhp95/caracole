@@ -45,7 +45,9 @@ to a songbook… (the Select mode, the song picked) and, served, Fetch again and
 LaCuerda's sheet (``lacuerdaSheet``, or the search's LaCuerda row of it: each the
 ``POST /lookup`` the lookup page sends for the song) and Remove…. Served, each Guitar Pro file caracole serve shows
 in the browser (its ``guitarPage``, ``guitar_pages``) is a group of its own there, Open in the browser and Download
-(web/guitar_routes.py); without alphaTab there (``WebControls.guitar``), a note says they are downloads. An
+(web/guitar_routes.py); without alphaTab there (``WebControls.guitar``), a note says they are downloads. Each
+harmonica tab whose page is beside it (``harmonicaPage``: render.py's ``harmonica-N.html``) is a group of its own
+there too, served or from a file: Open, its page, and Download, its text. An
 artist's name, marked with a funnel (``artistFilter``, ROWS_SCRIPT's), shows that
 artist's songs alone. An A-Z strip jumps to the first group (or line) of a letter
 once more than 40 songs show. On a phone the header is short (the numbers beside
@@ -254,7 +256,7 @@ from caracole.config import Config
 from caracole.db import kv_get_json, kv_set_json
 from caracole.download_names import download_name
 from caracole.icons import kept_sources, page_icons, source_of
-from caracole.inbox import SCORE_EXTENSIONS, guitar_files
+from caracole.inbox import SCORE_EXTENSIONS, guitar_files, harmonica_page
 from caracole.inline import json_block, sha256_source
 from caracole.keys import SongKey, key_name, song_key
 from caracole.library import song_dir, write_atomic
@@ -559,8 +561,8 @@ def page_csp(page: bytes) -> str:
 def linked_files(page: bytes) -> list[str]:
     """The files of the library ``page`` (an index.html caracole wrote) links to, as paths in the library, decoded
     ("Soda Stereo/De Música Ligera/sheet.pdf"), each once, in the page's order: every relative link (``href``) in
-    its data, its songs' files and their kept versions' pages, its songbooks' files and their songs' sheets and
-    Guitar Pro files. A link to a site, or with a query or a fragment, is none; a page whose data can't be read
+    its data, its songs' files, their kept versions' pages and their harmonica tabs' pages, its songbooks' files and
+    their songs' sheets and Guitar Pro files. A link to a site, or with a query or a fragment, is none; a page whose data can't be read
     links none."""
     from urllib.parse import unquote, urlsplit
 
@@ -797,7 +799,9 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     score but its PDF, gets the name it downloads under, its ``download`` ("Eagles - Hotel California (2).gp5":
     download_names.py), its links' ``download`` attribute, as caracole serve's header names it. ``ukulele``: the
     sheet is UG's Ukulele Chords version (``ukulele_sheets``), and its files' labels say so ("Sheet viewer ·
-    Ukulele Chords")."""
+    Ukulele Chords"). A harmonica tab whose page is beside it (``harmonica-N.html``, render.py) gets that page's
+    address, its ``harmonicaPage`` (``{"href"}``, a link the offline copy takes: ``linked_files``), which its line
+    lists as a group of its own, Open and Download (the text); the page is no file of the list."""
     pages = guitar or {}
     guitar_names = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
@@ -818,11 +822,13 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
                  if _GUITAR.fullmatch(n) or (_SCORE.fullmatch(n) and not n.endswith(".pdf"))}
     if ukulele:
         labels.update({n: f"{_LABELS[n]} · {UKULELE_SHEET}" for n in _UKULELE_LABELLED if n in names})
+    harp_pages = {n: page for _, n in harmonica if (page := harmonica_page(n)) in names}
     return [
         {"name": n, "label": labels.get(n) or _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}",
          "primary": n == primary, "source": source_of(n, origins or {}),
          **({"version": versions[n]} if n in versions else {}),
          **({"guitarPage": pages[n]} if n in pages else {}),
+         **({"harmonicaPage": {"href": f"{base}/{quote(harp_pages[n], safe='')}"}} if n in harp_pages else {}),
          **({"download": downloads[n]} if n in downloads else {})}
         for n in ordered
     ]

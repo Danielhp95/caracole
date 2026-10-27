@@ -50,7 +50,8 @@ PANEL = """(() => {
                    t.querySelector('.wd-name').textContent])]),
     tabs: [...box.querySelectorAll('.wd-tabs li')].map((li) => [li.querySelector('a').textContent,
       li.querySelector('a').getAttribute('href'), li.querySelector('.wd-key') ? li.querySelector('.wd-key').textContent : null,
-      li.querySelector('.wd-key') ? li.querySelector('.wd-key').title : null]),
+      li.querySelector('.wd-key') ? li.querySelector('.wd-key').title : null,
+      li.querySelector('.wd-text') ? li.querySelector('.wd-text').getAttribute('href') : null]),
   };
 })()"""
 FACTS = "document.getElementById('facts').textContent"
@@ -130,25 +131,25 @@ def test_the_harmonica_row_lists_each_chord_on_the_harp_chosen(tmp_path):
         assert holes == (None if played.holes is None else "%d-%d" % played.holes)
 
 
-def test_the_harmonica_row_links_the_songs_harmonica_tabs(tmp_path):
+def test_the_harmonica_row_links_each_of_the_songs_harmonica_tabs_page_and_its_text(tmp_path):
     page = tmp_path / "Artist" / "Title" / "sheet.html"
     page.parent.mkdir(parents=True)
-    page.write_text(build_viewer(SONG, harmonica=[{"name": "harmonica-1.txt", "href": "harmonica-1.txt", "key": "C"},
-                                                  {"name": "harmonica-2.txt", "href": "harmonica-2.txt"}]),
-                    encoding="utf-8")
-    (page.parent / "harmonica-1.txt").write_text("6 6 6 -5 5\n", encoding="utf-8")
+    page.write_text(build_viewer(SONG, harmonica=[
+        {"name": "harmonica-1.txt", "href": "harmonica-1.txt", "page": "harmonica-1.html", "key": "C"},
+        {"name": "harmonica-2.txt", "href": "harmonica-2.txt"}]), encoding="utf-8")  # a page made before pages were
+    (page.parent / "harmonica-1.html").write_text("<p>the tab's page</p>", encoding="utf-8")
     with open_viewer(tmp_path, page.as_uri() + "#inst=harmonica") as b:
         b.click("#more")
         found = b.js(PANEL)
         b.js("document.querySelector('.wd-tabs a').click()")
-        assert b.wait("location.href.endsWith('harmonica-1.txt')")
+        assert b.wait("location.href.endsWith('harmonica-1.html')")
         text = b.js("document.body.textContent")
     assert found["title"] == ["Harmonica tabs"]
     # harptabs.com's Key chip is the song's key on some tabs and the harp's on others: never named a harp here.
     said = "The key harptabs.com's page names: the song's on some tabs, the harp's on others"
-    assert found["tabs"] == [["harmonica-1.txt", "harmonica-1.txt", "key C (harptabs.com)", said],
-                             ["harmonica-2.txt", "harmonica-2.txt", None, None]]
-    assert "6 6 6 -5 5" in text
+    assert found["tabs"] == [["harmonica-1", "harmonica-1.html", "key C (harptabs.com)", said, "harmonica-1.txt"],
+                             ["harmonica-2.txt", "harmonica-2.txt", None, None, None]]
+    assert "the tab's page" in text
 
 
 def test_a_chords_card_and_the_strip_show_its_holes(tmp_path):

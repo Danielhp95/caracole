@@ -1019,10 +1019,18 @@
     // Served, a Guitar Pro file caracole serve shows (``guitarPage``) gets a group of its own: Open in the browser,
     // and Download; without alphaTab there, a note says why it is a download alone. From a file, a file like any.
     const shownInBrowser = (f) => Boolean(server) && typeof f.guitarPage === "string" && f.guitarPage !== "";
-    const others = listed.filter((f) => !isVersion(f) && !(shownInBrowser(f) && server.guitar));
+    // A harmonica tab with its page beside it (``harmonicaPage``: render.py's harmonica-N.html) is a group of its
+    // own too, served or from a file: Open, its page, and Download, its text.
+    const harpPage = (f) => (f.harmonicaPage && typeof f.harmonicaPage.href === "string" && f.harmonicaPage.href
+      ? f.harmonicaPage.href : "");
+    const others = listed.filter((f) => !isVersion(f) && !(shownInBrowser(f) && server.guitar) && !harpPage(f));
     more.push({ heading: "Sheet versions", links: keptVersions(s, primary) },
       { heading: "PDF exports", links: versions },
       { heading: "Files", links: others.map((f) => elsewhere(s, f)) });
+    for (const f of listed.filter(harpPage)) {
+      more.push({ heading: String(f.label || f.name), links: [{ label: "Open", href: harpPage(f) },
+        { label: "Download", href: f.href, download: String(f.name || "") }] });
+    }
     if (server && server.guitar) {
       for (const f of listed.filter(shownInBrowser)) {
         more.push({ heading: String(f.label || f.name), links: [{ label: "Open in the browser", href: f.guitarPage },
