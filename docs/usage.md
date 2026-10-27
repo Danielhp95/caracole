@@ -457,7 +457,8 @@ In order:
    `[harptabs]`), else the most viewed by the song's artist. A tab you picked is
    kept beside the song's other harmonica tabs, never in place of one.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
-   sheet changed, and MuseScore's pages matched from its local index.
+   sheet changed, the page of each harmonica tab the song keeps (`harmonica-N.html`,
+   for a song with no sheet too), and MuseScore's pages matched from its local index.
 9. **The songbooks it is in**: each songbook of songbooks.toml that lists the
    song is made again, as `caracole songbook render NAME` does (one whose
    songs and settings did not change is left as it is: "up to date"), then
