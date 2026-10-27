@@ -849,7 +849,7 @@ def test_the_songbook_page_caracole_wrote_is_served_in_its_sandbox(app, campfire
     assert header(response, "content-type") == "text/html; charset=utf-8"
     csp = header(response, "content-security-policy")
     assert csp == songbook_csp(page) + "; frame-ancestors 'none'"
-    assert csp.startswith("sandbox allow-scripts; default-src 'none'; ")
+    assert csp.startswith("sandbox allow-scripts allow-downloads; default-src 'none'; ")
     assert header(response, "x-content-type-options") == "nosniff" and header(response, "cache-control") == "no-store"
     assert get(app, "/_songbooks/Campfire/songbook%2Ehtml").status == 200  # an address is decoded first
 

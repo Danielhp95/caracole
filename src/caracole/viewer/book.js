@@ -43,6 +43,10 @@
     }
   }
   harvest();
+  // The player's instrument: the one the song came with in its address (carried from the song before; none where the
+  // browser keeps it), or the last one chosen here by hand; and the one the song's own version names, if any, which
+  // it opens on (viewer.js), its own alone.
+  let player = new URLSearchParams(hash).get("inst"), ownInst = null;
 
   // The songs' names (their titles, their artists') in the characters the viewer shows the Chinese in, Simplified at
   // first: its Chinese characters, kept for every page (localStorage), else trad=1 in the address, which carryScreen
@@ -89,7 +93,11 @@
       const winds = document.getElementById("winds");  // the winds' fingerings and the harps' notes, every song's
       if (winds) song.winds = JSON.parse(winds.textContent);
       data.textContent = JSON.stringify(song);
+      ownInst = new URLSearchParams(String(song.start || "")).get("inst");
     } catch (err) { /* the viewer says so */ }
+    document.addEventListener("change", (e) => {
+      if (e.target instanceof HTMLSelectElement && e.target.id === "insts") player = e.target.value;
+    });
     const title = current.querySelector("h2.title");
     const name = document.querySelector(".book-head h1");
     if (title && name) document.title = title.textContent + " · " + name.textContent;
@@ -132,7 +140,8 @@
   };
   // The rail of necks, the pinyin, the Chinese characters and the instrument are the screen's choices, not a song's:
   // where there is no storage (caracole serve's sandbox), the address the viewer keeps them in ("necks=0", "py=1",
-  // "trad=1", "inst=ukulele") goes on with every step, to the next song or the contents.
+  // "trad=1", "inst=ukulele") goes on with every step, to the next song or the contents. From a song on an instrument
+  // of its own, the step goes on with the player's.
   const SCREEN = ["necks", "py", "trad", "inst"];
   const carryScreen = (from) => {
     const at = String(from || "").indexOf("#");
@@ -140,7 +149,7 @@
     const to = new URLSearchParams(location.hash.slice(1));
     let changed = false;
     for (const name of SCREEN) {
-      const kept = was.get(name);
+      const kept = name === "inst" && ownInst !== null ? player : was.get(name);
       if (to.get(name) === kept) continue;
       if (kept !== null) to.set(name, kept);
       else to.delete(name);

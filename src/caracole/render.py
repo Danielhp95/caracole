@@ -1160,8 +1160,79 @@ def render_version(
     Raises RenderError: no sheet kept, a sheet that can't be read or made, a CJK font needed and missing, or
     chordpro failing.
     """
-    sheet, text, found = _export_source(conn, cfg, song)
-    folder = song_dir(cfg.library_dir, song)
+    made = _export_text(conn, cfg, song, v, pdf_fonts, traditional=traditional)
+    pdf = song_dir(cfg.library_dir, song) / made.name
+    state = {
+        "pdf": pdf.name,
+        "query": export_query(v, traditional=made.traditional),
+        "source_sha": hashlib.sha256(made.text.encode("utf-8")).hexdigest(),
+        "style": _style(),
+        "pdf_text": PDF_TEXT_VERSION,
+        "printed_sha": hashlib.sha256(made.printed.encode("utf-8")).hexdigest(),
+        "font": str(made.font) if made.font else None,
+        "fonts": _fonts_record(made.fonts),
+    }
+    key = f"{EXPORT_KV}{song.id}"
+    record = kv_get_json(conn, key)
+    record = {k: e for k, e in record.items() if isinstance(e, Mapping)} if isinstance(record, Mapping) else {}
+    if not force and _up_to_date(pdf, record.get(made.label), state):
+        return pdf
+    sha, size = _render_into(made.printed, pdf, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin,
+                             font_file=made.font, fonts=made.fonts, runner=runner)
+    # The label names the file, so another label never names the same one; a name that sorts the same
+    # after safe_name is the same file, and its older record goes.
+    record = {k: e for k, e in record.items() if e.get("pdf") != pdf.name}
+    record[made.label] = {**state, "pdf_sha256": sha, "pdf_size": size}
+    kv_set_json(conn, key, record)
+    return pdf
+
+
+def version_pdf(
+    conn: sqlite3.Connection,
+    cfg: Config,
+    song: Song,
+    v: Version,
+    *,
+    runner: Runner = subprocess.run,
+    pdf_fonts: Any = _CONFIG,
+    traditional: bool = False,
+) -> tuple[str, bytes]:
+    """The PDF ``render_version`` makes of the song's sheet in the version ``v`` (in Traditional characters with
+    ``traditional``, a Chinese sheet's), as its label ("A Major, capo 0", "A Major, capo 0, Traditional")
+    and its bytes, for caracole serve's Export PDF to download at once: made in a private folder under the cache
+    (``_render_bytes``) and written nowhere else, recorded nowhere, no lock taken, so two at once never meet. Raises
+    RenderError as ``render_version`` does."""
+    made = _export_text(conn, cfg, song, v, pdf_fonts, traditional=traditional)
+    data = _render_bytes(made.printed, made.name, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin,
+                         font_file=made.font, fonts=made.fonts, runner=runner)
+    return made.label, data
+
+
+@dataclass(frozen=True)
+class _ExportText:
+    """What an export's PDF is made from (``_export_text``): the sheet's ChordPro text, the version's label and the
+    PDF's name by it, the text chordpro prints, and the fonts it prints it in; and whether it is in Traditional
+    characters (a Chinese sheet's, asked so)."""
+
+    text: str
+    label: str
+    printed: str
+    font: Path | None
+    fonts: PdfFonts | None
+    traditional: bool = False
+
+    @property
+    def name(self) -> str:
+        return f"sheet ({safe_name(self.label)}).pdf"
+
+
+def _export_text(conn: sqlite3.Connection, cfg: Config, song: Song, v: Version, pdf_fonts: Any, *,
+                 traditional: bool = False) -> _ExportText:
+    """The text an export of the song's sheet in the version ``v`` prints, in the PDF fonts ``pdf_fonts`` hands over,
+    else ``cfg``'s when chordpro can use them (``render_version``, ``version_pdf``); a Chinese sheet's in Simplified
+    characters, or in Traditional ones with ``traditional``, its label then saying so; another sheet's as written.
+    RenderError: no sheet kept, a sheet that can't be read or made, or a CJK font needed and missing."""
+    _, text, found = _export_source(conn, cfg, song)
     fonts = _pdf_fonts(cfg.pdf_fonts)[0] if pdf_fonts is _CONFIG else pdf_fonts
     try:
         shapes = viewer_key(text, *_key_of(found))
@@ -1174,33 +1245,11 @@ def render_version(
     except Exception as e:  # a sheet the viewer's code can't read
         log.warning("%s: cannot make the export %s", song.display, version_query(v), exc_info=True)
         raise RenderError(f"cannot make the export: {type(e).__name__}: {e}") from e
-    pdf = folder / f"sheet ({safe_name(label)}).pdf"
     font, lost = pdf_font(printed, _cjk_font(cfg.cjk_font)[0], fonts)
+    made = _ExportText(text, label, printed, font, fonts, traditional)
     if lost is not None:
-        raise RenderError(f"{pdf.name} needs a CJK font: {FONT_HINT}")
-    state = {
-        "pdf": pdf.name,
-        "query": export_query(v, traditional=traditional),
-        "source_sha": hashlib.sha256(text.encode("utf-8")).hexdigest(),
-        "style": _style(),
-        "pdf_text": PDF_TEXT_VERSION,
-        "printed_sha": hashlib.sha256(printed.encode("utf-8")).hexdigest(),
-        "font": str(font) if font else None,
-        "fonts": _fonts_record(fonts),
-    }
-    key = f"{EXPORT_KV}{song.id}"
-    record = kv_get_json(conn, key)
-    record = {k: e for k, e in record.items() if isinstance(e, Mapping)} if isinstance(record, Mapping) else {}
-    if not force and _up_to_date(pdf, record.get(label), state):
-        return pdf
-    sha, size = _render_into(printed, pdf, work_dir=cfg.cache_dir, chordpro_bin=cfg.chordpro_bin, font_file=font,
-                             fonts=fonts, runner=runner)
-    # The label names the file, so another label never names the same one; a name that sorts the same
-    # after safe_name is the same file, and its older record goes.
-    record = {k: e for k, e in record.items() if e.get("pdf") != pdf.name}
-    record[label] = {**state, "pdf_sha256": sha, "pdf_size": size}
-    kv_set_json(conn, key, record)
-    return pdf
+        raise RenderError(f"{made.name} needs a CJK font: {FONT_HINT}")
+    return made
 
 
 def _remake_exports(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song, *,
@@ -1681,25 +1730,39 @@ def _render_into(
     runner: Runner,
     fonts: PdfFonts | None = None,
 ) -> tuple[str, int]:
-    """``render_pdf`` of the ChordPro ``text`` (a PDF's own, ``_printed``) in a private directory, then
-    the PDF to ``pdf``; return the SHA-256 and the length of the PDF written.
+    """``_render_bytes`` of the ChordPro ``text`` (a PDF's own, ``_printed``), then the PDF to ``pdf``; return the
+    SHA-256 and the length of the PDF written. It goes there through ``write_atomic``, so a failed run leaves the
+    last good one in place, and another caracole rendering the same sheet isn't in the way."""
+    data = _render_bytes(text, pdf.name, work_dir=work_dir, chordpro_bin=chordpro_bin, font_file=font_file,
+                         fonts=fonts, runner=runner)
+    return write_atomic(pdf, data), len(data)
+
+
+def _render_bytes(
+    text: str,
+    name: str,
+    *,
+    work_dir: Path,
+    chordpro_bin: str,
+    font_file: Path | None,
+    runner: Runner,
+    fonts: PdfFonts | None = None,
+) -> bytes:
+    """``render_pdf`` of the ChordPro ``text`` in a private directory, to a PDF named ``name``; its bytes.
 
     chordpro opens its input and its output by name and follows symbolic links, and
     others can write to the song's folder: either file could be swapped for a link
     while it runs, to print one of caracole's private files into the PDF or to write
     over it. So chordpro reads the text, as a file, and writes the PDF in a directory
     of its own under ``work_dir`` (the cache), which only caracole can enter (mode
-    0700). The PDF then goes to ``pdf`` through ``write_atomic``, so a failed run
-    leaves the last good one in place, and another caracole rendering the same sheet
-    isn't in the way. Both files keep the sheet's names: chordpro picks its backend
-    by the extension, and its messages then say which sheet failed.
+    0700), and which goes once done. Both files keep the sheet's names: chordpro picks
+    its backend by the extension, and its messages then say which sheet failed.
     """
     with private_dir(work_dir, "render-") as tmp:
-        cho, out = tmp / f"{pdf.stem}.cho", tmp / pdf.name
+        cho, out = tmp / f"{Path(name).stem}.cho", tmp / name
         cho.write_bytes(text.encode("utf-8"))
         render_pdf(cho, out, chordpro_bin=chordpro_bin, font_file=font_file, fonts=fonts, runner=runner)
-        data = out.read_bytes()
-        return write_atomic(pdf, data), len(data)
+        return out.read_bytes()
 
 
 @contextmanager

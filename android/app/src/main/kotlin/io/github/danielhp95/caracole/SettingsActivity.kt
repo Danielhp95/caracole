@@ -16,6 +16,7 @@ import androidx.core.view.WindowInsetsCompat
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncEngine
 import io.github.danielhp95.caracole.mirror.SyncError
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
@@ -99,8 +100,11 @@ class SettingsActivity : Activity() {
                     val size = Syncs.size(this@SettingsActivity, manifest.bytes)
                     if (manifest.skipped.isEmpty()) getString(R.string.answered, manifest.entries.size, size)
                     else getString(R.string.answered_skipped, manifest.entries.size, size, manifest.skipped.size)
-                } catch (e: SyncError) {
-                    e.message ?: e.javaClass.simpleName
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // Anything, the unexpected too: said on the screen, never a crash.
+                    SyncError.of(e).let { it.message ?: it.javaClass.simpleName }
                 }
             }
             testResult.text = said

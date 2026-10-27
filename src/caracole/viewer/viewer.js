@@ -44,7 +44,7 @@
     ["M14.5 10a2.5 2.5 0 0 1 0 4", "M17 8a5.5 5.5 0 0 1 0 8", "M19.5 5.5a9.5 9.5 0 0 1 0 13"]];
   const VOL = 2;
   // Whether caracole serve sent this page, so that its controls may link to the server's own pages: Export PDF
-  // (/export), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
+  // (/export.pdf), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
   // file they show the command to run, or the file itself, instead; and so in caracole's Android app, whose offline
   // copy of the library (androidx.webkit's WebViewAssetLoader, always at appassets.androidplatform.net) reads like
   // a file: no server answers there. The one place the page tells the two apart.
@@ -102,17 +102,17 @@
   // The shapes kept chosen, each with the chord it was chosen for (atSigns): read back once the chords
   // can be named (below setAt), as only a chord still named so gets its shape back.
   let keptAt = null;
-  // Where an address (or the song's own version) plays the song: what it names of it.
-  const adopt = (params) => {
-    if (params.has("alt")) state.alt = swapsOf(params.get("alt"));
+  // Where an address (or the song's own version) plays the song: what it names of it, into the state (or ``into``).
+  const adopt = (params, into = state) => {
+    if (params.has("alt")) into.alt = swapsOf(params.get("alt"));
     if (params.has("at")) {
-      state.at = positionsOf(params.get("at"));
-      keptAt = null;  // the address says which
+      into.at = positionsOf(params.get("at"));
+      if (into === state) keptAt = null;  // the address says which
     }
-    if (params.has("t")) state.t = clampT(params.get("t"));
-    if (validMode(params.get("mode"))) state.mode = params.get("mode");
-    if (params.has("capo")) state.capo = fretOf(params.get("capo"));
-    if (params.has("nm")) state.nm = nmOf(params.get("nm"));
+    if (params.has("t")) into.t = clampT(params.get("t"));
+    if (validMode(params.get("mode"))) into.mode = params.get("mode");
+    if (params.has("capo")) into.capo = fretOf(params.get("capo"));
+    if (params.has("nm")) into.nm = nmOf(params.get("nm"));
   };
   // The song's own version (overrides.toml's [version], "Make this my version"), which its PDF is in: the page
   // starts there when its address names no version of its own, and Reset everything goes back there.
@@ -248,9 +248,9 @@
     versionLinks();
   };
 
-  // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the server's export page
-  // for this very address, followed in this tab (the sandbox has no popups); from a file, a row that unfolds the
-  // command that makes it, with Copy.
+  // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the PDF itself for this very
+  // address (caracole serve's /export.pdf, which answers it as a download: the sandbox allows downloads, and the page
+  // stays where it is); from a file, a row that unfolds the command that makes it, with Copy.
   const exportLink = () => {
     const link = $("export");
     const cmd = $("export-cmd");
@@ -277,8 +277,70 @@
     const query = new URLSearchParams();
     query.set("sheet", sheetPath());
     version.forEach((value, name) => query.append(name, value));
-    link.setAttribute("href", "/export?" + query.toString());
+    link.setAttribute("href", "/export.pdf?" + query.toString());
   };
+  // What of where the song is played makes its music (the key, the mode, the capo, the chords swapped in that mode and
+  // the shapes chosen), never how it is read (the text size, the scroll, the chord names, the necks, the pinyin, the
+  // strum, and the instrument, the player's): two states that play the song alike say the same.
+  const musicOf = (s) => {
+    const mode = key ? s.mode || key.mode : "";
+    const swaps = (s.alt && s.alt[mode]) || {};
+    const alt = Object.keys(swaps).filter((i) => Array.isArray(swaps[i])).sort((a, b) => a - b)
+      .map((i) => [i].concat(swaps[i]).join("."));
+    const at = Object.keys(s.at || {}).filter((i) => Number(s.at[i]) > 0).sort((a, b) => a - b)
+      .map((i) => i + "." + s.at[i]);
+    return [s.t, mode, s.capo === null ? sheetCapo : s.capo, alt.join(","), at.join(",")].join("|");
+  };
+  // The song's own version, where the page opens with no version in its address (data.start over the sheet at its
+  // [transpose]), or the one made the song's own on this page since (Download and make it mine), which its job saves.
+  let madeMine = null;
+  const ownMusic = () => {
+    if (madeMine !== null) return madeMine;
+    const mine = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null };
+    adopt(start, mine);
+    return musicOf(mine);
+  };
+  // Served, Export PDF pressed on a version other than the song's own asks first: make it your version too (the
+  // download with mine=1, which queues `caracole render --mine`: its PDF, its viewer and its songbooks then start
+  // there), just download it, or neither. A modal dialog, the song dimmed under it: its focus goes round within it, and
+  // Escape, ×, Cancel or a tap beside its box closes it, the focus back on Export PDF. On the song's own, the download
+  // at once.
+  const ask = $("export-ask");
+  if (ask && $("export")) {
+    const title = (document.querySelector("h1") || {}).textContent || "";
+    $("export").addEventListener("click", (e) => {
+      if (!served || musicOf(state) === ownMusic()) return;
+      e.preventDefault();
+      const href = $("export").getAttribute("href");
+      $("ask-title").textContent = "Make this your version of " + title + "?";
+      $("ask-version").textContent = versionWords().filter(Boolean).join(", ");
+      $("ask-just").setAttribute("href", href);
+      $("ask-mine").setAttribute("href", href + "&mine=1");
+      ask.showModal();
+      $("ask-title").focus({ preventScroll: true });
+    });
+    ask.addEventListener("click", (e) => {
+      if (e.target === ask) ask.close();  // beside its box: the backdrop
+    });
+    for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => ask.close());
+    $("ask-mine").addEventListener("click", () => {
+      madeMine = musicOf(state);
+      ask.close();
+    });
+    ask.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();  // the dialog closes itself, and nothing under it
+        return;
+      }
+      if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+      const mine = Array.from(ask.querySelectorAll(FOCUSABLE)).filter(reachable);
+      const here = mine.indexOf(document.activeElement);
+      const to = e.shiftKey ? (here <= 0 ? mine[mine.length - 1] : null) : (here === mine.length - 1 ? mine[0] : null);
+      if (!to) return;
+      e.preventDefault();
+      to.focus();
+    });
+  }
   // The page's path in the library, as caracole serve serves it ("Artist/Title/sheet.html"); its file name.
   const sheetPath = () => decodeURIComponent(location.pathname.slice(1));
   const pageName = () => {
@@ -382,8 +444,8 @@
     return nameOf(rep, s);
   };
   // The frets where a guitar's open shapes play the key (page.py's ``capo``): on an instrument with shapes of its own
-  // (a ukulele), its Easy keys instead.
-  const capoHints = () => (key && !inst().shapes ? data.capo[modeNow()][mod12(state.t)] : []);
+  // (a ukulele), its Easy keys instead; on one with no capo (the harmonica, the winds), none.
+  const capoHints = () => (key && takesCapo() && !inst().shapes ? data.capo[modeNow()][mod12(state.t)] : []);
   // Where the song is played, as Cifra Club's key line says it: with a capo, the key of the
   // shapes, the capo and the key the song sounds in ("Em shapes · capo 2 · sounds F#m"), as
   // "Key Em" alone would read as the song's key; with none, the key. Each part is
@@ -1376,6 +1438,7 @@
     const name = label(i, rep);
     const found = numbered() ? reading(i, chordEls.indexOf(shown.el), shown.pick) : null;
     $("card-name").textContent = found ? name + " · " + found.text : name;
+    $("card-tip").hidden = !tipDraws(i, chordEls.indexOf(shown.el));
     const shapes = shapesOf(rep, shift());
     const box = $("diagram");
     box.textContent = "";
@@ -1700,7 +1763,7 @@
   // note of the chord is outside the key when it isn't one of them, and the line under the picture names it, with
   // the key's note of its letter.
   const tip = $("tip");
-  let tipOf = null, leaving = 0;
+  let tipOf = null, tipI = null, leaving = 0;  // what the tooltip is by (a chord, or the strip's button), its chord
   function hideTip() {
     clearTimeout(leaving);
     if (tip.hidden) return;
@@ -1708,7 +1771,7 @@
     tip.hidden = true;
     if (tipOf) tipOf.removeAttribute("aria-describedby");
     if (inside && tipOf && tipOf.isConnected) tipOf.focus({ preventScroll: true });  // not lost with the tooltip
-    tipOf = null;
+    tipOf = tipI = null;
   }
   const ROLES = { h: "home", a: "away", p: "pull" };
   const MODE_WORDS = { ionian: "major", aeolian: "minor" };
@@ -1882,9 +1945,10 @@
     tip.style.setProperty("--tip-top", Math.round(top + window.scrollY) + "px");
     tip.style.setProperty("--tip-left", Math.round(left + window.scrollX) + "px");
   };
-  function showTip(el) {
-    const i = el.dataset.c;
-    const found = reading(i, chordEls.indexOf(el));
+  // The chord ``i`` (by default the chord ``el``'s), read at its place on the sheet ``k``, as the one played now:
+  // its tooltip by ``el``, a chord on the sheet or the strip's button the card was opened from.
+  function showTip(el, i = el.dataset.c, k = chordEls.indexOf(el)) {
+    const found = reading(i, k);
     if (!found) return;
     clearTimeout(leaving);
     if (tipOf && tipOf !== el) tipOf.removeAttribute("aria-describedby");
@@ -1903,12 +1967,25 @@
     $("tip-switch").hidden = $("tip-view").hidden && $("tip-hear").hidden;  // nothing to switch, nothing to hear
     tip.hidden = false;
     tipOf = el;
+    tipI = i;
     el.setAttribute("aria-describedby", "tip");
     placeTip();
   }
   $("tip-hear").addEventListener("click", () => {
-    const heard = tipOf ? tipSound(tipOf.dataset.c) : null;
+    const heard = tipOf ? tipSound(tipI) : null;
     if (heard) sound.strum(heard.position, { capo: heard.capo, tuning: inst().tuning, voice: inst().voice });
+  });
+  // Whether the tooltip has the chord ``i``'s notes to draw, as it is played now (at its place ``k``): its numeral, its
+  // notes in the tables and the key's. The card offers Circle & keyboard where it has, which closes the card and opens
+  // the tooltip by the chord the card is by (its numeral where the sheet shows one, else its name), the focus on its
+  // first button: the chords' names alone have no numeral to hover or tap.
+  const tipDraws = (i, k) => Boolean(reading(i, k)) && Boolean(tonesOf(current(i))) && Boolean(keyNotes());
+  $("card-tip").addEventListener("click", () => {
+    const i = shown.i, k = chordEls.indexOf(shown.el), by = anchor();
+    close(card);
+    showTip(by, i, k);
+    const first = ["tip-view", "tip-hear"].map($).find((b) => !b.hidden && b.getClientRects().length > 0);
+    if (!tip.hidden && first) first.focus({ preventScroll: true });
   });
   document.addEventListener("pointerdown", (e) => {
     const target = e.target instanceof Element ? e.target : null;

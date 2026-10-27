@@ -465,8 +465,9 @@ function openSiteArtist(a, focus) {
     .then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
 }
 
-// Read a LaCuerda page ({slug} or {name}) from the button ``go`` in ``offer``, then list the artist's songs; a read
-// that leaves none to list says what LaCuerda answered, under the offer (ROWS_SCRIPT's readOutcome).
+// Read a LaCuerda page ({slug} or {name}), or a harptabs.com one ({harptabs}), from the button ``go`` in ``offer``,
+// then list the artist's songs; a read that leaves none to list says what the site answered, under the offer
+// (ROWS_SCRIPT's readOutcome).
 function readThenShow(who, go, offer) {
   const mine = typed;
   go.disabled = true;
@@ -479,7 +480,7 @@ function readThenShow(who, go, offer) {
       const line = read.job && read.job.line && typeof read.job.line === "object" ? read.job.line : {};
       go.disabled = line.tone === "missing";  // no such page: asking again finds none either
       offer.querySelectorAll(".read-outcome").forEach(x => x.remove());
-      const said = rowKit.readOutcome(read.job);
+      const said = rowKit.readOutcome(read.job, Boolean(who.harptabs));
       offer.append(said);
       status.textContent = said.firstChild.textContent.trim();
     });

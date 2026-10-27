@@ -674,12 +674,12 @@ def test_the_pdf_link_and_the_export_follow_the_choice(tmp_path):
 
 
 @in_chromium
-def test_served_the_export_page_is_asked_for_the_characters_shown(tmp_path):
+def test_served_export_pdf_is_asked_for_the_characters_shown(tmp_path):
     sheet = "/Artist/Title/sheet.html"
     with served({sheet: (build_viewer(SHEET), viewer_csp)}) as site, \
             open_viewer(tmp_path, site + sheet + "#trad=1", **DESKTOP) as b:
         seen = b.js(LINKS)
-    assert seen["export"].startswith("/export?sheet=") and seen["export"].endswith("&trad=1")
+    assert seen["export"].startswith("/export.pdf?sheet=") and seen["export"].endswith("&trad=1")
 
 
 @in_chromium

@@ -2578,7 +2578,7 @@
         const line = read.job && read.job.line && typeof read.job.line === "object" ? read.job.line : {};
         go.disabled = line.tone === "missing";  // no such page: asking again finds none either
         offer.querySelectorAll(".read-outcome").forEach((x) => x.remove());
-        const said = readOutcome(read.job);
+        const said = readOutcome(read.job, Boolean(who.harptabs));
         offer.appendChild(said);
         say(said.firstChild.textContent.trim());
       });
