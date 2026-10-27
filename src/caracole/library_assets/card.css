@@ -68,6 +68,7 @@
 .drawer-what { margin: 0; font-size: .95rem; font-weight: 650; }
 .drawer-said { color: var(--muted); font-size: .84rem; }
 .drawer-head form { margin: 0; }
+.drawer-head .pin-note { flex: 1 1 100%; margin: 0; color: var(--review); font-size: .84rem; }
 .drawer-close { position: absolute; top: 7px; right: 8px; display: grid; place-items: center; width: 30px;
   height: 30px; margin: 0; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent;
   color: var(--muted); cursor: pointer; }

@@ -88,7 +88,7 @@ const caracoleCard = (icons, rows) => {
     drawer.setAttribute("aria-labelledby", title.id);
     head.appendChild(title);
     if (said) head.appendChild(el("span", "drawer-said", said));
-    for (const node of listOf(extra)) head.appendChild(node);
+    for (const node of listOf(extra)) if (node) head.appendChild(node);
     return head;
   };
   const versionRow = (r) => {
@@ -158,8 +158,9 @@ const caracoleCard = (icons, rows) => {
     if (rest > 0) {
       const more = el("div", "drawer-rest");
       more.appendChild(el("span", "rest-said", rest + " more on Ultimate Guitar, not kept"));
-      if (acts.keepMore) {
-        more.appendChild(acts.keepMore(rest, Number(v.keepMore) || 0));
+      const fetch = acts.keepMore ? acts.keepMore(rest, Number(v.keepMore) || 0) : null;
+      if (fetch) {
+        more.appendChild(fetch);
       } else if (acts.keepMoreCommand) {
         const said = el("span", "rest-command", "Keep them with ");
         said.appendChild(el("code", null, acts.keepMoreCommand));
@@ -169,18 +170,25 @@ const caracoleCard = (icons, rows) => {
     }
   };
   // The LaCuerda sheets caracole met for the song (``lacuerdaVersions``), best first: each its page on LaCuerda, its
-  // share of the lyrics, and In use for the sheet, else what keeps it (``acts.useLaCuerda``).
+  // share of the lyrics, and In use for the sheet, else what keeps it (``acts.useLaCuerda``). A UG version you chose
+  // (a [pin]) outranks a LaCuerda pick: while one does, the drawer says so, with what takes it out, and keeps none.
   const lacuerdaDrawer = (s, drawer, acts) => {
     const met = listOf(s.lacuerdaVersions).filter((x) => x && typeof x === "object");
     const title = String(s.title);
+    const pinned = Boolean(s.versions && s.versions.pinned) && Boolean(acts.useLaCuerda);
+    const extra = [];
+    if (pinned) {
+      extra.push(el("p", "pin-note", "Your choice on Ultimate Guitar is in use: Back to caracole's pick first."));
+      if (acts.clear) extra.push(acts.clear());
+    }
     drawer.appendChild(drawerHead(drawer, "lacuerda", "LaCuerda · chord sheets", many(met.length, "version") +
-      " caracole met"));
+      " caracole met", extra));
     const ol = el("ol", "vrows");
     met.forEach((x, n) => {
       const ver = "Version " + (n + 1);
       const actions = [];
       if (x.sheet) actions.push(inUse());
-      else if (acts.useLaCuerda) actions.push(acts.useLaCuerda(x, ver));
+      else if (acts.useLaCuerda && !pinned) actions.push(acts.useLaCuerda(x, ver));
       actions.push(openLink(x.href, ver + " of " + title + " on LaCuerda, in a new tab", { external: true }));
       ol.appendChild(versionRow({ ver, note: [lyricsShare(null, x.coverage) || "not scored"], actions,
         cls: x.sheet ? "cur" : "" }));

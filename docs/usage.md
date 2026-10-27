@@ -1986,13 +1986,24 @@ use** on the one the title opens, **Open** on each, its own viewer page,
 `version-<tab>.html` (served by caracole serve as a sheet viewer is, while it
 holds what caracole wrote), or its text, `version-<tab>.txt`, until render has
 written the page; a version UG no longer has says so. The versions caracole
-hasn't kept are counted, not listed (`10 more on Ultimate Guitar, not kept`);
-from the folder, the drawer gives the command that keeps them, `caracole
-versions --keep-more 'Eagles - Hotel California'`. **LaCuerda**'s: the sheets
-caracole met there, the most of the lyrics first, each with its page (↗) and In
-use on the one that is the sheet. The **auto sheet** beside a human one: its
-viewer, its PDF, text and ChordPro. A Guitar Pro file's, a harmonica tab's or a
-score's source: a row a file, Open where the page shows it, and Download.
+hasn't kept are counted, not listed (`10 more on Ultimate Guitar, not kept`).
+On the page `caracole serve` serves, each version but the one has **Use this
+one**, which makes it the sheet, as `caracole versions --choose` does (a
+`[pin]`); while a `[pin]` chooses the sheet, **Back to caracole's pick**, as
+`--clear` does; and the versions not kept have **Fetch them**, which keeps them
+beside the sheet as `caracole versions --keep-more` does, within a lookup's
+budget (**Fetch 6 more** when more are left than one lookup may keep: press it
+again for the next). Each is a request of the song's, which its line shows as a
+lookup's, and once it is over the card counts again. From the folder, the drawer
+gives the command that keeps them, `caracole versions --keep-more 'Eagles -
+Hotel California'`. **LaCuerda**'s: the sheets caracole met there, the most of
+the lyrics first, each with its page (↗), In use on the one that is the sheet
+and, served, Use this one on the others, which looks the song up keeping that
+sheet, as Use LaCuerda's sheet does; while your choice on Ultimate Guitar is in
+use, it says so, with Back to caracole's pick, as a `[pin]` outranks a LaCuerda
+pick. The **auto sheet** beside a human one: its viewer, its PDF, text and
+ChordPro. A Guitar Pro file's, a harmonica tab's or a score's source: a row a
+file, Open where the page shows it, and Download.
 
 Then its progressions, as it plays them ("vi–IV–I–V"), each a chip that shows
 your songs with that progression (below); where else to find it, links that

@@ -317,12 +317,13 @@
   };
   // A song you have, looked up again now (POST /lookup with its id: one caracole get, its sheet first), as the lookup
   // page's Fetch again and its LaCuerda row's Get it again post it: with ``lacuerda``, that LaCuerda sheet kept, as
-  // caracole get --lacuerda keeps it. Under its line's chevron, served alone; a refusal says why on the line.
-  const lookupForm = (s, label, aria, title, lacuerda) => {
+  // caracole get --lacuerda keeps it. Under its line's chevron, served alone; a refusal says why on the line. ``icon``:
+  // a glyph before its words.
+  const lookupForm = (s, label, aria, title, lacuerda, icon) => {
     const form = songForm("again", "/lookup", s);
     if (lacuerda) form.appendChild(hidden("lacuerda", lacuerda));
     const go = el("button", "btn small", label);
-    go.prepend(glyph("refresh"));
+    if (icon) go.prepend(glyph(icon));
     go.type = "submit";
     go.setAttribute("aria-label", aria);
     go.title = title;
@@ -349,12 +350,13 @@
     const box = el("div", "actions again");
     if (s.status === "found") {
       box.appendChild(lookupForm(s, "Fetch again", "Fetch " + names + " again",
-        "Looks the song up anew now, as caracole get does: Ultimate Guitar's best sheet of it, then the rest", ""));
+        "Looks the song up anew now, as caracole get does: Ultimate Guitar's best sheet of it, then the rest", "",
+        "refresh"));
     }
     const lacuerda = lacuerdaOf(s);
     if (lacuerda) {
       box.appendChild(lookupForm(s, "Use LaCuerda's sheet", "Get " + names + " again, keeping LaCuerda's sheet",
-        "Looks the song up now and keeps this LaCuerda sheet, as caracole get --lacuerda does", lacuerda));
+        "Looks the song up now and keeps this LaCuerda sheet, as caracole get --lacuerda does", lacuerda, "refresh"));
     }
     return box.childNodes.length ? box : null;
   };
@@ -955,11 +957,52 @@
     go.title = "Pick it, and any other songs, for a songbook";
     return go;
   };
-  // What a card's drawers do with a song's versions (card.js ``acts``): from the file, which can ask nothing, the
-  // command that fetches the versions not kept.
-  const drawerActs = (s) => (server ? {} : {
-    keepMoreCommand: "caracole versions --keep-more " + shellNames(String(s.display)),
-  });
+  // A post of caracole serve's versions routes for a song, by its id (``action``: /versions/choose, /clear or
+  // /keep-more), ``fields`` beside it; sent by the page's script, its request followed on the song's line.
+  const versionsForm = (s, action, label, aria, title, fields) => {
+    const form = songForm("versions-post", action, s);
+    for (const [name, value] of Object.entries(fields || {})) form.appendChild(hidden(name, value));
+    const go = el("button", "btn small", label);
+    go.type = "submit";
+    go.setAttribute("aria-label", aria);
+    go.title = title;
+    form.appendChild(go);
+    postInPlace(form, go, s);
+    return form;
+  };
+  // What a card's drawers do with a song's versions (card.js ``acts``), each made when its drawer opens. Served,
+  // while no request of the song waits or runs (its line says how that goes) and it isn't ignored: Use this one
+  // (``caracole versions --choose``, a [pin]), Back to caracole's pick (``--clear``), Fetch them (``--keep-more``,
+  // "Fetch 6 more" when more are left than one lookup keeps), and LaCuerda's Use this one, the lookup that keeps
+  // that LaCuerda sheet. From the file, which can ask nothing, the command that fetches the versions not kept.
+  const drawerActs = (s) => {
+    if (!server) return { keepMoreCommand: "caracole versions --keep-more " + shellNames(String(s.display)) };
+    const id = Number(s.id);
+    const title = String(s.title);
+    const names = title + " by " + String(s.artist);
+    const free = () => {
+      const asked = jobOfSong(id);
+      return s.status !== "ignored" && !removing.has(id) && !busy.has(id) && !(asked && isActive(asked));
+    };
+    return {
+      choose: (v, ver) => (free() ? versionsForm(s, "/versions/choose", "Use this one", "Use " + ver + " of " + names,
+        "Make it the sheet the title opens, as caracole versions --choose does: a [pin] in overrides.toml",
+        { tab: String(v.tab) }) : null),
+      clear: () => (free() ? versionsForm(s, "/versions/clear", "Back to caracole's pick",
+        "Back to caracole's pick for " + names,
+        "Take your choice out of [pin], as caracole versions --clear does: caracole picks the sheet again") : null),
+      keepMore: (rest, n) => {
+        if (!free() || !(n > 0)) return null;
+        const some = n < rest;
+        return versionsForm(s, "/versions/keep-more", some ? "Fetch " + n + " more" : "Fetch them",
+          "Fetch " + (some ? n + " more versions" : rest === 1 ? "the version" : "the " + rest + " versions") + " of " +
+          title + " from Ultimate Guitar",
+          "Keeps them beside the sheet, one request each at a lookup's pace, as caracole versions --keep-more does");
+      },
+      useLaCuerda: (x, ver) => (free() ? lookupForm(s, "Use this one", "Use LaCuerda's " + ver + " of " + names,
+        "Looks the song up now and keeps this LaCuerda sheet, as caracole get --lacuerda does", String(x.href)) : null),
+    };
+  };
   // A song's line: its title (which opens its sheet), its status when it needs something, what it holds, its key, its
   // main action; and under its chevron, its card (card.js): its facts, then what needs you (its picker or what to do
   // about its match, where its audio comes from, a LaCuerda pick, Look in the index), what you play from it as tiles

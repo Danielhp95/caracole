@@ -9,6 +9,7 @@ A test adds a script after the page's own (``with_script``), which opens the son
 
 from __future__ import annotations
 
+import json
 from urllib.parse import quote
 
 import pytest
@@ -512,3 +513,207 @@ def test_a_line_drawn_again_keeps_its_card_open_and_its_drawer_closed(conn, cfg,
     assert browser.js(f"document.querySelector('{item} .drawer').hidden") is True
     assert browser.js(f"[...document.querySelectorAll('{item} button.vchip')].map((c) => "
                       "c.getAttribute('aria-expanded'))") == ["false"] * 5
+
+
+# --- served: what a drawer's versions do ---------------------------------------------------------------------
+
+
+class FakeVersions:
+    """The commands the drawer's posts queue, faked (``ran``, each one's words): ``caracole versions --keep-more``
+    keeps the next two versions not kept beside the sheet, as the real one would within a lookup's budget; any
+    other (``--choose``, ``--clear``, ``caracole get``) changes nothing."""
+
+    def __init__(self, cfg):
+        self.cfg = cfg
+        self.ran: list[tuple[str, ...]] = []
+
+    def __call__(self, args, emit):
+        from helpers.library_songs import TABS
+
+        from caracole import db
+        from caracole.overrides import override_key
+        from caracole.sheet_versions import version_names
+        from caracole.songs import find_song
+
+        self.ran.append(tuple(args))
+        if args[0] == "versions" and "--keep-more" in args:
+            conn = db.connect(self.cfg.db_path)
+            try:
+                song = find_song(conn, override_key(f"{args[-2]} - {args[-1]}"))
+                for rank, tab in enumerate(TABS[3:5], start=4):
+                    vid = conn.execute("SELECT id FROM versions WHERE song_id = ? AND tab_id = ?",
+                                       (song.id, tab)).fetchone()[0]
+                    text, doc, _ = version_names(tab)
+                    keep_file(conn, self.cfg.library_dir, song=song, version_id=vid, name=text, data=tab.encode(),
+                              rank=rank)
+                    keep_file(conn, self.cfg.library_dir, song=song, version_id=vid, name=doc, data=b"{}", rank=rank)
+            finally:
+                conn.close()
+        return 0
+
+
+class Posts(list):
+    """Each POST the page sent, as (path, its form), in order; ``next`` waits for the one after ``n``."""
+
+    def next(self, n: int, timeout: float = 10.0) -> tuple[str, dict]:
+        import time
+
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if len(self) > n:
+                return self[n]
+            time.sleep(0.05)
+        raise AssertionError(f"the page posted nothing after {n}")
+
+
+@pytest.fixture
+def versions_served(cfg):
+    """caracole serve on a free port, its queue running FakeVersions and its page asking how its requests go every
+    100 ms: its address, the posts it got, and the commands it ran."""
+    import threading
+    from urllib.parse import parse_qs
+
+    from caracole.web.app import WebApp
+    from caracole.web.jobs import JobQueue
+    from caracole.web.security import allowed_hosts
+    from caracole.web.server import make_server
+
+    runner = FakeVersions(cfg)
+    queue = JobQueue(runner)
+    queue.start()
+    app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", timers={"poll": 100, "undo": 500},
+                 searches_lacuerda=False)
+    posts = Posts()
+    answer = app.handle
+
+    def handle(request):
+        if request.method == "POST":
+            posts.append((request.target, {k: v[0] for k, v in parse_qs(request.body.decode()).items()}))
+        return answer(request)
+
+    app.handle = handle
+    server = make_server(app, "127.0.0.1", 0)
+    threading.Thread(target=server.serve_forever, args=(0.01,), daemon=True).start()
+    yield f"http://127.0.0.1:{server.server_address[1]}/", posts, runner
+    server.shutdown()
+    server.server_close()
+    queue.stop()
+
+
+def drawer_of(browser, song, source):
+    """The song's card opened, and its chip of ``source`` on its sheet tile, its drawer then shown; its line's
+    selector."""
+    item = f'article.line[data-id="{song.id}"]'
+    browser.click(item + " .line-more")
+    browser.click(item + f' .tile-sheet button.vchip[data-source="{source}"]')
+    assert browser.wait(f"!document.querySelector('{item} .drawer').hidden")
+    return item
+
+
+def press(browser, item, words, where=".drawer"):
+    """The button of the song's ``where`` that says ``words``, pressed as a hand would."""
+    found = (f"[...document.querySelectorAll('{item} {where} button')].find((b) => b.textContent === "
+             f"{json.dumps(words)})")
+    assert browser.wait(f"!!({found})"), browser.js(f"[...document.querySelectorAll('{item} {where} button')]"
+                                                   ".map((b) => b.textContent)")
+    browser.js(f"({found}).dataset.pressMe = '1'")
+    browser.click(f"{item} {where} button[data-press-me]")
+
+
+def test_use_this_one_posts_choose_with_the_tab(conn, cfg, versions_served, browser):
+    base, posts, _ = versions_served
+    song = hotel(conn, cfg)
+    browser.open(base)
+    item = drawer_of(browser, song, "ug")
+    assert browser.js(f"[...document.querySelectorAll('{item} .vrow')].map((r) => [...r.querySelectorAll("
+                      "'.vbtns button, .vbtns .inuse')].map((b) => b.textContent))") == [
+        ["In use"], ["Use this one"], ["Use this one"]]
+    press(browser, item, "Use this one")
+    assert posts.next(0) == ("/versions/choose", {"csrf": "tok", "song": str(song.id), "tab": "46191"})
+    # Its request shows on the song's line, as a lookup's does.
+    assert browser.wait(f"!!document.querySelector('{item} .progress')?.textContent")
+
+
+def test_fetch_them_posts_keep_more_and_says_fetch_n_more(conn, cfg, versions_served, browser):
+    base, posts, _ = versions_served
+    song = hotel(conn, cfg)
+    few = add_song(conn, "Eagles", "Take It Easy")  # three versions not kept: one press keeps them all
+    for n, tab in enumerate(("700", "701", "702", "703")):
+        vid = upsert_version(conn, provider="ug", tab_id=tab, song_id=few.id, slot="sheet", kind="chords",
+                             rating=4.5 - n / 10, votes=10, version=n + 1, label=None,
+                             url=f"https://tabs.ultimate-guitar.com/tab/{tab}", raw={}, now="x")
+        if n == 0:
+            keep_file(conn, cfg.library_dir, song=few, version_id=vid, name="sheet.txt", data=b"G\n", rank=1)
+    update_song(conn, few.id, status="found")
+    browser.open(base)
+    item = drawer_of(browser, song, "ug")
+    rest = f"document.querySelector('{item} .drawer-rest')"
+    assert browser.js(f"{rest}.querySelector('.rest-said').textContent") == "10 more on Ultimate Guitar, not kept"
+    assert browser.js(f"{rest}.querySelector('button').getAttribute('aria-label')") == (
+        "Fetch 6 more versions of Hotel California from Ultimate Guitar")
+    other = drawer_of(browser, few, "ug")
+    assert browser.js(f"[...document.querySelectorAll('{other} .drawer-rest button')].map((b) => b.textContent)") == [
+        "Fetch them"]
+    press(browser, item, "Fetch 6 more")
+    assert posts.next(0) == ("/versions/keep-more", {"csrf": "tok", "song": str(song.id)})
+
+
+def test_after_keep_more_the_drawer_counts_again_from_the_jobs_view(conn, cfg, versions_served, browser):
+    base, posts, runner = versions_served
+    song = hotel(conn, cfg)
+    browser.open(base)
+    item = drawer_of(browser, song, "ug")
+    press(browser, item, "Fetch 6 more")
+    posts.next(0)
+    # Once its job is over, the line is drawn again from what the library has: two more kept, eight left.
+    assert browser.wait(f"document.querySelector('{item} .progress')?.dataset.tone === 'ready'", timeout=20)
+    assert runner.ran == [("versions", "--keep-more", "--progress", "--", "Eagles", "Hotel California")]
+    assert browser.js(f"document.querySelector('{item} .drawer').hidden") is True  # closed, as it was drawn again
+    browser.click(item + ' .tile-sheet button.vchip[data-source="ug"]')
+    assert browser.wait(f"!document.querySelector('{item} .drawer').hidden")
+    assert browser.js(f"document.querySelector('{item} .drawer-said').textContent") == (
+        "13 versions on the site · 5 kept in your library")
+    assert browser.js(f"document.querySelector('{item} .drawer-rest .rest-said').textContent") == (
+        "8 more on Ultimate Guitar, not kept")
+    assert browser.js(f"document.querySelectorAll('{item} .vrow').length") == 5
+
+
+def test_back_to_caracoles_pick_only_when_pinned(conn, cfg, versions_served, browser):
+    from caracole.overrides import add_pin
+
+    base, posts, _ = versions_served
+    song = hotel(conn, cfg)
+    browser.open(base)
+    item = drawer_of(browser, song, "ug")
+    assert browser.js(f"document.querySelector('{item} .drawer-head').textContent").count("Back") == 0
+    add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
+    browser.open(base)
+    item = drawer_of(browser, song, "ug")
+    press(browser, item, "Back to caracole's pick", ".drawer-head")
+    assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})
+
+
+def test_lacuerda_use_this_one_posts_the_lookup_with_its_page(conn, cfg, versions_served, browser):
+    base, posts, _ = versions_served
+    song = hotel(conn, cfg)
+    browser.open(base)
+    item = drawer_of(browser, song, "lacuerda")
+    press(browser, item, "Use this one")
+    assert posts.next(0) == ("/lookup", {"csrf": "tok", "song": str(song.id), "lacuerda": LACUERDA[0]})
+
+
+def test_lacuerda_use_this_one_waits_for_a_pin_to_go(conn, cfg, versions_served, browser):
+    # A UG version chosen (a [pin]) outranks a LaCuerda pick: its Use this one would do nothing until the pin goes.
+    from caracole.overrides import add_pin
+
+    base, posts, _ = versions_served
+    song = hotel(conn, cfg)
+    add_pin(cfg.overrides_file, song.display, ["https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-46191"])
+    browser.open(base)
+    item = drawer_of(browser, song, "lacuerda")
+    buttons = f"[...document.querySelectorAll('{item} .drawer button')].map((b) => b.textContent)"
+    assert "Use this one" not in browser.js(buttons)
+    assert browser.js(f"document.querySelector('{item} .drawer .pin-note').textContent") == (
+        "Your choice on Ultimate Guitar is in use: Back to caracole's pick first.")
+    press(browser, item, "Back to caracole's pick")
+    assert posts.next(0) == ("/versions/clear", {"csrf": "tok", "song": str(song.id)})
