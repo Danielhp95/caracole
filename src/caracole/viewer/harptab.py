@@ -55,7 +55,7 @@ _HOLE = re.compile(r"""
     (?P<sign>[-+−–])?
     (?P<num>10|[1-9])
     (?P<bd>[BD](?![A-Za-z]))?            # 4B blow, 5D draw
-    (?P<bend>(?:'|’|`|b(?![a-z]{2})){1,3})?   # -3' -3'' -3b -3bb (a b, not a word's start)
+    (?P<bend>(?:'|’|`|b(?!b*[ac-z])){1,3})?   # -3' -3'' -3b -3bbb (a b, not a word's start)
     (?P<ob>o(?![a-z]))?                  # 6o: an overblow, an overdraw on 7 to 10
     (?P<btn2>[<*](?!\S*[a-z]))?          # 4< 4*: the slide
 """, re.X)

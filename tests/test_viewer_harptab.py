@@ -182,6 +182,13 @@ def test_each_way_of_writing_a_hole():
     assert found.coverage == 1.0 and found.is_row
 
 
+def test_a_bend_of_three_semitones_is_read_as_its_other_spellings_are():
+    # The 3 draw bends a whole step and a half: -3''', -3bbb or bbb-3, as the module's docstring reads them.
+    found = scan("-3''' -3bbb bbb-3 -2bb 10b")
+    assert [g.label() for g in found.groups] == ["−3′′′", "−3′′′", "−3′′′", "−2′′", "10′"]
+    assert found.coverage == 1.0 and harp.hole_note(0, 3, "draw", 3) is not None
+
+
 def test_holes_together():
     found = scan("(4 5 6) (456) {-4 -5} [-2 -5] 7,8B (-4)")
     assert [(g.kind, g.label()) for g in found.groups] == [
