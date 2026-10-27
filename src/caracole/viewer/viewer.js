@@ -1728,17 +1728,115 @@
     state.roles = !state.roles;
     render();
   });
-  // A numeral's line, by it: on a finger's tap, or while the mouse is over it. Escape, a tap anywhere else,
-  // or the mouse moving away closes it; it goes with the page as it scrolls, and opens the chord's card.
+  // A numeral's tooltip, by it: on a finger's tap, or while the mouse is over it. Escape, a tap anywhere else,
+  // or the mouse moving away closes it; it goes with the page as it scrolls. It heads with the chord as the sheet
+  // names it, its numeral as the sheet draws it and its role in words; then the numeral's line and the key it is
+  // read in; then the chord's notes on a twelve-note circle, C at the top, beside their list; ▶ Hear it strums the
+  // chord as its card would, and Shapes opens the card. Every note, interval and pitch class is the page's data
+  // (data.tones: harmony_tables.py), and the key's notes are its scale (data.keyScale) above the tonic shown: a
+  // note of the chord is outside the key when it isn't one of them, and the line under the picture names it, with
+  // the key's note of its letter.
   const tip = $("tip");
   let tipOf = null, leaving = 0;
   function hideTip() {
     clearTimeout(leaving);
     if (tip.hidden) return;
+    const inside = tip.contains(document.activeElement);
     tip.hidden = true;
     if (tipOf) tipOf.removeAttribute("aria-describedby");
+    if (inside && tipOf && tipOf.isConnected) tipOf.focus({ preventScroll: true });  // not lost with the tooltip
     tipOf = null;
   }
+  const ROLES = { h: "home", a: "away", p: "pull" };
+  const MODE_WORDS = { ionian: "major", aeolian: "minor" };
+  // The chord's notes, each [name, interval, pitch class], from the root up by degree as data.tones lists them, or
+  // null where the tables don't name the chord.
+  const tonesOf = (rep) => {
+    const found = rep && data.tones ? data.tones[nameOf(rep, shift())] : null;
+    if (typeof found !== "string") return null;
+    const [notes, steps, pcs] = found.split("|").map((text) => text.split(" "));
+    if (!pcs || pcs.length !== notes.length || pcs.some((pc) => !/^\d+$/.test(pc))) return null;
+    return notes.map((note, n) => [note, steps[n] || "", mod12(Number(pcs[n]))]);
+  };
+  // The key's notes, as pitch classes, in the key shown; null without a key.
+  const keyNotes = () => {
+    const steps = key ? table("keyScale") : null;
+    return Array.isArray(steps) ? new Set(steps.map((step) => mod12(key.tonic + shift() + step))) : null;
+  };
+  // "G major", "E minor", "D Dorian": the key shown, as the numerals' lines name it.
+  const keyWordsShort = () => names(shift())[mod12(key.tonic + shift())] + " "
+    + (MODE_WORDS[modeNow()] || (MODES[modeNow()] || [modeNow()])[0]);
+  // The twelve notes as a clock, C at the top, each named as the page names it in the key shown (the chord's own
+  // as the chord spells them): the key's ringed, the others faint; the chord's larger, joined round the circle in
+  // its role's colour; the root in the accent; a note from outside the key dashed (viewer.css). Each dot and name
+  // carries its pitch class (data-pc).
+  const CLOCK = { mid: 75, r: 56 };
+  const clock = (notes, inKey) => {
+    const out = svg("svg", { viewBox: "0 0 150 150", class: "tc", focusable: "false" });
+    const at = (pc) => [CLOCK.mid + CLOCK.r * Math.sin(pc * Math.PI / 6), CLOCK.mid - CLOCK.r * Math.cos(pc * Math.PI / 6)]
+      .map((v) => Math.round(v * 100) / 100);
+    svg("circle", { class: "tc-ring", cx: CLOCK.mid, cy: CLOCK.mid, r: CLOCK.r }, out);
+    const corners = Array.from(new Set(notes.map((note) => note[2]))).sort((a, b) => a - b);
+    if (corners.length > 1) svg("polygon", { class: "tc-shape", points: corners.map((pc) => at(pc).join(",")).join(" ") }, out);
+    const n = names(shift());
+    for (let pc = 0; pc < 12; pc++) {
+      const mine = notes.find((note) => note[2] === pc);
+      const marks = [inKey.has(pc) ? "in" : "", mine ? "on" : "", mine && mine[1] === "R" ? "root" : "",
+        mine && !inKey.has(pc) ? "off" : ""].filter(Boolean).join(" ");
+      const [x, y] = at(pc);
+      svg("circle", { class: ("tc-dot " + marks).trim(), cx: x, cy: y, r: mine ? 9 : 7, "data-pc": pc }, out);
+      svg("text", { class: ("tc-name " + marks).trim(), x, y, "data-pc": pc }, out).textContent = mine ? mine[0] : n[pc];
+    }
+    return out;
+  };
+  // The chord's notes as a list, each with its interval: the root's row in the accent, an outside note's dashed.
+  const noteList = (box, notes, inKey) => {
+    box.textContent = "";
+    for (const [name, step, pc] of notes) {
+      const row = box.appendChild(document.createElement("li"));
+      const off = !inKey.has(pc);
+      row.className = [step === "R" ? "root" : "", off ? "off" : ""].filter(Boolean).join(" ");
+      row.appendChild(document.createElement("b")).textContent = name;
+      row.appendChild(document.createElement("span")).textContent = (step === "R" ? "root" : step) + (off ? " · off key" : "");
+    }
+  };
+  // "F isn't in G major (it has F#).": the notes from outside the key, and the key's notes of their letters.
+  const offWords = (notes, inKey) => {
+    const off = notes.filter((note) => !inKey.has(note[2])).map((note) => note[0]);
+    if (!off.length) return "";
+    const n = names(shift());
+    const mine = Array.from(inKey).map((pc) => n[pc]);
+    const has = off.map((name) => mine.find((other) => other.charAt(0) === name.charAt(0))).filter(Boolean);
+    const and = (words) => (words.length > 1 ? words.slice(0, -1).join(", ") + " and " + words[words.length - 1] : words[0]);
+    return and(off) + (off.length > 1 ? " aren't" : " isn't") + " in " + keyWordsShort()
+      + (has.length === off.length ? " (it has " + and(has) + ")" : "") + ".";
+  };
+  const drawTipNotes = (rep) => {
+    const notes = tonesOf(rep), inKey = keyNotes();
+    const can = Boolean(notes) && Boolean(inKey);
+    $("tip-pic").hidden = !can;
+    $("tip-clock").textContent = "";
+    $("tip-notes").textContent = "";
+    const off = can ? offWords(notes, inKey) : "";
+    $("tip-off").hidden = !off;
+    $("tip-off").textContent = off;
+    if (!can) return;
+    $("tip-clock").appendChild(clock(notes, inKey));
+    noteList($("tip-notes"), notes, inKey);
+  };
+  // What Hear it strums: the shape the chord's card shows for it now, on the instrument played, or null where
+  // nothing would sound (no Web Audio, the strum off, no shape).
+  const tipSound = (i) => {
+    const rep = current(i);
+    if (!sound || state.vol <= 0 || !rep) return null;
+    if (partsOf()) {
+      const notes = notesBy(i, rep);
+      return notes ? { position: notes, capo: capoNow() } : null;
+    }
+    const shapes = shapesOf(rep, shift());
+    if (!shapes.list.length) return null;
+    return { position: shapes.list[Math.min(state.at[i] || 0, shapes.list.length - 1)], capo: capoNow() };
+  };
   const placeTip = () => {
     if (!tipOf || tip.hidden) return;
     const a = (tipOf.querySelector(".nm") || tipOf).getBoundingClientRect();
@@ -1756,10 +1854,18 @@
     if (!found) return;
     clearTimeout(leaving);
     if (tipOf && tipOf !== el) tipOf.removeAttribute("aria-describedby");
+    const name = label(i, current(i));
+    $("tip-chord").textContent = name;
+    $("tip-nm").textContent = "";
+    $("tip-nm").appendChild(numeralEl(found));
+    $("tip-role").textContent = own.call(ROLES, found.role) ? ROLES[found.role] : "outside the key";
+    tip.dataset.role = found.role;
     $("tip-line").textContent = found.line ? textOf(found.line)
       : found.text + ": the chord you chose in place of " + label(i, base(i)) + ".";
     $("tip-key").textContent = "In " + keyWords() + ".";
-    $("tip-card").textContent = label(i, current(i)) + ": shapes";
+    drawTipNotes(current(i));
+    $("tip-hear").hidden = !tipSound(i);
+    $("tip-card").setAttribute("aria-label", name + ": shapes");
     tip.hidden = false;
     tipOf = el;
     el.setAttribute("aria-describedby", "tip");
@@ -1769,6 +1875,10 @@
     const el = tipOf;
     hideTip();
     if (el) openCard(el.dataset.c, el);
+  });
+  $("tip-hear").addEventListener("click", () => {
+    const heard = tipOf ? tipSound(tipOf.dataset.c) : null;
+    if (heard) sound.strum(heard.position, { capo: heard.capo, tuning: inst().tuning, voice: inst().voice });
   });
   document.addEventListener("pointerdown", (e) => {
     const target = e.target instanceof Element ? e.target : null;

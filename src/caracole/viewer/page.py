@@ -723,6 +723,10 @@ def _words(text: str) -> list[str]:
 # (``_EXPORT_ROW``, a sheet's alone); and after another, Reset everything, quiet.
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
+#
+# A numeral's tooltip, top to bottom: the chord as the sheet names it, its numeral and its role in words; the
+# numeral's line and the key it is read in; the chord's notes (viewer.js draws them: a twelve-note circle beside
+# their list), and a line naming a note from outside the key; ▶ Hear it, and Shapes, the chord's card.
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
          '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
 _GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>'  # ›, a place here
@@ -826,8 +830,13 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <ol class="progs" id="progs"></ol>
 <p class="hint" id="progs-none" hidden>No chords here caracole can read.</p>
 </section>
-<div class="tip" id="tip" role="tooltip" hidden><p id="tip-line"></p><p class="tip-key" id="tip-key"></p>
-<button type="button" class="chip" id="tip-card"></button></div>
+<div class="tip" id="tip" role="tooltip" hidden>
+<div class="tip-head"><span class="tip-chord" id="tip-chord"></span><span class="tip-nm" id="tip-nm"></span><span class="tip-role" id="tip-role"></span></div>
+<p class="tip-line" id="tip-line"></p><p class="tip-key" id="tip-key"></p>
+<div class="tip-pic" id="tip-pic"><div class="tip-circle" id="tip-circle"><div class="tip-clock" id="tip-clock" aria-hidden="true"></div><ul class="tip-notes" id="tip-notes"></ul></div></div>
+<p class="tip-off" id="tip-off" hidden></p>
+<div class="tip-foot"><button type="button" class="tip-btn tip-hear" id="tip-hear"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Hear it</button>
+<button type="button" class="tip-btn" id="tip-card">Shapes<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/><path d="m13 6 6 6-6 6"/></svg></button></div></div>
 <noscript><p class="noscript">Turn on JavaScript to transpose, change the mode and see chord shapes.</p></noscript>
 """
 

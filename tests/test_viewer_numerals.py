@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import json
 import re
+from urllib.parse import quote
 
 import pytest
 
@@ -332,14 +333,14 @@ def test_with_numerals_only_a_tap_shows_the_line_and_the_way_to_the_shapes(tmp_p
         tap_at(b, *middle(b, "#sheet .c", 3))  # E7's V7
         assert b.wait("!document.getElementById('tip').hidden")
         tipped = b.js(TIP)
-        button = b.js("document.getElementById('tip-card').textContent")
+        button = b.js("[document.getElementById('tip-card').textContent, document.getElementById('tip-card').getAttribute('aria-label')]")
         targets = b.js(small_targets(".foot *"))
         b.click("#tip-card")
         assert b.wait("!document.getElementById('card').hidden")
         card = b.js("document.getElementById('card-name').textContent")
     assert tipped["line"] == "V7: the 5th chord of A minor, major (upper case) with a 7th (7)"
     assert tipped["key"] == "In the key of Am (from the sheet)."
-    assert button == "E7: shapes" and targets == [] and card == "E7 · V7"
+    assert button == ["Shapes", "E7: shapes"] and targets == [] and card == "E7 · V7"
 
 
 @in_chromium
@@ -414,3 +415,175 @@ def test_a_songbook_song_shows_its_numerals_and_its_harmony(tmp_path):
                      "p.querySelector('.prog-songs').getAttribute('href')])")
     assert [c["nm"] for c in shown] == AM_NUMERALS
     assert progs == [["i–♭VII–♭VI–V7×2", "../../index.html#prog=V%20i%20%E2%99%ADVII%20%E2%99%ADVI"]]
+
+
+# --- the tooltip: the chord's notes ----------------------------------------------------------------------
+
+# What the tooltip shows: its head (the chord, its numeral and the numeral's classes, its role), its line and key,
+# the view shown, the circle's dots ([pitch class, classes, name, centre]) and the shape joining them (the pitch
+# class of each corner, in order), the notes listed ([name, interval, classes]), the line under the picture, and
+# whether Hear it shows; None while it is hidden.
+SEEN = """(() => { const tip = document.getElementById('tip'); if (tip.hidden) return null;
+  const q = (s) => tip.querySelector(s), shows = (el) => Boolean(el) && el.getClientRects().length > 0;
+  const nm = q('#tip-nm .nm'), shape = q('#tip-clock polygon');
+  const pc = (x, y) => (Math.round(Math.atan2(x - 75, 75 - y) / (Math.PI / 6)) + 12) % 12;
+  return {chord: q('#tip-chord').textContent, nm: nm ? nm.textContent : null, nmClass: nm ? nm.className : '',
+    role: q('#tip-role').textContent, line: q('#tip-line').textContent, key: q('#tip-key').textContent,
+    view: tip.dataset.view, picture: shows(q('#tip-pic')),
+    dots: [...tip.querySelectorAll('#tip-clock circle.tc-dot')].map((d) => [Number(d.dataset.pc),
+      d.getAttribute('class').split(' ').slice(1).sort(), tip.querySelector(`#tip-clock text[data-pc="${d.dataset.pc}"]`).textContent,
+      [Number(d.getAttribute('cx')), Number(d.getAttribute('cy'))]]),
+    dashed: [...tip.querySelectorAll('#tip-clock circle.tc-dot')].filter((d) => getComputedStyle(d).strokeDasharray !== 'none')
+      .map((d) => Number(d.dataset.pc)),
+    shape: shape ? shape.getAttribute('points').trim().split(/\\s+/).map((p) => pc(...p.split(',').map(Number))) : null,
+    notes: [...tip.querySelectorAll('#tip-notes li')].filter(shows).map((li) => [li.children[0].textContent,
+      li.children[1].textContent, li.className]),
+    off: shows(q('#tip-off')) ? q('#tip-off').textContent : null,
+    hear: shows(q('#tip-hear')), shapes: [q('#tip-card').textContent, q('#tip-card').getAttribute('aria-label')]};
+})()"""
+G_MAJOR = {7, 9, 11, 0, 2, 4, 6}
+
+
+def tip_on(b, n: int) -> dict:
+    """The mouse over the ``n``-th numeral of the sheet, from afar: its tooltip, once it shows."""
+    hover(b, 5, 5)
+    assert b.wait("document.getElementById('tip').hidden", timeout=3)
+    hover(b, *middle(b, "#sheet .nm", n))
+    assert b.wait("!document.getElementById('tip').hidden")
+    return b.js(SEEN)
+
+
+def lit(seen: dict, mark: str = "on") -> list[int]:
+    return sorted(pc for pc, classes, _, _ in seen["dots"] if mark in classes)
+
+
+@in_chromium
+def test_the_tip_heads_with_chord_numeral_and_role(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
+        d7, g7, c, em = (tip_on(b, n) for n in (6, 1, 2, 5))
+    assert [d7["chord"], d7["nm"], d7["role"]] == ["D7", "V7", "pull"]
+    assert "r-p" in d7["nmClass"] and "out" not in d7["nmClass"]
+    assert [g7["chord"], g7["nm"], g7["role"]] == ["G7", "V7/IV", "outside the key"] and "out" in g7["nmClass"]
+    assert [c["chord"], c["role"], em["chord"], em["role"]] == ["C", "away", "Em", "home"]
+    assert d7["line"] == "V7: the 5th chord of G major, major (upper case) with a 7th (7)"
+    assert d7["key"] == "In the key of G (from the sheet)."
+
+
+@in_chromium
+def test_the_circle_rings_the_key_and_joins_the_chords_notes(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
+        d7 = tip_on(b, 6)
+        b.click("#t-up")
+        b.click("#t-up")
+        e7 = tip_on(b, 6)  # two semitones up, in A
+    assert d7["picture"]
+    assert lit(d7) == [0, 2, 6, 9] and lit(d7, "root") == [2] and lit(d7, "in") == sorted(G_MAJOR) and lit(d7, "off") == []
+    assert d7["shape"] == [0, 2, 6, 9]  # joined round the circle, in pitch order
+    assert d7["notes"] == [["D", "root", "root"], ["F#", "3", ""], ["A", "5", ""], ["C", "♭7", ""]]
+    names = spelling(Key(7, "ionian"))
+    assert [name for _, _, name, _ in d7["dots"]] == ["C", names[1], "D", names[3], "E", names[5], "F#", "G", names[8],
+                                                     "A", names[10], "B"]
+    top = min(d7["dots"], key=lambda d: d[3][1])
+    assert top[0] == 0 and top[3][0] == 75  # C at the top, the notes round it as a clock's hours
+    assert d7["off"] is None and d7["dashed"] == []
+    assert e7["chord"] == "E7" and lit(e7) == [2, 4, 8, 11] and lit(e7, "root") == [4]
+    assert lit(e7, "in") == sorted({(pc + 2) % 12 for pc in G_MAJOR}) and e7["shape"] == [2, 4, 8, 11]
+    assert [n for n, _, _ in e7["notes"]] == ["E", "G#", "B", "D"]
+
+
+@in_chromium
+def test_an_outside_note_is_marked_and_named(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
+        g7 = tip_on(b, 1)  # V7/IV, going to C
+    assert lit(g7) == [2, 5, 7, 11] and lit(g7, "root") == [7] and lit(g7, "off") == [5] and g7["dashed"] == [5]
+    assert g7["notes"] == [["G", "root", "root"], ["B", "3", ""], ["D", "5", ""], ["F", "♭7 · off key", "off"]]
+    assert g7["off"] == "F isn't in G major (it has F#)."
+
+
+@in_chromium
+def test_hear_it_strums_the_chord_and_hides_when_sound_is_off(tmp_path):
+    url = written(tmp_path, IN_G) + "#nm=both"
+    with open_viewer(tmp_path, url, **PHONE) as b:
+        name = b.js("""(() => { const c = document.querySelectorAll('#sheet .c')[6]; c.scrollIntoView({block: 'center'});
+          const r = document.createRange(); r.selectNodeContents(c.firstChild); const box = r.getBoundingClientRect();
+          return [box.left + box.width / 2, box.top + box.height / 2]; })()""")
+        tap_at(b, *name)  # the chord's name: its card, and its shape strummed
+        assert b.wait("document.documentElement.dataset.heard !== undefined")
+        card = b.js("document.documentElement.dataset.heard")
+        b.press("Escape")
+        b.js("delete document.documentElement.dataset.heard")
+        tap_at(b, *middle(b, "#sheet .nm", 6))
+        assert b.wait("!document.getElementById('tip').hidden")
+        assert b.js(SEEN)["hear"]
+        tap_at(b, *b.js("""(() => { const r = document.getElementById('tip-hear').getBoundingClientRect();
+          return [r.left + r.width / 2, r.top + r.height / 2]; })()"""))
+        assert b.wait("document.documentElement.dataset.heard !== undefined")
+        heard = b.js("[document.documentElement.dataset.heard, document.getElementById('tip').hidden]")
+    assert heard == [card, False]  # the shape its card shows, and the tooltip stays
+    with open_viewer(tmp_path, url + "&vol=0", **PHONE) as b:
+        tap_at(b, *middle(b, "#sheet .nm", 6))
+        assert b.wait("!document.getElementById('tip').hidden")
+        silent = b.js(SEEN)
+    assert not silent["hear"] and silent["shapes"][0] == "Shapes"
+
+
+@in_chromium
+def test_shapes_opens_the_chords_card(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
+        g7 = tip_on(b, 1)
+        b.click("#tip-card")
+        assert b.wait("!document.getElementById('card').hidden")
+        card = b.js("[document.getElementById('card-name').textContent, document.getElementById('tip').hidden]")
+    assert g7["shapes"] == ["Shapes", "G7: shapes"] and card == ["G7 · V7/IV", True]
+
+
+# Where the tooltip and the numeral it is for are on the screen, the bar's top, and the screen's width.
+WHERE = """(() => { const r = (el) => el.getBoundingClientRect(), tip = r(document.getElementById('tip'));
+  const nm = r(document.querySelectorAll('#sheet .nm')[%d]);
+  return {tip: [tip.left, tip.top, tip.right, tip.bottom], nm: [nm.top, nm.bottom], bar: r(document.getElementById('bar')).top,
+    width: document.documentElement.clientWidth, sideways: document.documentElement.scrollWidth > innerWidth}; })()"""
+
+
+@in_chromium
+def test_the_tip_fits_390px_and_flips_above_near_the_bottom(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, LONG) + "#nm=both", **PHONE) as b:
+        tap_at(b, *middle(b, "#sheet .nm", 40))
+        assert b.wait("!document.getElementById('tip').hidden")
+        middle_of = b.js(WHERE % 40)
+        small = [t for t in b.js(small_targets("")) if "tip" in t["what"]]
+        b.press("Escape")
+        low = b.js("""(() => { const nm = document.querySelectorAll('#sheet .nm')[60];
+          scrollBy(0, nm.getBoundingClientRect().top - (document.getElementById('bar').getBoundingClientRect().top - 60));
+          const r = nm.getBoundingClientRect(); return [r.left + r.width / 2, r.top + r.height / 2]; })()""")
+        tap_at(b, *low)
+        assert b.wait("!document.getElementById('tip').hidden")
+        near_the_foot = b.js(WHERE % 60)
+    left, top, right, bottom = middle_of["tip"]
+    assert left >= 8 and right <= middle_of["width"] - 8 and not middle_of["sideways"]
+    assert top >= middle_of["nm"][1] and bottom <= middle_of["bar"]  # under its numeral, above the bar
+    assert small == []
+    left, top, right, bottom = near_the_foot["tip"]
+    assert bottom <= near_the_foot["nm"][0] and top >= 0  # above its numeral: there's no room under it
+
+
+@in_chromium
+def test_a_chord_chosen_instead_or_one_the_tables_cant_name_still_opens_its_tip(tmp_path):
+    html = build_viewer(IN_G)
+    data = data_of(html)
+    alt = data["alts"]["ionian"][4][0]  # D7's first alternative
+    names = spelling(Key(7, "ionian"))
+    alt_name = names[alt[0]] + alt[1] + ("" if alt[2] is None else "/" + names[alt[2]])
+    swap = f"alt=ionian.4.{alt[0]}.{quote(alt[1], safe='')}.{'' if alt[2] is None else alt[2]}"
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both&" + swap, **DESKTOP) as b:
+        chosen = tip_on(b, 6)
+    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: the chord you chose in place of D7."
+    assert chosen["picture"] and [n for n, _, _ in chosen["notes"]] == data["tones"][alt_name].split("|")[0].split(" ")
+    unnamed = tmp_path / "Unnamed" / "Title" / "sheet.html"
+    unnamed.parent.mkdir(parents=True)
+    tones = json.dumps({"D7": data["tones"]["D7"]}, ensure_ascii=False, separators=(",", ":"))[1:-1]
+    assert tones in html
+    unnamed.write_text(html.replace(tones, '"D7?":"?"'), encoding="utf-8")
+    with open_viewer(tmp_path, unnamed.as_uri() + "#nm=both", **DESKTOP) as b:
+        bare = tip_on(b, 6)
+    assert [bare["chord"], bare["nm"], bare["role"]] == ["D7", "V7", "pull"]
+    assert not bare["picture"] and bare["notes"] == [] and bare["off"] is None
