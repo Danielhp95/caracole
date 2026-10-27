@@ -893,7 +893,8 @@ def test_the_panel_names_a_progression_a_section_plays_within_it_and_a_cycle_tha
 
 
 # A verse that plays ii–V–I, then the Andalusian cadence read in C major: a link to the songs with each.
-TWO = "{title: Two}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n[Dm7]a [G7]b [Cmaj7]c [Am]d [G]e [F]f [E7]g\n"
+# In C major, named with its mode: "C" alone over chords that centre on A minor is A minor (theory.bare_key)
+TWO = "{title: Two}\n{artist: Synthetic}\n{key: C major}\n{comment: Verse}\n[Dm7]a [G7]b [Cmaj7]c [Am]d [G]e [F]f [E7]g\n"
 
 
 @in_chromium
