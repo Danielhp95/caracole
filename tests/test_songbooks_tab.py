@@ -53,13 +53,18 @@ pytestmark = CHROMIUM_MARKS  # every test here opens the page in Chromium
 QUICK = {"poll": 100, "undo": 500}  # the page asks /jobs.json every 100 ms
 NOW = datetime(2026, 10, 18, 3, 41, tzinfo=UTC)
 CAMPFIRE = "#tab=songbooks&book=Campfire"
+# How long each of Fake's commands takes at least. caracole's take seconds, and a browser counts a layout shift as
+# the tap's (``hadRecentInput``) for half a second after it: each takes longer, so that what a change does once it
+# is over is never taken for the tap's, on a busy machine or an idle one.
+TAKES = 0.6
 
 
 class Fake:
     """caracole's commands, done here with no request. ``songbook`` changes songbooks.toml as the command does,
     then makes the songbooks' files again (a stand-in chordpro); ``get`` adds the song from wanted.txt and keeps
-    a sheet, its stages said as ``caracole get --progress`` says them. Each waits a moment, so the page sees it
-    run; a songbook named in ``fail`` fails with that error; with ``hold``, an event, each waits for it first."""
+    a sheet, its stages said as ``caracole get --progress`` says them. Each takes ``TAKES`` at least, so the page
+    sees it run; a songbook named in ``fail`` fails with that error; with ``hold``, an event, each waits for it
+    first."""
 
     def __init__(self, cfg, *, fail=None, hold=None):
         self.cfg = cfg
@@ -71,7 +76,7 @@ class Fake:
         if self.hold is not None:
             self.hold.wait(20)
         self.calls.append(list(args))
-        time.sleep(0.2)
+        time.sleep(TAKES)
         conn = db.connect(self.cfg.db_path)
         try:
             if args[0] == "get":

@@ -58,6 +58,12 @@
       : given;
   };
   const songs = listOf(data.songs);
+  // Whether a songbook offers to get a song of your library now (Get the missing songs now), as
+  // songbook.songs_to_get has it: one with no sheet yet (no file of it is its sheet's), unless it is ignored.
+  const gettable = (id) => {
+    const s = songs.find((x) => x && Number(x.id) === Number(id));
+    return Boolean(s) && s.status !== "ignored" && !listOf(s.files).some((f) => f && f.primary);
+  };
 
   // --- the tab, and the address ---------------------------------------------------------------------------
   // #tab=songbooks shows it, and book=NAME the songbook open; the library's own words in the address stay.
@@ -120,6 +126,9 @@
   const songLines = (root, view) => Array.from(root.querySelectorAll('.set-line[data-song="' + Number(view.songId) +
     '"]')).filter((li) => !view.identity || !li.dataset.key || li.dataset.key === String(view.identity));
   const changes = new Map();  // job id -> the newest view of a songbook's change
+  // A songbook's name -> the one a rename sent gives it: over its set list from the tap until the rename is over, so
+  // that nothing beside it moves then.
+  const renaming = new Map();
   const placed = new Map();  // job id -> the line that shows it (a song added, before the songbook has it)
   const namesOf = (view) => {
     const book = view && view.songbook && typeof view.songbook === "object" ? view.songbook : null;
@@ -201,6 +210,7 @@
       shownNow.delete(name);
       li.dataset.book = name;
       li.classList.remove("gone");
+      li.style.minHeight = "";
       const go = button(null, "book-line", () => openBook(name, true));
       go.dataset.book = name;
       go.append(el("span", "book-name", name), el("span", "book-meta", metaOf(b)));
@@ -212,6 +222,8 @@
     }
     for (const [name, li] of shownNow) {  // gone from songbooks.toml: says so where it was, until your next click
       if (!gone.has(li)) {
+        const tall = li.getBoundingClientRect().height;  // as tall as it was: the lines under it stay where they were
+        if (tall) li.style.minHeight = tall + "px";
         const left = el("p", "book-line gone");
         left.append(el("span", "book-name", name), el("span", "book-meta", "deleted"));
         li.replaceChildren(left);
@@ -456,7 +468,17 @@
       a.href = /^[a-z][a-z0-9+.-]*:/i.test(String(f.href)) || String(f.href).startsWith("/") ? "#" : String(f.href);
       return a;
     });
-    const parts = links.length ? links
+    // On its way (Select's make): the files it will have, and its button to get the songs without a sheet, there
+    // already, not to be used until it is made, so that nothing under them moves then.
+    const coming = Boolean(b.pending) && !b.failed && !links.length && listOf(shelf.fileLabels).length > 0;
+    const soon = (label) => {
+      const go = el("button", "btn small", label);
+      go.type = "button";
+      go.disabled = true;
+      go.title = "Its files come once it is made.";
+      return go;
+    };
+    const parts = links.length ? links : coming ? listOf(shelf.fileLabels).map((label) => soon(String(label)))
       : [el("p", "hint", b.failed ? "Not made: Select can make it again." : b.pending ? "Its files come once it is made."
         : "Not made yet: caracole render, or caracole songbook render, makes its files.")];
     if (b.failed && !links.length) {
@@ -474,7 +496,7 @@
         (line || newBook).focus({ preventScroll: true });
       }, "Forget " + name + ": take it off the page"));
     }
-    const toGet = listOf(b.set).filter((e) => e && e.get).length;
+    const toGet = listOf(b.set).filter((e) => e && (coming ? e.pending && gettable(e.id) : e.get)).length;
     const was = row.querySelector("form.get-missing");
     if (!toGet && was && !gone.has(was)) {  // nothing left to get: its room kept until your next click or key
       was.classList.add("spent");
@@ -483,15 +505,21 @@
     }
     if (was && gone.has(was)) parts.push(was);
     if (toGet && server && !readOnly) {
-      const form = el("form", "get-missing");
-      form.method = "post";
-      form.setAttribute("action", "/songbook/get");
-      const go = el("button", "btn small", toGet === 1 ? "Get the missing song now" : "Get the " + toGet +
-        " missing songs now");
-      go.type = "submit";
-      go.title = "Looks each one up now, as caracole get does, then makes the songbook again";
-      form.appendChild(go);
-      parts.push(form);
+      const label = toGet === 1 ? "Get the missing song now" : "Get the " + toGet + " missing songs now";
+      if (coming) {
+        const box = el("div", "get-missing");  // as the form will hold it
+        box.appendChild(soon(label));
+        parts.push(box);
+      } else {
+        const form = el("form", "get-missing");
+        form.method = "post";
+        form.setAttribute("action", "/songbook/get");
+        const go = el("button", "btn small", label);
+        go.type = "submit";
+        go.title = "Looks each one up now, as caracole get does, then makes the songbook again";
+        form.appendChild(go);
+        parts.push(form);
+      }
     }
     row.replaceChildren(...parts);
   };
@@ -584,8 +612,7 @@
     }
     bookName = b.name;
     book.dataset.songbook = b.name;
-    const h2 = book.querySelector("h2");
-    if (h2.textContent !== b.name) h2.textContent = b.name;
+    showTitle(b.name);
     book.querySelector(".book-meta").textContent = metaOf(b)
       .replace(/ · changed .*| · not made yet| · on its way| · couldn't be made/, "");
     drawFiles(b, readOnly);
@@ -601,6 +628,11 @@
       const h3 = out.closest(".set-line").querySelector("h3");
       out.setAttribute("aria-label", "Take " + (h3 ? h3.textContent : "it") + " out of " + b.name);
     }
+  };
+  const showTitle = (name) => {
+    const h2 = book && book.querySelector("h2");
+    const title = renaming.get(name) || name;
+    if (h2 && h2.textContent !== title) h2.textContent = title;
   };
   // A rename or a deletion waits: the songbook's controls wait with it (a form sent meanwhile would name it wrong).
   const busyFor = (name) => Array.from(changes.values()).some((v) => isActive(v) && namesOf(v).indexOf(name) >= 0 &&
@@ -689,6 +721,7 @@
     shelf = shelfOf(detail.songbooks);
     const view = detail.view && typeof detail.view === "object" ? detail.view : null;
     const [was, after] = view ? namesOf(view) : ["", ""];
+    if (view && view.songbook && view.songbook.action === "rename" && !isActive(view)) renaming.delete(was);
     if (view && view.state === "failed" && view.songbook && view.songbook.action === "make") {
       const b = before.find((x) => x.name === was && x.pending);
       if (b && !books().some((x) => x.name === was)) {  // never made, not deleted; the Select bar gets its ticks back
@@ -715,7 +748,12 @@
       if (view.songbook.action === "delete" && bookName === was && book) {  // says Deleted where it was
         state.book = "";
         save();
-        for (const part of book.querySelectorAll(".book-files, .set, .add-song, .book-more, .book-back")) part.remove();
+        // As tall as it was, its way back's room kept: nothing on the screen moves until your next click or key.
+        const tall = book.getBoundingClientRect().height;
+        if (tall) book.style.minHeight = tall + "px";
+        const back = book.querySelector(".book-back");
+        if (back) back.style.visibility = "hidden";
+        for (const part of book.querySelectorAll(".book-files, .set, .add-song, .book-more")) part.remove();
         if (status) showLine(status, view);
         book.classList.add("gone");
         gone.add(book);
@@ -849,6 +887,12 @@
       return;
     }
     const body = fields(bookName, Object.fromEntries(new FormData(form).entries()));
+    const renamed = /\/rename$/.test(action) ? bookName : null;
+    if (renamed !== null) {  // its new name as caracole keeps it (songbook.check_name), at once
+      renaming.set(renamed, String(body.get("new") || "").normalize("NFC").split(/\s+/).filter(Boolean).join(" ") ||
+        renamed);
+      showTitle(renamed);
+    }
     if (/\/get$/.test(action)) {
       for (const li of book.querySelectorAll(".set-line")) {
         const entry = listOf((books().find((b) => b.name === bookName) || {}).set)
@@ -859,6 +903,7 @@
     for (const control of form.querySelectorAll("button")) control.disabled = true;
     change(action, body).then((view) => {
       for (const control of form.querySelectorAll("button")) control.disabled = false;
+      if (!view && renamed !== null && renaming.delete(renamed) && bookName === renamed) showTitle(renamed);  // refused
       if (view && /\/delete$/.test(action)) lockBook(true);
     });
   });
