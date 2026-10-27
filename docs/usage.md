@@ -2385,7 +2385,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   back where you were in the song, and while the keyboard's focus is on one
   of its buttons; Tab reaches each of them from the end of the page, and
   brings the bar back.
-- **The settings** (⋯), headed by the key line, leave the song in view, so
+- **The settings** (⋯), headed by what is set ("D Dorian · capo 2 · Guitar":
+  the key of the shapes you play in the mode played, the capo, the instrument;
+  "As written" or "Transposed +2" for a song whose key caracole can't tell),
+  leave the song in view, so
   you see its chords change as you transpose, move the capo or change the
   mode: on a phone they sit at the foot, above the bar, in at most 45 % of
   the screen, and the song scrolls under them; from 900 px wide they are a
@@ -2393,7 +2396,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   dimmed or out of reach. A chord's card opened with them covers them on a
   phone, and sits by its chord beside them on a wider screen; Escape closes
   the card first, then the settings, and gives the focus back to what opened
-  each. Among them: **Transpose**, as − and + do, with the semitones counted; Reset goes back to the song's
+  each. Among them, side by side: **Transpose**, as − and + do, with the semitones counted; ↺ Reset, by it
+  while it differs, goes back to the song's
   `[transpose]`, where the viewer starts, like the PDF. A song with a version
   of its own (`[version]`, Make this my version) starts in it, key, capo, mode,
   shapes and swaps (its key on whichever sheet the song has now), whenever its
@@ -2403,12 +2407,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the browser kept for the page before the song had that version is left
   out. **Capo**, on every
   song, moves the capo a fret at a time, from none to
-  the 11th; Reset puts it back where the sheet has it. The song sounds the same
+  the 11th; its ↺ Reset puts it back where the sheet has it. The song sounds the same
   wherever the capo is, and the chords show the shapes to play there: Em shapes
   with capo 2 become F#m shapes with no capo, or Dm shapes with capo 4. The
   capo stays on its fret when you transpose, as on a guitar, so the shapes
-  move instead. In an awkward key it also suggests frets where open shapes play
-  it (Bb: capo 1 with A shapes, capo 3 with G shapes); tap one to play them.
+  move instead. In an awkward key it also suggests, under them, **Easier shapes**: frets
+  where open shapes play it (Bb: capo 1 with A shapes, capo 3 with G shapes); tap one to play them.
   The fret suggested is where the capo goes, and it may be lower than the
   sheet's, or no capo at all (a sheet in G shapes with capo 2, transposed down
   two: no capo, G shapes).

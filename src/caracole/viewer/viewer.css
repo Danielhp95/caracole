@@ -6,6 +6,11 @@
   --text: #1f1e1c;
   --muted: #645f57;
   --border: #e1ddd5;
+  --border-strong: #b5ada1;  /* a control's own edge: a stepper, a select */
+  --sunk: #ece9e3;  /* a segmented control's track */
+  --seg-on: #ffffff;  /* its chosen segment */
+  --orig-edge: #8a8378;  /* the song's own mode, among the modes */
+  --orig-bg: #f1eee8;
   --accent: #b4441e;
   --accent-soft: #efd9cf;
   --on-accent: #ffffff;
@@ -30,6 +35,11 @@
     --text: #edebe7;
     --muted: #aaa59c;
     --border: #363431;
+    --border-strong: #4b4844;
+    --sunk: #181716;
+    --seg-on: #292826;
+    --orig-edge: #8f8a82;
+    --orig-bg: #2f2d2a;
     --accent: #f0895c;
     --accent-soft: #4a2a1c;
     --on-accent: #1b0e07;
@@ -367,6 +377,45 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+/* The settings (#panel): grouped by space, a rule between the groups. Its head is "Settings" and, under it, what is
+   set ("D Dorian · capo 2 · Guitar"), the key and mode in bold, wrapping rather than widening the panel. */
+#panel .ui-head { align-items: flex-start; padding-bottom: 2px; }
+.ui-title { flex: 1 1 auto; min-width: 0; padding-top: 8px; }
+#panel .ui-head h2 { display: block; min-height: 0; font-size: 1.1rem; }
+.sum { margin: 2px 0 0; color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+.sum b { color: var(--text); font-weight: 650; }
+/* Transpose and Capo side by side, each labelled over its stepper; Transpose alone, on an instrument with no capo,
+   takes the whole width. A Reset by the label while the value differs, in a line as tall with it as without, so the
+   steppers never move; the stepper's edge then in the accent. */
+.pair { display: flex; gap: 12px; margin: 6px 0 12px; }
+.num { flex: 1 1 0; min-width: 0; }
+.num-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 24px;
+  margin-bottom: 5px; color: var(--muted); font-size: .84rem; font-weight: 600; }
+.undo { display: inline-flex; align-items: center; gap: 4px; padding: 0 2px; border: 0; border-radius: 6px;
+  background: none; color: var(--accent); font: inherit; font-size: .76rem; font-weight: 650; cursor: pointer; }
+.undo svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round;
+  stroke-linejoin: round; }
+#panel .stepper { display: flex; align-items: stretch; gap: 0; border: 1px solid var(--border-strong);
+  border-radius: 10px; }
+#panel .stepper.changed { border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong)); }
+#panel .stepper button { flex: none; width: 44px; height: 36px; min-width: 0; min-height: 0; padding: 0; border: 0;
+  border-radius: 9px;
+  background: none; color: var(--text); font-size: 1.15rem; line-height: 1; }
+#panel .stepper button:focus-visible { outline-offset: -3px; }
+#panel .stepper output { flex: 1 1 auto; display: grid; place-items: center; min-width: 0;
+  border-inline: 1px solid var(--border); font-weight: 700; }
+/* The easier capos and an instrument's easy keys, under them: a small label, then the pills. */
+.opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -2px 0 12px; }
+.opts-lab { color: var(--muted); font-size: .8rem; font-weight: 600; }
+@media (hover: hover) {
+  #panel .stepper button:hover, .undo:hover { background: var(--raised); }
+}
+/* A finger's target, 44 px either way, wherever a pointer is coarse: the steppers taller, a Reset's target reaching
+   over the line round it, the line no taller. */
+@media (pointer: coarse) {
+  #panel .stepper button { height: 44px; }
+  .undo { min-height: 44px; margin: -10px -2px; padding: 0 6px; }
+}
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0;
   border-top: 1px solid var(--border); }
 .lab { min-width: 92px; color: var(--muted); font-size: .85rem; font-weight: 600; }

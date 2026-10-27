@@ -237,7 +237,7 @@ def test_more_opens_the_rest_of_the_settings(tmp_path):
     with viewer(tmp_path, written(tmp_path, UG_CHO)) as b:
         b.click("#more")
         opened = bar(b)
-        shown = b.js("""['capo-row', 'mode-row', 'strip-toggle', 'reset-t', 'reset-all']
+        shown = b.js("""['capo-row', 'mode-row', 'strip-toggle', 'reset-all']  // a Reset only once a value differs
           .map((id) => document.getElementById(id).getClientRects().length > 0)""")
         b.press("Escape")
         closed = bar(b)

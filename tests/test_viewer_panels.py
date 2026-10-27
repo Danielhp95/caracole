@@ -160,15 +160,123 @@ def test_from_900_px_wide_the_settings_are_a_rail_beside_the_song(tmp_path, widt
 
 @in_chromium
 @pytest.mark.parametrize("size", [PHONE, DESKTOP], ids=["phone", "desktop"])
-def test_a_heading_on_two_lines_clears_the_line_under_it(tmp_path, size):
-    measure = """(() => { const h = document.querySelector('#panel-title'), range = document.createRange();
-      range.selectNodeContents(h);
-      const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
-      return [lines, range.getBoundingClientRect().bottom, document.querySelector('#panel .row').getBoundingClientRect().top]; })()"""
-    with viewer(tmp_path, written(tmp_path) + "#t=1&mode=dorian", **size) as b:
+def test_the_head_clears_the_line_under_it(tmp_path, size):
+    # Its title on one line, and what is set under it, however long that runs, above Transpose and Capo.
+    measure = """(() => { const lines = (el) => { const range = document.createRange(); range.selectNodeContents(el);
+        return [new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size, range.getBoundingClientRect().bottom]; };
+      return [lines(document.querySelector('#panel-title'))[0], lines(document.querySelector('#panel-sum'))[1],
+              document.querySelector('#t-row').getBoundingClientRect().top]; })()"""
+    with viewer(tmp_path, written(tmp_path) + "#t=1&mode=mixolydian&capo=11&inst=baritone", **size) as b:
         b.click("#more")
         lines, text, row = b.js(measure)
-    assert lines == 2 and text <= row - 4  # "Ab dorian shapes · capo 2 · sounds" / "Bb dorian"
+    assert lines == 1 and text <= row - 4
+
+
+# --- what the settings hold, top to bottom ------------------------------------------------------------
+
+IN_E = "{title: In E}\n{artist: Synthetic}\n{key: E}\n{comment: Verse}\n[E]la la [A]la la [B7]la la [E]la\n"
+NO_KEY = "{title: Riffs}\n{artist: Synthetic}\n{capo: 1}\n{comment: Verse}\n[N.C.]Made up [Xq]words\n"
+# The settings' head: its title, the line of what is set, and the part of it in bold.
+HEAD = """[document.getElementById('panel-title').textContent, document.getElementById('panel-sum').textContent,
+  (document.querySelector('#panel-sum b') || {}).textContent || '']"""
+# Whether each Reset shows, and whether its stepper's edge says the value differs.
+RESETS = """(() => { const q = (s) => document.querySelector(s);
+  const shown = (el) => !el.hidden && el.getClientRects().length > 0;
+  return {t: shown(q('#reset-t')), capo: shown(q('#reset-capo')),
+          tMarked: q('#up').closest('.stepper').classList.contains('changed'),
+          capoMarked: q('#capo-up').closest('.stepper').classList.contains('changed')}; })()"""
+SHIFT = "document.getElementById('shift').textContent"
+
+
+def mode(b: Browser, name: str) -> None:
+    """The settings' mode ``name``, pressed."""
+    b.js(f"[...document.querySelectorAll('#modes .chip')].find((c) => c.firstChild.textContent === {name!r}).click()")
+
+
+@in_chromium
+def test_the_settings_head_says_key_mode_capo_and_instrument(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        first = b.js(HEAD)
+        mode(b, "Dorian")
+        b.click("#capo-up")
+        b.click("#capo-up")
+        chosen = b.js(HEAD)
+    with viewer(tmp_path, written(tmp_path, name="Long") + "#inst=piano") as b:
+        b.click("#more")
+        piano = b.js(HEAD)
+    with viewer(tmp_path, written(tmp_path, NO_KEY, name="Riffs") + "#t=2") as b:
+        b.click("#more")
+        moved = b.js(HEAD)
+        b.click("#reset-t")
+        unknown = b.js(HEAD)
+    assert first == ["Settings", "E Major · Guitar", "E Major"]
+    assert chosen == ["Settings", "D Dorian · capo 2 · Guitar", "D Dorian"]  # the shapes played, and the capo
+    assert piano == ["Settings", "A Major · Piano", "A Major"]  # G shapes, capo 2: no capo, the key it sounds in
+    assert moved == ["Settings", "Transposed +2 · capo 1 · Guitar", "Transposed +2"]
+    assert unknown == ["Settings", "As written · capo 1 · Guitar", "As written"]
+
+
+@in_chromium
+def test_a_reset_shows_only_while_a_value_differs(tmp_path):
+    with viewer(tmp_path) as b:  # G shapes, capo 2
+        b.click("#more")
+        sheet = b.js(RESETS)
+        b.click("#capo-up")
+        capo = b.js(RESETS)
+        b.js("document.getElementById('reset-capo').focus()")
+        b.press("Enter")
+        back = [b.js(RESETS), b.js("document.getElementById('capo-at').textContent"),
+                b.js("document.activeElement.closest('.stepper') === document.getElementById('capo-up').parentElement")]
+        b.click("#up")
+        up = b.js(RESETS)
+    assert sheet == {"t": False, "capo": False, "tMarked": False, "capoMarked": False}
+    assert capo == {"t": False, "capo": True, "tMarked": False, "capoMarked": True}
+    assert back == [sheet, "2", True]  # the focus on the stepper it put back, not lost with the Reset
+    assert up == {"t": True, "capo": False, "tMarked": True, "capoMarked": False}
+
+
+@in_chromium
+def test_transpose_reset_goes_back_to_the_pdfs_transposition(tmp_path):
+    page = tmp_path / "Artist" / "Moved" / "sheet.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(build_viewer(LONG, transpose=2), encoding="utf-8")
+    with viewer(tmp_path, page.as_uri()) as b:
+        b.click("#more")
+        pdf = [b.js(SHIFT), b.js(RESETS)["t"]]
+        b.click("#down")
+        b.click("#down")
+        zero = [b.js(SHIFT), b.js(RESETS)["t"]]  # the sheet as written, which the PDF isn't
+        b.click("#reset-t")
+        back = [b.js(SHIFT), b.js(RESETS)["t"]]
+    assert pdf == ["+2", False] and zero == ["0", True] and back == ["+2", False]
+
+
+@in_chromium
+def test_transpose_and_capo_share_a_line_at_390px(tmp_path):
+    seen = """(() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+      return {rows: [r('#t-row').top, r('#capo-row').top], steppers: [r('#down').top, r('#capo-down').top],
+              between: r('#up').right <= r('#capo-down').left, page: document.documentElement.scrollWidth}; })()"""
+    with viewer(tmp_path) as b:
+        b.click("#more")
+        b.click("#capo-up")  # its Reset shown: nothing moves
+        shown = b.js(seen)
+        b.click("#reset-capo")
+        hidden = b.js(seen)
+    assert shown["rows"][0] == shown["rows"][1] and shown["steppers"][0] == shown["steppers"][1]
+    assert shown["between"] and shown["page"] <= 390
+    assert hidden == shown
+
+
+@in_chromium
+def test_an_instrument_without_a_capo_shows_transpose_alone(tmp_path):
+    with viewer(tmp_path, written(tmp_path) + "#inst=piano") as b:
+        b.click("#more")
+        seen = b.js("""(() => { const q = (s) => document.querySelector(s), panel = q('#panel');
+          const style = getComputedStyle(panel);
+          return {capo: q('#capo-row').getClientRects().length > 0, width: q('#t-row').getBoundingClientRect().width,
+                  room: panel.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)}; })()""")
+    assert not seen["capo"] and seen["width"] >= seen["room"] - 1  # the whole width
 
 
 # --- a chord's card ------------------------------------------------------------------------------------

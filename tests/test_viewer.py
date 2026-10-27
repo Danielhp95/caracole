@@ -475,20 +475,22 @@ def test_the_script_runs_and_leaves_the_sheet_as_written(tmp_path):
 
 @in_chromium
 @pytest.mark.parametrize(
-    ("cho", "label"),
-    [(UG_CHO, "G shapes · capo 2 · sounds A"), (WALL, "Em shapes · capo 2 · sounds F#m"), (MINOR, "Key Cm")],
+    ("cho", "label", "set"),
+    [(UG_CHO, "G shapes · capo 2 · sounds A", "G Major · capo 2 · Guitar"),
+     (WALL, "Em shapes · capo 2 · sounds F#m", "E Minor · capo 2 · Guitar"), (MINOR, "Key Cm", "C Minor · Guitar")],
     ids=["capo", "capo-on-open-shapes", "no-capo"],
 )
-def test_the_bar_and_the_settings_say_what_the_key_line_says(tmp_path, cho, label):
+def test_the_bar_and_the_settings_say_what_the_key_line_says(tmp_path, cho, label, set):
     # The script writes the line the page came with, so nothing moves as it runs; the bar (to a
-    # screen reader, whole) and the settings' heading say the same: the shapes, the capo and the
-    # key the song sounds in.
+    # screen reader, whole) says the same: the shapes, the capo and the key the song sounds in. The
+    # settings' head says what is set: the shapes played, the capo and the instrument.
     html = build_viewer(cho)
-    facts, said, heading = run_in_page(html, tmp_path, """
-      out = [q("#facts").textContent, q("#key-full").textContent, q("#panel-title").textContent];
+    facts, said, heading, summary = run_in_page(html, tmp_path, """
+      out = [q("#facts").textContent, q("#key-full").textContent, q("#panel-title").textContent,
+             q("#panel-sum").textContent];
     """)
     assert facts == unescape(re.sub(r"<[^>]+>", "", facts_of(html)))
-    assert said == label and heading == label
+    assert said == label and heading == "Settings" and summary == set
 
 
 def test_the_guitar_pro_files_beside_the_page_are_named_for_the_song_they_download_as():
@@ -604,13 +606,15 @@ def test_a_sheet_with_no_key_moves_its_capo_too(tmp_path):
 
 def phone_tab(browser, url: str, width: int = 390, height: int = 844):
     """A tab of ``browser`` (helpers.chromium) as wide as a phone's screen, at ``url``, once the
-    viewer's script ran: headless Chromium's own window is never narrower than 500 px."""
+    viewer's script ran: headless Chromium's own window is never narrower than 500 px. A touch screen,
+    as a phone's is: its pointer is coarse."""
     from helpers.chromium import Tab
 
     target = browser.send("Target.createTarget", url="about:blank")["targetId"]
     session = browser.send("Target.attachToTarget", targetId=target, flatten=True)["sessionId"]
     browser.send("Emulation.setDeviceMetricsOverride", session, width=width, height=height, deviceScaleFactor=2,
                  mobile=True)
+    browser.send("Emulation.setTouchEmulationEnabled", session, enabled=True)
     browser.send("Page.navigate", session, url=url)
     tab = Tab(browser, session)
     tab.wait_for("document.documentElement.dataset.ready === '1'")
@@ -620,8 +624,9 @@ def phone_tab(browser, url: str, width: int = 390, height: int = 844):
 @in_chromium
 def test_the_capo_control_fits_a_phone_and_holds_still(tmp_path):
     # On a phone: the capo's buttons never move under a thumb that taps them again, though the
-    # heading above them names other shapes at each fret, on one line or two; they are big enough
-    # to tap; and with the longest key line, the bar still fits, with nothing scrolling sideways.
+    # head above them names another capo at each fret and its Reset comes and goes; they are big
+    # enough for a finger to tap; and with the longest key line, the bar still fits, with nothing
+    # scrolling sideways.
     from helpers.chromium import Chromium
 
     def written(name: str, cho: str) -> str:
@@ -631,18 +636,18 @@ def test_the_capo_control_fits_a_phone_and_holds_still(tmp_path):
         return page.as_uri()
 
     box = "(() => { const r = document.querySelector('%s').getBoundingClientRect(); return [r.top, r.width, r.height]; })()"
-    text = ("(() => { const r = document.createRange(); r.selectNodeContents(document.querySelector('#panel-title'));"
-            " return r.getBoundingClientRect().height; })()")
+    said = "[document.querySelector('#panel-sum').textContent, document.querySelector('#reset-capo').hidden]"
     with Chromium(tmp_path / "profile") as browser:
         tab = phone_tab(browser, written("Wall", WALL))
         tab.click("#more")
-        heights, tops = set(), set()
+        heads, tops = set(), set()
         for button in ["#capo-up"] * 4 + ["#capo-down"] * 6:  # capo 2 up to 6, then down to none
-            heights.add(round(tab.eval(text)))
+            heads.add(tuple(tab.eval(said)))
             tops.add(round(tab.eval(box % "#capo-up")[0]))
             tab.click(button)
         sizes = [min(tab.eval(box % s)[1:]) for s in ("#capo-down", "#capo-up", "#reset-capo")]
-        assert len(heights) > 1  # the heading wrapped at some frets and not at others...
+        # the head named another capo at each fret, and its Reset came and went...
+        assert len({head for head, _ in heads}) > 1 and {hidden for _, hidden in heads} == {True, False}
         assert len(tops) == 1  # ...and the buttons stayed where they were
         assert min(sizes) >= 44
 

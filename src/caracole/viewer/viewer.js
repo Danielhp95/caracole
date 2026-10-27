@@ -375,6 +375,15 @@
     if (capo) return [keyName(shift()), "shapes", rest];
     return [keyName(state.t + sheetCapo), "key", rest];
   };
+  // What is set, in words, as version.py's played_label names a version: the key of the shapes played, in the mode
+  // played ("D Dorian"; on an instrument with no capo, the key the song sounds in, the capo folded in), or how far a
+  // sheet with no key moved ("As written", "Transposed +2"); and the capo, where there is one ("capo 2"), else "".
+  const versionWords = () => {
+    const s = shift(), moved = takesCapo() ? state.t : s;
+    const words = key ? names(s)[mod12(key.tonic + s)] + " " + (MODES[modeNow()] || [modeNow()])[0]
+      : moved ? "Transposed " + signed(moved) : "As written";
+    return [words, capoNow() ? "capo " + capoNow() : ""];
+  };
   // The key in short and the line under it, fitted to the room between − and +. The key a little
   // smaller where it is too long ("Ab mixolydian" at 360 px), down to three quarters of its size, then
   // cut short. The line whole where there is room ("shapes · capo 2 · +1"); on a narrow screen the capo
@@ -763,6 +772,26 @@
     const to = at >= 0 ? box.children[Math.min(at, box.children.length - 1)] : null;
     if (to) to.focus({ preventScroll: true });
   };
+  // The head of the settings, under "Settings": what is set, the key and mode in bold, then the capo and the
+  // instrument ("D Dorian · capo 2 · Guitar").
+  const drawHead = () => {
+    const [words, capo] = versionWords();
+    const line = $("panel-sum");
+    line.textContent = "";
+    line.appendChild(document.createElement("b")).textContent = words;
+    for (const part of [capo, String(inst().name || inst().id)]) {
+      if (part) line.appendChild(document.createTextNode(" · " + part));
+    }
+  };
+  // A Reset by its label while its value differs from where the page starts it, its stepper's edge in the accent;
+  // pressed, it hides, and the focus goes to its stepper rather than out of the settings.
+  const showReset = (reset, shown) => {
+    const stepper = reset.closest(".num").querySelector(".stepper");
+    const had = !shown && document.activeElement === reset;
+    reset.hidden = !shown;
+    stepper.classList.toggle("changed", shown);
+    if (had) stepper.querySelector("button").focus({ preventScroll: true });
+  };
 
   // A chord's chosen position holds while the chord is the same: once its name or its number of
   // shapes changes (a transposition, a mode, a capo, a swap), it starts at its first shape again.
@@ -824,7 +853,7 @@
     keyUnder = [what, rest];
     fitKey();
     $("key-full").textContent = keyLabel(true);
-    $("panel-title").textContent = key ? keyLabel(false) : "Transpose";
+    drawHead();
     const box = $("facts");
     box.textContent = "";
     keyLine(state.t ? " (" + signed(state.t) + ")" : "").forEach((f, n) => {
@@ -851,17 +880,15 @@
     }
 
     $("shift").textContent = signed(state.t);
-    $("shift-hint").textContent = data.transpose
-      ? "Your PDF is transposed " + signed(data.transpose) + "; Reset goes back there." : "";
+    showReset($("reset-t"), state.t !== (Number(data.transpose) || 0));  // the PDF's transposition, else none
     $("capo-at").textContent = String(capoNow());
+    showReset($("reset-capo"), capoNow() !== sheetCapo);
     const hints = capoHints();
+    $("capo-opts").hidden = hints.length === 0;
     refill($("capo"), hints.map(([fret, shapesKey]) => button(fret ? "Capo " + fret : "No capo", state.capo === fret, () => {
       state.capo = state.capo === fret ? null : fret;
       render();
     }, shapesKey + " shapes")));
-    // The same words wherever the capo is, so the row keeps its height under your thumb.
-    $("capo-hint").textContent = "Wherever the capo is, the song sounds the same: the chords show the shapes to play."
-      + (hints.length ? " Easier shapes:" : "");
 
     $("mode-row").hidden = !key;
     refill($("modes"), key ? data.modes.map((mode) => button((MODES[mode] || [mode])[0], modeNow() === mode, () => {

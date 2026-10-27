@@ -708,6 +708,14 @@ def _words(text: str) -> list[str]:
 # above the bar's place, the bar out of the way while the song moves: its first button counts down (a
 # ring and the seconds), pauses (❚❚) and resumes (▶); the status line says so to a screen reader. The settings and the card are dialogs that are not
 # modal: nothing dims the song or takes it out of reach while they are open (viewer.js).
+#
+# The settings, top to bottom, grouped by space rather than headings: "Settings" and a line of what is set (the key
+# and mode played, the capo, the instrument: viewer.js); Transpose and Capo side by side, each labelled over its
+# stepper, with a Reset by its label while its value differs; the easier capos and an instrument's easy keys.
+# Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
+# many, a switch for on or off, a row with › or ↗ for a place to go.
+_UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
+         '<path d="M3 3v5h5"/></svg>')  # ↺, a Reset's: an arc and its arrowhead
 _EXPORT_ROW = """<div class="row" id="export-row"><a class="link" id="export" href="/export">Export PDF of this version</a>
 <p class="hint" id="export-hint"></p>
 <code class="cmd" id="export-cmd" hidden></code><button type="button" class="chip" id="export-copy" hidden>Copy</button></div>
@@ -743,20 +751,23 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="end" id="pill-end" aria-label="Stop scrolling">×</button>
 </div>
 <p class="vh" id="scroll-status" role="status"></p>
-<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title">
-<header class="ui-head"><h2 id="panel-title" tabindex="-1">Key</h2>
+<section class="sheet-ui panel" id="panel" hidden role="dialog" aria-labelledby="panel-title" aria-describedby="panel-sum">
+<header class="ui-head"><div class="ui-title"><h2 id="panel-title" tabindex="-1">Settings</h2>
+<p class="sum" id="panel-sum"></p></div>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
-<div class="row"><span class="lab">Transpose</span>
-<span class="stepper"><button type="button" id="down" aria-label="Down a semitone">−</button>
-<output id="shift">0</output><button type="button" id="up" aria-label="Up a semitone">+</button></span>
-<button type="button" class="link" id="reset-t">Reset</button><p class="hint" id="shift-hint"></p></div>
-<div class="row" id="easy-row" hidden><span class="lab">Easy keys</span><span class="chips" id="easy"></span>
+<div class="pair">
+<div class="num" id="t-row"><div class="num-top"><span id="t-lab">Transpose</span>
+<button type="button" class="undo" id="reset-t" hidden aria-label="Reset the transposition">""" + _UNDO + """Reset</button></div>
+<span class="stepper" role="group" aria-labelledby="t-lab"><button type="button" id="down" aria-label="Down a semitone">−</button>
+<output id="shift">0</output><button type="button" id="up" aria-label="Up a semitone">+</button></span></div>
+<div class="num" id="capo-row"><div class="num-top"><span id="capo-lab">Capo</span>
+<button type="button" class="undo" id="reset-capo" hidden aria-label="Reset the capo">""" + _UNDO + """Reset</button></div>
+<span class="stepper" role="group" aria-labelledby="capo-lab"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
+<output id="capo-at">0</output><button type="button" id="capo-up" aria-label="Capo up a fret">+</button></span></div>
+</div>
+<div class="opts" id="capo-opts" hidden><span class="opts-lab">Easier shapes</span><span class="chips" id="capo"></span></div>
+<div class="opts" id="easy-row" hidden><span class="opts-lab">Easy keys</span><span class="chips" id="easy"></span>
 <p class="hint" id="easy-hint"></p></div>
-<div class="row" id="capo-row"><span class="lab">Capo</span>
-<span class="stepper"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
-<output id="capo-at">0</output><button type="button" id="capo-up" aria-label="Capo up a fret">+</button></span>
-<button type="button" class="link" id="reset-capo">Reset</button><p class="hint" id="capo-hint"></p>
-<span class="chips" id="capo"></span></div>
 <div class="row" id="mode-row" hidden><span class="lab">Mode</span><span class="chips" id="modes"></span>
 <p class="hint" id="mode-hint"></p></div>
 <div class="row" id="names-row"><span class="lab">Chord names</span><span class="chips" id="names"></span>
