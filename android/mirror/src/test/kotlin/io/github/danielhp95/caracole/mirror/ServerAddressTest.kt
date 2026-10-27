@@ -17,7 +17,8 @@ class ServerAddressTest {
     @Test
     fun `an address the app can't use is refused in words`() {
         assertFailsWith<SyncError.NoAddress> { ServerAddress.parse("   ") }
-        for (text in listOf("ftp://server", "http://", "http://user:pw@server:8737", "server name with spaces")) {
+        for (text in listOf("ftp://server", "http://", "http://user:pw@server:8737", "server name with spaces",
+            "192.168.1.20:87370", "192.168.1.20:65536", "http://192.168.1.20:0", "192.168.1.20:99999999999")) {
             assertFailsWith<SyncError.BadAddress>(text) { ServerAddress.parse(text) }
         }
     }

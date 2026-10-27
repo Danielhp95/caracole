@@ -40,4 +40,15 @@ sealed class SyncError(message: String, cause: Throwable? = null) : Exception(me
 
     /** The sync was stopped before it ended; the mirror is as it was. */
     class Cancelled : SyncError("The sync was stopped before it ended; the copy on the phone is as it was.")
+
+    /** Anything else that went wrong, which the app didn't expect: said as it is, rather than a crash. */
+    class Unexpected(cause: Throwable) : SyncError(
+        "Something went wrong that the app didn't expect (${cause.javaClass.simpleName}${cause.message?.let { ": $it" } ?: ""}).",
+        cause,
+    )
+
+    companion object {
+        /** [e] as a SyncError: itself, or [Unexpected]. */
+        fun of(e: Throwable): SyncError = e as? SyncError ?: Unexpected(e)
+    }
 }

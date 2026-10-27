@@ -43,6 +43,7 @@ class ServerAddress private constructor(private val base: URI) {
             val scheme = uri.scheme?.lowercase()
             if (scheme != "http" && scheme != "https") throw SyncError.BadAddress(typed)
             if (uri.host.isNullOrEmpty() || uri.rawUserInfo != null) throw SyncError.BadAddress(typed)
+            if (uri.port != -1 && uri.port !in 1..65535) throw SyncError.BadAddress(typed)
             val authority = uri.rawAuthority
             return ServerAddress(URI("$scheme://$authority"))
         }

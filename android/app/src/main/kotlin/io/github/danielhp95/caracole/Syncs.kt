@@ -61,12 +61,14 @@ object Syncs {
             val fetched = engine.fetchManifest(address)
             val report = engine.sync(address, fetched, progress = { status.value = SyncState.Running(it) }, cancelled = stopped)
             Outcome(System.currentTimeMillis(), true, report.summary())
-        } catch (e: SyncError) {
-            if (probe && (e is SyncError.NoAnswer || e is SyncError.NoAddress || e is SyncError.BadAddress)) {
+        } catch (e: Exception) {
+            // Anything, the unexpected too (SyncError.Unexpected): a failed outcome, never "Syncing…" left up.
+            val error = SyncError.of(e)
+            if (probe && (error is SyncError.NoAnswer || error is SyncError.NoAddress || error is SyncError.BadAddress)) {
                 status.value = SyncState.Idle
                 return null
             }
-            Outcome(System.currentTimeMillis(), false, e.message ?: e.javaClass.simpleName)
+            Outcome(System.currentTimeMillis(), false, error.message ?: error.javaClass.simpleName)
         }
         settings.lastOutcome = outcome
         status.value = SyncState.Ended(outcome)
