@@ -237,7 +237,7 @@ def test_more_opens_the_rest_of_the_settings(tmp_path):
     with viewer(tmp_path, written(tmp_path, UG_CHO)) as b:
         b.click("#more")
         opened = bar(b)
-        shown = b.js("""['capo-row', 'mode-row', 'strip-toggle', 'reset-t', 'reset-all']
+        shown = b.js("""['capo-row', 'mode-row', 'strip-toggle', 'reset-all']  // a Reset only once a value differs
           .map((id) => document.getElementById(id).getClientRects().length > 0)""")
         b.press("Escape")
         closed = bar(b)
@@ -245,7 +245,7 @@ def test_more_opens_the_rest_of_the_settings(tmp_path):
     assert not closed["panel"] and closed["more"] == "false" and closed["focus"] == "more"
 
 
-# The strip of chord shapes, the guitar in the bar and the settings' chip, which say the same.
+# The strip of chord shapes, the guitar in the bar and the settings' switch, which say the same.
 SHAPES = """(() => {
   const q = (s) => document.querySelector(s);
   const strip = q("#strip"), r = strip.getBoundingClientRect();
@@ -270,9 +270,10 @@ def test_the_guitar_shows_the_chord_shapes_and_hides_them_again(tmp_path):
         b.click("#shapes")
         hidden = shapes(b)
     assert not opened  # the strip alone: the settings stay closed
-    assert not before["strip"] and before["pressed"] == before["chip"] == "false" and before["said"] == "Show all"
-    assert shown["strip"] and shown["pressed"] == shown["chip"] == "true" and shown["said"] == "Hide"
-    assert not hidden["strip"] and hidden["pressed"] == hidden["chip"] == "false" and hidden["said"] == "Show all"
+    assert not before["strip"] and before["pressed"] == before["chip"] == "false"
+    assert shown["strip"] and shown["pressed"] == shown["chip"] == "true"
+    assert not hidden["strip"] and hidden["pressed"] == hidden["chip"] == "false"
+    assert before["said"] == shown["said"] == hidden["said"] == "All chord shapes"  # a switch: its state, its press
 
 
 @in_chromium
@@ -286,7 +287,7 @@ def test_the_guitar_and_the_settings_chip_stay_in_step_both_ways(tmp_path):
         panel = bar(b)["panel"]
     assert from_chip["strip"] and from_chip["pressed"] == from_chip["chip"] == "true"
     assert not from_bar["strip"] and from_bar["pressed"] == from_bar["chip"] == "false"
-    assert from_bar["said"] == "Show all" and panel  # the settings stay open
+    assert from_bar["said"] == "All chord shapes" and panel  # the settings stay open
 
 
 @in_chromium

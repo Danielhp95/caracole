@@ -46,18 +46,21 @@ BOARDS = """((boards) => [...boards].map((svg) => {
            on: lit.filter((k) => k.dataset.role === 'on').map((k) => Number(k.dataset.note)).sort((a, b) => a - b),
            keys: svg.querySelectorAll('rect').length };
 }))"""
+# The Instrument menu's options, each with whether it is the one chosen, and its title: what it says of that one.
 SETTINGS = """(() => ({
-  chips: [...document.querySelectorAll('#insts .chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')]),
-  row: !document.getElementById('inst-row').hidden, hint: document.getElementById('inst-hint').textContent,
+  chips: [...document.querySelectorAll('#insts option')].map((o) => [o.textContent, o.selected ? 'true' : 'false']),
+  row: !document.getElementById('inst-row').hidden, hint: document.getElementById('insts').title,
   capo: !document.getElementById('capo-row').hidden, easy: !document.getElementById('easy-row').hidden,
   facts: document.getElementById('facts').textContent, hash: location.hash,
 }))()"""
 
 
 def choose(b: Browser, name: str) -> None:
-    """The settings' Instrument row's chip ``name``, pressed."""
+    """The instrument ``name`` chosen in the settings' Instrument menu, as a hand picks it."""
     b.js(f"""(() => {{ if (document.getElementById('panel').hidden) document.getElementById('more').click();
-      [...document.querySelectorAll('#insts .chip')].find((c) => c.textContent === {json.dumps(name)}).click(); }})()""")
+      const menu = document.getElementById('insts');
+      menu.value = [...menu.options].find((o) => o.textContent === {json.dumps(name)}).value;
+      menu.dispatchEvent(new Event('change', {{bubbles: true}})); }})()""")
 
 
 def strip(b: Browser) -> list:

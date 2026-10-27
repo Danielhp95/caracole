@@ -364,11 +364,11 @@ def test_the_settings_row_and_the_bars_button_say_the_same_both_ways(tmp_path):
         from_row = [b.js(RAIL), toggles(b)]
         b.click("#necks-toggle")  # with the settings open: the row says so
         from_bar = [b.js(RAIL), toggles(b)]
-    assert before["row"] and before["chip"] == before["pressed"] == "true" and before["said"] == "Hide"
+    assert before["row"] and before["chip"] == before["pressed"] == "true" and before["said"] == "Chord necks"
     assert from_row[0]["rail"] is None and from_row[1]["chip"] == from_row[1]["pressed"] == "false"
-    assert from_row[1]["said"] == "Show" and from_row[0]["panel"] is not None  # the settings stay open
+    assert from_row[1]["said"] == "Chord necks" and from_row[0]["panel"] is not None  # the settings stay open
     assert from_bar[0]["rail"]["width"] == 345 and from_bar[1]["chip"] == from_bar[1]["pressed"] == "true"
-    assert from_bar[1]["said"] == "Hide"
+    assert from_bar[1]["said"] == "Chord necks"  # a switch: pressed or not
     # The song between the two rails, or beside the settings' alone.
     assert from_row[0]["sheet"]["left"] < 345 <= from_bar[0]["sheet"]["left"]
     assert from_bar[0]["sheet"]["right"] <= from_bar[0]["panel"]["left"]

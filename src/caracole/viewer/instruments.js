@@ -20,7 +20,7 @@
   //                                     inversion to the next
   //   register(id, parts)               draws the instrument ``id`` of the data's list, whose kind the viewer doesn't
   //                                     draw itself (a harmonica, a flute: not "strings" or "keys"); the viewer offers
-  //                                     it in its Instrument row only once registered, and draws the page again
+  //                                     it in its Instrument menu only once registered, and draws the page again
   //                                     (the event "caracole:instruments" on document). ``parts``, each optional:
   //                                       header(view)  a line of text under the key line, for this instrument alone,
   //                                                     or "" for none
@@ -29,7 +29,7 @@
   //                                                     ``bare``), or null for none
   //                                       panel(view, box)
   //                                                     fills ``box``, the instrument's own row of the settings,
-  //                                                     under the Instrument row, emptied before each call
+  //                                                     under the Instrument menu's line, emptied before each call
   //                                       notes(view, chord)
   //                                                     the MIDI notes a tap on the chord sounds, struck together
   //                                                     in the instrument's voice (strum.js), or null for none

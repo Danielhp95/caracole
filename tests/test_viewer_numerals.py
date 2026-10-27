@@ -1,11 +1,11 @@
 """The sheet viewer's chord names as Roman numerals (viewer/harmony_tables.py, page.py's data; viewer.js, viewer.css).
 
-"Chord names" in the settings: Chords · Chords + numerals · Numerals only (``nm`` in the address: absent,
+"Chord names" in the settings, a segmented control: Chords · + Numerals · Numerals (``nm`` in the address: absent,
 ``both``, ``numerals``). page.py hands the page harmony.py's answers as tables per mode; the script only looks
 them up. The numerals sit after the chord names, or in their place, coloured by family (home, away, pull) unless
 the colours are off, a chord from outside the key underlined; a tap (touch) or the mouse over one shows its line,
-which names the key it is read in, and "What do the numerals mean?" in the settings explains the notation with
-the song's own chords. The browser tests open a viewer in a Chromium of their own (helpers/viewer_pages.py).
+which names the key it is read in, and opens the chord's card, which names its numeral too. The browser tests open
+a viewer in a Chromium of their own (helpers/viewer_pages.py).
 """
 
 from __future__ import annotations
@@ -118,16 +118,10 @@ def test_the_lines_are_harmonys_on_every_transposition():
                 shifted(chord, s), Key((9 + s) % 12, "aeolian"), shifted(goes[i], s))
 
 
-def test_the_glossary_lists_the_symbols_the_song_uses_with_its_chords():
-    data = data_of(build_viewer(IN_A_MINOR))
-    key = Key(9, "aeolian")
-    rows = [[text_on(part, key, 0) for part in row] for row in data["glossary"]["aeolian"]]
-    symbols = [row[0] for row in rows]
-    assert "♭" in symbols and "7" in symbols and "°" not in symbols
-    assert any("A minor" in row[1] for row in rows)  # it names the key it is read in
-    assert ["7", "E7 = V7"] == [rows[symbols.index("7")][0], rows[symbols.index("7")][2]]
-    up = [[text_on(part, key, 2) for part in row] for row in data["glossary"]["aeolian"]]
-    assert any("B minor" in row[1] for row in up) and up[symbols.index("7")][2] == "F#7 = V7"
+def test_the_data_carries_no_glossary():
+    # A numeral's line and its chord's card say what it does; no page explains the notation as a whole any more
+    # (the PDF's legend is pdf_text.py's, from harmony.glossary).
+    assert "glossary" not in data_of(build_viewer(IN_A_MINOR)) and "numerals" in data_of(build_viewer(IN_A_MINOR))
 
 
 def test_each_chord_and_each_alternative_has_its_notes_and_its_scale_for_a_solo():
@@ -154,7 +148,7 @@ def test_a_song_with_no_key_has_no_numerals_but_its_chords_notes():
 def test_a_long_songs_tables_grow_with_its_chords_not_its_lines():
     short = data_of(build_viewer(LONG.split("{comment: Verse 2}")[0]))
     long = data_of(build_viewer(LONG))
-    for name in ("numerals", "explains", "families", "relations", "altNumerals", "tones", "scales", "glossary"):
+    for name in ("numerals", "explains", "families", "relations", "altNumerals", "tones", "scales"):
         assert len(json.dumps(long[name])) == len(json.dumps(short[name])), name
     assert len(json.dumps(long["places"])) <= len(json.dumps(short["places"])) + 200
 
@@ -231,8 +225,9 @@ def test_every_display_names_the_chords_as_asked(tmp_path, cho, names, numerals,
 def test_the_setting_shows_the_numerals_keeps_them_in_the_address_and_colours_them_by_family(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, IN_C), **PHONE) as b:
         b.click("#more")
-        chips = b.js("[...document.querySelectorAll('#names .chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')])")
-        b.js("[...document.querySelectorAll('#names .chip')][1].click()")
+        chips = b.js("[...document.querySelectorAll('#names > button')].map((c) => [c.getAttribute('aria-label'), "
+                     "c.getAttribute('aria-pressed')])")
+        b.js("[...document.querySelectorAll('#names > button')][1].click()")
         both = b.js(SHEET)
         address = b.js("location.hash")
         b.js("location.reload()")
@@ -365,29 +360,10 @@ def test_no_sideways_scroll_on_a_phone_with_numerals_beside_a_long_songs_chords(
 def test_a_song_with_no_key_offers_chords_alone_and_says_why(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, NO_KEY) + "#nm=both", **PHONE) as b:
         b.click("#more")
-        seen = b.js("""({chips: [...document.querySelectorAll('#names .chip')].map((c) => c.textContent),
-          hint: document.getElementById('names-hint').textContent, gloss: document.getElementById('gloss').hidden,
-          numerals: document.querySelectorAll('#sheet .nm').length})""")
+        seen = b.js("""({chips: [...document.querySelectorAll('#names > button:not(:disabled)')].map((c) => c.textContent),
+          hint: document.getElementById('names-hint').textContent, numerals: document.querySelectorAll('#sheet .nm').length})""")
     assert seen == {"chips": ["Chords"], "hint": "caracole can't tell this song's key, so it can't number its chords.",
-                    "gloss": True, "numerals": 0}
-
-
-@in_chromium
-def test_the_glossary_explains_the_songs_numerals_in_the_key_shown(tmp_path):
-    with open_viewer(tmp_path, written(tmp_path, IN_C) + "#nm=both", **PHONE) as b:
-        b.click("#more")
-        b.js("document.getElementById('gloss').open = true")
-        read = "[...document.querySelectorAll('#gloss-body dt, #gloss-body dd, #gloss-body .gloss-key')].map((e) => e.textContent)"
-        first = b.js(read)
-        targets = b.js(small_targets(".foot *"))
-        b.click("#up")
-        b.click("#up")
-        moved = b.js(read)
-    assert first[0] == "Read in the key of C (from the sheet): in another key, every numeral would name other chords."
-    assert "♭" in first and "V/x" in first
-    assert any(t.endswith("Bb = ♭VII") for t in first) and any(t.endswith("C = ♭VII") for t in moved)
-    assert moved[0].startswith("Read in the key of D (from the sheet)")
-    assert targets == []
+                    "numerals": 0}
 
 
 @in_chromium
@@ -408,7 +384,7 @@ def test_a_songbook_song_shows_its_numerals_and_its_harmony(tmp_path):
     path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
     with open_viewer(tmp_path, path.as_uri() + "#song-2", **PHONE) as b:
         b.click("#more")
-        b.js("[...document.querySelectorAll('#names .chip')][1].click()")
+        b.js("[...document.querySelectorAll('#names > button')][1].click()")
         shown = b.js(SHEET)
         b.click("#harmony-open")
         assert b.wait("!document.getElementById('harmony').hidden")

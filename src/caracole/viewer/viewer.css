@@ -6,6 +6,12 @@
   --text: #1f1e1c;
   --muted: #645f57;
   --border: #e1ddd5;
+  --border-strong: #958e82;  /* a control's own edge: a stepper, a select, a switch off (3:1) */
+  --sunk: #ece9e3;  /* a segmented control's track */
+  --seg-on: #ffffff;  /* its chosen segment */
+  --knob: #ffffff;  /* a switch's knob, off */
+  --orig-edge: #8a8378;  /* the song's own mode, among the modes */
+  --orig-bg: #f1eee8;
   --accent: #b4441e;
   --accent-soft: #efd9cf;
   --on-accent: #ffffff;
@@ -30,6 +36,12 @@
     --text: #edebe7;
     --muted: #aaa59c;
     --border: #363431;
+    --border-strong: #4b4844;
+    --sunk: #181716;
+    --seg-on: #292826;
+    --knob: #d8d4cc;
+    --orig-edge: #8f8a82;
+    --orig-bg: #2f2d2a;
     --accent: #f0895c;
     --accent-soft: #4a2a1c;
     --on-accent: #1b0e07;
@@ -146,19 +158,6 @@ html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
 .tip p { margin: 0; }
 .tip .tip-key { margin-top: 4px; color: var(--muted); font-size: .8rem; }
 .tip .chip { margin-top: 8px; }
-/* What do the numerals mean? In the settings, folded: the key they are read in, the song's symbols, each with
-   one of its chords, the colours and the whole notation. */
-.gloss { flex-basis: 100%; }
-.gloss summary { display: flex; align-items: center; min-height: 44px; color: var(--accent); font-weight: 600;
-  cursor: pointer; }
-.gloss dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 8px 0 0;
-  font-size: .88rem; }
-.gloss dt { font-weight: 700; }
-.gloss dd { margin: 0; }
-.gloss .ex { display: block; color: var(--muted); font-size: .8rem; }
-.gloss p { margin: 10px 0 0; color: var(--muted); font-size: .85rem; }
-.gloss .gloss-key { color: var(--text); }
-.gloss-roles .nm { font-weight: 700; }
 /* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
    ▶ beside it, and its songs, and those of each named progression it contains; the numeral playing marked. A
    section's heading names its progression. */
@@ -367,6 +366,132 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .ui-head h2:focus { outline: none; }  /* where focus lands as it opens; not a control */
 .x { flex: none; margin-left: auto; width: 44px; height: 44px; border: 0; border-radius: 12px; background: none;
   color: var(--muted); font-size: 1.6rem; line-height: 1; cursor: pointer; }
+/* The settings (#panel): grouped by space, a rule between the groups. Its head is "Settings" and, under it, what is
+   set ("D Dorian · capo 2 · Guitar"), the key and mode in bold, wrapping rather than widening the panel. */
+#panel .ui-head { align-items: flex-start; padding-bottom: 2px; }
+.ui-title { flex: 1 1 auto; min-width: 0; padding-top: 8px; }
+#panel .ui-head h2 { display: block; min-height: 0; font-size: 1.1rem; }
+.sum { margin: 2px 0 0; color: var(--muted); font-size: .82rem; overflow-wrap: anywhere; }
+.sum b { color: var(--text); font-weight: 650; }
+/* Transpose and Capo side by side, each labelled over its stepper; Transpose alone, on an instrument with no capo,
+   takes the whole width. A Reset by the label while the value differs, in a line as tall with it as without, so the
+   steppers never move; the stepper's edge then in the accent. */
+.pair { display: flex; gap: 12px; margin: 6px 0 12px; }
+.num { flex: 1 1 0; min-width: 0; }
+.num-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 24px;
+  margin-bottom: 5px; color: var(--muted); font-size: .84rem; font-weight: 600; }
+.undo { display: inline-flex; align-items: center; gap: 4px; padding: 0 2px; border: 0; border-radius: 6px;
+  background: none; color: var(--accent); font: inherit; font-size: .76rem; font-weight: 650; cursor: pointer; }
+.undo svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round;
+  stroke-linejoin: round; }
+#panel .stepper { display: flex; align-items: stretch; gap: 0; border: 1px solid var(--border-strong);
+  border-radius: 10px; }
+#panel .stepper.changed { border-color: color-mix(in srgb, var(--accent) 60%, var(--border-strong)); }
+#panel .stepper button { flex: none; width: 44px; height: 36px; min-width: 0; min-height: 0; padding: 0; border: 0;
+  border-radius: 9px;
+  background: none; color: var(--text); font-size: 1.15rem; line-height: 1; }
+#panel .stepper button:focus-visible { outline-offset: -3px; }
+#panel .stepper output { flex: 1 1 auto; display: grid; place-items: center; min-width: 0;
+  border-inline: 1px solid var(--border); font-weight: 700; }
+/* The easier capos and an instrument's easy keys, under them: a small label, then the pills. */
+.opts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; margin: -2px 0 12px; }
+.opts-lab { color: var(--muted); font-size: .8rem; font-weight: 600; }
+/* Pills, for one of many: the modes, the capos, the easy keys, an instrument's own choices. The one chosen has the
+   accent's edge and fill; what a pill adds in small (a capo's shapes) follows its name. Among the modes the song's
+   own (orig) has a 2 px edge in a lighter grey and a lighter fill, and a 2 px accent edge when it is chosen too. */
+#panel .chips { gap: 6px; }
+#panel .chip { display: inline-flex; align-items: center; gap: 5px; min-width: 0; min-height: 32px; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: 999px; background: none; color: var(--text); font-size: .84rem;
+  font-weight: 550; }
+#panel .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+#panel .chip small { display: inline; font-size: .74rem; font-weight: 500; color: var(--muted); opacity: 1; }
+#panel .chip.orig { padding: 0 11px; border: 2px solid var(--orig-edge); background: var(--orig-bg); }
+#panel .chip.orig[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
+.modes { margin-bottom: 12px; }
+.modeline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
+.modeline .lab { min-width: 0; font-size: .84rem; }
+.what { color: var(--muted); font-size: .8rem; text-align: end; }
+/* A rule between the groups, across the whole panel (--pad: the panel's own padding at the side). */
+#panel { --pad: 16px; }
+.ruled { margin-inline: calc(-1 * var(--pad)); padding: 10px var(--pad) 0; border-top: 1px solid var(--border); }
+/* The chord names, one of three: segments in a sunken track, the one chosen raised; a segment greyed where it has
+   nothing to show (no numerals for a song with no key). */
+.seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--sunk); }
+.seg > button { flex: 1 1 0; display: grid; place-items: center; min-width: 0; min-height: 32px; padding: 0 6px;
+  border: 0; border-radius: 7px; background: none; color: var(--muted); font: inherit; font-size: .84rem;
+  font-weight: 600; text-align: center; cursor: pointer; }
+.seg > button[aria-pressed="true"] { background: var(--seg-on); color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .25), inset 0 0 0 1px var(--border-strong); }
+.seg > button:disabled { opacity: .45; cursor: default; }
+.seg > button:focus-visible { outline-offset: -1px; }
+.chords > .seg { margin: 2px 0 6px; }
+.chords > .hint { margin: 0 0 4px; }
+/* On or off: a row, its words and the switch at its right, the whole row the button (pressed while it is on); the
+   switch's track in the accent while on, its knob over at the right. Role colours says them, each in its colour. */
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px;
+  padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: .92rem; text-align: start;
+  cursor: pointer; }
+.switch::after { content: ""; flex: none; width: 42px; height: 24px; border-radius: 999px;
+  background: radial-gradient(circle at 12px 50%, var(--knob) 8.5px, transparent 9px) var(--border-strong); }
+.switch[aria-pressed="true"]::after { background-color: var(--accent);
+  background-image: radial-gradient(circle at 30px 50%, #fff 8.5px, transparent 9px); }
+.switch .roles { flex: 1 1 auto; display: flex; gap: 8px; margin-left: 8px; font-size: .74rem; font-weight: 700; }
+.roles .r-h { color: var(--home); }
+.roles .r-a { color: var(--away); }
+.roles .r-p { color: var(--pull); }
+#pinyin-row .hint { margin: -6px 0 4px; }
+/* The instrument, a menu (the platform's own, its arrow drawn), and the strum's loudness, four speakers in a
+   segmented control, on one line; on a screen too narrow for both, the speakers under the menu. An instrument's own
+   rows (instruments.js) right under the line. */
+.duo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 4px 0 2px; }
+.inst-pick { position: relative; flex: 0 1 auto; min-width: 0; }
+.inst-pick::after { content: ""; position: absolute; top: 50%; right: 12px; width: 6px; height: 6px; margin-top: -5px;
+  border: solid var(--muted); border-width: 0 1.8px 1.8px 0; transform: rotate(45deg); pointer-events: none; }
+#insts { appearance: none; max-width: 100%; height: 36px; padding: 0 28px 0 10px; border: 1px solid var(--border-strong);
+  border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: .88rem;
+  font-weight: 600; text-overflow: ellipsis; cursor: pointer; }
+.icons { flex: none; }
+.icons > button { flex: none; width: 32px; color: var(--muted); }
+.icons svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round;
+  stroke-linejoin: round; }
+.inst-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 6px 0 2px; }
+/* After a rule, the places to go, a full-width row each: its words, and at its right what it holds or where it goes,
+   then › (something here: the Harmony panel, Export PDF's page or, from a file, its command, unfolded) or ↗ (away
+   from the page: a Guitar Pro file). Its hover reaches a little past the panel's text on either side. */
+.places { margin-top: 10px; padding-top: 4px; padding-bottom: 4px; }
+.goto { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% + 16px);
+  min-height: 44px; margin: 0 -8px; padding: 0 8px; border: 0; border-radius: 9px; background: none; color: var(--text);
+  font: inherit; font-size: .92rem; text-align: start; text-decoration: none; cursor: pointer; }
+.goto-lab { flex: none; }
+.goto-v { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; color: var(--muted);
+  font-size: .85rem; text-align: end; }
+.goto svg { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9;
+  stroke-linecap: round; stroke-linejoin: round; }
+.goto[aria-expanded="true"] svg { transform: rotate(90deg); }
+.export-file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0 8px; }
+.export-file .hint { margin: 0; }
+/* Reset everything, after the last rule: quiet, centred. */
+.panel-end { display: flex; justify-content: center; margin-top: 4px; padding-top: 8px; }
+.quiet { min-height: 36px; padding: 0 12px; border: 0; border-radius: 9px; background: none; color: var(--muted);
+  font: inherit; font-size: .85rem; font-weight: 600; cursor: pointer; }
+@media (hover: hover) {
+  #panel .stepper button:hover, .undo:hover { background: var(--raised); }
+  #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
+  .seg > button:not([aria-pressed="true"]):not(:disabled):hover { color: var(--text); }
+  .goto:hover, .quiet:hover { background: var(--raised); }
+}
+/* A finger's target, 44 px either way, wherever a pointer is coarse: the steppers taller, a Reset's target reaching
+   over the line round it, the line no taller. */
+@media (pointer: coarse) {
+  #panel .stepper button { height: 44px; }
+  .undo { min-height: 44px; margin: -10px -2px; padding: 0 6px; }
+  #panel .chip { min-width: 44px; min-height: 44px; }
+  .seg > button { min-height: 44px; }
+  #insts { height: 44px; }
+  .quiet { min-height: 44px; }
+  .icons > button { width: 44px; }
+}
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0;
   border-top: 1px solid var(--border); }
 .lab { min-width: 92px; color: var(--muted); font-size: .85rem; font-weight: 600; }
@@ -475,6 +600,7 @@ a.ver-main .ver-name { color: var(--accent); }
 .strip svg.kb { width: 132px; }
 .facts .inst-line { display: block; margin-top: 2px; }
 .inst-panel:empty { display: none; }
+.inst-panel > .hint { margin: 0; }
 /* The harmonica and the winds (winds.js): a harp's ten holes, those a chord plays lit; a flute's keys or a
    recorder's holes down its length for each note, pressed or covered filled. As wide as a keyboard on the card. */
 .hp { display: block; width: 100%; height: auto; }
@@ -531,6 +657,7 @@ a.ver-main .ver-name { color: var(--accent); }
   .sheet-ui.panel { top: 0; bottom: 0; left: auto; right: 0; width: var(--rail); max-width: none; max-height: none;
     margin: 0; padding: 14px 20px calc(18px + env(safe-area-inset-bottom)); border: 0; border-left: 1px solid var(--border);
     border-radius: 0; box-shadow: -2px 0 14px rgb(0 0 0 / .06); }
+  #panel { --pad: 20px; }
   html[data-panel] body { padding-right: var(--rail); }
   html[data-panel] .bar { right: var(--rail); }
   html[data-panel] .pill { right: calc(var(--rail) + 16px); }

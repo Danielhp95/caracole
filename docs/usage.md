@@ -1486,8 +1486,9 @@ and cache.
   that plays the sheet where the song plays without one (its `[transpose]`,
   else as written) takes the song's `[version]` out instead, and the song
   follows its sheet again. `--mine` needs `--version` (exit 2).
-  In the sheet viewer, ⋯ has **Export PDF of this version**, but for the auto
-  sheet's viewer kept beside a human sheet: its chords are other ones, and an
+  In the sheet viewer, ⋯ has **Export PDF**, with the version in words at its
+  right ("D Dorian, capo 2"; from the folder, the row unfolds this command,
+  with Copy), but for the auto sheet's viewer kept beside a human sheet: its chords are other ones, and an
   export would be the human sheet's (caracole serve refuses one from it, 409).
   caracole serve refuses one from a kept version's page (`version-<tab>.html`)
   too, for the same reason: make that version the one first, then export it
@@ -2312,8 +2313,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   plucked string, a piano's string, a reed or a flute's breath, synthesized:
   no recording, nothing loaded), so it works from the synced folder and from `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
   time, and the page falls silent when you switch away from it; the next tap
-  plays again. **Sound**, in the settings, sets the volume: Off, Soft,
-  Medium (the default) or Loud. With it off, a tap opens the card alone. A
+  plays again. The strum's loudness, four speakers beside the instrument in the
+  settings, sets the volume: Off (crossed out), Soft, Medium (the default) or
+  Loud (one, two and three waves). With it off, a tap opens the card alone. A
   phone set to silent may keep it silent.
 - **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
   left lists each chord of the song once, in the order it first comes, with a
@@ -2335,8 +2337,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   **Showing and hiding it**: the button at the rail's top (a sidebar, "Hide
   chord necks", which stays at the top as the rail scrolls) hides it, and the
   song takes the whole width; the same sidebar, first in the bar, hides it or
-  brings it back (pressed while it shows), and so does **Chord necks**
-  (Show, Hide) in the settings: the three always agree. The choice is the
+  brings it back (pressed while it shows), and so does the **Chord necks**
+  switch in the settings: the three always agree. The choice is the
   screen's, not a song's: the browser keeps it once for every sheet and
   songbook, and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: ‹ and › to another
@@ -2355,7 +2357,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Em): the guitar's capo comes back with the guitar. On the harmonica a
   second line names the harps for the song, each in its position: "Harmonica:
   G harp (1st position) · C harp (2nd)" (below).
-- **Instrument**, in the settings: Guitar (the default), Ukulele (G C E A, the
+- **Instrument**, a menu in the settings: Guitar (the default), Ukulele (G C E A, the
   G string high), Ukulele, low G, Baritone ukulele (D G B E), Piano,
   Harmonica, Flute and Recorder. It
   changes how every chord is drawn and heard, never the song: the chord names
@@ -2381,7 +2383,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   (3rd position, dorian)"). A song in a major key lists the 1st position, then
   the 2nd; a song in another mode, the positions that suit it (the 3rd, 4th
   and 5th for a minor one), those that play the most of its chords first. Its
-  row in the settings, **Harp**, picks one of them, and lists each chord on it:
+  row in the settings, under the menu, **Harp**, picks one of them, and lists each chord on it:
   the holes that play it on one breath ("draw 2–5"), the chord without its
   seventh or ninth where the harp has only that ("blow 1–3 (as C)"), the minor
   chord a harp plays for a major one it lacks ("draw 4–6 (as Dm, minor
@@ -2440,7 +2442,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   long for its room ("Ab mixolydian") is a little smaller. A screen reader
   hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
   guitar** shows the strip of every chord's shape (below), or hides it
-  again, as Show all in the settings does: it stays pressed while the strip
+  again, as All chord shapes in the settings does: it stays pressed while the strip
   shows, and the two always agree. Pressed further down the song, it takes
   the page up to the strip, so the shapes are in view; a sheet without
   chords has none. **Aa** opens a small box over the bar with the text
@@ -2452,7 +2454,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   back where you were in the song, and while the keyboard's focus is on one
   of its buttons; Tab reaches each of them from the end of the page, and
   brings the bar back.
-- **The settings** (⋯), headed by the key line, leave the song in view, so
+- **The settings** (⋯), headed by what is set ("D Dorian · capo 2 · Guitar":
+  the key of the shapes you play in the mode played, the capo, the instrument;
+  "As written" or "Transposed +2" for a song whose key caracole can't tell),
+  leave the song in view, so
   you see its chords change as you transpose, move the capo or change the
   mode: on a phone they sit at the foot, above the bar, in at most 45 % of
   the screen, and the song scrolls under them; from 900 px wide they are a
@@ -2460,7 +2465,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   dimmed or out of reach. A chord's card opened with them covers them on a
   phone, and sits by its chord beside them on a wider screen; Escape closes
   the card first, then the settings, and gives the focus back to what opened
-  each. Among them: **Transpose**, as − and + do, with the semitones counted; Reset goes back to the song's
+  each. Among them, side by side: **Transpose**, as − and + do, with the semitones counted; ↺ Reset, by it
+  while it differs, goes back to the song's
   `[transpose]`, where the viewer starts, like the PDF. A song with a version
   of its own (`[version]`, Make this my version) starts in it, key, capo, mode,
   shapes and swaps (its key on whichever sheet the song has now), whenever its
@@ -2470,12 +2476,12 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the browser kept for the page before the song had that version is left
   out. **Capo**, on every
   song, moves the capo a fret at a time, from none to
-  the 11th; Reset puts it back where the sheet has it. The song sounds the same
+  the 11th; its ↺ Reset puts it back where the sheet has it. The song sounds the same
   wherever the capo is, and the chords show the shapes to play there: Em shapes
   with capo 2 become F#m shapes with no capo, or Dm shapes with capo 4. The
   capo stays on its fret when you transpose, as on a guitar, so the shapes
-  move instead. In an awkward key it also suggests frets where open shapes play
-  it (Bb: capo 1 with A shapes, capo 3 with G shapes); tap one to play them.
+  move instead. In an awkward key it also suggests, under them, **Easier shapes**: frets
+  where open shapes play it (Bb: capo 1 with A shapes, capo 3 with G shapes); tap one to play them.
   The fret suggested is where the capo goes, and it may be lower than the
   sheet's, or no capo at all (a sheet in G shapes with capo 2, transposed down
   two: no capo, G shapes).
@@ -2487,8 +2493,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Mode**: with C minor, switch to C major, or to any mode on C (Dorian,
   Phrygian, Lydian, Mixolydian, Locrian). Each chord's notes move to the same
   degree of the new scale, so Ab becomes Am and Bb7 a Bm7b5; a note outside
-  the key, such as the G major chord's B in C minor, stays where it is.
-- **Chord names**: Chords, Chords + numerals or Numerals only. A numeral says
+  the key, such as the G major chord's B in C minor, stays where it is. The
+  song's own mode has a thicker edge among the others, and the line over them
+  says what the mode played sounds like ("minor, with a brighter sixth").
+- **Chord names**, one of three: Chords, + Numerals (each chord's name and its
+  numeral) or Numerals (the numeral in its place). A numeral says
   what the chord is in the key, as a Roman numeral counted up the key's scale
   from its tonic: in C major, C F G Am are I IV V vi; in A minor, Am G F E7
   are i ♭VII ♭VI V7 (numerals are written against the tonic's major scale, so
@@ -2505,7 +2514,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   i, ♭III, ♭VI in minor) green, moving away (IV, ii) blue, pulling home (V,
   vii°, and a minor key's ♭VII) purple; a chord from outside the key
   (borrowed, as B♭ in C from C minor; a secondary dominant; or plainly
-  outside) is underlined with dots. **Role colours** turns the colours off.
+  outside) is underlined with dots. The **Role colours** switch turns the colours off.
   Hover over a numeral with the mouse, or tap it, for its line: "vi: the 6th
   chord of C major, minor (lower case)", "♭VII: built on the lowered 7th
   degree of C major, major (upper case); borrowed from C minor", with the key
@@ -2514,10 +2523,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
   chord's name opens its card, which names the numeral too ("Bb · ♭VII").
-  **What do the numerals mean?** under it explains the notation with the
-  song's own chords as examples, in the key shown. A song whose key caracole
-  can't tell offers chords alone, and says so.
-- **Harmony** (in the settings) opens a panel in their place, docked at the
+  A song whose key caracole can't tell offers chords alone (the numerals
+  greyed), and says so.
+- **Harmony ›** (in the settings, with Guitar Pro tab and Export PDF after a
+  rule, near their foot) opens a panel in their place, docked at the
   foot on a phone and a rail on the right from 900 px wide: the key the
   numerals are read in and where it came from, the key's neck on a phone (on
   a laptop it heads the rail of necks), and each section's progression in
@@ -2557,7 +2566,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shuttle). A section with no chord caracole can read isn't listed; a sheet with
   no headings has one section, "Section 1". Tap a progression to go to its
   section. **▶** plays it (strummed, as a tap on a chord is, above; not with
-  **Sound** off, or in a browser that can't make sound), a chord a bar at
+  the strum Off, or in a browser that can't make sound), a chord a bar at
   the tempo above the list (80 bpm to start; − and + change it as it plays),
   each chord with the shape and the capo the page shows, always in the
   progression's order (a busy page plays the rest later, never two chords at
@@ -2571,15 +2580,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sheet names its progression too ("Verse · the pop progression"), or those
   it plays within it ("Chorus · contains the '50s progression").
 - Every chord's shape in a strip above the song (the guitar in the bar, or
-  Show all in the settings; kept for the page, as the text size is): the
+  All chord shapes in the settings; kept for the page, as the text size is): the
   shapes alone, large enough to read at a glance; tap one for its card,
-  with the fingers. Reset everything, at the foot of the settings, puts the
+  with the fingers. Reset everything, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
   the viewer starts them, shows the rail of necks again and hides the pinyin.
-- **Pinyin**, in the settings of a sheet with Chinese lyrics: **Show** puts
+- **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
   each Chinese character's reading over it, in pinyin with its tone marks
-  (zhǐ), smaller and muted, between its chord and it; **Hide** takes the
-  readings away again, as the viewer starts. Each is read in context when the
+  (zhǐ), smaller and muted, between its chord and it; off, as the viewer starts,
+  the readings go again. Each is read in context when the
   page is made (by pypinyin, word by word: 长 is cháng in 长城 and zhǎng in 成长,
   不要 is bú yào), and a sheet in Traditional characters is read as in
   Simplified ones, its 著 as 着 (睡著, shuì zháo) but in a word of its own (顯著,
@@ -2599,11 +2608,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   songbook's) have none. Copied, the lyrics leave the readings out. A sheet
   without chords has no settings, so no Pinyin row, but shows the readings
   when another page turned them on.
-- **Guitar Pro**, in the settings of a song with a Guitar Pro file (not a
-  Power Tab one): served by caracole serve, **Guitar Pro tab** opens the file
-  drawn and played in the browser (see
-  [Guitar Pro files in the browser](#caracole-serve)); from the folder, the
-  file's name links the file itself.
+- **Guitar Pro tab ↗**, in the settings of a song with a Guitar Pro file (not a
+  Power Tab one), a row a file: served by caracole serve, it opens the file
+  drawn and played "in the browser" (see
+  [Guitar Pro files in the browser](#caracole-serve)); from the folder, it is
+  a "download", the file itself.
 - **Scrolling by itself**: ▶ in the bar counts down 3 seconds to give you
   time to get your hands on the guitar (press the count to start at once),
   then scrolls the song at a steady pace, with the screen kept on where the

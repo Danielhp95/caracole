@@ -138,22 +138,23 @@ def test_a_songbook_inlines_it_too():
 
 def test_the_settings_have_a_sound_row():
     html = build_viewer(SONG)
-    row = re.search(r'<div class="row" id="sound-row".*?</div>', html, re.S)
-    assert row and 'id="volumes"' in row.group(0)
+    row = re.search(r'<span id="sound-row" hidden>.*?</span></span>', html, re.S)
+    assert row and 'id="volumes"' in row.group(0) and 'role="group" aria-label="Strum"' in row.group(0)
     assert re.search(r'<div class="diagram" id="diagram"', html)
 
 
 @in_chromium
 def test_the_volume_is_a_setting_kept_in_the_address(tmp_path):
     url = written(tmp_path, build_viewer(SONG))
-    chips = "[...document.querySelectorAll('#volumes .chip')].map((c) => [c.textContent, c.getAttribute('aria-pressed')])"
+    chips = ("[...document.querySelectorAll('#volumes > button')].map((c) => [c.getAttribute('aria-label'), "
+             "c.getAttribute('aria-pressed')])")
     dom = browser.dump_dom(url + "#vol=1", (390, 844))
     assert 'id="sound-row"' in dom and 'id="sound-row" hidden' not in dom
     with opened(tmp_path, url) as b:
         assert b.js(chips) == [["Off", "false"], ["Soft", "false"], ["Medium", "true"], ["Loud", "false"]]
         assert "vol" not in b.js("location.hash")
         b.click("#more")
-        b.click("#volumes .chip:nth-child(4)")
+        b.click("#volumes > button:nth-child(4)")
         assert b.js(chips)[3] == ["Loud", "true"]
         assert "vol=3" in b.js("location.hash")
         assert look(b)["contexts"] == 0  # choosing it plays nothing

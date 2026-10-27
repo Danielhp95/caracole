@@ -24,7 +24,7 @@ with no capo (``capo`` False: the piano) plays the chords as they sound, the cap
   viewer's Easy keys row offers before the capo; None for none;
 - ``voice``: the sound strum.js makes for it ("guitar", "ukulele", "piano", "reed", "flute", "recorder");
 - ``sounds``: how many semitones its notes sound above where its music is written (0: at concert pitch);
-- ``about``: a line on it, under the settings' Instrument row.
+- ``about``: a line on it, the title of the settings' Instrument menu.
 
 Their shapes, all from the chord's name alone:
 

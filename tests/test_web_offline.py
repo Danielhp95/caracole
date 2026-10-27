@@ -355,8 +355,7 @@ VIEWER_CONTROLS = """JSON.stringify({
   export: [...document.querySelectorAll('#export, #export-cmd, #export-copy')].map((e) =>
     [e.id, e.hidden, e.getAttribute('href'), e.id === 'export-cmd' ? e.textContent : null]),
   guitar: [...document.querySelectorAll('#guitar-links a')].map((a) =>
-    [a.textContent, a.getAttribute('href'), a.getAttribute('download')]),
-  hint: (document.getElementById('guitar-hint') || {}).textContent,
+    [a.querySelector('.goto-v').textContent, a.getAttribute('href'), a.getAttribute('download')]),
   versions: [...document.querySelectorAll('#ver-acts > *, #ver-items .ver-acts > *')].map((e) =>
     [e.tagName, e.textContent, e.getAttribute('href')]),
   server: [...document.querySelectorAll('a[href^="/"]')].map((a) => a.getAttribute('href')),
@@ -445,7 +444,7 @@ def test_in_the_apps_copy_a_viewer_offers_what_it_offers_from_a_file(app, versio
                 assert [(name, hidden) for name, hidden, _, _ in controls["export"]] == [
                     ("export", True), ("export-cmd", False), ("export-copy", False)]
                 assert controls["export"][1][3].startswith("caracole render --song 'Placeholder Band - Synthetic Song'")
-            assert controls["guitar"] == [["guitar-1.gp5", "guitar-1.gp5", "Placeholder Band - Synthetic Song.gp5"]]
+            assert controls["guitar"] == [["download", "guitar-1.gp5", "Placeholder Band - Synthetic Song.gp5"]]
             assert controls["versions"] and all(tag == "BUTTON" or href.startswith("https://tabs.ultimate-guitar.com/")
                                                 for tag, _, href in controls["versions"])
             assert controls["server"] in ([], ["/export"]) and controls["fetched"] == []  # /export: its link, hidden

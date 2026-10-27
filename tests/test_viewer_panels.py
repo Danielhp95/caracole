@@ -160,15 +160,421 @@ def test_from_900_px_wide_the_settings_are_a_rail_beside_the_song(tmp_path, widt
 
 @in_chromium
 @pytest.mark.parametrize("size", [PHONE, DESKTOP], ids=["phone", "desktop"])
-def test_a_heading_on_two_lines_clears_the_line_under_it(tmp_path, size):
-    measure = """(() => { const h = document.querySelector('#panel-title'), range = document.createRange();
-      range.selectNodeContents(h);
-      const lines = new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size;
-      return [lines, range.getBoundingClientRect().bottom, document.querySelector('#panel .row').getBoundingClientRect().top]; })()"""
-    with viewer(tmp_path, written(tmp_path) + "#t=1&mode=dorian", **size) as b:
+def test_the_head_clears_the_line_under_it(tmp_path, size):
+    # Its title on one line, and what is set under it, however long that runs, above Transpose and Capo.
+    measure = """(() => { const lines = (el) => { const range = document.createRange(); range.selectNodeContents(el);
+        return [new Set([...range.getClientRects()].map((r) => Math.round(r.top))).size, range.getBoundingClientRect().bottom]; };
+      return [lines(document.querySelector('#panel-title'))[0], lines(document.querySelector('#panel-sum'))[1],
+              document.querySelector('#t-row').getBoundingClientRect().top]; })()"""
+    with viewer(tmp_path, written(tmp_path) + "#t=1&mode=mixolydian&capo=11&inst=baritone", **size) as b:
         b.click("#more")
         lines, text, row = b.js(measure)
-    assert lines == 2 and text <= row - 4  # "Ab dorian shapes · capo 2 · sounds" / "Bb dorian"
+    assert lines == 1 and text <= row - 4
+
+
+# --- what the settings hold, top to bottom ------------------------------------------------------------
+
+IN_E = "{title: In E}\n{artist: Synthetic}\n{key: E}\n{comment: Verse}\n[E]la la [A]la la [B7]la la [E]la\n"
+NO_KEY = "{title: Riffs}\n{artist: Synthetic}\n{capo: 1}\n{comment: Verse}\n[N.C.]Made up [Xq]words\n"
+# The settings' head: its title, the line of what is set, and the part of it in bold.
+HEAD = """[document.getElementById('panel-title').textContent, document.getElementById('panel-sum').textContent,
+  (document.querySelector('#panel-sum b') || {}).textContent || '']"""
+# Whether each Reset shows, and whether its stepper's edge says the value differs.
+RESETS = """(() => { const q = (s) => document.querySelector(s);
+  const shown = (el) => !el.hidden && el.getClientRects().length > 0;
+  return {t: shown(q('#reset-t')), capo: shown(q('#reset-capo')),
+          tMarked: q('#up').closest('.stepper').classList.contains('changed'),
+          capoMarked: q('#capo-up').closest('.stepper').classList.contains('changed')}; })()"""
+SHIFT = "document.getElementById('shift').textContent"
+
+
+def mode(b: Browser, name: str) -> None:
+    """The settings' mode ``name``, pressed."""
+    b.js(f"[...document.querySelectorAll('#modes .chip')].find((c) => c.firstChild.textContent === {name!r}).click()")
+
+
+@in_chromium
+def test_the_settings_head_says_key_mode_capo_and_instrument(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        first = b.js(HEAD)
+        mode(b, "Dorian")
+        b.click("#capo-up")
+        b.click("#capo-up")
+        chosen = b.js(HEAD)
+    with viewer(tmp_path, written(tmp_path, name="Long") + "#inst=piano") as b:
+        b.click("#more")
+        piano = b.js(HEAD)
+    with viewer(tmp_path, written(tmp_path, NO_KEY, name="Riffs") + "#t=2") as b:
+        b.click("#more")
+        moved = b.js(HEAD)
+        b.click("#reset-t")
+        unknown = b.js(HEAD)
+    assert first == ["Settings", "E Major · Guitar", "E Major"]
+    assert chosen == ["Settings", "D Dorian · capo 2 · Guitar", "D Dorian"]  # the shapes played, and the capo
+    assert piano == ["Settings", "A Major · Piano", "A Major"]  # G shapes, capo 2: no capo, the key it sounds in
+    assert moved == ["Settings", "Transposed +2 · capo 1 · Guitar", "Transposed +2"]
+    assert unknown == ["Settings", "As written · capo 1 · Guitar", "As written"]
+
+
+@in_chromium
+def test_a_reset_shows_only_while_a_value_differs(tmp_path):
+    with viewer(tmp_path) as b:  # G shapes, capo 2
+        b.click("#more")
+        sheet = b.js(RESETS)
+        b.click("#capo-up")
+        capo = b.js(RESETS)
+        b.js("document.getElementById('reset-capo').focus()")
+        b.press("Enter")
+        back = [b.js(RESETS), b.js("document.getElementById('capo-at').textContent"),
+                b.js("document.activeElement.closest('.stepper') === document.getElementById('capo-up').parentElement")]
+        b.click("#up")
+        up = b.js(RESETS)
+    assert sheet == {"t": False, "capo": False, "tMarked": False, "capoMarked": False}
+    assert capo == {"t": False, "capo": True, "tMarked": False, "capoMarked": True}
+    assert back == [sheet, "2", True]  # the focus on the stepper it put back, not lost with the Reset
+    assert up == {"t": True, "capo": False, "tMarked": True, "capoMarked": False}
+
+
+@in_chromium
+def test_transpose_reset_goes_back_to_the_pdfs_transposition(tmp_path):
+    page = tmp_path / "Artist" / "Moved" / "sheet.html"
+    page.parent.mkdir(parents=True)
+    page.write_text(build_viewer(LONG, transpose=2), encoding="utf-8")
+    with viewer(tmp_path, page.as_uri()) as b:
+        b.click("#more")
+        pdf = [b.js(SHIFT), b.js(RESETS)["t"]]
+        b.click("#down")
+        b.click("#down")
+        zero = [b.js(SHIFT), b.js(RESETS)["t"]]  # the sheet as written, which the PDF isn't
+        b.click("#reset-t")
+        back = [b.js(SHIFT), b.js(RESETS)["t"]]
+    assert pdf == ["+2", False] and zero == ["0", True] and back == ["+2", False]
+
+
+@in_chromium
+def test_transpose_and_capo_share_a_line_at_390px(tmp_path):
+    seen = """(() => { const r = (s) => document.querySelector(s).getBoundingClientRect();
+      return {rows: [r('#t-row').top, r('#capo-row').top], steppers: [r('#down').top, r('#capo-down').top],
+              between: r('#up').right <= r('#capo-down').left, page: document.documentElement.scrollWidth}; })()"""
+    with viewer(tmp_path) as b:
+        b.click("#more")
+        b.click("#capo-up")  # its Reset shown: nothing moves
+        shown = b.js(seen)
+        b.click("#reset-capo")
+        hidden = b.js(seen)
+    assert shown["rows"][0] == shown["rows"][1] and shown["steppers"][0] == shown["steppers"][1]
+    assert shown["between"] and shown["page"] <= 390
+    assert hidden == shown
+
+
+@in_chromium
+def test_an_instrument_without_a_capo_shows_transpose_alone(tmp_path):
+    with viewer(tmp_path, written(tmp_path) + "#inst=piano") as b:
+        b.click("#more")
+        seen = b.js("""(() => { const q = (s) => document.querySelector(s), panel = q('#panel');
+          const style = getComputedStyle(panel);
+          return {capo: q('#capo-row').getClientRects().length > 0, width: q('#t-row').getBoundingClientRect().width,
+                  room: panel.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)}; })()""")
+    assert not seen["capo"] and seen["width"] >= seen["room"] - 1  # the whole width
+
+
+# Each mode's pill: its name, whether it is pressed and the song's own (orig), and its edge: its width and whether
+# it is the accent (the chords' colour); and the line over them: "Mode", what the mode played sounds like.
+MODES = """(() => { const accent = getComputedStyle(document.querySelector('#sheet .c')).color;
+  const pills = [...document.querySelectorAll('#modes .chip')].map((c) => { const s = getComputedStyle(c);
+    return [c.firstChild.textContent, c.getAttribute('aria-pressed'), c.classList.contains('orig'), s.borderTopWidth,
+            s.borderTopColor === accent]; });
+  const line = (el) => Math.round(el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2);
+  const label = document.querySelector('#mode-row .lab'), what = document.getElementById('mode-hint');
+  return {pills, label: label.textContent, what: what.textContent, level: Math.abs(line(label) - line(what)) <= 2,
+          said: /as written/i.test(document.getElementById('panel').textContent)}; })()"""
+
+
+@in_chromium
+def test_the_songs_own_mode_is_marked_and_says_no_as_written(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        seen = b.js(MODES)
+    names = [p[0] for p in seen["pills"]]
+    assert names == ["Major", "Dorian", "Phrygian", "Lydian", "Mixolydian", "Minor", "Locrian"]
+    assert seen["pills"][0] == ["Major", "true", True, "2px", True]  # the song's, and chosen: a 2 px accent edge
+    assert all(not p[2] and p[1] == "false" and p[3] == "1px" and not p[4] for p in seen["pills"][1:])
+    assert not seen["said"]
+
+
+@in_chromium
+def test_the_chosen_mode_is_the_accent_and_the_own_one_keeps_its_mark(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        mode(b, "Dorian")
+        seen = b.js(MODES)
+    major, dorian = seen["pills"][:2]
+    assert major == ["Major", "false", True, "2px", False]  # its own, a thicker edge of another colour
+    assert dorian == ["Dorian", "true", False, "1px", True]
+    assert not seen["said"]
+
+
+@in_chromium
+def test_the_mode_line_says_what_it_sounds_like(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        major = b.js(MODES)
+        mode(b, "Dorian")
+        dorian = b.js(MODES)
+    assert [major["label"], major["what"], major["level"]] == ["Mode", "bright and settled", True]
+    assert [dorian["what"], dorian["level"]] == ["minor, with a brighter sixth", True]
+
+
+# The chord names' segments: the words shown, the words a screen reader hears, pressed, offered (not disabled).
+NAMES = """[...document.querySelectorAll('#names > button')].map((c) => [c.textContent, c.getAttribute('aria-label'),
+  c.getAttribute('aria-pressed'), !c.disabled])"""
+# Each switch of the settings shown: its id, its words, whether it is on, and whether it looks it (its track in the
+# accent); and the strip, the necks' rail, the pinyin and the role colours, which they show or hide.
+SWITCHES = """(() => { const accent = getComputedStyle(document.querySelector('#sheet .c')).color;
+  const shown = (el) => Boolean(el) && el.getClientRects().length > 0;
+  return {switches: [...document.querySelectorAll('#panel .switch')].filter(shown).map((s) => [s.id,
+            s.textContent.replace(/home away pull$/, '').trim(), s.getAttribute('aria-pressed'),
+            getComputedStyle(s, '::after').backgroundColor === accent]),
+          strip: !document.getElementById('strip').hidden, bar: document.getElementById('shapes').getAttribute('aria-pressed'),
+          necks: shown(document.getElementById('necks')), pinyin: document.querySelectorAll('#sheet ruby').length > 0,
+          roles: document.documentElement.dataset.roles || 'on',
+          colours: [...document.querySelectorAll('#roles .roles > span')].map((s) => [s.textContent, getComputedStyle(s).color])}; })()"""
+ZH = "{title: 合成}\n{artist: 示例}\n{key: C}\n{comment: Verse}\n[C]你好 [G]世界\n"
+
+
+@in_chromium
+def test_chord_names_is_one_segmented_control(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        first = b.js(NAMES)
+        b.click("#names > button:nth-child(2)")
+        both = [b.js(NAMES), b.js("location.hash"), b.js("document.querySelectorAll('#sheet .nm').length")]
+    assert first == [["Chords", "Chords", "true", True], ["+ Numerals", "Chords + numerals", "false", True],
+                     ["Numerals", "Numerals only", "false", True]]
+    assert [p for _, _, p, _ in both[0]] == ["false", "true", "false"] and "nm=both" in both[1] and both[2] > 0
+
+
+@in_chromium
+def test_role_colours_all_shapes_necks_and_pinyin_are_switches(tmp_path):
+    with viewer(tmp_path, written(tmp_path, ZH), **DESKTOP) as b:
+        b.click("#more")
+        first = b.js(SWITCHES)
+        for switch in ("#roles", "#strip-toggle", "#necks-chip", "#pinyin-chip"):
+            b.click(switch)
+        flipped = b.js(SWITCHES)
+        b.click("#shapes")  # the bar's guitar: the switch follows
+        bar = b.js(SWITCHES)
+    assert first["switches"] == [["roles", "Role colours", "true", True], ["strip-toggle", "All chord shapes", "false", False],
+                                 ["necks-chip", "Chord necks", "true", True], ["pinyin-chip", "Pinyin", "false", False]]
+    assert [first[k] for k in ("strip", "necks", "pinyin", "roles")] == [False, True, False, "on"]
+    assert [s[2] for s in flipped["switches"]] == ["false", "true", "false", "true"]
+    assert [s[3] for s in flipped["switches"]] == [False, True, False, True]
+    assert [flipped[k] for k in ("strip", "bar", "necks", "pinyin", "roles")] == [True, "true", False, True, "off"]
+    assert bar["switches"][1][2] == "false" and not bar["strip"]
+    home, away, pull = first["colours"]  # Role colours, then home, away and pull in their own colours
+    assert [home[0], away[0], pull[0]] == ["home", "away", "pull"] and len({home[1], away[1], pull[1]}) == 3
+
+
+@in_chromium
+def test_no_numerals_glossary(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E) + "#nm=both") as b:
+        b.click("#more")
+        seen = b.js("[document.getElementById('gloss'), /numerals mean/i.test(document.getElementById('panel').textContent)]")
+    assert seen == [None, False]
+
+
+@in_chromium
+def test_the_names_hint_shows_only_without_a_key(tmp_path):
+    hint = "(() => { const h = document.getElementById('names-hint'); return h.getClientRects().length ? h.textContent : null; })()"
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        keyed = b.js(hint)
+    with viewer(tmp_path, written(tmp_path, NO_KEY, name="Riffs")) as b:
+        b.click("#more")
+        unknown = [b.js(hint), b.js(NAMES)]
+    assert keyed is None
+    assert unknown[0] == "caracole can't tell this song's key, so it can't number its chords."
+    assert [offered for *_, offered in unknown[1]] == [True, False, False]  # the chords alone, the others greyed
+
+
+# The instrument's menu: its tag, its options (name, value) and the one chosen, its title; and where the page is.
+MENU = """(() => { const menu = document.getElementById('insts');
+  let kept = null;
+  try { kept = localStorage.getItem('caracole-viewer-instrument'); } catch (err) { /* none */ }
+  return {tag: menu.tagName, options: [...menu.options].map((o) => [o.textContent, o.value]), value: menu.value,
+          title: menu.title, named: menu.getAttribute('aria-label'), hash: location.hash, kept,
+          strings: [...document.querySelectorAll('#strip svg')].map((s) => s.querySelectorAll('[data-string]').length)}; })()"""
+# The strum's loudness: each button's name and title, whether it is pressed, its picture and its words (none).
+VOLUME = """[...document.querySelectorAll('#volumes > button')].map((v) => [v.getAttribute('aria-label'), v.title,
+  v.getAttribute('aria-pressed'), v.querySelectorAll('svg path').length, v.textContent])"""
+
+
+def instrument(b: Browser, value: str) -> None:
+    """The instrument ``value`` chosen in the settings' menu, as a hand picks it."""
+    b.js(f"(() => {{ const m = document.getElementById('insts'); m.value = {value!r}; "
+         "m.dispatchEvent(new Event('change', {bubbles: true})); })()")
+
+
+@in_chromium
+def test_the_instrument_is_a_select_that_switches_the_instrument(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        b.click("#shapes")
+        guitar = b.js(MENU)
+        instrument(b, "ukulele")
+        uke = b.js(MENU)
+    names = ["Guitar", "Ukulele", "Ukulele, low G", "Baritone ukulele", "Piano", "Harmonica", "Flute", "Recorder"]
+    assert guitar["tag"] == "SELECT" and [n for n, _ in guitar["options"]] == names and guitar["named"] == "Instrument"
+    assert guitar["value"] == "guitar" and guitar["title"] == "Standard tuning, E A D G B E." and guitar["hash"] == ""
+    assert set(guitar["strings"]) == {6}
+    assert uke["value"] == "ukulele" and uke["title"] == "G C E A, the G string high."
+    assert uke["hash"] == "#inst=ukulele" and uke["kept"] == "ukulele" and set(uke["strings"]) == {4}  # as the chips did
+
+
+@in_chromium
+def test_loudness_is_four_named_icon_buttons(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        first = b.js(VOLUME)
+        b.click("#volumes > button:nth-child(4)")
+        loud = [b.js(VOLUME), b.js("location.hash")]
+        b.click("#volumes > button:nth-child(1)")
+        off = [b.js(VOLUME), b.js("location.hash")]
+    assert [v[:2] for v in first] == [["Off", "Strum: off"], ["Soft", "Strum: soft"], ["Medium", "Strum: medium"],
+                                      ["Loud", "Strum: loud"]]
+    assert [v[2] for v in first] == ["false", "false", "true", "false"]
+    assert [v[3] for v in first] == [2, 2, 3, 4] and all(v[4] == "" for v in first)  # a speaker, crossed out or waves
+    assert [v[2] for v in loud[0]] == ["false", "false", "false", "true"] and "vol=3" in loud[1]
+    assert [v[2] for v in off[0]] == ["true", "false", "false", "false"] and "vol=0" in off[1]
+
+
+@in_chromium
+@pytest.mark.parametrize("size", [PHONE, DESKTOP], ids=["phone", "desktop"])
+def test_the_instrument_and_the_strum_share_a_line_and_its_own_rows_follow_it(tmp_path, size):
+    line = """(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect();
+        return {top: b.top, bottom: b.bottom, left: b.left, right: b.right}; };
+      const panel = document.getElementById('inst-panel');
+      return {menu: r('#insts'), strum: r('#volumes'), switches: r('#strip-toggle').bottom,
+              panel: panel.hidden ? null : panel.getBoundingClientRect().top,
+              page: document.documentElement.scrollWidth}; })()"""
+    with viewer(tmp_path, written(tmp_path, IN_E) + "#inst=baritone", **size) as b:
+        b.click("#more")
+        uke = b.js(line)
+        instrument(b, "harmonica")
+        assert b.wait("!document.getElementById('inst-panel').hidden")
+        harp = b.js(line)
+    for seen in (uke, harp):
+        assert abs((seen["menu"]["top"] + seen["menu"]["bottom"]) - (seen["strum"]["top"] + seen["strum"]["bottom"])) <= 2
+        assert seen["menu"]["right"] <= seen["strum"]["left"] and seen["menu"]["top"] >= seen["switches"]
+        assert seen["page"] <= size["width"]
+    assert uke["panel"] is None
+    assert harp["panel"] >= harp["menu"]["bottom"]  # the harmonica's own rows right under the line
+
+
+# The places to go, in order, as each row says them: its id, its words, the words at its right, and its address.
+PLACES = """(() => { const shown = (el) => el.getClientRects().length > 0;
+  const rows = [...document.querySelectorAll('#places .goto')].filter(shown).map((g) => [g.id,
+    g.querySelector('.goto-lab').textContent, g.querySelector('.goto-v').textContent, g.getAttribute('href'),
+    g.getAttribute('download')]);
+  const r = (s) => document.querySelector(s).getBoundingClientRect();
+  return {rows, after: r('#places').top >= r('#inst-line').bottom,
+          file: shown(document.getElementById('export-file')) ? [document.getElementById('export-cmd').textContent,
+            shown(document.getElementById('export-copy'))] : null,
+          expanded: (document.getElementById('export-fold') || {getAttribute() { return null; }}).getAttribute('aria-expanded'),
+          page: document.documentElement.scrollWidth}; })()"""
+
+
+def with_files(tmp_path: Path, cho: str = IN_E, name: str = "Files", **options) -> Path:
+    """The viewer of ``cho`` with the song's two Guitar Pro files beside it, as Artist/<name>/sheet.html."""
+    page = tmp_path / "Artist" / name / "sheet.html"
+    page.parent.mkdir(parents=True, exist_ok=True)
+    page.write_text(build_viewer(cho, guitar=("guitar-1.gp5", "guitar-2.gpx"), **options), encoding="utf-8")
+    return page
+
+
+@in_chromium
+def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with viewer(tmp_path, with_files(tmp_path).as_uri() + "#mode=dorian&capo=2") as b:
+        b.click("#more")
+        folded = b.js(PLACES)
+        b.click("#export-fold")
+        unfolded = b.js(PLACES)
+        b.click("#harmony-open")
+        harmony = b.js("[document.getElementById('harmony').hidden, document.getElementById('panel').hidden]")
+    sheet = "/Artist/Files/sheet.html"
+    with served({sheet: (build_viewer(IN_E, guitar=("guitar-1.gp5",)), viewer_csp)}) as site, \
+            viewer(tmp_path, site + sheet + "#t=-2") as b:
+        b.click("#more")
+        served_rows = b.js(PLACES)
+    assert folded["rows"] == [
+        ["harmony-open", "Harmony", "progressions, scale", None, None],
+        ["", "Guitar Pro tab 1", "download", "guitar-1.gp5", "Synthetic - In E.gp5"],
+        ["", "Guitar Pro tab 2", "download", "guitar-2.gpx", "Synthetic - In E (2).gpx"],
+        ["export-fold", "Export PDF", "D Dorian, capo 2", None, None]]  # the version in words
+    assert folded["after"] and folded["file"] is None and folded["expanded"] == "false" and folded["page"] <= 390
+    assert unfolded["expanded"] == "true" and unfolded["file"][1]  # the command, and Copy
+    assert unfolded["file"][0] == "caracole render --song 'Synthetic - In E' --version 'mode=dorian&capo=2'"
+    assert harmony == [False, True]  # Harmony › opens its panel in the settings' place
+    assert [row[:3] for row in served_rows["rows"]] == [
+        ["harmony-open", "Harmony", "progressions, scale"], ["", "Guitar Pro tab", "in the browser"],
+        ["export", "Export PDF", "D Major"]]
+    assert served_rows["rows"][1][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
+    assert served_rows["rows"][2][3].startswith("/export?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
+
+
+@in_chromium
+def test_reset_everything_is_last_and_quiet(tmp_path):
+    with viewer(tmp_path, with_files(tmp_path).as_uri() + "#t=3&mode=lydian") as b:
+        b.click("#more")
+        seen = b.js("""(() => { const q = (s) => document.querySelector(s), reset = q('#reset-all');
+          const shown = [...q('#panel').querySelectorAll('a[href], button, select')].filter((e) => e.getClientRects().length);
+          const r = reset.getBoundingClientRect(), panel = q('#panel').getBoundingClientRect();
+          return {last: shown[shown.length - 1] === reset, centred: Math.abs((r.left + r.right) - (panel.left + panel.right)) <= 2,
+                  quiet: getComputedStyle(reset).color === getComputedStyle(q('#panel-sum')).color,
+                  ruled: getComputedStyle(reset.parentElement).borderTopStyle === 'solid'}; })()""")
+        b.click("#reset-all")
+        after = [b.js(SHIFT), b.js("location.hash"), b.js(HEAD)[1]]
+    assert seen == {"last": True, "centred": True, "quiet": True, "ruled": True}
+    assert after == ["0", "", "E Major · Guitar"]
+
+
+@in_chromium
+def test_the_songbook_has_the_same_panel_without_export(tmp_path):
+    from test_viewer_necks import to_song
+
+    songs = [BookSong("Long Song", "Synthetic", cho=LONG, id="aaaa"), BookSong("In E", "Synthetic", cho=IN_E, id="bbbb")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    parts = """(() => { const shown = (id) => { const e = document.getElementById(id); return Boolean(e) && e.getClientRects().length > 0; };
+      return ['t-row', 'capo-row', 'mode-row', 'names', 'roles', 'strip-toggle', 'insts', 'volumes', 'harmony-open',
+              'export-row', 'export', 'export-fold', 'reset-all'].filter(shown); })()"""
+    with viewer(tmp_path, path.as_uri() + "#song-1") as b:
+        b.click("#more")
+        first = [b.js(parts), b.js(HEAD)[1]]
+        to_song(b, 2)
+        b.click("#more")
+        second = [b.js(parts), b.js(HEAD)[1]]
+    every = ["t-row", "capo-row", "mode-row", "names", "roles", "strip-toggle", "insts", "volumes", "harmony-open", "reset-all"]
+    assert first == [every, "G Major · capo 2 · Guitar"]
+    assert second == [every, "E Major · Guitar"]  # the head follows the song shown
+
+
+@in_chromium
+def test_on_a_phone_every_control_of_the_settings_is_a_thumbs_target(tmp_path):
+    cho = ZH.replace("{key: C}", "{key: C}\n{capo: 1}")
+    with viewer(tmp_path, with_files(tmp_path, cho).as_uri() + "#t=1&capo=3") as b:  # both Resets, capo pills
+        b.click("#more")
+        b.click("#export-fold")
+        small = b.js(small_targets(":not(#panel *)"))
+        shown = b.js("[...document.querySelectorAll('#panel button, #panel a[href], #panel select')]"
+                     ".filter((e) => e.checkVisibility()).length")
+        sideways = b.js("document.documentElement.scrollWidth > innerWidth")
+    assert small == [] and shown > 30 and not sideways
 
 
 # --- a chord's card ------------------------------------------------------------------------------------
@@ -410,7 +816,7 @@ def test_with_the_sound_off_the_panel_offers_no_play_until_it_is_on_again(tmp_pa
         off = b.js(HARMONY)
         b.js("document.querySelector('#harmony [data-close]').click()")
         b.click("#more")
-        b.js("[...document.querySelectorAll('#volumes .chip')].find((c) => c.textContent === 'Soft').click()")
+        b.js("[...document.querySelectorAll('#volumes > button')].find((c) => c.getAttribute('aria-label') === 'Soft').click()")
         b.click("#harmony-open")
         assert b.wait("!document.getElementById('harmony').hidden")
         on = b.js(HARMONY)
@@ -496,7 +902,7 @@ def test_a_link_focused_in_the_panel_keeps_the_focus_though_the_panel_is_drawn_a
         open_harmony(b)
         links = b.js("[...document.querySelectorAll('#harmony .prog-named')].map((a) => a.textContent)")
         b.js("document.querySelectorAll('#harmony .prog-named')[1].focus()")
-        b.js("document.querySelectorAll('#volumes .chip')[1].click()")  # the panel is drawn anew
+        b.js("document.querySelectorAll('#volumes > button')[1].click()")  # the panel is drawn anew
         after = b.js("[document.activeElement.textContent, document.activeElement.isConnected]")
     assert links == ["Songs with ii–V–I", "Songs with the Andalusian cadence"]
     assert after == ["Songs with the Andalusian cadence", True]  # the second link, as before, not the first
@@ -653,6 +1059,8 @@ def test_the_file_viewer_shows_the_command_to_export(tmp_path):
     # A page opened from the disk has no server to ask: the settings say what to run, with Copy.
     with viewer(tmp_path, written(tmp_path) + "#t=2&capo=1&fs=20") as b:
         b.js("document.querySelector('#more').click()")
+        folded = b.js("[document.getElementById('export-file').hidden, document.getElementById('export-fold').textContent]")
+        b.click("#export-fold")  # Export PDF's row unfolds it
         shown = b.js("""(() => {
           const q = (s) => document.querySelector(s);
           const box = (el) => { const r = el.getBoundingClientRect(); return [r.width, r.height]; };
@@ -662,6 +1070,7 @@ def test_the_file_viewer_shows_the_command_to_export(tmp_path):
         })()""")
         b.js("document.querySelector('#t-up').click()")
         moved = b.js("document.querySelector('#export-cmd').textContent")
+    assert folded == [True, "Export PDFBb Major, capo 1"]  # G shapes with capo 2, up two, on capo 1: Bb shapes
     assert shown["cmd"] == "caracole render --song 'Synthetic - Long Song' --version 't=2&capo=1'"
     assert shown["link"] is True and shown["cmdSeen"] and not shown["sideways"]
     assert "--mine" in shown["hint"]  # and how to make it the song's own version

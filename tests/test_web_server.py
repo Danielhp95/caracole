@@ -301,7 +301,8 @@ def test_the_served_viewer_links_to_its_export_in_the_same_tab(cfg, conn, tmp_pa
             tab.wait_for("document.documentElement.dataset.ready === '1'")
             tab.click("#more")
             assert tab.eval(f"{link}.hidden") is False and tab.eval(f"{link}.target") == ""
-            assert tab.eval(f"{link}.textContent") == "Export PDF of this version"
+            assert tab.eval(f"{link}.querySelector('.goto-lab').textContent") == "Export PDF"
+            assert tab.eval(f"{link}.querySelector('.goto-v').textContent") == "G Major, capo 2"  # the version, in words: G, two up, capo 2
             assert tab.eval(f"{link}.getAttribute('href')") == (
                 "/export?" + urlencode({"sheet": "Soda Stereo/De Música Ligera/sheet.html"}) + "&t=2&capo=2&fs=20")
             tab.eval("document.querySelector('#t-up').click()")  # the link follows the address
