@@ -145,6 +145,24 @@ def test_a_tab_of_no_artist_you_picked_is_kept(conn, tmp_path):
     assert version.tab_id == "29910" and version.raw["artist"] is None and version.raw["key"] == "C"
 
 
+def test_a_title_with_an_apostrophe_meets_the_slug_that_writes_it_as_a_hyphen(conn, tmp_path):
+    # harptabs.com slugs an apostrophe either way: "knockin-on-heavens-door", but "you-ain-t-goin-nowhere",
+    # "can-t-help-falling-in-love", "isn-t-she-lovely-…" (most of its later tabs, as the live sitemap lists them).
+    song = add_song(conn, "Bob Dylan", "You Ain't Goin' Nowhere")
+    site = FakeHarpTabs()
+    paths = ["artist/1283/bob-dylan", "tab/1690/you-ain-t-goin-nowhere"]
+    site.pages[SITEMAP] = (200, fixture("sitemap.xml").replace(
+        "</urlset>", "".join(f"<url><loc>{BASE}/{p}</loc></url>" for p in paths) + "</urlset>"),
+        {"Content-Type": "application/xml"})
+    site.page("tab/1690/you-ain-t-goin-nowhere", tab_page("You Ain't Goin' Nowhere", "Bob Dylan", body="4 5\nmine\n"))
+
+    stats = run(site, conn, tmp_path)
+
+    assert stats == HarpTabsStats(sitemaps=1, tried=1, kept=1)
+    assert site.requests == [SITEMAP, f"{BASE}/tab/1690/you-ain-t-goin-nowhere"]
+    assert (folder(tmp_path, song) / "harmonica-1.txt").read_text(encoding="utf-8") == "4 5\nmine\n"
+
+
 def test_a_song_whose_artist_the_sitemap_doesnt_list_costs_no_page(conn, tmp_path):
     # "Silent Night" is a tab there, but by no artist named as the song's: no page is read for it.
     add_song(conn, "Mariah Carey", "Silent Night")

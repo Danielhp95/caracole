@@ -74,6 +74,7 @@ _COUNT = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM]?)")
 _TAB_PATH = re.compile(r"/(tab/(\d{1,9})/[a-z0-9-]{1,200})")  # a card's link: a tab's page, as the sitemap lists it
 _TABS_SAID = re.compile(r"([\d,]+)\s+tabs?")  # an artist page's header: "98 tabs", "1 tab"
 _BRACKETED = re.compile(r"\([^()]*\)|\[[^\[\]]*\]")  # a part of a title in brackets, the innermost first
+_APOSTROPHE = re.compile(r"['’ʼ]")  # which a slug writes as nothing ("dont") or as a hyphen ("don-t")
 
 
 class HarpTabsParseError(ProviderError):
@@ -115,6 +116,13 @@ def parse_page_url(url: str) -> IndexRow | None:
 def title_key(title: str) -> str:
     """The key a song's title meets the tabs' titles with: its version suffixes go first (clean_title)."""
     return slug_key(clean_title(title))
+
+
+def title_keys(title: str) -> list[str]:
+    """The keys a song's title meets the sitemap's slugs with: ``title_key``'s, and for a title with an apostrophe,
+    the key of the slug that writes it as a hyphen, as harptabs.com slugs most of its later tabs
+    ("you-ain-t-goin-nowhere", "can-t-help-falling-in-love"; earlier ones, "knockin-on-heavens-door")."""
+    return [key for key in dict.fromkeys((title_key(title), title_key(_APOSTROPHE.sub(" ", title)))) if key]
 
 
 def song_title(title: str) -> str:

@@ -1265,7 +1265,8 @@ and cache.
   local index when it never has, or last did 30 days ago: its tabs by title
   (the address of a tab names its title alone, `/tab/25/piano-man`) and its
   artists by name. It never uses the site's search or its API. A song is looked
-  up only when the sitemap lists a tab of its title and an artist of its
+  up only when the sitemap lists a tab of its title (an apostrophe slugged as
+  nothing or as a hyphen, `dont` or `don-t`) and an artist of its
   artist's name; then the pages of the tabs of that title are read, lowest id
   first, eight at most, each for the artist it names, and of those by your
   song's artist the most viewed is kept, as the song's `harmonica-N.txt`, the

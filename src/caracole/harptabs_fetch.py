@@ -58,7 +58,7 @@ from caracole.harptabs import (
     page_url,
     parse_page_url,
     parse_tab_page,
-    title_key,
+    title_keys,
 )
 from caracole.http import (
     BudgetExhausted,
@@ -184,14 +184,16 @@ class _Index:
                                                             (ARTIST,))}
 
     def candidates(self, song: Song) -> list[tuple[int, str]]:
-        """The tabs titled as the song is, ``(id, path)`` lowest id first, at most ``CANDIDATES``; none when
-        the sitemap lists no artist by one of the song's artists' names, as then no tab there is theirs."""
-        key = title_key(song.title)
-        if not key or not any(compact(form) in self.artists for form in _forms(song)):
+        """The tabs titled as the song is (``harptabs.title_keys``: an apostrophe slugged as nothing or as a
+        hyphen), ``(id, path)`` lowest id first, at most ``CANDIDATES``; none when the sitemap lists no artist by
+        one of the song's artists' names, as then no tab there is theirs."""
+        keys = title_keys(song.title)
+        if not keys or not any(compact(form) in self.artists for form in _forms(song)):
             return []
+        marks = ", ".join("?" for _ in keys)
         return [(r[0], r[1]) for r in self.conn.execute(
-            "SELECT page_id, path FROM harptabs_index WHERE kind = ? AND key = ? ORDER BY page_id LIMIT ?",
-            (TAB, key, CANDIDATES))]
+            f"SELECT page_id, path FROM harptabs_index WHERE kind = ? AND key IN ({marks}) ORDER BY page_id LIMIT ?",
+            (TAB, *keys, CANDIDATES))]
 
 
 def _forms(song: Song) -> list[str]:
