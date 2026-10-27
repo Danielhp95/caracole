@@ -292,7 +292,8 @@ def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, con
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
     assert 'role="status"' in line and 'data-tone="ready"' in line  # read out as it changes
-    assert "Ready" in line and 'href="Radiohead/Creep/sheet.pdf"' in line and "Open sheet" in line
+    # Ready, alone: the line folds it away (a screen reader hears it), and the song's own line opens the sheet.
+    assert "Ready" in line and "<a" not in line and "Open sheet" not in line
     # Once done, the line shows what the library has now: the sheet, its button, and no Fetch now.
     assert re.search(r'<div class="line-action"><a [^>]*>Open PDF</a>', shown) and 'action="/fetch"' not in shown
     assert 'data-status="found"' in shown
@@ -340,7 +341,8 @@ def test_a_songs_request_line_stays_the_same_live_region_until_its_request_ends(
     assert re.search(r'<p class="progress"[^>]*data-tone="ready"', shown) and shown.count('class="progress"') == 1
     assert ">Open PDF</a>" in shown  # the line is the song's new one all the same
     assert attribute(dom, "data-same") == {"list Creep": True}
-    assert attribute(dom, "data-focus") == ["p.progress", "Creep"]
+    # Ready, the request line folds away: the focus goes to the Open that took Fetch now's place, on the same line.
+    assert attribute(dom, "data-focus") == ["a.btn small primary", "Creep"]
 
 
 def test_a_requested_song_gets_a_line_of_its_own_on_the_page(serve, cfg, conn, tmp_path):
@@ -375,10 +377,14 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
 
     tray = re.search(r'<aside[^>]*id="tray"[^>]*>(.*?)</aside>', dom, re.S)
     assert tray and "hidden" not in tray.group(0)[:60], dom[-3000:]
-    lines = re.findall(r'<li[^>]*><span class="tray-song">([^<]*)</span><p class="progress"[^>]*>(.*?)</p>',
-                       tray.group(1), re.S)
-    assert [name for name, _ in lines] == ["Muse - Hysteria", "Oasis - Wonderwall", "Radiohead - Creep"]
-    assert all("Ready" in said for _, said in lines), lines
+    lines = re.findall(r'<li[^>]*><a class="tray-song" href="([^"]*)"[^>]*>([^<]*)</a><p class="progress"[^>]*>'
+                       r"(.*?)</p>", tray.group(1), re.S)
+    assert [name for _, name, _ in lines] == ["Muse - Hysteria", "Oasis - Wonderwall", "Radiohead - Creep"]
+    # Each Ready, alone; its song's name opens its sheet, as its line's title does.
+    assert [said for _, _, said in lines] == ["<span>Ready</span>"] * 3, lines
+    assert [href for href, _, _ in lines] == ["Muse/Hysteria/sheet.pdf", "Oasis/Wonderwall/sheet.pdf",
+                                              "Radiohead/Creep/sheet.pdf"]
+    assert "step-chips" not in tray.group(1)  # one line each: the songs' lines have the steps
     assert "3 requests" in tray.group(1) and 'href="jobs"' in tray.group(1)
     # One Details link, the list's own: its lines say how each goes, and the cards link their details.
     assert tray.group(1).count(">Details<") == 1 and "jobs?job=" not in tray.group(1)
@@ -626,7 +632,7 @@ def test_a_pick_on_a_line_shows_how_it_goes_there_then_the_sheet(serve, cfg, con
     assert "Writing the answer to overrides.toml…" in seen and "Fetching from Ultimate Guitar…" in seen, seen
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'data-tone="ready"' in line and "Open sheet" in line
+    assert 'data-tone="ready"' in line and "Open sheet" not in line  # folded away: the line opens the sheet
     assert ">Open PDF</a>" in shown and 'class="picker"' not in shown and "Needs review" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
 
@@ -749,7 +755,7 @@ r.querySelector("form.pick-form button[type=submit]").click();
     assert '<article class="card' not in listed(dom) and '<article class="row' not in listed(dom)
     shown = card(dom, "Creep")
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', shown, re.S).group(0)
-    assert 'data-tone="ready"' in line and "Open sheet" in line
+    assert 'data-tone="ready"' in line and "Open sheet" not in line  # folded away: the line opens the sheet
     assert re.search(r'<div class="line-action"><a [^>]*>Open PDF</a>', shown)
     assert 'class="picker"' not in shown and "line-pick" not in shown and "Needs review" not in shown
     assert not re.search(r"<body[^>]*data-both", dom)  # no second pick while the first one ran
@@ -956,7 +962,7 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
           form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
           form.querySelector('button[type="submit"]').click(); })()""")
         assert page.wait("(document.querySelector('#requested article .progress') || {}).textContent === "
-                         "'Ready·Open sheet'", timeout=20), page.js("document.getElementById('requested').innerText")
+                         "'Ready'", timeout=20), page.js("document.getElementById('requested').innerText")
         shown = page.js("""(() => ({
           creep: [window.song.querySelector('h3').textContent, window.song.querySelector('.progress').textContent,
                   window.song.closest('section.artist').querySelector('.artist-name').textContent],
@@ -1030,7 +1036,7 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
           form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
           form.requestSubmit(); })()""")
         assert page.wait("(document.querySelector('#requested article .progress') || {}).textContent === "
-                         "'Ready·Open sheet'", timeout=20), page.js("document.getElementById('requested').innerText")
+                         "'Ready'", timeout=20), page.js("document.getElementById('requested').innerText")
         page.click("#tab-library")
         shown = page.js("""(() => { const song = %s; return {
           creep: [song.querySelector('h3').textContent, song.querySelector('.progress').textContent, song.dataset.id],

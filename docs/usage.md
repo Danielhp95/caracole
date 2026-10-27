@@ -2919,9 +2919,10 @@ Who can reach it, below).
   beside Ultimate Guitar's song, Get it with this sheet, which keeps
   LaCuerda's; gtptabs.com's page. A MuseScore page is a link to open, as
   caracole never fetches from MuseScore. The line then says how it goes, on a
-  line of its own ("Sending…", "Fetching from Ultimate Guitar…", "Ready · Open
-  sheet"), and once the sheet is kept the line is the song's own line, its
-  sheet its button. **A result's name does what its Get it does**: a click on
+  line of its own ("Sending…", "Fetching from Ultimate Guitar… · 2 of 7
+  done"), with the lookup's steps as chips under it, as on a song's line
+  (below), and once the sheet is kept the line is the song's own line, yours,
+  its sheet its button: the request line and its steps fold away. **A result's name does what its Get it does**: a click on
   "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
   and while that request is on its way the name, like the button, can't be
   pressed again. A removed song's name does what its Add again does (below). A
@@ -3075,8 +3076,25 @@ Who can reach it, below).
   sheet…", "Fetching the lyrics from LRCLIB…", "Fetching from LaCuerda…",
   "Fetching from gtptabs.com…", "Writing the library page…"), or "Waiting for
   another caracole…" while a nightly run holds the lock until its next pause;
-  then how it ended (a lookup that stopped says why, in its stage's words):
-  - **Ready · Open sheet**, and the song's line opens its sheet, its files under its "⋯";
+  then how it ended (a lookup that stopped says why, in its stage's words).
+  While a song is looked up (Fetch now, Fetch again, a search result's Get it,
+  Get the missing songs, the Songbooks tab's Add a song, Try again), the line
+  counts the steps over ("Fetching the lyrics from LRCLIB… · 4 of 7 done"),
+  and under it each step is a chip, as on the requests page: Song, Match UG
+  (the offline index it matched in, Ultimate Guitar's), Sheet (then the site
+  it asks, Sheet UG or Sheet LaCuerda, switching when it falls back to the
+  other, and once done the site the sheet came from), PDF, Lyrics, Extras and
+  Songbooks; those done ticked, the one that runs lit, those to come grey, a
+  failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
+  UG**, drawn plain (dashed), never as a failure: the sheet may come from
+  LaCuerda. A step that turns out not to apply drops out, and the count with
+  it (no PDF without a sheet, no Songbooks when no songbook lists the song).
+  A request that looks nothing up (an add for tonight, a removal, a songbook's
+  change) keeps its one line. How it ended:
+  - **Ready**: the steps fold away and nothing takes their place; the line is
+    the song's, Found, and its title or its Open opens the sheet, its files
+    under its "⋯" (a screen reader still hears Ready, and the focus Fetch now
+    gave the request line goes to that Open);
   - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
     index has no such song (and its artist's UG page isn't known);
@@ -3101,6 +3119,10 @@ Who can reach it, below).
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
+  Ended any way but Ready, a lookup's steps stay under its line, so that you
+  see which one stopped (a failed one crossed and red, Match: not on UG
+  plain).
+
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
   way when you reload the page keeps its line. When the server stops
@@ -3109,7 +3131,9 @@ Who can reach it, below).
 
   Two requests or more also show in a corner, folded to one line on every
   width ("2 requests · 1 to go"), so that it covers no song; it opens upwards
-  to a line per song, and closes. Its one Details link opens the requests
+  to a line per song, with no steps (the songs' lines have them), and closes;
+  a request that ended Ready says just **Ready**, its song's name opening the
+  sheet. Its one Details link opens the requests
   page. A songbook's change and a removal stay out of it: the songbook, in
   the Songbooks tab, or the song's line, where you asked says how each goes. A screen reader hears each song's request line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
@@ -3119,9 +3143,12 @@ Who can reach it, below).
   - **Now**: the request that runs, as a card with its song, how long ago it
     started ("started 12 s ago"), its line ("Rendering the sheet…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
-    Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass,
-    its sheets scored and its tab, LaCuerda's sheet and gtptabs.com's Guitar
-    Pro file) and Songbooks, leaving out a step it
+    Song, Match UG (or Match: not on UG, plain), Sheet (Sheet UG or Sheet
+    LaCuerda once it asks a site, then where the sheet came from), PDF,
+    Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
+    tab, LaCuerda's sheet and gtptabs.com's Guitar Pro file) and Songbooks,
+    the same chips the library page draws under a song's line, leaving out a
+    step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
     of a song with no sheet); for a request of other commands, its commands.
