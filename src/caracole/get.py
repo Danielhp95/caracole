@@ -450,17 +450,18 @@ class _Lookup:
             return  # said as the pin is recorded
         kind = classify_tab_url(pin_url(req.tab or ""))
         if isinstance(kind, str) and kind not in (BARE, UNRECOGNIZED):
-            raise _Stop(f"tab {tab_id} is not a chords or tabs page")
+            raise _Stop(f"tab {tab_id} is not a chords, tabs or ukulele chords page")
 
     def _other_pins(self, song, tab_id: int) -> list[str]:
         """The song's pins that stay beside a tab you pick, as written: those of another kind group (a
         text tab beside a chords sheet you pick), by the offline index's types. A pin of the pick's group,
-        or of a tab the index doesn't know on either side, is replaced; the pick goes first anyway."""
-        from caracole.ug.fetch import CHORDS_KINDS, TAB_KINDS
+        or of a tab the index doesn't know on either side, is replaced; the pick goes first anyway. Chords and
+        ukulele chords are one group here: either is the sheet (ug/fetch.py)."""
+        from caracole.ug.fetch import CHORDS_KINDS, TAB_KINDS, UKULELE_KINDS
 
         def group(tab: int) -> tuple[str, ...] | None:
             row = self.conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab,)).fetchone()
-            kinds = (CHORDS_KINDS, TAB_KINDS)  # the groups a pin replaces (ug/fetch.py)
+            kinds = (CHORDS_KINDS + UKULELE_KINDS, TAB_KINDS)  # the groups a pin replaces (ug/fetch.py)
             return next((g for g in kinds if row is not None and row[0] in g), None)
 
         mine = group(tab_id)

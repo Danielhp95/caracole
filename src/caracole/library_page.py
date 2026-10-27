@@ -392,6 +392,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     browsable = guitar_pages(conn)
     sources = _downloaded(conn)
     origins = kept_sources(conn)
+    ukulele = ukulele_sheets(conn)
     exports = _exports(conn)
     library = list_songs(conn) if songs is None else songs
     keys = {s.id: song_key(conn, cfg.library_dir, s) for s in library}
@@ -410,7 +411,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                    sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
                    transpose=pdf_transpose(conn, overrides, s), lacuerda_met=met.get(s.id),
-                   versions=kept.get(s.id), guitar=browsable.get(s.id))
+                   versions=kept.get(s.id), guitar=browsable.get(s.id), ukulele=s.id in ukulele)
              for s in library]
     _add_picks(conn, library, cards)
     played = library_progressions(conn)  # each song's, as its last render read its sheet
@@ -427,10 +428,11 @@ def result_cards(conn: sqlite3.Connection, cfg: Config, songs: list[Song]) -> di
     origins = kept_sources(conn)
     exports = _exports(conn)
     browsable = guitar_pages(conn)
+    ukulele = ukulele_sheets(conn)
     cards = {}
     for s in songs:
         files = _files(cfg.library_dir, s, _file_names(song_dir(cfg.library_dir, s)), {}, origins.get(s.id, {}),
-                       exports.get(s.id, {}), browsable.get(s.id))
+                       exports.get(s.id, {}), browsable.get(s.id), ukulele=s.id in ukulele)
         key = song_key(conn, cfg.library_dir, s)
         cards[s.id] = {"links": files, "source": next((f["source"] for f in files if f["primary"]), None),
                        "key": key.key if key else None}
@@ -483,7 +485,7 @@ def _add_picks(conn: sqlite3.Connection, library: list[Song], songs: list[dict[s
             card["notFound"] = True  # not for the sheet picked on LaCuerda, still to come: that is the song's
 
 
-_TAB_KINDS = {"chords": "Chords", "tabs": "Tabs"}
+_TAB_KINDS = {"chords": "Chords", "tabs": "Tabs", "ukulele": "Ukulele Chords"}
 
 
 def _tab_counts(counts: Any) -> str:
@@ -608,7 +610,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
           musescore: list[dict[str, str]], youtube: dict[str, Any] | None = None, *,
           origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
           transpose: int = 0, lacuerda_met: str | None = None,
-          versions: list[SheetVersion] | None = None, guitar: Mapping[str, str] | None = None) -> dict[str, Any]:
+          versions: list[SheetVersion] | None = None, guitar: Mapping[str, str] | None = None,
+          ukulele: bool = False) -> dict[str, Any]:
     """One song's data; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
     the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
@@ -621,6 +624,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     (``_lacuerda_met``), for ``lacuerdaSheet`` (``_lacuerda_sheet``). ``versions``: its UG chords versions in rank
     order, when some are kept beside its sheet (``_kept_versions``), for ``versions`` (``_versions_data``). ``guitar``:
     the address of caracole serve's Guitar Pro page of each of its Guitar Pro files, by name (``guitar_pages``).
+    ``ukulele``: its sheet is UG's Ukulele Chords version (``ukulele_sheets``), which its sheet's files say.
     """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
@@ -635,7 +639,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         if for_buying:  # not while caracole may still find a sheet, nor once you have the audio
             buy = [{"label": label, "href": found[name]}
                    for label, name in (("Bandcamp", "bandcamp"), ("Qobuz", "qobuz"), ("iTunes", "itunes"))]
-    files = _files(library_dir, song, names, sources, origins or {}, exports or {}, guitar)
+    files = _files(library_dir, song, names, sources, origins or {}, exports or {}, guitar, ukulele=ukulele)
     return {
         "id": song.id,
         "artist": song.artist,
@@ -683,7 +687,7 @@ def _file_names(folder: Path) -> set[str]:
 
 def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, str],
            origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
-           guitar: Mapping[str, str] | None = None) -> list[dict[str, Any]]:
+           guitar: Mapping[str, str] | None = None, *, ukulele: bool = False) -> list[dict[str, Any]]:
     """Links to the kept files that exist, as paths relative to index.html, percent-encoded. The
     primary one is the sheet's PDF, else its text: never a score, whatever its format. Each says
     where it came from (``icons.source_of``). ``exports`` (``_exports``) are listed after the sheets' viewers
@@ -693,7 +697,9 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     Guitar Pro file caracole serve shows in the browser gets that page's address, its ``guitarPage``, which the
     page it serves offers as Open in the browser beside the file's Download. A Guitar Pro or Power Tab file, and a
     score but its PDF, gets the name it downloads under, its ``download`` ("Eagles - Hotel California (2).gp5":
-    download_names.py), its links' ``download`` attribute, as caracole serve's header names it."""
+    download_names.py), its links' ``download`` attribute, as caracole serve's header names it. ``ukulele``: the
+    sheet is UG's Ukulele Chords version (``ukulele_sheets``), and its files' labels say so ("Sheet viewer ·
+    Ukulele Chords")."""
     pages = guitar or {}
     guitar_names = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
@@ -710,6 +716,8 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     versions = {n: label for label, n in made}
     downloads = {n: download_name(song.artist, clean_title(song.title), n) for n in ordered
                  if _GUITAR.fullmatch(n) or (_SCORE.fullmatch(n) and not n.endswith(".pdf"))}
+    if ukulele:
+        labels.update({n: f"{_LABELS[n]} · {UKULELE_SHEET}" for n in _UKULELE_LABELLED if n in names})
     return [
         {"name": n, "label": labels.get(n) or _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}",
          "primary": n == primary, "source": source_of(n, origins or {}),
@@ -757,6 +765,18 @@ def _label(name: str, source: str | None = None) -> str:
     if m:
         return f"Score {m.group(1)} ({_SCORE_FORMATS[m.group(2)]})"
     return _LABELS[name]
+
+
+UKULELE_SHEET = "Ukulele Chords"  # what a sheet from UG's Ukulele Chords type is called on the page
+_UKULELE_LABELLED = ("sheet.html", "sheet.pdf", "sheet.txt", "sheet.cho")  # the human sheet's files
+
+
+def ukulele_sheets(conn: sqlite3.Connection) -> set[int]:
+    """The songs whose sheet is a version of Ultimate Guitar's Ukulele Chords type (ug/fetch.py: a song with no
+    chords there takes those), by the version its kept ``sheet.txt`` came from."""
+    return {r[0] for r in conn.execute(
+        "SELECT f.song_id FROM files f JOIN versions v ON v.id = f.version_id "
+        "WHERE f.name = 'sheet.txt' AND v.provider = 'ug' AND v.kind = 'ukulele'")}
 
 
 def guitar_pages(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:

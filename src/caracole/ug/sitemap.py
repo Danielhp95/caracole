@@ -2,7 +2,9 @@
 
 UG's sitemap index lists ``sitemap1``–``sitemapN`` and ``sitemap_last``, which
 hold every tab page as ``tabs.ultimate-guitar.com/tab/{artist}/{song}-{type}-{id}``,
-next to ukulele, news, forum and other sitemaps that hold no guitar tabs.
+and ``sitemap_ukulele1``–``sitemap_ukuleleN``, which hold its "Ukulele Chords" pages
+(``…/{song}-ukulele-{id}``, about 150,000 of them; ``sitemap_last`` lists the newest
+too), next to news, forum and other sitemaps that hold no tabs.
 
 A numbered sitemap is about 25 MB of XML, so ``<loc>`` elements are found with
 a regular expression over bytes rather than an XML parser.
@@ -18,9 +20,10 @@ from xml.sax.saxutils import unescape
 
 from caracole.normalize import ug_slug_key
 
-# The types the index keeps: those caracole uses (ug/page.py ``KINDS``). Every other type's tab is counted, by type,
-# and left out (``classify_tab_url``), Guitar Pro and Power Tab files among them.
-KEEP_TYPES = frozenset({"chords", "tabs"})
+# The types the index keeps: those caracole uses (ug/page.py ``KINDS``), UG's "Ukulele Chords" among them (a sheet
+# for a song with no guitar chords, ug/fetch.py). Every other type's tab is counted, by type, and left out
+# (``classify_tab_url``), Guitar Pro and Power Tab files among them.
+KEEP_TYPES = frozenset({"chords", "tabs", "ukulele"})
 
 # Every type token seen in the sitemaps. "guitar-pro" comes first, so it is peeled
 # off whole before any single-word token could match its last part.
@@ -45,7 +48,8 @@ _GZIP_MAGIC = b"\x1f\x8b"
 _LOC = re.compile(rb"<loc>([^<]*)</loc>")
 _TAB_URL = re.compile(r"https?://tabs\.ultimate-guitar\.com/tab/([^/]*)/([^/]*)-(\d+)")
 _BARE_TAB_URL = re.compile(r"https?://tabs\.ultimate-guitar\.com/tab/\d+")
-_TAB_SITEMAP = re.compile(r"/sitemap(\d+|_last)\.xml\Z")
+_TAB_SITEMAP = re.compile(r"/sitemap(\d+|_last|_ukulele\d+)\.xml\Z")
+UKULELE = "ukulele"  # the short names of the ukulele sitemaps start so: "ukulele1"
 _XML_ENTITIES = {"&quot;": '"', "&apos;": "'"}
 
 
@@ -79,7 +83,7 @@ def parse_tab_url(url: str) -> IndexRow | None:
     """The index row for a tab page URL, or None when the index has no use for it.
 
     None for: other hosts, bare ``/tab/{id}`` URLs, unknown or unkept types
-    (bass, ukulele, official, video, musescore, drums), and an artist or song
+    (bass, official, video, musescore, drums), and an artist or song
     whose key is empty once canonicalized (``/tab//autosmile-chords-65163``).
     ``classify_tab_url`` says which.
     """
@@ -124,23 +128,28 @@ def parse_sitemap_index(data: bytes) -> list[str]:
 
 
 def tab_sitemaps(children: list[str]) -> list[str]:
-    """The children that list tab pages: ``sitemapN`` in numeric order, then ``sitemap_last``."""
-    numbered: dict[int, str] = {}
-    last: str | None = None
+    """The children that list tab pages: ``sitemapN`` in numeric order, then ``sitemap_ukuleleN`` in
+    numeric order, then ``sitemap_last``."""
+    by_name: dict[str, str] = {}
     for url in children:
         m = _TAB_SITEMAP.search(url)
-        if m is None:
-            continue
-        if m.group(1) == "_last":
-            last = last or url
-        else:
-            numbered.setdefault(int(m.group(1)), url)
-    return [numbered[n] for n in sorted(numbered)] + ([last] if last else [])
+        if m is not None:
+            by_name.setdefault(m.group(1).lstrip("_"), url)
+    return [by_name[n] for n in sorted(by_name, key=sitemap_order)]
+
+
+def sitemap_order(name: str) -> tuple[int, int]:
+    """Where a tab sitemap goes by its short name: the numbered ones, the ukulele ones, then ``last``."""
+    if name.isdigit():
+        return (0, int(name))
+    if name.startswith(UKULELE) and name[len(UKULELE):].isdigit():
+        return (1, int(name[len(UKULELE):]))
+    return (2, 0)
 
 
 def sitemap_name(url: str) -> str:
-    """The short name of a tab sitemap: ``"40"`` for ``sitemap40.xml``, ``"last"`` for
-    ``sitemap_last.xml``. Any other sitemap is a ValueError."""
+    """The short name of a tab sitemap: ``"40"`` for ``sitemap40.xml``, ``"ukulele1"`` for
+    ``sitemap_ukulele1.xml``, ``"last"`` for ``sitemap_last.xml``. Any other sitemap is a ValueError."""
     m = _TAB_SITEMAP.search(url)
     if m is None:
         raise ValueError(f"not a tab sitemap: {url}")
@@ -148,5 +157,6 @@ def sitemap_name(url: str) -> str:
 
 
 def sitemap_label(name: str) -> str:
-    """The file name of the tab sitemap with that short name: ``sitemap40.xml``, ``sitemap_last.xml``."""
-    return "sitemap_last.xml" if name == "last" else f"sitemap{name}.xml"
+    """The file name of the tab sitemap with that short name: ``sitemap40.xml``, ``sitemap_ukulele1.xml``,
+    ``sitemap_last.xml``."""
+    return f"sitemap{name}.xml" if name.isdigit() else f"sitemap_{name}.xml"

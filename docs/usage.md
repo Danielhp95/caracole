@@ -458,11 +458,11 @@ Options:
   under `[match]` in overrides.toml, so the matcher never asks you about it.
 - `--tab URL` is the tab to use, its page's address or its id: it is
   recorded under `[pin]`, in place of the song's pin of the same kind (a
-  chords sheet or a text tab, by the offline index), and beside its pins of
-  the other kind: a text tab picked after a chords sheet keeps the sheet you
-  chose. A page of another type (a Guitar Pro file's, a bass tab's), when its
-  address says so, is refused before anything is added or recorded: `tab
-  301 is not a chords or tabs page`.
+  sheet, chords or ukulele chords, or a text tab, by the offline index), and
+  beside its pins of the other kind: a text tab picked after a chords sheet
+  keeps the sheet you chose. A page of another type (a Guitar Pro file's, a
+  bass tab's), when its address says so, is refused before anything is added
+  or recorded: `tab 301 is not a chords, tabs or ukulele chords page`.
 - `--lacuerda URL` is the LaCuerda song to keep the sheet of, its page's
   address (its best Letra y Acordes version) or a version's
   (`https://acordes.lacuerda.net/estopa/como_camaron-2.shtml`): it is recorded
@@ -489,7 +489,9 @@ Ultimate Guitar keeps several chords versions of a song (Wonderwall has 13),
 and caracole keeps the three it scores against the lyrics: the best as
 `sheet.txt`, the title's, and the other two beside it as `version-<tab>.txt`
 (see [the library folder](#the-library-folder)). `caracole versions "ARTIST -
-TITLE"` lists them all, in caracole's order: the versions that cover the
+TITLE"` lists them all, in caracole's order (a song whose sheet is one of UG's
+Ukulele Chords, as it has no chords there, lists those: "2 Ukulele Chords
+versions on Ultimate Guitar"): the versions that cover the
 lyrics first, then by the rating weighed by its votes; those never scored
 after, by that rating; those Ultimate Guitar took down last. It only reads:
 no request, and no wait for another caracole.
@@ -673,12 +675,16 @@ With some songs listed:
 
 Caracole never searches Ultimate Guitar, whose robots.txt disallows its search
 page. It reads the sitemaps UG publishes for crawlers instead, and keeps a
-local index of every chords and text tabs page, well over a million. Tabs of
-the other types are counted and left out, Guitar Pro and Power Tab files among
-them: caracole uses none of UG's, so a song UG has only as one of those is not
-found there. `caracole index build` reads the sitemap index and its 41 tab sitemaps,
-one request at a time, 10–20 seconds apart: about 42 requests, 70 MB and 10
-minutes. Its budget is 100 requests, more than a night's, so one build is
+local index of every chords, text tabs and ukulele chords page, well over a
+million. Tabs of the other types are counted and left out, Guitar Pro and
+Power Tab files among them: caracole uses none of UG's, so a song UG has only
+as one of those is not found there. UG's "Ukulele Chords" (about 150,000
+pages, in their own sitemaps, `sitemap_ukulele1.xml` to `sitemap_ukulele4.xml`)
+are the same chord-over-lyrics sheets with ukulele shapes beside them: a song
+with no chords on UG takes its sheet from them (see [caracole
+fetch](#one-step-at-a-time)). `caracole index build` reads the sitemap index
+and its 45 tab sitemaps, one request at a time, 10–20 seconds apart: about 46
+requests, 80 MB and 12 minutes. Its budget is 100 requests, more than a night's, so one build is
 enough. A block or a spent budget keeps the sitemaps read so far, and the next
 refresh reads the rest. Until then the index is incomplete, and no song is
 matched against it: a song in a sitemap not read yet isn't missing from UG.
@@ -741,8 +747,9 @@ why, sums up what it read, and says how to resume and where. Blocked at the
     To resume, run `caracole index refresh` after 2026-10-20 22:54 UTC: it reads the 29 sitemaps left, sitemap13.xml to sitemap40.xml and sitemap_last.xml (30 requests, about 7 min). The nightly run does the same.
 
 **`caracole index build --from DIR`** builds the index offline, from sitemap
-files you already have: `sitemap1.xml` to `sitemap40.xml` and
-`sitemap_last.xml`, gzipped or not. It sends no requests. The 41 files take
+files you already have: `sitemap1.xml` to `sitemap40.xml`,
+`sitemap_ukulele1.xml` to `sitemap_ukulele4.xml` and `sitemap_last.xml`,
+gzipped or not. It sends no requests. The 41 files of guitar tabs take
 about 22 seconds and make a 303 MB database. It prints the same, with the
 files it found in place of the sitemap index. A file that isn't a sitemap
 stops it, exiting 1: the files before it are kept, and running it again reads
@@ -755,8 +762,10 @@ Sabina, Maná or 宋冬野. The to-do page asks you for those artists' pages onc
 or for any of their tab pages (see [the to-do page](#the-to-do-page)).
 
 **`caracole index refresh`** re-reads `sitemap_last`, the highest-numbered
-sitemap and any numbered one not indexed yet, whether new or left by a stopped
-build. These are conditional requests, which usually answer "unchanged". A
+sitemap of each kind (`sitemap40.xml`, `sitemap_ukulele4.xml`) and any tab
+sitemap not indexed yet, whether new, left by a stopped build, or one an older
+caracole didn't read: an index built before caracole kept ukulele chords reads
+the four ukulele sitemaps at its next refresh. These are conditional requests, which usually answer "unchanged". A
 new tab for a song you want marks that song to be fetched again. The nightly
 run does this; the command does it by hand. In the journal or piped, it
 prints a line for each sitemap that changed, then one line for it all (on a
@@ -1044,6 +1053,15 @@ and cache.
   text is the sheet's very text gets no files: the sheet stands for it. A
   version you keep with [`caracole versions --keep`](#caracole-versions)
   stays kept whatever the ranking.
+  A song Ultimate Guitar has no chords for (none in the index, none on its
+  artist's page) takes its sheet from UG's Ukulele Chords versions, rated and
+  scored as chords are: the same chord-over-lyrics sheet with ukulele shapes,
+  its files labelled "Ukulele Chords" on the library page, its versions those
+  `caracole versions` lists. A song with chords keeps them, and its ukulele
+  versions are never read (the sheet viewer draws ukulele shapes on any
+  sheet); a chords version found later replaces a ukulele sheet. A chords
+  page that can't be read is no reason to take the ukulele one: the song waits.
+  A `[pin]` of a ukulele version makes it the sheet, as a chords pin does.
   Songs the index can't settle are looked up on their artist's UG page, when
   it is known, at most once in 30 days: songs not found, songs reviewed on
   their title alone (only other artists' songs of it) or on names that
@@ -2455,8 +2473,8 @@ offline Ultimate Guitar index and LaCuerda's (see below):
   `caracole add` brings it back, it is in your library and not in this group.
 
 - **On Ultimate Guitar**: numbered hits from the offline index, each tagged
-  `[UG]`, with its tabs per type (chords and text tabs, the types the index
-  keeps), one of its pages, and the `caracole add` line to paste. The UG artist pages caracole has read (see
+  `[UG]`, with its tabs per type (chords, text tabs and ukulele chords, the
+  types the index keeps), one of its pages, and the `caracole add` line to paste. The UG artist pages caracole has read (see
   [caracole fetch](#one-step-at-a-time)) are searched too: every tab each one
   listed, bare ids included, which UG's sitemaps list without names. Their
   names are compared in each script UG writes them in ("Song Dongye (宋冬野)"

@@ -411,7 +411,7 @@ def test_a_page_of_another_type_asked_for_as_the_tab_is_refused_and_nothing_is_w
         result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep", tab=tab)
 
         assert progress.states()["song"] == "failed" and sites.requests == []
-        assert result.details["song"] == f"tab {tab_id_from_url(tab)} is not a chords or tabs page"
+        assert result.details["song"] == f"tab {tab_id_from_url(tab)} is not a chords, tabs or ukulele chords page"
     assert not cfg.wanted_file.exists() and not cfg.overrides_file.exists()
 
 

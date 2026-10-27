@@ -89,7 +89,7 @@ S1 = urlset(
     "1004",
     "the-rifles/the-general-chords-1005",
     "queen/the-miracle-tabs-1006",
-    "oasis/wonderwall-ukulele-1007",
+    "oasis/wonderwall-drums-1007",
 )
 S2 = urlset("oasis/champagne-supernova-chords-2001", "radiohead/creep-chords-2002")
 LAST = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-tabs-3001")
@@ -98,13 +98,13 @@ LAST = urlset("radiohead/creep-chords-2002", "radiohead/creep-acoustic-tabs-3001
 def site(**extra: bytes) -> FakeUG:
     files = {
         "sitemap.xml": sitemap_index(
-            "sitemap_news.xml", "sitemap2.xml", "sitemap_ukulele1.xml", "sitemap1.xml", "sitemap_last.xml"
+            "sitemap_news.xml", "sitemap2.xml", "sitemap_wiki_1.xml", "sitemap1.xml", "sitemap_last.xml"
         ),
         "sitemap1.xml": S1,
         "sitemap2.xml": S2,
         "sitemap_last.xml": LAST,
         "sitemap_news.xml": urlset("x/y-chords-9"),
-        "sitemap_ukulele1.xml": urlset("x/y-ukulele-8"),
+        "sitemap_wiki_1.xml": urlset("x/y-chords-8"),
     }
     files.update(extra)
     return FakeUG(files)
@@ -239,9 +239,9 @@ def test_build_reports_what_each_sitemap_held(conn, tmp_path):
     ug = site()
     seen = []
     build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=seen.append)
-    # sitemap1: 4 rows, the bare id 1004, and a bass and a ukulele tab the index doesn't keep
+    # sitemap1: 4 rows, the bare id 1004, and a bass and a drums tab the index doesn't keep
     assert seen[1:] == [
-        SitemapRead(1, 3, "1", "sitemap1.xml", tabs=TabCounts(urls=7, indexed=4, bare=1, other={"bass": 1, "ukulele": 1}),
+        SitemapRead(1, 3, "1", "sitemap1.xml", tabs=TabCounts(urls=7, indexed=4, bare=1, other={"bass": 1, "drums": 1}),
                     new_tab_ids=(1001, 1002, 1005, 1006)),
         SitemapRead(2, 3, "2", "sitemap2.xml", tabs=TabCounts(urls=2, indexed=2), new_tab_ids=(2001, 2002)),
         SitemapRead(3, 3, "last", "sitemap_last.xml", tabs=TabCounts(urls=2, indexed=2), new_tab_ids=(3001,)),
@@ -313,7 +313,7 @@ def test_a_cached_body_newer_than_the_indexed_one_is_parsed(conn, tmp_path):
 
 
 def test_index_without_tab_sitemaps_is_an_error(conn, tmp_path):
-    ug = FakeUG({"sitemap.xml": sitemap_index("sitemap_news.xml", "sitemap_ukulele1.xml")})
+    ug = FakeUG({"sitemap.xml": sitemap_index("sitemap_news.xml", "sitemap_wiki_1.xml")})
     with pytest.raises(ProviderError, match="no tab sitemaps"):
         build_index(conn, ug.client(tmp_path / "cache"), NOW)
 
@@ -342,7 +342,7 @@ def test_build_from_dir_reads_numbered_and_last_files(conn, tmp_path):
     (d / "sitemap10.xml").write_bytes(urlset("eagles/hotel-california-chords-4001"))
     (d / "sitemap2.xml.gz").write_bytes(gzip.compress(S2))
     (d / "sitemap_last.xml.gz").write_bytes(gzip.compress(LAST))
-    (d / "sitemap_ukulele1.xml").write_bytes(urlset("x/y-chords-9"))
+    (d / "sitemap_wiki_1.xml").write_bytes(urlset("x/y-chords-9"))
     (d / "fetch.log").write_text("not a sitemap")
     stats = build_index(conn, None, NOW, from_dir=d)
     assert [r[0] for r in rows(conn)] == [1001, 1002, 1005, 1006, 2001, 2002, 3001, 4001]
@@ -560,7 +560,7 @@ def test_coverage_names_what_a_stopped_build_left_and_a_refresh_reads_exactly_th
         build_index(conn, blocked.client(tmp_path / "cache"), NOW)
     cov = index_coverage(conn)
     assert (cov.listed, cov.indexed, cov.left) == (("1", "2", "last"), ("1",), ("2", "last"))
-    assert cov.tabs == TabCounts(urls=7, indexed=4, bare=1, other={"bass": 1, "ukulele": 1})
+    assert cov.tabs == TabCounts(urls=7, indexed=4, bare=1, other={"bass": 1, "drums": 1})
     ug = site()
     refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
     assert ug.names()[1:] == [sitemap_label(n) for n in cov.refresh] == ["sitemap2.xml", "sitemap_last.xml"]
@@ -570,7 +570,7 @@ def test_coverage_of_a_complete_index_sums_what_its_sitemaps_held(conn, tmp_path
     build_index(conn, site().client(tmp_path / "cache"), NOW)
     cov = index_coverage(conn)
     assert cov.left == () and cov.refresh == ("2", "last")
-    assert cov.tabs == TabCounts(urls=11, indexed=8, bare=1, other={"bass": 1, "ukulele": 1})
+    assert cov.tabs == TabCounts(urls=11, indexed=8, bare=1, other={"bass": 1, "drums": 1})
 
 
 @pytest.mark.parametrize(
@@ -600,7 +600,91 @@ def test_a_refresh_sums_itself_up_in_one_line(stats, refetch, line):
         ((*map(str, range(1, 41)), "last"), "sitemap1.xml to sitemap40.xml and sitemap_last.xml"),
         (("3", "7", "8", "9", "12", "20", "last"),
          "sitemap3.xml, sitemap7.xml to sitemap9.xml, sitemap12.xml and 2 more"),
+        (("40", "ukulele1", "ukulele2", "ukulele3", "ukulele4", "last"),
+         "sitemap40.xml, sitemap_ukulele1.xml to sitemap_ukulele4.xml and sitemap_last.xml"),
+        (("39", "40", "ukulele1", "last"), "sitemap39.xml, sitemap40.xml, sitemap_ukulele1.xml and sitemap_last.xml"),
     ],
 )
 def test_describe_sitemaps_names_runs_of_numbers_as_ranges(names, text):
     assert describe_sitemaps(names) == text
+
+
+# --- UG's Ukulele Chords: sitemap_ukulele1–N ----------------------------------------------------------------
+
+
+def ukulele_site() -> FakeUG:
+    return FakeUG({
+        "sitemap.xml": sitemap_index("sitemap_ukulele2.xml", "sitemap1.xml", "sitemap_ukulele1.xml", "sitemap_last.xml",
+                                     "sitemap_news.xml"),
+        "sitemap1.xml": urlset("oasis/wonderwall-chords-1001", "oasis/wonderwall-bass-1003"),
+        "sitemap_ukulele1.xml": urlset("vance-joy/riptide-ukulele-1391193", "6592001"),
+        "sitemap_ukulele2.xml": urlset("israel-kamakawiwoole/over-the-rainbow-ukulele-1391194"),
+        "sitemap_last.xml": urlset("rainbow/man-on-the-silver-mountain-ukulele-6573122"),
+    })
+
+
+def test_build_indexes_the_ukulele_sitemaps_after_the_numbered_ones_with_their_type(conn, tmp_path):
+    ug = ukulele_site()
+    seen = []
+    build_index(conn, ug.client(tmp_path / "cache"), NOW, progress=seen.append)
+    assert ug.names() == ["sitemap.xml", "sitemap1.xml", "sitemap_ukulele1.xml", "sitemap_ukulele2.xml",
+                          "sitemap_last.xml"]
+    assert seen[0] == IndexPlan(listed=("1", "ukulele1", "ukulele2", "last"),
+                                reads=("1", "ukulele1", "ukulele2", "last"))
+    assert [(r[0], r[1], r[2], r[3], r[4]) for r in rows(conn)] == [
+        (1001, "oasis", "wonderwall", "chords", "1"),
+        (1391193, "vance-joy", "riptide", "ukulele", "ukulele1"),
+        (1391194, "israel-kamakawiwoole", "over-the-rainbow", "ukulele", "ukulele2"),
+        (6573122, "rainbow", "man-on-the-silver-mountain", "ukulele", "last"),
+    ]
+    # A bare ukulele id, as a guitar one, only an artist page leads to.
+    assert seen[2] == SitemapRead(2, 4, "ukulele1", "sitemap_ukulele1.xml", tabs=TabCounts(urls=2, indexed=1, bare=1),
+                                  new_tab_ids=(1391193,))
+    assert index_stats(conn)["types"] == {"ukulele": 3, "chords": 1}
+
+
+def test_a_refresh_reads_the_highest_ukulele_sitemap_as_it_reads_the_highest_numbered_one(conn, tmp_path):
+    ug = ukulele_site()
+    build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    ug.files["sitemap_ukulele2.xml"] = urlset("israel-kamakawiwoole/over-the-rainbow-ukulele-1391194",
+                                              "vance-joy/mess-is-mine-ukulele-1391195")
+    ug.requests.clear()
+    stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
+    assert ug.names() == ["sitemap.xml", "sitemap1.xml", "sitemap_ukulele2.xml", "sitemap_last.xml"]
+    assert stats.new_tab_ids == (1391195,)
+
+
+def test_an_index_built_before_caracole_kept_ukulele_tabs_reads_the_ukulele_sitemaps_at_its_next_refresh(
+        conn, tmp_path):
+    ug = ukulele_site()
+    ug.files["sitemap.xml"] = sitemap_index("sitemap1.xml", "sitemap_last.xml")  # as an older caracole read it
+    build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    ug.files["sitemap.xml"] = ukulele_site().files["sitemap.xml"]
+    ug.requests.clear()
+    stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
+    assert ug.names() == ["sitemap.xml", "sitemap1.xml", "sitemap_ukulele1.xml", "sitemap_ukulele2.xml",
+                          "sitemap_last.xml"]
+    assert stats.new_tab_ids == (1391193, 1391194)
+    assert index_coverage(conn).indexed == ("1", "ukulele1", "ukulele2", "last")
+
+
+def test_a_song_with_a_new_ukulele_tab_is_marked_to_fetch_again(conn, tmp_path):
+    ug = ukulele_site()
+    build_index(conn, ug.client(tmp_path / "cache"), NOW)
+    riptide = add_song(conn, "Vance Joy", "Riptide").id
+    update_song(conn, riptide, match_decision="accept", match_artist_key="vance-joy", match_song_key="riptide")
+    ug.files["sitemap_ukulele2.xml"] = urlset("israel-kamakawiwoole/over-the-rainbow-ukulele-1391194",
+                                              "vance-joy/riptide-ukulele-1391196")
+    stats = refresh_index(conn, ug.client(tmp_path / "cache"), LATER)
+    assert stats.songs_marked == frozenset({riptide})
+
+
+def test_build_from_dir_reads_the_ukulele_files_too(conn, tmp_path):
+    d = tmp_path / "sitemaps"
+    d.mkdir()
+    (d / "sitemap1.xml").write_bytes(urlset("oasis/wonderwall-chords-1001"))
+    (d / "sitemap_ukulele1.xml.gz").write_bytes(gzip.compress(urlset("vance-joy/riptide-ukulele-1391193")))
+    (d / "sitemap_last.xml").write_bytes(urlset("radiohead/creep-chords-2002"))
+    stats = build_index(conn, None, NOW, from_dir=d)
+    assert stats.parsed == ("1", "ukulele1", "last")
+    assert [r[3] for r in rows(conn)] == ["chords", "chords", "ukulele"]

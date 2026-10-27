@@ -56,7 +56,7 @@ NO_SHEET_TITLE = "No human sheet found yet"  # the buy list, when caracole takes
 NOTHING_TITLE = "Nothing on YouTube for these"
 NEW_FILES_FOR = timedelta(days=7)  # how long a file downloaded from gtptabs.com is listed as new
 _MD_SPECIAL = "\\`*_[]<>|"
-_KIND_NAMES = {"tabs": "Tab", "chords": "Chords"}
+_KIND_NAMES = {"tabs": "Tab", "chords": "Chords", "ukulele": "Ukulele Chords"}
 PERFORMER = "catch_all:performer"  # a catch_all candidate under misc-originals or misc-unsigned-bands
 
 

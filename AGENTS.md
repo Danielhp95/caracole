@@ -37,7 +37,7 @@ section says where things are, and the rules a change there keeps.
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
 | lyrics | lyrics.py |
-| fetch | ug/fetch.py (UG's chords and text tabs alone), ug/page.py (tab pages; `KINDS`, the types caracole uses: chords, tabs), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores, written by ug/fetch.py's `_keep_beside` with no request more, a pinned sheet's from the cache alone; `in_library`, the list as the library holds it; `as_data`, the pages' JSON) |
+| fetch | ug/fetch.py (UG's chords and text tabs, and its Ukulele Chords as the sheet of a song with no chords there: `UKULELE_KINDS`, `sheet_group`), ug/page.py (tab pages; `KINDS`, the types caracole uses: chords, tabs, ukulele), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, or its ukulele chords ones when its sheet is one (`sheet_kind`, `group_of`), the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores, written by ug/fetch.py's `_keep_beside` with no request more, a pinned sheet's from the cache alone; `in_library`, the list as the library holds it; `as_data`, the pages' JSON) |
 | lacuerda | lacuerda.py (URLs, parsing, its search's pages), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page; `popular_pages`, the most popular artists' pages once the listings are read whole), lacuerda_index.py (its listings of every artist, for searches; `backfill_cached`, the artist pages the HTTP cache holds; `store_search`, what its search answered), lacuerda_search.py (its own search, one query at the lookup pace, `caracole lacuerda --search`; `gate`, whether the pages may send it) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
 | gtptabs | gtptabs.py (URLs, parsing), gtptabs_fetch.py (the step) |
@@ -555,11 +555,11 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `ug:unreadable:<tab id>` (`test_fetch.py::test_slugged_tabs_fetched_at_their_slugged_url`,
   `::test_bare_id_chords_of_a_matched_song_come_from_its_artist_page`, tests/test_live_banma.py).
 - **Guitar Pro: gtptabs.com's downloads and the inbox, never Ultimate Guitar's.** The index
-  keeps UG's chords and text tabs alone (ug/sitemap.py `KEEP_TYPES`): a Guitar Pro or Power
+  keeps UG's chords, text tabs and ukulele chords alone (ug/sitemap.py `KEEP_TYPES`): a Guitar Pro or Power
   Tab file's tab is counted by type and left out, so no song matches one and no page, search,
   count or link shows one
   (`test_index.py::test_guitar_pro_and_power_tab_files_are_counted_by_type_and_left_out`).
-  ug/page.py gives UG's `Pro` and `Power` types no kind (`KINDS`: chords, tabs), so ug/fetch.py
+  ug/page.py gives UG's `Pro` and `Power` types no kind (`KINDS`: chords, tabs, ukulele), so ug/fetch.py
   never rates, records or picks such a version, never reads an artist page's lists of them,
   and a `[pin]` of one pins nothing
   (`test_fetch.py::test_a_pin_ultimate_guitar_answers_with_a_guitar_pro_page_pins_nothing`,

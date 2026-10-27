@@ -326,13 +326,20 @@ def test_official_non_public_and_untracked_types_are_not_kept(conn):
     artist_tabs.store(conn, SODA, "Soda Stereo", [_version(d) for d in (
         version_dict(1, song="Signos", artist="Soda Stereo", type="Official"),
         version_dict(2, song="Signos", artist="Soda Stereo", access="pro"),
-        version_dict(3, song="Signos", artist="Soda Stereo", type="Ukulele Chords"),
+        version_dict(3, song="Signos", artist="Soda Stereo", type="Bass Tabs"),
         version_dict(4, song="Signos", artist="Soda Stereo", tab_url="https://www.ultimate-guitar.com/pro/4"),
         version_dict(5, song="Signos", artist="Soda Stereo", type="Pro"),  # a Guitar Pro file: nothing to count
         version_dict(6, song="Signos", artist="Soda Stereo", type="Power"),
         version_dict(7, song="Signos", artist="Soda Stereo", type="Tabs"),
     )], read_at="2026-10-18T00:00:00Z")
     assert [tuple(r) for r in conn.execute("SELECT tab_id, type FROM ug_artist_tabs")] == [(7, "tabs")]
+
+
+def test_ukulele_chords_are_kept_with_their_type(conn):
+    artist_tabs.store(conn, SODA, "Soda Stereo", [_version(version_dict(3, song="Signos", artist="Soda Stereo",
+                                                                        type="Ukulele Chords"))],
+                      read_at="2026-10-18T00:00:00Z")
+    assert [tuple(r) for r in conn.execute("SELECT tab_id, type FROM ug_artist_tabs")] == [(3, "ukulele")]
 
 
 def test_an_older_read_never_overwrites_a_newer_one(conn):

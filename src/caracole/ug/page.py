@@ -32,11 +32,12 @@ from caracole.http import ProviderError
 
 TAB_BASE_URL = "https://tabs.ultimate-guitar.com/tab/"
 
-# UG's tab types that caracole uses: its chords, for the sheet, and its text tabs. Everything else (Pro and
-# Power, a Guitar Pro or Power Tab file; Official, Bass Tabs, Ukulele Chords, Drum Tabs, Video…) has no kind,
-# and every page of a kind carries its text.
-_KINDS = {"chords": "chords", "tabs": "tabs"}
-KINDS = tuple(_KINDS.values())  # caracole's kinds of UG's tabs: chords, tabs
+# UG's tab types that caracole uses: its chords, for the sheet, its text tabs, and its Ukulele Chords, a sheet in
+# the same markup with ukulele shapes, the sheet of a song with no chords (ug/fetch.py), each its own group of
+# versions (a page lists the versions of its own type). Everything else (Pro and Power, a Guitar Pro or Power Tab
+# file; Official, Bass Tabs, Drum Tabs, Video…) has no kind, and every page of a kind carries its text.
+_KINDS = {"chords": "chords", "tabs": "tabs", "ukulele chords": "ukulele"}
+KINDS = tuple(_KINDS.values())  # caracole's kinds of UG's tabs: chords, tabs, ukulele
 _MARKUP = re.compile(r"\[/?(?:ch|tab)\]")
 
 
@@ -47,7 +48,7 @@ class PageParseError(ProviderError):
 def kind_of(ug_type: str | None) -> str | None:
     """caracole's kind for a UG tab type.
 
-    Chords → chords, Tabs → tabs. Any other type has no kind (None): ``Official``,
+    Chords → chords, Tabs → tabs, Ukulele Chords → ukulele. Any other type has no kind (None): ``Official``,
     and ``Pro`` and ``Power``, a Guitar Pro or Power Tab file, which caracole
     doesn't use (gtptabs.com's files are downloaded for you, gtptabs_fetch.py, and
     you file your own from the inbox, inbox.py).
@@ -83,7 +84,7 @@ class UGVersion:
 
     @property
     def kind(self) -> str | None:
-        """chords or tabs; None for every type caracole doesn't use."""
+        """chords, tabs or ukulele; None for every type caracole doesn't use."""
         return kind_of(self.type)
 
     @property
