@@ -229,6 +229,12 @@ opens it.
 A song not found carries ``notFound``, says "Not found", and its served line's "⋯" links to
 ``/review?song=ID``, which offers what ``caracole search`` finds for it: a
 search per song would cost every page a moment each.
+
+**The Android app's copy.** The file on disk is where caracole's Android app starts (caracole serve's
+``/api/offline``, web/offline_routes.py): the pages write it with its SHA-256 and length recorded
+(``write_library_page``, kv ``library_page:written``), and the server sends it only while it is still
+those bytes (``pages_written``), with the policy its ``<meta>`` tag holds (``page_csp``); the app copies
+every file it links to (``linked_files``).
 """
 
 from __future__ import annotations
@@ -245,6 +251,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import quote, urlencode
 
 from caracole.config import Config
+from caracole.db import kv_get_json, kv_set_json
 from caracole.download_names import download_name
 from caracole.icons import kept_sources, page_icons, source_of
 from caracole.inbox import SCORE_EXTENSIONS, guitar_files
@@ -281,6 +288,7 @@ if TYPE_CHECKING:
 # PICKER_STYLE, ROWS_STYLE, ROWS_SCRIPT: library_assets/), and the Songbooks tab's data (songbook_section.py).
 
 PAGE_NAME = "index.html"
+WRITTEN_KEY = "library_page:written"  # kv: the SHA-256 and the length of the index.html last written
 
 # Kept files, in the order a song's line lists them: the sheets' viewers and PDFs, then the song's exports (the
 # sheet's PDF in other versions, by their versions), the rest of the first group; guitar-N.* goes between the two
@@ -499,11 +507,94 @@ def _tab_counts(counts: Any) -> str:
     return " · ".join(f"{_TAB_KINDS.get(kind, kind)} ×{n}" for kind, n in counts.items())
 
 
-def write_library_page(library_dir: Path, html: str) -> Path:
-    """Write ``index.html`` in the library folder, atomically, and return its path."""
+def write_library_page(library_dir: Path, html: str, conn: sqlite3.Connection | None = None) -> Path:
+    """Write ``index.html`` in the library folder, atomically, and return its path; with ``conn``, record its
+    SHA-256 and length (kv ``library_page:written``), as ``todo.write_pages`` does, so that caracole serve sends
+    it to the Android app only while it is still those bytes (``pages_written``)."""
     path = library_dir / PAGE_NAME
-    write_atomic(path, html.encode("utf-8"))
+    data = html.encode("utf-8")
+    sha = write_atomic(path, data)
+    if conn is not None:
+        kv_set_json(conn, WRITTEN_KEY, {"sha256": sha, "size": len(data)})
     return path
+
+
+def pages_written(conn: sqlite3.Connection, library_dir: Path, parts: tuple[str, ...]) -> list[tuple[str, int]]:
+    """The record of the library page a server is asked for, by its path's parts in the library: the SHA-256 and
+    the length of the index.html caracole last wrote at the library's top (``write_library_page``), [] for any
+    other path or none recorded (one written by an older caracole: the next command that writes the pages
+    records it). As ``songbook.pages_written`` does for a songbook's page: anyone with a synced device can put a
+    page in the library, whose script would run as the server's. ``library_dir`` goes unused: the lookups of the
+    server's pages all take the same arguments."""
+    from caracole.render import written_entry
+
+    if parts != (PAGE_NAME,):
+        return []
+    written = written_entry(kv_get_json(conn, WRITTEN_KEY))
+    return [] if written is None else [written]
+
+
+# What a server says for a library page it won't send (web/offline_routes.py): the Android app asks for it first.
+PAGE_REFUSED = ("This library page isn't the one caracole last wrote here (it was changed on a synced device, say, "
+                "or caracole has no record of it yet), so the server won't send it: caracole todo writes it again.")
+
+
+def page_csp(page: bytes) -> str:
+    """The Content-Security-Policy header a server sends with ``page``, an index.html caracole wrote: the page's own
+    policy, as its ``<meta>`` tag holds it (its script and stylesheet by their hashes, images from ``data:``, no
+    form to send, nothing to connect to), which the header repeats. No sandbox, as caracole serve's own library
+    page has none: its script needs no origin of its own, and its links to the sites open in a new tab, and its
+    Guitar Pro files download, which a sandbox would stop. A page whose policy can't be read gets a sandbox that
+    runs and loads nothing.
+
+    Serve only a page still as caracole wrote it (``pages_written``, ``files.read_written_page``)."""
+    found = _META_POLICY.search(page)
+    try:
+        policy = html_text.unescape(found.group(1).decode("utf-8")) if found else ""
+    except UnicodeDecodeError:
+        policy = ""
+    return policy if _HEADER_TEXT.fullmatch(policy) else _NOTHING
+
+
+def linked_files(page: bytes) -> list[str]:
+    """The files of the library ``page`` (an index.html caracole wrote) links to, as paths in the library, decoded
+    ("Soda Stereo/De Música Ligera/sheet.pdf"), each once, in the page's order: every relative link (``href``) in
+    its data, its songs' files and their kept versions' pages, its songbooks' files and their songs' sheets and
+    Guitar Pro files. A link to a site, or with a query or a fragment, is none; a page whose data can't be read
+    links none."""
+    from urllib.parse import unquote, urlsplit
+
+    found = _DATA.search(page)
+    try:
+        data = json.loads(found.group(1)) if found else None
+    except (ValueError, RecursionError):  # not UTF-8, not JSON, or too deep
+        return []
+    paths: dict[str, None] = {}
+    stack = [data]
+    while stack:
+        node = stack.pop()
+        if isinstance(node, dict):
+            href = node.get("href")
+            if isinstance(href, str):
+                try:
+                    link = urlsplit(href)
+                    path = unquote(link.path, errors="strict")
+                except (UnicodeDecodeError, ValueError):
+                    path = ""
+                if path and not (link.scheme or link.netloc or link.query or link.fragment or path.startswith("/")):
+                    paths[path] = None
+            stack.extend(reversed([value for key, value in node.items() if key != "href"]))
+        elif isinstance(node, list):
+            stack.extend(reversed(node))
+    return list(paths)
+
+
+# The page's own policy, as head.html writes it; what a header may hold (no line break); the header for a page
+# whose policy can't be read: a sandbox that runs and loads nothing (as viewer.viewer_csp's). And its data.
+_META_POLICY = re.compile(rb'<meta http-equiv="Content-Security-Policy" content="([^"<>]*)">')
+_HEADER_TEXT = re.compile(r"[ -~]+")
+_NOTHING = "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'"
+_DATA = re.compile(rb'<script type="application/json" id="songs">(.*?)</script>', re.S)
 
 
 # --- the data ---------------------------------------------------------------------------
@@ -865,7 +956,8 @@ def _haystack(texts: list[str]) -> str:
 # index.html's one stylesheet and one script: the files of library_assets/, in this order (what each one
 # is: its __init__.py). BASE_STYLE, PICKER_STYLE, ROWS_STYLE and ROWS_SCRIPT, the ones caracole serve's own
 # pages share, are importable from here too.
-STYLESHEETS = ("base.css", "picker.css", "library.css", "rows.css", "library-screens.css", "songbooks.css")
+STYLESHEETS = ("base.css", "picker.css", "library.css", "rows.css", "steps.css", "library-screens.css",
+               "songbooks.css")
 SCRIPTS = ("rows.js", "library.js", "select.js", "songbooks.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)

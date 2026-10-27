@@ -872,6 +872,36 @@ def test_write_library_page(cfg):
     assert path.read_text(encoding="utf-8") == "<!doctype html>\n"
 
 
+def test_the_pages_record_the_library_page_they_write(conn, cfg):
+    # What the Android app's copy starts from (web/offline_routes.py): sent only while it is still these bytes.
+    from caracole.library_page import pages_written
+    from caracole.todo import write_pages
+
+    add_song(conn, "Radiohead", "Creep")
+    assert pages_written(conn, cfg.library_dir, ("index.html",)) == []
+    write_pages(conn, cfg, Overrides(), NOW)
+    data = (cfg.library_dir / "index.html").read_bytes()
+    record = [(hashlib.sha256(data).hexdigest(), len(data))]
+    assert pages_written(conn, cfg.library_dir, ("index.html",)) == record
+    for parts in (("Radiohead", "index.html"), ("Radiohead", "Creep", "index.html"), ("_todo.md",), ()):
+        assert pages_written(conn, cfg.library_dir, parts) == []
+    write_library_page(cfg.library_dir, "<!doctype html>\n")  # with no database, nothing recorded
+    assert pages_written(conn, cfg.library_dir, ("index.html",)) == record
+
+
+def test_the_library_page_goes_out_with_the_policy_it_holds(conn, cfg):
+    from caracole.library_page import page_csp
+
+    html = build_library_page(conn, cfg, Overrides(), NOW)
+    own = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
+    assert page_csp(html.encode("utf-8")) == own and "form-action 'none'" in own
+    # one whose policy can't be read runs and loads nothing
+    assert page_csp(b"<!doctype html><title>x</title>") == (
+        "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'")
+    assert page_csp(b'<meta http-equiv="Content-Security-Policy" content="default-src \xc3\xa9">').startswith(
+        "sandbox; default-src 'none'")
+
+
 # --- where it is written -------------------------------------------------------------------
 
 

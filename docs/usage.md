@@ -219,8 +219,9 @@ viewed one by your song's artist as `harmonica-1.txt` (`caracole harptabs`, in
 [One step at a time](#one-step-at-a-time)). Its site terms ask that nothing be
 copied, and its API's that the tabs not be mirrored: caracole keeps the tabs of
 your own songs alone, for you, never a tab of a song nobody asked for. It asks
-with its own user agent, as everywhere, and a block is a block (see
-[caracole run](#caracole-run)).
+with caracole's own user agent, as it asks every site, and an HTTP 403, a 429 or
+a challenge from harptabs.com is a block like any site's: a cooldown and one
+alert, never a way around it (see [caracole run](#caracole-run)).
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -2153,9 +2154,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Hear it**: a tap on a chord, in the song or in the strip, also strums
   it, and so does a tap on the shape on its card (or Enter on it): the shape
   the card shows, with the capo where it is, low string to high, in standard
-  tuning. The sound is made in the browser (a plucked string, synthesized:
-  no recording, nothing loaded), so it works from the synced folder and from
-  `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
+  tuning, or on the instrument chosen (below): a ukulele's strings from the
+  4th to the 1st, shorter and softer, in its own tuning; a piano's notes
+  struck together, the bass with them. The sound is made in the browser (a
+  plucked string, or a piano's string, synthesized: no recording, nothing
+  loaded), so it works from the synced folder and from `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
   time, and the page falls silent when you switch away from it; the next tap
   plays again. **Sound**, in the settings, sets the volume: Off, Soft,
   Medium (the default) or Loud. With it off, a tap opens the card alone. A
@@ -2194,7 +2197,33 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
-  "Key Em". Each says where the key came from.
+  "Key Em". Each says where the key came from. On the piano, which takes no
+  capo, it names the key the song sounds in ("Key F#m"), and the chords are
+  named as they sound (F#m, not Em): the guitar's capo comes back with the
+  guitar.
+- **Instrument**, in the settings: Guitar (the default), Ukulele (G C E A, the
+  G string high), Ukulele, low G, Baritone ukulele (D G B E) and Piano. It
+  changes how every chord is drawn and heard, never the song: the chord names
+  stay, each drawn its own way. A ukulele's chords are four-string boxes, up to
+  four shapes each, from chords-db's ukulele data (MIT, as the guitar's);
+  low G plays the same shapes, the baritone the same shapes a fourth lower (a
+  ukulele's C shape is its G). A chord it has no shape for shows the closest
+  (C5 as C, G9 as G7), saying so, and a slash chord its plain chord ("Shown
+  without its bass, E"). A ukulele keeps the capo, and offers **Easy keys**
+  above it, the keys whose chords sit well under the fingers (on a ukulele
+  C, F, G, Bb, Am and Dm; on the baritone G, C, D, F, Em and Am), nearest the
+  key you play first: tap one to move the song there, as Transpose does (the
+  guitar's capo suggestions are the guitar's alone). The piano draws each
+  chord on a keyboard, its notes lit and its bass marked: root position, then
+  the first and second inversions (‹ ›), the right hand around middle C and
+  the bass, the root or a slash chord's, for the left hand below it. The rail
+  of necks (below) draws a ukulele's four strings, and the piano has none.
+  Like the rail of necks, the choice is the player's, not a song's: the
+  browser keeps it once for every sheet and songbook, and the address keeps
+  `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`) while it is another
+  than the guitar, for a page served by `caracole serve`; ‹ and › to another
+  version keep it, and so does every step to another song in a songbook.
+  **Reset everything** leaves it as it is.
 - **The versions** of a song Ultimate Guitar has several of: under the key
   line, the sheet's viewer and each version kept beside it say which of UG's
   chords versions they are, with its rating and votes: "Ver 3 of 13 ·
@@ -2409,10 +2438,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 The viewer remembers its settings for each song in the browser, the scroll
 speed, the text size, the volume and the shape chosen for each chord among them: a chord
 named otherwise when the page opens (an address with another key, mode or
-capo) starts at its first shape. It keeps the transposition, the mode, the
+capo), or on another instrument, starts at its first shape. It keeps the transposition, the mode, the
 capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
-(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), and so the shape chosen for a
+(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the instrument
+(`inst=piano`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
 suffix, bass), so a reload or
@@ -2993,9 +3023,10 @@ Who can reach it, below).
   beside Ultimate Guitar's song, Get it with this sheet, which keeps
   LaCuerda's; gtptabs.com's page. A MuseScore page is a link to open, as
   caracole never fetches from MuseScore. The line then says how it goes, on a
-  line of its own ("Sending…", "Fetching from Ultimate Guitar…", "Ready · Open
-  sheet"), and once the sheet is kept the line is the song's own line, its
-  sheet its button. **A result's name does what its Get it does**: a click on
+  line of its own ("Sending…", "Fetching from Ultimate Guitar… · 2 of 7
+  done"), with the lookup's steps as chips under it, as on a song's line
+  (below), and once the sheet is kept the line is the song's own line, yours,
+  its sheet its button: the request line and its steps fold away. **A result's name does what its Get it does**: a click on
   "Wonderwall", or Enter or Space on it, looks the song up just as Get it would,
   and while that request is on its way the name, like the button, can't be
   pressed again. A removed song's name does what its Add again does (below). A
@@ -3149,8 +3180,25 @@ Who can reach it, below).
   sheet…", "Fetching the lyrics from LRCLIB…", "Fetching from LaCuerda…",
   "Fetching from gtptabs.com…", "Writing the library page…"), or "Waiting for
   another caracole…" while a nightly run holds the lock until its next pause;
-  then how it ended (a lookup that stopped says why, in its stage's words):
-  - **Ready · Open sheet**, and the song's line opens its sheet, its files under its "⋯";
+  then how it ended (a lookup that stopped says why, in its stage's words).
+  While a song is looked up (Fetch now, Fetch again, a search result's Get it,
+  Get the missing songs, the Songbooks tab's Add a song, Try again), the line
+  counts the steps over ("Fetching the lyrics from LRCLIB… · 4 of 7 done"),
+  and under it each step is a chip, as on the requests page: Song, Match UG
+  (the offline index it matched in, Ultimate Guitar's), Sheet (then the site
+  it asks, Sheet UG or Sheet LaCuerda, switching when it falls back to the
+  other, and once done the site the sheet came from), PDF, Lyrics, Extras and
+  Songbooks; those done ticked, the one that runs lit, those to come grey, a
+  failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
+  UG**, drawn plain (dashed), never as a failure: the sheet may come from
+  LaCuerda. A step that turns out not to apply drops out, and the count with
+  it (no PDF without a sheet, no Songbooks when no songbook lists the song).
+  A request that looks nothing up (an add for tonight, a removal, a songbook's
+  change) keeps its one line. How it ended:
+  - **Ready**: the steps fold away and nothing takes their place; the line is
+    the song's, Found, and its title or its Open opens the sheet, its files
+    under its "⋯" (a screen reader still hears Ready, and the focus Fetch now
+    gave the request line goes to that Open);
   - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
     index has no such song (and its artist's UG page isn't known);
@@ -3175,6 +3223,10 @@ Who can reach it, below).
   - or, when a command failed, its error in one sentence, with a **Details**
     link to what it printed.
 
+  Ended any way but Ready, a lookup's steps stay under its line, so that you
+  see which one stopped (a failed one crossed and red, Match: not on UG
+  plain).
+
   A song asked for again shows on the line it has there already, and a
   refused request's line goes at the next request. A request still on its
   way when you reload the page keeps its line. When the server stops
@@ -3183,7 +3235,9 @@ Who can reach it, below).
 
   Two requests or more also show in a corner, folded to one line on every
   width ("2 requests · 1 to go"), so that it covers no song; it opens upwards
-  to a line per song, and closes. Its one Details link opens the requests
+  to a line per song, with no steps (the songs' lines have them), and closes;
+  a request that ended Ready says just **Ready**, its song's name opening the
+  sheet. Its one Details link opens the requests
   page. A songbook's change and a removal stay out of it: the songbook, in
   the Songbooks tab, or the song's line, where you asked says how each goes. A screen reader hears each song's request line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
@@ -3193,9 +3247,13 @@ Who can reach it, below).
   - **Now**: the request that runs, as a card with its song, how long ago it
     started ("started 12 s ago"), its line ("Rendering the sheet…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
-    Song, Match, Sheet, PDF, Lyrics, Extras (Ultimate Guitar's second pass,
-    its sheets scored and its tab, LaCuerda's sheet and gtptabs.com's Guitar
-    Pro file) and Songbooks, leaving out a step it
+    Song, Match UG (or Match: not on UG, plain), Sheet (Sheet UG or Sheet
+    LaCuerda once it asks a site, then where the sheet came from), PDF,
+    Lyrics, Extras (Ultimate Guitar's second pass, its sheets scored and its
+    tab, LaCuerda's sheet, gtptabs.com's Guitar Pro file and harptabs.com's
+    harmonica tab) and Songbooks,
+    the same chips the library page draws under a song's line, leaving out a
+    step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
     of a song with no sheet); for a request of other commands, its commands.
@@ -3469,6 +3527,25 @@ for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`; without Nix, see
 [deploy.md](deploy.md#4-the-fonts-and-alphatab)). Without it the server runs all the same, the line's ⋯
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
+
+**The Android app's copy.** caracole's Android app copies the library from the
+server to read it offline: `GET /api/offline` lists what to copy, as JSON
+(`format` 1; `start`, the page the app opens first; `files`, each with its
+`path` in the library, the `url` that sends it, its `size`, `sha256`, `type`
+and the `headers` the server sends it with, its Content-Security-Policy among
+them). It lists `index.html` first, as caracole wrote it into the library (the
+page that opens from the folder, with no forms), at `/offline/index.html`, then,
+by path, every file that page links to that the server sends: the sheet
+viewers, kept versions' pages and songbook pages while each is still as
+caracole wrote it, and the PDFs, sheets' text, ChordPro, lyrics, info.json,
+Guitar Pro files and scores. Never Music/, `_inbox/`, a hidden name or a file
+no page links. caracole records `index.html` each time it writes the pages; one
+changed since, or written by a caracole older than that record, isn't sent, and
+`/api/offline` answers 503 until `caracole todo` (or any command that writes the
+pages) writes it again. It is a read and needs nothing on the server: no
+option, no lock, no request to a site. Another site's page can't read it. In
+the app the pages behave as they do opened from the folder: a viewer shows the
+command to run for Export PDF or a version, and the Guitar Pro files themselves.
 
 Who can reach it: there is no sign-in, no access token and no cookie, so
 whoever can reach the server can read the library, request songs and change

@@ -3,10 +3,20 @@ finished one ended, with the next step to take."""
 
 from datetime import UTC, datetime
 
-from caracole.get import NOT_IN_INDEX, STAGES
+from caracole.get import MATCH_NOT_FOUND, NOT_IN_INDEX, SHEET_FROM, STAGES
 from caracole.songs import get_song, update_song
-from caracole.web.jobs import LACUERDA_ARTIST, REMOVING, Job, Stage, Step, lookup_steps, remove_steps
-from caracole.web.outcome import Action, Chip, Outcome, elsewhere, outcome, steps
+from caracole.web.jobs import (
+    KEEP_STAGES,
+    LACUERDA_ARTIST,
+    REMOVING,
+    Job,
+    Stage,
+    Step,
+    lookup_steps,
+    remove_steps,
+    version_steps,
+)
+from caracole.web.outcome import Action, Chip, Outcome, elsewhere, outcome, progress, steps
 from caracole.web.status import SongFacts, job_line
 
 from conftest import add_song
@@ -37,12 +47,25 @@ def ended(stages, state="done", **kw):
 def test_a_lookup_in_progress_shows_its_stages_as_steps_in_plain_words():
     job = lookup(stages={"song": ("done", "in the library"), "match": ("done", "matched to muse/hysteria"),
                          "sheet": ("done", "tab 1 from Ultimate Guitar"), "pdf": ("running", "")})
-    assert steps(job) == [Chip("Song", "done"), Chip("Match", "done"), Chip("Sheet", "done"), Chip("PDF", "running"),
-                          Chip("Lyrics", "waiting"), Chip("Extras", "waiting"), Chip("Songbooks", "waiting")]
+    assert steps(job, SongFacts(sheet="Muse/Hysteria/sheet.html", sheet_from="UG")) == [
+        Chip("Song", "done"), Chip("Match", "done", "UG"), Chip("Sheet", "done", "UG"), Chip("PDF", "running"),
+        Chip("Lyrics", "waiting"), Chip("Extras", "waiting"), Chip("Songbooks", "waiting")]
     # Ultimate Guitar's second pass, LaCuerda's and gtptabs.com's are one step, running from the first to the last.
     later = lookup(stages={name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug")}
                    | {"lacuerda": ("running", "")})
     assert Chip("Extras", "running") in steps(later) and Chip("Lyrics", "done") in steps(later)
+
+
+def test_harptabs_coms_stage_is_part_of_the_extras_step_and_says_what_waits_in_its_words():
+    # The lookup's last site, after gtptabs.com: Extras runs until it is over, and a spent budget says its harmonica tab.
+    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs")}
+    running = lookup(stages=extras | {"harptabs": ("running", "")})
+    assert Chip("Extras", "running") in steps(running)
+    assert Chip("Extras", "done") in steps(lookup(stages=extras | {"harptabs": ("done", "harmonica tab kept")}))
+    spent = ended({"harptabs": ("skipped", "the lookup's 6 requests to harptabs.com are spent; the nightly run does "
+                                           "the rest")})
+    assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
+        "The lookup's 6 requests to harptabs.com are spent: the harmonica tab waits for tonight's run.")
 
 
 def test_a_step_the_request_doesnt_use_is_not_drawn():
@@ -53,12 +76,105 @@ def test_a_step_the_request_doesnt_use_is_not_drawn():
     skipped = lookup(stages={"song": ("done", ""), "match": ("done", "not in the offline Ultimate Guitar index"),
                              "sheet": ("skipped", "the offline index doesn't have it"), "pdf": ("skipped", "no sheet yet"),
                              "lyrics": ("running", "")})
-    assert [c.name for c in steps(skipped)] == ["Song", "Match", "Lyrics", "Extras", "Songbooks"]
+    assert [c.name for c in steps(skipped)] == ["Song", "Match: not on UG", "Lyrics", "Extras", "Songbooks"]
     # A failed stage stays, as failed.
     failed = lookup(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("done", ""),
                             "pdf": ("failed", "chordpro couldn't make the PDF; the log says why"),
                             "lyrics": ("running", "")})
     assert Chip("PDF", "failed") in steps(failed)
+
+
+def test_match_says_the_index_it_matched_in_and_sheet_the_site_it_asked_then_got_it_from():
+    # Match is the offline index's, Ultimate Guitar's. The sheet names no site until it asks one, then the one it
+    # asks (get.SHEET_FROM), switching when it falls back to the other; once done, where the song's sheet came from.
+    asked = {"song": ("done", "in the library"), "match": ("done", "matched to muse/hysteria")}
+    assert steps(lookup(stages={**asked, "sheet": ("running", "")}))[1:3] == [
+        Chip("Match", "done", "UG"), Chip("Sheet", "running")]
+    assert steps(lookup(stages={**asked, "sheet": ("running", SHEET_FROM["ug"])}))[2] == Chip("Sheet", "running", "UG")
+    assert steps(lookup(stages={**asked, "sheet": ("running", SHEET_FROM["lacuerda"])}))[2] == Chip(
+        "Sheet", "running", "LaCuerda")
+    done = lookup(stages={**asked, "sheet": ("done", "sheet kept from LaCuerda"), "pdf": ("running", "")})
+    assert steps(done, SongFacts(sheet="Muse/Hysteria/sheet.html", sheet_from="LaCuerda"))[2] == Chip(
+        "Sheet", "done", "LaCuerda")
+    assert steps(done)[2] == Chip("Sheet", "done")  # where it came from isn't known: no site, never a guess
+    assert [c.name for c in steps(lookup(stages={}))[:3]] == ["Song", "Match", "Sheet"]  # waiting: no site yet
+
+
+def test_a_song_ultimate_guitars_index_lacks_is_drawn_plain_never_a_failure():
+    # The sheet may come from LaCuerda: "Match: not on UG", which is over, as a done step is.
+    job = lookup(stages={"song": ("done", "in the library"),
+                         "match": ("done", MATCH_NOT_FOUND + " (the offline index is incomplete)"),
+                         "sheet": ("running", SHEET_FROM["lacuerda"])})
+    assert steps(job)[:3] == [Chip("Song", "done"), Chip("Match: not on UG", "plain"),
+                              Chip("Sheet", "running", "LaCuerda")]
+
+
+def test_a_sheet_that_failed_names_the_site_it_asked_when_it_did():
+    job = lookup(stages={"song": ("done", ""), "match": ("done", "matched to muse/hysteria")})
+    job.heard({"stage": "sheet", "state": "running", "detail": SHEET_FROM["ug"]})
+    job.heard({"stage": "sheet", "state": "failed", "detail": "Ultimate Guitar failed (ug: 502); the nightly run "
+                                                              "tries again"})
+    assert steps(job)[2] == Chip("Sheet", "failed", "UG")
+    bug = lookup(stages={"song": ("done", ""), "match": ("done", ""), "sheet": ("failed", "a bug in caracole: x")})
+    assert steps(bug)[2] == Chip("Sheet", "failed")
+
+
+def test_the_library_page_draws_a_running_lookups_steps_with_the_count_of_those_over():
+    facts = SongFacts(sheet_from="UG")
+    lyrics = lookup(stages={name: ("done", "") for name in ("song", "match", "sheet", "pdf")} | {"lyrics": (
+        "running", "")})
+    assert progress(lyrics, job_line(lyrics, facts), facts) == {
+        "steps": [{"name": "Song", "source": "", "state": "done"}, {"name": "Match", "source": "UG", "state": "done"},
+                  {"name": "Sheet", "source": "UG", "state": "done"}, {"name": "PDF", "source": "", "state": "done"},
+                  {"name": "Lyrics", "source": "", "state": "running"},
+                  {"name": "Extras", "source": "", "state": "waiting"},
+                  {"name": "Songbooks", "source": "", "state": "waiting"}],
+        "count": "4 of 7 done"}
+    # Match: not on UG is over, as a done step is; a step that drops out drops from the count.
+    lacuerda = lookup(stages={"song": ("done", ""), "match": ("done", MATCH_NOT_FOUND),
+                              "sheet": ("running", SHEET_FROM["lacuerda"])})
+    assert progress(lacuerda, job_line(lacuerda, None), None)["count"] == "2 of 7 done"
+    dropped = lookup(stages={"song": ("done", ""), "match": ("done", MATCH_NOT_FOUND),
+                             "sheet": ("skipped", NOT_IN_INDEX), "pdf": ("skipped", "no sheet yet"),
+                             "lyrics": ("running", "")})
+    assert progress(dropped, job_line(dropped, None), None)["count"] == "2 of 5 done"
+
+
+def test_the_steps_fold_away_once_a_lookup_ends_ready_and_stay_once_it_ends_otherwise():
+    ready = SongFacts(sheet="Muse/Hysteria/sheet.html", sheet_from="UG")
+    over = ended({"songbooks": ("skipped", "no songbook lists it")})
+    assert progress(over, job_line(over, ready), ready) == {}  # the song's line opens the sheet itself
+    # Ended otherwise, the steps stay, with no count: they show which step stopped.
+    missing = ended({"match": ("done", MATCH_NOT_FOUND), "sheet": ("skipped", NOT_IN_INDEX),
+                     "pdf": ("skipped", "no sheet yet"), "songbooks": ("skipped", "no songbook lists it")})
+    facts = SongFacts(not_found=True, checked_now=True)
+    assert job_line(missing, facts).text == "Not found"
+    assert progress(missing, job_line(missing, facts), facts) == {"steps": [
+        {"name": "Song", "source": "", "state": "done"}, {"name": "Match: not on UG", "source": "", "state": "plain"},
+        {"name": "Lyrics", "source": "", "state": "done"}, {"name": "Extras", "source": "", "state": "done"}]}
+    failed = ended({"song": ("failed", "overrides.toml can't be read: line 3")} | {
+        name: ("skipped", "") for name, _ in STAGES[1:]}, state="failed")
+    assert progress(failed, job_line(failed, None), None) == {"steps": [
+        {"name": "Song", "source": "", "state": "failed"}]}
+
+
+def test_a_request_that_runs_no_lookup_or_hasnt_run_has_no_steps_on_the_library_page():
+    queued = lookup(state="queued")
+    assert progress(queued, job_line(queued, None), None) == {}  # its line says its place in the queue
+    cancelled = ended({name: ("skipped", "") for name, _ in STAGES}, state="cancelled")
+    cancelled.state = "cancelled"
+    assert progress(cancelled, job_line(cancelled, None), None) == {}
+    add = Job(2, "Add Muse - Hysteria", "muse/hysteria", [Step("Adding to the library", ("add", "--", "Muse",
+                                                                                       "Hysteria"),
+                                                                 state="running")], state="running")
+    assert progress(add, job_line(add, None), None) == {}
+    read = Job(3, "x", LACUERDA_ARTIST + "caifanes", [Step("Reading LaCuerda's page for Caifanes", (
+        "lacuerda", "--artist=caifanes"), state="running")], state="running")
+    assert progress(read, job_line(read, None), None) == {}
+    keep = Job(5, "Keep", "muse/hysteria", [Step("Fetching the version from Ultimate Guitar", tuple(
+        version_steps("Muse", "Hysteria", keep="3")[0][1]), state="running")], state="running",
+               stages=[Stage(name, label) for name, label in KEEP_STAGES])
+    assert progress(keep, job_line(keep, None), None) == {}
 
 
 def test_a_request_of_other_commands_shows_its_job_steps_the_same_way():

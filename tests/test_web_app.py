@@ -620,8 +620,9 @@ def test_a_done_requests_line_and_card_say_what_the_library_has_now(app, conn, c
     update_song(conn, creep.id, status="found", ug_dirty=False)
     job = answer(get_json(app, "/jobs.json?jobs=1,x,99"))["jobs"][0]
     assert job["state"] == "done"
-    assert job["line"] == {"tone": "ready", "text": "Ready",
-                           "link": {"label": "Open sheet", "href": "Radiohead/Creep/sheet.pdf"}, "details": None}
+    # Ready, alone: the song's line opens its sheet; the list of requests opens it by the song's name (``sheet``).
+    assert job["line"] == {"tone": "ready", "text": "Ready", "link": None, "details": None}
+    assert job["sheet"] == "Radiohead/Creep/sheet.pdf"
     # Asked for, the card its song has now, as the page would draw it.
     card = job["card"]
     assert (card["id"], card["status"], card["fetchable"]) == (creep.id, "found", True)
@@ -2745,8 +2746,8 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     from caracole.web.app import route_for, routes
 
     names = sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes"))
-    assert names == ["export_routes", "guitar_routes", "jobs_routes", "library_routes", "remove_routes",
-                     "review_routes", "search_routes", "songbook_routes", "versions_routes"]
+    assert names == ["export_routes", "guitar_routes", "jobs_routes", "library_routes", "offline_routes",
+                     "remove_routes", "review_routes", "search_routes", "songbook_routes", "versions_routes"]
     gathered = []
     for name in names:
         module = importlib.import_module(f"caracole.web.{name}")

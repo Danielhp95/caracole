@@ -1,8 +1,8 @@
 """sheet.html: one sheet as a page for a phone, written beside its PDF.
 
 The page is one self-contained file. It opens from the synced library folder with
-no server: it loads nothing (a Content-Security-Policy with the hashes of its two
-scripts, strum.js and viewer.js, and its stylesheet makes the browser enforce that)
+no server: it loads nothing (a Content-Security-Policy with the hashes of its three
+scripts, strum.js, instruments.js and viewer.js, and its stylesheet makes the browser enforce that)
 and links only to the PDF beside it and to the library's index.html two folders up.
 A server may serve it too, only while it is the page caracole wrote, with
 ``viewer_csp(page)`` as its header.
@@ -30,7 +30,14 @@ written ``\\u003c``:
   that mode on each tonic, ``theory.spelling``), ``keyNames``, and ``capo`` hints
   for each transposition (``theory.capo_hints``: the fret the capo goes on, 0 for
   none, which may be below the sheet's own, and the shapes' key);
-- ``voicings``: the fingerings of every chord the page can show, on every root;
+- ``voicings``: the fingerings of every chord the page can show, on every root: the guitar's by
+  ``voicings.voicing_keys``, and each instrument's under its prefix (instruments.py ``page_voicings``:
+  "ukulele:m7", "piano:m7|");
+- ``instruments``: the instruments the viewer offers, in its menu's order (instruments.py ``entries``: each one's
+  ``id``, ``name``, ``kind``, ``tuning``, whether it takes a ``capo``, where its ``shapes`` are, its ``offset``, its
+  ``easy`` keys' table, its ``voice``, ``sounds``, ``about``, and a ukulele's ``near``); ``easy``, for a sheet with a
+  key, each table's easy keys in every mode (``instruments.easy_keys``: ``[tonic, name]``), which the settings' Easy
+  keys row offers on an instrument that has one;
 - ``shapes``: the fingerings the sheet gives its chords (its chord legend, its ``{define}``),
   first, before chords-db's (``voicings.sheet_shapes``: ``{"mine": how many are the sheet's,
   "list": positions}``), by the chord as shown: the script shows them for that very chord
@@ -75,7 +82,7 @@ from caracole.download_names import download_name
 from caracole.inline import json_block, sha256_source
 from caracole.normalize import clean_title, has_han
 from caracole.page_icon import LINK as PAGE_ICON
-from caracole.viewer import harmony_tables, pinyin
+from caracole.viewer import harmony_tables, instruments, pinyin
 from caracole.viewer.sheet import (
     Blank,
     ChordRow,
@@ -133,9 +140,10 @@ _OF_THE_SHAPES = frozenset({"chords", "audio"})
 # A module the viewer comes to import goes here too (test_viewer_book.py checks).
 BUILD_FILES = (
     *(HERE / name for name in ("page.py", "sheet.py", "theory.py", "harmony.py", "harmony_tables.py",
-                               "voicings.py", "voicings.json", "version.py", "pinyin.py", "viewer.js",
-                               "viewer.css", "LICENSE-chords-db")),
+                               "voicings.py", "voicings.json", "voicings-ukulele.json", "instruments.py",
+                               "version.py", "pinyin.py", "viewer.js", "viewer.css", "LICENSE-chords-db")),
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
+    HERE / "instruments.js",  # a chord's box and keyboard, and the instruments a script registers, before viewer.js
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "download_names.py",  # download_name, a Guitar Pro link's download attribute
     HERE.parent / "normalize.py",  # has_han, clean_title
@@ -178,6 +186,14 @@ def _sound() -> str:
     """strum.js: a chord's shape strummed in Web Audio (``window.caracoleSound``), inlined before viewer.js,
     which calls it, in a sheet.html and a songbook.html alike."""
     return (HERE / "strum.js").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _instruments() -> str:
+    """instruments.js: a chord's box on any fretted instrument and a piano's keyboard, and the instruments another
+    script registers (``window.caracoleInstruments``), inlined after strum.js and before viewer.js, which calls it,
+    in a sheet.html and a songbook.html alike."""
+    return (HERE / "instruments.js").read_text(encoding="utf-8")
 
 
 def build_viewer(
@@ -226,7 +242,7 @@ def build_viewer(
         f"{title} · {sheet.artist}" if sheet.artist else title,
         _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar)) + json_block("song", data),
         styles=(style,),
-        scripts=(_sound(), script),
+        scripts=(_sound(), _instruments(), script),
     )
 
 
@@ -340,10 +356,12 @@ def _played(sheet: Sheet) -> list[int]:
 def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str | None,
           transpose: int) -> dict[str, Any]:
     needed: set[str] = set()
+    kinds: dict[str, Chord] = {}  # each kind of chord the page shows, by its piano key: the piano's positions
 
     def rep(chord: Chord | None) -> list[Any] | None:
         if chord is None:
             return None
+        kinds.setdefault(instruments.piano_key(chord), chord)
         fingering, nearest, slash = voicing_keys(chord)
         needed.add(fingering)
         if slash:
@@ -381,7 +399,10 @@ def _data(sheet: Sheet, chords: list[Chord | None], key: Key | None, origin: str
                  for fret, shapes in capo_hints(Key((key.tonic + t) % 12, mode), capo=sheet.capo or 0)]
                 for t in range(12)
             ]
-    data["voicings"] = page_voicings(needed)
+    data["voicings"] = page_voicings(needed) | instruments.page_voicings(needed, list(kinds.values()))
+    data["instruments"] = instruments.entries(needed)
+    if key is not None:
+        data["easy"] = {table: instruments.easy_keys(table) for table in instruments.EASY}
     data["shapes"] = shapes_of(sheet)
     data.update(harmony_tables.tables(chords, key, _places(sheet), mapped_by_mode, alts_by_mode))
     data["library"] = LIBRARY_PAGE
@@ -696,6 +717,8 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <span class="stepper"><button type="button" id="down" aria-label="Down a semitone">−</button>
 <output id="shift">0</output><button type="button" id="up" aria-label="Up a semitone">+</button></span>
 <button type="button" class="link" id="reset-t">Reset</button><p class="hint" id="shift-hint"></p></div>
+<div class="row" id="easy-row" hidden><span class="lab">Easy keys</span><span class="chips" id="easy"></span>
+<p class="hint" id="easy-hint"></p></div>
 <div class="row" id="capo-row"><span class="lab">Capo</span>
 <span class="stepper"><button type="button" id="capo-down" aria-label="Capo down a fret">−</button>
 <output id="capo-at">0</output><button type="button" id="capo-up" aria-label="Capo up a fret">+</button></span>
@@ -711,6 +734,9 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <p class="gloss-all">The whole notation: upper case for a major chord, lower case for a minor one; ♭ or ♯ before it, a root a half step below or above that degree of the major scale; ° diminished, ø half-diminished, + augmented; then the chord's extension (7, maj7, sus4, add9…). A number after a slash is the bass note, as its degree above the chord's root (I/3); a numeral after one, the chord of the key it leads to (V/V, vii°/vi).</p></details></div>
 <div class="row" id="harmony-row" hidden><span class="lab">Harmony</span>
 <button type="button" class="chip" id="harmony-open" aria-haspopup="dialog" aria-controls="harmony">Progressions, the key's scale</button></div>
+<div class="row" id="inst-row" hidden><span class="lab">Instrument</span><span class="chips" id="insts"></span>
+<p class="hint" id="inst-hint"></p></div>
+<div class="row inst-panel" id="inst-panel" hidden></div>
 <div class="row"><span class="lab">Chord shapes</span>
 <button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
 <div class="row" id="necks-row" hidden><span class="lab">Chord necks</span>

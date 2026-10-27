@@ -59,6 +59,8 @@
     try {
       const song = JSON.parse(data.textContent);
       song.voicings = JSON.parse(document.getElementById("voicings").textContent);
+      const easy = document.getElementById("easy");  // every instrument's easy keys, for a song with a key
+      if (easy && song.key) song.easy = JSON.parse(easy.textContent);
       data.textContent = JSON.stringify(song);
     } catch (err) { /* the viewer says so */ }
     const title = current.querySelector("h2.title");
@@ -88,19 +90,19 @@
     if (current) book.y = Math.round(window.scrollY);
     keep();
   };
-  // The rail of necks and the pinyin are the screen's choices, not a song's: where there is no storage (caracole
-  // serve's sandbox), the address the viewer keeps them in ("necks=0", "py=1") goes on with every step, to the
-  // next song or the contents.
-  const SCREEN = [["necks", "0"], ["py", "1"]];
+  // The rail of necks, the pinyin and the instrument are the screen's choices, not a song's: where there is no
+  // storage (caracole serve's sandbox), the address the viewer keeps them in ("necks=0", "py=1", "inst=ukulele")
+  // goes on with every step, to the next song or the contents.
+  const SCREEN = ["necks", "py", "inst"];
   const carryScreen = (from) => {
     const at = String(from || "").indexOf("#");
     const was = new URLSearchParams(at >= 0 ? from.slice(at + 1) : "");
     const to = new URLSearchParams(location.hash.slice(1));
     let changed = false;
-    for (const [name, value] of SCREEN) {
-      const kept = was.get(name) === value;
-      if ((to.get(name) === value) === kept) continue;
-      if (kept) to.set(name, value);
+    for (const name of SCREEN) {
+      const kept = was.get(name);
+      if (to.get(name) === kept) continue;
+      if (kept !== null) to.set(name, kept);
       else to.delete(name);
       changed = true;
     }

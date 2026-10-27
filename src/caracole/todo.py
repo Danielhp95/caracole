@@ -893,7 +893,9 @@ def write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now
 
     Whatever changes what the pages show calls this, so they never point at a stale state.
     Each song's info.json is brought up to date first, once after an upgrade
-    (``keys.refresh_info_keys``), so it gives the key the page shows.
+    (``keys.refresh_info_keys``), so it gives the key the page shows. index.html is
+    recorded as written (``library_page.write_library_page``), for caracole serve to
+    send to the Android app.
     """
     from caracole.keys import refresh_info_keys
     from caracole.library_page import build_library_page, write_library_page  # it imports this module
@@ -901,4 +903,5 @@ def write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now
     refresh_info_keys(conn, cfg.library_dir)
     youtube = song_states(conn, overrides, now) if route_problem(cfg) is None else {}  # once, for both pages
     todo = write_todo(cfg.library_dir, build_todo(conn, cfg, overrides, now, youtube=youtube))
-    return todo, write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now, youtube=youtube))
+    return todo, write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now, youtube=youtube),
+                                    conn)

@@ -28,9 +28,11 @@ A small server from the standard library (``http.server``), in these parts:
   search as you type, lookups, LaCuerda's pages read and its own search), remove_routes.py, songbook_routes.py,
   export_routes.py (a sheet's PDF in the version its viewer was left in),
   versions_routes.py (one of Ultimate Guitar's versions of a song's sheet made
-  the one, or kept beside it) and guitar_routes.py (a song's Guitar Pro file
+  the one, or kept beside it), guitar_routes.py (a song's Guitar Pro file
   drawn and played in the browser: guitar_page.py, with alphaTab's bundle,
-  alphatab.py).
+  alphatab.py) and offline_routes.py (``/api/offline``, what caracole's Android
+  app copies of the library to read it offline: every file the library page
+  caracole wrote links to, as the server sends each).
   pages.py: the pages it writes itself.
 - songbooks.py: the songbook forms, each queued as its ``caracole songbook``
   command (songbook_routes.py). Each songbook's page is one of the pages

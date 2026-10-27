@@ -10,6 +10,9 @@ file, and none of it loads anything from the network.
   (``pointer: coarse``) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
 - picker.css (``PICKER_STYLE``): the picker of a song in review's candidates, under a song's "⋯" and on
   the pages caracole serve writes itself (web/pages.py), which build the same markup.
+- steps.css (``STEPS_STYLE``): a request's steps as chips (web/outcome.py's): the requests page's running
+  card (web/pages.py), and on index.html a song's line, or a search result's row, while its lookup runs
+  (library.js), the same markup.
 - rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines and the marks
   of where each thing came from, ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
   and its search's results, and those of caracole serve's lookup page (web/lookup_page.py), which runs
@@ -67,5 +70,6 @@ def read(name: str) -> str:
 
 BASE_STYLE = read("base.css")
 PICKER_STYLE = read("picker.css")
+STEPS_STYLE = read("steps.css")
 ROWS_STYLE = read("rows.css")
 ROWS_SCRIPT = read("rows.js")

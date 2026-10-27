@@ -19,7 +19,9 @@ ran. So a job of other commands reads the same way:
   stage's words). A command that printed no error is named by its step. A fetch that fails on a song with no sheet that
   needs review, or wasn't found, says so instead, as a done one would: those
   are the fetch's usual refusals, worded for a terminal.
-- **Done**: "Ready", with a link to the song's sheet; "Needs review", with a
+- **Done**: "Ready", with a link to the song's sheet (the requests page's Open;
+  on the library page the song's line opens it itself, and its request's line
+  says "Ready" alone: ``song_line``); "Needs review", with a
   link to the song's picker when its review has candidates to pick from
   ("Pick the match"), else to the to-do page; "Not found", with the to-do
   page's link, only for a song the
@@ -47,13 +49,14 @@ ran. So a job of other commands reads the same way:
 A line that ends in a failure or a wait also links to the job's output on
 /jobs (``Line.details``). Every link is relative to the library page, which
 ``caracole serve`` serves at /. The requests page reads the same line and says
-it as an outcome, a reason and the next step (outcome.py).
+it as an outcome, a reason and the next step (outcome.py), and a lookup's steps
+under it, which the library page draws under the song's line too.
 """
 
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any
 
 from caracole.get import SHEET_FROM
@@ -62,6 +65,7 @@ from caracole.web.jobs import EXPORTING, LACUERDA_READS, MINE, REMOVING, Job, St
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
+READY = "Ready"  # a song's request that ended with its sheet there
 MAX_TEXT = 160  # characters of an error's sentence
 _ERROR = re.compile(r"^(?:<\d>)?error: (.+)$")
 _SENTENCE_END = re.compile(r"(?<=[.!?])\s")
@@ -91,7 +95,8 @@ _READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiti
 
 @dataclass(frozen=True)
 class SongFacts:
-    """What the library knows of a job's song once the job is over.
+    """What the library knows of a job's song now: once the job is over, how it ended; while it runs, where its
+    sheet came from once its sheet stage is done.
 
     ``sheet`` is the link to its sheet (its card's main file), ``review`` says
     its match needs review, ``not_found`` that its match found it nowhere in
@@ -108,7 +113,9 @@ class SongFacts:
     itself asked Ultimate Guitar (``checked_since``), so that what the song lacks, UG
     lacks; both the requests page alone says, and the line here never reads them.
     ``pdf`` is, for an export that is over, the link to the PDF it made, once it is
-    there (``export_routes.made_pdf``).
+    there (``export_routes.made_pdf``). ``sheet_from`` is where its sheet came from,
+    the site's tag ("UG", "LaCuerda": ``icons.tag``, its kept sheet's version), for a
+    lookup's Sheet step (outcome.py); "" without a sheet.
     """
 
     sheet: str | None = None
@@ -121,6 +128,7 @@ class SongFacts:
     elsewhere: tuple[str, str] | None = None
     asked_ug: bool = False
     pdf: str | None = None
+    sheet_from: str = ""
 
 
 @dataclass(frozen=True)
@@ -182,7 +190,7 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if job.song_key.startswith(LACUERDA_READS):  # no song's: its command's last word says what LaCuerda answered
         return _artist_read(job.steps, details)
     if song is not None and song.sheet:
-        return Line("ready", "Ready", ("Open sheet", song.sheet))
+        return Line("ready", READY, ("Open sheet", song.sheet))
     if song is not None and song.ignored:
         return Line("added", "Ignored in overrides.toml")
     if song is not None and song.review:
@@ -194,6 +202,13 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if song.checked_now:
         return Line("missing", "Not found", ("see the to-do page", TODO))
     return Line("waiting", "Not fetched yet", details=details)
+
+
+def song_line(line: Line) -> Line:
+    """The line as the library page says it under a song's line, or a result's row (/jobs.json's view): "Ready"
+    alone, with no link, as the song's line opens its sheet itself (its title, its Open), and the list of requests
+    by the song's name; any other line as it is, its link the next step."""
+    return replace(line, link=None) if line.tone == "ready" and line.text == READY else line
 
 
 def _artist_read(steps: list[Step], details: str) -> Line:
