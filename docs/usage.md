@@ -3396,6 +3396,23 @@ for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`; without Nix, see
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
 
+**The Android app's copy.** caracole's Android app copies the library from the
+server to read it offline: `GET /api/offline` lists what to copy, as JSON
+(`format` 1; `start`, the page the app opens first; `files`, each with its
+`path` in the library, the `url` that sends it, its `size`, `sha256`, `type`
+and the `headers` the server sends it with, its Content-Security-Policy among
+them). It lists `index.html` first, as caracole wrote it into the library (the
+page that opens from the folder, with no forms), at `/offline/index.html`, then,
+by path, every file that page links to that the server sends: the sheet
+viewers, kept versions' pages and songbook pages while each is still as
+caracole wrote it, and the PDFs, sheets' text, ChordPro, lyrics, info.json,
+Guitar Pro files and scores. Never Music/, `_inbox/`, a hidden name or a file
+no page links. caracole records `index.html` each time it writes the pages; one
+changed since, or written by a caracole older than that record, isn't sent, and
+`/api/offline` answers 503 until `caracole todo` (or any command that writes the
+pages) writes it again. It is a read and needs nothing on the server: no
+option, no lock, no request to a site. Another site's page can't read it.
+
 Who can reach it: there is no sign-in, no access token and no cookie, so
 whoever can reach the server can read the library, request songs and change
 songbooks. Keep it reachable only on a network you trust, your LAN or your
