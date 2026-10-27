@@ -798,7 +798,7 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
     except RenderError as e:
         log.warning("no viewer for %s: %s", song.display, e)
         return False
-    found = sheet_key(raw, sheet.markup)
+    found = sheet_key(raw, sheet.markup, sheet.capo)
     text = _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
                           key=sheet.key, capo=sheet.capo)
     data = _write_viewer(song, text, folder / page, None, key=(found.key, found.source) if found else (None, None),

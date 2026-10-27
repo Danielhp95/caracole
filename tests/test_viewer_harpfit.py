@@ -76,6 +76,19 @@ def test_the_key_the_song_sounds_in_names_the_position():
     assert with_capo.tonic == 11
 
 
+def test_a_sheets_key_named_by_its_letter_alone_over_minor_chords_is_minor_for_the_harp_too():
+    # UG's Hotel California: {key: A}, capo 2, Am E7 G D F C Dm E. The song sounds B minor: an A harp in the 3rd
+    # position, a D harp in the 4th, never a B harp in the 1st.
+    lines = ("other words than the tab", "and more of them here", "a third line of them", "and a fourth")
+    pairs = (("Am", "E7"), ("G", "D"), ("F", "C"), ("Dm", "E"))
+    cho = "{title: Hotel}\n{artist: Placeholder Band}\n{key: A}\n{capo: 2}\n" + "".join(
+        f"[{a}]{line} [{b}]and on\n" for (a, b), line in zip(pairs, lines))
+    for key, source in ((None, None), ("A minor", "tab")):  # the sheet's own, and as keys.py now reads UG's "A"
+        chosen = choose(parse(a_tab()), cho=cho, key=key, key_source=source)
+        assert (chosen.harp, chosen.why, chosen.tonic) == (9, "song", 11), key
+        assert harp.position_text(chosen.tonic, chosen.harp) == "3rd position, dorian"
+
+
 def test_the_songs_own_key_wins_over_the_sheets():
     chosen = choose(parse(a_tab()), cho=a_sheet("D", key="D"), key="Bm", key_source="chords")
     assert chosen.tonic == 11

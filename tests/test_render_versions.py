@@ -49,12 +49,14 @@ def ug_version(conn, song, tab: int, *, rating: float, votes: int, number: int, 
     return vid, raw
 
 
-def keep_text(conn, cfg, song, vid: int, raw: dict, content: str, names: tuple[str, str], rank: int) -> None:
-    """Keep a sheet's text and its JSON, as the fetch step keeps them (``ug/fetch.py`` ``_keep_text``)."""
+def keep_text(conn, cfg, song, vid: int, raw: dict, content: str, names: tuple[str, str], rank: int,
+              meta: dict | list = ()) -> None:
+    """Keep a sheet's text and its JSON, as the fetch step keeps them (``ug/fetch.py`` ``_keep_text``), with UG's
+    ``meta`` (its capo), an empty list by default as UG's is for a tab with none."""
     txt, doc = names
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=txt,
               data=strip_markup(content).encode("utf-8"), rank=rank)
-    body = {"version": raw, "content": content, "url": raw["tab_url"], "meta": []}
+    body = {"version": raw, "content": content, "url": raw["tab_url"], "meta": meta or []}
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=doc,
               data=(json.dumps(body, ensure_ascii=False, indent=2) + "\n").encode("utf-8"), rank=rank)
 
@@ -127,6 +129,26 @@ def test_a_version_page_takes_its_own_key_and_links_no_pdf(conn, cfg):
     assert c["key"]["from"] == "estimated from the chords"
     assert page_data(folder / "sheet.html")["key"]["tonic"] == 7
     assert "sheet.pdf" not in (folder / version_names(str(B))[2]).read_text("utf-8")
+
+
+def test_a_tabs_key_named_by_its_letter_alone_over_minor_chords_is_minor_on_the_sheet_and_a_versions_page(conn, cfg):
+    # UG's Hotel California: tonality "A", capo 2, Am E7 G D F C Dm E. A minor shapes, sounding B minor.
+    song = add_song(conn, "Placeholder Band", "Synthetic Hotel")
+    def hotel(word: str) -> str:
+        return "".join(f"[tab][ch]{a}[/ch]      [ch]{b}[/ch]\r\nPalabras de prueba {word}[/tab]\r\n"
+                       for a, b in (("Am", "E7"), ("G", "D"), ("F", "C"), ("Dm", "E")))
+
+    for rank, tab in enumerate((SHEET_TAB, B), start=1):
+        vid, raw = ug_version(conn, song, tab, rating=4.8, votes=100, number=rank, coverage=0.9, tonality="A")
+        names = ("sheet.txt", "sheet.json") if tab == SHEET_TAB else version_names(str(tab))[:2]
+        keep_text(conn, cfg, song, vid, raw, hotel(str(tab)), names, rank, meta={"capo": 2})
+    render(conn, cfg)
+    folder = folder_of(cfg, song)
+    for page in ("sheet.html", version_names(str(B))[2]):
+        assert page_data(folder / page)["key"] == {"tonic": 9, "mode": "aeolian", "from": "from the tab"}, page
+        facts = re.search(r'<p class="facts" id="facts">(.*?)</p>', (folder / page).read_text("utf-8"), re.S)
+        assert facts and facts.group(1).startswith("<b>Am</b> shapes · capo <b>2</b> · sounds <b>Bm</b>"), page
+    assert json.loads((folder / "info.json").read_text("utf-8"))["key"] == "A minor"
 
 
 def test_a_version_page_offers_no_export_the_sheets_does(conn, cfg):
