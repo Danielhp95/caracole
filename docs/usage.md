@@ -4505,7 +4505,15 @@ from. It takes the first of these that gives one:
 
 An estimate is the key of the chords as the sheet writes them, the shapes you
 play: with a capo, the song sounds higher. A key from the tab is as its
-transcriber gives it. Either is the sheet's key before any `[transpose]`.
+transcriber gives it, but for a letter alone (`A`, `F#`, `La`), which says no
+mode: that is the minor key on that letter when the sheet's chords have its
+notes (or those of the minor key a capo lower, for a tab that names the key the
+song sounds in) and not the major key's. Ultimate Guitar names Hotel
+California's key `A`, with capo 2 over Am E7 G D F C Dm E: caracole reads A
+minor, A minor shapes that sound B minor. A key named with its mode (`Am`, `A
+major`, `A minor`) is as named, and a letter whose chords fit its major key is
+that major key. A sheet's own `{key: A}` with no key from the tab is read so
+too. Either is the sheet's key before any `[transpose]`.
 
 `info.json` holds it in two fields, for anything that reads the library:
 
@@ -4522,7 +4530,8 @@ transcriber gives it. Either is the sheet's key before any `[transpose]`.
   `null` with no key.
 - `identity_key` is caracole's own key for the song, which info.json called
   `key` before. The first command that rewrites the pages after an upgrade
-  rewrites every song's info.json once, with these fields. caracole never
+  rewrites every song's info.json once, with these fields (and once more
+  after the upgrade that reads a tab's letter alone with its chords). caracole never
   rewrites an info.json that holds the same text already, so Syncthing has
   nothing to sync for it.
 

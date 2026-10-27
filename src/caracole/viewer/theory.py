@@ -339,7 +339,8 @@ _MODE_WORDS = {"m": "aeolian", "M": "ionian", "min": "aeolian", "minor": "aeolia
 
 
 def parse_key(text: object) -> Key | None:
-    """The key a tab or a tag names ("Am", "F#m", "Bb", "C minor", "A dorian"), or None."""
+    """The key a tab or a tag names ("Am", "F#m", "Bb", "C minor", "A dorian"), or None: a letter alone ("A", "F#")
+    is its major key, which ``named_key`` reads again with the chords the sheet plays."""
     if not isinstance(text, str):
         return None
     m = _KEY.fullmatch(text)
@@ -349,6 +350,40 @@ def parse_key(text: object) -> Key | None:
     word = word or "M"
     mode = _MODE_WORDS.get(word) or _MODE_WORDS.get(word.lower()) or word.lower()
     return Key(note_pc(letter.upper(), accidental), mode)
+
+
+def named_key(text: object, capo: int, played: list[Chord]) -> Key | None:
+    """The key a tab, a tag or a sheet's ``{key}`` names (``parse_key``), its sheet's chords ``played`` with the capo
+    on fret ``capo``: a letter alone ("A", "F#") is its parallel minor where they say so (``bare_key``), and a key
+    named with its mode ("A", "Am", "A major", "A minor", "A dorian") is as named. Still the key the tab named, the
+    shapes' or the sound's: ``shapes_key`` tells which. None when ``text`` names no key."""
+    named = parse_key(text)
+    if named is None or (m := _KEY.fullmatch(str(text))) is None or m.group(3) is not None:
+        return named
+    return bare_key(named, capo, played)
+
+
+def bare_key(named: Key, capo: int, played: list[Chord]) -> Key:
+    """The key a tab names by its letter alone, ``named`` (read as major), its sheet's chords ``played`` with the
+    capo on fret ``capo``: its parallel minor when their key (``estimate_key``) has the notes of that minor, or of the
+    minor a capo lower (a tab that names the sound, as ``shapes_key`` reads it), and those of neither major key.
+
+    UG's "A" for Hotel California, capo 2, over Am E7 G D F C Dm E: their key, A minor, has A minor's notes and not
+    A major's, so A minor (the shapes; the song sounds B minor), and its "B" is B minor (the sound). "G" over G C D
+    Em stays G, and "C" over C F G Am with capo 3 stays C, though A minor, a capo below C minor, has those notes too:
+    the major key that fits comes first. Without a capo the two tests are one. Without chords to tell, major."""
+    if named.mode != "ionian":
+        return named
+    found = estimate_key(played)
+    if found is None:
+        return named
+    notes = scale(found)
+    lowered = (named.tonic - capo) % 12
+    if notes in (scale(named), scale(Key(lowered, "ionian"))):
+        return named
+    if notes in (scale(Key(named.tonic, "aeolian")), scale(Key(lowered, "aeolian"))):
+        return Key(named.tonic, "aeolian")
+    return named
 
 
 def scale(key: Key) -> frozenset[int]:
@@ -562,6 +597,9 @@ def shapes_key(named: Key, capo: int, played: list[Chord]) -> Key:
     the one the song sounds in (UG's F# for a song played in C shapes with capo 6). The chords
     tell which: when their key has the notes of the named key lowered by the capo, the tab named
     the sound. Otherwise, and with no capo or no chords to go by, the named key is the shapes'.
+
+    ``named`` is in its mode as ``named_key`` reads it: a tab's letter alone, its parallel minor where the chords
+    say so (UG's "A" for Hotel California, A minor shapes with capo 2).
     """
     if capo % 12 == 0:
         return named

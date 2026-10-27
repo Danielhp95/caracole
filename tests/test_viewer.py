@@ -313,6 +313,28 @@ def test_a_tabs_key_that_names_the_sound_is_not_taken_for_the_shapes():
     assert data_of(build_viewer(UG_CHO))["key"]["tonic"] == 7  # G with capo 2, its chords in G: the shapes
 
 
+HOTEL = to_chordpro(
+    "[ch]Am[/ch]      [ch]E7[/ch]\nSynthetic words go here\n[ch]G[/ch]     [ch]D[/ch]\nmade up for the test\n"
+    "[ch]F[/ch]  [ch]C[/ch]\nsome more\n[ch]Dm[/ch]  [ch]E[/ch]\nand back",
+    title="Hotel", artist="Synthetic", key="A", capo=2,
+)  # as UG writes Hotel California: "A", capo 2, chords in A minor
+
+
+def test_a_key_named_by_its_letter_alone_is_the_parallel_minor_when_the_chords_say_so():
+    from caracole.viewer.page import viewer_key
+    from caracole.viewer.theory import Key
+
+    for html in (build_viewer(HOTEL), build_viewer(HOTEL, key="A", key_source=None)):
+        assert (data_of(html)["key"]["tonic"], data_of(html)["key"]["mode"]) == (9, "aeolian")
+        assert facts_of(html).startswith("<b>Am</b> shapes · capo <b>2</b> · sounds <b>Bm</b>")
+    assert viewer_key(HOTEL) == Key(9, "aeolian")
+    # keys.py reads a tab's letter with its chords itself (keys.sheet_key): its "A" is A major, as a tab's
+    # "A major" is, and stays so
+    assert viewer_key(HOTEL, "A", "tab") == Key(9, "ionian")
+    assert viewer_key(HOTEL, "A minor", "tab") == Key(9, "aeolian")
+    assert viewer_key(HOTEL.replace("{key: A}", "{key: A major}")) == Key(9, "ionian")
+
+
 def test_a_key_estimated_from_the_chords_is_the_shapes_key_whatever_the_capo():
     # keys.py's estimate (or the key heard) is the key of the chords as the sheet writes them: Am C G D with capo 5
     # are Am shapes that sound Dm. Their notes are also E minor's, A minor lowered by the capo, which a key a tab

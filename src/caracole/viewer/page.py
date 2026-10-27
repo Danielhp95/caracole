@@ -113,6 +113,7 @@ from caracole.viewer.theory import (
     estimate_key,
     key_name,
     map_chord,
+    named_key,
     parse_chord,
     parse_key,
     shapes_key,
@@ -349,12 +350,19 @@ def _song_key(sheet: Sheet, chords: list[Chord | None], key: str | None,
               source: str | None) -> tuple[Key | None, str | None]:
     """The key of the shapes the sheet's chords are, and where it came from in words. A key named
     for a sheet with a capo may be the one the song sounds in (``theory.shapes_key``); one the chords
-    gave (``_OF_THE_SHAPES``) is their shapes', whatever the capo."""
+    gave (``_OF_THE_SHAPES``) is their shapes', whatever the capo. A letter alone, the sheet's ``{key}`` or
+    one from no source keys.py names, is its parallel minor where the chords say so (``theory.named_key``);
+    keys.py has read a tab's so already (``keys.sheet_key``), and its "A" is A major, as "A major" is."""
     played = [chords[i] for i in _played(sheet) if chords[i] is not None]
+    capo = sheet.capo or 0
     if (found := parse_key(key)) is not None:
-        return found if source in _OF_THE_SHAPES else shapes_key(found, sheet.capo or 0, played), _origin(source)
-    if (found := parse_key(sheet.key)) is not None:
-        return shapes_key(found, sheet.capo or 0, played), "from the sheet"
+        if source in _OF_THE_SHAPES:
+            return found, _origin(source)
+        if source not in _SOURCES:
+            found = named_key(key, capo, played) or found
+        return shapes_key(found, capo, played), _origin(source)
+    if (found := named_key(sheet.key, capo, played)) is not None:
+        return shapes_key(found, capo, played), "from the sheet"
     found = estimate_key(played)
     return found, "estimated from the chords" if found else None
 

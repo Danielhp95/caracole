@@ -22,6 +22,7 @@ from caracole.viewer.theory import (
     estimate_key,
     key_name,
     map_chord,
+    named_key,
     parse_chord,
     parse_key,
     shapes_key,
@@ -480,6 +481,36 @@ def test_a_capo_raises_the_key_the_song_sounds_in(shapes, capo, sounds):
 def test_a_tabs_key_with_a_capo_may_name_the_sound_rather_than_the_shapes(named, capo, played, shapes):
     # Tabs name either: the chords fit the shapes' key.
     assert key_name(shapes_key(named, capo, chords(*played))) == shapes
+
+
+HOTEL = ("Am", "E7", "G", "D", "F", "C", "Dm", "E", "Am", "E7", "G", "D", "F", "C", "Dm", "E7")
+
+
+@pytest.mark.parametrize(
+    ("named", "capo", "played", "shapes", "sounds"),
+    [
+        ("A", 2, HOTEL, "Am", "Bm"),  # Hotel California on UG: {key: A}, capo 2, its chords A minor's
+        ("B", 2, HOTEL, "Am", "Bm"),  # the same named by the sound
+        ("E", 0, ("Em", "C", "G", "D", "Em"), "Em", "Em"),  # its chords G major's notes, E minor's
+        ("G", 0, ("G", "C", "D", "Em", "G"), "G", "G"),  # chords that fit the major key stay in it
+        ("C", 3, ("C", "F", "G", "Am", "C"), "C", "Eb"),  # A minor, a capo below C minor, has C major's notes
+        ("F#", 6, ("C", "Em", "F", "G", "Am", "C"), "C", "F#"),  # the sound, in C shapes
+        ("Am", 2, HOTEL, "Am", "Bm"),  # named with its mode: as named
+        ("A major", 2, HOTEL, "A", "B"),
+        ("A minor", 0, ("G", "C", "D", "G"), "Am", "Am"),
+        ("A", 2, (), "A", "B"),  # no chords to tell: major
+        ("A dorian", 0, HOTEL, "A dorian", "A dorian"),
+    ],
+)
+def test_a_key_named_by_its_letter_alone_is_minor_when_the_chords_say_its_parallel_minor(named, capo, played,
+                                                                                       shapes, sounds):
+    key = shapes_key(named_key(named, capo, chords(*played)), capo, chords(*played))
+    assert (key_name(key), key_name(sounding(key, capo))) == (shapes, sounds)
+
+
+def test_named_key_reads_only_what_parse_key_reads():
+    assert named_key("Standard", 2, chords(*HOTEL)) is None
+    assert named_key(None, 0, chords(*HOTEL)) is None
 
 
 # --- the same questions for every song --------------------------------------------------------

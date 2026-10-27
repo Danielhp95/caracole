@@ -281,13 +281,14 @@ AUTO_SHEET = (
 )
 
 
-def keep_sheet(conn, cfg, song, *, content=AM_F_C_G, raw=None, provider="ug", tab_id="85053"):
-    """A human sheet as the fetch steps keep it: sheet.json with the markup, then sheet.txt."""
+def keep_sheet(conn, cfg, song, *, content=AM_F_C_G, raw=None, provider="ug", tab_id="85053", meta=None):
+    """A human sheet as the fetch steps keep it: sheet.json with the markup (and UG's ``meta``, its capo), then
+    sheet.txt."""
     url = f"https://example.invalid/{tab_id}"
     vid = upsert_version(conn, provider=provider, tab_id=tab_id, song_id=song.id, slot="sheet",
                          kind="chords" if provider == "ug" else "acordes", rating=4.5, votes=10,
                          version=1, label=None, url=url, raw=raw or {}, now="2026-10-18T00:00:00Z")
-    doc = {"version": raw or {}, "content": content, "url": url}
+    doc = {"version": raw or {}, "content": content, "url": url, **({"meta": meta} if meta is not None else {})}
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json",
               data=json.dumps(doc).encode(), rank=1)
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
@@ -321,6 +322,41 @@ def test_a_lacuerda_sheets_tono_is_the_tabs(conn, cfg):
     s = add_song(conn)
     keep_sheet(conn, cfg, s, provider="lacuerda", content="Tono: Re\n\n" + AM_F_C_G)
     assert song_key(conn, cfg.library_dir, s) == SongKey("D", "tab")
+
+
+HOTEL = (
+    "[Intro]\n[ch]Am[/ch]  [ch]E7[/ch]  [ch]G[/ch]  [ch]D[/ch]  [ch]F[/ch]  [ch]C[/ch]  [ch]Dm[/ch]  [ch]E[/ch]\n"
+    + "[Verse]\n[ch]Am[/ch]  [ch]E7[/ch]\nWords go here\n[ch]G[/ch]  [ch]D[/ch]\nmore words\n"
+    "[ch]F[/ch]  [ch]C[/ch]\nand more\n[ch]Dm[/ch]  [ch]E7[/ch]\nand back\n" * 3
+)  # as UG writes Hotel California: tonality "A", capo 2
+
+
+@pytest.mark.parametrize(
+    ("raw", "content", "capo", "key"),
+    [
+        ({"tonality_name": "A"}, HOTEL, 2, "A minor"),  # its chords say A minor, never A major
+        ({"tonality_name": "B"}, HOTEL, 2, "B minor"),  # the same named by the sound: B is A a capo higher
+        ({"tonality_name": "A"}, HOTEL, None, "A minor"),
+        ({}, "Key: A\n\n" + HOTEL, 2, "A minor"),  # a key the sheet states
+        ({}, "Key: A major\n\n" + HOTEL, 2, "A"),  # named with its mode: as named
+        ({"tonality_name": "Am"}, HOTEL, 2, "A minor"),
+        ({"tonality_name": "G"}, "[ch]G[/ch] [ch]C[/ch] [ch]D[/ch] [ch]Em[/ch] [ch]G[/ch]\nwords\n", None, "G"),
+        ({"tonality_name": "C"}, "[ch]C[/ch] [ch]F[/ch] [ch]G[/ch] [ch]Am[/ch] [ch]C[/ch]\nwords\n", 3, "C"),
+    ],
+    ids=("hotel-california", "named-by-the-sound", "no-capo", "stated", "stated-major", "named-minor", "G-major",
+         "C-capo-3"),
+)
+def test_a_key_the_tab_names_by_its_letter_alone_is_minor_when_its_chords_say_the_parallel_minor(
+        conn, cfg, raw, content, capo, key):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw=raw, content=content, meta=None if capo is None else {"capo": capo})
+    assert song_key(conn, cfg.library_dir, s) == SongKey(key, "tab")
+
+
+def test_a_lacuerda_sheets_tono_named_by_its_letter_alone_is_minor_when_its_chords_say_so(conn, cfg):
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, provider="lacuerda", content="Tono: La\n\n" + AM_F_C_G)
+    assert song_key(conn, cfg.library_dir, s) == SongKey("A minor", "tab")
 
 
 def test_without_the_tabs_word_the_key_is_estimated_from_the_chords(conn, cfg):
@@ -409,6 +445,20 @@ def test_info_json_written_before_keys_gets_them_once(conn, cfg):
     info.write_text("{}")
     assert refresh_info_keys(conn, cfg.library_dir) == 0
     assert info.read_text() == "{}"
+
+
+def test_info_json_an_older_caracole_wrote_gets_a_key_read_as_now_once(conn, cfg):
+    # caracole read a tab's "A" as A major whatever its chords until INFO_VERSION 2
+    from caracole.db import kv_set_json
+    from caracole.keys import INFO_VERSION_KEY
+
+    s = add_song(conn)
+    keep_sheet(conn, cfg, s, raw={"tonality_name": "A"}, content=HOTEL, meta={"capo": 2})
+    info = song_dir(cfg.library_dir, s) / "info.json"
+    info.write_text(json.dumps({"key": "A", "key_source": "tab"}))
+    kv_set_json(conn, INFO_VERSION_KEY, 1)
+    assert refresh_info_keys(conn, cfg.library_dir) == 1
+    assert json.loads(info.read_text())["key"] == "A minor"
 
 
 def test_refreshing_makes_no_folder_for_a_song_without_files(conn, cfg):
