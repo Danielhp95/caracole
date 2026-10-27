@@ -693,3 +693,110 @@ def test_the_songbook_has_the_same_tip(tmp_path):
     assert lit(d7) == [0, 2, 6, 9] and d7["notes"][0] == ["D", "root", "root"] and d7["switch"] == KEYBOARD
     assert left["view"] == "circle" and right["view"] == "keys" and right["board"][0] == [62, "bass", False]
     assert before.startswith("#song-1") and stayed == [before, True]
+
+
+# --- the card's Circle & keyboard: the tooltip from a chord's name ----------------------------------------------------
+
+# A chord's name on the sheet (its text, not its numeral), scrolled into the middle of the screen.
+NAME_AT = """(() => { const c = document.querySelectorAll('#sheet .c')[%d]; c.scrollIntoView({block: 'center'});
+  const r = document.createRange(); r.selectNodeContents(c.firstChild); const box = r.getBoundingClientRect();
+  return [box.left + box.width / 2, box.top + box.height / 2]; })()"""
+# The card's Circle & keyboard: whether it shows, its words, and whether a finger reaches it.
+CARD_TIP = """(() => { const b = document.getElementById('card-tip'); if (!b || !b.getClientRects().length) return null;
+  const r = b.getBoundingClientRect(); return {words: b.textContent, big: r.width >= 44 && r.height >= 44}; })()"""
+# Where the tooltip is, and the chord it is by: its name's box, or its numeral's where it shows one.
+BY = """(() => { const r = (el) => el.getBoundingClientRect(), tip = r(document.getElementById('tip'));
+  const c = document.querySelectorAll('#sheet .c')[%d], nm = c.querySelector('.nm'), a = r(nm || c);
+  return {tip: [tip.left, tip.top, tip.bottom], by: [a.left, a.top, a.bottom], numeral: Boolean(nm)}; })()"""
+
+
+def card_of(b, n: int) -> None:
+    """A finger on the ``n``-th chord's name: its card, open."""
+    tap_at(b, *b.js(NAME_AT % n))
+    assert b.wait("!document.getElementById('card').hidden")
+
+
+@in_chromium
+def test_the_cards_circle_and_keyboard_opens_the_chords_tip(tmp_path):
+    # With the chords' names alone, no numeral to hover or tap: the card reaches the tooltip, by its chord.
+    with open_viewer(tmp_path, written(tmp_path, IN_G), **PHONE) as b:
+        card_of(b, 6)  # D7
+        button = b.js(CARD_TIP)
+        b.click("#card-tip")
+        assert b.wait("!document.getElementById('tip').hidden")
+        seen = b.js(SEEN)
+        after = b.js("[document.getElementById('card').hidden, document.activeElement.id]")
+        by = b.js(BY % 6)
+        b.press("Escape")
+        escaped = b.js("[document.getElementById('tip').hidden, document.activeElement.closest('.c') !== null]")
+    assert button == {"words": "Circle & keyboard", "big": True}
+    assert [seen["chord"], seen["nm"], seen["role"]] == ["D7", "V7", "pull"] and seen["view"] == "circle"
+    assert lit(seen) == [0, 2, 6, 9] and seen["notes"][0] == ["D", "root", "root"] and seen["hear"]
+    assert after == [True, "tip-view"]  # the card closed, the focus in the tooltip
+    left, top, bottom = by["tip"]
+    assert not by["numeral"] and (top >= by["by"][2] or bottom <= by["by"][1])  # by the chord's name
+    assert escaped == [True, True]  # Escape: back to the chord
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
+        b.js("document.querySelectorAll('#sheet .c')[1].click()")  # G7, numerals shown
+        assert b.wait("!document.getElementById('card').hidden")
+        b.click("#card-tip")
+        assert b.wait("!document.getElementById('tip').hidden")
+        g7 = b.js(SEEN)
+        by = b.js(BY % 1)
+    assert [g7["chord"], g7["nm"]] == ["G7", "V7/IV"] and g7["off"] == "F isn't in G major (it has F#)."
+    left, top, bottom = by["tip"]
+    assert by["numeral"] and (top >= by["by"][2] or bottom <= by["by"][1]) and left >= by["by"][0] - 16  # by its numeral
+
+
+@in_chromium
+def test_the_button_hides_where_the_tip_has_nothing_to_draw(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, NO_KEY), **PHONE) as b:
+        b.js("document.querySelectorAll('#sheet .c')[1].click()")  # no key: no numeral, no key's notes
+        assert b.wait("!document.getElementById('card').hidden")
+        keyless = b.js(CARD_TIP)
+    html = build_viewer(IN_G)
+    tones = json.dumps({"D7": data_of(html)["tones"]["D7"]}, ensure_ascii=False, separators=(",", ":"))[1:-1]
+    unnamed = tmp_path / "Unnamed" / "Title" / "sheet.html"
+    unnamed.parent.mkdir(parents=True)
+    unnamed.write_text(html.replace(tones, '"D7?":"?"'), encoding="utf-8")
+    with open_viewer(tmp_path, unnamed.as_uri(), **PHONE) as b:
+        card_of(b, 6)  # D7, whose notes the tables don't give
+        bare = b.js(CARD_TIP)
+        card_of(b, 2)  # C, whose they do
+        named = b.js(CARD_TIP)
+    assert keyless is None and bare is None and named == {"words": "Circle & keyboard", "big": True}
+
+
+@in_chromium
+def test_it_follows_the_chord_played_now(tmp_path):
+    data = data_of(build_viewer(IN_G))
+    alt = data["alts"]["ionian"][4][0]  # D7's first alternative
+    names = spelling(Key(7, "ionian"))
+    alt_name = names[alt[0]] + alt[1] + ("" if alt[2] is None else "/" + names[alt[2]])
+    with open_viewer(tmp_path, written(tmp_path, IN_G), **DESKTOP) as b:
+        b.js("document.querySelectorAll('#sheet .c')[6].click()")
+        assert b.wait("!document.getElementById('card').hidden")
+        b.js("document.querySelectorAll('#alts .chip')[1].click()")  # the alternative, tried
+        b.click("#use")  # and played for every D7
+        assert b.wait(f"document.querySelectorAll('#sheet .c')[6].textContent === {json.dumps(alt_name)}")
+        b.click("#card-tip")
+        assert b.wait("!document.getElementById('tip').hidden")
+        chosen = b.js(SEEN)
+    assert chosen["chord"] == alt_name and chosen["line"] == f"{chosen['nm']}: the chord you chose in place of D7."
+    assert [n for n, _, _ in chosen["notes"]] == data["tones"][alt_name].split("|")[0].split(" ")
+
+
+@in_chromium
+def test_the_songbooks_card_reaches_the_tip_too(tmp_path):
+    from caracole.viewer.book import BookSong, build_songbook
+
+    songs = [BookSong("In G", "Synthetic", cho=IN_G, id="aaaa"), BookSong("In C", "Synthetic", cho=IN_C, id="bbbb")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    with open_viewer(tmp_path, path.as_uri() + "#song-1", **PHONE) as b:
+        card_of(b, 6)
+        b.click("#card-tip")
+        assert b.wait("!document.getElementById('tip').hidden")
+        d7 = b.js(SEEN)
+    assert d7["chord"] == "D7" and lit(d7) == [0, 2, 6, 9]

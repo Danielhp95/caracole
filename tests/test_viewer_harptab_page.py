@@ -53,7 +53,7 @@ def test_it_loads_nothing_and_allows_exactly_its_scripts_and_styles():
                       "form-action 'none'")
     assert "<script src" not in html and "<link rel=\"stylesheet\"" not in html
     served = viewer_csp(html.encode("utf-8"))
-    assert served.startswith("sandbox allow-scripts; default-src 'none'")
+    assert served.startswith("sandbox allow-scripts allow-downloads; default-src 'none'")
 
 
 def test_its_script_builds_every_element_and_writes_no_markup():
@@ -215,6 +215,14 @@ def test_with_no_sheet_the_overlay_has_no_guitar_and_no_key_for_the_harps():
     assert overlay["guitar"] is None
     assert overlay["harp"]["key"] is None and "chord sheet" in overlay["harp"]["none"]
     assert overlay["harp"]["holes"] == [harp.holes(o) for o in range(12)]
+
+
+def test_a_sheet_with_no_key_has_its_guitar_tab_and_says_so_of_the_harps():
+    # A chord sheet with no chord caracole can read: its Guitar tab is there, so the line never says there is no sheet
+    keyless = "{title: Synthetic Song}\n{artist: Placeholder Band}\n[N.C.]la la [Hm]lo lo\n"
+    overlay = data_of(page(TAB_D, cho=keyless))["overlay"]
+    assert overlay["guitar"] is not None and overlay["harp"]["key"] is None
+    assert overlay["harp"]["none"] == "With no key in its chord sheet, caracole can't tell which harp plays the song."
 
 
 def test_a_harp_its_page_guesses_is_no_tabs():

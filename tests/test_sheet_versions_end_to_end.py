@@ -309,7 +309,7 @@ def test_make_this_the_one_from_a_versions_served_page(config, sites, conn, tmp_
 
     assert get("/" + quote(f"{FOLDER}/version-103.html")).status == 404
     assert get("/" + quote(f"{FOLDER}/version-102.html")).status == 200
-    assert get(f"/export?sheet={quote(FOLDER + '/version-102.html')}&t=2").status == 409
+    assert get(f"/export.pdf?sheet={quote(FOLDER + '/version-102.html')}&t=2").status == 409
 
     # Keep it, from the sheet's served page: the 4th version, fetched now and kept beside the sheet
     browser.open(base + quote(f"{FOLDER}/sheet.html"))

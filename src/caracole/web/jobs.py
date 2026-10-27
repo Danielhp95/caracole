@@ -355,8 +355,8 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
 
 
 REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it never joins the song's add or fetch
-EXPORTING = "export:"  # an export's song_key (export_routes.py): the song's key and the version, never the song's own
-MINE = ":mine"  # after an export's song_key: making that version the song's own
+EXPORTING = "export:"  # Make this my version's song_key (export_routes.py): the song's key and the version, then MINE,
+MINE = ":mine"  # never the song's own key, so it joins no request of the song's
 
 
 def remove_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:

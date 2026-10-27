@@ -311,7 +311,9 @@ def viewer_csp(page: bytes) -> str:
     with no cookie and no way to ask the server for anything. Its scripts still run; they have
     no storage there, and keep the transposition, the mode, the capo, the text size and the
     scroll speed in the address (``#t=2&mode=aeolian&fs=20&speed=8``; a songbook's song too,
-    ``#song-3``) alone, as they do everywhere besides their storage.
+    ``#song-3``) alone, as they do everywhere besides their storage. It may download what a
+    link it follows answers as an attachment (``allow-downloads``): Export PDF's link is the
+    download itself (web/export_routes.py), and the page stays where it is.
 
     The policy is the page's, not this caracole's: a page written before an upgrade carries
     the hashes of the scripts and styles it was written with, and keeps them until the next
@@ -327,7 +329,7 @@ def viewer_csp(page: bytes) -> str:
         policy = unescape(found.group(1).decode("utf-8")) if found else ""
     except UnicodeDecodeError:
         policy = ""
-    return "sandbox allow-scripts; " + policy if _HEADER_TEXT.fullmatch(policy) else _NOTHING
+    return "sandbox allow-scripts allow-downloads; " + policy if _HEADER_TEXT.fullmatch(policy) else _NOTHING
 
 
 # The page's own policy, as ``_page`` writes it; what a header may hold (no line break);
@@ -792,6 +794,9 @@ def _words(text: str) -> list[str]:
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 #
+# A chord's card heads with the chord, Circle & keyboard (the chord's notes in a numeral's tooltip, which the card
+# closes for; viewer.js shows it where the tooltip has notes to draw) and ×.
+#
 # A numeral's tooltip, top to bottom: the chord as the sheet names it, its numeral and its role in words; the
 # numeral's line and the key it is read in; the chord's notes (viewer.js draws them: a twelve-note circle beside
 # their list, or tiles over a keyboard), and a line naming a note from outside the key; the button to the other
@@ -802,9 +807,9 @@ _GO = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg
 _HARMONY_ROW = ('<div id="harmony-row" hidden><button type="button" class="goto" id="harmony-open" aria-haspopup="dialog" '
                 'aria-controls="harmony"><span class="goto-lab">Harmony</span><span class="goto-v">progressions, scale'
                 + _GO + '</span></button></div>\n')
-# Export PDF of this version, in words at its right: served, a link to caracole serve's export page (viewer.js); from a
-# file, a row that unfolds the command that makes it, with Copy.
-_EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export" href="/export"><span class="goto-lab">Export PDF</span>"""
+# Export PDF of this version, in words at its right: served, a link to the PDF itself, caracole serve's download
+# (viewer.js); from a file, a row that unfolds the command that makes it, with Copy.
+_EXPORT_ROW = ("""<div id="export-row"><a class="goto" id="export"><span class="goto-lab">Export PDF</span>"""
                """<span class="goto-v"><span class="export-v"></span>""" + _GO + """</span></a>
 <button type="button" class="goto" id="export-fold" hidden aria-expanded="false" aria-controls="export-file"><span class="goto-lab">Export PDF</span><span class="goto-v"><span class="export-v"></span>""" + _GO + """</span></button>
 <div class="export-file" id="export-file" hidden><p class="hint" id="export-hint"></p>
@@ -879,6 +884,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">
 <header class="ui-head"><h2 id="card-name" tabindex="-1"></h2>
+<button type="button" class="tip-btn card-tip" id="card-tip" hidden>Circle &amp; keyboard</button>
 <button type="button" class="x" data-close aria-label="Close">×</button></header>
 <div class="shape"><button type="button" class="round" id="prev" aria-label="Previous shape">‹</button>
 <div class="diagram" id="diagram"></div>
@@ -943,6 +949,23 @@ def _with_guitar(controls: str, guitar: bool) -> str:
     return controls.replace(_HARMONY_ROW, _HARMONY_ROW + _GUITAR_ROW, 1) if guitar else controls
 
 
-# The sheet viewer's controls: the shared ones and the export row, the last place to go. The songbook has none: no
-# song owns it.
-_SHEET_CONTROLS = _CONTROLS.replace(_PLACES_END, _EXPORT_ROW + _PLACES_END, 1)
+# Export PDF's question, served, pressed on a version other than the song's own (viewer.js fills it in and opens it): a
+# modal dialog, its focus kept inside, Escape, × and Cancel closing it, that asks whether to make this version the
+# song's own ("Make this your version of <title>?", the version in words, what that does), with Download and make it
+# mine (the download's link with mine=1), Just download (the link) and Cancel. Its content in a box of its own, so
+# that a tap on the dialog itself is a tap beside it, on the backdrop.
+_EXPORT_ASK = """<dialog class="ask" id="export-ask" aria-labelledby="ask-title" aria-describedby="ask-version ask-what">
+<div class="ask-in"><header class="ui-head"><h2 id="ask-title" tabindex="-1"></h2>
+<button type="button" class="x" id="ask-x" aria-label="Close">×</button></header>
+<p class="ask-v" id="ask-version"></p>
+<p class="hint" id="ask-what">Its PDF, its viewer and your songbooks will start there.</p>
+<div class="ask-acts"><a class="btn primary" id="ask-mine">Download and make it mine</a>
+<a class="btn" id="ask-just">Just download</a>
+<button type="button" class="btn" id="ask-cancel">Cancel</button></div></div>
+</dialog>
+"""
+
+
+# The sheet viewer's controls: the shared ones, the export row, the last place to go, and its question. The songbook
+# has none: no song owns it.
+_SHEET_CONTROLS = _CONTROLS.replace(_PLACES_END, _EXPORT_ROW + _PLACES_END, 1) + _EXPORT_ASK

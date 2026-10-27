@@ -110,7 +110,14 @@ def test_a_server_sends_the_pages_own_policy_in_a_sandbox():
     # origin of its own, with no cookie and no way to ask the server for anything.
     html = build_viewer(UG_CHO)
     meta = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
-    assert viewer_csp(html.encode("utf-8")) == "sandbox allow-scripts; " + meta
+    assert viewer_csp(html.encode("utf-8")) == "sandbox allow-scripts allow-downloads; " + meta
+
+
+def test_viewer_csp_allows_downloads():
+    # Export PDF is a link to the download itself (caracole serve's /export.pdf): the sandbox lets the page download
+    # it, and nothing else (no popups, no forms, no same origin, no top navigation)
+    sandbox = viewer_csp(build_viewer(UG_CHO).encode("utf-8")).split(";")[0].split()
+    assert sandbox == ["sandbox", "allow-scripts", "allow-downloads"]
 
 
 def test_a_page_goes_out_with_the_policy_it_was_written_with(monkeypatch):
@@ -122,7 +129,7 @@ def test_a_page_goes_out_with_the_policy_it_was_written_with(monkeypatch):
     style, script = page._assets()
     monkeypatch.setattr(page, "_assets", lambda: (style + "\n.new {}", script + "\n// a new release"))
     assert build_viewer(UG_CHO) != written
-    assert viewer_csp(written.encode("utf-8")) == "sandbox allow-scripts; " + meta
+    assert viewer_csp(written.encode("utf-8")) == "sandbox allow-scripts allow-downloads; " + meta
 
 
 def test_the_build_version_follows_each_file_and_the_python(monkeypatch, tmp_path):

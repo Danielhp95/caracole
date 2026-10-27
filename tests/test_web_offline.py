@@ -168,7 +168,7 @@ def test_a_written_page_goes_with_its_own_policy_in_a_sandbox_and_the_library_pa
                  f"{BOOK}/songbook.html"):
         own = META_POLICY.search((library / path).read_text(encoding="utf-8")).group(1)
         assert listed[path]["type"] == HTML
-        assert listed[path]["headers"] == {"Content-Security-Policy": f"sandbox allow-scripts; {own}; "
+        assert listed[path]["headers"] == {"Content-Security-Policy": f"sandbox allow-scripts allow-downloads; {own}; "
                                                                       "frame-ancestors 'none'",
                                            "X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin"}
     # The library page is the file on disk (no form, no request: form-action 'none' and nothing to connect to),
