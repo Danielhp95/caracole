@@ -49,7 +49,7 @@ written ``\\u003c``:
   "list": positions}``), by the chord as shown: the script shows them for that very chord
   alone, not once it is transposed into another;
 - what each chord is in the key, by mode (``numerals``, ``families``, ``relations``, ``explains``,
-  ``places``, ``glossary``, ``altNumerals``), each chord's notes (``tones``) and its scale for a solo
+  ``places``, ``altNumerals``), each chord's notes (``tones``) and its scale for a solo
   (``solo``, ``altSolo``, ``scaleWords``, ``scales``), the key's scale (``keyScale``, ``pentatonic``) and
   each section's progression (``progressions``): harmony_tables.py says how;
 - ``library``: the library's index.html, relative to the page;
@@ -712,7 +712,10 @@ def _words(text: str) -> list[str]:
 # The settings, top to bottom, grouped by space rather than headings: "Settings" and a line of what is set (the key
 # and mode played, the capo, the instrument: viewer.js); Transpose and Capo side by side, each labelled over its
 # stepper, with a Reset by its label while its value differs; the easier capos and an instrument's easy keys; Mode,
-# what the mode played sounds like, and a pill a mode, the song's own marked.
+# what the mode played sounds like, and a pill a mode, the song's own marked; after a rule, the chord names (Chords,
+# + Numerals, Numerals), why there are no numerals for a song with no key, and a switch for each thing on or off (a
+# toggle button, pressed while it is on): Role colours, All chord shapes (as the bar's guitar), Chord necks (where the
+# rail shows) and Pinyin (a sheet with Chinese).
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
@@ -771,24 +774,18 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <p class="hint" id="easy-hint"></p></div>
 <div class="modes" id="mode-row" hidden><p class="modeline"><span class="lab">Mode</span><span class="what" id="mode-hint"></span></p>
 <span class="chips" id="modes"></span></div>
-<div class="row" id="names-row"><span class="lab">Chord names</span><span class="chips" id="names"></span>
-<button type="button" class="chip" id="roles" aria-pressed="true">Role colours</button>
+<div class="chords ruled" id="names-row"><div class="seg" id="names" role="group" aria-label="Chord names"></div>
 <p class="hint" id="names-hint"></p>
-<details class="gloss" id="gloss" hidden><summary>What do the numerals mean?</summary><div id="gloss-body"></div>
-<p class="gloss-roles"><span class="nm r-h">home</span> chords at rest, <span class="nm r-a">away</span> chords moving away, <span class="nm r-p">pull</span> chords pulling home; <span class="nm out">underlined</span>, a chord from outside the key: the colours are a help, and each numeral's line says the same.</p>
-<p class="gloss-all">The whole notation: upper case for a major chord, lower case for a minor one; ♭ or ♯ before it, a root a half step below or above that degree of the major scale; ° diminished, ø half-diminished, + augmented; then the chord's extension (7, maj7, sus4, add9…). A number after a slash is the bass note, as its degree above the chord's root (I/3); a numeral after one, the chord of the key it leads to (V/V, vii°/vi).</p></details></div>
+<button type="button" class="switch" id="roles" aria-pressed="true">Role colours<span class="roles" aria-hidden="true"><span class="r-h">home</span> <span class="r-a">away</span> <span class="r-p">pull</span></span></button>
+<button type="button" class="switch" id="strip-toggle" aria-pressed="false" aria-controls="strip">All chord shapes</button>
+<div id="necks-row" hidden><button type="button" class="switch" id="necks-chip" aria-pressed="true" aria-controls="necks">Chord necks</button></div>
+<div id="pinyin-row" hidden><button type="button" class="switch" id="pinyin-chip" aria-pressed="false" aria-controls="sheet" aria-describedby="pinyin-hint">Pinyin</button>
+<p class="hint" id="pinyin-hint">Each Chinese character's reading, over it.</p></div></div>
 <div class="row" id="harmony-row" hidden><span class="lab">Harmony</span>
 <button type="button" class="chip" id="harmony-open" aria-haspopup="dialog" aria-controls="harmony">Progressions, the key's scale</button></div>
 <div class="row" id="inst-row" hidden><span class="lab">Instrument</span><span class="chips" id="insts"></span>
 <p class="hint" id="inst-hint"></p></div>
 <div class="row inst-panel" id="inst-panel" hidden></div>
-<div class="row"><span class="lab">Chord shapes</span>
-<button type="button" class="chip" id="strip-toggle" aria-pressed="false">Show all</button></div>
-<div class="row" id="necks-row" hidden><span class="lab">Chord necks</span>
-<button type="button" class="chip" id="necks-chip" aria-pressed="true" aria-controls="necks">Hide</button></div>
-<div class="row" id="pinyin-row" hidden><span class="lab">Pinyin</span>
-<button type="button" class="chip" id="pinyin-chip" aria-pressed="false" aria-controls="sheet">Show</button>
-<p class="hint">Each Chinese character's reading, over it.</p></div>
 <div class="row" id="sound-row" hidden><span class="lab">Sound</span><span class="chips" id="volumes"></span>
 <p class="hint">Tap a chord, or its shape on its card, to hear it strummed.</p></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>

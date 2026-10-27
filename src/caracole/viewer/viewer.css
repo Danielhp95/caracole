@@ -6,9 +6,10 @@
   --text: #1f1e1c;
   --muted: #645f57;
   --border: #e1ddd5;
-  --border-strong: #b5ada1;  /* a control's own edge: a stepper, a select */
+  --border-strong: #958e82;  /* a control's own edge: a stepper, a select, a switch off (3:1) */
   --sunk: #ece9e3;  /* a segmented control's track */
   --seg-on: #ffffff;  /* its chosen segment */
+  --knob: #ffffff;  /* a switch's knob, off */
   --orig-edge: #8a8378;  /* the song's own mode, among the modes */
   --orig-bg: #f1eee8;
   --accent: #b4441e;
@@ -38,6 +39,7 @@
     --border-strong: #4b4844;
     --sunk: #181716;
     --seg-on: #292826;
+    --knob: #d8d4cc;
     --orig-edge: #8f8a82;
     --orig-bg: #2f2d2a;
     --accent: #f0895c;
@@ -156,19 +158,6 @@ html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
 .tip p { margin: 0; }
 .tip .tip-key { margin-top: 4px; color: var(--muted); font-size: .8rem; }
 .tip .chip { margin-top: 8px; }
-/* What do the numerals mean? In the settings, folded: the key they are read in, the song's symbols, each with
-   one of its chords, the colours and the whole notation. */
-.gloss { flex-basis: 100%; }
-.gloss summary { display: flex; align-items: center; min-height: 44px; color: var(--accent); font-weight: 600;
-  cursor: pointer; }
-.gloss dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 8px 0 0;
-  font-size: .88rem; }
-.gloss dt { font-weight: 700; }
-.gloss dd { margin: 0; }
-.gloss .ex { display: block; color: var(--muted); font-size: .8rem; }
-.gloss p { margin: 10px 0 0; color: var(--muted); font-size: .85rem; }
-.gloss .gloss-key { color: var(--text); }
-.gloss-roles .nm { font-weight: 700; }
 /* The Harmony panel (viewer.js), in the settings' place: each section's progression, a button to its section,
    ▶ beside it, and its songs, and those of each named progression it contains; the numeral playing marked. A
    section's heading names its progression. */
@@ -422,9 +411,38 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .modeline { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 0 0 8px; }
 .modeline .lab { min-width: 0; font-size: .84rem; }
 .what { color: var(--muted); font-size: .8rem; text-align: end; }
+/* A rule between the groups. */
+.ruled { padding-top: 10px; border-top: 1px solid var(--border); }
+/* The chord names, one of three: segments in a sunken track, the one chosen raised; a segment greyed where it has
+   nothing to show (no numerals for a song with no key). */
+.seg { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--border); border-radius: 10px; background: var(--sunk); }
+.seg > button { flex: 1 1 0; display: grid; place-items: center; min-width: 0; min-height: 32px; padding: 0 6px;
+  border: 0; border-radius: 7px; background: none; color: var(--muted); font: inherit; font-size: .84rem;
+  font-weight: 600; text-align: center; cursor: pointer; }
+.seg > button[aria-pressed="true"] { background: var(--seg-on); color: var(--text);
+  box-shadow: 0 1px 2px rgb(0 0 0 / .25), inset 0 0 0 1px var(--border-strong); }
+.seg > button:disabled { opacity: .45; cursor: default; }
+.seg > button:focus-visible { outline-offset: -1px; }
+.chords > .seg { margin: 2px 0 6px; }
+.chords > .hint { margin: 0 0 4px; }
+/* On or off: a row, its words and the switch at its right, the whole row the button (pressed while it is on); the
+   switch's track in the accent while on, its knob over at the right. Role colours says them, each in its colour. */
+.switch { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 44px;
+  padding: 0; border: 0; background: none; color: var(--text); font: inherit; font-size: .92rem; text-align: start;
+  cursor: pointer; }
+.switch::after { content: ""; flex: none; width: 42px; height: 24px; border-radius: 999px;
+  background: radial-gradient(circle at 12px 50%, var(--knob) 8.5px, transparent 9px) var(--border-strong); }
+.switch[aria-pressed="true"]::after { background-color: var(--accent);
+  background-image: radial-gradient(circle at 30px 50%, #fff 8.5px, transparent 9px); }
+.switch .roles { flex: 1 1 auto; margin-left: 8px; font-size: .74rem; font-weight: 700; }
+.roles .r-h { color: var(--home); }
+.roles .r-a { color: var(--away); }
+.roles .r-p { color: var(--pull); }
+#pinyin-row .hint { margin: -6px 0 4px; }
 @media (hover: hover) {
   #panel .stepper button:hover, .undo:hover { background: var(--raised); }
   #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
+  .seg > button:not([aria-pressed="true"]):not(:disabled):hover { color: var(--text); }
 }
 /* A finger's target, 44 px either way, wherever a pointer is coarse: the steppers taller, a Reset's target reaching
    over the line round it, the line no taller. */
@@ -432,6 +450,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   #panel .stepper button { height: 44px; }
   .undo { min-height: 44px; margin: -10px -2px; padding: 0 6px; }
   #panel .chip { min-width: 44px; min-height: 44px; }
+  .seg > button { min-height: 44px; }
 }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0;
   border-top: 1px solid var(--border); }

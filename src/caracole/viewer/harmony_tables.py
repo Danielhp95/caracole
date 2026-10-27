@@ -12,7 +12,6 @@ script's ``#sheet .c``):
 - ``families[mode][r]``: "home", "away", "pull", or null for a chord from outside the key;
 - ``relations[mode][r]``: ``harmony.Relation.kind``;
 - ``explains[mode][r]``: the tooltip's line (``harmony.explain``), as a **text**, below;
-- ``glossary[mode]``: ``[symbol, meaning, example]`` texts for each symbol the song's numerals use;
 - ``altNumerals[mode][i]``: for each chord ``data.alts[mode][i]`` offers instead, its numeral's text after its
   ``role`` ("hImaj7": home; "b♭VII": borrowed);
 - ``solo[mode][i]`` and ``altSolo[mode][i]``: the scale for a solo over the chord (``harmony.solo_scale``),
@@ -141,7 +140,7 @@ def tables(chords: Sequence[Chord | None], key: Key | None, places: Sequence[tup
         for chord in chords:
             add_tones(chord, None)
         return out
-    out.update(numerals={}, families={}, relations={}, explains={}, places={}, glossary={}, altNumerals={},
+    out.update(numerals={}, families={}, relations={}, explains={}, places={}, altNumerals={},
                solo={}, altSolo={}, keyScale={}, pentatonic={}, pentatonicName={}, progressions={})
     words: list[str] = []
     scales: dict[str, str] = {}
@@ -191,11 +190,6 @@ def tables(chords: Sequence[Chord | None], key: Key | None, places: Sequence[tup
                                                             shifted(g, s)) for s in SHIFTS], mode_key)
             for c, g in readings]
         out["places"][mode] = {str(k): r for k, r in by_place.items()}
-        sequence = [here[i] for _, i, _ in played] or [c for c in here if c is not None]
-        glossaries = [harmony.glossary([shifted(c, s) for c in sequence], Key((key.tonic + s) % 12, mode))
-                      for s in SHIFTS]
-        out["glossary"][mode] = [[text_of([g[n][part] for g in glossaries], mode_key) for part in range(3)]
-                                 for n in range(len(glossaries[0]))]
         out["altNumerals"][mode] = [[role(a, mode_key) + harmony.numeral(a, mode_key).text for a in options]
                                     for options in alts[mode]]
         out["solo"][mode] = [None if c is None else solo(c, mode_key) for c in here]

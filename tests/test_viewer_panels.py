@@ -326,6 +326,78 @@ def test_the_mode_line_says_what_it_sounds_like(tmp_path):
     assert [dorian["what"], dorian["level"]] == ["minor, with a brighter sixth", True]
 
 
+# The chord names' segments: the words shown, the words a screen reader hears, pressed, offered (not disabled).
+NAMES = """[...document.querySelectorAll('#names > button')].map((c) => [c.textContent, c.getAttribute('aria-label'),
+  c.getAttribute('aria-pressed'), !c.disabled])"""
+# Each switch of the settings shown: its id, its words, whether it is on, and whether it looks it (its track in the
+# accent); and the strip, the necks' rail, the pinyin and the role colours, which they show or hide.
+SWITCHES = """(() => { const accent = getComputedStyle(document.querySelector('#sheet .c')).color;
+  const shown = (el) => Boolean(el) && el.getClientRects().length > 0;
+  return {switches: [...document.querySelectorAll('#panel .switch')].filter(shown).map((s) => [s.id,
+            s.textContent.replace(/home away pull$/, '').trim(), s.getAttribute('aria-pressed'),
+            getComputedStyle(s, '::after').backgroundColor === accent]),
+          strip: !document.getElementById('strip').hidden, bar: document.getElementById('shapes').getAttribute('aria-pressed'),
+          necks: shown(document.getElementById('necks')), pinyin: document.querySelectorAll('#sheet ruby').length > 0,
+          roles: document.documentElement.dataset.roles || 'on',
+          colours: [...document.querySelectorAll('#roles .roles > span')].map((s) => [s.textContent, getComputedStyle(s).color])}; })()"""
+ZH = "{title: 合成}\n{artist: 示例}\n{key: C}\n{comment: Verse}\n[C]你好 [G]世界\n"
+
+
+@in_chromium
+def test_chord_names_is_one_segmented_control(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        first = b.js(NAMES)
+        b.click("#names > button:nth-child(2)")
+        both = [b.js(NAMES), b.js("location.hash"), b.js("document.querySelectorAll('#sheet .nm').length")]
+    assert first == [["Chords", "Chords", "true", True], ["+ Numerals", "Chords + numerals", "false", True],
+                     ["Numerals", "Numerals only", "false", True]]
+    assert [p for _, _, p, _ in both[0]] == ["false", "true", "false"] and "nm=both" in both[1] and both[2] > 0
+
+
+@in_chromium
+def test_role_colours_all_shapes_necks_and_pinyin_are_switches(tmp_path):
+    with viewer(tmp_path, written(tmp_path, ZH), **DESKTOP) as b:
+        b.click("#more")
+        first = b.js(SWITCHES)
+        for switch in ("#roles", "#strip-toggle", "#necks-chip", "#pinyin-chip"):
+            b.click(switch)
+        flipped = b.js(SWITCHES)
+        b.click("#shapes")  # the bar's guitar: the switch follows
+        bar = b.js(SWITCHES)
+    assert first["switches"] == [["roles", "Role colours", "true", True], ["strip-toggle", "All chord shapes", "false", False],
+                                 ["necks-chip", "Chord necks", "true", True], ["pinyin-chip", "Pinyin", "false", False]]
+    assert [first[k] for k in ("strip", "necks", "pinyin", "roles")] == [False, True, False, "on"]
+    assert [s[2] for s in flipped["switches"]] == ["false", "true", "false", "true"]
+    assert [s[3] for s in flipped["switches"]] == [False, True, False, True]
+    assert [flipped[k] for k in ("strip", "bar", "necks", "pinyin", "roles")] == [True, "true", False, True, "off"]
+    assert bar["switches"][1][2] == "false" and not bar["strip"]
+    home, away, pull = first["colours"]  # Role colours, then home, away and pull in their own colours
+    assert [home[0], away[0], pull[0]] == ["home", "away", "pull"] and len({home[1], away[1], pull[1]}) == 3
+
+
+@in_chromium
+def test_no_numerals_glossary(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E) + "#nm=both") as b:
+        b.click("#more")
+        seen = b.js("[document.getElementById('gloss'), /numerals mean/i.test(document.getElementById('panel').textContent)]")
+    assert seen == [None, False]
+
+
+@in_chromium
+def test_the_names_hint_shows_only_without_a_key(tmp_path):
+    hint = "(() => { const h = document.getElementById('names-hint'); return h.getClientRects().length ? h.textContent : null; })()"
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        keyed = b.js(hint)
+    with viewer(tmp_path, written(tmp_path, NO_KEY, name="Riffs")) as b:
+        b.click("#more")
+        unknown = [b.js(hint), b.js(NAMES)]
+    assert keyed is None
+    assert unknown[0] == "caracole can't tell this song's key, so it can't number its chords."
+    assert [offered for *_, offered in unknown[1]] == [True, False, False]  # the chords alone, the others greyed
+
+
 # --- a chord's card ------------------------------------------------------------------------------------
 
 

@@ -2269,8 +2269,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   **Showing and hiding it**: the button at the rail's top (a sidebar, "Hide
   chord necks", which stays at the top as the rail scrolls) hides it, and the
   song takes the whole width; the same sidebar, first in the bar, hides it or
-  brings it back (pressed while it shows), and so does **Chord necks**
-  (Show, Hide) in the settings: the three always agree. The choice is the
+  brings it back (pressed while it shows), and so does the **Chord necks**
+  switch in the settings: the three always agree. The choice is the
   screen's, not a song's: the browser keeps it once for every sheet and
   songbook, and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: ‹ and › to another
@@ -2373,7 +2373,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   long for its room ("Ab mixolydian") is a little smaller. A screen reader
   hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
   guitar** shows the strip of every chord's shape (below), or hides it
-  again, as Show all in the settings does: it stays pressed while the strip
+  again, as All chord shapes in the settings does: it stays pressed while the strip
   shows, and the two always agree. Pressed further down the song, it takes
   the page up to the strip, so the shapes are in view; a sheet without
   chords has none. **Aa** opens a small box over the bar with the text
@@ -2427,7 +2427,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the key, such as the G major chord's B in C minor, stays where it is. The
   song's own mode has a thicker edge among the others, and the line over them
   says what the mode played sounds like ("minor, with a brighter sixth").
-- **Chord names**: Chords, Chords + numerals or Numerals only. A numeral says
+- **Chord names**, one of three: Chords, + Numerals (each chord's name and its
+  numeral) or Numerals (the numeral in its place). A numeral says
   what the chord is in the key, as a Roman numeral counted up the key's scale
   from its tonic: in C major, C F G Am are I IV V vi; in A minor, Am G F E7
   are i ♭VII ♭VI V7 (numerals are written against the tonic's major scale, so
@@ -2444,7 +2445,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   i, ♭III, ♭VI in minor) green, moving away (IV, ii) blue, pulling home (V,
   vii°, and a minor key's ♭VII) purple; a chord from outside the key
   (borrowed, as B♭ in C from C minor; a secondary dominant; or plainly
-  outside) is underlined with dots. **Role colours** turns the colours off.
+  outside) is underlined with dots. The **Role colours** switch turns the colours off.
   Hover over a numeral with the mouse, or tap it, for its line: "vi: the 6th
   chord of C major, minor (lower case)", "♭VII: built on the lowered 7th
   degree of C major, major (upper case); borrowed from C minor", with the key
@@ -2453,9 +2454,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
   chord's name opens its card, which names the numeral too ("Bb · ♭VII").
-  **What do the numerals mean?** under it explains the notation with the
-  song's own chords as examples, in the key shown. A song whose key caracole
-  can't tell offers chords alone, and says so.
+  A song whose key caracole can't tell offers chords alone (the numerals
+  greyed), and says so.
 - **Harmony** (in the settings) opens a panel in their place, docked at the
   foot on a phone and a rail on the right from 900 px wide: the key the
   numerals are read in and where it came from, the key's neck on a phone (on
@@ -2510,15 +2510,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   sheet names its progression too ("Verse · the pop progression"), or those
   it plays within it ("Chorus · contains the '50s progression").
 - Every chord's shape in a strip above the song (the guitar in the bar, or
-  Show all in the settings; kept for the page, as the text size is): the
+  All chord shapes in the settings; kept for the page, as the text size is): the
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset everything, at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
   the viewer starts them, shows the rail of necks again and hides the pinyin.
-- **Pinyin**, in the settings of a sheet with Chinese lyrics: **Show** puts
+- **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
   each Chinese character's reading over it, in pinyin with its tone marks
-  (zhǐ), smaller and muted, between its chord and it; **Hide** takes the
-  readings away again, as the viewer starts. Each is read in context when the
+  (zhǐ), smaller and muted, between its chord and it; off, as the viewer starts,
+  the readings go again. Each is read in context when the
   page is made (by pypinyin, word by word: 长 is cháng in 长城 and zhǎng in 成长,
   不要 is bú yào), and a sheet in Traditional characters is read as in
   Simplified ones, its 著 as 着 (睡著, shuì zháo) but in a word of its own (顯著,

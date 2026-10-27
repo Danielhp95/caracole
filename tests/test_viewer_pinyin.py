@@ -134,15 +134,14 @@ def test_the_notes_before_the_song_have_no_readings():
 def test_a_sheet_without_chinese_lyrics_has_no_readings_and_no_pinyin_row_shown():
     html = build_viewer("{title: 斑马}\n{artist: A}\n{comment: Verse}\n[Am]la la [F]la\n")
     assert "pinyin" not in data_of(html)
-    assert re.search(r'<div class="row" id="pinyin-row" hidden>', html)  # the script shows it for a sheet with some
+    assert re.search(r'<div id="pinyin-row" hidden>', html)  # the script shows it for a sheet with some
 
 
 def test_the_settings_have_a_pinyin_row_hidden_until_the_script_shows_it():
     html = build_viewer(ZH)
-    row = re.search(r'<div class="row" id="pinyin-row" hidden>(.*?)</div>', html, re.S)
-    assert row and '<span class="lab">Pinyin</span>' in row.group(1)
-    assert ('<button type="button" class="chip" id="pinyin-chip" aria-pressed="false" aria-controls="sheet">Show'
-            '</button>') in row.group(1)
+    row = re.search(r'<div id="pinyin-row" hidden>(.*?)</div>', html, re.S)
+    assert row and ('<button type="button" class="switch" id="pinyin-chip" aria-pressed="false" aria-controls="sheet" '
+                    'aria-describedby="pinyin-hint">Pinyin</button>') in row.group(1)  # a switch, off
 
 
 def test_a_songbooks_songs_each_carry_their_own_readings():
@@ -292,13 +291,13 @@ def test_off_at_first_and_on_each_chinese_character_has_its_reading_over_it(tmp_
         assert b.wait("document.querySelector('#sheet ruby.py') === null")
         off = b.js(DRAWN)
     assert all(r == [] for r in before["rubies"]) and before["py"] is None
-    assert before["chip"] == "Show" and before["pressed"] == "false"
+    assert before["chip"] == "Pinyin" and before["pressed"] == "false"
     expected = readings(ZH_LINES)
     for line, rubies, read in zip(ZH_LINES, on["rubies"], expected):
         assert [c for c, _ in rubies] == han(line)  # a ruby each Chinese character, none for the rest
         assert [r for _, r in rubies] == [r for r in (read or []) if r]
     assert on["rubies"][4] == [["长", "cháng"], ["城", "chéng"], ["和", "hé"], ["成", "chéng"], ["长", "zhǎng"]]
-    assert on["row"] and on["chip"] == "Hide" and on["pressed"] == "true" and on["py"] == "1"
+    assert on["row"] and on["chip"] == "Pinyin" and on["pressed"] == "true" and on["py"] == "1"
     assert off["lines"] == before["lines"] and off["py"] is None  # the words as the page wrote them, again
 
 

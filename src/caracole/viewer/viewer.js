@@ -917,7 +917,6 @@
       render();
     })) : []);
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
-    $("strip-toggle").textContent = state.strip ? "Hide" : "Show all";
     shapesButton.setAttribute("aria-pressed", state.strip ? "true" : "false");  // the guitar says the same
     drawSpeed();
     drawStrip();
@@ -1133,7 +1132,6 @@
     if (necksChip) {
       $("necks-row").hidden = !can;
       necksChip.setAttribute("aria-pressed", on ? "true" : "false");
-      necksChip.textContent = on ? "Hide" : "Show";
     }
     if (!necksEl) return;
     necksEl.hidden = !on;
@@ -1309,7 +1307,6 @@
     if (pyChip) {
       $("pinyin-row").hidden = !pyCan;
       pyChip.setAttribute("aria-pressed", state.py ? "true" : "false");
-      pyChip.textContent = state.py ? "Hide" : "Show";
     }
     const on = pyCan && state.py;
     if (on === pyDrawn) return;
@@ -1654,46 +1651,33 @@
     to.focus();
   });
 
-  // --- the chord names setting, a numeral's line and the glossary ------------------------------------
-  const NAMES = [[null, "Chords"], ["both", "Chords + numerals"], ["numerals", "Numerals only"]];
+  // --- the chord names setting and a numeral's line --------------------------------------------------
+  // The chord names, a segmented control: each segment's words, and what a screen reader hears.
+  const NAMES = [[null, "Chords", "Chords"], ["both", "+ Numerals", "Chords + numerals"],
+    ["numerals", "Numerals", "Numerals only"]];
   const keyWords = () => "the key of " + keyName(shift()) + (key && key.from ? " (" + key.from + ")" : "");
+  // A song whose key caracole can't tell has its chords alone: the numerals' segments greyed, and the hint says why.
   function drawNames() {
     const can = Boolean(key) && Boolean(data.numerals);
-    refill($("names"), (can ? NAMES : NAMES.slice(0, 1)).map(([nm, words]) => button(words, (can ? state.nm : null) === nm,
-      () => {
+    refill($("names"), NAMES.map(([nm, words, said]) => {
+      const segment = button(words, (can ? state.nm : null) === nm, () => {
         state.nm = nm;
         render();
-      })));
+      });
+      segment.removeAttribute("class");  // a segment, not a chip
+      segment.setAttribute("aria-label", said);
+      segment.disabled = !can && nm !== null;
+      return segment;
+    }));
     $("roles").hidden = !can;
     $("roles").setAttribute("aria-pressed", state.roles ? "true" : "false");
     $("names-hint").textContent = can ? "" : "caracole can't tell this song's key, so it can't number its chords.";
-    $("gloss").hidden = !can;
-    if (can) drawGlossary();
     $("harmony-row").hidden = !can || !data.progressions;
   }
   $("roles").addEventListener("click", () => {
     state.roles = !state.roles;
     render();
   });
-  // "What do the numerals mean?": the key they are read in, then each symbol the song's numerals use, with
-  // the first of its chords that shows it, in the key shown.
-  const drawGlossary = () => {
-    const body = $("gloss-body");
-    body.textContent = "";
-    const intro = body.appendChild(document.createElement("p"));
-    intro.className = "gloss-key";
-    intro.textContent = "Read in " + keyWords() + ": in another key, every numeral would name other chords.";
-    const list = body.appendChild(document.createElement("dl"));
-    for (const [symbol, meaning, example] of table("glossary") || []) {
-      list.appendChild(document.createElement("dt")).textContent = textOf(symbol);
-      const dd = list.appendChild(document.createElement("dd"));
-      dd.appendChild(document.createTextNode(textOf(meaning)));
-      const ex = dd.appendChild(document.createElement("span"));
-      ex.className = "ex";
-      ex.textContent = textOf(example);
-    }
-  };
-
   // A numeral's line, by it: on a finger's tap, or while the mouse is over it. Escape, a tap anywhere else,
   // or the mouse moving away closes it; it goes with the page as it scrolls, and opens the chord's card.
   const tip = $("tip");
