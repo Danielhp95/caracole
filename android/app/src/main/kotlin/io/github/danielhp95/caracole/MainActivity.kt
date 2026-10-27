@@ -34,8 +34,8 @@ import kotlinx.coroutines.launch
 
 /**
  * The library screen: a WebView showing the mirror's pages, caracole's own, unchanged, at
- * `https://appassets.androidplatform.net/library/<path>`, with a small bar (the page's title; Sync now,
- * Library, Settings) and the sync's line under it.
+ * `https://appassets.androidplatform.net/<path>` (the root, as on caracole serve: [Links]), with a small bar
+ * (the page's title; Sync now, Library, Settings) and the sync's line under it.
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView

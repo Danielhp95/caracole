@@ -44,7 +44,7 @@
     ["M14.5 10a2.5 2.5 0 0 1 0 4", "M17 8a5.5 5.5 0 0 1 0 8", "M19.5 5.5a9.5 9.5 0 0 1 0 13"]];
   const VOL = 2;
   // Whether caracole serve sent this page, so that its controls may link to the server's own pages: Export PDF
-  // (/export), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
+  // (/export.pdf), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
   // file they show the command to run, or the file itself, instead; and so in caracole's Android app, whose offline
   // copy of the library (androidx.webkit's WebViewAssetLoader, always at appassets.androidplatform.net) reads like
   // a file: no server answers there. The one place the page tells the two apart.
@@ -55,12 +55,13 @@
   // through a transposition, as on a guitar: the shapes move instead.
   // nm: the chord names as numerals beside them ("both") or in their place ("numerals"), null for the
   // chords alone; roles: the numerals in their families' colours; necks: the rail of necks shown, on a screen
-  // wide enough for it; py: each Chinese character's reading over it (pinyin), on a sheet with Chinese.
+  // wide enough for it; py: each Chinese character's reading over it (pinyin), on a sheet with Chinese; trad: its
+  // Chinese in Traditional characters, else in Simplified ones.
   // inst: the instrument the chords are drawn and heard for (data.instruments' id), the player's: kept once for every
   // page, as the rail of necks is.
   const state = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, fs: FS.start, strip: false,
     speed: SPEED.start, nm: null, roles: true, kn: "scale", bpm: BPM.start, vol: VOL, necks: true, py: false,
-    inst: "guitar" };
+    trad: false, inst: "guitar" };
   const store = "caracole-viewer:" + location.pathname;
   // Chords chosen instead of others are kept for the sheet's chords by index: they only hold
   // while the sheet's chords do.
@@ -101,17 +102,17 @@
   // The shapes kept chosen, each with the chord it was chosen for (atSigns): read back once the chords
   // can be named (below setAt), as only a chord still named so gets its shape back.
   let keptAt = null;
-  // Where an address (or the song's own version) plays the song: what it names of it.
-  const adopt = (params) => {
-    if (params.has("alt")) state.alt = swapsOf(params.get("alt"));
+  // Where an address (or the song's own version) plays the song: what it names of it, into the state (or ``into``).
+  const adopt = (params, into = state) => {
+    if (params.has("alt")) into.alt = swapsOf(params.get("alt"));
     if (params.has("at")) {
-      state.at = positionsOf(params.get("at"));
-      keptAt = null;  // the address says which
+      into.at = positionsOf(params.get("at"));
+      if (into === state) keptAt = null;  // the address says which
     }
-    if (params.has("t")) state.t = clampT(params.get("t"));
-    if (validMode(params.get("mode"))) state.mode = params.get("mode");
-    if (params.has("capo")) state.capo = fretOf(params.get("capo"));
-    if (params.has("nm")) state.nm = nmOf(params.get("nm"));
+    if (params.has("t")) into.t = clampT(params.get("t"));
+    if (validMode(params.get("mode"))) into.mode = params.get("mode");
+    if (params.has("capo")) into.capo = fretOf(params.get("capo"));
+    if (params.has("nm")) into.nm = nmOf(params.get("nm"));
   };
   // The song's own version (overrides.toml's [version], "Make this my version"), which its PDF is in: the page
   // starts there when its address names no version of its own, and Reset everything goes back there.
@@ -171,6 +172,18 @@
       localStorage.setItem(PINYIN, state.py ? "shown" : "hidden");
     } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
   };
+  // So are the characters the Chinese is shown in (the settings' Chinese characters): kept once for every page, and
+  // in the address while they are Traditional (trad=1, as they start Simplified).
+  const HANZI = "caracole-viewer-hanzi";
+  try {
+    if (localStorage.getItem(HANZI) === "traditional") state.trad = true;
+  } catch (err) { /* no storage: Simplified, unless the address says otherwise */ }
+  if (hash.get("trad") === "1") state.trad = true;
+  const keepHanzi = () => {
+    try {
+      localStorage.setItem(HANZI, state.trad ? "traditional" : "simplified");
+    } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
+  };
   // And so is the instrument (the settings' Instrument menu): the player's, kept once for every page, and in the address
   // (inst=ukulele) while it is another than the guitar, or always for a song whose own version names one (a songbook's
   // entry played on another instrument): that song starts on it when its address names no version, as it starts in
@@ -224,6 +237,7 @@
       keep("vol", state.vol, state.vol !== VOL);
       keep("necks", "0", !state.necks);
       keep("py", "1", state.py);
+      keep("trad", "1", state.trad);
       keep("inst", state.inst, state.inst !== "guitar" || Boolean(startInst));
       const fragment = params.toString();
       if (fragment !== location.hash.slice(1)) {
@@ -234,9 +248,9 @@
     versionLinks();
   };
 
-  // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the server's export page
-  // for this very address, followed in this tab (the sandbox has no popups); from a file, a row that unfolds the
-  // command that makes it, with Copy.
+  // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the PDF itself for this very
+  // address (caracole serve's /export.pdf, which answers it as a download: the sandbox allows downloads, and the page
+  // stays where it is); from a file, a row that unfolds the command that makes it, with Copy.
   const exportLink = () => {
     const link = $("export");
     const cmd = $("export-cmd");
@@ -246,7 +260,7 @@
     const version = new URLSearchParams(location.hash.slice(1));
     if (!served) {
       const quoted = (text) => "'" + text.replace(/'/g, "'\\''") + "'";
-      for (const name of ["fs", "speed", "vol", "necks", "py"]) version.delete(name);
+      for (const name of ["fs", "speed", "vol", "necks", "py", "trad"]) version.delete(name);
       cmd.textContent = "caracole render --song " + songNamed()
         + " --version " + quoted(version.toString().replace(/%2C/g, ","));
       link.hidden = true;
@@ -260,8 +274,70 @@
     const query = new URLSearchParams();
     query.set("sheet", sheetPath());
     version.forEach((value, name) => query.append(name, value));
-    link.setAttribute("href", "/export?" + query.toString());
+    link.setAttribute("href", "/export.pdf?" + query.toString());
   };
+  // What of where the song is played makes its music (the key, the mode, the capo, the chords swapped in that mode and
+  // the shapes chosen), never how it is read (the text size, the scroll, the chord names, the necks, the pinyin, the
+  // strum, and the instrument, the player's): two states that play the song alike say the same.
+  const musicOf = (s) => {
+    const mode = key ? s.mode || key.mode : "";
+    const swaps = (s.alt && s.alt[mode]) || {};
+    const alt = Object.keys(swaps).filter((i) => Array.isArray(swaps[i])).sort((a, b) => a - b)
+      .map((i) => [i].concat(swaps[i]).join("."));
+    const at = Object.keys(s.at || {}).filter((i) => Number(s.at[i]) > 0).sort((a, b) => a - b)
+      .map((i) => i + "." + s.at[i]);
+    return [s.t, mode, s.capo === null ? sheetCapo : s.capo, alt.join(","), at.join(",")].join("|");
+  };
+  // The song's own version, where the page opens with no version in its address (data.start over the sheet at its
+  // [transpose]), or the one made the song's own on this page since (Download and make it mine), which its job saves.
+  let madeMine = null;
+  const ownMusic = () => {
+    if (madeMine !== null) return madeMine;
+    const mine = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null };
+    adopt(start, mine);
+    return musicOf(mine);
+  };
+  // Served, Export PDF pressed on a version other than the song's own asks first: make it your version too (the
+  // download with mine=1, which queues `caracole render --mine`: its PDF, its viewer and its songbooks then start
+  // there), just download it, or neither. A modal dialog, the song dimmed under it: its focus goes round within it, and
+  // Escape, ×, Cancel or a tap beside its box closes it, the focus back on Export PDF. On the song's own, the download
+  // at once.
+  const ask = $("export-ask");
+  if (ask && $("export")) {
+    const title = (document.querySelector("h1") || {}).textContent || "";
+    $("export").addEventListener("click", (e) => {
+      if (!served || musicOf(state) === ownMusic()) return;
+      e.preventDefault();
+      const href = $("export").getAttribute("href");
+      $("ask-title").textContent = "Make this your version of " + title + "?";
+      $("ask-version").textContent = versionWords().filter(Boolean).join(", ");
+      $("ask-just").setAttribute("href", href);
+      $("ask-mine").setAttribute("href", href + "&mine=1");
+      ask.showModal();
+      $("ask-title").focus({ preventScroll: true });
+    });
+    ask.addEventListener("click", (e) => {
+      if (e.target === ask) ask.close();  // beside its box: the backdrop
+    });
+    for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => ask.close());
+    $("ask-mine").addEventListener("click", () => {
+      madeMine = musicOf(state);
+      ask.close();
+    });
+    ask.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();  // the dialog closes itself, and nothing under it
+        return;
+      }
+      if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+      const mine = Array.from(ask.querySelectorAll(FOCUSABLE)).filter(reachable);
+      const here = mine.indexOf(document.activeElement);
+      const to = e.shiftKey ? (here <= 0 ? mine[mine.length - 1] : null) : (here === mine.length - 1 ? mine[0] : null);
+      if (!to) return;
+      e.preventDefault();
+      to.focus();
+    });
+  }
   // The page's path in the library, as caracole serve serves it ("Artist/Title/sheet.html"); its file name.
   const sheetPath = () => decodeURIComponent(location.pathname.slice(1));
   const pageName = () => {
@@ -875,7 +951,7 @@
     drawSpeed();
     drawStrip();
     drawNecks();  // before layout(), which measures the song beside the rail
-    drawPinyin();  // and the words with their readings
+    drawWords();  // and the words in the characters chosen, with their readings
     layout();  // fit() too
     drawHeadings();
     if (!harmony.hidden) drawHarmony();
@@ -1166,17 +1242,58 @@
     });
   }
 
-  // --- pinyin: each Chinese character's reading over it ------------------------------------------------
-  // data.pinyin (page.py, pinyin.py: read in context at render time): for each line of the song's sections, in
-  // the page's order, each of its characters' reading, "" for a letter, a space or punctuation, or null for a
-  // line with no Chinese; none for a sheet with none, which has no Pinyin row. Shown (state.py: the settings'
-  // Pinyin), each character with a reading is a ruby, the reading over it, between its chord and it
-  // (viewer.css: a chord stays over its character's column); hidden, the words are again as the page wrote them.
+  // --- the Chinese: in Simplified or Traditional characters, each character's reading over it ---------------
+  // data.hanzi (page.py, hanzi.py: converted at render time, word by word), for a sheet with Chinese: each text the
+  // sheet writes in its words (a line's, a section's label, a tab, a line of the notes' peek) in Simplified
+  // characters and in Traditional ones, where that isn't the text as written, each as long as its text. Shown
+  // (state.trad: the settings' Chinese characters, Simplified at first), each text is in the characters chosen, cut
+  // again where the page cut it (into a line's columns, under its chords), and the sheet's language says which.
+  // data.pinyin (page.py, pinyin.py: read in context at render time): for each line of the song's sections, in the
+  // page's order, each of its characters' reading, "" for a letter, a space or punctuation, or null for a line with
+  // no Chinese; none for a sheet with none, which has neither row. Shown (state.py: the settings' Pinyin), each
+  // character with a reading is a ruby, the reading over it, between its chord and it (viewer.css: a chord stays
+  // over its character's column), in either script: a character's reading is its own in both.
   const pyLines = Array.isArray(data.pinyin) ? data.pinyin : [];
   const pyCan = pyLines.some((line) => Array.isArray(line));
   const pyChip = $("pinyin-chip");
-  const pyWritten = new Map();  // each element drawn with readings: its text as the page wrote it
-  let pyDrawn = false;
+  const hanzi = data.hanzi && typeof data.hanzi === "object" ? data.hanzi : null;
+  const hanRow = $("hanzi-row");
+  // Where the sheet writes words, each with its text as the page wrote it: a line's words (its columns, .y and .w,
+  // or a line of text whole), with its readings where it is a line of the song's; and a section's label, a tab and
+  // a line of the notes' peek, each a text node (a label's progression, which the numerals name, follows it).
+  const units = [];
+  if (pyCan || hanzi) {
+    const songLines = Array.from(sheetEl.querySelectorAll(":scope > section.sec > p.l"));
+    for (const line of sheetEl.querySelectorAll("p.l:not(.chords)")) {
+      const nodes = line.querySelector(".y, .w") ? Array.from(line.querySelectorAll(".y, .w"))
+        : line.firstElementChild ? [] : [line];
+      const n = songLines.indexOf(line);
+      if (nodes.length) {
+        units.push({ line, nodes, texts: nodes.map((node) => node.textContent),
+          readings: n >= 0 && Array.isArray(pyLines[n]) ? pyLines[n] : null });
+      }
+    }
+    for (const box of sheetEl.querySelectorAll("h2.lbl, pre.tab, .peek")) {
+      for (const node of Array.from(box.childNodes)) {
+        if (node.nodeType === Node.TEXT_NODE) units.push({ line: null, nodes: [node], texts: [node.data], readings: null });
+      }
+    }
+  }
+  const chars = (text) => Array.from(text);  // a character a code point, as hanzi.py and pinyin.py count them
+  // A unit's texts in ``script``'s characters: the whole converted, then cut where the page cut it; as written where
+  // the data has none, or one of another length (not this page's).
+  const inScript = (unit, script) => {
+    const whole = unit.texts.join("");
+    const table = script && hanzi && hanzi[script] && typeof hanzi[script] === "object" ? hanzi[script] : null;
+    const shown = table && own.call(table, whole) && typeof table[whole] === "string" ? chars(table[whole]) : null;
+    if (!shown || shown.length !== chars(whole).length) return unit.texts;
+    let at = 0;
+    return unit.texts.map((text) => {
+      const part = shown.slice(at, at + chars(text).length).join("");
+      at += chars(text).length;
+      return part;
+    });
+  };
   const ruby = (character, reading) => {
     const out = document.createElement("ruby");
     out.className = "py";
@@ -1187,17 +1304,20 @@
     rt.setAttribute("aria-hidden", "true");  // a screen reader reads the characters themselves
     return out;
   };
-  // One line's words (a sung line's columns, or a line of text whole) with their characters' readings.
-  const withReadings = (line, readings) => {
-    const words = line.querySelector(".y, .w") ? Array.from(line.querySelectorAll(".y, .w")) : [line];
-    const texts = words.map((word) => Array.from(word.textContent));
-    if (texts.reduce((n, chars) => n + chars.length, 0) !== readings.length) return;  // not this page's lines
+  // A unit drawn with ``texts``, and ``readings`` (one a character, of its texts together) over its characters.
+  const drawUnit = (unit, texts, readings) => {
+    const read = readings && readings.length === texts.reduce((n, text) => n + chars(text).length, 0) ? readings : null;
     let at = 0;
-    words.forEach((word, k) => {
+    let rubies = false;
+    unit.nodes.forEach((node, k) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (node.data !== texts[k]) node.data = texts[k];
+        return;
+      }
       const parts = [];
       let plain = "";
-      for (const character of texts[k]) {
-        const reading = readings[at++];
+      for (const character of chars(texts[k])) {
+        const reading = read ? read[at++] : "";
         if (typeof reading === "string" && reading) {
           if (plain) parts.push(document.createTextNode(plain));
           plain = "";
@@ -1206,31 +1326,35 @@
           plain += character;
         }
       }
+      if (!parts.length) {
+        if (node.firstElementChild || node.textContent !== plain) node.textContent = plain;
+        return;
+      }
       if (plain) parts.push(document.createTextNode(plain));
-      if (!parts.some((part) => part.nodeName === "RUBY")) return;
-      pyWritten.set(word, word.textContent);
-      word.textContent = "";
-      for (const part of parts) word.appendChild(part);
+      node.textContent = "";
+      for (const part of parts) node.appendChild(part);
+      rubies = true;
     });
-    line.classList.add("py");  // its columns keep the readings' room (viewer.css)
+    if (unit.line) unit.line.classList.toggle("py", rubies);  // its columns keep the readings' room (viewer.css)
   };
-  function drawPinyin() {
+  let wordsDrawn = "";  // as the page wrote them
+  function drawWords() {
     if (pyChip) {
       $("pinyin-row").hidden = !pyCan;
       pyChip.setAttribute("aria-pressed", state.py ? "true" : "false");
     }
-    const on = pyCan && state.py;
-    if (on === pyDrawn) return;
-    pyDrawn = on;
-    if (on) {
-      sheetEl.querySelectorAll(":scope > section.sec > p.l").forEach((line, n) => {
-        if (Array.isArray(pyLines[n])) withReadings(line, pyLines[n]);
-      });
-      return;
+    if (hanRow) {
+      hanRow.hidden = !hanzi;
+      $("hanzi-s").setAttribute("aria-pressed", state.trad ? "false" : "true");
+      $("hanzi-t").setAttribute("aria-pressed", state.trad ? "true" : "false");
     }
-    pyWritten.forEach((text, word) => { word.textContent = text; });
-    pyWritten.clear();
-    for (const line of sheetEl.querySelectorAll(".l.py")) line.classList.remove("py");
+    const script = hanzi ? (state.trad ? "traditional" : "simplified") : "";
+    const py = pyCan && state.py;
+    const now = script + (py ? "+py" : "");
+    if (now === wordsDrawn) return;
+    wordsDrawn = now;
+    if (hanzi) sheetEl.lang = state.trad ? "zh-Hant" : "zh-Hans";
+    for (const unit of units) drawUnit(unit, inScript(unit, script), py ? unit.readings : null);
   }
   if (pyChip) {
     pyChip.addEventListener("click", () => {
@@ -1238,6 +1362,16 @@
       keepPinyin();
       render();
       place();  // an open card goes with its chord
+    });
+  }
+  for (const [id, trad] of [["hanzi-s", false], ["hanzi-t", true]]) {
+    if (!$(id)) continue;
+    $(id).addEventListener("click", () => {
+      if (state.trad === trad) return;
+      state.trad = trad;
+      keepHanzi();
+      render();
+      place();
     });
   }
 
@@ -1275,6 +1409,7 @@
     const name = label(i, rep);
     const found = numbered() ? reading(i, chordEls.indexOf(shown.el), shown.pick) : null;
     $("card-name").textContent = found ? name + " · " + found.text : name;
+    $("card-tip").hidden = !tipDraws(i, chordEls.indexOf(shown.el));
     const shapes = shapesOf(rep, shift());
     const box = $("diagram");
     box.textContent = "";
@@ -1599,7 +1734,7 @@
   // note of the chord is outside the key when it isn't one of them, and the line under the picture names it, with
   // the key's note of its letter.
   const tip = $("tip");
-  let tipOf = null, leaving = 0;
+  let tipOf = null, tipI = null, leaving = 0;  // what the tooltip is by (a chord, or the strip's button), its chord
   function hideTip() {
     clearTimeout(leaving);
     if (tip.hidden) return;
@@ -1607,7 +1742,7 @@
     tip.hidden = true;
     if (tipOf) tipOf.removeAttribute("aria-describedby");
     if (inside && tipOf && tipOf.isConnected) tipOf.focus({ preventScroll: true });  // not lost with the tooltip
-    tipOf = null;
+    tipOf = tipI = null;
   }
   const ROLES = { h: "home", a: "away", p: "pull" };
   const MODE_WORDS = { ionian: "major", aeolian: "minor" };
@@ -1781,9 +1916,10 @@
     tip.style.setProperty("--tip-top", Math.round(top + window.scrollY) + "px");
     tip.style.setProperty("--tip-left", Math.round(left + window.scrollX) + "px");
   };
-  function showTip(el) {
-    const i = el.dataset.c;
-    const found = reading(i, chordEls.indexOf(el));
+  // The chord ``i`` (by default the chord ``el``'s), read at its place on the sheet ``k``, as the one played now:
+  // its tooltip by ``el``, a chord on the sheet or the strip's button the card was opened from.
+  function showTip(el, i = el.dataset.c, k = chordEls.indexOf(el)) {
+    const found = reading(i, k);
     if (!found) return;
     clearTimeout(leaving);
     if (tipOf && tipOf !== el) tipOf.removeAttribute("aria-describedby");
@@ -1802,12 +1938,25 @@
     $("tip-switch").hidden = $("tip-view").hidden && $("tip-hear").hidden;  // nothing to switch, nothing to hear
     tip.hidden = false;
     tipOf = el;
+    tipI = i;
     el.setAttribute("aria-describedby", "tip");
     placeTip();
   }
   $("tip-hear").addEventListener("click", () => {
-    const heard = tipOf ? tipSound(tipOf.dataset.c) : null;
+    const heard = tipOf ? tipSound(tipI) : null;
     if (heard) sound.strum(heard.position, { capo: heard.capo, tuning: inst().tuning, voice: inst().voice });
+  });
+  // Whether the tooltip has the chord ``i``'s notes to draw, as it is played now (at its place ``k``): its numeral, its
+  // notes in the tables and the key's. The card offers Circle & keyboard where it has, which closes the card and opens
+  // the tooltip by the chord the card is by (its numeral where the sheet shows one, else its name), the focus on its
+  // first button: the chords' names alone have no numeral to hover or tap.
+  const tipDraws = (i, k) => Boolean(reading(i, k)) && Boolean(tonesOf(current(i))) && Boolean(keyNotes());
+  $("card-tip").addEventListener("click", () => {
+    const i = shown.i, k = chordEls.indexOf(shown.el), by = anchor();
+    close(card);
+    showTip(by, i, k);
+    const first = ["tip-view", "tip-hear"].map($).find((b) => !b.hidden && b.getClientRects().length > 0);
+    if (!tip.hidden && first) first.focus({ preventScroll: true });
   });
   document.addEventListener("pointerdown", (e) => {
     const target = e.target instanceof Element ? e.target : null;
@@ -2086,6 +2235,7 @@
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
     if (!state.necks) params.set("necks", "0");  // the rail hidden there too
     if (state.py) params.set("py", "1");  // and the pinyin shown
+    if (state.trad) params.set("trad", "1");  // and the Chinese in Traditional characters
     if (state.inst !== "guitar") params.set("inst", state.inst);  // and the instrument
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
@@ -2294,12 +2444,13 @@
   });
   $("reset-all").addEventListener("click", () => {
     Object.assign(state, { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null, nm: null,
-      necks: true, py: false });
+      necks: true, py: false, trad: false });
     for (const i of Object.keys(atSeen)) delete atSeen[i];  // the version's shapes are for its own chords
     adopt(start);  // the song's own version, if it has one
     if (startInst) state.inst = startInst;  // and its instrument; else the instrument stays the player's
     keepNecks();  // the rail of necks back, on every sheet
     keepPinyin();  // and the pinyin off
+    keepHanzi();  // and the Chinese in Simplified characters
     render();
     place();
   });

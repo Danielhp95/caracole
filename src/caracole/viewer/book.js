@@ -100,11 +100,11 @@
     if (current) book.y = Math.round(window.scrollY);
     keep();
   };
-  // The rail of necks, the pinyin and the instrument are the screen's choices, not a song's: where there is no
-  // storage (caracole serve's sandbox), the address the viewer keeps them in ("necks=0", "py=1", "inst=ukulele")
-  // goes on with every step, to the next song or the contents. From a song on an instrument of its own, the step goes
-  // on with the player's.
-  const SCREEN = ["necks", "py", "inst"];
+  // The rail of necks, the pinyin, the Chinese characters and the instrument are the screen's choices, not a song's:
+  // where there is no storage (caracole serve's sandbox), the address the viewer keeps them in ("necks=0", "py=1",
+  // "trad=1", "inst=ukulele") goes on with every step, to the next song or the contents. From a song on an instrument
+  // of its own, the step goes on with the player's.
+  const SCREEN = ["necks", "py", "trad", "inst"];
   const carryScreen = (from) => {
     const at = String(from || "").indexOf("#");
     const was = new URLSearchParams(at >= 0 ? from.slice(at + 1) : "");

@@ -235,7 +235,7 @@ def test_the_policy_allows_exactly_its_scripts_and_styles():
     assert csp.startswith("default-src 'none'; ") and "unsafe" not in csp
     assert all(sha(s) in csp for s in scripts + styles)
     assert "form-action 'none'" in csp and "base-uri 'none'" in csp
-    assert songbook_csp(html.encode("utf-8")) == "sandbox allow-scripts; " + csp  # the policy of those bytes
+    assert songbook_csp(html.encode("utf-8")) == "sandbox allow-scripts allow-downloads; " + csp  # the policy of those bytes
 
 
 def test_the_page_loads_nothing_and_credits_the_fingerings():

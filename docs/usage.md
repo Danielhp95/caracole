@@ -1493,17 +1493,20 @@ and cache.
   caracole serve refuses one from a kept version's page (`version-<tab>.html`)
   too, for the same reason: make that version the one first, then export it
   from the song's own viewer.
-  On `caracole serve` it opens `/export` in the same tab: the version in words ("G Dorian,
-  capo 0"), Make PDF (this command, queued like any request), the job's line,
-  then Open the PDF and Back to the sheet, which keeps the viewer's address.
-  Below Make PDF, **Make this my version** queues the same command with
-  `--mine` (caracole serve writes no overrides.toml itself); once it is done
-  the page says so and links the song's own PDF. On the version the song
-  plays in already (its `[version]`, else its `[transpose]`, else as written),
-  the page says "It is your version" instead; for a `[version]` caracole
-  wrote as a move from the sheet (`t=`, before it kept a key), it adds that a
-  sheet in another key in its place would move it, and offers **Keep it in
-  this key**, the same command, which writes it by its key.
+  On `caracole serve` it downloads the PDF at once (`/export.pdf`, see
+  [caracole serve](#caracole-serve)): this command's PDF, made in a private
+  folder and written nowhere in the library, so it isn't listed among the
+  song's PDF exports; the viewer stays where it is. On the version the song
+  plays in already (its `[version]`, else its `[transpose]`, else as written:
+  where the viewer opens), that is all. On any other key, mode, capo, chord
+  played instead or shape chosen, it first asks **Make this your version of
+  Amazing Grace?**, with the version in words ("D Dorian, capo 2") and "Its
+  PDF, its viewer and your songbooks will start there.": **Download and make
+  it mine** downloads it and queues the same command with `--mine` (caracole
+  serve writes no overrides.toml itself), **Just download** downloads it, and
+  Cancel (or Escape, or ×) does neither. The text size, the scroll speed,
+  the chord names, the necks, the pinyin, the strum and the instrument are
+  how you read the song, not where it is played: they ask nothing.
   Opened from a file, the viewer shows the command to run instead, with Copy,
   and says that `--mine` makes it your version.
   chordpro works on a copy, in a private folder in the cache, and the new PDF
@@ -2302,7 +2305,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   for a chord in the key (Dm7 in C: D Dorian), the mode of the key a borrowed
   chord comes from, Mixolydian for a secondary dominant, and by its quality
   otherwise (Locrian for m7♭5); both follow the transposition, the capo and the
-  mode, and a chord you try instead in the card. The card leaves the song in
+  mode, and a chord you try instead in the card. **Circle & keyboard**, at the
+  card's head, closes it and opens the chord's tooltip (its notes on a circle
+  or a keyboard, below), by the chord: its numeral where the sheet shows one,
+  else its name, so the chords' names alone reach it too. It shows the chord
+  played there now (one you chose instead, else the sheet's), and only where
+  the tooltip has its notes to draw (the key known, the chord one caracole
+  can read). The card leaves the song in
   view: on a phone it sits at the foot, above the bar, about 270 px tall, and
   the song scrolls
   under it (a chord tapped where the card comes up moves above it, with its
@@ -2459,7 +2468,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   song the songbook plays on an instrument of its own keeps that one to
   itself: the songs after it are on yours again, the last you chose).
   **Reset everything** leaves it as it is. **Export PDF** makes the PDF on
-  the instrument shown, and **Make this my version** keeps it, so the song
+  the instrument shown, and **Download and make it mine** keeps it, so the song
   opens there (`caracole render --version`'s `inst=`); a songbook may play a
   song on its own (`caracole songbook set --instrument`).
 - **The versions** of a song Ultimate Guitar has several of: under the key
@@ -2582,7 +2591,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   button, strums the chord as its card plays it (none with the strum Off).
   Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
-  chord's name opens its card, which names the numeral too ("Bb · ♭VII").
+  chord's name opens its card, which names the numeral too ("Bb · ♭VII"), and
+  whose Circle & keyboard opens this tooltip, with the chords' names alone too.
   A song whose key caracole can't tell offers chords alone (the numerals
   greyed), and says so.
 - **Harmony ›** (in the settings, with Guitar Pro tab and Export PDF after a
@@ -2644,7 +2654,24 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shapes alone, large enough to read at a glance; tap one for its card,
   with the fingers. Reset everything, alone at the foot of the settings, puts the
   transposition, the mode, the capo and the chords played instead back as
-  the viewer starts them, shows the rail of necks again and hides the pinyin.
+  the viewer starts them, shows the rail of necks again, hides the pinyin and
+  shows the Chinese in Simplified characters.
+- **Simplified 简体 · Traditional 繁體**, right above Pinyin in the settings of a
+  sheet with Chinese lyrics: the characters the sheet's Chinese is shown in,
+  Simplified as the viewer starts, whichever the sheet is written in. A sheet in
+  Traditional characters shows in Simplified ones until you choose Traditional,
+  and a sheet in Simplified ones shows in Traditional ones (Taiwan's: 為, 裡, 著)
+  once you do: its lines, the notes before the song and the sections' headings,
+  never the title. Each text is converted when the page is made, word by word
+  (by OpenCC, as one Simplified character may be two Traditional ones: 头发 is
+  頭髮, 发现 發現; 睡著 is 睡着, 著名 stays), a character for a character, so each
+  chord stays over its character and each reading of the Pinyin over its own.
+  A sheet is written in the script most of its own characters are; in that
+  script it shows as written. OpenCC is not always right (我是只会 comes out as
+  我是隻會 in Traditional), so a sheet UG has in either script reads best in its
+  own. Kept as Pinyin is: once for every sheet and songbook, and in the address
+  (`trad=1`) while it is Traditional. The PDFs and the library page show the
+  sheet as written.
 - **Pinyin**, a switch in the settings of a sheet with Chinese lyrics: on, it puts
   each Chinese character's reading over it, in pinyin with its tone marks
   (zhǐ), smaller and muted, between its chord and it; off, as the viewer starts,
@@ -2697,7 +2724,8 @@ named otherwise when the page opens (an address with another key, mode or
 capo), or on another instrument, starts at its first shape. It keeps the transposition, the mode, the
 capo, the chord names (`nm=both`, `nm=numerals`), the text size, the scroll speed and the
 volume in its address too (`sheet.html#t=2&mode=aeolian&fs=20&speed=8&vol=1`), the rail of necks hidden
-(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the instrument
+(`necks=0`; the browser keeps that once for every page), the pinyin shown (`py=1`, kept so too), the Chinese in
+Traditional characters (`trad=1`, kept so too), the instrument
 (`inst=piano`, kept so too), and so the shape chosen for a
 chord, on its card or its neck (`at=3.2`: chord 3, its third shape), and the
 chords played instead of others (`alt=ionian.0.7.maj7.`: mode, chord, root,
@@ -3543,7 +3571,9 @@ Who can reach it, below).
   failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
   UG**, drawn plain (dashed), never as a failure: the sheet may come from
   LaCuerda. A step that turns out not to apply drops out, and the count with
-  it (no PDF without a sheet, no Songbooks when no songbook lists the song).
+  it (no PDF without a sheet, no Songbooks when no songbook lists the song);
+  the Sheet a cooldown, a block or a spent budget stopped stays, red, as one a
+  site's error stopped, so a lookup that ends Not fetched yet shows it.
   A request that looks nothing up (an add for tonight, a removal, a songbook's
   change) keeps its one line. How it ended:
   - **Ready**: the steps fold away and nothing takes their place; the line is
@@ -3607,13 +3637,14 @@ Who can reach it, below).
     step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
-    of a song with no sheet); for a request of other commands, its commands.
+    of a song with no sheet, but never the Sheet a cooldown, a block or a spent
+    budget stopped, drawn failed); for a request of other commands, its commands.
     Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and
     one that is over stays). A cancelled request is over, never run: it stays
     in the history as **Cancelled**, and the pages that follow it (the library
-    page on another device, the lookup, export and versions pages) say so, the
+    page on another device, the lookup and versions pages) say so, the
     song's line getting its Fetch now back. Cancelling a request leaves its wanted.txt line:
     the song is in your library's list from the moment you asked, and the
     nightly run looks for it; remove it from the library if you don't want it.
@@ -3657,10 +3688,9 @@ Who can reach it, below).
       **Deleted**, **Added** (the nightly run looks for it), and a LaCuerda
       artist page's **Read**, **Not found** or **Not read** (Try again), each
       in a word and a sentence;
-    - an export's **PDF made** · **Open the PDF** (or **Failed**, no PDF was
-      found, with Try again), and Make this my version's **Your version now**
-      · **Open sheet**: never its song's request, whose line on the library
-      page stays its own.
+    - Make this my version's **Your version now** · **Open sheet** (Export
+      PDF's Download and make it mine): never its song's request, whose line
+      on the library page stays its own.
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and
@@ -3685,6 +3715,19 @@ Who can reach it, below).
   line on `/jobs`, its output open; a pick, to its line; a lookup, to the
   lookup page, which follows it (one from the requests page's Get it from
   there, back to `/jobs`).
+- **A sheet's PDF.** The sheet viewer's Export PDF is a link to
+  `/export.pdf?sheet=<the viewer's path in the library>&<its address after
+  #>`, which makes the PDF of that version now and sends it as a download,
+  named for the song and the version (`Soda Stereo - De Música Ligera (A
+  Major, capo 0).pdf`): the PDF `caracole render --version` would write, made
+  in a private folder in the cache and written nowhere else, so nothing is
+  added to the library, the song's PDF exports or the requests, and it takes
+  no lock. A PDF that can't be made (chordpro failing, a CJK font needed and
+  not set) is refused with the reason (500). With `&mine=1` (Download and
+  make it mine) it also queues `caracole render --song … --version …
+  --mine`, which makes that version your version, as a request of its own
+  ("Your version now"). The auto sheet's viewer kept beside a human sheet and
+  a kept version's page get none (409), as above.
 - **A sheet's versions.** The sheet viewer's Make this the one and Keep it
   open `/versions?sheet=…&tab=…&do=choose|keep` in the same tab (the viewer
   runs in a sandbox, with no way to send a form), and `do=clear` is Back to
@@ -3926,7 +3969,11 @@ tailnet, never the internet.
 - Every form must come from the server's own page: it carries a token the
   server makes when it starts, and a request from another site is refused
   (403). A form posted from a page older than the server's last start is
-  refused too; reload the page. `/jobs.json`, which the page's script reads,
+  refused too; reload the page. The one exception, your choice: Export PDF's
+  Download and make it mine is a plain link (`/export.pdf?…&mine=1`), with no
+  token, so a page on another site could change a song's saved version with a
+  link of its own. Nothing is lost: Reset, or another version made yours,
+  undoes it. `/jobs.json`, which the page's script reads,
   is refused the same way, and needs the same token in an
   `X-Caracole-Form-Token` header: a song's line then says the server has restarted.
   Only the served page may ask the server anything from its script (its

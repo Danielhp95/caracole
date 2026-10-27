@@ -523,7 +523,7 @@ def test_harmony_guitar_pro_and_export_are_rows_at_the_end(tmp_path):
         ["harmony-open", "Harmony", "progressions, scale"], ["", "Guitar Pro tab", "in the browser"],
         ["export", "Export PDF", "D Major"]]
     assert served_rows["rows"][1][3] == "/guitar?file=" + "Artist%2FFiles%2Fguitar-1.gp5"
-    assert served_rows["rows"][2][3].startswith("/export?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
+    assert served_rows["rows"][2][3].startswith("/export.pdf?sheet=Artist%2FFiles%2Fsheet.html&t=-2")
 
 
 @in_chromium
@@ -1076,3 +1076,140 @@ def test_the_file_viewer_shows_the_command_to_export(tmp_path):
     assert "--mine" in shown["hint"]  # and how to make it the song's own version
     assert min(shown["copy"]) >= 44
     assert moved.endswith("--version 't=3&capo=1'")  # it follows the song
+
+
+# Served, a press on a link goes nowhere in these tests (no server answers /export.pdf here): a listener of the test's,
+# after the page's own, notes where it would have gone and whether the page kept it from going, and stops it.
+STOP_LINKS = """(() => { window.went = []; window.addEventListener('click', (e) => {
+  const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
+  if (a) { window.went.push([a.getAttribute('href'), e.defaultPrevented]); e.preventDefault(); } }); })()"""
+# Export PDF's question, while it is open: its words, its answers ([words, address, primary]), and whether it is
+# modal with the focus in it.
+ASKED = """(() => { const d = document.getElementById('export-ask'); if (!d || !d.open) return null;
+  const q = (s) => d.querySelector(s);
+  return {title: q('#ask-title').textContent, version: q('#ask-version').textContent, what: q('#ask-what').textContent,
+    answers: [...d.querySelectorAll('.ask-acts > *')].map((b) => [b.textContent, b.getAttribute('href'),
+      b.classList.contains('primary')]),
+    modal: d.matches(':modal'), focus: d.contains(document.activeElement)}; })()"""
+SHEET_PATH = "/Artist/Files/sheet.html"
+EXPORTS = "/export.pdf?sheet=Artist%2FFiles%2Fsheet.html"
+
+
+def press_export(b) -> None:
+    """The settings opened, and Export PDF pressed."""
+    b.js(STOP_LINKS)
+    b.click("#more")
+    b.click("#export")
+
+
+@in_chromium
+def test_export_downloads_the_own_version_at_once(tmp_path):
+    # Served, Export PDF is a link to the download itself: pressed on the song's own version, where the page opens,
+    # it goes there at once, and the page stays where it is (the sandbox allows downloads).
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    pages_served = {SHEET_PATH: (build_viewer(IN_E), viewer_csp),
+                    "/Artist/Mine/sheet.html": (build_viewer(IN_E, start="t=2&capo=0"), viewer_csp)}
+    with served(pages_served) as site, viewer(tmp_path, site + SHEET_PATH + "#fs=20") as b:
+        press_export(b)
+        plain = [b.js("window.went"), b.js(ASKED)]
+    with served(pages_served) as site, viewer(tmp_path, site + "/Artist/Mine/sheet.html") as b:
+        press_export(b)  # the song's own version is its [version]: two up, where the page opens
+        mine = [b.js("window.went"), b.js(ASKED)]
+    assert plain == [[[EXPORTS + "&fs=20", False]], None]
+    assert mine == [[["/export.pdf?sheet=Artist%2FMine%2Fsheet.html&t=2", False]], None]
+
+
+@in_chromium
+def test_a_changed_version_asks_before_downloading(tmp_path):
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site, viewer(tmp_path, site + SHEET_PATH) as b:
+        b.js(STOP_LINKS)
+        b.click("#more")
+        b.js("document.getElementById('capo-up').click(); document.getElementById('capo-up').click()")  # capo 2
+        b.click("#export")
+        assert b.wait("document.getElementById('export-ask').open")
+        asked = b.js(ASKED)
+        went = b.js("window.went")
+        b.press("Escape")
+        escaped = [b.js(ASKED), b.js("[document.activeElement.id, document.getElementById('panel').hidden]")]
+        b.click("#export")
+        assert b.wait("document.getElementById('export-ask').open")
+        b.click("#ask-cancel")
+        cancelled = [b.js(ASKED), b.js("window.went")]
+        b.click("#export")
+        b.click("#ask-x")
+        closed = b.js(ASKED)
+        b.click("#export")
+        b.click("#ask-just")
+        just = [b.js(ASKED), b.js("window.went.at(-1)")]
+        b.click("#export")
+        b.click("#ask-mine")
+        mine = [b.js(ASKED), b.js("window.went.at(-1)")]
+        b.click("#export")  # made yours on this page: the next one downloads at once
+        again = [b.js(ASKED), b.js("window.went.at(-1)")]
+        b.js("document.getElementById('capo-down').click()")
+        b.click("#export")  # another version again: asked again
+        other = b.js(ASKED)
+    link = EXPORTS + "&capo=2"
+    assert asked == {"title": "Make this your version of In E?", "version": "D Major, capo 2",  # D shapes, sounding E
+                     "what": "Its PDF, its viewer and your songbooks will start there.",
+                     "answers": [["Download and make it mine", link + "&mine=1", True], ["Just download", link, False],
+                                 ["Cancel", None, False]],
+                     "modal": True, "focus": True}
+    assert went == [[link, True]]  # the press itself went nowhere
+    assert escaped == [None, ["export", False]]  # Escape: the question alone, the focus back on Export PDF
+    assert cancelled == [None, [[link, True]] * 2] and closed is None  # two presses, neither going anywhere
+    assert just == [None, [link, False]] and mine == [None, [link + "&mine=1", False]]
+    assert again == [None, [link, False]]
+    assert other is not None and other["version"] == "Eb Major, capo 1"
+
+
+@in_chromium
+def test_the_question_keeps_the_focus_and_fits_a_phone(tmp_path):
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site, \
+            viewer(tmp_path, site + SHEET_PATH + "#t=3", **PHONE) as b:
+        press_export(b)
+        assert b.wait("document.getElementById('export-ask').open")
+        seen = []
+        for _ in range(5):
+            tab(b)
+            seen.append(b.js("document.activeElement.id"))
+        tab(b, back=True)
+        back = b.js("document.activeElement.id")
+        fits = b.js("""(() => { const r = document.getElementById('export-ask').getBoundingClientRect();
+          return [r.left >= 16, r.right <= innerWidth - 16, r.top >= 0, r.bottom <= innerHeight,
+                  document.documentElement.scrollWidth <= innerWidth]; })()""")
+        small = [t for t in b.js(small_targets()) if "licence" not in t["what"]]  # the page's own, under it
+    assert seen == ["ask-x", "ask-mine", "ask-just", "ask-cancel", "ask-x"]  # round within it
+    assert back == "ask-cancel" and all(fits) and small == []
+
+
+@in_chromium
+def test_reading_settings_are_no_change(tmp_path):
+    # Text size, scroll speed, the rail of necks, the chord names, the strum's loudness: none moves the song, so the
+    # song's own version still downloads at once
+    from caracole.viewer import viewer_csp
+    from test_viewer_necks import served
+
+    with served({SHEET_PATH: (build_viewer(IN_E), viewer_csp)}) as site, \
+            viewer(tmp_path, site + SHEET_PATH, **DESKTOP) as b:
+        b.js(STOP_LINKS)
+        b.click("#size")
+        b.click("#bigger")
+        b.click("#more")
+        b.js("[...document.querySelectorAll('#names > button')][1].click()")  # + Numerals
+        b.js("document.querySelectorAll('#volumes > button')[0].click()")  # the strum Off
+        b.click("#necks-chip")
+        b.js("document.getElementById('pill-faster').click()")
+        address = b.js("location.hash")
+        b.click("#export")
+        went = [b.js("window.went"), b.js(ASKED)]
+    assert "fs=" in address and "nm=both" in address and "vol=0" in address and "necks=0" in address
+    assert went[1] is None and went[0] == [[EXPORTS + "&" + address[1:], False]]

@@ -8,7 +8,7 @@ Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, Ca
 /jobs.json, /api/jobs),
 search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
 read, LaCuerda's own search), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
-sheet's PDF in the version its viewer was left in, and Make this my version), versions_routes.py
+sheet's PDF in the version its viewer was left in, downloaded at once, and Make this my version), versions_routes.py
 (a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick), guitar_routes.py
 (a song's Guitar Pro file in the browser, and alphaTab's bundle) and offline_routes.py (what caracole's Android
 app copies of the library, and the library page it starts from). A new route, or a new module of them, changes
@@ -23,7 +23,10 @@ Every request must name the server by a name it answers to (421 otherwise).
 Every POST must pass the cross-origin check and carry the form token (403),
 be a form (415) and be small (413). /jobs.json, which no form asks for, must
 pass the same cross-origin check and carry the form token in an
-``X-Caracole-Form-Token`` header (403).
+``X-Caracole-Form-Token`` header (403). One GET changes something, with
+neither, by the owner's choice (security.py): ``/export.pdf?…&mine=1``
+(export_routes.py), a plain link from the sandboxed viewer, which queues Make
+this my version.
 
 A route that turns a request down raises ``Refused`` (pages.py: a status, a
 title and one sentence), which ``WebApp.handle`` answers with the message page.

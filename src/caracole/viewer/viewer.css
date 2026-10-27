@@ -528,6 +528,10 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .roles .r-a { color: var(--away); }
 .roles .r-p { color: var(--pull); }
 #pinyin-row .hint { margin: -6px 0 4px; }
+/* The Chinese characters, Simplified or Traditional, as the chord names are chosen, above Pinyin: each segment named
+   in English, then in its own characters, muted. */
+#hanzi-row .seg { margin: 6px 0 4px; }
+#hanzi .zh { margin-left: 4px; color: var(--muted); font-weight: 500; }
 /* The instrument, a menu (the platform's own, its arrow drawn), and the strum's loudness, four speakers in a
    segmented control, on one line; on a screen too narrow for both, the speakers under the menu. An instrument's own
    rows (instruments.js) right under the line. */
@@ -637,6 +641,9 @@ a.ver-main .ver-name { color: var(--accent); }
 .info .sx { margin-left: .5em; color: var(--muted); }
 .card:not([hidden]) { display: grid; }
 .card .ui-head { grid-area: head; }
+/* Circle & keyboard, at the head's end before ×: the chord's notes in a numeral's tooltip (viewer.js). */
+.card-tip { flex: none; margin-left: auto; }
+.card-tip:not([hidden]) + .x { margin-left: 0; }
 .shape { grid-area: shape; display: grid; grid-template: "d d" auto "p n" auto / 44px 44px; justify-content: center;
   align-content: start; gap: 0 8px; }
 .shape .diagram { grid-area: d; }
@@ -664,6 +671,18 @@ a.ver-main .ver-name { color: var(--accent); }
 .card .hint { grid-area: note; margin-top: 8px; text-align: start; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 650; }
+/* Export PDF's question (viewer.js): a modal dialog in the middle of the screen, the song dimmed under it, a card like
+   the chord's; the version in bold, what it does under it, then its three answers a row each, the first the accent's.
+   Its box (.ask-in) holds the padding, so that a tap on the dialog itself is one on the backdrop. */
+.ask { width: min(400px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0;
+  border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
+  box-shadow: 0 12px 40px rgb(0 0 0 / .3); }
+.ask::backdrop { background: rgb(0 0 0 / .45); }
+.ask-in { padding: 6px 16px 16px; }
+.ask-v { margin: 2px 0 0; font-weight: 650; }
+.ask .hint { margin-top: 4px; font-size: .88rem; }
+.ask-acts { display: grid; gap: 8px; margin-top: 16px; }
+.ask-acts .btn { justify-content: center; width: 100%; }
 .noscript { position: fixed; bottom: 0; left: 0; right: 0; margin: 0; padding: 8px 16px; background: var(--raised);
   color: var(--muted); font-size: .85rem; text-align: center; }
 

@@ -2700,7 +2700,7 @@ def test_the_viewer_caracole_wrote_is_served_in_a_sandbox(app, conn, cfg):
         assert header(response, "content-type") == "text/html; charset=utf-8"
         policies = [v for k, v in response.headers if k.lower() == "content-security-policy"]
         own = META_POLICY.search(text(response)).group(1)
-        assert policies == [f"sandbox allow-scripts; {own}; frame-ancestors 'none'"]  # a sandbox, no framing
+        assert policies == [f"sandbox allow-scripts allow-downloads; {own}; frame-ancestors 'none'"]  # a sandbox, no framing
         assert header(response, "x-frame-options") == "DENY" and header(response, "cache-control") == "no-store"
         assert header(response, "x-content-type-options") == "nosniff"
         assert header(response, "content-disposition") is None
@@ -2723,7 +2723,7 @@ def test_a_viewer_written_before_an_upgrade_goes_out_with_its_own_policy(app, co
     scripts = re.findall(r"<script>(.*?)</script>", sent, re.S)
     assert f"script-src {' '.join(map(sha256_source, scripts))};" in policy
     assert f"style-src {sha256_source(re.search(r'<style>(.*?)</style>', sent, re.S).group(1))};" in policy
-    assert policy.startswith("sandbox allow-scripts; default-src 'none'; ")
+    assert policy.startswith("sandbox allow-scripts allow-downloads; default-src 'none'; ")
     assert policy.endswith("; frame-ancestors 'none'")
 
 
@@ -2860,7 +2860,7 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     assert route_for("GET", "/api/jobsx") is None and route_for("POST", "/songbook/nothing") is None
     assert route_for("POST", "/songbook/make").page == "the library"
     assert route_for("POST", "/lookup").page == "the page" and route_for("GET", "/jobs.json").script_only
-    assert route_for("POST", "/export").page == "the export page"
+    assert route_for("GET", "/export.pdf").path == "/export.pdf" and route_for("POST", "/export") is None
 
 
 # --- LaCuerda's own search -------------------------------------------------------------------------------
