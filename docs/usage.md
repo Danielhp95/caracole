@@ -3558,7 +3558,9 @@ Who can reach it, below).
   failed one red. A song Ultimate Guitar's index lacks reads **Match: not on
   UG**, drawn plain (dashed), never as a failure: the sheet may come from
   LaCuerda. A step that turns out not to apply drops out, and the count with
-  it (no PDF without a sheet, no Songbooks when no songbook lists the song).
+  it (no PDF without a sheet, no Songbooks when no songbook lists the song);
+  the Sheet a cooldown, a block or a spent budget stopped stays, red, as one a
+  site's error stopped, so a lookup that ends Not fetched yet shows it.
   A request that looks nothing up (an add for tonight, a removal, a songbook's
   change) keeps its one line. How it ended:
   - **Ready**: the steps fold away and nothing takes their place; the line is
@@ -3622,7 +3624,8 @@ Who can reach it, below).
     step it
     doesn't use (Songbooks when Get the missing songs makes the songbook
     after, a step that ended with nothing to do for the song, such as the PDF
-    of a song with no sheet); for a request of other commands, its commands.
+    of a song with no sheet, but never the Sheet a cooldown, a block or a spent
+    budget stopped, drawn failed); for a request of other commands, its commands.
     Under it, the requests queued, in order ("Queued, next", "Queued, 2nd"),
     each with **Cancel**, which takes it out of the queue before it starts
     (`POST /jobs/cancel`; a request that runs is never stopped halfway, and

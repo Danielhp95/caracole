@@ -12,7 +12,9 @@ the job and what the library knows of its song:
   fetch``), else by its step's label. A step is running while one of its stages runs, or once some ran and
   others wait; done once all are over, failed when one failed. A step the request doesn't use is not drawn:
   the songbooks of a lookup that leaves them to a later job (``--no-songbooks``), and a step whose every
-  stage ended skipped, with nothing to do for the song. Two steps name a site (``Chip.source``): Match the
+  stage ended skipped, with nothing to do for the song. The sheet skipped for a block, a cooldown or a spent
+  budget had something to do: it is the step that stopped the lookup, drawn failed, as a site's error leaves
+  it, so a lookup that ends Not fetched yet shows it. Two steps name a site (``Chip.source``): Match the
   offline index it matched in, Ultimate Guitar's ("Match UG"), or, for a song that index lacks, "Match: not
   on UG", drawn plain (``plain``: over, and no failure, as the sheet may come from LaCuerda); Sheet no site
   until it asks one, then the one it asks (its running detail, get.py's ``SHEET_FROM``: "Sheet LaCuerda"),
@@ -159,7 +161,7 @@ def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
     for name, names in LOOKUP_STEPS:
         if name == "Songbooks" and leaves_songbooks:
             continue
-        states = [by_name[n].state for n in names if n in by_name]
+        states = [_sheet_waited(by_name[n]) for n in names if n in by_name]
         state = _state(states)
         if state is None:
             continue
@@ -170,6 +172,13 @@ def _lookup_steps(job: Job, facts: SongFacts | None) -> list[Chip]:
         else:
             chips.append(Chip(name, state))
     return chips
+
+
+def _sheet_waited(stage: Stage) -> str:
+    """A stage's state as its step reads it: the sheet's, skipped for a block, a cooldown or a spent budget, is
+    ``failed``, as a site's error leaves it, never a step with nothing to do for the song: it is the step that stopped
+    a lookup that ends Not fetched yet."""
+    return "failed" if stage.name == "sheet" and stage.state == "skipped" and _waited(stage.detail) else stage.state
 
 
 def _match(stage: Stage, state: str) -> Chip:
