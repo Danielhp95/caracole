@@ -715,7 +715,8 @@ def _words(text: str) -> list[str]:
 # what the mode played sounds like, and a pill a mode, the song's own marked; after a rule, the chord names (Chords,
 # + Numerals, Numerals), why there are no numerals for a song with no key, and a switch for each thing on or off (a
 # toggle button, pressed while it is on): Role colours, All chord shapes (as the bar's guitar), Chord necks (where the
-# rail shows) and Pinyin (a sheet with Chinese).
+# rail shows) and Pinyin (a sheet with Chinese); the instrument, a menu, and the strum's loudness, four speakers, on
+# one line, and the instrument's own rows (instruments.js) under it.
 # Each kind of control has one look: a stepper for a number, a segmented control for one of a few, pills for one of
 # many, a switch for on or off, a row with › or ↗ for a place to go.
 _UNDO = ('<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/>'
@@ -780,14 +781,13 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <button type="button" class="switch" id="strip-toggle" aria-pressed="false" aria-controls="strip">All chord shapes</button>
 <div id="necks-row" hidden><button type="button" class="switch" id="necks-chip" aria-pressed="true" aria-controls="necks">Chord necks</button></div>
 <div id="pinyin-row" hidden><button type="button" class="switch" id="pinyin-chip" aria-pressed="false" aria-controls="sheet" aria-describedby="pinyin-hint">Pinyin</button>
-<p class="hint" id="pinyin-hint">Each Chinese character's reading, over it.</p></div></div>
+<p class="hint" id="pinyin-hint">Each Chinese character's reading, over it.</p></div>
+<div class="duo" id="inst-line"><span class="inst-pick" id="inst-row" hidden><select id="insts" aria-label="Instrument"></select></span>
+<span id="sound-row" hidden><span class="seg icons" id="volumes" role="group" aria-label="Strum" aria-describedby="strum-hint"></span>
+<span class="vh" id="strum-hint">Tap a chord, or its shape on its card, to hear it strummed.</span></span></div>
+<div class="inst-panel" id="inst-panel" hidden></div></div>
 <div class="row" id="harmony-row" hidden><span class="lab">Harmony</span>
 <button type="button" class="chip" id="harmony-open" aria-haspopup="dialog" aria-controls="harmony">Progressions, the key's scale</button></div>
-<div class="row" id="inst-row" hidden><span class="lab">Instrument</span><span class="chips" id="insts"></span>
-<p class="hint" id="inst-hint"></p></div>
-<div class="row inst-panel" id="inst-panel" hidden></div>
-<div class="row" id="sound-row" hidden><span class="lab">Sound</span><span class="chips" id="volumes"></span>
-<p class="hint">Tap a chord, or its shape on its card, to hear it strummed.</p></div>
 <div class="row"><button type="button" class="link" id="reset-all">Reset everything</button></div>
 </section>
 <section class="sheet-ui card" id="card" hidden role="dialog" aria-labelledby="card-name">

@@ -36,8 +36,12 @@
   const BPM = { min: 40, max: 200, start: 80, step: 5 };
   // The capo goes on any fret up to the 11th (past it the shapes come round again), or the sheet's.
   const CAPO_MAX = Math.max(11, Number(data.capoSheet) || 0);
-  // A chord heard (strum.js), as loud as this: the setting's names and caracoleSound's volumes.
+  // A chord heard (strum.js), as loud as this: the setting's names and caracoleSound's volumes; each drawn as a
+  // speaker (viewer.css .icons), crossed out, then with one, two and three waves.
   const VOLUMES = [["Off", 0], ["Soft", 0.3], ["Medium", 0.6], ["Loud", 1]];
+  const SPEAKER = "M11 5 6 9H2v6h4l5 4z";
+  const WAVES = [["m22 9-6 6M16 9l6 6"], ["M15.5 8.5a5 5 0 0 1 0 7"], ["M15 9.5a3.5 3.5 0 0 1 0 5", "M18 7a7 7 0 0 1 0 10"],
+    ["M14.5 10a2.5 2.5 0 0 1 0 4", "M17 8a5.5 5.5 0 0 1 0 8", "M19.5 5.5a9.5 9.5 0 0 1 0 13"]];
   const VOL = 2;
   // Whether caracole serve sent this page, so that its controls may link to the server's own pages: Export PDF
   // (/export), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
@@ -499,6 +503,12 @@
     if (parent) parent.appendChild(node);
     return node;
   };
+  // The strum's loudness ``v`` (VOLUMES) as a speaker and its waves, for its button.
+  const speaker = (v) => {
+    const icon = svg("svg", { viewBox: "0 0 24 24", "aria-hidden": "true" });
+    for (const d of [SPEAKER].concat(WAVES[v])) svg("path", { d }, icon);
+    return icon;
+  };
   // A chord's shapes on the instrument played. On the guitar: those the sheet gives that very chord first (page.py's
   // "shapes", "mine" of them: the first so many), then chords-db's; the note goes with chords-db's. On a ukulele: its
   // table's for the quality the guitar files the chord under (data.voicings[shapes + quality], the instrument's
@@ -702,14 +712,25 @@
     }
   };
   const wrapT = (t) => (t > 11 ? t - 12 : t < -11 ? t + 12 : t);
-  // The Instrument row, its line, and what follows the instrument in the settings: the Capo row on one that takes a
-  // capo; Easy keys, nearest the key played first, on one that has them (instruments.py EASY: the ukulele's C, F, G,
-  // Bb, Am, Dm), each moving the song there as Transpose does; the row an instrument's script fills.
+  // The Instrument menu, what it says of the one chosen (its title), and what follows the instrument in the settings:
+  // Capo on one that takes a capo; Easy keys, nearest the key played first, on one that has them (instruments.py EASY:
+  // the ukulele's C, F, G, Bb, Am, Dm), each moving the song there as Transpose does; the row an instrument's script
+  // fills. The menu's options are made again only when the instruments offered change (one registered).
   function drawInstruments() {
     const offered = INSTRUMENTS.filter(drawn);
     $("inst-row").hidden = offered.length < 2;
-    refill($("insts"), offered.map((i) => button(String(i.name || i.id), i.id === inst().id, () => setInst(i.id))));
-    $("inst-hint").textContent = String(inst().about || "");
+    const menu = $("insts"), ids = offered.map((i) => i.id).join(" ");
+    if (menu.dataset.ids !== ids) {
+      menu.textContent = "";
+      for (const i of offered) {
+        const option = menu.appendChild(document.createElement("option"));
+        option.value = i.id;
+        option.textContent = String(i.name || i.id);
+      }
+      menu.dataset.ids = ids;
+    }
+    menu.value = inst().id;
+    menu.title = String(inst().about || "");
     $("capo-row").hidden = !takesCapo();
     const table = key && inst().easy && data.easy && data.easy[inst().easy] ? data.easy[inst().easy][modeNow()] || [] : [];
     $("easy-row").hidden = table.length === 0;
@@ -731,7 +752,7 @@
     }
     panelBox.hidden = panelBox.childNodes.length === 0;
   }
-  // Another instrument, from the Instrument row: the song stays where it is played, its chords drawn and heard anew.
+  // Another instrument, from the Instrument menu: the song stays where it is played, its chords drawn and heard anew.
   const setInst = (id) => {
     if (!drawn(instOf(id)) || id === state.inst) return;
     state.inst = id;
@@ -739,6 +760,7 @@
     render();
     place();
   };
+  $("insts").addEventListener("change", () => setInst($("insts").value));
   // An instrument registered once the page is drawn: the row offers it, and a page on it draws it.
   document.addEventListener("caracole:instruments", () => {
     if (doc.dataset.ready === "1") render();
@@ -912,10 +934,17 @@
     drawInstruments();
     $("sound-row").hidden = !sound || count === 0;
     if (sound) sound.setVolume(VOLUMES[state.vol][1]);
-    refill($("volumes"), sound ? VOLUMES.map(([name], v) => button(name, state.vol === v, () => {
-      state.vol = v;
-      render();
-    })) : []);
+    refill($("volumes"), sound ? VOLUMES.map(([name], v) => {
+      const level = button("", state.vol === v, () => {
+        state.vol = v;
+        render();
+      });
+      level.removeAttribute("class");  // a segment, not a chip
+      level.setAttribute("aria-label", name);
+      level.title = "Strum: " + name.toLowerCase();
+      level.appendChild(speaker(v));
+      return level;
+    }) : []);
     $("strip-toggle").setAttribute("aria-pressed", state.strip ? "true" : "false");
     shapesButton.setAttribute("aria-pressed", state.strip ? "true" : "false");  // the guitar says the same
     drawSpeed();

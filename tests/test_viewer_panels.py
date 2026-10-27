@@ -398,6 +398,80 @@ def test_the_names_hint_shows_only_without_a_key(tmp_path):
     assert [offered for *_, offered in unknown[1]] == [True, False, False]  # the chords alone, the others greyed
 
 
+# The instrument's menu: its tag, its options (name, value) and the one chosen, its title; and where the page is.
+MENU = """(() => { const menu = document.getElementById('insts');
+  let kept = null;
+  try { kept = localStorage.getItem('caracole-viewer-instrument'); } catch (err) { /* none */ }
+  return {tag: menu.tagName, options: [...menu.options].map((o) => [o.textContent, o.value]), value: menu.value,
+          title: menu.title, named: menu.getAttribute('aria-label'), hash: location.hash, kept,
+          strings: [...document.querySelectorAll('#strip svg')].map((s) => s.querySelectorAll('[data-string]').length)}; })()"""
+# The strum's loudness: each button's name and title, whether it is pressed, its picture and its words (none).
+VOLUME = """[...document.querySelectorAll('#volumes > button')].map((v) => [v.getAttribute('aria-label'), v.title,
+  v.getAttribute('aria-pressed'), v.querySelectorAll('svg path').length, v.textContent])"""
+
+
+def instrument(b: Browser, value: str) -> None:
+    """The instrument ``value`` chosen in the settings' menu, as a hand picks it."""
+    b.js(f"(() => {{ const m = document.getElementById('insts'); m.value = {value!r}; "
+         "m.dispatchEvent(new Event('change', {bubbles: true})); })()")
+
+
+@in_chromium
+def test_the_instrument_is_a_select_that_switches_the_instrument(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        b.click("#shapes")
+        guitar = b.js(MENU)
+        instrument(b, "ukulele")
+        uke = b.js(MENU)
+    names = ["Guitar", "Ukulele", "Ukulele, low G", "Baritone ukulele", "Piano", "Harmonica", "Flute", "Recorder"]
+    assert guitar["tag"] == "SELECT" and [n for n, _ in guitar["options"]] == names and guitar["named"] == "Instrument"
+    assert guitar["value"] == "guitar" and guitar["title"] == "Standard tuning, E A D G B E." and guitar["hash"] == ""
+    assert set(guitar["strings"]) == {6}
+    assert uke["value"] == "ukulele" and uke["title"] == "G C E A, the G string high."
+    assert uke["hash"] == "#inst=ukulele" and uke["kept"] == "ukulele" and set(uke["strings"]) == {4}  # as the chips did
+
+
+@in_chromium
+def test_loudness_is_four_named_icon_buttons(tmp_path):
+    with viewer(tmp_path, written(tmp_path, IN_E)) as b:
+        b.click("#more")
+        first = b.js(VOLUME)
+        b.click("#volumes > button:nth-child(4)")
+        loud = [b.js(VOLUME), b.js("location.hash")]
+        b.click("#volumes > button:nth-child(1)")
+        off = [b.js(VOLUME), b.js("location.hash")]
+    assert [v[:2] for v in first] == [["Off", "Strum: off"], ["Soft", "Strum: soft"], ["Medium", "Strum: medium"],
+                                      ["Loud", "Strum: loud"]]
+    assert [v[2] for v in first] == ["false", "false", "true", "false"]
+    assert [v[3] for v in first] == [2, 2, 3, 4] and all(v[4] == "" for v in first)  # a speaker, crossed out or waves
+    assert [v[2] for v in loud[0]] == ["false", "false", "false", "true"] and "vol=3" in loud[1]
+    assert [v[2] for v in off[0]] == ["true", "false", "false", "false"] and "vol=0" in off[1]
+
+
+@in_chromium
+@pytest.mark.parametrize("size", [PHONE, DESKTOP], ids=["phone", "desktop"])
+def test_the_instrument_and_the_strum_share_a_line_and_its_own_rows_follow_it(tmp_path, size):
+    line = """(() => { const r = (s) => { const b = document.querySelector(s).getBoundingClientRect();
+        return {top: b.top, bottom: b.bottom, left: b.left, right: b.right}; };
+      const panel = document.getElementById('inst-panel');
+      return {menu: r('#insts'), strum: r('#volumes'), switches: r('#strip-toggle').bottom,
+              panel: panel.hidden ? null : panel.getBoundingClientRect().top,
+              page: document.documentElement.scrollWidth}; })()"""
+    with viewer(tmp_path, written(tmp_path, IN_E) + "#inst=baritone", **size) as b:
+        b.click("#more")
+        uke = b.js(line)
+        instrument(b, "harmonica")
+        assert b.wait("!document.getElementById('inst-panel').hidden")
+        harp = b.js(line)
+    for seen in (uke, harp):
+        assert abs((seen["menu"]["top"] + seen["menu"]["bottom"]) - (seen["strum"]["top"] + seen["strum"]["bottom"])) <= 2
+        assert seen["menu"]["right"] <= seen["strum"]["left"] and seen["menu"]["top"] >= seen["switches"]
+        assert seen["page"] <= size["width"]
+    assert uke["panel"] is None
+    assert harp["panel"] >= harp["menu"]["bottom"]  # the harmonica's own rows right under the line
+
+
 # --- a chord's card ------------------------------------------------------------------------------------
 
 
@@ -637,7 +711,7 @@ def test_with_the_sound_off_the_panel_offers_no_play_until_it_is_on_again(tmp_pa
         off = b.js(HARMONY)
         b.js("document.querySelector('#harmony [data-close]').click()")
         b.click("#more")
-        b.js("[...document.querySelectorAll('#volumes .chip')].find((c) => c.textContent === 'Soft').click()")
+        b.js("[...document.querySelectorAll('#volumes > button')].find((c) => c.getAttribute('aria-label') === 'Soft').click()")
         b.click("#harmony-open")
         assert b.wait("!document.getElementById('harmony').hidden")
         on = b.js(HARMONY)
@@ -723,7 +797,7 @@ def test_a_link_focused_in_the_panel_keeps_the_focus_though_the_panel_is_drawn_a
         open_harmony(b)
         links = b.js("[...document.querySelectorAll('#harmony .prog-named')].map((a) => a.textContent)")
         b.js("document.querySelectorAll('#harmony .prog-named')[1].focus()")
-        b.js("document.querySelectorAll('#volumes .chip')[1].click()")  # the panel is drawn anew
+        b.js("document.querySelectorAll('#volumes > button')[1].click()")  # the panel is drawn anew
         after = b.js("[document.activeElement.textContent, document.activeElement.isConnected]")
     assert links == ["Songs with ii–V–I", "Songs with the Andalusian cadence"]
     assert after == ["Songs with the Andalusian cadence", True]  # the second link, as before, not the first

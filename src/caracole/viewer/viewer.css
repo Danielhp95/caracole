@@ -439,6 +439,22 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .roles .r-a { color: var(--away); }
 .roles .r-p { color: var(--pull); }
 #pinyin-row .hint { margin: -6px 0 4px; }
+/* The instrument, a menu (the platform's own, its arrow drawn), and the strum's loudness, four speakers in a
+   segmented control, on one line; on a screen too narrow for both, the speakers under the menu. An instrument's own
+   rows (instruments.js) right under the line. */
+.duo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 4px 0 2px; }
+.inst-pick { position: relative; flex: 0 1 auto; min-width: 0; }
+.inst-pick::after { content: ""; position: absolute; top: 50%; right: 12px; width: 6px; height: 6px; margin-top: -5px;
+  border: solid var(--muted); border-width: 0 1.8px 1.8px 0; transform: rotate(45deg); pointer-events: none; }
+#insts { appearance: none; max-width: 100%; height: 36px; padding: 0 28px 0 10px; border: 1px solid var(--border-strong);
+  border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: .88rem;
+  font-weight: 600; text-overflow: ellipsis; cursor: pointer; }
+.icons { flex: none; }
+.icons > button { flex: none; width: 32px; color: var(--muted); }
+.icons svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round;
+  stroke-linejoin: round; }
+.inst-panel { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 6px 0 2px; }
 @media (hover: hover) {
   #panel .stepper button:hover, .undo:hover { background: var(--raised); }
   #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
@@ -451,6 +467,8 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   .undo { min-height: 44px; margin: -10px -2px; padding: 0 6px; }
   #panel .chip { min-width: 44px; min-height: 44px; }
   .seg > button { min-height: 44px; }
+  #insts { height: 44px; }
+  .icons > button { width: 44px; }
 }
 .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; padding: 10px 0;
   border-top: 1px solid var(--border); }
@@ -560,6 +578,7 @@ a.ver-main .ver-name { color: var(--accent); }
 .strip svg.kb { width: 132px; }
 .facts .inst-line { display: block; margin-top: 2px; }
 .inst-panel:empty { display: none; }
+.inst-panel > .hint { margin: 0; }
 /* The harmonica and the winds (winds.js): a harp's ten holes, those a chord plays lit; a flute's keys or a
    recorder's holes down its length for each note, pressed or covered filled. As wide as a keyboard on the card. */
 .hp { display: block; width: 100%; height: auto; }

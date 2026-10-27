@@ -2246,8 +2246,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   plucked string, a piano's string, a reed or a flute's breath, synthesized:
   no recording, nothing loaded), so it works from the synced folder and from `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
   time, and the page falls silent when you switch away from it; the next tap
-  plays again. **Sound**, in the settings, sets the volume: Off, Soft,
-  Medium (the default) or Loud. With it off, a tap opens the card alone. A
+  plays again. The strum's loudness, four speakers beside the instrument in the
+  settings, sets the volume: Off (crossed out), Soft, Medium (the default) or
+  Loud (one, two and three waves). With it off, a tap opens the card alone. A
   phone set to silent may keep it silent.
 - **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
   left lists each chord of the song once, in the order it first comes, with a
@@ -2289,7 +2290,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   Em): the guitar's capo comes back with the guitar. On the harmonica a
   second line names the harps for the song, each in its position: "Harmonica:
   G harp (1st position) · C harp (2nd)" (below).
-- **Instrument**, in the settings: Guitar (the default), Ukulele (G C E A, the
+- **Instrument**, a menu in the settings: Guitar (the default), Ukulele (G C E A, the
   G string high), Ukulele, low G, Baritone ukulele (D G B E), Piano,
   Harmonica, Flute and Recorder. It
   changes how every chord is drawn and heard, never the song: the chord names
@@ -2315,7 +2316,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   (3rd position, dorian)"). A song in a major key lists the 1st position, then
   the 2nd; a song in another mode, the positions that suit it (the 3rd, 4th
   and 5th for a minor one), those that play the most of its chords first. Its
-  row in the settings, **Harp**, picks one of them, and lists each chord on it:
+  row in the settings, under the menu, **Harp**, picks one of them, and lists each chord on it:
   the holes that play it on one breath ("draw 2–5"), the chord without its
   seventh or ninth where the harp has only that ("blow 1–3 (as C)"), the minor
   chord a harp plays for a major one it lacks ("draw 4–6 (as Dm, minor
@@ -2496,7 +2497,7 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   shuttle). A section with no chord caracole can read isn't listed; a sheet with
   no headings has one section, "Section 1". Tap a progression to go to its
   section. **▶** plays it (strummed, as a tap on a chord is, above; not with
-  **Sound** off, or in a browser that can't make sound), a chord a bar at
+  the strum Off, or in a browser that can't make sound), a chord a bar at
   the tempo above the list (80 bpm to start; − and + change it as it plays),
   each chord with the shape and the capo the page shows, always in the
   progression's order (a busy page plays the rest later, never two chords at
