@@ -344,3 +344,50 @@ def test_answers_are_frozen_and_a_list_handed_out_is_a_copy():
     first.clear()
     assert choices(Key(7, "ionian"), chords("G C D"))
     assert isinstance(play(ch("C"), C_HARP), Playing)
+
+
+# --- a hole's note, for a harmonica tab's page -----------------------------------------------------------------
+
+
+def test_a_holes_note_on_a_c_harp_blown_drawn_bent_and_overblown():
+    assert [harp.hole_note(C_HARP, h, "blow") for h in range(1, 11)] == [60 + n for n in BLOW]
+    assert [harp.hole_note(C_HARP, h, "draw") for h in range(1, 11)] == [60 + n for n in DRAW]
+    assert harp.hole_note(C_HARP, 3, "draw", 1) == 70  # -3': B bent to Bb
+    assert harp.hole_note(C_HARP, 3, "draw", 3) == 68  # -3''': to Ab, as deep as it goes
+    assert harp.hole_note(C_HARP, 3, "draw", 4) is None
+    assert harp.hole_note(C_HARP, 2, "draw", 2) == 65  # -2'': G to F
+    assert harp.hole_note(C_HARP, 10, "blow", 2) == 94  # 10'': C to Bb, a blow bend
+    assert harp.hole_note(C_HARP, 5, "draw", 1) is None and harp.hole_note(C_HARP, 7, "blow", 1) is None
+    assert harp.hole_note(C_HARP, 3, "blow", 1) is None  # holes 1 to 6 bend on the draw alone
+    assert harp.hole_note(C_HARP, 6, "blow", over=True) == 82  # 6 overblown: Bb, a semitone over its draw A
+    assert harp.hole_note(C_HARP, 7, "draw", over=True) == 85  # -7 overdrawn: C#, over its blow C
+    assert harp.hole_note(C_HARP, 6, "draw", over=True) is None and harp.hole_note(C_HARP, 7, "blow", over=True) is None
+    assert harp.hole_note(C_HARP, 11, "blow") is None and harp.hole_note(C_HARP, 0, "draw") is None
+
+
+def test_another_harp_plays_the_same_holes_in_its_key():
+    for key in range(12):
+        low = harp.layout(key)
+        assert harp.hole_note(key, 4, "blow") == low.blow[3]
+        assert harp.hole_note(key, 4, "draw", 1) == low.draw[3] - 1
+    assert harp.hole_note(2, 8, "blow") == 90  # a D harp's 8: F#6
+
+
+def test_the_hole_tables_hold_every_note_a_hole_plays():
+    # As harptab.js looks them up: table[breath][hole - 1][bend], table.over[hole - 1] = [breath, note].
+    for key, table in enumerate(harp.hole_tables()):
+        for hole in range(1, 11):
+            for breath in ("blow", "draw"):
+                for bend in range(4):
+                    listed = table[breath][hole - 1]
+                    assert (listed[bend] if bend < len(listed) else None) == harp.hole_note(key, hole, breath, bend)
+                over = table["over"][hole - 1]
+                assert (over[1] if over[0] == breath else None) == harp.hole_note(key, hole, breath, over=True)
+
+
+def test_a_position_in_words():
+    assert harp.position_text(11, 2) == "4th position, aeolian"  # a D harp, a song in B (Hotel California)
+    assert harp.position_text(7, 0) == "2nd position"
+    assert harp.position_text(0, 0) == "1st position"
+    assert harp.position_text(2, 0) == "3rd position, dorian"
+    assert harp.position_text(1, 0) == "8th position"

@@ -152,6 +152,8 @@ BUILD_FILES = (
     HERE / "strum.js",  # hearing a chord: the synthesis, its own script before viewer.js
     HERE / "instruments.js",  # a chord's box and keyboard, and the instruments a script registers, before viewer.js
     HERE / "harp.py", HERE / "winds.py", HERE / "winds.js",  # the harmonica, the flute and the recorder
+    # A harmonica tab's page, harmonica-N.html: the tab read, the harp it plays on, the page, its script and style
+    *(HERE / name for name in ("harptab.py", "harpfit.py", "harptab_page.py", "harptab.js", "harptab.css")),
     HERE.parent / "inline.py",  # sha256_source, json_block
     HERE.parent / "download_names.py",  # download_name, a Guitar Pro link's download attribute
     HERE.parent / "normalize.py",  # has_han, clean_title

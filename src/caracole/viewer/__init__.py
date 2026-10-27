@@ -17,7 +17,11 @@
   instrument's script registers its drawing (``window.caracoleInstruments``); winds.js, inlined after it,
   registers the harmonica, the flute and the recorder, drawn from harp.py's and winds.py's tables;
 - book.py builds ``songbook.html``, a songbook's songs in one page, from page.py's pieces, with
-  book.js and book.css beside the viewer's own.
+  book.js and book.css beside the viewer's own;
+- harptab_page.py builds ``harmonica-N.html``, a harmonica tab kept from harptabs.com as a page in the
+  viewer's look (``build_harmonica_viewer``), from page.py's pieces, with harptab.js and harptab.css
+  beside the viewer's stylesheet and strum.js: harptab.py reads the tab (holes over syllables),
+  harpfit.py chooses the harp it plays on (with the record, from the song's chord sheet).
 
 What a page is made from is ``page.BUILD_FILES`` (and ``book.BOOK_FILES``), whose hash
 (``page.build_version``) tells a page made by another caracole: a module the viewer comes to
