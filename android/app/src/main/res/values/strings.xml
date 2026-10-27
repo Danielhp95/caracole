@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">caracole</string>
+    <string name="settings">Settings</string>
+    <string name="sync_now">Sync now</string>
+    <string name="library">Library</string>
+    <string name="more">More</string>
+    <string name="empty">No library on this phone yet.\n\nType caracole serve\'s address in Settings, then sync: the phone keeps a copy of your library and reads it with no network.</string>
+    <string name="open_settings">Open Settings</string>
+
+    <string name="address_label">caracole serve\'s address</string>
+    <string name="address_hint">http://192.168.1.20:8737</string>
+    <string name="test">Test</string>
+    <string name="testing">Asking caracole…</string>
+    <string name="answered">caracole answered: %1$d files, %2$s</string>
+    <string name="answered_skipped">caracole answered: %1$d files, %2$s (%3$d listed wrong, left out)</string>
+    <string name="last_sync">Last sync</string>
+    <string name="never_synced">Never synced.</string>
+    <string name="storage">Storage used: %1$s</string>
+    <string name="wifi_sync">Sync on Wi-Fi by itself</string>
+    <string name="wifi_sync_hint">Every 6 hours on Wi-Fi (an unmetered network), when caracole answers at the address; otherwise it does nothing.</string>
+    <string name="open_library">Open the library</string>
+    <string name="offline_note">Offline, the app shows the pages caracole writes into your library: the library page, each sheet with its viewer (key, capo, diagrams, harmony), songbooks, and the PDFs and Guitar Pro files, which open in another app. Searching the sites, adding songs, Export and choosing versions need caracole serve, in the browser.</string>
+
+    <string name="syncing_asking">Syncing: asking caracole…</string>
+    <string name="syncing">Syncing: %1$d of %2$d files</string>
+    <string name="up_to_date">Up to date</string>
+    <string name="up_to_date_changes">Up to date: %1$s</string>
+
+    <string name="server_only">That needs caracole serve: it isn\'t in the copy on the phone. Open caracole serve in the browser for it.</string>
+    <string name="missing">That isn\'t in the copy on the phone: sync again.</string>
+    <string name="no_app">No app on this phone opens %1$s (%2$s).</string>
+    <string name="no_browser">No browser on this phone opens %1$s.</string>
+    <string name="handoff_failed">The file couldn\'t be copied for another app: %1$s</string>
+</resources>

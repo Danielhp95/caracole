@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- caracole's accent (base.css, page_icon.py), light and dark. -->
+    <color name="accent">#B4441E</color>
+    <color name="bar">#B4441E</color>
+    <color name="on_bar">#FFFFFF</color>
+    <color name="background">#FFFFFF</color>
+    <color name="text">#1F1B19</color>
+    <color name="muted">#6B625D</color>
+    <color name="status">#F5E9E3</color>
+</resources>
