@@ -31,10 +31,13 @@ artist's name, artists A to Z, each group's header saying how many of their
 songs you have, whatever the search or a filter leaves out ("Soda Stereo · you
 have 2"); by title or by when they came,
 they stand alone, each with its artist. A line holds the song's title, which
-opens its sheet (its viewer, else its PDF, else its text), its status (Found,
-Wanted, Needs review, Not found), its key, the marks of where its sheet and its
-files came from and its main action: Open, or, served, Fetch now or Pick the
-match. Everything else a song has is under its "⋯": its facts (the key in words
+opens its sheet (its viewer, else its PDF, else its text), its status when it
+needs something (Wanted, Needs review, Not found, Ignored: a found song says
+nothing), what it holds, a glyph each (its sheet, a Guitar Pro file or a tab, a
+harmonica tab, its lyrics, a score: rows.js ``glyph``, read from its files and
+``instruments``), its key as a chip and its main action: Open, or, served, Fetch
+now or Pick the match. Everything else a song has is under its chevron, which
+unfolds it in place: its facts (the key in words
 and where it came from, the transposition, the lyrics, when it came), its
 review's picker, where its audio comes from, its Sheet versions (the Ultimate
 Guitar versions kept beside its sheet, sheet_versions.py's, each opening its
@@ -56,26 +59,26 @@ and the key.
 
 On a touch screen (``pointer: coarse``) every control is a thumb's target, 44
 px each way at the least: buttons, folds, chips, menus, letters, a line's
-button and "⋯" and an artist's name; a mouse keeps the compact sizes. Fields,
+button and chevron and an artist's name; a mouse keeps the compact sizes. Fields,
 menus and the Select boxes have the ``--control-edge`` colour, 3:1 or more
 against every background (WCAG 1.4.11); boxes and dividers keep the soft
 ``--border``. ``BASE_STYLE`` and ``PICKER_STYLE`` carry both to
 the pages caracole serve writes itself (web/pages.py, web/lookup_page.py).
 
-Each file, link and line shows where it came from (icons.py): the site's own
+Each file and link, and a site's song's line, shows where it came from (icons.py): the site's own
 icon, inlined in the data as a ``data:`` URI (the CSP allows images from
 ``data:`` alone), else the site's lettered badge, or a glyph for the audio
 model and the inbox; each is named "from Ultimate Guitar" for a screen reader.
-An auto sheet made from the audio caracole took from YouTube shows YouTube's
-(``icons.kept_sources``), and its line's "⋯" the video.
+A song of yours says on its line what it holds instead. An auto sheet made from the audio caracole took from
+YouTube shows YouTube's on its files (``icons.kept_sources``), and its line's panel the video.
 
 The seam for lists the page doesn't make itself (the results of caracole
 serve's lookup page, web/lookup_page.py, which runs ``ROWS_SCRIPT`` and has
 ``ROWS_STYLE`` as this page does, and gets each song's files from
 ``result_cards``): ``window.caracole.resultRow(result)`` returns a row
 element, to put in a ``<div class="rows">``, or with ``dense``, a line as a
-song's is (``article.line``: ``.line-title``, ``.line-status``, ``.line-key``,
-``.line-sources``, ``.line-action``, ``.line-more``), to put in a ``<div
+song's is (``article.line``: ``.line-title``, ``.line-status``, ``.line-holds`` or
+``.line-sources``, ``.line-key``, ``.line-action``, ``.line-more``), to put in a ``<div
 class="lines">``. ``result`` is a plain object, every field optional:
 
 - ``title``, ``artist``: text; ``onArtist``, a function, makes the artist a button that
@@ -84,13 +87,15 @@ class="lines">``. ``result`` is a plain object, every field optional:
 - ``href``: what the title opens (the song's sheet, as its button does), the same way as
   ``action``'s link; out of the Tab order, since the button says what it opens;
 - ``source``: a key of the data's ``icons`` (``icons.SOURCES``: "ug", "lacuerda"…), or, for
-  a line, ``sources``, several, each marked once;
+  a line, ``sources``, several, each marked once; or, for a song of yours, ``holds``, what it
+  holds (rows.js ``HOLDS``: "sheet", "auto", "ukulele", "guitar", "tab", "harmonica", "lyrics",
+  "score"), a glyph each named for a screen reader, in place of any mark;
 - ``key`` ("A minor"), and ``keyText``, what a screen reader hears for it;
 - ``status``, which its ``data-status`` gets; ``badges``: ``[{kind, text}]``,
   ``kind`` a badge class (found, wanted, review, auto…); ``facts``: a line of text;
 - ``action``: the main control, a Node, or ``{label, href, source}``: an http(s)
   link opens in a new tab, any other address stays relative or goes nowhere;
-- ``more``: what its "⋯" button shows, Nodes or
+- ``more``: what its "⋯" button (a line's chevron) shows, Nodes or
   ``{heading, links: [{label, href, source}]}``.
 
 ``window.caracole.sourceMark(key)`` gives a source's mark alone, and

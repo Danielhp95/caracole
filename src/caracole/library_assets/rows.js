@@ -1,7 +1,8 @@
 
-// Where each thing came from, and a list's rows and lines (``resultRow``): index.html's, and the results of
-// caracole serve's lookup page (web/lookup_page.py), which runs this script before its own. ``does.searchArtist(name)``,
-// where a page can search: what an artist's name on a site's row does (ugHit, siteHit), the search for them.
+// Where each thing came from, the pages' glyphs, and a list's rows and lines (``resultRow``): index.html's, and the
+// results of caracole serve's lookup page (web/lookup_page.py), which runs this script before its own.
+// ``does.searchArtist(name)``, where a page can search: what an artist's name on a site's row does (ugHit, siteHit),
+// the search for them.
 const caracoleRows = (icons, does) => {
   "use strict";
   const searchArtist = does && typeof does.searchArtist === "function" ? does.searchArtist : null;
@@ -15,6 +16,79 @@ const caracoleRows = (icons, does) => {
   };
   const listOf = (value) => (Array.isArray(value) ? value : []);
   const keyName = (key) => (/ minor$/.test(key) ? key : key + " major");
+  // The pages' glyphs, each drawn on a 24-unit grid as the paths of a stroke in the text's colour (a circle is two
+  // arcs): what a song holds, and what a control does.
+  const GLYPHS = {
+    // a page, its corner folded, with a note on it
+    sheet: ["M14 2.5H6.5A1.5 1.5 0 0 0 5 4v16a1.5 1.5 0 0 0 1.5 1.5h11A1.5 1.5 0 0 0 19 20V7.5z", "M14 2.5v5h5",
+      "M8.7 17a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0-3.6 0", "M12.3 17v-6.2l2.7.9"],
+    // a guitar across the grid: its body, sound hole, neck and head
+    guitar: ["M10.4 9.6c-1.6-.7-3.6-.3-4.9 1-.7.7-.9 1.6-1.4 2.1-.5.5-1.5.8-1.9 1.7-.6 1.4.2 3.1 1.5 4.4 1.3 1.3 3 2.1 " +
+      "4.4 1.5.9-.4 1.2-1.4 1.7-1.9.5-.5 1.4-.7 2.1-1.4 1.3-1.3 1.7-3.3 1-4.9",
+    "M7.2 16.8a1.4 1.4 0 1 0 0-2.8a1.4 1.4 0 1 0 0 2.8", "M11 13l8-8", "M17.5 3.5l3 3"],
+    // a harmonica's front: its covers, and the comb's chambers between them
+    harmonica: ["M4 7h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z", "M2 10h20M2 14h20",
+      "M6 10v4M10 10v4M14 10v4M18 10v4"],
+    // a microphone on its stand
+    lyrics: ["M9 5.5a3 3 0 0 1 6 0v5a3 3 0 0 1-6 0z", "M5.5 10.5a6.5 6.5 0 0 0 13 0", "M12 17v3.5M8.5 21h7"],
+    // two notes beamed together, as a score writes them
+    score: ["M9 18V6l11-2.5v12", "M9 9.5l11-2.5", "M4 18a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0",
+      "M15 15.5a2.5 2.5 0 1 0 5 0a2.5 2.5 0 1 0-5 0"],
+    download: ["M12 3.5v11", "M7.5 10l4.5 4.5 4.5-4.5", "M4.5 20h15"],
+    open: ["M5 12h14", "M13 6l6 6-6 6"],
+    chevron: ["M6 9l6 6 6-6"],
+    search: ["M4 10.5a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0", "M15.5 15.5l5 5"],
+    refresh: ["M20 12a8 8 0 1 1-2.34-5.66L20 8.5", "M20 3.5v5h-5"],
+    book: ["M5 19.5V4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5a1.5 1.5 0 0 0 1.5 1.5H19v-3",
+      "M12 7v6M9 10h6"],
+    trash: ["M4 6.5h16", "M9.5 6.5v-2a1 1 0 0 1 1-1h3a1 1 0 0 1 1 1v2",
+      "M6 6.5l1 13a1.5 1.5 0 0 0 1.5 1.5h7a1.5 1.5 0 0 0 1.5-1.5l1-13", "M10 10.5v6.5M14 10.5v6.5"],
+    info: ["M3 12a9 9 0 1 0 18 0a9 9 0 1 0-18 0", "M12 11v5.5", "M12 7.5v.01"],
+    check: ["M5 12.5l4.5 4.5L19 7.5"],
+    close: ["M6 6l12 12M18 6L6 18"],
+    plus: ["M12 5v14M5 12h14"],
+  };
+  const SVG = "http://www.w3.org/2000/svg";
+  // A glyph (``name``, of GLYPHS) as inline SVG, a text's height unless a stylesheet sizes it: named ``label`` for a
+  // screen reader and titled so for the pointer, else unheard, as the words beside it say what it is.
+  const glyph = (name, label) => {
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("class", "glyph glyph-" + name);
+    for (const [attr, value] of [["viewBox", "0 0 24 24"], ["width", "1em"], ["height", "1em"], ["fill", "none"],
+      ["stroke", "currentColor"], ["stroke-width", "1.8"], ["stroke-linecap", "round"], ["stroke-linejoin", "round"],
+      ["focusable", "false"]]) {
+      svg.setAttribute(attr, value);
+    }
+    if (label) {
+      svg.setAttribute("role", "img");
+      svg.setAttribute("aria-label", String(label));
+      const title = document.createElementNS(SVG, "title");
+      title.textContent = String(label);
+      svg.appendChild(title);
+    } else {
+      svg.setAttribute("aria-hidden", "true");
+    }
+    for (const d of own.call(GLYPHS, name) ? GLYPHS[name] : []) {
+      const path = document.createElementNS(SVG, "path");
+      path.setAttribute("d", d);
+      svg.appendChild(path);
+    }
+    return svg;
+  };
+  // What a song of yours holds, as its line says it (``holds``): each thing's glyph and its name. Its sheet is a chord
+  // sheet, the auto one, or UG's Ukulele Chords; its guitar's, a Guitar Pro file, else a text tab.
+  const HOLDS = { sheet: ["sheet", "Chord sheet"], auto: ["sheet", "Auto sheet"], ukulele: ["sheet", "Ukulele chords"],
+    guitar: ["guitar", "Guitar Pro"], tab: ["guitar", "Guitar tab"], harmonica: ["harmonica", "Harmonica tab"],
+    lyrics: ["lyrics", "Lyrics"], score: ["score", "Score"] };
+  const holdsOf = (holds) => {
+    const box = el("span", "line-holds");
+    for (const name of listOf(holds).filter((n, i, all) => own.call(HOLDS, n) && all.indexOf(n) === i)) {
+      const drawn = glyph(HOLDS[name][0], HOLDS[name][1]);
+      if (name === "auto") drawn.classList.add("auto");
+      box.appendChild(drawn);
+    }
+    return box;
+  };
   // Its site's own icon, inlined as a data: URI, else its lettered badge; a glyph for the audio model
   // and the inbox (icons.py). Each is named for a screen reader: "from LaCuerda".
   const ICONS = icons && typeof icons === "object" ? icons : {};
@@ -151,8 +225,9 @@ const caracoleRows = (icons, does) => {
     box.appendChild(line);
     return box;
   };
-  // What a row's or a line's "⋯" button shows (``more``), folded under it: the button and its panel, named for the
-  // ``kind`` of item ("row-more", "row-panel"), go at the item's end; nothing more to show, no button.
+  // What a row's "⋯" button or a line's chevron shows (``more``), folded under it: the button and its panel, named
+  // for the ``kind`` of item ("row-more", "row-panel"), go at the item's end; nothing more to show, no button. A line
+  // unfolds in place, so its button is a chevron, which turns while it is open (rows.css), never "⋯", a menu's mark.
   const foldMore = (item, title, more, kind) => {
     const extra = listOf(more).map(linkGroup).filter(Boolean);
     if (!extra.length) return;
@@ -166,9 +241,13 @@ const caracoleRows = (icons, does) => {
     button.setAttribute("aria-expanded", "false");
     button.setAttribute("aria-controls", panel.id);
     button.title = "More for " + title;
-    const dots = el("span", null, "⋯");
-    dots.setAttribute("aria-hidden", "true");
-    button.appendChild(dots);
+    if (kind === "line") {
+      button.appendChild(glyph("chevron"));
+    } else {
+      const dots = el("span", null, "⋯");
+      dots.setAttribute("aria-hidden", "true");
+      button.appendChild(dots);
+    }
     button.appendChild(el("span", "visually-hidden", "More for " + title));
     button.addEventListener("click", () => {
       const open = button.getAttribute("aria-expanded") !== "true";
@@ -182,8 +261,10 @@ const caracoleRows = (icons, does) => {
     : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null);
   // A dense list's line (``dense``): index.html's songs, under their artist's name. Its title, which opens what
   // ``href`` says; then the artist (where no group above names it: ``onSearch`` and ``onArtist`` make it what a
-  // group's name is, artistOf), the status's badges, the key and the marks of where it came from (``sources``, else ``source``); its main
-  // action and "⋯". One line from 720px; on a phone two, the title and the action, then the rest.
+  // group's name is, artistOf), the status's badges, what a song of yours holds (``holds``, HOLDS' names, its glyphs)
+  // or else the marks of where a site's song came from (``sources``, else ``source``); its key, as a chip; its main
+  // action and its chevron. One line from 720px; on a phone the title, the key, the action and the chevron, and under
+  // them the artist and the badges, when there are any.
   const denseLine = (r) => {
     const title = String(r.title || "");
     const artist = String(r.artist || "");
@@ -211,15 +292,20 @@ const caracoleRows = (icons, does) => {
       facts.title = String(r.facts);  // the whole of it, where its column cuts it short
     }
     if (status.childNodes.length) meta.appendChild(status);
-    if (typeof r.key === "string" && r.key) meta.appendChild(keyMark("line-key", r));
-    const marks = el("span", "line-sources");
-    const sources = listOf(r.sources).length ? listOf(r.sources) : [r.source];
-    for (const key of sources.filter((k, n) => sources.indexOf(k) === n)) {
-      const mark = sourceMark(key);
-      if (mark) marks.appendChild(mark);
+    if (Array.isArray(r.holds)) {
+      const holds = holdsOf(r.holds);
+      if (holds.childNodes.length) meta.appendChild(holds);
+    } else {
+      const marks = el("span", "line-sources");
+      const sources = listOf(r.sources).length ? listOf(r.sources) : [r.source];
+      for (const key of sources.filter((k, n) => sources.indexOf(k) === n)) {
+        const mark = sourceMark(key);
+        if (mark) marks.appendChild(mark);
+      }
+      if (marks.childNodes.length) meta.appendChild(marks);
     }
-    if (marks.childNodes.length) meta.appendChild(marks);
     line.appendChild(meta);
+    if (typeof r.key === "string" && r.key) line.appendChild(keyMark("line-key", r));
     const action = el("div", "line-action");
     const main = mainAction(r);
     if (main) action.appendChild(main);
@@ -958,8 +1044,8 @@ const caracoleRows = (icons, does) => {
     if (why) line.appendChild(why);
     return line;
   };
-  return { resultRow, sourceMark, link, titleLink, artistFilter, artistSearch, artistOnly, button, many, counts, opener,
-    instrumentBadges, ugHit, artistHit,
+  return { resultRow, sourceMark, glyph, link, titleLink, artistFilter, artistSearch, artistOnly, button, many, counts,
+    opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
     didYouMean, lookedChips, nothingFound, lookedLine };
 };

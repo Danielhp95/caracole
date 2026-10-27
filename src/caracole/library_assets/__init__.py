@@ -13,8 +13,9 @@ file, and none of it loads anything from the network.
 - steps.css (``STEPS_STYLE``): a request's steps as chips (web/outcome.py's): the requests page's running
   card (web/pages.py), and on index.html a song's line, or a search result's row, while its lookup runs
   (library.js), the same markup.
-- rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines and the marks
-  of where each thing came from, ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
+- rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines, the marks
+  of where each thing came from and the pages' glyphs (``glyph``: inline SVG, a stroke in the text's colour, made
+  with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
   and its search's results, and those of caracole serve's lookup page (web/lookup_page.py), which runs
   rows.js before its own script.
 - library.css, library-screens.css and library.js: index.html's own. library-screens.css comes
@@ -23,7 +24,7 @@ file, and none of it loads anything from the network.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds
   everything with createElement and textContent, as the page does. While it is on, a tap anywhere
-  on a line picks it (the stylesheet puts its action and its "⋯" away, and lets the taps through to
+  on a line picks it (the stylesheet puts its action and its chevron away, and lets the taps through to
   the line). A line's "Add to a songbook…" turns it on with that song picked ("caracole:pick"). The
   bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu and the name
   field. On caracole serve songbooks.js posts the bar's songbook (the server's token, the songs' ids in
@@ -47,7 +48,7 @@ file, and none of it loads anything from the network.
   ``__BLANKS__`` library_page.py fills in: the policy, the style, the masthead's links and, served,
   the request form and the songs just requested. body.html also holds the guitar a set list marks a
   song with a Guitar Pro file by (``#guitar-glyph``, an inline SVG in a template songbooks.js clones:
-  the HTML parser gives it its namespace, so no script names one, and the page holds no address).
+  the HTML parser gives it its namespace).
 
 index.html inlines the stylesheets and the scripts in the order of ``library_page.STYLESHEETS`` and
 ``library_page.SCRIPTS``, and fills in the templates of ``library_page.TEMPLATES``.

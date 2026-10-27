@@ -253,8 +253,8 @@ MARKS = ("[...document.querySelectorAll('#results article.line')].map((a) => [a.
 
 
 def test_a_hit_for_one_instrument_says_which_and_nothing_is_left_out_for_it(cfg, live, browser):
-    # UG's Ukulele Chords, a harmonica tab of harptabs.com, a MuseScore page; a song of yours with a harmonica tab and
-    # a score: each says the instrument it is for, and every chord sheet stays, with no mark.
+    # UG's Ukulele Chords, a harmonica tab of harptabs.com, a MuseScore page: each says the instrument it is for, and
+    # every chord sheet stays, with no mark; a song of yours with a harmonica tab and a score holds them, its glyphs.
     from caracole.harptabs import parse_page_url as harp_row
     from caracole.library import keep_file
     from caracole.versions import upsert_version
@@ -280,7 +280,9 @@ def test_a_hit_for_one_instrument_says_which_and_nothing_is_left_out_for_it(cfg,
     assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
     assert browser.wait("document.querySelectorAll('#results article.line').length >= 5")
     marks = dict(browser.js(MARKS))
-    assert marks["Wonderwall Remix"] == ["Harmonica", "Score"]
+    assert marks["Wonderwall Remix"] == []  # a song of yours says it by what its line holds
+    assert browser.js("[...document.querySelectorAll('#results article.line[data-id] .line-holds svg')]"
+                      ".map((g) => g.getAttribute('aria-label'))") == ["Harmonica tab", "Score"]
     lines = browser.js(LINES)
     assert ["Oasis", [["Wonderwall", "ug"]]] in lines and ["Ryan Adams", [["Wonderwall", "ug"]]] in lines
     rows = browser.js(MARKS)

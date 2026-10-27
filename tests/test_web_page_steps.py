@@ -219,7 +219,9 @@ def test_a_songs_line_shows_its_lookups_steps_ticking_then_folds_them_away_once_
         assert page.js(f"document.querySelector('{line} .progress').textContent") == "Ready"
         assert page.js(f"document.querySelector('{line} .progress a')") is None  # no "Ready · Open sheet"
         assert page.js(f"document.querySelector('{line} .progress').getBoundingClientRect().height") <= 1
-        assert page.js(f"document.querySelector('{line} .line-status .badge').textContent") == "Found"
+        # Found, it needs no badge: its status is the line's alone, as the page's filters read it.
+        assert page.js(f"document.querySelector('{line}').dataset.status") == "found"
+        assert page.js(f"document.querySelector('{line} .line-status .badge')") is None
         assert page.wait(f"document.querySelector('{line} .line-action a').textContent === 'Open PDF'")
         # The focus, on the request line since Fetch now, is on the Open that took Fetch now's place.
         assert page.js("document.activeElement.textContent") == "Open PDF"

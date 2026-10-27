@@ -222,11 +222,8 @@
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares
   const { sourceMark, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine, titleLine,
-    instrumentBadges, readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } =
+    readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } =
     caracoleRows(ICONS);
-  // A song's file from where its sheet came from has no mark of its own: its line's says it.
-  const elsewhere = (s, item) => (item && item.source && item.source === s.source
-    ? Object.assign({}, item, { source: null }) : item);
   // The file a song opens with, from its title and its line's button: its viewer, else its PDF, else its text
   // (the data marks it primary).
   const primaryOf = (s) => listOf(s.files).find((f) => f && f.primary) || null;
@@ -319,7 +316,7 @@
   };
   // A song you have, looked up again now (POST /lookup with its id: one caracole get, its sheet first), as the lookup
   // page's Fetch again and its LaCuerda row's Get it again post it: with ``lacuerda``, that LaCuerda sheet kept, as
-  // caracole get --lacuerda keeps it. Under its line's "⋯", served alone; a refusal says why on the line.
+  // caracole get --lacuerda keeps it. Under its line's chevron, served alone; a refusal says why on the line.
   const lookupForm = (s, label, aria, title, lacuerda) => {
     const form = songForm("again", "/lookup", s);
     if (lacuerda) form.appendChild(hidden("lacuerda", lacuerda));
@@ -341,7 +338,7 @@
     const url = String(s.lacuerdaSheet || lacuerdaFound.get(Number(s.id)) || "");
     return /^https:[/][/]/i.test(url) ? url : "";
   };
-  // Under a song's "⋯", served: Fetch again, for a song with its sheet (a wanted one has Fetch now), and Use
+  // Under a song's chevron, served: Fetch again, for a song with its sheet (a wanted one has Fetch now), and Use
   // LaCuerda's sheet, when LaCuerda has one of it; neither for an ignored song, nor while a request of it waits or
   // runs (its line says how that goes, and the line is drawn again once it is over).
   const againActions = (s) => {
@@ -367,7 +364,7 @@
     held.title = "caracole review settles this match; then it can be fetched";
     return held;
   };
-  // Every line's "Remove…", under its "⋯": one tap counts down REMOVE_WAIT seconds on the song's own line,
+  // Every line's "Remove…", under its chevron: one tap counts down REMOVE_WAIT seconds on the song's own line,
   // "Removing in 5 s · Undo", with what goes (the server's answer to the question, ``removal.brief``), and sends
   // nothing else meanwhile; then the removal, whose line the song's follows to Removed, never leaving the page.
   // Undo stops it. Without JavaScript the form posts, and caracole serve asks on a page of its own, whose answers
@@ -632,7 +629,7 @@
     e.preventDefault();
     showPicker(box);
   };
-  // Opens a picker where it is, in its line's panel (the "⋯" button's), which opens first. Opened, the picker
+  // Opens a picker where it is, in its line's panel (its chevron's), which opens first. Opened, the picker
   // takes the focus to its first candidate (its toggle); open already, the focus goes there.
   const showPicker = (box) => {
     const panel = box.closest(".line-panel");
@@ -767,8 +764,8 @@
     row.appendChild(pick);
     return row;
   };
-  // What a line shows under its "⋯" of a song with no picker: why its match waits (a review with no candidates to
-  // pick from), or, on the file, the line that lists a song not found's search hits; else nothing (null).
+  // What a line shows under its chevron of a song with no picker: why its match waits (a review with no candidates
+  // to pick from), or, on the file, the line that lists a song not found's search hits; else nothing (null).
   const unpicked = (s) => {
     if (SHOWS.review(s)) {
       const note = el("p", "note", "caracole isn't sure about this match: see the ");
@@ -859,7 +856,7 @@
       input.focus();
     }, "Show every song, not only those with " + progNumerals(state.prog)));
   };
-  // Under a line's "⋯": the song's progressions, as it plays them; each shows the songs that play it too.
+  // Under a line's chevron: the song's progressions, as it plays them; each shows the songs that play it too.
   const progressionsOf = (s) => {
     const found = progsOf(s);
     if (!found.length) return null;
@@ -909,14 +906,30 @@
     }
     return { held: false, action: null };
   };
-  // A line's one word for where its song stands: Needs review, Not found, else Found, Wanted or Ignored.
+  // A line's one word for where its song stands, when it needs something or isn't plainly yours: Needs review, Not
+  // found, Wanted or Ignored. A song found, nearly every one, says nothing: null.
   const statusOf = (s) => (SHOWS.review(s) ? { kind: "review", text: "Needs review" }
     : s.notFound && s.status === "wanted" ? { kind: "missing", text: "Not found" }
+    : s.status === "found" ? null
     : { kind: s.status, text: label(STATUS_TEXT, s.status) || s.status });
-  // Where a song's sheet and files came from, for its line's marks: its sheet's first.
-  const sourcesOf = (s) => [s.source].concat(listOf(s.files).map((f) => f && f.source))
-    .filter((key) => typeof key === "string" && key);
-  // A song's facts, under its line's "⋯": the key in words and where it came from, the PDF's transposition, the
+  // What a song holds, for its line's glyphs (rows.js ``holds``), read from its files and its instruments: its sheet
+  // (the auto one, when it has no other; UG's Ukulele Chords), a Guitar Pro file or else a text tab, a harmonica tab,
+  // its lyrics and a score you filed.
+  const holdingsOf = (s) => {
+    const names = listOf(s.files).map((f) => String((f && f.name) || ""));
+    const has = (pattern) => names.some((n) => pattern.test(n));
+    const plays = (x) => listOf(s.instruments).indexOf(x) >= 0;
+    const holds = [];
+    if (s.auto === true) holds.push("auto");
+    else if (has(/^sheet[.](html|pdf|txt|cho)$/)) holds.push(plays("ukulele") ? "ukulele" : "sheet");
+    if (has(/^guitar-\d+[.]/)) holds.push("guitar");
+    else if (names.indexOf("tab.txt") >= 0) holds.push("tab");
+    if (plays("harmonica")) holds.push("harmonica");
+    if (has(/^lyrics[.](txt|lrc)$/)) holds.push("lyrics");
+    if (plays("score")) holds.push("score");
+    return holds;
+  };
+  // A song's facts, under its line's chevron: the key in words and where it came from, the PDF's transposition, the
   // lyrics, when the song came, and its other artists.
   const factsOf = (s) => {
     const facts = el("p", "facts");
@@ -934,8 +947,8 @@
     if (others.length) facts.appendChild(el("span", "with", "With " + others.join(", ")));
     return facts.childNodes.length ? facts : null;
   };
-  // A kept version's name in a line's "⋯": UG's version number, its rating and votes, and whether it is the one,
-  // "Ver 3 · 4.86★ (408) · the one".
+  // A kept version's name under a line's chevron: UG's version number, its rating and votes, and whether it is the
+  // one, "Ver 3 · 4.86★ (408) · the one".
   const versionLabel = (v) => {
     const parts = ["Ver " + (Number(v.number) || "?")];
     if (typeof v.rating === "number") {
@@ -951,15 +964,15 @@
     const data = s.versions && typeof s.versions === "object" ? s.versions : null;
     const kept = listOf(data && data.list).filter((v) => v && typeof v === "object" && typeof v.href === "string" && v.href);
     if (!kept.length) return [];
-    const links = kept.map((v) => elsewhere(s, { label: versionLabel(v), href: v.href, source: v.source }));
+    const links = kept.map((v) => ({ label: versionLabel(v), href: v.href, source: v.source }));
     if (!kept.some((v) => v.chosen === true) && primary) {
       const site = typeof s.source === "string" && own.call(ICONS, s.source) && ICONS[s.source] ? ICONS[s.source].name : "";
       const name = s.auto === true ? "the auto sheet" : site ? String(site) + "'s sheet" : "its sheet";
-      links.unshift(elsewhere(s, { label: "The one: " + name, href: primary.href, source: s.source }));
+      links.unshift({ label: "The one: " + name, href: primary.href, source: s.source });
     }
     return links;
   };
-  // Under a line's "⋯": Select, the song picked, and its bar to put it in a songbook there is or a new one
+  // Under a line's chevron: Select, the song picked, and its bar to put it in a songbook there is or a new one
   // (select.js, which hears "caracole:pick"). Select knows the songs the page was loaded with: a song new to the
   // library since (Get it, a request) has none until the page is loaded again, as it would do nothing.
   const bookButton = (s) => {
@@ -969,10 +982,9 @@
     go.title = "Pick it, and any other songs, for a songbook";
     return go;
   };
-  // A song's line: its title (which opens its sheet), its status, its key and the marks of where its sheet and
-  // files came from, its main action; and under its "⋯" its facts, its picker or what to do about its match, where
-  // its audio comes from, its sheet's versions, its other files, the links to find or buy it, Add to a songbook…
-  // and Remove….
+  // A song's line: its title (which opens its sheet), its status when it needs something, what it holds, its key, its
+  // main action; and under its chevron its facts, its picker or what to do about its match, where its audio comes
+  // from, its sheet's versions, its other files, the links to find or buy it, Add to a songbook… and Remove….
   const lineFor = (s) => {
     const id = Number(s.id);
     const files = listOf(s.files);
@@ -1015,14 +1027,14 @@
     const listed = control.held ? files : files.filter((f) => f !== primary);
     // The sheet's PDFs in other versions (Export PDF of this version), by their versions, before the other files.
     const isVersion = (f) => f && typeof f.version === "string" && f.version;
-    const versions = listed.filter(isVersion).map((f) => Object.assign({}, elsewhere(s, f), { label: f.version }));
+    const versions = listed.filter(isVersion).map((f) => Object.assign({}, f, { label: f.version }));
     // Served, a Guitar Pro file caracole serve shows (``guitarPage``) gets a group of its own: Open in the browser,
     // and Download; without alphaTab there, a note says why it is a download alone. From a file, a file like any.
     const shownInBrowser = (f) => Boolean(server) && typeof f.guitarPage === "string" && f.guitarPage !== "";
     const others = listed.filter((f) => !isVersion(f) && !(shownInBrowser(f) && server.guitar));
     more.push({ heading: "Sheet versions", links: keptVersions(s, primary) },
       { heading: "PDF exports", links: versions },
-      { heading: "Files", links: others.map((f) => elsewhere(s, f)) });
+      { heading: "Files", links: others });
     if (server && server.guitar) {
       for (const f of listed.filter(shownInBrowser)) {
         more.push({ heading: String(f.label || f.name), links: [{ label: "Open in the browser", href: f.guitarPage },
@@ -1041,16 +1053,17 @@
     more.push(foot);
     const artists = listOf(s.artists);
     const keyed = typeof s.key === "string" && s.key;
+    const status = statusOf(s);
     const line = resultRow({
       dense: true,
       title: s.title,
       href: primary ? primary.href : "",
       artist: artists.length > 1 ? artists.join(", ") : s.artist,  // shown where no group names it
-      sources: sourcesOf(s),
+      holds: holdingsOf(s),  // its glyphs, in place of where each came from: the card says that
       status: s.status,
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
-      badges: [statusOf(s), ...instrumentBadges(s.instruments)],  // and what it holds for one instrument
+      badges: status ? [status] : [],
       action,
       more,
       onArtist: () => {
@@ -1124,8 +1137,8 @@
   // ("Queen" also finds "Dancing Queen").
   // all: the search of the sites under the bar: served, as you type (searchesAsYouType); on the file, the line that
   // searches them, on Enter.
-  // prog: the songs that play a progression alone, by its key (#prog=, from a song's "⋯", a viewer's Harmony panel or
-  // the served search).
+  // prog: the songs that play a progression alone, by its key (#prog=, from under a song's chevron, a viewer's Harmony
+  // panel or the served search).
   const state = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
@@ -1700,7 +1713,7 @@
     return item;
   };
   // A LaCuerda row of a song of yours, with chords: its line offers that sheet (Use LaCuerda's sheet), drawn again
-  // now if it is drawn already and had none. Its "⋯" open, it stays open, and the focus on its button stays there.
+  // now if it is drawn already and had none. Its chevron open, it stays open, and the focus on its button stays there.
   const offerLaCuerda = (i, row) => {
     const id = Number(songs[i].id);
     const https = (url) => /^https:[/][/]/i.test(String(url || ""));
@@ -2631,7 +2644,7 @@
           showLine(progressIn(row), UNREACHABLE);
         });
     };
-    // Get it: the song looked up now (POST /lookup, one caracole get), to its sheet; a version picked under "⋯" too.
+    // Get it: the song looked up now (POST /lookup, one caracole get), to its sheet; a version picked under its chevron too.
     getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "artist", "title", "ug", "tab", "lacuerda"], row,
       go, (answer) => answer.view);
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).

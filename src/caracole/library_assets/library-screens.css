@@ -11,7 +11,7 @@
   .masthead.lib { grid-template-areas: "app links" "title links"; align-items: end; padding: 28px 0 8px; }
 }
 /* A thumb's targets: the pages' links, the chips, the menus, the letters and "+ N more". Every .btn has its 44 px from
-   BASE_STYLE, and a line's, its "⋯" and an artist's name theirs from ROWS_STYLE. */
+   BASE_STYLE, and a line's, its chevron and an artist's name theirs from ROWS_STYLE. */
 @media (pointer: coarse) {
   .masthead.lib .navlink, .chip, .sort select, .btn.more-by { min-height: 44px; }
   .progress .undo { min-width: 44px; min-height: 44px; }

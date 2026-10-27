@@ -179,7 +179,7 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 .picked .pick { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 /* While selecting, a song's line is one target: a tap anywhere on it lands on it, and the Select script picks it
    or lets it go; only its box takes a tap of its own. What opens a file or acts on the song is put away (its
-   action, its "⋯" and what that holds), and so are the links of its request's line (which still says how the
+   action, its chevron and what that holds), and so are the links of its request's line (which still says how the
    request goes), so that a pick never opens or fetches anything; a key pressed on what stays (its artist's
    filter) still does what it says. */
 .selecting [data-picker] { cursor: pointer; -webkit-tap-highlight-color: transparent; -webkit-user-select: none;
@@ -190,15 +190,17 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 .selecting [data-picker] > .line-panel, .selecting [data-picker] .filter-mark, .selecting [data-picker] .artist-only,
 .selecting [data-picker] .progress a, .selecting [data-picker] .progress .dot { display: none; }
 .selecting [data-picker] button.artist { min-height: 0; }  /* no target of its own: the line is */
-/* A line's box comes first, beside its title and what is under it (both lines on a phone); its action and "⋯" wait. */
-.selecting .line { grid-template-columns: 44px minmax(0, 1fr); grid-template-areas: "pick title" "pick meta"; }
+/* A line's box comes first, beside its title, its key and what is under it (both lines on a phone); its action and
+   its chevron wait. */
+.selecting .line { grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-areas: "pick title key" "pick meta meta"; }
 .selecting .line > .pick { grid-area: pick; align-self: center; }
 .selecting .line.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 @media (min-width: 720px) {
-  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 3rem 4.75rem;
-    grid-template-areas: "pick title by status key src"; }
-  .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 3rem 4.75rem;
-    grid-template-areas: "pick title status key src"; }
+  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 6.5rem 2.75rem;
+    grid-template-areas: "pick title by status src key"; }
+  .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 6.5rem 2.75rem;
+    grid-template-areas: "pick title status src key"; }
 }
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .selecting .page { padding-bottom: 104px; }

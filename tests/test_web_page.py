@@ -303,6 +303,33 @@ def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, con
     assert re.search(r'data-show="found"[^>]*>Found <span class="n">1</span>', dom)
 
 
+# Notes each line's glyphs of what its song holds, its badges and how many marks of where things came from it shows.
+HOLDS = """
+(() => {
+  const held = {};
+  for (const l of document.querySelectorAll("#list .line")) {
+    held[l.querySelector("h3").textContent] = {
+      holds: Array.from(l.querySelectorAll(".line-holds svg")).map((g) => g.getAttribute("aria-label")),
+      badges: Array.from(l.querySelectorAll(".line-status .badge")).map((b) => b.textContent),
+      marks: l.querySelectorAll(".line-meta .source").length,
+    };
+  }
+  document.body.setAttribute("data-held", JSON.stringify(held));
+})();
+"""
+
+
+def test_a_served_line_says_what_its_song_holds_and_nothing_of_found(serve, cfg, conn, tmp_path):
+    from helpers.library_songs import hotel_california
+
+    hotel_california(conn, cfg)
+    add_song(conn, "Eagles", "Desperado")
+    held = attribute(dump_dom(serve(FakeCaracole(cfg), HOLDS), tmp_path), "data-held")
+    assert held["Hotel California"] == {"holds": ["Chord sheet", "Guitar Pro", "Harmonica tab", "Lyrics", "Score"],
+                                        "badges": [], "marks": 0}, held
+    assert held["Desperado"] == {"holds": [], "badges": ["Wanted"], "marks": 0}, held
+
+
 # Notes whether each song's request line is still the first node it showed one in (data-same, by where the song's
 # line is and its title), and where the focus is, every 100 ms (data-focus).
 FIRST_LINE_AND_FOCUS = """

@@ -8,6 +8,9 @@
   --muted: #645f57;
   --border: #e3dfd6;
   --border-strong: #cdc7bb;
+  /* A glyph's quiet colour (what a song's line holds): below --muted, yet 3:1 or more against every background, as a
+     graphic needs (WCAG 1.4.11); never a text's. */
+  --faint: #857f74;
   --control-edge: #8d877c;
   --accent: #b4441e;
   --accent-hover: #9a3915;
@@ -33,6 +36,7 @@
     --muted: #aaa59c;
     --border: #34322f;
     --border-strong: #4b4844;
+    --faint: #7d786f;
     --control-edge: #7a756e;
     --accent: #f0895c;
     --accent-hover: #f5a47f;

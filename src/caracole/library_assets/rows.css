@@ -94,12 +94,15 @@ button.artist-only:hover { background: color-mix(in srgb, currentColor 14%, tran
   .row .btn { min-height: 30px; }
   .row-more { height: 28px; }
 }
-/* A dense list's line (resultRow's ``dense``): on a phone the title, its action and "⋯", then its status, key and
-   marks (and its artist, where no group names it) under the title; from 720px all of it on one line, 25 px tall
-   with a mouse, every column but the title's as wide on every line, so that the lines of a list line up. Its action
-   is a word in the accent's colour, as a link of the list's own, so that a column of them reads quietly. */
-.line { --line-more: 30px; display: grid; grid-template-columns: minmax(0, 1fr) auto var(--line-more);
-  grid-template-areas: "title act more" "meta meta meta"; align-items: center; gap: 0 8px; min-width: 0;
+/* A dense list's line (resultRow's ``dense``): on a phone the title, its key, its action (its column as wide on every
+   line but for a long word, so that the keys line up) and its chevron, then its status and marks (and its artist,
+   where no group names it) under the title, a row a found song of yours has none of; from 720px all of it on one
+   line, 25 px tall with a mouse, every column but the title's as wide on every line, so that the lines of a list
+   line up. Its action is a word in the accent's colour, as a link of the list's own, so that a column of them reads
+   quietly. */
+.line { --line-more: 30px; display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(max-content, 5.5rem) var(--line-more);
+  grid-template-areas: "title key act more" "meta meta meta meta"; align-items: center; gap: 0 8px; min-width: 0;
   padding: 3px 4px 4px 12px; border-top: 1px solid var(--border); }
 .line:first-child { border-top: 0; }
 .line[data-status="ignored"] { opacity: .7; }
@@ -113,13 +116,23 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-by { flex: 1 1 3rem; min-width: 0; max-width: max-content; overflow: hidden; color: var(--muted);
   font-size: .82rem; white-space: nowrap; text-overflow: ellipsis; }
 .line-by .artist-name { overflow: hidden; text-overflow: ellipsis; }
-.line-status { display: flex; align-items: center; gap: 4px 6px; min-width: 0; }
-.line-status .badge { padding: 1px 8px; }
+/* A line's status, in its own cell: badges that don't fit wrap under the first, and one too long for the cell is cut,
+   so none ever lies over the key's column or a site's marks; a site's counts take what the badges leave, else go
+   under them. */
+.line-status { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; min-width: 0; overflow: hidden; }
+.line-status .badge { flex: none; max-width: 100%; overflow: hidden; padding: 1px 8px; text-overflow: ellipsis; }
 /* An instrument's row (Ukulele, Harmonica, Score): outlined in the text's colour, so it reads as what the row is for,
    never as a state of the song. */
 .badge.instrument { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--control-edge); }
-.line-facts { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.line-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
+.line-facts { flex: 1 1 0; min-width: 3em; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* The key, a small chip; what a song of yours holds, a glyph each in a quiet colour, the auto sheet's in its own (a
+   phone leaves them out: its files are under its chevron); where a site's song came from, its sites' marks. */
+.line-key { grid-area: key; justify-self: center; min-width: 2.25rem; padding: 1px 6px; border: 1px solid
+  var(--border-strong); border-radius: 7px; color: var(--text); font-size: .8rem; font-weight: 700; line-height: 1.3;
+  text-align: center; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.line-holds { display: none; align-items: center; gap: 5px; min-width: 0; overflow: hidden; color: var(--faint); }
+.line-holds .glyph { flex: none; width: 16px; height: 16px; }
+.line-holds .glyph.auto { color: var(--auto); }
 .line-sources { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
 .line-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .line-action form { margin: 0; }
@@ -136,7 +149,10 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .line-more:hover, .line-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
   color: var(--text); }
-/* A request's line, a lookup's steps under it, and what "⋯" holds: each across the whole line, under the rest. */
+.line-more .glyph { width: 18px; height: 18px; }
+.line-more[aria-expanded="true"] .glyph { transform: rotate(180deg); }
+/* A request's line, a lookup's steps under it, and what its chevron holds: each across the whole line, under the
+   rest. */
 .line > .progress { grid-column: 1 / -1; font-size: .85rem; }
 .line > .step-chips { grid-column: 1 / -1; margin: 3px 0 4px; }
 /* A request that ended Ready folds away (library.js showRequest): the line is the song's, which opens its sheet. Its
@@ -146,19 +162,27 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-panel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
 .line-panel .note, .line-panel .facts { margin: 0; }
 .line-panel .foot { flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin-top: 2px; }
+/* From 720px: the status, then what a song of yours holds where a site's song has its marks, then the key. A site's
+   song has no key: its status and counts take most of that room, its marks the rest, beside its action, the columns
+   around them where yours are. */
 @media (min-width: 720px) {
-  .line { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem 3rem 4.75rem 7.5rem var(--line-more);
-    grid-template-areas: "title by status key src act more"; padding: 0 4px 0 12px; }
+  .line { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem 6.5rem 2.75rem 7.5rem var(--line-more);
+    grid-template-areas: "title by status src key act more"; padding: 0 4px 0 12px; }
+  .line.hit { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 12rem 4.25rem 7.5rem var(--line-more);
+    grid-template-areas: "title by status src act more"; }
   .line-meta { display: contents; }
   .line-by { grid-area: by; justify-self: start; max-width: 100%; }
   .line-status { grid-area: status; }
-  .line-key { grid-area: key; }
+  .line-holds { display: flex; grid-area: src; }
   .line-sources { grid-area: src; }
   .line-action .btn, .line-busy { min-height: 24px; }
   .line-more { height: 24px; }
 }
-/* A thumb's targets: a row's or a line's button and "⋯", a row's artist (on a phone the title's line and the
-   artist's, two thumbs high), and a version's page on UG beside its button; a mouse keeps the compact sizes. */
+@media (prefers-reduced-motion: no-preference) {
+  .line-more .glyph { transition: transform .15s; }
+}
+/* A thumb's targets: a row's or a line's button, its "⋯" or chevron, a row's artist (on a phone the title's line and
+   the artist's, two thumbs high), and a version's page on UG beside its button; a mouse keeps the compact sizes. */
 @media (pointer: coarse) {
   .row { --row-more: 44px; padding-top: 4px; padding-bottom: 4px; }
   .row .btn { min-height: 44px; }

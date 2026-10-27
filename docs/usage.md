@@ -618,7 +618,7 @@ say), nothing is removed and it exits 1.
 `caracole remove` on a song removed already says when it was, and how to
 bring it back. Like `caracole review`, it asks before it takes caracole's lock,
 so the nightly run never waits for your answer; `--list` only reads. On the
-web page, each song's **Remove…**, under its line's "⋯", does the same, right
+web page, each song's **Remove…**, under its line's chevron, does the same, right
 there on its line: it says in one line what goes, counts down five seconds with Undo, then
 removes the song ([caracole serve](#caracole-serve)).
 
@@ -1387,7 +1387,7 @@ and cache.
   another key or capo took the old one's place, an auto sheet's key was heard
   again) is made under its new name, and the PDF under the old one goes, while
   it is still as caracole wrote it. The library page lists them under the
-  song's line's "⋯", as its PDF exports, each by its version (`G Dorian, capo
+  song's line's chevron, as its PDF exports, each by its version (`G Dorian, capo
   0`), before its other files. An
   export is made from the song's human sheet, else its auto sheet; it needs one
   of them to be kept, and exits 1 with the reason when it can't be made.
@@ -1905,23 +1905,29 @@ all of them, whatever the search or a filter leaves out), and their songs A to
 Z under it. A line is a song, one line each on a laptop, 24 px tall with a
 mouse (its buttons no smaller than a pointer needs): read down under the
 search box, a laptop's screen holds twenty-odd lines with their artists'
-names. On a phone two lines a song, the title and its button, then the rest
-under the title. A line has the song's title, which
-opens its sheet (the sheet viewer, see [The sheet viewer](#the-sheet-viewer),
-else the PDF, else the text); its status, one word: Found, Wanted, Needs review
-when caracole isn't sure of the match, or Not found when the offline index has
-no such song; its key ("Am"; a screen reader hears "Key A minor (from the
-tab)", see [The song's key](#the-songs-key)); the marks of where its sheet and
-its files came from, the sheet's first, by each site's own icon (the lyrics
-LRCLIB's, a Guitar Pro file gtptabs.com's: see [Where each file came
-from](#where-each-file-came-from)); and its one button, Open (Open PDF, Open
+names. On a phone a found song is one line too, its title, its key and its
+button, and a song that needs something says so under its title. A line has the
+song's title, which opens its sheet (the sheet viewer, see [The sheet
+viewer](#the-sheet-viewer), else the PDF, else the text); its status when it
+needs something, one word: Wanted, Needs review when caracole isn't sure of the
+match, Not found when the offline index has no such song, or Ignored (a found
+song, nearly every one, says nothing); what it holds, a small icon each, named
+by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
+own colour, for one the audio model wrote; "Ukulele chords" for Ultimate
+Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab"), a
+harmonica tab, its lyrics and a score you filed (a phone leaves them out); its
+key, in a small box ("Am"; a screen reader hears "Key A minor (from the tab)",
+see [The song's key](#the-songs-key)); its one button, Open (Open PDF, Open
 text), or, on the page `caracole serve` serves, Fetch now for a wanted song
 (Pick the match for one that needs review first, and Removing… while caracole
-removes it). An auto sheet says so by its ♪ mark (YouTube's, when its audio came
-from there), by its button's tooltip, "Auto sheet PDF", and to a screen reader
-by the button's name, "Open PDF of Creep by Radiohead, an auto sheet".
+removes it); and a chevron, which unfolds the song in place, turned while it is
+open. An auto sheet says so by its icon, by its button's tooltip, "Auto sheet
+PDF", and to a screen reader by the button's name, "Open PDF of Creep by
+Radiohead, an auto sheet". Where each file came from, each site's own icon
+says beside the file under the chevron (the lyrics LRCLIB's, a Guitar Pro file
+gtptabs.com's: see [Where each file came from](#where-each-file-came-from)).
 
-Everything else a song has waits under its line's "⋯": its key in words and
+Everything else a song has waits under its line's chevron: its key in words and
 where it came from ("Key A minor (from the tab)", "Key C major (estimated from
 the chords)", "(from the audio)"), its transposition, its lyrics' state and
 when it was added; a review's candidates (below); where it stands on the
@@ -1977,7 +1983,7 @@ reads the sheet in, one cycle, with its name when it has one ("the pop
 progression", "the Andalusian cadence"), and the named progressions it
 plays within it (a verse ii–I–V–vi–IV–♭VII–I–V–vi–IV plays the pop
 progression twice). A progression's button under a song's
-"⋯", or `#prog=` in the address (`index.html#prog=I%20V%20vi%20IV`, as a
+chevron, or `#prog=` in the address (`index.html#prog=I%20V%20vi%20IV`, as a
 sheet viewer's Harmony panel links to it; written by hand, `#prog=vi–IV–I–V` is
 the same progression), shows only your songs that play it,
 in any key and starting on any of its chords, under a line that says which,
@@ -1989,7 +1995,7 @@ that plays it within a longer section. A section held on
 one chord is no progression. A library rendered by an older caracole has its
 progressions after its next render (the nightly run's).
 
-A song that needs review lists its candidates under its "⋯", under "3
+A song that needs review lists its candidates under its chevron, under "3
 candidates", numbered as `caracole review` numbers them. Each is the UG song as UG names it
 ("Radiohead – Creep"), why the matcher thought of it ("artist spelled
 differently", "title only: another artist's song, probably a cover", "under
@@ -2032,7 +2038,7 @@ request a song by name (see below).
 
 On a touch screen every button, fold, chip, menu, letter, artist's name and funnel is
 at least 44 pixels each way, for a thumb, and so are each line's button and
-"⋯" (its title, beside them, is as tall): a phone shows about eleven songs to a
+chevron (its title, beside them, is as tall): a phone shows about eleven songs to a
 screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
 (3:1 at least, as WCAG 1.4.11 asks), while the boxes the songs are in keep
@@ -2044,10 +2050,10 @@ same.
 box at the start of each song's line: tick songs in the order they go in the
 songbook (each box shows its place, and a screen reader says it: "Pick Creep by
 Radiohead, 2nd"). A tap anywhere on a line ticks it, or unticks it: while you
-select, each line's button and "⋯" are put away, a request's line still says
+select, each line's button and chevron are put away, a request's line still says
 how it goes but without its links (Details), and a tap on its title opens
 nothing, so a tick never opens a file by mistake. A line's **Add to a
-songbook…**, under its "⋯", does the same with that song ticked, the bar's menu
+songbook…**, under its chevron, does the same with that song ticked, the bar's menu
 or name field ready. Search, filter and sort between ticks; the bar at the
 bottom counts them, `3 selected`. Give the songbook a name and tap Make
 songbook, or pick a songbook there is in the menu (instead of New songbook)
@@ -2593,7 +2599,7 @@ offline Ultimate Guitar index and LaCuerda's (see below):
 
 - **In your library**: every song, whatever its status, with its key when it
   has one (`Key G major (from the tab)`) and its folder. A song with a sheet
-  is tagged with where the sheet came from, as `index.html` marks it with the
+  is tagged with where the sheet came from, as `index.html` marks its files with the
   site's icon: `[UG]`, `[LaCuerda]`, `[auto]` (the audio model), `[YouTube]`
   (the audio model, from the audio caracole took from YouTube), as in
   `[LaCuerda] Soda Stereo - De Música Ligera · found · …`. A song in review
@@ -3001,8 +3007,8 @@ Who can reach it, below).
   beside its marks: **Ukulele** for an Ultimate Guitar song that has Ukulele
   Chords (its counts say "ukulele chords ×2"), **Harmonica** for a tab of
   harptabs.com, **Score** for a MuseScore page; and a song of yours says what it
-  holds for one (a ukulele sheet, a harmonica tab, a score you filed), on the
-  library page's lines and the lookup page's rows alike. Nothing is left out for
+  holds for one (a ukulele sheet, a harmonica tab, a score you filed): by its
+  icons on the library page's line, as a badge on the lookup page's row. Nothing is left out for
   an instrument: every chord sheet is listed as always, with no badge, as a
   chord sheet is every instrument's. The results follow what you type; a search typed over stops at once, and only
   the newest query's answer is shown, the older one staying until then. Only
@@ -3091,7 +3097,7 @@ Who can reach it, below).
   else as LaCuerda's, as `caracole get --lacuerda …` does, keeping that
   LaCuerda sheet (`[lacuerda]`), whatever Ultimate Guitar has (one with no
   chords there, "LaCuerda ×1, no chords", is looked up by its names); else by
-  its names, as `caracole get` does. Its "⋯" has what each site has: Ultimate
+  its names, as `caracole get` does. Its chevron has what each site has: Ultimate
   Guitar's versions ("Chords 2 of 13", each with an "on UG" link to look at it
   there first), each looked up as `--tab …` (`[pin]`); LaCuerda's page and,
   beside Ultimate Guitar's song, Get it with this sheet, which keeps
@@ -3121,11 +3127,11 @@ Who can reach it, below).
   line; one new to the library since the page loaded says In your library and
   Get it again, and is looked up as your song: no second song, and no line
   added to wanted.txt. A song your library hasn't, from Ultimate Guitar,
-  LaCuerda or gtptabs.com, also has **Add for tonight's run** under "⋯": it
+  LaCuerda or gtptabs.com, also has **Add for tonight's run** under its chevron: it
   goes into wanted.txt under the site's names, as Request does with Fetch it
   now unticked (a song only LaCuerda has as `caracole add --lacuerda …`, the
   pick recorded: its request says Added: tonight's run gets the sheet you
-  picked on LaCuerda, as its line's "⋯" does, with a link to that sheet's
+  picked on LaCuerda, as its line's chevron does, with a link to that sheet's
   page, and it waits for no Ultimate Guitar review of other artists' songs of
   its title), and the nightly run looks it up (not a song under one of UG's
   `misc-…` names, which are no one's: request it by name as you know it).
@@ -3157,7 +3163,7 @@ Who can reach it, below).
   Ultimate Guitar's Get it again, with a version of theirs to pick under "⋯",
   and LaCuerda's, which keeps that LaCuerda sheet.
 - **Fetch again, and Use LaCuerda's sheet.** On the library page the index's
-  rows of a song of yours are folded into your song's own line, so its "⋯" looks
+  rows of a song of yours are folded into your song's own line, so its chevron looks
   it up again, sending what the lookup page sends: **Fetch again**, on a song
   with its sheet (a wanted song has Fetch now), looks it up anew, one `caracole
   get` (`POST /lookup` with the song); **Use LaCuerda's sheet**, when LaCuerda has
@@ -3205,18 +3211,18 @@ Who can reach it, below).
   offers it a pin or an ignore. With the keyboard, Enter opens the picker and
   takes the focus to the first candidate, the arrow keys choose, and Tab
   goes on through the candidates' UG links to Fetch it now and Pick. The picker
-  is under the line's "⋯", and the line's Pick the match opens it there, the
+  is under the line's chevron, and the line's Pick the match opens it there, the
   focus on the first candidate.
 - **Look in the index.** A wanted song the offline index didn't match (and
-  whose sheet you didn't pick on LaCuerda: its line's "⋯" says Tonight's run
+  whose sheet you didn't pick on LaCuerda: its line's chevron says Tonight's run
   gets the sheet you picked on LaCuerda instead) has a
-  Look in the index link under its line's "⋯": its
+  Look in the index link under its line's chevron: its
   page, `/review?song=ID`, runs
   `caracole search` for the song's artist and title, and offers the first five
   hits the same way, without None of these. A pick writes `[match]` alone (see
   [Review](#review)). The page runs the search when you open it, so the
   library page carries no hits of its own.
-- **Remove a song.** Each song's Remove…, under its line's "⋯", removes the
+- **Remove a song.** Each song's Remove…, under its line's chevron, removes the
   song where it is, and you stay on the library: one tap, and
   the song's line says "Removing in 5 s · Undo", the keyboard focus on Undo,
   and under it what goes, in one sentence, as
@@ -3270,8 +3276,8 @@ Who can reach it, below).
   A request that looks nothing up (an add for tonight, a removal, a songbook's
   change) keeps its one line. How it ended:
   - **Ready**: the steps fold away and nothing takes their place; the line is
-    the song's, Found, and its title or its Open opens the sheet, its files
-    under its "⋯" (a screen reader still hears Ready, and the focus Fetch now
+    the song's, found, and its title or its Open opens the sheet, its files
+    under its chevron (a screen reader still hears Ready, and the focus Fetch now
     gave the request line goes to that Open);
   - **Not found · see the to-do page**, when Ultimate Guitar had no sheet:
     the fetch looked the song up during the request and found none, or the
@@ -3560,7 +3566,7 @@ afresh.
 **Guitar Pro files in the browser.** Served, a song's Guitar Pro file
 (`guitar-N.gp3`, `.gp4`, `.gp5`, `.gpx` or `.gp`, one caracole keeps: filed
 from `_inbox/` or downloaded from gtptabs.com) has a group of its own under its
-line's ⋯, named as the file is (`Guitar Pro 1 · gtptabs.com`): **Open in the
+line's chevron, named as the file is (`Guitar Pro 1 · gtptabs.com`): **Open in the
 browser**, and **Download** beside it. A sheet viewer the server sends offers
 the same as **Guitar Pro tab**, in its ⋯ settings, for a song with such a file
 (the viewer from the folder links the file itself), and so does the guitar after
@@ -3601,7 +3607,7 @@ against its hash and keeps for good. That script is the same for anyone, so the
 server sends it to any origin, the page's sandbox among them. Only caracole serve does this: `index.html`
 opened from the folder lists the file as before, and the server needs alphaTab
 for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`; without Nix, see
-[deploy.md](deploy.md#4-the-fonts-and-alphatab)). Without it the server runs all the same, the line's ⋯
+[deploy.md](deploy.md#4-the-fonts-and-alphatab)). Without it the server runs all the same, the line's chevron
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
 
