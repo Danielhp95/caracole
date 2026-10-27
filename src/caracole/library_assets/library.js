@@ -220,7 +220,8 @@
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares
   const { sourceMark, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine, titleLine,
-    readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } = caracoleRows(ICONS);
+    instrumentBadges, readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } =
+    caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its line's says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -980,7 +981,7 @@
       status: s.status,
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
-      badges: [statusOf(s)],
+      badges: [statusOf(s), ...instrumentBadges(s.instruments)],  // and what it holds for one instrument
       action,
       more,
       onArtist: () => {
@@ -1532,13 +1533,13 @@
   // The answer's artists and songs, put together by artist and by song, in the order the answer ranks them: the
   // removed songs it matches first (songs you had), then LaCuerda's artists and songs when it alone has the artist the
   // query names (``lacuerda_leads``), the artists the query names when one leads, Ultimate Guitar's songs, its
-  // artists otherwise, LaCuerda's, gtptabs.com's songs; MuseScore's pages, titles alone, apart. An artist's group is
+  // artists otherwise, LaCuerda's, gtptabs.com's songs; MuseScore's pages and harptabs.com's tabs, titles alone, apart. An artist's group is
   // keyed by the artist part of its rows' identity keys (``artist_key``; an artist's ``group_key``), a row of a song of
   // yours by your song's artist (``song``, ``same_artist``) putting its artist's rows under your artist (UG's "Song
   // Dongye (宋冬野)" is your 宋冬野); within it, a song (``title_key``) is one item, which each site's row of it is on.
   const mergeSites = (data) => {
     const model = { groups: new Map(), order: [], items: new Map(), lines: new Map(), alias: new Map(),
-      titles: objects(data.musescore), unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
+      titles: objects(data.musescore), harps: objects(data.harptabs), unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
         ? data.lacuerda_unlisted : null, meant: undefined, card: undefined, line: undefined };
     const ugArtists = objects(data.artists);
     const lcArtists = objects(data.lacuerda_artists);
@@ -1882,6 +1883,11 @@
       box.appendChild(artistGroup({ name: "MuseScore", search: false }, model.titleLines,
         { note: many(model.titles.length, "page") + " by that title" }));
     }
+    if (model && model.harps.length) {  // harptabs.com's harmonica tabs: a title alone too
+      if (!model.harpLines) model.harpLines = model.harps.map(titleLine);
+      box.appendChild(artistGroup({ name: "harptabs.com", search: false }, model.harpLines,
+        { note: many(model.harps.length, "harmonica tab") + " by that title" }));
+    }
     groupsBox.replaceChildren(box);
     groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
     if (had && !groupsBox.contains(document.activeElement)) {
@@ -2027,6 +2033,7 @@
     const artists = objects(data.artists);
     const gtp = objects(data.gtptabs);
     const ms = objects(data.musescore);
+    const harps = objects(data.harptabs);
     const lcArtists = objects(data.lacuerda_artists);
     const lc = objects(data.lacuerda);
     const parts = [];
@@ -2036,6 +2043,7 @@
     }
     if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
     if (ms.length) parts.push(ms.length + " on MuseScore");
+    if (harps.length) parts.push(harps.length + " on harptabs.com");
     const meant = objects(data.suggest).filter((x) => x.artist);
     say(parts.length ? parts.join(" · ") : meant.length ? "Nothing on the sites: did you mean " + String(meant[0].artist) + "?"
       : "Nothing on the sites: request it by name below");

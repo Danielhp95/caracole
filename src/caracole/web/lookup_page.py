@@ -397,6 +397,7 @@ function librarySong(s) {
     .map(f => ({label: f.label, href: f.href, source: f.source === s.source ? null : f.source, download: f.download}));
   const badges = [{kind: s.status, text: STATUS[s.status] || s.status}];
   if (s.review) badges.push({kind: "review", text: "Needs review"});
+  badges.push(...rowKit.instrumentBadges(s.instruments));  // what it holds for one instrument, as the hits say
   const row = window.caracole.resultRow({
     title: s.title, href: opens ? opens.href : "", artist: s.artist, onSearch: () => searchArtist(s.artist),
     source: s.source, status: s.status,

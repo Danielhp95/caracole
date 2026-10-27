@@ -114,6 +114,9 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-by .artist-name { overflow: hidden; text-overflow: ellipsis; }
 .line-status { display: flex; align-items: center; gap: 4px 6px; min-width: 0; }
 .line-status .badge { padding: 1px 8px; }
+/* An instrument's row (Ukulele, Harmonica, Score): outlined in the text's colour, so it reads as what the row is for,
+   never as a state of the song. */
+.badge.instrument { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--control-edge); }
 .line-facts { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .line-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
 .line-sources { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }

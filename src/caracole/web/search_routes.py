@@ -58,9 +58,10 @@ ones, running or waiting (``superseded``: the page asks again if it still
 wants it). A search of another box, another page or another person's phone,
 never stops one: it waits its turn, and both are answered. The offline
 indexes' answers are kept a few minutes. A query of fewer than three letters (two in Chinese)
-looks nowhere. Of LaCuerda, gtptabs.com and MuseScore it reads only the tables
+looks nowhere. Of LaCuerda, gtptabs.com, MuseScore and harptabs.com it reads only the tables
 their listings and sitemaps filled (``search.search_lacuerda``,
-``search.search_gtptabs``, ``search.search_musescore``), and says why it left a
+``search.search_gtptabs``, ``search.search_musescore``, ``search.search_harptabs``: harmonica tabs by their
+title alone, as MuseScore's pages, none while harptabs.com is turned off, and no chip), and says why it left a
 site out (``skipped``): turned off, its index still empty, or MuseScore blocking
 caracole; and why it searched one only in part (``partial``): LaCuerda's index
 while the nightly run still reads its listings, with the letters read so far.
@@ -328,6 +329,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
         found,
         lacuerda_leads,
         search_gtptabs,
+        search_harptabs,
         search_lacuerda,
         search_library,
         search_musescore,
@@ -345,15 +347,16 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     _after_reads(app)
     cached = app._found.get(q)
     if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
-        index_found, index, artists, hint, unseen, gtptabs, musescore, lc_artists, lacuerda, close = cached[1:]
+        index_found, index, artists, hint, unseen, gtptabs, musescore, harptabs, lc_artists, lacuerda, close = cached[1:]
     else:
         index_found, index, artists, hint, unseen = _index_hits(conn, q)
         gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
         musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
+        harptabs = search_harptabs(conn, q, SITE_HITS) if app.cfg.provider("harptabs").enabled else []
         lc_artists, lacuerda = (search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out
                                 else ([], []))
         close = None  # looked for below, once a song of yours doesn't make it moot
-        app._found[q] = (time.monotonic(), index_found, index, artists, hint, unseen, gtptabs, musescore,
+        app._found[q] = (time.monotonic(), index_found, index, artists, hint, unseen, gtptabs, musescore, harptabs,
                          lc_artists, lacuerda, close)
         while len(app._found) > CACHE_SIZE:
             app._found.popitem(last=False)
@@ -385,6 +388,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "gtptabs": _gtptabs_rows(app, conn, gtptabs if "gtptabs" not in left_out else [], songs),
             "musescore": [{"source": h.source, "title": h.title, "url": h.url, "score": h.score}
                           for h in (musescore if "musescore" not in left_out else [])],
+            # harmonica tabs of harptabs.com, by their title alone: possible matches, as MuseScore's pages are
+            "harptabs": [{"source": h.source, "title": h.title, "url": h.url, "score": h.score} for h in harptabs],
             "lacuerda": _lacuerda_rows(app, conn, lacuerda, songs),
             "lacuerda_artists": [{**_lacuerda_artist_json(app, conn, a, songs),
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],

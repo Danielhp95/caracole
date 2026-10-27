@@ -2892,8 +2892,17 @@ Who can reach it, below).
   you typed less an artist's name before or after it, when that artist has a
   song of that title in the Ultimate Guitar index, gtptabs.com's or your
   library ("oasis wonderwall" finds the Wonderwall pages, and "oasis live
-  forever" never a page titled Oasis or Forever), each a possible match. The
-  results follow what you type; a search typed over stops at once, and only
+  forever" never a page titled Oasis or Forever), each a possible match.
+  **harptabs.com**'s harmonica tabs come after them, the same way: its sitemap
+  names a tab's title alone (none while harptabs.com is turned off).
+  **Instruments.** A row for one instrument says which, in an outlined badge
+  beside its marks: **Ukulele** for an Ultimate Guitar song that has Ukulele
+  Chords (its counts say "ukulele chords ×2"), **Harmonica** for a tab of
+  harptabs.com, **Score** for a MuseScore page; and a song of yours says what it
+  holds for one (a ukulele sheet, a harmonica tab, a score you filed), on the
+  library page's lines and the lookup page's rows alike. Nothing is left out for
+  an instrument: every chord sheet is listed as always, with no badge, as a
+  chord sheet is every instrument's. The results follow what you type; a search typed over stops at once, and only
   the newest query's answer is shown, the older one staying until then. Only
   your own typing stops a search: two people searching at the same moment (on
   two phones, or the library page and the lookup page) each wait their turn

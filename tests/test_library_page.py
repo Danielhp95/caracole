@@ -386,6 +386,22 @@ def test_a_harmonica_tab_from_harptabs_is_listed_after_the_scores_and_says_where
         ("harmonica-1.txt", "Harmonica tab 1 · harptabs.com", "harptabs"), ("tab.txt", "Tab", None)]
 
 
+def test_a_songs_card_says_what_it_holds_for_one_instrument(conn, cfg):
+    # Its line's marks (rows.js instrumentBadges): a ukulele sheet, a harmonica tab, a score; a chord sheet is none.
+    plain, harp = add_song(conn, "Oasis", "Wonderwall"), add_song(conn, "Ritchie Valens", "La Bamba")
+    put(cfg, plain, "sheet.html", "sheet.pdf")
+    put(cfg, harp, "sheet.html", "harmonica-1.txt", "score-1.mxl")
+    uke = add_song(conn, "Vance Joy", "Riptide")
+    vid = upsert_version(conn, provider="ug", tab_id="1391193", song_id=uke.id, slot="sheet", kind="ukulele",
+                         rating=4.9, votes=1, version=1, label=None, url="https://tabs.ultimate-guitar.com/tab/1",
+                         raw={}, now="2026-10-27T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=uke, version_id=vid, name="sheet.txt", data=b"uke", rank=1)
+    cards = songs_of(page(conn, cfg))
+    assert cards[plain.display]["instruments"] == []
+    assert cards[harp.display]["instruments"] == ["harmonica", "score"]
+    assert cards[uke.display]["instruments"] == ["ukulele"]
+
+
 def test_a_sheet_from_ugs_ukulele_chords_says_so(conn, cfg):
     # A song with no chords on UG takes its Ukulele Chords (ug/fetch.py): its sheet's files say which.
     s = add_song(conn, "Vance Joy", "Riptide")

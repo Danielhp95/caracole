@@ -111,6 +111,10 @@ Rules a change there keeps (the Invariants below are the others):
   a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). A test that drives
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
   does.
+  A row for one instrument says which, a badge as a source has its mark (rows.js `instrumentBadges`: Ukulele for
+  UG's Ukulele Chords, Harmonica for harptabs.com's tabs, `search.search_harptabs`, by title alone as MuseScore's
+  pages, Score for MuseScore's; a song's card's `instruments`, library_page.py `instruments_of`), on both pages, and
+  nothing is ever filtered by instrument.
   What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
   `suggest`), `nothingFound` (one card for a query that found nothing: the request by name first, Ask LaCuerda,
   the chips of `looked`, `unseen` folded) and `lookedLine` (the chips in one muted line under results).

@@ -136,7 +136,10 @@ songs, then "+ 57 more by Estopa", the rest in the group fifty at a time
 offer to read their page (``POST /lacuerda/artist``), and a query LaCuerda's
 index has no artist by while the listing of its letter isn't read whole has Ask
 LaCuerda, under the groups. MuseScore's pages, titles alone, come last under a
-header of their own. Under them, where caracole looked: chips in one muted line
+header of their own, and harptabs.com's harmonica tabs after them (``titleLine``, by
+each one's ``source``). A row for one instrument says which (``instrumentBadges``:
+Ukulele for UG's Ukulele Chords, Harmonica for harptabs.com's, Score for MuseScore's;
+a song's card's ``instruments``, ``instruments_of``), and nothing is filtered by one. Under them, where caracole looked: chips in one muted line
 (UG ✓, LaCuerda: up to C, MuseScore blocked…), each one's detail its tooltip, or,
 for a query that found nothing, "Did you mean" (Their songs opens that artist's
 group, first, from ``/api/artist``) and one card, whose Request “…” by name
@@ -433,11 +436,12 @@ def result_cards(conn: sqlite3.Connection, cfg: Config, songs: list[Song]) -> di
     ukulele = ukulele_sheets(conn)
     cards = {}
     for s in songs:
-        files = _files(cfg.library_dir, s, _file_names(song_dir(cfg.library_dir, s)), {}, origins.get(s.id, {}),
+        names = _file_names(song_dir(cfg.library_dir, s))
+        files = _files(cfg.library_dir, s, names, {}, origins.get(s.id, {}),
                        exports.get(s.id, {}), browsable.get(s.id), ukulele=s.id in ukulele)
         key = song_key(conn, cfg.library_dir, s)
         cards[s.id] = {"links": files, "source": next((f["source"] for f in files if f["primary"]), None),
-                       "key": key.key if key else None}
+                       "key": key.key if key else None, "instruments": instruments_of(names, ukulele=s.id in ukulele)}
     return cards
 
 
@@ -657,6 +661,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "lyrics": song.lyrics_status,
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
         "files": files,
+        "instruments": instruments_of(names, ukulele=ukulele),  # what it holds for one instrument, its line's marks
         "versions": _versions_data(versions, names, _folder_href(library_dir, song)),  # its kept versions
         "source": next((f["source"] for f in files if f["primary"]), None),  # where its sheet came from
         "museScore": musescore,
@@ -772,6 +777,18 @@ def _label(name: str, source: str | None = None) -> str:
     if m:
         return f"Harmonica tab {m.group(1)}" + (f" · {source}" if source else "")
     return _LABELS[name]
+
+
+def instruments_of(names: set[str], *, ukulele: bool = False) -> list[str]:
+    """What a song's folder holds for one instrument, which its line marks as the search's rows are (rows.js
+    ``instrumentBadges``): "ukulele", its sheet one of UG's Ukulele Chords; "harmonica", a harmonica tab kept from
+    harptabs.com; "score", a score you filed. A chord sheet is every instrument's, and is no mark."""
+    found = ["ukulele"] if ukulele else []
+    if any(_HARMONICA.fullmatch(n) for n in names):
+        found.append("harmonica")
+    if any((m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS for n in names):
+        found.append("score")
+    return found
 
 
 UKULELE_SHEET = "Ukulele Chords"  # what a sheet from UG's Ukulele Chords type is called on the page
