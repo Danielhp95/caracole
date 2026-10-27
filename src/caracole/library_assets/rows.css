@@ -70,8 +70,9 @@ button.artist-only:hover { background: color-mix(in srgb, currentColor 14%, tran
 .row-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .row-action form { margin: 0; }
 .row .btn { min-height: 34px; padding: 0 11px; font-size: .85rem; }
-/* A request's line: a line of the row's own, under the title, the artist and the button. */
+/* A request's line: a line of the row's own, under the title, the artist and the button; a lookup's steps under it. */
 .row > .progress { grid-column: 2 / -1; font-size: .85rem; }
+.row > .step-chips { grid-column: 2 / -1; margin: 3px 0 2px; }
 .row-more { grid-area: more; justify-self: end; display: grid; place-items: center; width: var(--row-more); height: 30px;
   padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--muted);
   font: inherit; font-size: 1.15rem; line-height: 1; cursor: pointer; }
@@ -114,6 +115,9 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-by .artist-name { overflow: hidden; text-overflow: ellipsis; }
 .line-status { display: flex; align-items: center; gap: 4px 6px; min-width: 0; }
 .line-status .badge { padding: 1px 8px; }
+/* An instrument's row (Ukulele, Harmonica, Score): outlined in the text's colour, so it reads as what the row is for,
+   never as a state of the song. */
+.badge.instrument { color: var(--text); background: transparent; box-shadow: inset 0 0 0 1px var(--control-edge); }
 .line-facts { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .line-key { color: var(--text); font-weight: 650; font-variant-numeric: tabular-nums; }
 .line-sources { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
@@ -132,8 +136,13 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   color: var(--muted); font: inherit; font-size: 1.1rem; line-height: 1; cursor: pointer; }
 .line-more:hover, .line-more[aria-expanded="true"] { border-color: var(--border); background: var(--raised);
   color: var(--text); }
-/* A request's line, and what "⋯" holds: each across the whole line, under the rest. */
+/* A request's line, a lookup's steps under it, and what "⋯" holds: each across the whole line, under the rest. */
 .line > .progress { grid-column: 1 / -1; font-size: .85rem; }
+.line > .step-chips { grid-column: 1 / -1; margin: 3px 0 4px; }
+/* A request that ended Ready folds away (library.js showRequest): the line is the song's, which opens its sheet. Its
+   words stay for a screen reader, which hears the request end. */
+.line > .progress[data-tone="ready"], .row > .progress[data-tone="ready"] { position: absolute; width: 1px; height: 1px;
+  margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .line-panel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
 .line-panel .note, .line-panel .facts { margin: 0; }
 .line-panel .foot { flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin-top: 2px; }

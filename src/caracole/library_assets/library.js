@@ -222,7 +222,8 @@
   const ICONS = data.icons && typeof data.icons === "object" ? data.icons : {};
   // ROWS_SCRIPT's, which the lookup page shares
   const { sourceMark, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine, titleLine,
-    readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } = caracoleRows(ICONS);
+    instrumentBadges, readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } =
+    caracoleRows(ICONS);
   // A song's file from where its sheet came from has no mark of its own: its line's says it.
   const elsewhere = (s, item) => (item && item.source && item.source === s.source
     ? Object.assign({}, item, { source: null }) : item);
@@ -401,6 +402,7 @@
   const countdownIn = (item, r) => {
     const s = r.song;
     const p = progressIn(item);
+    drawSteps(p, null);  // what the line says now is the removal, not a lookup
     p.dataset.key = "";  // drawn here: the next showLine draws its own
     p.dataset.tone = "waiting";
     p.textContent = "";
@@ -535,18 +537,26 @@
     return i !== undefined && lines.get(i) === node;
   };
   // A request's line, written into p only when it changed, so a screen reader hears each change once.
-  // Its link says where to go next; details, the request's output on /jobs, follows it.
-  const showLine = (p, view) => {
+  // Its link says where to go next; details, the request's output on /jobs, follows it. ``counted``: a song's line or
+  // a result's row (showRequest), which says how many of its lookup's steps are over, "· 4 of 7 done" (the view's
+  // ``count``, while it runs).
+  const showLine = (p, view, counted) => {
     const line = view && view.line && typeof view.line === "object" ? view.line : {};
     const to = line.link && typeof line.link === "object" ? line.link : null;
     const more = typeof line.details === "string" ? line.details : "";
-    const key = [line.tone, line.text, to ? to.href : "", more].map(String).join("|");
+    const count = counted && view && typeof view.count === "string" ? view.count : "";
+    const key = [line.tone, line.text, to ? to.href : "", more, count].map(String).join("|");
     if (p.dataset.key === key) return;
     const focused = p !== document.activeElement && p.contains(document.activeElement);
     p.dataset.key = key;
     p.dataset.tone = String(line.tone || "");
     p.textContent = "";
     p.appendChild(el("span", null, line.text || ""));
+    if (count) {
+      const dot = el("span", "dot", "·");
+      dot.setAttribute("aria-hidden", "true");
+      p.append(dot, el("span", "steps-over", count));
+    }
     for (const go of [to, more ? { label: "Details", href: more } : null]) {
       if (!go) continue;
       const dot = el("span", "dot", "·");
@@ -557,6 +567,60 @@
       p.appendChild(a);
     }
     if (focused) focusOn(p);  // its link is gone: the focus stays on the line
+  };
+  // A lookup's steps (the view's ``steps``: outcome.py's, each its name, the site it names and its state) as chips
+  // under its request line ``p`` (steps.css's, the requests page's markup): those done ticked, the one that runs lit
+  // and the current step, those to come grey, a failed one crossed; a plain one ("Match: not on UG") its name alone.
+  // No live region: the line above says how it goes; this is a list to read. None in the view (a request that runs no
+  // lookup, or ended Ready, its steps folded away): none drawn.
+  const STEP_MARKS = { done: "✓ ", failed: "✕ " };
+  const STEP_STATES = ["waiting", "running", "done", "failed", "plain"];
+  const stepsAfter = (p) => (p && p.nextElementSibling && p.nextElementSibling.classList.contains("step-chips")
+    ? p.nextElementSibling : null);
+  const drawSteps = (p, view) => {
+    const chips = listOf(view && view.steps).filter((c) => c && typeof c === "object" && c.name);
+    let box = stepsAfter(p);
+    if (!chips.length) {
+      if (box) box.remove();
+      return;
+    }
+    const key = JSON.stringify(chips.map((c) => [c.name, c.source, c.state]));
+    if (box && box.dataset.key === key) return;
+    if (!box) {
+      box = el("ol", "step-chips");
+      box.setAttribute("aria-label", "Steps");
+      p.after(box);
+    }
+    box.dataset.key = key;
+    box.replaceChildren(...chips.map((c) => {
+      const state = STEP_STATES.indexOf(c.state) >= 0 ? String(c.state) : "waiting";
+      const chip = el("li", "step-chip " + state);
+      if (state === "running") chip.setAttribute("aria-current", "step");
+      if (own.call(STEP_MARKS, state)) {
+        const mark = el("span", null, STEP_MARKS[state]);
+        mark.setAttribute("aria-hidden", "true");
+        chip.appendChild(mark);
+      }
+      chip.appendChild(document.createTextNode(String(c.name)));
+      if (c.source) chip.append(" ", el("b", null, String(c.source)));
+      if (state !== "plain") chip.appendChild(el("span", "visually-hidden", ": " + state));
+      return chip;
+    }));
+  };
+  // How a song's request goes on its line, a result's row or a line under the bar: its request line, with the count of
+  // its lookup's steps over, and the steps under it. Ended Ready, the steps fold away and the line's words are for a
+  // screen reader alone (rows.css), which hears the request end: the line is the song's, its title and its Open
+  // opening the sheet. The focus, if the request line had it (Fetch now hands it there), goes to that Open, where
+  // Fetch now was.
+  const showRequest = (item, view) => {
+    const p = progressIn(item);
+    showLine(p, view, true);
+    drawSteps(p, view);
+    if (p.dataset.tone === "ready" && p === document.activeElement) {
+      const open = item.querySelector(".line-action a, .row-action a");
+      if (open) open.focus({ preventScroll: true });
+    }
+    return p;
   };
   // A song in review's line sends you to its picker (review?song=ID): on a line that has the picker, it opens
   // that one, where you are, rather than the picker's own page. The list of requests has none: it goes there.
@@ -605,7 +669,8 @@
     return p;
   };
   // The line old, drawn again as fresh (lineFor's) where it is, around its own request line, which never leaves
-  // the page; returns old. The focus, if it was on something of old's that goes, moves to that line.
+  // the page, and its steps under it, which the request's next view draws again; returns old. The focus, if it was on
+  // something of old's that goes, moves to that line.
   const refill = (old, fresh) => {
     const kept = old.querySelector(".progress");
     if (!kept) {
@@ -614,11 +679,14 @@
     }
     const at = document.activeElement;
     const focused = at !== old && old.contains(at) && !kept.contains(at);  // on something that goes
+    const steps = stepsAfter(kept);
     const drawn = progressIn(fresh);  // where fresh has its line
-    for (const child of Array.from(old.childNodes)) if (child !== kept) child.remove();
+    const freshSteps = stepsAfter(drawn);
+    for (const child of Array.from(old.childNodes)) if (child !== kept && child !== steps) child.remove();
     let before = true;
     for (const child of Array.from(fresh.childNodes)) {
       if (child === drawn) before = false;
+      else if (child === freshSteps) continue;  // old's stay where they are
       else if (before) old.insertBefore(child, kept);
       else old.appendChild(child);
     }
@@ -982,7 +1050,7 @@
       status: s.status,
       key: keyed ? s.key : "",
       keyText: keyed ? keyText(s) : "",
-      badges: [statusOf(s)],
+      badges: [statusOf(s), ...instrumentBadges(s.instruments)],  // and what it holds for one instrument
       action,
       more,
       onArtist: () => {
@@ -992,10 +1060,10 @@
       onSearch: server ? () => searchFor(String(s.artist)) : null,  // served, the name searches; the funnel filters
     });
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
-    // How the song's request goes, on a line of its own.
+    // How the song's request goes, on a line of its own, and its lookup's steps under it.
     const job = server ? jobOfSong(id) : null;
     if (job) {
-      showLine(progressIn(line), job);
+      showRequest(line, job);
     } else if (server && s.status === "wanted" && !removing.has(id) && busy.has(id)) {
       showLine(progressIn(line), { line: { tone: "running", text: "Fetching…" } });
     }
@@ -1534,13 +1602,13 @@
   // The answer's artists and songs, put together by artist and by song, in the order the answer ranks them: the
   // removed songs it matches first (songs you had), then LaCuerda's artists and songs when it alone has the artist the
   // query names (``lacuerda_leads``), the artists the query names when one leads, Ultimate Guitar's songs, its
-  // artists otherwise, LaCuerda's, gtptabs.com's songs; MuseScore's pages, titles alone, apart. An artist's group is
+  // artists otherwise, LaCuerda's, gtptabs.com's songs; MuseScore's pages and harptabs.com's tabs, titles alone, apart. An artist's group is
   // keyed by the artist part of its rows' identity keys (``artist_key``; an artist's ``group_key``), a row of a song of
   // yours by your song's artist (``song``, ``same_artist``) putting its artist's rows under your artist (UG's "Song
   // Dongye (宋冬野)" is your 宋冬野); within it, a song (``title_key``) is one item, which each site's row of it is on.
   const mergeSites = (data) => {
     const model = { groups: new Map(), order: [], items: new Map(), lines: new Map(), alias: new Map(),
-      titles: objects(data.musescore), unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
+      titles: objects(data.musescore), harps: objects(data.harptabs), unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
         ? data.lacuerda_unlisted : null, meant: undefined, card: undefined, line: undefined };
     const ugArtists = objects(data.artists);
     const lcArtists = objects(data.lacuerda_artists);
@@ -1884,6 +1952,11 @@
       box.appendChild(artistGroup({ name: "MuseScore", search: false }, model.titleLines,
         { note: many(model.titles.length, "page") + " by that title" }));
     }
+    if (model && model.harps.length) {  // harptabs.com's harmonica tabs: a title alone too
+      if (!model.harpLines) model.harpLines = model.harps.map(titleLine);
+      box.appendChild(artistGroup({ name: "harptabs.com", search: false }, model.harpLines,
+        { note: many(model.harps.length, "harmonica tab") + " by that title" }));
+    }
     groupsBox.replaceChildren(box);
     groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
     if (had && !groupsBox.contains(document.activeElement)) {
@@ -2029,6 +2102,7 @@
     const artists = objects(data.artists);
     const gtp = objects(data.gtptabs);
     const ms = objects(data.musescore);
+    const harps = objects(data.harptabs);
     const lcArtists = objects(data.lacuerda_artists);
     const lc = objects(data.lacuerda);
     const parts = [];
@@ -2038,6 +2112,7 @@
     }
     if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
     if (ms.length) parts.push(ms.length + " on MuseScore");
+    if (harps.length) parts.push(harps.length + " on harptabs.com");
     const meant = objects(data.suggest).filter((x) => x.artist);
     say(parts.length ? parts.join(" · ") : meant.length ? "Nothing on the sites: did you mean " + String(meant[0].artist) + "?"
       : "Nothing on the sites: request it by name below");
@@ -2205,8 +2280,9 @@
   const trayItems = new Map();  // job id -> its line in the list of requests
   const quiet = new Set();  // the lookups the Songbooks tab asked for: its set list says how they go
   let trayClosed = false;
-  // The list of requests, once there are two or more: one line each, not read out (the songs' lines are). A
-  // songbook's change, or a removal, is left out: its songbook or line, where it was asked for, says how it goes.
+  // The list of requests, once there are two or more: one line each, not read out (the songs' lines are), with no
+  // steps (the songs' lines have them); a song's name opens its sheet once it is Ready. A songbook's change, or a
+  // removal, is left out: its songbook or line, where it was asked for, says how it goes.
   const trayShow = (view) => {
     if (!tray || view.kind === "songbook" || view.kind === "remove" || quiet.has(Number(view.id))) return;
     const id = Number(view.id);
@@ -2217,6 +2293,13 @@
       item.appendChild(el("p", "progress"));
       trayItems.set(id, item);
       trayList.prepend(item);
+    }
+    // Ready: the song's name opens its sheet (the view's ``sheet``), as its line's title does.
+    const name = item.querySelector(".tray-song");
+    if (typeof view.sheet === "string" && view.sheet && name.tagName !== "A") {
+      const opens = link({ label: view.display || "", href: view.sheet }, "tray-song", false);
+      opens.title = "Open its sheet";
+      name.replaceWith(opens);
     }
     // One Details link, the list's own: a line here says how its request goes, and its song's links the rest.
     const line = view.line && typeof view.line === "object" ? view.line : {};
@@ -2291,8 +2374,7 @@
     const i = song !== null && songJob.get(song) === id ? byIndex.get(song) : undefined;
     for (const item of [i === undefined ? null : lines.get(i), spots.get(id)]) {
       if (!item || (song !== null && removals.has(song))) continue;  // its line counts down to its removal
-      const p = progressIn(item);
-      showLine(p, view);
+      const p = showRequest(item, view);
       if (view.kind === "remove") continue;  // its buttons wait where they are: the song is gone once it is done
       const button = item.querySelector("form.fetch");
       if (button && isActive(view)) {
@@ -2389,7 +2471,7 @@
     if (i === undefined || !identity || String(songs[i].identity || "") === String(identity)) return;
     stopRemoval(id, REMOVED, false);  // counting down to its removal: nothing left to remove
     removed(id);
-    showLine(progressIn(lines.get(i)), REMOVED);
+    showRequest(lines.get(i), REMOVED);
     forget(id);
   };
 
@@ -2404,7 +2486,9 @@
   // The server can't answer this page any more (it restarted since the page was loaded): say so on each line.
   const stop = (text) => {
     stopped = true;
-    for (const id of pending()) apply(Object.assign({}, views.get(id), { line: { tone: "failed", text } }));
+    for (const id of pending()) {
+      apply(Object.assign({}, views.get(id), { line: { tone: "failed", text }, count: null }));
+    }
   };
   const poll = () => {
     timer = 0;
@@ -2440,7 +2524,9 @@
         misses += 1;
         if (misses >= MISSES) {
           const text = e && e.said ? String(e.said) + " Trying again…" : UNREACHABLE_NOW;
-          for (const id of pending()) paint(Object.assign({}, views.get(id), { line: { tone: "waiting", text } }));
+          for (const id of pending()) {
+            paint(Object.assign({}, views.get(id), { line: { tone: "waiting", text }, count: null }));
+          }
         }
         schedule(Math.min(POLL * 2 ** misses, 30000));
       });
@@ -2543,7 +2629,7 @@
         const [artist, ...title] = String((view && view.display) || "").split(" - ");
         const card = song !== null && arrived.has(song) ? lineFor(arrived.get(song))
           : title.length ? placeholder(artist, title.join(" - ")) : placeholder("", artist);
-        if (view) showLine(progressIn(card), view);
+        if (view) showRequest(card, view);
         requestedList.prepend(card);
         requested.hidden = false;
         spots.set(id, card);

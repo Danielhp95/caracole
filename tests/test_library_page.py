@@ -373,6 +373,49 @@ def test_a_guitar_pro_file_from_gtptabs_says_where_it_came_from(conn, cfg):
     assert files == {"guitar-1.gpx": "Guitar Pro 1 · gtptabs.com", "guitar-2.gp5": "Guitar Pro 2"}
 
 
+def test_a_harmonica_tab_from_harptabs_is_listed_after_the_scores_and_says_where_it_came_from(conn, cfg):
+    s = add_song(conn, "Ritchie Valens", "La Bamba")
+    tab = upsert_version(conn, provider="harptabs", tab_id="89", song_id=s.id, slot="guitar", kind="harmonica",
+                         rating=0, votes=57000, version=1, label=None, url="https://www.harptabs.com/tab/89/la-bamba",
+                         raw={"key": "C"}, now="2026-10-27T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=s, version_id=tab, name="harmonica-1.txt", data=b"-9 -9 8 7\n", rank=1)
+    put(cfg, s, "sheet.html", "score-1.pdf", "tab.txt")
+    files = songs_of(page(conn, cfg))[s.display]["files"]
+    assert [(f["name"], f["label"], f["source"]) for f in files] == [
+        ("sheet.html", "Sheet viewer", None), ("score-1.pdf", "Score 1 (PDF)", None),
+        ("harmonica-1.txt", "Harmonica tab 1 · harptabs.com", "harptabs"), ("tab.txt", "Tab", None)]
+
+
+def test_a_songs_card_says_what_it_holds_for_one_instrument(conn, cfg):
+    # Its line's marks (rows.js instrumentBadges): a ukulele sheet, a harmonica tab, a score; a chord sheet is none.
+    plain, harp = add_song(conn, "Oasis", "Wonderwall"), add_song(conn, "Ritchie Valens", "La Bamba")
+    put(cfg, plain, "sheet.html", "sheet.pdf")
+    put(cfg, harp, "sheet.html", "harmonica-1.txt", "score-1.mxl")
+    uke = add_song(conn, "Vance Joy", "Riptide")
+    vid = upsert_version(conn, provider="ug", tab_id="1391193", song_id=uke.id, slot="sheet", kind="ukulele",
+                         rating=4.9, votes=1, version=1, label=None, url="https://tabs.ultimate-guitar.com/tab/1",
+                         raw={}, now="2026-10-27T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=uke, version_id=vid, name="sheet.txt", data=b"uke", rank=1)
+    cards = songs_of(page(conn, cfg))
+    assert cards[plain.display]["instruments"] == []
+    assert cards[harp.display]["instruments"] == ["harmonica", "score"]
+    assert cards[uke.display]["instruments"] == ["ukulele"]
+
+
+def test_a_sheet_from_ugs_ukulele_chords_says_so(conn, cfg):
+    # A song with no chords on UG takes its Ukulele Chords (ug/fetch.py): its sheet's files say which.
+    s = add_song(conn, "Vance Joy", "Riptide")
+    uke = upsert_version(conn, provider="ug", tab_id="1391193", song_id=s.id, slot="sheet", kind="ukulele",
+                         rating=4.9, votes=12745, version=1, label=None,
+                         url="https://tabs.ultimate-guitar.com/tab/vance-joy/riptide-ukulele-1391193", raw={},
+                         now="2026-10-27T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=s, version_id=uke, name="sheet.txt", data=b"uke", rank=1)
+    put(cfg, s, "sheet.html", "sheet.pdf", "lyrics.txt")
+    files = {f["name"]: f["label"] for f in songs_of(page(conn, cfg))[s.display]["files"]}
+    assert files == {"sheet.html": "Sheet viewer · Ukulele Chords", "sheet.pdf": "Sheet PDF · Ukulele Chords",
+                     "sheet.txt": "Sheet text · Ukulele Chords", "lyrics.txt": "Lyrics"}
+
+
 def test_the_sheet_viewer_is_the_first_link_for_the_phone(conn, cfg):
     s = add_song(conn, "Soda Stereo", "De Música Ligera")
     put(cfg, s, "sheet.pdf", "sheet.html", "sheet.txt", "sheet (auto).html", "sheet (auto).pdf")

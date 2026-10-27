@@ -1,5 +1,6 @@
-voicings.json, beside this file, holds guitar chord fingerings taken from chords-db
-(https://github.com/tombatossals/chords-db, lib/guitar.json at commit
+voicings.json and voicings-ukulele.json, beside this file, hold guitar and ukulele
+chord fingerings taken from chords-db (https://github.com/tombatossals/chords-db,
+lib/guitar.json and lib/ukulele.json at commit
 df06fa7b425cf5fd29485ff6591236b3557e3fac), cut down and re-encoded by
 caracole/viewer/voicings.py. chords-db is distributed under the licence below.
 

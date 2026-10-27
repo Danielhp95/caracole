@@ -521,7 +521,8 @@ def test_play_asks_the_synthesis_for_the_progression_and_marks_the_chord_playing
         stopped = b.js("[window.stopped, document.querySelectorAll('#harmony .prog-play')[0].getAttribute('aria-label')]")
     assert shown["tempo"] and all(r["play"] for r in shown["rows"])
     assert asked["bpm"] == 80 and len(asked["chords"]) == 4 * 4  # a chord a bar, the cycle four times
-    assert asked["chords"][0] == {"position": shapes, "capo": 0}
+    # with the guitar's strings and its sound (strum.js: the default tuning and voice)
+    assert asked["chords"][0] == {"position": shapes, "capo": 0, "tuning": [40, 45, 50, 55, 59, 64], "voice": "guitar"}
     assert marked == ["I"] and later == ["V"] and label == "Stop"
     assert stopped == [True, "Play Verse"]
 

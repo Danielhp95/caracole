@@ -33,16 +33,16 @@ from html import escape
 from typing import TYPE_CHECKING, Any
 
 from caracole.inline import sha256_source
-from caracole.library_assets import BASE_STYLE, PICKER_STYLE
+from caracole.library_assets import BASE_STYLE, PICKER_STYLE, STEPS_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.stamps import shown, stamp
 
 if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
     from caracole.web.jobs import Job, Stage, Step
     from caracole.web.outcome import Action, Outcome
-    from caracole.web.status import Line
+    from caracole.web.status import Line, SongFacts
 
-PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
+PAGE_STYLE = BASE_STYLE + PICKER_STYLE + STEPS_STYLE + """
 .waits { display: grid; grid-column: 1 / -1; gap: 8px; margin-top: 12px; padding-top: 12px;
   border-top: 1px solid var(--border); }  /* under the whole request: its line and its Output */
 .waits > p { margin: 0; color: var(--review); font-weight: 600; }
@@ -73,15 +73,12 @@ PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .when { color: var(--muted); font-size: .85rem; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .card.running { padding: 14px 16px; border-color: color-mix(in srgb, var(--auto) 45%, var(--border)); }
 .card.running .song { font-size: 1.15rem; }
-.progress { display: flex; flex-wrap: wrap; gap: 6px; margin: 2px 0 0; padding: 0; list-style: none; }
-.chip { flex: 1 1 auto; min-width: 4.5rem; padding: 5px 8px; border-radius: 8px; background: var(--raised);
-  color: var(--muted); font-size: .8rem; font-weight: 600; text-align: center; }
-.chip.done { color: var(--found); background: var(--found-bg); }
-.chip.running { color: var(--auto); background: var(--auto-bg); font-weight: 750;
-  box-shadow: inset 0 0 0 1px var(--auto); }
-.chip.failed { color: var(--failed); background: var(--failed-bg); }
+/* The running card's steps (steps.css), across the card, each as wide as the row leaves it. */
+.card .step-chips { gap: 6px; margin: 2px 0 0; }
+.card .step-chip { flex: 1 1 auto; min-width: 4.5rem; padding: 4px 8px; border-radius: 8px; font-size: .8rem;
+  text-align: center; }
 /* On a phone, a request's parts stack: its line, the reason, the steps; its next step with Output beside it. */
-.job .line, .reason, .progress, .waits, .output, .output[open] { grid-column: 1 / -1; }
+.job .line, .reason, .step-chips, .waits, .output, .output[open] { grid-column: 1 / -1; }
 .job .next { grid-column: 1; }
 .job.over .output:not([open]), .job.queued .output:not([open]) { grid-column: 2; }
 @media (min-width: 640px) {
@@ -94,7 +91,7 @@ PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
   .job .next { grid-column: 2; grid-row: 1 / span 2; justify-content: flex-end; }
   .job.over .output:not([open]), .job.queued .output:not([open]) { grid-column: 3; grid-row: 1 / span 2; }
   .output[open] { grid-row: 3; }
-  .card.running .line, .progress { grid-column: 1 / -1; }
+  .card.running .line, .step-chips { grid-column: 1 / -1; }
 }
 .output > summary { display: inline-flex; align-items: center; min-height: 44px; color: var(--muted); font-size: .85rem;
   font-weight: 600; list-style: none; cursor: pointer; }
@@ -129,6 +126,7 @@ PAGE_CSP = (f"default-src 'none'; style-src {sha256_source(PAGE_STYLE)}; img-src
 
 _STATE_TEXT = {"queued": "Queued", "running": "Running", "done": "Done", "failed": "Failed",
                "waiting": "Waiting", "skipped": "Skipped"}
+_MARKS = {"done": "✓ ", "failed": "✕ "}  # a step's, before its name
 
 
 def page(title: str, body: str, *, head: str = "") -> str:
@@ -226,10 +224,11 @@ def review_page(pick: Pick, csrf: str) -> str:
 
 
 def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[int, Outcome] | None = None,
-              opened: int | None = None, refresh: bool = True, picks: Mapping[str, Pick] | None = None,
-              csrf: str = "", now: datetime | None = None) -> str:
-    """Every request remembered (``jobs``, newest first): now, the one that runs, as a card with its steps,
-    and those queued under it in order, each with Cancel; then the feed, the finished ones newest first
+              facts: Mapping[int, SongFacts | None] | None = None, opened: int | None = None, refresh: bool = True,
+              picks: Mapping[str, Pick] | None = None, csrf: str = "", now: datetime | None = None) -> str:
+    """Every request remembered (``jobs``, newest first): now, the one that runs, as a card with its steps
+    (outcome.steps, its song's ``facts`` by job id saying where its sheet came from), and those queued under it
+    in order, each with Cancel; then the feed, the finished ones newest first
     under Today and Earlier (by when each finished, in the server's local time zone), each with its
     outcome (``outcomes``, by job id: outcome.py's, else read from its line in ``lines``), its reason,
     when it finished and its next step. Every request keeps its commands' output folded away, open for
@@ -272,7 +271,7 @@ def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[i
     active = sorted((job for job in jobs if job.active), key=lambda job: (job.state != "running", job.id))
     queued = [job for job in active if job.state == "queued"]
     now_items = [
-        _running(job, lines.get(job.id), now, output(job)) if job.state == "running"
+        _running(job, lines.get(job.id), (facts or {}).get(job.id), now, output(job)) if job.state == "running"
         else _queued(job, queued.index(job) + 1, csrf, output(job)) for job in active]
     over = sorted((job for job in jobs if not job.active),
                   key=lambda job: (job.finished_at or job.queued_at, job.id), reverse=True)
@@ -311,20 +310,24 @@ def _song(job: Job) -> str:
     return f'<span class="song">{escape(job.display or job.title)}</span>'
 
 
-def _running(job: Job, line: Line | None, now: datetime, output: str) -> str:
-    """The request that runs: its song, how long ago it started, its line, and its steps (outcome.steps)."""
+def _running(job: Job, line: Line | None, facts: SongFacts | None, now: datetime, output: str) -> str:
+    """The request that runs: its song, how long ago it started, its line, and its steps (outcome.steps), as
+    steps.css draws them, the library page's too: a mark, the name, the site it names, and its state for a screen
+    reader; a plain step's name says it all ("Match: not on UG")."""
     from caracole.web.outcome import steps
 
     text = line.text if line is not None else _STATE_TEXT["running"]
     ago = (f'<span class="ago">started {_ago(job.started_at, now)}</span>' if job.started_at is not None else "")
     chips = []
-    for chip in steps(job):
-        mark = {"done": "✓ ", "failed": "✕ "}.get(chip.state, "")
+    for chip in steps(job, facts):
         current = ' aria-current="step"' if chip.state == "running" else ""
-        state = f'<span class="visually-hidden">: {escape(_STATE_TEXT.get(chip.state, chip.state).lower())}</span>'
-        chips.append(f'<li class="chip {escape(chip.state)}"{current}><span aria-hidden="true">{mark}</span>'
-                     f"{escape(chip.name)}{state}</li>")
-    progress = f'<ol class="progress" aria-label="Steps">{"".join(chips)}</ol>' if chips else ""
+        mark = "" if chip.state == "plain" else f'<span aria-hidden="true">{_MARKS.get(chip.state, "")}</span>'
+        source = f" <b>{escape(chip.source)}</b>" if chip.source else ""
+        state = ("" if chip.state == "plain" else
+                 f'<span class="visually-hidden">: {escape(_STATE_TEXT.get(chip.state, chip.state).lower())}</span>')
+        chips.append(f'<li class="step-chip {escape(chip.state)}"{current}>{mark}{escape(chip.name)}{source}'
+                     f"{state}</li>")
+    progress = f'<ol class="step-chips" aria-label="Steps">{"".join(chips)}</ol>' if chips else ""
     return (f'<li class="job card running" id="job-{job.id}"><p class="line">{_song(job)}{ago}'
             f'{_says("running", text)}</p>{progress}{output}</li>\n')
 

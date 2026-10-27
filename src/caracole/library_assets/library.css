@@ -161,6 +161,7 @@ section.artist .line-by { display: none; }
 .progress[data-tone="failed"] { color: var(--failed); }
 .progress a { padding: 6px 0; color: inherit; text-underline-offset: 2px; }
 .progress .dot { margin: 0 .4em; opacity: .6; }
+.progress .steps-over { color: var(--muted); font-weight: 500; }  /* a lookup's steps over: "4 of 7 done" */
 /* A removal counting down: its seconds, Undo, and what goes, under it. */
 .progress .left { font-variant-numeric: tabular-nums; }
 .progress .undo { min-height: 32px; margin: 0; padding: 0 6px; border: 0; border-radius: 8px; background: none;

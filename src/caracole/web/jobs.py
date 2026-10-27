@@ -86,12 +86,15 @@ class Step:
 
 @dataclass
 class Stage:
-    """A stage of a lookup (get.py's ``STAGES``), as its ``caracole get --progress`` reports it."""
+    """A stage of a lookup (get.py's ``STAGES``), as its ``caracole get --progress`` reports it: ``detail``, what it
+    says now; ``running_detail``, what it said last while it ran (a sheet stage, the site it asks: get.SHEET_FROM),
+    kept once it ends, so a sheet that failed names the site it asked (outcome.py)."""
 
     name: str
     label: str
     state: str = "waiting"  # waiting, running, done, skipped, failed
     detail: str = ""
+    running_detail: str = ""
 
 
 @dataclass
@@ -117,6 +120,12 @@ class Job:
     @property
     def active(self) -> bool:
         return self.state in ("queued", "running")
+
+    @property
+    def looks_up(self) -> bool:
+        """Whether one of its commands looks its song up: ``caracole get``, or ``caracole versions --choose`` or
+        ``--clear``, which run one (its stages are a lookup's)."""
+        return any(_looks_up(step.args) for step in self.steps)
 
     def as_json(self) -> dict[str, Any]:
         """The job as plain data: its steps, each with a state (a lookup's stages; else its commands)."""
@@ -149,6 +158,8 @@ class Job:
                 self.stages.append(stage)
             stage.state = str(event.get("state") or stage.state)
             stage.detail = str(event.get("detail") or "")
+            if stage.state == "running":
+                stage.running_detail = stage.detail
         song = event.get("song")
         if isinstance(song, Mapping) and isinstance(song.get("id"), int):
             self.song_id, self.song_display = song["id"], str(song.get("display") or "")

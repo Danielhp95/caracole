@@ -20,8 +20,9 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   rating, and the best rated is kept (two requests at most; one when the first
   page read is the best). Without one, LaCuerda's, for a song LaCuerda would
   be asked about tonight. The sheet is readable from here on
-  (``Progress.readable``). Once it asks LaCuerda, the stage says, running,
-  which site it asks (``SHEET_FROM``), for caracole serve's line.
+  (``Progress.readable``). Running, the stage says which site it asks
+  (``SHEET_FROM``), once it asks one and again when it turns to the other, for
+  caracole serve's line and its Sheet step.
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
   writes one, for this song alone (``render_all``'s ``song_ids``): another
   song's failure, or its wait for a CJK font, is not this one's.
@@ -36,6 +37,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   ``SHEETS_SHARE`` too, once the song has a sheet.
 - ``gtptabs``: a Guitar Pro file from gtptabs.com, from the index the nightly
   run keeps.
+- ``harptabs``: a harmonica tab from harptabs.com, from the index the nightly run
+  keeps: the song's candidates read at the lookup pace (harptabs_fetch.py).
 - ``pages``: the PDF again if the sheet changed, then _todo.md and index.html,
   whose MuseScore links come from the local index.
 - ``songbooks``: the songbooks of songbooks.toml that list the song, made again
@@ -83,20 +86,25 @@ STAGES = (
     ("ug", "Ultimate Guitar: the sheets scored, the tab"),
     ("lacuerda", "LaCuerda"),
     ("gtptabs", "A Guitar Pro file from gtptabs.com"),
+    ("harptabs", "A harmonica tab from harptabs.com"),
     ("pages", "The library page"),
     ("songbooks", "The songbooks it is in"),
 )
 STAGE_LABELS = dict(STAGES)
 NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com",
-         "musescore": "MuseScore"}
+         "musescore": "MuseScore", "harptabs": "harptabs.com"}
 PROGRESS_PREFIX = "caracole-progress: "  # a JSON line of `caracole get --progress`
 _FIRST_PAGES = 1  # versions pages read before the first sheet is kept: the first lists them all
 _FIRST_SCORED = 1  # sheets fetched for it: the best rated
 SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: what follows one spends the rest
-# A running sheet stage's detail, once LaCuerda is one of the sites it asks: the site it asks now, which caracole
-# serve's line follows (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's.
+# A running sheet stage's detail, once it asks a site: the site it asks now, which caracole serve's line follows
+# (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's, and its Sheet step ("Sheet LaCuerda").
 SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
+# How the match stage begins for a song the offline index lacks, which caracole serve's Match step reads
+# ("Match: not on UG").
+MATCH_NOT_FOUND = "not in the offline Ultimate Guitar index"
 GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a file kept, which caracole serve reads
+HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab kept
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
 NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn't known"
 
@@ -450,17 +458,18 @@ class _Lookup:
             return  # said as the pin is recorded
         kind = classify_tab_url(pin_url(req.tab or ""))
         if isinstance(kind, str) and kind not in (BARE, UNRECOGNIZED):
-            raise _Stop(f"tab {tab_id} is not a chords or tabs page")
+            raise _Stop(f"tab {tab_id} is not a chords, tabs or ukulele chords page")
 
     def _other_pins(self, song, tab_id: int) -> list[str]:
         """The song's pins that stay beside a tab you pick, as written: those of another kind group (a
         text tab beside a chords sheet you pick), by the offline index's types. A pin of the pick's group,
-        or of a tab the index doesn't know on either side, is replaced; the pick goes first anyway."""
-        from caracole.ug.fetch import CHORDS_KINDS, TAB_KINDS
+        or of a tab the index doesn't know on either side, is replaced; the pick goes first anyway. Chords and
+        ukulele chords are one group here: either is the sheet (ug/fetch.py)."""
+        from caracole.ug.fetch import CHORDS_KINDS, TAB_KINDS, UKULELE_KINDS
 
         def group(tab: int) -> tuple[str, ...] | None:
             row = self.conn.execute("SELECT type FROM ug_index WHERE tab_id = ?", (tab,)).fetchone()
-            kinds = (CHORDS_KINDS, TAB_KINDS)  # the groups a pin replaces (ug/fetch.py)
+            kinds = (CHORDS_KINDS + UKULELE_KINDS, TAB_KINDS)  # the groups a pin replaces (ug/fetch.py)
             return next((g for g in kinds if row is not None and row[0] in g), None)
 
         mine = group(tab_id)
@@ -489,7 +498,7 @@ class _Lookup:
         target = f"{r.artist_key}/{r.song_key}" if r.artist_key and r.song_key else ""
         words = {"accept": f"matched to {target}", "pinned": f"pinned to {target or 'your tab'}",
                  "review": f"not sure which Ultimate Guitar song: {target} is the nearest",
-                 "not_found": "not in the offline Ultimate Guitar index", "ignored": "ignored in overrides.toml"}
+                 "not_found": MATCH_NOT_FOUND, "ignored": "ignored in overrides.toml"}
         said = words.get(self.song.match_decision or "not_found", self.song.match_decision or "")
         if state != "complete" and r.step not in ("override", "pin"):
             said += (" (the offline index is empty: run caracole index build once)" if state == "empty"
@@ -536,10 +545,10 @@ class _Lookup:
         return version.provider == "lacuerda" and pick.holds(version.tab_id)
 
     def _sheet_from(self, provider: str) -> None:
-        """Say which site the running sheet stage asks now, once LaCuerda is one of them (``SHEET_FROM``):
-        caracole serve's line then says LaCuerda, and Ultimate Guitar again after it. A sheet Ultimate Guitar
-        alone is asked for says nothing more."""
-        if self.running != "sheet" or self.sheet_from == provider or (provider == "ug" and self.sheet_from is None):
+        """Say which site the running sheet stage asks now (``SHEET_FROM``), once it asks one and again when it
+        turns to the other: caracole serve's line then says LaCuerda, and Ultimate Guitar again after it, and its
+        Sheet step names the site."""
+        if self.running != "sheet" or self.sheet_from == provider:
             return
         self.sheet_from = provider
         self._report("sheet", "running", SHEET_FROM[provider])
@@ -705,6 +714,23 @@ class _Lookup:
 
         return self.asking("gtptabs", ask)
 
+    def harptabs(self) -> tuple[str, str] | str:
+        from caracole.harptabs_fetch import harptabs_tabs
+
+        def ask(client) -> tuple[str, str] | str:
+            s = harptabs_tabs(self.conn, client, self.cfg.library_dir, self.now, overrides=self.overrides,
+                              only={self.song.id}, refresh_index=False)
+            if s.budget_exhausted:
+                raise BudgetExhausted("harptabs")
+            if s.failures:
+                _, e = s.failures[0]
+                raise e
+            if not s.tried:
+                return "skipped", "no tab wanted, or harptabs.com's index has no tab of the title by the artist"
+            return HARPTABS_KEPT if s.kept else "no tab there by the artist"
+
+        return self.asking("harptabs", ask)
+
     def pages(self) -> str:
         from caracole.render import render_all
         from caracole.todo import write_pages
@@ -774,7 +800,8 @@ class _Lookup:
                         return self._refuse(str(e))
                     for name, work in (("match", self.match), ("sheet", self.sheet), ("pdf", self.pdf),
                                        ("lyrics", self.lyrics), ("ug", self.ug), ("lacuerda", self.lacuerda),
-                                       ("gtptabs", self.gtptabs), ("pages", self.pages),
+                                       ("gtptabs", self.gtptabs), ("harptabs", self.harptabs),
+                                       ("pages", self.pages),
                                        ("songbooks", self.songbooks)):
                         self.stage(name, work)
                     note_looked_up(conn, self.song.id)

@@ -6,6 +6,10 @@ UG lists many chords versions of a song (Wonderwall has 13). caracole scores the
 scored beside it, flat in the song's folder: ``version-<tab>.txt`` and ``.json``, and
 render.py's viewer page ``version-<tab>.html`` (no PDF of their own).
 
+A song with no chords on UG takes its sheet from UG's "Ukulele Chords" versions (ug/fetch.py),
+and its versions are those: the versions listed are of the group the kept sheet comes from
+(``group_of``), chords unless that is a ukulele version.
+
 This module names those files (``version_names``, ``tab_of``) and lists the versions
 (``song_sheet_versions``) in ``rank.rank_sheets`` order: the scored versions, complete ones
 (coverage at or above ``coverage_threshold``) first, then by the rating weighed by votes
@@ -40,7 +44,7 @@ from caracole.versions import VersionRow, get_version, song_versions
 
 PREFIX = "version-"
 PROVIDER = "ug"
-KINDS = ("chords",)  # UG's kinds for the sheet slot
+KINDS = ("chords", "ukulele")  # UG's kinds for the sheet slot: ukulele chords for a song with no chords
 SHEET_PAGE = "sheet.html"  # the chosen version's viewer page, render.py's
 NOTE_LENGTH = 200
 SAME_KV = "sheet_versions:same:"  # + song id: the versions whose text is a kept one's, and its page
@@ -136,6 +140,8 @@ def song_sheet_versions(
         r for r in song_versions(conn, song_id, kinds=KINDS, include_gone=True)
         if r.provider == PROVIDER and not r.stale
     ]
+    group = group_of(rows, chosen_tab)
+    rows = [r for r in rows if r.kind == group]
     variant = _variant(conn, song_id)
     live = _ranked([r for r in rows if not r.gone], policy, variant)
     gone = rank_by_rating([_candidate(r) for r in rows if r.gone], policy, variant=variant)
@@ -161,6 +167,15 @@ def song_sheet_versions(
             rank=rank, kept=is_kept, chosen=chosen, gone=row.gone, page=page, url=row.url,
         ))
     return out
+
+
+def group_of(rows: Sequence[VersionRow], chosen_tab: str | None) -> str:
+    """The kind of the versions a song's list shows: the chosen one's (``chords`` or ``ukulele``), else chords
+    while the song has any live, else ukulele."""
+    chosen = next((r.kind for r in rows if chosen_tab is not None and r.tab_id == chosen_tab), None)
+    if chosen is not None:
+        return chosen
+    return "chords" if any(r.kind == "chords" and not r.gone for r in rows) or not rows else "ukulele"
 
 
 def as_data(versions: Sequence[SheetVersion], total: int) -> dict:
@@ -191,6 +206,16 @@ def library_state(conn: sqlite3.Connection, song_id: int) -> tuple[str | None, t
         elif (tab := tab_of(f.name)) is not None and f.name == version_names(tab)[0]:
             kept.append((f.kept_rank, tab))
     return chosen, tuple(tab for _, tab in sorted(kept, key=lambda k: (k[0], len(k[1]), k[1])))
+
+
+def sheet_kind(conn: sqlite3.Connection, song_id: int) -> str:
+    """The kind of the song's kept UG sheet: ``ukulele`` for a version of UG's Ukulele Chords type (a song with no
+    chords there, ug/fetch.py), else ``chords``, whether its sheet is UG's, another site's or none."""
+    for f in kept_files(conn, song_id):
+        if f.name == HUMAN_SHEET:
+            row = get_version(conn, f.version_id)
+            return "ukulele" if row.provider == PROVIDER and row.kind == "ukulele" else "chords"
+    return "chords"
 
 
 def same_key(song_id: int) -> str:

@@ -19,6 +19,8 @@
   --home: #1c7a3c;
   --away: #1b5fc1;
   --pull: #973b9d;
+  --kb-white: #fdfcfa;
+  --kb-black: #2b2926;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -37,6 +39,8 @@
     --p2: #6ea8fe;
     --p3: #5fcf85;
     --p4: #c79bf2;
+    --kb-white: #d6d2cb;
+    --kb-black: #262422;
     --home: #6fd08f;
     --away: #8ab8ff;
     --pull: #e5a3ef;
@@ -447,6 +451,20 @@ a.ver-main .ver-name { color: var(--accent); }
 .dg-dot, .dg-barre { fill: var(--accent); }
 .dg-finger { fill: var(--on-accent); font: 700 6.5px system-ui, sans-serif; text-anchor: middle; dominant-baseline: central; }
 .dg-fret { fill: currentColor; font: 600 7px system-ui, sans-serif; text-anchor: end; dominant-baseline: central; }
+/* A piano's keyboard strip (instruments.js keyboard): the right hand's keys lit, the bass marked. Wider than a
+   chord box: the card's diagram makes room for it, and so does its button in the strip. */
+.kb { display: block; height: auto; }
+.kb-white { fill: var(--kb-white); stroke: var(--kb-black); stroke-width: .6; }
+.kb-black { fill: var(--kb-black); stroke: var(--kb-black); stroke-width: .6; }
+.kb-white.kb-on, .kb-black.kb-on { fill: var(--accent); stroke: var(--kb-black); }
+.kb-white.kb-bass, .kb-black.kb-bass { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.4; }
+.diagram[data-kind="keys"] { width: 176px; }
+.diagram[data-kind="keys"] svg { width: 176px; }
+.card[data-kind="keys"] .shape { grid-template-columns: 84px 84px; }
+.card[data-kind="keys"] .shape .round { justify-self: center; width: 44px; }
+.strip svg.kb { width: 132px; }
+.facts .inst-line { display: block; margin-top: 2px; }
+.inst-panel:empty { display: none; }
 
 /* A wide screen: one column, centred, in larger text; two side by side only for a song the window
    shows whole that way (viewer.js measures it, and says so in data-columns). A longer song would
@@ -471,6 +489,9 @@ a.ver-main .ver-name { color: var(--accent); }
     width: 340px; height: auto; max-width: none; max-height: none; margin: 0; padding-bottom: 14px; overflow: visible;
     border-bottom: 1px solid var(--border); border-radius: 14px; box-shadow: 0 8px 28px rgb(0 0 0 / .18); }
   .card #alts { flex-wrap: wrap; margin: 0; padding: 0; overflow: visible; }
+  .sheet-ui.card[data-kind="keys"] { width: 470px; }
+  .card[data-kind="keys"] .shape { grid-template-columns: 106px 106px; }
+  .diagram[data-kind="keys"], .diagram[data-kind="keys"] svg { width: 220px; }
 }
 @media print {
   .bar, .pill, .sheet-ui, .tip, .back, .necks, .strip, .foot, .noscript, .versions { display: none !important; }

@@ -216,7 +216,7 @@ def test_the_policy_allows_exactly_its_scripts_and_styles():
     csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
     scripts = re.findall(r"<script>(.*?)</script>", html, re.DOTALL)
     styles = re.findall(r"<style>(.*?)</style>", html, re.DOTALL)
-    assert len(scripts) == 3 and len(styles) == 2  # book.js, strum.js and viewer.js
+    assert len(scripts) == 4 and len(styles) == 2  # book.js, strum.js, instruments.js and viewer.js
     assert csp.startswith("default-src 'none'; ") and "unsafe" not in csp
     assert all(sha(s) in csp for s in scripts + styles)
     assert "form-action 'none'" in csp and "base-uri 'none'" in csp

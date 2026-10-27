@@ -115,9 +115,10 @@ def test_the_synthesis_is_a_script_of_its_own_inlined_and_hashed_before_the_view
     csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html).group(1)
     scripts = re.findall(r"<script>(.*?)</script>", html, re.S)
     strum = (page.HERE / "strum.js").read_text(encoding="utf-8")
+    instruments = (page.HERE / "instruments.js").read_text(encoding="utf-8")
     viewer = (page.HERE / "viewer.js").read_text(encoding="utf-8")
-    assert scripts == [strum, viewer]
-    assert f"script-src {sha256_source(strum)} {sha256_source(viewer)};" in csp
+    assert scripts == [strum, instruments, viewer]
+    assert f"script-src {sha256_source(strum)} {sha256_source(instruments)} {sha256_source(viewer)};" in csp
     assert page.HERE / "strum.js" in page.BUILD_FILES
     # It loads nothing: no worklet module, no sample, no fetch.
     for word in ("addModule", "fetch(", "XMLHttpRequest", "import(", "new Audio(", "innerHTML", "eval("):
@@ -811,3 +812,100 @@ def test_the_tempo_changed_as_it_plays_keeps_the_order_and_takes_the_new_beat(tm
     on_the_beat(found, lambda strum: 0.3 if strum["first"] < mark else 0.375)
     after = [b2["when"] - a["when"] for a, b2 in zip(found, found[1:]) if b2["first"] >= mark]
     assert len(after) >= 5 and sum(abs(gap - 0.375) < 1e-6 for gap in after) >= 2
+
+
+# --- on each instrument (viewer/instruments.py): its strings, or a piano ------------------------------------------
+
+
+def heard_for(inst, name: str, shift: int = 0) -> str:
+    """What the page writes it strummed for the chord ``name``'s first shape on ``inst``, as Python shapes it."""
+    from caracole.viewer.instruments import chord_shapes
+    from caracole.viewer.theory import parse_chord
+    from caracole.viewer.voicings import notes_of
+
+    position = chord_shapes(inst, parse_chord(name), shift)[0]
+    midis = position if inst.kind == "keys" else notes_of(position, inst.tuning)
+    return " ".join(f"{440 * 2 ** ((m - 69) / 12):.2f}" for m in midis)
+
+
+@in_chromium
+@pytest.mark.parametrize("inst", ["ukulele", "ukulele-low-g", "baritone", "piano"])
+def test_each_instrument_strums_its_own_notes(tmp_path, inst):
+    from caracole.viewer.instruments import instrument
+
+    with opened(tmp_path, written(tmp_path, build_viewer(SONG)) + "#inst=" + inst) as b:
+        tap(b, '#sheet .c[data-c="0"]')
+        assert b.wait("document.documentElement.dataset.heard !== undefined")
+        heard = look(b)["heard"]
+    assert heard == heard_for(instrument(inst), "C")
+    expected = {"ukulele": "392.00 261.63 329.63 523.25",  # 0003: G4 C4 E4 C5, the G string high
+                "ukulele-low-g": "196.00 261.63 329.63 523.25",  # G3
+                "baritone": "164.81 196.00 261.63 329.63",  # a ukulele's F shape, 2010, on D3 G3 B3 E4: E3 G3 C4 E4
+                "piano": "130.81 261.63 329.63 392.00"}  # C3 in the bass; C4 E4 G4
+    assert heard == expected[inst]
+
+
+@in_chromium
+def test_the_notes_of_a_voicing_on_any_tuning_and_a_pianos_as_they_are(tmp_path):
+    with opened(tmp_path, written(tmp_path, build_viewer(SONG))) as b:
+        notes = "window.caracoleSound.notes(%s, %d, %s)"
+        assert b.js(notes % ('["0003", "0003", 1, []]', 0, "[67, 60, 64, 69]")) == [67, 60, 64, 72]
+        assert b.js(notes % ('["0003", "0003", 1, []]', 2, "[67, 60, 64, 69]")) == [69, 62, 66, 74]  # at the capo
+        assert b.js(notes % ('["1343", "1243", 5, []]', 0, "[55, 60, 64, 69]")) == [60, 67, 72, 76]  # from fret 5
+        assert b.js(notes % ('["0003", "0003", 1, []]', 0, "null")) == []  # four frets: no guitar's
+        assert b.js(notes % ("[48, 60, 64, 67]", 0, "null")) == [48, 60, 64, 67]
+        assert b.js("window.caracoleSound.voices") == ["guitar", "ukulele", "piano"]
+
+
+@in_chromium
+def test_a_piano_note_is_in_tune_and_dies_away_and_a_ukuleles_rings_shorter_than_a_guitars(tmp_path):
+    measure = """((hz, rate, make) => {
+      const s = make(hz, rate);
+      const from = Math.round(rate * 0.2), n = Math.round(rate * 0.3);
+      const at = (lag) => { let sum = 0; for (let i = from; i < from + n; i++) sum += s[i] * s[i + lag]; return sum; };
+      const period = rate / hz;
+      let best = 0, lag = 0;
+      for (let l = Math.floor(period * 0.9); l <= Math.ceil(period * 1.1); l++) { const v = at(l); if (v > best) { best = v; lag = l; } }
+      const a = at(lag - 1), b = at(lag), c = at(lag + 1);
+      const exact = lag + (a - c) / (2 * (a - 2 * b + c));
+      const peak = (i0, i1) => { let m = 0; for (let i = i0; i < i1; i++) m = Math.max(m, Math.abs(s[i])); return m; };
+      return { cents: 1200 * Math.log2((rate / exact) / hz), early: peak(0, rate * 0.1), late: peak(rate * 0.9, rate),
+               last: Math.abs(s[s.length - 1]), length: s.length };
+    })(%s, %s, %s)"""
+    strike = "(hz, rate) => window.caracoleSound.strike(hz, rate, 1.0)"
+    with opened(tmp_path, written(tmp_path, build_viewer(SONG))) as b:
+        for hz in (87.31, 130.81, 261.63, 392.0, 659.26):
+            for rate in (44100, 48000):
+                found = b.js(measure % (hz, rate, strike))
+                assert abs(found["cents"]) < 3, (hz, rate, found)
+                assert found["length"] == rate and found["last"] < 1e-3
+                assert found["late"] < found["early"] / 2, (hz, rate, found)
+        for hz in (261.63, 392.0, 440.0):
+            uke = b.js(measure % (hz, 48000, "(hz, rate) => window.caracoleSound.pluck(hz, rate, 1.0, 'ukulele')"))
+            guitar = b.js(measure % (hz, 48000, "(hz, rate) => window.caracoleSound.pluck(hz, rate, 1.0)"))
+            assert abs(uke["cents"]) < 2, (hz, uke)
+            assert uke["late"] / uke["early"] < guitar["late"] / guitar["early"] / 2, (hz, uke, guitar)
+
+
+@in_chromium
+def test_a_progression_on_the_piano_strikes_each_chord_at_once_and_stops(tmp_path):
+    from caracole.viewer.instruments import PIANO
+
+    with scheduled(tmp_path, SECTIONS, "#inst=piano") as b:
+        harmony_at_200_bpm(b)
+        tapped(b, PLAY % 0)  # the verse: C G Am F
+        assert b.wait("notesNow().length >= 24")
+        notes = b.js("notesNow()")
+        heard = b.js("document.documentElement.dataset.heard")
+        _, t = when_ahead(b, "document.querySelector('#harmony [data-close]').click()")
+        time.sleep(0.6)
+        for note in b.js("notesNow()"):  # nothing due after it is heard, and what rang fades out
+            assert not sounds(note) if note["when"] > t + 0.01 else ends(note) <= t + FADE + 1e-6, (t, note)
+        assert b.wait("log.context.state === 'suspended'", 8)
+        assert strum_timers(b) == []
+    struck: dict[int, list[float]] = {}
+    for note in notes:
+        struck.setdefault(note["strum"], []).append(note["when"])
+    firsts = [whens for _, whens in sorted(struck.items())][:6]
+    assert all(len(whens) == 4 and max(whens) == min(whens) for whens in firsts)  # bass and triad, together
+    assert heard in {heard_for(PIANO, name) for name in ("C", "G", "Am", "F")}

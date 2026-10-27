@@ -1,0 +1,13 @@
+
+/* A request's steps (web/outcome.py's), as chips: the requests page's running card, and on the library page a song's
+   line, or a search result's row, while its lookup runs (library.js). Those done ticked in the found colour, the one
+   that runs lit, those to come grey, a failed one red; a plain one, over and no failure ("Match: not on UG"), dashed
+   and muted. The site a step names is bold: "Sheet LaCuerda". */
+.step-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.step-chip { min-width: 0; padding: 2px 9px; border: 1px solid transparent; border-radius: 7px; background: var(--raised);
+  color: var(--muted); font-size: .78rem; font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.step-chip b { font-weight: 750; }
+.step-chip.done { color: var(--found); background: var(--found-bg); }
+.step-chip.running { border-color: var(--auto); color: var(--auto); background: var(--auto-bg); font-weight: 750; }
+.step-chip.failed { color: var(--failed); background: var(--failed-bg); }
+.step-chip.plain { border: 1px dashed var(--control-edge); background: transparent; }
