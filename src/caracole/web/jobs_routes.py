@@ -16,7 +16,8 @@ from its line and its song (``song_of``: for a song a fetch left without a sheet
 have elsewhere, ``outcome.elsewhere``).
 
 Each job is shown as the page's script reads it (``views``): its song (its id, and its identity key, which
-an id songs.id gives again once the newest song is removed never shares), its line (status.py) and, once
+an id songs.id gives again once the newest song is removed never shares), its line (status.py, as a song's
+line says it: ``song_line``), a lookup's steps and how many are over (outcome.py's ``progress``) and, once
 it is over and the page asks (``?jobs=``), its song's card as the library page draws it now, and the
 songbooks as its Songbooks tab has them now, which the page draws again: a songbook's change, a lookup
 (``caracole get`` makes the songbooks its song is in again) and a removal each change them. A job says
@@ -47,7 +48,7 @@ from caracole.web.app import (
 from caracole.web.jobs import EXPORTING, LACUERDA_READS, LACUERDA_SEARCH, LOOKUP, REMOVING, Job, JobStarted
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
-from caracole.web.status import SongFacts, details_href, job_line
+from caracole.web.status import SongFacts, details_href, job_line, song_line
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
@@ -92,8 +93,8 @@ def jobs_page(app: WebApp, asked: dict[str, list[str]]) -> Response:
     outcomes = {job.id: outcome(job, lines[job.id], facts.get(job.id), song_id=songs.get(job.id, (None,))[0])
                 for job in jobs if not job.active}
     still = asked.get("refresh") == ["0"]
-    return html_response(200, pages.jobs_page(jobs, lines, outcomes=outcomes, opened=opened, refresh=not still,
-                                              picks=picks_waiting(app, jobs), csrf=app.csrf))
+    return html_response(200, pages.jobs_page(jobs, lines, outcomes=outcomes, facts=facts, opened=opened,
+                                              refresh=not still, picks=picks_waiting(app, jobs), csrf=app.csrf))
 
 
 def cancel(app: WebApp, form: dict[str, str]) -> Response:
@@ -228,15 +229,25 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     links once it is done. A song's job names it by its id (``songId``) and its identity key (``identity``, the
     job's key: ``song_of`` finds the song by it): songs.id has no AUTOINCREMENT, so once the newest song is
     removed the next one added gets its id again, and a page that knew the one by that id tells the other by its
-    identity."""
+    identity.
+
+    Its ``line`` is as a song's line says it (``song_line``): Ready alone, and its sheet as ``sheet``, which the
+    list of requests opens by the song's name. A lookup's ``steps`` and, while it runs, its ``count`` are
+    outcome.py's ``progress``: none once it ends Ready."""
+    from caracole.web.outcome import progress
     from caracole.web.songbooks import songbook_of
 
     songbook = songbook_of(job.song_key)
     kind = ("remove" if job.song_key.startswith(REMOVING) else "export" if job.song_key.startswith(EXPORTING)
             else "songbook" if songbook is not None else "song")
     line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
+    shown = song_line(line) if kind == "song" else line
     seen = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
-            "state": job.state, "fetching": job.fetching, "line": line.as_json(), "details": details_href(job.id)}
+            "state": job.state, "fetching": job.fetching, "line": shown.as_json(), "details": details_href(job.id)}
+    if shown is not line and line.link is not None:
+        seen["sheet"] = line.link[1]
+    if kind == "song":
+        seen.update(progress(job, line, facts))
     if song_id is not None and songbook is None:
         seen["identity"] = job.song_key.removeprefix(REMOVING)
     if songbook is not None:
@@ -296,6 +307,7 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
 
             picker = f"review?song={song.id}" if candidates_of(song) else None  # the card's, or its page
         picked = overrides is not None and song.key in overrides.lacuerda and song.lacuerda_checked_at is None
+        sheet_from = _sheet_from(conn, song) if sheet and job.stages else ""
         elsewhere = None
         if over and job.fetching and not sheet and not song.review and not ignored:
             from caracole.web.outcome import elsewhere as other_sites
@@ -308,13 +320,24 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
             pdf = made_pdf(conn, app.cfg.library_dir, song, job)
         facts = SongFacts(sheet=sheet, review=bool(song.review), not_found=song.match_decision == "not_found",
                           checked_now=checked_now, ignored=ignored, picker=picker, lacuerda=picked,
-                          elsewhere=elsewhere, asked_ug=asked_ug, pdf=pdf)
+                          elsewhere=elsewhere, asked_ug=asked_ug, pdf=pdf, sheet_from=sheet_from)
     # A removal's song is gone once it is done: the job knows which it was.
     answer = (None if export else song.id if song is not None else job.song_id if removal else None, facts)
     if over and overrides is not None:  # with overrides.toml unreadable, "ignored" isn't known
         with app._ended_lock:
             app._ended[job.id] = answer
     return answer
+
+
+def _sheet_from(conn: sqlite3.Connection, song: Song) -> str:
+    """Where the song's kept sheet came from, its site's tag ("UG", "LaCuerda": icons.py), for a lookup's Sheet step;
+    "" without one."""
+    from caracole.get import kept_sheet
+    from caracole.icons import tag
+    from caracole.versions import get_version
+
+    kept = kept_sheet(conn, song)
+    return tag(get_version(conn, kept.version_id).provider) if kept is not None else ""
 
 
 def _song_by_id(conn: sqlite3.Connection, song_id: int | None) -> Song | None:

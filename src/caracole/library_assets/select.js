@@ -12,6 +12,7 @@
   }
   const songs = new Map((Array.isArray(data.songs) ? data.songs : []).map((s) => [String(s.id), s]));
   if (!list || !toolbar || !songs.size) return;
+  // Served by caracole serve (the data's ``server``), else the file on disk, or the Android app's copy of it.
   const server = data.server && typeof data.server === "object" ? data.server : null;
   const names = (list) => (Array.isArray(list) ? list : []).map((b) => String(b && b.name || "")).filter(Boolean);
   const books = names(data.songbooks && data.songbooks.books);

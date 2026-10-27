@@ -85,7 +85,8 @@ Rules a change there keeps (the Invariants below are the others):
   every element with `createElement` and `textContent`, never `innerHTML`, and connect to
   nothing but caracole serve. A page caracole writes into the library is served only through
   `app.written_pages` (a new kind goes there, with its record and its policy; a kept version's page,
-  `version-<tab>.html`, is a sheet viewer by its name: `app.written_page`), and only while it
+  `version-<tab>.html`, is a sheet viewer by its name: `app.written_page`; index.html itself, recorded by
+  `library_page.write_library_page`, only at `/offline/index.html`, with no sandbox), and only while it
   holds the bytes caracole recorded (`files.read_written_page`). The one page that loads anything from caracole
   serve is the Guitar Pro page (`web/guitar_routes.py`, `guitar_page.py`: a song's kept `guitar-N.*` file drawn and
   played by alphaTab, made per request, nothing written into the library): served in a sandbox, it loads alphaTab's
@@ -230,7 +231,9 @@ Rules a change there keeps (the Invariants below are the others):
   colour the last part ended in and cut the header's first line, so an alphaTab upgrade re-checks it:
   test_web_guitar_browser.py reads the header's pixels); a song's kept Guitar Pro files are
   `inbox.guitar_files`, which library_page.py (`guitarPage`), songbook_section.py (a set list's `guitar`) and render.py
-  (the viewer's `guitar`) read too. web/__init__.py names its parts, and web/app.py's
+  (the viewer's `guitar`) read too. offline_routes.py is `GET /api/offline`, the manifest caracole's Android app
+  copies the library by (read-only: each file the written index.html links to, as `WebApp._file` sends it now,
+  its bytes' SHA-256 and its headers; test_web_offline.py). web/__init__.py names its parts, and web/app.py's
   docstring the modules of routes and the checks every request passes. app.py is the router and
   what every route shares (`Request`, `Response`, the answers' shapes, `WebApp.db()`,
   `.overrides()`, `.submit()`, `.queued()`); a route lives in its area's `*_routes.py`, as a
@@ -248,8 +251,9 @@ Rules a change there keeps (the Invariants below are the others):
   `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
   shows is status.py's, read from the job's steps and the song's state, never from which commands
   ran: a step's label is that line while it runs ("Adding to the library…"). The requests page
-  (/jobs) says that line its own way (outcome.py), and the library page's lines never read it: the
-  running request's steps, a finished one's outcome, a reason from its stages and its song's state
+  (/jobs) says that line its own way (outcome.py), and the library page's lines read only its steps
+  (`outcome.progress`: a lookup's chips under its line while it runs, kept when it ends otherwise than
+  Ready), never the rest: a finished one's outcome, a reason from its stages and its song's state
   (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,
   `SongFacts.asked_ug`), and its next step; Cancel takes a request that hasn't started out of the
   queue (`JobQueue.cancel`, never one that runs, with the jobs `submit_all` queued `together` with

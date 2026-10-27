@@ -9,8 +9,9 @@ Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, Ca
 search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
 read, LaCuerda's own search), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
 sheet's PDF in the version its viewer was left in, and Make this my version), versions_routes.py
-(a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick) and guitar_routes.py
-(a song's Guitar Pro file in the browser, and alphaTab's bundle). A new route, or a new module of them, changes
+(a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick), guitar_routes.py
+(a song's Guitar Pro file in the browser, and alphaTab's bundle) and offline_routes.py (what caracole's Android
+app copies of the library, and the library page it starts from). A new route, or a new module of them, changes
 nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
@@ -452,18 +453,23 @@ class WrittenPage:
 
 def written_pages() -> dict[str, WrittenPage]:
     """The pages caracole writes into the library, by file name: each song's sheet viewers
-    (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``), and each
+    (render.py), served in a sandbox with their own policy (``viewer.viewer_csp``), each
     songbook's page (songbook.py, ``_songbooks/<folder>/songbook.html``), with its own
-    (``book.songbook_csp``). A new kind of page joins here with its own record. A kept version's
-    page, named by its tab, is a viewer too (``written_page``)."""
-    from caracole import songbook
+    (``book.songbook_csp``), and the library page, index.html at the library's top (library_page.py), with
+    the policy it holds and no sandbox (``library_page.page_csp``): ``/`` and ``/index.html`` are the page
+    caracole serve makes itself, so the file is sent at ``/offline/index.html`` alone (offline_routes.py).
+    A new kind of page joins here with its own record. A kept version's page, named by its tab, is a viewer
+    too (``written_page``)."""
+    from caracole import library_page, songbook
     from caracole.render import AUTO_OUTPUTS, HUMAN_OUTPUTS
     from caracole.viewer import viewer_csp
     from caracole.viewer.book import songbook_csp
 
     viewer = WrittenPage(_viewers_written, viewer_csp, _VIEWER_REFUSED)
     return {HUMAN_OUTPUTS[2]: viewer, AUTO_OUTPUTS[2]: viewer,  # "sheet.html", "sheet (auto).html"
-            songbook.HTML_NAME: WrittenPage(songbook.pages_written, songbook_csp, songbook.PAGE_REFUSED)}
+            songbook.HTML_NAME: WrittenPage(songbook.pages_written, songbook_csp, songbook.PAGE_REFUSED),
+            library_page.PAGE_NAME: WrittenPage(library_page.pages_written, library_page.page_csp,
+                                                library_page.PAGE_REFUSED)}
 
 
 _VIEWER_REFUSED = ("This sheet viewer isn't the page caracole last wrote here (it was changed on a synced "
