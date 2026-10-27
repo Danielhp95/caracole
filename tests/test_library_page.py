@@ -250,7 +250,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
 
 
 def bar_of(html):
-    found = re.search(r'<div class="searchbar"[^>]*>.*?</div>\n</div>', html, re.S)
+    found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\n</div>', html, re.S)
     assert found, html[:3000]
     return found.group(0)
 
@@ -1173,7 +1173,7 @@ def test_the_key_menu_puts_the_spellings_of_one_key_together_in_a_real_browser(c
     path = write_library_page(cfg.library_dir, page(conn, cfg))
 
     dom = dump_dom(path, tmp_path)
-    menu = re.search(r'<select id="key">(.*?)</select>', dom, re.S).group(1)
+    menu = re.search(r'<select id="key"[^>]*>(.*?)</select>', dom, re.S).group(1)
     options = re.findall(r'<option value="([^"]*)"[^>]*>([^<]*)</option>', menu)
     assert options == [("", "Any"), ("A#", "A# / Bb major · 2"), ("F minor", "F minor · 1"),
                        ("F# minor", "F# / Gb minor · 2")]
@@ -2400,7 +2400,7 @@ COMPACT = """
     return node ? Math.round(node.getBoundingClientRect().height) : null;
   };
   return { line: tall("#list .line-action .btn"), more: tall("#list .line-more"), artist: tall("#list button.artist"),
-           file: tall("#list .line-panel .btn.small"), letter: tall("#jump button"), chip: tall(".chip"),
+           file: tall("#list .line-panel .btn.small"), letter: tall("#jump button"), tool: tall(".toolbar .tool"),
            menu: tall("#sort") };
 })()
 """
@@ -3190,7 +3190,7 @@ def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_p
         song = add_song(conn, artist, title)
         if n:
             update_song(conn, song.id, status="found")
-        keep_sheet_json(conn, cfg, song, "Words\n", raw={"tonality_name": "Am"}, tab_id=n + 1)  # the Key menu shows
+        keep_sheet_json(conn, cfg, song, "Words\n", raw={"tonality_name": "Am"}, tab_id=n + 1)  # a Key to filter by
     served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
     for html in (served, page(conn, cfg)):
         path = write_library_page(cfg.library_dir, html)
@@ -3198,51 +3198,50 @@ def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_p
         top = phone_page.js(FIRST_SONG)
         assert top < 400, top  # under the header, the bar and the buttons: more than half the screen is songs
         assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
-        # The numbers sit beside the title, and the buttons are one row that scrolls sideways.
+        # The numbers sit beside the title, and Filter, Sort and Select are one row, a thumb's worth each.
         title = phone_page.js("document.querySelector('h1').getBoundingClientRect().top")
         stats = phone_page.js("document.getElementById('summary').getBoundingClientRect().top")
         assert abs(title - stats) < 16, (title, stats)
-        # No song needs review: no Needs review button. All, Found, Wanted, then Select, Key and Sort: one row that
-        # scrolls sideways, a thumb's worth each.
-        assert not phone_page.js(f"{SHOWN}(document.querySelector('.chip[data-show=\"review\"]'))")
-        row = phone_page.js("[...document.querySelectorAll('.toolbar .chip, .toolbar select')].filter((c) => c.offsetParent)"
-                            ".map((c) => [Math.round(c.getBoundingClientRect().top), c.getBoundingClientRect().height])")
-        assert len(row) == 6 and max(t for t, _ in row) - min(t for t, _ in row) < 8, row
-        assert min(h for _, h in row) >= 44, row
-        assert phone_page.js("document.querySelector('.toolbar').scrollWidth > innerWidth")
+        row = phone_page.js(f"{TOOLS}.map((c) => [Math.round(c.getBoundingClientRect().top), "
+                            "c.getBoundingClientRect().height, c.id || c.className])")
+        assert [c for _, _, c in row] == ["filter", "sort", "tool pick-toggle"], row
+        assert max(t for t, _, _ in row) - min(t for t, _, _ in row) < 8, row
+        assert min(h for _, h, _ in row) >= 44, row
+        assert phone_page.js("document.querySelector('.toolbar').scrollWidth <= innerWidth")
+
+
+# The toolbar's buttons shown: Filter, Sort and Select (the tags aside).
+TOOLS = "[...document.querySelectorAll('.toolbar .tools > .tool, .toolbar .tools select')].filter((c) => c.checkVisibility())"
 
 
 @in_chromium
-def test_on_a_phone_the_row_of_buttons_fades_where_it_goes_on_out_of_sight(conn, cfg, phone_page):
+def test_on_a_phone_the_tags_wrap_under_the_buttons_and_nothing_scrolls_sideways(conn, cfg, phone_page):
     from caracole.library_page import WebControls
 
     for n, (artist, title) in enumerate((("Radiohead", "Creep"), ("Oasis", "Wonderwall"), ("Muse", "Hysteria"))):
         song = add_song(conn, artist, title)
         update_song(conn, song.id, status="found" if n else "wanted", review=bool(n == 2))
     served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
-    phone_page.open(write_library_page(cfg.library_dir, served).as_uri())
-    row = "document.querySelector('.toolbar')"
-    mask = f"(getComputedStyle({row}).maskImage || getComputedStyle({row}).webkitMaskImage || 'none')"
-    assert phone_page.js(f"{row}.scrollWidth > {row}.clientWidth")  # Needs review is out of sight
-    assert phone_page.wait(f"{row}.classList.contains('more-end')")
-    assert "gradient" in phone_page.js(mask) and not phone_page.js(f"{row}.classList.contains('more-start')")
-    phone_page.js(f"{row}.scrollLeft = {row}.scrollWidth")  # at its end: the fade moves to where it came from
-    assert phone_page.wait(f"!{row}.classList.contains('more-end') && {row}.classList.contains('more-start')")
-    assert "gradient" in phone_page.js(mask)
+    phone_page.open(write_library_page(cfg.library_dir, served).as_uri() + "#show=wanted&artist=radiohead")
+    tools = phone_page.js(f"{TOOLS}.map((c) => Math.round(c.getBoundingClientRect().bottom))")
+    tag = phone_page.js("document.getElementById('artist').getBoundingClientRect().top")
+    assert len(tools) == 3 and tag >= max(tools), (tools, tag)
+    assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
+    assert phone_page.js("document.querySelector('.toolbar').scrollWidth <= document.querySelector('.toolbar').clientWidth")
 
 
 @in_chromium
-def test_on_a_desktop_the_menus_sit_beside_the_buttons_and_needs_review_shows_once_a_song_does(conn, cfg, tmp_path):
+def test_on_a_desktop_filter_sort_and_select_are_one_line_and_review_shows_once_a_song_needs_it(conn, cfg, tmp_path):
     from helpers.targets import noted, noting
 
     add_song(conn, "Radiohead", "Creep")
     in_review(conn)
-    tops = noting("data-tops", "[...document.querySelectorAll('.toolbar .chip:not([hidden]), #sort')]"
-                               ".map((e) => Math.round(e.getBoundingClientRect().top))")
+    tops = noting("data-tops", f"{TOOLS}.map((e) => Math.round(e.getBoundingClientRect().top))")
     dom = dump_dom(write_library_page(cfg.library_dir, with_script(page(conn, cfg), tops)), tmp_path, size="1280,900")
     assert not re.search(r'data-show="review"[^>]*hidden', dom)
     toolbar = re.search(r'<div class="toolbar">(.*?)<nav class="jump"', dom, re.S).group(1)
-    assert 'id="sort"' in toolbar and 'id="key"' in toolbar and 'id="view' not in toolbar
+    assert 'id="sort"' in toolbar and 'id="filter-panel"' in toolbar and 'id="view' not in toolbar
+    assert len(noted(dom, "data-tops")) == 3
     assert max(noted(dom, "data-tops")) - min(noted(dom, "data-tops")) < 8  # one line: it all fits
 
 
@@ -3597,7 +3596,7 @@ def test_there_is_no_cards_rows_switch(conn, cfg, tmp_path):
         assert gone not in html, gone
     for name in ("makeCard", "cardFor", "songRow", "rowFor", "VIEWS"):
         assert not re.search(rf"\b{name}\b", _PAGE_SCRIPT), name
-    script = (noting("data-jump", JUMP_TO_R) + 'document.querySelector(".chip[data-show=all]").click();\n'
+    script = (noting("data-jump", JUMP_TO_R) + 'document.querySelector("[data-show=all]").click();\n'
               + noting("data-hash", "location.hash"))
     dom = dump_dom(write_library_page(cfg.library_dir, with_script(html, script)), tmp_path, "#view=rows&q=song")
     # An address from before, Rows and all, opens the lines, and the address forgets the view once it changes.

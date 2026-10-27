@@ -828,7 +828,7 @@ def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
     assert browser.wait("document.getElementById('results').hidden")
     assert browser.js("document.getElementById('q').value") == "creep"
     assert browser.js(GRID) == ["Creep"]
-    assert browser.js("document.querySelector('.chip[data-show=\"wanted\"]').getAttribute('aria-pressed')") == "true"
+    assert browser.js("document.querySelector('[data-show=\"wanted\"]').getAttribute('aria-checked')") == "true"
     assert browser.js("location.hash.includes('all=1')") is False
     browser.press("Escape")  # again: the search clears
     assert browser.wait(f"{GRID}.length === 2")

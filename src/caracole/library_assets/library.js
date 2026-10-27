@@ -17,8 +17,12 @@
   const sort = byId("sort");
   const count = byId("count");
   const jump = byId("jump");
-  const chips = Array.from(document.querySelectorAll(".chip[data-show]"));
-  const artistChip = byId("artist");
+  const artistChip = byId("artist");  // the artist's filter: a tag of the toolbar's
+  // The toolbar's Filter, and the panel it opens (body.html): the songs' Status, what they have something for, their Key.
+  const toolbar = document.querySelector(".toolbar");
+  const filterButton = byId("filter");
+  const panel = byId("filter-panel");
+  const statusButtons = Array.from(panel.querySelectorAll("[data-show]"));
   const progLine = byId("prog");
   const JUMP_FROM = 40;  // songs shown before the A-Z strip is worth its room: fewer, and a thumb scrolls
 
@@ -1190,6 +1194,14 @@
     keySelect.appendChild(option);
   }
   byId("keys").hidden = keyGroups.size === 0;
+  // The filters of the panel that are on, as Filter counts them: the status, and the key.
+  const filtersOn = () => (state.show !== "all" ? 1 : 0) + (state.key ? 1 : 0);
+  const filterCount = byId("filter-count");
+  const filterLive = byId("filter-live");
+  const showN = byId("show-n");
+  const glyphFor = caracoleRows({}).glyph;
+  filterButton.prepend(glyphFor("sliders"));
+  sort.before(glyphFor("sort"));
   const save = () => {
     const params = new URLSearchParams();
     let was = new URLSearchParams();
@@ -1239,54 +1251,56 @@
   const smooth = () => (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ? "auto" : "smooth");
 
-  // The row of buttons and menus, one line that scrolls sideways on a phone: which of its ends hide some.
-  const buttonRow = document.querySelector(".toolbar");
-  const chipEdges = () => {
-    if (!buttonRow) return;
-    const room = buttonRow.scrollWidth - buttonRow.clientWidth;
-    buttonRow.classList.toggle("more-start", room > 1 && buttonRow.scrollLeft > 1);
-    buttonRow.classList.toggle("more-end", room > 1 && buttonRow.scrollLeft < room - 1);
-  };
-  if (buttonRow) {
-    buttonRow.addEventListener("scroll", chipEdges, { passive: true });
-    if ("ResizeObserver" in window) new ResizeObserver(chipEdges).observe(buttonRow);
-  }
-  // How many of the songs the search and filters match each button would show; a line drawn again changes it.
+  // How many of the songs the search and filters match each option of the panel would show; a line drawn again
+  // changes it. matchingNow: the songs the search, the artist's filter and the progression leave, the panel's
+  // filters aside.
   let matchingNow = [];
   let shownNow = [];
+  const keyFits = (i) => !state.key || songKeys[i] === keyId(state.key);
   const tallyChips = () => {
-    const tally = { all: matchingNow.filter((i) => counted(songs[i])).length, found: 0, wanted: 0, review: 0 };
+    const tally = { all: 0, found: 0, wanted: 0, review: 0 };
     for (const i of matchingNow) {
+      if (!counted(songs[i]) || !keyFits(i)) continue;
+      tally.all += 1;
       for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
     }
-    // Needs review, only while a song does (or while it is the one pressed).
+    // Review, only while a song needs it (or while it is the one chosen).
     const reviewing = songs.some((s) => SHOWS.review(s)) || Array.from(arrived.values()).some((s) => SHOWS.review(s));
-    for (const chip of chips) {
-      chip.setAttribute("aria-pressed", String(chip.dataset.show === state.show));
-      chip.querySelector(".n").textContent = String(tally[chip.dataset.show]);
-      chip.hidden = chip.dataset.show === "review" && !reviewing && state.show !== "review";
+    for (const b of statusButtons) {
+      const on = b.dataset.show === state.show;
+      b.setAttribute("aria-checked", String(on));
+      b.tabIndex = on ? 0 : -1;
+      b.querySelector(".n").textContent = String(tally[b.dataset.show]);
+      b.hidden = b.dataset.show === "review" && !reviewing && !on;
     }
-    chipEdges();
+    // Filter says how many of its filters are on, in the accent.
+    const on = filtersOn();
+    filterButton.classList.toggle("on", on > 0);
+    filterCount.hidden = !on;
+    filterCount.textContent = on ? String(on) : "";
+    filterButton.setAttribute("aria-label", on ? "Filter, " + on + " on" : "Filter");
   };
-  // How many songs the list shows, of how many.
+  // How many songs the list shows, of how many; and in the panel, "4 songs", or on a phone "Show 4 songs".
   const tell = () => {
     const total = songs.filter(counted).length;
     const n = shownNow.filter((i) => counted(songs[i])).length;
     count.textContent = n === total ? plural(total, "song") : n + " of " + plural(total, "song");
+    filterLive.textContent = plural(n, "song");
+    showN.textContent = "Show " + plural(n, "song");
   };
 
   const render = () => {
     const query = parseQuery(state.q);
-    const inKey = keyId(state.key);
     const fits = typedMatch(query);
-    const matching = ORDERS[state.sort].filter((i) =>
+    matchingNow = ORDERS[state.sort].filter((i) =>
       (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
-      (!inKey || songKeys[i] === inKey) && (!state.prog || playsProg(songs[i], state.prog)) && fits(i));
-    matchingNow = matching;
+      (!state.prog || playsProg(songs[i], state.prog)) && fits(i));
     tallyChips();
+    const matching = matchingNow.filter(keyFits);
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
     sort.value = state.sort;
     keySelect.value = state.key;
+    if (Boolean(server) && state.all) closePanel(false);  // the sites' results take the list's place, its tools too
     clear.hidden = !state.q;
     artistChip.hidden = !state.artist;
     artistChip.textContent = state.artist ? artistName(state.artist) + " ×" : "";
@@ -1525,9 +1539,9 @@
     setQuery("");
     input.focus();
   });
-  for (const chip of chips) {
-    chip.addEventListener("click", () => {
-      state.show = chip.dataset.show;
+  for (const b of statusButtons) {
+    b.addEventListener("click", () => {
+      state.show = b.dataset.show;
       render();
       save();
     });
@@ -1542,6 +1556,120 @@
     render();
     save();
   });
+
+  // --- Filter's panel: a popover under it from 720 px, a sheet from the bottom on a phone ------------------------
+  // On a computer a dialog of its own (show(), not modal): the list behind it filters as you tap, with no Apply; a
+  // click outside it, Escape or Filter again closes it. On a phone a modal one (showModal()), over the page dimmed,
+  // which neither takes a tap nor scrolls behind it; Tab keeps to it, and Show N songs closes it. Either way the
+  // focus goes to the status chosen, and back to Filter once it closes.
+  const wide = window.matchMedia("(min-width: 720px)");
+  // The popover under Filter, its right edge with Filter's, kept within the window; its arrow at Filter's middle.
+  const placePanel = () => {
+    if (!panel.open || panel.matches(":modal")) return;
+    const bar = toolbar.getBoundingClientRect();
+    const at = filterButton.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    const room = document.documentElement.clientWidth;
+    const left = Math.max(16, Math.min(at.right - width, room - 16 - width));
+    panel.style.left = Math.round(left - bar.left) + "px";
+    panel.style.top = Math.round(at.bottom - bar.top + 8) + "px";
+    panel.style.setProperty("--arrow", Math.round(at.left + at.width / 2 - left) + "px");
+  };
+  const openPanel = () => {
+    if (panel.open) return;
+    if (wide.matches) {
+      panel.show();
+      placePanel();
+    } else {
+      document.documentElement.classList.add("sheet-open");
+      panel.showModal();
+    }
+    filterButton.setAttribute("aria-expanded", "true");
+    const chosen = statusButtons.find((b) => b.tabIndex === 0 && !b.hidden) || statusButtons[0];
+    chosen.focus({ preventScroll: true });
+  };
+  // ``refocus``: the focus back to Filter, unless it went somewhere of its own (a click on another control).
+  const closePanel = (refocus = true) => {
+    if (!panel.open) return;
+    const at = document.activeElement;
+    const back = refocus && (!at || at === document.body || panel.contains(at));
+    panel.close();
+    closed();
+    if (back) filterButton.focus({ preventScroll: true });
+  };
+  const closed = () => {
+    filterButton.setAttribute("aria-expanded", "false");
+    document.documentElement.classList.remove("sheet-open");
+  };
+  panel.addEventListener("close", closed);  // its event comes a task later: closePanel says so at once
+  filterButton.addEventListener("click", () => (panel.open ? closePanel() : openPanel()));
+  showN.addEventListener("click", () => closePanel());
+  byId("clear-all").addEventListener("click", () => {
+    state.show = "all";
+    state.key = "";
+    render();
+    save();
+  });
+  panel.addEventListener("cancel", (e) => {  // Escape, on the modal sheet
+    e.preventDefault();
+    closePanel();
+  });
+  // Escape closes it wherever the focus is, before the page's own Escape (the search box's) hears it.
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !panel.open || composing(e)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    closePanel();
+  }, true);
+  // A click outside the popover closes it; on the sheet, a tap on the page dimmed behind it.
+  document.addEventListener("click", (e) => {
+    if (!panel.open || !(e.target instanceof Node) || !e.target.isConnected) return;
+    if (panel.matches(":modal")) {
+      const box = panel.getBoundingClientRect();
+      const outside = e.clientY < box.top || e.clientY > box.bottom || e.clientX < box.left || e.clientX > box.right;
+      if (e.target === panel && outside) closePanel();
+    } else if (!panel.contains(e.target) && !filterButton.contains(e.target)) {
+      closePanel();
+    }
+  });
+  // Tab and Shift+Tab go round the sheet's controls.
+  panel.addEventListener("keydown", (e) => {
+    if (e.key !== "Tab" || !panel.matches(":modal")) return;
+    const stops = Array.from(panel.querySelectorAll("button, select")).filter((n) => !n.disabled && n.tabIndex >= 0 &&
+      n.checkVisibility());
+    if (!stops.length) return;
+    const at = stops.indexOf(document.activeElement);
+    if (e.shiftKey && at <= 0) {
+      e.preventDefault();
+      stops[stops.length - 1].focus();
+    } else if (!e.shiftKey && at === stops.length - 1) {
+      e.preventDefault();
+      stops[0].focus();
+    }
+  });
+  // A segmented control's options, one of them chosen: the arrow keys move between them, choosing as they go.
+  for (const group of panel.querySelectorAll('[role="radiogroup"]')) {
+    group.addEventListener("keydown", (e) => {
+      const options = Array.from(group.querySelectorAll('[role="radio"]')).filter((b) => !b.hidden && !b.disabled);
+      const at = options.indexOf(document.activeElement);
+      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+      const to = at < 0 ? -1 : step ? (at + step + options.length) % options.length
+        : e.key === "Home" ? 0 : e.key === "End" ? options.length - 1 : -1;
+      if (to < 0) return;
+      e.preventDefault();
+      options[to].focus();
+      options[to].click();
+    });
+  }
+  window.addEventListener("resize", placePanel);
+  const reopen = () => {  // past 720 px either way: the other kind of panel
+    if (!panel.open) return;
+    const inside = panel.contains(document.activeElement);
+    panel.close();
+    openPanel();
+    if (!inside) filterButton.focus({ preventScroll: true });
+  };
+  if (wide.addEventListener) wide.addEventListener("change", reopen);
 
   // --- the bar: your songs and every index as you type ------------------------------------------
   // Typing filters your songs, here, asking nothing. Served, it searches the sites too (searchesAsYouType), a moment

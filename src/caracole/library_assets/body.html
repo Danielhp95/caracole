@@ -31,25 +31,44 @@ __REQUESTED__<section class="results" id="results" aria-label="Search results">
 <div class="found" id="found" hidden></div>
 __REQUEST__</section>
 <div class="toolbar">
-  <div class="chips" role="group" aria-label="Show">
-    <button type="button" class="chip" data-show="all" aria-pressed="true">All <span class="n"></span></button>
-    <button type="button" class="chip" data-show="found" aria-pressed="false">Found <span class="n"></span></button>
-    <button type="button" class="chip" data-show="wanted" aria-pressed="false">Wanted <span class="n"></span></button>
-    <button type="button" class="chip" data-show="review" aria-pressed="false">Needs review <span class="n"></span></button>
-    <button type="button" class="chip person" id="artist" hidden></button>
+  <div class="tags" id="tags" role="group" aria-label="Filters on">
+    <button type="button" class="tag person" id="artist" hidden></button>
   </div>
-  <div class="controls">
-    <label class="sort" id="keys" hidden>Key
-      <select id="key"><option value="">Any</option></select>
-    </label>
-    <label class="sort">Sort
-      <select id="sort">
+  <div class="tools" id="tools">
+    <button type="button" class="tool" id="filter" aria-expanded="false" aria-controls="filter-panel">Filter <span
+      class="filter-n" id="filter-count" hidden></span></button>
+    <label class="tool-menu"><span class="visually-hidden">Sort</span>
+      <select id="sort" class="tool">
         <option value="artist">Artist A–Z</option>
         <option value="title">Title A–Z</option>
         <option value="recent">Recently added</option>
       </select>
     </label>
   </div>
+  <dialog class="filter-panel" id="filter-panel" aria-label="Filter your songs">
+    <div class="grab" aria-hidden="true"></div>
+    <div class="fsec">
+      <p class="fhead" id="f-status">Status</p>
+      <div class="seg" role="radiogroup" aria-labelledby="f-status">
+        <button type="button" role="radio" data-show="all" aria-checked="true">All <span class="n"></span></button>
+        <button type="button" role="radio" data-show="found" aria-checked="false" tabindex="-1">Found <span
+          class="n"></span></button>
+        <button type="button" role="radio" data-show="wanted" aria-checked="false" tabindex="-1">Wanted <span
+          class="n"></span></button>
+        <button type="button" role="radio" data-show="review" aria-checked="false" tabindex="-1">Review <span
+          class="n"></span></button>
+      </div>
+    </div>
+    <div class="fsec" id="keys" hidden>
+      <p class="fhead" id="f-key">Key</p>
+      <select id="key" class="tool" aria-labelledby="f-key"><option value="">Any</option></select>
+    </div>
+    <div class="ffoot">
+      <button type="button" class="clear-all" id="clear-all">Clear all</button>
+      <span class="live" id="filter-live"></span>
+      <button type="button" class="btn primary show-n" id="show-n"></button>
+    </div>
+  </dialog>
 </div>
 <p class="prog-filter" id="prog" aria-live="polite" hidden></p>
 <nav class="jump" id="jump" aria-label="Jump to a letter" hidden></nav>

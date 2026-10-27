@@ -1892,11 +1892,10 @@ your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
 the address remembers which (`#tab=songbooks`). Its header is short, so that on
 a phone the first song starts well within the first screen: the library's
 numbers beside its title (served, the Requests link on the line above), the
-tabs, the search box, then one row of
-buttons and menus (the status buttons, then Select, Key and Sort), which
-scrolls sideways on a phone, fading at an end where more of it is out of
-sight. The search box stays at the top as the page scrolls under it, with an
-edge to show it.
+tabs, the search box, then the toolbar: **Filter**, **Sort** and, set apart
+after a divider, **Select** (see below), at the right, one row on a phone too.
+The search box stays at the top as the page scrolls under it, with an edge to
+show it.
 
 It shows your songs as dense lines, grouped by artist: each artist's name over
 their songs, artists A to Z ("The Beatles" under B, Chinese names by their
@@ -1972,8 +1971,8 @@ same). `#by=` in the address, an artist's name as a sheet viewer's artist line
 links to it (`index.html#by=Soda%20Stereo`), does what pressing their name does:
 from the folder, their songs alone (else the songs the name finds); served, the
 search for them. A request's line (see [caracole serve](#caracole-serve)) shows under
-the song's, a line of its own. The search, the status buttons, the Key menu,
-the sort and the letters all work on the lines, and the address remembers
+the song's, a line of its own. The search, the filters, the sort and the
+letters all work on the lines, and the address remembers
 them, as it does the rest: a bookmark opens the page as you left it. (An
 address from before, with `#view=rows` in it, opens the lines.)
 
@@ -2014,12 +2013,19 @@ initials, typed whole, find it too: "wywh" finds "Wish You Were Here", "bmbm"
 斑马斑马. It finds keys too, however a sheet spells them: "a
 minor", "F# major", "bbm", and "gb minor", which also finds the songs in F#
 minor; or "minor" for every song in a minor key. A key written as a chord, such
-as "am", also finds the names with "am" in them ("I Am the Walrus"). The
-buttons show all songs, or only those found, wanted or needing review (that
-button only while a song needs review); the Key
-menu, there once a song has a key, shows only the songs in one key, with how
-many each key has, and puts the spellings of one key together ("F# / Gb
-minor"); and you can sort by artist, by title or by when songs were added.
+as "am", also finds the names with "am" in them ("I Am the Walrus").
+**Filter** opens the filters, as a panel under it on a computer (the list
+behind it filters as you tap, with nothing to apply; a click outside it,
+Escape or Filter again closes it) and as a sheet from the bottom of a phone's
+screen (over the page dimmed, it ends in **Show 4 songs**, which closes it,
+as Escape does). Its **Status** shows all songs, or only those found, wanted
+or needing review (Review only while a song needs it), each with how many
+songs it would show, the arrow keys moving between them; its **Key** menu,
+there once a song has a key, shows only the songs in one key, with how many
+each key has, and puts the spellings of one key together ("F# / Gb minor");
+**Clear all** lets them all go, and the panel says how many songs show
+("4 songs"). Filter says how many of its filters are on (Filter 1), in the
+accent. **Sort** sorts by artist, by title or by when songs were added.
 Sorted by artist or title, with more than 40 songs shown, a row of letters
 jumps to the first artist under each (by title, the first song). A line under the box says what typing and Enter do.
 On the file on disk, which can ask nothing of anyone, **Enter** searches the
@@ -2046,7 +2052,7 @@ their soft border, and so does the search box. The pages `caracole serve`
 writes itself (Requests, Look up and its search box, a song's pick) do the
 same.
 
-**Select**, beside the Key menu, puts a
+**Select**, at the toolbar's end, puts a
 box at the start of each song's line: tick songs in the order they go in the
 songbook (each box shows its place, and a screen reader says it: "Pick Creep by
 Radiohead, 2nd"). A tap anywhere on a line ticks it, or unticks it: while you
@@ -2928,12 +2934,12 @@ Who can reach it, below).
 - **Search as you type.** The library page's search box filters your songs as
   you type, here as on the file, and from the third letter (the second with a
   Chinese character in it) it searches the sites too, a moment after you stop:
-  no Enter, and no button. The list and its buttons make way for the results,
-  your songs among them still keeping to the status buttons, the Key menu and
-  an artist's name you pressed, which the results' head says ("Your songs
+  no Enter, and no button. The list and its toolbar make way for the results,
+  your songs among them still keeping to the filters and an artist's name you
+  pressed, which the results' head says ("Your songs
   here: wanted · by Soda Stereo · in A minor"), with Show all of yours, which
   lets every song of yours show, there and in the list; the sites' songs are
-  what the sites have, whatever the buttons show. A progression typed as
+  what the sites have, whatever the filters show. A progression typed as
   numerals ("vi IV I V", "i bVII bVI V") or named ("andalusian", "the pop
   progression", "blues"; words of fewer than five letters, "pop" or "the road",
   are words, as "minor" alone is, and "creep" the song) finds your songs

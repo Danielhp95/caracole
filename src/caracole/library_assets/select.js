@@ -31,11 +31,15 @@
   const picked = [];  // song ids, in the order they were picked: the songbook's order
   let sending = false;  // on caracole serve, until the server answers the bar's form
 
-  const toggle = el("button", "chip pick-toggle", "Select");
+  // Last in the toolbar, after a divider: set apart from the filters before it (Filter, Sort), as it filters nothing.
+  const toggle = el("button", "tool pick-toggle");
   toggle.type = "button";
   toggle.title = "Pick songs for a songbook";
   toggle.setAttribute("aria-pressed", "false");
-  (toolbar.querySelector(".controls") || toolbar).prepend(toggle);
+  toggle.append(caracoleRows({}).glyph("select"), "Select");
+  const divider = el("span", "divider");
+  divider.setAttribute("aria-hidden", "true");
+  (toolbar.querySelector(".tools") || toolbar).append(divider, toggle);
 
   const bar = el("section", "pickbar");
   bar.hidden = true;
