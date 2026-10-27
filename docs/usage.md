@@ -3459,6 +3459,12 @@ Who can reach it, below).
   from. On the one already, a version kept already, one Ultimate Guitar no
   longer has, one under `[block]`, or a song with no such pin, it says so and
   offers nothing (sent anyway: 409).
+  The library page's song sends the same three by the song's id (`song`, in
+  place of `sheet`), and one more: **Fetch them**, `POST /versions/keep-more`,
+  queues `caracole versions SONG --keep-more`, the Ultimate Guitar versions
+  not kept yet, as many as one lookup may, a request of the song's as Keep it
+  is (refused, 409, for a song with none left to keep, or an ignored one).
+  Each shows on the song's line as any request does, not on a page of its own.
 - **Songbooks**, the page's second tab (see [The Songbooks tab](#the-songbooks-tab)
   for what it shows). Each change runs its `caracole songbook` command (see
   [Songbooks](#songbooks)) and leaves you where you are:
