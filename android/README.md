@@ -46,8 +46,9 @@ with the same key.
 3. Tap **Test**. It answers "caracole answered: 312 files, 41 MB", or says what went wrong. Then tap **Sync now**.
 
 **Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network. First it checks that caracole answers
-at the address, and does nothing when it doesn't. The library screen's menu (⋮) has Sync now, Library and
-Settings.
+at the address. When nothing answers there, or something else does (another network's device, a Wi-Fi login
+page), it does nothing and keeps the last sync's outcome; **Sync now** says what answered. The library screen's
+menu (⋮) has Sync now, Library and Settings.
 
 ## Offline
 

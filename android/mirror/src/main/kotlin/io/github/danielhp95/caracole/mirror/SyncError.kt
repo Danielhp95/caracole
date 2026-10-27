@@ -2,6 +2,12 @@ package io.github.danielhp95.caracole.mirror
 
 /** Why a sync or a test of the server failed, as one plain sentence ([message]) the app shows as it is. */
 sealed class SyncError(message: String, cause: Throwable? = null) : Exception(message, cause) {
+    /**
+     * Whether it says there is no caracole at the address: none typed, nothing answering there, or something
+     * else answering (another network's device, a Wi-Fi login page). The sync on Wi-Fi keeps quiet about these.
+     */
+    val noCaracole: Boolean get() = this is NoAddress || this is BadAddress || this is NoAnswer || this is NotCaracole
+
     /** No address typed yet. */
     class NoAddress : SyncError("No server address yet: type caracole serve's address in Settings.")
 

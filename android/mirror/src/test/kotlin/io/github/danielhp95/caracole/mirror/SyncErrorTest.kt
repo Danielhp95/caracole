@@ -21,4 +21,20 @@ class SyncErrorTest {
         assertEquals("Something went wrong that the app didn't expect (IllegalStateException).",
             SyncError.of(IllegalStateException()).message)
     }
+
+    @Test
+    fun `no caracole at the address is nothing answering there, or something else answering`() {
+        val address = ServerAddress.parse("192.168.1.20:8737")
+        // The sync on Wi-Fi keeps quiet about these (another network's device, a Wi-Fi login page).
+        for (error in listOf(SyncError.NoAddress(), SyncError.BadAddress("x y"), SyncError.NoAnswer(address, "refused"),
+            SyncError.NotCaracole(address, "it redirects /api/offline elsewhere"))) {
+            assertEquals(true, error.noCaracole, error.message)
+        }
+        // caracole answered: these are said.
+        for (error in listOf(SyncError.Unavailable(address, "busy"), SyncError.NewerFormat(2L), SyncError.BadManifest("x"),
+            SyncError.Changed("a.pdf", "x"), SyncError.Storage("full"), SyncError.Cancelled(),
+            SyncError.Unexpected(IllegalStateException()))) {
+            assertEquals(false, error.noCaracole, error.message)
+        }
+    }
 }

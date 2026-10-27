@@ -48,8 +48,9 @@ object Syncs {
 
     /**
      * Syncs with the address in the settings, telling [Caracole.status] how far it is, and keeps the outcome.
-     * With [probe] (the sync on Wi-Fi), a server that doesn't answer, or no address, does nothing and says
-     * nothing. [stopped] is asked between two files and between two chunks of one.
+     * With [probe] (the sync on Wi-Fi), no caracole at the address ([SyncError.noCaracole]: no address, nothing
+     * answering, or something else answering, such as a Wi-Fi login page) does nothing, says nothing, and keeps
+     * the last outcome; Sync now says it. [stopped] is asked between two files and between two chunks of one.
      */
     fun run(context: Context, probe: Boolean, stopped: () -> Boolean = { false }): Outcome? {
         val settings = Settings(context)
@@ -65,7 +66,7 @@ object Syncs {
         } catch (e: Exception) {
             // Anything, the unexpected too (SyncError.Unexpected): a failed outcome, never "Syncing…" left up.
             val error = SyncError.of(e)
-            if (probe && (error is SyncError.NoAnswer || error is SyncError.NoAddress || error is SyncError.BadAddress)) {
+            if (probe && error.noCaracole) {
                 status.value = SyncState.Idle
                 return null
             }
