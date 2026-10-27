@@ -36,6 +36,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
   ``SHEETS_SHARE`` too, once the song has a sheet.
 - ``gtptabs``: a Guitar Pro file from gtptabs.com, from the index the nightly
   run keeps.
+- ``harptabs``: a harmonica tab from harptabs.com, from the index the nightly run
+  keeps: the song's candidates read at the lookup pace (harptabs_fetch.py).
 - ``pages``: the PDF again if the sheet changed, then _todo.md and index.html,
   whose MuseScore links come from the local index.
 - ``songbooks``: the songbooks of songbooks.toml that list the song, made again
@@ -83,12 +85,13 @@ STAGES = (
     ("ug", "Ultimate Guitar: the sheets scored, the tab"),
     ("lacuerda", "LaCuerda"),
     ("gtptabs", "A Guitar Pro file from gtptabs.com"),
+    ("harptabs", "A harmonica tab from harptabs.com"),
     ("pages", "The library page"),
     ("songbooks", "The songbooks it is in"),
 )
 STAGE_LABELS = dict(STAGES)
 NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com",
-         "musescore": "MuseScore"}
+         "musescore": "MuseScore", "harptabs": "harptabs.com"}
 PROGRESS_PREFIX = "caracole-progress: "  # a JSON line of `caracole get --progress`
 _FIRST_PAGES = 1  # versions pages read before the first sheet is kept: the first lists them all
 _FIRST_SCORED = 1  # sheets fetched for it: the best rated
@@ -97,6 +100,7 @@ SHEETS_SHARE = 0.5  # of an hour's lookup requests to a site, kept for sheets: w
 # serve's line follows (web/status.py), "Fetching from LaCuerda…" rather than Ultimate Guitar's.
 SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
 GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a file kept, which caracole serve reads
+HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab kept
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
 NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn't known"
 
@@ -706,6 +710,23 @@ class _Lookup:
 
         return self.asking("gtptabs", ask)
 
+    def harptabs(self) -> tuple[str, str] | str:
+        from caracole.harptabs_fetch import harptabs_tabs
+
+        def ask(client) -> tuple[str, str] | str:
+            s = harptabs_tabs(self.conn, client, self.cfg.library_dir, self.now, overrides=self.overrides,
+                              only={self.song.id}, refresh_index=False)
+            if s.budget_exhausted:
+                raise BudgetExhausted("harptabs")
+            if s.failures:
+                _, e = s.failures[0]
+                raise e
+            if not s.tried:
+                return "skipped", "no tab wanted, or harptabs.com's index has no tab of the title by the artist"
+            return HARPTABS_KEPT if s.kept else "no tab there by the artist"
+
+        return self.asking("harptabs", ask)
+
     def pages(self) -> str:
         from caracole.render import render_all
         from caracole.todo import write_pages
@@ -775,7 +796,8 @@ class _Lookup:
                         return self._refuse(str(e))
                     for name, work in (("match", self.match), ("sheet", self.sheet), ("pdf", self.pdf),
                                        ("lyrics", self.lyrics), ("ug", self.ug), ("lacuerda", self.lacuerda),
-                                       ("gtptabs", self.gtptabs), ("pages", self.pages),
+                                       ("gtptabs", self.gtptabs), ("harptabs", self.harptabs),
+                                       ("pages", self.pages),
                                        ("songbooks", self.songbooks)):
                         self.stage(name, work)
                     note_looked_up(conn, self.song.id)

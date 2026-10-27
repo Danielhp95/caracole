@@ -373,6 +373,19 @@ def test_a_guitar_pro_file_from_gtptabs_says_where_it_came_from(conn, cfg):
     assert files == {"guitar-1.gpx": "Guitar Pro 1 · gtptabs.com", "guitar-2.gp5": "Guitar Pro 2"}
 
 
+def test_a_harmonica_tab_from_harptabs_is_listed_after_the_scores_and_says_where_it_came_from(conn, cfg):
+    s = add_song(conn, "Ritchie Valens", "La Bamba")
+    tab = upsert_version(conn, provider="harptabs", tab_id="89", song_id=s.id, slot="guitar", kind="harmonica",
+                         rating=0, votes=57000, version=1, label=None, url="https://www.harptabs.com/tab/89/la-bamba",
+                         raw={"key": "C"}, now="2026-10-27T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=s, version_id=tab, name="harmonica-1.txt", data=b"-9 -9 8 7\n", rank=1)
+    put(cfg, s, "sheet.html", "score-1.pdf", "tab.txt")
+    files = songs_of(page(conn, cfg))[s.display]["files"]
+    assert [(f["name"], f["label"], f["source"]) for f in files] == [
+        ("sheet.html", "Sheet viewer", None), ("score-1.pdf", "Score 1 (PDF)", None),
+        ("harmonica-1.txt", "Harmonica tab 1 · harptabs.com", "harptabs"), ("tab.txt", "Tab", None)]
+
+
 def test_a_sheet_from_ugs_ukulele_chords_says_so(conn, cfg):
     # A song with no chords on UG takes its Ukulele Chords (ug/fetch.py): its sheet's files say which.
     s = add_song(conn, "Vance Joy", "Riptide")

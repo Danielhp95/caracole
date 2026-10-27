@@ -1,0 +1,19 @@
+User-Agent: *
+Allow: /
+Disallow: /login
+Disallow: /signup
+Disallow: /recover
+Disallow: /settings
+Disallow: /submit
+Disallow: /admin/
+Disallow: /messages/
+Disallow: /favorites
+Disallow: /following
+Disallow: /tab/*/edit
+Disallow: /tab/*/upload
+Disallow: /api/
+Disallow: /search
+Disallow: /*?*_rsc=
+
+Host: https://www.harptabs.com
+Sitemap: https://www.harptabs.com/sitemap.xml

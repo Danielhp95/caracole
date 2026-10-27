@@ -1,7 +1,8 @@
-"""A site's sitemaps, read into a table of the database: gtptabs.com's and MuseScore's.
+"""A site's sitemaps, read into a table of the database: gtptabs.com's, MuseScore's and harptabs.com's.
 
 A ``Site`` names its sitemap index, the table its pages go in and how a ``<loc>`` becomes
-a child sitemap's name or a page's row. :func:`refresh` reads the sitemaps into the table
+a child sitemap's name or a page's row; a site of one sitemap and no index (harptabs.com's)
+has no ``child``, and its sitemap is read as the index's one child, ``ONE``. :func:`refresh` reads the sitemaps into the table
 when they never were all read, again after ``Site.max_age``, and at once after a change to
 caracole's keys (``normalize.KEY_VERSION``), always with conditional requests:
 
@@ -36,13 +37,17 @@ def _as_is(url: str) -> str:
     return url
 
 
+ONE = "sitemap"  # the name of a site's one sitemap, when it has no index
+
+
 @dataclass(frozen=True)
 class Site:
     """A site's sitemaps and the table they fill.
 
     ``columns`` are the table's columns a row fills, in the row's order; the table also has
     a ``sitemap`` column, the name of the sitemap a row came from. ``child`` names a child
-    sitemap from its ``<loc>`` in the index (None for any other URL), and ``row`` makes a
+    sitemap from its ``<loc>`` in the index (None for any other URL); with no ``child``,
+    ``index_url`` is the site's one sitemap, named ``ONE``, and no index is asked for. ``row`` makes a
     page's row from its ``<loc>`` (None leaves it out: a page robots.txt closes, say).
     ``fetch_url`` is the address a child is asked for at.
     """
@@ -51,7 +56,7 @@ class Site:
     index_url: str
     table: str
     columns: Sequence[str]
-    child: Callable[[str], str | None]
+    child: Callable[[str], str | None] | None
     row: Callable[[str], Sequence[Any] | None]
     max_age: timedelta = timedelta(days=30)
     fetch_url: Callable[[str], str] = field(default=_as_is)
@@ -82,8 +87,10 @@ def refresh(
     old_keys = any(not _current(entry) for entry in sitemaps(conn, site).values())
     if complete is not None and now - complete < site.max_age and not old_keys:
         return
-    resp = client.get(site.index_url, cache=False, conditional=True)
-    listed = _children(site, resp)
+    if site.child is None:  # one sitemap, no index
+        listed = {ONE: site.fetch_url(site.index_url)}
+    else:
+        listed = _children(site, client.get(site.index_url, cache=False, conditional=True))
     for name in [n for n in sitemaps(conn, site) if n not in listed]:
         _forget(conn, site, name)
     for name, url in listed.items():
@@ -113,6 +120,7 @@ def complete_at(conn: sqlite3.Connection, site: Site) -> datetime | None:
 
 def _children(site: Site, resp: Response) -> dict[str, str]:
     """The child sitemaps the sitemap index lists, by name, at the address each is asked for at."""
+    assert site.child is not None
     children = {
         name: site.fetch_url(loc)
         for loc in _locs(site, resp.content, site.index_url, resp.status)

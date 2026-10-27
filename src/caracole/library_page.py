@@ -288,6 +288,8 @@ _LAST = ("tab.txt", "sheet (auto).txt", "sheet (auto).cho", "info.json")
 _GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
 # Scores filed from _inbox/ (inbox.py), after the guitar files, in SCORE_EXTENSIONS' order.
 _SCORE = re.compile(r"score-(\d+)(\.[a-z]+)")
+# Harmonica tabs kept from harptabs.com (harptabs_fetch.py), after the scores.
+_HARMONICA = re.compile(r"harmonica-(\d+)\.txt")
 _SCORE_FORMATS = {".mscz": "MuseScore", ".mxl": "MusicXML", ".musicxml": "MusicXML", ".pdf": "PDF", ".mid": "MIDI",
                   ".midi": "MIDI"}
 _LABELS = {
@@ -704,11 +706,13 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     guitar_names = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
     scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
                     for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
+    harmonica = sorted((int(m.group(1)), n) for n in names if (m := _HARMONICA.fullmatch(n)))
     made = sorted((label, n) for n, label in (exports or {}).items() if n in names)
     labels = {n: f"Sheet PDF, {label}" for label, n in made}
     ordered = ([n for n in _SHEET_PAGES if n in names] + [n for _, n in made]
                + [n for n in _FIRST if n in names and n not in _SHEET_PAGES]
-               + [n for _, n in guitar_names] + [n for _, _, n in scores] + [n for n in _LAST if n in names])
+               + [n for _, n in guitar_names] + [n for _, _, n in scores] + [n for _, n in harmonica]
+               + [n for n in _LAST if n in names])
     base = _folder_href(library_dir, song)
     primary = next((n for n in ordered if n in ("sheet.html", "sheet (auto).html", "sheet.pdf", "sheet (auto).pdf")),
                    None) or next(
@@ -764,6 +768,9 @@ def _label(name: str, source: str | None = None) -> str:
     m = _SCORE.fullmatch(name)
     if m:
         return f"Score {m.group(1)} ({_SCORE_FORMATS[m.group(2)]})"
+    m = _HARMONICA.fullmatch(name)
+    if m:
+        return f"Harmonica tab {m.group(1)}" + (f" · {source}" if source else "")
     return _LABELS[name]
 
 
@@ -790,14 +797,18 @@ def guitar_pages(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     return found
 
 
+_DOWNLOADED_FROM = {"gtptabs": "gtptabs.com", "harptabs": "harptabs.com"}
+
+
 def _downloaded(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
-    """The files caracole downloaded from gtptabs.com, as {song id: {file name: "gtptabs.com"}}."""
+    """The files caracole downloaded from gtptabs.com and harptabs.com, as {song id: {file name: "gtptabs.com"}}."""
     found: dict[int, dict[str, str]] = {}
     rows = conn.execute(
-        "SELECT f.song_id, f.name FROM files f JOIN versions v ON v.id = f.version_id WHERE v.provider = 'gtptabs'"
+        "SELECT f.song_id, f.name, v.provider FROM files f JOIN versions v ON v.id = f.version_id "
+        "WHERE v.provider IN ('gtptabs', 'harptabs')"
     )
-    for song_id, name in rows:
-        found.setdefault(song_id, {})[name] = "gtptabs.com"
+    for song_id, name, provider in rows:
+        found.setdefault(song_id, {})[name] = _DOWNLOADED_FROM[provider]
     return found
 
 
