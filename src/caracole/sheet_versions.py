@@ -21,7 +21,9 @@ song's and isn't listed.
 ``as_data`` is the JSON the viewer pages and the library page read. ``library_state`` reads
 from the files table which version is the one and which are kept beside it, ``same_pages``
 which versions are a kept one's very text (kept under one name only), and ``in_library``
-lists the versions with both. ``kept_by_you`` are the versions you asked to keep
+lists the versions with both; ``in_library_of`` lists those of many songs in a few queries for
+them all (the library page's every song), as ``in_library`` does each: both read the same way
+(``_listings``). ``kept_by_you`` are the versions you asked to keep
 (``caracole versions --keep``), which the fetch keeps beside the sheet whatever the ranking.
 ``sheet_pins`` are the song's ``[pin]`` tabs that choose its sheet, those ``caracole versions
 --clear`` takes out.
@@ -29,6 +31,7 @@ lists the versions with both. ``kept_by_you`` are the versions you asked to keep
 
 from __future__ import annotations
 
+import json
 import re
 import sqlite3
 from collections.abc import Collection, Mapping, Sequence
@@ -40,7 +43,7 @@ from caracole.db import kv_get_json, kv_set_json
 from caracole.library import kept_files
 from caracole.rank import Candidate, is_complete, rank_by_rating
 from caracole.songs import HUMAN_SHEET
-from caracole.versions import VersionRow, get_version, song_versions
+from caracole.versions import GONE, STALE, VersionRow, get_version
 
 PREFIX = "version-"
 PROVIDER = "ug"
@@ -94,8 +97,7 @@ class SheetVersion:
     url: str
 
 
-def _note(raw: dict[str, Any]) -> str | None:
-    text = raw.get("version_description")
+def _note(text: object) -> str | None:
     if not isinstance(text, str):
         return None
     folded = " ".join(text.split())
@@ -109,9 +111,32 @@ def _candidate(row: VersionRow) -> Candidate:
     )
 
 
-def _variant(conn: sqlite3.Connection, song_id: int) -> str | None:
-    row = conn.execute("SELECT variant FROM songs WHERE id = ?", (song_id,)).fetchone()
-    return row[0] if row is not None else None
+# The UG versions of the sheet's kinds of the songs a JSON list names, found under their match (a STALE one is
+# another song's), in each song's order of ids, each with its tabber's note as UG wrote it: its JSON's
+# version_description, read by SQLite, as the rest of that JSON (a kilobyte a version) is never needed here.
+_ROWS = (
+    "SELECT id, provider, tab_id, song_id, slot, kind, rating, votes, version, label, coverage, url, fetched_at, "
+    "pick_rank, gone, CASE WHEN json_valid(raw) THEN CASE json_type(raw, '$.version_description') WHEN 'text' "
+    "THEN json_extract(raw, '$.version_description') END END FROM versions "
+    f"WHERE provider = ? AND kind IN ({', '.join('?' for _ in KINDS)}) AND gone != ? "
+    "AND song_id IN (SELECT value FROM json_each(?)) ORDER BY song_id, id"
+)
+
+
+def _rows_of(conn: sqlite3.Connection, ids: str) -> dict[int, list[tuple[VersionRow, str | None]]]:
+    """The versions ``_ROWS`` reads of the songs ``ids`` names (a JSON list), by song id, each with its note
+    (``_note``). Their ``raw`` is left empty: what a list shows of it is the note."""
+    found: dict[int, list[tuple[VersionRow, str | None]]] = {}
+    for r in conn.execute(_ROWS, (PROVIDER, *KINDS, STALE, ids)):
+        row = VersionRow(id=r[0], provider=r[1], tab_id=r[2], song_id=r[3], slot=r[4], kind=r[5], rating=r[6],
+                         votes=r[7], version=r[8], label=r[9], coverage=r[10], url=r[11], raw={}, fetched_at=r[12],
+                         pick_rank=r[13], gone=r[14] == GONE)
+        found.setdefault(row.song_id, []).append((row, _note(r[15])))
+    return found
+
+
+def _variants(conn: sqlite3.Connection, ids: str) -> dict[int, str | None]:
+    return dict(conn.execute("SELECT id, variant FROM songs WHERE id IN (SELECT value FROM json_each(?))", (ids,)))
 
 
 def _ranked(rows: Sequence[VersionRow], policy: RankPolicy, variant: str | None) -> list[Candidate]:
@@ -137,13 +162,19 @@ def song_sheet_versions(
     ``same_as`` gives the versions whose text is a kept one's, by tab, with that one's page
     (``same_pages``): they are kept, and open that page.
     """
-    rows = [
-        r for r in song_versions(conn, song_id, kinds=KINDS, include_gone=True)
-        if r.provider == PROVIDER and not r.stale
-    ]
+    ids = json.dumps([song_id])
+    return _listed(_rows_of(conn, ids).get(song_id, []), policy, _variants(conn, ids).get(song_id),
+                   chosen_tab=chosen_tab, kept_tabs=kept_tabs, same_as=same_as)
+
+
+def _listed(found: Sequence[tuple[VersionRow, str | None]], policy: RankPolicy, variant: str | None, *,
+            chosen_tab: str | None, kept_tabs: Collection[str],
+            same_as: Mapping[str, str] | None) -> list[SheetVersion]:
+    """``song_sheet_versions`` of a song's rows (``_rows_of``) and its ``variant``."""
+    rows = [r for r, _ in found]
+    notes = {r.id: note for r, note in found}
     group = group_of(rows, chosen_tab)
     rows = [r for r in rows if r.kind == group]
-    variant = _variant(conn, song_id)
     live = _ranked([r for r in rows if not r.gone], policy, variant)
     gone = rank_by_rating([_candidate(r) for r in rows if r.gone], policy, variant=variant)
     by_id = {r.id: r for r in rows}
@@ -163,7 +194,7 @@ def song_sheet_versions(
             page = same.get(row.tab_id)
         out.append(SheetVersion(
             version_id=row.id, tab_id=row.tab_id, number=row.version, rating=row.rating, votes=row.votes,
-            label=row.label, note=_note(row.raw), coverage=row.coverage,
+            label=row.label, note=notes[row.id], coverage=row.coverage,
             complete=None if row.coverage is None else is_complete(c, policy),
             rank=rank, kept=is_kept, chosen=chosen, gone=row.gone, page=page, url=row.url,
         ))
@@ -197,16 +228,29 @@ def as_data(versions: Sequence[SheetVersion], total: int) -> dict:
 def library_state(conn: sqlite3.Connection, song_id: int) -> tuple[str | None, tuple[str, ...]]:
     """The UG tab kept as ``sheet.txt`` (None when the sheet is another site's or none), and the tabs
     kept beside it, by their ``kept_rank``: what the files table says caracole wrote."""
-    chosen: str | None = None
-    kept: list[tuple[int, str]] = []
-    for f in kept_files(conn, song_id):
-        if f.name == HUMAN_SHEET:
-            row = get_version(conn, f.version_id)
-            if row.provider == PROVIDER and row.kind in KINDS:
-                chosen = row.tab_id
-        elif (tab := tab_of(f.name)) is not None and f.name == version_names(tab)[0]:
-            kept.append((f.kept_rank, tab))
-    return chosen, tuple(tab for _, tab in sorted(kept, key=lambda k: (k[0], len(k[1]), k[1])))
+    return _states(conn, json.dumps([song_id])).get(song_id, (None, ()))
+
+
+def _states(conn: sqlite3.Connection, ids: str) -> dict[int, tuple[str | None, tuple[str, ...]]]:
+    """``library_state`` of each song ``ids`` names (a JSON list) that has a ``sheet.txt`` or a
+    ``version-*`` file, by song id, in one query."""
+    chosen: dict[int, str | None] = {}
+    kept: dict[int, list[tuple[int, str]]] = {}
+    rows = conn.execute(
+        "SELECT f.song_id, f.name, f.kept_rank, v.provider, v.kind, v.tab_id FROM files f "
+        "JOIN versions v ON v.id = f.version_id WHERE f.song_id IN (SELECT value FROM json_each(?)) "
+        "AND (f.name = ? OR substr(f.name, 1, ?) = ?)", (ids, HUMAN_SHEET, len(PREFIX), PREFIX))
+    for song_id, name, kept_rank, provider, kind, tab_id in rows:
+        chosen.setdefault(song_id, None)
+        kept.setdefault(song_id, [])
+        if name == HUMAN_SHEET:
+            if provider == PROVIDER and kind in KINDS:
+                chosen[song_id] = tab_id
+        elif (tab := tab_of(name)) is not None and name == version_names(tab)[0]:
+            kept[song_id].append((kept_rank, tab))
+    return {song_id: (chosen[song_id], tuple(tab for _, tab in sorted(kept[song_id],
+                                                                      key=lambda k: (k[0], len(k[1]), k[1]))))
+            for song_id in chosen}
 
 
 def sheet_kind(conn: sqlite3.Connection, song_id: int) -> str:
@@ -227,12 +271,22 @@ def same_pages(conn: sqlite3.Connection, song_id: int) -> dict[str, str]:
     """The song's versions whose text is a kept one's (two UG tabs, one text: ``library.keep_file`` keeps
     one text under one name), by tab, with the page that shows it: ``sheet.html`` or another version's.
     The fetch writes it (ug/fetch.py ``_keep_beside``); a page no longer kept is left out."""
-    record = kv_get_json(conn, same_key(song_id), default={})
+    return _same(kv_get_json(conn, same_key(song_id), default={}), *library_state(conn, song_id))
+
+
+def _same(record: Any, chosen: str | None, kept: Collection[str]) -> dict[str, str]:
+    """``same_pages`` of a song's record, the one ``chosen`` and the tabs ``kept`` beside it."""
     if not isinstance(record, dict):
         return {}
-    chosen, kept = library_state(conn, song_id)
     pages = {version_names(t)[2] for t in kept} | ({SHEET_PAGE} if chosen is not None else set())
     return {str(t): p for t, p in record.items() if isinstance(p, str) and p in pages}
+
+
+def _same_records(conn: sqlite3.Connection, ids: str) -> dict[int, Any]:
+    """The ``same_pages`` record of each song ``ids`` names (a JSON list) that has one, by song id, in one query."""
+    rows = conn.execute("SELECT key, value FROM kv WHERE key IN (SELECT ? || value FROM json_each(?))",
+                        (SAME_KV, ids))
+    return {int(key[len(SAME_KV):]): json.loads(value) for key, value in rows}
 
 
 def yours_key(song_id: int) -> str:
@@ -302,6 +356,28 @@ def sheet_pins(conn: sqlite3.Connection, song_id: int, pins: Sequence[int]) -> l
 def in_library(conn: sqlite3.Connection, song_id: int, policy: RankPolicy) -> list[SheetVersion]:
     """``song_sheet_versions`` with the one, the kept versions and those that are a kept one's text, as the
     library holds them now. The JSON the pages read is ``as_data`` of it."""
-    chosen, kept = library_state(conn, song_id)
-    return song_sheet_versions(conn, song_id, policy, chosen_tab=chosen, kept_tabs=kept,
-                               same_as=same_pages(conn, song_id))
+    return _listings(conn, [song_id], policy).get(song_id, [])
+
+
+def in_library_of(conn: sqlite3.Connection, song_ids: Collection[int],
+                  policy: RankPolicy) -> dict[int, list[SheetVersion]]:
+    """``in_library`` of each of ``song_ids`` that has UG versions listed, by song id (a song with none is left out),
+    in four queries for them all: the library page lists every song's, where a few queries a song would cost it a
+    moment."""
+    return {song_id: listed for song_id, listed in _listings(conn, song_ids, policy).items() if listed}
+
+
+def _listings(conn: sqlite3.Connection, song_ids: Collection[int], policy: RankPolicy) -> dict[int, list[SheetVersion]]:
+    """``in_library``'s list of each of ``song_ids`` with a version recorded, by song id: its rows, its library state,
+    its ``same_pages`` record and its variant, each read for every song at once."""
+    rows = _rows_of(conn, json.dumps(sorted(set(song_ids))))
+    if not rows:
+        return {}
+    ids = json.dumps(sorted(rows))
+    states, records, variants = _states(conn, ids), _same_records(conn, ids), _variants(conn, ids)
+    out = {}
+    for song_id, found in rows.items():
+        chosen, kept = states.get(song_id, (None, ()))
+        out[song_id] = _listed(found, policy, variants.get(song_id), chosen_tab=chosen, kept_tabs=kept,
+                               same_as=_same(records.get(song_id, {}), chosen, kept))
+    return out

@@ -768,7 +768,7 @@ def test_a_songs_card_names_the_lacuerda_sheet_it_could_be_looked_up_with(conn, 
 
 def test_a_one_song_card_reads_the_lacuerda_sheets_and_kept_versions_of_that_song_alone(conn, cfg):
     # /jobs.json's card of a song asks of that song alone, as its YouTube state is asked (above).
-    from caracole.library_page import _lacuerda_met, song_cards
+    from caracole.library_page import _lacuerda_versions, song_cards
     from caracole.songs import get_song
 
     asked = add_song(conn, "Estopa", "Como Camarón")
@@ -776,8 +776,9 @@ def test_a_one_song_card_reads_the_lacuerda_sheets_and_kept_versions_of_that_son
     for s, slug in ((asked, "como_camaron"), (other, "tu_calorro")):
         update_song(conn, s.id, status="found")
         lacuerda_version(conn, s, f"estopa/{slug}", f"https://acordes.lacuerda.net/estopa/{slug}.shtml", coverage=0.5)
-    assert _lacuerda_met(conn, {asked.id}) == {asked.id: "https://acordes.lacuerda.net/estopa/como_camaron.shtml"}
-    assert set(_lacuerda_met(conn)) == {asked.id, other.id}  # every song's, for the whole page
+    assert _lacuerda_versions(conn, {asked.id}) == {asked.id: [
+        {"href": "https://acordes.lacuerda.net/estopa/como_camaron.shtml", "coverage": 0.5, "sheet": False}]}
+    assert set(_lacuerda_versions(conn)) == {asked.id, other.id}  # every song's, for the whole page
     [card] = song_cards(conn, cfg, Overrides(), NOW, [get_song(conn, asked.id)])
     assert card["lacuerdaSheet"] == "https://acordes.lacuerda.net/estopa/como_camaron.shtml"
 
@@ -2146,10 +2147,11 @@ def test_a_line_opens_its_sheet_from_one_button_and_its_other_files_wait_under_i
     top, menu = creep.split('class="line-panel"', 1)
     # One button opens the viewer, as the title does.
     assert link_texts(top) == ["Open"], top
-    # Every other file under "⋯": closed, small. No Guitar Pro version to download: caracole picks none on UG.
+    # Every other file under "⋯": closed, small, after the UG version its sheet is. No Guitar Pro version to
+    # download: caracole picks none on UG.
     assert re.search(r'<button class="line-more"[^>]*aria-expanded="false"', top) and re.search(r'^[^>]*hidden', menu)
-    assert link_texts(menu) == ["Sheet PDF", "Sheet text", "ChordPro", "Lyrics", "Timed lyrics", "Guitar Pro 1",
-                                "Tab", "Info"], menu
+    assert link_texts(menu) == ["Ver 1 · 4.50★ (12) · the one", "Sheet PDF", "Sheet text", "ChordPro", "Lyrics",
+                                "Timed lyrics", "Guitar Pro 1", "Tab", "Info"], menu
     assert '<p class="subhead">Files</p>' in menu and "Guitar Pro to download" not in menu
     assert all(cls.startswith("btn small") for cls in re.findall(r'<a class="([^"]*)"', menu)), menu
     # A sheet with no viewer opens its PDF; nothing else to list.
@@ -2184,8 +2186,9 @@ def test_a_lines_menu_lists_the_sheets_versions_apart_from_its_files(conn, cfg, 
     soda = line_of(shown, "De Música Ligera")
     assert link_texts(soda.split('class="line-panel"', 1)[0]) == ["Open"]
     groups = re.findall(r'<p class="subhead">([^<]*)</p><div class="actions">(.*?)</div>', panel_of(soda), re.S)
-    assert [(heading, link_texts(links)) for heading, links in groups][:2] == [
-        ("PDF exports", ["B Minor, capo 2", "G Dorian, capo 0"]), ("Files", ["Sheet PDF", "Sheet text"])], groups
+    assert [(heading, link_texts(links)) for heading, links in groups][:3] == [
+        ("Sheet versions", ["Ver 1 · 4.50★ (12) · the one"]), ("PDF exports", ["B Minor, capo 2", "G Dorian, capo 0"]),
+        ("Files", ["Sheet PDF", "Sheet text"])], groups
     versions = dict(groups)["PDF exports"]
     assert 'href="Soda%20Stereo/De%20M%C3%BAsica%20Ligera/sheet%20%28G%20Dorian%2C%20capo%200%29.pdf"' in versions
     # A song with no export has no PDF exports.
@@ -2235,8 +2238,8 @@ def test_a_songs_kept_versions_are_its_datas_in_rank_order_each_with_its_page(co
     assert {v["source"] for v in listed} == {"ug"}
     # The kept versions' files are no files of the line's own: they are under Sheet versions.
     assert not any(f["name"].startswith("version-") for f in cards[s.display]["files"])
-    # A song with no version kept beside its sheet has none to list.
-    assert cards[plain.display]["versions"] is None
+    # A song with no version kept beside its sheet lists its sheet's alone, the one.
+    assert [(v["tab"], v["chosen"]) for v in cards[plain.display]["versions"]["list"]] == [("5", True)]
 
 
 def test_the_one_whose_text_and_page_are_gone_from_the_folder_opens_its_pdf(conn, cfg):
@@ -2247,6 +2250,162 @@ def test_the_one_whose_text_and_page_are_gone_from_the_folder_opens_its_pdf(conn
     card = songs_of(page(conn, cfg))[s.display]
     one = card["versions"]["list"][0]
     assert (one["tab"], one["chosen"], one["href"]) == ("1064463", True, "Oasis/Wonderwall/sheet.pdf")
+
+
+UG_HOTEL = "https://tabs.ultimate-guitar.com/tab/eagles/hotel-california-chords-"
+LC_HOTEL = "https://acordes.lacuerda.net/eagles/hotel_california"
+
+
+def hotel_california(conn, cfg, *, title="Hotel California", beside=(), lacuerda_sheet=False):
+    """A song of the Eagles with 13 chords versions on UG, tabs 101 to 113 in rank order (rated 4.90 down, fewer votes
+    each), 101 its sheet (``sheet.txt``, its viewer page and PDF in the folder) unless ``lacuerda_sheet`` keeps
+    LaCuerda's there; ``beside``, the tabs kept beside it (``version-<tab>.txt``, ``.json``). The song, and each
+    version's id by tab."""
+    from caracole.sheet_versions import version_names
+
+    s = add_song(conn, "Eagles", title)
+    update_song(conn, s.id, status="found")
+    ids = {}
+    for n in range(13):
+        tab = str(101 + n)
+        ids[tab] = upsert_version(conn, provider="ug", tab_id=tab, song_id=s.id, slot="sheet", kind="chords",
+                                  rating=round(4.9 - n / 20, 2), votes=1000 - 50 * n, version=n + 1, label=None,
+                                  url=UG_HOTEL + tab, raw={}, now="x")
+    if lacuerda_sheet:
+        lc = lacuerda_version(conn, s, "eagles/hotel_california", LC_HOTEL + ".shtml", coverage=0.9)
+        keep_file(conn, cfg.library_dir, song=s, version_id=lc, name="sheet.txt", data=b"lacuerda", rank=1)
+    else:
+        keep_file(conn, cfg.library_dir, song=s, version_id=ids["101"], name="sheet.txt", data=b"101", rank=1)
+    for rank, tab in enumerate(beside, start=2):
+        text, doc, _ = version_names(tab)
+        keep_file(conn, cfg.library_dir, song=s, version_id=ids[tab], name=text, data=tab.encode(), rank=rank)
+        keep_file(conn, cfg.library_dir, song=s, version_id=ids[tab], name=doc, data=b"{" + tab.encode() + b"}",
+                  rank=rank)
+    put(cfg, s, "sheet.html", "sheet.pdf")
+    return s, ids
+
+
+def test_versions_counts_ug_versions_for_a_song_with_none_kept(conn, cfg):
+    # Every song with UG versions recorded has its versions, not only one with some kept beside its sheet: the one
+    # (the sheet, when it is UG's), and the others counted, as many as a lookup may keep for Fetch them.
+    s, _ = hotel_california(conn, cfg)
+    elsewhere, _ = hotel_california(conn, cfg, title="Take It Easy", lacuerda_sheet=True)
+    cards = songs_of(page(conn, cfg, Overrides(block=frozenset({113}))))
+    versions = cards[s.display]["versions"]
+    assert (versions["total"], versions["rest"], versions["keepMore"], versions["pinned"]) == (13, 11, 6, False)
+    assert [(v["tab"], v["chosen"], v["href"], v["source"]) for v in versions["list"]] == [
+        ("101", True, "Eagles/Hotel%20California/sheet.html", "ug")]
+    # Its sheet LaCuerda's, no UG version is kept: every one but the blocked one is left to keep.
+    versions = cards[elsewhere.display]["versions"]
+    assert (versions["total"], versions["list"], versions["rest"], versions["keepMore"]) == (13, [], 12, 6)
+
+
+def test_versions_counts_match_in_library(conn, cfg):
+    # total: the versions UG still has; rest: those a keep may still keep (sheet_versions.may_keep), neither kept,
+    # nor the one, nor gone, nor blocked, nor found unkeepable. A version an earlier match found is another song's.
+    from caracole.sheet_versions import in_library, may_keep, note_unkeepable
+    from caracole.versions import STALE, mark_gone, set_coverage
+
+    s, ids = hotel_california(conn, cfg, beside=("102", "103"))
+    set_coverage(conn, ids["101"], 0.95)
+    set_coverage(conn, ids["102"], 0.5)
+    mark_gone(conn, ids["103"])  # kept, and gone from UG since: still listed, never counted
+    mark_gone(conn, ids["104"])
+    conn.execute("UPDATE versions SET gone = ? WHERE id = ?", (STALE, ids["105"]))
+    note_unkeepable(conn, s.id, "106")
+    overrides = Overrides(block=frozenset({107}))
+    versions = songs_of(page(conn, cfg, overrides))[s.display]["versions"]
+    listed = in_library(conn, s.id, cfg.rank)
+    assert versions["total"] == sum(not v.gone for v in listed) == 10
+    assert versions["rest"] == len(may_keep(conn, s.id, listed, overrides.block)) == 6
+    assert [(v["tab"], v["complete"], v["coverage"], v["gone"]) for v in versions["list"]] == [
+        ("101", True, 0.95, False), ("102", False, 0.5, False), ("103", None, None, True)]
+
+
+def test_keep_more_is_capped_by_the_lookup_budget(conn, cfg):
+    from dataclasses import replace
+
+    s, _ = hotel_california(conn, cfg)
+    few = replace(cfg, providers={**cfg.providers, "ug": replace(cfg.provider("ug"), lookup_requests=2)})
+    versions = songs_of(page(conn, few))[s.display]["versions"]
+    assert (versions["rest"], versions["keepMore"]) == (12, 2)
+    # Never more than are left to keep.
+    versions = songs_of(page(conn, cfg, Overrides(block=frozenset(range(102, 113)))))[s.display]["versions"]
+    assert (versions["rest"], versions["keepMore"]) == (1, 1)
+
+
+def test_pinned_says_a_pin_chooses_the_sheet(conn, cfg):
+    # As the viewer's (render.py): a [pin] of a chords version chooses the sheet, Back to caracole's pick takes it out.
+    s, _ = hotel_california(conn, cfg)
+    version(conn, s, 900, slot="guitar", kind="tabs")
+
+    def pinned(*tabs):
+        return songs_of(page(conn, cfg, Overrides(pin={s.key: tabs})))[s.display]["versions"]["pinned"]
+
+    assert pinned() is False
+    assert pinned(105) is True
+    assert pinned(900) is False  # a text tab's pin chooses no sheet
+
+
+def test_lacuerda_versions_best_first_and_the_sheet_marked(conn, cfg):
+    # The LaCuerda sheets caracole met for the song and LaCuerda still has, the most of the lyrics first, each its
+    # page; the one kept as the sheet says so.
+    s = add_song(conn, "Estopa", "Como Camarón")
+    update_song(conn, s.id, status="found")
+    lc = "https://acordes.lacuerda.net/estopa/como_camaron"
+    kept = lacuerda_version(conn, s, "estopa/como_camaron-2", lc + "-2.shtml", coverage=0.4)
+    lacuerda_version(conn, s, "estopa/como_camaron", lc + ".shtml", coverage=0.6)
+    lacuerda_version(conn, s, "estopa/como_camaron-3", lc + "-3.shtml")
+    lacuerda_version(conn, s, "estopa/como_camaron-4", lc + "-4.shtml", coverage=0.9, gone=True)
+    keep_file(conn, cfg.library_dir, song=s, version_id=kept, name="sheet.txt", data=b"sheet", rank=1)
+    plain = add_song(conn, "Radiohead", "Creep")
+    cards = songs_of(page(conn, cfg))
+    assert cards[s.display]["lacuerdaVersions"] == [
+        {"href": lc + ".shtml", "coverage": 0.6, "sheet": False},
+        {"href": lc + "-2.shtml", "coverage": 0.4, "sheet": True},
+        {"href": lc + "-3.shtml", "coverage": None, "sheet": False}]
+    assert cards[plain.display]["lacuerdaVersions"] == []
+
+
+def test_versions_is_null_without_ug_versions(conn, cfg):
+    from caracole.versions import STALE
+
+    plain = add_song(conn, "Radiohead", "Creep")
+    tab_only = add_song(conn, "Radiohead", "Nude")
+    version(conn, tab_only, 7, slot="guitar", kind="tabs")  # a text tab is no sheet's version
+    stale = add_song(conn, "Radiohead", "Karma Police")
+    conn.execute("UPDATE versions SET gone = ? WHERE id = ?", (STALE, version(conn, stale, 8)))
+    cards = songs_of(page(conn, cfg))
+    assert [cards[x.display]["versions"] for x in (plain, tab_only, stale)] == [None, None, None]
+
+
+def test_an_auto_sheet_beside_a_human_one_is_in_the_data_of_its_own(conn, cfg):
+    # The sheet tile's Auto chip: the auto sheet's viewer (else its PDF, else its text, as a title opens a sheet)
+    # and its files, for a song whose human sheet is its sheet. An auto sheet alone is the sheet: none.
+    s = add_song(conn, "Eagles", "Hotel California")
+    put(cfg, s, "sheet.html", "sheet.pdf", "sheet.txt", "sheet (auto).html", "sheet (auto).pdf", "sheet (auto).txt",
+        "sheet (auto).cho")
+    no_viewer = add_song(conn, "Eagles", "Desperado")
+    put(cfg, no_viewer, "sheet.txt", "sheet (auto).txt", "sheet (auto).pdf")
+    alone = add_song(conn, "宋冬野", "斑马，斑马")
+    put(cfg, alone, "sheet (auto).html", "sheet (auto).pdf")
+    human = add_song(conn, "Radiohead", "Creep")
+    put(cfg, human, "sheet.pdf")
+    cards = songs_of(page(conn, cfg))
+    folder = "Eagles/Hotel%20California/"
+    assert cards[s.display]["autoSheet"] == {
+        "href": folder + "sheet%20%28auto%29.html",
+        "files": [
+            {"label": "PDF", "href": folder + "sheet%20%28auto%29.pdf",
+             "download": "Eagles - Hotel California (auto).pdf"},
+            {"label": "Text", "href": folder + "sheet%20%28auto%29.txt",
+             "download": "Eagles - Hotel California (auto).txt"},
+            {"label": "ChordPro", "href": folder + "sheet%20%28auto%29.cho",
+             "download": "Eagles - Hotel California (auto).cho"}]}
+    assert cards[no_viewer.display]["autoSheet"]["href"] == "Eagles/Desperado/sheet%20%28auto%29.pdf"
+    assert cards[alone.display]["autoSheet"] is None and cards[human.display]["autoSheet"] is None
+    # The song's files list them still, as before.
+    assert "sheet (auto).pdf" in [f["name"] for f in cards[s.display]["files"]]
 
 
 @in_chromium
@@ -2312,7 +2471,8 @@ def test_on_a_phone_files_open_with_a_tap_the_title_opens_the_viewer_and_tab_ski
         phone.click(line + " .line-more")
         assert phone.wait(f"!{q}.querySelector('.line-panel').hidden")
         heights = phone.js(f"Array.from({q}.querySelectorAll('.line-panel a')).map((a) => a.getBoundingClientRect().height)")
-        assert len(heights) == 8 and min(heights) >= 44, heights  # the eight files filed_library keeps
+        # The eight files filed_library keeps, and the UG version its sheet is.
+        assert len(heights) == 9 and min(heights) >= 44, heights
         # From the line, Tab goes to Open: the title opens the same, and isn't a stop of its own.
         phone.js(f"{q}.focus()")
         phone.press("Tab")
