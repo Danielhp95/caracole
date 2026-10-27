@@ -107,3 +107,88 @@ def test_a_harp_tab_is_frozen():
     assert isinstance(tab, HarpTab)
     with pytest.raises(AttributeError):
         tab.title = "x"  # type: ignore[misc]
+
+
+# --- an artist page ---------------------------------------------------------------------------------------------------
+
+
+def test_an_artist_page_gives_its_name_how_many_tabs_it_says_and_the_tabs_it_lists():
+    from caracole.harptabs import ListedTab, parse_artist_page
+
+    page = parse_artist_page(fixture("artist_1178_billy-joel.html"))
+    assert (page.name, page.tabs) == ("billy joel", 98)  # the page's own spelling, and the count its header says
+    assert page.listed[:2] == (
+        ListedTab(25, "tab/25/piano-man", "piano man", key="C", difficulty="Beginner", views=1_100_000, rating=4.0),
+        ListedTab(23862, "tab/23862/piano-man-c-harmonica", "Piano Man (C Harmonica)", key="C", views=574_000),
+    )
+    # Beside the artist, a card shows the harp's key, a genre ("Rock", "Pop"), both or neither.
+    assert [(t.tab_id, t.title, t.key, t.rating) for t in page.listed[2:]] == [
+        (9925, "((((Piano Man (Harmonica Intro)", None, 2.9),
+        (1256, "Piano Man (Harp Intro)", "C", 2.2),
+        (8767, "Vienna!", "Bb", None),
+        (2008, "She's Always a Woman", None, None),
+        (5751, "New York State Of Mind", "C", None),
+    ]
+    assert [t.views for t in page.listed] == [1_100_000, 574_000, 177_000, 75_000, 59_000, 32_000, 15_000]
+
+
+def test_the_sites_catch_all_artist_is_a_page_like_any_other():
+    from caracole.harptabs import parse_artist_page
+
+    page = parse_artist_page(fixture("artist_4.html"))
+    assert (page.name, page.tabs) == ("?", 41)
+    assert [(t.path, t.key, t.difficulty) for t in page.listed] == [
+        ("tab/125/dixie", "C", "Beginner"), ("tab/165/oh-danny-boy", None, "Beginner"),
+        ("tab/4907/lord-of-the-rings-theme", None, "Beginner")]
+
+
+@pytest.mark.parametrize("html", [
+    "<html><body><h1>Not here</h1></body></html>",  # no header of an artist's page
+    "<html><body><main><p>98 tabs</p></main></body></html>",  # no name
+])
+def test_an_artist_page_without_its_header_is_an_error_never_no_tabs(html):
+    from caracole.harptabs import parse_artist_page
+
+    with pytest.raises(HarpTabsParseError):
+        parse_artist_page(html, f"{BASE}/artist/1/x")
+
+
+def test_an_artist_with_no_tab_is_a_page_with_none():
+    from caracole.harptabs import parse_artist_page
+
+    html = fixture("artist_4.html")
+    head, _, rest = html.partition('<div class="grid')
+    empty = head.replace("41 tabs", "0 tabs") + "</div></main></body></html>"
+    page = parse_artist_page(empty)
+    assert (page.name, page.tabs, page.listed) == ("?", 0, ())
+
+
+def test_a_card_that_links_to_no_tab_page_is_left_out():
+    from caracole.harptabs import parse_artist_page
+
+    html = fixture("artist_4.html").replace('href="/tab/165/oh-danny-boy"', 'href="/tab/165/Oh Danny"')
+    assert [t.tab_id for t in parse_artist_page(html).listed] == [125, 4907]
+
+
+@pytest.mark.parametrize("title, song", [
+    ("piano man", "piano man"),
+    ("Piano Man (C Harmonica)", "Piano Man"),
+    ("((((Piano Man (Harmonica Intro)", "Piano Man"),
+    ("Piano man(THE ACTUAL WAY THE GUY PLAYS )", "Piano man"),
+    ("(harmonica riff) piano man", "piano man"),
+    ("Piano Man [intro]", "Piano Man"),
+    ("Pianoman (Complete)", "Pianoman"),
+    ("(Intro)", "(Intro)"),  # nothing left: the title as it is
+])
+def test_a_tabs_song_is_its_title_less_what_it_says_in_brackets(title, song):
+    from caracole.harptabs import song_title
+
+    assert song_title(title) == song
+
+
+def test_tabs_of_one_song_share_its_key():
+    from caracole.harptabs import song_key
+
+    assert {song_key(t) for t in ("piano man", "Piano Man (C Harmonica)", "((((Piano Man (Harmonica Intro)")} == {
+        "piano-man"}
+    assert song_key("She's Always a Woman") == "shes-always-a-woman"

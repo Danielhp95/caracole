@@ -158,6 +158,8 @@ the state folder is yours to delete). A file you dropped into `_inbox/` that an 
 filed under a Guitar Pro pick on Ultimate Guitar stays, as the song's own inbox file. It takes
 a few seconds more than the copy. Schema 10 adds harptabs.com's index, empty until the nightly
 run, or `caracole harptabs`, reads its sitemap (see [caracole harptabs](#one-step-at-a-time)).
+Schema 11 adds the tabs of harptabs.com's artist pages, empty until `caracole harptabs --index`,
+or the nightly run, reads them.
 The ukulele chords need no change of schema: an index built before reads Ultimate Guitar's
 ukulele sitemaps at its next refresh (see [caracole index build](#caracole-index-build)). A state
 folder caracole can't use ends a command with status
@@ -218,10 +220,14 @@ site's sitemap, reads the pages of the tabs titled so, and keeps the most
 viewed one by your song's artist as `harmonica-1.txt` (`caracole harptabs`, in
 [One step at a time](#one-step-at-a-time)). Its site terms ask that nothing be
 copied, and its API's that the tabs not be mirrored: caracole keeps the tabs of
-your own songs alone, for you, never a tab of a song nobody asked for. It asks
-with caracole's own user agent, as it asks every site, and an HTTP 403, a 429 or
-a challenge from harptabs.com is a block like any site's: a cooldown and one
-alert, never a way around it (see [caracole run](#caracole-run)).
+your own songs alone, for you, never a tab of a song nobody asked for. So that
+a search finds its tabs by artist as well as by title, as it finds Ultimate
+Guitar's, caracole reads harptabs.com's artist pages into a local index (the
+names of an artist's tabs, never the tabs themselves): `caracole harptabs
+--index`, a budget at a time, and the nightly run with what its harptabs budget
+leaves. It asks with caracole's own user agent, as it asks every site, and an
+HTTP 403, a 429 or a challenge from harptabs.com is a block like any site's: a
+cooldown and one alert, never a way around it (see [caracole run](#caracole-run)).
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -802,7 +808,9 @@ resume.
 
 **`caracole index stats`** prints the number of tabs of each type, of artists
 and of sitemaps, the newest tab id, and when the index was built and last
-refreshed.
+refreshed; then, once harptabs.com's sitemap is read, how far its artist index
+has got: `harptabs.com: 1204 of 10428 artist pages read, 5130 tabs; caracole
+harptabs --index reads the rest.`
 
 ### caracole match --dry-run
 
@@ -915,7 +923,10 @@ configuration it would take, and why it waits.
    cause's line; sitemaps it couldn't read get a line of their own.
 10. **harptabs**: keep a harmonica tab from harptabs.com for each song that has
     none and a tab there by its artist (see [caracole
-    harptabs](#one-step-at-a-time)).
+    harptabs](#one-step-at-a-time)). What its budget leaves reads artist pages
+    into harptabs.com's local index, for searches: your songs' artists first,
+    then the others, each again after 30 days (`artist index: 18 pages read,
+    1204 of 10428 artists`). Only once the library has a song.
 11. **musescore**: read MuseScore's song sitemaps into a local index, for the
     to-do page's links to its pages. It downloads nothing.
 12. **youtube**: take the audio of a few songs no human sheet was found for from
@@ -988,7 +999,10 @@ spends one on its sitemap, a single 6.4 MB file with no validators, read again
 after 30 days. Then a song costs the pages of the tabs titled as it is (only
 when the sitemap lists an artist by its artist's name), eight at most, each
 read once and cached for good: most songs cost one or two, a common title a few
-more.
+more. Its artist pages, for searches, cost one request each, and are read again
+after 30 days: what the budget leaves reads about 15 a night, so the whole
+index (about 10,400 artists) is `caracole harptabs --index`'s, which at 10–20
+seconds a request takes some 44 hours of requests, a `--budget` at a time.
 
 MuseScore gets at most 10 requests a run, 10–20 seconds apart, all for its song
 sitemaps: an index and 18 files of about 40,000 song pages each, read over two
@@ -1016,7 +1030,7 @@ run's ("caracole: Ultimate Guitar blocked"), its text the line the command
 prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
 `harptabs`, `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
-lacuerda --artist`) sends none: it says so where you asked. A run, a command
+lacuerda --artist`, `caracole harptabs --artist`) sends none: it says so where you asked. A run, a command
 or a lookup the site answers without a block starts the count again; one the
 site answered with nothing but errors doesn't, and neither does a run that let
 a lookup go first which was blocked meanwhile: that block's cooldown stands.
@@ -1237,6 +1251,37 @@ and cache.
   song that has a harmonica tab gets no other, and no file is ever replaced.
   With harptabs.com turned off it asks nothing and says so. A cooldown, a block
   or a spent budget exits 0.
+
+  **`caracole harptabs --index`** reads harptabs.com's artist pages into its
+  local index instead, for searches, even for an empty library: the sitemap first, when it never was read or last
+  was 30 days ago, then each artist page not read in 30 days, your songs'
+  artists first, then the others in the sitemap's order. An artist page lists
+  the artist's 30 most viewed tabs and says how many they have; the rest come
+  from the site's API, which robots.txt closes, so caracole knows those 30. It
+  asks at the bulk pace (10–20 s apart) with a budget of its own: `--budget N`
+  requests, 100 by default, and goes on where the last one stopped. It prints
+  `Index: harptabs.com's sitemap read.`, `harptabs.com: 99 artist pages read;
+  99 of 10428 artists read, 412 tabs in the index.` and, with the budget spent,
+  `The budget of 100 requests is spent: caracole harptabs --index reads the
+  next 10329 artists, about 43 h of requests at this pace.`; or `harptabs.com's
+  artist index is up to date: …` when nothing was due. A page that answers 404
+  keeps no tab (`1 gone`); one that won't parse, or any other error, leaves what
+  the index held of that artist, and is asked for again next time. It holds
+  caracole's lock while it runs, as the nightly run does, letting a lookup go
+  first in its pauses: a nightly run waits for it, so give it a budget that
+  ends before night (2000 requests are about 8 hours). A cooldown, a block or a
+  spent budget exits 0; `--budget` goes with `--index` alone (exit 2).
+
+  **`caracole harptabs --artist NAME`** reads one artist's page into the index
+  now: NAME is their name, or their page's address (`artist/1178/billy-joel`, as
+  the sitemap lists it). It asks at the lookup pace, as `caracole get` does,
+  within a lookup's budgets: one request, and none when caracole read the page
+  within 30 days. Its last line starts as `caracole lacuerda --artist`'s does:
+  `Read: harptabs.com's page of billy joel lists 30 of their 98 tabs, in the
+  index now.`, `Not found: harptabs.com's sitemap lists no artist named NAME.`
+  (no request), or `Not read: …` for the site turned off, its index still
+  empty, a cooldown, a block, a spent budget or an error, all of which exit 0,
+  nothing changed. It can't go with `--index` (exit 2).
 - **`caracole musescore`** reads MuseScore's song sitemaps into the local index
   the to-do page's MuseScore links come from, when it never has, or last did 30
   days ago; it asks for nothing else, and downloads nothing. It prints
