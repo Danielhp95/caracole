@@ -282,3 +282,17 @@ def test_in_library_of_lists_each_song_as_in_library_does(conn, cfg):
         ("1", True, "sheet.html", "Capo 2 slowly"), ("2", True, "version-2.html", None),
         ("3", True, "version-2.html", None), ("4", False, None, None)]
     assert in_library_of(conn, [], POLICY) == {}
+
+
+def test_may_keep_is_nothing_when_a_keep_keeps_another_group_than_the_list_shows(conn):
+    # No sheet of UG's and no live chords version: the list shows the Ukulele Chords versions, but a keep keeps
+    # chords beside a sheet that isn't UG's ukulele one (ug.fetch.sheet_group), so none of them is to fetch.
+    from caracole.sheet_versions import may_keep
+
+    song = add_song(conn, "Oasis", "Wonderwall")
+    chords(conn, song.id, "201", kind="ukulele")
+    chords(conn, song.id, "202", kind="ukulele")
+    versions = song_sheet_versions(conn, song.id, POLICY, chosen_tab=None, kept_tabs=())
+
+    assert tabs(versions) == ["201", "202"]
+    assert may_keep(conn, song.id, versions, block=()) == []

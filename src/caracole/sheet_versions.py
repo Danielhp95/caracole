@@ -331,6 +331,12 @@ def may_keep(conn: sqlite3.Connection, song_id: int, versions: Sequence[SheetVer
     found it can't keep (``unkeepable``). What the library page counts as not kept, and ``--keep-more`` keeps."""
     from caracole.http import robots_disallows
 
+    # The list shows one group of versions (``group_of``); a keep keeps the group of the song's sheet (chords but
+    # beside UG's ukulele sheet: ug.fetch.sheet_group). A song with no chords version but ukulele ones, and a sheet
+    # that isn't UG's, lists the ukulele ones: none of them is one a keep may keep.
+    live = [v for v in versions if not v.gone]
+    if live and (get_version(conn, live[0].version_id).kind == "ukulele") != (sheet_kind(conn, song_id) == "ukulele"):
+        return []
     cannot = set(unkeepable(conn, song_id))
     return [v for v in versions
             if not (v.kept or v.chosen or v.gone) and int(v.tab_id) not in block and v.tab_id not in cannot
