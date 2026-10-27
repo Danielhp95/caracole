@@ -327,6 +327,23 @@ def test_the_sitemap_is_read_again_after_30_days_and_not_before(conn, tmp_path):
     assert site.requests == [SITEMAP, SITEMAP]
 
 
+def test_a_sitemap_cut_short_is_an_error_and_the_index_stays_whole(conn, tmp_path):
+    # A 200 whose body stops before its </urlset> (the server cut it short, say) lists fewer pages than the site has:
+    # stored, the tabs past the cut would leave the index for 30 days.
+    add_song(conn, "Mariah Carey", "Silent Night")  # wants a tab, and has no candidate: the sitemap alone
+    site = FakeHarpTabs()
+    run(site, conn, tmp_path)
+    rows = conn.execute("SELECT COUNT(*) FROM harptabs_index").fetchone()[0]
+    whole = fixture("sitemap.xml")
+    cut = whole[:whole.index("<loc>https://www.harptabs.com/tab/")]  # its artists and the site's pages alone
+    site.pages[SITEMAP] = (200, cut, {"Content-Type": "application/xml"})
+
+    stats = run(site, conn, tmp_path, NOW + timedelta(days=31))
+
+    assert (stats.sitemaps, stats.errors, stats.sitemap_errors) == (0, 1, 1)
+    assert conn.execute("SELECT COUNT(*) FROM harptabs_index").fetchone()[0] == rows
+
+
 # --- a tab you picked ([harptabs]) -----------------------------------------------------------------------------
 
 
