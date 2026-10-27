@@ -2988,7 +2988,7 @@ def test_lacuerdas_search_route_refuses_what_its_gates_refuse(app, conn, queue):
     assert status == 409 and "within 30 days" in error
     lacuerda_events(conn, "lookup:lacuerda-search:x", 20)
     status, error = refused({"q": "corazon de papel"})  # the page's share spent: not by itself
-    assert status == 429 and "Search LaCuerda" in error
+    assert status == 429 and "press Ask LaCuerda" in error
     assert queue.snapshot() == []
     response = post(app, "/lacuerda/search", {"q": "corazon de papel", "by_hand": "1"}, accept="application/json")
     assert response.status == 202  # by hand, the button: within the hour's lookups
@@ -3017,7 +3017,7 @@ def test_a_search_that_failed_lately_is_offered_by_hand_and_never_sent_by_the_pa
     assert tiza["why"].startswith("LaCuerda's search for “tiza corazón” failed less than an hour ago "
                                   "(LaCuerda failed: HTTP 500), so the page won't send it by itself before ")
     response = post(app, "/lacuerda/search", {"q": "corazon de tiza"}, accept="application/json")
-    assert response.status == 429 and "press Search LaCuerda" in as_json(response)["error"]
+    assert response.status == 429 and "press Ask LaCuerda" in as_json(response)["error"]
     assert queue.snapshot() == []
     response = post(app, "/lacuerda/search", {"q": "corazon de tiza", "by_hand": "1"}, accept="application/json")
     assert response.status == 202  # by hand: a person asks

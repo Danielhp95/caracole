@@ -41,6 +41,28 @@ private copy it renders (``render._render_into``). It is the .cho with:
   ``fonts``). With ``names``, the legend is part of the song it levels, each chord as
   wide as the name chordpro displays for it ("D · V/V"), and a numerals chart has no diagrams' rows.
 
+**On another instrument** than the guitar (``instrument``: a version's, ``version.played_on``), the text is
+a version's (``apply_version``: its chords named, and defined, as the viewer shows them there), and:
+
+- a ukulele (high G, low G, baritone) draws its four strings: the text starts with a song config of its own,
+  ``##config: json`` and its lines (``instrument_config``), which chordpro 6.050.7 reads before the song's first
+  line, naming the instrument and its ``tuning``, so each ``{define}`` gives four frets;
+- the piano draws a keyboard (the config's ``instrument.type`` "keyboard", ``pdf.kbdiagrams`` set to
+  ``KEYBOARD``): each chord's ``{define: C keys …}`` is its first position, the bass and the right hand, as the
+  viewer shows it (``version.define_keys``);
+- the harmonica draws none (``{diagrams: off}``): the song starts with the harps for it (``harp.header_line``,
+  "Harmonica: C harp (2nd position) · G harp (1st)") and, under the first one's name, a line per chord with its
+  holes there ("G7: draw 2–5", ``harp.play``);
+- the flute and the recorder draw none: the song starts with the key's scale ("G major scale: G A B C D E F#
+  G", ``winds.scale_notes``).
+
+Its subtitle names the instrument ("The Placeholders · Piano · Key A"), the harmonica's own line aside, and the
+key line is the version's there: one with no capo says the key it sounds in. Without ``diagrams`` (a songbook's
+PDF draws the diagrams of one number of strings: songbook.py), a fretted instrument's shapes are a line of frets
+in place of its diagrams ("Ukulele: C 0003 · Am 2000"). ``column_height`` reads the song's config for the rows of
+diagrams it draws: a keyboard's, or a ukulele's more to a row, and only the chords the text defines, as chordpro
+then knows no other.
+
 Each PDF's record (render.py) keeps the SHA-256 of this text, so a PDF is made again whenever it
 would print otherwise (a key heard anew, a newer viewer's theory or shapes), and ``PDF_TEXT_VERSION``:
 bump it to make every PDF again even so.
@@ -62,10 +84,11 @@ from caracole.chordpro import directive_text
 from caracole.pdf_fonts import PdfFonts, metrics
 from caracole.progressions import key_words
 from caracole.viewer import harmony
+from caracole.viewer.instruments import GUITAR, Instrument
 from caracole.viewer.page import key_line_text, shapes_of
 from caracole.viewer.sheet import COMMENTS, Preamble, directive, parse_sheet, split_preamble
-from caracole.viewer.theory import Chord, Key, parse_chord
-from caracole.viewer.voicings import Position, load_voicings, parse_define, shape_key, voicing_keys
+from caracole.viewer.theory import Chord, Key, parse_chord, spelling
+from caracole.viewer.voicings import Position, frets_from_nut, load_voicings, parse_define, shape_key, voicing_keys
 
 PDF_TEXT_VERSION = 2  # 2: two columns that end level
 
@@ -82,19 +105,34 @@ NAMES = ("chords", "both", "numerals")
 _CHORD = re.compile(r"\[([^\]*][^\]]*)\]")  # a chord on a line of the song; [*…] is an annotation
 _NAMEABLE = re.compile(r"[^\s{}\[\]\"~]+")  # a chord name a {define} can carry, and display
 
+# How a piano's chord is drawn (chordpro's pdf.kbdiagrams, in a keyboard song's config): above the song as the
+# guitar's are, three octaves from a C (the bass and the right hand: version.define_keys), its keys pressed in the
+# chords' colour.
+KEYBOARD = {"show": "top", "width": 4, "height": 20, "keys": 21, "base": "C", "linewidth": 0.1,
+            "pressed": "#b4441e", "hspace": 3.95, "vspace": 0.3}
+_CONFIG_LINE = "##config: json"  # the first line of a song config chordpro reads in the song (Song.pm, 6.050.7)
+_NOTES = ("C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B")
+
 
 def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, names: str = "chords",
-             notes_capo: bool = True, defined: bool = False, fonts: PdfFonts | None = None) -> str:
+             notes_capo: bool = True, defined: bool = False, fonts: PdfFonts | None = None,
+             instrument: Instrument = GUITAR, diagrams: bool = True) -> str:
     """The text of the PDF of the .cho ``cho`` (see the module's docstring). ``key`` is the key of
     its shapes and ``capo`` its capo, None for none, as the viewer reads them (``page.viewer_key``);
     ``columns`` the song's columns, one for none; ``names``, one of ``NAMES``; ``notes_capo``, whether a
     capo the notes name is the one the chords are played at: not in a version of the sheet that moves
     them or the capo (``render._version_text``); ``defined``, whether ``cho``'s ``{define}``s are the
     shapes its viewer shows, a version's (``apply_version``), each drawn as it is; ``fonts``, the PDF fonts
-    it is printed in (``pdf_fonts``), None for ChordPro's built-in ones."""
+    it is printed in (``pdf_fonts``), None for ChordPro's built-in ones; ``instrument``, the one it is played on
+    (a version's, as ``cho`` is: the module's docstring), and ``diagrams``, whether its fretted shapes are drawn
+    (else written as frets)."""
     if names not in NAMES:
         raise ValueError(f"names: {names!r} is none of {', '.join(NAMES)}")
+    drawn = diagrams and instrument.kind in ("strings", "keys")
     lines = cho.splitlines()
+    its_defines: dict[str, str] = {}  # another instrument's {define}s, by chord: its frets, or its keys
+    if instrument is not GUITAR:
+        lines, its_defines = _pull_defines(lines)
     pre = split_preamble(lines)
     head = 0
     while head < len(lines) and _in_header(lines[head]):
@@ -107,19 +145,25 @@ def pdf_text(cho: str, *, key: Key | None, capo: int | None, columns: int = 2, n
         shapes |= _defined(sheet.defines)
     if numbered is not None:
         body, shown, played = _numbered(body, numbered, names, shapes)
-    out = lines[:head]
-    if subtitle := _subtitle(lines[:head], key, capo, pre, numbered, notes_capo=notes_capo):
+    out = instrument_config(instrument) if drawn and instrument is not GUITAR else []
+    out += lines[:head]
+    named = "" if instrument is GUITAR or instrument.kind == "harmonica" else instrument.name
+    if subtitle := _subtitle(lines[:head], key, capo, pre, numbered, notes_capo=notes_capo, instrument=named):
         out.append(f"{{subtitle: {directive_text(subtitle)}}}")
     # A directive among the notes stays (a {define} the viewer can't read, say)
     out += [line for line in lines[head:pre.end] if (found := directive(line)) and not _read_define(found)]
-    if numbered is None:
-        out += _defines(shapes, parse_sheet("\n".join(body)).chords)
-    else:
+    song_chords = parse_sheet("\n".join(body)).chords
+    if numbered is None and drawn and instrument is not GUITAR:
+        out += [f"{{define: {name} {how}}}" for name, how in its_defines.items()]
+    elif numbered is None and drawn:
+        out += _defines(shapes, song_chords)
+    elif numbered is not None:
         out += shown
-    if numbered is not None and names == "numerals":
+    if (numbered is not None and names == "numerals") or not drawn:
         out.append("{diagrams: off}")
     if columns > 1:
         out.append(f"{{columns: {columns}}}")
+    out += _instrument_lines(instrument, key, song_chords, shapes, drawn, its_defines)
     out += body
     if numbered is not None:
         out += _legend(played, numbered)
@@ -134,14 +178,106 @@ def _in_header(line: str) -> bool:
 
 
 def _subtitle(header: list[str], key: Key | None, capo: int | None, pre: Preamble,
-              numbered: Key | None = None, *, notes_capo: bool = True) -> str:
-    """The line under the title: the artist, the key line, the key the numerals are read in, the notes'
-    capo (for a sheet with no capo, where the chords are played where it writes them: ``notes_capo``) and
-    their tuning."""
+              numbered: Key | None = None, *, notes_capo: bool = True, instrument: str = "") -> str:
+    """The line under the title: the artist, the instrument (``instrument``: its name, "" for the guitar), the
+    key line, the key the numerals are read in, the notes' capo (for a sheet with no capo, where the chords are
+    played where it writes them: ``notes_capo``) and their tuning (the guitar's, which no other instrument has)."""
     artist = next((found[1] for line in header if (found := directive(line)) and found[0] == "artist"), "")
     read = f"numerals in {key_words(numbered)}" if numbered is not None else ""
-    parts = (artist, key_line_text(key, capo), read, "" if capo or not notes_capo else pre.capo_note, pre.tuning)
+    tuning = "" if instrument else pre.tuning
+    parts = (artist, instrument, key_line_text(key, capo), read, "" if capo or not notes_capo else pre.capo_note,
+             tuning)
     return " · ".join(part for part in parts if part)
+
+
+# --- on another instrument ------------------------------------------------------------------------
+
+
+def instrument_config(instrument: Instrument) -> list[str]:
+    """The song config that has chordpro draw ``instrument``'s diagrams, as the first lines of a song's text
+    (``##config: json``, then its JSON after "# "): a fretted instrument's ``tuning`` (its strings in the order a
+    box draws them, as chordpro names notes: "G4"), the piano's keyboard (``KEYBOARD``)."""
+    config: dict[str, Any] = {"instrument": {"type": instrument.id, "description": instrument.name}}
+    if instrument.kind == "keys":
+        config = {"instrument": {"type": "keyboard", "description": instrument.name},
+                  "pdf": {"kbdiagrams": KEYBOARD}}
+    else:
+        config["tuning"] = [f"{_NOTES[n % 12]}{n // 12 - 1}" for n in instrument.tuning]
+    return [_CONFIG_LINE, "# " + json.dumps(config, ensure_ascii=False)]
+
+
+def song_config(lines: list[str]) -> dict[str, Any]:
+    """The song config a text starts with (``instrument_config``), as chordpro reads it: the lines after
+    ``##config: json`` that start with "# ", up to the first that doesn't; {} for none, or one that isn't JSON."""
+    if not lines or lines[0].strip() != _CONFIG_LINE:
+        return {}
+    taken = []
+    for line in lines[1:]:
+        if not line.startswith("# "):
+            break
+        taken.append(line[2:])
+    text = "\n".join(taken)
+    try:
+        found = json.loads(text)
+    except ValueError:
+        return {}
+    return found if isinstance(found, dict) else {}
+
+
+def _pull_defines(lines: list[str]) -> tuple[list[str], dict[str, str]]:
+    """``lines`` without the ``{define}``s of a version on another instrument than the guitar (``apply_version``:
+    a ukulele's frets, the piano's keys), and those, by chord: what follows its name ("base-fret 1 frets 0 2 3 2
+    fingers 0 1 3 2", "keys 0 12 16 19")."""
+    kept, defines = [], {}
+    for line in lines:
+        found = _directive(line)
+        parts = found[1].split(None, 1) if found is not None and found[0] == "define" else []
+        if len(parts) == 2 and _INSTRUMENT_DEFINE.match(parts[1]):
+            defines.setdefault(parts[0], parts[1])
+            continue
+        kept.append(line)
+    return kept, defines
+
+
+_INSTRUMENT_DEFINE = re.compile(r"(?:base-fret \d+ frets |keys )")
+_FRETS = re.compile(r"base-fret (\d+) frets ((?:\S+ )+?)fingers")
+
+
+def _instrument_lines(instrument: Instrument, key: Key | None, chords: list[str],
+                      shapes: dict[str, dict[str, Any]], drawn: bool,
+                      its_defines: dict[str, str] | None = None) -> list[str]:
+    """What the song starts with on ``instrument`` (the module's docstring): the harps and each chord's holes,
+    the key's scale, or a fretted instrument's shapes as frets where they aren't ``drawn``; each followed by an
+    empty line. ``chords`` are the song's, as it names them, ``shapes`` the ones the guitar's sheet gives them
+    (``_defined``), ``its_defines`` another instrument's (``_pull_defines``)."""
+    from caracole.viewer import harp, winds
+
+    readable = {name: chord for name in dict.fromkeys(chords) if (chord := parse_chord(name, strict=False))}
+    if instrument.kind == "harmonica" and key is not None:
+        names = spelling(key)
+        best = harp.choices(key, list(readable.values()))[0]
+        return [harp.header_line(key, list(readable.values())),
+                f"{{comment: {directive_text(f'On the {best.name} harp'.upper())}}}",
+                *(f"{name}: {harp.play(chord, best.harp).text(names)}" for name, chord in readable.items()), ""]
+    if instrument.kind == "wind" and key is not None:
+        names = spelling(key)
+        scale = " ".join(names[n % 12] for n in winds.scale_notes(key))
+        return [f"{key_words(key)} scale: {scale}", ""]
+    if instrument.kind == "strings" and not drawn:
+        written = []
+        for name, chord in readable.items():
+            if instrument is GUITAR:
+                shape = _shape(chord, shapes)
+                frets = frets_from_nut(shape) if shape is not None else None
+            else:
+                found = _FRETS.match((its_defines or {}).get(name, ""))
+                frets = None if found is None else frets_from_nut(
+                    ["".join(found.group(2).split()), "", int(found.group(1)), []])
+            if frets is not None:
+                sep = "" if all(f is None or f < 10 for f in frets) else "-"
+                written.append(f"{name} {sep.join('x' if f is None else str(f) for f in frets)}")
+        return [f"{instrument.name}: " + " · ".join(written), ""] if written else []
+    return []
 
 
 def _numbered(body: list[str], key: Key, names: str,
@@ -401,7 +537,9 @@ class Layout:
     """What caracole's style (STYLE_FILE) makes of a page, in points, as chordpro lays it out: the paper,
     its margins, two columns and the space between them, and how tall each kind of line is (a font's
     size times its spacing). ``diagram_row`` is a row of chord diagrams above the song, ``per_row`` how
-    many a row holds; ``wrap_indent`` is how far a wrapped line's next part is indented (an "x"). A
+    many a row holds (``strings_per_row`` for another number of strings than the guitar's: each diagram's
+    ``diagram_width`` a string, then ``diagram_space``), ``keyboard_row`` and ``keyboard_per_row`` the same for a
+    piano's keyboards (``KEYBOARD``); ``wrap_indent`` is how far a wrapped line's next part is indented (an "x"). A
     heading is its font's size times ``heading_spacing``: a {comment}'s (``comment``), a
     {comment_italic}'s or a {comment_box}'s (``italic_size``, ``box_size``). ``regular``, ``bold`` and
     ``italic`` are its fonts' widths (``_Widths``): the words', the chords' and section names', and the
@@ -428,6 +566,10 @@ class Layout:
     empty: float
     diagram_row: float
     per_row: int
+    diagram_width: float
+    diagram_space: float
+    keyboard_row: float
+    keyboard_per_row: int
     regular: _Widths = field(compare=False, repr=False)
     bold: _Widths = field(compare=False, repr=False)
     italic: _Widths = field(compare=False, repr=False)
@@ -445,6 +587,11 @@ class Layout:
     def wrap_indent(self) -> float:
         return _width("x", self.text_size, self.regular)
 
+    def strings_per_row(self, strings: int) -> int:
+        """How many chord diagrams of ``strings`` strings a row above the song holds (``per_row``, the guitar's six)."""
+        inner = self.width - self.left - self.right
+        return int((inner + self.diagram_space) / ((strings - 1) * self.diagram_width + self.diagram_space))
+
 
 @lru_cache(maxsize=4)
 def layout(pdf_fonts: PdfFonts | None = None) -> Layout:
@@ -458,6 +605,10 @@ def layout(pdf_fonts: PdfFonts | None = None) -> Layout:
     row = (fonts["diagram"]["size"] * spacing["diagramchords"] + d["nutwidth"] * d["linewidth"] * d["width"]
            + 0.4 * d["width"] + d["vcells"] * d["height"] + d["vspace"] * d["height"])
     across = (_STRINGS - 1) * d["width"] + d["hspace"] * d["width"]
+    # chordpro's KeyboardDiagram: the name, the keys and a line; a keyboard's width, its keys', and the space after
+    kb, kb_line = KEYBOARD, KEYBOARD["linewidth"] * KEYBOARD["width"]
+    kb_row = fonts["diagram"]["size"] * 1.2 + kb["height"] + kb_line + kb["vspace"] * kb["height"]
+    kb_space = kb["hspace"] * kb["width"]
     return Layout(
         width=width, height=height, left=pdf["marginleft"], right=pdf["marginright"], top=pdf["margintop"],
         bottom=pdf["marginbottom"], column_space=pdf["columnspace"], text_size=fonts["text"]["size"],
@@ -469,6 +620,8 @@ def layout(pdf_fonts: PdfFonts | None = None) -> Layout:
         comment=fonts["comment"]["size"] * spacing["lyrics"], tab=fonts["tab"]["size"] * spacing["tab"],
         empty=fonts["text"]["size"] * spacing["empty"],  # an empty line's font is the text's
         diagram_row=row, per_row=int((inner + d["hspace"] * d["width"]) / across),
+        diagram_width=d["width"], diagram_space=d["hspace"] * d["width"], keyboard_row=kb_row,
+        keyboard_per_row=int((inner + kb_space) / (kb_line + kb["keys"] * kb["width"] + kb_space)),
         **_font_widths(pdf_fonts),
     )
 
@@ -485,7 +638,10 @@ def column_height(lines: list[str], shape: Layout) -> float:
     the rows of chord diagrams above the song, none with ``{diagrams: off}`` (a numerals chart). A
     chord gets a diagram from chordpro when the text defines it or chordpro knows its shape; chordpro
     knows no chord over another bass ("C/E"), so every other chord counts (one chordpro lacks only
-    makes the estimate short of room)."""
+    makes the estimate short of room). A song config (``song_config``) names the instrument the rows are
+    drawn for: a keyboard's rows (every chord counts: chordpro works out any one's keys), or a ukulele's,
+    whose four strings make more to a row, its chords the text defines alone (its tuning sets chordpro's own
+    chords aside)."""
     played: dict[str, None] = {}  # the chords sung, each once, in order (as parse_sheet's)
     defined, tab, diagrams = set(), False, True
     for line in lines:
@@ -500,9 +656,18 @@ def column_height(lines: list[str], shape: Layout) -> float:
                 diagrams = found[1].strip().lower() not in ("off", "false")
         elif not line.startswith("#"):
             played.update(dict.fromkeys(name.strip() for name in _TOKEN.findall(line) if not name.startswith("*")))
-    drawn = [name for name in played if name and (name in defined or "/" not in name)]
-    rows = -(-len(drawn) // shape.per_row) if diagrams else 0
-    return shape.height - shape.top - shape.bottom - rows * shape.diagram_row
+    config = song_config(lines)
+    kind = config.get("instrument", {}).get("type") if isinstance(config.get("instrument"), dict) else None
+    tuning = config.get("tuning") if isinstance(config.get("tuning"), list) else None
+    if kind == "keyboard":
+        drawn, per_row, row = [name for name in played if name], shape.keyboard_per_row, shape.keyboard_row
+    elif tuning is not None:
+        drawn, per_row, row = [n for n in played if n in defined], shape.strings_per_row(len(tuning)), shape.diagram_row
+    else:
+        drawn = [name for name in played if name and (name in defined or "/" not in name)]
+        per_row, row = shape.per_row, shape.diagram_row
+    rows = -(-len(drawn) // per_row) if diagrams else 0
+    return shape.height - shape.top - shape.bottom - rows * row
 
 
 def line_heights(lines: list[str], shape: Layout) -> list[float]:

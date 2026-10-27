@@ -18,7 +18,9 @@ request too (``POST /lacuerda/search``): the page sends it by itself once the
 query has settled, the box unchanged for 1.5 s, when ``/api/search`` says so
 (``lacuerda_search``), never twice for a query, or offers it as a button, a
 line under the results (rows.js ``lacuerdaSearcher``); Enter sends it at once,
-by hand as the button does, when its gate sends one. Its rows come with the
+by hand as the button does, when its gate sends one. One LaCuerda button at a
+time: where a name's page is offered too, Ask LaCuerda sends the search while
+its gate lets one go by hand, else reads the page. Its rows come with the
 search asked again once it is over (once you are back to All results, when an
 artist's songs are open meanwhile). A query may be an
 artist's name alone or a title alone, or a word of an artist's name
@@ -249,9 +251,11 @@ function show(data, text) {
   // listings aren't read to yet, whose page may say; where caracole looked; why it may not see an artist); else where
   // it looked, in one muted line, when a site wasn't searched whole.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
+  // Ask LaCuerda, the one LaCuerda button: LaCuerda's search while its gate lets one go by hand, else the name's page.
   const does = {
     request: () => byNameFrom(text), requestLabel: "Look “" + text + "” up by name",
-    ask: unlisted ? (go, at) => readThenShow({name: String(unlisted.name || "")}, go, at) : null,
+    ask: unlisted ? (go, at) => searcher.ask(text, go) || readThenShow({name: String(unlisted.name || "")}, go, at)
+      : null,
   };
   if (!n) {
     const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s));
@@ -265,8 +269,9 @@ function show(data, text) {
   shownData = data;
   if (lcChanged === text) lcChanged = null;
   if (enterFor === text) { enterFor = null; pickBest(); }  // before LaCuerda's search: a song it looks up goes first
-  // LaCuerda's own search, under the results: sent by itself once the query settles, or by an Enter that came first.
-  const lcLine = searcher.show(data.lacuerda_search, text);
+  // LaCuerda's own search, under the results: sent by itself once the query settles, or by an Enter that came first;
+  // with no button of its own beside Ask LaCuerda's, which sends it then.
+  const lcLine = searcher.show(data.lacuerda_search, text, Boolean(unlisted));
   if (lcLine) results.append(lcLine);
 }
 

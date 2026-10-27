@@ -1,6 +1,6 @@
 // The Songbooks tab (songbook_section.py gives its data): the songbooks as lines, and the one opened as a set list.
 // Served, each song can be dragged (or moved with ↑ and ↓ on its grip), played elsewhere (its chip: key, mode,
-// capo), taken out (×) or got now (Get it); the songbook gets its missing songs, a song from your library or the
+// capo, instrument), taken out (×) or got now (Get it); the songbook gets its missing songs, a song from your library or the
 // indexes (Add a song), another name, or deleted. Each is one form posted with fetch(), queued as a caracole
 // songbook command; the songbook's status line says how it goes, a lookup's line its song's, and once a change, a
 // lookup or a removal is over /jobs.json brings the songbooks as they are now (library.js tells: "caracole:songbooks").
@@ -245,6 +245,13 @@
   const keys = listOf(shelf.keys);
   const modes = listOf(shelf.modes);
   const capoMax = Number(shelf.capoMax) || 11;
+  // The viewer's instruments, each [id, name, whether it takes a capo]: on one that takes none, the key is the key
+  // the song sounds in (the data's ``at.sounds``), and the capo menu is off.
+  const instruments = listOf(shelf.instruments).filter((i) => Array.isArray(i) && i.length >= 3);
+  const takesCapo = (id) => {
+    const found = instruments.find((i) => String(i[0]) === id);
+    return !found || found[2] !== false;
+  };
   const titleOf = (text) => String(text).charAt(0).toUpperCase() + String(text).slice(1);
   const editSerial = { n: 0 };
   const lockBook = (on) => {
@@ -324,7 +331,7 @@
       } else {
         const chip = button(where, "plays" + (e.own ? "" : " set"), (ev) => edit(lineOf(ev), e),
           title + " plays in " + whose + ": change it");
-        chip.title = "Where this songbook plays it: its key, mode and capo";
+        chip.title = "Where this songbook plays it: its key, mode, capo and instrument";
         chip.setAttribute("aria-expanded", "false");
         if (e.pending) chip.disabled = true;
         slot.appendChild(chip);
@@ -769,7 +776,22 @@
     menu("Mode", "mode", modes.map((m) => [String(m[0]), String(m[1])]), String(at.mode || ""), keyless);
     const capos = [["0", "No capo"]];
     for (let n = 1; n <= capoMax; n += 1) capos.push([String(n), "Capo " + n]);
-    menu("Capo", "capo", capos, String(Number(at.capo) || 0), false);
+    const playsOn = String(at.inst || "guitar");  // the instrument it is played on now
+    menu("Capo", "capo", capos, String(Number(at.capo) || 0), !takesCapo(playsOn));
+    const keySelect = form.querySelector("select[name=key]");
+    const capoSelect = form.querySelector("select[name=capo]");
+    if (instruments.length > 1) {
+      menu("Instrument", "instrument", instruments.map((i) => [String(i[0]), String(i[1])]), playsOn, false);
+      // Another instrument: one with no capo plays the key the song sounds in, its capo menu off; back on one that
+      // takes a capo, the key and the capo it plays at now (those it sounds in, from an instrument that takes none)
+      form.querySelector("select[name=instrument]").addEventListener("change", (ev) => {
+        const chosen = ev.currentTarget.value;
+        const fromShapes = takesCapo(chosen) && takesCapo(playsOn);
+        if (!keyless) keySelect.value = String(keys[Number(fromShapes ? at.tonic : at.sounds)] || keySelect.value);
+        capoSelect.value = fromShapes ? String(Number(at.capo) || 0) : "0";
+        capoSelect.disabled = !takesCapo(chosen);
+      });
+    }
     const actions = el("div", "actions");
     const go = el("button", "btn small primary", "Play it here");
     go.type = "submit";
@@ -796,6 +818,7 @@
       ev.preventDefault();
       const body = fields(bookName, { song: e.entry });
       for (const [k, v] of new FormData(form).entries()) body.set(k, String(v));
+      if (body.get("instrument") === playsOn) body.delete("instrument");  // an instrument only once it changes
       close();
       if (chip) chip.focus();
       change("/songbook/set", body);

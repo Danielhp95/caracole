@@ -48,6 +48,7 @@ from caracole.viewer.page import (
     _page,
     _read_song,
     _song_html,
+    artist_line,
     viewer_csp,
 )
 from caracole.viewer.theory import Key, key_name
@@ -172,7 +173,7 @@ def _song(song: BookSong, n: int, total: int, prev: tuple[int, str] | None,
         + _pager("Songs", prev, nxt)
         + f'<p class="pos">Song {n} of {total}</p>\n'
         + f'<h2 class="title" id="title-{n}">{escape(song.title)}</h2>\n'
-        + (f'<p class="artist">{escape(song.artist)}</p>\n' if song.artist else "")
+        + artist_line(song.artist)
         + f'<p class="facts" id="facts-{n}">{_facts(key, origin, sheet.capo or 0)}</p>\n</header>\n'
         + _song_html(sheet, f"-{n}", song.title)
         + _pager("Songs, after the sheet", prev, nxt)  # at the end of a long sheet, no scrolling back up

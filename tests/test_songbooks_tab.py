@@ -102,7 +102,8 @@ class Fake:
         elif action == "set":
             said = dict(zip(options[::2], options[1::2]))
             setting = None if "--clear" in options else Setting(
-                said.get("--key"), said.get("--mode"), int(said["--capo"]) if "--capo" in said else None)
+                said.get("--key"), said.get("--mode"), int(said["--capo"]) if "--capo" in said else None,
+                said.get("--instrument"))
             set_song_setting(toml, name, others[0], setting)
         elif action == "rename":
             rename_songbook(toml, name, others[0])
@@ -397,7 +398,7 @@ def test_a_settings_chip_changes_that_songs_key_mode_and_capo(serve, cfg, librar
         page.click(f"{creep} .plays")
         # The menus start where it plays now: A, minor, no capo.
         assert page.js(f"""Array.from(document.querySelectorAll('{creep} .set-edit select'))
-            .map((s) => s.options[s.selectedIndex].textContent)""") == ["A", "Minor", "No capo"]
+            .map((s) => s.options[s.selectedIndex].textContent)""") == ["A", "Minor", "No capo", "Guitar"]
         page.js(f"""(() => {{ const form = document.querySelector('{creep} .set-edit');
             form.elements.key.value = 'G'; form.elements.mode.value = 'dorian'; form.elements.capo.value = '0'; }})()""")
         page.click(f"{creep} .set-edit button[type=submit]")
@@ -422,6 +423,44 @@ def test_a_settings_chip_changes_that_songs_key_mode_and_capo(serve, cfg, librar
         assert books_toml(cfg)[0].songs[0].setting is None
         page.js(STILL)
         assert page.js(MOVED) == [], page.js("window.shifts")
+
+
+def test_a_settings_chip_plays_that_song_on_another_instrument(serve, cfg, library, tmp_path):
+    # On an instrument with no capo the key is the key the song sounds in: G dorian at capo 2 is A dorian on the
+    # piano, its capo menu off; the instrument is sent once it changes
+    url, posted = serve(Fake(cfg))
+    creep = '#songbooks .set-line[data-entry="Radiohead - Creep"]'
+    chip = f"document.querySelector('{creep} .plays').textContent"
+    form = f"document.querySelector('{creep} .set-edit')"
+    with opened(tmp_path, 390, 844) as page:
+        page.open(url + CAMPFIRE)
+        page.click(f"{creep} .plays")
+        page.js(f"(() => {{ const f = {form}; f.elements.key.value = 'G'; f.elements.mode.value = 'dorian'; "
+                "f.elements.capo.value = '2'; })()")
+        page.click(f"{creep} .set-edit button[type=submit]")
+        assert page.wait(f"{chip} === 'G Dorian, capo 2'", timeout=20), page.js(chip)
+        assert not any("instrument" in fields for _, fields in posted)  # the guitar still: none sent
+        page.click(f"{creep} .plays")
+        page.js(f"(() => {{ const s = {form}.elements.instrument; s.value = 'piano'; "
+                "s.dispatchEvent(new Event('change')); })()")
+        assert page.js(f"[{form}.elements.key.value, {form}.elements.capo.disabled]") == ["A", True]
+        page.click(f"{creep} .set-edit button[type=submit]")
+        assert page.wait(f"{chip} === 'A Dorian, piano'", timeout=20), page.js(chip)
+        assert ("/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "key": "A", "mode": "dorian",
+                                  "instrument": "piano"}) in posted
+        assert books_toml(cfg)[0].songs[0].setting == Setting("A", "dorian", None, "piano")  # no capo sent
+        # its menus start there; back on a ukulele, which takes a capo, from the key it sounds in, with none
+        page.click(f"{creep} .plays")
+        assert page.js(f"""Array.from({form}.querySelectorAll('select'))
+            .map((s) => s.options[s.selectedIndex].textContent)""") == ["A", "Dorian", "No capo", "Piano"]
+        page.js(f"(() => {{ const s = {form}.elements.instrument; s.value = 'ukulele'; "
+                "s.dispatchEvent(new Event('change')); })()")
+        assert page.js(f"[{form}.elements.key.value, {form}.elements.capo.value, {form}.elements.capo.disabled]") == [
+            "A", "0", False]
+        page.click(f"{creep} .set-edit button[type=submit]")
+        assert page.wait(f"{chip} === 'A Dorian, ukulele'", timeout=20), page.js(chip)
+        assert books_toml(cfg)[0].songs[0].setting == Setting("A", "dorian", 0, "ukulele")
+        assert page.js("document.documentElement.scrollWidth <= innerWidth")
 
 
 def index(cfg, *songs):
@@ -578,7 +617,8 @@ def test_the_file_pages_commands_run_for_names_that_start_with_a_dash(conn, cfg,
     assert [parsed(line) for line in commands] == [
         (("songbook", "add"), {"name": name, "songs": ("ARTIST - TITLE",)}),
         (("songbook", "move"), {"name": name, "song": song, "position": 2}),
-        (("songbook", "set"), {"name": name, "song": song, "key": "G", "mode": "dorian", "capo": 0, "clear": False}),
+        (("songbook", "set"), {"name": name, "song": song, "key": "G", "mode": "dorian", "capo": 0, "instrument": None,
+                                  "clear": False}),
         (("songbook", "remove"), {"name": name, "songs": (song,)}),
         (("songbook", "rename"), {"name": name, "new": "NEW NAME"}),
         (("songbook", "delete"), {"name": name})], commands

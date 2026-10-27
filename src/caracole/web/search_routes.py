@@ -101,7 +101,7 @@ query LaCuerda reads no word of, or that LaCuerda's index answers well (a
 strong song, or the artist the query names, whose page caracole has read);
 else its ``state``, ``auto`` (the library page and the lookup page send it by
 themselves once the query has settled), ``button`` (the share of the hour's
-lookups such searches have is spent: the page offers Search LaCuerda, which
+lookups such searches have is spent: the page offers Ask LaCuerda, which
 asks by hand), ``failed`` (its search failed within the hour, or three did:
 the page says ``why`` and offers the button), ``asked`` (within 30 days) or
 ``spent`` (a cooldown, or the hour's lookups to LaCuerda), with the ``query``
@@ -870,10 +870,10 @@ def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> R
         raise Refused(429, "Not now", "LaCuerda is cooling down after a block, or this hour's lookups to it are "
                                       "spent: ask again later.")
     if said["state"] == "failed" and not by_hand:
-        raise Refused(429, "Not by itself", f"{said['why'].removesuffix('.')}: press Search LaCuerda to ask anyway.")
+        raise Refused(429, "Not by itself", f"{said['why'].removesuffix('.')}: press Ask LaCuerda to ask anyway.")
     if said["state"] == "button" and not by_hand:
         raise Refused(429, "Not by itself", f"This hour's {SEARCHES_PER_HOUR} searches the page sends by itself are "
-                                            "spent: press Search LaCuerda to ask anyway.")
+                                            "spent: press Ask LaCuerda to ask anyway.")
     job, _ = app.submit(f"Search LaCuerda for “{q}”", LACUERDA_SEARCH + said["key"],
                         lacuerda_search_steps(q, auto=not by_hand), display=f"“{q}” on LaCuerda")
     with app._searching:

@@ -1132,6 +1132,12 @@
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
   };
+  // The key of the artist named ``name`` (their sortArtist): the songs' artist as written, else as fold reads it.
+  const artistKey = (name) => {
+    const s = songs.find((song) => String(song.artist) === name) ||
+      songs.find((song) => fold(String(song.artist)) === fold(name));
+    return s ? String(s.sortArtist || "") : "";
+  };
   // What the address says of the list (save() writes it): what the page opens on, and what Back brings again.
   const addressed = () => {
     const at = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
@@ -1144,6 +1150,21 @@
       if (keyGroup(params.get("key"))) at.key = keyGroup(params.get("key")).value;  // any spelling of it
       at.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
       at.all = params.get("all") === "1" && sitesCan(at.q) && (!server || typedEnough(at.q));
+      // by: an artist's name, as a sheet viewer's artist line links here (viewer/page.py artist_line), for what
+      // pressing their name here does: served, the search for them (searchFor's, which asks no site); from a file and
+      // in the Android app's copy, which can't search the sites, their songs alone (the funnel's), else the songs the
+      // name finds. Read once: the page then writes its own address for it (``cameBy``, below).
+      const by = normal(params.get("by") || "");
+      if (by && !at.q && !at.artist && !at.prog) {
+        if (server) {
+          at.q = by;
+          at.all = searchesAsYouType(by);
+        } else if (artistKey(by)) {
+          at.artist = artistKey(by);
+        } else {
+          at.q = by;
+        }
+      }
     } catch (err) {
       // A malformed address: the defaults.
     }
@@ -1518,9 +1539,9 @@
   // until it comes. Enter moves the focus to the first result: it never asks for a song, only a result's Get it
   // does. LaCuerda's own search, which finds the songs of artists whose page caracole hasn't read, is one request:
   // sent by itself once the query has settled, when /api/search says so (``lacuerda_search``), at once by Enter
-  // when its gate sends one, or offered as a button, a line under the results (rows.js lacuerdaSearcher, lcBox); its
-  // rows come in a new answer once it is over. On the file, which can ask nothing, Enter shows the line that
-  // searches the sites.
+  // when its gate sends one, or offered as a button, a line under the results (rows.js lacuerdaSearcher, lcBox), or by
+  // Ask LaCuerda's, the one LaCuerda button, where the results offer a name's page too; its rows come in a new answer
+  // once it is over. On the file, which can ask nothing, Enter shows the line that searches the sites.
   const say = (text) => {
     if (barStatus.textContent === text) return;
     barStatus.textContent = text;
@@ -2027,12 +2048,18 @@
   // Under the groups, what the search says beside them (rows.js): for a query that found nothing (``nothing``), one card,
   // its request by name first, then Ask LaCuerda for a name under a letter its listings don't reach yet, where caracole
   // looked, and why it may not see an artist; under results, where it looked in one muted line, when a site wasn't
-  // searched whole. Each made once an answer, Ask LaCuerda's state kept from one draw to the next.
+  // searched whole. Each made once an answer, Ask LaCuerda's state kept from one draw to the next. Ask LaCuerda is the
+  // one LaCuerda button: it sends LaCuerda's search while its gate lets one go by hand (the searcher's ``ask``), else
+  // reads the name's page.
   const notesOf = (model, nothing) => {
     const data = Object.assign({}, answer.data, { lacuerda_unlisted: model.unlisted });
+    const q = answer.q;
     const does = {
       request: requestByName,
-      ask: (go, box) => readThenShow({ name: String(model.unlisted.name || "") }, go, box, readByName(model)),
+      ask: (go, box) => {
+        if (searcher && searcher.ask(q, go)) return;
+        readThenShow({ name: String(model.unlisted.name || "") }, go, box, readByName(model));
+      },
     };
     if (nothing) {
       if (!model.card) model.card = nothingFound(data, answer.q, does);
@@ -2138,7 +2165,8 @@
     }
     drawGroups();
     if (going.size) settleSpots(true);
-    const lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q) : null;  // sent, if Enter came first
+    // Sent, if Enter came first; with no button of its own beside Ask LaCuerda's, which sends it then.
+    const lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q, Boolean(answer.model.unlisted)) : null;
     lcBox.replaceChildren(...(lcLine ? [lcLine] : []));
     if (data.short) {
       say("Type three letters or more to search the sites");
@@ -2807,6 +2835,15 @@
   }
   summarize();
   render();
+  // Come from a sheet's artist line (#by=): the address the page writes for what it shows, in place of the link's, with
+  // no step of its own, so Back goes to the sheet and a reload or a bookmark keeps the search, or the artist's songs.
+  let cameBy = false;
+  try {
+    cameBy = new URLSearchParams(location.hash.slice(1)).has("by");
+  } catch (err) {
+    // A malformed address: nothing to write again.
+  }
+  if (cameBy) save();
   // Back from a page of caracole serve's about a song (Remove's question): its line in view, and the focus
   // on it, as the A-Z strip leaves a group; the address keeps the rest. In the next frame, once every script
   // has drawn what it draws (the Songbooks tab, shown as it was left).

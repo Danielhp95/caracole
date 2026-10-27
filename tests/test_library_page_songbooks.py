@@ -68,7 +68,7 @@ def test_each_songbook_is_data_with_its_songs_and_its_files(library):
         (3, "De Música Ligera", "Soda Stereo", "Soda Stereo - De Música Ligera")]
     creep, hysteria, _ = songs
     assert creep["plays"] == "A Minor" and creep["own"] and creep["missing"] is None  # no capo: none said
-    assert creep["at"] == {"tonic": 9, "mode": "aeolian", "capo": 0}  # where it plays: the theory's, as data
+    assert creep["at"] == {"tonic": 9, "mode": "aeolian", "capo": 0, "sounds": 9, "inst": "guitar"}  # the theory's
     assert creep["href"] == "Radiohead/Creep/sheet.html" and creep["get"] is False
     assert creep["key"] == "radiohead/creep"  # its identity key: a search's result is known in it by it
     assert (hysteria["missing"], hysteria["plays"], hysteria["at"], hysteria["href"]) == ("no sheet yet", None, None,
@@ -83,10 +83,17 @@ def test_a_songs_setting_says_where_the_songbook_plays_it(library):
     set_song_setting(songbooks_file(cfg.library_dir), "Campfire", "Radiohead - Creep", Setting("G", "dorian", 0))
     creep = books_of(page(conn, cfg))[0]["set"][0]
     assert creep["plays"] == "G Dorian" and not creep["own"]  # never "G Dorian, capo 0"
-    assert creep["at"] == {"tonic": 7, "mode": "dorian", "capo": 0}
+    assert creep["at"] == {"tonic": 7, "mode": "dorian", "capo": 0, "sounds": 7, "inst": "guitar"}
     set_song_setting(songbooks_file(cfg.library_dir), "Campfire", "Radiohead - Creep", Setting("G", "dorian", 2))
     creep = books_of(page(conn, cfg))[0]["set"][0]
-    assert creep["plays"] == "G Dorian, capo 2" and creep["at"] == {"tonic": 7, "mode": "dorian", "capo": 2}
+    assert creep["plays"] == "G Dorian, capo 2"
+    assert creep["at"] == {"tonic": 7, "mode": "dorian", "capo": 2, "sounds": 9, "inst": "guitar"}  # sounds A
+    # on an instrument with no capo: the key it sounds in, no capo
+    set_song_setting(songbooks_file(cfg.library_dir), "Campfire", "Radiohead - Creep",
+                     Setting(mode="dorian", capo=2, instrument="piano"))
+    creep = books_of(page(conn, cfg))[0]["set"][0]
+    assert creep["plays"] == "A Dorian, piano"
+    assert creep["at"] == {"tonic": 9, "mode": "dorian", "capo": 0, "sounds": 9, "inst": "piano"}
 
 
 def test_the_data_offers_the_keys_modes_and_capos_a_setting_takes(library):
@@ -95,6 +102,8 @@ def test_the_data_offers_the_keys_modes_and_capos_a_setting_takes(library):
     assert shown["keys"] == ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
     assert shown["modes"][:2] == [["ionian", "Major"], ["dorian", "Dorian"]] and len(shown["modes"]) == 7
     assert shown["capoMax"] == 11 and shown["error"] is None
+    assert shown["instruments"][:2] == [["guitar", "Guitar", True], ["ukulele", "Ukulele", True]]
+    assert ["piano", "Piano", False] in shown["instruments"] and ["harmonica", "Harmonica", False] in shown["instruments"]
 
 
 def test_a_song_gone_from_the_library_is_missing_with_no_id(conn, cfg):

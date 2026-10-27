@@ -2463,3 +2463,60 @@ def test_a_bug_placing_my_version_on_a_sheet_leaves_it_as_written_and_says_why(c
     assert viewer_data(viewer_of(cfg, song))["start"] == "t=0"
     assert "Soda Stereo - De Música Ligera: cannot place it in its own version" in caplog.text
     assert "Traceback" in caplog.text and "a bug in the viewer's theory" in caplog.text
+
+
+# --- on another instrument ---------------------------------------------------------------------------
+
+def test_an_export_on_another_instrument_is_named_by_it_and_played_there(conn, cfg):
+    from caracole.render import EXPORT_KV
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm", meta={"capo": 2})  # Gm shapes, capo 2: sounds Am
+    render(conn, cfg)
+    sheet_pdf = pdf_of(cfg, song).read_bytes()
+    path, run = export(conn, cfg, song, "inst=piano")
+    assert path == pdf_of(cfg, song, "sheet (A Minor, piano).pdf")
+    printed = run.printed[-1].decode("utf-8")
+    assert printed.startswith("##config: json\n# ") and '"type": "keyboard"' in printed
+    assert "[Am]Una canción de [F]prueba" in printed and "{define: Am keys " in printed
+    assert "{subtitle: Soda Stereo · Piano · Key Am}" in printed.splitlines()
+    uke, run = export(conn, cfg, song, "t=0&inst=ukulele")
+    assert uke == pdf_of(cfg, song, "sheet (G Minor, capo 2, ukulele).pdf")
+    assert '"tuning": ["G4", "C4", "E4", "A4"]' in run.printed[-1].decode("utf-8")
+    harp, run = export(conn, cfg, song, "inst=harmonica")
+    assert harp.name == "sheet (A Minor, harmonica).pdf" and "Harmonica: " in run.printed[-1].decode("utf-8")
+    # each kept by its query, its instrument and all, as a render pass makes it again
+    record = kv_get_json(conn, f"{EXPORT_KV}{song.id}")
+    assert record["A Minor, piano"]["query"] == "t=0&inst=piano"
+    assert record["G Minor, capo 2, ukulele"]["query"] == "t=0&inst=ukulele"
+    assert pdf_of(cfg, song).read_bytes() == sheet_pdf  # the sheet's own PDF is the guitar's, as it was
+    run = FakeChordPro()
+    render(conn, cfg, force=True, runner=run)
+    assert any(b'"type": "keyboard"' in p for p in run.printed) and any(b'"tuning"' in p for p in run.printed)
+
+
+def test_my_version_on_another_instrument_opens_its_viewer_there_and_its_pdf_stays_the_guitars(conn, cfg):
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    mine = overrides(cfg, '[version]\n"Soda Stereo - De Música Ligera" = "key=Am&capo=0&inst=piano"\n')
+    run = FakeChordPro()
+    assert render(conn, cfg, mine, runner=run).rendered == 1
+    printed = pdf_of(cfg, song).read_bytes().decode("utf-8")
+    assert "[Am]Una canción de [F]prueba" in printed and "##config" not in printed and "Piano" not in printed
+    assert viewer_data(viewer_of(cfg, song))["start"] == "t=2&capo=0&inst=piano"
+
+
+def test_an_export_names_its_instrument_or_takes_the_songs_own(conn, cfg):
+    from caracole.render import export_sheet, export_version
+    from caracole.viewer.version import Version
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, song, GM_SHEET, tonality="Gm")
+    own = export_sheet(conn, cfg, song).own(
+        overrides(cfg, '[version]\n"Soda Stereo - De Música Ligera" = "key=Am&capo=0&inst=piano"\n'))
+    assert own == Version(t=2, capo=0, inst="piano")
+    assert export_version("", own) == own  # the viewer opens it on the piano
+    assert export_version("inst=ukulele", own) == Version(t=2, capo=0, inst="ukulele")
+    assert export_version("inst=guitar", own) == Version(t=2, capo=0)  # the guitar, asked for by name
+    assert export_version("t=2&capo=0", own) == Version(t=2, capo=0)  # a version and no instrument: the guitar
+    assert export_version("t=1&inst=piano", own) == Version(t=1, inst="piano")
