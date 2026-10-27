@@ -49,6 +49,7 @@ SHEET_PAGE = "sheet.html"  # the chosen version's viewer page, render.py's
 NOTE_LENGTH = 200
 SAME_KV = "sheet_versions:same:"  # + song id: the versions whose text is a kept one's, and its page
 YOURS_KV = "sheet_versions:yours:"  # + song id: the versions you kept (caracole versions --keep)
+UNKEEPABLE_KV = "sheet_versions:unkeepable:"  # + song id: the versions a keep found it can't keep
 
 _NAME = re.compile(rf"{re.escape(PREFIX)}([0-9]+)\.(?:txt|json|html)")
 
@@ -249,6 +250,37 @@ def note_kept_by_you(conn: sqlite3.Connection, song_id: int, tab_id: str) -> Non
     tabs = kept_by_you(conn, song_id)
     if str(tab_id) not in tabs:
         kv_set_json(conn, yours_key(song_id), [*tabs, str(tab_id)])
+
+
+def unkeepable_key(song_id: int) -> str:
+    return f"{UNKEEPABLE_KV}{song_id}"
+
+
+def unkeepable(conn: sqlite3.Connection, song_id: int) -> tuple[str, ...]:
+    """The tabs a keep (``caracole versions --keep``, ``--keep-more``) read and found it can't keep: no sheet text
+    on their page, or the very text of another file kept in the song's folder. A page that won't parse isn't one:
+    it waits, as any does."""
+    record = kv_get_json(conn, unkeepable_key(song_id), default=[])
+    return tuple(str(t) for t in record) if isinstance(record, list) else ()
+
+
+def note_unkeepable(conn: sqlite3.Connection, song_id: int, tab_id: str | int) -> None:
+    tabs = unkeepable(conn, song_id)
+    if str(tab_id) not in tabs:
+        kv_set_json(conn, unkeepable_key(song_id), [*tabs, str(tab_id)])
+
+
+def may_keep(conn: sqlite3.Connection, song_id: int, versions: Sequence[SheetVersion],
+             block: Collection[int]) -> list[SheetVersion]:
+    """The song's versions (``in_library``'s) a keep may still keep beside its sheet, in their order: neither kept
+    nor the one nor gone, not under ``[block]`` (``block``), not at an address robots.txt closes, and none a keep
+    found it can't keep (``unkeepable``). What the library page counts as not kept, and ``--keep-more`` keeps."""
+    from caracole.http import robots_disallows
+
+    cannot = set(unkeepable(conn, song_id))
+    return [v for v in versions
+            if not (v.kept or v.chosen or v.gone) and int(v.tab_id) not in block and v.tab_id not in cannot
+            and robots_disallows(v.url) is None]
 
 
 def sheet_pins(conn: sqlite3.Connection, song_id: int, pins: Sequence[int]) -> list[int]:

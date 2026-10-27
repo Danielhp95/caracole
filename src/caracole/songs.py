@@ -58,7 +58,7 @@ _WANTED = "wanted"  # wanted.SOURCE: a line's source id is its identity key
 _PER_SONG_KV = ("render:", "render:files:", "render:export:", "render:progressions:", "ug:artist_page_checked:",
                 "autochords:failed:", "gtptabs:checked:", "harptabs:checked:", "ug:blocked:", "youtube:",
                 "sheet_versions:same:",
-                "sheet_versions:yours:")
+                "sheet_versions:yours:", "sheet_versions:unkeepable:")
 
 
 def utc_now_iso() -> str:

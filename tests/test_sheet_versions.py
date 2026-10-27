@@ -197,3 +197,44 @@ def test_with_no_chords_the_ukulele_versions_are_listed(conn):
 
     assert tabs(song_sheet_versions(conn, song.id, POLICY, chosen_tab=None, kept_tabs=())) == ["301"]
     assert sheet_kind(conn, song.id) == "chords"  # no sheet kept yet
+
+
+def test_may_keep_is_every_version_a_keep_may_still_keep_in_rank_order(conn):
+    from caracole.sheet_versions import may_keep, note_unkeepable
+
+    song = add_song(conn, "Oasis", "Wonderwall")
+    ids = {tab: chords(conn, song.id, tab, rating=4.9 - n / 10, votes=100)
+           for n, tab in enumerate(("10", "20", "30", "40", "50", "60", "70"))}
+    gone = ids["50"]
+    mark_gone(conn, gone)
+    note_unkeepable(conn, song.id, "60")  # a keep found it had no text, or another kept file's very text
+    versions = song_sheet_versions(conn, song.id, POLICY, chosen_tab="20", kept_tabs=["10"])
+
+    left = may_keep(conn, song.id, versions, block={40})
+
+    assert tabs(left) == ["30", "70"]  # not kept, not the one, not under [block], not gone, not unkeepable
+
+
+def test_may_keep_leaves_out_a_version_robots_txt_closes(conn):
+    from caracole.sheet_versions import may_keep
+
+    song = add_song(conn, "Oasis", "Wonderwall")
+    chords(conn, song.id, "10")
+    vid = chords(conn, song.id, "20")
+    conn.execute("UPDATE versions SET url = ? WHERE id = ?",
+                 ("https://www.ultimate-guitar.com/tab-pro/download?id=20", vid))
+    versions = song_sheet_versions(conn, song.id, POLICY, chosen_tab=None, kept_tabs=())
+
+    assert tabs(may_keep(conn, song.id, versions, block=())) == ["10"]
+
+
+def test_unkeepable_versions_are_noted_once_and_go_with_the_song(conn):
+    from caracole.sheet_versions import UNKEEPABLE_KV, note_unkeepable, unkeepable
+    from caracole.songs import _PER_SONG_KV
+
+    song = add_song(conn, "Oasis", "Wonderwall")
+    note_unkeepable(conn, song.id, "60")
+    note_unkeepable(conn, song.id, 60)
+
+    assert unkeepable(conn, song.id) == ("60",)
+    assert UNKEEPABLE_KV in _PER_SONG_KV  # a merge or a removal deletes it
