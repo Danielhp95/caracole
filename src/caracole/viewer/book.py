@@ -19,7 +19,7 @@ they go to, a swipe or the arrow keys go from song to song, skipping the missing
 each step reloads the page, so the viewer starts afresh on each song.
 
 The page is self-contained and loads nothing, as a sheet.html: a Content-Security-Policy
-with the hashes of its four scripts (book.js, the viewer's strum.js, instruments.js and viewer.js) and
+with the hashes of its five scripts (book.js, the viewer's strum.js, instruments.js, winds.js and viewer.js) and
 two stylesheets. A server serves it only while it is the page caracole wrote, with
 ``songbook_csp(page)``.
 """
@@ -41,6 +41,7 @@ from caracole.viewer.page import (
     LIBRARY_PAGE,
     _assets,
     _instruments,
+    _winds,
     _sound,
     _facts,
     _footer,
@@ -106,6 +107,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
     playable = [(n, song.title) for n, song in enumerate(songs, start=1) if song.cho is not None]
     voicings: dict[str, Any] = {}
     easy: dict[str, Any] | None = None  # every song's alike: one block for the page
+    wind_facts: dict[str, Any] | None = None  # so are the winds' fingerings and the harps' notes
     sections = []
     about: dict[int, str] = {}
     for i, (n, _) in enumerate(playable):
@@ -114,6 +116,7 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         html, data, about[n] = _song(songs[n - 1], n, len(songs), prev, nxt)
         voicings.update(data.pop("voicings"))
         easy = data.pop("easy", easy)
+        wind_facts = data.pop("winds", wind_facts)
         sections.append(html + json_block(f"data-{n}", data) + "</section>\n")
     count = f"{len(songs)} song{'' if len(songs) == 1 else 's'}"
     files = "".join(f'<a class="pdf" href="{escape(quote(f))}">{label}</a>\n'
@@ -126,12 +129,13 @@ def build_songbook(name: str, songs: list[BookSong], *, pdf: str | None = None, 
         + "".join(sections)
         + json_block("voicings", voicings)
         + (json_block("easy", easy) if easy is not None else "")
+        + (json_block("winds", wind_facts) if wind_facts is not None else "")
         + _footer(files)
         + "</div>\n"
         + _CONTROLS
     )
     return _page(f"{name} · songbook", body, styles=(style, book_style),
-                 scripts=(book_script, _sound(), _instruments(), script))
+                 scripts=(book_script, _sound(), _instruments(), _winds(), script))
 
 
 def _contents(songs: list[BookSong], about: dict[int, str], files: str) -> str:

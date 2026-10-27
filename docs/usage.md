@@ -2156,9 +2156,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the card shows, with the capo where it is, low string to high, in standard
   tuning, or on the instrument chosen (below): a ukulele's strings from the
   4th to the 1st, shorter and softer, in its own tuning; a piano's notes
-  struck together, the bass with them. The sound is made in the browser (a
-  plucked string, or a piano's string, synthesized: no recording, nothing
-  loaded), so it works from the synced folder and from `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
+  struck together, the bass with them; a harmonica's holes for the chord
+  blown or drawn together, on the harp chosen; a flute's or a recorder's
+  notes of the chord one after another. The sound is made in the browser (a
+  plucked string, a piano's string, a reed or a flute's breath, synthesized:
+  no recording, nothing loaded), so it works from the synced folder and from `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
   time, and the page falls silent when you switch away from it; the next tap
   plays again. **Sound**, in the settings, sets the volume: Off, Soft,
   Medium (the default) or Loud. With it off, a tap opens the card alone. A
@@ -2197,12 +2199,15 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
-  "Key Em". Each says where the key came from. On the piano, which takes no
-  capo, it names the key the song sounds in ("Key F#m"), and the chords are
-  named as they sound (F#m, not Em): the guitar's capo comes back with the
-  guitar.
+  "Key Em". Each says where the key came from. On the piano, the harmonica,
+  the flute and the recorder, which take no capo, it names the key the song
+  sounds in ("Key F#m"), and the chords are named as they sound (F#m, not
+  Em): the guitar's capo comes back with the guitar. On the harmonica a
+  second line names the harps for the song, each in its position: "Harmonica:
+  G harp (1st position) · C harp (2nd)" (below).
 - **Instrument**, in the settings: Guitar (the default), Ukulele (G C E A, the
-  G string high), Ukulele, low G, Baritone ukulele (D G B E) and Piano. It
+  G string high), Ukulele, low G, Baritone ukulele (D G B E), Piano,
+  Harmonica, Flute and Recorder. It
   changes how every chord is drawn and heard, never the song: the chord names
   stay, each drawn its own way. A ukulele's chords are four-string boxes, up to
   four shapes each, from chords-db's ukulele data (MIT, as the guitar's);
@@ -2218,9 +2223,35 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   the first and second inversions (‹ ›), the right hand around middle C and
   the bass, the root or a slash chord's, for the left hand below it. The rail
   of necks (below) draws a ukulele's four strings, and the piano has none.
+  The **Harmonica** is a 10-hole diatonic harp in Richter tuning. The key line
+  names the harps that play the song, two or three, best first, each with its
+  position, numbered round the circle of fifths (1st: the harp in the song's
+  key; 2nd, "cross harp": a harp a fourth above the song; 3rd, "slant harp": a
+  whole tone below; and the mode the harp plays in from the 3rd on: "E harp
+  (3rd position, dorian)"). A song in a major key lists the 1st position, then
+  the 2nd; a song in another mode, the positions that suit it (the 3rd, 4th
+  and 5th for a minor one), those that play the most of its chords first. Its
+  row in the settings, **Harp**, picks one of them, and lists each chord on it:
+  the holes that play it on one breath ("draw 2–5"), the chord without its
+  seventh or ninth where the harp has only that ("blow 1–3 (as C)"), the minor
+  chord a harp plays for a major one it lacks ("draw 4–6 (as Dm, minor
+  substitute)"), or "not on this harp"; and the song's harmonica tabs from
+  harptabs.com, a link each, with the harp's key its page named. A chord's card
+  and the strip draw the harp's ten holes, those it plays lit. The **Flute**
+  (concert pitch) and the **Recorder** (soprano, sounding an octave above the
+  notes it reads) show each chord's notes, each with its fingering: on the
+  card, and in their row with the key's scale. That row switches the note
+  names between A–G and Do–Si, and the recorder's fingering between baroque
+  and German (they differ on F, F# and G#); the browser keeps both for every
+  page. A flute's fingering shows the thumb's two keys at the top left, the
+  left hand's three fingers and G# key, then the right hand's, with the trill
+  keys, the E♭ key and the foot's C# and C; a recorder's, the thumb (half
+  filled: pinched), the seven holes (the last two double) and the bell. None
+  of the three takes a capo, and the harps follow Transpose.
   Like the rail of necks, the choice is the player's, not a song's: the
   browser keeps it once for every sheet and songbook, and the address keeps
-  `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`) while it is another
+  `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`, `harmonica`, `flute`,
+  `recorder`) while it is another
   than the guitar, for a page served by `caracole serve`; ‹ and › to another
   version keep it, and so does every step to another song in a songbook.
   **Reset everything** leaves it as it is.

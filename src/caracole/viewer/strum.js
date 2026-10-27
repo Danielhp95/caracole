@@ -1,11 +1,14 @@
 (() => {
   "use strict";
-  // Hear a chord: a voicing strummed in the browser, on the guitar, a ukulele or the piano, for the sheet viewer
-  // and a songbook (viewer.js calls it; it runs before viewer.js). A plucked-string synthesis (Karplus-Strong: a
-  // burst of noise fed back through a delay a period long, softened a little each time round) makes each string's
-  // note into an AudioBuffer, and a piano's note is a sum of decaying partials, each a damped resonator, struck
-  // together as a block chord (VOICES: each instrument's sound). Web Audio plays them. No sample, no worklet,
-  // nothing loaded: the page's policy needs no new source, from a file or in a server's sandbox alike.
+  // Hear a chord: a voicing strummed in the browser, on the guitar, a ukulele or the piano, or blown on a harmonica,
+  // a flute or a recorder, for the sheet viewer and a songbook (viewer.js calls it; it runs before viewer.js). A
+  // plucked-string synthesis (Karplus-Strong: a burst of noise fed back through a delay a period long, softened a
+  // little each time round) makes each string's note into an AudioBuffer; a piano's note is a sum of decaying
+  // partials, each a damped resonator, struck together as a block chord; a wind's, its harmonics swelling in and
+  // held with a breath of noise, a free reed's bright and a harmonica's chord blown at once, a flute's and a
+  // recorder's soft, their notes one after the other (VOICES: each instrument's sound). Web Audio plays them. No
+  // sample, no worklet, nothing loaded: the page's policy needs no new source, from a file or in a server's sandbox
+  // alike.
   //
   // Never on its own: the AudioContext is made on the first tap that asks for a sound (a user gesture,
   // navigator.userActivation), and a context suspended (by this script once the page is hidden, or after
@@ -35,7 +38,9 @@
   //   strum(position, {capo, tuning, voice})
   //                                strums it now, string by string (a piano's struck together); ``voice`` the
   //                                instrument's sound, one of ``voices`` (data.instruments' voice: "guitar", the
-  //                                default; "ukulele", a shorter, softer ring; "piano"); false when nothing sounds
+  //                                default; "ukulele", a shorter, softer ring; "piano"; "reed", a harmonica's, its
+  //                                holes blown or drawn together; "flute" and "recorder", note after note); false
+  //                                when nothing sounds
   //                                (no tap asked, no Web Audio, the volume off, a position with no string played)
   //   play(chords, {bpm, beats, every, onChord, onEnd})
   //                                plays a progression, a chord a bar: ``chords`` lists
@@ -53,6 +58,9 @@
   //                                one plucked note's samples (a Float32Array), as a buffer holds them (``voice``:
   //                                "guitar" unless given)
   //   strike(hz, rate, seconds)    one piano note's samples, likewise
+  //   blow(hz, rate, seconds, voice)
+  //                                one wind's note's samples, likewise (``voice``: "reed", "flute", "recorder";
+  //                                "flute" unless given)
   //   voices                       the voices it has, by name
   //   available                    whether this browser has Web Audio
   //
@@ -71,12 +79,22 @@
   // period back. 0.5 (Karplus and Strong's average) dulls a note within half a second; less rings brighter.
   const BLEND = 0.3;
   // Each instrument's sound: a plucked string ("pluck": its loss, ``blend``, its ring, ``ring`` times the guitar's,
-  // its strum's ``gap``) or a struck piano string ("strike": every note at once), each note at ``level``. The
-  // ukulele's nylon rings shorter and duller, strummed a little slower.
+  // its strum's ``gap``), a struck piano string ("strike": every note at once) or a wind ("blow": its harmonics'
+  // levels, ``partials``, the fundamental's first, swelling in over ``attack`` seconds, held, dying away over
+  // ``release``, with ``breath`` of noise and ``vibrato``, its pitch's waver once held, as a share of it), each note
+  // at ``level``. The ukulele's nylon rings shorter and duller, strummed a little slower. A harmonica's free reeds
+  // are bright, every harmonic there, the odd ones stronger, its holes sounding at once; a flute is nearly pure,
+  // breathy and wavering, a recorder purer still and steady, each playing a chord's notes one after another.
   const VOICES = Object.freeze({
     guitar: Object.freeze({ kind: "pluck", blend: BLEND, ring: 1, gap: GAP, level: LEVEL }),
     ukulele: Object.freeze({ kind: "pluck", blend: 0.42, ring: 0.45, gap: 0.03, level: LEVEL }),
     piano: Object.freeze({ kind: "strike", gap: 0, level: 0.24 }),
+    reed: Object.freeze({ kind: "blow", gap: 0, level: 0.16, attack: 0.03, release: 0.25, breath: 0.015, vibrato: 0,
+      partials: Object.freeze([1, 0.5, 0.62, 0.3, 0.4, 0.2, 0.24, 0.12, 0.14, 0.07]) }),
+    flute: Object.freeze({ kind: "blow", gap: 0.12, level: 0.26, attack: 0.07, release: 0.3, breath: 0.05,
+      vibrato: 0.004, partials: Object.freeze([1, 0.26, 0.09, 0.035]) }),
+    recorder: Object.freeze({ kind: "blow", gap: 0.12, level: 0.24, attack: 0.04, release: 0.2, breath: 0.025,
+      vibrato: 0, partials: Object.freeze([1, 0.12, 0.05]) }),
   });
   const voiceOf = (name) => (Object.prototype.hasOwnProperty.call(VOICES, name) ? name : "guitar");
   const Context = window.AudioContext || window.webkitAudioContext || null;
@@ -176,6 +194,40 @@
     return s;
   };
 
+  // A wind's note: its harmonics (``partials``: each a sine at that multiple of the note, none past the buffer's
+  // highest), with breath (noise, softened by a one-pole low pass), swelling in over ``attack``, held, then dying
+  // away over ``release`` before the last 150 ms fade it out; a flute's pitch wavers ``vibrato`` of itself, five
+  // times a second, from half a second in, as a player's breath does once the note is set. Never past full scale.
+  const VIBRATO_FROM = 0.5, VIBRATO_HZ = 5.2;
+  const blow = (frequency, rate, seconds, voice) => {
+    const name = voiceOf(voice);
+    const v = VOICES[name].kind === "blow" ? VOICES[name] : VOICES.flute;
+    const length = Math.max(1, Math.round(rate * seconds));
+    const s = new Float32Array(length);
+    const partials = v.partials.filter((_, k) => (k + 1) * frequency < rate * 0.45);
+    const fadeOut = Math.min(length, Math.round(rate * 0.15));
+    const release = Math.min(v.release, seconds * 0.3);
+    const held = Math.max(0, seconds - 0.15 - release);  // seconds from the start to the release
+    let phase = 0, low = 0;
+    for (let i = 0; i < length; i++) {
+      const time = i / rate;
+      const swell = Math.min(1, (time - VIBRATO_FROM) / 0.4);
+      const waver = v.vibrato && time > VIBRATO_FROM ? 1 + v.vibrato * swell * Math.sin(2 * Math.PI * VIBRATO_HZ * time) : 1;
+      phase += (2 * Math.PI * frequency * waver) / rate;
+      let sum = 0;
+      for (let k = 0; k < partials.length; k++) sum += partials[k] * Math.sin((k + 1) * phase);
+      low += 0.2 * (Math.random() * 2 - 1 - low);
+      const envelope = time < v.attack ? Math.sin((Math.PI / 2) * (time / v.attack))
+        : time < held ? 1 : Math.max(0, 1 - (time - held) / release);
+      s[i] = envelope * (sum + v.breath * low * 4);
+    }
+    let top = 0;
+    for (let i = 0; i < length; i++) top = Math.max(top, Math.abs(s[i]));
+    if (top > 0) for (let i = 0; i < length; i++) s[i] /= top;
+    for (let i = 0; i < fadeOut; i++) s[length - 1 - i] *= i / fadeOut;
+    return s;
+  };
+
   // A note's buffer in a voice, kept for the next strum of it (a progression strums the same notes again and again).
   const buffers = new Map();
   const bufferOf = (midi, voice) => {
@@ -184,8 +236,10 @@
     let buffer = buffers.get(key);
     if (!buffer) {
       buffer = context.createBuffer(1, Math.round(context.sampleRate * RING), context.sampleRate);
-      buffer.getChannelData(0).set(VOICES[name].kind === "strike" ? strike(hz(midi), context.sampleRate, RING)
-        : pluck(hz(midi), context.sampleRate, RING, name));
+      const kind = VOICES[name].kind;
+      buffer.getChannelData(0).set(kind === "strike" ? strike(hz(midi), context.sampleRate, RING)
+        : kind === "blow" ? blow(hz(midi), context.sampleRate, RING, name)
+          : pluck(hz(midi), context.sampleRate, RING, name));
       if (buffers.size >= 48) buffers.delete(buffers.keys().next().value);
       buffers.set(key, buffer);
     }
@@ -307,7 +361,7 @@
     }
   };
   // A strum at ``at`` in a voice, string by string in their order (``up``: the other way), its notes ``gap`` apart (none
-  // on the piano), the sounds before it stopped as it begins.
+  // on the piano or a harmonica), the sounds before it stopped as it begins.
   const sound = (midis, at, level, up, voice) => {
     const v = VOICES[voiceOf(voice)];
     const order = up ? midis.slice().reverse() : midis;
@@ -463,7 +517,7 @@
   window.addEventListener("pagehide", hush);
 
   window.caracoleSound = Object.freeze({
-    notes, frequencies, strum, play, stop, setVolume, pluck, strike, voices: Object.freeze(Object.keys(VOICES)),
+    notes, frequencies, strum, play, stop, setVolume, pluck, strike, blow, voices: Object.freeze(Object.keys(VOICES)),
     available: Boolean(Context),
   });
 })();
