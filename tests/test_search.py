@@ -3,10 +3,10 @@ import random
 import re
 import socket
 import sqlite3
-import time
 from pathlib import Path
 
 import pytest
+from helpers.reads import Reads
 from typer.testing import CliRunner
 
 from caracole import db
@@ -312,16 +312,18 @@ def test_the_prefilter_reads_the_trigram_index_not_every_row(conn):
     assert plans and all("VIRTUAL TABLE INDEX" in p for p in plans)
 
 
-def test_index_search_is_fast_on_a_large_index(conn):
+def test_index_search_reads_no_more_than_it_needs_on_a_large_index(conn):
     conn.execute("BEGIN")
     index(conn, synthetic_rows(50_000) + ROWS + PINYIN_ROWS)
     conn.execute("COMMIT")
     for query in ("radiohead creep", "radiohed creep", "persiana americana", "宋冬野 斑马", "love", "AC/DC"):
-        start = time.perf_counter()
-        hits = search_index(conn, query)
-        elapsed = time.perf_counter() - start
+        with Reads(conn) as read:
+            hits = search_index(conn, query)
         assert hits, query
-        assert elapsed < 0.5, f"{query!r} took {elapsed:.2f} s"
+        # Its rows come by the keys' trigram index (ug/key_search.py), never a pass over every row or key; and into
+        # Python a few of them, never all a common word is in ("love" is in thousands here).
+        assert read.scans("ug_index", "ug_keys") == [], query
+        assert read.rows <= 50_000 // 10, (query, read.rows)
     assert keys(search_index(conn, "radiohead creep"))[0] == ("radiohead", "creep")
 
 

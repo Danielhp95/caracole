@@ -278,8 +278,44 @@ def test_a_command_that_never_waited_is_not_waiting(tmp_path):
     assert not waiting_for(lock, thread.is_alive)
 
 
-def test_a_command_still_busy_after_the_timeout_counts_as_waiting(tmp_path):
-    # Where /proc/locks says nothing, all a test can tell: the command hasn't finished.
+@pytest.mark.skipif(not os.access(locks.LOCKS, os.R_OK), reason="no /proc/locks to read")
+def test_a_command_slow_to_get_to_the_lock_is_not_waiting_until_it_does(tmp_path):
+    # A busy machine: still on its way to the lock after the timeout, it isn't waiting yet; once it waits, it is.
+    lock = tmp_path / "caracole.lock"
+    held = os.open(lock, os.O_RDWR | os.O_CREAT)
+    fcntl.flock(held, fcntl.LOCK_EX)
+    seen = []
+    late = threading.Thread(target=lambda: seen.append(waiting_for(lock, lambda: True, timeout=0.05)), daemon=True)
+    try:
+        late.start()
+        late.join(0.5)  # ten times the timeout: not taken for a wait
+        assert late.is_alive() and seen == []
+        fd = os.open(lock, os.O_RDWR)
+        waiter = threading.Thread(target=lambda: fcntl.flock(fd, fcntl.LOCK_EX), daemon=True)
+        waiter.start()
+        late.join(10)
+        assert seen == [True]
+    finally:
+        os.close(held)
+    waiter.join(10)
+    os.close(fd)
+
+
+def test_a_lookup_waiting_for_the_lock_is_seen_by_its_ticket(tmp_path):
+    # A lookup tries for the lock again and again, blocking nowhere: its ticket says it waits.
+    lock = tmp_path / "caracole.lock"
+    lock.touch()
+    running = iter([True] * 5 + [False])
+    assert not waiting_for(lock, lambda: next(running, False))
+    (tmp_path / "caracole.lock.waiting").mkdir()
+    (tmp_path / "caracole.lock.waiting" / "4242.0").write_text("get Oasis - Wonderwall\n", encoding="utf-8")
+    assert waiting_for(lock, lambda: True)
+
+
+def test_a_command_still_busy_after_the_timeout_counts_as_waiting_where_proc_locks_cant_be_read(
+        tmp_path, monkeypatch):
+    # Where /proc/locks can't be read, all a test can tell: the command hasn't finished.
+    monkeypatch.setattr(locks, "LOCKS", tmp_path / "no-proc-locks")
     lock = tmp_path / "caracole.lock"
     lock.touch()
     assert waiting_for(lock, lambda: True, timeout=0.05)

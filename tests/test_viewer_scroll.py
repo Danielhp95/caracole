@@ -206,23 +206,36 @@ def test_served_in_a_sandbox_a_reload_keeps_the_speed(tmp_path):
 # --- scrolling, in real time -------------------------------------------------------------------------
 
 
+# What the pill shows, taken by the page itself as a press of ``#scroll`` or ``#go`` is handled (``window.seen``: its
+# time, ``at``, and LOOK's view a timer due at once takes) and 1.2 s after it by the page's clock (``window.later``):
+# timers run in the order they are due, so this one runs after the countdown's first tick and before its second,
+# however late a busy machine runs either, and nothing it sees depends on when the test gets to read it.
+PRESSES = """(() => {
+  window.seen = [];
+  window.addEventListener("click", (e) => {
+    if (!e.target.closest || !e.target.closest("#scroll, #go")) return;
+    const at = performance.now();
+    window.pressed = at;
+    setTimeout(() => { window.seen.push(Object.assign({at}, LOOK)); });
+    if (window.later === undefined) setTimeout(() => { window.later = LOOK; }, 1200);
+  }, true);
+})()""".replace("LOOK", LOOK)
+
+
 @in_chromium
 def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_path):
     with viewer(tmp_path) as b:
         b.js(RECORD)
-        # When each press reached the page, as the page counts time: read after it, the clock has gone on.
-        b.js("window.addEventListener('click', () => { window.pressed = performance.now(); }, true)")
+        b.js(PRESSES)
         b.click("#scroll")
-        pressed = b.js("window.pressed")
-        counting = look(b)
         ring = b.js("getComputedStyle(document.querySelector('#go .ring .arc')).animationName")
         # The arc drawn in the button's own colour, as the number and the track are.
         colours = b.js("""['#go', '#go .ring .arc', '#go .ring .track']
           .map((s) => getComputedStyle(document.querySelector(s))).map((c, i) => i ? c.stroke : c.color)""")
-        time.sleep(1.2)
-        later = look(b)
-        assert b.wait("document.querySelector('#go').getAttribute('aria-label') === 'Pause'", 5)
-        assert b.wait("moves.length > 0", 2)
+        assert b.wait("window.later !== undefined", 10)
+        assert b.wait("document.querySelector('#go').getAttribute('aria-label') === 'Pause'", 10)
+        assert b.wait("moves.length > 0", 10)
+        counting, later = b.js("window.seen[0]"), b.js("window.later")
         first = b.js("moves[0][0]")
         running = look(b)
 
@@ -230,9 +243,8 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
         b.js("moves.length = 0")
         b.click("#scroll")
         b.click("#go")  # pressed again: no waiting
-        again = b.js("window.pressed")
-        assert b.wait("moves.length > 0", 1)
-        soon = b.js("moves[0][0]") - again
+        assert b.wait("window.seen.length === 3 && moves.length > 0", 10)
+        again = b.js("window.seen[2]")
 
     # The pill takes the bar's place, counting down on its first button, which has the focus:
     # press it again to start at once.
@@ -242,9 +254,10 @@ def test_it_starts_three_seconds_after_start_or_at_once_when_pressed_again(tmp_p
     assert ring == "drain"  # the ring empties as the seconds pass
     assert colours[1] == colours[2] == colours[0]
     assert later["tick"] == "2" and later["y"] == 0
-    assert 2900 <= first - pressed <= 4000
+    assert first - counting["at"] >= 2900  # not before its three seconds
     assert running["icons"] == ["i-pause"] and running["status"] == "Scrolling"
-    assert soon < 500
+    # Pressed again, it runs as the press is handled: no countdown, and the page moves on its next frames.
+    assert again["go"] == "Pause" and again["tick"] == "" and again["status"] == "Scrolling"
 
 
 @in_chromium

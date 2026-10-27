@@ -3610,8 +3610,9 @@ Who can reach it, below).
     into wanted.txt, is looked up now as Get it does (`caracole get`), then
     added. Nothing is queued unless both fit in the queue (a lookup that joins
     one already queued needs no room of its own);
-  - **Rename or delete** renames the songbook or, once you tick the box,
-    deletes it and the files caracole made of it.
+  - **Rename or delete** renames the songbook (its new name over the set list
+    at once) or, once you tick the box, deletes it and the files caracole made
+    of it.
 
   The songbook's status line, under its name, says how its change goes
   ("Queued…", "Moving the song…", then "Moved"; "Changed", "Renamed", "Taken
@@ -3628,8 +3629,9 @@ Who can reach it, below).
   after your tap. Select's Make songbook (or Add to a songbook there is) runs
   `caracole songbook make NAME "ARTIST - TITLE"...` (or `add`) with the songs
   in the order you ticked them, ends Select once the server has it, and opens
-  the Songbooks tab on the songbook, its songs there at once ("Making the
-  songbook…", then "Made · Open songbook"). A change that can't be made, such
+  the Songbooks tab on the songbook, its songs there at once, and its files'
+  buttons too, to use once it is made ("Making the songbook…", then "Made ·
+  Open songbook"). A change that can't be made, such
   as a name another songbook has, a song no longer in the library or a
   songbook deleted since the page was made, is refused at once, and nothing
   runs: the songbook's status line, or the Select bar, says why, and the bar
