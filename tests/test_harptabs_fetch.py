@@ -163,6 +163,23 @@ def test_a_title_with_an_apostrophe_meets_the_slug_that_writes_it_as_a_hyphen(co
     assert (folder(tmp_path, song) / "harmonica-1.txt").read_text(encoding="utf-8") == "4 5\nmine\n"
 
 
+def test_a_lookup_keys_a_table_keyed_before_again_from_its_paths_and_meets_the_tab(conn, tmp_path):
+    # The sitemap read before slugs were keyed as now: a lookup, which reads no sitemap, keys them again first.
+    from caracole.db import kv_set
+
+    song = add_song(conn, "Bob Dylan", "You Ain't Goin' Nowhere")
+    conn.executemany("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES (?, ?, ?, ?, 'sitemap')",
+                     [("artist/1283/bob-dylan", "artist", 1283, "bob-dylan"),
+                      ("tab/1690/you-ain-t-goin-nowhere", "tab", 1690, "you-ain-t-goin-nowhere")])
+    kv_set(conn, "harptabs:index:keys", "0")
+    site = FakeHarpTabs()
+    site.page("tab/1690/you-ain-t-goin-nowhere", tab_page("You Ain't Goin' Nowhere", "Bob Dylan", body="4 5\nmine\n"))
+
+    stats = run(site, conn, tmp_path, only={song.id}, refresh_index=False)
+
+    assert stats.kept == 1 and site.requests == [f"{BASE}/tab/1690/you-ain-t-goin-nowhere"]
+
+
 def test_a_song_whose_artist_the_sitemap_doesnt_list_costs_no_page(conn, tmp_path):
     # "Silent Night" is a tab there, but by no artist named as the song's: no page is read for it.
     add_song(conn, "Mariah Carey", "Silent Night")

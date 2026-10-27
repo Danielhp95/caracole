@@ -75,6 +75,7 @@ _TAB_PATH = re.compile(r"/(tab/(\d{1,9})/[a-z0-9-]{1,200})")  # a card's link: a
 _TABS_SAID = re.compile(r"([\d,]+)\s+tabs?")  # an artist page's header: "98 tabs", "1 tab"
 _BRACKETED = re.compile(r"\([^()]*\)|\[[^\[\]]*\]")  # a part of a title in brackets, the innermost first
 _APOSTROPHE = re.compile(r"['’ʼ]")  # which a slug writes as nothing ("dont") or as a hyphen ("don-t")
+_CONTRACTED = frozenset({"t", "s", "ll", "re", "ve", "d", "m"})  # a contraction's or a possessive's end, as a slug word
 
 
 class HarpTabsParseError(ProviderError):
@@ -94,8 +95,8 @@ def page_url(path: str) -> str:
 
 class IndexRow(NamedTuple):
     """One page of the sitemap, as ``harptabs_index`` keeps it: its path, its kind (``TAB`` or ``ARTIST``),
-    the site's id and its key: a tab's title's (``title_key``), an artist's name's, as Ultimate Guitar's slugs
-    are keyed (``ug_slug_key``)."""
+    the site's id and its key, its slug's as Ultimate Guitar's slugs are keyed (``ug_slug_key``): a tab's title's,
+    each contraction's end ``joined`` to its word, an artist's name's."""
 
     path: str
     kind: str
@@ -109,8 +110,21 @@ def parse_page_url(url: str) -> IndexRow | None:
     if m is None:
         return None
     path, kind, page_id, slug = m.groups()
-    key = ug_slug_key(slug)
+    key = joined(ug_slug_key(slug)) if kind == TAB else ug_slug_key(slug)
     return IndexRow(path, kind, int(page_id), key) if key else None
+
+
+def joined(key: str) -> str:
+    """A slug's key with each contraction's or possessive's end, a word of its own there ("can-t", "heaven-s",
+    "i-m"), joined to the word before it ("cant", "heavens", "im"): a tab's key whichever way its slug writes the
+    apostrophe, as nothing or as a hyphen, which a title's key, its apostrophe dropped, meets."""
+    words: list[str] = []
+    for word in key.split("-"):
+        if words and word in _CONTRACTED:
+            words[-1] += word
+        else:
+            words.append(word)
+    return "-".join(words)
 
 
 def title_key(title: str) -> str:
@@ -119,10 +133,12 @@ def title_key(title: str) -> str:
 
 
 def title_keys(title: str) -> list[str]:
-    """The keys a song's title meets the sitemap's slugs with: ``title_key``'s, and for a title with an apostrophe,
-    the key of the slug that writes it as a hyphen, as harptabs.com slugs most of its later tabs
-    ("you-ain-t-goin-nowhere", "can-t-help-falling-in-love"; earlier ones, "knockin-on-heavens-door")."""
-    return [key for key in dict.fromkeys((title_key(title), title_key(_APOSTROPHE.sub(" ", title)))) if key]
+    """The keys a song's title meets the sitemap's tabs with (``parse_page_url``: a contraction's end ``joined`` to
+    its word, as most of its later tabs slug it as a word of its own, "can-t-help-falling-in-love"): ``title_key``'s,
+    and for a title with an apostrophe that ends no contraction ("O'Brien"), that of the slug that writes it as a
+    hyphen ("o-brien")."""
+    keys = (title_key(title), title_key(_APOSTROPHE.sub(" ", title)))
+    return [key for key in dict.fromkeys(joined(k) for k in keys) if key]
 
 
 def song_title(title: str) -> str:

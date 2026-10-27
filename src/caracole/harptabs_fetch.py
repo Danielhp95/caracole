@@ -46,7 +46,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 from caracole import site_index, stamps
-from caracole.db import kv_get, kv_set
+from caracole.db import kv_get, kv_set, savepoint
 from caracole.harptabs import (
     ARTIST,
     PROVIDER,
@@ -86,6 +86,8 @@ RECHECK_AFTER = timedelta(days=30)  # a song whose candidates were none of its a
 CANDIDATES = 8  # a title's tabs read for one song at most, lowest id first
 _ACCEPT = (200, 404)  # a 404 is an answer: the tab is gone
 
+KEYS_KEY = "harptabs:index:keys"  # how the sitemap's rows in harptabs_index are keyed (ROW_KEYS)
+ROW_KEYS = "1"  # a tab's key joins a contraction's end to its word (harptabs.joined)
 CHECKED_PREFIX = "harptabs:checked:"  # + song id: when its candidates last answered for it
 PICKED = ":pick"  # CHECKED_PREFIX + song id + this: the tab you picked that was asked for then
 
@@ -132,6 +134,7 @@ def harptabs_tabs(
     """
     stats = HarpTabsStats()
     now = stamps.utc(now)
+    ensure_current_keys(conn)
     wanting = [s for s in _songs_wanting_a_tab(conn, now, overrides) if only is None or s.id in only]
     if not wanting:
         return stats
@@ -175,6 +178,23 @@ SITE = Site(
 )
 
 
+def ensure_current_keys(conn: sqlite3.Connection) -> int:
+    """Key the sitemap's rows again from their paths (``parse_page_url``) after a change to how harptabs.py keys them
+    (``ROW_KEYS``), once and with no request, as the next read of the sitemap would; the step, a lookup and the artist
+    pages' pass do it first. Returns how many rows changed."""
+    if kv_get(conn, KEYS_KEY) == ROW_KEYS:
+        return 0
+    changed = 0
+    with savepoint(conn, "harptabs_index_keys"):
+        for path, key in conn.execute("SELECT path, key FROM harptabs_index").fetchall():
+            row = parse_page_url(page_url(path))
+            if row is not None and row.key != key:
+                conn.execute("UPDATE harptabs_index SET key = ? WHERE path = ?", (row.key, path))
+                changed += 1
+        kv_set(conn, KEYS_KEY, ROW_KEYS)
+    return changed
+
+
 class _Index:
     """``harptabs_index`` as a pass reads it: the artists' keys, hyphens aside, loaded once."""
 
@@ -185,7 +205,7 @@ class _Index:
 
     def candidates(self, song: Song) -> list[tuple[int, str]]:
         """The tabs titled as the song is (``harptabs.title_keys``: an apostrophe slugged as nothing or as a
-        hyphen), ``(id, path)`` lowest id first, at most ``CANDIDATES``; none when the sitemap lists no artist by
+        hyphen, ``harptabs.joined``), ``(id, path)`` lowest id first, at most ``CANDIDATES``; none when the sitemap lists no artist by
         one of the song's artists' names, as then no tab there is theirs."""
         keys = title_keys(song.title)
         if not keys or not any(compact(form) in self.artists for form in _forms(song)):

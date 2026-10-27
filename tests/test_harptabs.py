@@ -33,6 +33,17 @@ def test_the_sitemap_gives_its_tabs_by_title_and_its_artists_by_name():
     assert [r.page_id for r in rows if r.key == "piano-man"] == [25, 29525]
 
 
+def test_a_tabs_key_joins_a_contractions_end_to_its_word_whichever_way_the_slug_wrote_it():
+    # "can-t-help-falling-in-love" and "cant-help-falling-in-love" are one title's slugs: the key is the second,
+    # which the title's own key ("Can't Help Falling in Love") and a query typed either way meet.
+    for slug in ("can-t-help-falling-in-love", "cant-help-falling-in-love"):
+        assert parse_page_url(f"{BASE}/tab/1/{slug}").key == "cant-help-falling-in-love"
+    assert parse_page_url(f"{BASE}/tab/2/knockin-on-heaven-s-door").key == "knockin-on-heavens-door"
+    assert parse_page_url(f"{BASE}/tab/3/i-m-confessin").key == title_key("I'm Confessin'") == "im-confessin"
+    assert parse_page_url(f"{BASE}/tab/4/you-ain-t-goin-nowhere").key == title_key("You Ain't Goin' Nowhere")
+    assert parse_page_url(f"{BASE}/artist/5/guns-n-roses").key == "guns-n-roses"  # an artist's: compared hyphens aside
+
+
 @pytest.mark.parametrize("url", [
     f"{BASE}/", f"{BASE}/browse", f"{BASE}/genre/blues", f"{BASE}/artist/4", f"{BASE}/tab/25/piano-man/edit",
     f"{BASE}/tab/25/Piano-Man", "https://example.com/tab/25/piano-man", f"{BASE}/tab/25/piano-man?_rsc=1",

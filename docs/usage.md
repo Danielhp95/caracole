@@ -3140,7 +3140,9 @@ Piano Man), the most viewed first: its line names how many there are and the
 key the first's page names, its page, and the `caracole get --harptabs` line that
 looks the song up now keeping that tab (`[harptabs]` in overrides.toml). A tab
 whose artist no page read names yet is listed by its title alone, as a possible
-match (`same title, maybe another song`). `--artist NAME` lists the songs the
+match (`same title, maybe another song`), its whole title the query's, an
+apostrophe typed or not, whichever way its address writes it (`can-t-help-…` or
+`cant-help-…`). `--artist NAME` lists the songs the
 index holds of the artist NAME names, the most viewed first, and `--title TITLE`
 its songs of that title. While its artist pages aren't all read, the group ends
 with how far it has got (`harptabs.com's artist pages are still being read: 1,204
