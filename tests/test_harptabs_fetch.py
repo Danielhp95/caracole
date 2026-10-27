@@ -178,6 +178,19 @@ def test_a_song_with_a_harmonica_tab_gets_no_other_and_a_number_held_is_never_re
     assert (folder(tmp_path, other) / "harmonica-2.txt").exists()
 
 
+def test_a_page_of_yours_by_a_tabs_page_name_holds_its_number_too(conn, tmp_path):
+    # The page render.py writes beside a tab takes the tab's number (harmonica-1.txt, harmonica-1.html): one of yours
+    # by that name, say a page caracole wrote that you changed, then let go with its tab, would be written over.
+    song = add_song(conn, "Ritchie Valens", "La Bamba")
+    folder(tmp_path, song).mkdir(parents=True)
+    (folder(tmp_path, song) / "harmonica-1.html").write_text("my own notes")
+
+    assert run(FakeHarpTabs(), conn, tmp_path).kept == 1
+
+    assert [f.name for f in harmonica_files(conn, song.id)] == ["harmonica-2.txt"]
+    assert (folder(tmp_path, song) / "harmonica-1.html").read_text() == "my own notes"
+
+
 def test_a_page_that_wont_parse_is_an_error_never_a_miss(conn, tmp_path):
     song = add_song(conn, "Ritchie Valens", "La Bamba")
     site = FakeHarpTabs()
