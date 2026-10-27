@@ -58,7 +58,8 @@ tests in the file that covers the tooltip (`git grep -l "tip-line" tests`).
 
 ### Task 3: The keyboard view and the switch
 
-- [ ] Failing tests: `test_the_switch_shows_the_keyboard_and_back` (arrows, dots, ← →; dots `aria-pressed`);
+- [ ] Failing tests: `test_the_keyboard_button_shows_the_keyboard_and_circle_goes_back` (the labelled button,
+  "Keyboard ›" / "‹ Circle", ← →; the dots `aria-hidden`);
   `test_the_keyboard_stacks_the_notes_up_from_the_root` (D7: D4 F♯4 A4 C5 lit); `test_the_view_chosen_is_kept_for_every_page`
   (localStorage, and circle when storage is refused); `test_the_songbook_has_the_same_tip`.
 - [ ] Run → FAIL. Implement. PASS.

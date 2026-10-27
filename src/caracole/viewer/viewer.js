@@ -1731,7 +1731,8 @@
   // A numeral's tooltip, by it: on a finger's tap, or while the mouse is over it. Escape, a tap anywhere else,
   // or the mouse moving away closes it; it goes with the page as it scrolls. It heads with the chord as the sheet
   // names it, its numeral as the sheet draws it and its role in words; then the numeral's line and the key it is
-  // read in; then the chord's notes on a twelve-note circle, C at the top, beside their list; ▶ Hear it strums the
+  // read in; then the chord's notes, on a twelve-note circle, C at the top, beside their list, or as tiles over a
+  // keyboard, and a button to the other view (← and → too, while the focus is in the tooltip); ▶ Hear it strums the
   // chord as its card would, and Shapes opens the card. Every note, interval and pitch class is the page's data
   // (data.tones: harmony_tables.py), and the key's notes are its scale (data.keyScale) above the tonic shown: a
   // note of the chord is outside the key when it isn't one of them, and the line under the picture names it, with
@@ -1811,19 +1812,90 @@
     return and(off) + (off.length > 1 ? " aren't" : " isn't") + " in " + keyWordsShort()
       + (has.length === off.length ? " (it has " + and(has) + ")" : "") + ".";
   };
+  // The chord's notes as tiles, each its name over its interval, the root's in the accent, an outside note's dashed.
+  const noteTiles = (box, notes, inKey) => {
+    box.textContent = "";
+    for (const [name, step, pc] of notes) {
+      const tile = box.appendChild(document.createElement("li"));
+      tile.className = [step === "R" ? "root" : "", inKey.has(pc) ? "" : "off"].filter(Boolean).join(" ");
+      tile.appendChild(document.createElement("b")).textContent = name;
+      tile.appendChild(document.createElement("small")).textContent = step === "R" ? "root" : step;
+    }
+  };
+  // The chord's notes stacked up from its root, each above the one before, from the C at or below the root (C4,
+  // MIDI 60), as MIDI notes.
+  const stacked = (notes) => {
+    const out = [];
+    for (const note of notes) {
+      let midi = 60 + note[2];
+      while (out.length && midi <= out[out.length - 1]) midi += 12;
+      out.push(midi);
+    }
+    return out;
+  };
+  // Those notes on a keyboard from that C, two octaves of it or more (instruments.js keyboard): the root's key in
+  // the accent (its "bass"), the others' in the role's colour, an outside note's red (viewer.css).
+  const keyboardOf = (notes, inKey) => {
+    if (!kit) return null;
+    const midis = stacked(notes);
+    const board = kit.keyboard(midis, "", true, [[60, Math.max(83, ...midis)]]);
+    for (const attr of ["role", "aria-label"]) board.removeAttribute(attr);
+    board.setAttribute("class", "kb");
+    board.setAttribute("preserveAspectRatio", "none");  // the tooltip's width, and keys no taller than it needs
+    for (const rect of board.querySelectorAll("rect[data-role]")) {
+      const k = midis.indexOf(Number(rect.dataset.note));
+      if (k >= 0 && !inKey.has(notes[k][2])) rect.classList.add("off");
+    }
+    return board;
+  };
   const drawTipNotes = (rep) => {
     const notes = tonesOf(rep), inKey = keyNotes();
     const can = Boolean(notes) && Boolean(inKey);
-    $("tip-pic").hidden = !can;
-    $("tip-clock").textContent = "";
-    $("tip-notes").textContent = "";
+    $("tip-pic").hidden = $("tip-switch").hidden = !can;
+    for (const box of ["tip-clock", "tip-notes", "tip-tiles", "tip-kb"]) $(box).textContent = "";
     const off = can ? offWords(notes, inKey) : "";
     $("tip-off").hidden = !off;
     $("tip-off").textContent = off;
     if (!can) return;
     $("tip-clock").appendChild(clock(notes, inKey));
     noteList($("tip-notes"), notes, inKey);
+    noteTiles($("tip-tiles"), notes, inKey);
+    const board = keyboardOf(notes, inKey);
+    if (board) $("tip-kb").appendChild(board);
   };
+  // The view shown, the circle or the keyboard: the reader's, kept once for every sheet and songbook, as the rail of
+  // necks is; the circle when nothing is kept, or the page has no storage (a server's sandbox: the choice then lasts
+  // as long as the page).
+  const TIPVIEW = "caracole-viewer-tipview";
+  const VIEWS = { circle: ["Keyboard ›", "Show the notes on a keyboard", "keys"],
+    keys: ["‹ Circle", "Show the notes on a circle", "circle"] };
+  let tipView = "circle";
+  try {
+    if (localStorage.getItem(TIPVIEW) === "keys") tipView = "keys";
+  } catch (err) { /* no storage: the circle */ }
+  const drawTipView = () => {
+    tip.dataset.view = tipView;
+    $("tip-circle").hidden = tipView !== "circle";
+    $("tip-keys").hidden = tipView !== "keys";
+    $("tip-view").textContent = VIEWS[tipView][0];
+    $("tip-view").setAttribute("aria-label", VIEWS[tipView][1]);
+  };
+  const showTipView = (view) => {
+    if (view === tipView) return;
+    tipView = view;
+    try {
+      localStorage.setItem(TIPVIEW, view);
+    } catch (err) { /* private mode, or a server's sandbox: for this page alone */ }
+    drawTipView();
+    placeTip();  // the other view's height: still by its numeral
+  };
+  $("tip-view").addEventListener("click", () => showTipView(VIEWS[tipView][2]));
+  tip.addEventListener("keydown", (e) => {
+    if ((e.key !== "ArrowLeft" && e.key !== "ArrowRight") || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    e.preventDefault();
+    e.stopPropagation();  // in a songbook the arrows go from song to song (book.js), but not from here
+    if (!$("tip-switch").hidden) showTipView(e.key === "ArrowLeft" ? "circle" : "keys");
+  });
   // What Hear it strums: the shape the chord's card shows for it now, on the instrument played, or null where
   // nothing would sound (no Web Audio, the strum off, no shape).
   const tipSound = (i) => {
@@ -1864,6 +1936,7 @@
       : found.text + ": the chord you chose in place of " + label(i, base(i)) + ".";
     $("tip-key").textContent = "In " + keyWords() + ".";
     drawTipNotes(current(i));
+    drawTipView();
     $("tip-hear").hidden = !tipSound(i);
     $("tip-card").setAttribute("aria-label", name + ": shapes");
     tip.hidden = false;

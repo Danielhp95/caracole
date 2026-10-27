@@ -222,7 +222,9 @@ Rules a change there keeps (the Invariants below are the others):
   one with no capo (the piano) names the chords as they sound (viewer.js `capoNow`, version.py
   `for_instrument`), and the menu offers only what the page draws, an instrument of another kind once its
   script registers it (instruments.js documents that API): test_viewer_instruments.py,
-  test_viewer_instruments_page.py, test_viewer_sound.py.
+  test_viewer_instruments_page.py, test_viewer_sound.py. So, last, is the view of a numeral's tooltip (the chord's
+  notes on a twelve-note circle, or tiles over a keyboard: localStorage `caracole-viewer-tipview`, the circle with
+  none), which draws only what `tones` (with each note's pitch class) and `keyScale` give: test_viewer_numerals.py.
 - `commands/`: one module per area, each with `register(app)`, which `cli.build_app` finds
   by itself (A4: add a module, never edit cli.py). `_common.py` holds what they share (config,
   the database, the lock, clients at either pace, pages, `fail`, `warn`, `song_named`): use it

@@ -9,7 +9,7 @@ something visual that shows which notes make the chord (a D7: D + F♯ + A + C).
 
 Mockup (gitignored, in the main checkout): `.superpowers/brainstorm/2818486-1793122579/content/`
 numeral-tip-directions.html. **C, the twelve-note circle, is the default view; A, notes and a keyboard, is the
-second; an arrow or other indicator cycles between the two.** (The owner wrote "add 1": taken as the first
+second; a labelled button under the picture goes from one to the other.** (The owner wrote "add 1": taken as the first
 direction, A.)
 
 ## The tooltip, top to bottom
@@ -30,11 +30,13 @@ direction, A.)
      role's colour, an outside note red.
    Under either, when a note is outside the key, one line: "F isn't in G major (it has F♯)" (the key's note of
    that letter, when it has one; otherwise "F isn't in G major").
-4. **The switch**: under the picture, centred: ‹, two dots (the view shown filled), › . Either arrow, or a dot,
-   goes to the other view; ← and → do too while the focus is in the tooltip. The arrows and dots are buttons named
-   for the view they show ("Show the notes on a keyboard", "Show the notes on a circle"); the dots
-   `aria-pressed`. The view chosen is the reader's, kept for every page as the chord necks are (localStorage
-   `caracole-viewer-tipview`, `"circle"` or `"keys"`; circle when nothing is kept or storage is refused).
+4. **The switch** (the owner's refinement, 2026-10-27: it must read plainly as a button): under the picture,
+   centred, one labelled button to the other view: "Keyboard ›" on the circle (named "Show the notes on a
+   keyboard"), "‹ Circle" on the keyboard (named "Show the notes on a circle"), and beside it two dots, the view
+   shown filled, an indicator alone (`aria-hidden`). ← shows the circle and → the keyboard while the focus is in
+   the tooltip (in a songbook they stay there, never going to another song). The view chosen is the reader's,
+   kept for every page as the chord necks are (localStorage `caracole-viewer-tipview`, `"circle"` or `"keys"`;
+   circle when nothing is kept or storage is refused).
 5. **Footer**: **▶ Hear it**, the chord strummed by `window.caracoleSound` on the instrument and loudness set
    (hidden when there is no sound or it is Off); and **Shapes →**, today's `tip-card` (opens the chord's card).
 

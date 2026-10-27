@@ -29,6 +29,7 @@
   --kb-black: #2b2926;
   --off: #a3261b;  /* a note from outside the key, in a numeral's tooltip */
   --off-bg: #fbe1dd;
+  --kb-lit: #8a8378;  /* a key lit for a chord from outside the key: apart from the white keys and the black */
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -60,6 +61,7 @@
     --pull: #e5a3ef;
     --off: #ff9d92;
     --off-bg: #3d1713;
+    --kb-lit: #7d786f;
   }
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -156,17 +158,19 @@ html[data-roles="off"][data-nm="numerals"] .c .nm { color: var(--accent); }
 html[data-nm="numerals"] .c .nm::after { inset: -10px -8px; }
 /* A numeral's tooltip, by it (placed in the page by the script: --tip-top, --tip-left), one width whatever it shows:
    the chord, its numeral as the sheet draws it and its role in its colour (--role, by the numeral's family; muted for
-   a chord from outside the key, or with the colours off); its line and its key; the chord's notes on a twelve-note
-   circle (viewer.js clock: .tc) beside their list, which goes under it on a screen too narrow for both; a line for
-   a note from outside the key; ▶ Hear it and Shapes, a finger's 44 px where a pointer is coarse. */
-.tip { --role: var(--muted); position: absolute; z-index: 9; top: var(--tip-top, 0px); left: var(--tip-left, 0px);
-  width: min(340px, calc(100vw - 16px)); padding: 12px; border: 1px solid var(--border-strong); border-radius: 14px;
-  background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgb(0 0 0 / .22); font-size: .9rem;
-  line-height: 1.35; }
-.tip[data-role="h"] { --role: var(--home); }
-.tip[data-role="a"] { --role: var(--away); }
-.tip[data-role="p"] { --role: var(--pull); }
-html[data-roles="off"] .tip { --role: var(--muted); }
+   a chord from outside the key, or with the colours off; --role-key, the keys it lights, a grey both kinds of key
+   stand apart from there); its line and its key; the chord's notes on a twelve-note circle (viewer.js clock: .tc)
+   beside their list, which goes under it on a screen too narrow for both, or as tiles over a keyboard (data-view);
+   a line for a note from outside the key; the button to the other view and the dots that mark the one shown; ▶ Hear
+   it and Shapes, a finger's 44 px where a pointer is coarse. A view fades in, unless motion is reduced. */
+.tip { --role: var(--muted); --role-key: var(--kb-lit); position: absolute; z-index: 9; top: var(--tip-top, 0px);
+  left: var(--tip-left, 0px); width: min(340px, calc(100vw - 16px)); padding: 12px; border: 1px solid var(--border-strong);
+  border-radius: 14px; background: var(--surface); color: var(--text); box-shadow: 0 10px 30px rgb(0 0 0 / .22);
+  font-size: .9rem; line-height: 1.35; }
+.tip[data-role="h"] { --role: var(--home); --role-key: var(--home); }
+.tip[data-role="a"] { --role: var(--away); --role-key: var(--away); }
+.tip[data-role="p"] { --role: var(--pull); --role-key: var(--pull); }
+html[data-roles="off"] .tip { --role: var(--muted); --role-key: var(--kb-lit); }
 .tip p { margin: 0; }
 .tip-head { display: flex; align-items: center; gap: 10px; }
 .tip-chord { font-size: 1.5rem; font-weight: 750; letter-spacing: -.01em; line-height: 1.1; overflow-wrap: anywhere; }
@@ -201,7 +205,34 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .tip-notes .root span { color: var(--accent); }
 .tip-notes .off { border: 1px dashed var(--off); background: transparent; }
 .tip-notes .off span { color: var(--off); }
+.tip-tiles { display: flex; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.tip-tiles li { flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 1px; padding: 7px 2px 6px;
+  border: 1px solid var(--border); border-radius: 10px; background: var(--sunk); }
+.tip-tiles b { font-size: 1.15rem; font-weight: 750; line-height: 1.1; }
+.tip-tiles small { color: var(--muted); font-size: .72rem; font-weight: 650; }
+.tip-tiles .root { border-color: var(--accent); background: var(--accent-soft); }
+.tip-tiles .root small { color: var(--accent); }
+.tip-tiles .off { border-style: dashed; border-color: var(--off); }
+.tip-tiles .off small { color: var(--off); }
+.tip-kb { margin-top: 10px; }
+.tip-kb svg { width: 100%; height: 64px; }
+.tip-kb rect { stroke-width: 1; vector-effect: non-scaling-stroke; }
+.tip-kb .kb-white.kb-on, .tip-kb .kb-black.kb-on { fill: var(--role-key); stroke: var(--kb-black); }
+.tip-kb .kb-white.kb-bass, .tip-kb .kb-black.kb-bass { fill: var(--accent); stroke: var(--kb-black); }
+.tip-kb .kb-white.off, .tip-kb .kb-black.off { fill: var(--off-bg); stroke: var(--off); stroke-width: 1.5;
+  stroke-dasharray: 3 2; }
+.tip-circle:not([hidden]), .tip-keys:not([hidden]) { animation: tip-in .16s ease-out; }
+@keyframes tip-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .tip-circle:not([hidden]), .tip-keys:not([hidden]) { animation: none; }
+}
 .tip .tip-off { margin-top: 8px; color: var(--off); font-size: .8rem; }
+.tip-switch { display: flex; justify-content: center; align-items: center; gap: 10px; margin-top: 10px; }
+.tip[data-view="keys"] .tip-switch { flex-direction: row-reverse; }
+.tip-dots { display: inline-flex; gap: 5px; }
+.tip-dots > span { width: 7px; height: 7px; border: 1px solid var(--muted); border-radius: 50%; }
+.tip[data-view="circle"] .tip-dots > span:first-child, .tip[data-view="keys"] .tip-dots > span:last-child {
+  background: var(--muted); }
 .tip-foot { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px;
   border-top: 1px solid var(--border); }
 .tip-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px;

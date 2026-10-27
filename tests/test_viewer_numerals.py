@@ -12,6 +12,8 @@ from __future__ import annotations
 
 import json
 import re
+import tempfile
+from pathlib import Path
 from urllib.parse import quote
 
 import pytest
@@ -20,7 +22,7 @@ from caracole.viewer import build_viewer, harmony
 from caracole.viewer.harmony_tables import SHIFTS, fill, page_name, pitch_class, shifted
 from caracole.viewer.theory import MODES, Key, map_chord, parse_chord, spelling
 
-from helpers.browser import in_chromium
+from helpers.browser import Browser, in_chromium
 from helpers.targets import small_targets
 from helpers.viewer_pages import tap_at, viewer as open_viewer, written
 
@@ -421,8 +423,9 @@ def test_a_songbook_song_shows_its_numerals_and_its_harmony(tmp_path):
 
 # What the tooltip shows: its head (the chord, its numeral and the numeral's classes, its role), its line and key,
 # the view shown, the circle's dots ([pitch class, classes, name, centre]) and the shape joining them (the pitch
-# class of each corner, in order), the notes listed ([name, interval, classes]), the line under the picture, and
-# whether Hear it shows; None while it is hidden.
+# class of each corner, in order), the notes listed ([name, interval, classes]), the keyboard's tiles (the same) and
+# its keys (the first, and each lit: [MIDI note, role, outside the key]), the line under the picture, the switch
+# (its words and its name), and whether Hear it shows; None while it is hidden.
 SEEN = """(() => { const tip = document.getElementById('tip'); if (tip.hidden) return null;
   const q = (s) => tip.querySelector(s), shows = (el) => Boolean(el) && el.getClientRects().length > 0;
   const nm = q('#tip-nm .nm'), shape = q('#tip-clock polygon');
@@ -438,6 +441,13 @@ SEEN = """(() => { const tip = document.getElementById('tip'); if (tip.hidden) r
     shape: shape ? shape.getAttribute('points').trim().split(/\\s+/).map((p) => pc(...p.split(',').map(Number))) : null,
     notes: [...tip.querySelectorAll('#tip-notes li')].filter(shows).map((li) => [li.children[0].textContent,
       li.children[1].textContent, li.className]),
+    circle: shows(q('#tip-circle')), keys: shows(q('#tip-keys')),
+    tiles: [...tip.querySelectorAll('#tip-tiles li')].map((li) => [li.children[0].textContent, li.children[1].textContent,
+      li.className]),
+    first: q('#tip-kb rect[data-note]') ? Number(q('#tip-kb rect[data-note]').dataset.note) : null,
+    board: [...tip.querySelectorAll('#tip-kb rect[data-role]')].map((r) => [Number(r.dataset.note), r.dataset.role,
+      r.classList.contains('off')]).sort((a, b) => a[0] - b[0]),
+    switch: shows(q('#tip-view')) ? [q('#tip-view').textContent, q('#tip-view').getAttribute('aria-label')] : null,
     off: shows(q('#tip-off')) ? q('#tip-off').textContent : null,
     hear: shows(q('#tip-hear')), shapes: [q('#tip-card').textContent, q('#tip-card').getAttribute('aria-label')]};
 })()"""
@@ -476,7 +486,7 @@ def test_the_circle_rings_the_key_and_joins_the_chords_notes(tmp_path):
         b.click("#t-up")
         b.click("#t-up")
         e7 = tip_on(b, 6)  # two semitones up, in A
-    assert d7["picture"]
+    assert d7["view"] == "circle" and d7["picture"] and d7["circle"] and not d7["keys"]
     assert lit(d7) == [0, 2, 6, 9] and lit(d7, "root") == [2] and lit(d7, "in") == sorted(G_MAJOR) and lit(d7, "off") == []
     assert d7["shape"] == [0, 2, 6, 9]  # joined round the circle, in pitch order
     assert d7["notes"] == [["D", "root", "root"], ["F#", "3", ""], ["A", "5", ""], ["C", "♭7", ""]]
@@ -560,7 +570,8 @@ def test_the_tip_fits_390px_and_flips_above_near_the_bottom(tmp_path):
         near_the_foot = b.js(WHERE % 60)
     left, top, right, bottom = middle_of["tip"]
     assert left >= 8 and right <= middle_of["width"] - 8 and not middle_of["sideways"]
-    assert top >= middle_of["nm"][1] and bottom <= middle_of["bar"]  # under its numeral, above the bar
+    assert top >= middle_of["nm"][1] or bottom <= middle_of["nm"][0]  # under its numeral or over it, never across
+    assert top >= 0 and bottom <= middle_of["bar"]  # on the screen, above the bar
     assert small == []
     left, top, right, bottom = near_the_foot["tip"]
     assert bottom <= near_the_foot["nm"][0] and top >= 0  # above its numeral: there's no room under it
@@ -587,3 +598,97 @@ def test_a_chord_chosen_instead_or_one_the_tables_cant_name_still_opens_its_tip(
         bare = tip_on(b, 6)
     assert [bare["chord"], bare["nm"], bare["role"]] == ["D7", "V7", "pull"]
     assert not bare["picture"] and bare["notes"] == [] and bare["off"] is None
+
+
+KEYBOARD = ["Keyboard ›", "Show the notes on a keyboard"]
+CIRCLE = ["‹ Circle", "Show the notes on a circle"]
+
+
+@in_chromium
+def test_the_keyboard_button_shows_the_keyboard_and_circle_goes_back(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
+        first = tip_on(b, 6)
+        b.click("#tip-view")
+        keys = b.js(SEEN)
+        focus = b.js("document.activeElement.id")
+        b.click("#tip-view")
+        back = b.js(SEEN)
+        b.press("ArrowRight")  # the focus still on the button: the arrows go from one view to the other
+        right = b.js(SEEN)
+        b.press("ArrowLeft")
+        left = b.js(SEEN)
+        dots = b.js("document.querySelector('#tip .tip-dots').getAttribute('aria-hidden')")
+    assert first["view"] == "circle" and first["switch"] == KEYBOARD
+    assert keys["view"] == "keys" and keys["keys"] and not keys["circle"] and keys["switch"] == CIRCLE
+    assert focus == "tip-view" and dots == "true"
+    assert back["view"] == "circle" and back["circle"] and not back["keys"] and back["switch"] == KEYBOARD
+    assert right["view"] == "keys" and right["switch"] == CIRCLE
+    assert left["view"] == "circle" and left["switch"] == KEYBOARD
+
+
+@in_chromium
+def test_the_keyboard_stacks_the_notes_up_from_the_root(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, IN_G) + "#nm=both", **DESKTOP) as b:
+        tip_on(b, 6)
+        b.click("#tip-view")
+        d7 = b.js(SEEN)
+        g7 = tip_on(b, 1)
+    assert d7["first"] == 60 and d7["board"] == [[62, "bass", False], [66, "on", False], [69, "on", False], [72, "on", False]]
+    assert d7["tiles"] == [["D", "root", "root"], ["F#", "3", ""], ["A", "5", ""], ["C", "♭7", ""]] and d7["off"] is None
+    assert g7["view"] == "keys" and g7["first"] == 60  # the view chosen stays for the next numeral
+    assert g7["board"] == [[67, "bass", False], [71, "on", False], [74, "on", False], [77, "on", True]]
+    assert g7["tiles"][3] == ["F", "♭7", "off"] and g7["off"] == "F isn't in G major (it has F#)."
+
+
+# A page with no storage at all: localStorage refused, as in a server's sandbox.
+NO_STORAGE = """Object.defineProperty(window, 'localStorage', {configurable: true,
+  get() { throw new DOMException('The document is sandboxed', 'SecurityError'); }});"""
+
+
+@in_chromium
+def test_the_view_chosen_is_kept_for_every_page(tmp_path):
+    url, other = written(tmp_path, IN_G), written(tmp_path, IN_C, name="Other")
+    with open_viewer(tmp_path, url + "#nm=both", **DESKTOP) as b:
+        tip_on(b, 6)
+        b.click("#tip-view")
+        kept = b.js("localStorage.getItem('caracole-viewer-tipview')")
+        b.open(other + "#nm=both")
+        assert b.wait("document.documentElement.dataset.ready === '1' && location.href.includes('Other')")
+        elsewhere = tip_on(b, 1)
+        b.click("#tip-view")
+        again = b.js("localStorage.getItem('caracole-viewer-tipview')")
+    assert kept == "keys" and elsewhere["view"] == "keys" and elsewhere["keys"] and again == "circle"
+    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=1280, height=800) as b:
+        b.send("Page.addScriptToEvaluateOnNewDocument", source=NO_STORAGE)
+        b.open(url + "#nm=both")
+        assert b.wait("document.documentElement.dataset.ready === '1'")
+        refused = tip_on(b, 6)
+        b.click("#tip-view")
+        switched = tip_on(b, 1)
+        errors = b.js("document.documentElement.dataset.error || null")
+    assert refused["view"] == "circle" and switched["view"] == "keys" and switched["keys"] and errors is None
+
+
+@in_chromium
+def test_the_songbook_has_the_same_tip(tmp_path):
+    from caracole.viewer.book import BookSong, build_songbook
+
+    songs = [BookSong("In G", "Synthetic", cho=IN_G, id="aaaa"), BookSong("In C", "Synthetic", cho=IN_C, id="bbbb")]
+    path = tmp_path / "Library" / "_songbooks" / "Campfire" / "songbook.html"
+    path.parent.mkdir(parents=True)
+    path.write_text(build_songbook("Campfire", songs), encoding="utf-8")
+    with open_viewer(tmp_path, path.as_uri() + "#song-1", **DESKTOP) as b:
+        b.click("#more")
+        b.js("[...document.querySelectorAll('#names > button')][1].click()")
+        b.press("Escape")
+        d7 = tip_on(b, 6)
+        b.click("#tip-view")
+        before = b.js("window.before = true; location.hash")
+        b.press("ArrowLeft")  # in the tooltip, not the songbook's next or previous song
+        left = b.js(SEEN)
+        b.press("ArrowRight")
+        right = b.js(SEEN)
+        stayed = b.js("[location.hash, window.before === true]")
+    assert lit(d7) == [0, 2, 6, 9] and d7["notes"][0] == ["D", "root", "root"] and d7["switch"] == KEYBOARD
+    assert left["view"] == "circle" and right["view"] == "keys" and right["board"][0] == [62, "bass", False]
+    assert before.startswith("#song-1") and stayed == [before, True]

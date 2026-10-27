@@ -2549,9 +2549,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   chord's joined into a shape in its role's colour, the root filled, beside
   the notes listed with their intervals (D7: D root, F# 3, A 5, C ♭7), a note
   from outside the key dashed in red and named under them ("F isn't in G
-  major (it has F#)."); ▶ Hear it, the chord strummed as its card plays it
-  (none with the strum Off), and Shapes, its card. Escape, a tap elsewhere
-  or the mouse moving away closes it. With numerals
+  major (it has F#)."). **Keyboard ›** under the circle shows the notes as
+  tiles over a keyboard instead, stacked up from the root (D7: D, then the F#,
+  A and C above it), and **‹ Circle** goes back; ← and → do too while the
+  focus is in the tooltip. The view you chose is kept for every sheet and
+  songbook (the circle where the browser keeps nothing). ▶ Hear it strums the
+  chord as its card plays it (none with the strum Off), and Shapes opens its
+  card. Escape, a tap elsewhere or the mouse moving away closes it. With numerals
   only, a tap anywhere on the numeral shows its line; with both, a tap on the
   chord's name opens its card, which names the numeral too ("Bb · ♭VII").
   A song whose key caracole can't tell offers chords alone (the numerals
