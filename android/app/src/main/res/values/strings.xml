@@ -29,6 +29,7 @@
 
     <string name="server_only">That needs caracole serve: it isn\'t in the copy on the phone. Open caracole serve in the browser for it.</string>
     <string name="missing">That isn\'t in the copy on the phone: sync again.</string>
+    <string name="open_with">Open %1$s with</string>
     <string name="no_app">No app on this phone opens %1$s (%2$s).</string>
     <string name="no_browser">No browser on this phone opens %1$s.</string>
     <string name="handoff_failed">The file couldn\'t be copied for another app: %1$s</string>

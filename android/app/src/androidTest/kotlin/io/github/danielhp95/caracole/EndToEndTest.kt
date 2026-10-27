@@ -12,6 +12,7 @@ import androidx.test.espresso.action.ViewActions.click
 import androidx.test.espresso.intent.Intents
 import androidx.test.espresso.intent.Intents.intending
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
+import org.hamcrest.Matchers.anyOf
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -111,10 +112,14 @@ class EndToEndTest {
             val sandbox = JSONObject(js("""JSON.stringify({origin: String(window.origin),
                 storage: (() => { try { localStorage.length; return 'allowed'; } catch (e) { return 'refused: ' + e.name; } })(),
                 cookie: (() => { try { document.cookie; return 'allowed'; } catch (e) { return 'refused: ' + e.name; } })(),
-                serverLinks: Array.from(document.querySelectorAll('a[href]')).map(a => a.getAttribute('href'))
-                    .filter(h => /^\/(export|versions|guitar)/.test(h)),
+                serverLinks: Array.from(document.querySelectorAll('a[href]')).filter(a => !a.hidden)
+                    .map(a => a.getAttribute('href')).filter(h => /^\/(export|versions|guitar)/.test(h)),
+                hiddenServerLinks: Array.from(document.querySelectorAll('a[href]')).filter(a => a.hidden)
+                    .map(a => a.getAttribute('href')).filter(h => /^\/(export|versions|guitar)/.test(h)),
                 exportShown: (() => { const e = document.getElementById('export'); return !!e && !e.hidden; })()})""") as String)
             record("viewer", sandbox)
+            assertEquals("no link to caracole serve's own pages", 0, sandbox.getJSONArray("serverLinks").length())
+            assertFalse("no Export PDF link", sandbox.getBoolean("exportShown"))
             shot("sheet")
 
             // Its script runs: one semitone up changes the key and the chords shown, and the address keeps it.
@@ -131,7 +136,7 @@ class EndToEndTest {
 
             Intents.init()
             try {
-                intending(hasAction(Intent.ACTION_VIEW)).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
+                intending(anyOf(hasAction(Intent.ACTION_VIEW), hasAction(Intent.ACTION_CHOOSER))).respondWith(Instrumentation.ActivityResult(Activity.RESULT_OK, null))
 
                 // The viewer's PDF link: a navigation, which goes to another app; the viewer stays.
                 val folder = sheetHref.removePrefix("https://${Links.HOST}/").substringBeforeLast('/')
@@ -143,6 +148,7 @@ class EndToEndTest {
                 checkCopy(pdf, manifest.byPath.getValue(pdfPath).sha256)
                 record("pdf", JSONObject().put("uri", pdf.data.toString()).put("type", pdf.type).put("flags", pdf.flags))
                 assertTrue(pdf.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+                assertFalse("a PDF goes straight to the app that opens PDFs", "application/pdf" in chosen)
                 assertTrue(url(main).substringBefore('#').endsWith("sheet.html"))
 
                 // Back goes back in the WebView: to the library page.
@@ -159,7 +165,30 @@ class EndToEndTest {
                     val file = handedOff(null, since = sent)
                     val path = java.net.URLDecoder.decode(href, "UTF-8")
                     checkCopy(file, manifest.byPath.getValue(path).sha256)
-                    record("download", JSONObject().put("href", href).put("uri", file.data.toString()).put("type", file.type))
+                    record("download", JSONObject().put("href", href).put("uri", file.data.toString()).put("type", file.type)
+                        .put("chooser", file.type in chosen))
+                    assertTrue("a file of no known type goes through a chooser", file.type in chosen)
+
+                    // That song's viewer links its Guitar Pro file too, in its settings panel: with `download` now
+                    // (as from a file), in a page sandboxed without allow-downloads. Recorded, not asserted.
+                    val viewer = Links.address(path.substringBeforeLast('/') + "/sheet.html")
+                    main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl(viewer) }
+                    loaded("sheet.html")
+                    waitUntil("the viewer's script") { (js("(document.getElementById('key-now') || {}).textContent || ''") as String).isNotEmpty() }
+                    tap(main, "#more")
+                    waitUntil("the settings panel") { js("(() => { const r = document.getElementById('guitar-row'); return !!r && !r.hidden && r.getBoundingClientRect().height > 0; })()") == true }
+                    val link = js("""(() => { const a = document.querySelector('#guitar-links a'); return a ? JSON.stringify({href: a.getAttribute('href'), download: a.getAttribute('download'), text: a.textContent}) : null; })()""")
+                    val before = Intents.getIntents().size
+                    tap(main, "#guitar-links a")
+                    val reached = try {
+                        handedOff(null, since = before, timeoutMs = 8_000).type
+                    } catch (e: AssertionError) {
+                        null
+                    }
+                    record("viewerGuitar", JSONObject().put("link", link ?: "none").put("handedOff", reached ?: "nothing: the tap opened no app"))
+                    shot("viewer-guitar")
+                    instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
+                    loaded(Links.address(manifest.start).substringAfterLast('/'))
                 }
             } finally {
                 Intents.release()
@@ -206,15 +235,26 @@ class EndToEndTest {
         return true
     }
 
-    /** The ACTION_VIEW the app sent (of [type], when given; after the first [since] intents), waited for. */
-    private fun handedOff(type: String?, since: Int = 0): Intent {
+    /**
+     * The ACTION_VIEW the app sent (of [type], when given; after the first [since] intents), on its own or in a
+     * chooser, waited for.
+     */
+    private fun handedOff(type: String?, since: Int = 0, timeoutMs: Long = 30_000): Intent {
         var intent: Intent? = null
-        waitUntil("a file handed to another app") {
-            intent = Intents.getIntents().drop(since).lastOrNull { it.action == Intent.ACTION_VIEW && (type == null || it.type == type) }
+        waitUntil("a file handed to another app", timeoutMs) {
+            intent = Intents.getIntents().drop(since)
+                .map { sent ->
+                    if (sent.action != Intent.ACTION_CHOOSER) sent
+                    else (@Suppress("DEPRECATION") sent.getParcelableExtra<Intent>(Intent.EXTRA_INTENT))?.also { chosen.add(it.type) }
+                }
+                .lastOrNull { it != null && it.action == Intent.ACTION_VIEW && (type == null || it.type == type) }
             intent != null
         }
         return intent!!
     }
+
+    /** The types of the files handed over through a chooser. */
+    private val chosen = mutableSetOf<String?>()
 
     /** The bytes another app reads through the intent's URI are the file's, as listed. */
     private fun checkCopy(intent: Intent, sha256: String) {
