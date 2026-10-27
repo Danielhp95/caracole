@@ -69,6 +69,21 @@ names, and the page names a harp ``harpKeys[(tonic + shift + offset) % 12]``, wh
 And, the same on every page, ``layouts()``: each harp's notes by its key's pitch class, ``[blow, draw]``, each its
 ten holes' MIDI notes (``layout``), for the sound of a chord's holes (page.py carries it in ``winds``, as ``harps``).
 
+**The overlay** (overlay.js: the rail's Harmonica tab, on a chord sheet and on a harmonica tab's page) draws the 12
+harps round the circle of fifths, the key on the harp chosen and each chord's holes on it. Its tables are relative
+to the song's tonic as it sounds, so one serves every transposition: a note is a **step**, semitones above the
+tonic (0 to 11), which the page names with the names of the key as it sounds (``tonic + step``), and a **text** is a
+list of strings and steps, each step a note so named.
+
+- ``harpRing``: the 12 harps round the circle, by position (``ring``: ``[offset, ordinal, mode]``, the 1st at the
+  top, counted round the other way, a fifth down at each);
+- ``harpHoles[offset]``: the harp ``offset`` semitones above the tonic (``holes``): its ten holes' ``blow`` and
+  ``draw`` steps, and each hole's ``bends``, ``[breath, steps]``, the shallowest first;
+- ``harpScales[mode]``: the key card's chips, Scale, the pentatonic, Blues, each ``[name, steps]`` (``key_scales``);
+- ``harpOutside[mode][offset]``: the line under the harp's holes, a text (``outside``): "Outside B minor: C.";
+- ``harpNotes[mode][i]``, ``harpAltNotes[mode][i][j]``: each chord's notes as steps (its card outlines the holes
+  that sound them), as ``harpChords`` and ``harpAlts`` list the chords.
+
 **A hole's note** (``hole_note``), for a harmonica tab's page (harptab_page.py), whose holes play the same on any
 harp but sound in its key: a hole blown or drawn, bent down a semitone at a time on the reed that bends (the draw on
 holes 1 to 6, the blow on 7 to 10, never 5 or 7: ``Layout.bends``), or overblown (holes 1 to 6, a semitone above the
@@ -92,6 +107,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
+from caracole.viewer.harmony import pentatonic
 from caracole.viewer.theory import MODES, QUALITIES, SCALES, Chord, Key, scale
 
 HOLES = 10
@@ -375,8 +391,12 @@ def tables(key: Key | None, mapped: dict[str, Sequence[Chord | None]],
             forms.append(entries)
         return index
 
+    def steps(chord: Chord | None) -> list[int] | None:
+        return None if chord is None else chord_steps(chord, key.tonic)
+
     out: dict[str, Any] = {"harpKeys": list(HARP_KEYS), "harps": {}, "harpForms": forms, "harpChords": {},
-                           "harpAlts": {}}
+                           "harpAlts": {}, "harpRing": ring(), "harpHoles": [holes(o) for o in range(12)],
+                           "harpScales": {}, "harpOutside": {}, "harpNotes": {}, "harpAltNotes": {}}
     for mode in MODES:
         if mode not in mapped:
             continue
@@ -384,7 +404,73 @@ def tables(key: Key | None, mapped: dict[str, Sequence[Chord | None]],
         out["harps"][mode] = [[c.position, (c.harp - key.tonic) % 12, _label(n, c)] for n, c in enumerate(found)]
         out["harpChords"][mode] = [form(c) for c in mapped[mode]]
         out["harpAlts"][mode] = [[form(a) for a in options] for options in (alts or {}).get(mode, [])]
+        out["harpScales"][mode] = key_scales(mode)
+        out["harpOutside"][mode] = [outside(mode, o) for o in range(12)]
+        out["harpNotes"][mode] = [steps(c) for c in mapped[mode]]
+        out["harpAltNotes"][mode] = [[steps(a) for a in options] for options in (alts or {}).get(mode, [])]
     return out
+
+
+# --- the overlay's tables: the harps round the circle, each harp's holes, the key on it --------------------------
+
+# The blues scale on the tonic (Wikipedia, "Blues scale"): the minor blues (1 ♭3 4 ♭5 5 ♭7) in a mode with a minor
+# third, the major blues (1 2 ♭3 3 5 6) in one with a major third.
+MINOR_BLUES = (0, 3, 5, 6, 7, 10)
+MAJOR_BLUES = (0, 2, 3, 4, 7, 9)
+# The key in words after its tonic, as the key card writes it ("Outside B minor: C.").
+_MODE_WORDS = {"ionian": "major", "aeolian": "minor"}
+
+
+def ring() -> list[list[Any]]:
+    """The 12 harps round the circle of fifths, by position, 1st to 12th: ``[offset, ordinal, mode]``, the harp's key
+    ``offset`` semitones above the song's tonic (the 1st is the song's own key, each next a fifth below), the
+    position's ordinal ("4th"), and the mode the harp plays the song in there (None from the 7th to the 11th)."""
+    return [[harp_for(0, p), ordinal(p), position_mode(p)] for p in POSITIONS]
+
+
+@functools.cache
+def _holes(offset: int) -> tuple[tuple[int, ...], tuple[int, ...], tuple[tuple[str, tuple[int, ...]], ...]]:
+    harp = layout(offset % 12)
+    return (tuple(n % 12 for n in harp.blow), tuple(n % 12 for n in harp.draw),
+            tuple((breath, tuple(n % 12 for n in bent)) for breath, bent in zip(harp.bend_breath, harp.bends,
+                                                                                strict=True)))
+
+
+def holes(offset: int) -> dict[str, Any]:
+    """The harp ``offset`` semitones above the song's tonic, its notes as steps above the tonic: its ten holes'
+    ``blow`` and ``draw``, and each hole's ``bends``, ``[breath, steps]``: the breath its higher reed bends on and
+    its bent notes, a semitone at a time down from that reed, the shallowest first (none on holes 5 and 7)."""
+    blow, draw, bends = _holes(offset)
+    return {"blow": list(blow), "draw": list(draw), "bends": [[breath, list(bent)] for breath, bent in bends]}
+
+
+def key_scales(mode: str) -> list[list[Any]]:
+    """The scales of a key in ``mode`` the harp's key card offers, each ``[name, steps]``: "Scale", its pentatonic
+    ("Minor pentatonic" or "Major pentatonic": ``harmony.pentatonic``) and "Blues" (``MINOR_BLUES``, ``MAJOR_BLUES``,
+    by its third)."""
+    box = list(pentatonic(Key(0, mode)))
+    major = 4 in SCALES[mode]
+    return [["Scale", list(SCALES[mode])], [("Major" if major else "Minor") + " pentatonic", box],
+            ["Blues", list(MAJOR_BLUES if major else MINOR_BLUES)]]
+
+
+def outside(mode: str, offset: int) -> list[str | int]:
+    """What the key card says under the holes of the harp ``offset`` semitones above the song's tonic, a key in
+    ``mode``, as a text (steps for the notes): the notes it blows or draws outside the key's scale, from the harp's
+    key up ("Outside B minor: C."), or that none is ("Every note it blows or draws is in B minor.")."""
+    words = " " + _MODE_WORDS.get(mode, mode)
+    out = [(offset + i) % 12 for i in _IONIAN if (offset + i) % 12 not in SCALES[mode]]
+    if not out:
+        return ["Every note it blows or draws is in ", 0, words + "."]
+    text: list[str | int] = ["Outside ", 0, words + ": "]
+    for n, step in enumerate(out):
+        text += ([", "] if n else []) + [step]
+    return text + ["."]
+
+
+def chord_steps(chord: Chord, tonic: int) -> list[int]:
+    """A chord's notes (its bass too) as steps above ``tonic``, the lowest step first."""
+    return sorted((pc - tonic) % 12 for pc in chord.pitch_classes)
 
 
 def layouts() -> list[list[list[int]]]:

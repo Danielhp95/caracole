@@ -24,6 +24,8 @@
   --p4: #8a4fc7;
   --home: #1c7a3c;
   --away: #1b5fc1;
+  --away-soft: #dce6f8;  /* a harp's draw run, as --accent-soft is its blow run's (the overlay) */
+  --on-away: #ffffff;
   --pull: #973b9d;
   --kb-white: #fdfcfa;
   --kb-black: #2b2926;
@@ -58,6 +60,8 @@
     --kb-black: #262422;
     --home: #6fd08f;
     --away: #8ab8ff;
+    --away-soft: #1b2a44;
+    --on-away: #0b1a33;
     --pull: #e5a3ef;
     --off: #ff9d92;
     --off-bg: #3d1713;
@@ -504,7 +508,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 .seg > button { flex: 1 1 0; display: grid; place-items: center; min-width: 0; min-height: 32px; padding: 0 6px;
   border: 0; border-radius: 7px; background: none; color: var(--muted); font: inherit; font-size: .84rem;
   font-weight: 600; text-align: center; cursor: pointer; }
-.seg > button[aria-pressed="true"] { background: var(--seg-on); color: var(--text);
+.seg > button[aria-pressed="true"], .seg > button[aria-selected="true"] { background: var(--seg-on); color: var(--text);
   box-shadow: 0 1px 2px rgb(0 0 0 / .25), inset 0 0 0 1px var(--border-strong); }
 .seg > button:disabled { opacity: .45; cursor: default; }
 .seg > button:focus-visible { outline-offset: -1px; }
@@ -566,7 +570,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
 @media (hover: hover) {
   #panel .stepper button:hover, .undo:hover { background: var(--raised); }
   #panel .chip:not([aria-pressed="true"]):hover { background: var(--raised); }
-  .seg > button:not([aria-pressed="true"]):not(:disabled):hover { color: var(--text); }
+  .seg > button:not([aria-pressed="true"]):not([aria-selected="true"]):not(:disabled):hover { color: var(--text); }
   .goto:hover, .quiet:hover, .tip-btn:hover { background: var(--raised); }
 }
 /* A finger's target, 44 px either way, wherever a pointer is coarse: the steppers taller, a Reset's target reaching
@@ -807,11 +811,12 @@ a.ver-main .ver-name { color: var(--accent); }
   html[data-necks] body { padding-left: var(--necks); }
   html[data-necks] .bar { left: var(--necks); }
 }
-/* Its head, kept at its top as it scrolls: its name, and Hide (viewer.js; the bar's button brings it back), far
-   enough below the rail's top for the keyboard's ring round Hide to show whole. */
-.nk-head { position: sticky; z-index: 1; top: 0; display: flex; align-items: center; gap: 8px;
-  margin: 0 calc(-16px * var(--nk)); padding: calc(6px * var(--nk)) calc(8px * var(--nk)) 0 calc(16px * var(--nk));
-  background: var(--surface); }
+/* Its head, kept at its top as it scrolls: its tabs, Guitar and Harmonica (overlay.js; or its one tab's name), and
+   Hide (the bar's button brings it back), far enough below the rail's top for the keyboard's ring round Hide to show
+   whole. */
+.nk-head { position: sticky; z-index: 2; top: 0; margin: 0 calc(-16px * var(--nk));
+  padding: calc(6px * var(--nk)) calc(8px * var(--nk)) 0 calc(16px * var(--nk)); background: var(--surface); }
+.nk-row { display: flex; align-items: center; gap: 8px; }
 .nk-title { margin: 0; color: var(--muted); font-size: .72em; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .nk-hide { flex: none; display: grid; place-items: center; width: calc(44px * var(--nk)); height: calc(44px * var(--nk));
@@ -853,5 +858,104 @@ a.ver-main .ver-name { color: var(--accent); }
 .sw.p2 { background: var(--p3); }
 .sw.p3 { background: var(--p4); }
 .sw.tabs { box-shadow: 0 0 0 1.5px var(--surface), 0 0 0 2.5px var(--text); }  /* ringed, as on the neck */
+
+/* The overlay's tabs (overlay.js): a segmented control in the rail's head, the tab shown raised. */
+.ov-tabs { flex: 0 1 auto; min-width: 0; }
+.ov-tabs > button { flex: none; min-width: calc(44px * var(--nk)); min-height: calc(38px * var(--nk));
+  padding: 0 calc(12px * var(--nk)); font-size: .8em; }
+/* The slim bar: once the circle has scrolled out of the rail, it slides in under the head, naming the harp, with
+   Change harp, which goes back up to the circle. Out of the way, it is clipped, and inert. */
+.ov-clip { position: absolute; top: 100%; left: 0; right: 0; overflow: hidden; padding-bottom: 8px;
+  pointer-events: none; }
+.ov-slim { display: flex; align-items: center; gap: 8px; padding: calc(4px * var(--nk)) calc(8px * var(--nk))
+  calc(4px * var(--nk)) calc(16px * var(--nk)); border-bottom: 1px solid var(--border); background: var(--surface);
+  box-shadow: 0 2px 6px rgb(0 0 0 / .08); transform: translateY(calc(-100% - 8px)); visibility: hidden;
+  transition: transform .18s, visibility 0s .18s; }
+.ov-slim.on { transform: none; visibility: visible; pointer-events: auto; transition: transform .18s; }
+@media (prefers-reduced-motion: reduce) { .ov-slim, .ov-slim.on { transition: none; } }
+.ov-harp { flex: 1 1 auto; min-width: 0; margin: 0; font-size: .74em; }
+.ov-harp b { font-size: 1.1em; }
+.necks .ov-change { display: inline-flex; align-items: center; gap: 5px; flex: none; min-width: calc(44px * var(--nk));
+  min-height: calc(40px * var(--nk)); padding: 0 calc(10px * var(--nk)); font-size: .7em; font-weight: 600; }
+.ov-change svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 1.6; }
+.ov-change svg .fill { fill: currentColor; stroke: none; }
+/* The Harmonica tab: the circle of fifths, small, the harp chosen beside it, then the key on that harp and a card per
+   chord, each harp's ten holes drawn across the rail. Its sizes are --nk times the page's, as the necks' are. */
+.hw { display: grid; grid-template-columns: calc(172px * var(--nk)) minmax(0, 1fr); gap: calc(4px * var(--nk));
+  align-items: center; padding-top: calc(6px * var(--nk)); }
+.hw-ring { display: block; width: 100%; height: auto; overflow: visible; }
+.hw-track { fill: none; stroke: var(--border); stroke-dasharray: 2 4; }
+.hw-band { fill: none; stroke: var(--accent-soft); stroke-linecap: round; }
+.hw-band.one { fill: var(--accent-soft); stroke: none; }
+.hw-harp { cursor: pointer; outline: none; -webkit-tap-highlight-color: transparent; }
+.hw-hit { fill: transparent; }
+.hw-dot { fill: var(--surface); stroke: var(--border-strong); stroke-width: 1; }
+.hw-kn { fill: var(--muted); font-size: 9.5px; font-weight: 800; pointer-events: none; }
+.hw-harp.good .hw-dot { fill: var(--text); stroke: none; }
+.hw-harp.good .hw-kn { fill: var(--surface); }
+.hw-harp.sel .hw-dot { fill: var(--accent); stroke: none; }
+.hw-harp.sel .hw-kn { fill: var(--on-accent); }
+.hw-harp:focus-visible .hw-dot { stroke: var(--focus); stroke-width: 3; }
+@media (hover: hover) { .hw-harp:not(.sel):hover .hw-dot { stroke: var(--accent); stroke-width: 1.5; } }
+.hw-ord { fill: var(--muted); font-size: 7.5px; font-weight: 600; }
+.hw-key { fill: var(--text); font-size: 17px; font-weight: 800; }
+.hw-side { min-width: 0; }
+.hw-name { margin: 0; font-size: 1.1em; font-weight: 800; line-height: 1.2; }
+.hw-pos, .hw-plays { margin: .2em 0 0; font-size: .72em; line-height: 1.35; }
+.hw-pos { color: var(--muted); }
+.hw-plays { margin-top: .5em; }
+.hw-tag { display: inline-block; margin: .35em 0 0; padding: 1px 7px; border-radius: 8px; background: var(--accent-soft);
+  color: var(--accent); font-size: .6em; font-weight: 700; }
+.hw-hint { margin: calc(2px * var(--nk)) 0 calc(4px * var(--nk)); color: var(--muted); font-size: .66em;
+  text-align: center; }
+.hw-none { margin: calc(12px * var(--nk)) 0; color: var(--muted); font-size: .82em; }
+.hk, .hc { padding: calc(12px * var(--nk)) 0 calc(10px * var(--nk)); }
+.hk + .hc, .hc + .hc { border-top: 1px solid var(--border); }
+.hk-name, .hc-name { margin: 0 0 calc(6px * var(--nk)); font-weight: 700; }
+.hk-name small, .hc-name small { margin-left: .45em; color: var(--muted); font-size: .7em; font-weight: 500; }
+.necks .hk-switch { flex-wrap: nowrap; gap: calc(6px * var(--nk)); margin-bottom: calc(4px * var(--nk)); }
+.necks .hk-switch .chip { flex: none; min-width: calc(44px * var(--nk)); min-height: calc(44px * var(--nk));
+  padding: 0 calc(10px * var(--nk)); font-size: .74em; }
+.hk-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: .3em 0 0; font-size: .72em; }
+.hk-legend > span, .hc-run { display: inline-flex; align-items: center; gap: 6px; }
+.hk-out { margin: .3em 0 0; color: var(--muted); font-size: .7em; }
+.hc-run { margin: .2em 0 0; font-size: .74em; }
+.sw.k-tonic, .sw.b-blow { background: var(--accent); }
+.sw.k-in { background: var(--text); }
+.sw.k-bent { box-shadow: inset 0 0 0 1.5px var(--pull); }
+.sw.b-draw { background: var(--away); }
+.sw.b-none { box-shadow: inset 0 0 0 1.5px var(--muted); }
+/* A harp's holes: blow above the comb, draw below, bends beyond (the key's card). The key's tonic filled in the
+   accent, a note of its scale filled dark, any other outlined and faint; a bent note in the scale outlined in --pull,
+   one outside it a faint dot. On a chord's card, the run that plays it filled in its breath's colour (blow the
+   accent, draw --away) on a soft band (dashed for a minor stand-in), its other notes outlined, the rest faint. */
+.harp { display: block; width: 100%; height: auto; margin-top: calc(4px * var(--nk)); }
+.hx-lab { fill: var(--muted); font-size: 9px; font-weight: 600; }
+.hx-comb { fill: var(--raised); stroke: var(--border); }
+.hx-hole { fill: var(--muted); font-size: 8.5px; }
+.hx-name { fill: var(--text); font-size: 8.5px; font-weight: 700; }
+.hx-name.sm { font-size: 7px; }
+.hx.tonic .hx-note, .hx.bent-tonic .hx-note { fill: var(--accent); }
+.hx.tonic .hx-name, .hx.bent-tonic .hx-name { fill: var(--on-accent); }
+.hx.in .hx-note { fill: var(--text); }
+.hx.in .hx-name { fill: var(--surface); }
+.hx.out .hx-note { fill: none; stroke: var(--border-strong); stroke-width: 1; opacity: .7; }
+.hx.out .hx-name, .hx.off .hx-name { fill: var(--muted); opacity: .6; }
+.hx.bent-in .hx-note { fill: none; stroke: var(--pull); stroke-width: 1.3; }
+.hx.bent-in .hx-name { fill: var(--pull); }
+.hx-dot { fill: var(--muted); opacity: .4; }
+.hx.plain .hx-note { fill: none; stroke: var(--muted); stroke-width: 1; }
+.hx-run.blow { fill: var(--accent-soft); }
+.hx-run.draw { fill: var(--away-soft); }
+.hx-run.sub { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 2; }
+.hx.run.blow .hx-note { fill: var(--accent); }
+.hx.run.draw .hx-note { fill: var(--away); }
+.hx.run.blow .hx-name { fill: var(--on-accent); }
+.hx.run.draw .hx-name { fill: var(--on-away); }
+.hx.tone .hx-note { fill: var(--surface); stroke-width: 1.5; }
+.hx.tone.blow .hx-note { stroke: var(--accent); }
+.hx.tone.draw .hx-note { stroke: var(--away); }
+.hx.tone.blow .hx-name { fill: var(--accent); }
+.hx.tone.draw .hx-name { fill: var(--away); }
 /* A chord's diagram on its card is a button while it can be heard (viewer.js heardBy, strum.js). */
 .diagram[role="button"] { cursor: pointer; border-radius: 8px; -webkit-tap-highlight-color: transparent; }

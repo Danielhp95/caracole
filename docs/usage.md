@@ -2341,8 +2341,10 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   settings, sets the volume: Off (crossed out), Soft, Medium (the default) or
   Loud (one, two and three waves). With it off, a tap opens the card alone. A
   phone set to silent may keep it silent.
-- **A neck per chord**, on a laptop (1200 px wide or more): a rail on the
-  left lists each chord of the song once, in the order it first comes, with a
+- **The overlay**, on a laptop (1200 px wide or more): a rail on the left
+  with two tabs, **Guitar** and **Harmonica**; a sheet opens on Guitar, and
+  the tab you choose holds for that page alone. **Guitar** is a neck per
+  chord: it lists each chord of the song once, in the order it first comes, with a
   guitar neck (frets 0 to 15, the high e on top) showing every shape of it in
   a colour of its own, the tab's own ringed (a note several shapes play is a
   smaller dot for each, side by side in the fret, the first shape leftmost,
@@ -2355,7 +2357,27 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   keeps it, as the card's ‹ › do (and the rail follows the card's). In a
   legend the arrow keys go from shape to shape; Tab stops once a chord. The
   necks follow the key, the capo and the mode, and two chords shown by one
-  name (A# and Bb, transposed to B) share one neck. The rail scrolls on its
+  name (A# and Bb, transposed to B) share one neck. With a ukulele or a
+  baritone chosen (below), the necks are theirs and the tab is named so; with
+  an instrument that has no neck (the piano, the harmonica, the flute, the
+  recorder), they are the guitar's, at its capo. **Harmonica** picks the harp:
+  a small circle of fifths with the key the song sounds in at its middle
+  ("Bm") and the 12 harps round it, each at its position (the 1st, the harp in
+  the song's key, at the top, then counted round the other way), the ones that
+  play the song's chords shaded and marked with their position; tap one (or
+  use the arrow keys). Beside it, the harp chosen, its position and mode ("D
+  harp, 4th position, aeolian"), "the tab's" on the harp the song's harmonica
+  tab plays on, and what it plays ("Plays A, D and Em; E as Em."). Under it,
+  the key on that harp: Scale, the pentatonic or Blues over its ten holes,
+  blow above, draw below, the bends beyond, the tonic in rust, the key's
+  notes dark, the rest faint, and the harp's notes outside the key ("Outside B
+  minor: C."); then a card per chord, the holes that play it lit ("draw 4–6",
+  "draw 4–6 · as Em, the minor stand-in") or "no chord here". It follows the
+  song as it sounds: a harmonica takes no capo, and a transposition moves
+  every harp. It starts on the harp the song's harmonica tab plays on (with the
+  record, or as its words say), else on the first harp for the song's key.
+  Once the circle has scrolled away, a slim bar at the rail's top names the
+  harp, with **Change harp** to go back up to it. The rail scrolls on its
   own, the song and the bar move over for it, and it isn't printed; on a
   narrower screen or a phone, the chord's card is where the shapes are.
   **Showing and hiding it**: the button at the rail's top (a sidebar, "Hide
@@ -2753,6 +2775,14 @@ the library page link it, the tab's text beside it.
   stops when pressed again (no rhythm: the tab has none).
 - **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
   with none), and **The tab as text**, at the foot, opens `harmonica-1.txt`.
+- **The overlay**, from 1200 px, as on the sheet viewer, with Harmonica first
+  and shown: its harp is the page's, both ways (a harp tapped on the circle is
+  the one the page plays and names its notes on, and − and + move the
+  circle's choice). **Guitar** shows the song's sheet as written: its key's
+  neck and its chords' necks. A song with no sheet has no Guitar tab, and with
+  no key to place the harps in, its Harmonica tab shows the page's harp's
+  notes alone. Its Hide and the bar's button are the viewer's, and so is the
+  choice: hidden here, hidden on every sheet.
 
 The page keeps the harp, Notes, the text size and the scroll speed in its
 address too (`harmonica-1.html#harp=A&notes=1&fs=20`).

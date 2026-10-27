@@ -225,10 +225,13 @@ def test_the_guitars_capo_hints_are_the_guitars_alone(tmp_path):
 
 RAIL = """(() => ({ shown: !document.getElementById('necks').hidden,
   strings: [...document.querySelectorAll('#necks svg.neck')].map((s) => s.querySelectorAll('.nk-string').length),
-  button: !document.getElementById('necks-toggle').hidden }))()"""
+  button: !document.getElementById('necks-toggle').hidden,
+  tabs: [...document.querySelectorAll('#necks [role=tab]')].map((t) => t.textContent),
+  names: [...document.querySelectorAll('#necks .nk-name')].map((n) => n.textContent) }))()"""
 
 
-def test_the_rail_of_necks_has_four_strings_on_a_ukulele_and_is_none_on_the_piano(tmp_path):
+def test_the_rail_of_necks_has_four_strings_on_a_ukulele_and_the_guitars_on_the_piano(tmp_path):
+    # Its Guitar tab is the instrument's necks, named for it; on one with no neck (the piano), the guitar's.
     with open_viewer(tmp_path, written(tmp_path, SONG), **DESKTOP) as b:
         guitar = b.js(RAIL)
         choose(b, "Ukulele")
@@ -238,10 +241,14 @@ def test_the_rail_of_necks_has_four_strings_on_a_ukulele_and_is_none_on_the_pian
         piano = b.js(RAIL)
         padding = b.js("getComputedStyle(document.body).paddingLeft")
     assert guitar["shown"] and set(guitar["strings"]) == {6} and guitar["button"]
+    assert guitar["tabs"] == ["Guitar", "Harmonica"]
     assert uke["shown"] and set(uke["strings"]) == {4} and len(uke["strings"]) == 1 + 8  # the key's, then a chord's
+    assert uke["tabs"] == ["Ukulele", "Harmonica"]
     shapes = chord_shapes(UKULELE, parse_chord("C"))
     assert dots == sum(sum(1 for f in p[0] if f != "x") for p in shapes)
-    assert not piano["shown"] and not piano["button"] and piano["strings"] == [] and padding == "0px"
+    assert piano["shown"] and piano["button"] and padding != "0px"
+    assert piano["tabs"] == ["Guitar", "Harmonica"] and piano["strings"] == guitar["strings"]
+    assert piano["names"] == guitar["names"]  # the guitar's chords, as its capo names them
 
 
 # --- kept, carried, in the address -----------------------------------------------------------------------------
