@@ -218,20 +218,35 @@ SEEN = """Array.from(document.querySelectorAll('#songbooks .book .set-line:not(.
 STATUS = "((document.querySelector('#songbooks .book .book-status') || {}).textContent || '')"
 SHOWN = "((s) => { const n = document.querySelector(s); return Boolean(n && n.checkVisibility()); })"
 
-# Notes every layout shift that no input brought about (buffered: since the page loaded), and what moved.
+# Notes every layout shift that no input brought about (buffered: since the page loaded), what moved, and when (``at``,
+# by the page's clock).
 SHIFTS = """(() => {
   window.shifts = [];
   new PerformanceObserver((list) => {
     for (const e of list.getEntries()) {
       if (e.hadRecentInput) continue;
       const moved = (e.sources || []).map((s) => (s.node ? s.node.id || String(s.node.className || s.node.nodeName) : "?"));
-      window.shifts.push({ value: Math.round(e.value * 10000) / 10000, moved });
+      window.shifts.push({ value: Math.round(e.value * 10000) / 10000, moved, at: Math.round(e.startTime) });
     }
   }).observe({ type: "layout-shift", buffered: true });
   return true;
 })()"""
 # The shifts but the masthead's Requests count's, which counts what runs, as on every page that asks for something.
 MOVED = "window.shifts.filter((s) => s.value > 0 && JSON.stringify(s.moved) !== '[\"links\"]')"
+# The page's clock once the frames under way are drawn: a shift after it (``at``) came after what was drawn by then.
+DRAWN = "new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(performance.now()))))"
+# When the page hears the server's answer to a form it posts (``window.answered``, by its clock), before its script does.
+ANSWERED = """(() => {
+  const real = window.fetch;
+  window.fetch = (url, init) => real(url, init).then((r) => {
+    if (init && init.method === "POST") window.answered = performance.now();
+    return r;
+  });
+  return true;
+})()"""
+# What a Select's change moved on its own: none of what the tab's opening moved, on the server's answer to the tap
+# (``window.answered``, and the frames drawn by ``tab``), which is the tap's, however late a busy machine gives it.
+OWN_MOVES = "{moved}.filter((s) => s.at <= window.answered || s.at > {tab})"
 STILL = "new Promise((done) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(done)), 400))"
 
 
@@ -739,10 +754,11 @@ def test_a_kept_guitar_pro_files_mark_downloads_it_where_no_page_shows_it(serve,
 
 
 def test_select_makes_a_songbook_and_the_tab_opens_on_it(serve, cfg, library, tmp_path):
-    url, posted = serve(Fake(cfg))
+    hold = threading.Event()
+    url, posted = serve(Fake(cfg, hold=hold))
     with opened(tmp_path, 390, 844) as page:
         page.open(url)
-        assert page.js(SHIFTS)
+        assert page.js(SHIFTS) and page.js(ANSWERED)
         page.click(".pick-toggle")
         page.click('#list [data-id="%d"] .pick' % library["Hysteria"].id)
         page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
@@ -752,7 +768,10 @@ def test_select_makes_a_songbook_and_the_tab_opens_on_it(serve, cfg, library, tm
         page.click(".pickbar-form button[type=submit]")
         # The tab opens on the songbook at once, its songs in the order picked, and says how it goes.
         assert page.wait(f"{SHOWN}('#songbooks') && document.querySelector('#songbooks .book h2').textContent === "
-                         "'Beach nights'", timeout=5)
+                         "'Beach nights'", timeout=10)
+        # It opens on the server's answer to the tap (OWN_MOVES). The make is held until then, and ends after.
+        tab = page.js(DRAWN)
+        hold.set()
         assert page.js(TITLES) == ["Hysteria", "Creep"]
         assert page.wait(f"{STATUS} === 'Made·Open songbook'", timeout=20), page.js(STATUS)
         assert page.js(TITLES) == ["Hysteria", "Creep"] and "book=Beach+nights" in page.js("location.hash")
@@ -762,27 +781,30 @@ def test_select_makes_a_songbook_and_the_tab_opens_on_it(serve, cfg, library, tm
             "", "Campfire", "Road trip", "Beach nights"]
         assert posted[0][0] == "/songbook/make"
         page.js(STILL)
-        assert page.js(MOVED) == [], page.js("window.shifts")
+        assert page.js(OWN_MOVES.format(moved=MOVED, tab=tab)) == [], page.js("window.shifts")
 
 
 def test_select_adds_to_a_songbook_there_is_and_the_tab_opens_on_it(serve, cfg, library, tmp_path):
-    url, posted = serve(Fake(cfg))
+    hold = threading.Event()
+    url, posted = serve(Fake(cfg, hold=hold))
     with opened(tmp_path) as page:
         page.open(url)
-        assert page.js(SHIFTS)
+        assert page.js(SHIFTS) and page.js(ANSWERED)
         page.click(".pick-toggle")
         page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
         page.js("(() => { const into = document.querySelector('.pick-into'); into.value = 'Road trip';"
                 " into.dispatchEvent(new Event('change')); })()")
         page.click(".pickbar-form button[type=submit]")
         assert page.wait(f"{SHOWN}('#songbooks') && document.querySelector('#songbooks .book h2').textContent === "
-                         "'Road trip'", timeout=5)
+                         "'Road trip'", timeout=10)
+        tab = page.js(DRAWN)  # opened on the server's answer to the tap, as a make's is
+        hold.set()
         assert page.js(TITLES) == ["De Música Ligera", "Creep"]  # at its end, at once
         assert page.wait(f"{STATUS} === 'Added·Open songbook'", timeout=20), page.js(STATUS)
         assert page.js(SET)[1] == ["2", "Creep", "Radiohead", "A Minor"]
         assert posted == [("/songbook/add", {"name": "Road trip", "songs": str(library["Creep"].id)})]
         page.js(STILL)
-        assert page.js(MOVED) == [], page.js("window.shifts")
+        assert page.js(OWN_MOVES.format(moved=MOVED, tab=tab)) == [], page.js("window.shifts")
 
 
 def test_select_refused_says_why_in_its_bar_and_keeps_the_picks(serve, cfg, library, tmp_path):
