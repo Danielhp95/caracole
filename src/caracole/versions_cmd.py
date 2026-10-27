@@ -62,6 +62,7 @@ KEPT_WORDS = {
     "sheet": "it is the sheet already",
     "gone": "Ultimate Guitar no longer has it",
     "unreadable": "its page can't be read now; it waits",
+    "closed": "Ultimate Guitar moved its page where robots.txt keeps caracole out; nothing kept",
     "no text": "its page has no sheet caracole can keep",
     "unknown": "it isn't one of the song's chords versions caracole may use",
 }

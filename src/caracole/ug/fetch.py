@@ -250,6 +250,7 @@ class _SongRun:
     pages: dict[int, UGTabPage | None] = field(default_factory=dict)
     fetched: Counter[str] = field(default_factory=Counter)
     unreadable: set[int] = field(default_factory=set)  # tabs whose pages couldn't be read this run
+    closed: set[int] = field(default_factory=set)  # tabs whose pages UG moved where robots.txt closes, this run
     kept_versions: tuple[str, ...] = ()  # the tabs kept beside the sheet, once the sheet slot is settled
 
     @property
@@ -589,6 +590,7 @@ def _page(run: _SongRun, tab_id: int, url: str, kind: str | None = None) -> UGTa
     except RobotsClosed:
         run.fetched[kind or "?"] += 1  # the request UG answered with the redirect
         run.pages[tab_id] = None
+        run.closed.add(tab_id)
         return None
     kv_delete(run.conn, _unreadable_key(tab_id))
     run.pages[tab_id] = page
@@ -947,7 +949,8 @@ def keep_version(ctx: FetchContext, song: Song, tab_id: int) -> str:
     version is kept as ``version-<tab>.txt`` and ``.json`` and noted as yours, so the fetch keeps it
     whatever the ranking. What came of it: ``kept``, ``same`` (its text is a kept one's: that one's page
     shows it), ``held`` (its text is another kept file's, the tab's: nothing shows it), ``sheet`` (it is
-    the sheet), ``gone`` (UG answered 404), ``unreadable`` (the page won't parse: it waits), ``no text``,
+    the sheet), ``gone`` (UG answered 404), ``unreadable`` (the page won't parse: it waits), ``closed`` (UG moved
+    the page where robots.txt closes: it waits too, nothing noted), ``no text``,
     or ``unknown`` (not a chords version of the song caracole may use). Only ``kept`` and ``same`` note it
     as yours. A block, a spent budget or an error raises, keeping nothing."""
     run = _SongRun(ctx, song)
@@ -958,6 +961,8 @@ def keep_version(ctx: FetchContext, song: Song, tab_id: int) -> str:
     if page is None:
         if get_version(run.conn, row.id).gone:
             return "gone"
+        if tab_id in run.closed:
+            return "closed"  # no failure and no miss: neither unreadable nor a page with no text
         return "unreadable" if tab_id in run.unreadable else "no text"
     assert page.content is not None
     lines = _lyric_lines(song)

@@ -372,3 +372,18 @@ def test_a_version_whose_text_is_the_tabs_is_not_kept_and_leaves_no_file(conn, t
     assert kept_by_you(conn, song.id) == ()
     listed = {x.tab_id: (x.kept, x.page) for x in in_library(conn, song.id, RankPolicy())}
     assert listed["104"] == (False, None)
+
+
+def test_a_version_whose_page_redirects_where_robots_txt_closes_is_closed_never_textless(conn, tmp_path):
+    # RobotsClosed is no failure and no miss: the keep says so, and nothing notes the version as one it can't keep.
+    from test_fetch import CLOSED
+
+    song = accepted(conn)
+    ug = FakeUG()
+    four_chords(conn, ug)
+    fetch(conn, ug, tmp_path, song)
+    ug.redirect(slugged(104), CLOSED)
+
+    assert keep(conn, ug, tmp_path, song, 104) == "closed"
+    assert CLOSED not in ug.requests
+    assert not list(song_dir(tmp_path / "lib", song).glob("version-104*"))
