@@ -92,7 +92,7 @@ def test_the_viewers_policy_allows_the_icon_and_keeps_its_sandbox():
     page = build_viewer(CHO)
     policy = META_POLICY.search(page).group(1)
     assert "img-src data:;" in policy and "default-src 'none'" in policy and "form-action 'none'" in policy
-    assert viewer_csp(page.encode("utf-8")).startswith("sandbox allow-scripts; ")
+    assert viewer_csp(page.encode("utf-8")).startswith("sandbox allow-scripts allow-downloads; ")
 
 
 def test_caracole_serve_answers_favicon_ico_with_the_mark(cfg):

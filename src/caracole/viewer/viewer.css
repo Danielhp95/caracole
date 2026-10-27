@@ -663,6 +663,18 @@ a.ver-main .ver-name { color: var(--accent); }
 .card .hint { grid-area: note; margin-top: 8px; text-align: start; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 650; }
+/* Export PDF's question (viewer.js): a modal dialog in the middle of the screen, the song dimmed under it, a card like
+   the chord's; the version in bold, what it does under it, then its three answers a row each, the first the accent's.
+   Its box (.ask-in) holds the padding, so that a tap on the dialog itself is one on the backdrop. */
+.ask { width: min(400px, calc(100vw - 32px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0;
+  border: 1px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
+  box-shadow: 0 12px 40px rgb(0 0 0 / .3); }
+.ask::backdrop { background: rgb(0 0 0 / .45); }
+.ask-in { padding: 6px 16px 16px; }
+.ask-v { margin: 2px 0 0; font-weight: 650; }
+.ask .hint { margin-top: 4px; font-size: .88rem; }
+.ask-acts { display: grid; gap: 8px; margin-top: 16px; }
+.ask-acts .btn { justify-content: center; width: 100%; }
 .noscript { position: fixed; bottom: 0; left: 0; right: 0; margin: 0; padding: 8px 16px; background: var(--raised);
   color: var(--muted); font-size: .85rem; text-align: center; }
 

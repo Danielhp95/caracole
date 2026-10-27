@@ -284,3 +284,56 @@ def test_a_phone_on_the_lan_cancels_a_request(cfg, conn, tmp_path):
     finally:
         server.shutdown()
         server.server_close()
+
+
+def downloaded(folder: Path, n: int, timeout: float = 15) -> list[str]:
+    """The names of the files a browser saved into ``folder``, once there are ``n`` (none half written)."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        names = sorted(p.name for p in folder.iterdir() if not p.name.endswith(".crdownload"))
+        if len(names) >= n:
+            return names
+        time.sleep(0.05)
+    raise AssertionError(f"no {n} downloads in {folder}: {sorted(p.name for p in folder.iterdir())}")
+
+
+@in_chromium
+def test_the_served_viewer_downloads_its_pdf_and_asks_before_making_a_version_yours(cfg, conn, tmp_path, monkeypatch):
+    # The viewer is sandboxed (no popups, no forms): its Export PDF is a plain link to the PDF, which the sandbox lets
+    # it download, the page staying where it is. On a version other than the song's own it asks first, and Download
+    # and make it mine queues Make this my version too.
+    from caracole import render
+    from helpers.rendered import fake_chordpro
+
+    real = render.version_pdf
+    monkeypatch.setattr(render, "version_pdf", lambda *a, **k: real(*a, runner=fake_chordpro, **k))
+    rendered_song(conn, cfg)  # in G
+    app = WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    server = running(app)
+    url = f"http://127.0.0.1:{server.server_address[1]}/" + quote("Soda Stereo/De Música Ligera/sheet.html") + "#fs=20"
+    saved = tmp_path / "downloads"
+    saved.mkdir()
+    try:
+        with Chromium(tmp_path / "profile") as browser:
+            browser.send("Browser.setDownloadBehavior", behavior="allow", downloadPath=str(saved))
+            tab = browser.open(url)
+            tab.wait_for("document.documentElement.dataset.ready === '1'")
+            tab.eval("window.before = true")
+            tab.click("#more")
+            tab.eval("document.querySelector('#export').scrollIntoView({block: 'center'})")
+            tab.click("#export")  # the song's own: at once
+            assert downloaded(saved, 1) == ["Soda Stereo - De Música Ligera (G Major, capo 0).pdf"]
+            assert tab.eval("window.before === true && !document.getElementById('export-ask').open")
+            tab.eval("document.getElementById('up').click()")  # a semitone up: another version
+            tab.click("#export")
+            tab.wait_for("document.getElementById('export-ask').open")
+            assert tab.eval("document.getElementById('ask-version').textContent") == "Ab Major"
+            tab.click("#ask-mine")
+            assert "Soda Stereo - De Música Ligera (Ab Major, capo 0).pdf" in downloaded(saved, 2)
+            assert tab.eval("window.before === true && !document.getElementById('export-ask').open")
+        [job] = app.queue.snapshot()
+        assert [list(step.args) for step in job.steps] == [
+            ["render", "--song=Soda Stereo - De Música Ligera", "--version=t=1", "--mine"]]
+    finally:
+        server.shutdown()
+        server.server_close()

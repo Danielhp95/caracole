@@ -309,7 +309,11 @@ Rules a change there keeps (the Invariants below are the others):
   no page: `GET /export.pdf` (export_routes.py) renders the version in this process (render.py `version_pdf`, in a
   private folder under the cache) and answers it as an attachment, writing nothing into the library and recording
   nothing, with no lock and no queue; with `mine=1` (the exception above) it queues Make this my version too, under
-  the song's key (`jobs.EXPORTING`, `jobs.MINE`).
+  the song's key (`jobs.EXPORTING`, `jobs.MINE`). The viewer's Export PDF is a link to it, which its sandbox may
+  download (`viewer_csp`: `allow-downloads`, nothing else added), the page staying where it is; on a version whose
+  music differs from the song's own (key, mode, capo, swaps, shapes: viewer.js `musicOf`; never a reading setting nor
+  the instrument, the player's), a modal dialog asks first, Download and make it mine (`mine=1`), Just download or
+  Cancel (test_viewer_panels.py, test_web_server.py's download in the real sandbox).
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library.

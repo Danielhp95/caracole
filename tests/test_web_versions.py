@@ -100,7 +100,7 @@ def test_a_kept_versions_page_is_served_as_a_viewer_in_its_sandbox(app, conn, cf
     assert response.body == (song_dir(cfg.library_dir, song) / f"version-{KEPT}.html").read_bytes()
     own = META_POLICY.search(text(response)).group(1)
     assert [v for k, v in response.headers if k.lower() == "content-security-policy"] == [
-        f"sandbox allow-scripts; {own}; frame-ancestors 'none'"]
+        f"sandbox allow-scripts allow-downloads; {own}; frame-ancestors 'none'"]
     assert header(response, "content-type") == "text/html; charset=utf-8"
     assert header(response, "x-frame-options") == "DENY"
 

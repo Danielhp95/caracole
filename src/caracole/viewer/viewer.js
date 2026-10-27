@@ -44,7 +44,7 @@
     ["M14.5 10a2.5 2.5 0 0 1 0 4", "M17 8a5.5 5.5 0 0 1 0 8", "M19.5 5.5a9.5 9.5 0 0 1 0 13"]];
   const VOL = 2;
   // Whether caracole serve sent this page, so that its controls may link to the server's own pages: Export PDF
-  // (/export), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
+  // (/export.pdf), a version made the one or kept (/versions), a Guitar Pro file drawn in the browser (/guitar). From a
   // file they show the command to run, or the file itself, instead; and so in caracole's Android app, whose offline
   // copy of the library (androidx.webkit's WebViewAssetLoader, always at appassets.androidplatform.net) reads like
   // a file: no server answers there. The one place the page tells the two apart.
@@ -101,17 +101,17 @@
   // The shapes kept chosen, each with the chord it was chosen for (atSigns): read back once the chords
   // can be named (below setAt), as only a chord still named so gets its shape back.
   let keptAt = null;
-  // Where an address (or the song's own version) plays the song: what it names of it.
-  const adopt = (params) => {
-    if (params.has("alt")) state.alt = swapsOf(params.get("alt"));
+  // Where an address (or the song's own version) plays the song: what it names of it, into the state (or ``into``).
+  const adopt = (params, into = state) => {
+    if (params.has("alt")) into.alt = swapsOf(params.get("alt"));
     if (params.has("at")) {
-      state.at = positionsOf(params.get("at"));
-      keptAt = null;  // the address says which
+      into.at = positionsOf(params.get("at"));
+      if (into === state) keptAt = null;  // the address says which
     }
-    if (params.has("t")) state.t = clampT(params.get("t"));
-    if (validMode(params.get("mode"))) state.mode = params.get("mode");
-    if (params.has("capo")) state.capo = fretOf(params.get("capo"));
-    if (params.has("nm")) state.nm = nmOf(params.get("nm"));
+    if (params.has("t")) into.t = clampT(params.get("t"));
+    if (validMode(params.get("mode"))) into.mode = params.get("mode");
+    if (params.has("capo")) into.capo = fretOf(params.get("capo"));
+    if (params.has("nm")) into.nm = nmOf(params.get("nm"));
   };
   // The song's own version (overrides.toml's [version], "Make this my version"), which its PDF is in: the page
   // starts there when its address names no version of its own, and Reset everything goes back there.
@@ -232,9 +232,9 @@
     versionLinks();
   };
 
-  // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the server's export page
-  // for this very address, followed in this tab (the sandbox has no popups); from a file, a row that unfolds the
-  // command that makes it, with Copy.
+  // Export PDF of this version, named at its right ("D Dorian, capo 2"): served, a link to the PDF itself for this very
+  // address (caracole serve's /export.pdf, which answers it as a download: the sandbox allows downloads, and the page
+  // stays where it is); from a file, a row that unfolds the command that makes it, with Copy.
   const exportLink = () => {
     const link = $("export");
     const cmd = $("export-cmd");
@@ -258,8 +258,70 @@
     const query = new URLSearchParams();
     query.set("sheet", sheetPath());
     version.forEach((value, name) => query.append(name, value));
-    link.setAttribute("href", "/export?" + query.toString());
+    link.setAttribute("href", "/export.pdf?" + query.toString());
   };
+  // What of where the song is played makes its music (the key, the mode, the capo, the chords swapped in that mode and
+  // the shapes chosen), never how it is read (the text size, the scroll, the chord names, the necks, the pinyin, the
+  // strum, and the instrument, the player's): two states that play the song alike say the same.
+  const musicOf = (s) => {
+    const mode = key ? s.mode || key.mode : "";
+    const swaps = (s.alt && s.alt[mode]) || {};
+    const alt = Object.keys(swaps).filter((i) => Array.isArray(swaps[i])).sort((a, b) => a - b)
+      .map((i) => [i].concat(swaps[i]).join("."));
+    const at = Object.keys(s.at || {}).filter((i) => Number(s.at[i]) > 0).sort((a, b) => a - b)
+      .map((i) => i + "." + s.at[i]);
+    return [s.t, mode, s.capo === null ? sheetCapo : s.capo, alt.join(","), at.join(",")].join("|");
+  };
+  // The song's own version, where the page opens with no version in its address (data.start over the sheet at its
+  // [transpose]), or the one made the song's own on this page since (Download and make it mine), which its job saves.
+  let madeMine = null;
+  const ownMusic = () => {
+    if (madeMine !== null) return madeMine;
+    const mine = { t: Number(data.transpose) || 0, mode: null, alt: {}, at: {}, capo: null };
+    adopt(start, mine);
+    return musicOf(mine);
+  };
+  // Served, Export PDF pressed on a version other than the song's own asks first: make it your version too (the
+  // download with mine=1, which queues `caracole render --mine`: its PDF, its viewer and its songbooks then start
+  // there), just download it, or neither. A modal dialog, the song dimmed under it: its focus goes round within it, and
+  // Escape, ×, Cancel or a tap beside its box closes it, the focus back on Export PDF. On the song's own, the download
+  // at once.
+  const ask = $("export-ask");
+  if (ask && $("export")) {
+    const title = (document.querySelector("h1") || {}).textContent || "";
+    $("export").addEventListener("click", (e) => {
+      if (!served || musicOf(state) === ownMusic()) return;
+      e.preventDefault();
+      const href = $("export").getAttribute("href");
+      $("ask-title").textContent = "Make this your version of " + title + "?";
+      $("ask-version").textContent = versionWords().filter(Boolean).join(", ");
+      $("ask-just").setAttribute("href", href);
+      $("ask-mine").setAttribute("href", href + "&mine=1");
+      ask.showModal();
+      $("ask-title").focus({ preventScroll: true });
+    });
+    ask.addEventListener("click", (e) => {
+      if (e.target === ask) ask.close();  // beside its box: the backdrop
+    });
+    for (const id of ["ask-x", "ask-cancel", "ask-just"]) $(id).addEventListener("click", () => ask.close());
+    $("ask-mine").addEventListener("click", () => {
+      madeMine = musicOf(state);
+      ask.close();
+    });
+    ask.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();  // the dialog closes itself, and nothing under it
+        return;
+      }
+      if (e.key !== "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+      const mine = Array.from(ask.querySelectorAll(FOCUSABLE)).filter(reachable);
+      const here = mine.indexOf(document.activeElement);
+      const to = e.shiftKey ? (here <= 0 ? mine[mine.length - 1] : null) : (here === mine.length - 1 ? mine[0] : null);
+      if (!to) return;
+      e.preventDefault();
+      to.focus();
+    });
+  }
   // The page's path in the library, as caracole serve serves it ("Artist/Title/sheet.html"); its file name.
   const sheetPath = () => decodeURIComponent(location.pathname.slice(1));
   const pageName = () => {

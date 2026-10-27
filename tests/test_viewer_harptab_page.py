@@ -52,7 +52,7 @@ def test_it_loads_nothing_and_allows_exactly_its_scripts_and_styles():
                       "form-action 'none'")
     assert "<script src" not in html and "<link rel=\"stylesheet\"" not in html
     served = viewer_csp(html.encode("utf-8"))
-    assert served.startswith("sandbox allow-scripts; default-src 'none'")
+    assert served.startswith("sandbox allow-scripts allow-downloads; default-src 'none'")
 
 
 def test_its_script_builds_every_element_and_writes_no_markup():
