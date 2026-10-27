@@ -3427,11 +3427,14 @@ Who can reach it, below).
   - a song's **grip** (⠿) drags it to its place; on the keyboard, ↑ and ↓ on
     the grip move it, and the move is sent a moment after the last key, so
     ↑ ↑ ↑ is one `caracole songbook move`;
-  - its **chip** ("A Minor") opens its key, mode and capo there:
-    **Play it here** runs `caracole songbook set NAME SONG --key K --mode M
-    --capo N`, the capo always sent with the key and the mode, so a sheet that
-    takes the song's place later still sounds in that key; **Its own version**
-    runs `--clear`;
+  - its **chip** ("A Minor", "A Minor, piano") opens its key, mode, capo and
+    instrument there: **Play it here** runs `caracole songbook set NAME SONG
+    --key K --mode M --capo N`, the capo always sent with the key and the mode,
+    so a sheet that takes the song's place later still sounds in that key, and
+    `--instrument I` once you choose another instrument; on one with no capo
+    (the piano, the harmonica, the winds) the capo menu is off and the key is
+    the key the song sounds in, which the key menu takes as you choose it;
+    **Its own version** runs `--clear`;
   - **×** takes it out; **Get it**, on a song with no sheet yet, looks it up
     now (one `caracole get`), then makes the songbook again with its sheet;
   - **Get the 2 missing songs now** looks up each song of yours there without
@@ -3641,7 +3644,13 @@ in `Library/_songbooks/<name>/`:
   else in the song's own version (its `[version]`, else its `[transpose]`, else
   as written), every chord written as its viewer shows it there (Bb, not
   chordpro's A#) with the viewer's shape as its diagram, all from one chordpro run, with the Chinese font when a song
-  needs it. A song without a sheet keeps its place: the contents name it
+  needs it. A song set on another instrument is printed for it, as an export
+  is (`caracole render --version`, above): a ukulele's four strings, the
+  piano's keyboards, the harmonica's harps and holes, the winds' scale. One
+  chordpro run draws diagrams of one number of strings, so the PDF draws
+  those most of its songs on a fretted instrument have (the guitar's six on a
+  tie), and writes the others' shapes as frets above their song (`Ukulele: C
+  0003 · Am 2000 · F 2010`). A song without a sheet keeps its place: the contents name it
   ("Hysteria · Muse · missing: no sheet yet"), and its page says so. Its
   document title, the name a PDF viewer or a phone shows, is the songbook's.
 - **`songbook.html`**: one page for the phone, which opens from the synced
@@ -3651,7 +3660,8 @@ in `Library/_songbooks/<name>/`:
   where the songbook plays it); tap
   a song to open it in the sheet viewer, with everything the viewer does
   (chord shapes, transposition, chords to play instead, modes, scrolling by
-  itself), each song opening where the songbook plays it and keeping its own settings, its scroll
+  itself), each song opening where the songbook plays it (on its instrument
+  too) and keeping its own settings, its scroll
   speed, text size and chosen shapes among them. Previous and Next name the
   songs they go to ("‹ Hotel California", "Next: little wolf ›", a title too long for the phone
   cut short with "…"), above each song and again at its end, where on a phone
@@ -3734,10 +3744,18 @@ song's chip sets where it plays.
   song removed from the library goes by the name the songbook gives it.
 - **`caracole songbook move NAME "ARTIST - TITLE" POSITION`** moves a song,
   1 being the first; past the end is last.
-- **`caracole songbook set NAME "ARTIST - TITLE" [--key K] [--mode M] [--capo N]`**
+- **`caracole songbook set NAME "ARTIST - TITLE" [--key K] [--mode M] [--capo N] [--instrument I]`**
   gives a song its own setting in the songbook: the key it is played in
-  (`G`, `F#`, `Bb`), its mode (`ionian`, `dorian`, ... `locrian`) and its capo
-  (0 to 11). The parts you give change; the others stay. A key or a mode
+  (`G`, `F#`, `Bb`), its mode (`ionian`, `dorian`, ... `locrian`), its capo
+  (0 to 11) and the instrument it is played on (`guitar`, `ukulele`,
+  `ukulele-low-g`, `baritone`, `piano`, `harmonica`, `flute`, `recorder`): the
+  songbook's PDF draws that instrument's chords (above, `songbook.pdf`), its
+  phone page opens the song there, and it says so (`on the ukulele`,
+  `In the songbook: A Minor, ukulele`). On an instrument with no capo the key
+  is the key the song sounds in, with no capo taken from where it plays now
+  (`--key B --instrument piano`: `B Minor, piano`); `--instrument guitar` plays
+  it on the guitar even where its own version is on another. The parts you
+  give change; the others stay. A key or a mode
   given with no capo keeps the capo the song plays at now, and the setting
   names it (`key G, dorian, no capo`). It says where the songbook plays the
   song now, as its set list does: `In the songbook: G Dorian`, or
@@ -3745,9 +3763,10 @@ song's chip sets where it plays.
   whole setting off, and the song is in its own version again. In songbooks.toml a
   song with a setting is a table in place of the string, and one without stays
   a string: `songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música
-  Ligera", key = "G", mode = "dorian", capo = 0 }]`. A key, mode or capo that
-  is none of those is an error naming the songbook and the song, and stops the
-  songbooks. The songbook's files play the song there: the key is the key of
+  Ligera", key = "G", mode = "dorian", capo = 0 }, { song = "Eagles - Hotel
+  California", instrument = "ukulele" }]`. A key, mode, capo or instrument
+  that is none of those is an error naming the songbook and the song, and
+  stops the songbooks. The songbook's files play the song there: the key is the key of
   the shapes you play, as an export's name gives it (`G Dorian, capo 0`: G
   dorian shapes, no capo; with `--capo 2` they sound in A dorian), and what the
   setting leaves out is the song's own version's (`--capo 2` alone keeps its

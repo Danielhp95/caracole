@@ -520,6 +520,17 @@ def test_a_songs_setting_is_queued_as_caracole_songbook_set_with_its_capo(app, s
     assert queue.snapshot()[0].title == 'Play Muse - Hysteria with no capo, in "Campfire"'
 
 
+def test_a_songs_instrument_is_queued_as_caracole_songbook_set_with_it(app, setup, queue, campfire):
+    post(app, "/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "instrument": "Ukulele"})
+    assert steps(queue) == [[("songbook", "set", "--instrument", "ukulele", "--", "Campfire", "Radiohead - Creep")]]
+    assert queue.snapshot()[0].title == 'Play Radiohead - Creep on the ukulele, in "Campfire"'
+    post(app, "/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "key": "A", "mode": "aeolian",
+                                "instrument": "piano"})  # no capo: the piano takes none
+    assert steps(queue)[1] == [("songbook", "set", "--key", "A", "--mode", "aeolian", "--instrument", "piano", "--",
+                                "Campfire", "Radiohead - Creep")]
+    assert queue.snapshot()[0].title == 'Play Radiohead - Creep in A aeolian on the piano, in "Campfire"'
+
+
 @pytest.mark.slow
 def test_the_setting_queued_is_written_in_songbooks_toml(app, setup, queue, campfire):
     post(app, "/songbook/set", {"name": "Campfire", "song": "Radiohead - Creep", "key": "G", "mode": "dorian",
@@ -549,7 +560,8 @@ def test_a_setting_change_says_what_runs_then_what_it_did(setup, campfire):
 
 
 @pytest.mark.parametrize("fields,status,said", [
-    ({"song": "Radiohead - Creep"}, 400, "a key, a mode or a capo"),
+    ({"song": "Radiohead - Creep"}, 400, "a key, a mode, a capo or an instrument"),
+    ({"song": "Radiohead - Creep", "instrument": "banjo"}, 400, "instrument must be one of"),
     ({"song": "Radiohead - Creep", "key": "H"}, 400, "key must be a tonic"),
     ({"song": "Radiohead - Creep", "mode": "major"}, 400, "mode must be one of"),
     ({"song": "Radiohead - Creep", "capo": "12"}, 400, "capo must be a fret"),

@@ -561,6 +561,24 @@ def test_cli_songbook_set_and_clear(setup):
 
 
 @pytest.mark.slow
+def test_cli_songbook_set_plays_a_song_on_an_instrument(setup):
+    assert run(setup, "make", "Gig", "Soda Stereo - De Música Ligera").exit_code == 0
+    out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--instrument", "Ukulele")
+    assert out.exit_code == 0, out.output
+    assert "Soda Stereo - De Música Ligera: on the ukulele" in out.output.splitlines()
+    assert "In the songbook: A Minor, ukulele" in out.output.splitlines()
+    assert books(setup)[0].songs[0].setting == Setting(instrument="ukulele")
+    # a key on the piano is the key it sounds in: no capo taken from where it plays now
+    out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--key", "B", "--instrument", "piano")
+    assert out.exit_code == 0, out.output
+    assert "In the songbook: B Minor, piano" in out.output.splitlines()
+    assert books(setup)[0].songs[0].setting == Setting("B", instrument="piano")
+    out = run(setup, "set", "Gig", "Soda Stereo - De Música Ligera", "--instrument", "banjo")
+    assert out.exit_code == 1 and "instrument must be one of" in out.output
+    assert books(setup)[0].songs[0].setting == Setting("B", instrument="piano")  # changed nothing
+
+
+@pytest.mark.slow
 def test_show_says_where_the_songbook_plays_a_song_with_a_setting_or_a_version_of_its_own(setup):
     _, cfg, conn = setup
     keyless = add_song(conn, "Placeholder Band", "Keyless Song")  # no chord caracole can read: no key

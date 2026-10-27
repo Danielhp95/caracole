@@ -19,15 +19,21 @@ files. It is written only through this module's writers (``make_songbook``,
 the line; it stops the songbooks and nothing else.
 
 A song may carry its own setting, an inline table in place of the string: its key (a tonic as written),
-its mode (one of ``theory.MODES``) and its capo, each left out where it says nothing::
+its mode (one of ``theory.MODES``), its capo and the instrument it is played on (an id of the viewer's,
+``version.instrument_of``: "ukulele", "piano", "harmonica"...), each left out where it says nothing::
 
-    songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música Ligera", key = "G", mode = "dorian", capo = 0 }]
+    songs = ["Oasis - Wonderwall", { song = "Soda Stereo - De Música Ligera", key = "G", mode = "dorian", capo = 0 },
+             { song = "Eagles - Hotel California", instrument = "ukulele" }]
 
 A song with no setting stays a plain string, in the file and after any change to it. The songbook's files
 play each song in its setting (``in_setting``): its key is the key of the shapes played, as an export's name
 gives one ("G Dorian, capo 0"), so a sheet in another key in its place plays there too; what the setting
 leaves out is the song's own version's (``render.own_version``), and a song with no setting is in its own
-version, as its sheet's PDF is.
+version, as its sheet's PDF is. On its instrument, the songbook's PDF draws the instrument's diagrams (a ukulele's
+four strings, the piano's keys; the harmonica's holes and the winds' scale in their place: pdf_text.py), its
+phone page opens the song there (its viewer's ``start`` names it: ``inst=``), and on one with no capo the key is
+the key it sounds in. One chordpro run draws one number of strings: the PDF draws those most of its fretted songs
+have (the guitar's six on a tie), and writes the others' shapes as frets (``_run_strings``).
 
 Two songs are the same when their identity keys are (``same_entry``): accents, case,
 Traditional or Simplified characters and a version suffix don't count. A name is a
@@ -44,6 +50,7 @@ import sqlite3
 import subprocess
 import tomllib
 import unicodedata
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
@@ -106,6 +113,7 @@ from caracole.viewer.version import (
     places,
     played_key,
     played_label,
+    played_on,
     setting_problem,
 )
 
@@ -120,7 +128,7 @@ FILE_NAME = "songbooks.toml"  # in the library
 FOLDER = "_songbooks"  # in the library: a folder per songbook
 MAX_NAME = 80  # characters
 _KEYS = ("songs",)
-_SETTING_KEYS = ("song", "key", "mode", "capo")
+_SETTING_KEYS = ("song", "key", "mode", "capo", "instrument")
 _HEADER = (
     "Your songbooks. Each [table] is one: its header is the songbook's name, and songs",
     'its songs in order, each "Artist - Title". Edit it by hand, or with caracole songbook',
@@ -321,14 +329,15 @@ def _entry(value: Any, where: str) -> str:
     return text
 
 
-def check_setting(key: Any = None, mode: Any = None, capo: Any = None, *, where: str = "a setting") -> Setting:
+def check_setting(key: Any = None, mode: Any = None, capo: Any = None, instrument: Any = None, *,
+                  where: str = "a setting") -> Setting:
     """The setting these parts make (``version.Setting``: how a songbook plays one song, each part None where it
     says nothing, the song's own version's); SongbookError naming ``where`` for a part that can't be one
     (``version.setting_problem``). ``caracole songbook set`` gives a key or a mode the capo it plays at
     (``with_capo``), so that a sheet in place of the song's keeps the key it sounds in."""
-    if (problem := setting_problem(key, mode, capo)) is not None:
+    if (problem := setting_problem(key, mode, capo, instrument)) is not None:
         raise SongbookError(f"{where}: {problem}")
-    return Setting(key, mode, capo)
+    return Setting(key, mode, capo, instrument)
 
 
 def _song_of(value: Any, where: str) -> SongbookSong:
@@ -337,9 +346,11 @@ def _song_of(value: Any, where: str) -> SongbookSong:
         unknown = [k for k in value if k not in _SETTING_KEYS]
         if unknown:
             raise SongbookError(f"{where}: unknown key(s) in a song: {', '.join(map(repr, unknown))}; expected "
-                                '{ song = "Artist - Title", key = "G", mode = "dorian", capo = 0 }')
+                                '{ song = "Artist - Title", key = "G", mode = "dorian", capo = 0, '
+                                'instrument = "ukulele" }')
         text = _entry(value.get("song"), where)
-        setting = check_setting(value.get("key"), value.get("mode"), value.get("capo"), where=f'{where}, "{text}"')
+        setting = check_setting(value.get("key"), value.get("mode"), value.get("capo"), value.get("instrument"),
+                                where=f'{where}, "{text}"')
         return SongbookSong(text, setting or None)
     return SongbookSong(_entry(value, where))
 
@@ -351,7 +362,7 @@ def _item(song: SongbookSong):
         return song.text
     table = tomlkit.inline_table()
     table["song"] = song.text
-    for name in ("key", "mode", "capo"):
+    for name in ("key", "mode", "capo", "instrument"):
         if (value := getattr(setting, name)) is not None:
             table[name] = value
     return table
@@ -401,7 +412,8 @@ def _parse(data: Mapping[str, Any]) -> list[Songbook]:
         songs = table.get("songs", [])
         if not isinstance(songs, list) or not all(isinstance(s, (str, Mapping)) for s in songs):
             raise SongbookError(f'{where}: songs must be a list of "Artist - Title" strings or '
-                                '{ song = "Artist - Title", key = ..., mode = ..., capo = ... } tables')
+                                '{ song = "Artist - Title", key = ..., mode = ..., capo = ..., instrument = ... } '
+                                'tables')
         if name_key(name) in names:
             raise SongbookError(f"{where} and [{_quoted(names[name_key(name)])}] are one songbook written "
                                 "twice: merge them")
@@ -568,7 +580,7 @@ def _move_item(songs, at: int, to: int) -> None:
 def set_song_setting(path: Path, name: str, entry: str, setting: Setting | None) -> None:
     """Give the song its setting, in place; ``None`` (or an empty one) takes it off, and the song is a plain
     string again. SongbookError if the songbook doesn't hold the song. Its place and the rest of the file stay."""
-    setting = check_setting(setting.key, setting.mode, setting.capo) if setting else None
+    setting = check_setting(setting.key, setting.mode, setting.capo, setting.instrument) if setting else None
 
     def change(doc, _books) -> None:
         header = _header(doc, name)
@@ -734,12 +746,15 @@ def with_capo(entry: Entry, setting: Setting, overrides: Overrides) -> Setting:
     a key or a mode and no capo (``caracole songbook set``): a setting's key is the key of the shapes played, so
     without its capo a sheet in place of this one, with another capo, would play them at that capo, in another
     key for the singer. As given for a song without a sheet, or one the viewer's code can't read (a bug, logged
-    with its traceback), or a setting naming its capo."""
+    with its traceback), or a setting naming its capo, or one played on an instrument with no capo, whose key is
+    the key it sounds in."""
     if setting.capo is not None or not places(setting) or entry.cho is None or entry.song is None:
         return setting
     try:
         own = own_version(overrides, entry.song, entry.cho, entry.key, entry.key_source)
         version = _played_in(entry.text, entry.cho, entry.key, entry.key_source, own, setting)
+        if not played_on(version).capo:
+            return setting
         _, capo = played_key(version, viewer_key(entry.cho, entry.key, entry.key_source), parse_sheet(entry.cho).capo)
     except Exception:
         log.warning("%s: cannot say at which capo its songbook plays it", entry.text, exc_info=True)
@@ -916,7 +931,8 @@ def _make_files(cfg: Config, book: Songbook, entries: list[Entry], folder: Path,
         make(CHO_NAME, {"songs": texts, "v": 4}, lambda: _chordpro_file(cfg, texts, runner) if texts else None)
 
     try:
-        printed = [_song_file(e, pdf=True, fonts=fonts) for e in entries]
+        strings = _run_strings(entries)
+        printed = [_song_file(e, pdf=True, fonts=fonts, strings=strings) for e in entries]
     except RenderError as e:
         log.warning("songbook %s: no %s: %s", book.name, PDF_NAME, e)
         done.failed = True
@@ -1084,18 +1100,37 @@ def _like_prefix(prefix: str) -> str:
 # --- the chordpro runs -------------------------------------------------------------------------
 
 
-def _song_file(entry: Entry, *, pdf: bool = False, fonts: PdfFonts | None = None) -> str:
+def _run_strings(entries: Sequence[Entry]) -> int:
+    """How many strings the diagrams of a songbook's PDF have: one chordpro run draws every song's with the strings
+    of the last tuning it read (chordpro 6.050.7's ``ChordPro::Chords::strings``), so the songbook draws those most
+    of its songs on a fretted instrument play on (a ukulele's four, a guitar's six: the six on a tie, and with none),
+    and writes the others' shapes as frets (``_song_file``)."""
+    counts = Counter(len(inst.tuning) for e in entries if e.cho is not None
+                     and (inst := played_on(e.version)).kind == "strings")
+    most = max(counts.values(), default=0)
+    tied = [n for n, count in counts.items() if count == most]
+    return GUITAR_STRINGS if not tied or GUITAR_STRINGS in tied else max(tied)
+
+
+GUITAR_STRINGS = 6
+
+
+def _song_file(entry: Entry, *, pdf: bool = False, fonts: PdfFonts | None = None,
+               strings: int = GUITAR_STRINGS) -> str:
     """One song for chordpro: its sheet where the songbook plays it (``Entry.version``), each chord named as its
     viewer names it there (``apply_version``: chordpro moves nothing, and its A# would be the viewer's Bb); for
     the PDF, that sheet's PDF text (``render._sheet_text``, levelled in the PDF fonts ``fonts``), with the viewer's
-    shapes as its diagrams; for
+    shapes as its diagrams on its instrument, those of a fretted one with other than ``strings`` strings written as
+    frets (``_run_strings``); for
     songbook.cho, without the chord definitions an app may not read. Or a page naming it as missing, which the
     contents then name too. A text that can't be made (a bug in the viewer's code it runs) is a RenderError,
     logged with its traceback: it costs the files it is in, and no more."""
     if entry.cho is not None:
         try:
+            inst = played_on(entry.version)
+            drawn = inst.kind != "strings" or len(inst.tuning) == strings
             return (_sheet_text(entry.cho, key=entry.key, key_source=entry.key_source, version=entry.version,
-                                fonts=fonts) if pdf else _app_text(entry))
+                                fonts=fonts, diagrams=drawn) if pdf else _app_text(entry))
         except Exception as e:
             log.warning("%s: cannot make its text for the songbook %s", entry.text, "PDF" if pdf else "ChordPro file",
                         exc_info=True)

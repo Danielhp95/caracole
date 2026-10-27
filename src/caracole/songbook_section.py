@@ -17,10 +17,12 @@ Every text is data, which the script puts in the page with ``textContent``.
   forms name it by), its identity ``key`` (its song's, else its entry's: what the page knows a search's
   result in it by), its ``title`` and ``artist``, its song's ``id`` (None for one not in the library),
   ``missing`` (why it has no sheet in it, else None), ``get`` (a lookup could get its sheet now:
-  ``songbook.songs_to_get``), ``plays`` (where the songbook plays it, in words, "G Dorian", "E Minor, capo 2"; None
-  without a sheet), ``own`` (no setting of its own here: it follows the song's own version), ``at`` (where
-  it plays, for the setting's menus: the key's ``tonic`` as a pitch class, its ``mode``, both None for a
-  sheet with no key caracole can read, and its ``capo``; None without a sheet), ``href`` (its sheet, as
+  ``songbook.songs_to_get``), ``plays`` (where the songbook plays it, in words, "G Dorian", "E Minor, capo 2", "A
+  Major, piano"; None without a sheet), ``own`` (no setting of its own here: it follows the song's own version),
+  ``at`` (where it plays, for the setting's menus: the key's ``tonic`` as a pitch class, its ``mode``, both None
+  for a sheet with no key caracole can read, and its ``capo``, as the instrument it is played on has them: on one
+  with no capo the key it sounds in and no capo; ``sounds``, the tonic it sounds in, which the menus take for the
+  key once an instrument with no capo is chosen; ``inst``, that instrument's id; None without a sheet), ``href`` (its sheet, as
   its line in the library opens it; None without one) and ``guitar``, its Guitar Pro mark (``_Guitar``): a
   Guitar Pro or Power Tab file caracole keeps for the song (``inbox.guitar_files``, still in its folder),
   ``{"kind": "file", "href", "download", "page"}``, its link relative to index.html, percent-encoded, the name
@@ -28,9 +30,10 @@ Every text is data, which the script puts in the page with ``textContent``.
   None for a Power Tab file, which alphaTab can't read), one the browser shows first; else None. The songbook's
   files never show it: it is the tab's, a set list's as a playlist's;
 - ``error``: why songbooks.toml can't be read (then no songbooks), else None;
-- ``keys``, ``modes`` and ``capoMax``: what a setting's menus offer: each pitch class's name as chord sheets
-  write it most (``theory.spelling``), the modes with the viewer's names ("Major", "Dorian"...), and the
-  highest capo (``songbook.CAPO_MAX``). A key or a mode a song plays in is the theory's to work out
+- ``keys``, ``modes``, ``capoMax`` and ``instruments``: what a setting's menus offer: each pitch class's name as
+  chord sheets write it most (``theory.spelling``), the modes with the viewer's names ("Major", "Dorian"...), the
+  highest capo (``songbook.CAPO_MAX``), and the viewer's instruments, each ``[id, name, capo]``, whether it takes
+  a capo (``instruments.INSTRUMENTS``). A key or a mode a song plays in is the theory's to work out
   (viewer/theory.py, viewer/version.py): the page only shows the names it is given.
 """
 
@@ -64,11 +67,12 @@ def songbooks_data(conn: sqlite3.Connection, cfg: Config, overrides: Overrides) 
     """The songbooks as the Songbooks tab draws them (see the module's docstring). A songbooks.toml that can't
     be read is said (``error``), and costs the rest of the page nothing."""
     from caracole.songbook import CAPO_MAX, SongbookError, load_songbooks, songbooks_file
+    from caracole.viewer.instruments import INSTRUMENTS
     from caracole.viewer.theory import MODES, spelling
     from caracole.viewer.version import MODE_NAMES
 
     shared: dict[str, Any] = {"keys": spelling(None), "modes": [[m, MODE_NAMES[m]] for m in MODES],
-                              "capoMax": CAPO_MAX}
+                              "capoMax": CAPO_MAX, "instruments": [[i.id, i.name, i.capo] for i in INSTRUMENTS]}
     try:
         books = load_songbooks(songbooks_file(cfg.library_dir))
     except SongbookError as e:
@@ -165,12 +169,15 @@ def _made(folder: Any) -> dict[str, float]:
 
 def _plays(entry: Entry) -> tuple[str | None, dict[str, Any] | None]:
     """Where the songbook plays the song (``songbook.plays_in``, in words), and for the setting's menus the key of
-    the shapes played (a pitch class and a mode, None for a sheet with no key) and the capo; None for a song
-    without a sheet, or one the viewer's code can't read (a bug, logged with its traceback)."""
+    the shapes played (a pitch class and a mode, None for a sheet with no key), the capo, the tonic it sounds in
+    and the instrument it is played on; None for a song without a sheet, or one the viewer's code can't read (a bug,
+    logged with its traceback)."""
     from caracole.songbook import where_played
+    from caracole.viewer.version import played_on
 
     label, played = where_played(entry)
     if played is None:
         return label, None
     key, capo = played
-    return label, {"tonic": key.tonic if key else None, "mode": key.mode if key else None, "capo": capo}
+    return label, {"tonic": key.tonic if key else None, "mode": key.mode if key else None, "capo": capo,
+                   "sounds": (key.tonic + capo) % 12 if key else None, "inst": played_on(entry.version).id}

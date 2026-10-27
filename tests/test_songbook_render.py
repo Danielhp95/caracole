@@ -1142,3 +1142,86 @@ def test_a_song_whose_pdf_text_cant_be_made_fails_the_songbooks_pdf_alone(conn, 
     assert (folder(cfg, "Picnic") / "songbook.pdf").exists()
     assert "songbook Campfire: no songbook.pdf" in caplog.text
     assert "Traceback" in caplog.text and "a bug in the viewer's theory" in caplog.text
+
+
+# --- each song on its instrument --------------------------------------------------------------------------
+
+def test_a_song_on_a_ukulele_draws_its_four_strings_and_opens_there_on_the_phone(conn, cfg, two):
+    set_setting(cfg, SODA, Setting(instrument="ukulele"))
+    fake = FakeChordPro()
+    assert render(conn, cfg, runner=fake).rendered == 1
+    creep, soda = inputs(fake, pdf_call(fake))
+    # One song on a ukulele, one on a guitar: a tie, the run draws six strings, the ukulele's shapes as frets
+    assert "{diagrams: off}" in soda.splitlines() and "##config" not in soda
+    assert next(line for line in soda.splitlines() if line.startswith("Ukulele: "))
+    assert "Soda Stereo · Ukulele · Key Am" in soda
+    assert "##config" not in creep and "{diagrams: off}" not in creep  # the guitar's, as before
+    assert page_data(cfg, 2)["start"] == "t=0&inst=ukulele" and page_data(cfg, 1)["start"] is None
+    _, soda_entry = entries_of(conn, cfg)
+    assert plays_in(soda_entry) == "A Minor, ukulele"
+    # most of its fretted songs on a ukulele: the run draws four strings, and the guitar's shapes are frets
+    set_setting(cfg, "Radiohead - Creep", Setting(instrument="baritone"))
+    fake = FakeChordPro()
+    render(conn, cfg, runner=fake)
+    creep, soda = inputs(fake, pdf_call(fake))
+    assert soda.startswith("##config: json\n") and '"tuning": ["G4", "C4", "E4", "A4"]' in soda
+    assert creep.startswith("##config: json\n") and '"tuning": ["D3", "G3", "B3", "E4"]' in creep
+
+
+def test_a_song_on_an_instrument_with_no_capo_plays_the_key_it_sounds_in(conn, cfg):
+    song = add_song(conn, "Oasis", "Wonderwall")
+    keep_sheet(conn, cfg, song, IN_E_MINOR, tab_id=5, tonality="Em", capo=2)  # Em shapes, capo 2: F#m sounds
+    render_sheets(conn, cfg)
+    make(cfg, "Campfire", WONDERWALL)
+    set_setting(cfg, WONDERWALL, Setting(instrument="piano"))
+    ovr = overrides(cfg, "")
+    (entry,) = entries_of(conn, cfg, ovr)
+    assert plays_in(entry) == "F# Minor, piano"
+    # a key set on it is the key it sounds in, and takes no capo (with_capo)
+    assert with_capo(entry, Setting("G", instrument="piano"), ovr) == Setting("G", instrument="piano")
+    set_setting(cfg, WONDERWALL, Setting("G", instrument="piano"))
+    (entry,) = entries_of(conn, cfg, ovr)
+    assert plays_in(entry) == "G Minor, piano"
+    fake = FakeChordPro()
+    render(conn, cfg, ovr, runner=fake)
+    (text,) = inputs(fake, pdf_call(fake))
+    assert sung(text) == ["Gm", "Bb", "F", "C"] and '"type": "keyboard"' in text and "{capo" not in text
+    assert "{define: Gm keys " in text
+    (cho,) = cho_inputs(fake)
+    assert "[Gm]" in cho and "{define" not in cho  # for an app: the chords as they sound, no definitions
+    assert page_data(cfg, 1)["start"] == "t=1&capo=0&inst=piano"
+    # back on the guitar, by name: the song's own on it, whatever the own version is on
+    set_setting(cfg, WONDERWALL, Setting(instrument="guitar"))
+    own = overrides(cfg, f'[version]\n"{WONDERWALL}" = "key=Em&capo=2&inst=harmonica"\n')
+    (entry,) = entries_of(conn, cfg, own)
+    assert plays_in(entry) == "E Minor, capo 2"
+    set_setting(cfg, WONDERWALL, None)
+    (entry,) = entries_of(conn, cfg, own)
+    assert plays_in(entry) == "F# Minor, harmonica"  # the own version's instrument
+
+
+@real_chordpro
+@pytest.mark.chordpro
+def test_the_real_pdf_draws_each_songs_instrument_in_one_run(conn, cfg, two):
+    # Creep on the ukulele, De Música Ligera on the piano, then on the harmonica: every chord drawn or written,
+    # and chordpro says nothing of a chord it can't draw
+    cfg = replace(cfg, chordpro_bin=CHORDPRO, cjk_font=None)
+    set_setting(cfg, "Radiohead - Creep", Setting(instrument="ukulele"))
+    for soda in ("piano", "harmonica", "guitar"):
+        set_setting(cfg, SODA, Setting(instrument=soda))
+        said: list[str] = []
+
+        def run(cmd, **kwargs):
+            done = subprocess.run(cmd, **kwargs)
+            said.append(done.stderr)
+            return done
+
+        stats = render_songbooks(conn, cfg, overrides(cfg, ""), runner=run)
+        assert stats.failed == [], stats
+        assert not any(w in "".join(said) for w in ("Incorrect", "Invalid", "No chord diagram", "No diagram")), said
+        strings = drawn(folder(cfg) / "songbook.pdf")
+        assert "Radiohead · Ukulele · Key G" in strings or soda == "guitar", strings
+        if soda == "harmonica":
+            assert any(s.startswith("Harmonica: ") for s in strings), strings
+        if soda == "guitar":  # one each: a tie, six strings drawn, the ukulele's shapes as frets
+            assert any(s.startswith("Ukulele: ") for s in strings), strings
