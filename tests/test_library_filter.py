@@ -228,3 +228,111 @@ def test_select_sits_last_and_still_starts_picking(shelf, laptop):
     assert laptop.js("document.querySelector('#list article.picked h3').textContent") == "Hysteria"
     laptop.click(".pick-toggle")
     assert laptop.wait("!document.body.classList.contains('selecting')")
+
+
+# --- what a song has something for -------------------------------------------------------------------------------
+
+# Each instrument's chip in the panel: its words (its name and count), its glyph, whether it is on, and whether it
+# can be pressed.
+CHIPS = """[...document.querySelectorAll('#filter-panel [data-inst]')].map((c) => ({
+  inst: c.dataset.inst, text: c.textContent.replace(/\\s+/g, ' ').trim(), on: c.getAttribute('aria-pressed'),
+  off: c.disabled, glyph: c.querySelector('svg.glyph').getAttribute('class'),
+  faded: Number(getComputedStyle(c).opacity) < 1 }))"""
+
+
+def test_instrument_chips_count_and_filter_any_of(shelf, laptop):
+    laptop.open(shelf.as_uri())
+    assert laptop.js("document.querySelector('#f-inst').textContent.replace(/\\s+/g, ' ').trim()") == (
+        "Has something for any of these")
+    chips = laptop.js(CHIPS)
+    assert [(c["inst"], c["text"], c["glyph"]) for c in chips] == [
+        ("sheet", "Chord sheet 7", "glyph glyph-sheet"), ("guitar", "Guitar tab 2", "glyph glyph-guitar"),
+        ("ukulele", "Ukulele 1", "glyph glyph-ukulele"), ("harmonica", "Harmonica 4", "glyph glyph-harmonica"),
+        ("score", "Score 1", "glyph glyph-score")], chips
+    assert not any(c["off"] or c["faded"] for c in chips) and {c["on"] for c in chips} == {"false"}
+    laptop.click("#filter")
+    assert laptop.wait(f"{PANEL}.open")
+    laptop.click("#filter-panel [data-inst=harmonica]")
+    assert laptop.wait(f"{TITLES}.length === 4"), laptop.js(TITLES)
+    assert laptop.js(TITLES) == ["Blowin' in the Wind", "Like a Rolling Stone", "Hotel California", "Heart of Gold"]
+    laptop.click("#filter-panel [data-inst=guitar]")  # any of them: Creep's text tab too
+    assert laptop.wait(f"{TITLES}.length === 5"), laptop.js(TITLES)
+    assert "Creep" in laptop.js(TITLES)
+    assert [c["on"] for c in laptop.js(CHIPS)] == ["false", "true", "false", "true", "false"]
+    assert laptop.js(f"{FILTER}.textContent.trim().replace(/\\s+/g, ' ')") == "Filter 2"
+    assert laptop.js("document.getElementById('filter-live').textContent") == "5 songs"
+    laptop.click("#filter-panel [data-inst=guitar]")  # pressed again: off
+    assert laptop.wait(f"{TITLES}.length === 4"), laptop.js(TITLES)
+    assert laptop.js(f"{PANEL}.open")  # still open: the list filtered behind it
+
+
+def test_an_instrument_with_no_song_is_disabled(conn, cfg, shelf, laptop):
+    laptop.open(shelf.as_uri() + "#q=dylan")
+    chips = {c["inst"]: c for c in laptop.js(CHIPS)}
+    assert chips["guitar"]["text"] == "Guitar tab 0" and chips["guitar"]["off"] and chips["guitar"]["faded"]
+    assert chips["harmonica"]["text"] == "Harmonica 2" and not chips["harmonica"]["off"]
+    # One on that no song has now stays a chip you can press, to let it go.
+    laptop.open(shelf.as_uri() + "#q=dylan&inst=score")
+    assert laptop.wait(f"{TITLES}.length === 0")
+    score = {c["inst"]: c for c in laptop.js(CHIPS)}["score"]
+    assert (score["on"], score["off"], score["text"]) == ("true", False, "Score 0"), score
+    # A library with nothing but sheets: nothing to ask for, no instruments in the panel.
+    for song in ("Hotel California", "Blowin' in the Wind", "Like a Rolling Stone", "Heart of Gold", "Creep",
+                 "Riptide"):
+        conn.execute("DELETE FROM songs WHERE title = ?", (song,))
+    plain = write_library_page(cfg.library_dir, build_library_page(conn, cfg, Overrides(), NOW))
+    laptop.open(plain.as_uri())
+    assert laptop.js("document.getElementById('f-inst').closest('.fsec').hidden") is True
+
+
+def test_a_lines_glyph_of_a_chosen_instrument_is_lit(shelf, laptop):
+    held = """(() => { const line = [...document.querySelectorAll('#list article.line')]
+        .find((l) => l.querySelector('h3').textContent === 'Hotel California');
+      const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
+      const probe = document.createElement('span'); probe.style.color = accent; document.body.append(probe);
+      const lit = getComputedStyle(probe).color; probe.remove();
+      return [...line.querySelectorAll('.line-holds svg')].map((g) => [g.getAttribute('aria-label'),
+        getComputedStyle(g).color === lit]); })()"""
+    laptop.open(shelf.as_uri())
+    assert not any(lit for _, lit in laptop.js(held))
+    laptop.open(shelf.as_uri() + "#inst=harmonica")
+    assert laptop.js(held) == [["Chord sheet", False], ["Guitar Pro", False], ["Harmonica tab", True],
+                               ["Lyrics", False], ["Score", False]]
+    laptop.open(shelf.as_uri() + "#inst=sheet,guitar")
+    assert laptop.js(held) == [["Chord sheet", True], ["Guitar Pro", True], ["Harmonica tab", False],
+                               ["Lyrics", False], ["Score", False]]
+
+
+def test_inst_is_kept_in_the_address_and_read_back(shelf, laptop):
+    from urllib.parse import parse_qs
+
+    laptop.open(shelf.as_uri())
+    laptop.click("#filter")
+    assert laptop.wait(f"{PANEL}.open")
+    laptop.click("#filter-panel [data-inst=score]")
+    laptop.click("#filter-panel [data-inst=harmonica]")
+    assert laptop.wait("location.hash.includes('inst=')")
+    assert parse_qs(laptop.js("location.hash.slice(1)"))["inst"] == ["harmonica,score"]  # in the panel's order
+    # Read back, however written, a name the page doesn't know left out.
+    laptop.open(shelf.as_uri() + "#inst=score,nonsense,harmonica&show=found")
+    assert [c["on"] for c in laptop.js(CHIPS)] == ["false", "false", "false", "true", "true"]
+    assert laptop.js(TITLES) == ["Blowin' in the Wind", "Like a Rolling Stone", "Hotel California", "Heart of Gold"]
+    laptop.js("document.querySelector('[data-show=found]').click()")  # the page's next change writes it its own way
+    assert parse_qs(laptop.js("location.hash.slice(1)")) == {"inst": ["harmonica,score"], "show": ["found"]}
+
+
+def test_counts_follow_the_other_filters_and_the_search(shelf, laptop):
+    status = ("[...document.querySelectorAll('#filter-panel [data-show]')].filter((b) => !b.hidden)"
+              ".map((b) => b.textContent.replace(/\\s+/g, ' ').trim())")
+    counts = "Object.fromEntries(CHIPS.map((c) => [c.inst, c.text.replace(/^\\D+/, '')]))".replace("CHIPS", CHIPS)
+    laptop.open(shelf.as_uri() + "#inst=harmonica")
+    assert laptop.js(status) == ["All 4", "Found 4", "Wanted 0", "Review 0"]
+    # An instrument's count is the songs it would show itself, with the status and the key as they are.
+    assert laptop.js(counts) == {"sheet": "7", "guitar": "2", "ukulele": "1", "harmonica": "4", "score": "1"}
+    laptop.open(shelf.as_uri() + "#show=wanted")
+    assert laptop.js(counts) == {"sheet": "0", "guitar": "0", "ukulele": "0", "harmonica": "0", "score": "0"}
+    laptop.open(shelf.as_uri() + "#q=dylan&inst=harmonica")
+    assert laptop.js(status) == ["All 2", "Found 2", "Wanted 0", "Review 0"]
+    assert laptop.js(counts) == {"sheet": "2", "guitar": "0", "ukulele": "0", "harmonica": "2", "score": "0"}
+    laptop.open(shelf.as_uri() + "#artist=eagles")
+    assert laptop.js(counts) == {"sheet": "1", "guitar": "1", "ukulele": "0", "harmonica": "1", "score": "1"}

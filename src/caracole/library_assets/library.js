@@ -23,6 +23,8 @@
   const filterButton = byId("filter");
   const panel = byId("filter-panel");
   const statusButtons = Array.from(panel.querySelectorAll("[data-show]"));
+  const instChips = Array.from(panel.querySelectorAll("[data-inst]"));
+  const libraryView = byId("library-view");
   const progLine = byId("prog");
   const JUMP_FROM = 40;  // songs shown before the A-Z strip is worth its room: fewer, and a thumb scrolls
 
@@ -933,6 +935,25 @@
     if (plays("score")) holds.push("score");
     return holds;
   };
+  // What a song has something for, as the Filter panel asks it (``inst=``, any of them): its closed line's holds,
+  // read the same way: a chord sheet (the auto one, UG's Ukulele Chords), a guitar's (a Guitar Pro file or a text
+  // tab), and, from its instruments, UG's Ukulele Chords, a harmonica tab and a score you filed.
+  const INSTRUMENTS = ["sheet", "guitar", "ukulele", "harmonica", "score"];
+  const instruments = new WeakMap();  // a song's data -> what it has something for, until the data changes
+  const instOf = (s) => {
+    if (!instruments.has(s)) {
+      const holds = holdingsOf(s);
+      const plays = listOf(s.instruments);
+      const has = new Set();
+      if (holds.some((h) => h === "sheet" || h === "auto" || h === "ukulele")) has.add("sheet");
+      if (holds.indexOf("guitar") >= 0 || holds.indexOf("tab") >= 0) has.add("guitar");
+      for (const x of ["ukulele", "harmonica", "score"]) if (plays.indexOf(x) >= 0) has.add(x);
+      instruments.set(s, has);
+    }
+    return instruments.get(s);
+  };
+  // A list of them as the address writes it: the known ones, in the panel's order, each once.
+  const instList = (names) => INSTRUMENTS.filter((x) => names.indexOf(x) >= 0).join(",");
   // A song's facts, under its line's chevron: the key in words and where it came from, the PDF's transposition, the
   // lyrics, when the song came, and its other artists.
   const factsOf = (s) => {
@@ -1139,11 +1160,12 @@
 
   // artist: one artist's songs alone, by sortArtist, which a search for the name wouldn't give
   // ("Queen" also finds "Dancing Queen").
+  // inst: the songs that have something for any of these (INSTRUMENTS, comma-separated), in the panel's order.
   // all: the search of the sites under the bar: served, as you type (searchesAsYouType); on the file, the line that
   // searches them, on Enter.
   // prog: the songs that play a progression alone, by its key (#prog=, from under a song's chevron, a viewer's Harmony
   // panel or the served search).
-  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
+  const state = { q: "", show: "all", sort: "artist", artist: "", key: "", inst: "", prog: "", all: false };
   const artistName = (key) => {
     const s = key ? songs.find((song) => String(song.sortArtist || "") === key) : undefined;
     return s ? String(s.artist) : "";
@@ -1156,7 +1178,7 @@
   };
   // What the address says of the list (save() writes it): what the page opens on, and what Back brings again.
   const addressed = () => {
-    const at = { q: "", show: "all", sort: "artist", artist: "", key: "", prog: "", all: false };
+    const at = { q: "", show: "all", sort: "artist", artist: "", key: "", inst: "", prog: "", all: false };
     try {
       const params = new URLSearchParams(location.hash.slice(1));
       at.q = params.get("q") || "";
@@ -1164,6 +1186,7 @@
       if (own.call(SHOWS, params.get("show"))) at.show = params.get("show");
       if (SORTS.indexOf(params.get("sort")) >= 0) at.sort = params.get("sort");
       if (keyGroup(params.get("key"))) at.key = keyGroup(params.get("key")).value;  // any spelling of it
+      at.inst = instList(String(params.get("inst") || "").split(","));
       at.prog = progKeyOf(String(params.get("prog") || "").slice(0, 200));
       at.all = params.get("all") === "1" && sitesCan(at.q) && (!server || typedEnough(at.q));
       // by: an artist's name, as a sheet viewer's artist line links here (viewer/page.py artist_line), for what
@@ -1194,13 +1217,15 @@
     keySelect.appendChild(option);
   }
   byId("keys").hidden = keyGroups.size === 0;
-  // The filters of the panel that are on, as Filter counts them: the status, and the key.
-  const filtersOn = () => (state.show !== "all" ? 1 : 0) + (state.key ? 1 : 0);
+  // The filters of the panel that are on, as Filter counts them: the status, each instrument, and the key.
+  const instsChosen = () => (state.inst ? state.inst.split(",") : []);
+  const filtersOn = () => (state.show !== "all" ? 1 : 0) + instsChosen().length + (state.key ? 1 : 0);
   const filterCount = byId("filter-count");
   const filterLive = byId("filter-live");
   const showN = byId("show-n");
   const glyphFor = caracoleRows({}).glyph;
   filterButton.prepend(glyphFor("sliders"));
+  for (const c of instChips) c.prepend(glyphFor(c.dataset.inst));
   sort.before(glyphFor("sort"));
   const save = () => {
     const params = new URLSearchParams();
@@ -1216,6 +1241,7 @@
     if (state.sort !== "artist") params.set("sort", state.sort);
     if (state.artist) params.set("artist", state.artist);
     if (state.key) params.set("key", state.key);
+    if (state.inst) params.set("inst", state.inst);
     if (state.prog) params.set("prog", state.prog);
     if (state.all) params.set("all", "1");
     try {
@@ -1257,13 +1283,31 @@
   let matchingNow = [];
   let shownNow = [];
   const keyFits = (i) => !state.key || songKeys[i] === keyId(state.key);
+  const instFits = (i) => !state.inst || instsChosen().some((x) => instOf(songs[i]).has(x));
+  // An option's count: the songs it would show chosen, the panel's other groups as they are.
   const tallyChips = () => {
     const tally = { all: 0, found: 0, wanted: 0, review: 0 };
+    const having = { sheet: 0, guitar: 0, ukulele: 0, harmonica: 0, score: 0 };
     for (const i of matchingNow) {
       if (!counted(songs[i]) || !keyFits(i)) continue;
-      tally.all += 1;
-      for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
+      if (instFits(i)) {
+        tally.all += 1;
+        for (const k of ["found", "wanted", "review"]) if (SHOWS[k](songs[i])) tally[k] += 1;
+      }
+      if (SHOWS[state.show](songs[i])) for (const x of instOf(songs[i])) having[x] += 1;
     }
+    // An instrument no song has here is greyed and can't be pressed, unless it is on: pressed again, it goes. The
+    // group shows once a song has something but a chord sheet, and each line's glyph of one that is on is lit.
+    const chosen = instsChosen();
+    for (const c of instChips) {
+      const on = chosen.indexOf(c.dataset.inst) >= 0;
+      c.setAttribute("aria-pressed", String(on));
+      c.querySelector(".n").textContent = String(having[c.dataset.inst]);
+      c.disabled = !on && having[c.dataset.inst] === 0;
+    }
+    byId("f-insts").hidden = !chosen.length && !songs.some((s) => counted(s) &&
+      Array.from(instOf(s)).some((x) => x !== "sheet"));
+    libraryView.dataset.lit = chosen.join(" ");
     // Review, only while a song needs it (or while it is the one chosen).
     const reviewing = songs.some((s) => SHOWS.review(s)) || Array.from(arrived.values()).some((s) => SHOWS.review(s));
     for (const b of statusButtons) {
@@ -1296,7 +1340,7 @@
       (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
       (!state.prog || playsProg(songs[i], state.prog)) && fits(i));
     tallyChips();
-    const matching = matchingNow.filter(keyFits);
+    const matching = matchingNow.filter((i) => keyFits(i) && instFits(i));
     const shown = matching.filter((i) => SHOWS[state.show](songs[i]));
     sort.value = state.sort;
     keySelect.value = state.key;
@@ -1546,6 +1590,15 @@
       save();
     });
   }
+  for (const c of instChips) {
+    c.addEventListener("click", () => {
+      const chosen = instsChosen();
+      const name = c.dataset.inst;
+      state.inst = instList(chosen.indexOf(name) >= 0 ? chosen.filter((x) => x !== name) : chosen.concat(name));
+      render();
+      save();
+    });
+  }
   sort.addEventListener("change", () => {
     state.sort = SORTS.indexOf(sort.value) >= 0 ? sort.value : "artist";
     render();
@@ -1606,6 +1659,7 @@
   showN.addEventListener("click", () => closePanel());
   byId("clear-all").addEventListener("click", () => {
     state.show = "all";
+    state.inst = "";
     state.key = "";
     render();
     save();
@@ -2005,7 +2059,7 @@
   // hides the buttons: "Your songs here: wanted · by Soda Stereo · in A minor", or nothing when they show every song.
   const kept = (i) => (!state.artist || String(songs[i].sortArtist || "") === state.artist) &&
     (!state.key || songKeys[i] === keyId(state.key)) && (!state.prog || playsProg(songs[i], state.prog)) &&
-    SHOWS[state.show](songs[i]);
+    instFits(i) && SHOWS[state.show](songs[i]);
   const SHOW_WORD = { found: "found", wanted: "wanted", review: "needing review" };
   const keptSaid = () => {
     const parts = [label(SHOW_WORD, state.show), state.artist ? "by " + artistName(state.artist) : "",
@@ -2018,6 +2072,7 @@
   const keptNote = el("p", "filtered");
   keptNote.append(el("span"), button("Show all of yours", "small", () => {
     state.show = "all";
+    state.inst = "";
     state.artist = "";
     state.key = "";
     state.prog = "";

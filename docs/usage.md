@@ -1912,8 +1912,8 @@ needs something, one word: Wanted, Needs review when caracole isn't sure of the
 match, Not found when the offline index has no such song, or Ignored (a found
 song, nearly every one, says nothing); what it holds, a small icon each, named
 by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
-own colour, for one the audio model wrote; "Ukulele chords" for Ultimate
-Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab"), a
+own colour, for one the audio model wrote; "Ukulele chords", a ukulele, for
+Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab"), a
 harmonica tab, its lyrics and a score you filed (a phone leaves them out); its
 key, in a small box ("Am"; a screen reader hears "Key A minor (from the tab)",
 see [The song's key](#the-songs-key)); its one button, Open (Open PDF, Open
@@ -2020,7 +2020,15 @@ Escape or Filter again closes it) and as a sheet from the bottom of a phone's
 screen (over the page dimmed, it ends in **Show 4 songs**, which closes it,
 as Escape does). Its **Status** shows all songs, or only those found, wanted
 or needing review (Review only while a song needs it), each with how many
-songs it would show, the arrow keys moving between them; its **Key** menu,
+songs it would show, the arrow keys moving between them; **Has something
+for** shows the songs that have something for any of the instruments you
+tap: a Chord sheet (a human or an auto sheet), a Guitar tab (a Guitar Pro
+file or a text tab), Ukulele (Ultimate Guitar's Ukulele Chords), Harmonica
+(a harmonica tab) or a Score you filed, each with how many songs have it
+(one no song has, greyed, can't be tapped), and while one is on, each line's
+icon of it is in the accent (the group shows once a song has something but a
+chord sheet; the search's rows of the sites stay, whatever they are for); its
+**Key** menu,
 there once a song has a key, shows only the songs in one key, with how many
 each key has, and puts the spellings of one key together ("F# / Gb minor");
 **Clear all** lets them all go, and the panel says how many songs show

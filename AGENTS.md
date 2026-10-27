@@ -120,7 +120,8 @@ Rules a change there keeps (the Invariants below are the others):
   A row for one instrument says which, a badge as a source has its mark (rows.js `instrumentBadges`: Ukulele for
   UG's Ukulele Chords, Harmonica for harptabs.com's tabs, `search.search_harptabs`, by title alone as MuseScore's
   pages, Score for MuseScore's; a song's card's `instruments`, library_page.py `instruments_of`), on both pages, and
-  nothing is ever filtered by instrument.
+  no site's row is ever filtered by instrument: the Filter panel's Has something for (library.js `instOf`, a line's
+  holds read the same way) keeps to your songs, in the list and among the results.
   What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
   `suggest`), `nothingFound` (one card for a query that found nothing: the request by name first, Ask LaCuerda,
   the chips of `looked`, `unseen` folded) and `lookedLine` (the chips in one muted line under results).

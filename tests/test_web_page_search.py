@@ -816,6 +816,24 @@ def test_a_word_of_an_artists_name_puts_their_header_first_and_enter_asks_for_no
     assert queue.snapshot() == []
 
 
+def test_the_instruments_filter_your_songs_in_the_results_never_the_sites(cfg, live, browser):
+    # With Harmonica on, your songs among the results are those with a harmonica tab, as in the list; a site's song
+    # stays whatever it is for: the filters are your songs'.
+    base, _, _ = live
+    sites(cfg, ug=[("eagles", "take-it-easy", 2), ("eagles", "hotel-california", 3)])
+    hotel, _ = library(cfg, ("Eagles", "Hotel California"), ("Eagles", "Desperado"))
+    folder = song_dir(cfg.library_dir, hotel)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "harmonica-1.txt").write_bytes(b"4 -4 5\n")
+    browser.open(base + "#inst=harmonica")
+    assert browser.js(GRID) == ["Hotel California"]
+    search(browser, "eagles")
+    assert browser.wait("document.getElementById('found').dataset.query === 'eagles'")
+    [(artist, lines)] = browser.js(LINES)
+    assert artist == "Eagles" and ["Hotel California", "yours"] in lines and ["Take It Easy", "ug"] in lines, lines
+    assert "Desperado" not in [title for title, _ in lines], lines  # yours, with no harmonica tab
+
+
 def test_escape_returns_to_the_list_with_its_filter(cfg, live, browser):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
