@@ -215,6 +215,14 @@ def test_with_no_sheet_the_overlay_has_no_guitar_and_no_key_for_the_harps():
     assert overlay["harp"]["holes"] == [harp.holes(o) for o in range(12)]
 
 
+def test_a_sheet_with_no_key_has_its_guitar_tab_and_says_so_of_the_harps():
+    # A chord sheet with no chord caracole can read: its Guitar tab is there, so the line never says there is no sheet
+    keyless = "{title: Synthetic Song}\n{artist: Placeholder Band}\n[N.C.]la la [Hm]lo lo\n"
+    overlay = data_of(page(TAB_D, cho=keyless))["overlay"]
+    assert overlay["guitar"] is not None and overlay["harp"]["key"] is None
+    assert overlay["harp"]["none"] == "With no key in its chord sheet, caracole can't tell which harp plays the song."
+
+
 def test_a_harp_its_page_guesses_is_no_tabs():
     # harptabs.com's key, with no record and no word of the tab's: the page starts there, but no harp is the tab's.
     part = data_of(page(a_tab(3), cho=a_song(), key="Am", key_source="tab", page_key="C"))["overlay"]["harp"]
