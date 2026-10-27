@@ -446,6 +446,29 @@ def test_the_card_fits_with_the_drawer_under_its_tile(conn, cfg, tmp_path, size)
         assert layout["tiles"][4][2] >= layout["guitar"]["drawer"][3], layout
 
 
+def test_a_drawer_left_open_in_a_folded_card_is_placed_again_when_the_card_opens_after_a_resize(conn, cfg, tmp_path):
+    # Folded, the card's tiles measure nothing: a resize then (a phone turned) waits for the card to open again.
+    import tempfile
+    from pathlib import Path
+
+    hotel(conn, cfg)
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=SERVED)
+    path = write_library_page(cfg.library_dir, with_script(html, "(() => {\n" + KIT +
+                                                           "\nwindow.kit = { openCard, chipOf, lineOf };\n})();"))
+    after = "kit.lineOf('Hotel California').querySelector('.drawer').previousElementSibling.className"
+    with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=1280, height=900) as b:
+        b.open(path.as_uri())
+        assert b.wait("!!window.kit && !!document.querySelector('#list .line-more')", 15)
+        b.js("kit.openCard('Hotel California'); kit.chipOf('Hotel California', 'gtptabs', 'guitar').click()")
+        assert b.js(after).startswith("tile tile-lyrics")  # four a row: under the row
+        b.js("kit.lineOf('Hotel California').querySelector('.line-more').click()")  # folded, its drawer left open
+        b.js("window.resized = 0; addEventListener('resize', () => { window.resized += 1; })")  # after the page's own
+        b.send("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=1, mobile=False)
+        assert b.wait("innerWidth === 390 && window.resized > 0")  # the page heard it while the card was folded
+        b.js("kit.openCard('Hotel California')")
+        assert b.wait(f"{after}.startsWith('tile tile-guitar')"), b.js(after)  # one a row: right under its own
+
+
 @pytest.mark.parametrize("size", ["390,844", "1280,900"])
 def test_the_card_meets_touch_targets_with_a_drawer_open(conn, cfg, tmp_path, size):
     from helpers.targets import noted, noting, small_targets

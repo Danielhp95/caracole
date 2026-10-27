@@ -469,15 +469,16 @@ const caracoleCard = (icons, rows) => {
     });
     for (const t of made) box.appendChild(tileOf(t, card));
     box.appendChild(drawer);
-    drawers.add(box);
+    if (watch) watch.observe(box);
     return box;
   };
   // The drawer under the row of tiles that holds its tile (on a phone, one tile a row, right under it), its pointer
-  // over the tile: placed when it opens, and again when the window's width moves the tiles.
-  const drawers = new Set();
+  // over the tile: placed when it opens, and again whenever its tiles' width moves them. Their box is watched, not the
+  // window: a folded card's tiles, or a line the search left out, measure nothing, and are placed once they show.
+  const placed = new WeakMap();  // a box of tiles -> its width when its drawer was placed
   const place = (drawer, tileBox) => {
     const box = drawer.parentNode;
-    if (!box || !tileBox.isConnected) return;
+    if (!box || !tileBox.isConnected || !tileBox.getClientRects().length) return;
     drawer.hidden = true;  // out of the rows while they are measured
     const top = Math.round(tileBox.getBoundingClientRect().top);
     let last = tileBox;
@@ -489,18 +490,18 @@ const caracoleCard = (icons, rows) => {
     const at = tileBox.getBoundingClientRect();
     drawer.style.setProperty("--point", Math.round(at.left + at.width / 2 - box.getBoundingClientRect().left) + "px");
     drawer.dataset.tile = String(Array.from(box.querySelectorAll(":scope > .tile")).indexOf(tileBox));
+    placed.set(box, Math.round(box.getBoundingClientRect().width));
   };
-  window.addEventListener("resize", () => {
-    for (const box of Array.from(drawers)) {
-      if (!box.isConnected) {
-        drawers.delete(box);
-        continue;
-      }
+  const watch = typeof ResizeObserver === "function" ? new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const box = entry.target;
+      const width = Math.round(box.getBoundingClientRect().width);
+      if (!width || placed.get(box) === width) continue;  // hidden, or where it was placed
       const drawer = box.querySelector(":scope > .drawer");
       const tileBox = drawer && !drawer.hidden ? box.querySelectorAll(":scope > .tile")[Number(drawer.dataset.tile)] : null;
       if (tileBox) place(drawer, tileBox);
     }
-  });
+  }) : null;
 
   // The song's progressions (``items``: { text, said, go }): chips that find your songs that play each.
   const progressions = (items) => {
