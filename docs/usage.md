@@ -2373,7 +2373,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   legend the arrow keys go from shape to shape; Tab stops once a chord. The
   necks follow the key, the capo and the mode, and two chords shown by one
   name (A# and Bb, transposed to B) share one neck. With a ukulele or a
-  baritone chosen (below), the necks are theirs and the tab is named so; with
+  baritone chosen (below), the necks are theirs and the tab is named so, in
+  short (Ukulele for low G too, Baritone); with
   an instrument that has no neck (the piano, the harmonica, the flute, the
   recorder), they are the guitar's, at its capo. **Harmonica** picks the harp:
   a small circle of fifths with the key the song sounds in at its middle
@@ -2403,12 +2404,14 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   screen's, not a song's: the browser keeps it once for every sheet and
   songbook, and the address keeps `necks=0` too, for a page served by
   `caracole serve`, where the browser keeps nothing: ‹ and › to another
-  version keep it, and in a songbook so does every step to another song (the
+  version keep it, so do a harmonica tab's link in the Harmonica row and its
+  page's ‹ Chord sheet, and in a songbook so does every step to another song (the
   arrows, a swipe, ‹ ›, the contents). Served, a sheet opened afresh from the
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset everything** shows the rail again. Hidden, the
   Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
-  there is no rail and no button for it.
+  there is no rail and no button for it (narrowed with the keyboard's focus
+  in the rail, the focus goes to the bar).
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
@@ -2470,7 +2473,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `inst=ukulele` (`ukulele-low-g`, `baritone`, `piano`, `harmonica`, `flute`,
   `recorder`) while it is another
   than the guitar, for a page served by `caracole serve`; ‹ and › to another
-  version keep it, and so does every step to another song in a songbook (a
+  version keep it, so does the trip to a harmonica tab's page and back, and so
+  does every step to another song in a songbook (a
   song the songbook plays on an instrument of its own keeps that one to
   itself: the songs after it are on yours again, the last you chose).
   **Reset everything** leaves it as it is. **Export PDF** makes the PDF on
@@ -2793,7 +2797,10 @@ the library page link it, the tab's text beside it.
   the line hole by hole, a beat each, lighting each hole as it sounds, and
   stops when pressed again (no rhythm: the tab has none).
 - **‹ Chord sheet** goes back to the song's sheet viewer (‹ Library for a song
-  with none), and **The tab as text**, at the foot, opens `harmonica-1.txt`.
+  with none), with the rail hidden, the pinyin, the Chinese characters and the
+  instrument as they came (served, where the browser keeps nothing, the
+  address carries them both ways), and **The tab as text**, at the foot, opens
+  `harmonica-1.txt`.
 - **The overlay**, from 1200 px, as on the sheet viewer, with Harmonica first
   and shown: its harp is the page's, both ways (a harp tapped on the circle is
   the one the page plays and names its notes on, and − and + move the

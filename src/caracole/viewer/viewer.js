@@ -653,6 +653,18 @@
   const diagram = (position, title, bare, span) => (inst().kind === "keys"
     ? kit.keyboard(position, title, bare, span) : kit.box(position, title, bare));
 
+  // The screen's choices, kept once for every page (the rail of necks hidden, the pinyin shown, the Chinese in
+  // Traditional characters, the instrument), set in ``params`` as the address keeps them: a link to another page of the
+  // song takes them on (a version's ‹ ›, a harmonica tab's page, and back), so that where the browser keeps nothing
+  // (caracole serve's sandbox) they go with it.
+  function screenChoices(params) {
+    if (!state.necks) params.set("necks", "0");
+    if (state.py) params.set("py", "1");
+    if (state.trad) params.set("trad", "1");
+    if (state.inst !== "guitar") params.set("inst", state.inst);
+    return params;
+  }
+
   // --- the instrument: what the chords are drawn and heard for ------------------------------------------
   // The settings' Instrument menu offers each instrument of data.instruments the page draws (``drawn``); one drawn by
   // its own script (instruments.js register) draws its chords, a line under the key line, and a row of the settings.
@@ -669,8 +681,9 @@
       chords.push(Object.freeze({ i: c, name, rep: Object.freeze(rep.slice()), root: mod12(rep[0] + s),
         bass: rep[2] === null ? null : mod12(rep[2] + s) }));
     }
+    const carry = screenChoices(new URLSearchParams()).toString();
     return Object.freeze({ data, instrument: inst(), mode: modeNow(), shift: s, key: key ? keyName(s) : "",
-      names: Object.freeze(names(s)), chords: Object.freeze(chords) });
+      names: Object.freeze(names(s)), chords: Object.freeze(chords), carry: carry ? "#" + carry : "" });
   };
   const partsOf = () => (kit && inst().kind !== "strings" && inst().kind !== "keys" ? kit.registered(inst().id) : null);
   // A chord as its instrument's script draws it (``bare``: the strip's), or null; and the notes it sounds there.
@@ -1144,7 +1157,7 @@
       const shapes = shapesOf(rep, s, it);
       return { name, list: shapes.list, mine: shapes.mine, chosen: played ? state.at[c] || 0 : railAt[name] || 0 };
     });
-    return { name: String(it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
+    return { name: String(it.tab || it.name || "Guitar"), strings: (it.tuning || []).length || 6, chords,
       key: key && data.keyScale ? keySpec(s, it) : null };
   };
   // A chord's row in one of harp.py's tables by chord: the sheet's in the mode played, else its alternative's.
@@ -1234,11 +1247,18 @@
   if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
   if (necksEl) {
     // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it.
+    // Narrowed with the keyboard's focus in the rail, the focus goes to the bar's first control, where the rail's
+    // button was.
     railWide.addEventListener("change", () => {
+      const had = necksEl.contains(document.activeElement);
       drawNecks();
       if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
       layout();
       place();
+      if (had && !necksEl.contains(document.activeElement)) {
+        const first = Array.from(bar.querySelectorAll("button")).find((b) => b.getClientRects().length > 0);
+        if (first) first.focus({ preventScroll: true });
+      }
     });
   }
 
@@ -2233,10 +2253,7 @@
     const params = new URLSearchParams();
     if (state.fs !== FS.start) params.set("fs", String(state.fs));
     if (state.speed !== SPEED.start) params.set("speed", String(state.speed));
-    if (!state.necks) params.set("necks", "0");  // the rail hidden there too
-    if (state.py) params.set("py", "1");  // and the pinyin shown
-    if (state.trad) params.set("trad", "1");  // and the Chinese in Traditional characters
-    if (state.inst !== "guitar") params.set("inst", state.inst);  // and the instrument
+    screenChoices(params);  // the rail, the pinyin, the characters and the instrument there too
     const fragment = params.toString();
     return encodeURIComponent(page) + (fragment ? "#" + fragment : "");
   };

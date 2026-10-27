@@ -121,8 +121,9 @@ def test_how_to_read_the_holes_and_what_harptabs_com_says_of_the_tab():
 
 
 def test_back_to_the_songs_sheet_or_the_library():
-    assert '<a class="back" href="sheet.html">‹ Chord sheet</a>' in page(back="sheet.html")
-    assert '<a class="back" href="sheet%20%28auto%29.html">‹ Chord sheet</a>' in page(back="sheet (auto).html")
+    # the sheet's (data-sheet): harptab.js takes the screen's choices back to it
+    assert '<a class="back" href="sheet.html" data-sheet>‹ Chord sheet</a>' in page(back="sheet.html")
+    assert '<a class="back" href="sheet%20%28auto%29.html" data-sheet>‹ Chord sheet</a>' in page(back="sheet (auto).html")
     assert '<a class="back" href="../../index.html">‹ Library</a>' in page()
     assert 'href="../../index.html#by=Placeholder%20Band"' in page()  # the artist's songs, as a sheet's line
 

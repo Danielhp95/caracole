@@ -212,7 +212,9 @@ Rules a change there keeps (the Invariants below are the others):
   viewer.css's `--nk` (1.15: the owner's 15 % over the first 300 px), its width, padding, text and
   targets alike; whether it shows (`state.necks`) is the one setting kept for every page at once
   (localStorage `caracole-viewer-necks`, and `necks=0` in the address, which book.js's `carryScreen`
-  takes on to a songbook's next address, for its sandbox with no storage), with its Hide, the bar's
+  takes on to a songbook's next address, for its sandbox with no storage, as a link to another of the song's
+  pages does: a version's ‹ ›, a harmonica tab's and its ‹ Chord sheet, viewer.js `screenChoices`, the view's
+  `carry`, harptab.js `backToSheet`), with its Hide, the bar's
   button and the settings' row in step (test_viewer_necks.py). So is the settings' Pinyin (`state.py`,
   off at first: localStorage `caracole-viewer-pinyin`, `py=1` in the address, which `carryScreen` takes
   on too), each Chinese character's reading over it, between its chord and it: pinyin.py reads them at

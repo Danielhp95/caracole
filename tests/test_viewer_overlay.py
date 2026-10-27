@@ -334,3 +334,19 @@ def test_a_sheet_with_a_harmonica_tab_starts_on_its_harp_marked_the_tabs(tmp_pat
 def test_below_1200_px_there_is_no_overlay(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, SONG), width=1100, height=800, mobile=False) as b:
         assert b.js("document.getElementById('necks').hidden && !document.querySelector('#necks *')")
+
+
+@in_chromium
+def test_the_window_narrowed_with_the_focus_in_the_rail_puts_it_on_the_bar(tmp_path):
+    # The rail goes below 1200 px, and the keyboard's focus with it: it goes to the bar's first control, where the rail's
+    # button was, rather than to nothing.
+    with open_viewer(tmp_path, written(tmp_path, SONG), **DESKTOP) as b:
+        harmonica(b)
+        b.js("document.querySelector('#necks .hw-harp[aria-checked=true]').focus()")
+        b.send("Emulation.setDeviceMetricsOverride", width=1100, height=1000, deviceScaleFactor=1, mobile=False)
+        assert b.wait("document.getElementById('necks').hidden")
+        narrow = b.js("document.activeElement.id")
+        b.send("Emulation.setDeviceMetricsOverride", width=1400, height=1000, deviceScaleFactor=1, mobile=False)
+        assert b.wait("!document.getElementById('necks').hidden")
+        wide = b.js("document.activeElement.id")
+    assert narrow == "t-down" and wide == "t-down"  # the rail back does not take it

@@ -72,6 +72,19 @@
       if (kit) localStorage.setItem(kit.NECKS, state.necks ? "shown" : "hidden");
     } catch (err) { /* private mode, or a server's sandbox: the address keeps it */ }
   };
+  // ‹ Chord sheet takes the screen's choices back with it (the rail hidden, and as they came in the address, a sheet's
+  // viewer's link here having taken them on: the pinyin, the Chinese characters, the instrument), so that where the
+  // browser keeps nothing (caracole serve's sandbox) they go both ways. ‹ Library takes none.
+  const sheetLink = document.querySelector("a.back[data-sheet]");
+  const sheetPage = sheetLink ? sheetLink.getAttribute("href") : "";
+  function backToSheet() {
+    if (!sheetLink) return;
+    const now = new URLSearchParams(location.hash.slice(1)), params = new URLSearchParams();
+    if (!state.necks) params.set("necks", "0");
+    for (const name of ["py", "trad", "inst"]) if (now.has(name)) params.set(name, now.get(name));
+    const fragment = params.toString();
+    sheetLink.setAttribute("href", sheetPage + (fragment ? "#" + fragment : ""));
+  }
   const save = () => {
     try {
       localStorage.setItem(store, JSON.stringify({ harp: keys[state.harp], notes: state.notes, fs: state.fs,
@@ -90,6 +103,7 @@
         history.replaceState(null, "", fragment ? "#" + fragment : location.pathname + location.search);
       }
     } catch (err) { /* an address the page can't change */ }
+    backToSheet();
   };
 
   // --- a hole's note on the harp chosen --------------------------------------------------------------------------
@@ -216,7 +230,16 @@
     save();
   };
   necksButton.addEventListener("click", () => showRail(!state.necks));
-  wide.addEventListener("change", drawRail);
+  // The window narrowed below 1200 px with the keyboard's focus in the rail: it goes to the bar's first control, where
+  // the rail's button was.
+  wide.addEventListener("change", () => {
+    const had = aside.contains(document.activeElement);
+    drawRail();
+    if (had && !aside.contains(document.activeElement)) {
+      const first = Array.from($("bar").querySelectorAll("button")).find((b) => b.getClientRects().length > 0);
+      if (first) first.focus({ preventScroll: true });
+    }
+  });
 
   // --- a hole tapped, a line played ------------------------------------------------------------------------------
   let playing = null, lit = 0;
@@ -485,5 +508,6 @@
   bar.hidden = false;
   showScroll();
   render();
+  backToSheet();
   doc.dataset.ready = "1";
 })();

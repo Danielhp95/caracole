@@ -142,12 +142,13 @@ def test_the_harmonica_row_links_each_of_the_songs_harmonica_tabs_page_and_its_t
         b.click("#more")
         found = b.js(PANEL)
         b.js("document.querySelector('.wd-tabs a').click()")
-        assert b.wait("location.href.endsWith('harmonica-1.html')")
+        assert b.wait("location.href.endsWith('harmonica-1.html#inst=harmonica')")  # the instrument goes with it
         text = b.js("document.body.textContent")
     assert found["title"] == ["Harmonica tabs"]
     # harptabs.com's Key chip is the song's key on some tabs and the harp's on others: never named a harp here.
     said = "The key harptabs.com's page names: the song's on some tabs, the harp's on others"
-    assert found["tabs"] == [["harmonica-1", "harmonica-1.html", "key C (harptabs.com)", said, "harmonica-1.txt"],
+    assert found["tabs"] == [["harmonica-1", "harmonica-1.html#inst=harmonica", "key C (harptabs.com)", said,
+                              "harmonica-1.txt"],
                              ["harmonica-2.txt", "harmonica-2.txt", None, None, None]]
     assert "the tab's page" in text
 

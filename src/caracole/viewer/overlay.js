@@ -19,7 +19,8 @@
   //                            or hides the aside itself. ``page``:
   //     first                  "guitar" or "harmonica": the tab a page opens on, first in the control too
   //     guitar()               the Guitar tab, or null for none (a harmonica tab's page with no sheet): {name (the
-  //                            instrument whose necks: "Guitar", "Ukulele"), strings, key (a keyNeck spec, or null),
+  //                            instrument whose necks, in short: "Guitar", "Ukulele", "Baritone"), strings, key (a
+  //                            keyNeck spec, or null),
   //                            chords: [{name, list (its positions: voicings.py), mine (how many are the sheet's),
   //                            chosen (the one played)}], each chord shown once, in the order it first comes}
   //     harmonica()            the Harmonica tab: {key: null, none (a line: why there is no harp), plain (or null: a
