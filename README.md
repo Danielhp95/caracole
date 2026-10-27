@@ -60,6 +60,7 @@ the page has no sign-in, so keep it on a network you trust (your LAN or tailnet)
 - [docs/install.md](docs/install.md): installing it.
 - [docs/usage.md](docs/usage.md): every command, setting and file.
 - [docs/deploy.md](docs/deploy.md): running it on a server.
+- [android/README.md](android/README.md): the Android app, a copy of the library to read offline.
 
 caracole is gentle with the sites it reads: one request at a time, seconds apart,
 within a small budget, never a page robots.txt closes, and at least a day's rest
