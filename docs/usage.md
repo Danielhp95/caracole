@@ -2088,9 +2088,11 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
 - **Hear it**: a tap on a chord, in the song or in the strip, also strums
   it, and so does a tap on the shape on its card (or Enter on it): the shape
   the card shows, with the capo where it is, low string to high, in standard
-  tuning. The sound is made in the browser (a plucked string, synthesized:
-  no recording, nothing loaded), so it works from the synced folder and from
-  `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
+  tuning, or on the instrument chosen (below): a ukulele's strings from the
+  4th to the 1st, shorter and softer, in its own tuning; a piano's notes
+  struck together, the bass with them. The sound is made in the browser (a
+  plucked string, or a piano's string, synthesized: no recording, nothing
+  loaded), so it works from the synced folder and from `caracole serve` alike. Nothing sounds until you tap, one sound plays at a
   time, and the page falls silent when you switch away from it; the next tap
   plays again. **Sound**, in the settings, sets the volume: Off, Soft,
   Medium (the default) or Loud. With it off, a tap opens the card alone. A

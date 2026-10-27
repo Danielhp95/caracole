@@ -371,8 +371,9 @@ def test_an_instrument_a_script_registers_is_offered_then_drawn_by_it(tmp_path, 
         b.click('#sheet .c[data-c="0"]')
         assert b.wait("!document.getElementById('card').hidden")
         card = b.js("document.querySelector('#diagram .kz').textContent")
+        heard = b.wait("document.documentElement.dataset.heard === '369.99'")  # F#4: its notes, as it says
     assert [c[0] for c in before["chips"]] == NAMES and before["chips"][0][1] == "true"  # not drawn yet: the guitar
     assert [c[0] for c in after["chips"]] == [*NAMES, "Kazoo"]
     assert on[0]["facts"] == "Key F#m from the sheetKazoo in F#m, 4 chords"  # its line, under the key line
     assert on[0]["hint"] == "Hum along." and not on[0]["capo"] and on[2] == "Kazoo at 2"
-    assert bare == ["hum F#", "hum D", "hum A", "hum E"] and card == "hum F#"
+    assert bare == ["hum F#", "hum D", "hum A", "hum E"] and card == "hum F#" and heard

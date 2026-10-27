@@ -10,7 +10,7 @@
 - pinyin.py reads each Chinese character's pinyin in context, for the page's Pinyin;
 - viewer.js and viewer.css are the page's script and stylesheet, inlined; strum.js, inlined before
   viewer.js, strums the shape a chord's card shows in Web Audio (``window.caracoleSound``: a chord,
-  or a progression at a tempo), only on a tap; instruments.js, inlined after
+  or a progression at a tempo, on the instrument chosen), only on a tap; instruments.js, inlined after
   it, draws a chord's box on any fretted instrument and a piano's keyboard, and is where another
   instrument's script registers its drawing (``window.caracoleInstruments``);
 - book.py builds ``songbook.html``, a songbook's songs in one page, from page.py's pieces, with
