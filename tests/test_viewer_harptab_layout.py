@@ -13,12 +13,13 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from caracole.viewer.harptab import Prose, Row, expand, parse
+from caracole.viewer.harptab import BRACKETS, DOTS, SIGNS, Prose, Row, expand, parse, scan
 
 LAYOUT = Path(__file__).parent / "fixtures" / "harptabs" / "layout"
 CHIPS = {"5370_19-dias-y-500-noches": "Diatonic", "12631_en-brazos-de-la-fiebre-with-lyric": "Diatonic",
          "16988_l-l-og-mere-l": "Diatonic", "29720_te-amar-a-massa-demais": None,
-         "14346_william-tell-overture": "Diatonic"}
+         "14346_william-tell-overture": "Diatonic", "23467_mon-anci-1-2tre-gurdil": "Diatonic",
+         "7018_music-of-the-day": "Diatonic", "28721_atun": "Diatonic", "20960_when-the-ship-comes-in-solo": "Diatonic"}
 
 
 def text_of(stem: str) -> list[str]:
@@ -116,3 +117,77 @@ def test_a_line_of_letters_above_each_row_is_no_words():
     read = parse(" w    q q  q  q\n-4 / -4 4 -3 -2\n\n h  q  q   q q q q\n-2 -1 -2 / -2 -1 -2 -1\n\n"
                  "  e  e e  e  h\n-4 -1 -4 -1 4\n")
     assert [r.lyric for r in read.rows()] == [None, None, None]
+
+
+# --- the tabber's words inside a line of holes -----------------------------------------------------------------------
+
+
+def kept(found) -> list[tuple[str, str]]:
+    """What a line keeps that plays nothing: its words ("words") and what its notation couldn't read ("unread")."""
+    return [(g.kind, g.text) for g in found.groups if not g.holes]
+
+
+def test_words_after_a_line_of_holes_are_kept_in_place_and_the_row_is_a_row():
+    found = scan("6 -6 -6 -6 6 -6 -7 6 -6 BOM BOM (percussions)")
+    assert found.is_row and len(found.holes) == 9
+    assert kept(found) == [("words", "BOM BOM (percussions)")] and found.explained == 1.0
+    assert scan("8 8 -8 8 -9 9 -7 7 (Chorus)").is_row and kept(scan("8 -8 9 -7 7 (Chorus)")) == [("words", "(Chorus)")]
+
+
+def test_words_written_against_a_hole_or_in_brackets_are_words_and_their_numbers_no_holes():
+    found = scan('4 -4 5 -4 4 -4 4 -3" 4(if you can\'t')
+    assert found.is_row and kept(found) == [("words", "(if you can't")]
+    aside = scan(".-9.. -9  -9 8... . (nur Vers 1 + 2 !)", notation=SIGNS.changed((DOTS,)))
+    assert [g.label() for g in aside.holes] == ["−9", "−9", "−9", "8"]  # never 1 and 2
+    assert aside.is_row and kept(aside) == [("words", "(nur Vers 1 + 2 !)")]
+
+
+def test_syllables_written_against_their_holes_are_words():
+    # One tabber's articulation, "(2)te (3)tue": each hole read, each syllable kept against it
+    found = scan("(2)te (2)te (2)te (3)tue (3)tue (3)tue (3)tue (2)eeeu", notation=BRACKETS)
+    assert found.is_row and [g.label() for g in found.holes] == ["−2"] * 3 + ["−3"] * 4 + ["−2"]
+    assert [text for kind, text in kept(found) if kind == "words"] == ["te"] * 3 + ["tue"] * 4 + ["eeeu"]
+    assert scan("(4)tuuuue (45)tue", notation=BRACKETS).is_row  # two holes, a syllable against each
+    for line in ("I'm 5 and you're 6", "Take 5", "4 5 BOOM"):
+        assert not scan(line).is_row, line
+
+
+def test_a_mark_no_notation_reads_is_unread_still_never_words():
+    # letters with no vowel against a hole ("-4SB", "-4z-5"), a letter alone: as before
+    assert kept(scan("-4SB -3' -4 -5 -4z-5")) == [("unread", "-4SB"), ("unread", "-4z-5")]
+    assert kept(scan("4 -4 X 5 -5 r 6")) == [("unread", "X"), ("unread", "r")]
+
+
+def test_a_line_of_words_with_a_few_numbers_is_no_row():
+    for line in ("Take 5, 6 and 7 trains", "Play it 3 times then go to 4", "do 3, slip to 6", "bar 12:"):
+        assert not scan(line).is_row, line
+
+
+def test_mon_ancetre_gurdil_reads_every_row_its_percussions_in_place():
+    read = laid("23467_mon-anci-1-2tre-gurdil")
+    rows = read.rows()
+    assert len(rows) == 7 and all(r.trusted for r in rows)
+    assert [g.text for r in rows for g in r.groups if g.kind == "words"] == [
+        "GER VIX (viqmirriujp)", "MOH HOS", "(mo wadpem :D )"]
+
+
+def test_a_line_of_holes_and_its_words_after_them_is_a_row():
+    read = laid("7018_music-of-the-day")
+    row = next(r for r in read.rows() if r.line == 47)
+    assert row.trusted and len([g for g in row.groups if g.holes]) == 12
+    assert [g.text for g in row.groups if g.kind == "words"] == [
+        "Aaa mov chiirz ap lqi oeh rel-tez bu e-dka weejp"]
+
+
+def test_atun_reads_its_rows_with_their_syllables_against_the_holes():
+    read = laid("28721_atun")
+    assert read.convention == "brackets" and read.readable
+    rows = read.rows()
+    assert all(r.trusted for r in rows) and len(rows) == 9
+
+
+def test_when_the_ship_comes_in_keeps_its_parts_name_in_its_row():
+    read = laid("20960_when-the-ship-comes-in-solo")
+    first = next(r for r in read.rows() if r.line == 1)
+    assert first.trusted and [(g.kind, g.text) for g in first.groups if not g.holes] == [
+        ("unread", "-"), ("words", "Gozpq Pamj")]

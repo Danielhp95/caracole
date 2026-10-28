@@ -23,6 +23,9 @@
   overflow-wrap: anywhere; }
 .hg > .u:not(:first-child), .hg > .u + .h { margin-left: .32em; }
 .hg > .jn + .u { margin-left: 0; }
+/* The tabber's words in a row of holes ("BOM BOM", "(Chorus)", a syllable against its hole): text, in its place. */
+.tw { font-weight: 400; font-style: italic; overflow-wrap: anywhere; }
+.hg > .tw:not(:first-child), .hg > .tw + .h { margin-left: .32em; }
 .h.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 @media (hover: hover) { .h:hover { background: var(--accent-soft); } }
 .hold { color: var(--muted); font-size: .8em; margin-left: .1em; }

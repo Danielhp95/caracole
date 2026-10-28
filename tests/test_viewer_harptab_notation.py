@@ -177,10 +177,11 @@ def test_a_row_read_with_low_confidence_is_shown_as_written():
 
 
 def test_a_line_of_holes_read_under_the_share_is_shown_as_written_never_taken_for_words():
-    found = parse("4 -4 5 -5 6\nla la la la la\n\n4 5 6 -6 5 BOOM\nlo lo lo lo lo\n")
+    # "$$$$" no notation reads (a word, "BOOM", would be the tabber's, kept in the row: test_viewer_harptab_layout.py)
+    found = parse("4 -4 5 -5 6\nla la la la la\n\n4 5 6 -6 5 $$$$\nlo lo lo lo lo\n")
     rows = found.rows()
     assert [(r.trusted, r.text, r.lyric) for r in rows] == [
-        (True, "4 -4 5 -5 6", "la la la la la"), (False, "4 5 6 -6 5 BOOM", "lo lo lo lo lo")]
+        (True, "4 -4 5 -5 6", "la la la la la"), (False, "4 5 6 -6 5 $$$$", "lo lo lo lo lo")]
     assert not any(isinstance(i, Words) for s in found.sections for i in s.items)
 
 

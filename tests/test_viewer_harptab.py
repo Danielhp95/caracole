@@ -88,15 +88,18 @@ def test_the_sample_is_the_fourteen_tabs():
     assert len(SAMPLED) == 14
 
 
-def test_thirteen_of_the_fourteen_sampled_tabs_are_read_and_the_private_notation_is_not():
-    unread = [stem for stem in SAMPLED if not tab(stem).readable]
-    assert unread == ["29910_knockin-on-heavens-door"]  # "(3)tue (3)te": its tabber's own notation
+def test_every_sampled_tab_is_read_the_private_notations_syllables_kept_as_its_words():
+    assert [stem for stem in SAMPLED if not tab(stem).readable] == []
+    # "(3)tue (3)te", its tabber's own: each "(3)" a draw, each syllable the tabber's, kept against its hole
     knockin = tab("29910_knockin-on-heavens-door")
-    assert knockin.rows() == [] and len(knockin.missed) == 2  # its two lines of holes, before any row: its notes
-    assert knockin.convention == "brackets" and knockin.reading.q < 0.7  # "(3)": a draw, "tue" read by none
+    assert len(knockin.rows()) == 2 and knockin.missed == [] and knockin.convention == "brackets"
+    first = knockin.rows()[0]
+    assert [g.label() for g in first.groups] == ["−3", "mua", "−3", "do", "−3", "be", "−3", "pi", "−3", "va", "3", "−3",
+                                                 "fa"]
+    assert {g.kind for g in first.groups if not g.holes} == {"words"}
 
 
-@pytest.mark.parametrize("stem", [s for s in SAMPLED if s != "29910_knockin-on-heavens-door"])
+@pytest.mark.parametrize("stem", SAMPLED)
 def test_every_hole_read_is_a_note_a_richter_harp_has(stem):
     holes = [h for r in tab(stem).rows() for g in r.groups for h in g.holes]
     assert holes
@@ -117,10 +120,11 @@ def test_what_each_sampled_tab_holds():
     rows = {stem: len(tab(stem).rows()) for stem in SAMPLED}
     assert rows == {"10228_whammer-jammer": 48, "124_heart-of-gold": 9, "1278_house-of-the-rising-sun": 4,
                     "164_blowin-in-the-wind": 11, "16_amazing-grace": 4, "1786_simple-man": 8, "1882_juke": 23,
-                    "25_piano-man": 15, "28841_isnt-she-lovely": 8, "29910_knockin-on-heavens-door": 0,
+                    "25_piano-man": 15, "28841_isnt-she-lovely": 8, "29910_knockin-on-heavens-door": 2,
                     "3489_wonderwall": 33, "53_love-me-do": 4, "588_hotel-california": 19, "99_free-bird": 22}
     instrumental = [s for s in SAMPLED if tab(s).rows() and not sung(s)]
-    assert instrumental == ["10228_whammer-jammer", "124_heart-of-gold", "1882_juke", "28841_isnt-she-lovely"]
+    assert instrumental == ["10228_whammer-jammer", "124_heart-of-gold", "1882_juke", "28841_isnt-she-lovely",
+                            "29910_knockin-on-heavens-door"]
 
 
 def test_how_each_tab_writes_a_draw():
@@ -250,11 +254,15 @@ def test_dirty_old_town_writes_its_signs_after_the_hole():
 def test_a_star_after_a_hole_is_a_bend_on_twelve_bar_blues_boogie_as_its_page_says_diatonic():
     read = spelled("9069_twelve-bar-blues-boogie-different")
     assert star_bends(read) and not read.chromatic and read.readable
-    assert labels(read).count("−3′") == 3 and not any(h.button for r in read.rows() for g in r.groups for h in g.holes)
-    # its turnaround, a line with words inside it, reads as no row still; its holes, as their legend says
-    turnaround = scan(read.missed[0], notation=read.reading.notation)
-    assert [g.label() for g in turnaround.holes][:7] == ["−1", "−2", "−3′", "−3′", "1", "2", "3"]
-    assert [g.label() for g in turnaround.holes][-5:] == ["−4′", "−4", "−4′", "4", "−3"]  # b-4/-4 b-4 4 -3
+    assert labels(read).count("−3′") == 6 and not any(h.button for r in read.rows() for g in r.groups for h in g.holes)
+    # its turnaround, its words inside it kept in their place (test_viewer_harptab_layout.py); its holes, as their
+    # legend says
+    turnaround = next(r for r in read.rows() if r.line == 10)
+    assert turnaround.trusted and read.missed == []
+    assert [g.label() for g in turnaround.groups if g.holes][:8] == ["−1", "−2", "−3′", "−3′", "1", "2", "3", "−3′"]
+    assert [g.label() for g in turnaround.groups if g.holes][-5:] == ["−4′", "−4", "−4′", "4", "−3"]  # b-4/-4 b-4 4 -3
+    assert [g.text for g in turnaround.groups if g.kind == "words"] == ["(wvel how ob fuqweziudf i na ub nwez wia)",
+                                                                        "od"]
     # without its chip, as a tab kept before caracole kept chips: a slide, a chromatic's, shown as written
     assert not spelled("9069_twelve-bar-blues-boogie-different", harp=None).readable
 

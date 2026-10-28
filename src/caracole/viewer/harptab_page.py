@@ -397,9 +397,12 @@ def _cells(groups: list[Group], data: dict[str, Any], space: str) -> str:
 
 def _group_html(group: Group, data: dict[str, Any]) -> str:
     """A group of holes as the page shows it before its script runs, which draws it again as the harp and Notes
-    ask; ``data-i``, its place in the data's ``groups``. What the notation couldn't read is its text, as written."""
+    ask; ``data-i``, its place in the data's ``groups``. What the notation couldn't read is its text, as written;
+    the tabber's words in the row ("BOM BOM", "(Chorus)", "tue" against its hole) are text, in their place."""
     if group.kind == "unread":
         return f'<span class="u">{escape(group.text)}</span>'
+    if group.kind == "words":
+        return f'<span class="tw">{escape(group.text)}</span>'
     i = len(data["groups"])
     more: dict[str, Any] = {}
     if group.effects:

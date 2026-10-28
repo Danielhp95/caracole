@@ -2838,9 +2838,12 @@ the library page link it, the tab's text beside it.
 - **How it was read**, under the harp: "Read as: b blow · d draw · * bend ·
   - joins · (h) hold · (w) wah, from the tab's own legend", each symbol as the
   tab writes it, or "Read as: 4 blow · - draw, guessed (0.99)", how surely.
-  What its notation couldn't read stays in its place as written, muted ("$",
-  "(DV)"), never guessed; an effect is a small label on its hole ("wah"),
-  notes run together a ‿ between them; the tab's legend is a block of its own.
+  The tabber's words inside a line of holes ("BOM BOM (percussions)",
+  "(Chorus)", a syllable written against its hole, "(3)tue") stay in their
+  place as text, and the line is drawn all the same. What its notation
+  couldn't read stays in its place as written, muted ("$", "(DV)"), never
+  guessed; an effect is a small label on its hole ("wah"), notes run together
+  a ‿ between them; the tab's legend is a block of its own.
   A line read with little confidence (holes no harp has, or too little of it
   read) is its text as written, its words under it, in place, and the rest of
   the tab is drawn; a tab read with little confidence, or for a chromatic
