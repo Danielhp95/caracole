@@ -55,6 +55,8 @@ _GUITAR_FILE = re.compile(r"guitar-(\d+)\.", re.IGNORECASE)
 HARMONICA_FILE = re.compile(r"harmonica-(\d+)\.txt")  # a harmonica tab caracole kept (harptabs_fetch.py)
 HARMONICA_PAGE = re.compile(r"harmonica-(\d+)\.html")  # its page, written beside it (render.py)
 HARMONICA_KIND = "harmonica"  # its version's kind
+GAMETAB_FILE = re.compile(r"gametab-(\d+)\.txt")  # a text tab of game music caracole kept (gametabs_fetch.py)
+GAMETAB_KIND = "gametab"  # its version's kind
 _SCORE_FILE = re.compile(r"score-(\d+)(\.[A-Za-z0-9]+)")
 _KEPT_GUITAR = re.compile(r"guitar-(\d+)(\.[A-Za-z0-9]+)")
 MATCH_CUTOFF = 90  # music.Names.score is exact from 82 up (test_inbox.py)
@@ -198,6 +200,13 @@ def harmonica_number(conn: sqlite3.Connection, library_dir: Path, song: Song) ->
     beside it), so that no file is ever replaced."""
     taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song)
              if (m := HARMONICA_FILE.fullmatch(n) or HARMONICA_PAGE.fullmatch(n))}
+    return next(n for n in itertools.count(1) if n not in taken)
+
+
+def gametab_number(conn: sqlite3.Connection, library_dir: Path, song: Song) -> int:
+    """The N of a new ``gametab-N.txt``, a text tab of game music (gametabs_fetch.py): the lowest number no file of
+    the song holds, kept or put in its folder by hand, so that no file is ever replaced."""
+    taken = {int(m.group(1)) for n in _names_taken(conn, library_dir, song) if (m := GAMETAB_FILE.fullmatch(n))}
     return next(n for n in itertools.count(1) if n not in taken)
 
 

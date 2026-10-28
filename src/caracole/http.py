@@ -213,12 +213,23 @@ def _header(headers: Mapping[str, str], name: str) -> str | None:
 # The Disallow lines of the "User-agent: *" group of each host's robots.txt, as fetched
 # on 2026-10-18 (docs/spike-2026-10-18.md), gtptabs.com's and musescore.com's on 2026-10-19
 # (tests/fixtures/gtptabs/robots.txt, tests/fixtures/musescore/robots.txt), harptabs.com's on 2026-10-27
-# (tests/fixtures/harptabs/robots.txt, which allows "/" first: its Disallow lines are longer, so they win). LaCuerda's
-# robots.txt is empty (tests/fixtures/lacuerda/robots.txt, 2026-10-20) and LRCLIB is an API,
+# (tests/fixtures/harptabs/robots.txt, which allows "/" first: its Disallow lines are longer, so they win), gametabs.net's
+# on 2026-10-28 (tests/fixtures/gametabs/robots.txt, whose "$" ends a rule: "/*.php$" closes a path that ends in
+# ".php"). LaCuerda's robots.txt is empty (tests/fixtures/lacuerda/robots.txt, 2026-10-20) and LRCLIB is an API,
 # so their hosts have none.
 _HARPTABS = (
     "/login", "/signup", "/recover", "/settings", "/submit", "/admin/", "/messages/", "/favorites", "/following",
     "/tab/*/edit", "/tab/*/upload", "/api/", "/search", "/*?*_rsc=",
+)
+_GAMETABS = (
+    "/api/", "/admin/", "/*.log$", "/*.php$", "/create-report", "/tab-submissions", "/reputation", "/reports",
+    "/settings", "/change-username", "/notifications", "/my-tabs", "/preparing-tab-file-download", "/global-stats",
+    "/account-deactivation", "/tabs?*", "/login?*", "/create-account?*", "/administrator/", "/all-tabs/",
+    "/article/", "/articles/", "/backend/", "/comment/", "/comments/", "/composer/", "/composers/", "/dashboard/",
+    "/file/", "/files/", "/forum/topic/", "/game/", "/member/", "/members/", "/message/", "/messages/", "/module/",
+    "/modules/", "/node/", "/nodes/", "/panel/", "/platform/", "/platforms/", "/recording/", "/recordings/",
+    "/request/", "/requests/", "/series/", "/stat/", "/stats/", "/style/", "/styles/", "/template/", "/templates/",
+    "/user/", "/users/",
 )
 ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # /storage/ holds each artist's "Download all" archive; /ru/ is half of every sitemap.
@@ -247,20 +258,30 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # /api/ is its API (keys on request); /search its search; /*?*_rsc= a page's React data.
     "www.harptabs.com": _HARPTABS,
     "harptabs.com": _HARPTABS,
+    # /preparing-tab-file-download is every attachment's download (a login's); /tabs?* its filters; /api/ its API.
+    "gametabs.net": _GAMETABS,
+    "www.gametabs.net": _GAMETABS,
     "tabs.ultimate-guitar.com": (
         "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
         "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",
     ),
 }
-_ROBOTS = {
-    host: [(rule, re.compile(".*".join(map(re.escape, rule.split("*"))))) for rule in rules]
-    for host, rules in ROBOTS_DISALLOW.items()
-}
 
-# The Crawl-delay of each host's "User-agent: *" group, in seconds, from the same robots.txt files:
-# none of them has one (musescore.com's "Crawl-delay: 30" is its BingPreview group's). A host listed
-# here gets at least this long between two requests, whatever the pace.
-ROBOTS_CRAWL_DELAY: dict[str, float] = {}
+
+def _robots_pattern(rule: str) -> re.Pattern[str]:
+    """A Disallow rule as a pattern matched at the start of a path and query: ``*`` any run of characters, and a
+    ``$`` at its end the end of the path (RFC 9309)."""
+    anchored = rule.endswith("$")
+    body = ".*".join(map(re.escape, rule.removesuffix("$").split("*")))
+    return re.compile(body + (r"\Z" if anchored else ""))
+
+
+_ROBOTS = {host: [(rule, _robots_pattern(rule)) for rule in rules] for host, rules in ROBOTS_DISALLOW.items()}
+
+# The Crawl-delay of each host's "User-agent: *" group, in seconds, from the same robots.txt files: gametabs.net's
+# 5 s alone (musescore.com's "Crawl-delay: 30" is its BingPreview group's). A host listed here gets at least this long
+# between two requests, whatever the pace.
+ROBOTS_CRAWL_DELAY: dict[str, float] = {"gametabs.net": 5.0, "www.gametabs.net": 5.0}
 
 
 def crawl_delay(url: str) -> float:

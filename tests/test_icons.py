@@ -267,7 +267,7 @@ def test_each_site_is_asked_with_its_own_client_and_no_glyph_is_fetched(conn, tm
     assert sorted(run.fetched) == ["lacuerda", "ug"]
     assert lacuerda.asked == ["acordes.lacuerda.net/favicon.ico"]
     # The rest have no client this time: they wait, unmarked, for one that has.
-    assert sorted(run.waiting) == ["gtptabs", "harptabs", "lrclib", "musescore", "youtube"]
+    assert sorted(run.waiting) == ["gametabs", "gtptabs", "harptabs", "lrclib", "musescore", "youtube"]
 
 
 HOME = b"""<!doctype html><html><head><title>MuseScore</title>
@@ -482,6 +482,7 @@ def icon_sites():
         "musescore": Site("musescore", {"/favicon.ico": (403, b"Just a moment...")}),
         "youtube": Site("youtube", {"/favicon.ico": (200, ico((16, bmp_image(16))))}),
         "harptabs": Site("harptabs", {"/favicon.ico": (200, png(32))}),
+        "gametabs": Site("gametabs", {"/favicon.ico": (200, png(32))}),
     }
 
 
@@ -516,7 +517,7 @@ def test_caracole_icons_fetches_what_is_missing_and_rewrites_the_pages(tmp_path,
     assert "MuseScore blocked caracole" in out
     assert "index.html" in out and (tmp_path / "lib" / "index.html").is_file()
     assert sorted(p.name for p in (tmp_path / "cache" / "icons").iterdir()) == [
-        "gtptabs.png", "harptabs.png", "lacuerda.png", "lrclib.png", "ug.png", "youtube.png"]
+        "gametabs.png", "gtptabs.png", "harptabs.png", "lacuerda.png", "lrclib.png", "ug.png", "youtube.png"]
     conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     assert is_cooling(conn, "musescore", datetime.now(UTC))
     conn.close()

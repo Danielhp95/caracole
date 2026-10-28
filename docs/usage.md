@@ -85,6 +85,10 @@ delay = [10, 20]
 enabled = true                    # false: caracole asks harptabs.com nothing
 budget = 20
 delay = [10, 20]
+[providers.gametabs]              # text tabs of game music, kept for your songs
+enabled = true                    # false: caracole asks gametabs.net nothing
+budget = 20
+delay = [10, 20]                  # never under its robots.txt's 5 s
 [providers.youtube]               # the audio of songs nobody has charted, with auto-chords
 enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
 budget = 6                        # yt-dlp runs per run, each a search or a download
@@ -163,7 +167,9 @@ or the nightly run, reads them. Schema 12 adds an index of the UG index's tabs b
 artists' and titles' names, and those words once each, for suggesting a title spelled close to a
 query (see [caracole search](#caracole-search)): the first command after the upgrade builds it
 from the index, in about ten seconds (8 s, the copy included, for a full index of 1.4 million
-tabs), and it adds about 25 MB to it.
+tabs), and it adds about 25 MB to it. Schema 13 adds gametabs.net's index and the tabs of its game
+pages, empty until the nightly run, or `caracole gametabs` and `caracole gametabs --index`, reads
+them (see [caracole gametabs](#one-step-at-a-time)).
 The ukulele chords need no change of schema: an index built before reads Ultimate Guitar's
 ukulele sitemaps at its next refresh (see [caracole index build](#caracole-index-build)). A state
 folder caracole can't use ends a command with status
@@ -179,7 +185,7 @@ under `[ntfy]`, which an older caracole read, is now an unknown key like any
 other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`,
-`harptabs` and `youtube`. Any other `[providers.…]` table is an error, like any other
+`harptabs`, `gametabs` and `youtube`. Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
 (YouTube's go unused: a lookup runs no yt-dlp).
 
@@ -198,11 +204,12 @@ so an evening of songs looked up on the spot keeps getting sheets (about
 twenty to thirty an hour with the defaults). What a lookup leaves undone waits
 for the nightly run. Either
 pace sends one request at a time to a site, never less than its robots.txt's
-`Crawl-delay` apart (none of the sites caracole reads sets one for every
-robot), and keeps everything else below: robots.txt, the cache, the blocks and
-cooldowns. Only gtptabs.com, MuseScore, harptabs.com and YouTube can be turned
+`Crawl-delay` apart (gametabs.net's asks 5 seconds, the one site caracole reads that
+sets one for every robot), and keeps everything else below: robots.txt, the cache, the blocks and
+cooldowns. Only gtptabs.com, MuseScore, harptabs.com, gametabs.net and YouTube can be turned
 off: with `enabled = false` under `[providers.gtptabs]`, `[providers.musescore]`,
-`[providers.harptabs]` or `[providers.youtube]`, caracole sends that site nothing, the nightly run skips
+`[providers.harptabs]`, `[providers.gametabs]` or `[providers.youtube]`, caracole sends that site nothing, the
+nightly run skips
 its step, and the to-do page's Provider health says it is off. The other three
 are what caracole is built on, so `enabled` in their tables is an unknown key.
 YouTube is on only where caracole can make chords of what it downloads (see
@@ -234,6 +241,28 @@ names of an artist's tabs, never the tabs themselves): `caracole harptabs
 leaves. It asks with caracole's own user agent, as it asks every site, and an
 HTTP 403, a 429 or a challenge from harptabs.com is a block like any site's: a
 cooldown and one alert, never a way around it (see [caracole run](#caracole-run)).
+
+**Tabs of game music** come from gametabs.net (about 8,500 guitar and bass
+tabs of some 1,600 games, with some anime, film and TV music). It files a tab
+under a game, a track and its composers, never a performer, so a wanted.txt
+line finds one when its artist is the game (`Hollow Knight - Resting Grounds`,
+or `Hollow Knight OST - Resting Grounds`) or the composer (`Yuzo Koshiro -
+Fillmore`). For each song you want that has none, caracole matches its title
+against the site's sitemaps, reads the pages of up to four tabs of that title
+of a game or a composer your line names, the most viewed first, and keeps the
+most viewed one whose page agrees (its title, and its game or composer) as
+`gametab-1.txt`, the tab as the page shows it (`caracole gametabs`, in [One
+step at a time](#one-step-at-a-time)). A tab's files (Guitar Pro, MIDI, PDF)
+need a login there, so caracole never has them. Who composed each tab is on
+its game's page, which caracole reads into a local index (`caracole gametabs
+--index`, a budget at a time, and the nightly run with what its gametabs
+budget leaves): until a game's page is read, a song is found by its game
+alone. gametabs.net's terms forbid bots and scrapers without its written
+permission; reading it anyway is the owner's choice, on every other rule
+caracole keeps: its robots.txt and its 5-second `Crawl-delay`, caracole's own
+user agent, the paces and budgets, and a block (a 403, a 429 or a challenge)
+honoured with a cooldown and one alert, never worked around. It keeps the tabs
+of your own songs alone, for you, never a mirror of the site.
 
 **Model files** for auto-chords come from `[autochords]`, else the
 environment. The `autochords` package's wrapper sets the variables to the
@@ -955,13 +984,19 @@ configuration it would take, and why it waits.
     into harptabs.com's local index, for searches: your songs' artists first,
     then the others, each again after 30 days (`artist index: 18 pages read,
     1204 of 10428 artists`). Only once the library has a song.
-11. **musescore**: read MuseScore's song sitemaps into a local index, for the
+11. **gametabs**: keep a text tab of game music from gametabs.net for each song
+    that has none and a tab there of its game or its composer (see [caracole
+    gametabs](#one-step-at-a-time)). What its budget leaves reads game pages
+    into gametabs.net's local index, for composers: your songs' games first,
+    then the others, each again after 30 days (`game index: 11 pages read, 93
+    of 1658 game pages`). Only once the library has a song.
+12. **musescore**: read MuseScore's song sitemaps into a local index, for the
     to-do page's links to its pages. It downloads nothing.
-12. **youtube**: take the audio of a few songs no human sheet was found for from
+13. **youtube**: take the audio of a few songs no human sheet was found for from
     YouTube, for auto-chords (see [Audio from YouTube](#audio-from-youtube)).
     Skipped in a caracole without auto-chords.
-12. **render**: write ChordPro files and PDFs.
-13. **todo**: rewrite `_todo.md` and `index.html`.
+14. **render**: write ChordPro files and PDFs.
+15. **todo**: rewrite `_todo.md` and `index.html`.
 
 Every step runs even when an earlier one failed, so the to-do page is always
 rewritten. Until the index is built, the index and match steps are skipped;
@@ -1032,6 +1067,16 @@ after 30 days: what the budget leaves reads about 15 a night, so the whole
 index (about 10,400 artists) is `caracole harptabs --index`'s, which at 10–20
 seconds a request takes some 44 hours of requests, a `--budget` at a time.
 
+gametabs.net gets at most 20 requests a run, 10–20 seconds apart (its
+robots.txt asks 5 at least, which a quicker pace would keep too). The first run
+spends seven on its sitemap index and six sitemaps, read again after 30 days
+with their ETags, so each unchanged one costs a request. Then a song costs the
+pages of the tabs titled as it is of a game or composer its line names, four at
+most, each read once and cached for good. Its game pages, for composers, cost
+one request each, and are read again after 30 days: what the budget leaves
+reads about ten a night, so the whole index (about 1,660 pages) is `caracole
+gametabs --index`'s, which at 10–20 seconds a request takes some 7 hours.
+
 MuseScore gets at most 10 requests a run, 10–20 seconds apart, all for its song
 sitemaps: an index and 18 files of about 40,000 song pages each, read over two
 nights, the second going on where the first stopped, then again each month with
@@ -1056,7 +1101,7 @@ and the next four after a third. A block in a command counts the same way,
 from when the command started, and sends one ntfy message too, titled as the
 run's ("caracole: Ultimate Guitar blocked"), its text the line the command
 prints: `caracole fetch`, `index`, `icons`, `lyrics`, `lacuerda`, `gtptabs`,
-`harptabs`, `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
+`harptabs`, `gametabs`, `musescore` and `youtube` alike. So does a tab picked on caracole serve's review
 page, which runs `caracole fetch --song`. A lookup (`caracole get`, `caracole
 lacuerda --artist`, `caracole harptabs --artist`) sends none: it says so where you asked. A run, a command
 or a lookup the site answers without a block starts the count again; one the
@@ -1069,7 +1114,7 @@ other error from a site marks a song not found or its lyrics missing: the
 song waits for the next run. An answer that won't read but was cached all the
 same (a maintenance notice served as a page, say) is asked for once more,
 past the cache, by the next run that needs it: from UG, LaCuerda,
-gtptabs.com, harptabs.com and LRCLIB alike. Caracole never works around a block: no proxies,
+gtptabs.com, harptabs.com, gametabs.net and LRCLIB alike. Caracole never works around a block: no proxies,
 no retries from elsewhere. A tab page UG keeps serving without its data is
 asked for again after 7 days, then twice as long each time, up to 90 days;
 meanwhile the song is filled from its other versions.
@@ -1078,7 +1123,9 @@ Nor does caracole ask for a page robots.txt closes to bots, or follow a
 redirect to one: UG's search, download and print pages, and a few tab pages
 (`/tab/track/…`); gtptabs.com's search, its Russian copy of every page
 (`/ru/`) and each artist's "Download all" archive (`/storage/`); harptabs.com's
-search, its API and its pages' data for scripts (`/*?*_rsc=`); MuseScore's
+search, its API and its pages' data for scripts (`/*?*_rsc=`); gametabs.net's
+API, its filters (`/tabs?…`), the pages behind its login and every
+attachment's download (`/preparing-tab-file-download`); MuseScore's
 search, downloads, oEmbed endpoint and `/api/jmuse`, which serves a score's
 pages, audio and MIDI. A tab at such a page, or at a page UG redirects to one, is
 no candidate, and neither is a link in UG's data that isn't a valid address:
@@ -1318,6 +1365,51 @@ and cache.
   empty, a cooldown, a block, a spent budget or an error, all of which exit 0,
   nothing changed. It can't go with `--index` (exit 2). An artist's Read their
   page on the pages `caracole serve` serves runs it.
+- **`caracole gametabs`** keeps a text tab of game music from gametabs.net for
+  each song that has none, newest songs first. It reads gametabs.net's sitemaps
+  (an index and six children; `sitemap_static`, the site's own pages, is never
+  read) into a local index when it never has, or last did 30 days ago: its
+  games and their tabs, each by its slug, `/tabs/actraiser/fillmore`. A title
+  the site has more than once takes a number in its slug (`main-theme-108`,
+  `resting-grounds-2`), which is one more tab of that title, never part of it.
+  It never uses the site's search, its filters or its API. A song is looked up
+  only when a tab of its title is of a game your line names as its artist (by
+  the game's slug, or its name once its page was read; `OST` and `(Original
+  Soundtrack)` after it are the game too), or of a composer it names (by the
+  game pages read: `caracole gametabs --index`); then the pages of those tabs
+  are read, four at most, the most viewed first, and of those whose page agrees
+  (its title, and its game or a composer) the most viewed is kept, as the
+  song's `gametab-N.txt`, the page's tab as it is. A tab's attachments need a
+  login: caracole keeps the text alone. A song none of whose tabs agrees is
+  asked about again after 30 days; a song with an error, next run. It prints
+  `gametabs.net: 2 tried, 1 tab kept, 1 not on gametabs.net, 0 errors`, after
+  `Index: 6 sitemaps read.` when it read them. A song that has a tab from
+  there gets no other, and no file is ever replaced. With gametabs.net turned
+  off it asks nothing and says so. A cooldown, a block or a spent budget exits 0.
+
+  **`caracole gametabs --index`** reads gametabs.net's game pages into its
+  local index instead, even for an empty library: the sitemaps first, when
+  they never were read or last were 30 days ago, then each game page not read
+  in 30 days, your songs' games first (a game your lines name, or one with a
+  tab titled as one of your songs), then the others in the sitemaps' order. A
+  game page lists 50 tabs, each with its composers, its instruments, its views
+  and its rating; a game with more has more pages (`?page=2`), which the
+  sitemaps list too. That is how a song is found by its composer, and how a
+  search finds a tab by its composer. It asks at the bulk pace (10–20 s apart,
+  never under robots.txt's 5 s) with a budget of its own: `--budget N`
+  requests, 100 by default, and goes on where the last one stopped. It prints
+  `Index: gametabs.net's 6 sitemaps read.`, `gametabs.net: 93 game pages read;
+  93 of 1658 game pages read, 512 tabs in the index.` and, with the budget
+  spent, `The budget of 100 requests is spent: caracole gametabs --index reads
+  the next 1565 game pages, about 7 h of requests at this pace.`; or
+  `gametabs.net's game index is up to date: …` when nothing was due. A page
+  that answers 404 keeps no tab (`1 gone`); one that won't parse, or any other
+  error, leaves what the index held of that page, and is asked for again next
+  time. It holds caracole's lock while it runs, as the nightly run does,
+  letting a lookup go first in its pauses: a nightly run waits for it, so give
+  it a budget that ends before night (the whole index, about 1,660 pages, is
+  some 7 hours: `--budget 1700`). A cooldown, a block or a spent budget exits
+  0; `--budget` goes with `--index` alone (exit 2).
 - **`caracole musescore`** reads MuseScore's song sitemaps into the local index
   the to-do page's MuseScore links come from, when it never has, or last did 30
   days ago; it asks for nothing else, and downloads nothing. It prints
@@ -1585,7 +1677,7 @@ rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
 `todo`, `add`, `search --add`, `sync`, `autochords` and every `songbook`
 command but `list` and `show`; `review` when an
 answer changed something; and `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
-`harptabs`, `musescore` and `youtube` when they did something or were blocked, so that
+`harptabs`, `gametabs`, `musescore` and `youtube` when they did something or were blocked, so that
 Provider health shows the cooldown (`youtube` also when it let go of audio no
 song needs any more, with nothing to download).
 A page caracole can't write ends the command with status 1 and
@@ -1596,7 +1688,7 @@ A page caracole can't write ends the command with status 1 and
 the library hold caracole's lock, `caracole.lock` in the state folder, while they
 work, so no two budgets are ever spent side by side: `run` from start to end,
 `get`, `index build` and `refresh`, `fetch`, `lyrics`, `lacuerda`, `gtptabs`,
-`harptabs`, `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
+`harptabs`, `gametabs`, `musescore`, `youtube`, `render`, `match`, `scan`, `todo`, `sync`, `add`,
 `search --add`, `autochords` and the `songbook` commands that change a songbook
 or render one. A
 second one waits for the first, and says which it is:
@@ -1628,7 +1720,7 @@ sends no request lets a lookup go first between two songs:
 the PDF pass of the run and of `caracole render`, which reads each song and
 overrides.toml again after it, and makes the songbooks and the pages from
 overrides.toml as the lookup left it. `caracole fetch`, `lyrics`, `lacuerda`,
-`gtptabs`, `harptabs`, `musescore`, `youtube` and `icons` let a lookup go first in their
+`gtptabs`, `harptabs`, `gametabs`, `musescore`, `youtube` and `icons` let a lookup go first in their
 pauses as the run does, and make the pages they write at their end from
 overrides.toml as the lookup left it too. The waiting lookup announces itself with a file
 in `caracole.lock.waiting/` in the state folder, which it touches every second
@@ -1878,9 +1970,9 @@ when it has something in it:
   read; for a wanted.txt it couldn't read at all, the error, as
   `wanted.txt: error at <time>: …`; before it exists, how to create it.
 - **Provider health.** For Ultimate Guitar, LRCLIB, LaCuerda, gtptabs.com,
-  MuseScore, harptabs.com and YouTube: OK, errors (nothing has worked since the last error),
+  MuseScore, harptabs.com, gametabs.net and YouTube: OK, errors (nothing has worked since the last error),
   cooling down until when, or off (`[providers.gtptabs] enabled = false`, and
-  the same for `musescore`, `harptabs` and `youtube`; for YouTube also `off:` and why, as in
+  the same for `musescore`, `harptabs`, `gametabs` and `youtube`; for YouTube also `off:` and why, as in
   a caracole without auto-chords); the last success; the last error; the
   requests of the last run (for YouTube, its yt-dlp runs).
 
@@ -4429,6 +4521,9 @@ tab_ids = [1601668]
 [harptabs]     # the harptabs.com tab a song's harmonica tab comes from
 "Billy Joel - Piano Man" = "https://www.harptabs.com/tab/23862/piano-man-c-harmonica"
 
+[gametabs]     # the gametabs.net tab a song's tab of game music comes from
+"Hollow Knight - Resting Grounds" = "https://gametabs.net/tabs/hollow-knight/resting-grounds-2"
+
 [harmonica]    # how a song's harmonica tab is read, whatever caracole guesses
 "Cowboy Bebop - Spokey Dokey" = {"harmonica-1.txt" = "letters"}
 "Little Walter - Juke" = {"harmonica-1.txt" = {as = "signs", "*" = "bend"}}
@@ -4587,6 +4682,14 @@ tab_ids = [1601668]
   tab you name is asked for at once; one gone from the site (404) is asked for
   again after 30 days. Get it on a harptabs.com row of caracole serve's search,
   and `caracole get --harptabs`, write it.
+- **`[gametabs]`** names the gametabs.net tab you picked for the song: its page
+  (`https://gametabs.net/tabs/hollow-knight/resting-grounds-2`, or as your
+  browser shows it). The nightly gametabs pass reads that page alone, in place
+  of the song's candidates, and keeps its tab whatever game or composer the page
+  names, as the song's next `gametab-N.txt`, beside any it has: never in place of
+  one. A tab you name is asked for at once; one gone from the site (404) is
+  asked for again after 30 days. Get it on a gametabs.net row of caracole
+  serve's search, and `caracole get --gametabs`, write it.
 - **`[harmonica]`** says how each of a song's harmonica tabs is read, by its
   file's name (`harmonica-1.txt`): a notation (`"signs"`, harptabs.com's own;
   `"brackets"`; `"letters"`; `"signs after"`; `"barrett"`), `"legend"` (the
@@ -4727,6 +4830,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       harmonica-1.txt       a harmonica tab from harptabs.com: hole numbers over the lyrics
       harmonica-1.html      its page, for the phone: each hole over its syllable, heard on a tap
       tab.txt  tab.json     the best text tab
+      gametab-1.txt         a text tab of game music from gametabs.net, as its page shows it
       sheet (auto).txt      made from audio you bought, or caracole took from YouTube,
       sheet (auto).cho      when no human sheet exists; it stays, with its ChordPro,
       sheet (auto).pdf      PDF and viewer, beside a partial human sheet, until a

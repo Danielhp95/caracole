@@ -836,6 +836,58 @@ def test_add_harptabs_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
         add_harptabs(p, "Piano Man", "https://www.harptabs.com/tab/25/piano-man")
 
 
+def test_gametabs_names_the_tab_you_picked_there(tmp_path):
+    from caracole.overrides import GameTabsPick
+
+    o = load_overrides(write(tmp_path, '''
+[gametabs]   # the gametabs.net tab a song's game music tab comes from
+"Hollow Knight - Resting Grounds" = "https://gametabs.net/tabs/hollow-knight/resting-grounds-2"
+"Yuzo Koshiro - Fillmore" = "www.gametabs.net/tabs/actraiser/fillmore/?ref=1"
+'''))
+    assert o.gametabs == {"hollow-knight/resting-grounds": GameTabsPick("hollow-knight", "resting-grounds-2"),
+                          "yuzo-koshiro/fillmore": GameTabsPick("actraiser", "fillmore")}
+    assert o.gametabs["yuzo-koshiro/fillmore"].url == "https://gametabs.net/tabs/actraiser/fillmore"
+    assert o.gametabs["yuzo-koshiro/fillmore"].path == "tabs/actraiser/fillmore"
+    assert Overrides().gametabs == {}
+
+
+@pytest.mark.parametrize("value", [
+    "https://gametabs.net/tabs/actraiser", "https://gametabs.net/tabs?composers=12", "https://gametabs.net/",
+    "https://gametabs.net/tabs/actraiser/fillmore/edit", "https://gametabs.net/tabs/Actraiser/Fillmore",
+    "https://example.com/tabs/actraiser/fillmore", "ftp://gametabs.net/tabs/actraiser/fillmore", "fillmore", ""])
+def test_a_gametabs_entry_that_is_no_tab_page_says_what_it_takes(tmp_path, value):
+    from caracole.overrides import gametabs_pick_from_url
+
+    with pytest.raises(OverridesError, match="gametabs.net tab"):
+        gametabs_pick_from_url(value)
+    p = write(tmp_path, f'[gametabs]\n"Yuzo Koshiro - Fillmore" = "{value}"\n')
+    with pytest.raises(OverridesError, match=r"\[gametabs\] 'Yuzo Koshiro - Fillmore': expected a gametabs.net tab"):
+        load_overrides(p)
+    with pytest.raises(OverridesError, match="a string"):
+        load_overrides(write(tmp_path, '[gametabs]\n"Yuzo Koshiro - Fillmore" = 484\n'))
+
+
+def test_add_gametabs_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
+    from caracole.overrides import GameTabsPick, add_gametabs
+
+    p = write(tmp_path, '# mine\n[gametabs]\n"yuzo koshiro - fillmore" = "https://gametabs.net/tabs/x/y"  # old\n')
+    add_gametabs(p, "Yuzo Koshiro - Fillmore", "gametabs.net/tabs/actraiser/fillmore?ref=1")
+    add_gametabs(p, "Hollow Knight - Resting Grounds", "https://gametabs.net/tabs/hollow-knight/resting-grounds-2")
+    before, inode = p.read_text(encoding="utf-8"), p.stat().st_ino
+    add_gametabs(p, "Yuzo Koshiro - Fillmore", "https://gametabs.net/tabs/actraiser/fillmore")  # the same
+    text = p.read_text(encoding="utf-8")
+    assert text == before and p.stat().st_ino == inode
+    assert "# mine" in text and text.lower().count("fillmore\" =") == 1 and "# old" in text
+    assert '"yuzo koshiro - fillmore" = "https://gametabs.net/tabs/actraiser/fillmore"' in text
+    assert load_overrides(p).gametabs == {"yuzo-koshiro/fillmore": GameTabsPick("actraiser", "fillmore"),
+                                          "hollow-knight/resting-grounds": GameTabsPick("hollow-knight",
+                                                                                        "resting-grounds-2")}
+    with pytest.raises(OverridesError, match="gametabs.net tab"):
+        add_gametabs(p, "Yuzo Koshiro - Fillmore", "https://gametabs.net/tabs/actraiser")
+    with pytest.raises(OverridesError, match="Artist - Title"):
+        add_gametabs(p, "Fillmore", "https://gametabs.net/tabs/actraiser/fillmore")
+
+
 # --- [harmonica]: how a song's harmonica tab is read, as you set it --------------------------------------------------
 
 

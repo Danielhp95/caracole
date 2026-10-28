@@ -160,8 +160,10 @@ def test_unexpected_error_marks_the_run_failed_but_later_steps_still_run(conn, c
 def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
-    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0, "gtptabs": 0, "musescore": 0, "harptabs": 0}
-    assert ("Requests: Ultimate Guitar 7, LRCLIB 3, LaCuerda 0, gtptabs.com 0, MuseScore 0, harptabs.com 0."
+    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0, "gtptabs": 0, "musescore": 0, "harptabs": 0,
+                               "gametabs": 0}
+    assert ("Requests: Ultimate Guitar 7, LRCLIB 3, LaCuerda 0, gtptabs.com 0, MuseScore 0, harptabs.com 0, "
+            "gametabs.net 0."
             in report.summary().splitlines())
 
 
@@ -240,12 +242,12 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "icons", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs", "musescore",
-        "youtube", "render", "todo",
+        "sync", "icons", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs", "gametabs",
+        "musescore", "youtube", "render", "todo",
     ]
     providers = {s.name: s.provider for s in default_steps()}
     assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
-    assert providers["harptabs"] == "harptabs"
+    assert providers["harptabs"] == "harptabs" and providers["gametabs"] == "gametabs"
 
 
 def gtptabs_context(conn, cfg, client=None, overrides=None):
@@ -352,7 +354,7 @@ def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
     off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
     made = make_services(off, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "musescore", "harptabs"}
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "musescore", "harptabs", "gametabs"}
     finally:
         made.close()
     steps = [s for s in default_steps() if s.name == "gtptabs"]
@@ -365,7 +367,7 @@ def test_the_run_makes_a_client_for_every_provider_turned_on(conn, cfg):
 
     made = make_services(cfg, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs"}
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs", "gametabs"}
     finally:
         made.close()
 
@@ -450,6 +452,59 @@ def test_the_harptabs_step_asks_nothing_for_an_empty_library(conn, cfg):
     site = FakeHarpTabs()
     svc = Services(clients={"harptabs": site.client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
     steps = [s for s in default_steps() if s.name == "harptabs"]
+    run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert site.requests == []
+
+
+def test_a_gametabs_block_cools_it_down_and_marks_no_song(conn, cfg):
+    # gametabs.net's terms forbid bots; the owner chose to read it anyway, on every other rule: a 429 there is a
+    # block, honoured as any site's (its cooldown, one alert), never worked around.
+    from conftest import add_song
+    from helpers.gametabs_site import FakeGameTabs
+
+    from caracole.pipeline import default_steps
+
+    song = add_song(conn, "Hollow Knight", "Resting Grounds")
+    site = FakeGameTabs()
+    site.page("tabs/hollow-knight/resting-grounds", "Too Many Requests", status=429)
+    out = Outbox()
+    svc = Services(clients={"gametabs": site.client(cfg.cache_dir, now=NOW)}, notifier=out.notifier())
+    steps = [s for s in default_steps() if s.name == "gametabs"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.blocked == ["gametabs"] and report.steps["gametabs"].startswith("blocked")
+    assert is_cooling(conn, "gametabs", NOW + timedelta(hours=25))
+    assert kv_get_json(conn, f"gametabs:checked:{song.id}") is None
+    assert site.requests[-1] == "https://gametabs.net/tabs/hollow-knight/resting-grounds"  # nothing after the block
+
+
+def test_the_gametabs_step_keeps_a_tab_and_reads_game_pages_with_what_the_budget_leaves(conn, cfg):
+    from conftest import add_song
+    from helpers.gametabs_site import BASE, FakeGameTabs
+
+    from caracole.gametabs_index import index_state
+    from caracole.pipeline import default_steps
+
+    add_song(conn, "Hollow Knight", "Resting Grounds")
+    site = FakeGameTabs()
+    svc = Services(clients={"gametabs": site.client(cfg.cache_dir, budget=11, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "gametabs"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    # The sitemaps (7 requests), the song's two candidates, then your song's game's page first, and one more.
+    assert site.requests[9:] == [f"{BASE}/tabs/hollow-knight", f"{BASE}/tabs/actraiser"]
+    assert report.steps["gametabs"] == ("6 sitemaps indexed, 1 tried, 1 tab kept, 0 not on gametabs.net, 0 errors; "
+                                        "game index: 2 pages read, 2 of 7 game pages (budget spent)")
+    assert "gametabs.net: 1 game music tab kept, 2 game pages read." in report.summary().splitlines()
+    assert index_state(conn).tabs == 11
+
+
+def test_the_gametabs_step_asks_nothing_for_an_empty_library(conn, cfg):
+    from helpers.gametabs_site import FakeGameTabs
+
+    from caracole.pipeline import default_steps
+
+    site = FakeGameTabs()
+    svc = Services(clients={"gametabs": site.client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name == "gametabs"]
     run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
     assert site.requests == []
 
@@ -1008,7 +1063,7 @@ def todo_step():
 def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     # The page is written before the run ends; a first run must not say "never" after 80 good requests.
     run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5, gtptabs=3, musescore=2,
-                                                   harptabs=1),
+                                                   harptabs=1, gametabs=4),
                  steps=todo_step(), now=NOW)
     page = todo_page(cfg)
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
@@ -1016,6 +1071,7 @@ def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     assert "| gtptabs | OK | 2026-10-18 03:30 UTC |  | 3 |" in page
     assert "| musescore | OK | 2026-10-18 03:30 UTC |  | 2 |" in page
     assert "| harptabs | OK | 2026-10-18 03:30 UTC |  | 1 |" in page
+    assert "| gametabs | OK | 2026-10-18 03:30 UTC |  | 4 |" in page
     rows = [line for line in page.split("## Provider health", 1)[1].splitlines() if line.startswith("| ")]
     # Every provider this run asked; YouTube, which needs auto-chords and its models, is off here, never used.
     assert [row for row in rows if "never" in row] == [next(row for row in rows if row.startswith("| youtube |"))]
@@ -1130,7 +1186,8 @@ def test_with_auto_chords_the_run_makes_a_yt_dlp_runner_that_holds_the_lock(conn
     made = make_services(ycfg, conn, "2026-10-19T03:30:00Z")
     lock = ycfg.state_dir / _common.LOCK_NAME
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs", "youtube"}
+        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs", "gametabs",
+                                     "youtube"}
         assert made.clients["youtube"].policy.budget == 6
         assert lock in _common._held
     finally:

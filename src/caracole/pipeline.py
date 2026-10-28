@@ -1,11 +1,11 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → icons → index → match → lyrics → fetch → lacuerda →
-scan → gtptabs → harptabs → musescore → youtube → render → todo. Each step runs even if an
-earlier one failed, so the to-do page is always rewritten.
+scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo. Each step runs even
+if an earlier one failed, so the to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. So are gtptabs, harptabs, musescore and youtube when caracole.toml
+  the run once it blocks. So are gtptabs, harptabs, gametabs, musescore and youtube when caracole.toml
   turns one off: it gets no client then. A block records a cooldown (24 h, doubling)
   and sends one ntfy message; it is expected behaviour, not a failed run.
 - The youtube step runs yt-dlp (youtube.py, youtube_fetch.py) only in a caracole
@@ -402,6 +402,44 @@ def _harptabs(ctx: StepContext) -> StepResult:
     return result
 
 
+def _gametabs(ctx: StepContext) -> StepResult:
+    from caracole.gametabs_fetch import gametabs_tabs
+    from caracole.gametabs_index import GamePassStats, game_pass, index_state
+
+    client = ctx.services.client("gametabs")
+    s = gametabs_tabs(ctx.conn, client, ctx.cfg.library_dir, ctx.now, overrides=ctx.overrides)
+    # The game pages, for a song to be found by its composer and searches by composer, get what the tabs left of the
+    # budget (gametabs_index.py: your songs' games first); only once the library has a song, so that an empty one asks
+    # no site. The sitemaps are asked for again only when the tabs' pass didn't fail on them.
+    wanted = any(song.status != "ignored" and song.key not in ctx.overrides.ignore for song in list_songs(ctx.conn))
+    gx = (game_pass(ctx.conn, client, ctx.now, overrides=ctx.overrides, refresh_index=not s.sitemap_errors)
+          if wanted and not s.budget_exhausted else GamePassStats())
+    state = index_state(ctx.conn)
+    sitemaps = s.sitemaps + gx.sitemaps
+    index = f"{plural(sitemaps, 'sitemap')} indexed, " if sitemaps else ""
+    games = (f"; game index: {plural(gx.read, 'page')} read, {state.read:,} of {plural(state.pages, 'game page')}"
+             if gx.read or gx.errors else "")
+    result = _provider_result(
+        ctx, "gametabs", errors=s.errors, error=f"{plural(s.errors, 'error')} this run",
+        spent=s.budget_exhausted or gx.budget_exhausted,
+        status=(f"{index}{s.tried} tried, {plural(s.kept, 'tab')} kept, {s.missing} not on gametabs.net, "
+                f"{plural(s.errors, 'error')}{games}"),
+        failures=s.failures, title="gametabs.net",
+        done=_counted(_n(s.kept, "game music tab", "kept"), _n(s.missing, "song", "not there"),
+                      _n(gx.read, "game page", "read")),
+        retry="{songs} will be looked for on gametabs.net again on the next run",
+    )
+    if s.sitemap_errors or gx.sitemap_error:  # a song's error is on its failure's line
+        result.problems.append(Problem("gametabs.net's sitemaps couldn't be read this run; they are asked for again "
+                                       "on the next run, and the log says why."))
+    pages = gx.errors - gx.sitemap_error
+    if pages:
+        record_error(ctx.conn, "gametabs", ctx.now, f"{plural(pages, 'game page')} couldn't be read this run")
+        result.problems.append(Problem(f"{plural(pages, 'game page')} of gametabs.net couldn't be read this run; "
+                                       "they are asked for again on the next run, and the log says why."))
+    return result
+
+
 def _musescore(ctx: StepContext) -> StepResult:
     from caracole.musescore_fetch import index_size, musescore_index
 
@@ -541,6 +579,7 @@ def default_steps() -> list[Step]:
         # After the scan: a file you dropped into _inbox/ is filed first, so its song gets no other.
         Step("gtptabs", _gtptabs, provider="gtptabs"),
         Step("harptabs", _harptabs, provider="harptabs"),
+        Step("gametabs", _gametabs, provider="gametabs"),
         Step("musescore", _musescore, provider="musescore"),
         # After the scan, so a purchase dropped into Music/ is linked first and nothing is downloaded for it.
         Step("youtube", _youtube, provider="youtube"),
