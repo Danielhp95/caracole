@@ -355,8 +355,10 @@ def _section_html(n: int, section: Section, data: dict[str, Any]) -> str:
 
 
 def _written_html(row: Row) -> str:
-    """A row read with low confidence: its line as written, and its words under it, in the tab's own columns."""
-    lines = [row.text.rstrip()] + ([row.lyric.rstrip()] if row.lyric is not None else [])
+    """A row read with low confidence: its line as written, and its words under it (above it, where the tab writes
+    them so), in the tab's own columns."""
+    words = [row.lyric.rstrip()] if row.lyric is not None else []
+    lines = words + [row.text.rstrip()] if row.above else [row.text.rstrip()] + words
     return f'<pre class="tab asw">{escape(chr(10).join(lines))}</pre>'
 
 

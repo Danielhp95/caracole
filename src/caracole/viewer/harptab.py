@@ -49,7 +49,9 @@ its words when it is a line of text that is no section's name, no address and no
 prose; so is a block that holds an address or starts as an instruction does ("Repeat…", "Listen…"); a longer block is
 words sung to the same tune (a later verse). Before the first row, every line is the tabber's notes. A short line that
 names a section ("Verse", "chorus-", "[Bridge]") starts one; right above or below a row, one that starts so but goes
-on in words ("End of the road") is sung.
+on in words ("End of the road") is sung. A tab that writes each row's words above it (``_above``: the lines of words
+above its rows fit them, syllables to holes, clearly better than those below) pairs each row with the line above it
+(``Row.above``), its first line no note.
 
 **Holes over syllables** (``align``). Each syllable start of a row's words (a word's first letter, and each letter
 after a hyphen or a comma inside one) takes the hole written nearest it, within ``REACH`` columns of where the hole is
@@ -84,6 +86,8 @@ TAB_Q = 0.5  # the least Q a tab is drawn at
 MARGIN = 0.05  # how far a notation must beat a commoner one that reads the tab differently
 ROW_TRUST = 0.5  # the least confidence (its own P × T) a row is drawn at
 LEGEND_WEIGHT = 0.2  # how much a tab's legend weighs: a candidate's score × (1 + this × its agreement)
+ABOVE_LEAD = 2.0  # how far the words above a tab's rows must fit them better than those below, at least (``_above``)
+ABOVE_SHARE = 1 / 6  # … and at least this share of its rows
 
 # --- the notation ---------------------------------------------------------------------------------------------
 
@@ -295,6 +299,7 @@ class Row:
     line: int = -1
     confidence: float = 1.0
     trusted: bool = True
+    above: bool = False  # its words written above it (a tab that writes them so, ``_above``)
 
 
 @dataclass(frozen=True)
@@ -1013,10 +1018,12 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
     kinds = ["legend" if n in in_legend else "blank" if not line.strip() else "holes" if s.is_row
              else "missed" if s.missed else "text" for n, (line, s) in enumerate(zip(lines, scans))]
 
+    above = _above(lines, kinds, scans)
     notes: list[str] = []
     sections = [Section(None)]
     seen_row = False
     block: list[str] = []
+    last_text = -1  # the line block's last is
 
     def flush() -> None:
         if not block:
@@ -1045,22 +1052,26 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
             i = here.at[-1] + 1
             continue
         if kind == "holes" or (kind == "missed" and seen_row):  # before the first row, a line of the notes
-            flush()
             found = scans[i]
             lyric = None
-            if i + 1 < len(lines) and kinds[i + 1] == "text" and _sung(lines[i + 1], scans[i + 1]):
+            if above:  # the line just above it, unless it is a section's name, a row's or the tabber's notes' end
+                if last_text == i - 1 and block and _sung(lines[i - 1], scans[i - 1]):
+                    block.pop()
+                    lyric = lines[i - 1]
+            elif i + 1 < len(lines) and kinds[i + 1] == "text" and _sung(lines[i + 1], scans[i + 1]):
                 lyric = lines[i + 1]
+            flush()
             label = found.label
             if label and _is_label(label + ":"):
                 sections.append(Section(label))
                 label = None
             confidence = _row_confidence(found, chip)
             row = Row(list(found.groups), lyric, label, list(found.unknown), text=line, line=i, confidence=confidence,
-                      trusted=kind == "holes" and confidence >= ROW_TRUST)
+                      trusted=kind == "holes" and confidence >= ROW_TRUST, above=above and lyric is not None)
             align(row)
             sections[-1].items.append(row)
             seen_row = True
-            i += 2 if lyric is not None else 1
+            i += 2 if lyric is not None and not above else 1
             continue
         beside = any(0 <= j < len(kinds) and kinds[j] in ("holes", "missed") for j in (i - 1, i + 1))
         if _is_label(line, beside_row=beside) and (seen_row or _LABEL_WORDS.search(line)):
@@ -1068,6 +1079,7 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
             sections.append(Section(_label_text(line)))
         else:
             block.append(line if seen_row else line.strip())
+            last_text = i
         i += 1
     flush()
     for s in sections:
@@ -1100,6 +1112,34 @@ def named_key(lines: list[str]) -> str | None:
             if m := pattern.search(line):
                 return m.group(1).replace("♭", "b").replace("♯", "#")
     return None
+
+
+_VOWEL_RUN = re.compile(r"[aeiouyøæåœ]+")
+
+
+def _syllables(line: str) -> int:
+    """A line's syllables, near enough: its runs of vowels, accents folded ("Øl, øl og mere øl.": 6)."""
+    return len(_VOWEL_RUN.findall(_fold_accents(line).casefold()))
+
+
+def _above(lines: list[str], kinds: list[str], scans: list[Scan]) -> bool:
+    """Whether a tab writes each row's words above it, not under it: the lines of words above its rows fit them,
+    syllables to holes, better than those below, by ``ABOVE_LEAD`` and ``ABOVE_SHARE`` of its rows at least. A line
+    of words is one most of whose tokens hold two letters or more (not 8834's note lengths, "h q q"), no section's
+    name, no address and no line of holes."""
+    def fit(j: int, holes: int) -> float:
+        if not (0 <= j < len(lines) and kinds[j] == "text" and _sung(lines[j], scans[j])):
+            return 0.0
+        tokens = lines[j].split()
+        if 2 * sum(sum(c.isalpha() for c in t) >= 2 for t in tokens) < len(tokens):
+            return 0.0
+        found = _syllables(lines[j])
+        return 1 - abs(found - holes) / max(found, holes) if max(found, holes) else 0.0
+
+    rows = [n for n, kind in enumerate(kinds) if kind == "holes"]
+    up = sum(fit(n - 1, len(scans[n].holes)) for n in rows)
+    down = sum(fit(n + 1, len(scans[n].holes)) for n in rows)
+    return up - down >= max(ABOVE_LEAD, ABOVE_SHARE * len(rows))
 
 
 def _sung(line: str, found: Scan) -> bool:

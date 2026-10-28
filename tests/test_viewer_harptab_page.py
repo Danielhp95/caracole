@@ -173,6 +173,11 @@ def test_a_row_read_with_low_confidence_is_its_text_as_written():
     assert len(data["rows"]) == 2 and len(re.findall(r'class="rp"', html)) == 2  # its holes neither drawn nor played
 
 
+def test_a_row_read_with_low_confidence_keeps_its_words_above_it_where_the_tab_writes_them_so():
+    html = page("Lo rem ip\n4 5 6\n\nDo lor sit\n-4 -5 -6\n\nAm et con\n3b 3b 2b\n\nSed do ei\n-4 -5 -6\n")
+    assert '<pre class="tab asw">Am et con\n3b 3b 2b</pre>' in html
+
+
 def test_the_foot_says_the_holes_were_placed_only_where_a_row_has_words():
     assert "caracole placed each hole over its syllable" in page()
     assert "placed each hole" not in page(SPOKEY) and "as its tabber wrote it.</p>" in page(SPOKEY)
