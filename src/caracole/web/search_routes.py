@@ -8,7 +8,7 @@
                           index's songs, which comes first and the row Enter may act on; LaCuerda's
                           artists and songs, gtptabs.com's and MuseScore's pages, and the sites not
                           searched, or not whole, with why (``skipped``, ``partial``), and where it
-                          looked, a chip a site (``looked``); for a query the index may not see the
+                          looked, a mark a site (``looked``); for a query the index may not see the
                           artist of, what to paste (``unseen``). Each song's row has the two parts of its
                           identity key (``artist_key``, ``title_key``), and an artist's the first
                           (``group_key``): the library page puts what shares them on one line, and
@@ -73,7 +73,7 @@ searched one only in part (``partial``): LaCuerda's index while the nightly run 
 listings, with the letters read so far, and harptabs.com's while its artist pages aren't all read
 (harptabs_index.py, "2 of 10,428 artists").
 ``looked`` says the same of every site, Ultimate Guitar's index too, as the
-pages' chips show it (``_looked``: a state, a short label, a line of detail), and
+pages' marks show it (``_looked``: a state, a short label, a line of detail), and
 ``unseen`` (``search.bare_id_unseen``) what ``hint`` says of an artist UG's
 sitemaps may list only by a bare id, as facts the pages word themselves.
 LaCuerda's index holds every artist it has read, but the songs only of the
@@ -590,7 +590,7 @@ def _harptabs_left_out(app: WebApp, conn: sqlite3.Connection) -> tuple[str, str]
 
 def _looked(conn: sqlite3.Connection, skipped: list[dict[str, str]],
             partial: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Where the search looked, a site a chip on the pages: Ultimate Guitar's index, gtptabs.com's, LaCuerda's and
+    """Where the search looked, a site a mark on the pages: Ultimate Guitar's index, gtptabs.com's, LaCuerda's and
     MuseScore's, each with its ``state`` (``done``: searched whole; ``partial``: LaCuerda's while its listings are
     read; ``empty``, ``blocked``: MuseScore's, while it blocks caracole; ``off``: turned off in caracole.toml), its
     ``label`` ("UG ✓", "LaCuerda: up to C": the letters read whole run from the first to C) and its ``detail``, one

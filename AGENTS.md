@@ -113,7 +113,7 @@ Rules a change there keeps (the Invariants below are the others):
   a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). One
   LaCuerda button on the screen at a time, worded Ask LaCuerda: the search's own, "Ask LaCuerda for “…”
   (1 request)", only where the results offer no name's page; where they do (`lacuerda_unlisted`), Ask
-  LaCuerda's on the card or in `lookedLine` stands for both, sending the search while its gate says
+  LaCuerda's under the chevron of `nothingFound`'s line or in `lookedLine` stands for both, sending the search while its gate says
   `auto` or `button` (the searcher's `ask`, which the pages' `does.ask` tries first) and reading the
   name's page else, the search's line then its words alone. A test that drives
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
@@ -128,16 +128,19 @@ Rules a change there keeps (the Invariants below are the others):
   a lookup that keeps that tab (`harptabs`, `caracole get --harptabs`, `[harptabs]`); a tab no page read names is a
   title alone, as MuseScore's pages, apart. An artist's group ends with "+ N more by … on harptabs.com"
   (`/api/artist?harptabs=`) or, for a page never read, the offer to read it (`POST /harptabs/artist`, `caracole
-  harptabs --artist` queued, a job of no song's, `jobs.INDEX_READS`); the `looked` chip says how far its artist
-  index has got ("harptabs.com: 1,204 of 10,428 artists").
-  What a search says beside its results is rows.js's, shared by both pages: `didYouMean` (`/api/search`'s
-  `suggest`), `nothingFound` (one card for a query that found nothing: the request by name first, Ask LaCuerda,
-  the chips of `looked`, `unseen` folded) and `lookedLine` (the chips in one muted line under results).
+  harptabs --artist` queued, a job of no song's, `jobs.INDEX_READS`); its `looked` mark says how far its artist
+  index has got ("harptabs.com: 1,204 of 10,428 artists", its name and tooltip).
+  What a search says beside its results is rows.js's, shared by both pages: `nothingFound` (a query that found
+  nothing on the sites: a line of the list under a quiet band, "Not on the sites · searched 5", the query, the marks
+  of `looked`, Request where a song's Open is, the one Request then, and no Back to your songs; under its chevron Ask
+  LaCuerda and `unseen` folded), `lookedLine` (the same marks, `lookedMarks`, in one muted line under results) and,
+  on the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each); the library page draws a suggestion as
+  an artist's band of its own, first (library.js `mergeSites`, `tailOf`).
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line
   rows.js's `indexLine`; a removed song's line asks for it again as the request form does, a "Did you
-  mean" name (rows.js's `didYouMean`) opens that artist's group from `/api/artist`, as "+ N more" does, and a
+  mean" band's "Their 7 songs on UG ›" opens that artist's group from `/api/artist`, as "+ N more" does, and a
   song of yours under its ⋯ (Fetch again; Use LaCuerda's sheet, `lacuerdaSheet` or the search's LaCuerda row of
   it) posts `/lookup` exactly as the lookup page's rows of it do (test_web_page_again.py). A hit's
   name there and on the lookup page presses its Get it (or Add again), disabled while that button is

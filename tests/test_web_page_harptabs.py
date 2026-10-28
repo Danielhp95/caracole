@@ -160,9 +160,9 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     harptabs(cfg)
     search(browser, base, "ritchie valens")
     assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
-    chip = browser.js("(() => { const c = document.querySelector('#results .looked-line li[data-state=partial]'); "
-                      "return [c.textContent, c.title]; })()")
-    assert chip[0] == "harptabs.com: 2 of 3 artists" and "still being read" in chip[1]
+    mark = browser.js("(() => { const c = document.querySelector('#results .looked-line li[data-state=partial]'); "
+                      "return [c.dataset.source, c.firstElementChild.getAttribute('aria-label'), c.title]; })()")
+    assert mark[:2] == ["harptabs", "harptabs.com: 2 of 3 artists"] and "still being read" in mark[2]
     assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
     browser.click("#results .read-page button")
     assert browser.wait(f"{TITLES}.length === 2", timeout=20)

@@ -57,6 +57,8 @@
   line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
+/* A search that found nothing on the sites has its Request in its line: the form shows only once that opens it. */
+.results.missed .request:not([open]) { display: none; }
 .results-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 4px 0 0; }
 /* What the filters (the Filter panel's, an artist's) leave of your songs, hidden with the toolbar while the sites'
    results show: "Your songs here: wanted", and Show all of yours. */
@@ -78,6 +80,9 @@
 .btn.more-by { min-height: 28px; padding: 0 8px; border-color: transparent; background: transparent;
   color: var(--accent); font-size: .85rem; font-weight: 650; }
 .btn.more-by:hover { border-color: var(--border); background: var(--raised); }
+/* An artist a typo may have meant: their songs, in the artist's accent, as their name over them. */
+.btn.their-songs { color: var(--artist); }
+.their-arrow { margin-left: 5px; }
 .badge.removed { color: var(--ignored); background: var(--ignored-bg); }
 .results .request { margin-top: 20px; }
 .file-answer { display: grid; gap: 8px; max-width: 72ch; margin: 6px 0 12px; padding: 12px 14px;
@@ -97,8 +102,8 @@
 .lines, .groups { border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
   box-shadow: var(--shadow); }
 .list > .groups, .list > section.flat { margin-top: 10px; }
-section.artist .lines { border: 0; border-radius: 0; background: none; box-shadow: none; }
-section.artist + section.artist { border-top: 1px solid var(--border); }
+section.artist .lines, section.nothing .lines { border: 0; border-radius: 0; background: none; box-shadow: none; }
+section.artist + section.artist, .groups > section + section.nothing { border-top: 1px solid var(--border); }
 section.artist:focus { outline: none; }
 section.artist:focus-visible > .artist-title { outline: 3px solid var(--focus); outline-offset: -3px; }
 /* The name bigger than the titles under it, in the second accent (--artist), its funnel and underline with it; the
@@ -114,7 +119,17 @@ section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
 .artist-title .filter-mark { display: inline-block; margin-left: 5px; }
 .artist-title button.artist-only { align-self: center; color: var(--artist); }
 .artist-title button.artist-only .filter-mark { margin-left: 0; }
-.artist-counts { color: var(--muted); font-size: .82rem; font-weight: 500; }
+.artist-counts, .miss-count { color: var(--muted); font-size: .82rem; font-weight: 500; letter-spacing: 0; }
+/* A search that found nothing on the sites (rows.js nothingFound): a band as an artist's, as tall, quiet: in the text's
+   colour and smaller, over its one line, whose chevron opens a plain panel, as a site's song's does (card.css raises
+   a song of yours). */
+.miss-band { min-height: 34px; margin: 0; padding: 8px 12px; border-bottom: 1px solid var(--border);
+  background: var(--raised); color: var(--text); font-size: .875rem; font-weight: 700; letter-spacing: .02em;
+  line-height: 1.3; overflow-wrap: anywhere; }
+section.nothing:first-child > .miss-band { border-radius: 11px 11px 0 0; }
+section.nothing .line.miss:has(> .line-more[aria-expanded="true"]) { margin: 0; border: 0; border-radius: 0;
+  background: none; box-shadow: none; }
+section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
 /* In an artist's group its header names the artist: its lines leave the name out, and the column with it. */
 section.artist .line-by { display: none; }
 @media (min-width: 720px) {

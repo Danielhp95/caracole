@@ -259,7 +259,7 @@
   // ROWS_SCRIPT's, which the lookup page shares; and a song's card (card.js), drawn with them.
   const rowKit = caracoleRows(ICONS);
   const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine,
-    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, didYouMean, nothingFound, lookedLine } = rowKit;
+    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, nothingFound, lookedLine } = rowKit;
   const card = caracoleCard(ICONS, rowKit);
   // The file a song opens with, from its title and its line's button: its viewer, else its PDF, else its text
   // (the data marks it primary).
@@ -1163,7 +1163,9 @@
   // ``counts.lacuerda``, ``counts.gtptabs``: gtptabs.com's; ``counts.note``, any other words); then their lines. Served,
   // the name searches for them (searchFor; not a group that names no artist, ``artist.search`` false: MuseScore's), and,
   // once you have songs of theirs, the funnel beside it shows those alone (``artist.filter``, their sortArtist, else
-  // ``artist.key``); from a file, which can't search the sites, the name is the funnel's.
+  // ``artist.key``); from a file, which can't search the sites, the name is the funnel's. An artist a search may have
+  // meant (``artist.meant``, a typo's "Did you mean") says so to a screen reader, and their songs on the site that
+  // names them come first in the counts (``counts.theirs``: "7 songs on UG").
   let groupSerial = 0;
   const artistGroup = (artist, items, counts) => {
     const a = artist && typeof artist === "object" ? artist : { name: artist };
@@ -1171,7 +1173,7 @@
     const filter = String(own.call(a, "filter") ? a.filter : a.key || "");
     const c = counts && typeof counts === "object" ? counts : {};
     const mine = Number(c.mine) || 0;
-    const section = el("section", "artist");
+    const section = el("section", a.meant ? "artist meant" : "artist");
     section.dataset.artist = String(a.key || "");
     section.tabIndex = -1;  // the A-Z strip moves the focus to it
     const heading = el("h2", "artist-title");
@@ -1182,13 +1184,15 @@
       setArtist(filter);
       window.scrollTo(0, 0);
     };
+    if (a.meant) heading.appendChild(el("span", "visually-hidden", "Did you mean "));
     if (server && name && a.search !== false) {
       heading.appendChild(artistSearch(name, () => searchFor(name)));
       if (filter && mine) heading.appendChild(artistOnly(name, only));
     } else {
       heading.appendChild(filter && mine ? artistFilter(name, name, only) : el("span", "artist-name", name));
     }
-    const said = [mine ? "you have " + mine : "", Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
+    const said = [c.theirs ? String(c.theirs) : "", mine ? "you have " + mine : "",
+      Number(c.ug) ? "UG " + Number(c.ug).toLocaleString("en") : "",
       Number(c.lacuerda) ? "LaCuerda " + Number(c.lacuerda).toLocaleString("en") : "",
       Number(c.gtptabs) ? "Guitar Pro " + Number(c.gtptabs).toLocaleString("en") : "",
       Number(c.harptabs) ? "Harmonica " + Number(c.harptabs).toLocaleString("en") : "", c.note ? String(c.note) : ""]
@@ -1934,10 +1938,10 @@
   // page's (another person searching at once is answered too: web/search_routes.py).
   const SEARCH_BOX = Math.random().toString(36).slice(2, 12) || "bar";
   const allMine = el("p", "all-mine");
-  const meantBox = el("div", "meant");  // Did you mean, first
   const groupsBox = el("div", "groups");
   const lcBox = el("div", "lacuerda-search-box");  // LaCuerda's own search, under the results
   const notesBox = el("div", "notes");
+  let backButton = null;  // Back to your songs, over the results: the way back, but where they found nothing
   let asking = null;  // the search of the sites on its way, to abort
   let asked = 0;  // the newest search sent: an older one's answer is dropped
   let askTimer = 0;
@@ -1973,7 +1977,7 @@
     const model = { groups: new Map(), order: [], items: new Map(), lines: new Map(), alias: new Map(),
       titles: objects(data.musescore), harps: objects(data.harptabs).filter((h) => !h.artist),
       unlisted: data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object"
-        ? data.lacuerda_unlisted : null, meant: undefined, card: undefined, line: undefined };
+        ? data.lacuerda_unlisted : null, meant: [], card: undefined, line: undefined };
     const ugArtists = objects(data.artists);
     const lcArtists = objects(data.lacuerda_artists);
     const htArtists = objects(data.harptabs_artists);
@@ -2004,14 +2008,26 @@
       if (kind === "artist") addArtist(model, source, row);
       else addSong(model, source, row);
     }
+    // The artists the query may have meant (``suggest``, a typo's), each their group, first: an artist's band that says
+    // so, whose foot lists their songs (tailOf); the songs of yours by them under it, as an artist's are.
+    for (const s of objects(data.suggest).filter((x) => x.artist && x.group_key)) {
+      const g = groupOf(model, model.alias.get(String(s.group_key)) || String(s.group_key), s.artist);
+      if (!g.meant) g.meant = s;
+      if (model.meant.indexOf(g.key) < 0) model.meant.push(g.key);
+    }
     return model;
   };
+  // Whether an answer's model holds nothing of the sites (an artist, a song, a title, a song you removed): its search
+  // found nothing there, and says so as a line of the list (nothingFound). An artist it may have meant, once listed,
+  // or a name LaCuerda's page was read for, is something.
+  const foundNothing = (model) => Boolean(model) && !model.items.size && !model.titles.length && !model.harps.length &&
+    !Array.from(model.groups.values()).some((g) => g.ug || g.lacuerda || g.harptabs);
   const yourSong = (row) => (row.song === null || row.song === undefined ? undefined : byIndex.get(Number(row.song)));
   const groupOf = (model, key, name) => {
     let g = model.groups.get(key);
     if (!g) {
       g = { key, name: String(name || ""), ug: null, lacuerda: null, harptabs: null, items: [], ugListed: 0, ugOffset: 0,
-        lcListed: false, htListed: false, tail: null };
+        lcListed: false, htListed: false, tail: null, meant: null };
       model.groups.set(key, g);
       model.order.push(key);
     }
@@ -2071,11 +2087,22 @@
 
   // An artist's group's foot, made once: "+ 57 more by Estopa" (the rest of their songs on Ultimate Guitar, fifty at a
   // time, from /api/artist), "+ 3 more by Estopa on LaCuerda" (the rest the index holds of theirs), the same on
-  // harptabs.com, or, for an artist whose page caracole has never read there, the offer to read it. None when there is
+  // harptabs.com, or, for an artist whose page caracole has never read there, the offer to read it; for an artist the
+  // query may have meant, until their songs are listed, "Their 7 songs on UG ›" (openSuggested). None when there is
   // nothing more: null.
   const tailOf = (m) => {
     if (!m.tail) {
       m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null, ht: null, htOffer: null };
+      if (m.meant && !m.ug && !m.lacuerda) {
+        const model = answer.model;
+        const s = m.meant;
+        const go = button("Their " + songsOn(s), "small more-by their-songs", (e) => openSuggested(model, s,
+          e.currentTarget));
+        const arrow = el("span", "their-arrow", "›");
+        arrow.setAttribute("aria-hidden", "true");
+        go.appendChild(arrow);
+        m.tail.box.appendChild(go);
+      }
       if (m.ug) {
         m.tail.ug = button("", "small more-by", () => moreOf(m, "ug"));
         m.tail.box.appendChild(m.tail.ug);
@@ -2311,6 +2338,7 @@
       if (!groups.has(key)) groups.set(key, { mine: [], model: null });
       return groups.get(key);
     };
+    if (model) for (const key of model.meant) at(key);  // the artists it may have meant, first
     for (const i of shown) at(artistKeyOf(songs[i])).mine.push(i);
     if (model) for (const key of model.order) at(key).model = model.groups.get(key);
     const yours = new Map();  // how many songs of each artist you have, the songs the search leaves out too
@@ -2341,10 +2369,12 @@
       const ug = (g.model && g.model.ug) || {};  // the artists the query names there, if any
       const lc = (g.model && g.model.lacuerda) || {};
       const ht = (g.model && g.model.harptabs) || {};
+      const meant = (g.model && g.model.meant) || null;  // an artist it may have meant: their songs counted till listed
       const section = artistGroup({ key, name: you ? shownName(you, you.artist) : g.model.name,
-        filter: you ? you.sortArtist : "" },
+        filter: you ? you.sortArtist : "", meant: Boolean(meant) },
         [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
-          gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0), harptabs: ht.songs });
+          gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0), harptabs: ht.songs,
+          theirs: meant && !g.model.ug && !g.model.lacuerda && Number(meant.songs) ? songsOn(meant) : "" });
       if (tail) section.appendChild(tail);
       box.appendChild(section);
     }
@@ -2358,11 +2388,21 @@
       box.appendChild(artistGroup({ name: "harptabs.com", search: false }, model.harpLines,
         { note: many(model.harps.length, "harmonica tab") + " by that title" }));
     }
+    const missed = foundNothing(model);
+    const missWas = groupsBox.querySelector(":scope > section.nothing");
+    if (missed) box.appendChild(missOf(model, missWas));  // nothing on the sites: a line of the list, last
     groupsBox.replaceChildren(box);
     groupsBox.hidden = !groupsBox.childNodes.length;  // no empty box: nothing matches yet
+    // One Request: what found nothing has its own, in its line, so the form under the results waits for it; and no
+    // Back to your songs, as the box's × and Escape go back.
+    results.classList.toggle("missed", missed);
+    if (backButton) backButton.hidden = missed;
     if (had && !groupsBox.contains(document.activeElement)) {
       const lines = Array.from(groupsBox.querySelectorAll("article"));
-      const back = groupsBox.contains(had) ? had
+      const miss = missWas && missWas.contains(had) ? groupsBox.querySelector(":scope > section.nothing") : null;
+      const same = miss ? Array.from(miss.querySelectorAll(had.tagName)).find((x) => x.className === had.className)
+        : null;  // the same control of what found nothing, drawn again: Ask LaCuerda, its chevron, Request
+      const back = groupsBox.contains(had) ? had : same ? same
         : hadLine ? (hadHit && lines.find((a) => String(a.dataset.hit || "") === hadHit)) || lines[0] : null;
       if (back) back.focus({ preventScroll: true });
     }
@@ -2375,37 +2415,59 @@
     if (keptNote.firstChild.textContent !== said) keptNote.firstChild.textContent = said;
     keptNote.hidden = !said;
     drawProgFound();
-    if (model && model.meant === undefined) model.meant = didYouMean(answer.data.suggest, (s, go) => openSuggested(model, s, go));
-    meantBox.replaceChildren(...(model && model.meant ? [model.meant] : []));
-    notesBox.replaceChildren(...(model ? notesOf(model, !groupsBox.childNodes.length) : []));
+    notesBox.replaceChildren(...(model && !missed ? notesOf(model) : []));
   };
-  // Under the groups, what the search says beside them (rows.js): for a query that found nothing (``nothing``), one card,
-  // its request by name first, then Ask LaCuerda for a name under a letter its listings don't reach yet, where caracole
-  // looked, and why it may not see an artist; under results, where it looked in one muted line, when a site wasn't
-  // searched whole. Each made once an answer, Ask LaCuerda's state kept from one draw to the next. Ask LaCuerda is the
-  // one LaCuerda button: it sends LaCuerda's search while its gate lets one go by hand (the searcher's ``ask``), else
-  // reads the name's page.
-  const notesOf = (model, nothing) => {
-    const data = Object.assign({}, answer.data, { lacuerda_unlisted: model.unlisted });
+  // What the search says beside its results (rows.js), each made once an answer, Ask LaCuerda's state kept from one
+  // draw to the next. Ask LaCuerda is the one LaCuerda button: it sends LaCuerda's search while its gate lets one go
+  // by hand (the searcher's ``ask``), else reads the name's page.
+  const saysOf = (model) => {
     const q = answer.q;
-    const does = {
-      request: requestByName,
-      ask: (go, box) => {
-        if (searcher && searcher.ask(q, go)) return;
-        readThenShow({ name: String(model.unlisted.name || "") }, go, box, readByName(model));
+    return {
+      data: Object.assign({}, answer.data, { lacuerda_unlisted: model.unlisted }),
+      does: {
+        dense: true,
+        request: requestByName,
+        ask: (go, box) => {
+          if (searcher && searcher.ask(q, go)) return;
+          readThenShow({ name: String(model.unlisted.name || "") }, go, box, readByName(model));
+        },
       },
     };
-    if (nothing) {
-      if (!model.card) model.card = nothingFound(data, answer.q, does);
-      return [model.card];
+  };
+  // A query that found nothing on the sites: a line of the list under a quiet band (nothingFound), the query, where
+  // caracole looked, Request where a song's Open is; its chevron has Ask LaCuerda, for a name under a letter its
+  // listings don't reach yet, and why it may not see an artist. Drawn again for the same query (LaCuerda's search
+  // over, say), its chevron stays as it was (``was``, the line before).
+  const missOf = (model, was) => {
+    if (!model.card) {
+      const says = saysOf(model);
+      const open = Boolean(was && was.dataset.query === answer.q && was.querySelector('.line-more[aria-expanded="true"]'));
+      model.card = nothingFound(says.data, answer.q, Object.assign(says.does, { unfolded: open }));
     }
-    if (model.line === undefined) model.line = lookedLine(data, answer.q, does);
+    return model.card;
+  };
+  // Under results, where it looked in one muted line, when a site wasn't searched whole (lookedLine).
+  const notesOf = (model) => {
+    if (model.line === undefined) {
+      const says = saysOf(model);
+      model.line = lookedLine(says.data, answer.q, says.does);
+    }
     return model.line ? [model.line] : [];
   };
   // "Request “…” by name": the request form, filled in from the query (prefill), open and in view, the focus on its
-  // first field still empty.
+  // first field still empty. Where a search found nothing, the form shows only so opened (library.css): folded again,
+  // it goes, and the focus goes back to the line's Request.
+  const requestBox = byId("request-box");
+  if (requestBox) {
+    requestBox.addEventListener("toggle", () => {
+      if (requestBox.open || !results.classList.contains("missed")) return;
+      const go = groupsBox.querySelector("section.nothing .line-action button");
+      const lost = document.activeElement === document.body || requestBox.contains(document.activeElement);
+      if (go && lost) go.focus();
+    });
+  }
   const requestByName = () => {
-    const box = byId("request-box");
+    const box = requestBox;
     if (!box) return;
     box.open = true;
     box.scrollIntoView({ block: "center", behavior: smooth() });
@@ -2523,8 +2585,8 @@
     if (ms.length) parts.push(ms.length + " on MuseScore");
     if (harps.length || htArtists.length) parts.push((harps.length + htArtists.length) + " on harptabs.com");
     const meant = objects(data.suggest).filter((x) => x.artist);
-    say(parts.length ? parts.join(" · ") : meant.length ? "Nothing on the sites: did you mean " + String(meant[0].artist) + "?"
-      : "Nothing on the sites: request it by name below");
+    say(parts.length ? parts.join(" · ")
+      : "Nothing on the sites" + (meant.length ? " · did you mean " + String(meant[0].artist) + "?" : ""));
     prefill(data.lead || (lcArtists.length && !lc.length ? "artist" : null));  // an artist LaCuerda alone knows
     if (focusFirst && q === normal(state.q)) {
       focusFirst = false;
@@ -2633,10 +2695,11 @@
   };
   if (server) {
     const head = el("div", "results-head");
-    head.appendChild(button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)"));
+    backButton = button("Back to your songs", "small", () => leaveAll(true), "Back to your songs (Escape)");
+    head.appendChild(backButton);
     head.appendChild(keptNote);
     allMine.hidden = true;
-    found.append(head, progNote, allMine, meantBox, groupsBox, lcBox, notesBox);
+    found.append(head, progNote, allMine, groupsBox, lcBox, notesBox);
   }
   // A key that ends an input method's word (pinyin, kana) is still typing, never a command.
   const composing = (e) => e.isComposing || e.keyCode === 229;

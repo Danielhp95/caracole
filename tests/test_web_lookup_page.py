@@ -533,14 +533,23 @@ def test_a_close_spelling_says_did_you_mean_and_the_name_lists_their_songs(cfg, 
     browser.open(base + "/lookup")
     browser.type("lynrd")
     assert browser.wait("document.querySelector('#results .did-you-mean') !== null")
-    assert browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => s.textContent)") == [
-        "Lynyrd Skynyrdartist · 5 songs on UGTheir songs"]
+    # A group of the page's own, "Did you mean", an artist's row each (UG's mark, their songs counted, Their songs),
+    # then what found nothing: its band and line.
+    assert browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)") == [
+        "Did you mean", "Not on the sites · searched 5"]
+    assert browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => [s.querySelector("
+                      "'.row-title').textContent, s.querySelector('.source').dataset.source, s.querySelector("
+                      "'.row-facts').textContent, s.querySelector('.row-action button').textContent])") == [
+        ["Lynyrd Skynyrd", "ug", "5 songs on UG", "Their songs"]]
+    assert browser.js("[...document.querySelectorAll('#results > section')].map((s) => s.className)") == [
+        "did-you-mean", "nothing"]
     assert browser.js(HITS) == 0
     browser.press("Enter")  # nothing stands out: Enter takes no suggestion, and asks for nothing
     time.sleep(0.5)
     assert browser.js(f"{ARTIST_NAME} === undefined") and queue.snapshot() == []
     browser.click("#results .did-you-mean .their-songs")
     assert browser.wait(f"{ARTIST_NAME} === 'Lynyrd Skynyrd'")
+    assert browser.js("document.getElementById('by-name-box').checkVisibility()")  # their songs: the form under them
     assert browser.js("[...document.querySelectorAll('#results .hit .row-title')].map(t => t.textContent)") == [
         "Free Bird", "Simple Man", "That Smell", "Tuesdays Gone", "Workin For Mca"]
     assert queue.snapshot() == []

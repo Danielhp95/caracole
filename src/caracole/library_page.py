@@ -112,13 +112,15 @@ line however many sites have it, each site's mark and counts on it, its
 identity its ``data-hit``) and MuseScore's pages (``titleLine``); for the
 lookup page, rows (``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist`` and
 ``siteArtistSongs``, LaCuerda's artists and their songs); and for both what a
-search says beside its results: for a query that found nothing, the closest
-artists' names the indexes have (``didYouMean``, from ``suggest``: each one's
-Their songs), then one card (``nothingFound``: the request by name first, Ask
-LaCuerda (1 request) for a name under a letter LaCuerda's listings aren't read
-to yet, where caracole looked as chips, ``lookedChips`` from ``looked``, and
-"Why can't caracole find it?" folded, from ``unseen``); under results, the chips
-in one muted line when a site wasn't searched whole (``lookedLine``). With them
+search says beside its results: for a query that found nothing on the sites, a
+line of the list under a quiet band, "Not on the sites · searched 5"
+(``nothingFound``: the query, where caracole looked as small marks,
+``lookedMarks`` from ``looked``, and Request where a song's Open is; under its
+chevron, Ask LaCuerda · 1 request for a name under a letter LaCuerda's listings
+aren't read to yet, and "Why can't caracole find it?" folded, from ``unseen``);
+under results, the same marks in one muted line when a site wasn't searched whole
+(``lookedLine``); and, on the lookup page, the closest artists' names the indexes
+have (``didYouMean``, from ``suggest``: a row each, Their songs). With them
 ``readArtistPage``, which asks the server to read an artist's page, by its slug
 or by a name, and ``readOutcome``, what LaCuerda answered a read that left
 nothing to list.
@@ -150,17 +152,18 @@ LaCuerda, under the groups. MuseScore's pages, titles alone, come last under a
 header of their own, and harptabs.com's harmonica tabs after them (``titleLine``, by
 each one's ``source``). A row for one instrument says which (``instrumentBadges``:
 Ukulele for UG's Ukulele Chords, Harmonica for harptabs.com's, Score for MuseScore's;
-a song's card's ``instruments``, ``instruments_of``), and nothing is filtered by one. Under them, where caracole looked: chips in one muted line
-(UG ✓, LaCuerda: up to C, MuseScore blocked…), each one's detail its tooltip, or,
-for a query that found nothing, "Did you mean" (Their songs opens that artist's
-group, first, from ``/api/artist``) and one card, whose Request “…” by name
-opens the request form. A line's Get it (``POST /lookup``) shows its request's
+a song's card's ``instruments``, ``instruments_of``), and nothing is filtered by one. Under them, where caracole looked: "Searched" and
+a small mark a site in one muted line (grey searched, amber in part, red blocked), each one's detail its tooltip.
+A query that found nothing on the sites ends the list with a line of its own under a quiet band (rows.js
+``nothingFound``), whose Request opens the request form, the one Request then; a typo's "Did you mean" is an
+artist's band of its own, first, whose "Their 7 songs on UG ›" opens that artist's group from ``/api/artist``.
+A line's Get it (``POST /lookup``) shows its request's
 line in the line itself. Enter moves the focus to the first result and asks for no song;
 the one request it may send is LaCuerda's search, at once and by hand, as its button
 sends it, when ``/api/search``'s ``lacuerda_search`` says ``auto`` or ``button``
 (rows.js ``lacuerdaSearcher``). A wanted song whose sheet you picked on LaCuerda says that tonight's
 run gets it (``lacuerda``), and isn't a song not found (``notFound``). The
-request form sits under the results, filled in from the query.
+request form sits under the results, filled in from the query (where they found nothing, once Request opens it).
 
 ``caracole serve`` serves the same page with ``controls`` (``WebControls``): the
 search of the sites as you type, a form to request a song, a "Fetch now" button on each wanted song, a "Remove"

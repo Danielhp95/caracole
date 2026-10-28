@@ -27,7 +27,7 @@ artist's name alone or a title alone, or a word of an artist's name
 ("skynyrd"): an artist it names is a row of its own, whose Songs lists all
 their songs (``GET /api/artist``), and comes first when it leads. A query
 nothing matches well, spelled close to an artist's name ("lynrd"), says "Did
-you mean" that artist, whose name lists their songs the same way. Enter acts
+you mean" that artist, a row whose Their songs lists their songs the same way. Enter acts
 on the answer of the query typed, never of an older one still on the screen:
 its ``best`` row, the song you meant; when an artist leads, that artist's
 songs; when nothing stands out, nothing, so a guess never spends a request
@@ -95,6 +95,8 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .artist-head h2:focus { outline: none; }
 .more-songs { margin: 10px 0 0; }
 details.by-name { margin: 22px 0 0; }
+/* A search that found nothing has its Look up in its row: the form shows only once that opens it. */
+.missed > details.by-name:not([open]) { display: none; }
 details.by-name summary { color: var(--muted); font-size: .9rem; font-weight: 600; cursor: pointer; }
 .by-name form { display: grid; gap: 10px; margin-top: 10px; grid-template-columns: 1fr; }
 .reader { margin: 22px 0 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 16px;
@@ -200,6 +202,7 @@ function search() {
   const text = typedText();
   if (letters(text) < (han(text) ? 2 : MIN)) {
     results.replaceChildren();
+    root.classList.remove("missed");
     shownFor = null;
     status.textContent = text ? "Keep typing…" : "";
     return;
@@ -221,6 +224,11 @@ function search() {
 }
 
 function show(data, text) {
+  // What found nothing, drawn again for the same query (LaCuerda's search over, say): its "⋯" as it was, the focus on
+  // the same control.
+  const was = results.querySelector("section.nothing");
+  const unfolded = Boolean(was && was.dataset.query === text && was.querySelector('.row-more[aria-expanded="true"]'));
+  const focused = was && was.contains(document.activeElement) ? document.activeElement : null;
   results.replaceChildren();
   artistOpen = null;
   const artists = Array.isArray(data.artists) ? data.artists : [];
@@ -247,24 +255,29 @@ function show(data, text) {
   if (htArtists.length || ht.length) results.append(...group("On harptabs.com", [...htArtists.map(siteArtistRow),
                                                                                 ...ht.map(htSong)]));
   // What the search says beside its results, as the library page's bar says it (ROWS_SCRIPT's): nothing found, the
-  // artists it may have meant first, then one card (look it up by name; Ask LaCuerda for a name under a letter its
-  // listings aren't read to yet, whose page may say; where caracole looked; why it may not see an artist); else where
-  // it looked, in one muted line, when a site wasn't searched whole.
+  // artists it may have meant first ("Did you mean", a row each), then a band, "Not on the sites", over one row: the
+  // query, where caracole looked, and Look up (the form by name) where a row's Get it is; under its "⋯", Ask LaCuerda
+  // for a name under a letter its listings aren't read to yet, whose page may say, and why it may not see an artist.
+  // Else where it looked, in one muted line, when a site wasn't searched whole.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
   // Ask LaCuerda, the one LaCuerda button: LaCuerda's search while its gate lets one go by hand, else the name's page.
   const does = {
-    request: () => byNameFrom(text), requestLabel: "Look “" + text + "” up by name",
+    request: () => byNameFrom(text), requestText: "Look up", requestLabel: "Look up “" + text + "” by name",
     ask: unlisted ? (go, at) => searcher.ask(text, go) || readThenShow({name: String(unlisted.name || "")}, go, at)
       : null,
   };
   if (!n) {
     const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s));
     if (meant) results.append(meant);
-    results.append(rowKit.nothingFound(data, text, does));
+    const miss = rowKit.nothingFound(data, text, Object.assign(does, {unfolded}));
+    results.append(miss);
+    const same = focused && [...miss.querySelectorAll(focused.tagName)].find(x => x.className === focused.className);
+    if (same) same.focus();
   } else {
     const line = rowKit.lookedLine(data, text, does);
     if (line) results.append(line);
   }
+  root.classList.toggle("missed", !n);  // one Look up: the form by name waits for the row's
   shownFor = text;
   shownData = data;
   if (lcChanged === text) lcChanged = null;
@@ -354,6 +367,7 @@ function openArtist(a, focus) {
 
 function showArtist(data, focus) {
   results.replaceChildren();
+  root.classList.remove("missed");
   artistOpen = data.artist_key;
   const head = el("div", "artist-head");
   const name = el("h2", null, data.artist);
@@ -491,6 +505,7 @@ function showSiteArtist(data, focus) {
   const harp = data.source === "harptabs";
   const site = harp ? "harptabs.com" : "LaCuerda";
   results.replaceChildren();
+  root.classList.remove("missed");
   artistOpen = harp ? "harptabs:" + data.path : "lacuerda:" + data.slug;
   const head = el("div", "artist-head");
   const name = el("h2", null, data.artist);
@@ -688,6 +703,13 @@ document.getElementById("by-name").addEventListener("submit", e => {
   if (artist && title) lookUp({artist, title}, artist + " - " + title);
 });
 
+// Where a search found nothing, the form by name shows only once its row's Look up opens it: folded again, it goes, and
+// the focus goes back to Look up.
+byName.addEventListener("toggle", () => {
+  if (byName.open || !root.classList.contains("missed")) return;
+  const go = results.querySelector("section.nothing .row-action button");
+  if (go && (document.activeElement === document.body || byName.contains(document.activeElement))) go.focus();
+});
 window.addEventListener("resize", measureBar);
 measureBar();
 const params = new URLSearchParams(location.search);

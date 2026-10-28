@@ -48,7 +48,7 @@ pytestmark = CHROMIUM_MARKS
 
 LINE = "((document.querySelector('.lacuerda-search') || {}).textContent || '')"
 GO = ".lacuerda-search button.lacuerda-search-go"
-ASK = ".ask-lacuerda"  # Ask LaCuerda, under the results or on the card of a search that found nothing
+ASK = ".ask-lacuerda"  # Ask LaCuerda, under the results or under the chevron of a search that found nothing
 # The LaCuerda buttons on the screen, by their words.
 BUTTONS = ("[...document.querySelectorAll('button')].filter((b) => /^(Ask|Search) LaCuerda/.test(b.textContent) && "
            "b.getClientRects().length).map((b) => b.textContent)")
@@ -437,13 +437,17 @@ def test_a_search_that_failed_offers_the_button_and_no_page_sends_it_again_by_it
     assert len(jobs(queue)) == 1 and searches(heard) == SENT_BY_ITSELF
 
 
-@pytest.mark.parametrize("page, query, label", [
-    ("", "bunbury", "Ask LaCuerda for “bunbury” (1 request)"),  # under the results: gtptabs.com has a song of theirs
-    ("", "caifanes", "Ask LaCuerda (1 request)"),  # on the card of a search that found nothing
-    ("lookup", "bunbury", "Ask LaCuerda (1 request)"),
-], ids=["library", "library-card", "lookup"])
+# The chevron of a search that found nothing, on the library page and on the lookup page ("⋯"): Ask LaCuerda is under it.
+FOLD = {"": "#results .nothing .line-more", "lookup": "#results .nothing .row-more"}
+
+
+@pytest.mark.parametrize("page, query, label, folded", [
+    ("", "bunbury", "Ask LaCuerda for “bunbury” (1 request)", False),  # under the results: gtptabs.com has a song
+    ("", "caifanes", "Ask LaCuerda · 1 request", True),  # under the chevron of a search that found nothing
+    ("lookup", "bunbury", "Ask LaCuerda · 1 request", True),
+], ids=["library", "library-miss", "lookup"])
 def test_a_query_that_offers_its_search_and_a_names_page_shows_one_button_whose_press_sends_the_search(
-        cfg, live, browser, heard, page, query, label):
+        cfg, live, browser, heard, page, query, label, folded):
     base, queue, runner = live
     lacuerda(cfg, complete=False)  # LaCuerda's listings read to E and J only: the name's page may say
     sites(cfg, gtptabs=[GTP_BUNBURY])
@@ -451,13 +455,17 @@ def test_a_query_that_offers_its_search_and_a_names_page_shows_one_button_whose_
     browser.open(base + page)
     put(browser, query)
     assert browser.wait(f"!!document.querySelector('{ASK}')", timeout=5)
+    if folded:
+        assert browser.js(BUTTONS) == []  # folded away, with the line's own button none
+        browser.click(FOLD[page])
     time.sleep(0.5)
     assert browser.js(BUTTONS) == [label]  # one LaCuerda button, Ask LaCuerda's, where it was
     assert jobs(queue) == []
     browser.click(ASK)  # LaCuerda's search, which answers artists and songs both
     assert browser.wait(f"{LINE}.startsWith('Searched: ')", timeout=10)
     assert jobs(queue) == [("lacuerda", f"--search={query}", "--progress")] and searches(heard) == [(query, True)]
-    # Asked: the one button reads the name's page now, as Ask LaCuerda did.
+    # Asked: the one button reads the name's page now, as Ask LaCuerda did; drawn again with LaCuerda's answer, where
+    # it was, its chevron still open.
     assert browser.wait(f"!!document.querySelector('{ASK}:not([disabled])')", timeout=5)
     assert browser.js(BUTTONS) == [label]
     browser.click(ASK)
@@ -488,7 +496,7 @@ def test_the_one_button_pressed_before_the_query_settles_sends_the_search_by_han
 
 
 @pytest.mark.parametrize("page, titles, label", [
-    ("", TITLES, "Ask LaCuerda for “bunbury” (1 request)"), ("lookup", LOOKUP_TITLES, "Ask LaCuerda (1 request)")],
+    ("", TITLES, "Ask LaCuerda for “bunbury” (1 request)"), ("lookup", LOOKUP_TITLES, "Ask LaCuerda · 1 request")],
     ids=["library", "lookup"])
 def test_with_its_search_failed_lately_the_one_button_reads_the_names_page(cfg, live, browser, heard, page, titles,
                                                                             label):
@@ -503,6 +511,8 @@ def test_with_its_search_failed_lately_the_one_button_reads_the_names_page(cfg, 
     put(browser, "bunbury")
     assert browser.wait(f"!!document.querySelector('{ASK}')", timeout=5)
     assert browser.wait(f"{LINE}.startsWith('LaCuerda\\'s search for “bunbury” failed less than an hour ago')")
+    if page == "lookup":  # under the chevron of a search that found nothing
+        browser.click(FOLD[page])
     assert browser.js(BUTTONS) == [label]  # why the search waits, and one button: the name's page
     browser.click(ASK)
     assert browser.wait(f"{titles}.length === 2", timeout=10)

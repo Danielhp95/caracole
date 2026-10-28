@@ -1204,7 +1204,7 @@ and cache.
   spent budget or an error (`Not read: LaCuerda failed (…); nothing changed:
   try again later.`), all of which exit 0, nothing changed. It can't go with
   `--index` (exit 2). An artist's Songs on the page `caracole serve` serves
-  runs it, and so does Ask LaCuerda (1 request) for a name its listings
+  runs it, and so does Ask LaCuerda for a name its listings
   haven't reached yet, once LaCuerda's search for the query can't go by hand
   (that button sends the search first: see the library page below).
 
@@ -3372,30 +3372,35 @@ Who can reach it, below).
   and get their answer (`/api/search`'s `box`, an id each search box makes). The
   line under the box says "Searching the sites…", then how many each site has.
   Under the results, one muted line says where caracole looked when a site
-  wasn't searched whole, a chip a site: green searched whole (UG ✓,
-  gtptabs.com ✓), amber in part (LaCuerda: up to C, while the nightly run
-  still reads its listings: the letters read whole run up to C), red empty or
-  blocked (MuseScore blocked, gtptabs.com: empty, before the nightly run read
-  its index), grey turned off in caracole.toml (MuseScore: off); each chip's
+  wasn't searched whole: "Searched" and a small mark a site, the site's own
+  icon (else its letters, UG, LC, GT, MS, HT): grey where it searched (UG's
+  index whole, or one the nightly run hasn't filled yet), amber in part
+  (LaCuerda, while the nightly run still reads its listings), red where a site
+  blocks caracole (MuseScore), hollow turned off in caracole.toml. Each mark's
   tooltip says why in one line ("LaCuerda's index is still being read: 2,957
-  artists so far, with #, A–C read whole; the nightly run reads the rest.").
+  artists so far, with #, A–C read whole; the nightly run reads the rest."),
+  and a screen reader hears them all ("Searched Ultimate Guitar, LaCuerda (in
+  part) and harptabs.com; MuseScore blocked").
 
-  When a query finds nothing, the results are one card instead. First, when
-  its words are spelled close to artists' names (as [caracole
-  search](#caracole-search) chooses them), "Did you mean": a line each
-  ("Lynyrd Skynyrd · artist · 212 songs on UG"), whose Their songs opens that
-  artist's songs in their group, first (fifty of Ultimate Guitar's, with "+ N
-  more", or those LaCuerda's index holds, or the offer to read their page),
-  with no request. Then the card, headed "Not it?" under them, else "No song or artist
-  matches “lynrd”": Request “lynrd” by name, which opens the request form
-  below, filled in from the query; Ask LaCuerda (1 request), only while
-  LaCuerda's listings don't reach the name's letter (LaCuerda's search first,
-  as under results); the chips of where
-  caracole looked; and "Why can't caracole find it?", folded: Ultimate
-  Guitar's sitemaps name some artists only by a number (Joaquín Sabina, Maná,
-  宋冬野), so caracole can't see their tabs, with the `[artist_url]` lines to
-  paste into overrides.toml for the query as that artist's name, and, for a
-  title, `caracole add ARTIST "lynrd"`. Searching asks no site anything: it reads the indexes
+  When a query finds nothing on the sites, the list ends with a line of its
+  own, under a quiet band, "Not on the sites · searched 5": the query in its
+  quotes, the same marks, and **Request** where a song's Open is, which opens
+  the request form below, filled in from the query (the form shows only then:
+  one Request), and the line under the box says "Nothing on the sites". Its
+  chevron holds the rest: Ask LaCuerda · 1 request, only while LaCuerda's
+  listings don't reach the name's letter (LaCuerda's search first, as under
+  results), and "Why can't caracole find it?", folded: Ultimate Guitar's
+  sitemaps name some artists only by a number (Joaquín Sabina, Maná, 宋冬野),
+  so caracole can't see their tabs, with the `[artist_url]` lines to paste
+  into overrides.toml for the query as that artist's name, and, for a title,
+  `caracole add ARTIST "lynrd"`. When its words are spelled close to artists'
+  names (as [caracole search](#caracole-search) chooses them), each comes
+  first as an artist's band of its own, "Stephen Foster · 7 songs on UG · you
+  have 1", your songs of theirs under it as an artist's are, then "Their 7
+  songs on UG ›", which lists their songs in the band (fifty of Ultimate
+  Guitar's, with "+ N more", or those LaCuerda's index holds, or the offer to
+  read their page), with no request; the line under the box says "Nothing on
+  the sites · did you mean Stephen Foster?". Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
   common words), takes no lock and spends no budget, and so does "+ N more".
 
@@ -3431,14 +3436,15 @@ Who can reach it, below).
   the button under what it said. A query is sent once a page, and once in 30
   days. The Look up page does the same. **One LaCuerda button at a time**:
   where the results offer Ask LaCuerda for a name its listings don't reach yet
-  (above), the line has no button of its own, and that one sends the search
+  (above, under the results or under the chevron of what found nothing), the line has no button of its own, and that one sends the search
   while the search may go by hand (before the query settles too, in its place),
   then, once it is asked, or after it failed lately, reads the name's page.
   **Enter never asks for a song**, however clear the best result (LaCuerda's
   search, above, is the one request it may send): it moves to
   the first result's line (once the query's answer is in), from which Tab goes
   on to its name and its button; Get it, or a click or a key on the name,
-  does. Escape, or Back to your songs, goes back to
+  does. Escape, or Back to your songs (over results; a search that found
+  nothing on the sites has none), goes back to
   the list with your search and buttons as they were (Escape again clears the
   search; Enter, or typing on, brings the results back), and the box's × back
   to all your songs; either way a song asked for there has its line (see
@@ -3509,9 +3515,10 @@ Who can reach it, below).
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
   nothing; they stay open as LaCuerda's search ends), or nothing when nothing
   stands out, and sends LaCuerda's search as the library page's Enter does. A query that finds nothing
-  shows the same "Did you mean" and card, whose first button is Look “…” up by
-  name (the form under the results, filled in), and whose Their songs lists
-  that artist's songs, as their row's Songs does. A row's artist searches for
+  shows "Did you mean", a row each, whose Their songs lists that artist's
+  songs, as their row's Songs does, then the same band and line, its row's
+  Look up where a song's Get it is (the form under the results, filled in,
+  which shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
   them, as typing their name would. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there. Here your
   song keeps its own row, with Fetch again, and each site's row of it its own:
@@ -3529,7 +3536,7 @@ Who can reach it, below).
   LaCuerda's. The song's line then says how it goes, as for Get it. An ignored
   song has neither, and the file, which can ask nothing, never has them.
 - **Request a song.** Under the results, "Not in the list? Request it by
-  name" takes an artist, a title and, optionally, the album and the length,
+  name" (where they found nothing on the sites, the line's Request opens it) takes an artist, a title and, optionally, the album and the length,
   filled in from what you searched ("Muse - Hysteria"; an artist's name alone
   when an artist leads, else a title) until you type into a field yourself. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as

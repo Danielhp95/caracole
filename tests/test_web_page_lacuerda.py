@@ -165,9 +165,10 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert browser.wait(f"{answer_to('joaquin sabina')} && "
                         "!!document.querySelector('#results section.artist .read-page button')")
     assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
-    chip = browser.js("(() => { const c = document.querySelector('#results .looked-line li[data-state=partial]'); "
-                      "return [c.textContent, c.title]; })()")
-    assert chip[0] == "LaCuerda: E, J only" and "still being read" in chip[1] and "E, J read whole" in chip[1]
+    mark = browser.js("(() => { const c = document.querySelector('#results .looked-line li[data-state=partial]'); "
+                      "return [c.dataset.source, c.firstElementChild.getAttribute('aria-label'), c.title]; })()")
+    assert mark[:2] == ["lacuerda", "LaCuerda: E, J only"] and "still being read" in mark[2]
+    assert "E, J read whole" in mark[2]
     assert "241 songs" in browser.js("document.querySelector('#results .read-page').textContent")
     assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
     browser.click("#results .read-page button")
@@ -184,11 +185,13 @@ def test_a_close_spelling_of_a_lacuerda_artist_opens_their_group_with_the_offer_
     sites(cfg, ug=[("radiohead", "creep", 4)])
     lacuerda(cfg)
     search(browser, base, "sabinna")
-    did = "[...document.querySelectorAll('#results .suggestion')].map((s) => s.textContent).join('|')"
-    assert browser.wait(f"{did} === 'Joaquín Sabinaartist · 241 songs on LaCuerdaTheir songs'")
-    browser.click("#results .did-you-mean .their-songs")
+    assert browser.wait(f"{answer_to('sabinna')} && !!document.querySelector('#results section.meant')")
+    assert browser.js(GROUPS) == ["Did you mean Joaquín Sabina · 241 songs on LaCuerda"]
+    assert browser.js("document.querySelector('#results section.meant .their-songs').textContent") == (
+        "Their 241 songs on LaCuerda›")
+    browser.click("#results section.meant .their-songs")
     assert browser.wait("!!document.querySelector('#results section.artist .read-page button')")
-    assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
+    assert browser.js(GROUPS) == ["Did you mean Joaquín Sabina · LaCuerda 241"]
     assert browser.js("document.activeElement.matches('#results section.artist')")
     assert queue.snapshot() == [] and runner.ran == []  # their page is read only once asked to
 
@@ -212,11 +215,12 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     header = browser.js(GROUPS)[0]  # a group of their own, first, which counts their songs on gtptabs.com too
     assert header.startswith("Bunbury · LaCuerda") and header.endswith(" · Guitar Pro 1"), header
     assert browser.js("document.querySelector('#results .ask-lacuerda')") is None
-    # A name LaCuerda has no page for, which nothing else has either: the card's Ask LaCuerda says what LaCuerda
-    # answered, in the card, and rests.
+    # A name LaCuerda has no page for, which nothing else has either: Ask LaCuerda, under the chevron of what found
+    # nothing, says what LaCuerda answered, there, and rests.
     search(browser, base, "caifanes")
     ask = "#results .nothing .ask-lacuerda"
     assert browser.wait(f"{answer_to('caifanes')} && !!document.querySelector('{ask}')")
+    browser.click("#results .nothing .line-more")
     browser.click(ask)
     assert browser.wait("!!document.querySelector('#results .nothing .read-outcome')", timeout=20)
     said = browser.js("document.querySelector('#results .read-outcome').textContent")
@@ -230,6 +234,7 @@ def test_the_lookup_page_offers_to_read_a_name_lacuerda_hasnt_listed_yet(cfg, li
     lacuerda(cfg, complete=False)
     browser.open(base + "lookup?q=bunbury")
     assert browser.wait("!!document.querySelector('#results .nothing .ask-lacuerda')")
+    browser.click("#results .nothing .row-more")
     browser.click("#results .nothing .ask-lacuerda")
     assert browser.wait(f"{LOOKUP_TITLES}.length === 2", timeout=20)
     assert ("lacuerda", "--artist=bunbury") in runner.ran

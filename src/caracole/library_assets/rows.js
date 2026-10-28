@@ -991,49 +991,83 @@ const caracoleRows = (icons, does) => {
     return why;
   };
   // --- what a search says beside its results (/api/search) ------------------------------------------------------
-  // The closest artists' names the offline indexes have (``suggest``: each { source, artist, songs, and artist_key
-  // or slug }), most likely first, for a query that may be a typo: a line each, "Lynyrd Skynyrd · artist · 212 songs
-  // on UG", whose Their songs is ``open(s, button)``. None for none: null.
   const SITE_NAMES = { ug: "UG", lacuerda: "LaCuerda", gtptabs: "gtptabs.com", musescore: "MuseScore" };
+  // An artist's songs on the site whose index names them (``s``, a suggestion: its ``songs`` and ``source``), "212
+  // songs on UG".
+  const songsOn = (s) => (Number(s && s.songs) ? many(s.songs, "song") : "songs") +
+    (s && own.call(SITE_NAMES, s.source) ? " on " + SITE_NAMES[s.source] : "");
+  // The closest artists' names the offline indexes have (``suggest``: each { source, artist, songs, and artist_key
+  // or slug }), most likely first, for a query that may be a typo, as the lookup page draws them: a group of its own,
+  // "Did you mean", an artist's row each ("Lynyrd Skynyrd · Artist · 212 songs on UG", with its site's mark), whose
+  // Their songs is ``open(s, button)``. None for none: null. The library page draws each as an artist's band of its
+  // own (library.js).
   const didYouMean = (suggest, open) => {
     const names = listOf(suggest).filter((s) => s && typeof s === "object" && s.artist);
     if (!names.length) return null;
     const box = el("section", "did-you-mean");
     rowSerial += 1;
-    const head = el("h2", "nothing-head", "Did you mean");
+    const head = el("h2", "group", "Did you mean");
     head.id = "did-you-mean-" + rowSerial;
     box.setAttribute("aria-labelledby", head.id);
-    const list = el("ul", "suggestions");
+    const rows = el("div", "rows");
     for (const s of names) {
       const name = String(s.artist);
-      const item = el("li", "suggestion");
-      const said = el("span", "suggest-said");
-      said.appendChild(el("span", "suggest-name", name));
-      const where = own.call(SITE_NAMES, s.source) ? " on " + SITE_NAMES[s.source] : "";
-      said.appendChild(el("span", "suggest-facts", "artist" + (Number(s.songs) ? " · " + many(s.songs, "song") + where : "")));
-      item.appendChild(said);
-      item.appendChild(button("Their songs", "small their-songs", (e) => open(s, e.currentTarget), "Songs by " + name));
-      list.appendChild(item);
+      const go = button("Their songs", "small primary their-songs", (e) => open(s, e.currentTarget),
+        "Their songs, by " + name);
+      const row = resultRow({ title: name, artist: "Artist", source: String(s.source || ""), facts: songsOn(s),
+        action: go });
+      row.classList.add("suggestion");
+      rows.appendChild(row);
     }
-    box.append(head, list);
+    box.append(head, rows);
     return box;
   };
-  // Where caracole looked (``looked``: a site each, its ``state``, ``label`` and one line of ``detail``), as chips:
-  // green searched whole, amber in part, red empty or blocked, grey turned off. A chip is no control: its detail is
-  // its tooltip and its description.
-  const lookedChips = (looked) => {
+  // Where caracole looked (``looked``: a site each, its ``source``, ``name``, ``state``, ``label`` and one line of
+  // ``detail``), as small marks, each the site's own (sourceMark) on a pill: grey searched (whole, or its index empty
+  // yet), amber in part, red blocked, hollow turned off. A mark is no control: the site, and how far where it wasn't
+  // searched whole ("LaCuerda: up to C"), is its name for a screen reader, its detail its tooltip and its
+  // description, and the list's name says them all ("Searched Ultimate Guitar, LaCuerda (in part) and harptabs.com;
+  // MuseScore blocked").
+  const STATES = ["done", "partial", "empty", "blocked", "off"];
+  const SEARCHED = ["done", "partial", "empty"];
+  const stateOf = (s) => (STATES.indexOf(s.state) >= 0 ? s.state : "off");
+  const siteName = (s) => String(s.name || s.label || s.source || "");
+  const sitesOf = (looked) => listOf(looked).filter((x) => x && typeof x === "object");
+  const searchedIn = (sites) => sites.filter((s) => SEARCHED.indexOf(stateOf(s)) >= 0);
+  const inWords = (names) => (names.length > 1 ? names.slice(0, -1).join(", ") + " and " + names[names.length - 1]
+    : names.join(""));
+  const lookedSaid = (sites) => {
+    const searched = searchedIn(sites).map((s) => siteName(s) + (stateOf(s) === "partial" ? " (in part)" : ""));
+    const blocked = sites.filter((s) => stateOf(s) === "blocked").map(siteName);
+    const off = sites.filter((s) => stateOf(s) === "off").map(siteName);
+    return [searched.length ? "Searched " + inWords(searched) : "Searched nowhere",
+      blocked.length ? inWords(blocked) + " blocked" : "", off.length ? inWords(off) + " turned off" : ""]
+      .filter(Boolean).join("; ");
+  };
+  const lookedMarks = (looked) => {
+    const sites = sitesOf(looked);
     const list = el("ul", "looked");
-    list.setAttribute("aria-label", "Where caracole looked");
-    for (const s of listOf(looked).filter((x) => x && typeof x === "object")) {
-      const state = ["done", "partial", "empty", "blocked", "off"].indexOf(s.state) >= 0 ? s.state : "off";
-      const chip = el("li", "site-chip", String(s.label || s.name || ""));
-      chip.dataset.state = state;
-      chip.dataset.source = String(s.source || "");
-      if (s.detail) {
-        chip.title = String(s.detail);
-        chip.setAttribute("aria-description", String(s.detail));
+    list.setAttribute("aria-label", lookedSaid(sites));
+    for (const s of sites) {
+      const state = stateOf(s);
+      const item = el("li", "looked-mark");
+      item.dataset.state = state;
+      item.dataset.source = String(s.source || "");
+      const said = state === "done" ? siteName(s) : String(s.label || siteName(s));
+      const mark = sourceMark(String(s.source || "")) || el("span", "source letters", siteName(s).slice(0, 2).toUpperCase());
+      if (mark.tagName === "IMG") {
+        mark.setAttribute("alt", said);
+      } else {
+        mark.setAttribute("role", "img");
+        mark.setAttribute("aria-label", said);
       }
-      list.appendChild(chip);
+      mark.removeAttribute("title");  // the pill's, around it: its detail
+      if (s.detail) {
+        item.title = String(s.detail);
+        mark.setAttribute("aria-description", String(s.detail));
+      }
+      item.appendChild(mark);
+      list.appendChild(item);
     }
     return list;
   };
@@ -1068,7 +1102,7 @@ const caracoleRows = (icons, does) => {
     if (!u) return null;
     const name = String(u.name || "");
     const letter = String(u.letter || "");
-    const go = button(named ? "Ask LaCuerda for “" + name + "” (1 request)" : "Ask LaCuerda (1 request)",
+    const go = button(named ? "Ask LaCuerda for “" + name + "” (1 request)" : "Ask LaCuerda · 1 request",
       "small ask-lacuerda", (e) => ask(e.currentTarget, box),
       "Ask LaCuerda for “" + name + "”: one request");
     go.title = search
@@ -1079,39 +1113,69 @@ const caracoleRows = (icons, does) => {
         "at a lookup's pace.";
     return go;
   };
-  // A search that found nothing (``data``, for ``query``): one card, "Not it?" under the artists it may have meant
-  // (didYouMean, drawn above it), else "No song or artist matches “query”": its actions, the request by name first
-  // (``does.request``, labelled ``does.requestLabel``) and, while LaCuerda's listings don't reach the name, Ask
-  // LaCuerda (``does.ask(button, card)``, LaCuerda's search first while its gate, ``data.lacuerda_search``, lets one
-  // go); where caracole looked; and why it may not see an artist, folded.
+  // A search that found nothing on the sites (``data``, for ``query``), as a line of the list: a quiet band, "Not on
+  // the sites · searched 5" (the sites searched: whole, in part, or their index empty yet), over one line, the
+  // library page's (``does.dense``) or a row, the lookup page's: the query in its quotes, the marks of where caracole
+  // looked (lookedMarks), and where a song's Open sits, the request by name (``does.request``: "Request", else
+  // ``does.requestText``, named ``does.requestLabel``). Its chevron ("⋯" on a row) holds the rest: Ask LaCuerda while
+  // LaCuerda's listings don't reach the name (``does.ask(button, box)``, LaCuerda's search first while its gate,
+  // ``data.lacuerda_search``, lets one go), and why caracole may not see an artist, folded. ``does.unfolded``: its
+  // chevron open from the start (the same query drawn again, where it was open).
   const nothingFound = (data, query, does) => {
     const d = data && typeof data === "object" ? data : {};
-    const meant = listOf(d.suggest).some((s) => s && typeof s === "object" && s.artist);
-    const card = el("section", "nothing");
+    const sites = sitesOf(d.looked);
+    const box = el("section", "nothing");
+    box.dataset.query = String(query);
     rowSerial += 1;
-    const head = el("h2", "nothing-head", meant ? "Not it?" : "No song or artist matches “" + query + "”");
+    const head = el("h2", does.dense ? "miss-band" : "group miss-band", "Not on the sites");
     head.id = "nothing-" + rowSerial;
-    card.setAttribute("aria-labelledby", head.id);
-    const actions = el("div", "nothing-actions");
-    actions.appendChild(button(String(does.requestLabel || "Request “" + query + "” by name"), "small primary",
-      () => does.request()));
+    box.setAttribute("aria-labelledby", head.id);
+    if (sites.length) head.appendChild(el("span", "miss-count", " · searched " + searchedIn(sites).length));
+    const said = String(does.requestLabel || "Request “" + query + "” by name");
+    const request = button(String(does.requestText || "Request"), "small primary", () => does.request(), said);
+    request.title = said + ": the form, filled in from the search";
+    const rest = el("div", "row-group miss-more");
+    const actions = el("div", "actions");
     const ask = d.lacuerda_unlisted && does.ask
-      ? askLaCuerda(d.lacuerda_unlisted, does.ask, card, false, searchable(d.lacuerda_search) ? query : null) : null;
+      ? askLaCuerda(d.lacuerda_unlisted, does.ask, rest, false, searchable(d.lacuerda_search) ? query : null) : null;
     if (ask) actions.appendChild(ask);
-    card.append(head, actions, lookedChips(d.looked));
     const why = whyUnseen(d.unseen, query);
-    if (why) card.appendChild(why);
-    return card;
+    if (why) actions.appendChild(why);
+    rest.appendChild(actions);
+    const line = resultRow({ dense: Boolean(does.dense), title: "“" + query + "”", action: request,
+      more: actions.childNodes.length ? [rest] : [] });
+    line.classList.add("miss");
+    const marks = lookedMarks(sites);
+    if (does.dense) {
+      line.querySelector(".line-meta").appendChild(marks);
+    } else {  // a row's: beside the artist's column, where a row's facts are
+      const sub = el("div", "row-sub");
+      const meta = el("div", "row-meta");
+      meta.appendChild(marks);
+      sub.appendChild(meta);
+      line.insertBefore(sub, line.querySelector(".row-action"));
+    }
+    const more = does.unfolded ? line.querySelector(".line-more, .row-more") : null;
+    if (more) more.click();
+    const lines = el("div", does.dense ? "lines" : "rows");
+    lines.appendChild(line);
+    box.append(head, lines);
+    return box;
   };
-  // Under results: where caracole looked, in one muted line, when a site wasn't searched whole; Ask LaCuerda while its
-  // listings don't reach the name; the fold for an artist the index may not see. None when all went well: null.
+  // Under results: where caracole looked, in one muted line, "Searched" and the same marks, when a site wasn't searched
+  // whole; Ask LaCuerda while its listings don't reach the name; the fold for an artist the index may not see. None
+  // when all went well: null.
   const lookedLine = (data, query, does) => {
     const d = data && typeof data === "object" ? data : {};
-    const looked = listOf(d.looked).filter((x) => x && typeof x === "object");
+    const looked = sitesOf(d.looked);
     const ask = Boolean(d.lacuerda_unlisted && does.ask);
     if (!ask && !d.unseen && looked.every((s) => s.state === "done")) return null;
     const line = el("div", "looked-line");
-    line.appendChild(lookedChips(looked));
+    const where = el("div", "looked-where");
+    const word = el("span", "looked-said", "Searched");
+    word.setAttribute("aria-hidden", "true");  // the marks' list says it
+    where.append(word, lookedMarks(looked));
+    line.appendChild(where);
     if (ask) {
       line.appendChild(askLaCuerda(d.lacuerda_unlisted, does.ask, line, true,
         searchable(d.lacuerda_search) ? query : null));
@@ -1123,5 +1187,5 @@ const caracoleRows = (icons, does) => {
   return { resultRow, sourceMark, glyph, link, safeHref, titleLink, artistFilter, artistSearch, artistOnly, button, many,
     counts, opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
-    didYouMean, lookedChips, nothingFound, lookedLine };
+    songsOn, didYouMean, lookedMarks, nothingFound, lookedLine };
 };
