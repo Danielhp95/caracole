@@ -102,6 +102,8 @@ def _sheet_lines(cho: str) -> list[list[tuple[str, frozenset[int] | None]]]:
 
 
 def _first_note(group) -> int | None:
+    if not group.holes:  # what the tab's notation couldn't read
+        return None
     hole = group.holes[0]
     return None if hole.button else harp.hole_note(0, hole.hole, hole.breath, hole.bend, hole.over)
 
