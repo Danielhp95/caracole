@@ -139,11 +139,16 @@ def test_another_notation_says_how_it_was_read_and_its_source_is_what_changes_it
 
 
 def test_a_tab_shown_as_written_can_still_be_read_another_way():
-    html = page(KNOCKIN)
+    # Bare blows and one "(5)": the Spanish brackets read it a hair better than harptabs.com's signs, by under the
+    # margin an unusual notation needs, so caracole shows it as written; a pin reads it, the score never asked
+    thin = " ".join(["4 5 6"] * 14) + " (5)\n"
+    html = page(thin)
     assert '<pre class="tab">' in html and 'id="reading-foot" hidden' in html
-    read = page(KNOCKIN, pin="brackets")  # a pin is read as it says, the score never asked
-    assert data_of(read)["reading"] == {"name": "brackets", "source": "pinned", "q": 0.63, "margin": 0.63,
-                                        "said": "4 blow · (4) draw · - joins"}
+    read = page(thin, pin="brackets")
+    assert '<pre class="tab">' not in read and len(data_of(read)["groups"]) == 43
+    assert data_of(read)["reading"] == {"name": "brackets", "source": "pinned", "q": 1.0, "margin": 1.0,
+                                        "said": "4 blow · (4) draw"}
+    assert text_of(read, "legend") == "Read as: 4 blow · (4) draw, as you set it"
 
 
 def test_spokey_dokey_says_it_was_read_by_its_own_legend():
