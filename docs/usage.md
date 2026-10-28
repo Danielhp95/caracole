@@ -2865,35 +2865,6 @@ the library page link it, the tab's text beside it.
   Either way the song's pages are made again. A reading you set is drawn even
   where caracole would show the tab as written (each line it reads with little
   confidence still is), as yours.
-
-#### caracole harmonica
-
-`caracole harmonica "ARTIST - TITLE"` says how each of the song's harmonica
-tabs is read and the readings caracole weighs, best first, each by what you
-would write to read it so. It only reads: no wait for another caracole.
-
-    $ caracole harmonica "Cowboy Bebop - Spokey Dokey"
-    harmonica-1.txt: read as b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the tab's own legend (Q 0.96)
-      legend       Q 0.96  b blow · d draw · * bend · - joins · (h) hold · (w) wah
-      letters      Q 0.86  b blow · d draw · * bend · - joins
-      brackets     Q 0.29  4 blow · b bend · - joins
-      …
-
-- `--as NOTATION` reads the tab so, whatever caracole guesses: `signs`
-  (harptabs.com's), `brackets`, `letters`, `signs after`, `barrett`, or
-  `legend` (the tab's own; a tab with none is refused). `--symbol
-  SYMBOL=MEANING` (repeatable) reads one of the notation's symbols another
-  way: `--as signs --symbol "*=bend"`. A meaning is one of blow, draw, bend,
-  double bend, triple bend, overblow, slide, joins, together, hold, wah,
-  vibrato, shake, trill, glissando, staccato or mark; a "4" in the symbol
-  stands for its hole where you say where it is written ("(4)=draw", "4=blow").
-- `--clear` takes the tab's entry out: caracole guesses again.
-- `--tab harmonica-2.txt` names the tab, for a song that keeps more than one.
-
-`--as` and `--clear` write overrides.toml under caracole's lock, waiting for
-it as a lookup does, then make the song's pages again. A tab the song hasn't
-got, a notation caracole doesn't know, or both options at once exit 2 and
-write nothing.
 - **The harp**, in the header and the bar. A tab's holes are the same on any
   harp, and sound in its key: caracole starts on the harp that plays with the
   record, the one that puts the most of the tab's sung notes on the chords the
@@ -2930,6 +2901,35 @@ write nothing.
 
 The page keeps the harp, Notes, the text size and the scroll speed in its
 address too (`harmonica-1.html#harp=A&notes=1&fs=20`).
+
+#### caracole harmonica
+
+`caracole harmonica "ARTIST - TITLE"` says how each of the song's harmonica
+tabs is read and the readings caracole weighs, best first, each by what you
+would write to read it so. It only reads: no wait for another caracole.
+
+    $ caracole harmonica "Cowboy Bebop - Spokey Dokey"
+    harmonica-1.txt: read as b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the tab's own legend (Q 0.96)
+      legend       Q 0.96  b blow · d draw · * bend · - joins · (h) hold · (w) wah
+      letters      Q 0.86  b blow · d draw · * bend · - joins
+      brackets     Q 0.29  4 blow · b bend · - joins
+      …
+
+- `--as NOTATION` reads the tab so, whatever caracole guesses: `signs`
+  (harptabs.com's), `brackets`, `letters`, `signs after`, `barrett`, or
+  `legend` (the tab's own; a tab with none is refused). `--symbol
+  SYMBOL=MEANING` (repeatable) reads one of the notation's symbols another
+  way: `--as signs --symbol "*=bend"`. A meaning is one of blow, draw, bend,
+  double bend, triple bend, overblow, slide, joins, together, hold, wah,
+  vibrato, shake, trill, glissando, staccato or mark; a "4" in the symbol
+  stands for its hole where you say where it is written ("(4)=draw", "4=blow").
+- `--clear` takes the tab's entry out: caracole guesses again.
+- `--tab harmonica-2.txt` names the tab, for a song that keeps more than one.
+
+`--as` and `--clear` write overrides.toml under caracole's lock, waiting for
+it as a lookup does, then make the song's pages again. A tab the song hasn't
+got, a notation caracole doesn't know, or both options at once exit 2 and
+write nothing.
 
 ### Where each file came from
 
