@@ -48,6 +48,10 @@ def spelled(stem: str):
     return parse((SPELLINGS / f"{stem}.txt").read_text(encoding="utf-8"))
 
 
+def labels(read) -> list[str]:
+    return [g.label() for r in read.rows() for g in r.groups]
+
+
 def sung(stem: str) -> list[Row]:
     return [r for r in tab(stem).rows() if r.lyric is not None]
 
@@ -201,6 +205,20 @@ def test_if_i_die_young_bends_each_draw_it_marks_with_a_double_quote_a_whole_ste
     assert bent == [Hole(3, "draw", 2)] * text.count("”") and len(bent) == 26  # -3”: −3′′, never −3
 
 
+def test_whole_lotta_love_bends_a_draw_with_a_b_between_the_sign_and_the_hole():
+    read = spelled("2136_whole-lotta-love")
+    assert labels(read).count("−3′") == 7  # -b3 (5) and b-3 (2)
+    assert "3′" not in labels(read)  # never a blow bent, a note no harp has
+
+
+def test_en_el_pais_de_la_libertad_bends_a_draw_written_in_brackets():
+    read = spelled("4765_en-el-pais-de-la-libertad")
+    assert read.convention == "parens"
+    first = read.rows()[0]  # 4 ---> 6 ...... 6 5 (4) - 5 (4) 4 (3)b (3)b 3
+    assert [g.label() for g in first.groups] == ["4", "6", "6", "5", "−4", "5", "−4", "4", "−3′", "−3′", "3"]
+    assert [g.text for g in first.groups][-3:] == ["(3)b", "(3)b", "3"] and first.unknown == ["-"]
+
+
 # --- the notation ----------------------------------------------------------------------------------------------
 
 
@@ -230,6 +248,23 @@ def test_what_no_spelling_reads_is_unknown_never_dropped():
     found = scan('4 " 5 - 6 ( 7 .')
     assert [g.label() for g in found.groups] == ["4", "5", "6", "7"]
     assert found.unknown == ('"', "-", "(", ".") and found.coverage == 0.5
+
+
+def test_a_bend_written_between_the_sign_and_the_hole():
+    # Whole Lotta Love's "-b3": the draw bent, as "-3b" and "b-3" are
+    found = scan("-3-b3 3 -bb2 b-3 -3b")
+    assert [g.label() for g in found.groups] == ["−3", "−3′", "3", "−2′′", "−3′", "−3′"]
+    assert found.unknown == ()
+
+
+def test_a_bend_after_a_lone_hole_in_brackets_bends_the_hole():
+    # "(3)b": the draw of a tab that writes a draw in brackets, bent; "(3)'" and "(3)bb" as the hole's own marks are
+    found = scan("(3)b (3)' (4) (3)bb", parens_draw=True)
+    assert [g.label() for g in found.groups] == ["−3′", "−3′", "−4", "−3′′"]
+    assert found.unknown == () and found.groups[0].text == "(3)b"
+    assert scan("(-3)b 4").groups[0].label() == "−3′"
+    assert scan("(4 5)b").unknown == ("b",)  # holes together: no bend of theirs
+    assert scan("(3)tue", parens_draw=True).unknown == ("tue",)  # a word after it, no bend
 
 
 def test_holes_together():

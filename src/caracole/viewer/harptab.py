@@ -6,9 +6,10 @@ sung under it, the syllable each hole is blown on, and the words around them. Th
 
 - a hole: ``4`` or ``+4`` blow, ``-4`` (``−4``, ``–4``) draw; ``4B`` blow and ``4D`` draw (a suffix, upper case);
   a bend after it, ``'`` ``''`` ``'''`` or ``b`` ``bb`` ``bbb`` (``-3'``, ``-3bb``), ``"`` or ``”`` two (``-3"``,
-  as ``-3''``), or before it (``b-3``); an overblow or an overdraw ``o`` (``6o``, ``-7o``); a chromatic's slide
-  pressed in, ``<`` or ``*``. In a tab that writes no ``-`` anywhere and puts single holes in brackets, ``(5)`` is a
-  draw (the Spanish tabs' "aspirar"); anywhere else ``(-4)`` and ``(4)`` are the hole;
+  as ``-3''``), before it (``b-3``) or between its sign and it (``-b3``), after its brackets (``(3)b``); an
+  overblow or an overdraw ``o`` (``6o``, ``-7o``); a chromatic's slide pressed in, ``<`` or ``*``. In a tab that
+  writes no ``-`` anywhere and puts single holes in brackets, ``(5)`` is a draw (the Spanish tabs' "aspirar");
+  anywhere else ``(-4)`` and ``(4)`` are the hole;
 - holes together: ``(4 5 6)`` or ``(456)`` a chord, ``{-4 -5}`` a head shake, ``[-2 -5]`` a tongue split, ``7,8B``
   holes 7 and 8 blown;
 - what a line of holes holds besides: holds (``----``, ``....``, ``___``, ``(hold)``), bars, ``~``, repeat marks
@@ -61,14 +62,16 @@ _HOLE = re.compile(r"""
     (?P<pb>b{1,3}(?=[-+−–]?\d))?          # a bend written before the hole: b-3
     (?P<btn><)?                          # a chromatic's slide, before
     (?P<sign>[-+−–])?
+    (?P<sb>b{1,3}(?=\d))?                # a bend between the sign and the hole: -b3 (Whole Lotta Love's)
     (?P<num>10|[1-9])
     (?P<bd>[BD](?![A-Za-z]))?            # 4B blow, 5D draw
     (?P<bend>BEND{1,3})?                 # -3' -3'' -3b -3bbb -3" (a b, not a word's start)
     (?P<ob>o(?![a-z]))?                  # 6o: an overblow, an overdraw on 7 to 10
     (?P<btn2>[<*](?!\S*[a-z]))?          # 4< 4*: the slide
 """.replace("BEND", _BEND), re.X)
-_INNER = r"(?:b{1,3})?<?[-+−–]?(?:10|[1-9])[BD]?(?:'|’|`|\"|”|b){0,3}o?[<*]?"
+_INNER = r"(?:b{1,3})?<?[-+−–]?(?:b{1,3})?(?:10|[1-9])[BD]?(?:'|’|`|\"|”|b){0,3}o?[<*]?"
 _GROUP = re.compile(r"(?P<open>[(\[{])\s*(?P<body>" + _INNER + r"(?:[\s,]*" + _INNER + r")*)\s*(?P<close>[)\]}])")
+_BENT = re.compile(_BEND + "{1,3}")  # (3)b (3)' (3)": a bend after a lone hole in brackets, the hole's
 _COMMA_CHORD = re.compile(r"(?P<body>(?:10|[1-9])(?:,(?:10|[1-9]))+)(?P<bd>[BD])")
 _DECOR = re.compile(r"-{2,}|_+|\.{2,}|~+|\|+|\^|\*|,|;|/|\\|:|\(x\s?\d+\)|x\s?\d+\b|\(\d+x\)|\b\d+x\b|\(hold\)|hold\b|>|=",
                     re.I)
@@ -225,7 +228,7 @@ def _bends(marks: str | None) -> int:
 def _hole(m: re.Match, *, parens_draw: bool = False) -> Hole:
     sign, suffix = m.group("sign"), m.group("bd")
     breath = "draw" if (sign and sign in _DRAW_SIGNS) or suffix == "D" or parens_draw else "blow"
-    bend = _bends(m.group("bend")) + len(m.group("pb") or "")
+    bend = _bends(m.group("bend")) + len(m.group("pb") or "") + len(m.group("sb") or "")
     return Hole(int(m.group("num")), breath, min(bend, 3), bool(m.group("ob")), bool(m.group("btn") or m.group("btn2")))
 
 
@@ -255,12 +258,16 @@ def scan(line: str, *, parens_draw: bool = False) -> Scan:
             continue
         kind = {"(": "chord", "{": "shake", "[": "split"}[m.group("open")]
         digit = m.start("body") + inner[0].start("num")
+        end = m.end()
         if len(inner) == 1 and kind == "chord":  # (5): a draw where the tab writes no sign; (-4): the hole
             hole = _hole(inner[0], parens_draw=parens_draw and not inner[0].group("sign"))
-            groups.append(Group((hole,), "note", m.start(), digit, m.group(0)))
+            if bent := _BENT.match(text, end):  # (3)b (3)': a bend after the brackets, the hole's
+                hole = Hole(hole.hole, hole.breath, min(hole.bend + _bends(bent.group(0)), 3), hole.over, hole.button)
+                end = bent.end()
+            groups.append(Group((hole,), "note", m.start(), digit, text[m.start():end]))
         else:
             groups.append(Group(tuple(_hole(i) for i in inner), kind, m.start(), digit, m.group(0)))
-        mark(m.start(), m.end())
+        mark(m.start(), end)
     for m in _COMMA_CHORD.finditer(text):
         if any(covered[m.start():m.end()]):
             continue
