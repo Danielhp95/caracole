@@ -389,7 +389,7 @@ def test_spokey_dokey_says_how_it_was_read_and_keeps_what_it_couldnt_read_in_pla
         # the $ of 4d-$-5d, between draw 4 and draw 5, on their line, seen
         around = b.js("""(() => {
           const u = [...document.querySelectorAll('#sheet .u')].find((x) => x.textContent === '$');
-          const line = u.closest('p'), parts = [...line.children].filter((e) => !e.classList.contains('rp'));
+          const line = u.closest('p'), parts = [...line.querySelectorAll('.h, .u, .jn')];
           const at = parts.indexOf(u), r = u.getBoundingClientRect();
           return [parts[at - 2].textContent, parts[at - 1].textContent, parts[at + 1].textContent,
                   parts[at + 2].textContent, r.width > 0 && r.height > 0];
@@ -403,7 +403,8 @@ def test_spokey_dokey_says_how_it_was_read_and_keeps_what_it_couldnt_read_in_pla
     assert Counter(unread) == Counter({"3": 4, "$": 2, "(DV)": 1})
     assert around == ["−4", "‿", "‿", "−5", True]
     assert wahs == ["wah"] * 11
-    assert named == "Bb4" and wahs_with_notes == wahs and unread_with_notes == unread  # Notes keeps them
+    # 3*d, draw 3 bent a semitone, on the page's D harp: C5; Notes keeps the effects and what it couldn't read
+    assert named == "C5" and wahs_with_notes == wahs and unread_with_notes == unread
     assert wide[0] <= wide[1]
 
 

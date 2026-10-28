@@ -8,7 +8,10 @@
   //   data.holes[harp].blow[hole - 1][bend], .draw[…][bend]   the note a hole sounds, bent or not (null past its bends)
   //   data.holes[harp].over[hole - 1]                         [the breath its overblow takes, its note]
   //   data.names[harp][pitch class]                           the note's name, as the harp's key spells it
+  //   data.groups[i][2].fx                                    a group's effects ("wah"), drawn on it as labels
   //
+  // What a row's notation couldn't read ("$") is the page's text beside the groups, never redrawn: drawGroup draws
+  // a group's holes and effects alone.
   // Where the page is (the harp, Notes, the text size, the scroll's speed) is kept in the address (#harp=A&notes=1)
   // and, where the browser keeps anything, for this page. Every element is made with createElement and textContent;
   // nothing is loaded, and nothing sounds but on a tap.
@@ -140,7 +143,9 @@
   const notesOf = (i) => (groups[i] ? groups[i][1].map(noteOf).filter((n) => n !== null) : []);
   const BRACKETS = { chord: ["(", ")"], shake: ["{", "}"], split: ["[", "]"] };
   const holeEls = Array.from(document.querySelectorAll("#sheet .h[data-i]"));
-  // A group drawn again: its holes, or with Notes their notes on the harp chosen ("?" for one it can't play).
+  // A group drawn again: its holes, or with Notes their notes on the harp chosen ("?" for one it can't play), then
+  // its effects, each a small label.
+  const effectsOf = (g) => (g[2] && Array.isArray(g[2].fx) ? g[2].fx.filter((e) => typeof e === "string") : []);
   const drawGroup = (node) => {
     const g = groups[Number(node.dataset.i)];
     if (!g) return;
@@ -166,7 +171,9 @@
         + ", " + (n === null ? "not on this harp" : nameOf(n) + (Math.floor(n / 12) - 1)));
     });
     if (close) node.append(close);
-    node.setAttribute("aria-label", said.join(" and "));
+    const effects = effectsOf(g);
+    effects.forEach((e) => node.appendChild(el("small", "fx", e)));
+    node.setAttribute("aria-label", said.join(" and ") + effects.map((e) => ", " + e).join(""));
     node.classList.toggle("off", g[1].every((h) => noteOf(h) === null));
   };
   const drawHarp = () => {

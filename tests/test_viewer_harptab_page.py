@@ -151,7 +151,8 @@ def test_what_the_tab_couldnt_read_is_shown_in_place_as_written():
     seventh = unescape(re.sub(r"<[^>]+>", "", rows[6]))
     assert seventh.startswith("−3′‿−3 3 2 3 −3′‿−3 4 −4‿$‿−5 −4‿$‿−5 4‿5 4‿5")
     assert '<span class="u">$</span>' in rows[6] and '<span class="u">(DV)</span>' in html
-    assert re.search(r'<span class="u">3</span><span class="jn" aria-hidden="true">‿</span><b class="h"', rows[1])
+    assert re.search(r'<span class="cell"><span class="u">3</span><span class="jn" aria-hidden="true">‿</span></span>'
+                     r'<span class="cell"><b class="h"', rows[1])  # each with its tie, which a line never parts
     # an effect a label on its hole, a hold the page's own
     assert '<small class="fx">wah</small></b>' in html and '<span class="hold" aria-hidden="true">…</span>' in html
     assert 'aria-label="draw 3 bent 1, wah"' in html

@@ -335,6 +335,12 @@ class Reading:
 
     def said(self) -> str:
         """The symbols the tab was read by, as it writes them: "b blow · d draw · * bend · (w) wah"."""
+        return " · ".join(f"{text} {word}" for text, word in self.symbols())
+
+    def symbols(self) -> list[tuple[str, str]]:
+        """The symbols the tab was read by, each as it writes it most, and what it means in words: ``("b",
+        "blow")``, ``("' or b", "bend")``, ``("4", "blow")`` for a hole written alone, ``("(4)", "draw")`` for one in
+        brackets."""
         return said(Counter(dict(self.used)))
 
 
@@ -910,9 +916,9 @@ _SAY = {"over": "overblow", "join": "joins"}
 _ORDER = ("bare", "before", "around", "after", "between")
 
 
-def said(used: Counter) -> str:
-    """The symbols ``used`` (``Scan.used``'s), in words, each as the tab writes it most: "4 blow · - draw · ' or b
-    bend · (w) wah"."""
+def said(used: Counter) -> list[tuple[str, str]]:
+    """The symbols ``used`` (``Scan.used``'s), each as the tab writes it most, and what it means in words:
+    ``[("4", "blow"), ("-", "draw"), ("' or b", "bend"), ("(w)", "wah")]``."""
     entries: dict[tuple[str, str, int], Counter] = {}
     for (text, means, at, count), times in used.items():
         if means != "mark":
@@ -934,8 +940,8 @@ def said(used: Counter) -> str:
         word = (("bend", "double bend", "triple bend")[min(count, 3) - 1] if means == "bend"
                 else _SAY.get(means, means))
         text = "4" if at == "bare" else "(4)" if shown == ["()"] else " or ".join(shown)
-        out.append(f"{text} {word}")
-    return " · ".join(out)
+        out.append((text, word))
+    return out
 
 
 # --- the tab --------------------------------------------------------------------------------------------------

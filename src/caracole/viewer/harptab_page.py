@@ -7,7 +7,11 @@ their hashes, and served in a sandbox (``page.viewer_csp``). The tab is read by 
 on, as a chord sits over its syllable on sheet.html (page.py's ``.s`` and ``.w`` columns: a line wraps between its
 words, never parting a hole from its syllable), a blow in the accent colour, a draw in blue with its "−", a bend's
 ″ in purple, holes together in their brackets; rows played alone, words sung to the same tune and the tabber's notes
-as they come. A tab harptab.py can't read (``Tab.readable``) is its text as written, in the page's style, and its
+as they come. What a row's notation couldn't read is shown in its place as written, muted ("$", "(DV)"); an effect
+is a small label on its hole ("wah"), notes run together a ‿ between them, the tab's own legend a block of its own,
+and a row read with low confidence (``Row.trusted``) its text as written. The header says how the tab was read: the
+symbols it used, as it writes them, and whether its own legend said so or caracole guessed, how surely (harptab.py's
+``Reading``). A tab harptab.py can't read (``Tab.readable``) is its text as written, in the page's style, and its
 page says so; never an error.
 
 The header names the harp the page starts on and why (harpfit.py ``choose``: with the record, as the tab says,
@@ -37,9 +41,13 @@ holds every answer, made here:
 - ``holes``: each harp's every note (harp.py ``hole_tables``: ``blow[i]``, ``draw[i]``, its note then its bends;
   ``over[i]``, its overblow's breath and note), and ``names``, each harp's names of the 12 pitch classes
   (``theory.spelling`` of its major key);
-- ``groups``: each group of holes on the page, by its ``data-i``: ``[kind, [[hole, "b" or "d", bend, over], ...]]``;
-  ``rows``: each row's groups, by its ▶'s ``data-row``; ``bpm``, a hole a beat when a line plays. A tab shown as
-  written has no ``groups`` and no ``rows``;
+- ``groups``: each group of holes on the page, by its ``data-i``: ``[kind, [[hole, "b" or "d", bend, over], ...]]``,
+  and where it has more, a third entry: ``{"fx": ["wah"], "join": 1}``, its effects (which the script draws again on
+  it) and whether it runs into the next; ``rows``: each drawn row's groups, by its ▶'s ``data-row``; ``bpm``, a hole a
+  beat when a line plays. A tab shown as written has no ``groups`` and no ``rows``. What a row couldn't read is the
+  page's text alone, never in the data;
+- ``reading``: how the tab was read (harptab.py ``Reading``): the notation's ``name``, its ``source`` ("legend",
+  "guessed", "pinned"), its ``q`` and ``margin``, and ``said``, its symbols in words;
 - ``overlay``: what the overlay draws (``_overlay``), as overlay.js's ``rail`` takes it: ``guitar``, the Guitar tab
   (the sheet's chords as written, each with its positions, ``instruments.chord_shapes``, and the key's neck), or null
   for a song with no sheet; ``harp``, the Harmonica tab: with the sheet's key, the key as it sounds (``key``,
@@ -59,7 +67,7 @@ from urllib.parse import quote
 from caracole.inline import json_block
 from caracole.viewer import harmony, harp, harpfit
 from caracole.viewer.harmony_tables import page_name
-from caracole.viewer.harptab import Gap, Group, Hole, Prose, Row, Section, Tab, Words, parse
+from caracole.viewer.harptab import Gap, Group, Hole, Legend, Prose, Row, Section, Tab, Words, parse
 from caracole.viewer.instruments import GUITAR, chord_shapes
 from caracole.viewer.page import (
     HERE,
@@ -85,6 +93,8 @@ SITE = "https://www.harptabs.com/"
 _SAID = {"record": "with the record", "tab": "as the tab says", "page": "harptabs.com's key",
          "song": "for the song's key", "usual": ""}
 _BRACKETS = {"note": ("", ""), "chord": ("(", ")"), "shake": ("{", "}"), "split": ("[", "]")}
+_JOIN = '<span class="jn" aria-hidden="true">‿</span>'  # notes run together: 3*d-3d
+_SOURCE = {"legend": "from the tab's own legend", "pinned": "as you set it"}
 _PLAY_ICON = ('<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2.4v11.2c0 .6.7 1 1.2.6l8.8-5.6a.7.7 0 0 0 '
               '0-1.2L5.7 1.8c-.5-.4-1.2 0-1.2.6z"/></svg>')
 
@@ -132,7 +142,7 @@ def build_harmonica_viewer(
         + '<div class="page">\n'
         + head
         + article
-        + _footer(tab_file, url, placed=tab.readable)
+        + _footer(tab_file, url, placed=tab.readable and any(r.trusted and r.lyric for r in tab.rows()))
         + "</div>\n"
         + (_BAR if tab.readable else _BAR_RAW)
         + _PILL
@@ -158,6 +168,8 @@ def _data(tab: Tab, choice: harpfit.Choice) -> dict[str, Any]:
         "names": [spelling(Key(h, "ionian")) for h in range(12)],
         "holes": harp.hole_tables(),
         "bpm": BPM,
+        "reading": {"name": tab.reading.notation.name, "source": tab.reading.source, "q": round(tab.reading.q, 2),
+                    "margin": round(tab.reading.margin, 2), "said": tab.reading.said()},
     }
     if tab.readable:
         data["groups"] = []
@@ -246,7 +258,7 @@ def _header(title: str, artist: str, tab: Tab, choice: harpfit.Choice, facts: Ma
         + artist_line(artist, names)
         + (_harp_lines(choice) if tab.readable else
            '<p class="facts" id="facts">Harmonica tab, as its tabber wrote it: caracole can\'t read its notation.</p>\n')
-        + (_legend(facts) if tab.readable else "")
+        + (_read_as(tab, facts) if tab.readable else "")
         + "</header>\n"
     )
 
@@ -271,8 +283,9 @@ def _harp_lines(choice: harpfit.Choice) -> str:
     return html
 
 
-def _legend(facts: Mapping[str, Any]) -> str:
-    """How to read the holes, and what harptabs.com says of the tab: its difficulty, its views, its rating."""
+def _read_as(tab: Tab, facts: Mapping[str, Any]) -> str:
+    """How the tab was read (its symbols as it writes them, and whether its own legend said so or caracole guessed,
+    how surely), and what harptabs.com says of the tab: its difficulty, its views, its rating."""
     said = []
     if isinstance(facts.get("difficulty"), str) and facts["difficulty"].strip():
         said.append(escape(facts["difficulty"].strip()))
@@ -283,12 +296,12 @@ def _legend(facts: Mapping[str, Any]) -> str:
     rating = facts.get("rating")
     if isinstance(rating, (int, float)) and not isinstance(rating, bool) and rating > 0:
         said.append(f"{rating:.1f}★")
-    return ('<p class="legend" aria-label="How to read the holes">'
-            '<span class="h"><span class="b">4</span></span> blow '
-            '<span class="h"><span class="d"><span class="sg">−</span>4</span></span> draw '
-            '<span class="h"><span class="d"><span class="sg">−</span>3<span class="bd">′</span></span></span> bent '
-            '<span class="h">(<span class="b">4</span> <span class="b">5</span>)</span> together'
+    reading = tab.reading
+    symbols = " · ".join(f'<code class="sy">{escape(text)}</code> {escape(word)}' for text, word in reading.symbols())
+    source = _SOURCE.get(reading.source, f"guessed ({reading.q:.2f})")
+    return (f'<p class="legend" aria-label="How the tab was read">Read as: {symbols}, {escape(source)}'
             + (" · " + " · ".join(said) if said else "") + "</p>\n")
+
 
 
 # --- the tab -----------------------------------------------------------------------------------------------------
@@ -325,7 +338,10 @@ def _section_html(n: int, section: Section, data: dict[str, Any]) -> str:
         out.append(f'<h2 class="lbl">{escape(section.label)}</h2>')
     for item in section.items:
         if isinstance(item, Row):
-            out.append(_row_html(item, data))
+            out.append(_row_html(item, data) if item.trusted else _written_html(item))
+        elif isinstance(item, Legend):
+            out.append('<div class="tab-legend"><p class="lgh">The tab\'s legend</p>'
+                       + "".join(f'<p class="l">{escape(line.strip())}</p>' for line in item.lines) + "</div>")
         elif isinstance(item, Words):
             out += [f'<p class="l words">{escape(line.strip())}</p>' for line in item.lines if line.strip()]
         elif isinstance(item, Prose):
@@ -336,18 +352,24 @@ def _section_html(n: int, section: Section, data: dict[str, Any]) -> str:
     return "\n".join(out)
 
 
+def _written_html(row: Row) -> str:
+    """A row read with low confidence: its line as written, and its words under it, in the tab's own columns."""
+    lines = [row.text.rstrip()] + ([row.lyric.rstrip()] if row.lyric is not None else [])
+    return f'<pre class="tab asw">{escape(chr(10).join(lines))}</pre>'
+
+
 def _row_html(row: Row, data: dict[str, Any]) -> str:
     first = len(data["groups"])
     if row.lyric is None:
         lead = f'<i class="m">{escape(row.label)}</i> ' if row.label else ""
-        cells = " ".join(_group_html(g, data) for g in row.groups)
+        cells = _cells(row.groups, data, " ")
         line = f'<p class="l holes">{lead}{cells}'
     else:
         out = []
         for groups, text in row.parts:
             words = _words(text)
             if groups:
-                top = '<span class="hg">' + "".join(_group_html(g, data) for g in groups) + "</span>"
+                top = '<span class="hg">' + _cells(groups, data, "") + "</span>"
                 lead = escape(words.pop(0)) if words else ""
                 out.append(f'<span class="s">{top}<span class="y">{lead}</span></span>')
             out += [f'<span class="w">{escape(w)}</span>' for w in words]
@@ -357,16 +379,37 @@ def _row_html(row: Row, data: dict[str, Any]) -> str:
             f'aria-label="Play this line" aria-pressed="false">{_PLAY_ICON}</button></p>')
 
 
+def _cells(groups: list[Group], data: dict[str, Any], space: str) -> str:
+    """A row's groups in their order, ``space`` between two, none between two run together; in a row played alone,
+    each a cell with its hold and its tie, which a line never parts."""
+    out = ""
+    for n, group in enumerate(groups):
+        if n and not groups[n - 1].join:
+            out += space
+        cell = _group_html(group, data) + (_JOIN if group.join and n + 1 < len(groups) else "")
+        out += f'<span class="cell">{cell}</span>' if space else cell
+    return out
+
+
 def _group_html(group: Group, data: dict[str, Any]) -> str:
     """A group of holes as the page shows it before its script runs, which draws it again as the harp and Notes
-    ask; ``data-i``, its place in the data's ``groups``."""
+    ask; ``data-i``, its place in the data's ``groups``. What the notation couldn't read is its text, as written."""
+    if group.kind == "unread":
+        return f'<span class="u">{escape(group.text)}</span>'
     i = len(data["groups"])
-    data["groups"].append([group.kind, [[h.hole, h.breath[0], h.bend, int(h.over)] for h in group.holes]])
+    more: dict[str, Any] = {}
+    if group.effects:
+        more["fx"] = list(group.effects)
+    if group.join:
+        more["join"] = 1
+    data["groups"].append([group.kind, [[h.hole, h.breath[0], h.bend, int(h.over)] for h in group.holes]]
+                          + ([more] if more else []))
     a, b = _BRACKETS[group.kind]
     inner = " ".join(_hole_html(h) for h in group.holes)
+    effects = "".join(f'<small class="fx">{escape(e)}</small>' for e in group.effects)
     held = '<span class="hold" aria-hidden="true">…</span>' if group.hold else ""
     return (f'<b class="h" data-i="{i}" tabindex="0" role="button" aria-label="{escape(_said(group))}">'
-            f"{a}{inner}{b}</b>{held}")
+            f"{a}{inner}{b}{effects}</b>{held}")
 
 
 def _hole_html(hole: Hole) -> str:
@@ -377,9 +420,10 @@ def _hole_html(hole: Hole) -> str:
 
 
 def _said(group: Group) -> str:
-    """A group in words, for a screen reader: "draw 3 bent 1", "blow 4 and blow 5"."""
-    return " and ".join(f"{h.breath} {h.hole}" + (f" bent {h.bend}" if h.bend else "")
-                        + (" overblown" if h.over else "") for h in group.holes)
+    """A group in words, for a screen reader: "draw 3 bent 1", "blow 4 and blow 5", "draw 1, wah"."""
+    return (" and ".join(f"{h.breath} {h.hole}" + (f" bent {h.bend}" if h.bend else "")
+                         + (" overblown" if h.over else "") for h in group.holes)
+            + "".join(f", {e}" for e in group.effects))
 
 
 # --- the foot and the bar ----------------------------------------------------------------------------------------

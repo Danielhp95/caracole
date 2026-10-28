@@ -14,13 +14,23 @@
 .h .bd { color: var(--pull); font-weight: 800; }
 .h small { font-size: .7em; font-weight: 600; opacity: .8; }
 .h.off { opacity: .45; }  /* a hole the harp chosen can't play: a bend deeper than it goes, say */
+/* An effect on its hole ("wah"), small, after it; notes run together, a tie between them; what the tab's notation
+   couldn't read, as written, muted and underlined in dots, in its place. */
+.h .fx { margin-left: .18em; color: var(--muted); font-size: .58em; font-weight: 650; letter-spacing: .02em;
+  vertical-align: .55em; }
+.jn { color: var(--muted); font-weight: 400; }
+.u { color: var(--muted); font-weight: 400; text-decoration: underline dotted; text-underline-offset: .2em;
+  overflow-wrap: anywhere; }
+.hg > .u:not(:first-child), .hg > .u + .h { margin-left: .32em; }
+.hg > .jn + .u { margin-left: 0; }
 .h.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 @media (hover: hover) { .h:hover { background: var(--accent-soft); } }
 .hold { color: var(--muted); font-size: .8em; margin-left: .1em; }
 /* A row played alone: its holes in a line that wraps between them. */
 .l.holes { line-height: 1.9; }
-.l.holes .h { font-size: 1em; margin-right: .5em; }
-.l.holes .h + .h { margin-left: 0; }
+.l.holes .h { font-size: 1em; }
+.l.holes .cell { display: inline-block; margin-right: .5em; white-space: nowrap; }
+.l.holes .cell:has(> .jn) { margin-right: 0; }
 .l.words { color: var(--text); }
 .note { margin: .3em 0; color: var(--muted); font-size: .78em; font-style: italic; overflow-wrap: anywhere; }
 /* ▶ at a line's end: the line played hole by hole, pressed while it plays. */
@@ -33,10 +43,15 @@ html:not([data-ready]) .rp { display: none; }
 .l.hl .rp { margin-bottom: 1px; }
 .why { margin: 2px 0 0; color: var(--muted); font-size: .78rem; }
 .legend { margin: 8px 0 0; color: var(--muted); font-size: .82rem; }
-.legend .h { cursor: default; margin: 0 .15em 0 .5em; }
-.legend .h:first-child { margin-left: 0; }
-.legend .h::after { content: none; }
-@media (hover: hover) { .legend .h:hover { background: none; } }
+/* A row read with low confidence: its line and its words as written, in the viewer's tab box, its columns kept (a
+   wide one scrolls in its box, never the page). The tab's own legend, a block of its lines. */
+.harp-tab .asw { color: var(--muted); white-space: pre; }
+.tab-legend { margin: .6em 0; padding: .5em .7em; border-left: 3px solid var(--border); color: var(--muted);
+  font-size: .78em; }
+.tab-legend .lgh { margin: 0 0 .2em; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.tab-legend .l { margin: 0; }
+.legend code.sy { padding: 0 .25em; border-radius: 4px; background: var(--raised); color: var(--text);
+  font: .95em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 /* A tab caracole can't read: its text as written, in the viewer's tab box, wrapping rather than widening a phone. */
 .harp-tab.raw .tab { font-size: .82em; white-space: pre-wrap; overflow-wrap: anywhere; }
 /* The bar: the harp between − and +, ♪ (Notes: pressed while each hole's note shows), Aa and ▶. */
