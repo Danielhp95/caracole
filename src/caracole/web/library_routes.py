@@ -33,7 +33,7 @@ if TYPE_CHECKING:
     from caracole.wanted import WantedLine
 
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
-PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600, "harptabs": 600}
+PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600, "harptabs": 600, "gametabs": 600}
 
 
 ROUTES = (
@@ -166,6 +166,22 @@ def harptabs_field(form: dict[str, str]) -> str | None:
         return harptabs_pick_from_url(value).url
     except OverridesError as e:
         raise Refused(400, "Not a pick", f"That isn't a harptabs.com tab: {e}") from e
+
+
+def gametabs_field(form: dict[str, str]) -> str | None:
+    """A form's ``gametabs``, the gametabs.net tab picked, written as caracole asks for it; None for none; Refused for
+    one that is no gametabs.net tab's page."""
+    from caracole.overrides import OverridesError, gametabs_pick_from_url
+
+    value = form.get("gametabs", "").strip()
+    if not value:
+        return None
+    if len(value) > PICK_LIMITS["gametabs"]:
+        raise Refused(400, "Too long", f"The gametabs is too long: {PICK_LIMITS['gametabs']} characters at most.")
+    try:
+        return gametabs_pick_from_url(value).url
+    except OverridesError as e:
+        raise Refused(400, "Not a pick", f"That isn't a gametabs.net tab: {e}") from e
 
 
 def lacuerda_field(form: dict[str, str]) -> str | None:

@@ -488,7 +488,11 @@ In order:
    harmonica tab, from the indexes the nightly run keeps: the harptabs.com tab
    you picked (`--harptabs URL`, its page's address, recorded under
    `[harptabs]`), else the most viewed by the song's artist. A tab you picked is
-   kept beside the song's other harmonica tabs, never in place of one.
+   kept beside the song's other harmonica tabs, never in place of one. Then
+   **gametabs.net**, for a text tab of game music: the gametabs.net tab you
+   picked (`--gametabs URL`, its page's address, recorded under `[gametabs]`),
+   else the most viewed of the title by the game or the composer your line
+   names, kept as `gametab-N.txt` beside any the song has.
 8. **The pages**: `_todo.md` and `index.html`, with the PDF made again if the
    sheet changed, the page of each harmonica tab the song keeps (`harmonica-N.html`,
    for a song with no sheet too), and MuseScore's pages matched from its local index.
@@ -2092,8 +2096,8 @@ match, Not found when the offline index has no such song, or Ignored (a found
 song, nearly every one, says nothing); what it holds, a small icon each, named
 by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
 own colour, for one the audio model wrote; "Ukulele chords", a ukulele, for
-Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab"), a
-harmonica tab, its lyrics and a score you filed (a phone leaves them out); its
+Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab", from
+Ultimate Guitar or gametabs.net), a harmonica tab, its lyrics and a score you filed (a phone leaves them out); its
 key, in a small box ("Am"; a screen reader hears "Key A minor (from the tab)",
 see [The song's key](#the-songs-key)); its one button, Open (Open PDF, Open
 text), or, on the page `caracole serve` serves, Fetch now for a wanted song
@@ -2120,11 +2124,12 @@ Then what you play from it, a tile each, in this order: its **Chord sheet**
 (the accent's; **Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
 file (**Guitar tab** when it has a text tab and no Guitar Pro file), its
-**Harmonica tab**, its **Lyrics** and a **Score** you filed. A tile's body opens
+**Harmonica tab**, its **Game music tab** (gametabs.net's, `gametab-N.txt`), its
+**Lyrics** and a **Score** you filed. A tile's body opens
 what it holds: the sheet's viewer (else its PDF, else its text); the first
 Guitar Pro file, in the browser when `caracole serve` shows it there (see
 [caracole serve](#caracole-serve)), else a download; the first harmonica tab,
-the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
+the first game music tab, as text, the lyrics, the first score. Under it, a word of which it is (`Ver 3 · 4.86★ ·
 in use`, `LaCuerda`, `from the recording`); its versions, a chip a source with
 how many (`Versions [UG] 13 [LaCuerda] 2`, `Files [gtptabs] 1 [inbox] 1`), or,
 one source with one version, `From` it; and its formats, downloads: the sheet's

@@ -27,7 +27,8 @@
                           harptabs.com artist's songs the index holds (their page's path), and whether
                           caracole read their page
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), the LaCuerda
-                          song (``lacuerda``), or the harptabs.com tab (``harptabs``), you picked;
+                          song (``lacuerda``), the harptabs.com tab (``harptabs``) or the gametabs.net
+                          tab (``gametabs``), you picked;
                           ``then=jobs``, from the requests page's Get it from there: back there
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
@@ -145,7 +146,14 @@ from caracole.web.jobs import (
     lacuerda_search_steps,
     lookup_steps,
 )
-from caracole.web.library_routes import LIMITS, PICK_LIMITS, harptabs_field, lacuerda_field, wanted_line
+from caracole.web.library_routes import (
+    LIMITS,
+    PICK_LIMITS,
+    gametabs_field,
+    harptabs_field,
+    lacuerda_field,
+    wanted_line,
+)
 from caracole.web.pages import Refused
 
 if TYPE_CHECKING:
@@ -228,6 +236,7 @@ def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], s
     pick, ug = _pick(form)
     lacuerda = lacuerda_field(form)
     harptabs = harptabs_field(form)
+    gametabs = gametabs_field(form)
     found = _library_song(app, form, ug)
     if found is not None:  # the song as your library has it: no second song, and no new source for it
         artist, title, album, duration_ms, key = found.artist, found.title, None, None, found.key
@@ -237,7 +246,8 @@ def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], s
         artist, title, album, duration_ms, key = line.artist, line.title, line.album, line.duration_ms, line.identity
         display = f"{artist} - {title}"
     steps = lookup_steps(artist, title, album=album, duration_ms=duration_ms,
-                         ug=pick["ug"] or None, tab=pick["tab"] or None, lacuerda=lacuerda, harptabs=harptabs)
+                         ug=pick["ug"] or None, tab=pick["tab"] or None, lacuerda=lacuerda, harptabs=harptabs,
+                         gametabs=gametabs)
     request = {"title": f"Fetch {artist} - {title}", "song_key": key, "steps": steps, "fetching": True,
                "note": note, "display": display}
     full = (f"{note} The queue is full, so it wasn't looked up now: the nightly run looks for "

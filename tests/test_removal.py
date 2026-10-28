@@ -277,3 +277,20 @@ def test_a_removal_deletes_the_songs_exports(conn, cfg):
     assert "sheet (G Dorian, capo 0).pdf" in plan.delete and "sheet (mine).pdf" not in plan.delete
     assert not (folder / "sheet (G Dorian, capo 0).pdf").exists() and (folder / "sheet (mine).pdf").exists()
     assert db.kv_get_json(conn, f"{EXPORT_KV}{song.id}") is None
+
+
+def test_a_removal_deletes_the_songs_tabs_from_gametabs_and_their_record_but_a_file_of_yours_stays(conn, cfg):
+    song = creep(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    tab = version(conn, song, "tabs/actraiser/fillmore", "gametab", provider="gametabs")
+    keep_file(conn, cfg.library_dir, song=song, version_id=tab, name="gametab-1.txt", data=b"e|--12--|\n", rank=1)
+    (folder / "gametab-2.txt").write_text("my own", encoding="utf-8")  # put there by hand: yours
+    db.kv_set(conn, f"gametabs:checked:{song.id}", "2026-10-28T03:30:00Z")
+    db.kv_set(conn, f"gametabs:checked:{song.id}:pick", "tabs/actraiser/fillmore")
+
+    plan, result = plan_and_remove(conn, cfg, song)
+
+    assert "gametab-1.txt" in plan.delete and "gametab-2.txt" not in plan.delete
+    assert not (folder / "gametab-1.txt").exists() and (folder / "gametab-2.txt").read_text(encoding="utf-8") == "my own"
+    for key in (f"gametabs:checked:{song.id}", f"gametabs:checked:{song.id}:pick"):
+        assert db.kv_get(conn, key) is None, key

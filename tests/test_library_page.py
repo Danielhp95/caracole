@@ -386,6 +386,28 @@ def test_a_harmonica_tab_from_harptabs_is_listed_after_the_scores_and_says_where
         ("harmonica-1.txt", "Harmonica tab 1 · harptabs.com", "harptabs"), ("tab.txt", "Tab", None)]
 
 
+def test_a_tab_of_game_music_from_gametabs_is_listed_after_the_harmonica_tabs_and_linked_as_text(conn, cfg):
+    s = add_song(conn, "Hollow Knight", "Resting Grounds")
+    for number, path in ((1, "tabs/hollow-knight/resting-grounds"), (2, "tabs/hollow-knight/resting-grounds-2")):
+        tab = upsert_version(conn, provider="gametabs", tab_id=path, song_id=s.id, slot="guitar", kind="gametab",
+                             rating=5.0, votes=431, version=1, label=None, url=f"https://gametabs.net/{path}", raw={},
+                             now="2026-10-28T03:30:00Z")
+        keep_file(conn, cfg.library_dir, song=s, version_id=tab, name=f"gametab-{number}.txt", data=f"E|--{number}--|\n".encode(),
+                  rank=number)
+    put(cfg, s, "harmonica-1.txt", "tab.txt")
+    html = page(conn, cfg)
+    files = songs_of(html)[s.display]["files"]
+    assert [(f["name"], f["label"], f["source"], f["href"]) for f in files] == [
+        ("harmonica-1.txt", "Harmonica tab 1", None, "Hollow%20Knight/Resting%20Grounds/harmonica-1.txt"),
+        ("gametab-1.txt", "Game music tab 1 · gametabs.net", "gametabs",
+         "Hollow%20Knight/Resting%20Grounds/gametab-1.txt"),
+        ("gametab-2.txt", "Game music tab 2 · gametabs.net", "gametabs",
+         "Hollow%20Knight/Resting%20Grounds/gametab-2.txt"),
+        ("tab.txt", "Tab", None, "Hollow%20Knight/Resting%20Grounds/tab.txt")]
+    # The Android app's copy takes each, as the page links it.
+    assert "Hollow Knight/Resting Grounds/gametab-2.txt" in linked_files(html.encode("utf-8"))
+
+
 def test_a_harmonica_tab_with_its_page_beside_it_links_the_page(conn, cfg):
     # render.py writes harmonica-N.html beside each kept harmonica-N.txt: the tab's line opens it, a link the
     # library page's data holds, so the Android app's copy takes it (linked_files)

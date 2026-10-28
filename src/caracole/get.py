@@ -41,6 +41,9 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``harptabs``: a harmonica tab from harptabs.com, from the index the nightly run
   keeps: the song's candidates read at the lookup pace (harptabs_fetch.py), or the
   tab you picked, recorded under ``[harptabs]``.
+- ``gametabs``: a text tab of game music from gametabs.net, from the index the
+  nightly run keeps: the song's candidates read at the lookup pace
+  (gametabs_fetch.py), or the tab you picked, recorded under ``[gametabs]``.
 - ``pages``: the PDF again if the sheet changed, and the page of each harmonica
   tab the song keeps (a song with no sheet's too), then _todo.md and index.html,
   whose MuseScore links come from the local index.
@@ -90,12 +93,13 @@ STAGES = (
     ("lacuerda", "LaCuerda"),
     ("gtptabs", "A Guitar Pro file from gtptabs.com"),
     ("harptabs", "A harmonica tab from harptabs.com"),
+    ("gametabs", "A tab of game music from gametabs.net"),
     ("pages", "The library page"),
     ("songbooks", "The songbooks it is in"),
 )
 STAGE_LABELS = dict(STAGES)
 NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com",
-         "musescore": "MuseScore", "harptabs": "harptabs.com"}
+         "musescore": "MuseScore", "harptabs": "harptabs.com", "gametabs": "gametabs.net"}
 PROGRESS_PREFIX = "caracole-progress: "  # a JSON line of `caracole get --progress`
 _FIRST_PAGES = 1  # versions pages read before the first sheet is kept: the first lists them all
 _FIRST_SCORED = 1  # sheets fetched for it: the best rated
@@ -108,6 +112,7 @@ SHEET_FROM = {"lacuerda": "from LaCuerda", "ug": "from Ultimate Guitar"}
 MATCH_NOT_FOUND = "not in the offline Ultimate Guitar index"
 GTPTABS_KEPT = "Guitar Pro file downloaded"  # the gtptabs stage's detail for a file kept, which caracole serve reads
 HARPTABS_KEPT = "harmonica tab kept"  # the harptabs stage's detail for a tab kept
+GAMETABS_KEPT = "game music tab kept"  # the gametabs stage's detail for a tab kept
 # The sheet stage's detail for a song Ultimate Guitar can't be asked about, which caracole serve reads.
 NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn't known"
 
@@ -116,7 +121,8 @@ NOT_IN_INDEX = "the offline index doesn't have it, and its artist's UG page isn'
 class LookupRequest:
     """A song to look up now, by name; ``songbooks`` False leaves the stage that makes its songbooks again; ``ug`` ("artist-key/song-key") is the Ultimate Guitar song you
     picked, ``tab`` the tab (its page's address, or its id), ``lacuerda`` the LaCuerda song or version
-    (its page's address), ``harptabs`` the harptabs.com tab (its page's address)."""
+    (its page's address), ``harptabs`` the harptabs.com tab (its page's address), ``gametabs`` the gametabs.net tab
+    (its page's address)."""
 
     artist: str
     title: str
@@ -126,6 +132,7 @@ class LookupRequest:
     tab: str | None = None
     lacuerda: str | None = None
     harptabs: str | None = None
+    gametabs: str | None = None
     songbooks: bool = True  # False: leave the songbooks to a job that makes them once (Get the missing songs)
 
     @property
@@ -393,10 +400,12 @@ class _Lookup:
         from caracole.normalize import identity_key
         from caracole.overrides import (
             OverridesError,
+            add_gametabs,
             add_harptabs,
             add_lacuerda,
             add_match,
             add_pin,
+            gametabs_pick_from_url,
             harptabs_pick_from_url,
             lacuerda_pick_from_url,
             load_overrides,
@@ -445,6 +454,10 @@ class _Lookup:
                 harp = harptabs_pick_from_url(req.harptabs)
                 add_harptabs(self.cfg.overrides_file, song.display, harp.url)
                 picked.append(f"[harptabs] {harp.url}")
+            if req.gametabs:
+                game = gametabs_pick_from_url(req.gametabs)
+                add_gametabs(self.cfg.overrides_file, song.display, game.url)
+                picked.append(f"[gametabs] {game.url}")
             if picked:
                 self.overrides = load_overrides(self.cfg.overrides_file)
         except OverridesError as e:
@@ -741,6 +754,24 @@ class _Lookup:
 
         return self.asking("harptabs", ask)
 
+    def gametabs(self) -> tuple[str, str] | str:
+        from caracole.gametabs_fetch import gametabs_tabs
+
+        def ask(client) -> tuple[str, str] | str:
+            s = gametabs_tabs(self.conn, client, self.cfg.library_dir, self.now, overrides=self.overrides,
+                              only={self.song.id}, refresh_index=False)
+            if s.budget_exhausted:
+                raise BudgetExhausted("gametabs")
+            if s.failures:
+                _, e = s.failures[0]
+                raise e
+            if not s.tried:
+                return "skipped", ("no tab wanted, or gametabs.net's index has no tab of the title of its game or "
+                                   "composer")
+            return GAMETABS_KEPT if s.kept else "no tab there of its game or composer"
+
+        return self.asking("gametabs", ask)
+
     def pages(self) -> str:
         from caracole.inbox import harmonica_files
         from caracole.render import render_all
@@ -813,7 +844,7 @@ class _Lookup:
                     for name, work in (("match", self.match), ("sheet", self.sheet), ("pdf", self.pdf),
                                        ("lyrics", self.lyrics), ("ug", self.ug), ("lacuerda", self.lacuerda),
                                        ("gtptabs", self.gtptabs), ("harptabs", self.harptabs),
-                                       ("pages", self.pages),
+                                       ("gametabs", self.gametabs), ("pages", self.pages),
                                        ("songbooks", self.songbooks)):
                         self.stage(name, work)
                     note_looked_up(conn, self.song.id)

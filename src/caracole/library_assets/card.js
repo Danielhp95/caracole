@@ -61,6 +61,7 @@ const caracoleCard = (icons, rows) => {
   // A harmonica tab's page beside it (``harmonicaPage``: render.py's harmonica-N.html), which its tile and its row open.
   const harpPage = (f) => (f && f.harmonicaPage && typeof f.harmonicaPage.href === "string" ? f.harmonicaPage.href : "");
   const SCORE = /^score-\d+[.]([a-z]+)$/;
+  const GAMETAB = /^gametab-\d+[.]txt$/;  // a text tab of game music from gametabs.net
   const SCORE_FORMATS = { mscz: "MuseScore", mxl: "MusicXML", musicxml: "MusicXML", pdf: "PDF", mid: "MIDI",
     midi: "MIDI" };
   const LYRICS = ["lyrics.txt", "lyrics.lrc"];
@@ -369,6 +370,21 @@ const caracoleCard = (icons, rows) => {
         downloads: [downloadLink(first, "Text", "Download " + plainLabel(first) + " of " + title)],
         opener: (f) => ({ href: harpPage(f) || f.href }) };
       t.chips = bySource(harp).map((g) => ({ source: g.source, count: g.files.length, unit: "tab",
+        fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
+      made.push(t);
+    }
+
+    // Text tabs of game music from gametabs.net, opened as text, as Ultimate Guitar's tab.txt is.
+    const games = files.filter((f) => GAMETAB.test(f.name));
+    if (games.length) {
+      games.forEach(claim);
+      const first = games[0];
+      const t = { kind: "gametab", glyph: "guitar", name: "Game music tab", plural: "game music tabs", unit: "tab",
+        open: { href: first.href }, said: "Open the game music tab of " + title,
+        from: plainLabel(first).replace(/^Game music tab/, "Tab"), lead: "Tabs",
+        downloads: [downloadLink(first, "Text", "Download " + plainLabel(first) + " of " + title)],
+        opener: (f) => ({ href: f.href }) };
+      t.chips = bySource(games).map((g) => ({ source: g.source, count: g.files.length, unit: "tab",
         fixed: g.files.length === 1, fill: (d) => filesDrawer(s, d, t, g) }));
       made.push(t);
     }

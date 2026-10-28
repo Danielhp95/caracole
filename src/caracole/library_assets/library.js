@@ -958,7 +958,7 @@
     if (s.auto === true) holds.push("auto");
     else if (has(/^sheet[.](html|pdf|txt|cho)$/)) holds.push(plays("ukulele") ? "ukulele" : "sheet");
     if (has(/^guitar-\d+[.]/)) holds.push("guitar");
-    else if (names.indexOf("tab.txt") >= 0) holds.push("tab");
+    else if (names.indexOf("tab.txt") >= 0 || has(/^gametab-\d+[.]txt$/)) holds.push("tab");
     if (plays("harmonica")) holds.push("harmonica");
     if (has(/^lyrics[.](txt|lrc)$/)) holds.push("lyrics");
     if (plays("score")) holds.push("score");
