@@ -23,6 +23,9 @@
   overflow-wrap: anywhere; }
 .hg > .u:not(:first-child), .hg > .u + .h { margin-left: .32em; }
 .hg > .jn + .u { margin-left: 0; }
+/* The tabber's words in a row of holes ("BOM BOM", "(Chorus)", a syllable against its hole): text, in its place. */
+.tw { font-weight: 400; font-style: italic; overflow-wrap: anywhere; }
+.hg > .tw:not(:first-child), .hg > .tw + .h { margin-left: .32em; }
 .h.on { background: var(--mark); box-shadow: 0 0 0 2px var(--mark); }
 @media (hover: hover) { .h:hover { background: var(--accent-soft); } }
 .hold { color: var(--muted); font-size: .8em; margin-left: .1em; }
@@ -50,6 +53,8 @@ html:not([data-ready]) .rp { display: none; }
   font-size: .78em; }
 .tab-legend .lgh { margin: 0 0 .2em; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .tab-legend .l { margin: 0; }
+.legend a.src { color: inherit; text-decoration: underline; text-underline-offset: .15em; }
+.foot .reading a { color: var(--muted); }
 .legend code.sy { padding: 0 .25em; border-radius: 4px; background: var(--raised); color: var(--text);
   font: .95em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 /* A tab caracole can't read: its text as written, in the viewer's tab box, wrapping rather than widening a phone. */

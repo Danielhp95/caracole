@@ -62,7 +62,7 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.web.jobs import EXPORTING, INDEX_READS, REMOVING, Job, Stage, Step
+from caracole.web.jobs import EXPORTING, INDEX_READS, READING, REMOVING, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -92,6 +92,23 @@ _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a r
 _READ_TONES = {"Read: ": "added", "Not found: ": "missing", "Not read: ": "waiting",
                "Searched: ": "added", "Found already: ": "added", "Nothing found: ": "missing",
                "Not searched: ": "waiting"}
+
+
+def _harmonica_page(job: Job) -> str | None:
+    """The page of the harmonica tab a pin's job names (``--tab=`` and the song's artist and title after "--"), as a
+    link the library's pages follow (a sheet's link's shape: relative, each name quoted)."""
+    from urllib.parse import quote
+
+    from caracole.inbox import harmonica_page
+    from caracole.library import song_folder
+
+    args = job.steps[0].args if job.steps else ()
+    tab = next((a.split("=", 1)[1] for a in args if a.startswith("--tab=")), "")
+    page = harmonica_page(tab)
+    if page is None or "--" not in args or len(args) < args.index("--") + 3:
+        return None
+    artist, title = args[args.index("--") + 1:args.index("--") + 3]
+    return "/".join(quote(part) for part in (*song_folder(artist, title), page))
 
 
 @dataclass(frozen=True)
@@ -175,6 +192,10 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         return Line("removed", "Removed")
     if job.song_key.startswith(EXPORTING):  # Make this my version, none of the song's own requests: what it made
         return Line("ready", "Your version now", ("Open sheet", song.sheet) if song and song.sheet else None)
+    if job.song_key.startswith(READING):  # a harmonica tab's reading pinned or cleared (harmonica_routes.py)
+        page = _harmonica_page(job)
+        said = "read as caracole guesses" if any("--clear" in s.args for s in job.steps) else "read as you set it"
+        return Line("ready", f"Its harmonica tab {said}", ("Open the tab", page) if page else None)
     songbook = songbook_of(job.song_key)
     if songbook is not None:  # a songbook's change: no song at all; a deletion says so as a removal does
         action = str(songbook["action"])

@@ -206,7 +206,8 @@ def test_blow_and_draw_in_the_viewers_colours_light_and_dark(tmp_path, scheme, b
 
 
 def test_a_tab_caracole_cant_read_is_its_text_with_aa_and_scrolling_alone(tmp_path):
-    with opened(tmp_path, written(tmp_path, tab("29910_knockin-on-heavens-door"))) as b:
+    arrows = "ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6\n"  # a notation no tabber's key here gives
+    with opened(tmp_path, written(tmp_path, arrows)) as b:
         found = b.js("""[document.querySelector('#sheet pre.tab').textContent.split('\\n')[0],
           document.querySelectorAll('#sheet .h').length, document.getElementById('bar').hidden,
           Boolean(document.getElementById('h-up')), Boolean(document.getElementById('notes')),

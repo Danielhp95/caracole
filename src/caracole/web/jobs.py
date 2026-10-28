@@ -26,7 +26,9 @@ query's key), whose one stage is ``SEARCH_STAGES``. A harptabs.com tab you pick 
 one, kept, its versions not kept fetched (Fetch them, ``--keep-more``), or its pin taken out, is ``caracole versions
 --progress`` (``version_steps``), a pick of the song's as a lookup's ``--tab`` is, so the song's jobs join it as they
 would that; its JSON lines are the job's stages too (Keep it's and Fetch them's ``KEEP_STAGES``, and a lookup's for
-``--choose`` and ``--clear``, which run one). Each command takes caracole's lock (a
+``--choose`` and ``--clear``, which run one). A harmonica tab's reading pinned, or taken out, is ``caracole
+harmonica`` (harmonica_routes.py), under a key of its own (``READING``), the song's change, as Make this my
+version's (``EXPORTING``). Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -357,6 +359,7 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
 REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it never joins the song's add or fetch
 EXPORTING = "export:"  # Make this my version's song_key (export_routes.py): the song's key and the version, then MINE,
 MINE = ":mine"  # never the song's own key, so it joins no request of the song's
+READING = "harmonica:"  # a harmonica tab's reading pinned (harmonica_routes.py): the song's key, the tab, the reading, MINE
 
 
 def remove_steps(display: str) -> list[tuple[str, tuple[str, ...]]]:

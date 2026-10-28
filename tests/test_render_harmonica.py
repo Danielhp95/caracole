@@ -198,10 +198,10 @@ def test_a_sheet_whose_pdf_fails_still_gets_its_tabs_page(conn, cfg):
 
 def test_a_tab_it_cant_read_gets_a_page_of_its_text(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
-    keep_tab(conn, cfg, song, "ARMONICA C\n(3)mua (3)do (3)be (3)pi\n")
+    keep_tab(conn, cfg, song, "ARMONICA C\n↑3 ↓3 ↑4 ↓4\n")
     render(conn, cfg)
     text = (song_dir(cfg.library_dir, song) / "harmonica-1.html").read_text("utf-8")
-    assert '<pre class="tab">ARMONICA C\n(3)mua (3)do (3)be (3)pi</pre>' in text
+    assert '<pre class="tab">ARMONICA C\n↑3 ↓3 ↑4 ↓4</pre>' in text
 
 
 def test_a_tab_its_page_calls_chromatic_gets_a_page_of_its_text_and_marks_no_harp(conn, cfg):
@@ -226,3 +226,48 @@ def test_removing_the_song_deletes_the_page_a_render_wrote_and_not_one_of_yours(
     assert "harmonica-7.html" in {name for name, _ in plan.keep}
     remove_song(conn, cfg, plan)
     assert sorted(p.name for p in folder.iterdir() if p.name.startswith("harmonica-")) == ["harmonica-7.html"]
+
+
+def test_a_tab_is_read_as_overrides_toml_says_on_its_page_and_for_the_songs_viewer(conn, cfg):
+    # [harmonica] in overrides.toml pins how a tab is read: Barrett's notation draws the tab's bare holes, which
+    # moves the harp that plays with the record, on the tab's page and on the sheet's viewer alike
+    song = song_with_a_tab(conn, cfg)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    guessed = data_of(folder / "harmonica-1.html", "harp-data")
+    assert guessed["reading"]["source"] == "guessed" and data_of(folder / "sheet.html", "song")["harpTabs"] == [3]
+    pinned = Overrides(harmonica={song.key: {"harmonica-1.txt": "barrett"}})
+    stats = render_all(conn, cfg, pinned, runner=fake_chordpro)
+    assert stats.failed == 0
+    data = data_of(folder / "harmonica-1.html", "harp-data")
+    assert data["reading"]["source"] == "pinned" and data["reading"]["name"] == "barrett"
+    assert '<span class="src" id="reading-src">as you set it</span>' in (folder / "harmonica-1.html").read_text("utf-8")
+    assert data["start"] != guessed["start"]
+    assert data_of(folder / "sheet.html", "song")["harpTabs"] != [3]
+    # another tab of the song, or another song's, is read as caracole guesses
+    other = Overrides(harmonica={song.key: {"harmonica-2.txt": "barrett"}})
+    render_all(conn, cfg, other, runner=fake_chordpro)
+    assert data_of(folder / "harmonica-1.html", "harp-data")["reading"]["source"] == "guessed"
+
+
+def test_a_pin_by_the_tabs_legend_on_a_tab_with_none_is_read_as_guessed(conn, cfg):
+    song = song_with_a_tab(conn, cfg)
+    render_all(conn, cfg, Overrides(harmonica={song.key: {"harmonica-1.txt": "legend"}}), runner=fake_chordpro)
+    data = data_of(song_dir(cfg.library_dir, song) / "harmonica-1.html", "harp-data")
+    assert data["reading"]["source"] == "guessed"
+
+
+def test_a_removed_songs_harmonica_entry_waits_in_overrides_toml_as_every_tables_does(conn, cfg):
+    # caracole remove takes no overrides.toml entry out: asked for again, the song's tab is read as you set it
+    from caracole.overrides import add_harmonica, load_overrides
+
+    song = song_with_a_tab(conn, cfg)
+    add_harmonica(cfg.overrides_file, "placeholder band - synthetic song", "harmonica-1.txt", "barrett")
+    before = cfg.overrides_file.read_bytes()
+    render_all(conn, cfg, load_overrides(cfg.overrides_file), runner=fake_chordpro)
+    remove_song(conn, cfg, plan_removal(conn, cfg, song))
+    assert cfg.overrides_file.read_bytes() == before
+    again = song_with_a_tab(conn, cfg)  # asked for again: a new song, the same key
+    render_all(conn, cfg, load_overrides(cfg.overrides_file), runner=fake_chordpro)
+    page = song_dir(cfg.library_dir, again) / "harmonica-1.html"
+    assert data_of(page, "harp-data")["reading"]["source"] == "pinned"

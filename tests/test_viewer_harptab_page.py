@@ -20,7 +20,7 @@ from test_viewer_harpfit import LINES, a_sheet, a_tab
 TABS = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
 SPOKEY = (TABS.parent / "legends" / "693_spokey-dokey.txt").read_text(encoding="utf-8")
 HOTEL = (TABS / "588_hotel-california.txt").read_text(encoding="utf-8")
-KNOCKIN = (TABS / "29910_knockin-on-heavens-door.txt").read_text(encoding="utf-8")
+ARROWS = "ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6\n"  # a notation no tabber's key here gives
 JUKE = (TABS / "1882_juke.txt").read_text(encoding="utf-8")
 FACTS = {"title": "hotel california", "artist": "The Eagles", "key": None, "difficulty": "Beginner", "views": 224000,
          "rating": 3.3}
@@ -113,14 +113,42 @@ def test_the_harp_as_the_tab_says_or_its_key_or_the_songs_or_the_usual():
     assert data_of(page(HOTEL))["positions"] is None and data_of(page(HOTEL))["why"] == {}
 
 
-def test_how_the_tab_was_read_and_what_harptabs_com_says_of_it():
-    assert text_of(page(facts=FACTS), "legend") == "Read as: 4 blow · - draw, guessed (1.00) · Beginner · 224k views · 3.3★"
-    assert text_of(page(facts={"views": 1_100_000, "rating": None}), "legend").endswith("(1.00) · 1.1M views")
+def test_a_tab_in_harptabs_coms_own_notation_has_its_legend_and_what_harptabs_com_says_of_it():
+    # Read by the site's own key, guessed (Tab.reading.standard): the familiar legend says enough, the owner's choice
+    assert text_of(page(facts=FACTS), "legend") == "4 blow −4 draw −3′ bent (4 5) together · Beginner · 224k views · 3.3★"
+    assert text_of(page(facts={"views": 1_100_000, "rating": None}), "legend").endswith("together · 1.1M views")
     # as harptabs.com writes a count under a thousand: 400, never "0k"
-    assert text_of(page(facts={"views": 400}), "legend").endswith("(1.00) · 400 views")
-    assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("guessed (1.00)")
-    # each symbol as the tab writes it
-    assert '<code class="sy">-</code> draw' in page()
+    assert text_of(page(facts={"views": 400}), "legend").endswith("together · 400 views")
+    assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("together")
+    assert "Read as" not in re.search(r'<header class="head">.*?</header>', page(), re.S).group(0)
+    assert '<span class="src" id="reading-src">' not in page()
+    # served, a link at the foot changes how it is read (harptab.js shows it): from a file, none
+    assert ('<p class="reading" id="reading-foot" hidden><a href="#">Change how it\'s read</a></p>' in page())
+
+
+def test_another_notation_says_how_it_was_read_and_its_source_is_what_changes_it():
+    html = page(TABS.joinpath("124_heart-of-gold.txt").read_text("utf-8"), facts={"views": 400})
+    assert text_of(html, "legend") == "Read as: B blow · D draw · , together, guessed (1.00) · 400 views"
+    assert '<code class="sy">B</code> blow' in html  # each symbol as the tab writes it
+    # served, its source is a link to the page that changes it (harptab.js)
+    assert '<span class="src" id="reading-src">guessed (1.00)</span>' in html and 'id="reading-foot"' not in html
+    pinned = page(HOTEL, pin="signs")
+    assert text_of(pinned, "legend") == "Read as: 4 blow · - draw, as you set it"
+    assert '<span class="src" id="reading-src">as you set it</span>' in pinned
+    assert data_of(pinned)["reading"]["source"] == "pinned"
+
+
+def test_a_tab_shown_as_written_can_still_be_read_another_way():
+    # Bare blows and one "(5)": the Spanish brackets read it a hair better than harptabs.com's signs, by under the
+    # margin an unusual notation needs, so caracole shows it as written; a pin reads it, the score never asked
+    thin = " ".join(["4 5 6"] * 14) + " (5)\n"
+    html = page(thin)
+    assert '<pre class="tab">' in html and 'id="reading-foot" hidden' in html
+    read = page(thin, pin="brackets")
+    assert '<pre class="tab">' not in read and len(data_of(read)["groups"]) == 43
+    assert data_of(read)["reading"] == {"name": "brackets", "source": "pinned", "q": 1.0, "margin": 1.0,
+                                        "said": "4 blow · (4) draw"}
+    assert text_of(read, "legend") == "Read as: 4 blow · (4) draw, as you set it"
 
 
 def test_spokey_dokey_says_it_was_read_by_its_own_legend():
@@ -173,6 +201,17 @@ def test_a_row_read_with_low_confidence_is_its_text_as_written():
     assert len(data["rows"]) == 2 and len(re.findall(r'class="rp"', html)) == 2  # its holes neither drawn nor played
 
 
+def test_the_tabbers_words_in_a_row_are_text_in_their_place():
+    html = page("6 -6 -6 -6 6 -6 -7 6 -6 BOM BOM (percussions)\n")
+    assert '<span class="tw">BOM BOM (percussions)</span>' in html and 'class="u"' not in html
+    assert len(data_of(html)["groups"]) == 9  # the holes alone: the words play nothing
+
+
+def test_a_row_read_with_low_confidence_keeps_its_words_above_it_where_the_tab_writes_them_so():
+    html = page("Lo rem ip\n4 5 6\n\nDo lor sit\n-4 -5 -6\n\nAm et con\n3b 3b 2b\n\nSed do ei\n-4 -5 -6\n")
+    assert '<pre class="tab asw">Am et con\n3b 3b 2b</pre>' in html
+
+
 def test_the_foot_says_the_holes_were_placed_only_where_a_row_has_words():
     assert "caracole placed each hole over its syllable" in page()
     assert "placed each hole" not in page(SPOKEY) and "as its tabber wrote it.</p>" in page(SPOKEY)
@@ -194,8 +233,8 @@ def test_its_foot_links_the_tabs_text_and_its_page_on_harptabs_com_alone():
 
 
 def test_a_tab_it_cant_read_is_its_text_as_written_never_an_error():
-    html = page(KNOCKIN, page_key="C")
-    assert '<pre class="tab">' in html and "(3)mua (3)do" in html
+    html = page(ARROWS, page_key="C")
+    assert '<pre class="tab">' in html and "↑3 ↓3 ↑4" in html
     assert text_of(html, "facts") == "Harmonica tab, as its tabber wrote it: caracole can't read its notation."
     assert 'class="h"' not in html and 'class="rp"' not in html
     assert 'id="h-up"' not in html and 'id="notes"' not in html and 'id="size"' in html and 'id="scroll"' in html

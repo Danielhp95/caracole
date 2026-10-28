@@ -115,6 +115,13 @@ pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-
 .plan { max-width: 72ch; margin: 0; padding-left: 1.2em; overflow-wrap: anywhere; }
 .plan li + li { margin-top: 4px; }
 .confirm { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
+.readings { display: grid; gap: 10px; max-width: 72ch; margin: 0; padding: 0; list-style: none; }
+.reading { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 10px; overflow-wrap: anywhere; }
+.reading.now { border-color: var(--found); }
+.reading .said { flex: 1 1 16rem; font-weight: 600; }
+.reading .q { color: var(--muted); font-size: .85rem; white-space: nowrap; }
+.reading .confirm { margin-top: 0; }
 .btn.danger { min-height: 44px; background: var(--failed); border-color: var(--failed); color: var(--bg);
   font-weight: 650; }
 """

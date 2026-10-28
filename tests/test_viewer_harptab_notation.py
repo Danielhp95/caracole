@@ -177,10 +177,11 @@ def test_a_row_read_with_low_confidence_is_shown_as_written():
 
 
 def test_a_line_of_holes_read_under_the_share_is_shown_as_written_never_taken_for_words():
-    found = parse("4 -4 5 -5 6\nla la la la la\n\n4 5 6 -6 5 BOOM\nlo lo lo lo lo\n")
+    # "$$$$" no notation reads (a word, "BOOM", would be the tabber's, kept in the row: test_viewer_harptab_layout.py)
+    found = parse("4 -4 5 -5 6\nla la la la la\n\n4 5 6 -6 5 $$$$\nlo lo lo lo lo\n")
     rows = found.rows()
     assert [(r.trusted, r.text, r.lyric) for r in rows] == [
-        (True, "4 -4 5 -5 6", "la la la la la"), (False, "4 5 6 -6 5 BOOM", "lo lo lo lo lo")]
+        (True, "4 -4 5 -5 6", "la la la la la"), (False, "4 5 6 -6 5 $$$$", "lo lo lo lo lo")]
     assert not any(isinstance(i, Words) for s in found.sections for i in s.items)
 
 
@@ -314,3 +315,85 @@ def test_spokey_dokeys_effects_are_on_their_holes_and_its_runs_kept():
     wahs = sum("wah" in g.effects for r in rows for g in r.groups)
     holds = sum(g.hold for r in rows for g in r.groups)
     assert (wahs, holds) == (11, 4)
+
+
+# --- a reading pinned: overrides.toml's [harmonica] ------------------------------------------------------------------
+
+
+def test_a_pin_names_a_preset_the_tabs_own_legend_or_a_preset_changed():
+    from caracole.viewer.harptab import DOTS, pinned
+
+    assert pinned("letters", "4 5 6\n") == LETTERS
+    starred = "-1 -2 -3* -3*\nla la la la\n"
+    found = parse(starred, notation=pinned({"as": "signs", "*": "bend"}, starred))
+    assert found.reading.source == "pinned" and found.readable and not found.chromatic
+    assert [g.label() for g in found.rows()[0].groups] == ["−1", "−2", "−3′", "−3′"]
+    assert pinned("legend", SPOKEY) == parse(SPOKEY).reading.notation  # its own legend, whatever the score
+    assert pinned("legend", without_legend(SPOKEY)) is None  # no legend to read it by
+    # a placeholder says where a symbol is written: (x) round a hole, x a hole alone
+    spanish = "(5) 4 (6)\nla la la\n"
+    read = parse(spanish, notation=pinned({"as": "signs", "(x)": "draw"}, spanish))
+    assert [g.label() for g in read.rows()[0].groups] == ["−5", "4", "−6"]
+    # in a tab that writes a dot before a hole, a pin's dots lengthen a hole as the guess's do
+    assert DOTS in pinned("signs", ". 4 4 -4 5 . 7\n").symbols and DOTS not in pinned("signs", "4 5\n").symbols
+
+
+def test_a_pinned_reading_is_read_whatever_the_others_score():
+    from caracole.viewer.harptab import TAB_Q, pinned
+
+    found = parse(without_legend(SPOKEY), notation=pinned("signs", SPOKEY))
+    assert found.convention == "signs" and found.reading.source == "pinned" and found.reading.runner is None
+    assert found.reading.symbols()[0] == ("4", "blow")
+    # drawn though caracole would never guess it (its Q under TAB_Q): the owner's choice; each row it reads with
+    # low confidence is its text as written still
+    assert found.reading.q < TAB_Q and found.reading.confident and found.readable
+    assert [r.trusted for r in found.rows()] == [False, False, True, False, False, False, False, False, False]
+
+
+@pytest.mark.parametrize(("spec", "said"), [
+    ("staff", "signs, brackets, letters, signs after, barrett or legend"),
+    ({"as": "staff"}, "signs, brackets, letters, signs after or barrett"),
+    ({"as": "legend"}, "signs, brackets, letters, signs after or barrett"),
+    ({"*": "squeak"}, "what a symbol means"),
+    ({"": "bend"}, "a symbol"),
+    ({"*": 2}, "what a symbol means"),
+    (3, "a notation's name or a table"),
+])
+def test_a_pin_that_cant_be_read_says_what_it_takes(spec, said):
+    from caracole.viewer.harptab import check_spec
+
+    with pytest.raises(ValueError, match=re.escape(said)):
+        check_spec(spec)
+
+
+def test_every_reading_a_tab_weighs_best_first_each_as_a_pin_writes_it():
+    from caracole.viewer.harptab import readings, spec_of
+
+    found = readings(SPOKEY)
+    assert found[0] == parse(SPOKEY).reading
+    assert [spec_of(r) for r in found] == ["legend", "letters", "brackets", "signs after", "barrett", "signs"]
+    assert [r.score for r in found] == sorted((r.score for r in found), reverse=True)
+    starred = "-1 -2 -3* -3*\nla la la la\n"
+    diatonic = readings(starred, harp="Diatonic")
+    assert spec_of(diatonic[0]) == {"as": "signs", "*": "bend"}  # the chip's star bends
+    assert "signs" in [spec_of(r) for r in diatonic]
+    # two notations that read every hole alike and say so alike are one reading: here brackets' and signs after's
+    # (4 5 6 blown, "-" read by neither), the commoner's
+    plain = [spec_of(r) for r in readings("4 5 6 -6\nla la la la\n")]
+    assert plain[:2] == ["signs", "brackets"] and "signs after" not in plain
+
+
+def test_harptabs_coms_own_notation_guessed_is_the_standard_reading():
+    from caracole.viewer.harptab import pinned
+
+    tabs = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
+    for stem in ("588_hotel-california", "1882_juke", "10228_whammer-jammer"):
+        assert parse((tabs / f"{stem}.txt").read_text("utf-8")).reading.standard, stem
+    for stem in ("124_heart-of-gold", "28841_isnt-she-lovely"):  # letters, brackets
+        assert not parse((tabs / f"{stem}.txt").read_text("utf-8")).reading.standard, stem
+    assert not parse(SPOKEY).reading.standard  # its own legend's
+    hotel = (tabs / "588_hotel-california.txt").read_text("utf-8")
+    assert not parse(hotel, notation=pinned("signs", hotel)).reading.standard  # as you set it
+    starred = "-1 -2 -3* -3*\nla la la la\n"
+    assert not parse(starred, harp="Diatonic").reading.standard  # * a bend: not harptabs.com's key
+    assert parse("-1 -2 -3 4\nla la la la\n", harp="Diatonic").reading.standard

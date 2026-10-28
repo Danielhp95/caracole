@@ -45,7 +45,7 @@ from caracole.web.app import (
     query,
     redirect,
 )
-from caracole.web.jobs import EXPORTING, INDEX_READS, LACUERDA_SEARCH, LOOKUP, REMOVING, Job, JobStarted
+from caracole.web.jobs import EXPORTING, INDEX_READS, LACUERDA_SEARCH, LOOKUP, READING, REMOVING, Job, JobStarted
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import SongFacts, details_href, job_line, song_line
@@ -238,7 +238,7 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     from caracole.web.songbooks import songbook_of
 
     songbook = songbook_of(job.song_key)
-    kind = ("remove" if job.song_key.startswith(REMOVING) else "export" if job.song_key.startswith(EXPORTING)
+    kind = ("remove" if job.song_key.startswith(REMOVING) else "export" if job.song_key.startswith((EXPORTING, READING))
             else "songbook" if songbook is not None else "song")
     line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
     shown = song_line(line) if kind == "song" else line
@@ -288,7 +288,7 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     from caracole.songs import find_song
 
     removal = job.song_key.startswith(REMOVING)
-    export = job.song_key.startswith(EXPORTING)
+    export = job.song_key.startswith((EXPORTING, READING))  # a change of the song's own: by its id
     song = _song_by_id(conn, job.song_id) if export else find_song(conn, job.song_key.removeprefix(REMOVING))
     facts = None
     if song is not None:
