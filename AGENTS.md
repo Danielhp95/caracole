@@ -628,26 +628,40 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     is `ProviderBlocked`, honoured like any block (tests/test_youtube.py). Everything else
     keeps honouring robots.txt; widen nothing here without the owner, and copy it to no
     other site.
-  - **The second exception is harptabs.com**, the owner's explicit choice too: its site
-    terms (2004) say no one may "use, copy, or distribute any portion" of it, and its API's
-    terms ask that its tabs not be bulk-mirrored, yet caracole keeps tabs from it. Provider
-    `harptabs` (harptabs.py, harptabs_fetch.py) keeps them on these terms alone: for the songs
-    of wanted.txt and a lookup's song, never a tab page for a song nobody asked for and never a
-    mirror (its sitemap, then the pages of a song's candidates, `CANDIDATES` at most, each read
-    once and cached); one tab a song, privately, in the library; robots.txt honoured (it closes
-    `/search`, `/api/`, `/*?*_rsc=` and more); the bulk pace and budget above, a lookup's at the
-    lookup pace. Its artist pages, which robots.txt allows, are read for the names of their tabs
-    alone, never a tab, so that a search finds its tabs by artist as UG's index does, the owner's
-    ask (harptabs_index.py: every artist the sitemap lists, once in 30 days, at the bulk pace and
-    within a budget; an artist's Songs, one page at the lookup pace); an artist's tabs past the 30
-    a page renders are the site's API's, which caracole never asks for. caracole sends harptabs.com its own user agent, as every site
-    (`test_harptabs_fetch.py::test_caracole_asks_with_its_own_user_agent`): asked by hand on
-    2026-10-27 (robots.txt, the sitemap and two tab pages: all 200, the sitemap after one
-    Cloudflare 530, an error), it answers it. A 403, a 429 or a challenge there is a block like
-    any site's (`ProviderBlocked`, the cooldown, one alert:
-    `test_pipeline.py::test_a_harptabs_block_cools_it_down_and_marks_no_song`), and nothing is
-    worked around (no other user agent, cookies, login, proxies, API keys or captcha). The
-    exception is what is kept, never how it is asked for. Copy none of it to another site.
+  - **The second exception: a site whose terms forbid automated access, where the owner chose
+    it.** A site's terms against bots, scrapers or copying do not stop caracole at a site the
+    owner chose, named below with its terms; the owner's rule, for any site they name here.
+    Everything else above binds caracole there, as at every site: robots.txt honoured, its
+    `Crawl-delay` included; caracole's own user agent; the paces and budgets; one request at a
+    time; never a login, a file behind one, or an API robots.txt closes; a 403, a 429 or a
+    challenge a block (`ProviderBlocked`, the cooldown, one alert); and nothing worked around (no
+    other user agent, cookies, login, proxies, API keys or captcha). The exception is what is
+    kept, never how it is asked for. A site joins it by the owner's choice alone, never by
+    analogy:
+    - **harptabs.com**: its site terms (2004) say no one may "use, copy, or distribute any
+      portion" of it, and its API's terms ask that its tabs not be bulk-mirrored, yet caracole
+      keeps tabs from it. Provider `harptabs` (harptabs.py, harptabs_fetch.py) keeps them for the
+      songs of wanted.txt and a lookup's song, never a tab page for a song nobody asked for and
+      never a mirror (its sitemap, then the pages of a song's candidates, `CANDIDATES` at most,
+      each read once and cached); one tab a song, privately, in the library; robots.txt honoured
+      (it closes `/search`, `/api/`, `/*?*_rsc=` and more); the bulk pace and budget above, a
+      lookup's at the lookup pace. Its artist pages, which robots.txt allows, are read for the
+      names of their tabs alone, never a tab, so that a search finds its tabs by artist as UG's
+      index does, the owner's ask (harptabs_index.py: every artist the sitemap lists, once in 30
+      days, at the bulk pace and within a budget; an artist's Songs, one page at the lookup
+      pace); an artist's tabs past the 30 a page renders are the site's API's, which caracole
+      never asks for. caracole sends harptabs.com its own user agent, as every site
+      (`test_harptabs_fetch.py::test_caracole_asks_with_its_own_user_agent`): asked by hand on
+      2026-10-27 (robots.txt, the sitemap and two tab pages: all 200, the sitemap after one
+      Cloudflare 530, an error), it answers it. A block there is any site's
+      (`test_pipeline.py::test_a_harptabs_block_cools_it_down_and_marks_no_song`).
+    - **gametabs.net**: its terms (updated 2026-05-25) forbid "Using automated means (bots,
+      scrapers, etc.) to access or collect data from the Service without Our express written
+      permission"; the owner chose to read it anyway on 2026-10-28, knowing them. Its robots.txt
+      allows tab and game pages and the sitemaps, closes `/api/`, `/tabs?*`, the pages behind a
+      login (`/preparing-tab-file-download`, every attachment's download, among them) and more,
+      and asks a `Crawl-delay` of 5 s. caracole keeps the text tab each tab page shows to
+      anyone, never an attachment (Guitar Pro, MIDI, PDF: a login's).
   - Every accepted 200 and 404 is cached forever, in `cache_dir/http/<provider>/`.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`, `GtpTabsParseError`, `LaCuerdaParseError`,
