@@ -255,3 +255,19 @@ def test_a_pin_by_the_tabs_legend_on_a_tab_with_none_is_read_as_guessed(conn, cf
     render_all(conn, cfg, Overrides(harmonica={song.key: {"harmonica-1.txt": "legend"}}), runner=fake_chordpro)
     data = data_of(song_dir(cfg.library_dir, song) / "harmonica-1.html", "harp-data")
     assert data["reading"]["source"] == "guessed"
+
+
+def test_a_removed_songs_harmonica_entry_waits_in_overrides_toml_as_every_tables_does(conn, cfg):
+    # caracole remove takes no overrides.toml entry out: asked for again, the song's tab is read as you set it
+    from caracole.overrides import add_harmonica, load_overrides
+
+    song = song_with_a_tab(conn, cfg)
+    add_harmonica(cfg.overrides_file, "placeholder band - synthetic song", "harmonica-1.txt", "barrett")
+    before = cfg.overrides_file.read_bytes()
+    render_all(conn, cfg, load_overrides(cfg.overrides_file), runner=fake_chordpro)
+    remove_song(conn, cfg, plan_removal(conn, cfg, song))
+    assert cfg.overrides_file.read_bytes() == before
+    again = song_with_a_tab(conn, cfg)  # asked for again: a new song, the same key
+    render_all(conn, cfg, load_overrides(cfg.overrides_file), runner=fake_chordpro)
+    page = song_dir(cfg.library_dir, again) / "harmonica-1.html"
+    assert data_of(page, "harp-data")["reading"]["source"] == "pinned"
