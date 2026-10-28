@@ -113,14 +113,36 @@ def test_the_harp_as_the_tab_says_or_its_key_or_the_songs_or_the_usual():
     assert data_of(page(HOTEL))["positions"] is None and data_of(page(HOTEL))["why"] == {}
 
 
-def test_how_the_tab_was_read_and_what_harptabs_com_says_of_it():
-    assert text_of(page(facts=FACTS), "legend") == "Read as: 4 blow · - draw, guessed (1.00) · Beginner · 224k views · 3.3★"
-    assert text_of(page(facts={"views": 1_100_000, "rating": None}), "legend").endswith("(1.00) · 1.1M views")
+def test_a_tab_in_harptabs_coms_own_notation_has_its_legend_and_what_harptabs_com_says_of_it():
+    # Read by the site's own key, guessed (Tab.reading.standard): the familiar legend says enough, the owner's choice
+    assert text_of(page(facts=FACTS), "legend") == "4 blow −4 draw −3′ bent (4 5) together · Beginner · 224k views · 3.3★"
+    assert text_of(page(facts={"views": 1_100_000, "rating": None}), "legend").endswith("together · 1.1M views")
     # as harptabs.com writes a count under a thousand: 400, never "0k"
-    assert text_of(page(facts={"views": 400}), "legend").endswith("(1.00) · 400 views")
-    assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("guessed (1.00)")
-    # each symbol as the tab writes it
-    assert '<code class="sy">-</code> draw' in page()
+    assert text_of(page(facts={"views": 400}), "legend").endswith("together · 400 views")
+    assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("together")
+    assert "Read as" not in page() and 'id="reading-src"' not in page()
+    # served, a link at the foot changes how it is read (harptab.js shows it): from a file, none
+    assert ('<p class="reading" id="reading-foot" hidden><a href="#">Change how it\'s read</a></p>' in page())
+
+
+def test_another_notation_says_how_it_was_read_and_its_source_is_what_changes_it():
+    html = page(TABS.joinpath("124_heart-of-gold.txt").read_text("utf-8"), facts={"views": 400})
+    assert text_of(html, "legend") == "Read as: B blow · D draw · , together, guessed (1.00) · 400 views"
+    assert '<code class="sy">B</code> blow' in html  # each symbol as the tab writes it
+    # served, its source is a link to the page that changes it (harptab.js)
+    assert '<span class="src" id="reading-src">guessed (1.00)</span>' in html and 'id="reading-foot"' not in html
+    pinned = page(HOTEL, pin="signs")
+    assert text_of(pinned, "legend") == "Read as: 4 blow · - draw, as you set it"
+    assert '<span class="src" id="reading-src">as you set it</span>' in pinned
+    assert data_of(pinned)["reading"]["source"] == "pinned"
+
+
+def test_a_tab_shown_as_written_can_still_be_read_another_way():
+    html = page(KNOCKIN)
+    assert '<pre class="tab">' in html and 'id="reading-foot" hidden' in html
+    read = page(KNOCKIN, pin="brackets")  # a pin is read as it says, the score never asked
+    assert data_of(read)["reading"] == {"name": "brackets", "source": "pinned", "q": 0.63, "margin": 0.63,
+                                        "said": "4 blow · (4) draw · - joins"}
 
 
 def test_spokey_dokey_says_it_was_read_by_its_own_legend():

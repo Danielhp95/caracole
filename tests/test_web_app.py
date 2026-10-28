@@ -2857,8 +2857,9 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     from caracole.web.app import route_for, routes
 
     names = sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes"))
-    assert names == ["export_routes", "guitar_routes", "jobs_routes", "library_routes", "offline_routes",
-                     "remove_routes", "review_routes", "search_routes", "songbook_routes", "versions_routes"]
+    assert names == ["export_routes", "guitar_routes", "harmonica_routes", "jobs_routes", "library_routes",
+                     "offline_routes", "remove_routes", "review_routes", "search_routes", "songbook_routes",
+                     "versions_routes"]
     gathered = []
     for name in names:
         module = importlib.import_module(f"caracole.web.{name}")

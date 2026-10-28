@@ -834,3 +834,68 @@ def test_add_harptabs_writes_the_picks_address_in_the_songs_one_entry(tmp_path):
         add_harptabs(p, "Billy Joel - Piano Man", "https://www.harptabs.com/artist/1178/billy-joel")
     with pytest.raises(OverridesError, match="Artist - Title"):
         add_harptabs(p, "Piano Man", "https://www.harptabs.com/tab/25/piano-man")
+
+
+# --- [harmonica]: how a song's harmonica tab is read, as you set it --------------------------------------------------
+
+
+def test_a_harmonica_tabs_reading_is_kept_by_song_and_tab(tmp_path):
+    from caracole.overrides import add_harmonica
+
+    p = write(tmp_path, '# my decisions\n[match]  # songs\n"A - B" = "a/b"\n')
+    add_harmonica(p, "Cowboy Bebop - Spokey Dokey", "harmonica-1.txt", "letters")
+    add_harmonica(p, "Cowboy Bebop - Spokey Dokey", "harmonica-2.txt", {"as": "signs", "*": "bend"})
+    text = p.read_text(encoding="utf-8")
+    assert "# my decisions" in text and "# songs" in text
+    assert text.endswith('[harmonica]\n"Cowboy Bebop - Spokey Dokey" = {"harmonica-1.txt" = "letters", '
+                         '"harmonica-2.txt" = {as = "signs", "*" = "bend"}}\n')
+    o = load_overrides(p)
+    assert o.harmonica == {"cowboy-bebop/spokey-dokey": {"harmonica-1.txt": "letters",
+                                                         "harmonica-2.txt": {"as": "signs", "*": "bend"}}}
+    assert Overrides().harmonica == {}
+
+
+def test_a_harmonica_entry_is_found_by_its_songs_key_changed_and_taken_out(tmp_path):
+    from caracole.overrides import add_harmonica
+
+    p = write(tmp_path, '[harmonica."Cowboy Bebop - Spokey Dokey"]  # its tabber writes b for a blow\n'
+                        '"harmonica-1.txt" = "letters"\n"harmonica-2.txt" = "signs"\n')
+    before = p.read_bytes()
+    add_harmonica(p, "Cowboy Bebop - Spokey Dokey", "harmonica-1.txt", "letters")  # as it is: nothing written
+    assert p.read_bytes() == before
+    add_harmonica(p, "cowboy bebop - spokey dokey", "harmonica-1.txt", "legend")  # the song written another way
+    text = p.read_text(encoding="utf-8")
+    assert "# its tabber writes b for a blow" in text and text.count("harmonica-1.txt") == 1
+    assert load_overrides(p).harmonica["cowboy-bebop/spokey-dokey"] == {"harmonica-1.txt": "legend",
+                                                                        "harmonica-2.txt": "signs"}
+    add_harmonica(p, "Cowboy Bebop - Spokey Dokey", "harmonica-1.txt", None)
+    assert load_overrides(p).harmonica == {"cowboy-bebop/spokey-dokey": {"harmonica-2.txt": "signs"}}
+    add_harmonica(p, "Cowboy Bebop - Spokey Dokey", "harmonica-2.txt", None)  # its last: the song's entry goes
+    assert load_overrides(p).harmonica == {} and "Spokey" not in p.read_text(encoding="utf-8")
+    other = tmp_path / "other.toml"
+    other.write_text("# nothing pinned\n", encoding="utf-8")
+    add_harmonica(other, "Cowboy Bebop - Spokey Dokey", "harmonica-1.txt", None)  # nothing to take out
+    assert other.read_text(encoding="utf-8") == "# nothing pinned\n"
+
+
+@pytest.mark.parametrize(("entry", "said"), [
+    ('"A - B" = "letters"', "a table of its harmonica tabs"),
+    ('"A - B" = {"harmonica.txt" = "letters"}', "harmonica-N.txt"),
+    ('"A - B" = {"harmonica-1.txt" = "staff"}', "signs, brackets, letters, signs after, barrett or legend"),
+    ('"A - B" = {"harmonica-1.txt" = {as = "staff"}}', "signs, brackets, letters, signs after, barrett"),
+    ('"A - B" = {"harmonica-1.txt" = {"*" = "squeak"}}', "what a symbol means"),
+    ('"A - B" = {"harmonica-1.txt" = 3}', "a notation's name or a table"),
+    ('"A" = {"harmonica-1.txt" = "letters"}', "Artist - Title"),
+])
+def test_a_harmonica_entry_that_cant_be_read_says_what_it_takes(tmp_path, entry, said):
+    from caracole.overrides import add_harmonica
+
+    with pytest.raises(OverridesError, match=re.escape(said)):
+        load_overrides(write(tmp_path, f"[harmonica]\n{entry}\n"))
+    p = tmp_path / "other.toml"
+    p.write_text("# mine\n", encoding="utf-8")
+    with pytest.raises(OverridesError):
+        add_harmonica(p, "A - B", "harmonica-1.txt", {"*": "squeak"})
+    with pytest.raises(OverridesError):
+        add_harmonica(p, "A - B", "harmonica.txt", "letters")
+    assert p.read_text(encoding="utf-8") == "# mine\n"

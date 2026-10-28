@@ -226,3 +226,32 @@ def test_removing_the_song_deletes_the_page_a_render_wrote_and_not_one_of_yours(
     assert "harmonica-7.html" in {name for name, _ in plan.keep}
     remove_song(conn, cfg, plan)
     assert sorted(p.name for p in folder.iterdir() if p.name.startswith("harmonica-")) == ["harmonica-7.html"]
+
+
+def test_a_tab_is_read_as_overrides_toml_says_on_its_page_and_for_the_songs_viewer(conn, cfg):
+    # [harmonica] in overrides.toml pins how a tab is read: Barrett's notation draws the tab's bare holes, which
+    # moves the harp that plays with the record, on the tab's page and on the sheet's viewer alike
+    song = song_with_a_tab(conn, cfg)
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    guessed = data_of(folder / "harmonica-1.html", "harp-data")
+    assert guessed["reading"]["source"] == "guessed" and data_of(folder / "sheet.html", "song")["harpTabs"] == [3]
+    pinned = Overrides(harmonica={song.key: {"harmonica-1.txt": "barrett"}})
+    stats = render_all(conn, cfg, pinned, runner=fake_chordpro)
+    assert stats.failed == 0
+    data = data_of(folder / "harmonica-1.html", "harp-data")
+    assert data["reading"]["source"] == "pinned" and data["reading"]["name"] == "barrett"
+    assert '<span class="src" id="reading-src">as you set it</span>' in (folder / "harmonica-1.html").read_text("utf-8")
+    assert data["start"] != guessed["start"]
+    assert data_of(folder / "sheet.html", "song")["harpTabs"] != [3]
+    # another tab of the song, or another song's, is read as caracole guesses
+    other = Overrides(harmonica={song.key: {"harmonica-2.txt": "barrett"}})
+    render_all(conn, cfg, other, runner=fake_chordpro)
+    assert data_of(folder / "harmonica-1.html", "harp-data")["reading"]["source"] == "guessed"
+
+
+def test_a_pin_by_the_tabs_legend_on_a_tab_with_none_is_read_as_guessed(conn, cfg):
+    song = song_with_a_tab(conn, cfg)
+    render_all(conn, cfg, Overrides(harmonica={song.key: {"harmonica-1.txt": "legend"}}), runner=fake_chordpro)
+    data = data_of(song_dir(cfg.library_dir, song) / "harmonica-1.html", "harp-data")
+    assert data["reading"]["source"] == "guessed"
