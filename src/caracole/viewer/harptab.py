@@ -44,10 +44,12 @@ by ``1 + LEGEND_WEIGHT × agreement``. Its lines are a ``Legend`` on the page.
 or holds (``scan``); a row reads with confidence its own P × T, and one under ``ROW_TRUST``, or a line that holds
 three holes but reads under ``HOLE_SHARE``, is a row shown as written (``Row.trusted``). Nothing read is lost: what a
 row's notation can't read is kept in its place (a group of kind "unread": ``$``, ``(DV)``). The line under a row is
-its words when it is a line of text that is no section's name and no address. A line of text alone between blank
-lines after the first row is the tabber's prose; so is a block that holds an address or starts as an instruction does
-("Repeat…", "Listen…"); a longer block is words sung to the same tune (a later verse). Before the first row, every line
-is the tabber's notes. A short line that names a section ("Verse", "chorus-", "[Bridge]") starts one.
+its words when it is a line of text that is no section's name, no address and no line of holes too few to be a row
+(``Scan.holey``: "do 3, slip to 6"). A line of text alone between blank lines after the first row is the tabber's
+prose; so is a block that holds an address or starts as an instruction does ("Repeat…", "Listen…"); a longer block is
+words sung to the same tune (a later verse). Before the first row, every line is the tabber's notes. A short line that
+names a section ("Verse", "chorus-", "[Bridge]") starts one; right above or below a row, one that starts so but goes
+on in words ("End of the road") is sung.
 
 **Holes over syllables** (``align``). Each syllable start of a row's words (a word's first letter, and each letter
 after a hyphen or a comma inside one) takes the hole written nearest it, within ``REACH`` columns of where the hole is
@@ -176,9 +178,12 @@ _DOT_BEFORE = re.compile(r"(?<![.\w])\.[ \t]*[-+−–]?(?:10|[1-9])(?!\d)")  # 
 _CHIPS = {"Diatonic": re.compile(r"(?i)\bdiatonic\b"), "Chromatic": re.compile(r"(?i)\bchromatic\b")}
 _SIGNS = "+-−–"
 _LEAD_LABEL = re.compile(r"^\s*(?P<label>\(?[A-Za-z][A-Za-z ]{0,14}(?:\d{1,2})?\)?)\s*[:;]+\s*")
-_LABEL_WORDS = re.compile(
-    r"(?i)^\W*(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|"
-    r"pre-?chorus|break|ending|end|repeat|harp|harmonica|part|melody|theme|next verse|last verse|verso|estrofa)\b")
+_LABEL_WORD = (r"(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|"
+               r"pre-?chorus|break|ending|end|repeat|harp|harmonica|part|melody|theme|next verse|last verse|verso|"
+               r"estrofa)\b")
+_LABEL_WORDS = re.compile(r"(?i)^\W*" + _LABEL_WORD)
+# What a section's name holds besides its words: a number, a repeat mark, punctuation ("Verse 2", "Chorus (x2)").
+_LABEL_REST = re.compile(r"(?i)" + _LABEL_WORD + r"|\b(?:x\s?\d+|\d+x|\d+)\b|[^\w]")
 _CHORUS = re.compile(r"(?i)chorus|coro|estribillo|refr[aeá]i?n")
 _URL = re.compile(r"https?://|www\.", re.I)
 # A line that tells the player something rather than being sung: its block is the tabber's prose.
@@ -250,6 +255,7 @@ class Scan:
     unknown: tuple[str, ...]
     label: str | None = None
     used: Counter = field(default_factory=Counter, compare=False)
+    free: int = 0  # its words standing free: tokens of three letters or more and no digit ("slip", "BOM")
 
     @property
     def holes(self) -> tuple[Group, ...]:
@@ -264,6 +270,12 @@ class Scan:
     def missed(self) -> bool:
         """Whether it holds holes its notation couldn't read enough of to make it a row."""
         return not self.is_row and len(self.holes) >= 3 and self.coverage >= MISSED_SHARE
+
+    @property
+    def holey(self) -> bool:
+        """Whether it is a line of holes too few or too mixed to be a row ("do 3, slip to 6"): never a row's words.
+        Two holes at least, and twice as many as its words standing free."""
+        return len(self.holes) >= 2 and len(self.holes) >= 2 * self.free
 
 
 @dataclass
@@ -703,7 +715,8 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
             unknown.append(rest)
     letters = sum(not ch.isspace() for ch in text)
     good = sum(1 for i, ch in enumerate(text) if covered[i] and not ch.isspace())
-    return Scan(tuple(groups), good / letters if letters else 0.0, tuple(unknown), label, used)
+    free = sum(1 for w in _WORD.findall(text) if not re.search(r"\d", w) and sum(c.isalpha() for c in w) >= 3)
+    return Scan(tuple(groups), good / letters if letters else 0.0, tuple(unknown), label, used, free)
 
 
 def _free_until(covered: list[bool], prose: list[bool], start: int) -> int:
@@ -1035,8 +1048,7 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
             flush()
             found = scans[i]
             lyric = None
-            if i + 1 < len(lines) and kinds[i + 1] == "text" and not _is_label(lines[i + 1]) \
-                    and not _URL.search(lines[i + 1]):
+            if i + 1 < len(lines) and kinds[i + 1] == "text" and _sung(lines[i + 1], scans[i + 1]):
                 lyric = lines[i + 1]
             label = found.label
             if label and _is_label(label + ":"):
@@ -1050,7 +1062,8 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
             seen_row = True
             i += 2 if lyric is not None else 1
             continue
-        if _is_label(line) and (seen_row or _LABEL_WORDS.search(line)):
+        beside = any(0 <= j < len(kinds) and kinds[j] in ("holes", "missed") for j in (i - 1, i + 1))
+        if _is_label(line, beside_row=beside) and (seen_row or _LABEL_WORDS.search(line)):
             flush()
             sections.append(Section(_label_text(line)))
         else:
@@ -1089,14 +1102,22 @@ def named_key(lines: list[str]) -> str | None:
     return None
 
 
-def _is_label(line: str) -> bool:
+def _sung(line: str, found: Scan) -> bool:
+    """Whether a line of text by a row may be its words: no section's name, no address, no line of holes."""
+    return not _is_label(line, beside_row=True) and not _URL.search(line) and not found.holey
+
+
+def _is_label(line: str, *, beside_row: bool = False) -> bool:
+    """Whether a line names a section: "[Bridge]", "Chorus", "Verse 2", "fade:". Right above or below a row
+    (``beside_row``), a line that starts as one but goes on in words ("End of the road", "Break my heart") is sung."""
     words = line.split()
     stripped = line.strip()
     if not words or len(stripped) > 32 or _URL.search(stripped):
         return False
     if re.fullmatch(r"\[[^\]]+\]|\([^)]+\)", stripped) and len(words) <= 4:
         return True
-    if _LABEL_WORDS.search(stripped) and len(words) <= 4:
+    if _LABEL_WORDS.search(stripped) and len(words) <= 4 and (
+            not beside_row or ":" in stripped or not _LABEL_REST.sub("", stripped).strip()):
         return True
     return len(words) <= 3 and stripped[-1] in ":-" and not stripped.endswith("--")
 
