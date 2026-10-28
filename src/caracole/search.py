@@ -90,7 +90,10 @@ artist pages read, a song a hit (``SiteHit``: the tabs of one title by one artis
 title less what it says in brackets, ``harptabs.song_title``, the most viewed first, in
 ``tabs``), by any reading; then the sitemap's tabs whose artist no page read names, by
 their title alone, as MuseScore's pages. ``harptabs_artist`` and ``harptabs_songs`` give
-one of its artists and their songs. ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
+one of its artists and their songs. ``search_gametabs`` reads gametabs.net's (``gametabs_index``, from its
+sitemaps, and the game pages caracole read, gametabs_index.py): a track of a game a hit (``SiteHit``, the game as
+its artist, its tabs the most viewed first in ``tabs``), by its game, its title or a composer of its tabs (a game
+page's alone say who). ``gtptabs_songs`` counts the songs gtptabs.com's index lists by an
 artist, for an artist the query names. They only read the local tables: nothing here asks gtptabs.com or MuseScore
 anything, and MuseScore's pages are for the user to open. ``search_lacuerda`` reads
 LaCuerda's (``lacuerda_index``, from its listings of every artist and the artist pages
@@ -324,6 +327,19 @@ class HarpTabHit:
 
 
 @dataclass(frozen=True)
+class GameTabHit:
+    """One tab of a track on gametabs.net: its title, its page, and what its game's page said of it (nothing before
+    caracole read that page): its views, its fun rating, its instruments and its composers."""
+
+    title: str
+    url: str
+    views: int = 0
+    rating: float | None = None
+    instruments: tuple[str, ...] = ()
+    composers: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class SiteHit:
     """A page of another site's offline index the query matches.
 
@@ -333,7 +349,9 @@ class SiteHit:
     it, so ``artist`` is "" and the page a possible match), "harptabs" (a song's
     harmonica tabs on harptabs.com, the most viewed first in ``tabs``, ``url`` the
     first's, by the artist whose page caracole read, ``page``; or a tab of its sitemap
-    whose artist no page read names, a title alone, as MuseScore's) or "lacuerda" (a song
+    whose artist no page read names, a title alone, as MuseScore's), "gametabs" (a track of a
+    game on gametabs.net, the game its ``artist``, its tabs the most viewed first in ``tabs``,
+    ``url`` the first's, ``page`` the game's slug) or "lacuerda" (a song
     of LaCuerda's, named as LaCuerda names it, its versions counted in
     ``uploads``, and ``sheet`` the page of its best Letra y Acordes version, the
     sheet a lookup keeps; None for a song without chords there). ``url`` is the
@@ -350,7 +368,7 @@ class SiteHit:
     uploads: int = 1
     via: str = "title"
     sheet: str | None = None
-    tabs: tuple[HarpTabHit, ...] = ()
+    tabs: tuple[HarpTabHit | GameTabHit, ...] = ()
     page: str = ""
 
 
@@ -1268,6 +1286,79 @@ def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROW
         return [SongPage(*row).url for row in rows]
 
     return _title_pages(conn, query, limit, "musescore", title_key, pages)
+
+
+def search_gametabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
+    """gametabs.net's tracks in its index that match ``query``, best first, by any reading, as the index's songs are
+    scored: a track of a game a hit, the game as its artist, the game's name or a composer of its tabs (by the game
+    pages caracole read) as its artist's names; its tabs (``tabs``) the most viewed first, its ``url`` the first's.
+    Ties go to the most viewed. The game is named as its page heads it once caracole read it, else from its slug, and
+    the track as a card writes it, else from its slug (less the number a repeated title takes). It reads the tables
+    alone."""
+    from caracole.gametabs import TAB, page_url, title_key
+    from caracole.normalize import identity_key
+
+    patterns = _patterns(name_words(query))
+    queries = _queries(query)
+    if not patterns or not queries:
+        return []
+    paths = {r[0] for r in conn.execute(
+        f"SELECT path FROM gametabs_index WHERE kind = ? AND ({' OR '.join('path LIKE ?' for _ in patterns)}) LIMIT ?",
+        (TAB, *patterns, SITE_ROWS_READ))}
+    paths.update(r[0] for r in conn.execute(
+        f"SELECT path FROM gametabs_game_tabs WHERE {' OR '.join('composers LIKE ?' for _ in patterns)} LIMIT ?",
+        (*patterns, SITE_ROWS_READ)))
+    if not paths:
+        return []
+    marks = ", ".join("?" for _ in paths)
+    listed = {r[0]: tuple(r)[1:] for r in conn.execute(
+        f"SELECT path, title, views, rating, instruments, composers FROM gametabs_game_tabs WHERE path IN ({marks})",
+        list(paths))}
+    keyed = {r[0]: tuple(r)[1:] for r in conn.execute(
+        f"SELECT path, game, key FROM gametabs_index WHERE kind = ? AND path IN ({marks})", (TAB, *paths))}
+    games = {game for game, _ in keyed.values()} | {path.split("/")[1] for path in listed}
+    marks = ", ".join("?" for _ in games)
+    names = {r[0]: r[1] for r in conn.execute(f"SELECT game, name FROM gametabs_games WHERE name != '' AND game IN "
+                                              f"({marks}) ORDER BY path", list(games))} if games else {}
+    tracks: dict[tuple[str, str], list[tuple[str, str | None, tuple]]] = {}
+    for path in paths:
+        game = path.split("/")[1]
+        row = listed.get(path)
+        title = row[0] if row is not None else None
+        key = title_key(title) if title else (keyed[path][1] if path in keyed else "")
+        if key:
+            tracks.setdefault((game, key), []).append((path, title, row or ()))
+    scored = []
+    for (game, key), tabs in tracks.items():
+        name = names.get(game) or _title_words(game)
+        composers = list(dict.fromkeys(c for _, _, row in tabs for c in _listed_names(row[4] if row else None)))
+        artists = [" ".join(name_words(name)), game.replace("-", " "), *(" ".join(name_words(c)) for c in composers)]
+        score, via = _reading(q.readings(a, key.replace("-", " ")) for q in queries for a in dict.fromkeys(artists) if a)
+        if score >= MIN_SCORE:
+            views = max((row[1] for _, _, row in tabs if row), default=0)
+            scored.append((round(score, 1), views, name, key, game, tabs, via))
+    scored.sort(key=lambda s: (-s[0], -s[1], s[2], s[3]))
+    hits = []
+    for score, _, name, key, game, tabs, via in scored[:max(limit, 0)]:
+        tabs.sort(key=lambda t: (-(t[2][1] if t[2] else 0), t[0]))
+        title = next((t for _, t, _ in tabs if t), None) or _title_words(key)
+        hits.append(SiteHit(
+            "gametabs", title, page_url(tabs[0][0]), score, artist=name,
+            artist_key=identity_key(name, "").partition("/")[0], title_key=key, uploads=len(tabs), via=via,
+            tabs=tuple(GameTabHit(t or title, page_url(path), *((row[1], row[2], tuple(_listed_names(row[3])),
+                                                                  tuple(_listed_names(row[4]))) if row else ()))
+                       for path, t, row in tabs),
+            page=game))
+    return hits
+
+
+def _listed_names(text: str | None) -> list[str]:
+    """The names of a JSON array gametabs_game_tabs keeps (its instruments, its composers)."""
+    try:
+        names = json.loads(text or "[]")
+    except (ValueError, RecursionError):
+        return []
+    return [n for n in names if isinstance(n, str)] if isinstance(names, list) else []
 
 
 def search_harptabs(conn: sqlite3.Connection, query: str, *, songs: int = SITE_ROWS,

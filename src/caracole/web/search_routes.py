@@ -74,7 +74,11 @@ MuseScore's pages; none while harptabs.com is turned off), and says why it left 
 (``skipped``): turned off, its index still empty, or MuseScore blocking caracole; and why it
 searched one only in part (``partial``): LaCuerda's index while the nightly run still reads its
 listings, with the letters read so far, and harptabs.com's while its artist pages aren't all read
-(harptabs_index.py, "2 of 10,428 artists").
+(harptabs_index.py, "2 of 10,428 artists"). Of gametabs.net it reads its sitemaps' and game pages' tables
+(``search.search_gametabs``: ``gametabs``, a track of a game a song, the game its artist, its tabs the most viewed
+first, each with the instruments and composers its game's page said; none while gametabs.net is turned off, and no
+mark among ``looked``'s yet). A song's Get it on a gametabs.net row looks the song up and keeps that tab
+(``gametabs``: ``caracole get --gametabs``, recorded under ``[gametabs]``).
 ``looked`` says the same of every site, Ultimate Guitar's index too, as the
 pages' marks show it (``_looked``: a state, a short label, a line of detail), and
 ``unseen`` (``search.bare_id_unseen``) what ``hint`` says of an artist UG's
@@ -361,6 +365,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
         LibraryHit,
         found,
         lacuerda_leads,
+        search_gametabs,
         search_gtptabs,
         search_harptabs,
         search_lacuerda,
@@ -381,7 +386,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     cached = app._found.get(q)
     if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
         (index_found, index, artists, hint, unseen, gtptabs, musescore, harp_artists, harptabs, lc_artists, lacuerda,
-         close) = cached[1:]
+         gametabs, close) = cached[1:]
     else:
         index_found, index, artists, hint, unseen = _index_hits(conn, q)
         gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
@@ -390,9 +395,10 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
                                   else ([], []))
         lc_artists, lacuerda = (search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out
                                 else ([], []))
+        gametabs = search_gametabs(conn, q, SITE_HITS) if app.cfg.provider("gametabs").enabled else []
         close = None  # looked for below, once a song of yours doesn't make it moot
         app._found[q] = (time.monotonic(), index_found, index, artists, hint, unseen, gtptabs, musescore,
-                         harp_artists, harptabs, lc_artists, lacuerda, close)
+                         harp_artists, harptabs, lc_artists, lacuerda, gametabs, close)
         while len(app._found) > CACHE_SIZE:
             app._found.popitem(last=False)
     if close is None and not yours:
@@ -428,6 +434,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             # title alone, a possible match, as MuseScore's pages are; and its artists, as LaCuerda's
             "harptabs": _harptabs_rows(app, conn, harptabs, songs),
             "harptabs_artists": [_harptabs_artist_json(app, conn, a, songs) for a in harp_artists],
+            # gametabs.net's tracks of games, the game as the artist, each with its tabs
+            "gametabs": _gametabs_rows(app, conn, gametabs, songs),
             "lacuerda": _lacuerda_rows(app, conn, lacuerda, songs),
             "lacuerda_artists": [{**_lacuerda_artist_json(app, conn, a, songs),
                                   "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
@@ -538,6 +546,26 @@ def _harptabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit
                        "difficulty": t.difficulty} for t in h.tabs],
              **_keys(h.artist, h.title), **next(owners)} if h.artist else
             {"source": h.source, "title": h.title, "url": h.url, "score": h.score} for h in hits]
+
+
+def _gametabs_rows(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit],
+                   songs: list[Song]) -> list[dict[str, Any]]:
+    """gametabs.net's tracks as the pages draw them: the game as the artist, the track as the title, its tabs, the
+    most viewed first (``tabs``: each one's title, page, views, rating, instruments and composers, as its game's page
+    said them), what they are for (``instruments``) and who composed them (``composers``), and its song of your
+    library, as gtptabs.com's are."""
+    owners = iter(_owners(app, conn, hits, songs))
+
+    def names(h: SiteHit, part: str) -> list[str]:
+        return list(dict.fromkeys(n for t in h.tabs for n in getattr(t, part, ())))
+
+    return [{"source": h.source, "artist": h.artist, "title": h.title, "url": h.url, "uploads": h.uploads,
+             "score": h.score, "via": h.via, "page": h.page, "instruments": names(h, "instruments"),
+             "composers": names(h, "composers"),
+             "tabs": [{"title": t.title, "url": t.url, "views": t.views, "rating": t.rating,
+                       "instruments": list(getattr(t, "instruments", ())), "composers": list(getattr(t, "composers", ()))}
+                      for t in h.tabs],
+             **_keys(h.artist, h.title), **next(owners)} for h in hits]
 
 
 def _harptabs_artist_json(app: WebApp, conn: sqlite3.Connection, a: SiteArtist, songs: list[Song]) -> dict[str, Any]:

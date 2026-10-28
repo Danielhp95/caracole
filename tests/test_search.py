@@ -467,6 +467,71 @@ def test_musescore_pages_are_found_by_their_whole_title_alone(conn):
 
 
 
+def gametabs_index(conn) -> None:
+    """gametabs.net's index: the captured sitemaps' rows, and Actraiser's and Hollow Knight's game pages read."""
+    from datetime import UTC, datetime
+
+    from helpers.gametabs_site import fixture
+
+    from caracole.gametabs import parse_game_page, parse_page_url
+    from caracole.gametabs_index import store_game_page
+    from caracole.ug.sitemap import iter_locs
+
+    for name in ("sitemap_1.xml", "sitemap_2.xml"):
+        rows = [r for r in map(parse_page_url, iter_locs(fixture(name).encode())) if r is not None]
+        conn.executemany("INSERT INTO gametabs_index (path, kind, game, slug, page, key, slug_key, sitemap) "
+                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [(*r, name) for r in rows])
+    now = datetime(2026, 10, 28, tzinfo=UTC)
+    for game in ("actraiser", "hollow-knight"):
+        store_game_page(conn, f"tabs/{game}", parse_game_page(fixture(f"game_{game}.html")), now)
+
+
+def test_gametabs_finds_a_track_by_its_game_and_title_its_tabs_one_hit(conn):
+    from caracole.search import GameTabHit, search_gametabs
+
+    gametabs_index(conn)
+    hits = search_gametabs(conn, "hollow knight resting grounds")
+    hit = hits[0]
+    assert (hit.source, hit.artist, hit.title, hit.url, hit.uploads, hit.via, hit.page, hit.score) == (
+        "gametabs", "Hollow Knight", "Resting Grounds", "https://gametabs.net/tabs/hollow-knight/resting-grounds", 2,
+        "both", "hollow-knight", 100.0)
+    assert hit.tabs == (
+        GameTabHit("Resting Grounds", "https://gametabs.net/tabs/hollow-knight/resting-grounds", 692, 5.0, ("Guitar",),
+                   ("Christopher Larkin",)),
+        GameTabHit("Resting Grounds", "https://gametabs.net/tabs/hollow-knight/resting-grounds-2", 430, 5.0,
+                   ("Guitar",), ("Christopher Larkin",)))
+    assert (hit.artist_key, hit.title_key) == ("hollow-knight", "resting-grounds")
+    assert {h.via for h in hits[1:]} <= {"artist"} and all(h.score < hit.score for h in hits[1:])
+
+
+def test_gametabs_finds_a_track_by_its_title_or_its_composer(conn):
+    from caracole.search import search_gametabs
+
+    gametabs_index(conn)
+    [hit] = search_gametabs(conn, "fillmore")
+    assert (hit.artist, hit.title, hit.via, hit.tabs[0].composers) == ("Actraiser", "Fillmore", "title",
+                                                                       ("Yuzo Koshiro",))
+    by_composer = search_gametabs(conn, "yuzo koshiro fillmore")
+    assert (by_composer[0].title, by_composer[0].via) == ("Fillmore", "both")
+    every = search_gametabs(conn, "yuzo koshiro", limit=10)
+    assert {h.artist for h in every} == {"Actraiser"} and len(every) == 5  # Birth of People and of the People: two
+    assert all(h.via == "artist" for h in every)
+
+
+def test_gametabs_names_a_game_whose_page_wasnt_read_from_its_slug(conn):
+    from caracole.search import search_gametabs
+
+    gametabs_index(conn)
+    hit = search_gametabs(conn, "aeris theme")[0]  # then other themes, weaker
+    assert (hit.artist, hit.title, hit.url, hit.tabs[0].views, hit.tabs[0].composers) == (
+        "Final Fantasy Vii", "Aeris Theme", "https://gametabs.net/tabs/final-fantasy-vii/aeris-theme", 0, ())
+    # A repeated title's number is no part of it: "main-theme-108" is Main Theme, of its own game.
+    assert {(h.artist, h.title) for h in search_gametabs(conn, "main theme", limit=10) if h.score == 100} == {
+        ("Game Of Thrones", "Main Theme"), ("Age Of Empires Ii", "Main Theme"),
+        ("Army Men Sarge039s Heroes", "Main Theme")}
+    assert search_gametabs(conn, "zz") == [] and search_gametabs(conn, "nothing like it") == []
+
+
 def harptabs_index(conn) -> None:
     """harptabs.com's index: the captured sitemap's rows, Billy Joel's captured artist page (7 of his 98 tabs), and a
     page of the Beatles' listing two of their 40; Ritchie Valens's page not read."""
@@ -2241,6 +2306,35 @@ def test_a_lacuerda_name_the_query_is_only_inside_of_leaves_room_for_a_suggestio
     # LaCuerda's whole name is the query: nothing to suggest.
     lc_artists(conn, ("adelle", "Adelle", 3))
     assert suggestions(conn, "adelle", find_index(conn, "adelle"), search_lacuerda(conn, "adelle")[0]) == []
+
+
+# --- caracole search: gametabs.net's offline index ---------------------------------------------
+
+
+def test_cli_lists_gametabs_nets_tracks_last_each_with_the_line_that_keeps_its_tab(tmp_path):
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    conn = seed(tmp_path)
+    gametabs_index(conn)
+    conn.commit()
+    out = run(tmp_path, "search", "hollow knight resting grounds").output
+    assert out.index("On harptabs.com (offline index)") < out.index("On gametabs.net (offline index)")
+    gt = out.partition("On gametabs.net (offline index)")[2]
+    page = "https://gametabs.net/tabs/hollow-knight/resting-grounds"
+    assert (f"  [gametabs] Hollow Knight - Resting Grounds · 2 tabs, Guitar, by Christopher Larkin\n     {page}\n"
+            f'     caracole get --gametabs {page} "Hollow Knight" "Resting Grounds"\n') in gt
+    assert ("gametabs.net's game pages are still being read: 2 of 7 game pages so far; caracole gametabs --index "
+            "reads the rest.") in " ".join(gt.split())
+    nothing = run(tmp_path, "search", "piano man").output.partition("On gametabs.net (offline index)")[2]
+    assert "  nothing matches" in nothing
+
+
+def test_cli_says_why_gametabs_net_is_left_out(tmp_path):
+    (tmp_path / "lib").mkdir(parents=True, exist_ok=True)
+    (tmp_path / "state").mkdir(parents=True, exist_ok=True)
+    seed(tmp_path).commit()
+    gt = run(tmp_path, "search", "fillmore").output.partition("On gametabs.net (offline index)")[2]
+    assert "Nothing yet: gametabs.net's index is empty" in gt
 
 
 # --- caracole search: harptabs.com's offline index ---------------------------------------------

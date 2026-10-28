@@ -12,7 +12,9 @@ under a letter LaCuerda's listings aren't read to yet. harptabs.com's artists an
 songs come last, with its mark and the Harmonica badge: a song's Get it keeps that
 harmonica tab (``harptabs``), its other tabs under "⋯", and an artist's Songs lists
 the tabs the index holds of theirs, or offers to read their page (``POST
-/harptabs/artist``, one request, a job followed the same way). LaCuerda's own search,
+/harptabs/artist``, one request, a job followed the same way). gametabs.net's tracks of games
+follow, with its mark and their instruments as badges: a song's Get it keeps that tab
+(``gametabs``), its other tabs under "⋯". LaCuerda's own search,
 which finds the songs of an artist whose page caracole hasn't read, is one
 request too (``POST /lacuerda/search``): the page sends it by itself once the
 query has settled, the box unchanged for 1.5 s, when ``/api/search`` says so
@@ -235,8 +237,9 @@ function show(data, text) {
   const objects = (value) => (Array.isArray(value) ? value : []).filter(x => x && typeof x === "object");
   const lcArtists = objects(data.lacuerda_artists), lc = objects(data.lacuerda);
   const htArtists = objects(data.harptabs_artists), ht = objects(data.harptabs);
+  const gt = objects(data.gametabs);
   const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length + htArtists.length +
-    ht.length;
+    ht.length + gt.length;
   // The artists and the songs it may have meant first ("Did you mean", a row each), whatever else it found: an
   // artist's row, whose Their songs lists their songs; a song's, as the search's rows of it are (suggestedSong).
   const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s), suggestedSong);
@@ -260,6 +263,8 @@ function show(data, text) {
   // by its title alone, a possible match, to open), with its mark and the Harmonica badge.
   if (htArtists.length || ht.length) results.append(...group("On harptabs.com", [...htArtists.map(siteArtistRow),
                                                                                 ...ht.map(htSong)]));
+  // gametabs.net's: its tracks of games, the game the artist, with its mark and their instruments' badges.
+  if (gt.length) results.append(...group("On gametabs.net", gt.map(htSong)));
   // What the search says beside its results, as the library page's bar says it (ROWS_SCRIPT's): nothing found, a
   // band, "Not on the sites", over one row: the query, where caracole looked, and Look up (the form by name) where a
   // row's Get it is; under its "⋯", Ask LaCuerda for a name under a letter its listings aren't read to yet, whose page
@@ -583,7 +588,9 @@ backToResults.addEventListener("click", () => { expand(); window.scrollTo({top: 
 
 function lookUp(pick, display) {
   const body = new URLSearchParams({csrf});
-  for (const name of ["song", "artist", "title", "ug", "tab", "lacuerda", "harptabs"]) if (pick[name]) body.set(name, pick[name]);
+  for (const name of ["song", "artist", "title", "ug", "tab", "lacuerda", "harptabs", "gametabs"]) {
+    if (pick[name]) body.set(name, pick[name]);
+  }
   openReader(display, "Asking for it…");
   const mine = reading;
   fetch("/lookup", {method: "POST", body, headers: {"Accept": "application/json"}})

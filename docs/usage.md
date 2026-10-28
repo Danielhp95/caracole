@@ -3095,6 +3095,9 @@ offline Ultimate Guitar index, LaCuerda's and harptabs.com's (see below):
          https://www.harptabs.com/tab/3310/creep
          caracole get --harptabs https://www.harptabs.com/tab/3310/creep "radiohead" "Creep"
 
+    On gametabs.net (offline index)
+      nothing matches
+
 - **In your library**: every song, whatever its status, with its key when it
   has one (`Key G major (from the tab)`) and its folder. A song with a sheet
   is tagged with where the sheet came from, as `index.html` marks its files with the
@@ -3421,6 +3424,27 @@ of 10,428 artists so far; caracole harptabs --index reads the rest.`); turned
 off, or before its sitemap is read, it says so. An artist page lists their 30
 most viewed tabs: a prolific artist's others are found by their title alone.
 
+**On gametabs.net** follows, unnumbered, from its local index: its sitemaps, and
+the game pages caracole has read (`caracole gametabs --index`, or the nightly
+run with what its budget leaves; see [caracole gametabs](#one-step-at-a-time)).
+A track of a game is a line, the game as its artist, found by the game's name,
+the track's title, or a composer of its tabs (a game page alone says who): its
+tabs, their instruments and composers, the most viewed's page, and the
+`caracole get --gametabs` line that looks the song up now keeping that tab
+(`[gametabs]` in overrides.toml):
+
+    [gametabs] Hollow Knight - Resting Grounds · 2 tabs, Guitar, by Christopher Larkin
+       https://gametabs.net/tabs/hollow-knight/resting-grounds
+       caracole get --gametabs https://gametabs.net/tabs/hollow-knight/resting-grounds "Hollow Knight" "Resting Grounds"
+
+A game whose page caracole hasn't read is named from its address (`Final
+Fantasy Vii`), and so is its track (`Aeris Theme`). `--artist NAME` lists the
+tracks of the game or the composer NAME names, `--title TITLE` those of that
+title. While its game pages aren't all read, the group ends with how far it has
+got (`gametabs.net's game pages are still being read: 93 of 1,658 game pages so
+far; caracole gametabs --index reads the rest.`); turned off, or before its
+sitemaps are read, it says so.
+
 `--key KEY` keeps only your songs in that key (see
 [The song's key](#the-songs-key)), with or without QUERY; without it, your
 songs in the key, by name. It lists up to `--limit` of them, and says how many
@@ -3565,10 +3589,18 @@ Who can reach it, below).
   the queue), then their songs in their group. A tab whose artist no page read
   names comes after MuseScore's pages, by its title alone, the same way (none
   while harptabs.com is turned off).
+  **gametabs.net**'s tracks of games share them too, the game as their artist
+  ("Hollow Knight"), with its mark (`game tab ×2` on a line) and their
+  instruments' badges: a track's tabs the most viewed first under its "⋯", each
+  a Get it that keeps that tab, and the line's own Get it, on a song the other
+  sites don't have, keeps the most viewed (a lookup with `--gametabs`,
+  recorded under `[gametabs]`; none while gametabs.net is turned off).
   **Instruments.** A row for one instrument says which, in an outlined badge
   beside its marks: **Ukulele** for an Ultimate Guitar song that has Ukulele
   Chords (its counts say "ukulele chords ×2"), **Harmonica** for a tab of
-  harptabs.com, **Score** for a MuseScore page; and a song of yours says what it
+  harptabs.com, **Score** for a MuseScore page, **Guitar**, **Bass**,
+  **Ukulele**, **Mandolin** or **Banjo** for a track of gametabs.net, as its
+  game's page names them; and a song of yours says what it
   holds for one (a ukulele sheet, a harmonica tab, a score you filed): by its
   icons on the library page's line, as a badge on the lookup page's row. Nothing is left out for
   an instrument: every chord sheet is listed as always, with no badge, as a

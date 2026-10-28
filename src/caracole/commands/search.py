@@ -17,6 +17,9 @@ when caracole never read their page, the ``caracole harptabs --artist`` line tha
 its songs by an artist whose page caracole read, each with the ``caracole get --harptabs``
 line that looks the song up keeping that tab, and its tabs by title alone, whose artist no
 page read names (search.py ``search_harptabs``); then how far its artist index has got.
+gametabs.net's group follows, unnumbered: its tracks of games, each with the ``caracole get
+--gametabs`` line that looks the song up keeping that tab (search.py ``search_gametabs``), then
+how far its game index has got.
 
 A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
@@ -50,6 +53,7 @@ from caracole.commands._common import exclusive, fail, load_cfg, open_db
 
 LACUERDA = "On LaCuerda (offline index)"
 HARPTABS = "On harptabs.com (offline index)"
+GAMETABS = "On gametabs.net (offline index)"
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -251,6 +255,9 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
     _print_listing(lacuerda, known, start=shown)
     typer.echo(f"\n{HARPTABS}")
     for line in _harptabs_listing(cfg, conn, ask, limit):
+        typer.echo(line)
+    typer.echo(f"\n{GAMETABS}")
+    for line in _gametabs_listing(cfg, conn, ask, limit):
         typer.echo(line)
     if ug is not None and ask.artist is None and ask.title is None:
         _print_suggestions(cfg, conn, ask, ug, lacuerda, [hit for hit, _ in library])
@@ -618,6 +625,43 @@ def _harptabs_lines(hit: SiteHit) -> str:
     said = _count(hit.uploads, "tab") + (f", key {key}" if key else "")
     return (f"  {_tag('harptabs')}{hit.artist} - {hit.title} · {said}\n     {hit.url}\n"
             f"     caracole get --harptabs {hit.url} {_quote(hit.artist)} {_quote(hit.title)}")
+
+
+def _gametabs_listing(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int) -> list[str]:
+    """gametabs.net's index's answer as the search prints it, unnumbered: its tracks of games, at most ``limit``; with
+    ``--artist``, those of that game or composer; with ``--title``, those of that title. Then how far its game index
+    has got, while it isn't whole. Nothing but why, while gametabs.net is turned off or its index is empty."""
+    from caracole.gametabs_index import index_state
+    from caracole.search import search_gametabs
+
+    if not cfg.provider("gametabs").enabled:
+        return ["  gametabs.net is turned off in caracole.toml."]
+    if conn.execute("SELECT 1 FROM gametabs_index LIMIT 1").fetchone() is None:
+        return ["  Nothing yet: gametabs.net's index is empty: the nightly run reads its sitemaps (caracole gametabs "
+                "--index reads them now, then its game pages)."]
+    if ask.artist is not None:
+        hits = [h for h in search_gametabs(conn, f"{ask.artist} {ask.text}".strip(), limit) if h.via != "title"]
+    elif ask.title is not None:
+        hits = [h for h in search_gametabs(conn, ask.title, limit) if h.via == "title"]
+    else:
+        hits = search_gametabs(conn, ask.text, limit)
+    lines = [_gametabs_lines(h) for h in hits] or ["  nothing matches"]
+    state = index_state(conn)
+    if state.read < state.pages:
+        lines += ["", _fill(f"gametabs.net's game pages are still being read: {state.read:,} of "
+                            f"{state.pages:,} game pages so far; caracole gametabs --index reads the rest.")]
+    return lines
+
+
+def _gametabs_lines(hit: SiteHit) -> str:
+    """A gametabs.net track: its game and title, its tabs, their instruments and composers as its game's page says
+    them, the most viewed's page, and the line that looks the song up keeping that tab."""
+    instruments = list(dict.fromkeys(i for t in hit.tabs for i in getattr(t, "instruments", ())))
+    composers = list(dict.fromkeys(c for t in hit.tabs for c in getattr(t, "composers", ())))
+    said = ", ".join([_count(hit.uploads, "tab"), *instruments] + ([f"by {' and '.join(composers)}"] if composers
+                                                                   else []))
+    return (f"  {_tag('gametabs')}{hit.artist} - {hit.title} · {said}\n     {hit.url}\n"
+            f"     caracole get --gametabs {hit.url} {_quote(hit.artist)} {_quote(hit.title)}")
 
 
 def _count(n: int, thing: str) -> str:

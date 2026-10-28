@@ -120,7 +120,8 @@ Rules a change there keeps (the Invariants below are the others):
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
   does.
   A row for one instrument says which, a badge as a source has its mark (rows.js `instrumentBadges`: Ukulele for
-  UG's Ukulele Chords, Harmonica for harptabs.com's tabs, Score for MuseScore's; a song's card's `instruments`,
+  UG's Ukulele Chords, Harmonica for harptabs.com's tabs, Score for MuseScore's, Guitar, Bass… for gametabs.net's,
+  as its game pages name them; a song's card's `instruments`,
   library_page.py `instruments_of`), on both pages, and no site's row is ever filtered by instrument: the Filter panel's Has something for
   (library.js `instOf`, a line's holds read the same way) keeps to your songs, in the list and among the results.
   harptabs.com is searched as UG's index is (`search.search_harptabs`, `/api/search`'s `harptabs_artists` and
@@ -130,7 +131,11 @@ Rules a change there keeps (the Invariants below are the others):
   title alone, as MuseScore's pages, apart. An artist's group ends with "+ N more by … on harptabs.com"
   (`/api/artist?harptabs=`) or, for a page never read, the offer to read it (`POST /harptabs/artist`, `caracole
   harptabs --artist` queued, a job of no song's, `jobs.INDEX_READS`); its `looked` mark says how far its artist
-  index has got ("harptabs.com: 1,204 of 10,428 artists", its name and tooltip).
+  index has got ("harptabs.com: 1,204 of 10,428 artists", its name and tooltip). gametabs.net's tracks of games
+  (`search.search_gametabs`, `/api/search`'s `gametabs`) are songs whose artist is their game, a line in the game's
+  group, their tabs under its "⋯" (rows.js `gameTabsOf`), each Get it a lookup that keeps that tab (`gametabs`,
+  `caracole get --gametabs`, `[gametabs]`), their instruments badges, none while it is turned off; it has no `looked`
+  mark of its own yet (`caracole search` and `caracole index stats` say how far its game index has got).
   What a search says beside its results is rows.js's, shared by both pages: `nothingFound` (a query that found
   nothing on the sites: a line of the list under a quiet band, "Not on the sites · searched 5", the query, the marks
   of `looked`, Request where a song's Open is, the one Request then, and no Back to your songs; under its chevron Ask
@@ -280,8 +285,9 @@ Rules a change there keeps (the Invariants below are the others):
   --search` (LaCuerda's own search, one query, one request at the lookup pace), and review.py, search.py,
   removal.py and songbook.py are `caracole review`, `search`, `remove` and `songbook`. search.py reads the local
   indexes alone, never a site: UG's sitemap index and the artist pages caracole read (ug/artist_tabs.py),
-  gtptabs.com's, MuseScore's, LaCuerda's and harptabs.com's tables (its sitemap's and the artist pages read,
-  harptabs_index.py), and the tombstones of removed songs
+  gtptabs.com's, MuseScore's, LaCuerda's, harptabs.com's (its sitemap's and the artist pages read,
+  harptabs_index.py) and gametabs.net's tables (its sitemaps' and the game pages read, gametabs_index.py), and the
+  tombstones of removed songs
   (`search_removed`: never `lead` or `best`, shown with the `caracole add` line that brings one back,
   and in `/api/search`'s `removed`, which the library page shows with Add again), the words of the UG index's
   artists' names (`ug_artists_fts` and its vocabulary `ug_artist_words`, schema 8, kept by triggers on `ug_index`,
