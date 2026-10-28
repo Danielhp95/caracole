@@ -237,7 +237,13 @@ function show(data, text) {
   const htArtists = objects(data.harptabs_artists), ht = objects(data.harptabs);
   const n = data.library.length + data.index.length + artists.length + lcArtists.length + lc.length + htArtists.length +
     ht.length;
-  status.textContent = n ? "" : "Nothing matches.";
+  // The artists and the songs it may have meant first ("Did you mean", a row each), whatever else it found: an
+  // artist's row, whose Their songs lists their songs; a song's, as the search's rows of it are (suggestedSong).
+  const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s), suggestedSong);
+  const first = objects(data.suggest).find(x => x.artist);
+  status.textContent = (n ? "" : "Nothing matches") +
+    (meant && first ? (n ? "Did you mean " : " · did you mean ") + rowKit.meantName(first) + "?" : n ? "" : ".");
+  if (meant) results.append(meant);
   if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
   // LaCuerda's: its artists, then its songs (the index holds every artist, and the songs of the pages caracole read);
   // first when it alone has the artist the query names ("andres calamaro": lacuerda_leads).
@@ -254,11 +260,11 @@ function show(data, text) {
   // by its title alone, a possible match, to open), with its mark and the Harmonica badge.
   if (htArtists.length || ht.length) results.append(...group("On harptabs.com", [...htArtists.map(siteArtistRow),
                                                                                 ...ht.map(htSong)]));
-  // What the search says beside its results, as the library page's bar says it (ROWS_SCRIPT's): nothing found, the
-  // artists it may have meant first ("Did you mean", a row each), then a band, "Not on the sites", over one row: the
-  // query, where caracole looked, and Look up (the form by name) where a row's Get it is; under its "⋯", Ask LaCuerda
-  // for a name under a letter its listings aren't read to yet, whose page may say, and why it may not see an artist.
-  // Else where it looked, in one muted line, when a site wasn't searched whole.
+  // What the search says beside its results, as the library page's bar says it (ROWS_SCRIPT's): nothing found, a
+  // band, "Not on the sites", over one row: the query, where caracole looked, and Look up (the form by name) where a
+  // row's Get it is; under its "⋯", Ask LaCuerda for a name under a letter its listings aren't read to yet, whose page
+  // may say, and why it may not see an artist. Else where it looked, in one muted line, when a site wasn't searched
+  // whole.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
   // Ask LaCuerda, the one LaCuerda button: LaCuerda's search while its gate lets one go by hand, else the name's page.
   const does = {
@@ -267,8 +273,6 @@ function show(data, text) {
       : null,
   };
   if (!n) {
-    const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s));
-    if (meant) results.append(meant);
     const miss = rowKit.nothingFound(data, text, Object.assign(does, {unfolded}));
     results.append(miss);
     const same = focused && [...miss.querySelectorAll(focused.tagName)].find(x => x.className === focused.className);
@@ -300,14 +304,30 @@ function byNameFrom(text) {
   (f.artist.value ? f.title : f.artist).focus({preventScroll: true});
 }
 
-// A name Did you mean offers: their songs, as their row's Songs lists them, by Ultimate Guitar's ``artist_key`` or
-// the ``slug`` of their LaCuerda page; else the name searched, as typing it would.
+// A name Did you mean offers: their songs, as their row's Songs lists them, by Ultimate Guitar's ``artist_key``, the
+// ``slug`` of their LaCuerda page or the ``path`` of their harptabs.com page; else the name searched, as typing it
+// would.
 function openSuggested(s) {
   if (s.source === "ug" && s.artist_key) { openArtist({artist: String(s.artist), artist_key: String(s.artist_key)}, true); return; }
   if (s.source === "lacuerda" && s.slug) { openSiteArtist({artist: String(s.artist), slug: String(s.slug)}, true); return; }
+  if (s.source === "harptabs" && s.path) {
+    openSiteArtist({source: "harptabs", artist: String(s.artist), path: String(s.path)}, true);
+    return;
+  }
   q.value = String(s.artist || "");
   search();
   q.focus();
+}
+
+// A song Did you mean offers, as the search's rows of it are: your own row, a song of yours (``library``), which opens
+// it; else its row on the first site that has it (``song``: Ultimate Guitar's, LaCuerda's, gtptabs.com's,
+// harptabs.com's), whose Get it looks it up as that row's does.
+function suggestedSong(s) {
+  if (s.library && typeof s.library === "object") return librarySong(s.library);
+  const rows = s.song && typeof s.song === "object" ? s.song : {};
+  const site = ["ug", "lacuerda", "gtptabs", "harptabs"].find(k => rows[k] && typeof rows[k] === "object");
+  if (!site) return null;
+  return site === "ug" ? ugSong(rows.ug) : rowKit.siteHit(rows[site], (pick, display) => lookUp(pick, display));
 }
 
 // An artist's name on a row, pressed: the search for them, as typing their name runs it (their row first, as an artist

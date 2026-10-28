@@ -119,8 +119,10 @@ line of the list under a quiet band, "Not on the sites · searched 5"
 chevron, Ask LaCuerda · 1 request for a name under a letter LaCuerda's listings
 aren't read to yet, and "Why can't caracole find it?" folded, from ``unseen``);
 under results, the same marks in one muted line when a site wasn't searched whole
-(``lookedLine``); and, on the lookup page, the closest artists' names the indexes
-have (``didYouMean``, from ``suggest``: a row each, Their songs). With them
+(``lookedLine``); and, on the lookup page, the closest artists' names and songs'
+titles the indexes have (``didYouMean``, from ``suggest``: a row each, an artist's
+with Their songs, a song's as the search's rows of it are), and what the line under
+the search box calls the first (``meantName``: "Hotel California by Eagles"). With them
 ``readArtistPage``, which asks the server to read an artist's page, by its slug
 or by a name, and ``readOutcome``, what LaCuerda answered a read that left
 nothing to list.

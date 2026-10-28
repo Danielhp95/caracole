@@ -3444,13 +3444,18 @@ Who can reach it, below).
   so caracole can't see their tabs, with the `[artist_url]` lines to paste
   into overrides.toml for the query as that artist's name, and, for a title,
   `caracole add ARTIST "lynrd"`. When its words are spelled close to artists'
-  names (as [caracole search](#caracole-search) chooses them), each comes
-  first as an artist's band of its own, "Stephen Foster · 7 songs on UG · you
-  have 1", your songs of theirs under it as an artist's are, then "Their 7
-  songs on UG ›", which lists their songs in the band (fifty of Ultimate
-  Guitar's, with "+ N more", or those LaCuerda's index holds, or the offer to
-  read their page), with no request; the line under the box says "Nothing on
-  the sites · did you mean Stephen Foster?". Searching asks no site anything: it reads the indexes
+  names, or to a song's title (as [caracole search](#caracole-search) chooses
+  them), each comes first as an artist's band of its own, "Stephen Foster · 7
+  songs on UG · you have 1", a song suggested a line in its artist's band, as
+  the search's lines are (its title, its sites' marks, and Get it where Open
+  is, which looks it up as a result's Get it does; your own line, which opens
+  it, for a song you have), your songs of theirs under it as an artist's are,
+  then "Their 7 songs on UG ›", which lists their songs in the band (fifty of
+  Ultimate Guitar's, with "+ N more", or those LaCuerda's or harptabs.com's
+  index holds, or the offer to read their page), with no request; the line
+  under the box names the first: "Nothing on the sites · did you mean Stephen
+  Foster?", "… · did you mean Beautiful Dreamer by Stephen Foster?". Enter
+  still only moves to the first line. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
   common words), takes no lock and spends no budget, and so does "+ N more".
 
@@ -3564,9 +3569,11 @@ Who can reach it, below).
   yours opens; an Ultimate Guitar song is looked up), the leading artist's
   songs (LaCuerda's artist when LaCuerda's group leads, which asks LaCuerda
   nothing; they stay open as LaCuerda's search ends), or nothing when nothing
-  stands out, and sends LaCuerda's search as the library page's Enter does. A query that finds nothing
-  shows "Did you mean", a row each, whose Their songs lists that artist's
-  songs, as their row's Songs does, then the same band and line, its row's
+  stands out, and sends LaCuerda's search as the library page's Enter does. A query spelled close to
+  artists' names or songs' titles shows "Did you mean" first, a row each: an artist's, whose Their
+  songs lists that artist's songs, as their row's Songs does; a song's, as the search's rows are
+  (Get it, or your own row); the line under the box names the first. A query that finds nothing
+  shows the same band and line as the library page, its row's
   Look up where a song's Get it is (the form under the results, filled in,
   which shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
   them, as typing their name would. `/lookup?q=WORDS` opens it with

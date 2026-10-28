@@ -991,18 +991,27 @@ const caracoleRows = (icons, does) => {
     return why;
   };
   // --- what a search says beside its results (/api/search) ------------------------------------------------------
-  const SITE_NAMES = { ug: "UG", lacuerda: "LaCuerda", gtptabs: "gtptabs.com", musescore: "MuseScore" };
+  const SITE_NAMES = { ug: "UG", lacuerda: "LaCuerda", gtptabs: "gtptabs.com", musescore: "MuseScore",
+    harptabs: "harptabs.com" };
   // An artist's songs on the site whose index names them (``s``, a suggestion: its ``songs`` and ``source``), "212
-  // songs on UG".
-  const songsOn = (s) => (Number(s && s.songs) ? many(s.songs, "song") : "songs") +
-    (s && own.call(SITE_NAMES, s.source) ? " on " + SITE_NAMES[s.source] : "");
-  // The closest artists' names the offline indexes have (``suggest``: each { source, artist, songs, and artist_key
-  // or slug }), most likely first, for a query that may be a typo, as the lookup page draws them: a group of its own,
-  // "Did you mean", an artist's row each ("Lynyrd Skynyrd · Artist · 212 songs on UG", with its site's mark), whose
-  // Their songs is ``open(s, button)``. None for none: null. The library page draws each as an artist's band of its
-  // own (library.js).
-  const didYouMean = (suggest, open) => {
-    const names = listOf(suggest).filter((s) => s && typeof s === "object" && s.artist);
+  // songs on UG"; on harptabs.com, the harmonica tabs their page says they have.
+  const songsOn = (s) => {
+    const harp = Boolean(s && s.source === "harptabs");
+    return (Number(s && s.songs) ? many(s.songs, harp ? "harmonica tab" : "song") : harp ? "harmonica tabs" : "songs") +
+      (s && own.call(SITE_NAMES, s.source) ? " on " + SITE_NAMES[s.source] : "");
+  };
+  // What a suggestion is called, as the line under the search box names the first: an artist's name, a song's title by
+  // its artist ("Hotel California by Eagles").
+  const meantName = (s) => (s && s.title ? String(s.title) + " by " + String(s.artist || "") : String(s && s.artist || ""));
+  // The closest names the offline indexes have (``suggest``: each { source, artist, songs, and artist_key, slug or
+  // path }; a song's with its ``title`` too), most likely first, for a query that may be a typo, as the lookup page
+  // draws them: a group of its own, "Did you mean", a row each: an artist's ("Lynyrd Skynyrd · Artist · 212 songs on
+  // UG", with its site's mark), whose Their songs is ``open(s, button)``; a song's, the row ``song(s)`` makes, as the
+  // search's rows of it are (Get it; your own row, a song of yours). None for none: null. The library page draws each
+  // as an artist's band of its own, a song a line in it (library.js).
+  const didYouMean = (suggest, open, song) => {
+    const names = listOf(suggest).filter((s) => s && typeof s === "object" && s.artist &&
+      (!s.title || typeof song === "function"));
     if (!names.length) return null;
     const box = el("section", "did-you-mean");
     rowSerial += 1;
@@ -1011,6 +1020,11 @@ const caracoleRows = (icons, does) => {
     box.setAttribute("aria-labelledby", head.id);
     const rows = el("div", "rows");
     for (const s of names) {
+      if (s.title) {
+        const row = song(s);
+        if (row) rows.appendChild(row);
+        continue;
+      }
       const name = String(s.artist);
       const go = button("Their songs", "small primary their-songs", (e) => open(s, e.currentTarget),
         "Their songs, by " + name);
@@ -1019,6 +1033,7 @@ const caracoleRows = (icons, does) => {
       row.classList.add("suggestion");
       rows.appendChild(row);
     }
+    if (!rows.childNodes.length) return null;
     box.append(head, rows);
     return box;
   };
@@ -1187,5 +1202,5 @@ const caracoleRows = (icons, does) => {
   return { resultRow, sourceMark, glyph, link, safeHref, titleLink, artistFilter, artistSearch, artistOnly, button, many,
     counts, opener, instrumentBadges, ugHit, artistHit,
     siteHit, siteArtist, siteArtistSongs, readArtistPage, searchLaCuerda, lacuerdaSearcher, readOutcome, indexLine, titleLine,
-    songsOn, didYouMean, lookedMarks, nothingFound, lookedLine };
+    songsOn, meantName, didYouMean, lookedMarks, nothingFound, lookedLine };
 };

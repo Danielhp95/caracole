@@ -1231,6 +1231,81 @@ def test_the_lookup_page_shows_the_same_band_and_line(cfg, live, browser):
     assert queue.snapshot() == []
 
 
+EAGLES = [("eagles", "hotel-california", 6), ("eagles", "take-it-easy", 2), ("gipsy-kings", "hotel-california", 1)]
+MEANT_LINE = "#results section.meant article.hit"
+
+
+def test_a_title_spelled_close_is_a_line_in_its_artists_band_whose_get_it_looks_it_up(cfg, live, browser):
+    base, queue, asked = live
+    sites(cfg, ug=EAGLES)
+    browser.open(base)
+    search(browser, "hotl califronia")
+    assert browser.wait(f"{answer_to('hotl califronia')} && !!document.querySelector('{MEANT_LINE}')")
+    # The song it may have meant: a line in its artist's band, their songs on UG counted, then the miss's band.
+    assert browser.js(GROUPS) == ["Did you mean Eagles · 2 songs on UG"]
+    assert browser.js(LINES) == [["Eagles", [["Hotel California", "ug"]]]]
+    assert browser.js("[...document.querySelectorAll('#results .groups > section')].map((s) => s.className)") == [
+        "artist meant", "nothing"]
+    assert browser.js(STATUS) == "Nothing on the sites · did you mean Hotel California by Eagles?"
+    assert browser.js(f"document.querySelector('{MEANT_LINE} .line-facts').textContent") == "chords ×6"
+    assert browser.js(f"document.querySelector('{MEANT_LINE} .line-action button').textContent") == "Get it"
+    assert browser.js(f"document.querySelector('{MEANT_LINE} h3 .title-get').getAttribute('aria-label')") == (
+        "Get Eagles - Hotel California")  # its name gets it, as its Get it does
+    assert browser.js("document.querySelector('#results section.meant .their-songs').textContent") == (
+        "Their 2 songs on UG›")
+    browser.press("Enter")  # to the first line: a suggestion is never what Enter asks for
+    assert browser.wait(f"document.activeElement === document.querySelector('{MEANT_LINE}')")
+    time.sleep(0.3)
+    assert queue.snapshot() == []
+    searched = len(asked)
+    browser.click(f"{MEANT_LINE} .line-action button")  # Get it: the search's lookup of that Ultimate Guitar song
+    args = posted(queue)
+    assert args[:3] == ("get", "--progress", "--ug=eagles/hotel-california") and args[-2:] == ("Eagles",
+                                                                                                 "Hotel California")
+    assert len(asked) == searched
+
+
+def test_a_title_spelled_close_that_you_have_is_your_own_line_in_its_band(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, ug=EAGLES)
+    (mine,) = library(cfg, ("Eagles", "Hotel California"))
+    conn = db.connect(cfg.db_path)
+    folder = song_dir(cfg.library_dir, mine)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
+    update_song(conn, mine.id, status="found")
+    conn.close()
+    browser.open(base)
+    search(browser, "hotl califrnai")  # two typos: among your songs, though not well, and suggested
+    assert browser.wait(f"{answer_to('hotl califrnai')} && !!document.querySelector('#results section.meant')")
+    assert browser.js(GROUPS) == ["Did you mean Eagles · 2 songs on UG · you have 1"]
+    assert browser.js(LINES) == [["Eagles", [["Hotel California", "yours"]]]]  # one line: your own, which opens it
+    assert browser.js("document.querySelector('#results section.meant article.line[data-id] .line-action a')"
+                      ".textContent") == "Open PDF"
+    assert browser.js(STATUS) == "Nothing on the sites · did you mean Hotel California by Eagles?"
+    assert queue.snapshot() == []
+
+
+def test_the_lookup_page_suggests_a_title_as_a_row_whose_get_it_looks_it_up(cfg, live, browser):
+    base, queue, _ = live
+    sites(cfg, ug=EAGLES)
+    browser.open(base + "lookup?q=hotl%20califronia")
+    assert browser.wait("!!document.querySelector('#results .did-you-mean .hit')")
+    assert browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)") == [
+        "Did you mean", "Not on the sites · searched 5"]
+    row = "#results .did-you-mean .hit"
+    assert browser.js(f"[document.querySelector('{row} .row-title').textContent, document.querySelector('{row} "
+                      f".row-artist').textContent, document.querySelector('{row} .source').dataset.source, "
+                      f"document.querySelector('{row} .row-action button').textContent]") == [
+        "Hotel California", "Eagles", "ug", "Get it"]
+    assert browser.js("document.getElementById('status').textContent") == (
+        "Nothing matches · did you mean Hotel California by Eagles?")
+    browser.click(f"{row} .row-action button")
+    args = posted(queue)
+    assert args[:3] == ("get", "--progress", "--ug=eagles/hotel-california") and args[-2:] == ("Eagles",
+                                                                                                 "Hotel California")
+
+
 NO_SIDEWAYS = "document.documentElement.scrollWidth <= innerWidth"
 
 
@@ -1294,6 +1369,18 @@ READS = """(() => {
   read.box = Math.round(lum(behind(document.querySelector("#results .nothing article"))) * 1000) / 1000;
   return read;
 })()"""
+
+
+def test_a_title_suggestion_fits_a_phone(cfg, live, phone):
+    base, _, _ = live
+    sites(cfg, ug=EAGLES)
+    phone.open(base)
+    search(phone, "hotl califronia")
+    assert phone.wait(f"{answer_to('hotl califronia')} && !!document.querySelector('{MEANT_LINE}') && "
+                      f"!!document.querySelector('{NOTHING}')")
+    assert phone.js(NO_SIDEWAYS)
+    assert phone.js(small_targets()) == []  # the band's name, Their songs, the line's name and Get it, Request
+    assert phone.js(f"document.querySelector('{MEANT_LINE}').getBoundingClientRect().height") <= 2 * 44 + 12
 
 
 @pytest.mark.parametrize("dark", [False, True], ids=["light", "dark"])

@@ -134,8 +134,10 @@ Rules a change there keeps (the Invariants below are the others):
   nothing on the sites: a line of the list under a quiet band, "Not on the sites · searched 5", the query, the marks
   of `looked`, Request where a song's Open is, the one Request then, and no Back to your songs; under its chevron Ask
   LaCuerda and `unseen` folded), `lookedLine` (the same marks, `lookedMarks`, in one muted line under results) and,
-  on the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each); the library page draws a suggestion as
-  an artist's band of its own, first (library.js `mergeSites`, `tailOf`).
+  on the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each, a song's as the search's rows are,
+  before any result); the library page draws a suggestion as an artist's band of its own, first, a song suggested a
+  line in it (`indexLine`, or your own line), which leaves the miss's line in place (library.js `mergeSites`,
+  `foundNothing`, `tailOf`); the line under the box names the first (`meantName`).
   There, library.js's `mergeSites` puts your songs and every index's rows under one header an
   artist and one line a song, by the two parts of the identity key (the rows' `artist_key` and
   `title_key`, an artist's `group_key`, a song's `identity` in the page's data), each line

@@ -259,7 +259,7 @@
   // ROWS_SCRIPT's, which the lookup page shares; and a song's card (card.js), drawn with them.
   const rowKit = caracoleRows(ICONS);
   const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine,
-    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, nothingFound, lookedLine } = rowKit;
+    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, lookedLine } = rowKit;
   const card = caracoleCard(ICONS, rowKit);
   // The file a song opens with, from its title and its line's button: its viewer, else its PDF, else its text
   // (the data marks it primary).
@@ -1965,6 +1965,8 @@
   const artistKeyOf = (s) => String((s && s.identity) || "").split("/")[0] || "~" + String((s && s.sortArtist) || "");
   const titleKeyOf = (s) => String((s && s.identity) || "").split("/").slice(1).join("/");
 
+  // The sites a suggested song's rows are of, in the order its line takes them.
+  const SUGGESTED_SITES = ["ug", "lacuerda", "gtptabs", "harptabs"];
   // The answer's artists and songs, put together by artist and by song, in the order the answer ranks them: the
   // removed songs it matches first (songs you had), then LaCuerda's artists and songs when it alone has the artist the
   // query names (``lacuerda_leads``), the artists the query names when one leads, Ultimate Guitar's songs, its
@@ -1982,9 +1984,14 @@
     const lcArtists = objects(data.lacuerda_artists);
     const htArtists = objects(data.harptabs_artists);
     const htSongs = objects(data.harptabs).filter((h) => h.artist);
+    const meant = objects(data.suggest).filter((x) => x.artist && x.group_key);
+    // A song a suggestion is: its row on each site, as the search's rows are.
+    const meantRows = (x) => (x.title && x.song && typeof x.song === "object"
+      ? SUGGESTED_SITES.map((source) => [source, x.song[source]]).filter(([, row]) => row && typeof row === "object")
+      : []);
     for (const row of [...objects(data.index), ...objects(data.gtptabs), ...objects(data.lacuerda), ...htSongs,
       ...ugArtists.flatMap((a) => objects(a.top)), ...lcArtists.flatMap((a) => objects(a.top)),
-      ...htArtists.flatMap((a) => objects(a.top))]) {
+      ...htArtists.flatMap((a) => objects(a.top)), ...meant.flatMap((x) => meantRows(x).map(([, r]) => r))]) {
       const i = yourSong(row);
       if (i !== undefined && row.same_artist === true && row.artist_key && !model.alias.has(String(row.artist_key))) {
         model.alias.set(String(row.artist_key), artistKeyOf(songs[i]));
@@ -2008,19 +2015,27 @@
       if (kind === "artist") addArtist(model, source, row);
       else addSong(model, source, row);
     }
-    // The artists the query may have meant (``suggest``, a typo's), each their group, first: an artist's band that says
-    // so, whose foot lists their songs (tailOf); the songs of yours by them under it, as an artist's are.
-    for (const s of objects(data.suggest).filter((x) => x.artist && x.group_key)) {
-      const g = groupOf(model, model.alias.get(String(s.group_key)) || String(s.group_key), s.artist);
-      if (!g.meant) g.meant = s;
+    // The artists and the songs the query may have meant (``suggest``, a typo's), each artist's group first: an
+    // artist's band that says so, whose foot lists their songs (tailOf); a song a line in its artist's band, as the
+    // search's lines are (indexLine: Get it; your own line, a song of yours); the songs of yours by them under it, as
+    // an artist's are.
+    for (const x of meant) {
+      const g = groupOf(model, model.alias.get(String(x.group_key)) || String(x.group_key), x.artist);
+      if (!g.meant) g.meant = x;
       if (model.meant.indexOf(g.key) < 0) model.meant.push(g.key);
+      for (const [source, row] of meantRows(x)) {
+        const had = model.items.size;
+        const item = addSong(model, source, row, g);
+        if (model.items.size > had) item.meant = true;  // the suggestion's alone: no song the search found
+      }
     }
     return model;
   };
   // Whether an answer's model holds nothing of the sites (an artist, a song, a title, a song you removed): its search
   // found nothing there, and says so as a line of the list (nothingFound). An artist it may have meant, once listed,
-  // or a name LaCuerda's page was read for, is something.
-  const foundNothing = (model) => Boolean(model) && !model.items.size && !model.titles.length && !model.harps.length &&
+  // or a name LaCuerda's page was read for, is something; a song it may have meant is not.
+  const foundNothing = (model) => Boolean(model) && !Array.from(model.items.values()).some((item) => !item.meant) &&
+    !model.titles.length && !model.harps.length &&
     !Array.from(model.groups.values()).some((g) => g.ug || g.lacuerda || g.harptabs);
   const yourSong = (row) => (row.song === null || row.song === undefined ? undefined : byIndex.get(Number(row.song)));
   const groupOf = (model, key, name) => {
@@ -2093,7 +2108,7 @@
   const tailOf = (m) => {
     if (!m.tail) {
       m.tail = { box: el("div", "group-tail"), ug: null, lc: null, offer: null, ht: null, htOffer: null };
-      if (m.meant && !m.ug && !m.lacuerda) {
+      if (m.meant && !m.ug && !m.lacuerda && !m.harptabs) {
         const model = answer.model;
         const s = m.meant;
         const go = button("Their " + songsOn(s), "small more-by their-songs", (e) => openSuggested(model, s,
@@ -2232,15 +2247,18 @@
     model.card = model.line = undefined;
     drawGroups();
   };
-  // An artist the answer suggests ("Did you mean Lynyrd Skynyrd?"), opened: their songs (/api/artist, fifty, or those
-  // LaCuerda's index holds, or the offer to read their page), in their group, first, as an artist the query names
-  // is; the focus to it. It reads the indexes alone: no site is asked anything.
+  // An artist the answer suggests ("Did you mean Lynyrd Skynyrd?"), or the artist of a song it does, opened: their
+  // songs (/api/artist, fifty, or those LaCuerda's or harptabs.com's index holds, or the offer to read their page), in
+  // their group, first, as an artist the query names is; the focus to it. It reads the indexes alone: no site is asked
+  // anything.
   const openSuggested = (model, s, go) => {
     const was = answer;
-    const ug = s.source !== "lacuerda";
+    const ug = s.source !== "lacuerda" && s.source !== "harptabs";
     go.disabled = true;
     say("Listing " + String(s.artist || "") + "'s songs…");
-    (ug ? artistPage(String(s.artist_key || ""), 0) : sitePage({ slug: String(s.slug || "") })).then((page) => {
+    const listing = ug ? artistPage(String(s.artist_key || ""), 0)
+      : sitePage(s.source === "harptabs" ? { harptabs: String(s.path || "") } : { slug: String(s.slug || "") });
+    listing.then((page) => {
       go.disabled = false;
       if (!page || answer !== was || !state.all) return;
       const g = groupOf(model, model.alias.get(String(s.group_key)) || String(s.group_key || ""), page.artist);
@@ -2253,6 +2271,10 @@
         g.ugOffset = got.length;
         g.ugListed = got.length;
         say(String(page.artist) + ": " + many(page.total, "song") + " on Ultimate Guitar");
+      } else if (s.source === "harptabs") {
+        g.harptabs = { artist: page.artist, path: page.path, songs: page.listed, known: page.total,
+          held: objects(page.songs).length, read: page.read };
+        if (page.read) listHarptabs(g, page);
       } else {
         g.lacuerda = { artist: page.artist, slug: page.slug, songs: page.listed, known: page.total, gtptabs: page.gtptabs };
         if (page.read) listLaCuerda(g, page);
@@ -2374,7 +2396,8 @@
         filter: you ? you.sortArtist : "", meant: Boolean(meant) },
         [...theirs.map(lineOf), ...items], { mine: yours.get(key) || 0, ug: ug.songs, lacuerda: lc.songs,
           gtptabs: Math.max(Number(ug.gtptabs) || 0, Number(lc.gtptabs) || 0), harptabs: ht.songs,
-          theirs: meant && !g.model.ug && !g.model.lacuerda && Number(meant.songs) ? songsOn(meant) : "" });
+          theirs: meant && !g.model.ug && !g.model.lacuerda && !g.model.harptabs && Number(meant.songs)
+            ? songsOn(meant) : "" });
       if (tail) section.appendChild(tail);
       box.appendChild(section);
     }
@@ -2585,8 +2608,8 @@
     if (ms.length) parts.push(ms.length + " on MuseScore");
     if (harps.length || htArtists.length) parts.push((harps.length + htArtists.length) + " on harptabs.com");
     const meant = objects(data.suggest).filter((x) => x.artist);
-    say(parts.length ? parts.join(" · ")
-      : "Nothing on the sites" + (meant.length ? " · did you mean " + String(meant[0].artist) + "?" : ""));
+    say((parts.length ? parts.join(" · ") : "Nothing on the sites") +
+      (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""));
     prefill(data.lead || (lcArtists.length && !lc.length ? "artist" : null));  // an artist LaCuerda alone knows
     if (focusFirst && q === normal(state.q)) {
       focusFirst = false;
