@@ -871,7 +871,9 @@ resume.
 and of sitemaps, the newest tab id, and when the index was built and last
 refreshed; then, once harptabs.com's sitemap is read, how far its artist index
 has got: `harptabs.com: 1204 of 10428 artist pages read, 5130 tabs; caracole
-harptabs --index reads the rest.`
+harptabs --index reads the rest.`, and once gametabs.net's sitemaps are read,
+how far its game index has got: `gametabs.net: 93 of 1658 game pages read, 512
+tabs; caracole gametabs --index reads the rest.`
 
 ### caracole match --dry-run
 

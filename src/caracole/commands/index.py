@@ -144,13 +144,16 @@ def _refresh(cfg: Config) -> None:
 
 
 def _stats(cfg: Config) -> None:
-    """The UG index's counts, then how far harptabs.com's artist index has got, once its sitemap is read."""
+    """The UG index's counts, then how far harptabs.com's artist index and gametabs.net's game index have got, once
+    their sitemaps are read."""
+    from caracole.gametabs_index import index_state as game_state
     from caracole.harptabs_index import index_state
     from caracole.ug.index import index_stats
 
     with closing(open_db(cfg)) as conn:
         s = index_stats(conn)
         harp = index_state(conn)
+        game = game_state(conn)
     if not s["rows"]:
         typer.echo("The index is empty: run `caracole index build`.")
     else:
@@ -164,6 +167,10 @@ def _stats(cfg: Config) -> None:
         rest = "" if harp.complete else "; caracole harptabs --index reads the rest"
         typer.echo(f"harptabs.com: {harp.read:,} of {harp.artists:,} artist pages read, "
                    f"{harp.tabs:,} tab{'' if harp.tabs == 1 else 's'}{rest}.")
+    if game.pages:
+        rest = "" if game.complete else "; caracole gametabs --index reads the rest"
+        typer.echo(f"gametabs.net: {game.read:,} of {game.pages:,} game pages read, "
+                   f"{game.tabs:,} tab{'' if game.tabs == 1 else 's'}{rest}.")
 
 
 # --- shared ------------------------------------------------------------------------------------
