@@ -105,10 +105,10 @@ def test_the_page_says_how_the_tab_is_read_and_offers_each_reading_best_first(ap
     found = forms(response)
     assert [(action, button) for action, _, button in found] == [
         ("/harmonica/pin", "Read it by its own legend"), ("/harmonica/pin", "Read it as letters"),
-        ("/harmonica/pin", "Read it as brackets"), ("/harmonica/pin", "As harptabs.com writes it"),
-        ("/harmonica/pin", "Read it as signs after"), ("/harmonica/pin", "Read it as barrett")]
+        ("/harmonica/pin", "Read it as brackets"), ("/harmonica/pin", "Read it as signs after"),
+        ("/harmonica/pin", "Read it as barrett"), ("/harmonica/pin", "As harptabs.com writes it")]
     assert found[1][1] == {"csrf": "tok", "page": PAGE, "as": "letters"}
-    assert found[3][1]["as"] == "signs"
+    assert found[5][1]["as"] == "signs"
     rows = re.findall(r'<li class="reading( now)?">(.*?)</li>', text(response), re.S)
     assert [bool(now) for now, _ in rows] == [True, False, False, False, False, False]  # the one it is read by
     assert "Q 0.86" in unescape(re.sub(r"<[^>]+>", " ", rows[1][1]))
@@ -122,7 +122,7 @@ def test_a_reading_with_a_symbol_changed_is_posted_whole(app, conn, cfg):
     render_all(conn, cfg, load(cfg), runner=fake_chordpro)
     found = forms(get(app, page_url()))
     assert json.loads(found[0][1]["as"]) == {"as": "signs", "*": "bend"}
-    assert found[0][2] == "Read it so: 4 blow · - draw · * bend"
+    assert found[0][2] == "Read it so: - draw · * bend"
 
 
 def test_a_pin_is_a_command_queued_and_the_page_says_how_it_goes(app, runner, spokey):
@@ -202,3 +202,17 @@ def test_a_job_that_failed_says_so_with_its_output(cfg, spokey):
     job = int(dict(response.headers)["Location"].rsplit("=", 1)[1])
     assert "Failed: overrides.toml can't be written" in shown(after)
     assert f'href="/{details_href(job)}"' in text(after)
+
+
+def test_a_pins_request_is_the_songs_change_never_one_of_its_requests(app, spokey):
+    from test_web_app import answer, get_json
+
+    post(app, "/harmonica/pin", {"page": PAGE, "as": "letters"})
+    [queued] = answer(get_json(app, "/jobs.json"))["jobs"]
+    assert (queued["kind"], queued["songId"], queued["line"]["text"]) == ("export", None, "Queued…")
+    app.queue.run_pending()
+    [done] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
+    assert done["line"] == {"tone": "ready", "text": "Its harmonica tab read as you set it",
+                            "link": {"label": "Open the tab", "href": quote(PAGE)}, "details": None}
+    requests = text(get(app, "/jobs"))
+    assert "Its harmonica tab read as you set it" in requests and "Added" not in requests
