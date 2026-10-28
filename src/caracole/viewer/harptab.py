@@ -13,7 +13,8 @@ sung under it, the syllable each hole is blown on, and the words around them. Th
 - holes together: ``(4 5 6)`` or ``(456)`` a chord, ``{-4 -5}`` a head shake, ``[-2 -5]`` a tongue split, ``7,8B``
   holes 7 and 8 blown;
 - what a line of holes holds besides: holds (``----``, ``....``, ``___``, ``(hold)``), bars, ``~``, repeat marks
-  (``x2``, ``(x2)``, ``2x``, ``(2x)``), a leading label (``Intro:``, ``FILL 1 :``).
+  (``x2``, ``(x2)``, ``2x``, ``(2x)``), a leading label (``Intro:``, ``FILL 1 :``). A time signature or a clock time
+  (``Time: 3/4``, ``1:45``) is prose, never holes.
 
 What no spelling reads is the line's ``unknown``, never dropped as if read.
 
@@ -76,6 +77,8 @@ _COMMA_CHORD = re.compile(r"(?P<body>(?:10|[1-9])(?:,(?:10|[1-9]))+)(?P<bd>[BD])
 _DECOR = re.compile(r"-{2,}|_+|\.{2,}|~+|\|+|\^|\*|,|;|/|\\|:|\(x\s?\d+\)|x\s?\d+\b|\(\d+x\)|\b\d+x\b|\(hold\)|hold\b|>|=",
                     re.I)
 _HOLD = re.compile(r"-{2,}|\.{2,}|_+|\(hold\)|hold", re.I)
+# A time signature, a clock time, a date (Time: 3/4, 1:45, 30/03/2018): prose, never holes.
+_TIME = re.compile(r"(?<![\w/:.+−–-])\d{1,2}(?:[/:]\d{1,4})+(?![\w/:])")
 _LEAD_LABEL = re.compile(r"^\s*(?P<label>\(?[A-Za-z][A-Za-z ]{0,14}(?:\d{1,2})?\)?)\s*[:;]+\s*")
 _LABEL_WORDS = re.compile(
     r"(?i)^\W*(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|"
@@ -241,20 +244,27 @@ def scan(line: str, *, parens_draw: bool = False) -> Scan:
     """The holes ``line`` holds, where, and how much of it they explain (``parens_draw``: the tab writes a draw as
     ``(5)``). What no spelling reads is ``unknown``."""
     text = expand(line)
+    prose = [False] * len(text)  # a time, never holes (_TIME): unread
+    for m in _TIME.finditer(text):
+        prose[m.start():m.end()] = [True] * (m.end() - m.start())
     label = None
     lead = _LEAD_LABEL.match(text)
-    if lead and _HOLE.search(text[lead.end():]) and not lead.group("label").strip().isdigit():
+    if (lead and _HOLE.search(text[lead.end():]) and not lead.group("label").strip().isdigit()
+            and not any(prose[:lead.end()])):  # "SOLO 4:24": a time, no label "SOLO 4"
         label = lead.group("label").strip("() ")
         text = " " * lead.end() + text[lead.end():]
     groups: list[Group] = []
     covered = [False] * len(text)
+
+    def taken(a: int, b: int) -> bool:
+        return any(covered[a:b]) or any(prose[a:b])
 
     def mark(a: int, b: int) -> None:
         covered[a:b] = [True] * (b - a)
 
     for m in _GROUP.finditer(text):
         inner = list(_HOLE.finditer(m.group("body")))
-        if not inner:
+        if not inner or taken(m.start(), m.end()):
             continue
         kind = {"(": "chord", "{": "shake", "[": "split"}[m.group("open")]
         digit = m.start("body") + inner[0].start("num")
@@ -269,14 +279,14 @@ def scan(line: str, *, parens_draw: bool = False) -> Scan:
             groups.append(Group(tuple(_hole(i) for i in inner), kind, m.start(), digit, m.group(0)))
         mark(m.start(), end)
     for m in _COMMA_CHORD.finditer(text):
-        if any(covered[m.start():m.end()]):
+        if taken(m.start(), m.end()):
             continue
         breath = "draw" if m.group("bd") == "D" else "blow"
         holes = tuple(Hole(int(n), breath) for n in m.group("body").split(","))
         groups.append(Group(holes, "chord", m.start(), m.start(), m.group(0)))
         mark(m.start(), m.end())
     for m in _HOLE.finditer(text):
-        if any(covered[m.start():m.end()]):
+        if taken(m.start(), m.end()):
             continue
         before = text[m.start() - 1] if m.start() else " "
         after = text[m.end()] if m.end() < len(text) else " "
@@ -285,7 +295,7 @@ def scan(line: str, *, parens_draw: bool = False) -> Scan:
         groups.append(Group((_hole(m),), "note", m.start(), m.start("num"), m.group(0)))
         mark(m.start(), m.end())
     for m in _DECOR.finditer(text):
-        if any(covered[m.start():m.end()]):
+        if taken(m.start(), m.end()):
             continue
         mark(m.start(), m.end())
         if _HOLD.fullmatch(m.group(0)):  # held: the group before it

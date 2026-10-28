@@ -267,6 +267,16 @@ def test_a_bend_after_a_lone_hole_in_brackets_bends_the_hole():
     assert scan("(3)tue", parens_draw=True).unknown == ("tue",)  # a word after it, no bend
 
 
+def test_a_time_signature_or_a_clock_time_is_prose_never_holes():
+    for line in ("Time: 3/4", "3/4 TIME (SLOW)", "4/4", "2/4,", "1:45", "3:02", "21:57 30/03/2018",
+                 "SOLO 4:24", "run time 3:00."):
+        found = scan(line)
+        assert found.groups == () and not found.is_row, line
+    assert parse("Time: 3/4\n\n4 5 6\nla la la\n").notes == ["Time: 3/4"]
+    # a bar or a bend written with "/" beside a hole still reads
+    assert [g.label() for g in scan("4 / 5 /6 -3/ 7").groups] == ["4", "5", "6", "−3", "7"]
+
+
 def test_holes_together():
     found = scan("(4 5 6) (456) {-4 -5} [-2 -5] 7,8B (-4)")
     assert [(g.kind, g.label()) for g in found.groups] == [
