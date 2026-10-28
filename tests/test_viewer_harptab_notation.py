@@ -159,7 +159,7 @@ def test_an_unusual_reading_must_beat_a_commoner_one_by_the_margin():
 
 @pytest.mark.parametrize(("body", "name"), [
     ("4B 6B 5D 5B 4D 4B 3B\n", "letters"),
-    ("6+ 6-   7+  8+  8- 7+  8+  7+   6+\nI faund my lavo by tha gesworks creft\n", "signs after"),
+    ("6+ 6-   7+  8+  8- 7+  8+  7+   6+\nla li lo la li lo la li lo\n", "signs after"),
     ("2 3' 4+ 4' 4 5 4 4' 4+ 3' 4+ 3' 2 2’’ 1 1+ 1 2\n", "barrett"),
     ("-4 -4 5 -5 6 -6 6 -5\n", "signs"),
 ])
