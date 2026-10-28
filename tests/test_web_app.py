@@ -1614,6 +1614,63 @@ def test_api_search_suggests_artists_spelled_close_to_a_query_nothing_matches(ap
     assert as_json(get(app, "/api/search?q=lynrd"))["suggest"] == []
 
 
+def title_index(conn):
+    """The Eagles' Hotel California (nine tabs, a live one among them) and Take It Easy, Gipsy Kings' cover."""
+    from caracole.ug.index import mark_built, upsert_rows
+
+    rows = [*[(100 + i, "eagles", "hotel-california", "chords") for i in range(8)],
+            (108, "eagles", "hotel-california-live", "tabs"), (110, "eagles", "take-it-easy", "chords"),
+            (120, "gipsy-kings", "hotel-california", "chords")]
+    upsert_rows(conn, [(t, a, s, k, f"{a}/{s}-{k}-{t}") for t, a, s, k in rows], "1", datetime(2026, 10, 19, tzinfo=UTC))
+    mark_built(conn, datetime(2026, 10, 19, tzinfo=UTC))
+
+
+def test_api_search_suggests_a_song_titled_close_to_a_query_nothing_matches_under_its_artist(app, conn):
+    title_index(conn)
+    data = as_json(get(app, "/api/search?q=hotl%20califronia"))
+    assert (data["index"], data["artists"], data["best"]) == ([], [], None)  # Enter takes no suggestion
+    [meant] = data["suggest"]
+    # Its artist's band, as an artist's suggestion is (Their songs: /api/artist), and its title.
+    assert {k: meant[k] for k in ("source", "artist", "artist_key", "songs", "group_key", "title")} == {
+        "source": "ug", "artist": "Eagles", "artist_key": "eagles", "songs": 2, "group_key": "eagles",
+        "title": "Hotel California"}
+    # The song on each index that has it, as the search's rows are: Get it posts its pick.
+    assert list(meant["song"]) == ["ug"]
+    ug = meant["song"]["ug"]
+    assert {k: ug[k] for k in ("ug", "artist", "title", "artist_key", "title_key", "song", "library")} == {
+        "ug": "eagles/hotel-california", "artist": "Eagles", "title": "Hotel California", "artist_key": "eagles",
+        "title_key": "hotel-california", "song": None, "library": None}
+    assert ug["counts"] == {"chords": 8, "tabs": 1} and ug["tabs"] and meant["library"] is None
+
+
+def test_api_search_names_your_song_a_suggestion_is(app, conn):
+    title_index(conn)
+    mine = add_song(conn, "Eagles", "Hotel California")
+    conn.commit()
+    # Two typos: your song is among your songs that match, though not well, and the suggestion names it.
+    data = as_json(get(app, "/api/search?q=hotl%20califrnai"))
+    assert [h["id"] for h in data["library"]] == [mine.id] and data["library"][0]["score"] < 90
+    [meant] = data["suggest"]
+    assert meant["song"]["ug"]["song"] == mine.id
+    # Your song as the search's library rows have it, for a page to draw your line, which opens it.
+    assert {k: meant["library"][k] for k in ("id", "artist", "title", "display")} == {
+        "id": mine.id, "artist": "Eagles", "title": "Hotel California", "display": "Eagles - Hotel California"}
+    assert "links" in meant["library"] and "files" in meant["library"]
+
+
+def test_api_search_suggests_a_lacuerda_song_and_a_harptabs_artist_by_their_pages(app, conn):
+    lacuerda_index(conn)
+    harptabs_index(conn)
+    [vino] = as_json(get(app, "/api/search?q=vinno%20tintoo"))["suggest"]  # each word typed wrong: LaCuerda's search misses it
+    assert {k: vino[k] for k in ("source", "artist", "slug", "songs", "group_key", "title")} == {
+        "source": "lacuerda", "artist": "Estopa", "slug": "estopa", "songs": 159, "group_key": "estopa",
+        "title": "Vino Tinto"}
+    assert list(vino["song"]) == ["lacuerda"] and vino["song"]["lacuerda"]["title"] == "Vino Tinto"
+    [joel] = as_json(get(app, "/api/search?q=bily%20joell"))["suggest"]
+    assert joel == {"source": "harptabs", "artist": "billy joel", "path": "artist/1178/billy-joel", "songs": 98,
+                    "group_key": "billy-joel"}
+
+
 def test_api_search_suggests_lacuerdas_artists_by_the_slug_of_their_page(app, conn):
     from caracole import lacuerda_index as li
     from caracole.lacuerda import LCArtist
@@ -2260,7 +2317,7 @@ def test_api_search_looks_for_no_close_spelling_when_a_song_of_yours_is_the_quer
 
     by_word_index(conn)
     add_song(conn, "Someone", "Lynrd")
-    monkeypatch.setattr("caracole.search.suggest_artists", no)
+    monkeypatch.setattr("caracole.search.suggestions", no)
     data = as_json(get(app, "/api/search?q=lynrd"))
     assert data["suggest"] == [] and data["library"]
 

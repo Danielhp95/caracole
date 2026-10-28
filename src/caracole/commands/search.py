@@ -22,9 +22,10 @@ A query may be an artist alone or a title alone (``search.find_index``): when
 an artist leads, its most tabbed songs come first, then the songs titled like
 it; when a song does, the artists of that name are a line each, for
 ``--artist``; a word of an artist's name ("skynyrd") names them too, and a
-query nothing matches well, spelled close to an artist's name ("lynrd"),
-ends with "Did you mean" that artist (``search.suggestions``) and the line
-that lists their songs. ``--artist NAME`` lists an artist's songs, ``--title
+query nothing matches well, spelled close to an artist's name ("lynrd") or
+a song's title ("hotl califronia"), ends with "Did you mean" that artist and
+the line that lists their songs, or that song and the line that adds it
+(``search.suggestions``). ``--artist NAME`` lists an artist's songs, ``--title
 TITLE`` a title's by any artist, and ``--add N`` numbers exactly what was printed
 (``_listing``). ``offer_songs`` is what ``caracole add`` and ``caracole get``
 say to one name, which names no song: the same listing, each hit with its line
@@ -56,7 +57,7 @@ if TYPE_CHECKING:
     from caracole.config import Config
     from caracole.keys import SongKey
     from caracole.overrides import Overrides
-    from caracole.search import ArtistHit, IndexHit, LibraryHit, SiteArtist, SiteHit
+    from caracole.search import ArtistHit, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion
     from caracole.songs import Song
 
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
@@ -257,10 +258,14 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
         typer.echo("\n" + _wrap(hint))
 
 
+_SUGGESTED_ON = {"ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "harptabs": "harptabs.com", "gtptabs": "gtptabs.com"}
+
+
 def _print_suggestions(conn: sqlite3.Connection, ask: _Ask, ug: _Listing, lacuerda: _Listing,
                        mine: Sequence[LibraryHit]) -> None:
-    """The artists spelled close to a query nothing matches well (``search.suggestions``), each with the line that
-    lists their songs; nothing when a song of yours is the query's by its title."""
+    """The artists and the songs spelled close to a query nothing matches well (``search.suggestions``), each with
+    its line: an artist's lists their songs, a song's adds it as a hit's does (``_suggested_song``); nothing when a
+    song of yours is the query's by its title."""
     from caracole.search import STRONG, IndexFound, suggestions
 
     if any(h.score >= STRONG and h.via != "artist" for h in mine):
@@ -268,12 +273,32 @@ def _print_suggestions(conn: sqlite3.Connection, ask: _Ask, ug: _Listing, lacuer
     close = suggestions(conn, ask.text, IndexFound(ug.artists, ug.songs, ug.lead), lacuerda.sites)
     if not close:
         return
-    names = [s.artist for s in close]
+    names = [f"{s.title} by {s.artist}" if s.title else s.artist for s in close]
     said = names[0] if len(names) == 1 else ", ".join(names[:-1]) + " or " + names[-1]
     typer.echo(f"\nDid you mean {said}?")
     for s in close:
-        where = "LaCuerda" if s.source == "lacuerda" else "Ultimate Guitar"
-        typer.echo(f"  {s.artist} · {where} · {_count(s.songs, 'song')}: caracole search --artist {_quote(s.artist)}")
+        if s.title:
+            typer.echo(_suggested_song(s))
+        else:
+            typer.echo(f"  {s.artist} · {_SUGGESTED_ON.get(s.source, s.source)} · {_count(s.songs, 'song')}: "
+                       f"caracole search --artist {_quote(s.artist)}")
+
+
+def _suggested_song(s: Suggestion) -> str:
+    """A song spelled close to the query, as its first index has it: its names, where, its tabs (versions, harmonica
+    tabs) there, and the line its hit prints: Ultimate Guitar's adds it, LaCuerda's as your pick there,
+    harptabs.com's looks it up keeping that tab."""
+    from caracole.search import IndexHit
+
+    hit = s.hits[0]
+    if isinstance(hit, IndexHit):
+        return (f"  {hit.artist} - {hit.title} · Ultimate Guitar · {_count(hit.tabs, 'tab')}: {_add_line(hit)}")
+    if hit.source == "harptabs":
+        return (f"  {hit.artist} - {hit.title} · harptabs.com · {_count(hit.uploads, 'harmonica tab')}: "
+                f"caracole get --harptabs {hit.url} {_quote(hit.artist)} {_quote(hit.title)}")
+    pick = f"--lacuerda {hit.url} " if hit.sheet else ""
+    return (f"  {hit.artist} - {hit.title} · LaCuerda · {_count(hit.uploads, 'version')}: "
+            f"caracole add {pick}{_quote(hit.artist)} {_quote(hit.title)}")
 
 
 def _print_removed(conn: sqlite3.Connection, ask: _Ask, limit: int) -> None:

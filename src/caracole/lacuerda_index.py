@@ -673,6 +673,17 @@ def artist_songs(conn: sqlite3.Connection, slug: str, *, limit: int | None = Non
     return [_song_hit(_Row(*r), 0.0, "artist") for r in rows]
 
 
+def songs_like(conn: sqlite3.Connection, patterns: Sequence[str], limit: int = ROWS_READ) -> list[LaCuerdaHit]:
+    """The songs the index holds whose title's key or artist's key holds one of ``patterns`` (``LIKE``), at most
+    ``limit``: what search.py looks a close spelling of a title for among (``suggest_titles``)."""
+    if not patterns:
+        return []
+    where = " OR ".join("title_key LIKE ? OR artist_key LIKE ?" for _ in patterns)
+    rows = conn.execute(f"SELECT {', '.join(_COLUMNS)} FROM lacuerda_index WHERE title != '' AND ({where}) "
+                        "ORDER BY path LIMIT ?", (*(p for p in patterns for _ in (0, 1)), limit))
+    return [_song_hit(_Row(*r), 0.0, "title") for r in rows]
+
+
 class _Row:
     __slots__ = _COLUMNS
 

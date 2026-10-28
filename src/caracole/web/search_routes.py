@@ -15,9 +15,11 @@
                           under one header, which counts an artist's songs on each site (an artist's
                           ``songs`` on theirs, ``gtptabs`` gtptabs.com's); an artist the query names only
                           by a word of their name says so (``part``); and, for a query nothing matches
-                          well, the artists spelled close to it (``suggest``: each one's site, name, songs,
-                          group, and their ``artist_key`` or LaCuerda ``slug``, for /api/artist); and
-                          whether LaCuerda's own search may be sent for the query (``lacuerda_search``)
+                          well, the artists and the songs spelled close to it (``suggest``: each one's site,
+                          name, songs, group, and their ``artist_key``, LaCuerda ``slug`` or harptabs.com
+                          ``path``, for /api/artist; a song's ``title``, its row on each site, ``song``, and
+                          your song's row, ``library``, for a song of yours); and whether LaCuerda's own
+                          search may be sent for the query (``lacuerda_search``)
     GET  /api/artist?key= an artist of the offline index: their songs, most tabbed first, 50 from
                           ``offset``, and yours by them; ``?lacuerda=SLUG`` (``?lacuerda_name=NAME``),
                           a LaCuerda artist's songs the index holds, and whether caracole read their page
@@ -147,7 +149,7 @@ from caracole.web.library_routes import LIMITS, PICK_LIMITS, harptabs_field, lac
 from caracole.web.pages import Refused
 
 if TYPE_CHECKING:
-    from caracole.search import IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit
+    from caracole.search import IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion
     from caracole.songs import Song
 
 QUERY_LIMIT = 200  # characters of a search
@@ -385,7 +387,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             app._found.popitem(last=False)
     if close is None and not yours:
         close = suggestions(conn, q, index_found, [*lc_artists, *lacuerda, *gtptabs, *musescore, *harp_artists,
-                                                   *harptabs], lacuerda="lacuerda" not in left_out)
+                                                   *harptabs], lacuerda="lacuerda" not in left_out,
+                            harptabs="harptabs" not in left_out, gtptabs="gtptabs" not in left_out)
         if q in app._found:
             app._found[q] = (*app._found[q][:-1], close)
     answer = found(mine, index_found)
@@ -422,9 +425,42 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "lacuerda_leads": leads,
             "lacuerda_search": (_lacuerda_search_gate(app, conn, q, lc_artists, lacuerda, mine)
                                 if app.searches_lacuerda else None),
-            "suggest": [{"source": s.source, "artist": s.artist, ("artist_key" if s.source == "ug" else "slug"): s.key,
-                         "songs": s.songs, "group_key": _group_key(s.artist)} for s in (() if yours else close or ())],
+            "suggest": [_suggestion_json(app, conn, s, songs) for s in (() if yours else close or ())],
             "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
+
+
+SUGGESTED_KEY = {"ug": "artist_key", "lacuerda": "slug", "harptabs": "path"}  # what /api/artist takes of each site
+
+
+def _suggestion_json(app: WebApp, conn: sqlite3.Connection, s: Suggestion, songs: list[Song]) -> dict[str, Any]:
+    """A suggestion as the pages draw it: the artist's band (their site, name, songs there, group, and what /api/artist
+    takes of them: Ultimate Guitar's ``artist_key``, the ``slug`` of their LaCuerda page, the ``path`` of their
+    harptabs.com page); a song's, its ``title`` too, the song on each index that has it (``song``: its ``ug``,
+    ``lacuerda``, ``gtptabs`` and ``harptabs`` rows, each as the search's rows of that site are, a song of yours named
+    on them) and, for a song of yours, its row as your songs' rows are (``library``), else None."""
+    from caracole.search import IndexHit, LibraryHit
+
+    said = {"source": s.source, "artist": s.artist, SUGGESTED_KEY.get(s.source, "key"): s.key, "songs": s.songs,
+            "group_key": _group_key(s.artist)}
+    if not s.title:
+        return said
+    rows: dict[str, dict[str, Any]] = {}
+    for h in s.hits:
+        source = "ug" if isinstance(h, IndexHit) else h.source
+        if source in rows:
+            continue
+        if isinstance(h, IndexHit):
+            rows[source] = _rows(app, conn, [], [_hit_json(conn, h)], songs)[1][0]
+        elif source == "lacuerda":
+            rows[source] = _lacuerda_rows(app, conn, [h], songs)[0]
+        elif source == "gtptabs":
+            rows[source] = _gtptabs_rows(app, conn, [h], songs)[0]
+        else:
+            rows[source] = _harptabs_rows(app, conn, [h], songs)[0]
+    yours = next((r["song"] for r in rows.values() if r.get("song") is not None), None)
+    song = next((x for x in songs if x.id == yours), None)
+    library = _rows(app, conn, [LibraryHit(song, 100.0, "title")], [], songs)[0][0] if song is not None else None
+    return {**said, "title": s.title, "song": rows, "library": library}
 
 
 def _progression(conn: sqlite3.Connection, q: str, mine: set[int]) -> tuple[dict[str, Any] | None, list[LibraryHit]]:

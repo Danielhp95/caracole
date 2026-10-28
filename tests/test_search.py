@@ -2327,3 +2327,161 @@ def test_cli_with_harptabs_com_off_or_empty_says_so(tmp_path):
     path.write_text(path.read_text(encoding="utf-8") + "[providers.harptabs]\nenabled = false\n", encoding="utf-8")
     result = CliRunner().invoke(build_app(), ["--config", str(path), "search", "piano man"])
     assert "  harptabs.com is turned off in caracole.toml.\n" in harp_part(result.output)
+
+
+# --- close spellings of a title ------------------------------------------------------------------------------------
+
+TITLES = [
+    *[(60000 + i, "eagles", "hotel-california", "chords") for i in range(8)],
+    (60008, "eagles", "hotel-california-live", "tabs"),
+    *[(60010 + i, "eagles", "take-it-easy", "chords") for i in range(3)],
+    (60020, "gipsy-kings", "hotel-california", "chords"), (60021, "gipsy-kings", "hotel-california", "tabs"),
+    (60030, "heavy-nopal", "hotel-califonia", "chords"),  # a title UG has with a typo of its own
+    *[(60040 + i, "led-zeppelin", "stairway-to-heaven", "chords") for i in range(6)],
+    (60050, "led-zeppelin", "kashmir", "tabs"),
+    *[(60060 + i, "oasis", "wonderwall", "chords") for i in range(5)],
+    (60070, "ryan-adams", "wonderwall", "chords"),
+    (60071, "wonderwall", "who-am-i", "chords"),  # an artist named Wonderwall
+    *[(60080 + i, "beatles", "yesterday", "chords") for i in range(4)],
+    (60090, "trading-yesterday", "shattered", "chords"),
+    *[(60100 + i, "metallica", "nothing-else-matters", "tabs") for i in range(5)],
+    *songs_of("metallica", 60, 60200),
+    (60110, "metallica-tribute", "malika", "chords"),  # a title close to "metalika": noise beside Metallica
+    (60120, "misc-mashups", "hotel-california-stairway-to-heaven", "chords"),  # a catch-all's: no one's song
+]
+
+
+def suggested(found):
+    """Each suggestion as the pages name it: (artist, title) of a song's, the artist of an artist's."""
+    return [(s.artist, s.title) if s.title else s.artist for s in found]
+
+
+@pytest.mark.parametrize("query,expected", [
+    ("hotl califronia", ("Eagles", "Hotel California")),
+    ("stairwy to heavn", ("Led Zeppelin", "Stairway To Heaven")),
+    ("wonderwal oasys", ("Oasis", "Wonderwall")),  # a word of its artist's beside the title's, both typed wrong
+    ("oasys wonderwal", ("Oasis", "Wonderwall")),
+    ("yesterdy", ("Beatles", "Yesterday")),
+])
+def test_a_close_spelling_of_a_title_suggests_its_most_tabbed_song(conn, query, expected):
+    from caracole.search import IndexHit, find_index, suggest_titles
+
+    index(conn, TITLES)
+    before = find_index(conn, query)
+    [first, *_] = found = suggest_titles(conn, query)
+    assert suggested(found)[0] == expected
+    assert first.source == "ug" and first.key == {"Eagles": "eagles", "Led Zeppelin": "led-zeppelin", "Oasis": "oasis",
+                                                  "Beatles": "beatles"}[expected[0]]
+    # The song as the index's hits have it, under its artist's band: their songs counted, as an artist's suggestion.
+    [hit] = [h for h in first.hits if isinstance(h, IndexHit)]
+    assert (hit.artist, hit.title) == expected and hit.tabs >= 4
+    from caracole.normalize import split_variant
+
+    assert first.songs == len({split_variant(k)[0] for _, a, k, _ in TITLES if a == first.key})  # live: Hotel California's
+    assert find_index(conn, query) == before  # a suggestion changes nothing else
+
+
+def test_a_title_is_suggested_once_by_its_most_tabbed_artist_never_its_covers_or_its_typos(conn):
+    from caracole.search import suggest_titles
+
+    # Gipsy Kings' cover and Heavy Nopal's "Hotel Califonia", closer to the typo, give way to the Eagles' song;
+    # the catch-all's mashup is no one's.
+    index(conn, TITLES)
+    assert suggested(suggest_titles(conn, "hotl califronia")) == [("Eagles", "Hotel California")]
+    assert suggested(suggest_titles(conn, "wonderwal")) == [("Oasis", "Wonderwall")]
+
+
+def test_every_word_of_the_query_is_close_to_a_word_of_the_title_or_its_artist(conn):
+    from caracole.search import suggest_titles
+
+    index(conn, TITLES)
+    assert suggest_titles(conn, "hotl califronia zebra") == []  # no word of the song's is close to "zebra"
+    assert suggest_titles(conn, "wonderwal blurr") == []  # nor of its artist's
+    assert suggest_titles(conn, "oasys") == []  # its artist's alone: an artist's suggestion, never a song's
+
+
+def test_no_title_suggestion_for_noise_a_short_word_or_chinese(conn):
+    from caracole.search import find_index, suggest_titles, suggestions
+
+    index(conn, TITLES + PINYIN_ROWS)
+    # "metalika": a song titled Malika is spelled close to it, and weighs nothing beside Metallica.
+    assert suggested(suggestions(conn, "metalika", find_index(conn, "metalika"))) == ["Metallica"]
+    assert suggest_titles(conn, "zzzzqqq") == []
+    assert suggest_titles(conn, "hte") == []  # too short to be near anything
+    assert suggest_titles(conn, "斑马") == []
+
+
+def test_title_suggestions_come_with_the_artists_for_a_query_nothing_matches_well(conn):
+    from caracole.search import find_index, suggestions
+
+    index(conn, TITLES)
+    # One query may be close to a title and to an artist's name: a song's tabs weigh against an artist's songs, each
+    # weighed by how much of its name the query is. Trading Yesterday, one song, weighs nothing beside the Beatles'
+    # Yesterday; We Are Scientists, a longer name, come after Coldplay's The Scientist, a title the query is whole.
+    assert suggested(suggestions(conn, "yesterdy", find_index(conn, "yesterdy"))) == [("Beatles", "Yesterday")]
+    index(conn, songs_of("we-are-scientists", 40, 64000)
+          + [(64100 + i, "coldplay", "scientist", "chords") for i in range(5)])
+    assert suggested(suggestions(conn, "the scientst", find_index(conn, "the scientst"))) == [
+        ("Coldplay", "Scientist"), "We Are Scientists"]
+    # A song the query finds well already, by its title or its title and artist: nothing to suggest.
+    for query in ("hotel california", "hotel califronia", "wonderwall oasis", "stairway to heaven"):
+        assert suggestions(conn, query, find_index(conn, query)) == [], query
+
+
+def test_a_title_the_index_gains_is_suggested_by_the_next_search(conn):
+    from caracole.search import suggest_titles
+
+    index(conn, TITLES)
+    assert suggest_titles(conn, "bohemian rapsody") == []
+    index(conn, [(61000 + i, "queen", "bohemian-rhapsody", "chords") for i in range(3)])
+    assert suggested(suggest_titles(conn, "bohemian rapsody")) == [("Queen", "Bohemian Rhapsody")]
+
+
+def test_a_title_is_suggested_from_lacuerdas_and_harptabs_coms_songs_too(conn):
+    from caracole.search import IndexHit, SiteHit, suggest_titles
+
+    lacuerda(conn)
+    harptabs_index(conn)
+    index(conn, [(62000, "estopa", "como-camaron", "chords"), (62001, "estopa", "como-camaron", "chords")])
+    # On Ultimate Guitar and LaCuerda both: one suggestion, the song on each, its band Ultimate Guitar's artist.
+    [camaron] = suggest_titles(conn, "como camaon")
+    assert (camaron.source, camaron.artist, camaron.title, camaron.key) == ("ug", "Estopa", "Como Camaron", "estopa")
+    assert [(type(h), h.title) for h in camaron.hits] == [(IndexHit, "Como Camaron"), (SiteHit, "Como Camarón")]
+    # LaCuerda's alone: its band LaCuerda's artist, by the slug of their page.
+    [vino] = suggest_titles(conn, "vino tintoo")
+    assert (vino.source, vino.artist, vino.title, vino.key, vino.songs) == ("lacuerda", "Estopa", "Vino Tinto",
+                                                                            "estopa", 159)
+    # harptabs.com's alone: by the artist whose page caracole read, their page's path the band's.
+    [piano] = suggest_titles(conn, "piano mann")
+    assert (piano.source, piano.artist, piano.title, piano.key) == ("harptabs", "billy joel", "piano man",
+                                                                    "artist/1178/billy-joel")
+    assert [h.source for h in piano.hits] == ["harptabs"] and piano.hits[0].uploads == 4
+    assert suggest_titles(conn, "piano mann", harptabs=False) == []
+    assert suggest_titles(conn, "vino tintoo", lacuerda=False) == []
+
+
+def test_harptabs_coms_artists_are_suggested_too(conn):
+    from caracole.search import suggest_artists
+
+    harptabs_index(conn)
+    [joel] = suggest_artists(conn, "bily joel")
+    assert (joel.source, joel.artist, joel.key, joel.songs) == ("harptabs", "billy joel", "artist/1178/billy-joel", 98)
+    assert suggest_artists(conn, "bily joel", harptabs=False) == []
+    # An artist Ultimate Guitar has too is suggested once, as Ultimate Guitar's.
+    index(conn, songs_of("billy-joel", 3, 63000))
+    assert [(s.source, s.artist) for s in suggest_artists(conn, "bily joel")] == [("ug", "Billy Joel")]
+
+
+def test_cli_a_close_spelling_of_a_title_says_did_you_mean_the_song(tmp_path):
+    seed(tmp_path, rows=TITLES).close()
+    out = run(tmp_path, "search", "hotl califronia")
+    assert out.exit_code == 0, out.output
+    assert ('Did you mean Hotel California by Eagles?\n  Eagles - Hotel California · Ultimate Guitar · 9 tabs: '
+            'caracole add "Eagles" "Hotel California"') in out.output
+    conn = db.connect(tmp_path / "state" / "caracole.sqlite")
+    index(conn, songs_of("we-are-scientists", 40, 64000)
+          + [(64100 + i, "coldplay", "scientist", "chords") for i in range(5)])
+    conn.close()
+    both = run(tmp_path, "search", "scientst").output
+    assert "Did you mean Scientist by Coldplay or We Are Scientists?\n" in both
+    assert '  We Are Scientists · Ultimate Guitar · 40 songs: caracole search --artist "We Are Scientists"' in both

@@ -282,8 +282,14 @@ Rules a change there keeps (the Invariants below are the others):
   a key going with its last row: an artist by a word of their name, `ArtistHit.part`, bounded by `WORD_LETTERS` and
   `WORD_ARTISTS` (LaCuerda's by `lacuerda_index.WORD_ARTISTS`), placed before a small namesake by `_with_parts`,
   leading by `_part_leads` and, against LaCuerda's, `lacuerda_leads`; and `suggest_artists`, the artists spelled
-  close to a query nothing matches well, UG's and LaCuerda's ranked together, `/api/search`'s `suggest`, the pages'
-  "Did you mean"), and
+  close to a query nothing matches well, UG's, LaCuerda's and harptabs.com's ranked together), the words of every
+  row of `ug_index` (`ug_index_fts`, schema 12, its content `ug_index`'s own, kept by triggers on `ug_index`) and of
+  every key (`ug_key_words`, kept by a trigger on `ug_keys`, which only grows; read once a process, then only the
+  words added since, `_Vocabulary`): `suggest_titles`, the songs whose titles are spelled close to such a query,
+  an artist's words beside them maybe, UG's, LaCuerda's and harptabs.com's, a song on several once, under its
+  artist (`Suggestion.title`, `.hits`); `suggestions` ranks both kinds together (a tab as `TAB_SONGS` of an
+  artist's songs, `_cut`), `/api/search`'s `suggest` (a song's `title`, its row on each site, `song`, your song's
+  row, `library`), the pages' "Did you mean", and
   `gtptabs_songs` counts an artist's songs on gtptabs.com (an artist row's `gtptabs` in `/api/search`, the
   "Guitar Pro 12" of their header); `--progression` reads progressions.py's records alone, your songs
   only (`songs_with`). Its prefilter reads ug/key_search.py (`rows_like`: the keys' trigram

@@ -159,7 +159,11 @@ filed under a Guitar Pro pick on Ultimate Guitar stays, as the song's own inbox 
 a few seconds more than the copy. Schema 10 adds harptabs.com's index, empty until the nightly
 run, or `caracole harptabs`, reads its sitemap (see [caracole harptabs](#one-step-at-a-time)).
 Schema 11 adds the tabs of harptabs.com's artist pages, empty until `caracole harptabs --index`,
-or the nightly run, reads them.
+or the nightly run, reads them. Schema 12 adds an index of the UG index's tabs by the words of their
+artists' and titles' names, and those words once each, for suggesting a title spelled close to a
+query (see [caracole search](#caracole-search)): the first command after the upgrade builds it
+from the index, in about ten seconds (8 s, the copy included, for a full index of 1.4 million
+tabs), and it adds about 25 MB to it.
 The ukulele chords need no change of schema: an index built before reads Ultimate Guitar's
 ukulele sitemaps at its next refresh (see [caracole index build](#caracole-index-build)). A state
 folder caracole can't use ends a command with status
@@ -3067,22 +3071,44 @@ A query nothing matches well (no artist whose whole name it is, no song whose
 whole title it is, here or on another site's index; a title that only begins
 with it, The Who's "Eminence Front" for `eminen`, leaves room for Eminem) whose
 words are spelled close to an artist's name ends with that artist, and the line
-that lists their songs:
+that lists their songs; one whose words are spelled close to a song's title, and
+maybe its artist's name beside it, ends with that song, and the line that adds it:
 
     $ caracole search lynrd
     …
     Did you mean Lynyrd Skynyrd?
       Lynyrd Skynyrd · Ultimate Guitar · 139 songs: caracole search --artist "Lynyrd Skynyrd"
 
-Up to three, from Ultimate Guitar's index and LaCuerda's (`metalica` is
-Metallica, `beatels` The Beatles, `sabinna` LaCuerda's Joaquín Sabina), the
-most songs first, weighed by how much of the name the query is, both indexes'
-together, and none with a tenth of the first one's weight (`metalika`:
-Metallica, and no Malika Ayane): each word of the query is close to a word of the name (a
-word of fewer than four letters must be the name's own), of the same first
-letter, so a typo in a name's first letter suggests nothing, and Chinese never
-does. An artist a word of the query names may be shown already (`metalica`:
-La Naranja Metalica): an artist suggested then has more songs than any shown. The offline index knows no ratings (only the artist pages caracole
+    $ caracole search hotl califronia
+    …
+    Did you mean Hotel California by Eagles?
+      Eagles - Hotel California · Ultimate Guitar · 44 tabs: caracole add "Eagles" "Hotel California"
+
+Up to three in all, artists and songs together: artists from Ultimate Guitar's
+index, LaCuerda's and harptabs.com's (`metalica` is Metallica, `beatels` The
+Beatles, `sabinna` LaCuerda's Joaquín Sabina), the most songs first (the tabs
+their page says they have, on harptabs.com), weighed by how much of the name
+the query is; songs from Ultimate Guitar's index, LaCuerda's and the
+harptabs.com artist pages caracole read (`stairwy to heavn` is Led Zeppelin's
+Stairway To Heaven, `wonderwal oasys` Oasis's Wonderwall), the most tabbed
+first, weighed by how much of the title, and of the artist's name where the
+query names them, the query is, a tab as five of an artist's songs (a song
+has 1.4 tabs, an artist 7.2 songs, on a full index): `scientst` is Coldplay's
+The Scientist, then We Are Scientists. A title is suggested once, by its most
+tabbed artist (a cover, or the title spelled another way on UG itself, gives
+way), never under a catch-all such as `misc-mashups`, and gtptabs.com's page
+of it is one of its places. None has a tenth of the first one's weight
+(`metalika`: Metallica, and no Malika Ayane, nor a song titled Malika). Each
+word of the query is close to a word of the name, or of the title or its
+artist, one at least of the title's (a word of fewer than four letters must be
+the name's own), of the same first letter, so a typo in a word's first letter
+suggests nothing, a word in more than 5,000 tabs (`lovee`) names no title, and
+Chinese suggests nothing. An artist a word of the query names may be shown
+already (`metalica`: La Naranja Metalica): an artist suggested then has more
+songs than any shown. A song found well already (90 or more by its title, or
+its title and artist: `hotel califronia` finds the Eagles' Hotel California
+itself) leaves no room for a title. Suggestions read the indexes alone, as
+the search does, in a few milliseconds more. The offline index knows no ratings (only the artist pages caracole
 read do), so the number of
 tabs is what puts the song you probably mean first (Radiohead's Creep before
 Stone Temple Pilots'). A catch-all such as `misc-musicals` is never an
