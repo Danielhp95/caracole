@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole
 
+import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
@@ -38,7 +39,7 @@ import kotlinx.coroutines.launch
  * The library screen: a WebView showing the mirror's pages, caracole's own, unchanged, at
  * `https://appassets.androidplatform.net/<path>` (the root, as on caracole serve: [Links]), with a small bar
  * (the page's title; Sync now, Library, Settings) and the sync's line under it. A pinch sizes the pages' text
- * ([pinchToSize]).
+ * ([pinchToSize]), and shows the size it is at over the page while it lasts ([sizeLabel]).
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -49,6 +50,7 @@ class MainActivity : Activity() {
     private lateinit var loader: WebViewAssetLoader
     private lateinit var settings: Settings
     private lateinit var pinch: TextPinch
+    private lateinit var label: SizeLabel
     /** The WebView's own text zoom, as Android's font size has it: what [TextZoom.DEFAULT] stands for. */
     private var ownTextZoom = TextZoom.DEFAULT
     private var scope: CoroutineScope = MainScope()
@@ -93,7 +95,11 @@ class MainActivity : Activity() {
             displayZoomControls = false
             textZoom = TextZoom.applied(ownTextZoom, settings.textZoom)
         }
-        pinch = TextPinch(settings.textZoom, frame = { web.postOnAnimation(it) }, apply = ::sizeText)
+        label = sizeLabel()
+        pinch = TextPinch(settings.textZoom, frame = { web.postOnAnimation(it) }, apply = { size ->
+            sizeText(size)
+            label.sized(size)
+        })
         pinchToSize()
         web.webViewClient = Client()
         web.webChromeClient = object : WebChromeClient() {
@@ -263,6 +269,7 @@ class MainActivity : Activity() {
         val detector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
             override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
                 pinch.begin()
+                label.began(pinch.zoom)
                 return true
             }
 
@@ -272,7 +279,9 @@ class MainActivity : Activity() {
             }
 
             override fun onScaleEnd(detector: ScaleGestureDetector) {
-                settings.textZoom = pinch.end()
+                val size = pinch.end()
+                settings.textZoom = size
+                label.ended(size)
             }
         })
         detector.isQuickScaleEnabled = false // a double tap held and dragged stays the page's
@@ -293,6 +302,38 @@ class MainActivity : Activity() {
             if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) pinching = false
             pinched
         }
+    }
+
+    /**
+     * The pill near the top of the page that shows the size a pinch is at ([SizeLabel]): "135%", in the bar's colours,
+     * not a Toast, which would queue behind the last one. A screen reader hears the size once, at the pinch's end
+     * (`announceForAccessibility`: a live region would read every step).
+     */
+    private fun sizeLabel(): SizeLabel {
+        val pill = findViewById<TextView>(R.id.size_label)
+        return SizeLabel(
+            show = { size ->
+                pill.animate().cancel() // a fade under way stops, and its end, which hides the pill, never comes
+                pill.alpha = 1f
+                pill.text = getString(R.string.text_size, size)
+                pill.visibility = View.VISIBLE
+            },
+            hide = { fade ->
+                if (fade) pill.animate().alpha(0f).setDuration(FADE_MS).withEndAction { pill.visibility = View.GONE }
+                else pill.visibility = View.GONE
+            },
+            announce = { size ->
+                @Suppress("DEPRECATION") // Android 16's advice is a live region, which would speak at each step
+                web.announceForAccessibility(getString(R.string.text_size_said, size))
+            },
+            later = { delay, block ->
+                val run = Runnable(block)
+                pill.postDelayed(run, delay)
+                ({ pill.removeCallbacks(run) })
+            },
+            // Animations off (the accessibility setting Remove animations): hidden at once, never faded.
+            calm = { !ValueAnimator.areAnimatorsEnabled() },
+        )
     }
 
     /**
@@ -320,5 +361,6 @@ class MainActivity : Activity() {
     private companion object {
         const val SHOW_ENDED_MS = 5_000L
         const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
+        const val FADE_MS = 250L
     }
 }

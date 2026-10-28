@@ -21,6 +21,7 @@
     <string name="wifi_sync_hint">Every 6 hours on Wi-Fi (an unmetered network), when caracole answers at the address; otherwise it does nothing.</string>
     <string name="text_size_label">Text size</string>
     <string name="text_size">%1$d%%</string>
+    <string name="text_size_said">Text size %1$d%%</string>
     <string name="reset">Reset</string>
     <string name="reset_text_size">Reset the text size to 100%</string>
     <string name="text_size_hint">Pinch a page to change it: fingers apart for larger text, together for smaller, from 50% to 250% of the size Android\'s font size gives the pages. A sheet\'s own Aa sizes its text on top of this.</string>
