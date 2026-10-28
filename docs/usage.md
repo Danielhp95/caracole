@@ -2813,7 +2813,9 @@ the library page link it, the tab's text beside it.
   syllable. Rows played alone, later verses sung to the same tune and the
   tabber's notes come as the tab gives them. caracole reads what harptabs.com's
   tabbers write ("-4", "4D", "-3b", "b-3", "-b3", '-3"' bent a whole step,
-  "(5)" for a draw in a tab that writes no "-", "(3)b", "7,8B"…); a time
+  "(5)" for a draw in a tab that writes no "-", "(3)b", "7,8B"…), and what a
+  tab writes its own way: "6+ 6-" where no sign comes before a hole, a single
+  dot that lengthens a note where one comes before a hole (". 4 5 ."). A time
   ("Time: 3/4", "1:45") is never holes. A tab in a notation of its tabber's
   own, or for a chromatic harmonica, is its text as written, and the page says
   so.

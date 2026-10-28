@@ -25,6 +25,7 @@ from caracole.viewer.harptab import (
     Group,
     Hole,
     Prose,
+    Reading,
     Row,
     Words,
     align,
@@ -205,6 +206,25 @@ def test_if_i_die_young_bends_each_draw_it_marks_with_a_double_quote_a_whole_ste
     assert bent == [Hole(3, "draw", 2)] * text.count("”") and len(bent) == 26  # -3”: −3′′, never −3
 
 
+def test_a_tab_that_lengthens_its_holes_with_dots_reads_every_line_of_them():
+    # "the dots extend the note": a dot before a hole (".5", ". 4") and after it ("5 .", "-5.")
+    read = spelled("26330_vergiss-es-nie-dass-du-lebst")
+    assert read.reading.dots and read.readable
+    assert len(read.rows()) == len(lines_of_holes("26330_vergiss-es-nie-dass-du-lebst")) == 14
+    assert all(r.unknown == [] for r in read.rows())
+    second = read.rows()[1]  # .5. -4 5 -4 5 .
+    assert [(g.label(), g.hold) for g in second.groups] == [
+        ("5", True), ("−4", False), ("5", False), ("−4", False), ("5", True)]
+
+
+def test_dirty_old_town_writes_its_signs_after_the_hole():
+    read = spelled("10319_dirty-old-town-not-pogues")
+    assert read.reading.signs_after and read.readable
+    assert [r.lyric is not None for r in read.rows()] == [True] * 4 and all(r.unknown == [] for r in read.rows())
+    assert [g.label() for g in read.rows()[0].groups] == ["6", "−6", "7", "8", "−8", "7", "8", "7", "6"]
+    assert read.notes[-1].startswith("Rtu zheirvi")  # its "3+" and "7+" in a line of prose are prose still
+
+
 def test_whole_lotta_love_bends_a_draw_with_a_b_between_the_sign_and_the_hole():
     read = spelled("2136_whole-lotta-love")
     assert labels(read).count("−3′") == 7  # -b3 (5) and b-3 (2)
@@ -275,6 +295,38 @@ def test_a_time_signature_or_a_clock_time_is_prose_never_holes():
     assert parse("Time: 3/4\n\n4 5 6\nla la la\n").notes == ["Time: 3/4"]
     # a bar or a bend written with "/" beside a hole still reads
     assert [g.label() for g in scan("4 / 5 /6 -3/ 7").groups] == ["4", "5", "6", "−3", "7"]
+
+
+def test_a_tab_writes_its_signs_after_the_hole_or_before_it_never_both():
+    # "6+ 6-" (Wikibooks' notation), in a tab that writes no sign before a hole: blow 6, draw 6
+    read = parse("6+ 6- 7+ 8+ 8- 7+\nla la la la la la\n")
+    assert read.reading == Reading(signs_after=True) and read.convention == "signs after"
+    assert [g.label() for g in read.rows()[0].groups] == ["6", "−6", "7", "8", "−8", "7"]
+    assert read.rows()[0].unknown == []
+    # a tab that writes "-6" before the hole: "6-" is no draw, and its "-" no hole's
+    read = parse("-6 6- 7 -7\nla la la la\n")
+    assert not read.reading.signs_after
+    assert [g.label() for g in read.rows()[0].groups] == ["−6", "6", "7", "−7"] and read.rows()[0].unknown == ["-"]
+    assert [g.label() for g in scan("6- 7+ 6-7").groups] == ["6", "7", "6", "−7"]  # harptabs.com's, a line alone
+    assert scan("6+ 6-", signs_after=True).unknown == () and scan("6--", signs_after=True).groups[0].hold
+
+
+def test_dots_lengthen_the_hole_before_them_in_a_tab_that_writes_a_dot_before_a_hole():
+    # A German hymn series on harptabs.com: "the dots extend the note"; a dot before a hole, then after one
+    read = parse(". 4   4   -4  5 .  7\nLo-rem ip su: dol si\n.5. -4 5 -4 5 .\nam-et con-se\n")
+    assert read.reading == Reading(dots=True)
+    first, second = read.rows()
+    assert [(g.label(), g.hold) for g in first.groups] == [
+        ("4", False), ("4", False), ("−4", False), ("5", True), ("7", False)]
+    assert [g.hold for g in second.groups] == [True, False, False, False, True]
+    assert first.unknown == second.unknown == []
+
+
+def test_a_full_stop_lengthens_nothing_in_a_tab_that_writes_no_dot_before_a_hole():
+    read = parse("1.\n4 5 6.\nla la la\n2.\n")
+    assert read.reading == Reading()
+    assert len(read.rows()) == 1 and [g.hold for g in read.rows()[0].groups] == [False, False, False]
+    assert read.rows()[0].unknown == ["."]
 
 
 def test_holes_together():
