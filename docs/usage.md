@@ -3091,24 +3091,31 @@ their page says they have, on harptabs.com), weighed by how much of the name
 the query is; songs from Ultimate Guitar's index, LaCuerda's and the
 harptabs.com artist pages caracole read (`stairwy to heavn` is Led Zeppelin's
 Stairway To Heaven, `wonderwal oasys` Oasis's Wonderwall), the most tabbed
-first, weighed by how much of the title, and of the artist's name where the
-query names them, the query is, a tab as five of an artist's songs (a song
-has 1.4 tabs, an artist 7.2 songs, on a full index): `scientst` is Coldplay's
-The Scientist, then We Are Scientists. A title is suggested once, by its most
+first, weighed by how much of the title the query is, squared (a title the
+query is only part of is seldom the one meant: `yesterdy` is The Beatles'
+Yesterday, and Yesterday Once More gives way), by how much of the artist's
+name where the query names them, and by how close it is, from nothing at 70
+to all at 100; a tab weighs as five of an artist's songs (a song has 1.4 tabs,
+an artist 7.2 songs, on a full index): `the scientst` is Coldplay's The
+Scientist, then We Are Scientists. A title is suggested once, by its most
 tabbed artist (a cover, or the title spelled another way on UG itself, gives
 way), never under a catch-all such as `misc-mashups`, and gtptabs.com's page
 of it is one of its places. None has a tenth of the first one's weight
-(`metalika`: Metallica, and no Malika Ayane, nor a song titled Malika). Each
+(`metalika`: Metallica, and no Malika Ayane, nor Miriam Makeba's Malaika). Each
 word of the query is close to a word of the name, or of the title or its
 artist, one at least of the title's (a word of fewer than four letters must be
 the name's own), of the same first letter, so a typo in a word's first letter
 suggests nothing, a word in more than 5,000 tabs (`lovee`) names no title, and
 Chinese suggests nothing. An artist a word of the query names may be shown
 already (`metalica`: La Naranja Metalica): an artist suggested then has more
-songs than any shown. A song found well already (90 or more by its title, or
-its title and artist: `hotel califronia` finds the Eagles' Hotel California
-itself) leaves no room for a title. Suggestions read the indexes alone, as
-the search does, in a few milliseconds more. The offline index knows no ratings (only the artist pages caracole
+songs than any shown. A song of Ultimate Guitar's found well already (90 or
+more by its title, or its title and artist: `hotel califronia` finds the
+Eagles' Hotel California itself) leaves no room for a title, and a song the
+results show whole is never suggested; one another site found, a harmonica tab
+of harptabs.com, may come with the Ultimate Guitar song the search missed
+(`sweet chld o mine`). Suggestions read the indexes alone, as the search does:
+on a full index a search that suggests takes 10 to 20 ms more (45 ms instead
+of 30, typically). The offline index knows no ratings (only the artist pages caracole
 read do), so the number of
 tabs is what puts the song you probably mean first (Radiohead's Creep before
 Stone Temple Pilots'). A catch-all such as `misc-musicals` is never an

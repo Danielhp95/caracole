@@ -253,7 +253,7 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
     for line in _harptabs_listing(cfg, conn, ask, limit):
         typer.echo(line)
     if ug is not None and ask.artist is None and ask.title is None:
-        _print_suggestions(conn, ask, ug, lacuerda, [hit for hit, _ in library])
+        _print_suggestions(cfg, conn, ask, ug, lacuerda, [hit for hit, _ in library])
     if hint:  # Ultimate Guitar's bare ids: after every place's hits
         typer.echo("\n" + _wrap(hint))
 
@@ -261,16 +261,17 @@ def _search(cfg: Config, conn: sqlite3.Connection, ask: _Ask, limit: int, key: s
 _SUGGESTED_ON = {"ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "harptabs": "harptabs.com", "gtptabs": "gtptabs.com"}
 
 
-def _print_suggestions(conn: sqlite3.Connection, ask: _Ask, ug: _Listing, lacuerda: _Listing,
+def _print_suggestions(cfg: Config, conn: sqlite3.Connection, ask: _Ask, ug: _Listing, lacuerda: _Listing,
                        mine: Sequence[LibraryHit]) -> None:
     """The artists and the songs spelled close to a query nothing matches well (``search.suggestions``), each with
     its line: an artist's lists their songs, a song's adds it as a hit's does (``_suggested_song``); nothing when a
-    song of yours is the query's by its title."""
+    song of yours is the query's by its title. A site turned off in caracole.toml suggests nothing."""
     from caracole.search import STRONG, IndexFound, suggestions
 
     if any(h.score >= STRONG and h.via != "artist" for h in mine):
         return
-    close = suggestions(conn, ask.text, IndexFound(ug.artists, ug.songs, ug.lead), lacuerda.sites)
+    close = suggestions(conn, ask.text, IndexFound(ug.artists, ug.songs, ug.lead), lacuerda.sites,
+                        harptabs=cfg.provider("harptabs").enabled, gtptabs=cfg.provider("gtptabs").enabled)
     if not close:
         return
     names = [f"{s.title} by {s.artist}" if s.title else s.artist for s in close]

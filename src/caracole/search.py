@@ -186,7 +186,7 @@ CLOSE_ARTISTS = 1000  # the artists with those words it reads, at most
 CLOSE_MARGIN = 8  # a suggestion this much less close than the closest is noise beside it ("lynrd": no Lynda Lemay)
 SUGGEST_SHARE = 10  # a suggestion weighing less than a tenth of the first one's is noise beside it ("metalika": no Malika)
 CLOSE_TABS = 5000  # rows a title is suggested from at most: more hold the query's words, too common to name a title
-CLOSE_PATTERNS = 4  # the close spellings of the query's longest word another site's songs are looked for by
+CLOSE_PATTERNS = 2  # the close spellings of the query's longest word another site's songs are looked for by
 TAB_SONGS = 5  # a song's tab weighs as five of an artist's songs (on the full index: 1.4 tabs a song, 7.2 songs an artist)
 
 _SHELL_SPECIAL = re.compile(r'(["\\$`])')
@@ -676,9 +676,11 @@ def suggestions(conn: sqlite3.Connection, query: str, index: IndexFound, sites: 
     "Eminence Front", and Eminem is suggested. Any page of MuseScore's is a title someone wrote out as the query (its
     pages match by their exact title alone): no suggestion beside it. An artist the query names in part may be
     shown ("metalica": La Naranja Metalica): an artist suggested then is one with more songs than any artist shown,
-    and none of them (Metallica). A song found near the query already (``STRONG`` or more by its title, or its title
-    and artist: "hotel califronia" is the Eagles' Hotel California, scored 94) leaves no room for a title, nor is a
-    song suggested that the index's hits show."""
+    and none of them (Metallica). A song of the Ultimate Guitar index found near the query already (``STRONG`` or more
+    by its title, or its title and artist: "hotel califronia" is the Eagles' Hotel California, scored 94) leaves no
+    room for a title, nor is a song suggested whose every hit the results show; one another site's index found, a
+    harmonica tab of harptabs.com, may still be suggested with the Ultimate Guitar song the search missed ("sweet chld
+    o mine")."""
     for a in index.artists:
         if not a.part:
             return []
@@ -693,8 +695,6 @@ def suggestions(conn: sqlite3.Connection, query: str, index: IndexFound, sites: 
             shown.append((compact(name_words_key(h.artist)), h.songs))
         elif h.source == "musescore" or (h.score >= 100 and h.via != "artist"):
             return []
-        elif h.score >= STRONG and h.via != "artist":
-            titled = True
     words = _suggestible(query)
     if words is None:
         return []
@@ -702,11 +702,17 @@ def suggestions(conn: sqlite3.Connection, query: str, index: IndexFound, sites: 
     names = {name for name, _ in shown}
     artists = [(w, s) for w, s in _cut(_artist_suggestions(conn, words, lacuerda=lacuerda, harptabs=harptabs))
                if s.songs > most and compact(name_words_key(s.artist)) not in names]
-    hits = {(h.artist_key, h.song_key) for h in index.songs}
+    hits = {("ug", h.artist_key, h.song_key) for h in index.songs} | {
+        (h.source, h.url) for h in sites if isinstance(h, SiteHit)}
     titles = [] if titled else [
         (w, s) for w, s in _cut(_title_suggestions(conn, words, lacuerda=lacuerda, harptabs=harptabs, gtptabs=gtptabs))
-        if not any(isinstance(h, IndexHit) and (h.artist_key, h.song_key) in hits for h in s.hits)]
+        if not all(_shown(h) in hits for h in s.hits)]
     return [s for _, s in _cut(artists + titles)]
+
+
+def _shown(hit: IndexHit | SiteHit) -> tuple[str, ...]:
+    """What tells a hit among the results: an Ultimate Guitar song by its keys, another site's page by its address."""
+    return ("ug", hit.artist_key, hit.song_key) if isinstance(hit, IndexHit) else (hit.source, hit.url)
 
 
 def name_words_key(name: str) -> str:
@@ -853,20 +859,23 @@ def _lacuerda_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> lis
 
 
 def _harptabs_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> list[tuple[float, Suggestion]]:
-    """harptabs.com's artists spelled close to the query, from its sitemap (``harptabs_index``): those with a word of
-    each long word's first letter (a ``LIKE`` on their keys, their name's key), by their key's words; weighed by the
-    tabs their page says they have, none before it is read (the sitemap counts none)."""
-    firsts = sorted({w[0] for w in words if len(w) >= CLOSE_LETTERS})
-    where = " AND ".join("(i.key LIKE ? OR i.key LIKE ?)" for _ in firsts)
+    """harptabs.com's artists spelled close to the query, from its sitemap (``harptabs_index``): those whose key (their
+    name's) holds a needle of the query's longest word (``_needles``), by their key's words, of each long word's first
+    letter; weighed by the tabs their page says they have, none before it is read (the sitemap counts none)."""
+    longest = max(words, key=len)
+    needles = _needles(words, [_near(conn, w) if w == longest else [w] for w in words])
     rows = [_HarpArtist(*r) for r in conn.execute(
         "SELECT i.path, i.page_id, i.key, a.name, a.tabs, a.read_at FROM harptabs_index i LEFT JOIN harptabs_artists a "
-        f"ON a.path = i.path WHERE i.kind = 'artist' AND {where}", [p for c in firsts for p in (f"{c}%", f"%-{c}%")])]
+        f"ON a.path = i.path WHERE i.kind = 'artist' AND {_holds('i.key', needles)}", needles)]
     letters = sum(len(w) for w in words)
     close = []
     for row in rows:
         if row.read_at is not None and not row.name:  # a page gone names no one
             continue
-        c = _closeness(words, row.key.split("-"))
+        name = row.key.split("-")
+        if not all(any(n[:1] == w[:1] for n in name) for w in words if len(w) >= CLOSE_LETTERS):
+            continue
+        c = _closeness(words, name)
         if c is not None:
             songs = row.tabs or 0
             close.append((_weighed(songs, letters, row.key), Suggestion("harptabs", row.shown, row.path, songs,
@@ -985,10 +994,13 @@ def _word_closeness(word: str, other: str) -> float:
 def _title_closeness(words: Sequence[str], title: Sequence[str],
                      artist: Sequence[str]) -> tuple[float, float] | None:
     """How close the query's words are to a song's title and artist (their words), the mean of each one's closest, as
-    ``_closeness`` has it; and how much of the names the query is: of the title, the letters of its words close to the
-    query's over all its letters, times as much of the artist's name, where words of the query are close to it ("hotl
-    califronia" is little of Red Hot Chili Peppers' Dani California: "hot" of their name). None when a word is close
-    to no word of either, or none is closer to a word of the title than of the artist: the artist's name alone is an
+    ``_closeness`` has it; and what the song's tabs are weighed by: how much of the title the query is (the letters of
+    its words close to the query's over all its letters), squared, as a title the query is only a part of is seldom
+    the one meant ("yesterdy": Yesterday, and no Yesterday Once More); times as much of the artist's name, where words
+    of the query are close to it ("hotl califronia" is little of Red Hot Chili Peppers' Dani California: "hot" of
+    their name); times how close it is, from nothing at ``MIN_SCORE`` to all at 100, so that a title spelled no closer
+    than an artist's name gives way to it ("metalika": Metallica, and no Malaika, at 80). None when a word is close to
+    no word of either, or none is closer to a word of the title than of the artist: the artist's name alone is an
     artist's suggestion."""
     scores: list[float] = []
     held: set[int] = set()
@@ -1007,10 +1019,11 @@ def _title_closeness(words: Sequence[str], title: Sequence[str],
     letters = sum(len(t) for t in title)
     if not held or not letters:
         return None
-    share = sum(len(title[i]) for i in held) / letters
+    closeness = sum(scores) / len(scores)
+    share = (sum(len(title[i]) for i in held) / letters) ** 2
     if named:
         share *= sum(len(artist[i]) for i in named) / sum(len(a) for a in artist)
-    return sum(scores) / len(scores), share
+    return closeness, share * max(closeness - MIN_SCORE, 0.0) / (100 - MIN_SCORE)
 
 
 def _ug_titled(conn: sqlite3.Connection, words: Sequence[str], near: Sequence[Sequence[str]]) -> list[_Titled]:
@@ -1025,12 +1038,13 @@ def _ug_titled(conn: sqlite3.Connection, words: Sequence[str], near: Sequence[Se
     if len(rows) > CLOSE_TABS:
         return []
     tabs = Counter((artist_key, split_variant(song_key)[0]) for artist_key, song_key in rows)
+    titled = {t for n in near for t in n}  # a title that holds none was found by its artist's name alone
     found: list[_Titled] = []
     heaviest = 0.0
     for (artist_key, base), n in sorted(tabs.items(), key=lambda t: (-t[1], t[0])):
         if n * SUGGEST_SHARE < heaviest:
             break
-        if no_ones(artist_key):
+        if no_ones(artist_key) or titled.isdisjoint(base.split("-")):
             continue
         read = _title_closeness(words, base.split("-"), artist_key.split("-"))
         if read is None:
@@ -1072,16 +1086,16 @@ def _lacuerda_titled(conn: sqlite3.Connection, words: Sequence[str], near: Seque
 
 
 def _harptabs_titled(conn: sqlite3.Connection, words: Sequence[str], near: Sequence[Sequence[str]]) -> list[_Titled]:
-    """harptabs.com's songs spelled close to the query, of the artist pages caracole read: those whose title's key, or
-    whose artist's, holds a needle (``_needles``), by their harmonica tabs, the hit made once suggested."""
+    """harptabs.com's songs spelled close to the query, of the artist pages caracole read: those whose title's key holds
+    a needle (``_needles``: the query's longest word is the title's, as a title's words are most of a query's), by
+    their harmonica tabs, the hit made once suggested."""
     from caracole.normalize import identity_key
 
     needles = _needles(words, near)
     rows = conn.execute(  # the song keys read from their index alone
         "SELECT artist, song_key, COUNT(*) FROM harptabs_artist_tabs WHERE song_key IN (SELECT DISTINCT song_key FROM "
-        "harptabs_artist_tabs WHERE " + _holds("song_key", needles) + ") OR artist IN (SELECT path FROM "
-        "harptabs_artists WHERE " + _holds("key", needles) + ") GROUP BY artist, song_key LIMIT ?",
-        (*needles, *needles, SITE_TITLES_READ)).fetchall()
+        "harptabs_artist_tabs WHERE " + _holds("song_key", needles) + ") GROUP BY artist, song_key LIMIT ?",
+        (*needles, SITE_TITLES_READ)).fetchall()
     paths = sorted({r[0] for r in rows})
     names = {path: (key, name) for path, key, name in conn.execute(
         f"SELECT path, key, name FROM harptabs_artists WHERE path IN ({', '.join('?' * len(paths))})", paths)} \

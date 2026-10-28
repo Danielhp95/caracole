@@ -2420,7 +2420,7 @@ def test_title_suggestions_come_with_the_artists_for_a_query_nothing_matches_wel
     # Yesterday; We Are Scientists, a longer name, come after Coldplay's The Scientist, a title the query is whole.
     assert suggested(suggestions(conn, "yesterdy", find_index(conn, "yesterdy"))) == [("Beatles", "Yesterday")]
     index(conn, songs_of("we-are-scientists", 40, 64000)
-          + [(64100 + i, "coldplay", "scientist", "chords") for i in range(5)])
+          + [(64100 + i, "coldplay", "scientist", "chords") for i in range(8)])
     assert suggested(suggestions(conn, "the scientst", find_index(conn, "the scientst"))) == [
         ("Coldplay", "Scientist"), "We Are Scientists"]
     # A song the query finds well already, by its title or its title and artist: nothing to suggest.
@@ -2460,6 +2460,21 @@ def test_a_title_is_suggested_from_lacuerdas_and_harptabs_coms_songs_too(conn):
     assert suggest_titles(conn, "vino tintoo", lacuerda=False) == []
 
 
+def test_a_song_another_site_found_well_is_suggested_with_the_ultimate_guitar_song_the_search_missed(conn):
+    from caracole.search import IndexFound, search_harptabs, suggestions
+
+    harptabs_index(conn)
+    harp = search_harptabs(conn, "piano mann")[1]
+    assert (harp[0].artist, harp[0].title, harp[0].score >= 90) == ("billy joel", "piano man", True)
+    # harptabs.com alone has it: the results show it, nothing to suggest.
+    assert [s for s in suggestions(conn, "piano mann", IndexFound(), harp) if s.title] == []
+    # Ultimate Guitar has it too, which the search missed: suggested, both its places with it.
+    index(conn, [(65000 + i, "billy-joel", "piano-man", "chords") for i in range(3)])
+    [song] = [s for s in suggestions(conn, "piano mann", IndexFound(), harp) if s.title]
+    assert (song.source, song.artist, song.title) == ("ug", "Billy Joel", "Piano Man")
+    assert [getattr(h, "source", "ug") for h in song.hits] == ["ug", "harptabs"] and song.hits[1].url == harp[0].url
+
+
 def test_harptabs_coms_artists_are_suggested_too(conn):
     from caracole.search import suggest_artists
 
@@ -2480,7 +2495,7 @@ def test_cli_a_close_spelling_of_a_title_says_did_you_mean_the_song(tmp_path):
             'caracole add "Eagles" "Hotel California"') in out.output
     conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     index(conn, songs_of("we-are-scientists", 40, 64000)
-          + [(64100 + i, "coldplay", "scientist", "chords") for i in range(5)])
+          + [(64100 + i, "coldplay", "scientist", "chords") for i in range(8)])
     conn.close()
     both = run(tmp_path, "search", "scientst").output
     assert "Did you mean Scientist by Coldplay or We Are Scientists?\n" in both
