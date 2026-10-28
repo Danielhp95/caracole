@@ -7,6 +7,7 @@
   --muted: #645f57;
   --border: #e1ddd5;
   --border-strong: #958e82;  /* a control's own edge: a stepper, a select, a switch off (3:1) */
+  --grip: #958e82;  /* the overlay's sheet's handle (3:1) */
   --sunk: #ece9e3;  /* a segmented control's track */
   --seg-on: #ffffff;  /* its chosen segment */
   --knob: #ffffff;  /* a switch's knob, off */
@@ -42,6 +43,7 @@
     --muted: #aaa59c;
     --border: #363431;
     --border-strong: #4b4844;
+    --grip: #7d776f;
     --sunk: #181716;
     --seg-on: #292826;
     --knob: #d8d4cc;
@@ -378,11 +380,20 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
 .bar .shapes { margin-left: auto; }
 .bar .shapes:not([hidden]) + .size-box { margin-left: 0; }
 .bar .shapes svg { width: 20px; height: 20px; }
-.bar .shapes[aria-pressed="true"], .bar .necks-toggle[aria-pressed="true"] { background: var(--accent-soft);
-  color: var(--accent); box-shadow: inset 0 0 0 1.5px var(--accent); }
+.bar .shapes[aria-pressed="true"], .bar .necks-toggle[aria-pressed="true"],
+.bar .necks-open[aria-expanded="true"] { background: var(--accent-soft); color: var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--accent); }
 /* The rail of necks shown or hidden: from 1200 px, where there is a rail (viewer.js), first in the bar, on the
    rail's side; pressed while it shows, as the guitar is. */
 .bar .necks-toggle svg { width: 18px; height: 18px; }
+/* The neck: the overlay's sheet up or down, below 1200 px, where there is no rail (viewer.js, harptab.js): the first of
+   the tools at the end, right after the key; tinted while the sheet is open. From 360 px the guitar beside it, the key
+   narrower between − and +; narrower still there is no room for both: the neck takes the guitar's place, and the
+   strip of shapes is the settings' All chord shapes. */
+.bar .necks-open { margin-left: auto; }
+.bar .necks-open:not([hidden]) ~ .shapes, .bar .necks-open:not([hidden]) ~ .size-box { margin-left: 0; }
+.bar .necks-open svg { width: 18px; height: 18px; }
+@media (max-width: 359.98px) { .bar .necks-open:not([hidden]) ~ .shapes { display: none; } }
 /* A phone: the tools side by side with no gap (each 44 px, its icon in the middle) and the bar closer to
    the screen's edges, so the key between − and + keeps its room: "Ab mixolydian" whole at 390 px. */
 @media (max-width: 419px) {
@@ -454,6 +465,7 @@ html[data-pill] { --pill: 64px; }  /* the pill's 52 px and the gap under it */
   html[data-dock] { scroll-padding-bottom: calc(var(--dock) + var(--foot) + var(--pill) + 8px); }
   html[data-dock] .page { padding-bottom: calc(var(--dock) + 72px + var(--pill) + env(safe-area-inset-bottom)); }
   html[data-dock] .pill { bottom: calc(var(--dock) + var(--foot) + 12px); }
+  html[data-dock="necks-full"] .pill { bottom: calc(var(--foot) + 12px); }  /* over the foot of the whole-screen sheet */
 }
 .ui-head { display: flex; align-items: center; gap: 8px; }
 /* Room for two lines, as tall as the close button: a heading that wraps at one capo and not at
@@ -903,6 +915,35 @@ a.ver-main .ver-name { color: var(--accent); }
   min-height: calc(40px * var(--nk)); padding: 0 calc(10px * var(--nk)); font-size: .7em; font-weight: 600; }
 .ov-change svg { width: 1.1em; height: 1.1em; fill: none; stroke: currentColor; stroke-width: 1.6; }
 .ov-change svg .fill { fill: currentColor; stroke: none; }
+/* Below 1200 px the overlay is the phone's sheet (overlay.js, data-sheet), slid up from the bar by its neck (viewer.js,
+   harptab.js) over about half the screen and docked on the bar, as the settings are, the song readable and scrollable
+   above it; its handle takes it to the whole screen but a strip of the song at the top, and back. It holds what the rail
+   holds at the page's own sizes (--nk 1), every target a thumb's, and scrolls on its own, its head kept at its top: the
+   handle across it, its grip in the middle, reaching down under the row of the tabs and ✕, which lets a tap between
+   them through to it. At most 620 px wide, as the settings docked are, and beside their rail from 900 px; on a phone the
+   one opened last shows, as the settings and the card do. */
+@media screen and (max-width: 1199.98px) {
+  .necks[data-sheet] { --nk: 1; position: fixed; z-index: 7; left: 0; right: 0; bottom: var(--foot); height: 54vh;
+    height: 54dvh; max-width: 620px; margin: 0 auto; padding: 0 16px 18px; overflow-y: auto; overscroll-behavior: contain;
+    border: 1px solid var(--border); border-bottom: 0; border-radius: 18px 18px 0 0; background: var(--surface);
+    box-shadow: 0 -6px 22px rgb(0 0 0 / .18); font-size: 1rem; scrollbar-width: thin; }
+  .necks[data-sheet="full"] { height: calc(100vh - var(--foot) - 24px); height: calc(100dvh - var(--foot) - 24px); }
+  .necks[data-sheet] .nk-head { padding-top: 22px; }
+  .necks[data-sheet] .nk-row { position: relative; z-index: 1; pointer-events: none; }
+  .necks[data-sheet] .nk-row > :not(.nk-title) { pointer-events: auto; }
+  .necks[data-sheet] .ov-change, .necks[data-sheet] .ov-tabs > button { min-height: 44px; }
+  .necks[data-sheet] .hw { grid-template-columns: min(172px, 54%) minmax(0, 1fr); }
+}
+@media screen and (min-width: 900px) and (max-width: 1199.98px) { html[data-panel] .necks[data-sheet] { right: var(--rail); } }
+@media screen and (max-width: 899.98px) { .necks[data-sheet]:not(.top) { visibility: hidden; } }
+@media (prefers-reduced-motion: no-preference) { .necks[data-sheet] { animation: sheet-up .22s ease-out; } }
+@keyframes sheet-up { from { transform: translateY(100%); } }
+.ov-handle { position: absolute; z-index: 0; inset: 0; display: flex; justify-content: center; padding: 9px 0 0;
+  border: 0; border-radius: 18px 18px 0 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ov-grip { width: 42px; height: 5px; border-radius: 3px; background: var(--grip); }
+.ov-handle:focus-visible { outline: none; }
+.ov-handle:focus-visible .ov-grip { outline: 3px solid var(--focus); outline-offset: 3px; }
+@media (hover: hover) { .ov-handle:hover .ov-grip { background: var(--muted); } }
 /* The Harmonica tab: the circle of fifths, small, the harp chosen beside it, then the key on that harp and a card per
    chord, each harp's ten holes drawn across the rail. Its sizes are --nk times the page's, as the necks' are. */
 .hw { display: grid; grid-template-columns: calc(172px * var(--nk)) minmax(0, 1fr); gap: calc(4px * var(--nk));

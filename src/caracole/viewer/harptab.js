@@ -17,7 +17,8 @@
   // page's both ways (a harp tapped on its circle is the one the page plays; −/+ move the circle's choice), and
   // Guitar, the song's sheet's necks; data.overlay holds what it draws, as overlay.js's rail takes it. Whether it
   // shows is the screen's choice, as the sheet viewer's rail: kept for every page (overlay.js's NECKS) and in the
-  // address while hidden (necks=0).
+  // address while hidden (necks=0). Narrower, the phone's sheet, as the viewer's: the bar's neck slides the overlay up
+  // from the bar over half the screen, its handle to the whole screen and back, ✕, Escape or the neck again closing it.
   const $ = (id) => document.getElementById(id);
   const doc = document.documentElement;
   let data;
@@ -175,7 +176,22 @@
     const where = Array.isArray(data.positions) ? data.positions[state.harp] || "" : "";
     $("harp-why").textContent = [why, where.split(",")[0]].filter(Boolean).join(" · ");
     $("notes").setAttribute("aria-pressed", state.notes ? "true" : "false");
+    fitHarp();
   };
+  // The harp's name a little smaller where the bar is too narrow for it (320 px, the neck beside it), down to seven
+  // tenths of its size, then cut short. Measured to the fraction of a pixel, as the viewer's key is: scrollWidth rounds.
+  const fitHarp = () => {
+    const name = $("harp-name");
+    if (!name || !name.getClientRects().length) return;
+    name.style.fontSize = "";
+    const text = document.createRange();
+    text.selectNodeContents(name);
+    const tooWide = () => text.getBoundingClientRect().width > name.getBoundingClientRect().width;
+    const full = parseFloat(getComputedStyle(name).fontSize);
+    for (let size = full - 0.5; size >= full * 0.7 && tooWide(); size -= 0.5) name.style.fontSize = size + "px";
+  };
+  window.addEventListener("resize", () => fitHarp());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => fitHarp(), () => {});
   const render = () => {
     holeEls.forEach(drawGroup);
     drawHarp();
@@ -189,8 +205,9 @@
 
   // --- the overlay: Harmonica and Guitar, on a wide screen ------------------------------------------------------
   const over = data.overlay && typeof data.overlay === "object" && data.overlay.harp ? data.overlay : null;
-  const aside = $("necks"), necksButton = $("necks-toggle");
+  const aside = $("necks"), necksButton = $("necks-toggle"), sheetButton = $("necks-open");
   const wide = window.matchMedia("(min-width: 1200px)");
+  let sheetAt = null;  // the phone's sheet: "half", "full", or null while it is closed
   const mod12 = (n) => ((n % 12) + 12) % 12;
   const picks = {};  // a shape picked on a chord's neck: the page's alone
   const guitarTab = () => {
@@ -228,17 +245,61 @@
       showRail(false);
       necksButton.focus();  // the focus where the rail comes back from, not lost with it
     },
+    sheet: () => (wide.matches ? null : sheetAt),
+    grow: () => {
+      sheetAt = sheetAt === "full" ? "half" : "full";
+      if (sheetAt === "full") pauseScroll();  // the tab out of sight
+      drawRail();
+    },
+    close: () => closeSheet(),
   }) : null;
   function drawRail() {
     const can = Boolean(rail) && wide.matches, on = can && state.necks;
+    const phone = Boolean(rail) && !wide.matches && sheetAt !== null;
     necksButton.hidden = !can;
     necksButton.setAttribute("aria-pressed", on ? "true" : "false");
-    aside.hidden = !on;
+    sheetButton.hidden = !rail || wide.matches;
+    sheetButton.setAttribute("aria-expanded", phone ? "true" : "false");
+    aside.hidden = !on && !phone;
+    aside.classList.toggle("top", phone);  // the one sheet here: always on top (viewer.css)
     if (on) doc.dataset.necks = "1";  // the tab and the bar move over for it
     else delete doc.dataset.necks;
-    if (on) rail.draw();
+    if (on || phone) rail.draw();
+    else if (rail) rail.empty();
     else aside.textContent = "";
+    dockSheet();
   }
+  // The sheet docked on the bar, as the viewer's settings are: the page leaves room under the tab for it, so its end
+  // comes up above it, and the pill rides above it (--dock, viewer.css), or over the foot of the whole-screen one.
+  function dockSheet() {
+    if (sheetAt !== null && !wide.matches) {
+      doc.dataset.dock = sheetAt === "full" ? "necks-full" : "necks";
+      doc.style.setProperty("--dock", aside.offsetHeight + "px");
+    } else if (doc.dataset.dock) {
+      delete doc.dataset.dock;
+      doc.style.removeProperty("--dock");
+    }
+  }
+  // Open, the focus on its tab shown; closed, back on the neck when it was in the sheet. The bar stays under it.
+  const openSheet = () => {
+    if (sheetAt === null) sheetAt = "half";
+    showSizes(false);
+    pauseScroll();
+    bar.classList.remove("away");
+    drawRail();
+    const to = rail.landing();
+    if (to) to.focus({ preventScroll: true });
+  };
+  function closeSheet() {
+    if (sheetAt === null) return;
+    const active = document.activeElement;
+    const mine = !active || active === document.body || aside.contains(active);
+    sheetAt = null;
+    drawRail();
+    if (mine) sheetButton.focus({ preventScroll: true });
+  }
+  sheetButton.addEventListener("click", () => (sheetAt === null ? openSheet() : closeSheet()));
+  window.addEventListener("resize", () => dockSheet());
   const showRail = (on) => {
     state.necks = on;
     keepNecks();
@@ -247,9 +308,10 @@
   };
   necksButton.addEventListener("click", () => showRail(!state.necks));
   // The window narrowed below 1200 px with the keyboard's focus in the rail: it goes to the bar's first control, where
-  // the rail's button was.
+  // the rail's button was. Widened past it with the sheet open: the rail takes its place, on its tab.
   wide.addEventListener("change", () => {
     const had = aside.contains(document.activeElement);
+    if (wide.matches) sheetAt = null;
     drawRail();
     if (had && !aside.contains(document.activeElement)) {
       const first = Array.from($("bar").querySelectorAll("button")).find((b) => b.getClientRects().length > 0);
@@ -342,10 +404,13 @@
   $("size-box").addEventListener("focusout", (e) => {
     if (e.relatedTarget instanceof Node && !$("size-box").contains(e.relatedTarget)) showSizes(false);
   });
+  // Escape: the size box first, then the overlay's sheet.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !sizes.hidden) {
       showSizes(false);
       sizeButton.focus({ preventScroll: true });
+    } else if (e.key === "Escape" && sheetAt !== null) {
+      closeSheet();
     }
   });
   const setSize = (to) => {
@@ -370,7 +435,7 @@
     pill.hidden = scroll.state === "off";
     if (scroll.state === "off") delete doc.dataset.pill;
     else doc.dataset.pill = scroll.state;
-    bar.classList.toggle("away", moving());
+    bar.classList.toggle("away", moving() && sheetAt === null);  // the overlay's sheet sits on it
     pill.dataset.state = scroll.state;
     go.setAttribute("aria-label", LABELS[scroll.state] || "Pause");
     $("tick").textContent = scroll.state === "counting"
@@ -462,6 +527,10 @@
   };
   $("scroll").addEventListener("click", () => {
     showSizes(false);
+    if (sheetAt === "full") {  // the sheet stays, at half the screen, the tab moving above it
+      sheetAt = "half";
+      drawRail();
+    }
     countdown();
     go.focus({ preventScroll: true });
   });
@@ -507,7 +576,7 @@
       reveal.y = y;
       return;
     }
-    if (!reveal.touched || !sizes.hidden || bar.contains(document.activeElement)) {
+    if (!reveal.touched || !sizes.hidden || sheetAt !== null || bar.contains(document.activeElement)) {
       reveal.y = y;
       return;
     }

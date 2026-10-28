@@ -1118,14 +1118,20 @@
   // the rail alone. Harmonica: the harps for the song as it sounds (a harmonica takes no capo; a transposition moves
   // every harp), the harp chosen (harpAt, above the tonic; until one is tapped, the one the song's harmonica tab
   // plays on, else the first harp.py's choices pick), the key on it and each chord's holes, harp.py's tables looked
-  // up. Narrower, the card alone. Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the
-  // settings' Chord necks row show it or hide it (state.necks), the three always in step; hidden, the song has the
-  // whole width.
+  // up. Hide, at the rail's top, the bar's button (first in it, from 1200 px) and the settings' Chord necks row show it
+  // or hide it (state.necks), the three always in step; hidden, the song has the whole width.
+  // Narrower, the phone's sheet: the bar's neck (after the key) slides the same overlay up from the bar over half the
+  // screen (sheetAt), docked there as the settings are (a layer: the one opened last shows), the song readable and
+  // scrollable above it and its end coming up above it; its handle takes it to the whole screen and back, and ✕,
+  // Escape or the neck again closes it, the focus back on the neck. Each page opens with it closed; the rail's Hide and
+  // Chord necks are the rail's alone. Widened past 1200 px, the rail takes its place, on the tab it was on.
   const necksEl = $("necks");
   const railWide = window.matchMedia("(min-width: 1200px)");
-  const necksButton = $("necks-toggle"), necksChip = $("necks-chip");
+  const necksButton = $("necks-toggle"), necksChip = $("necks-chip"), sheetButton = $("necks-open");
   const railCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && railWide.matches;
   const railOn = () => railCan() && state.necks;
+  const sheetCan = () => Boolean(necksEl) && Boolean(overlay) && count > 0 && !railWide.matches;
+  let sheetAt = null;  // the phone's sheet: "half", "full", or null while it is closed
   const shownAs = (name) => {  // the chords the sheet shows by this name, by index
     const out = [];
     for (let i = 0; i < count; i++) {
@@ -1210,22 +1216,35 @@
       showNecks(false);
       if (necksButton) necksButton.focus();  // the focus where the rail comes back from, not lost with it
     },
+    sheet: () => (railWide.matches ? null : sheetAt),
+    grow: () => {
+      sheetAt = sheetAt === "full" ? "half" : "full";
+      if (sheetAt === "full") pauseScroll();  // the song out of sight
+      drawNecks();
+      dock();
+    },
+    close: () => close(necksEl),
   }) : null;
   const drawNecks = () => {
-    const can = railCan(), on = railOn();
+    const can = railCan(), on = railOn(), phone = sheetCan() && sheetAt !== null;
     if (necksButton) {
       necksButton.hidden = !can;
       necksButton.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    if (sheetButton) {
+      sheetButton.hidden = !sheetCan();
+      sheetButton.setAttribute("aria-expanded", phone ? "true" : "false");
     }
     if (necksChip) {
       $("necks-row").hidden = !can;
       necksChip.setAttribute("aria-pressed", on ? "true" : "false");
     }
     if (!necksEl) return;
-    necksEl.hidden = !on;
+    necksEl.hidden = !on && !phone;
     if (on) doc.dataset.necks = "1";  // the song and the bar move over for it
     else delete doc.dataset.necks;
-    if (on) rail.draw();
+    if (on || phone) rail.draw();
+    else if (rail) rail.empty();
     else necksEl.textContent = "";
   };
   // A position picked for a chord: every place the sheet shows it plays it, and its card, when it shows
@@ -1248,12 +1267,25 @@
   };
   if (necksButton) necksButton.addEventListener("click", () => showNecks(!state.necks));
   if (necksChip) necksChip.addEventListener("click", () => showNecks(!state.necks));
+  if (sheetButton) {
+    // The neck: the sheet up, on top of the settings or a card it was under, or closed where you see it.
+    sheetButton.addEventListener("click", () => {
+      if (sheetAt !== null && inSight(necksEl)) {
+        close(necksEl);
+        return;
+      }
+      if (sheetAt === null) sheetAt = "half";
+      open(necksEl, sheetButton);
+    });
+  }
   if (necksEl) {
-    // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it.
-    // Narrowed with the keyboard's focus in the rail, the focus goes to the bar's first control, where the rail's
-    // button was.
+    // The window widened past 1200 px, or narrowed under it: the rail comes or goes, and the song with it. Widened with
+    // the sheet open, the rail takes its place (where it is shown), on its tab, the focus kept in it. Narrowed with the
+    // keyboard's focus in the rail, the focus goes to the bar's first control, where the rail's button was; the sheet
+    // stays closed until the neck is pressed.
     railWide.addEventListener("change", () => {
       const had = necksEl.contains(document.activeElement);
+      if (railWide.matches && sheetAt !== null) dropSheet();
       drawNecks();
       if (!harmony.hidden) drawHarmony();  // the key's neck: in the rail, or in the panel
       layout();
@@ -1613,19 +1645,22 @@
   // the bar, the one opened last over the other, and the song scrolls under it; from 900 px wide
   // (viewer.css) the settings are a rail beside the song and the card a popover by its chord. Each
   // takes the focus as it opens (its heading); Escape closes the one on top, and the focus goes back
-  // to what opened it when it was in there.
+  // to what opened it when it was in there. The overlay's sheet is one of them below 1200 px (above), docked
+  // at the foot up to 1199 px, the focus on its tab shown as it opens.
   const pageEl = document.querySelector(".page");
   const wide = window.matchMedia("(min-width: 900px)");
   const calm = window.matchMedia("(prefers-reduced-motion: reduce)");
   const layers = [];  // the open ones, the last on top: {el, opener}
   const topLayer = () => (layers.length ? layers[layers.length - 1].el : null);
   const inSight = (which) => !which.hidden && (wide.matches || topLayer() === which);
+  const landing = (which) => (which === necksEl ? rail.landing() : which.querySelector("h2"));
   // On a phone the page leaves room under the song for the one docked at its foot, so the end of
   // the song comes up above it, and the pill rides above it (--dock: its height). The bar is out of
   // the way while the song moves by itself, unless one is docked on it: then nothing moves as the
-  // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill.
+  // scroll pauses and resumes. Paused, or at the end of the song, it is back, under the pill. The overlay's
+  // sheet docks there up to 1199 px; over the whole screen, the pill rides over its foot (necks-full, viewer.css).
   function dock() {
-    const there = wide.matches ? null : topLayer();
+    const there = !wide.matches ? topLayer() : sheetAt !== null && !railWide.matches ? necksEl : null;
     const away = moving() && !there;
     if (bar.hidden !== away) {
       bar.hidden = away;
@@ -1635,7 +1670,7 @@
       }
     }
     if (there) {
-      doc.dataset.dock = there.id;
+      doc.dataset.dock = there === necksEl && sheetAt === "full" ? "necks-full" : there.id;
       doc.style.setProperty("--dock", there.offsetHeight + "px");
     } else if (doc.dataset.dock) {
       delete doc.dataset.dock;
@@ -1659,7 +1694,7 @@
   }
   const restack = () => {
     const rail = doc.dataset.panel;
-    for (const which of [panel, card, harmony, vList]) if (which) which.classList.toggle("top", which === topLayer());
+    for (const which of [panel, card, harmony, vList, necksEl]) if (which) which.classList.toggle("top", which === topLayer());
     more.setAttribute("aria-expanded", panel.hidden ? "false" : "true");
     if (vList) $("ver-now").setAttribute("aria-expanded", vList.hidden ? "false" : "true");
     if (rails.every((which) => which.hidden)) delete doc.dataset.panel;  // the settings', the Harmony panel's, the versions'
@@ -1674,11 +1709,13 @@
     if (rails.indexOf(which) >= 0) for (const other of rails) if (other !== which) close(other);
     layers.push({ el: which, opener: opener instanceof Element && opener !== document.body ? opener : null });
     showSizes(false);
-    which.hidden = false;
+    if (which === necksEl) drawNecks();  // drawn as the sheet, sheetAt set
+    else which.hidden = false;
     slide(false);  // the bar it sits on
     restack();
     pauseScroll();
-    which.querySelector("h2").focus({ preventScroll: true });
+    const to = landing(which);
+    if (to) to.focus({ preventScroll: true });
   };
   const close = (which) => {
     const at = layers.findIndex((layer) => layer.el === which);
@@ -1686,18 +1723,31 @@
     const opener = layers.splice(at, 1)[0].opener;
     const active = document.activeElement;
     const mine = !active || active === document.body || which.contains(active);
-    which.hidden = true;
+    if (which === necksEl) {
+      sheetAt = null;
+      drawNecks();
+    } else {
+      which.hidden = true;
+    }
     if (which === card) for (const el of chordEls) el.classList.remove("on");
     if (which === harmony) stopPlaying(true);
     restack();
     if (!mine) return;  // the focus is somewhere else of yours: it stays there
     let to = opener && opener.isConnected ? opener : null;
     if (!to && opener && which === card) to = anchor();  // the strip drew its button anew
-    if (!to && topLayer()) to = topLayer().querySelector("h2");
+    if (!to && topLayer()) to = landing(topLayer());
     if (to) to.focus({ preventScroll: true });
   };
-  const closeAll = () => {
-    while (layers.length) close(topLayer());
+  // Every one but ``keep``.
+  const closeAll = (keep) => {
+    for (const layer of layers.slice().reverse()) if (layer.el !== keep) close(layer.el);
+  };
+  // The sheet gone with the window widened past 1200 px, where the rail takes its place: the focus left where it is.
+  const dropSheet = () => {
+    sheetAt = null;
+    const at = layers.findIndex((layer) => layer.el === necksEl);
+    if (at >= 0) layers.splice(at, 1);
+    restack();
   };
   for (const x of document.querySelectorAll("[data-close]")) x.addEventListener("click", () => close(x.closest(".sheet-ui")));
   document.addEventListener("keydown", (e) => {
@@ -2507,7 +2557,8 @@
   // change the speed as it runs, ❚❚ pauses and ▶ resumes (after a countdown again), × ends it; the
   // bar is out of the way while it counts down and runs (dock()). A finger on the page, the wheel, a
   // key that scrolls, a scroll by hand, a card opening or the end of the song pauses it: the page and
-  // the bar are yours until you press ▶, which stays within reach with the card open.
+  // the bar are yours until you press ▶, which stays within reach with the card open. ▶ closes the settings and the
+  // card, and leaves the overlay's sheet at half the screen, the bar under it and the pill above it.
   const COUNTDOWN = 3000;
   const scroll = { state: "off", from: 0, travelled: 0, last: 0, at: 0, ends: 0, timer: 0, loop: 0 };
   const moving = () => scroll.state === "counting" || scroll.state === "running";
@@ -2634,7 +2685,11 @@
   };
 
   $("scroll").addEventListener("click", () => {
-    closeAll();
+    closeAll(necksEl);  // the overlay's sheet stays, at half the screen, the song moving above it
+    if (sheetAt === "full") {
+      sheetAt = "half";
+      drawNecks();
+    }
     showSizes(false);
     countdown();
     go.focus({ preventScroll: true });  // press it again, or Enter, to start at once
@@ -2664,7 +2719,7 @@
   // it. Only your own scrolling moves it: none before you first touch the page (the browser, or the
   // songbook, putting you back where you were), and none just after a change of key or text size,
   // when the browser keeps the line you were reading in place by scrolling. It stays while the size
-  // box or a sheet is open, and while one of its controls has the keyboard's focus, which would
+  // box or a sheet is open (the overlay's too), and while one of its controls has the keyboard's focus, which would
   // otherwise go out of sight.
   const reveal = { y: window.scrollY, quiet: 0, touched: false };
   function hush() {
@@ -2692,7 +2747,7 @@
       return;
     }
     if (!reveal.touched || performance.now() < reveal.quiet || !sizes.hidden || !panel.hidden || !card.hidden
-        || !harmony.hidden || (vList && !vList.hidden)
+        || !harmony.hidden || (vList && !vList.hidden) || sheetAt !== null
         || keyboardIn(bar)) {
       reveal.y = y;
       return;

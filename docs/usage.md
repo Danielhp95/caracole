@@ -2395,8 +2395,23 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   record, or as its words say), else on the first harp for the song's key.
   Once the circle has scrolled away, a slim bar at the rail's top names the
   harp, with **Change harp** to go back up to it. The rail scrolls on its
-  own, the song and the bar move over for it, and it isn't printed; on a
-  narrower screen or a phone, the chord's card is where the shapes are.
+  own, the song and the bar move over for it, and it isn't printed.
+  **On a phone or a tablet** (below 1200 px) the neck in the bar, after the
+  key, slides the same overlay up from the bar as a sheet over about half
+  the screen, its tabs, circle, cards and slim bar as the rail has them; the
+  song stays readable and scrollable above it, its end coming up above the
+  sheet. A tap on the sheet's handle (the grip at its top, or anywhere
+  between its tabs and ✕) takes it to the whole screen and back; ✕, Escape
+  or the neck again closes it, and the focus goes back to the neck. Each
+  page opens with it closed, at half the screen. ▶ leaves it open, at half
+  the screen, the song scrolling above it and the pill above the sheet; the
+  settings or a chord's card open over it, and it is back once they close.
+  On a phone narrower than 360 px there is no room for both the neck and
+  the guitar beside the key: the neck takes the guitar's place, and **All
+  chord shapes** in the settings shows the strip. The sheet is the screen's
+  own: the rail's Hide and **Chord necks** don't touch it, and a window
+  widened past 1200 px with the sheet open shows the rail (where it is
+  shown) on the tab the sheet was on.
   **Showing and hiding it**: the button at the rail's top (a sidebar, "Hide
   chord necks", which stays at the top as the rail scrolls) hides it, and the
   song takes the whole width; the same sidebar, first in the bar, hides it or
@@ -2411,8 +2426,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   library page shows the rail again, as it starts at the usual text size: the
   library's links don't carry it. **Reset everything** shows the rail again. Hidden, the
   Harmony panel shows the key's neck, as on a narrower screen. Below 1200 px
-  there is no rail and no button for it (narrowed with the keyboard's focus
-  in the rail, the focus goes to the bar).
+  there is no rail and no button for it, but the neck (narrowed with the
+  keyboard's focus in the rail, the focus goes to the bar).
 - **The key line** under the title says how the song is played. With a capo,
   it names the key of the shapes you play, the capo and the key the song
   sounds in: "Em shapes · capo 2 · sounds F#m". With none, the key alone:
@@ -2502,14 +2517,17 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `caracole versions` command that does it, with Copy, and a version not kept
   links to its page on UG.
 - **The bar** at the foot of the page holds what you reach for while
-  playing: `− Em +`, a guitar, `Aa`, `▶` and `⋯`, and from 1200 px, first,
-  the rail of necks' button (above). − and + move every
+  playing: `− Em +`, a neck, a guitar, `Aa`, `▶` and `⋯`; from 1200 px the
+  rail of necks' button comes first, and the neck goes (both above). − and +
+  move every
   chord, its shapes and the key a semitone at a time, with the key you play
   between them in short: "Em" over "shapes · capo 2" (or "key" with no
   capo), and "· +1" once transposed, or "capo 2 · +1" on a screen too
-  narrow for all of it, and "capo 2" over "+1" on the narrowest; a key too
-  long for its room ("Ab mixolydian") is a little smaller. A screen reader
+  narrow for all of it (a phone, beside the neck and the guitar), and "capo
+  2" over "+1" on the narrowest; a key too long for its room ("Ab
+  mixolydian") is a little smaller, then cut short. A screen reader
   hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
+  neck** opens the overlay as a sheet on a phone or a tablet (above). **The
   guitar** shows the strip of every chord's shape (below), or hides it
   again, as All chord shapes in the settings does: it stays pressed while the strip
   shows, and the two always agree. Pressed further down the song, it takes
@@ -2808,9 +2826,10 @@ the library page link it, the tab's text beside it.
   row lists them; else a C harp. With a sheet that has a key, each harp says
   its position.
 - **The bar**: − and + change the harp a semitone (the holes stay; the sound
-  and the notes' names change); ♪, **Notes**, shows each hole's note on that
-  harp in its place ("F#6"); **Aa** the text size, and ▶ scrolls by itself,
-  as in the viewer.
+  and the notes' names change; on the narrowest phone the harp's name a
+  little smaller); the neck, below 1200 px, the overlay's sheet (below); ♪,
+  **Notes**, shows each hole's note on that harp in its place ("F#6");
+  **Aa** the text size, and ▶ scrolls by itself, as in the viewer.
 - **A hole tapped** is heard, a harmonica's reed; **▶ at a line's end** plays
   the line hole by hole, a beat each, lighting each hole as it sounds, and
   stops when pressed again (no rhythm: the tab has none).
@@ -2826,7 +2845,9 @@ the library page link it, the tab's text beside it.
   neck and its chords' necks. A song with no sheet has no Guitar tab, and with
   no key to place the harps in, its Harmonica tab shows the page's harp's
   notes alone. Its Hide and the bar's button are the viewer's, and so is the
-  choice: hidden here, hidden on every sheet.
+  choice: hidden here, hidden on every sheet. Below 1200 px the bar's neck
+  slides it up as a sheet, as on the viewer, Harmonica first and its harp the
+  page's both ways.
 
 The page keeps the harp, Notes, the text size and the scroll speed in its
 address too (`harmonica-1.html#harp=A&notes=1&fs=20`).

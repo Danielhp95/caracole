@@ -831,7 +831,8 @@ def _words(text: str) -> list[str]:
 # until it runs. The bar, in the order a keyboard reaches it: the rail of necks shown or hidden (from 1200 px,
 # where there is a rail: pressed while it shows, as the settings' Chord necks row says; a sidebar, drawn as a
 # path); the song a semitone down or up, its key in short between them (for the eye; whole for a screen
-# reader); a guitar, the strip of the song's chord
+# reader); a neck, the overlay's sheet opened or closed (below 1200 px, where there is no rail: a dialog that is not
+# modal, Guitar and Harmonica, overlay.js; frets and a dot, drawn as a path); a guitar, the strip of the song's chord
 # shapes shown or hidden (a toggle, pressed while it shows, as the settings' All chord shapes switch is, the two
 # always in step; the body with its waist and sound hole, the neck and the headstock, drawn as paths);
 # Aa, the text size in a box beside it; ▶, scrolling by itself; ⋯, the rest of the settings. The pill steers the scroll once it starts,
@@ -884,6 +885,7 @@ _CONTROLS = """<div class="bar" id="bar" hidden role="region" aria-label="Contro
 <output class="now" id="key-now" for="t-down t-up"><span class="k" aria-hidden="true"></span><span class="d" aria-hidden="true"></span><span class="vh" id="key-full"></span></output>
 <button type="button" class="step" id="t-up" aria-label="Transpose up a semitone">+</button>
 </span>
+<button type="button" class="tool necks-open" id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg></button>
 <button type="button" class="tool shapes" id="shapes" aria-label="Chord shapes" aria-pressed="false" aria-controls="strip"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M6.67 12.95A3.2 3.2 0 1 1 3.05 9.33A1.42 1.42 0 0 0 4.07 8.64A2.4 2.4 0 1 1 7.36 11.93A1.42 1.42 0 0 0 6.67 12.95ZM6.77 9.23A1.07 1.07 0 1 0 5.26 10.74A1.07 1.07 0 1 0 6.77 9.23Z"/><path d="M8.03 9.23L12.68 4.58L12.87 4.76L15.7 2.82L13.18 0.3L11.24 3.13L11.42 3.32L6.77 7.97Z"/></svg></button>
 <span class="size-box" id="size-box">
 <button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>

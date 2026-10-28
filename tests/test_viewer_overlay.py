@@ -1,7 +1,8 @@
 """The overlay (overlay.js): from 1200 px, the rail on the left with two tabs, Guitar and Harmonica, on a chord sheet
 (viewer.js) and a songbook's song. Guitar is the rail of necks (test_viewer_necks.py's tests); Harmonica, the circle
 of fifths that picks the harp, the key on that harp, each chord's holes on it, and the slim bar once the circle has
-scrolled out of the rail. A harmonica tab's page has it too (test_viewer_harptab_browser.py)."""
+scrolled out of the rail. A harmonica tab's page has it too (test_viewer_harptab_browser.py); narrower, the phone's
+sheet holds it (test_viewer_overlay_sheet.py)."""
 
 from __future__ import annotations
 
@@ -331,9 +332,10 @@ def test_a_sheet_with_a_harmonica_tab_starts_on_its_harp_marked_the_tabs(tmp_pat
 
 
 @in_chromium
-def test_below_1200_px_there_is_no_overlay(tmp_path):
+def test_below_1200_px_the_overlay_waits_for_the_bars_neck(tmp_path):
     with open_viewer(tmp_path, written(tmp_path, SONG), width=1100, height=800, mobile=False) as b:
         assert b.js("document.getElementById('necks').hidden && !document.querySelector('#necks *')")
+        assert b.js("document.getElementById('necks-open').getClientRects().length === 1")
 
 
 @in_chromium

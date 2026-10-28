@@ -401,8 +401,9 @@ def _footer(tab_file: str, url: str | None, *, placed: bool) -> str:
 
 # The bar, hidden until the script runs, in the order a keyboard reaches it: the overlay shown or hidden (from 1200 px,
 # as the viewer's: page.py's _CONTROLS); the harp a semitone down or up, its name
-# and why it was chosen between them; ♪, each hole's note on it in its place (pressed while it shows); Aa, the text
-# size in a box beside it; ▶, scrolling by itself. A tab shown as written has Aa and ▶ alone.
+# and why it was chosen between them; the neck, the overlay's sheet opened or closed (below 1200 px, as the viewer's);
+# ♪, each hole's note on it in its place (pressed while it shows); Aa, the text size in a box beside it; ▶, scrolling
+# by itself. A tab shown as written has the overlay's buttons, Aa and ▶ alone.
 _BAR = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <div class="bar-in">
 <button type="button" class="tool necks-toggle" id="necks-toggle" hidden aria-label="Chord necks" aria-pressed="true" aria-controls="necks"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M3 2h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2zm0 1.5a.5.5 0 0 0-.5.5v8a.5.5 0 0 0 .5.5h10a.5.5 0 0 0 .5-.5V4a.5.5 0 0 0-.5-.5zM3.5 4.5h3v7h-3z"/></svg></button>
@@ -411,6 +412,7 @@ _BAR = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 <output class="now" id="harp-now" for="h-down h-up"><span class="k" id="harp-name"></span><span class="d" id="harp-why"></span></output>
 <button type="button" class="step" id="h-up" aria-label="The harp a semitone up">+</button>
 </span>
+<button type="button" class="tool necks-open" id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks" aria-expanded="false"><svg viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M2.75 4.25h10.5a1.5 1.5 0 0 1 1.5 1.5v4.5a1.5 1.5 0 0 1-1.5 1.5H2.75a1.5 1.5 0 0 1-1.5-1.5v-4.5a1.5 1.5 0 0 1 1.5-1.5zM2.5 5.5v5h11v-5zm2.25 0h1v5h-1zM8 5.5h1v5H8zm3.25 0h1v5h-1zM6.875 7a1 1 0 1 0 0 2a1 1 0 1 0 0-2z"/></svg></button>
 <button type="button" class="tool notes" id="notes" aria-pressed="false" aria-label="Note names">♪</button>
 <span class="size-box" id="size-box">
 <button type="button" class="tool" id="size" aria-label="Text size" aria-expanded="false" aria-controls="sizes">Aa</button>
@@ -424,7 +426,9 @@ _BAR = """<div class="bar" id="bar" hidden role="region" aria-label="Controls">
 </div>
 </div>
 """
-_BAR_RAW = _BAR.replace(_BAR[_BAR.index('<span class="keys"'):_BAR.index('<span class="size-box"')], "", 1)
+_BAR_RAW = (_BAR.replace(_BAR[_BAR.index('<span class="keys"'):_BAR.index('<button type="button" class="tool necks-open"')],
+                         "", 1)
+            .replace(_BAR[_BAR.index('<button type="button" class="tool notes"'):_BAR.index('<span class="size-box"')], "", 1))
 
 # Scrolling by itself, as the viewer's (page.py's _CONTROLS): the pill that steers it, above the bar's place.
 _PILL = """<div class="pill" id="pill" role="group" aria-label="Scrolling by itself" hidden>

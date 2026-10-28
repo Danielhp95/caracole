@@ -176,10 +176,11 @@
   const go = (to) => {
     if (to) location.hash = "song-" + to.dataset.n;
   };
+  // The settings, a card or the overlay's sheet open: the arrows and a swipe stay with them.
   const busy = () => ["panel", "card"].some((id) => {
     const el = document.getElementById(id);
     return el && !el.hidden;
-  });
+  }) || Boolean(document.querySelector("#necks[data-sheet]:not([hidden])"));
   // A swipe across the sheet: left for the next song, right for the one before.
   let start = null;
   document.addEventListener("touchstart", (e) => {

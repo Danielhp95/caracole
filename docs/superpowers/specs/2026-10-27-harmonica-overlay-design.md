@@ -79,10 +79,51 @@ draw lives in one script both inline.
 ## The builder's calls
 
 The address and state names; how the rail's script is shared between the two pages; the circle's exact
-geometry; what the overlay does below 1200 px (nothing new: phones keep the settings' panels); sizes by
-viewer.css's `--nk`.
+geometry; what the overlay does below 1200 px (nothing new: phones keep the settings' panels; since superseded by
+the phone's sheet, below); sizes by viewer.css's `--nk`.
 
 ## Not in this
 
 The record fit's percentages anywhere in the overlay; a harp following the song as it plays (D); a Together tab
-(E); phones.
+(E); phones (since added: below).
+
+## The phone: a sheet from the bar
+
+Added the same day. The owner's choice from three phone mockups (a sheet from the bar; a row in the settings opening
+a panel of its own; a dock over the bar with the chord being played): **A, a sheet from the bar**. Below 1200 px a
+new button in the bar, a neck, slides the overlay up from the bar as a sheet over about half the screen (54 %), the
+song readable and scrollable above it. A tap on its handle takes it to the whole screen (a strip of the song left at
+the top) and back; ✕ closes it. It holds exactly what the rail holds: the tabs in the page's order, the circle, the
+key card, the chord cards and the slim bar, the same harp, linked with a harmonica tab's page's −/+ as the rail is.
+The rail's code draws it (overlay.js `rail`, the page's `sheet()`, `grow()` and `close()`); viewer.css makes the
+aside a sheet where it carries `data-sheet`.
+
+The builder's calls:
+
+- **The bar.** The neck sits right after the key, the first of the tools at the end, tinted while the sheet is open.
+  A sixth 44 px target leaves the key 44 px less: from 360 px the guitar stays beside the neck, as the mockup has it,
+  and the key between − and + says less ("capo 2 · +1" for "shapes · capo 2 · +1" at 390 px; "capo 2" over "+1" at
+  360 px; "Ab mixolydian" shrunk, then cut short), a screen reader still hearing all of it. Below 360 px (320) there is
+  no room for both: the neck takes the guitar's place, and the settings' All chord shapes shows the strip. On a
+  harmonica tab's page (no guitar) all four tools fit; at 320 px the harp's name is a little smaller ("Ab harp" at
+  11.5 px). Nothing overflows, and every target stays 44 px.
+- **Assistive tech.** The sheet is a dialog that is not modal (`role="dialog"`, no `aria-modal`), named "Necks and
+  harps" as the neck is (`aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`); the rail stays the
+  complementary "Chord necks". The focus goes to the tab shown as it opens, back to the neck as it closes (✕, Escape,
+  the neck again), unless it was somewhere else of yours. The handle is a toggle button, "Whole screen", pressed while
+  the sheet is whole; its grip at the top, its reach the whole head under the tabs and ✕.
+- **Kept or not.** Not kept: each page opens with the sheet closed, and it opens at half the screen. In a songbook
+  each song is a page of its own, so the next song opens with it closed; the songbook's arrows and swipes stay with
+  the sheet while it is open, as with the settings.
+- **Across 1200 px.** Widened past it with the sheet open, the sheet closes and the rail takes its place where it is
+  shown (the screen's choice), on the tab the sheet was on, the focus kept in it; narrowed again, nothing opens by
+  itself.
+- **The song under a half sheet.** The sheet docks on the bar as the settings do (viewer.js's layers: on a phone the
+  one opened last shows, the others hidden until it closes; from 900 px it stays beside the settings' rail): the page
+  leaves room under the song for it, so the song's last line comes up above it, by hand or by itself, and the pill
+  rides above it. ▶ closes the settings and the card but leaves the sheet, at half the screen, the bar under it; going
+  to the whole screen pauses the scroll, and its pill then sits over the sheet's foot. A finger on the sheet pauses
+  the scroll, as anywhere on the page.
+- **Chord necks and Hide.** The rail's alone: neither touches the sheet, and both show only from 1200 px.
+- **Sizes.** The sheet is the page's own size (`--nk: 1`), at most 620 px wide as the settings docked are; the circle
+  at most 54 % of its width, so the harp's words keep their room at 320 px.
