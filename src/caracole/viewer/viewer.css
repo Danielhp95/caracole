@@ -387,13 +387,13 @@ html[data-roles="off"] .tip-nm .nm { color: var(--muted); }
    rail's side; pressed while it shows, as the guitar is. */
 .bar .necks-toggle svg { width: 18px; height: 18px; }
 /* The neck: the overlay's sheet up or down, below 1200 px, where there is no rail (viewer.js, harptab.js): the first of
-   the tools at the end, right after the key; tinted while the sheet is open. From 360 px the guitar beside it, the key
-   narrower between − and +; narrower still there is no room for both: the neck takes the guitar's place, and the
-   strip of shapes is the settings' All chord shapes. */
+   the tools at the end, right after the key; tinted while the sheet is open. On a phone (below 440 px, the owner's
+   choice) it takes the guitar's place, so the key keeps its room, and the strip of shapes is the settings' All chord
+   shapes; wider, the guitar beside it, with room for the longest key ("Ab mixolydian") a little smaller. */
 .bar .necks-open { margin-left: auto; }
 .bar .necks-open:not([hidden]) ~ .shapes, .bar .necks-open:not([hidden]) ~ .size-box { margin-left: 0; }
 .bar .necks-open svg { width: 18px; height: 18px; }
-@media (max-width: 359.98px) { .bar .necks-open:not([hidden]) ~ .shapes { display: none; } }
+@media (max-width: 439px) { .bar .necks-open:not([hidden]) ~ .shapes { display: none; } }
 /* A phone: the tools side by side with no gap (each 44 px, its icon in the middle) and the bar closer to
    the screen's edges, so the key between − and + keeps its room: "Ab mixolydian" whole at 390 px. */
 @media (max-width: 419px) {

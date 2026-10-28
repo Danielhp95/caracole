@@ -101,12 +101,15 @@ aside a sheet where it carries `data-sheet`.
 The builder's calls:
 
 - **The bar.** The neck sits right after the key, the first of the tools at the end, tinted while the sheet is open.
-  A sixth 44 px target leaves the key 44 px less: from 360 px the guitar stays beside the neck, as the mockup has it,
-  and the key between − and + says less ("capo 2 · +1" for "shapes · capo 2 · +1" at 390 px; "capo 2" over "+1" at
-  360 px; "Ab mixolydian" shrunk, then cut short), a screen reader still hearing all of it. Below 360 px (320) there is
-  no room for both: the neck takes the guitar's place, and the settings' All chord shapes shows the strip. On a
-  harmonica tab's page (no guitar) all four tools fit; at 320 px the harp's name is a little smaller ("Ab harp" at
-  11.5 px). Nothing overflows, and every target stays 44 px.
+  A sixth 44 px target would leave the key 44 px less. First built with the guitar kept beside the neck from 360 px,
+  the key saying less there ("capo 2 · +1" at 390 px, "Ab mixolydian" cut short). The owner then chose: **"Let it
+  replace the guitar icon in small phones."** Below 440 px the neck takes the guitar's place,
+  the key keeps its room and its words as before ("Ab mixolydian" over "shapes · capo 2 · +1" whole at 390 px), and
+  the settings' All chord shapes shows the strip. From 440 px the guitar is beside the neck, with room for the
+  longest key a little smaller; 440 rather than the bar's phone width, 420, which left 420 to 433 px cutting "Ab
+  mixolydian" short, so no key is ever cut beside both. On a harmonica tab's page (no guitar) all four
+  tools fit; at 320 px the harp's name is a little smaller ("Ab harp" at 11.5 px). Nothing overflows, and every target
+  stays 44 px.
 - **Assistive tech.** The sheet is a dialog that is not modal (`role="dialog"`, no `aria-modal`), named "Necks and
   harps" as the neck is (`aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`); the rail stays the
   complementary "Chord necks". The focus goes to the tab shown as it opens, back to the neck as it closes (✕, Escape,
