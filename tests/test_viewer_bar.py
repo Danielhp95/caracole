@@ -2,7 +2,7 @@
 
 [necks] [− key +] [neck] [guitar] [Aa] [▶] [⋯]: from 1200 px, the rail of chord necks shown or hidden (its tests are
 test_viewer_necks.py's); the song a semitone down or up, with its key in short; below 1200 px, the overlay's sheet up
-or down (test_viewer_overlay_sheet.py's); the strip of
+or down (test_viewer_overlay_sheet.py's), in the guitar's place on a phone (below 440 px); the strip of
 the song's chord shapes, shown or hidden; the text size; scrolling by itself; and the rest of the settings. It slides away as you scroll down, and comes
 back when you scroll up, tap the page or reach the end. The tests that scroll and tap run in a
 Chromium of their own on real time (helpers/browser.py's ``Browser``).
@@ -145,8 +145,7 @@ def test_the_bar_says_the_key_in_short_and_a_screen_reader_hears_it_whole(tmp_pa
     page = tmp_path / "Artist" / "Title" / "sheet.html"
     page.parent.mkdir(parents=True)
     page.write_text(build_viewer(cho), encoding="utf-8")
-    # A wide phone's, sideways: room for all of it beside the neck and the guitar (the fit test has the narrow ones)
-    dom = browser.dump_dom(page.as_uri() + fragment, (480, 844), hide_scrollbars=True)
+    dom = browser.dump_dom(page.as_uri() + fragment, (390, 844), hide_scrollbars=True)  # a phone's, over the page
     assert re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)  # there once the script ran
     found = re.search(r'<output class="now" id="key-now"[^>]*><span class="k" aria-hidden="true">([^<]*)</span>'
                       r'<span class="d" aria-hidden="true">([^<]*)</span><span class="vh" id="key-full">([^<]*)</span>',
@@ -181,10 +180,9 @@ def test_minus_and_plus_transpose_a_semitone_at_a_time(tmp_path):
         b.click("#t-down")
         down = bar(b)
     assert (before["main"], before["chord"], before["hash"]) == ("G", "G", "")
-    # At 390 px, beside the neck and the guitar, the capo and the transposition (a screen reader hears it whole)
-    assert (up["main"], up["sub"], up["chord"], up["hash"]) == ("Ab", "capo 2 · +1", "Ab", "#t=1")
+    assert (up["main"], up["sub"], up["chord"], up["hash"]) == ("Ab", "shapes · capo 2 · +1", "Ab", "#t=1")
     assert up["full"] == "Ab shapes · capo 2 · sounds Bb · +1"
-    assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "capo 2 · −1"
+    assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "shapes · capo 2 · −1"
     assert not up["panel"] and not down["panel"] and up["where"] == down["where"] == "shown"  # nothing opened
 
 
@@ -268,9 +266,13 @@ def shapes(b: Browser) -> dict:
     return b.js(SHAPES)
 
 
+# A phone wide enough for the guitar beside the neck (from 440 px); narrower, the neck takes its place.
+WIDE_PHONE = {"width": 440, "height": 932}
+
+
 @in_chromium
 def test_the_guitar_shows_the_chord_shapes_and_hides_them_again(tmp_path):
-    with viewer(tmp_path, written(tmp_path, UG_CHO)) as b:
+    with viewer(tmp_path, written(tmp_path, UG_CHO), **WIDE_PHONE) as b:
         before = shapes(b)
         b.click("#shapes")
         shown, opened = shapes(b), bar(b)["panel"]
@@ -285,7 +287,7 @@ def test_the_guitar_shows_the_chord_shapes_and_hides_them_again(tmp_path):
 
 @in_chromium
 def test_the_guitar_and_the_settings_chip_stay_in_step_both_ways(tmp_path):
-    with viewer(tmp_path, written(tmp_path, UG_CHO)) as b:
+    with viewer(tmp_path, written(tmp_path, UG_CHO), **WIDE_PHONE) as b:
         b.click("#more")
         b.click("#strip-toggle")  # the chip shows them: the guitar is pressed
         from_chip = shapes(b)
@@ -301,7 +303,7 @@ def test_the_guitar_and_the_settings_chip_stay_in_step_both_ways(tmp_path):
 def test_the_guitar_brings_the_shapes_into_view_from_anywhere_in_the_song(tmp_path):
     # The strip is above the song: read from halfway down, the guitar takes you up to it, where the
     # shapes are whole above the bar, and the bar stays.
-    with viewer(tmp_path) as b:
+    with viewer(tmp_path, **WIDE_PHONE) as b:
         b.js("window.scrollTo(0, 2000)")
         assert b.wait("scrollY === 2000")
         b.click("#shapes")
@@ -318,7 +320,7 @@ def test_the_guitar_brings_the_shapes_into_view_from_anywhere_in_the_song(tmp_pa
 @in_chromium
 def test_the_guitars_choice_is_kept_across_a_reload(tmp_path):
     url = written(tmp_path, UG_CHO)
-    with viewer(tmp_path, url) as b:
+    with viewer(tmp_path, url, **WIDE_PHONE) as b:
         b.click("#shapes")
         b.open(url)
         assert b.wait("document.documentElement.dataset.ready === '1'")
@@ -443,8 +445,8 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
     end = """(() => { scrollTo(0, document.documentElement.scrollHeight);
       const last = [...document.querySelectorAll('.foot > *')].pop().getBoundingClientRect();
       return last.bottom <= document.querySelector('#bar').getBoundingClientRect().top; })()"""
-    for width, height, mobile in ((390, 844, True), (1280, 800, False), (768, 1024, True), (360, 740, True),
-                                  (320, 640, True)):
+    for width, height, mobile in ((390, 844, True), (1280, 800, False), (768, 1024, True), (440, 932, True),
+                                  (430, 932, True), (360, 740, True), (320, 640, True)):
         with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"W{width}") + "#mode=mixolydian&t=1", width=width,
                     height=height, mobile=mobile) as b:
             m = b.js(measure)
@@ -453,16 +455,18 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         rail = 345 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
         assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
-        # The rail's toggle on its side from 1200 px; narrower, the neck after the key, the guitar beside it from 360 px
+        # The rail's toggle on its side from 1200 px; narrower, the neck after the key, and the guitar beside it from
+        # 440 px: on a phone the neck takes the guitar's place, and the key keeps its room
         tools = (["necks-toggle", "t-down", "t-up", "shapes"] if width >= 1200
-                 else ["t-down", "t-up", "necks-open"] + ["shapes"] * (width >= 360))
+                 else ["t-down", "t-up", "necks-open"] + ["shapes"] * (width >= 440))
         assert m["ids"] == tools + ["size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, which is no taller than the buttons
-        if width >= 768:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1")
+        if width >= 768 or width in (430, 390):  # the longest key in short, whole ("Ab mixolydian" over "shapes ·
+            # capo 2 · +1")
             assert m["main"] and m["sub"] and m["said"] == ["shapes · capo 2 · +1"], (width, m)
             assert m["size"] == 16, (width, m)
-        elif width >= 390:  # with no room for "shapes", the capo and the transposition, whole; the key smaller, then cut
-            assert m["size"] == 12, (width, m)
+        elif width >= 360:  # with no room for "shapes", the capo and the transposition, whole; the key a little smaller
+            assert m["main"] and 12 <= m["size"] < 16, (width, m)
             assert m["sub"] and m["said"] == ["capo 2 · +1"], (width, m)
         else:  # with no room for both on one line, the capo over the transposition, each whole
             assert m["sub"] and m["said"] == ["capo 2", "+1"], (width, m)
@@ -533,7 +537,7 @@ def test_a_songbook_song_has_the_bar_and_its_next_and_previous_too(tmp_path):
 
 @in_chromium
 def test_a_songbook_songs_guitar_shows_its_shapes(tmp_path):
-    with viewer(tmp_path, songbook(tmp_path) + "#song-2") as b:
+    with viewer(tmp_path, songbook(tmp_path) + "#song-2", **WIDE_PHONE) as b:
         b.click("#shapes")
         shown = shapes(b)
         names = b.js("[...document.querySelectorAll('#strip button')].map((e) => e.lastChild.textContent)")

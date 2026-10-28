@@ -211,8 +211,8 @@ Rules a change there keeps (the Invariants below are the others):
   test_viewer_harptab_browser.py). Below 1200 px the bar's neck (`necks-open`, after the key) slides it up as the
   phone's sheet (the page's `sheet()`, `data-sheet` half or full: its handle and ✕ for Hide), a dialog not modal and,
   in viewer.js, one of the layers docked on the bar (`--dock`); each page opens with it closed, ▶ leaves it at half,
-  the rail's Hide and Chord necks don't touch it, and below 360 px the neck takes the guitar's place in the bar
-  (test_viewer_overlay_sheet.py). The rail is sized by
+  the rail's Hide and Chord necks don't touch it, and below 440 px (a phone, the owner's choice) the neck takes the
+  guitar's place in the bar, the strip then ⋯'s All chord shapes (test_viewer_overlay_sheet.py, test_viewer_bar.py). The rail is sized by
   viewer.css's `--nk` (1.15: the owner's 15 % over the first 300 px), its width, padding, text and
   targets alike; whether it shows (`state.necks`) is the one setting kept for every page at once
   (localStorage `caracole-viewer-necks`, and `necks=0` in the address, which book.js's `carryScreen`

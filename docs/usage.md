@@ -2386,7 +2386,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   harp, 4th position, aeolian"), "the tab's" on the harp the song's harmonica
   tab plays on, and what it plays ("Plays A, D and Em; E as Em."). Under it,
   the key on that harp: Scale, the pentatonic or Blues over its ten holes,
-  blow above, draw below, the bends beyond, the tonic in rust, the key's
+  as you hold the harp, draw above and blow below, the bends beyond (the
+  draw bends above, the blow bends below), the tonic in rust, the key's
   notes dark, the rest faint, and the harp's notes outside the key ("Outside B
   minor: C."); then a card per chord, the holes that play it lit ("draw 4–6",
   "draw 4–6 · as Em, the minor stand-in") or "no chord here". It follows the
@@ -2406,9 +2407,9 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   page opens with it closed, at half the screen. ▶ leaves it open, at half
   the screen, the song scrolling above it and the pill above the sheet; the
   settings or a chord's card open over it, and it is back once they close.
-  On a phone narrower than 360 px there is no room for both the neck and
-  the guitar beside the key: the neck takes the guitar's place, and **All
-  chord shapes** in the settings shows the strip. The sheet is the screen's
+  On a phone (below 440 px) the neck takes the guitar's place in the bar,
+  so the key keeps its room, and **All chord shapes** in the settings shows
+  the strip; wider, the guitar is beside the neck. The sheet is the screen's
   own: the rail's Hide and **Chord necks** don't touch it, and a window
   widened past 1200 px with the sheet open shows the rail (where it is
   shown) on the tab the sheet was on.
@@ -2517,18 +2518,19 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   `caracole versions` command that does it, with Copy, and a version not kept
   links to its page on UG.
 - **The bar** at the foot of the page holds what you reach for while
-  playing: `− Em +`, a neck, a guitar, `Aa`, `▶` and `⋯`; from 1200 px the
-  rail of necks' button comes first, and the neck goes (both above). − and +
+  playing: `− Em +`, a neck, a guitar, `Aa`, `▶` and `⋯`; on a phone (below
+  440 px) the neck takes the guitar's place, and from 1200 px the rail of
+  necks' button comes first and the neck goes (both above). − and +
   move every
   chord, its shapes and the key a semitone at a time, with the key you play
   between them in short: "Em" over "shapes · capo 2" (or "key" with no
   capo), and "· +1" once transposed, or "capo 2 · +1" on a screen too
-  narrow for all of it (a phone, beside the neck and the guitar), and "capo
-  2" over "+1" on the narrowest; a key too long for its room ("Ab
-  mixolydian") is a little smaller, then cut short. A screen reader
+  narrow for all of it, and "capo 2" over "+1" on the narrowest; a key too
+  long for its room ("Ab mixolydian") is a little smaller, and cut short
+  only where even that is too long. A screen reader
   hears the whole line ("Em shapes · capo 2 · sounds F#m · +1"). **The
   neck** opens the overlay as a sheet on a phone or a tablet (above). **The
-  guitar** shows the strip of every chord's shape (below), or hides it
+  guitar** (from 440 px; on a phone, All chord shapes in ⋯) shows the strip of every chord's shape (below), or hides it
   again, as All chord shapes in the settings does: it stays pressed while the strip
   shows, and the two always agree. Pressed further down the song, it takes
   the page up to the strip, so the shapes are in view; a sheet without

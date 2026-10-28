@@ -336,17 +336,18 @@
     return root;
   };
 
-  // A harp's ten holes: the comb of hole numbers, the blow notes above it, the draw notes below and, on the key's
-  // card, each hole's bends beyond its row (the blow bends of holes 7 to 10 above, the draw bends of holes 1 to 6
-  // below, the deepest farthest). Each note is its name in a circle, drawn as ``role`` says of it (data-role):
+  // A harp's ten holes as a player holds it, the draw reeds on top: the comb of hole numbers, the draw notes above it,
+  // the blow notes below and, on the key's card, each hole's bends beyond its row (the draw bends of holes 1 to 6
+  // above, the blow bends of holes 8 to 10 below, the deepest farthest; data-depth). Each note is its name in a
+  // circle, drawn as ``role`` says of it (data-role):
   // tonic, in, out, bent-tonic, bent-in, bent-out on the key's card; run, tone, off on a chord's; plain with no key.
   const CELL = 24, LEFT = 30, WORDS = { blow: "blow", draw: "draw" };
   const harpChart = (m, offset, roleOf, opts) => {
     const holes = m.holes[offset];
     const rows = [];
-    if (opts.bends) rows.push(["bend", "blow", 2, 15], ["bend", "blow", 1, 15]);
-    rows.push(["note", "blow", 0, 23], ["comb", "", 0, 14], ["note", "draw", 0, 23]);
-    if (opts.bends) rows.push(["bend", "draw", 1, 15], ["bend", "draw", 2, 15], ["bend", "draw", 3, 15]);
+    if (opts.bends) rows.push(["bend", "draw", 3, 15], ["bend", "draw", 2, 15], ["bend", "draw", 1, 15]);
+    rows.push(["note", "draw", 0, 23], ["comb", "", 0, 14], ["note", "blow", 0, 23]);
+    if (opts.bends) rows.push(["bend", "blow", 1, 15], ["bend", "blow", 2, 15]);
     let y = 3;
     const placed = rows.map(([kind, breath, depth, h]) => {
       const row = { kind, breath, depth, y: y + h / 2 };
@@ -385,6 +386,7 @@
         const role = roleOf(step, row.kind === "bend", row.breath, k + 1);
         const g = svg("g", { class: "hx " + role + " " + row.breath, "data-role": role, "data-hole": k + 1,
           "data-row": row.kind === "bend" ? "bend" : row.breath, "data-note": nameOf(m, step) }, root);
+        if (row.kind === "bend") g.setAttribute("data-depth", row.depth);
         if (role === "bent-out") {
           svg("circle", { class: "hx-dot", cx: cx(k), cy: row.y, r: 1.6 }, g);
           continue;
