@@ -397,7 +397,8 @@ const caracoleRows = (icons, does) => {
   // What a row is for, when it is one instrument's (``instruments``: "ukulele", UG's Ukulele Chords; "harmonica",
   // a harmonica tab of harptabs.com; "score", MuseScore's pages and the scores you filed): a badge each, as a source
   // has its mark. Nothing is left out for it: a chord sheet is every instrument's, and says nothing.
-  const INSTRUMENTS = { ukulele: "Ukulele", harmonica: "Harmonica", score: "Score" };
+  const INSTRUMENTS = { ukulele: "Ukulele", harmonica: "Harmonica", score: "Score", guitar: "Guitar", bass: "Bass",
+    mandolin: "Mandolin", banjo: "Banjo" };  // the last four, gametabs.net's tabs' (``instruments``, as its pages name them)
   const instrumentBadges = (instruments) => listOf(instruments)
     .filter((x, n, all) => own.call(INSTRUMENTS, x) && all.indexOf(x) === n)
     .map((x) => ({ kind: "instrument " + x, text: INSTRUMENTS[x] }));
@@ -475,6 +476,31 @@ const caracoleRows = (icons, does) => {
     box.appendChild(list);
     return box;
   };
+  // A track's tabs on gametabs.net (``tabs``: each one's title, page, views, instruments and composers, the most viewed
+  // first), under a "⋯": each a button, ``choose(tab, button)`` what it does, with a link to look at it there.
+  const gameTabsOf = (tabs, display, choose) => {
+    const list = el("ul", "versions");
+    tabs.forEach((t, n) => {
+      const said = [...listOf(t.instruments), ...listOf(t.composers).map((c) => "by " + c),
+        Number(t.views) ? Number(t.views).toLocaleString("en") + " views" : ""].filter(Boolean).join(" · ");
+      const name = "Tab " + (n + 1) + (said ? " · " + said : "");
+      const item = el("li", "version");
+      item.appendChild(button(name, "small", (e) => choose(t, e.currentTarget), "Get " + display + " with " + name));
+      const there = el("a", "on-ug", "on gametabs.net");
+      there.href = https(t.url) ? String(t.url) : "#";
+      there.target = "_blank";
+      there.rel = "noopener noreferrer";
+      there.setAttribute("aria-label", name + ", " + display + ", on gametabs.net");
+      item.appendChild(there);
+      list.appendChild(item);
+    });
+    const box = el("div", "row-group");
+    box.appendChild(el("p", "subhead", "Tabs on gametabs.net"));
+    box.appendChild(list);
+    return box;
+  };
+  // A track's instruments as badges: gametabs.net names them ("Guitar", "Bass").
+  const gameInstruments = (hit) => listOf(hit && hit.instruments).map((x) => String(x).toLowerCase());
   // An Ultimate Guitar song: Get it (Get it again for a song of yours, looked up as that song), which its name does
   // too (nameDoes), and its versions under "⋯" (versionsOf).
   const ugHit = (h, get, later) => {
@@ -567,6 +593,25 @@ const caracoleRows = (icons, does) => {
         badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(["harmonica"])],
         action: main, more });
       nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
+    } else if (hit.source === "gametabs") {  // gametabs.net's track of a game: the game is its artist
+      const mine = yours(hit);
+      const artist = String(hit.artist || "");
+      const display = mine ? String(mine.display || "") : artist + " - " + title;
+      const tabs = listOf(hit.tabs).filter((t) => t && typeof t === "object" && https(t.url));
+      const pick = (url) => Object.assign(mine ? { song: mine.id } : { artist, title }, { gametabs: String(url) });
+      const main = button(mine ? "Get it again" : "Get it", "small primary", (e) => get(pick(hit.url), display, row,
+        e.currentTarget), (mine ? "Get " + display + " again" : "Get " + display) + " with its tab from gametabs.net");
+      main.title = "Looks the song up now, and keeps this gametabs.net tab";
+      const more = [];
+      if (tabs.length) more.push(gameTabsOf(tabs, display, (t, go) => get(pick(t.url), display, row, go)));
+      const opens = mine ? opener(mine.links) : null;
+      if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
+      const composers = listOf(hit.composers);
+      row = resultRow({ title, artist, onSearch: searchesFor(artist), source: "gametabs",
+        facts: many(Number(hit.uploads) || 1, "tab") + (composers.length ? " · by " + composers.join(", ") : ""),
+        badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(gameInstruments(hit))],
+        action: main, more });
+      nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
     } else if (own.call(TITLE_SITES, String(hit.source))) {  // MuseScore's or harptabs.com's: a title alone
       const site = TITLE_SITES[hit.source];
       row = resultRow({ title, artist: "Same title: maybe another song", source: hit.source,
@@ -617,9 +662,10 @@ const caracoleRows = (icons, does) => {
     const lc = rowOf(it.lacuerda);
     const gtp = rowOf(it.gtptabs);
     const ht = rowOf(it.harptabs);
-    const mine = [ug, lc, gtp, ht].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
+    const gt = rowOf(it.gametabs);
+    const mine = [ug, lc, gtp, ht, gt].map(yours).find(Boolean) || null;  // a song of yours the page has no line of yet
     const gone = mine ? null : rowOf(it.removed);
-    const first = ug || lc || gtp || ht || gone || {};
+    const first = ug || lc || gtp || ht || gt || gone || {};
     const title = String(first.title || "");
     const artist = String(first.artist || "");
     const display = mine ? String(mine.display || "") : artist + " - " + title;
@@ -627,6 +673,7 @@ const caracoleRows = (icons, does) => {
     const chords = Boolean(lc) && https(lc.sheet) && https(lc.url);
     const sheet = chords ? { lacuerda: String(lc.url) } : {};
     const harp = ht && https(ht.url) ? { harptabs: String(ht.url) } : null;
+    const game = gt && https(gt.url) ? { gametabs: String(gt.url) } : null;
     const a = acts && typeof acts === "object" ? acts : {};
     let line = null;
     const here = () => line;
@@ -637,13 +684,16 @@ const caracoleRows = (icons, does) => {
         "Add " + display + " again");
       main.title = "Into wanted.txt again, as Request does, and looked up now: a wanted.txt line brings it back";
     } else {
-      const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : harp ? pick(harp) : pick(sheet);
+      const chosen = ug ? pick({ ug: ug.ug }) : chords ? pick(sheet) : harp ? pick(harp) : game ? pick(game)
+        : pick(sheet);
       main = button(mine ? "Get it again" : "Get it", "small primary", (e) => a.get(chosen, display, here(), e.currentTarget),
         (mine ? "Get " + display + " again" : "Get " + display) + (ug ? " from Ultimate Guitar" : chords ? " from LaCuerda"
-          : harp ? " with its harmonica tab from harptabs.com" : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
+          : harp ? " with its harmonica tab from harptabs.com" : game ? " with its tab from gametabs.net"
+          : gtp ? ", with a Guitar Pro file from gtptabs.com" : ""));
       main.title = ug ? "Looks the song up now, as caracole get does, on Ultimate Guitar first"
         : chords ? "Looks the song up now, and keeps this LaCuerda sheet"
         : harp ? "Looks the song up now, and keeps this harptabs.com tab"
+        : game ? "Looks the song up now, and keeps this gametabs.net tab"
         : gtp ? "Looks the song up now, as caracole get does: its sheet, then a Guitar Pro file from gtptabs.com"
         : "Looks the song up now: LaCuerda has no chords for it";
     }
@@ -669,6 +719,10 @@ const caracoleRows = (icons, does) => {
       const tabs = listOf(ht.tabs).filter((t) => t && typeof t === "object" && https(t.url));
       if (tabs.length) more.push(harpTabsOf(tabs, display, (t, go) => a.get(pick({ harptabs: String(t.url) }), display, here(), go)));
     }
+    if (gt) {  // its tabs on gametabs.net, each a Get it that keeps that tab (the line's own button may be another site's)
+      const tabs = listOf(gt.tabs).filter((t) => t && typeof t === "object" && https(t.url));
+      if (tabs.length) more.push(gameTabsOf(tabs, display, (t, go) => a.get(pick({ gametabs: String(t.url) }), display, here(), go)));
+    }
     const opens = mine ? opener(mine.links) : null;
     if (opens) more.push({ heading: "In your library", links: [{ label: opens.label, href: opens.href, source: opens.source }] });
     // Not under one of UG's misc-… names ("Misc Mashups"): no one's, the song would never be found by it.
@@ -676,19 +730,21 @@ const caracoleRows = (icons, does) => {
     const facts = [ug ? tabCounts(ug.counts) : "",
       lc ? "LaCuerda ×" + (Number(lc.versions) || 1) + (chords ? "" : ", no chords") : "",
       gtp ? "Guitar Pro file" + ((Number(gtp.uploads) || 1) > 1 ? " ×" + Number(gtp.uploads) : "") : "",
-      ht ? "harmonica tab" + ((Number(ht.uploads) || 1) > 1 ? " ×" + Number(ht.uploads) : "") : ""];
+      ht ? "harmonica tab" + ((Number(ht.uploads) || 1) > 1 ? " ×" + Number(ht.uploads) : "") : "",
+      gt ? "game tab" + ((Number(gt.uploads) || 1) > 1 ? " ×" + Number(gt.uploads) : "") : ""];
     const badges = gone ? [{ kind: "removed", text: "Removed " + String(gone.removed_at || "").slice(0, 10) }]
       : mine ? [{ kind: "found", text: "In your library" }] : [];
     line = resultRow({ dense: true, title, artist,
-      sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs"].filter(Boolean),
+      sources: [ug && "ug", lc && "lacuerda", gtp && "gtptabs", ht && "harptabs", gt && "gametabs"].filter(Boolean),
       facts: facts.filter(Boolean).join(" · "),
-      badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : [])])],
+      badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : []),
+        ...(gt && !ug && !lc && !gtp && !ht ? gameInstruments(gt) : [])])],
       action: main, more, status: gone ? "removed" : "" });
     line.classList.add("hit");
     if (held(mine)) line.classList.add("have");
     if (gone) line.classList.add("removed-hit");
     line.dataset.hit = String(it.key || "");
-    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : "removed";
+    line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : gt ? "gametabs" : "removed";
     if (ug) line.dataset.ug = String(ug.ug || "");
     nameDoes(line, main, gone ? "Add " + display + " again" : mine ? "Get " + display + " again" : "Get " + display);
     return line;

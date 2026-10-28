@@ -2072,6 +2072,30 @@ def test_the_search_says_a_site_whose_index_is_empty_is_empty(app, conn):
                       "harptabs": ("empty", "harptabs.com: empty")}
 
 
+def test_the_search_gives_gametabs_nets_tracks_and_their_tabs_and_none_while_it_is_turned_off(app, cfg, conn):
+    import dataclasses
+
+    from test_search import gametabs_index
+
+    from caracole.config import ProviderPolicy
+
+    gametabs_index(conn)  # the sitemaps, and two of the seven game pages read
+    song = add_song(conn, "Hollow Knight", "Resting Grounds")
+    conn.commit()
+    data = as_json(get(app, "/api/search?q=hollow+knight+resting+grounds"))
+    [hit] = [h for h in data["gametabs"] if h["title"] == "Resting Grounds"]
+    page = "https://gametabs.net/tabs/hollow-knight/resting-grounds"
+    assert (hit["source"], hit["artist"], hit["url"], hit["uploads"], hit["via"], hit["page"]) == (
+        "gametabs", "Hollow Knight", page, 2, "both", "hollow-knight")
+    assert (hit["instruments"], hit["composers"]) == (["Guitar"], ["Christopher Larkin"])
+    assert [(t["url"], t["views"]) for t in hit["tabs"]] == [(page, 692), (page + "-2", 430)]
+    assert (hit["artist_key"], hit["title_key"]) == ("hollow-knight", "resting-grounds")
+    assert hit["song"] == song.id  # yours: the lines merge on it
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    data = as_json(get(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok"), "/api/search?q=resting+grounds"))
+    assert data["gametabs"] == []
+
+
 def test_a_search_the_ug_index_answers_badly_says_what_to_paste_for_an_artist_it_cant_see(app, conn):
     creep_index(conn)
     data = as_json(get(app, "/api/search?q=%E5%AE%8B%E5%86%AC%E9%87%8E"))  # 宋冬野

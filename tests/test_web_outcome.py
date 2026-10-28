@@ -61,11 +61,25 @@ def test_harptabs_coms_stage_is_part_of_the_extras_step_and_says_what_waits_in_i
     extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs")}
     running = lookup(stages=extras | {"harptabs": ("running", "")})
     assert Chip("Extras", "running") in steps(running)
-    assert Chip("Extras", "done") in steps(lookup(stages=extras | {"harptabs": ("done", "harmonica tab kept")}))
+    assert Chip("Extras", "running") in steps(lookup(stages=extras | {"harptabs": ("done", "harmonica tab kept"),
+                                                                       "gametabs": ("waiting", "")}))
+    assert Chip("Extras", "done") in steps(lookup(stages=extras | {"harptabs": ("done", "harmonica tab kept"),
+                                                                    "gametabs": ("done", "")}))
     spent = ended({"harptabs": ("skipped", "the lookup's 6 requests to harptabs.com are spent; the nightly run does "
                                            "the rest")})
     assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
         "The lookup's 6 requests to harptabs.com are spent: the harmonica tab waits for tonight's run.")
+
+
+def test_gametabs_nets_stage_is_the_extras_steps_last_and_says_what_waits_in_its_words():
+    extras = {name: ("done", "") for name in ("song", "match", "sheet", "pdf", "lyrics", "ug", "lacuerda", "gtptabs",
+                                              "harptabs")}
+    assert Chip("Extras", "running") in steps(lookup(stages=extras | {"gametabs": ("running", "")}))
+    assert Chip("Extras", "done") in steps(lookup(stages=extras | {"gametabs": ("done", "game music tab kept")}))
+    spent = ended({"gametabs": ("skipped", "the lookup's 6 requests to gametabs.net are spent; the nightly run does "
+                                           "the rest")})
+    assert said(spent, SongFacts(sheet="Muse/Hysteria/sheet.html")).reason == (
+        "The lookup's 6 requests to gametabs.net are spent: the tab of game music waits for tonight's run.")
 
 
 def test_a_step_the_request_doesnt_use_is_not_drawn():

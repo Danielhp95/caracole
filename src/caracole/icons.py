@@ -1,7 +1,7 @@
 """Where a sheet, a tab or a file came from, shown by its site's own icon (index.html, search).
 
 Each source (``SOURCES``) is a value of ``versions.provider`` ("ug", "lacuerda", "gtptabs",
-"harptabs", "inbox", "auto"), LRCLIB for the lyrics, or YouTube for an auto sheet made from the audio
+"harptabs", "gametabs", "inbox", "auto"), LRCLIB for the lyrics, or YouTube for an auto sheet made from the audio
 caracole took from there. A site's icon is its favicon, fetched once
 (``fetch_icons``) and kept in ``cache_dir/icons/<source>.png``; the page inlines it as a
 ``data:`` URI, so index.html still loads nothing from the network. A source with no icon
@@ -104,6 +104,7 @@ SOURCES: Mapping[str, Source] = {
         _site("gtptabs", "gtptabs.com", "gtptabs", "GT", "https://gtptabs.com/"),
         _site("musescore", "MuseScore", "MuseScore", "MS", "https://musescore.com/"),
         _site("harptabs", "harptabs.com", "harptabs", "HT", "https://www.harptabs.com/"),
+        _site("gametabs", "gametabs.net", "gametabs", "GM", "https://gametabs.net/"),
         _site("youtube", "YouTube", "YouTube", "YT", "https://www.youtube.com/"),
         Source(AUTO, "the audio (auto-chords)", "auto", "♪"),
         Source(INBOX, "your inbox", "inbox", "↓"),

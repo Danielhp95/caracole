@@ -127,6 +127,25 @@ def test_tiles_in_order_with_their_open_links(conn, cfg, tmp_path):
     assert served["said"] == "Open the Guitar Pro tab of Hotel California"
 
 
+def test_a_tab_of_game_music_is_a_tile_of_its_own_opened_as_text(conn, cfg, tmp_path):
+    song = add_song(conn, "Hollow Knight", "Resting Grounds")
+    for number in (1, 2):
+        vid = upsert_version(conn, provider="gametabs", tab_id=f"tabs/hollow-knight/resting-grounds-{number}",
+                             song_id=song.id, slot="guitar", kind="gametab", rating=5.0, votes=10, version=1,
+                             label=None, url="https://gametabs.net/tabs/hollow-knight/resting-grounds-2", raw={},
+                             now="2026-10-28T03:30:00Z")
+        keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=f"gametab-{number}.txt", data=f"E|--{number}--|\n".encode(),
+                  rank=number)
+    update_song(conn, song.id, status="found")
+    card = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Resting Grounds"));'), "data-card")
+    [tile] = card["tiles"]
+    folder = "Hollow%20Knight/Resting%20Grounds/"
+    assert (tile["name"], tile["from"], tile["href"], tile["said"], tile["lead"]) == (
+        "Game music tab", "Tab 1", folder + "gametab-1.txt", "Open the game music tab of Resting Grounds", "Tabs")
+    assert [(c["source"], c["n"]) for c in tile["chips"]] == [("gametabs", "2")]
+    assert [d["text"] for d in tile["downloads"]] == ["Text"]
+
+
 def test_the_sheet_tile_downloads_pdf_text_chordpro_and_each_export(conn, cfg, tmp_path):
     hotel(conn, cfg)
     sheet = attribute_of(run(conn, cfg, tmp_path, 'note("card", noteCard("Hotel California"));'),

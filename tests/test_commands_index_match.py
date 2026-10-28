@@ -482,6 +482,23 @@ def test_cli_index_stats_says_how_far_harptabs_coms_artist_index_has_got(tmp_pat
     ]
 
 
+def test_cli_index_stats_says_how_far_gametabs_nets_game_index_has_got(tmp_path):
+    from test_search import gametabs_index
+
+    conn = connect(tmp_path)
+    try:
+        gametabs_index(conn)
+        conn.commit()
+    finally:
+        conn.close()
+    result = run(tmp_path, "index", "stats")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines() == [
+        "The index is empty: run `caracole index build`.",
+        "gametabs.net: 2 of 7 game pages read, 11 tabs; caracole gametabs --index reads the rest.",
+    ]
+
+
 # --- caracole match ---------------------------------------------------------------------------------
 
 

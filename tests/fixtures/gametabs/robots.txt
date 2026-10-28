@@ -1,0 +1,126 @@
+# Block AI crawlers that scrape content to train foundation models. These never
+# send a visitor to the site in return, unlike the "answer engine" bots below
+# (ChatGPT-User, Claude-Web, PerplexityBot, YouBot) that fetch pages live on
+# behalf of an actual user's question and can cite/link back - those are
+# intentionally left unblocked and fall through to the general crawler rules.
+User-agent: GPTBot
+Disallow: /
+
+User-agent: anthropic-ai
+Disallow: /
+
+User-agent: ClaudeBot
+Disallow: /
+
+# Common Crawl - scraped dataset reused by many AI companies for training
+User-agent: CCBot
+Disallow: /
+
+# Gemini/Vertex training only - separate from Google Search and AI Overviews
+User-agent: Google-Extended
+Disallow: /
+
+# Meta AI (Llama) training crawler
+User-agent: Meta-ExternalAgent
+Disallow: /
+
+# ByteDance/TikTok AI training crawlers
+User-agent: ByteDance
+Disallow: /
+
+User-agent: ByteSpider
+Disallow: /
+
+# Apple Intelligence training opt-out - separate from Siri/Spotlight's regular Applebot
+User-agent: Applebot-Extended
+Disallow: /
+
+# Allow Facebook link previews (needed for social sharing)
+User-agent: FacebookBot
+Disallow: /api/
+Disallow: /admin/
+Disallow: /*.log$
+Allow: /
+
+User-agent: facebookexternalhit
+Disallow: /api/
+Disallow: /admin/
+Disallow: /*.log$
+Allow: /
+
+# Allow Baidu search but restrict to public content only
+User-agent: Baiduspider
+Disallow: /api/
+Disallow: /admin/
+Disallow: /*.log$
+Crawl-delay: 10
+
+# General crawlers
+User-agent: *
+Disallow: /api/
+Disallow: /admin/
+Disallow: /*.log$
+Disallow: /*.php$
+
+# These pages require being logged in, so anonymous crawlers only ever get a 401.
+Disallow: /create-report
+Disallow: /tab-submissions
+Disallow: /reputation
+Disallow: /reports
+Disallow: /settings
+Disallow: /change-username
+Disallow: /notifications
+Disallow: /my-tabs
+Disallow: /preparing-tab-file-download
+Disallow: /global-stats
+Disallow: /account-deactivation
+
+# Every query-param combination is the same underlying page; crawl the bare URL instead.
+Disallow: /tabs?*
+Disallow: /login?*
+Disallow: /create-account?*
+
+# Retired URL shapes that nginx already answers with 410 Gone (see nginx.conf).
+# Listed here too so crawlers stop requesting them at all instead of just
+# getting told "gone" on every attempt.
+Disallow: /administrator/
+Disallow: /all-tabs/
+Disallow: /article/
+Disallow: /articles/
+Disallow: /backend/
+Disallow: /comment/
+Disallow: /comments/
+Disallow: /composer/
+Disallow: /composers/
+Disallow: /dashboard/
+Disallow: /file/
+Disallow: /files/
+Disallow: /forum/topic/
+Disallow: /game/
+Disallow: /member/
+Disallow: /members/
+Disallow: /message/
+Disallow: /messages/
+Disallow: /module/
+Disallow: /modules/
+Disallow: /node/
+Disallow: /nodes/
+Disallow: /panel/
+Disallow: /platform/
+Disallow: /platforms/
+Disallow: /recording/
+Disallow: /recordings/
+Disallow: /request/
+Disallow: /requests/
+Disallow: /series/
+Disallow: /stat/
+Disallow: /stats/
+Disallow: /style/
+Disallow: /styles/
+Disallow: /template/
+Disallow: /templates/
+Disallow: /user/
+Disallow: /users/
+
+Crawl-delay: 5
+Sitemap: https://gametabs.net/sitemap.xml

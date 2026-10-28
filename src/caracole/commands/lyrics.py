@@ -1,4 +1,5 @@
-"""``caracole lyrics``, ``lacuerda``, ``gtptabs``, ``harptabs`` and ``musescore``: one step of the nightly run, by hand.
+"""``caracole lyrics``, ``lacuerda``, ``gtptabs``, ``harptabs``, ``gametabs`` and ``musescore``: one step of the
+nightly run, by hand.
 
 Each makes the same pass as its ``caracole run`` step, with a client of its own:
 this run's budget, and the HTTP cache the nightly run uses too; the lacuerda step's
@@ -19,13 +20,16 @@ neither is a spent budget: each prints what happened and exits 0, as
 ``caracole fetch`` and ``caracole index`` do, and the songs left wait for the
 next run. Then each rewrites _todo.md and index.html, which read
 overrides.toml, unless it did nothing (a cooldown, or no song to ask about).
-``caracole gtptabs``, ``caracole harptabs`` and ``caracole musescore`` with their site turned
-off in caracole.toml say so and ask nothing. ``caracole harptabs --index`` reads harptabs.com's
+``caracole gtptabs``, ``caracole harptabs``, ``caracole gametabs`` and ``caracole musescore`` with
+their site turned off in caracole.toml say so and ask nothing. ``caracole harptabs --index`` reads harptabs.com's
 artist pages into its local index (harptabs_index.py), the artists of your songs first, at the
 bulk pace, with a budget of its own (``--budget``, ``caracole index build``'s by default), and
 goes on where it stopped the next time, even for an empty library; ``caracole harptabs
 --artist NAME`` reads one artist's page now, at the lookup pace: what caracole serve's Songs of
 a harptabs.com artist runs. Its last line starts as ``caracole lacuerda --artist``'s does.
+``caracole gametabs --index`` reads gametabs.net's game pages into its local index
+(gametabs_index.py), the games of your songs first, the same way: their tabs' composers and
+instruments, so that a song is found by its composer.
 
 Every command module is imported on every start, so the passes are imported
 inside the commands.
@@ -60,6 +64,9 @@ from caracole.stamps import shown
 
 if TYPE_CHECKING:
     from caracole.config import Config, ProviderPolicy
+    from caracole.gametabs_fetch import GameTabsStats
+    from caracole.gametabs_index import GamePassStats
+    from caracole.gametabs_index import IndexState as GameIndexState
     from caracole.gtptabs_fetch import GtpTabsStats
     from caracole.harptabs_fetch import HarpTabsStats
     from caracole.harptabs_index import ArtistPassStats, IndexState
@@ -72,7 +79,7 @@ if TYPE_CHECKING:
 
 # Each provider's command, for the lock.
 _COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs", "harptabs": "harptabs",
-             "musescore": "musescore"}
+             "gametabs": "gametabs", "musescore": "musescore"}
 LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the help, which imports no pass
 
 
@@ -159,6 +166,28 @@ def register(app: typer.Typer) -> None:
             _harptabs_index(cfg, budget)
         else:
             _harptabs(cfg)
+
+    @app.command("gametabs")
+    def gametabs_cmd(
+        ctx: typer.Context,
+        index: bool = typer.Option(
+            False, "--index",
+            help="Instead, read gametabs.net's game pages into its local index (their tabs' composers and "
+                 "instruments): your songs' games first, then the rest, going on where the last one stopped.",
+        ),
+        budget: int | None = typer.Option(
+            None, "--budget", metavar="N", min=1,
+            help=f"With --index: the requests it may send (default {BUILD_BUDGET}, at the bulk pace).",
+        ),
+    ) -> None:
+        """Keep a text tab from gametabs.net for each song that has none and a tab there of its game or composer."""
+        if budget is not None and not index:
+            _common.fail("--budget goes with --index", 2)
+        cfg = load_cfg(ctx)
+        if index:
+            _gametabs_index(cfg, budget)
+        else:
+            _gametabs(cfg)
 
     @app.command("musescore")
     def musescore_cmd(ctx: typer.Context) -> None:
@@ -482,6 +511,83 @@ def _harptabs(cfg: Config) -> None:
         typer.echo("Songs with an error are tried again next run.")
     if s.budget_exhausted:
         _budget_spent(cfg, "harptabs")
+
+
+def _gametabs(cfg: Config) -> None:
+    """Read gametabs.net's sitemaps when due, keep the tabs the songs need, then print the counts."""
+    from caracole.gametabs_fetch import gametabs_tabs
+
+    if not cfg.provider("gametabs").enabled:
+        typer.echo("gametabs.net is off ([providers.gametabs] enabled = false); nothing was asked.")
+        return
+    overrides = load_ovr(cfg)
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime):
+        return gametabs_tabs(conn, client, cfg.library_dir, now, overrides=overrides)
+
+    def ran(s: GameTabsStats) -> bool:
+        return bool(s.sitemaps or s.tried or s.errors or s.budget_exhausted)
+
+    s = _provider_pass(cfg, "gametabs", run, overrides, ran)
+    if s is None:
+        return
+    if not ran(s):
+        typer.echo("No song to look up on gametabs.net.")
+        return
+    if s.sitemaps:
+        typer.echo(f"Index: {plural(s.sitemaps, 'sitemap')} read.")
+    counts = f"{s.tried} tried, {plural(s.kept, 'tab')} kept, {s.missing} not on gametabs.net"
+    typer.echo(f"gametabs.net: {counts}, {plural(s.errors, 'error')}")
+    if s.errors:
+        typer.echo("Songs with an error are tried again next run.")
+    if s.budget_exhausted:
+        _budget_spent(cfg, "gametabs")
+
+
+def _gametabs_index(cfg: Config, budget: int | None) -> None:
+    """Read gametabs.net's game pages into its index, the sitemaps first when due, a budget at a time (its own,
+    ``--budget``), then say how far the index has got and how long the rest would take at this pace."""
+    from dataclasses import replace
+
+    from caracole.gametabs_index import game_pass, index_state
+    from caracole.progress import about
+
+    if not cfg.provider("gametabs").enabled:
+        typer.echo("gametabs.net is off ([providers.gametabs] enabled = false); nothing was asked.")
+        return
+    overrides = load_ovr(cfg)  # your songs' games first, and the pages
+    p = cfg.provider("gametabs")
+    policy = replace(p, budget=budget if budget is not None else max(BUILD_BUDGET, p.budget))
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime) -> tuple[GamePassStats, GameIndexState]:
+        return game_pass(conn, client, now, overrides=overrides), index_state(conn)
+
+    def ran(result: tuple[GamePassStats, GameIndexState]) -> bool:
+        s = result[0]
+        return bool(s.sitemaps or s.read or s.errors or s.budget_exhausted)
+
+    result = _provider_pass(cfg, "gametabs", run, overrides, ran, policy=policy, command="gametabs --index")
+    if result is None:
+        return
+    s, now = result
+    held = f"{now.read:,} of {plural(now.pages, 'game page')} read"
+    if not ran(result):
+        typer.echo(f"gametabs.net's game index is up to date: {held}, {plural(now.tabs, 'tab')}.")
+        return
+    if s.sitemaps:
+        typer.echo(f"Index: gametabs.net's {plural(s.sitemaps, 'sitemap')} read.")
+    gone = f", {s.gone} gone" if s.gone else ""
+    errors = f", {plural(s.errors, 'error')} (asked for again next time)" if s.errors else ""
+    typer.echo(f"gametabs.net: {plural(s.read, 'game page')} read{gone}{errors}; {held}, "
+               f"{plural(now.tabs, 'tab')} in the index.")
+    if s.budget_exhausted:
+        from caracole.gametabs import BASE_URL
+        from caracole.http import crawl_delay
+
+        left = max(now.pages - now.read, 0)
+        pace = about(left * max(sum(p.delay) / 2, crawl_delay(BASE_URL)))
+        typer.echo(f"The budget of {plural(policy.budget, 'request')} is spent: caracole gametabs --index reads the "
+                   f"next {plural(left, 'game page')}, {pace} of requests at this pace.")
 
 
 def _harptabs_index(cfg: Config, budget: int | None) -> None:

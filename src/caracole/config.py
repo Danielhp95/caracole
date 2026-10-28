@@ -57,6 +57,9 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     "musescore": ProviderPolicy(budget=10, delay=(10.0, 20.0)),
     # Harmonica tabs, kept for your wanted songs alone (harptabs.py): its sitemap, then a song's candidate pages.
     "harptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
+    # Text tabs of game music, kept for your wanted songs alone (gametabs.py): its sitemaps, a song's candidate pages,
+    # then its game pages. Its robots.txt asks 5 s between two requests (http.ROBOTS_CRAWL_DELAY), under this pace.
+    "gametabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
     # yt-dlp, for the audio of a song nobody has charted (youtube.py): a budget of yt-dlp runs,
     # each a search or a download, so six are three songs a night. A run sends several requests,
     # which yt-dlp's own pauses space out; these pauses go between two runs.
@@ -64,7 +67,7 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
 }
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"gtptabs", "musescore", "harptabs", "youtube"})
+SWITCHABLE = frozenset({"gtptabs", "musescore", "harptabs", "gametabs", "youtube"})
 
 
 @dataclass(frozen=True)

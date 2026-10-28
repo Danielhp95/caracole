@@ -36,6 +36,9 @@ Tables:
 - ``[harptabs]``: "Artist - Title" → the harptabs.com tab (its page) you picked
   (``HarpTabsPick``): harptabs_fetch.py keeps that tab for the song, as its next
   ``harmonica-N.txt`` beside any it has, whoever the page names as its artist.
+- ``[gametabs]``: "Artist - Title" → the gametabs.net tab (its page) you picked
+  (``GameTabsPick``): gametabs_fetch.py keeps that tab for the song, as its next
+  ``gametab-N.txt`` beside any it has, whatever game or composer its page names.
 - ``[harmonica]``: "Artist - Title" → a table of the song's harmonica tabs (``harmonica-1.txt``) and how
   each is read, whatever caracole guesses (``add_harmonica``, caracole serve's page of readings, ``caracole
   harmonica``): a notation's name ("signs", "brackets", "letters", "signs after", "barrett"), "legend" (the
@@ -84,7 +87,7 @@ _ARTIST_HOST = "https://www.ultimate-guitar.com"
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda",
-           "harptabs", "version", "harmonica"}
+           "harptabs", "gametabs", "version", "harmonica"}
 _HARMONICA_TAB = re.compile(r"harmonica-[1-9][0-9]{0,3}\.txt")  # a harmonica tab's name, as inbox.py keeps it
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
@@ -99,6 +102,10 @@ _HARPTABS_HOST = re.compile(r"(?:www\.)?harptabs\.com")
 _HARPTABS_PATH = re.compile(r"/tab/([1-9][0-9]{0,8})/([a-z0-9-]{1,200})")
 HARPTABS_BASE = "https://www.harptabs.com"
 HARPTABS_PAGE_SHAPE = f"{HARPTABS_BASE}/tab/<id>/<slug>"
+_GAMETABS_HOST = re.compile(r"(?:www\.)?gametabs\.net")
+_GAMETABS_PATH = re.compile(r"/tabs/([a-z0-9_-]{1,200})/([a-z0-9_-]{1,200})")
+GAMETABS_BASE = "https://gametabs.net"
+GAMETABS_PAGE_SHAPE = f"{GAMETABS_BASE}/tabs/<game>/<tab>"
 _TWICE = re.compile(r"Cannot declare (\(.*\)) twice")  # tomllib's words for a table declared twice
 # A version as a viewer's address writes it, and how long one may be: every chord's shape and swap is a few hundred.
 VERSION_SHAPE = "t=2&mode=dorian&capo=0"
@@ -131,6 +138,7 @@ class Overrides:
     youtube: Mapping[str, str | None] = field(default_factory=dict)
     lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
     harptabs: Mapping[str, HarpTabsPick] = field(default_factory=dict)
+    gametabs: Mapping[str, GameTabsPick] = field(default_factory=dict)
     version: Mapping[str, str] = field(default_factory=dict)
     harmonica: Mapping[str, Mapping[str, str | Mapping[str, str]]] = field(default_factory=dict)
     tables: frozenset[str] = frozenset()
@@ -183,6 +191,42 @@ class HarpTabsPick:
     def url(self) -> str:
         """Its page: as caracole writes the pick and asks for it."""
         return f"{HARPTABS_BASE}/{self.path}"
+
+
+@dataclass(frozen=True)
+class GameTabsPick:
+    """A gametabs.net tab you picked (``[gametabs]``): its game's slug and its own."""
+
+    game: str
+    slug: str
+
+    @property
+    def path(self) -> str:
+        """Its page's path, as gametabs.net's index keeps it (``tabs/actraiser/fillmore``)."""
+        return f"tabs/{self.game}/{self.slug}"
+
+    @property
+    def url(self) -> str:
+        """Its page: as caracole writes the pick and asks for it."""
+        return f"{GAMETABS_BASE}/{self.path}"
+
+
+def gametabs_pick_from_url(url: Any) -> GameTabsPick:
+    """The gametabs.net tab a page's address names (``GameTabsPick``), written as an address bar shows it:
+    without ``https://``, with ``www.``, with a query or a trailing slash."""
+    text = url.strip() if isinstance(url, str) else ""
+    if text and not _SCHEME.match(text):
+        text = f"https://{text}"
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        parts = None
+    found = None
+    if parts is not None and parts.scheme in ("http", "https") and _GAMETABS_HOST.fullmatch(parts.netloc.lower()):
+        found = _GAMETABS_PATH.fullmatch(parts.path.rstrip("/"))
+    if found is None:
+        raise OverridesError(f"expected a gametabs.net tab's page ({GAMETABS_PAGE_SHAPE}), got {url!r}")
+    return GameTabsPick(found.group(1), found.group(2))
 
 
 def harptabs_pick_from_url(url: Any) -> HarpTabsPick:
@@ -487,6 +531,16 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         except OverridesError as e:
             raise OverridesError(f"{where}: {e}") from e
 
+    gametabs: dict[str, GameTabsPick] = {}
+    for k, v in table("gametabs").items():
+        where = f"[gametabs] {k!r}"
+        if not isinstance(v, str):
+            raise OverridesError(f"{where}: expected a string, the address of a gametabs.net tab's page")
+        try:
+            gametabs[_song_key(k, where)] = gametabs_pick_from_url(v)
+        except OverridesError as e:
+            raise OverridesError(f"{where}: {e}") from e
+
     version = {_song_key(k, f"[version] {k!r}"): _version(v, f"[version] {k!r}") for k, v in table("version").items()}
 
     harmonica: dict[str, dict[str, str | Mapping[str, str]]] = {}
@@ -502,7 +556,8 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
-        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, version=version,
+        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, gametabs=gametabs,
+        version=version,
         harmonica=harmonica, tables=frozenset(data),
     )
 
@@ -709,6 +764,30 @@ def add_harptabs(path: Path, display: str, url: str) -> None:
 
     def change(doc) -> None:
         t = _table_of(doc, "harptabs")
+        key = next((k for k in reversed(list(t)) if same_song(k)), None)
+        if key is None:
+            t[display] = pick.url
+        elif t[key] != pick.url:
+            t[key] = pick.url
+
+    _edit(path, change)
+
+
+def add_gametabs(path: Path, display: str, url: str) -> None:
+    """Set the song's ``[gametabs]`` entry: the gametabs.net tab at ``url``, written as caracole asks for it
+    (``GameTabsPick.url``). The song's entry is found by its key, as the table is read, so the song written
+    another way changes the entry it has; the same pick again writes nothing."""
+    wanted = override_key(display)
+    pick = gametabs_pick_from_url(url)
+
+    def same_song(key: str) -> bool:
+        try:
+            return override_key(key) == wanted
+        except OverridesError:
+            return False
+
+    def change(doc) -> None:
+        t = _table_of(doc, "gametabs")
         key = next((k for k in reversed(list(t)) if same_song(k)), None)
         if key is None:
             t[display] = pick.url

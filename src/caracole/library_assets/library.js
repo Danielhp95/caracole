@@ -961,7 +961,7 @@
     if (s.auto === true) holds.push("auto");
     else if (has(/^sheet[.](html|pdf|txt|cho)$/)) holds.push(plays("ukulele") ? "ukulele" : "sheet");
     if (has(/^guitar-\d+[.]/)) holds.push("guitar");
-    else if (names.indexOf("tab.txt") >= 0) holds.push("tab");
+    else if (names.indexOf("tab.txt") >= 0 || has(/^gametab-\d+[.]txt$/)) holds.push("tab");
     if (plays("harmonica")) holds.push("harmonica");
     if (has(/^lyrics[.](txt|lrc)$/)) holds.push("lyrics");
     if (plays("score")) holds.push("score");
@@ -1996,6 +1996,7 @@
       ? SUGGESTED_SITES.map((source) => [source, x.song[source]]).filter(([, row]) => row && typeof row === "object")
       : []);
     for (const row of [...objects(data.index), ...objects(data.gtptabs), ...objects(data.lacuerda), ...htSongs,
+      ...objects(data.gametabs),
       ...ugArtists.flatMap((a) => objects(a.top)), ...lcArtists.flatMap((a) => objects(a.top)),
       ...htArtists.flatMap((a) => objects(a.top)), ...meant.flatMap((x) => meantRows(x).map(([, r]) => r))]) {
       const i = yourSong(row);
@@ -2017,6 +2018,7 @@
       ...objects(data.gtptabs).map((h) => ["song", "gtptabs", h]),
       ...htArtists.map((a) => ["artist", "harptabs", a]),
       ...htSongs.map((h) => ["song", "harptabs", h]),
+      ...objects(data.gametabs).map((h) => ["song", "gametabs", h]),  // gametabs.net's tracks, the game the artist
     ]) {
       if (kind === "artist") addArtist(model, source, row);
       else addSong(model, source, row);
@@ -2071,7 +2073,8 @@
     const key = g.key + "/" + (i !== undefined ? titleKeyOf(songs[i]) : String(row.title_key || ""));
     let item = model.items.get(key);
     if (!item) {
-      item = { key, mine: undefined, ug: null, lacuerda: null, gtptabs: null, harptabs: null, removed: null };
+      item = { key, mine: undefined, ug: null, lacuerda: null, gtptabs: null, harptabs: null, gametabs: null,
+        removed: null };
       model.items.set(key, item);
       g.items.push(item);
     }
@@ -2613,6 +2616,7 @@
     if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
     if (ms.length) parts.push(ms.length + " on MuseScore");
     if (harps.length || htArtists.length) parts.push((harps.length + htArtists.length) + " on harptabs.com");
+    if (objects(data.gametabs).length) parts.push(objects(data.gametabs).length + " on gametabs.net");
     const meant = objects(data.suggest).filter((x) => x.artist);
     say((parts.length ? parts.join(" · ") : "Nothing on the sites") +
       (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""));
@@ -3111,7 +3115,7 @@
     };
     // Get it: the song looked up now (POST /lookup, one caracole get), to its sheet; a version picked under its chevron too.
     getIt = (pick, display, row, go) => askFrom("lookup", pick, ["song", "artist", "title", "ug", "tab", "lacuerda",
-      "harptabs"], row, go, (answer) => answer.view);
+      "harptabs", "gametabs"], row, go, (answer) => answer.view);
     // Add for tonight's run: the song into wanted.txt under the site's names (POST /request, not fetched now).
     later = (pick, display, row, go) => askFrom("request", pick, ["artist", "title", "lacuerda"], row, go,
       (answer) => answer.job);

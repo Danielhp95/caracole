@@ -720,3 +720,27 @@ def test_the_rows_by_word_follow_every_row_a_sitemap_adds_renames_or_closes(conn
     # The words of every key a row ever had, the old ones too: a word no row holds any longer matches nothing.
     assert {"wonderwal", "wonderwall", "eagles", "hotel", "california", "the", "oasis"} <= set(key_words(conn))
     assert conn.execute("SELECT COUNT(*) FROM ug_key_words").fetchone()[0] == len(key_words(conn))
+
+
+def test_a_version_12_database_gains_gametabs_tables_and_keeps_its_rows(tmp_path):
+    # As the close spellings of a title left it: schema 12, with a song and a harptabs.com row.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 13)) + "\nPRAGMA user_version = 12;")
+    old.execute("INSERT INTO harptabs_index VALUES ('tab/25/piano-man', 'tab', 25, 'piano-man', 'sitemap')")
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
+    assert [tuple(r) for r in c.execute("SELECT * FROM harptabs_index")] == [
+        ("tab/25/piano-man", "tab", 25, "piano-man", "sitemap")]
+    assert columns(path, "gametabs_index")[0] == ["path", "kind", "game", "slug", "page", "key", "slug_key", "sitemap"]
+    assert columns(path, "gametabs_games")[0] == ["path", "game", "name", "tabs", "read_at"]
+    assert columns(path, "gametabs_game_tabs")[0] == [
+        "page", "path", "game", "title", "title_key", "instruments", "composers", "views", "rating", "place"]
+    for table in ("gametabs_index", "gametabs_games", "gametabs_game_tabs"):
+        assert c.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v12.bak"), "gametabs_index") == ([], 12)

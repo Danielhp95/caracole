@@ -23,6 +23,9 @@ Tables (plan §5, plus ``kv``):
   tabs each listed, for searches (schema 11, harptabs_index.py).
 - ``ug_index_fts`` and ``ug_key_words``: every row of ``ug_index`` by the words of its keys, and every
   word of its keys once, for the close spellings of a title (schema 12, search.py).
+- ``gametabs_index``: the game and tab pages gametabs.net's sitemaps list; ``gametabs_games`` and
+  ``gametabs_game_tabs``: the game pages caracole read, and the tabs each listed, with their composers and
+  instruments (schema 13, gametabs_fetch.py, gametabs_index.py).
 - ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
   file or score it keeps (gtptabs.com's, your inbox's).
 - ``files``: files kept in the library, with their SHA-256.
@@ -43,7 +46,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -461,10 +464,60 @@ INSERT OR IGNORE INTO ug_key_words(term) SELECT DISTINCT value FROM ug_keys, """
 WHERE value != '' ORDER BY value;
 """
 
+# gametabs.net, read by gametabs_fetch.py and gametabs_index.py. gametabs_index: its sitemaps, one row per game page
+# ("tabs/actraiser", and "tabs/final-fantasy-vii?page=2" for a game's next pages, page its number) or tab page
+# ("tabs/actraiser/fillmore"); game the game's slug, slug a tab's own ("" for a game page); key a tab's title's key,
+# its slug less the number a repeated title takes ("main-theme-108" is "main-theme"), slug_key its whole slug's (a
+# title that ends in a number), both the game's slug's key for a game page. gametabs_games: each game page read (its
+# path, as gametabs_index has it), the game's name as it heads it ("" for a page gone), the tabs it says the game has,
+# and when; gametabs_game_tabs: the tabs each listed, the track's title and its key, its instruments and composers (JSON
+# arrays of the names the card writes), its views and fun rating, in the page's order.
+_SCHEMA_V13 = """
+CREATE TABLE IF NOT EXISTS gametabs_index (
+  path TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  game TEXT NOT NULL,
+  slug TEXT NOT NULL,
+  page INTEGER NOT NULL,
+  key TEXT NOT NULL,
+  slug_key TEXT NOT NULL,
+  sitemap TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gametabs_index_key ON gametabs_index(kind, key);
+CREATE INDEX IF NOT EXISTS gametabs_index_slug_key ON gametabs_index(kind, slug_key);
+CREATE INDEX IF NOT EXISTS gametabs_index_game ON gametabs_index(game, kind);
+CREATE INDEX IF NOT EXISTS gametabs_index_sitemap ON gametabs_index(sitemap);
+CREATE TABLE IF NOT EXISTS gametabs_games (
+  path TEXT PRIMARY KEY,
+  game TEXT NOT NULL,
+  name TEXT NOT NULL,
+  tabs INTEGER NOT NULL DEFAULT 0,
+  read_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS gametabs_games_game ON gametabs_games(game);
+CREATE TABLE IF NOT EXISTS gametabs_game_tabs (
+  page TEXT NOT NULL,
+  path TEXT NOT NULL,
+  game TEXT NOT NULL,
+  title TEXT NOT NULL,
+  title_key TEXT NOT NULL,
+  instruments TEXT NOT NULL DEFAULT '[]',
+  composers TEXT NOT NULL DEFAULT '[]',
+  views INTEGER NOT NULL DEFAULT 0,
+  rating REAL,
+  place INTEGER NOT NULL,
+  PRIMARY KEY (page, path)
+);
+CREATE INDEX IF NOT EXISTS gametabs_game_tabs_title ON gametabs_game_tabs(title_key);
+CREATE INDEX IF NOT EXISTS gametabs_game_tabs_path ON gametabs_game_tabs(path);
+CREATE INDEX IF NOT EXISTS gametabs_game_tabs_game ON gametabs_game_tabs(game);
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
-               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11, 12: _SCHEMA_V12}
+               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11, 12: _SCHEMA_V12,
+               13: _SCHEMA_V13}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):
