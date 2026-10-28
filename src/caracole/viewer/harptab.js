@@ -597,6 +597,31 @@
   });
   bar.addEventListener("focusin", () => bar.classList.remove("away"));
 
+  // --- how the tab is read, changed on caracole serve's page of readings -----------------------------------------
+  // Served (caracole serve sent this page, as viewer.js tells), the Read as line's source ("guessed (0.86)", "from the
+  // tab's own legend", "as you set it") is a link to the server's own page of the readings caracole weighs for this
+  // tab (/harmonica?page=, its library path), and a tab read by harptabs.com's own key, or shown as written, has a
+  // "Change how it's read" link at its foot. From a file, or in caracole's Android app, no server answers: no link.
+  const served = location.protocol !== "file:" && location.hostname !== "appassets.androidplatform.net";
+  if (served) {
+    let path = "";
+    try {
+      path = decodeURIComponent(location.pathname.slice(1));
+    } catch (err) { /* an address that can't be read: no link */ }
+    const href = "/harmonica?page=" + encodeURIComponent(path);
+    const source = $("reading-src"), foot = $("reading-foot");
+    if (path && source) {
+      const link = el("a", "src", source.textContent);
+      link.id = "reading-src";
+      link.setAttribute("href", href);
+      source.replaceWith(link);
+    }
+    if (path && foot) {
+      foot.querySelector("a").setAttribute("href", href);
+      foot.hidden = false;
+    }
+  }
+
   bar.hidden = false;
   showScroll();
   render();

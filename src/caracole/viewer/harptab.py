@@ -40,6 +40,12 @@ word of ``_LEXICON``'s ("(w) = Wah effect", "b= blow", "(x) = aspirar"). It is e
 more candidate, the preset that agrees with most of it changed as it says, and each candidate's score is multiplied
 by ``1 + LEGEND_WEIGHT × agreement``. Its lines are a ``Legend`` on the page.
 
+**A reading pinned** (``pinned``): overrides.toml's ``[harmonica]`` names how a tab is read, a preset, "legend"
+(the tab's own), or a table, a preset and what its symbols mean (``check_spec``); ``parse(notation=)`` reads it so,
+whatever the others score, and draws it whatever its Q (``source`` "pinned"). ``readings`` is every way caracole
+weighs, best first, for caracole serve's page of them; ``spec_of`` the pin of each. ``Reading.standard``: harptabs.com's
+own key, guessed, the tab using nothing else, whose page says no more than that key's legend.
+
 **The lines.** A line is a row of holes when at least ``HOLE_SHARE`` of its characters read as holes, holes together
 or holds (``scan``); a row reads with confidence its own P × T, and one under ``ROW_TRUST``, or a line that holds
 three holes but reads under ``HOLE_SHARE``, is a row shown as written (``Row.trusted``). Nothing read is lost: what a
@@ -69,7 +75,9 @@ import math
 import re
 import unicodedata
 from collections import Counter
+from collections.abc import Mapping
 from dataclasses import dataclass, field, replace
+from typing import Any
 
 from caracole.viewer import harp
 
@@ -348,6 +356,16 @@ class Reading:
     @property
     def q(self) -> float:
         return self.explained * self.playable
+
+    @property
+    def standard(self) -> bool:
+        """Whether caracole guessed harptabs.com's own key, and the tab used nothing else: the page then says no
+        more than that key's legend (the owner's choice)."""
+        return self.source == "guessed" and self.notation.name == SIGNS.name and all(
+            (means == SIGNS.bare) if at == "bare" else (
+                (text, means, at) == (DOTS.text, DOTS.means, DOTS.at)
+                or (own := SIGNS.meaning(text, at)) is not None and (own.means, own.count) == (means, count))
+            for (text, means, at, count), _ in self.used)
 
     def said(self) -> str:
         """The symbols the tab was read by, as it writes them: "b blow · d draw · * bend · (w) wah"."""
@@ -783,6 +801,12 @@ def _entry(sym: str, meaning: str) -> Symbol | None:
     count = 1
     if means == "bend":
         count = 3 if _THREE.search(meaning) else 2 if _TWO.search(meaning) else 1
+    return _template(sym, means, count)
+
+
+def _template(sym: str, means: str, count: int = 1) -> Symbol | None:
+    """A symbol written with a placeholder for its hole, as a legend or a pin writes it (``_entry``), and what it
+    means: placed where the placeholder says, or ``at`` "" with none; None where nothing can go."""
     found = list(_PLACEHOLDER.finditer(sym))
     if not found:
         if len(sym) > 1 and len(set(sym)) == 1 and means == "bend":  # "**": the bend "*" written twice
@@ -902,24 +926,73 @@ def read(lines: list[str], *, harp_chip: str | None = None, notation: Notation |
          legends: list[Legend] | None = None) -> tuple[Reading, list[Scan]]:
     """How the tab's ``lines`` (tabs expanded, its legends' lines left out) are best read, and each line as that
     notation reads it: the module's docstring. ``notation`` given is read as it is ("pinned")."""
-    found: tuple[Symbol, ...] = ()
-    candidates: list[tuple[Notation, str]] = []
     if notation is not None:
-        candidates.append((notation, "pinned"))
+        candidates, found = [(notation, "pinned")], ()
     else:
-        holey = [line for line in lines if re.search(r"\d", line)]
-        placed = tuple(dict.fromkeys(s for legend_ in legends or [] for sym in legend_.symbols
-                                     if (s := _where(sym, holey)) is not None))
-        made = _with_legend(placed, holey)
-        if made is not None:
-            found = made[1]
-            candidates.append((made[0], "legend"))
-        for preset in PRESETS:  # where the chip says Diatonic, "*" a bend before a slide: the commoner there
-            if preset is SIGNS and harp_chip == "Diatonic":
-                candidates.append((STAR_BENDS, "guessed"))
-            candidates.append((preset, "guessed"))
-        if any(_DOT_BEFORE.search(line) for line in lines):  # "the dots extend the note"
-            candidates = [(n.changed((DOTS,)), source) for n, source in candidates]
+        candidates, found = _candidates(lines, harp_chip, legends or [])
+    weighed = _weighed(lines, candidates, harp_chip, found)
+    k = max(weighed.results, key=lambda r: (r[0], -r[1]))[1]
+    return weighed.reading(k), weighed.scanned[k]
+
+
+def _candidates(lines: list[str], harp_chip: str | None,
+                legends: list[Legend]) -> tuple[list[tuple[Notation, str]], tuple[Symbol, ...]]:
+    """The notations a tab is read under, the commonest first, each with its source, and its legends' symbols placed
+    (``found``, what each candidate's agreement is counted against): the legend's own candidate, the presets
+    (``STAR_BENDS`` before ``signs`` where the chip says Diatonic), each with ``DOTS`` where a dot comes before a
+    hole."""
+    holey = [line for line in lines if re.search(r"\d", line)]
+    placed = tuple(dict.fromkeys(s for legend_ in legends for sym in legend_.symbols
+                                 if (s := _where(sym, holey)) is not None))
+    candidates: list[tuple[Notation, str]] = []
+    found: tuple[Symbol, ...] = ()
+    made = _with_legend(placed, holey)
+    if made is not None:
+        found = made[1]
+        candidates.append((made[0], "legend"))
+    for preset in PRESETS:  # where the chip says Diatonic, "*" a bend before a slide: the commoner there
+        if preset is SIGNS and harp_chip == "Diatonic":
+            candidates.append((STAR_BENDS, "guessed"))
+        candidates.append((preset, "guessed"))
+    if _dotted(lines):  # "the dots extend the note"
+        candidates = [(n.changed((DOTS,)), source) for n, source in candidates]
+    return candidates, found
+
+
+def _dotted(lines: list[str]) -> bool:
+    return any(_DOT_BEFORE.search(line) for line in lines)
+
+
+@dataclass
+class _Weighed:
+    """Each candidate's scans of the tab's lines, the lines scored, and its result: ``(score, k, explained,
+    playable, signature)``, ``k`` its place among the candidates."""
+
+    candidates: list[tuple[Notation, str]]
+    scanned: list[list[Scan]]
+    scored: list[int]
+    results: list[tuple[float, int, float, float, tuple]]
+
+    def reading(self, k: int) -> Reading:
+        """The candidate ``k``'s reading: its margin over the best that reads the tab differently, and whether a
+        commoner one that does is within ``MARGIN`` of it."""
+        score, _, explained, playable, signature = self.results[k]
+        rivals = [r for r in self.results if r[4] != signature]
+        runner = max(rivals, key=lambda r: (r[0], -r[1])) if rivals else None
+        thin = any(r[1] < k and score - r[0] < MARGIN for r in rivals)
+        used: Counter = Counter()
+        for i in self.scored:
+            used.update(self.scanned[k][i].used)
+        n, source = self.candidates[k]
+        return Reading(n, source, explained, playable, score, score - runner[0] if runner else score,
+                       self.candidates[runner[1]][0].name if runner else None,
+                       source == "pinned" or (explained * playable >= TAB_Q and not thin),  # a pin is yours
+                       tuple(sorted(used.items())))
+
+
+def _weighed(lines: list[str], candidates: list[tuple[Notation, str]], harp_chip: str | None,
+             found: tuple[Symbol, ...]) -> _Weighed:
+    """Each candidate scored on the tab's lines: Q = P × T, weighed by the legend's ``found`` symbols."""
     scanned = [[scan(line, notation=n) if line.strip() else Scan((), 0.0, ()) for line in lines]
                for n, _ in candidates]
     scored = [i for i in range(len(lines)) if any(s[i].is_row or s[i].missed for s in scanned)]
@@ -933,18 +1006,119 @@ def read(lines: list[str], *, harp_chip: str | None = None, notation: Notation |
         weight = 1 + LEGEND_WEIGHT * _agreement(n, found) if found else 1.0
         results.append((explained * playable * weight, k, explained, playable,
                         _signature([scanned[k][i] for i in scored])))
-    best = max(results, key=lambda r: (r[0], -r[1]))
-    score, k, explained, playable, signature = best
-    rivals = [r for r in results if r[4] != signature]
-    runner = max(rivals, key=lambda r: (r[0], -r[1])) if rivals else None
-    margin = score - runner[0] if runner else score
-    thin = any(r[1] < k and score - r[0] < MARGIN for r in rivals)
-    used: Counter = Counter()
-    for i in scored:
-        used.update(scanned[k][i].used)
-    n, source = candidates[k]
-    return (Reading(n, source, explained, playable, score, margin, candidates[runner[1]][0].name if runner else None,
-                    explained * playable >= TAB_Q and not thin, tuple(sorted(used.items()))), scanned[k])
+    return _Weighed(candidates, scanned, scored, results)
+
+
+# --- a reading pinned: overrides.toml's [harmonica] -----------------------------------------------------------
+
+PIN_NAMES = (*(p.name for p in PRESETS), "legend")  # what a pin may name: a preset, or the tab's own legend
+# What a pin's table says a symbol means, in words: MEANINGS, a bend of two or three semitones, an overblow.
+_PIN_WORDS = {**{m: (m, 1) for m in MEANINGS}, "double bend": ("bend", 2), "triple bend": ("bend", 3),
+              "overblow": ("over", 1), "joins": ("join", 1)}
+
+
+def _names(names, last: str = "or") -> str:
+    *rest, end = names
+    return f"{', '.join(rest)} {last} {end}" if rest else end
+
+
+def _pin_symbol(key: Any, word: Any) -> Symbol:
+    """A pin's table entry as a symbol: ``key`` the symbol, a "4" (or an "x") standing for its hole where it says
+    where it is written ("(4)", "4", "b4", "4-4"), else where the tab writes it; ``word`` what it means
+    (``_PIN_WORDS``). Raises ValueError, saying what it takes."""
+    if not isinstance(key, str) or not key.strip() or key != key.strip() or len(key) > 12:
+        raise ValueError(f"expected a symbol, as the tab writes it, got {key!r}")
+    if not isinstance(word, str) or word not in _PIN_WORDS:
+        raise ValueError(f"{key!r}: expected what a symbol means ({_names(list(_PIN_WORDS))}), got {word!r}")
+    means, count = _PIN_WORDS[word]
+    sym = _template(key, means, count)
+    if sym is None:
+        raise ValueError(f"{key!r}: a hole alone, or in brackets, can only be a blow or a draw")
+    return sym
+
+
+def check_spec(spec: Any) -> None:
+    """Whether ``spec`` can be a pin: a notation's name (``PIN_NAMES``), or a table, ``as`` a preset (signs by
+    default) and each other entry a symbol and what it means (``_pin_symbol``). Raises ValueError, saying what it
+    takes."""
+    if isinstance(spec, str):
+        if spec not in PIN_NAMES:
+            raise ValueError(f"expected {_names(PIN_NAMES)}, got {spec!r}")
+        return
+    if not isinstance(spec, Mapping):
+        raise ValueError(f"expected a notation's name or a table of what its symbols mean, got {spec!r}")
+    base = spec.get("as", SIGNS.name)
+    if base not in PRESET:
+        raise ValueError(f"as: expected {_names(list(PRESET))}, got {base!r}")
+    for key, word in spec.items():
+        if key != "as":
+            _pin_symbol(key, word)
+
+
+def pinned(spec: Any, body: str) -> Notation | None:
+    """The notation the pin ``spec`` names for the tab ``body`` (``check_spec``'s): a preset; the tab's own
+    legend's (None for a tab with none); or a preset changed as the table says, each symbol placed as a legend's is,
+    in either case where it is a letter the tab writes in the other. With ``DOTS`` where a dot comes before a hole, as
+    every candidate has them. Raises ValueError for a spec ``check_spec`` refuses."""
+    check_spec(spec)
+    _, lines, legends, in_legend = _prepared(body, None)
+    lines = ["" if n in in_legend else line for n, line in enumerate(lines)]
+    holey = [line for line in lines if re.search(r"\d", line)]
+    if spec == "legend":
+        placed = tuple(dict.fromkeys(s for legend_ in legends for sym in legend_.symbols
+                                     if (s := _where(sym, holey)) is not None))
+        made = _with_legend(placed, holey)
+        notation = made[0] if made is not None else None
+    elif isinstance(spec, str):
+        notation = PRESET[spec]
+    else:
+        placed = tuple(s for key, word in spec.items() if key != "as"
+                       if (s := _where(_pin_symbol(key, word), holey)) is not None)
+        base = PRESET[spec.get("as", SIGNS.name)]
+        bare = next((s.means for s in placed if s.at == "bare"), "")
+        text = "\n".join(holey)
+        changes = [s for s in placed if s.at != "bare"]
+        changes += [replace(s, text=s.text.swapcase()) for s in changes
+                    if not base.fold and s.text != s.text.swapcase() and s.text.swapcase() in text]
+        notation = base.changed(tuple(changes), bare=bare)
+    if notation is not None and _dotted(lines):
+        notation = notation.changed((DOTS,))
+    return notation
+
+
+def readings(body: str, *, harp: str | None = None) -> list[Reading]:
+    """Every reading caracole weighs for the tab ``body`` (``harp``, the page's chip), best first: one a way of
+    reading it (two candidates that read every hole alike and say so alike are one, the better, else the
+    commoner); the first is ``parse``'s."""
+    chip, lines, legends, in_legend = _prepared(body, harp)
+    lines = ["" if n in in_legend else line for n, line in enumerate(lines)]
+    candidates, found = _candidates(lines, chip, legends)
+    weighed = _weighed(lines, candidates, chip, found)
+    out: dict[tuple, Reading] = {}
+    for _, k, *_rest in sorted(weighed.results, key=lambda r: (-r[0], r[1])):
+        reading = weighed.reading(k)
+        out.setdefault((weighed.results[k][4], reading.said()), reading)
+    return list(out.values())
+
+
+def spec_of(reading: Reading) -> str | dict[str, str]:
+    """The pin that reads a tab as ``reading`` does: "legend" for its legend's, a preset's name, or a table of the
+    preset and what changes it (a symbol after a hole written alone, another with a 4 for its hole)."""
+    if reading.source == "legend":
+        return "legend"
+    notation = reading.notation
+    base = PRESET[notation.name]
+    changed = [s for s in notation.symbols if s != DOTS and s not in base.symbols]
+    if not changed and notation.bare == base.bare:
+        return notation.name
+    spec = {"as": notation.name}
+    if notation.bare != base.bare and notation.bare is not None:
+        spec["4"] = notation.bare
+    for s in changed:
+        key = {"before": f"{s.text}4", "around": f"{s.text[:1]}4{s.text[1:]}", "between": f"4{s.text}4"}.get(
+            s.at, s.text)
+        spec[key] = s.means if s.means != "bend" or s.count == 1 else ("double bend", "triple bend")[s.count - 2]
+    return spec
 
 
 _SAY = {"over": "overblow", "join": "joins"}
@@ -988,13 +1162,19 @@ def _row_confidence(found: Scan, harp_chip: str | None) -> float:
     return found.coverage * (sum(_playable(h, harp_chip) for h in holes) / len(holes) if holes else 0.0)
 
 
-def parse(body: str, *, harp: str | None = None, notation: Notation | None = None) -> Tab:
-    """The tab ``body`` (a ``harmonica-N.txt``) read: the module's docstring says how. ``harp`` is the page's chip
-    ("Diatonic", "Chromatic"), ``notation`` one to read it by, whatever the others score ("pinned")."""
+def _prepared(body: str, harp: str | None) -> tuple[str | None, list[str], list[Legend], set[int]]:
+    """A tab's text as it is read: the page's chip as caracole reads it ("Diatonic", "Chromatic", or None), its
+    lines (tabs expanded), its legends, and their lines' places."""
     chip = next((name for name, pattern in _CHIPS.items() if harp and pattern.search(harp)), None)
     lines = [expand(line).rstrip() for line in body.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
     legends = legend(lines)
-    in_legend = {n for block in legends for n in block.at}
+    return chip, lines, legends, {n for block in legends for n in block.at}
+
+
+def parse(body: str, *, harp: str | None = None, notation: Notation | None = None) -> Tab:
+    """The tab ``body`` (a ``harmonica-N.txt``) read: the module's docstring says how. ``harp`` is the page's chip
+    ("Diatonic", "Chromatic"), ``notation`` one to read it by, whatever the others score ("pinned")."""
+    chip, lines, legends, in_legend = _prepared(body, harp)
     reading, scans = read(["" if n in in_legend else line for n, line in enumerate(lines)], harp_chip=chip,
                           notation=notation, legends=legends)
     kinds = ["legend" if n in in_legend else "blank" if not line.strip() else "holes" if s.is_row

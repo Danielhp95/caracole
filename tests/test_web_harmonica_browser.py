@@ -88,7 +88,7 @@ def test_served_the_read_as_lines_source_opens_the_readings_and_one_is_pinned(cf
     assert browser.wait("!window.before && location.pathname === '/harmonica'")
     listed = browser.js("[...document.querySelectorAll('li.reading')].map((li) => li.textContent.replace(/\\s+/g, ' ')"
                         ".trim())")
-    assert listed[0].startswith("b blow · d draw · * bend · - joins · (h) hold · (w) wah · Q 0.96")
+    assert listed[0].startswith("b blow · d draw · * bend · - joins · (h) hold · (w) wah Q 0.96 · now")
     browser.js("window.before = true")
     browser.js("[...document.querySelectorAll('button')].find((b) => b.textContent === 'Read it as letters').click()")
     assert browser.wait("!window.before && document.body.textContent.includes('Done: read as')", 15)

@@ -67,7 +67,7 @@ from urllib.parse import quote
 from caracole.inline import json_block
 from caracole.viewer import harmony, harp, harpfit
 from caracole.viewer.harmony_tables import page_name
-from caracole.viewer.harptab import Gap, Group, Hole, Legend, Prose, Row, Section, Tab, Words, parse
+from caracole.viewer.harptab import Gap, Group, Hole, Legend, Notation, Prose, Row, Section, Tab, Words, parse, pinned
 from caracole.viewer.instruments import GUITAR, chord_shapes
 from caracole.viewer.page import (
     HERE,
@@ -113,6 +113,7 @@ def build_harmonica_viewer(
     url: str | None = None,
     page_key: str | None = None,
     harp: str | None = None,
+    pin: str | Mapping[str, str] | None = None,
     facts: Mapping[str, Any] | None = None,
     cho: str | None = None,
     key: str | None = None,
@@ -123,12 +124,13 @@ def build_harmonica_viewer(
 
     ``tab_file`` names the text beside the page, which its foot links; ``url`` is the tab's page on harptabs.com,
     ``page_key`` the key it names, ``harp`` the harp ("Diatonic", "Chromatic": harptab.py ``parse`` reads the tab
-    for it), ``facts`` what else it says (``difficulty``, ``views``, ``rating``: the version's
+    for it), ``pin`` how the owner has it read (overrides.toml's ``[harmonica]``: harptab.py ``pinned``; a pin by its
+    legend on a tab with none is read as guessed), ``facts`` what else it says (``difficulty``, ``views``, ``rating``: the version's
     ``raw``, harptabs.HarpTab.raw). ``cho`` is the song's chord sheet (its human one, else its auto one, as render.py
     writes it), with ``key`` and ``key_source``, its key as keys.py found it: the harp that plays with the record, and
     the song's key for the positions. ``back`` names the song's sheet viewer beside the page ("sheet.html"), which
     ‹ Chord sheet opens; with none, ‹ Library."""
-    tab = parse(text, harp=harp)
+    tab = parse(text, harp=harp, notation=_pinned(pin, text))
     choice = harpfit.choose(tab, cho=cho, key=key, key_source=key_source, page_key=page_key)
     data = _data(tab, choice)
     data["overlay"] = _overlay_data(choice, cho, key, key_source)
@@ -144,7 +146,8 @@ def build_harmonica_viewer(
         + '<div class="page">\n'
         + head
         + article
-        + _footer(tab_file, url, placed=tab.readable and any(r.trusted and r.lyric for r in tab.rows()))
+        + _footer(tab_file, url, placed=tab.readable and any(r.trusted and r.lyric for r in tab.rows()),
+                  change=not tab.readable or tab.reading.standard)
         + "</div>\n"
         + (_BAR if tab.readable else _BAR_RAW)
         + _PILL
@@ -299,10 +302,30 @@ def _read_as(tab: Tab, facts: Mapping[str, Any]) -> str:
     if isinstance(rating, (int, float)) and not isinstance(rating, bool) and rating > 0:
         said.append(f"{rating:.1f}★")
     reading = tab.reading
+    facts_said = " · " + " · ".join(said) if said else ""
+    if reading.standard:  # harptabs.com's own key, guessed: its familiar legend says enough (the owner's choice)
+        return ('<p class="legend" aria-label="How to read the holes">'
+                '<span class="h"><span class="b">4</span></span> blow '
+                '<span class="h"><span class="d"><span class="sg">−</span>4</span></span> draw '
+                '<span class="h"><span class="d"><span class="sg">−</span>3<span class="bd">′</span></span></span> bent '
+                '<span class="h">(<span class="b">4</span> <span class="b">5</span>)</span> together'
+                + facts_said + "</p>\n")
     symbols = " · ".join(f'<code class="sy">{escape(text)}</code> {escape(word)}' for text, word in reading.symbols())
     source = _SOURCE.get(reading.source, f"guessed ({reading.q:.2f})")
-    return (f'<p class="legend" aria-label="How the tab was read">Read as: {symbols}, {escape(source)}'
-            + (" · " + " · ".join(said) if said else "") + "</p>\n")
+    # served, harptab.js makes its source a link to caracole serve's page that changes it
+    return (f'<p class="legend" aria-label="How the tab was read">Read as: {symbols}, '
+            f'<span class="src" id="reading-src">{escape(source)}</span>' + facts_said + "</p>\n")
+
+
+def _pinned(pin: str | Mapping[str, str] | None, text: str) -> Notation | None:
+    """The notation ``pin`` names for the tab ``text``, or None (no pin, a legend the tab hasn't got, or a pin
+    overrides.toml would refuse: read as caracole guesses)."""
+    if pin is None:
+        return None
+    try:
+        return pinned(pin, text)
+    except ValueError:
+        return None
 
 
 
@@ -431,9 +454,10 @@ def _said(group: Group) -> str:
 # --- the foot and the bar ----------------------------------------------------------------------------------------
 
 
-def _footer(tab_file: str, url: str | None, *, placed: bool) -> str:
+def _footer(tab_file: str, url: str | None, *, placed: bool, change: bool = False) -> str:
     """The foot: the tab's text beside the page, where it came from (its page on harptabs.com, else the site), and a
-    word on keeping the page private."""
+    word on keeping the page private; with ``change`` (a tab read by harptabs.com's own key, whose header says no
+    Read as, or one shown as written), a link that changes how it is read, which harptab.js shows served alone."""
     site = url if isinstance(url, str) and url.startswith(SITE) else SITE
     return (
         '<footer class="foot">\n'
@@ -441,7 +465,8 @@ def _footer(tab_file: str, url: str | None, *, placed: bool) -> str:
         f'<p>Tab from <a href="{escape(site)}">harptabs.com</a>, as its tabber wrote it'
         + ("; caracole placed each hole over its syllable.</p>\n" if placed else ".</p>\n")
         + "<p>Keep this page private: the lyrics and the tab are other people's work.</p>\n"
-        "</footer>\n"
+        + ('<p class="reading" id="reading-foot" hidden><a href="#">Change how it\'s read</a></p>\n' if change else "")
+        + "</footer>\n"
     )
 
 

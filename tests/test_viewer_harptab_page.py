@@ -120,7 +120,8 @@ def test_a_tab_in_harptabs_coms_own_notation_has_its_legend_and_what_harptabs_co
     # as harptabs.com writes a count under a thousand: 400, never "0k"
     assert text_of(page(facts={"views": 400}), "legend").endswith("together · 400 views")
     assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("together")
-    assert "Read as" not in page() and 'id="reading-src"' not in page()
+    assert "Read as" not in re.search(r'<header class="head">.*?</header>', page(), re.S).group(0)
+    assert '<span class="src" id="reading-src">' not in page()
     # served, a link at the foot changes how it is read (harptab.js shows it): from a file, none
     assert ('<p class="reading" id="reading-foot" hidden><a href="#">Change how it\'s read</a></p>' in page())
 

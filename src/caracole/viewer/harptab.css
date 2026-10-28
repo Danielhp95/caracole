@@ -50,6 +50,8 @@ html:not([data-ready]) .rp { display: none; }
   font-size: .78em; }
 .tab-legend .lgh { margin: 0 0 .2em; font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .tab-legend .l { margin: 0; }
+.legend a.src { color: inherit; text-decoration: underline; text-underline-offset: .15em; }
+.foot .reading a { color: var(--muted); }
 .legend code.sy { padding: 0 .25em; border-radius: 4px; background: var(--raised); color: var(--text);
   font: .95em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 /* A tab caracole can't read: its text as written, in the viewer's tab box, wrapping rather than widening a phone. */

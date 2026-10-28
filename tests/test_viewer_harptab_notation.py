@@ -338,17 +338,21 @@ def test_a_pin_names_a_preset_the_tabs_own_legend_or_a_preset_changed():
 
 
 def test_a_pinned_reading_is_read_whatever_the_others_score():
-    from caracole.viewer.harptab import pinned
+    from caracole.viewer.harptab import TAB_Q, pinned
 
     found = parse(without_legend(SPOKEY), notation=pinned("signs", SPOKEY))
     assert found.convention == "signs" and found.reading.source == "pinned" and found.reading.runner is None
     assert found.reading.symbols()[0] == ("4", "blow")
+    # drawn though caracole would never guess it (its Q under TAB_Q): the owner's choice; each row it reads with
+    # low confidence is its text as written still
+    assert found.reading.q < TAB_Q and found.reading.confident and found.readable
+    assert [r.trusted for r in found.rows()] == [False, False, True, False, False, False, False, False, False]
 
 
 @pytest.mark.parametrize(("spec", "said"), [
     ("staff", "signs, brackets, letters, signs after, barrett or legend"),
-    ({"as": "staff"}, "signs, brackets, letters, signs after, barrett"),
-    ({"as": "legend"}, "signs, brackets, letters, signs after, barrett"),
+    ({"as": "staff"}, "signs, brackets, letters, signs after or barrett"),
+    ({"as": "legend"}, "signs, brackets, letters, signs after or barrett"),
     ({"*": "squeak"}, "what a symbol means"),
     ({"": "bend"}, "a symbol"),
     ({"*": 2}, "what a symbol means"),
@@ -366,14 +370,16 @@ def test_every_reading_a_tab_weighs_best_first_each_as_a_pin_writes_it():
 
     found = readings(SPOKEY)
     assert found[0] == parse(SPOKEY).reading
-    assert [spec_of(r) for r in found] == ["legend", "letters", "brackets", "signs", "signs after", "barrett"]
+    assert [spec_of(r) for r in found] == ["legend", "letters", "brackets", "signs after", "barrett", "signs"]
     assert [r.score for r in found] == sorted((r.score for r in found), reverse=True)
     starred = "-1 -2 -3* -3*\nla la la la\n"
     diatonic = readings(starred, harp="Diatonic")
     assert spec_of(diatonic[0]) == {"as": "signs", "*": "bend"}  # the chip's star bends
     assert "signs" in [spec_of(r) for r in diatonic]
-    # two notations that read every hole alike are one reading: the commoner's
-    assert [spec_of(r) for r in readings("4 5 6 -6\nla la la la\n")][:2] == ["signs", "signs after"]
+    # two notations that read every hole alike and say so alike are one reading: here brackets' and signs after's
+    # (4 5 6 blown, "-" read by neither), the commoner's
+    plain = [spec_of(r) for r in readings("4 5 6 -6\nla la la la\n")]
+    assert plain[:2] == ["signs", "brackets"] and "signs after" not in plain
 
 
 def test_harptabs_coms_own_notation_guessed_is_the_standard_reading():
