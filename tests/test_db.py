@@ -656,3 +656,67 @@ def test_an_artist_no_row_has_any_longer_leaves_the_index_of_their_words(conn):
     assert by_word("skynyrd") == ["lynyrd-skynyrd-band"] and doc("lynyrd") == 1
     assert conn.execute("SELECT COUNT(*) FROM ug_artists").fetchone()[0] == 2  # Sam Grow's and the band's
     assert conn.execute("INSERT INTO ug_artists_fts(ug_artists_fts) VALUES ('integrity-check')") is not None
+
+
+def by_words(c, match):
+    """The rows of ug_index whose keys hold the FTS5 query ``match`` (each word in quotes) by word, by tab id."""
+    return [tuple(r) for r in c.execute(
+        "SELECT tab_id, artist_key, song_key FROM ug_index WHERE tab_id IN "
+        "(SELECT rowid FROM ug_index_fts WHERE ug_index_fts MATCH ?) ORDER BY tab_id", (match,))]
+
+
+def key_words(c):
+    return sorted(r[0] for r in c.execute("SELECT term FROM ug_key_words"))
+
+
+def test_a_version_11_database_gains_its_rows_by_word_and_the_words_of_its_keys(tmp_path):
+    # As harptabs.com's artist pages left it: schema 11, with index rows.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 12)) + "\nPRAGMA user_version = 11;")
+    old.executemany("INSERT INTO ug_index VALUES (?, ?, ?, 'chords', '1', 'x', '')",
+                    [(1, "eagles", "hotel-california"), (2, "eagles", "hotel-california-live"),
+                     (3, "led-zeppelin", "stairway-to-heaven"), (4, "oasis", "wonderwall")])
+    old.commit()
+    tables = {t: old.execute(f"SELECT * FROM {t} ORDER BY 1").fetchall() for t in ("ug_index", "ug_keys", "ug_artists")}
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
+    for table, rows in tables.items():
+        assert [tuple(r) for r in c.execute(f"SELECT * FROM {table} ORDER BY 1")] == rows, table
+    # Every row by the words of its artist and its title, together: a title's word and its artist's in one query.
+    assert by_words(c, '"hotel" AND "california"') == [(1, "eagles", "hotel-california"),
+                                                      (2, "eagles", "hotel-california-live")]
+    assert by_words(c, '"wonderwall" AND "oasis"') == [(4, "oasis", "wonderwall")]
+    assert by_words(c, '"heaven" AND "oasis"') == []
+    # And the words of every key, once each: what a close spelling is looked for among.
+    assert key_words(c) == ["california", "eagles", "heaven", "hotel", "led", "live", "oasis", "stairway", "to",
+                            "wonderwall", "zeppelin"]
+    assert c.execute("INSERT INTO ug_index_fts(ug_index_fts) VALUES ('integrity-check')") is not None
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v11.bak"), "ug_key_words") == ([], 11)
+
+
+def test_the_rows_by_word_follow_every_row_a_sitemap_adds_renames_or_closes(conn):
+    from datetime import UTC, datetime
+
+    from caracole.ug.index import upsert_rows
+
+    when = datetime(2026, 10, 27, tzinfo=UTC)
+    upsert_rows(conn, [(1, "oasis", "wonderwal", "chords", "oasis/wonderwal-chords-1"),
+                       (2, "eagles", "hotel-california", "chords", "eagles/hotel-california-chords-2")], "1", when)
+    assert by_words(conn, '"wonderwal"') == [(1, "oasis", "wonderwal")]
+    # Parsed again under new keys: the row is found by its new words alone.
+    upsert_rows(conn, [(1, "oasis", "wonderwall", "chords", "oasis/wonderwall-chords-1")], "1", when)
+    assert by_words(conn, '"wonderwal"') == [] and by_words(conn, '"wonderwall"') == [(1, "oasis", "wonderwall")]
+    conn.execute("UPDATE ug_index SET artist_key = 'the-eagles' WHERE tab_id = 2")
+    assert by_words(conn, '"eagles" AND "hotel"') == [(2, "the-eagles", "hotel-california")]
+    # A tab closed (ug/index.py deletes its row): found by no word.
+    conn.execute("DELETE FROM ug_index WHERE tab_id = 2")
+    assert by_words(conn, '"hotel"') == []
+    assert conn.execute("INSERT INTO ug_index_fts(ug_index_fts) VALUES ('integrity-check')") is not None
+    # The words of every key a row ever had, the old ones too: a word no row holds any longer matches nothing.
+    assert {"wonderwal", "wonderwall", "eagles", "hotel", "california", "the", "oasis"} <= set(key_words(conn))
+    assert conn.execute("SELECT COUNT(*) FROM ug_key_words").fetchone()[0] == len(key_words(conn))

@@ -21,6 +21,8 @@ Tables (plan §5, plus ``kv``):
   harptabs_fetch.py).
 - ``harptabs_artists`` and ``harptabs_artist_tabs``: the artist pages of harptabs.com caracole read, and the
   tabs each listed, for searches (schema 11, harptabs_index.py).
+- ``ug_index_fts`` and ``ug_key_words``: every row of ``ug_index`` by the words of its keys, and every
+  word of its keys once, for the close spellings of a title (schema 12, search.py).
 - ``versions``: every sheet or tab version seen for a song, and the version of each Guitar Pro
   file or score it keeps (gtptabs.com's, your inbox's).
 - ``files``: files kept in the library, with their SHA-256.
@@ -41,7 +43,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -414,10 +416,55 @@ CREATE INDEX IF NOT EXISTS harptabs_artist_tabs_song ON harptabs_artist_tabs(son
 CREATE INDEX IF NOT EXISTS harptabs_artist_tabs_tab ON harptabs_artist_tabs(tab_id);
 """
 
+# A key's words as a JSON array, for json_each: a key is words joined by hyphens (ug/sitemap.py), so the hyphens
+# become the array's commas; a key that would make no JSON array (a quote in it) gives no word.
+_KEY_WORDS = """json_each(CASE WHEN json_valid('["' || replace({key}, '-', '","') || '"]')
+  THEN '["' || replace({key}, '-', '","') || '"]' ELSE '[]' END)"""
+
+# Close spellings of a title (search.py ``suggest_titles``): every row of ug_index by the words of its artist key and
+# its song key together (ug_index_fts: unicode61 splits a key at its hyphens), so that a title's words, and an artist's
+# beside them, find its rows without reading 1.4 million ("hotel" and "california"; "wonderwall" and "oasis"). Its
+# content is ug_index's own (content='ug_index'): the index holds the words alone, detail=none and no column sizes,
+# about 15 MB on the full index, and follows every row inserted, re-keyed or deleted. And ug_key_words, the words of
+# every key ug_keys holds, once each, which a close spelling of a query's word is looked for among (by its first letter
+# and its length: a B-tree's range, where the index's vocabulary would count every word's rows). It follows ug_keys,
+# which only grows (schema 5): a word no row holds any longer stays and matches nothing, and the table is the words in
+# the order they came, so that a reader keeping them (search.py ``_Vocabulary``) reads only those added since. Both are
+# made here from the rows the index holds: about 10 s for 1.4 million rows.
+_SCHEMA_V12 = """
+CREATE VIRTUAL TABLE IF NOT EXISTS ug_index_fts USING fts5(
+  artist_key, song_key, content='ug_index', content_rowid='tab_id', tokenize='unicode61', detail='none', columnsize=0
+);
+CREATE TRIGGER IF NOT EXISTS ug_index_fts_added AFTER INSERT ON ug_index BEGIN
+  INSERT INTO ug_index_fts(rowid, artist_key, song_key) VALUES (new.tab_id, new.artist_key, new.song_key);
+END;
+CREATE TRIGGER IF NOT EXISTS ug_index_fts_gone AFTER DELETE ON ug_index BEGIN
+  INSERT INTO ug_index_fts(ug_index_fts, rowid, artist_key, song_key)
+  VALUES ('delete', old.tab_id, old.artist_key, old.song_key);
+END;
+CREATE TRIGGER IF NOT EXISTS ug_index_fts_changed AFTER UPDATE OF artist_key, song_key ON ug_index
+WHEN new.artist_key IS NOT old.artist_key OR new.song_key IS NOT old.song_key BEGIN
+  INSERT INTO ug_index_fts(ug_index_fts, rowid, artist_key, song_key)
+  VALUES ('delete', old.tab_id, old.artist_key, old.song_key);
+  INSERT INTO ug_index_fts(rowid, artist_key, song_key) VALUES (new.tab_id, new.artist_key, new.song_key);
+END;
+INSERT INTO ug_index_fts(ug_index_fts) VALUES ('rebuild');
+CREATE TABLE IF NOT EXISTS ug_key_words (
+  id INTEGER PRIMARY KEY,
+  term TEXT NOT NULL UNIQUE
+);
+CREATE TRIGGER IF NOT EXISTS ug_keys_words AFTER INSERT ON ug_keys BEGIN
+  INSERT OR IGNORE INTO ug_key_words(term) SELECT value FROM """ + _KEY_WORDS.format(key="new.key") + """
+  WHERE value != '';
+END;
+INSERT OR IGNORE INTO ug_key_words(term) SELECT DISTINCT value FROM ug_keys, """ + _KEY_WORDS.format(key="ug_keys.key") + """
+WHERE value != '' ORDER BY value;
+"""
+
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
-               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11}
+               7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11, 12: _SCHEMA_V12}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):
