@@ -2,21 +2,25 @@
   "use strict";
   // The overlay: the rail on the left of a wide screen (from 1200 px, viewer.css), with two tabs, Guitar and
   // Harmonica, for the sheet viewer and a songbook (viewer.js) and a harmonica tab's page (harptab.js), which inline
-  // it before their own script. Every element is made with createElement, createElementNS and textContent; nothing is
-  // loaded, nothing sounds, and nothing here computes music theory: each page hands it what Python made (page.py,
-  // harp.py, harptab_page.py), looked up for where the song is played.
+  // it before their own script; narrower, the phone's sheet, the same overlay slid up from the bar (its neck button)
+  // over half the screen, or the whole of it, a dialog that is not modal. Every element is made with createElement,
+  // createElementNS and textContent; nothing is loaded, nothing sounds, and nothing here computes music theory: each
+  // page hands it what Python made (page.py, harp.py, harptab_page.py), looked up for where the song is played.
   //
   // window.caracoleOverlay:
   //   NECKS                    the browser's name for whether the rail shows ("shown", "hidden"): the screen's
-  //                            choice, kept once for every page that has the rail
+  //                            choice, kept once for every page that has the rail; the sheet has no such choice
   //   keyNeck(spec)            the key's neck, a <section class="kn">: its scale, or its pentatonic box, across 15
   //                            frets, the tonic marked; ``spec``: {name ("Am"), tonic (its pitch class), tonicName,
   //                            scale and pentatonic (steps above the tonic), pentaName ("minor pentatonic"), tuning
   //                            (each open string, low first), box (the pentatonic shown), onSwitch(which): "scale"
   //                            or "penta", pressed}
   //   rail(aside, page)        draws the overlay into ``aside`` (the page's <aside class="necks">) on each draw(),
-  //                            the tab shown kept from one draw to the next, the first by default; the page shows
-  //                            or hides the aside itself. ``page``:
+  //                            the tab shown kept from one draw to the next, the first by default, as the rail or
+  //                            as the sheet (page.sheet()); the page shows or hides the aside itself. Returns
+  //                            {draw(), tab() (the tab shown), empty() (nothing in it, the rail's again: as the
+  //                            page hides it), landing() (where the focus goes as the sheet opens: the tab shown,
+  //                            else its handle)}. ``page``:
   //     first                  "guitar" or "harmonica": the tab a page opens on, first in the control too
   //     guitar()               the Guitar tab, or null for none (a harmonica tab's page with no sheet): {name (the
   //                            instrument whose necks, in short: "Guitar", "Ukulele", "Baritone"), strings, key (a
@@ -37,6 +41,11 @@
   //     pick(name, p)          position ``p`` of the chord ``name`` picked, on its neck or in its legend
   //     chooseHarp(offset)     a harp tapped on the circle
   //     hide()                 the rail's Hide pressed
+  //     sheet()                null for the rail; "half" or "full" for the phone's sheet, open at half the screen or
+  //                            the whole of it: drawn with its handle (half to whole and back) and ✕ in place of
+  //                            Hide, and named a dialog ("Necks and harps", data-sheet: viewer.css)
+  //     grow()                 the sheet's handle pressed
+  //     close()                the sheet's ✕ pressed
   //   The page draws the rail again after each of these (draw()). A step is a note as semitones above the tonic,
   //   named names[(tonic + step) % 12]; a text, a list of strings and steps.
   const NS = "http://www.w3.org/2000/svg";
@@ -463,9 +472,12 @@
     }
   };
 
-  // --- the rail -----------------------------------------------------------------------------------------------------
+  // --- the rail, or the phone's sheet -------------------------------------------------------------------------------
+  const SHEET = "Necks and harps";  // the sheet's name, as the bar's neck button says it
   const rail = (aside, page) => {
     const ui = { tab: page.first === "harmonica" ? "harmonica" : "guitar", hk: 0, draw: () => draw() };
+    const railName = aside.getAttribute("aria-label") || "Chord necks";
+    const sheetNow = () => (typeof page.sheet === "function" ? page.sheet() : null);
     let slim = null, circle = null, head = null;
     // The tabs, in the page's order: Guitar named for the instrument whose necks it shows.
     const tabsOf = (guitar) => {
@@ -474,9 +486,18 @@
       return page.first === "harmonica" ? both.reverse() : both;
     };
     // The rail's head, kept at its top as it scrolls: the tabs (or, with one, its name) and Hide; under it, once the
-    // circle has scrolled out of the rail, the slim bar naming the harp, with Change harp.
-    const headOf = (tabs, m) => {
+    // circle has scrolled out of the rail, the slim bar naming the harp, with Change harp. The sheet's has its handle
+    // across its top, which reaches down under the tabs' row (viewer.css), and ✕ in place of Hide.
+    const headOf = (tabs, m, how) => {
       const box = el("header", "nk-head");  // not a div: the chords' necks are the rail's divs
+      if (how) {
+        const handle = el("button", "ov-handle", box);
+        handle.type = "button";
+        handle.setAttribute("aria-label", "Whole screen");
+        handle.setAttribute("aria-pressed", how === "full" ? "true" : "false");
+        handle.setAttribute("aria-controls", aside.id);
+        el("span", "ov-grip", handle).setAttribute("aria-hidden", "true");
+      }
       const row = el("div", "nk-row", box);
       if (tabs.length > 1) {
         const control = el("div", "seg ov-tabs", row);
@@ -496,11 +517,17 @@
       } else {
         el("p", "nk-title", row, tabs.length ? tabs[0][1] : "");
       }
-      const hide = el("button", "nk-hide", row);
-      hide.type = "button";
-      hide.setAttribute("aria-label", "Hide chord necks");
-      hide.setAttribute("aria-controls", aside.id);
-      svg("path", { d: SIDEBAR, "fill-rule": "evenodd" }, svg("svg", { viewBox: "0 0 16 16", "aria-hidden": "true" }, hide));
+      if (how) {
+        const close = el("button", "x ov-close", row, "×");
+        close.type = "button";
+        close.setAttribute("aria-label", "Close");
+      } else {
+        const hide = el("button", "nk-hide", row);
+        hide.type = "button";
+        hide.setAttribute("aria-label", "Hide chord necks");
+        hide.setAttribute("aria-controls", aside.id);
+        svg("path", { d: SIDEBAR, "fill-rule": "evenodd" }, svg("svg", { viewBox: "0 0 16 16", "aria-hidden": "true" }, hide));
+      }
       if (ui.tab === "harmonica" && m && m.key) {
         const clip = el("div", "ov-clip", box);
         slim = el("div", "ov-slim", clip);
@@ -525,21 +552,33 @@
       slim.classList.toggle("on", on);
       slim.inert = !on;
     };
+    // The head's own controls, by the name the focus is kept under: Hide is the rail's, ✕ and the handle the
+    // sheet's, each of the rail's or the sheet's head standing for the other's as the window crosses 1200 px.
+    const OWN = { hide: ".nk-hide", close: ".ov-close", handle: ".ov-handle" };
+    const ownOf = (node) => Object.keys(OWN).find((k) => node.matches(OWN[k])) || null;
     // Drawn anew: the focus goes back to the control it was on (its group's checked one: the shape, the harp or the
     // tab now chosen), and the rail stays where it was scrolled to, unless the tab changed.
     const draw = (fresh) => {
       const active = aside.contains(document.activeElement) ? document.activeElement : null;
       const holder = active && active.closest("[data-f]");
-      const back = holder ? holder.dataset.f : active && active.classList.contains("nk-hide") ? "hide"
+      const back = holder ? holder.dataset.f : active && ownOf(active) ? ownOf(active)
         : active && active.classList.contains("ov-change") ? "ring" : null;
       const scrolled = aside.scrollTop;
       const guitar = page.guitar();
       const tabs = tabsOf(guitar);
       if (!tabs.some((t) => t[0] === ui.tab)) ui.tab = tabs[0][0];
       const m = ui.tab === "harmonica" ? page.harmonica() : null;
+      const how = sheetNow();
+      if (how) {
+        aside.dataset.sheet = how;
+        aside.setAttribute("role", "dialog");
+        aside.setAttribute("aria-label", SHEET);
+      } else {
+        unmark();
+      }
       slim = circle = null;
       aside.textContent = "";
-      head = aside.appendChild(headOf(tabs, m));
+      head = aside.appendChild(headOf(tabs, m, how));
       const pane = el("div", "ov-pane", aside);
       pane.id = aside.id + "-pane";
       pane.dataset.tab = ui.tab;
@@ -553,11 +592,22 @@
       aside.scrollTop = fresh ? 0 : scrolled;
       slide();
       if (back) {
-        const to = back === "hide" ? aside.querySelector(".nk-hide")
+        const to = own.call(OWN, back) ? aside.querySelector(OWN[back]) || aside.querySelector(".nk-hide, .ov-close")
           : aside.querySelector('[data-f="' + (window.CSS && CSS.escape ? CSS.escape(back) : back) + '"]');
         const one = to && (to.querySelector('[aria-checked="true"], [aria-selected="true"], [aria-pressed="true"]') || to);
         if (one && typeof one.focus === "function") one.focus({ preventScroll: true });
       }
+    };
+    // As the rail again, with nothing in it: as the page hides it.
+    const unmark = () => {
+      delete aside.dataset.sheet;
+      aside.removeAttribute("role");
+      aside.setAttribute("aria-label", railName);
+    };
+    const empty = () => {
+      slim = circle = head = null;
+      aside.textContent = "";
+      unmark();
     };
     const showTab = (id) => {
       if (id === ui.tab) return;
@@ -570,6 +620,14 @@
       if (!target) return;
       if (target.closest(".nk-hide")) {
         page.hide();
+        return;
+      }
+      if (target.closest(".ov-close")) {
+        page.close();
+        return;
+      }
+      if (target.closest(".ov-handle")) {
+        page.grow();
         return;
       }
       const tab = target.closest("[role=tab]");
@@ -625,7 +683,8 @@
         page.chooseHarp(Number(next.dataset.offset));
       }
     });
-    return Object.freeze({ draw: () => draw(false), tab: () => ui.tab });
+    return Object.freeze({ draw: () => draw(false), tab: () => ui.tab, empty,
+      landing: () => aside.querySelector('[role=tab][aria-selected="true"]') || aside.querySelector(".ov-handle") || null });
   };
 
   window.caracoleOverlay = Object.freeze({ NECKS, keyNeck, rail });

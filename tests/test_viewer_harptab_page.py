@@ -141,6 +141,7 @@ def test_a_tab_it_cant_read_is_its_text_as_written_never_an_error():
     assert text_of(html, "facts") == "Harmonica tab, as its tabber wrote it: caracole can't read its notation."
     assert 'class="h"' not in html and 'class="rp"' not in html
     assert 'id="h-up"' not in html and 'id="notes"' not in html and 'id="size"' in html and 'id="scroll"' in html
+    assert 'id="necks-toggle"' in html and 'id="necks-open"' in html  # the overlay's, the rail's and the sheet's
     data = data_of(html)
     assert "groups" not in data and "rows" not in data
     assert "as its tabber wrote it.</p>" in html and "placed each hole" not in html

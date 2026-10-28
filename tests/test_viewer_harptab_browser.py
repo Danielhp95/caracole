@@ -317,11 +317,11 @@ def test_the_rail_hidden_is_the_screens_choice_here_too(tmp_path):
     assert again == [True, "#necks=0", "necks-toggle"]
 
 
-def test_on_a_phone_there_is_no_overlay(tmp_path):
+def test_on_a_phone_the_overlay_waits_for_the_bars_neck(tmp_path):
     with opened(tmp_path, with_sheet(tmp_path)) as b:
         found = b.js("[document.getElementById('necks').hidden, document.getElementById('necks-toggle').hidden, "
-                     "document.documentElement.scrollWidth]")
-    assert found == [True, True, 390]
+                     "document.getElementById('necks-open').hidden, document.documentElement.scrollWidth]")
+    assert found == [True, True, False, 390]  # its sheet's tests are test_viewer_overlay_sheet.py's
 
 
 def test_served_with_no_storage_the_screens_choices_go_to_the_tabs_page_and_back(tmp_path):

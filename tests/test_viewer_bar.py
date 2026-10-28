@@ -1,7 +1,8 @@
 """caracole.viewer: the bar at the foot of the sheet viewer (page.py ``_CONTROLS``, viewer.js).
 
-[necks] [− key +] [guitar] [Aa] [▶] [⋯]: from 1200 px, the rail of chord necks shown or hidden (its tests are
-test_viewer_necks.py's); the song a semitone down or up, with its key in short; the strip of
+[necks] [− key +] [neck] [guitar] [Aa] [▶] [⋯]: from 1200 px, the rail of chord necks shown or hidden (its tests are
+test_viewer_necks.py's); the song a semitone down or up, with its key in short; below 1200 px, the overlay's sheet up
+or down (test_viewer_overlay_sheet.py's); the strip of
 the song's chord shapes, shown or hidden; the text size; scrolling by itself; and the rest of the settings. It slides away as you scroll down, and comes
 back when you scroll up, tap the page or reach the end. The tests that scroll and tap run in a
 Chromium of their own on real time (helpers/browser.py's ``Browser``).
@@ -96,7 +97,8 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     controls = html[start:html.index('<div class="pill"')]
     # In the order a keyboard reaches them, each named for a screen reader.
     assert re.findall(r'<button type="button"[^>]*id="([^"]+)"[^>]*aria-label="([^"]*)"', controls) == [
-        ("necks-toggle", "Chord necks"), ("t-down", "Transpose down a semitone"), ("t-up", "Transpose up a semitone"), ("shapes", "Chord shapes"),
+        ("necks-toggle", "Chord necks"), ("t-down", "Transpose down a semitone"), ("t-up", "Transpose up a semitone"),
+        ("necks-open", "Necks and harps"), ("shapes", "Chord shapes"),
         ("size", "Text size"),
         ("smaller", "Smaller text"), ("bigger", "Bigger text"), ("scroll", "Scroll by itself"),
         ("more", "More settings")]
@@ -107,6 +109,9 @@ def test_the_bar_is_on_the_page_hidden_until_the_script_runs():
     assert re.search(r'<span class="sizes" id="sizes" role="group" aria-label="Text size" hidden>', controls)
     assert '<output id="fs-now">18 px</output>' in controls
     assert re.search(r'id="more"[^>]*aria-haspopup="dialog" aria-controls="panel" aria-expanded="false"', controls)
+    # The neck opens the overlay's sheet, a dialog, below 1200 px (the script shows it there)
+    assert re.search(r'id="necks-open" hidden aria-label="Necks and harps" aria-haspopup="dialog" aria-controls="necks"'
+                     r' aria-expanded="false"', controls)
     # The guitar shows the strip of chord shapes, or hides it: a toggle, a tool like Aa and ⋯, its icon drawn.
     shapes = re.search(r'<button type="button" class="tool shapes" id="shapes"[^>]*>(.*?)</button>', controls)
     assert shapes and 'aria-pressed="false" aria-controls="strip"' in shapes.group(0)
@@ -140,7 +145,8 @@ def test_the_bar_says_the_key_in_short_and_a_screen_reader_hears_it_whole(tmp_pa
     page = tmp_path / "Artist" / "Title" / "sheet.html"
     page.parent.mkdir(parents=True)
     page.write_text(build_viewer(cho), encoding="utf-8")
-    dom = browser.dump_dom(page.as_uri() + fragment, (390, 844), hide_scrollbars=True)  # a phone's, over the page
+    # A wide phone's, sideways: room for all of it beside the neck and the guitar (the fit test has the narrow ones)
+    dom = browser.dump_dom(page.as_uri() + fragment, (480, 844), hide_scrollbars=True)
     assert re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)  # there once the script ran
     found = re.search(r'<output class="now" id="key-now"[^>]*><span class="k" aria-hidden="true">([^<]*)</span>'
                       r'<span class="d" aria-hidden="true">([^<]*)</span><span class="vh" id="key-full">([^<]*)</span>',
@@ -158,7 +164,7 @@ def test_a_sheet_without_chords_keeps_the_text_size_and_the_scrolling(tmp_path):
     assert 'data-ready="1"' in dom and re.search(r'<div class="bar" id="bar"(?![^>]*hidden)', dom)
     # Nothing to transpose, no shapes and no other setting: no key, no guitar and no ⋯, but Aa and ▶.
     assert re.search(r'id="keys"[^>]*hidden', dom) and re.search(r'id="more"[^>]*hidden', dom)
-    assert re.search(r'id="shapes"[^>]*hidden', dom)
+    assert re.search(r'id="shapes"[^>]*hidden', dom) and re.search(r'id="necks-open"[^>]*hidden', dom)  # no overlay
     assert not re.search(r'id="size"[^>]*hidden', dom) and not re.search(r'id="scroll"[^>]*hidden', dom)
 
 
@@ -175,9 +181,10 @@ def test_minus_and_plus_transpose_a_semitone_at_a_time(tmp_path):
         b.click("#t-down")
         down = bar(b)
     assert (before["main"], before["chord"], before["hash"]) == ("G", "G", "")
-    assert (up["main"], up["sub"], up["chord"], up["hash"]) == ("Ab", "shapes · capo 2 · +1", "Ab", "#t=1")
+    # At 390 px, beside the neck and the guitar, the capo and the transposition (a screen reader hears it whole)
+    assert (up["main"], up["sub"], up["chord"], up["hash"]) == ("Ab", "capo 2 · +1", "Ab", "#t=1")
     assert up["full"] == "Ab shapes · capo 2 · sounds Bb · +1"
-    assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "shapes · capo 2 · −1"
+    assert down["hash"] == "#t=-1" and down["main"] == down["chord"] == "F#" and down["sub"] == "capo 2 · −1"
     assert not up["panel"] and not down["panel"] and up["where"] == down["where"] == "shown"  # nothing opened
 
 
@@ -436,7 +443,8 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
     end = """(() => { scrollTo(0, document.documentElement.scrollHeight);
       const last = [...document.querySelectorAll('.foot > *')].pop().getBoundingClientRect();
       return last.bottom <= document.querySelector('#bar').getBoundingClientRect().top; })()"""
-    for width, height, mobile in ((390, 844, True), (1280, 800, False), (360, 740, True), (320, 640, True)):
+    for width, height, mobile in ((390, 844, True), (1280, 800, False), (768, 1024, True), (360, 740, True),
+                                  (320, 640, True)):
         with viewer(tmp_path, written(tmp_path, UG_CHO, name=f"W{width}") + "#mode=mixolydian&t=1", width=width,
                     height=height, mobile=mobile) as b:
             m = b.js(measure)
@@ -445,14 +453,16 @@ def test_the_bar_fits_a_phone_and_a_desktop_and_the_song_ends_above_it(tmp_path)
         rail = 345 if width >= 1200 else 0  # from 1200 px the rail of necks is on its left
         assert m["left"] == rail and m["right"] == m["client"] and m["page"] <= width, (width, m)
         assert m["smallest"] >= 44 and m["row"], (width, m)  # one row, each a thumb's target, none over another
-        tools = ["t-down", "t-up", "shapes", "size", "scroll", "more"]
-        assert m["ids"] == ["necks-toggle"] * (width >= 1200) + tools, (width, m)  # the rail's toggle on its side
+        # The rail's toggle on its side from 1200 px; narrower, the neck after the key, the guitar beside it from 360 px
+        tools = (["necks-toggle", "t-down", "t-up", "shapes"] if width >= 1200
+                 else ["t-down", "t-up", "necks-open"] + ["shapes"] * (width >= 360))
+        assert m["ids"] == tools + ["size", "scroll", "more"], (width, m)
         assert m["inside"], (width, m)  # the key's lines in its box, which is no taller than the buttons
-        if width >= 390:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1")
+        if width >= 768:  # the longest key in short, whole ("Ab mixolydian" over "shapes · capo 2 · +1")
             assert m["main"] and m["sub"] and m["said"] == ["shapes · capo 2 · +1"], (width, m)
             assert m["size"] == 16, (width, m)
-        elif width >= 360:  # with no room for "shapes", the capo and the transposition, whole; the key a little smaller
-            assert m["main"] and 12 <= m["size"] < 16, (width, m)
+        elif width >= 390:  # with no room for "shapes", the capo and the transposition, whole; the key smaller, then cut
+            assert m["size"] == 12, (width, m)
             assert m["sub"] and m["said"] == ["capo 2 · +1"], (width, m)
         else:  # with no room for both on one line, the capo over the transposition, each whole
             assert m["sub"] and m["said"] == ["capo 2", "+1"], (width, m)
