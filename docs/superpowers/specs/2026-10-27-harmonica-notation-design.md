@@ -30,19 +30,22 @@ hole or several; between-symbols join two), cached by the notation, in place of 
 `....`, `___`, `(hold)`), bars, repeat marks, a leading label.
 
 The presets, in the order of how common they are on harptabs.com (the corpus of 146 tabs: signs 104, brackets 13,
-letters 2, suffix signs 1, Barrett none):
+letters 2, signs after 1, Barrett none):
 
 | Preset | Blow | Draw | Bend | Besides | Who writes it |
 |---|---|---|---|---|---|
-| `signs` | `4`, `+4` | `-4` `−4` `–4` | `'` `’` `` ` `` `b` after, `b` before | `o` overblow, `<` `*` slide, `( )` chord, `{ }` shake, `[ ]` split | harptabs.com's key, harmonica.com |
-| `brackets` | `4` | `(4)`, every hole inside `( )` | `'` `b` after | `-` joins | Spanish tabs (LaCuerda's "aspirar") |
+| `signs` | `4`, `+4` | `-4` `−4` `–4` | `'` `’` `` ` `` `b` after, `"` `”` two, `b` before | `o` overblow, `<` `*` slide, `( )` chord, `{ }` shake, `[ ]` split | harptabs.com's key, harmonica.com |
+| `brackets` | `4` | `(4)`, every hole inside `( )` | `'` `b` after, `"` two, after the brackets too | `-` joins | Spanish tabs (LaCuerda's "aspirar") |
 | `letters` | `4b` `4B` | `4d` `4D` | `*` `'` after | `-` joins, `7,8B` together; a hole with no letter is unread | Harp-L, Harmonica Academy, Heart of Gold; Spokey Dokey |
-| `suffix signs` | `4+` | `4-` | `'` after | | Wikibooks' two-sign system |
-| `barrett` | `4+` | `4` | `'` `’` after | | David Barrett, Mel Bay |
+| `signs after` | `4+`, `4` | `4-` | `'` `"` after | never a sign before a hole (`6-7`), a hold's (`6--`) or glued holes' (`456-`) | Wikibooks' two-sign system |
+| `barrett` | `4+` | `4` | `'` `’` `"` after | | David Barrett, Mel Bay |
 
-harp-spellings (steps 1 and 2) adds fixed spellings (`"` two bends, `-b3`, `(3)b`, trailing `+`/`-`, dots as
-durations) and the harp chip; they drop into these tables as symbols, and `-b3` and `(3)b` already fall out of the
-generic tokenizer (before-symbols in any order; after-symbols on a bracket).
+harp-spellings (steps 1 and 2, merged before this lane finished) dropped into these tables: `"` two bends a symbol of
+every preset; `-b3` and `(3)b` fall out of the generic tokenizer (before-symbols in any order, after-symbols on a
+lone hole's brackets); its signs after the hole are the `signs after` preset; a single dot a hold, `DOTS`, added to
+every candidate in a tab that writes a dot before a hole; a time (`Time: 3/4`, `1:45`) never holes, in every
+notation; the chip read as it reads it, Diatonic one more candidate, `signs` with `*` a bend (`STAR_BENDS`), ordered
+before `signs` there.
 
 ## The score
 
@@ -57,8 +60,10 @@ dialect:
   tabber's own slip (`1**d`) costs a little and blocks nothing.
 
 Ties go to the commonest notation. The margin is the winner's score over the best candidate that reads the tab
-differently (two notations that read every hole alike are no rival: `signs` and `brackets` on a tab with no
-brackets). Two thresholds, set from the corpus so that no tab read fully today reads worse:
+differently (two notations that read every hole alike are no rival: `signs` and `brackets` on a tab of bare numbers).
+Two thresholds, set from the corpus so that no tab read fully today reads worse (`TAB_Q` 0.5: the lowest Q of a
+diatonic tab of the 146 is 0.63; `MARGIN` 0.05; `ROW_TRUST` 0.5, under the weakest row of a tab read fully today,
+0.6, a tabber's own `-5b` twice; `LEGEND_WEIGHT` 0.2):
 
 - the tab is drawn when Q reaches `TAB_Q`, else it is its text as written, as an unreadable tab is today;
 - a notation less common than another that reads the tab differently must beat it by `MARGIN`, else the evidence for

@@ -2813,15 +2813,34 @@ the library page link it, the tab's text beside it.
   in their brackets ("(4 5)" a chord, "{−4 −5}" a shake, "[−2 −5]" a split). A
   phone wraps a line between its words, never parting a hole from its
   syllable. Rows played alone, later verses sung to the same tune and the
-  tabber's notes come as the tab gives them. caracole reads what harptabs.com's
-  tabbers write ("-4", "4D", "-3b", "b-3", "-b3", '-3"' bent a whole step,
-  "(5)" for a draw in a tab that writes no "-", "(3)b", "7,8B"…), and what a
-  tab writes its own way: "6+ 6-" where no sign comes before a hole, a single
-  dot that lengthens a note where one comes before a hole (". 4 5 ."), "-3*" a
-  bend where harptabs.com calls the harp diatonic. A time ("Time: 3/4",
-  "1:45") is never holes. A tab in a notation of its tabber's own, or for a
-  chromatic harmonica (harptabs.com says so, or the tab presses the slide), is
-  its text as written, and the page says so.
+  tabber's notes come as the tab gives them.
+- **The tabbers' notations.** No two tabbers write holes quite alike, so
+  caracole reads each tab in every notation it knows and keeps the one that
+  explains the most of the tab's lines of holes as notes a harmonica plays:
+  harptabs.com's own ("4" blow, "-4" draw, "-3b", "-3'", '-3"' bent a whole
+  step, "b-3", "-b3"), brackets for a draw as Spanish tabs write it ("(5)",
+  "(3)b"), letters ("4B" "5D", or "3b" blow and "3d" draw with "*" bends and
+  "-" between notes run together, as Spokey Dokey's tabber writes), signs
+  after the hole ("6+ 6-"), and David Barrett's (a hole alone drawn, "4+"
+  blown). Where it is close, the commoner notation wins, and an unusual one
+  must win clearly, else the tab is its text as written. A tab's own legend
+  (two or more lines like "b= blow", "(w) = Wah effect", "(x) = aspirar")
+  weighs in, and adds what only it can say: "(w)" a wah, "(h)" a hold; it never
+  overrules a clearly better reading. So does harptabs.com's harp: a tab it
+  calls chromatic is its text as written (caracole knows the ten-hole harp
+  alone), one it calls diatonic may write "-3*" for a bend. A single dot
+  lengthens a note in a tab that writes a dot before a hole (". 4 5 ."), and a
+  time ("Time: 3/4", "1:45") is never holes.
+- **How it was read**, under the harp: "Read as: b blow · d draw · * bend ·
+  - joins · (h) hold · (w) wah, from the tab's own legend", each symbol as the
+  tab writes it, or "Read as: 4 blow · - draw, guessed (0.99)", how surely.
+  What its notation couldn't read stays in its place as written, muted ("$",
+  "(DV)"), never guessed; an effect is a small label on its hole ("wah"),
+  notes run together a ‿ between them; the tab's legend is a block of its own.
+  A line read with little confidence (holes no harp has, or too little of it
+  read) is its text as written, its words under it, in place, and the rest of
+  the tab is drawn; a tab read with little confidence, or for a chromatic
+  harmonica, is all its text as written, and the page says so.
 - **The harp**, in the header and the bar. A tab's holes are the same on any
   harp, and sound in its key: caracole starts on the harp that plays with the
   record, the one that puts the most of the tab's sung notes on the chords the
