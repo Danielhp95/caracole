@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import tempfile
 import time
-from collections.abc import Iterator
+from collections.abc import Iterable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -36,11 +36,11 @@ def written(tmp_path: Path, cho: str, name: str = "Title") -> str:
 
 @contextmanager
 def viewer(tmp_path: Path, url: str, *, width: int = 390, height: int = 844, mobile: bool = True,
-           reduced: bool = False) -> Iterator[Browser]:
+           reduced: bool = False, args: Iterable[str] = ()) -> Iterator[Browser]:
     """The page at ``url`` in a Chromium of its own, ``width`` × ``height`` (``mobile``: a phone's, with
-    touch), once its script ran; ``reduced``: with prefers-reduced-motion."""
+    touch), once its script ran; ``reduced``: with prefers-reduced-motion; ``args``: more of Chromium's switches."""
     with Browser(Path(tempfile.mkdtemp(prefix="profile-", dir=tmp_path)), width=width, height=height,
-                 mobile=mobile) as b:
+                 mobile=mobile, args=args) as b:
         b.send("Emulation.setEmulatedMedia", features=[
             {"name": "prefers-reduced-motion", "value": "reduce" if reduced else "no-preference"}])
         b.open(url)

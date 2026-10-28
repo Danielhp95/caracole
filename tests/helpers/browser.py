@@ -309,10 +309,11 @@ def dump_dom(url: str, size: tuple[int, int], *, hide_scrollbars: bool = False, 
 
 
 class Browser:
-    """One headless Chromium with one page, ``width`` × ``height`` CSS pixels (``mobile``: a phone's)."""
+    """One headless Chromium with one page, ``width`` × ``height`` CSS pixels (``mobile``: a phone's); ``args``, more
+    of Chromium's switches (``--blink-settings=minimumFontSize=40``: every text drawn at least that large)."""
 
     def __init__(self, profile: Path, *, width: int = 1280, height: int = 900, mobile: bool = False,
-                 timeout: float = 30.0):
+                 timeout: float = 30.0, args: Iterable[str] = ()):
         require_in_chromium()
         if CHROMIUM is None:
             raise BrowserError("chromium not found on PATH")
@@ -325,7 +326,7 @@ class Browser:
         os.close(from_child)
         command = [CHROMIUM, "--headless=new", "--mute-audio", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
                    "--no-proxy-server", "--disable-extensions", f"--user-data-dir={profile}", NO_LOOKUPS,
-                   f"--window-size={width},{height}", "--remote-debugging-pipe", "about:blank"]
+                   f"--window-size={width},{height}", *args, "--remote-debugging-pipe", "about:blank"]
         try:
             self._process = subprocess.Popen(
                 ["sh", "-c", f'exec "$@" 3<&{high_in} 4>&{high_out} {high_in}<&- {high_out}>&-', "sh", *command],
