@@ -63,12 +63,13 @@ PAGE_TABS = 50  # the tabs a game page lists; the rest on its next pages
 # The site's instruments, as its shuffle dialog names them on 28 October 2026: what a card's instruments are told
 # from its styles by, for a page that doesn't name them.
 INSTRUMENTS = ("Guitar", "Bass", "Mandolin", "Banjo", "Ukulele")
-# The slugs the sitemaps list are lowercase ASCII letters, digits and hyphens; a URL with anything else in it is no
-# page caracole reads, and never lands in a link it writes.
-_PAGE = re.compile(r"https://(?:www\.)?gametabs\.net/(tabs/([a-z0-9-]{1,200})(?:/([a-z0-9-]{1,200})|\?page=([1-9][0-9]{0,3}))?)")
+# The slugs the sitemaps list are lowercase ASCII letters, digits and hyphens, and an underscore now and then
+# ("exec_chronicle_key", which a key reads as a hyphen); a URL with anything else in it is no page caracole reads, and
+# never lands in a link it writes.
+_PAGE = re.compile(r"https://(?:www\.)?gametabs\.net/(tabs/([a-z0-9_-]{1,200})(?:/([a-z0-9_-]{1,200})|\?page=([1-9][0-9]{0,3}))?)")
 _CHILD = re.compile(r"https://(?:www\.)?gametabs\.net/(sitemap_[1-9][0-9]{0,2})\.xml(?:\.gz)?")
 _REPEAT = re.compile(r"-[0-9]{1,5}$")  # a slug's number: one more tab of a title the site has
-_TAB_HREF = re.compile(r"https://(?:www\.)?gametabs\.net/(tabs/[a-z0-9-]{1,200}/[a-z0-9-]{1,200})/?")
+_TAB_HREF = re.compile(r"https://(?:www\.)?gametabs\.net/(tabs/[a-z0-9_-]{1,200}/[a-z0-9_-]{1,200})/?")
 _COUNT = re.compile(r"(\d+(?:\.\d+)?)\s*([kKmM]?)")
 _SAID = re.compile(r"Tabs:\s*([\d,]+)")
 _RATING = re.compile(r"(\d+(?:\.\d+)?) average fun rating")
@@ -119,10 +120,10 @@ def parse_page_url(url: str) -> IndexRow | None:
         return None
     path, game, slug, page = m.groups()
     if slug is None:
-        key = ug_slug_key(game)
+        key = ug_slug_key(game.replace("_", "-"))
         return IndexRow(path, GAME, game, "", int(page or 1), key, key) if key else None
-    whole = ug_slug_key(slug)
-    key = ug_slug_key(_REPEAT.sub("", slug)) or whole
+    whole = ug_slug_key(slug.replace("_", "-"))
+    key = ug_slug_key(_REPEAT.sub("", slug).replace("_", "-")) or whole
     return IndexRow(path, TAB, game, slug, 0, key, whole) if whole else None
 
 

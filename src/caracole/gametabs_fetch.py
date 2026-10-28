@@ -75,7 +75,7 @@ from caracole.http import (
 )
 from caracole.inbox import GAMETAB_KIND, gametab_number
 from caracole.library import keep_file, write_info
-from caracole.normalize import compact, name_forms
+from caracole.normalize import compact, name_forms, ug_slug_key
 from caracole.overrides import GameTabsPick, Overrides
 from caracole.provider_pass import PassStats, each_song
 from caracole.site_index import Site
@@ -85,7 +85,7 @@ from caracole.versions import upsert_version
 log = logging.getLogger(__name__)
 
 INDEX_MAX_AGE = timedelta(days=30)
-RECHECK_AFTER = timedelta(days=30)  # a song whose candidates were none of its
+RECHECK_AFTER = timedelta(days=30)  # a song none of whose candidates was its own: asked about again after this
 CANDIDATES = 4  # a title's tabs read for one song at most, the most viewed first
 _ACCEPT = (200, 404)  # a 404 is an answer: the tab is gone
 # What follows a game's name in a wanted.txt line that names its music: "Hollow Knight OST", "Celeste (Original
@@ -253,7 +253,8 @@ def fits(song: Song, tab: GameTab) -> bool:
     if not title_key(tab.title) or title_key(tab.title) != title_key(song.title):
         return False
     forms = song_forms(song)
-    theirs = _named([tab.game, *tab.composers]) | ({compact(tab.game_slug)} if tab.game_slug else set())
+    theirs = _named([tab.game, *tab.composers]) | ({compact(ug_slug_key(tab.game_slug.replace("_", "-")))}
+                                                   if tab.game_slug else set())
     return not forms.isdisjoint(theirs)
 
 

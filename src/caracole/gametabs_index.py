@@ -65,7 +65,7 @@ log = logging.getLogger(__name__)
 GAME_MAX_AGE = timedelta(days=30)  # a game page is read again after this
 KEYS_KEY = "gametabs:games:keys"  # the KEY_VERSION the tabs' title keys were made with
 _ACCEPT = (200, 404)  # a 404 is an answer: the game is gone
-_GAME_PATH = re.compile(r"tabs/([a-z0-9-]{1,200})(?:\?page=[1-9][0-9]{0,3})?")
+_GAME_PATH = re.compile(r"tabs/([a-z0-9_-]{1,200})(?:\?page=[1-9][0-9]{0,3})?")
 
 
 @dataclass

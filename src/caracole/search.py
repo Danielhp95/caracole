@@ -1330,9 +1330,9 @@ def search_gametabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS
             tracks.setdefault((game, key), []).append((path, title, row or ()))
     scored = []
     for (game, key), tabs in tracks.items():
-        name = names.get(game) or _title_words(game)
+        name = names.get(game) or _title_words(game.replace("_", "-"))
         composers = list(dict.fromkeys(c for _, _, row in tabs for c in _listed_names(row[4] if row else None)))
-        artists = [" ".join(name_words(name)), game.replace("-", " "), *(" ".join(name_words(c)) for c in composers)]
+        artists = [" ".join(name_words(name)), re.sub(r"[-_]", " ", game), *(" ".join(name_words(c)) for c in composers)]
         score, via = _reading(q.readings(a, key.replace("-", " ")) for q in queries for a in dict.fromkeys(artists) if a)
         if score >= MIN_SCORE:
             views = max((row[1] for _, _, row in tabs if row), default=0)

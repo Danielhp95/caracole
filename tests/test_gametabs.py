@@ -60,6 +60,14 @@ def test_a_slugs_number_is_one_more_tab_of_the_title_never_part_of_it():
     assert title_key("Green Hill Zone Act 2") == row.slug_key
 
 
+def test_a_slug_with_an_underscore_is_read_as_a_hyphen():
+    # One of the first sitemap's 3,220 tabs, on 28 October 2026.
+    row = parse_page_url(f"{BASE}/tabs/ar-tonelico-melody-of-elemia/exec_chronicle_key")
+    assert (row.path, row.slug, row.key) == ("tabs/ar-tonelico-melody-of-elemia/exec_chronicle_key",
+                                             "exec_chronicle_key", "exec-chronicle-key")
+    assert title_key("EXEC_CHRONICLE_KEY") == row.key
+
+
 def test_a_page_url_is_its_path_on_the_site():
     assert page_url("tabs/actraiser/fillmore") == f"{BASE}/tabs/actraiser/fillmore"
     assert page_url("tabs/final-fantasy-vii?page=2") == f"{BASE}/tabs/final-fantasy-vii?page=2"
