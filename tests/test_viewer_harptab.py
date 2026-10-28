@@ -5,10 +5,14 @@ them (``harmonica-N.txt``, the page's ``<pre>``), named by their ids: every line
 the tabber wrote it, every other line's letters made up (a vowel for a vowel, a consonant for a consonant, the case,
 the spaces, the hyphens and the punctuation kept, so each word keeps its place and its syllables), addresses
 example.com's, and the few lines that name a harp written again in made-up words that still do.
+
+tests/fixtures/harptabs/spellings/ holds tabs of the 146 a study read on 2026-10-28, made the same way (the words inside
+a line of holes made up too, a harp's name kept), each for a spelling harptabs.com's key doesn't give.
 """
 
 from __future__ import annotations
 
+import re
 import time
 from collections import Counter
 from pathlib import Path
@@ -32,10 +36,16 @@ from caracole.viewer.harptab import (
 
 TABS = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
 SAMPLED = sorted(p.stem for p in TABS.glob("*.txt"))
+SPELLINGS = Path(__file__).parent / "fixtures" / "harptabs" / "spellings"
 
 
 def tab(stem: str):
     return parse((TABS / f"{stem}.txt").read_text(encoding="utf-8"))
+
+
+def spelled(stem: str):
+    """A tab of tests/fixtures/harptabs/spellings/, read."""
+    return parse((SPELLINGS / f"{stem}.txt").read_text(encoding="utf-8"))
 
 
 def sung(stem: str) -> list[Row]:
@@ -172,6 +182,25 @@ def test_simple_man_names_its_sections_on_a_row_of_holes_and_holds():
     assert intro.lyric is None and intro.groups[0].hold  # (-3) -------
 
 
+# --- the spellings harptabs.com's key doesn't give, in the tabs that write them -------------------------------------
+
+
+def lines_of_holes(stem: str) -> list[str]:
+    """The fixture's lines that hold a number and no word, a verse's name ("[V1]") aside."""
+    text = (SPELLINGS / f"{stem}.txt").read_text(encoding="utf-8")
+    return [line for line in text.splitlines() if re.search(r"\d", line) and not re.search(r"[^\W\d_]{2,}", line)
+            and not re.fullmatch(r"\s*\[\w+\]\s*", line)]
+
+
+def test_if_i_die_young_bends_each_draw_it_marks_with_a_double_quote_a_whole_step():
+    read = spelled("17941_if-i-die-young")
+    text = (SPELLINGS / "17941_if-i-die-young.txt").read_text(encoding="utf-8")
+    assert len(read.rows()) == len(lines_of_holes("17941_if-i-die-young")) == 61
+    assert all(r.unknown == [] for r in read.rows())
+    bent = [h for r in read.rows() for g in r.groups for h in g.holes if h.bend]
+    assert bent == [Hole(3, "draw", 2)] * text.count("”") and len(bent) == 26  # -3”: −3′′, never −3
+
+
 # --- the notation ----------------------------------------------------------------------------------------------
 
 
@@ -187,6 +216,20 @@ def test_a_bend_of_three_semitones_is_read_as_its_other_spellings_are():
     found = scan("-3''' -3bbb bbb-3 -2bb 10b")
     assert [g.label() for g in found.groups] == ["−3′′′", "−3′′′", "−3′′′", "−2′′", "10′"]
     assert found.coverage == 1.0 and harp.hole_note(0, 3, "draw", 3) is not None
+
+
+def test_a_double_quote_after_a_hole_is_two_bends_as_two_marks_are():
+    # Barrett's key writes a whole-step bend so; of the 128 a study found, 124 on draws 2 and 3, which bend a whole step
+    found = scan('-3" -2” -3\'\' -2bb 4')
+    assert [g.label() for g in found.groups] == ["−3′′", "−2′′", "−3′′", "−2′′", "4"]
+    assert found.coverage == 1.0 and found.unknown == ()
+
+
+def test_what_no_spelling_reads_is_unknown_never_dropped():
+    # a quote after no hole, a lone dash, a bracket left open, a full stop: each the line's own, unread, in its place
+    found = scan('4 " 5 - 6 ( 7 .')
+    assert [g.label() for g in found.groups] == ["4", "5", "6", "7"]
+    assert found.unknown == ('"', "-", "(", ".") and found.coverage == 0.5
 
 
 def test_holes_together():

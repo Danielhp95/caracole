@@ -5,14 +5,16 @@ sung under it, the syllable each hole is blown on, and the words around them. Th
 **The notation** (harptabs.com's own key, and what its tabs write besides):
 
 - a hole: ``4`` or ``+4`` blow, ``-4`` (``−4``, ``–4``) draw; ``4B`` blow and ``4D`` draw (a suffix, upper case);
-  a bend after it, ``'`` ``''`` ``'''`` or ``b`` ``bb`` ``bbb`` (``-3'``, ``-3bb``), or before it (``b-3``); an
-  overblow or an overdraw ``o`` (``6o``, ``-7o``); a chromatic's slide pressed in, ``<`` or ``*``. In a tab that
-  writes no ``-`` anywhere and puts single holes in brackets, ``(5)`` is a draw (the Spanish tabs' "aspirar");
-  anywhere else ``(-4)`` and ``(4)`` are the hole;
+  a bend after it, ``'`` ``''`` ``'''`` or ``b`` ``bb`` ``bbb`` (``-3'``, ``-3bb``), ``"`` or ``”`` two (``-3"``,
+  as ``-3''``), or before it (``b-3``); an overblow or an overdraw ``o`` (``6o``, ``-7o``); a chromatic's slide
+  pressed in, ``<`` or ``*``. In a tab that writes no ``-`` anywhere and puts single holes in brackets, ``(5)`` is a
+  draw (the Spanish tabs' "aspirar"); anywhere else ``(-4)`` and ``(4)`` are the hole;
 - holes together: ``(4 5 6)`` or ``(456)`` a chord, ``{-4 -5}`` a head shake, ``[-2 -5]`` a tongue split, ``7,8B``
   holes 7 and 8 blown;
 - what a line of holes holds besides: holds (``----``, ``....``, ``___``, ``(hold)``), bars, ``~``, repeat marks
   (``x2``, ``(x2)``, ``2x``, ``(2x)``), a leading label (``Intro:``, ``FILL 1 :``).
+
+What no spelling reads is the line's ``unknown``, never dropped as if read.
 
 **The lines.** A line is a row of holes when at least ``HOLE_SHARE`` of its characters read as holes, holes together
 or holds (``scan``). The line under a row is its words when it is a line of text that is no section's name and no
@@ -47,19 +49,25 @@ REACH = 3  # the columns from a syllable's start a hole may be written at and st
 MAX_CUTS = 20000  # the most ways ``_cuts`` weighs for one word: past it, fewer cuts (a long word, many holes in it)
 
 # --- the notation ---------------------------------------------------------------------------------------------
+# Each spelling is a named piece.
 
 _DRAW_SIGNS = "-−–"
+# A bend after a hole, a semitone each: ' ’ ` or b (a b, not a word's start). " and ” are two (``_TWO_BENDS``), as ''
+# is: Barrett's key prints a whole-step bend so, and 124 of the 128 a study of 146 tabs found sit on draws 2 and 3,
+# the holes that bend a whole step.
+_BEND = r"""(?:'|’|`|"|”|b(?!b*[ac-z]))"""
+_TWO_BENDS = '"”'
 _HOLE = re.compile(r"""
     (?P<pb>b{1,3}(?=[-+−–]?\d))?          # a bend written before the hole: b-3
     (?P<btn><)?                          # a chromatic's slide, before
     (?P<sign>[-+−–])?
     (?P<num>10|[1-9])
     (?P<bd>[BD](?![A-Za-z]))?            # 4B blow, 5D draw
-    (?P<bend>(?:'|’|`|b(?!b*[ac-z])){1,3})?   # -3' -3'' -3b -3bbb (a b, not a word's start)
+    (?P<bend>BEND{1,3})?                 # -3' -3'' -3b -3bbb -3" (a b, not a word's start)
     (?P<ob>o(?![a-z]))?                  # 6o: an overblow, an overdraw on 7 to 10
     (?P<btn2>[<*](?!\S*[a-z]))?          # 4< 4*: the slide
-""", re.X)
-_INNER = r"(?:b{1,3})?<?[-+−–]?(?:10|[1-9])[BD]?(?:'|’|`|b){0,3}o?[<*]?"
+""".replace("BEND", _BEND), re.X)
+_INNER = r"(?:b{1,3})?<?[-+−–]?(?:10|[1-9])[BD]?(?:'|’|`|\"|”|b){0,3}o?[<*]?"
 _GROUP = re.compile(r"(?P<open>[(\[{])\s*(?P<body>" + _INNER + r"(?:[\s,]*" + _INNER + r")*)\s*(?P<close>[)\]}])")
 _COMMA_CHORD = re.compile(r"(?P<body>(?:10|[1-9])(?:,(?:10|[1-9]))+)(?P<bd>[BD])")
 _DECOR = re.compile(r"-{2,}|_+|\.{2,}|~+|\|+|\^|\*|,|;|/|\\|:|\(x\s?\d+\)|x\s?\d+\b|\(\d+x\)|\b\d+x\b|\(hold\)|hold\b|>|=",
@@ -209,10 +217,15 @@ class Tab:
 # --- a line ---------------------------------------------------------------------------------------------------
 
 
+def _bends(marks: str | None) -> int:
+    """The semitones bend marks bend: a semitone each, two for a " or a ”."""
+    return sum(2 if ch in _TWO_BENDS else 1 for ch in marks or "")
+
+
 def _hole(m: re.Match, *, parens_draw: bool = False) -> Hole:
     sign, suffix = m.group("sign"), m.group("bd")
     breath = "draw" if (sign and sign in _DRAW_SIGNS) or suffix == "D" or parens_draw else "blow"
-    bend = len(m.group("bend") or "") + len(m.group("pb") or "")
+    bend = _bends(m.group("bend")) + len(m.group("pb") or "")
     return Hole(int(m.group("num")), breath, min(bend, 3), bool(m.group("ob")), bool(m.group("btn") or m.group("btn2")))
 
 
@@ -223,7 +236,7 @@ def expand(line: str) -> str:
 
 def scan(line: str, *, parens_draw: bool = False) -> Scan:
     """The holes ``line`` holds, where, and how much of it they explain (``parens_draw``: the tab writes a draw as
-    ``(5)``)."""
+    ``(5)``). What no spelling reads is ``unknown``."""
     text = expand(line)
     label = None
     lead = _LEAD_LABEL.match(text)
@@ -277,7 +290,7 @@ def scan(line: str, *, parens_draw: bool = False) -> Scan:
     unknown = []
     for m in _WORD.finditer(text):
         rest = "".join(ch for i, ch in enumerate(m.group(0), m.start()) if not covered[i])
-        if rest.strip("-+.()[]{}'\""):
+        if rest:  # nothing dropped as if read: a " left over is a bend no hole took
             unknown.append(rest)
     groups.sort(key=lambda g: g.col)
     letters = sum(not ch.isspace() for ch in text)
