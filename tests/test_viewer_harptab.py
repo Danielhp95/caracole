@@ -17,6 +17,7 @@ import pytest
 
 from caracole.viewer import harp
 from caracole.viewer.harptab import (
+    BRACKETS,
     Gap,
     Group,
     Hole,
@@ -58,7 +59,8 @@ def test_thirteen_of_the_fourteen_sampled_tabs_are_read_and_the_private_notation
     unread = [stem for stem in SAMPLED if not tab(stem).readable]
     assert unread == ["29910_knockin-on-heavens-door"]  # "(3)tue (3)te": its tabber's own notation
     knockin = tab("29910_knockin-on-heavens-door")
-    assert knockin.rows() == [] and len(knockin.missed) == 2
+    assert knockin.rows() == [] and len(knockin.missed) == 2  # its two lines of holes, before any row: its notes
+    assert knockin.convention == "brackets" and knockin.reading.q < 0.7  # "(3)": a draw, "tue" read by none
 
 
 @pytest.mark.parametrize("stem", [s for s in SAMPLED if s != "29910_knockin-on-heavens-door"])
@@ -89,11 +91,13 @@ def test_what_each_sampled_tab_holds():
 
 
 def test_how_each_tab_writes_a_draw():
+    # The notation each is read by (test_viewer_harptab_notation.py's), chosen by its score.
     conventions = {stem: tab(stem).convention for stem in SAMPLED}
-    assert conventions.pop("124_heart-of-gold") == "suffix"  # 4B 5D
-    assert conventions.pop("28841_isnt-she-lovely") == "parens"  # (5): no "-" anywhere
-    assert conventions.pop("29910_knockin-on-heavens-door") == "parens"
+    assert conventions.pop("124_heart-of-gold") == "letters"  # 4B 5D
+    assert conventions.pop("28841_isnt-she-lovely") == "brackets"  # (5): no "-" anywhere
+    assert conventions.pop("29910_knockin-on-heavens-door") == "brackets"
     assert set(conventions.values()) == {"signs"}
+    assert all(tab(stem).reading.source == "guessed" for stem in SAMPLED)
 
 
 def test_the_harp_a_tabs_words_name():
@@ -176,9 +180,10 @@ def test_simple_man_names_its_sections_on_a_row_of_holes_and_holds():
 
 
 def test_each_way_of_writing_a_hole():
-    found = scan("4 +4 -4 −4 –4 4B 4D -3' -3'' -3b -3bb b-3 6o -7o 10 -10")
+    # By harptabs.com's key (the signs, scan's own); 4B and 4D are the letters' (test_viewer_harptab_notation.py).
+    found = scan("4 +4 -4 −4 –4 -3' -3'' -3b -3bb b-3 6o -7o 10 -10")
     assert [g.label() for g in found.groups] == [
-        "4", "4", "−4", "−4", "−4", "4", "−4", "−3′", "−3′′", "−3′", "−3′′", "−3′", "6°", "−7°", "10", "−10"]
+        "4", "4", "−4", "−4", "−4", "−3′", "−3′′", "−3′", "−3′′", "−3′", "6°", "−7°", "10", "−10"]
     assert found.coverage == 1.0 and found.is_row
 
 
@@ -190,16 +195,18 @@ def test_a_bend_of_three_semitones_is_read_as_its_other_spellings_are():
 
 
 def test_holes_together():
-    found = scan("(4 5 6) (456) {-4 -5} [-2 -5] 7,8B (-4)")
+    found = scan("(4 5 6) (456) {-4 -5} [-2 -5] (-4)")
     assert [(g.kind, g.label()) for g in found.groups] == [
-        ("chord", "(4 5 6)"), ("chord", "(4 5 6)"), ("shake", "{−4 −5}"), ("split", "[−2 −5]"), ("chord", "(7 8)"),
-        ("note", "−4")]
+        ("chord", "(4 5 6)"), ("chord", "(4 5 6)"), ("shake", "{−4 −5}"), ("split", "[−2 −5]"), ("note", "−4")]
 
 
 def test_a_lone_hole_in_brackets_is_a_draw_only_where_the_tab_says_so():
-    assert scan("(5) 4", parens_draw=True).groups[0].holes == (Hole(5, "draw"),)
-    assert scan("(5) 4").groups[0].holes == (Hole(5, "blow"),)
-    assert scan("(-5)", parens_draw=True).groups[0].holes == (Hole(5, "draw"),)
+    assert scan("(5) 4", notation=BRACKETS).groups[0].holes == (Hole(5, "draw"),)
+    assert scan("(4 5)", notation=BRACKETS).groups[0].holes == (Hole(4, "draw"), Hole(5, "draw"))  # "se aspiran"
+    # By harptabs.com's key, brackets round one hole mean nothing: the hole is read, the brackets kept as written
+    signs = scan("(5) 4")
+    assert [(g.kind, g.text) for g in signs.groups] == [("unread", "("), ("note", "5"), ("unread", ")"), ("note", "4")]
+    assert signs.holes[0].holes == (Hole(5, "blow"),) and signs.coverage == 0.5
 
 
 def test_holds_bars_and_repeats_are_read_and_hold_the_hole_before_them():
@@ -219,14 +226,16 @@ def test_a_repeat_mark_is_read_written_either_way():
 
 
 def test_a_digit_in_a_word_is_no_hole_and_a_line_of_words_is_no_row():
-    assert scan("the 2nd verse, 4th time").groups == ()
+    assert scan("the 2nd verse, 4th time").holes == ()
     assert not scan("Play it 3 times then go to 4").is_row
     assert scan("").groups == () and not scan("   ").is_row
 
 
-def test_a_chromatics_slide_or_a_hole_past_ten_is_shown_as_written():
+def test_a_chromatics_slide_or_its_pages_chip_is_shown_as_written():
     assert not parse("4 <5 -6 7*\nwords to sing here\n").readable
     assert parse("4 5 -6 7\nwords to sing here\n").readable
+    assert not parse("4 5 -6 7\nwords to sing here\n", harp="Chromatic").readable
+    assert parse("4 5 -6 7\nwords to sing here\n", harp="Diatonic").readable
 
 
 def test_a_tab_with_no_row_is_shown_as_written():
