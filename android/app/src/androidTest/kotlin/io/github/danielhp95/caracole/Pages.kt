@@ -58,8 +58,9 @@ internal object Pages {
     /**
      * Two fingers on the page, one above the other about its middle, [from] then [to] apart (fractions of the
      * WebView's width), moved in [steps] a frame apart, as a hand pinches: fingers apart when [to] is the larger.
+     * [during] runs once they have moved, before they lift.
      */
-    fun pinch(scenario: ActivityScenario<MainActivity>, from: Float, to: Float, steps: Int = 24) {
+    fun pinch(scenario: ActivityScenario<MainActivity>, from: Float, to: Float, steps: Int = 24, during: () -> Unit = {}) {
         val origin = IntArray(2)
         var width = 0
         var height = 0
@@ -100,7 +101,9 @@ internal object Pages {
             at = SystemClock.uptimeMillis()
             send(MotionEvent.ACTION_MOVE, 2, from + (to - from) * step / steps)
         }
-        at += 10
+        instrumentation.waitForIdleSync()
+        during()
+        at = SystemClock.uptimeMillis()
         send(MotionEvent.ACTION_POINTER_UP or second, 2, to)
         at += 10
         send(MotionEvent.ACTION_UP, 1, to)
