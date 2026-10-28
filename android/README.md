@@ -22,9 +22,10 @@ rather than a Gradle wrapper, which would download a second copy. The flake also
 plugin at the SDK's aapt2, because NixOS can't run the copy the plugin fetches from Maven. The first build
 downloads the plugin and the libraries from Google's Maven and Maven Central.
 
-The sync engine's tests run on the JVM, against a fake caracole serve:
+The sync engine's tests run on the JVM, against a fake caracole serve, and so do the app's own (the text size, the
+settings):
 
-    nix develop ./android -c gradle -p android :mirror:test
+    nix develop ./android -c gradle -p android test
 
 ## Install
 
@@ -67,6 +68,21 @@ songs, Export PDF, and choosing versions. Use caracole serve in a browser for th
 
 The viewers run sandboxed, with the same Content-Security-Policy and sandbox headers caracole serve sends.
 
+## Text size
+
+Pinch any page to change its text size: fingers apart make the text larger, fingers together make it smaller. The
+size goes from 50% to 250%, in steps of 5%, where 100% is the size Android's own font size setting gives the pages.
+Only the text grows or shrinks. The page reflows to the screen's width, so it never zooms as a picture and never
+scrolls sideways. The size holds for every page and across restarts. Settings shows it ("Text size: 120%"), and
+**Reset** sets it back to 100%. A sheet's own **Aa** still works, and the two multiply.
+
+A touch of one finger reaches the page as before: a scroll, a tap, a swipe. A second finger makes the touch a
+pinch, and the page sees none of it.
+
+The sheet viewer keeps each chord over its syllable at any text size. Pages written by an older caracole put the
+chords over the lyrics when the text is much larger. Once caracole is upgraded, its next render writes the pages
+again, and the next sync brings them to the phone.
+
 ## Try it on an emulator
 
 `nix develop ./android#emulator` adds the emulator, `adb`, `avdmanager` and an Android 36 x86_64 image:
@@ -76,11 +92,14 @@ The viewers run sandboxed, with the same Content-Security-Policy and sandbox hea
 
 Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),
 emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
-the host's `127.0.0.1` is `10.0.2.2`. The instrumented test syncs from a running caracole serve, opens the
-library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file:
+the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running caracole serve. EndToEndTest opens
+the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
+page and a sheet, larger and smaller, and checks that the chords stay over their syllables:
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
     adb install -r -t android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
     adb shell am instrument -w -e server http://10.0.2.2:8737 \
         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
+
+Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them.

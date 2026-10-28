@@ -1,11 +1,12 @@
 package io.github.danielhp95.caracole
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.core.content.edit
 
 /** The settings and the last sync's outcome, in the app's own preferences. */
-class Settings(context: Context) {
-    private val prefs = context.applicationContext.getSharedPreferences("caracole", Context.MODE_PRIVATE)
+class Settings(private val prefs: SharedPreferences) {
+    constructor(context: Context) : this(context.applicationContext.getSharedPreferences("caracole", Context.MODE_PRIVATE))
 
     /** caracole serve's address, as typed. */
     var server: String
@@ -16,6 +17,11 @@ class Settings(context: Context) {
     var syncOnWifi: Boolean
         get() = prefs.getBoolean(WIFI, false)
         set(value) = prefs.edit { putBoolean(WIFI, value) }
+
+    /** The pages' text size, in percent of their own ([TextZoom]): as the last pinch left it. */
+    var textZoom: Int
+        get() = TextZoom.fitted(prefs.getInt(TEXT_ZOOM, TextZoom.DEFAULT))
+        set(value) = prefs.edit { putInt(TEXT_ZOOM, TextZoom.fitted(value)) }
 
     var lastOutcome: Outcome?
         get() = if (prefs.contains(LAST_AT)) {
@@ -29,6 +35,7 @@ class Settings(context: Context) {
     private companion object {
         const val SERVER = "server"
         const val WIFI = "sync_on_wifi"
+        const val TEXT_ZOOM = "text_zoom"
         const val LAST_AT = "last_sync_at"
         const val LAST_OK = "last_sync_ok"
         const val LAST_TEXT = "last_sync_text"

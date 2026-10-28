@@ -60,6 +60,10 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
+    // The app's own logic that needs no device (the text size, Settings over its preferences): `gradle :app:test`.
+    testImplementation("junit:junit:4.13.2")
+    testImplementation(kotlin("test-junit"))
+
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

@@ -16,10 +16,11 @@ import org.hamcrest.Matchers.anyOf
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.danielhp95.caracole.Pages.evaluate
+import io.github.danielhp95.caracole.Pages.url
+import io.github.danielhp95.caracole.Pages.waitUntil
 import io.github.danielhp95.caracole.mirror.Links
-import org.json.JSONArray
 import org.json.JSONObject
-import org.json.JSONTokener
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -29,8 +30,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.security.MessageDigest
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 
 /**
  * The app against a real caracole serve, on a device or an emulator:
@@ -263,53 +262,12 @@ class EndToEndTest {
         assertEquals(sha256, got)
     }
 
-    private fun url(scenario: ActivityScenario<MainActivity>): String {
-        var url: String? = null
-        scenario.onActivity { url = it.findViewById<WebView>(R.id.web).url }
-        return url.orEmpty()
-    }
-
-    /** [script]'s value in the page: a string, a number, a boolean, or null. */
-    private fun evaluate(scenario: ActivityScenario<MainActivity>, script: String): Any? {
-        var raw: String? = null
-        val latch = CountDownLatch(1)
-        scenario.onActivity { activity ->
-            activity.findViewById<WebView>(R.id.web).evaluateJavascript(script) { raw = it; latch.countDown() }
-        }
-        check(latch.await(10, TimeUnit.SECONDS)) { "no answer from the page to: $script" }
-        val value = (JSONTokener("[${raw ?: "null"}]").nextValue() as JSONArray).get(0)
-        return if (value == JSONObject.NULL) null else value
-    }
-
-    private fun waitUntil(what: String, timeoutMs: Long = 30_000, condition: () -> Boolean) {
-        val end = System.currentTimeMillis() + timeoutMs
-        var last: Throwable? = null
-        while (System.currentTimeMillis() < end) {
-            try {
-                if (condition()) return
-            } catch (e: Exception) {
-                last = e
-            } catch (e: AssertionError) {
-                last = e
-            }
-            Thread.sleep(200)
-        }
-        throw AssertionError("waited ${timeoutMs / 1000} s for $what" + (last?.let { " (last: $it)" } ?: ""), last)
-    }
-
     private fun record(name: String, value: Any) {
         found.put(name, value)
         Log.i(TAG, "$name: $value")
     }
 
-    /** With `-e shots <ms>`, says the screen is ready for the host's screenshot, and holds it. */
-    private fun shot(name: String) {
-        if (hold <= 0) return
-        instrumentation.waitForIdleSync()
-        Thread.sleep(800)
-        Log.i(TAG, "CARACOLE-SHOT $name")
-        Thread.sleep(hold)
-    }
+    private fun shot(name: String) = Pages.shot(name, hold)
 
     private companion object {
         const val TAG = "CaracoleE2E"

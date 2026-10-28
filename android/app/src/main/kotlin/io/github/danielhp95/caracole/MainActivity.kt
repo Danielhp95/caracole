@@ -5,6 +5,8 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.view.MotionEvent
+import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.RenderProcessGoneDetail
@@ -35,7 +37,8 @@ import kotlinx.coroutines.launch
 /**
  * The library screen: a WebView showing the mirror's pages, caracole's own, unchanged, at
  * `https://appassets.androidplatform.net/<path>` (the root, as on caracole serve: [Links]), with a small bar
- * (the page's title; Sync now, Library, Settings) and the sync's line under it.
+ * (the page's title; Sync now, Library, Settings) and the sync's line under it. A pinch sizes the pages' text
+ * ([pinchToSize]).
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
@@ -44,6 +47,10 @@ class MainActivity : Activity() {
     private lateinit var empty: View
     private lateinit var links: Links
     private lateinit var loader: WebViewAssetLoader
+    private lateinit var settings: Settings
+    private lateinit var pinch: TextPinch
+    /** The WebView's own text zoom, as Android's font size has it: what [TextZoom.DEFAULT] stands for. */
+    private var ownTextZoom = TextZoom.DEFAULT
     private var scope: CoroutineScope = MainScope()
     private var hiding: Job? = null
     private var shown = false
@@ -58,6 +65,7 @@ class MainActivity : Activity() {
         status = findViewById(R.id.status)
         title = findViewById(R.id.title)
         empty = findViewById(R.id.empty)
+        settings = Settings(this)
         fitInsets()
 
         val mirror = Caracole.mirror(this)
@@ -67,6 +75,7 @@ class MainActivity : Activity() {
             .addPathHandler(Links.PREFIX, MirrorPathHandler(mirror))
             .build()
 
+        ownTextZoom = web.settings.textZoom
         web.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
@@ -77,7 +86,15 @@ class MainActivity : Activity() {
             setGeolocationEnabled(false)
             mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             safeBrowsingEnabled = false
+            // A pinch sizes the text alone, and the page reflows to the screen's width: it is never zoomed as a
+            // picture, nor wider than the screen.
+            setSupportZoom(false)
+            builtInZoomControls = false
+            displayZoomControls = false
+            textZoom = TextZoom.applied(ownTextZoom, settings.textZoom)
         }
+        pinch = TextPinch(settings.textZoom, frame = { web.postOnAnimation(it) }, apply = ::sizeText)
+        pinchToSize()
         web.webViewClient = Client()
         web.webChromeClient = object : WebChromeClient() {
             override fun onReceivedTitle(view: WebView, text: String?) {
@@ -100,6 +117,7 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        pinch.set(settings.textZoom) // as Settings' Reset may have left it
         if (!shown) showLibrary()
     }
 
@@ -233,6 +251,60 @@ class MainActivity : Activity() {
         if (web.canGoBack()) web.goBack() else @Suppress("DEPRECATION") super.onBackPressed()
     }
 
+    /**
+     * Two fingers apart make the text larger, together smaller ([TextPinch]), kept in [Settings]. A touch of one
+     * finger goes on to the page as it was: a scroll, a tap, a swipe, a double tap. A second finger makes the touch
+     * the pinch's: the page lets go of it (a touch cancelled: no scroll, swipe or tap comes of it) and sees none of
+     * the rest. The WebView never sees two fingers: before a pinch is told apart from a slip, it would zoom the page
+     * as a picture with them, its own zoom off or not (WebView 133 did, by about a fifth each pinch).
+     */
+    @SuppressLint("ClickableViewAccessibility") // no click here: a tap reaches the page untouched
+    private fun pinchToSize() {
+        val detector = ScaleGestureDetector(this, object : ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            override fun onScaleBegin(detector: ScaleGestureDetector): Boolean {
+                pinch.begin()
+                return true
+            }
+
+            override fun onScale(detector: ScaleGestureDetector): Boolean {
+                pinch.scale(detector.scaleFactor)
+                return true
+            }
+
+            override fun onScaleEnd(detector: ScaleGestureDetector) {
+                settings.textZoom = pinch.end()
+            }
+        })
+        detector.isQuickScaleEnabled = false // a double tap held and dragged stays the page's
+        detector.isStylusScaleEnabled = false
+        var pinching = false
+        web.setOnTouchListener { view, event ->
+            detector.onTouchEvent(event)
+            if (event.actionMasked == MotionEvent.ACTION_POINTER_DOWN && !pinching) {
+                pinching = true
+                // The touch the page knows of, its first finger's, cancelled.
+                val cancel = MotionEvent.obtain(event.downTime, event.eventTime, MotionEvent.ACTION_CANCEL,
+                    event.getX(0), event.getY(0), 0)
+                cancel.source = event.source
+                view.onTouchEvent(cancel)
+                cancel.recycle()
+            }
+            val pinched = pinching
+            if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) pinching = false
+            pinched
+        }
+    }
+
+    /**
+     * The pages' text at [percent] of their own, as Android's font size draws them. A sheet viewer measures its chords to keep each over its syllable,
+     * and measures them again when the window changes size (viewer.js's `resize` listener): told of one, it lays the
+     * sheet out again in the new size. Other pages reflow by themselves, and a resize changes nothing on them.
+     */
+    private fun sizeText(percent: Int) {
+        web.settings.textZoom = TextZoom.applied(ownTextZoom, percent)
+        web.evaluateJavascript(RELAYOUT, null)
+    }
+
     /** Edge to edge: the bar under the status bar, the page above the navigation bar and the keyboard. */
     private fun fitInsets() {
         val bar = findViewById<View>(R.id.bar)
@@ -247,5 +319,6 @@ class MainActivity : Activity() {
 
     private companion object {
         const val SHOW_ENDED_MS = 5_000L
+        const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
     }
 }

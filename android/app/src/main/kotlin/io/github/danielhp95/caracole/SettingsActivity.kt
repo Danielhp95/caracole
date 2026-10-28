@@ -26,7 +26,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * The settings: caracole serve's address, Test (the list fetched and counted, nothing downloaded), Sync now,
- * the last sync's time and outcome, the storage the copy takes, and the sync on Wi-Fi by itself.
+ * the last sync's time and outcome, the storage the copy takes, the sync on Wi-Fi by itself, and the text size a
+ * pinch left, with Reset.
  */
 class SettingsActivity : Activity() {
     private lateinit var settings: Settings
@@ -34,6 +35,8 @@ class SettingsActivity : Activity() {
     private lateinit var testResult: TextView
     private lateinit var lastSync: TextView
     private lateinit var storage: TextView
+    private lateinit var textSize: TextView
+    private lateinit var resetTextSize: Button
     private var scope: CoroutineScope = MainScope()
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -48,6 +51,8 @@ class SettingsActivity : Activity() {
         testResult = findViewById(R.id.test_result)
         lastSync = findViewById(R.id.last_sync)
         storage = findViewById(R.id.storage)
+        textSize = findViewById(R.id.text_size)
+        resetTextSize = findViewById(R.id.reset_text_size)
 
         address.setText(settings.server)
         address.addTextChangedListener(object : TextWatcher {
@@ -72,6 +77,16 @@ class SettingsActivity : Activity() {
             settings.syncOnWifi = on
             Syncs.onWifi(this, on)
         }
+
+        resetTextSize.setOnClickListener {
+            settings.textZoom = TextZoom.DEFAULT
+            showTextSize()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        showTextSize()
     }
 
     override fun onStart() {
@@ -124,6 +139,13 @@ class SettingsActivity : Activity() {
             storage.text = getString(R.string.storage, Syncs.size(this@SettingsActivity, bytes))
         }
         findViewById<View>(R.id.open_library).visibility = if (mirror.manifest() != null) View.VISIBLE else View.GONE
+    }
+
+    /** "Text size: 120%", as the last pinch left it; Reset only when it isn't the pages' own. */
+    private fun showTextSize() {
+        val zoom = settings.textZoom
+        textSize.text = getString(R.string.text_size, zoom)
+        resetTextSize.isEnabled = zoom != TextZoom.DEFAULT
     }
 
     private fun fitInsets() {
