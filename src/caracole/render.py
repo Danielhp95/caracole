@@ -200,6 +200,7 @@ from caracole.versions import get_version
 from caracole.viewer import build_viewer, hanzi
 from caracole.viewer import harpfit
 from caracole.viewer.harptab import parse as parse_tab
+from caracole.viewer.harptab import pinned as pinned_tab
 from caracole.viewer.harptab_page import build_harmonica_viewer
 from caracole.viewer.page import viewer_key, written_script
 from caracole.viewer.sheet import parse_sheet
@@ -712,7 +713,7 @@ def _render_song(
         text = _sheet_cho(song, sheet)
         if not sheet.auto or human is None:
             primary.append((text, mine))
-            harps.update(_tab_harps(cfg, song, tabs, files, text, mine))
+            harps.update(_tab_harps(cfg, overrides, song, tabs, files, text, mine))
         # Each sheet in its own place: a version kept by its key moves each by what puts it in that key
         played = own_version(overrides, song, text, *mine)
         if beside:
@@ -752,7 +753,8 @@ def _render_song(
             _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
     finally:  # the tabs' pages, whatever came of the sheet's PDF: with the sheet's text read, if it was
         back = HUMAN_OUTPUTS[2] if human is not None else AUTO_OUTPUTS[2] if auto is not None else None
-        done.append(_render_harmonica(conn, cfg, song, folder, tabs, files, primary[0] if primary else None, back))
+        done.append(_render_harmonica(conn, cfg, overrides, song, folder, tabs, files, primary[0] if primary else None,
+                                      back))
     return done
 
 
@@ -832,12 +834,13 @@ def _render_version(conn: sqlite3.Connection, cfg: Config, song: Song, folder: P
 # --- the harmonica tabs kept: a page each --------------------------------------------
 
 
-def _tab_harps(cfg: Config, song: Song, tabs: list[HarmonicaFile], files: Mapping[str, KeptFile], cho: str,
-               key: tuple[str | None, str | None]) -> dict[str, int]:
+def _tab_harps(cfg: Config, overrides: Overrides, song: Song, tabs: list[HarmonicaFile],
+               files: Mapping[str, KeptFile], cho: str, key: tuple[str | None, str | None]) -> dict[str, int]:
     """The harp each harmonica tab the song keeps is played on, by its file's name, as its page chooses it with the
-    song's chord sheet ``cho`` (in ``key``, keys.py's, and where it came from): the one that plays with the record,
-    else the one the tab's words name (harpfit.py ``Choice.tabs_harp``). A tab with neither, or whose text can't be
-    read, has none: its sheet's overlay starts on harp.py's first harp."""
+    song's chord sheet ``cho`` (in ``key``, keys.py's, and where it came from), the tab read as its page reads it
+    (``overrides``' ``[harmonica]``, ``_harmonica_pin``): the one that plays with the record, else the one the tab's
+    words name (harpfit.py ``Choice.tabs_harp``). A tab with neither, or whose text can't be read, has none: its
+    sheet's overlay starts on harp.py's first harp."""
     out: dict[str, int] = {}
     for tab in tabs:
         kept = files.get(tab.name)
@@ -845,8 +848,9 @@ def _tab_harps(cfg: Config, song: Song, tabs: list[HarmonicaFile], files: Mappin
             continue
         try:
             text = read_regular(cfg.library_dir / kept.path).decode("utf-8", errors="replace")
-            found = harpfit.choose(parse_tab(text, harp=tab.harp), cho=cho, key=key[0], key_source=key[1],
-                                   page_key=tab.key)
+            pin = _harmonica_pin(overrides, song, tab)
+            read = parse_tab(text, harp=tab.harp, notation=pinned_tab(pin, text) if pin is not None else None)
+            found = harpfit.choose(read, cho=cho, key=key[0], key_source=key[1], page_key=tab.key)
         except OSError:
             continue  # its page says why (_render_harmonica)
         except Exception:  # a tab the overlay can't read must never cost the sheet's viewer
@@ -858,12 +862,18 @@ def _tab_harps(cfg: Config, song: Song, tabs: list[HarmonicaFile], files: Mappin
 
 
 
-def _render_harmonica(conn: sqlite3.Connection, cfg: Config, song: Song, folder: Path, tabs: list[HarmonicaFile],
-                      files: Mapping[str, KeptFile], sheet: tuple[str, tuple[str | None, str | None]] | None,
-                      back: str | None) -> _Done:
+def _harmonica_pin(overrides: Overrides, song: Song, tab: HarmonicaFile) -> str | Mapping[str, str] | None:
+    """How overrides.toml's ``[harmonica]`` has the song's tab read, or None: as caracole guesses."""
+    return overrides.harmonica.get(song.key, {}).get(tab.name)
+
+
+def _render_harmonica(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, song: Song, folder: Path,
+                      tabs: list[HarmonicaFile], files: Mapping[str, KeptFile],
+                      sheet: tuple[str, tuple[str | None, str | None]] | None, back: str | None) -> _Done:
     """Write a page for each harmonica tab the song keeps (harptabs_fetch.py), ``harmonica-N.html`` beside its
     ``harmonica-N.txt`` (viewer/harptab_page.py), from the tab's text and what its version says of it (its page, its
-    key, its harp, its difficulty, its views, its rating), with the song's chord sheet ``sheet`` (its ChordPro and its key as
+    key, its harp, its difficulty, its views, its rating), read as overrides.toml's ``[harmonica]`` has it, else as
+    caracole guesses, with the song's chord sheet ``sheet`` (its ChordPro and its key as
     keys.py found it: the human one, else the auto one), for the harp that plays with the record. ``back`` names the
     song's sheet viewer, which its ‹ Chord sheet opens. Each page is recorded (``_note_written``) and written only
     when its bytes change.
@@ -894,7 +904,8 @@ def _render_harmonica(conn: sqlite3.Connection, cfg: Config, song: Song, folder:
         try:
             html = build_harmonica_viewer(
                 text, title=clean_title(song.title), artist=song.artist, tab_file=tab.name, url=version.url,
-                page_key=tab.key, harp=tab.harp, facts=raw, cho=cho, key=key, key_source=key_source, back=back)
+                page_key=tab.key, harp=tab.harp, pin=_harmonica_pin(overrides, song, tab), facts=raw, cho=cho, key=key,
+                key_source=key_source, back=back)
         except Exception:  # a tab the page can't read must never cost the song's other pages
             log.warning("no viewer for %s: cannot build %s", song.display, tab.page, exc_info=True)
             ok = False
