@@ -10,6 +10,7 @@ import os
 import re
 import subprocess
 
+from caracole.inbox import harmonica_files
 from caracole.library import drop_file, keep_file, song_dir, write_atomic
 from caracole.overrides import Overrides
 from caracole.removal import plan_removal, remove_song
@@ -38,11 +39,12 @@ def keep_sheet(conn, cfg, song, chord: str = "D", tonality: str = "Bm") -> None:
     write_atomic(song_dir(cfg.library_dir, song) / "sheet.json", json.dumps(doc, ensure_ascii=False).encode())
 
 
-def keep_tab(conn, cfg, song, text: str = a_tab(), number: int = 1, key: str | None = "C") -> None:
-    """A harmonica tab kept as harptabs_fetch.py keeps one."""
+def keep_tab(conn, cfg, song, text: str = a_tab(), number: int = 1, key: str | None = "C",
+             harp: str | None = None) -> None:
+    """A harmonica tab kept as harptabs_fetch.py keeps one, its page's chips ``key`` and ``harp`` ("Diatonic")."""
     vid = upsert_version(conn, provider="harptabs", tab_id=str(588 + number), song_id=song.id, slot="guitar",
                          kind="harmonica", rating=3.3, votes=224000, version=1, label=None, url=TAB_URL,
-                         raw={"title": song.title, "artist": song.artist, "key": key, "harp": None,
+                         raw={"title": song.title, "artist": song.artist, "key": key, "harp": harp,
                               "difficulty": "Beginner", "views": 224000, "rating": 3.3}, now=FETCHED)
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name=f"harmonica-{number}.txt",
               data=text.encode("utf-8"), rank=number)
@@ -200,6 +202,18 @@ def test_a_tab_it_cant_read_gets_a_page_of_its_text(conn, cfg):
     render(conn, cfg)
     text = (song_dir(cfg.library_dir, song) / "harmonica-1.html").read_text("utf-8")
     assert '<pre class="tab">ARMONICA C\n(3)mua (3)do (3)be (3)pi</pre>' in text
+
+
+def test_a_tab_its_page_calls_chromatic_gets_a_page_of_its_text_and_marks_no_harp(conn, cfg):
+    # The tab's holes play with the record on a D harp (the first test), but harptabs.com says it is a chromatic's
+    song = add_song(conn, "Placeholder Band", "Synthetic Song")
+    keep_sheet(conn, cfg, song)
+    keep_tab(conn, cfg, song, harp="Chromatic")
+    assert [f.harp for f in harmonica_files(conn, song.id)] == ["Chromatic"]
+    render(conn, cfg)
+    folder = song_dir(cfg.library_dir, song)
+    assert '<pre class="tab">' in (folder / "harmonica-1.html").read_text("utf-8")
+    assert "harpTabs" not in data_of(folder / "sheet.html", "song")
 
 
 def test_removing_the_song_deletes_the_page_a_render_wrote_and_not_one_of_yours(conn, cfg):

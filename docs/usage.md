@@ -2815,10 +2815,11 @@ the library page link it, the tab's text beside it.
   tabbers write ("-4", "4D", "-3b", "b-3", "-b3", '-3"' bent a whole step,
   "(5)" for a draw in a tab that writes no "-", "(3)b", "7,8B"…), and what a
   tab writes its own way: "6+ 6-" where no sign comes before a hole, a single
-  dot that lengthens a note where one comes before a hole (". 4 5 ."). A time
-  ("Time: 3/4", "1:45") is never holes. A tab in a notation of its tabber's
-  own, or for a chromatic harmonica, is its text as written, and the page says
-  so.
+  dot that lengthens a note where one comes before a hole (". 4 5 ."), "-3*" a
+  bend where harptabs.com calls the harp diatonic. A time ("Time: 3/4",
+  "1:45") is never holes. A tab in a notation of its tabber's own, or for a
+  chromatic harmonica (harptabs.com says so, or the tab presses the slide), is
+  its text as written, and the page says so.
 - **The harp**, in the header and the bar. A tab's holes are the same on any
   harp, and sound in its key: caracole starts on the harp that plays with the
   record, the one that puts the most of the tab's sung notes on the chords the

@@ -17,9 +17,9 @@ sung under it, the syllable each hole is blown on, and the words around them. Th
   (``Time: 3/4``, ``1:45``) is prose, never holes.
 
 What a tab writes its own way is decided once for the whole tab (``Reading``), never token by token: its signs after
-the hole (``6+`` blow, ``6-`` draw) in a tab that writes no sign before one; a single dot lengthening the hole before
-it (``.5. -4 5 .``) in a tab that writes a dot before a hole. What no spelling reads is the line's ``unknown``, never
-dropped as if read.
+the hole (``6+`` blow, ``6-`` draw) in a tab that writes no sign before one; ``*`` after a hole a bend (``-3*``,
+``-3**``) where its page calls the harp diatonic; a single dot lengthening the hole before it (``.5. -4 5 .``) in a
+tab that writes a dot before a hole. What no spelling reads is the line's ``unknown``, never dropped as if read.
 
 **The lines.** A line is a row of holes when at least ``HOLE_SHARE`` of its characters read as holes, holes together
 or holds (``scan``). The line under a row is its words when it is a line of text that is no section's name and no
@@ -36,8 +36,8 @@ place. The holes left over inside a word with no hyphen there cut it where the p
 melisma: "air--"), or, before every place, the next word. A row's ``placement`` counts how each found its place.
 
 **Readable or not** (``Tab.readable``). A tab with no row of holes, with more lines that hold holes but don't read as
-a row than rows (a private notation: "(3)tue (3)te"), or for a chromatic harmonica (a slide, or a hole past 10) is
-shown as its tabber wrote it: its page says so.
+a row than rows (a private notation: "(3)tue (3)te"), or for a chromatic harmonica (its page says Chromatic, or it
+presses a slide or plays a hole past 10) is shown as its tabber wrote it: its page says so.
 """
 
 from __future__ import annotations
@@ -75,9 +75,9 @@ _HOLE_SPELLING = r"""
     (?P<post>SIGN_AFTER)?                # 6+ 6-: the sign after the hole, in a tab that writes it there
     (?P<bend>BEND{1,3})?                 # -3' -3'' -3b -3bbb -3" (a b, not a word's start)
     (?P<ob>o(?![a-z]))?                  # 6o: an overblow, an overdraw on 7 to 10
-    (?P<btn2>[<*](?!\S*[a-z]))?          # 4< 4*: the slide
+    (?P<btn2>(?:<|\*{1,3})(?!\S*[a-z]))? # 4< 4*: the slide; -3* -3** a bend on a harp its page calls diatonic
 """
-_INNER = r"(?:b{1,3})?<?[-+−–]?(?:b{1,3})?(?:10|[1-9])[BD]?(?:SIGN_AFTER)?(?:'|’|`|\"|”|b){0,3}o?[<*]?"
+_INNER = r"(?:b{1,3})?<?[-+−–]?(?:b{1,3})?(?:10|[1-9])[BD]?(?:SIGN_AFTER)?(?:'|’|`|\"|”|b){0,3}o?(?:<|\*{1,3})?"
 
 
 def _spellings(signs_after: bool) -> tuple[re.Pattern, re.Pattern]:
@@ -116,6 +116,7 @@ _SIGNED_AFTER = re.compile(r"(?<![\w+−–-])(?:10|[1-9])" + _SIGN_AFTER)  # 6+
 _SUFFIXED = re.compile(r"(?<!\w)(?:10|[1-9])[BD](?![A-Za-z])")
 _BRACKETED = re.compile(r"\((?:10|[1-9])\)")
 _DOT_BEFORE = re.compile(r"(?<![.\w])\.[ \t]*[-+−–]?(?:10|[1-9])(?!\d)")  # . 4  .5  .-6: a dot before a hole
+_CHIPS = {"diatonic": re.compile(r"(?i)\bdiatonic\b"), "chromatic": re.compile(r"(?i)\bchromatic\b")}
 _WORD = re.compile(r"\S+")
 
 # The harp's key a tab's words name: "I use an A harp", "harp in Bb", "ARMONICA EN C".
@@ -226,11 +227,13 @@ class Reading:
     """What a tab writes its own way, decided once for the whole tab (``parse``) and the same for each of its lines
     (``scan``): a lone hole in brackets is a draw (``parens_draw``: no "-" before a hole anywhere, a "(5)"
     somewhere); the breath's sign comes after the hole (``signs_after``: a "6+" or a "6-", and no sign before a hole
-    anywhere); a single dot lengthens the hole before it (``dots``: a dot written before a hole, ". 4" or ".5", as a
+    anywhere); a "*" after a hole is a bend, not a chromatic's slide (``star_bends``: its page calls the harp
+    diatonic); a single dot lengthens the hole before it (``dots``: a dot written before a hole, ". 4" or ".5", as a
     German hymn series does, "the dots extend the note")."""
 
     parens_draw: bool = False
     signs_after: bool = False
+    star_bends: bool = False
     dots: bool = False
 
 
@@ -266,11 +269,13 @@ def _bends(marks: str | None) -> int:
     return sum(2 if ch in _TWO_BENDS else 1 for ch in marks or "")
 
 
-def _hole(m: re.Match, *, parens_draw: bool = False) -> Hole:
-    sign, suffix = m.group("sign") or m.group("post"), m.group("bd")
+def _hole(m: re.Match, *, parens_draw: bool = False, star_bends: bool = False) -> Hole:
+    sign, suffix, slide = m.group("sign") or m.group("post"), m.group("bd"), m.group("btn2") or ""
     breath = "draw" if (sign and sign in _DRAW_SIGNS) or suffix == "D" or parens_draw else "blow"
-    bend = _bends(m.group("bend")) + len(m.group("pb") or "") + len(m.group("sb") or "")
-    return Hole(int(m.group("num")), breath, min(bend, 3), bool(m.group("ob")), bool(m.group("btn") or m.group("btn2")))
+    stars = len(slide) if star_bends and slide.startswith("*") else 0  # -3* -3**: bends, on a diatonic harp
+    bend = _bends(m.group("bend")) + len(m.group("pb") or "") + len(m.group("sb") or "") + stars
+    return Hole(int(m.group("num")), breath, min(bend, 3), bool(m.group("ob")),
+                bool(m.group("btn") or (slide and not stars)))
 
 
 def expand(line: str) -> str:
@@ -278,10 +283,11 @@ def expand(line: str) -> str:
     return line.expandtabs(TAB_STOP).replace(" ", " ")
 
 
-def scan(line: str, *, parens_draw: bool = False, signs_after: bool = False, dots: bool = False) -> Scan:
+def scan(line: str, *, parens_draw: bool = False, signs_after: bool = False, star_bends: bool = False,
+         dots: bool = False) -> Scan:
     """The holes ``line`` holds, where, and how much of it they explain, read as its tab writes them (``Reading``'s
-    fields: ``parens_draw``, the tab writes a draw as ``(5)``; ``signs_after``, as ``5-``; ``dots``, a single dot
-    lengthens the hole before it). What no spelling reads is ``unknown``."""
+    fields: ``parens_draw``, the tab writes a draw as ``(5)``; ``signs_after``, as ``5-``; ``star_bends``, ``*`` after
+    a hole is a bend; ``dots``, a single dot lengthens the hole before it). What no spelling reads is ``unknown``."""
     hole_re, group_re = _SPELLINGS[signs_after]
     text = expand(line)
     prose = [False] * len(text)  # a time, never holes (_TIME): unread
@@ -319,13 +325,15 @@ def scan(line: str, *, parens_draw: bool = False, signs_after: bool = False, dot
         end = m.end()
         if len(inner) == 1 and kind == "chord":  # (5): a draw where the tab writes no sign; (-4): the hole
             one = inner[0]
-            hole = _hole(one, parens_draw=parens_draw and not (one.group("sign") or one.group("post")))
+            hole = _hole(one, parens_draw=parens_draw and not (one.group("sign") or one.group("post")),
+                         star_bends=star_bends)
             if bent := _BENT.match(text, end):  # (3)b (3)': a bend after the brackets, the hole's
                 hole = Hole(hole.hole, hole.breath, min(hole.bend + _bends(bent.group(0)), 3), hole.over, hole.button)
                 end = bent.end()
             groups.append(Group((hole,), "note", m.start(), digit, text[m.start():end]))
         else:
-            groups.append(Group(tuple(_hole(i) for i in inner), kind, m.start(), digit, m.group(0)))
+            groups.append(Group(tuple(_hole(i, star_bends=star_bends) for i in inner), kind, m.start(), digit,
+                                m.group(0)))
         mark(m.start(), end)
     for m in _COMMA_CHORD.finditer(text):
         if taken(m.start(), m.end()):
@@ -341,7 +349,7 @@ def scan(line: str, *, parens_draw: bool = False, signs_after: bool = False, dot
         after = text[m.end()] if m.end() < len(text) else " "
         if before.isalpha() or after.isalpha():  # a digit in a word ("2nd", "4th") is no hole
             continue
-        groups.append(Group((_hole(m),), "note", m.start(), m.start("num"), m.group(0)))
+        groups.append(Group((_hole(m, star_bends=star_bends),), "note", m.start(), m.start("num"), m.group(0)))
         mark(m.start(), m.end())
     for m in _DECOR.finditer(text):
         if taken(m.start(), m.end()):
@@ -368,9 +376,9 @@ def scan(line: str, *, parens_draw: bool = False, signs_after: bool = False, dot
 # --- the tab --------------------------------------------------------------------------------------------------
 
 
-def _reading(lines: list[str]) -> tuple[Reading, str]:
+def _reading(lines: list[str], harp: str | None) -> tuple[Reading, str]:
     """How a tab's lines are read (``Reading``), and how it writes a draw (``Tab.convention``), from what the whole tab
-    writes."""
+    writes and the harp its page names (``harp``, harptabs.com's chip: "Diatonic", "Chromatic", or None)."""
     def count(pattern: re.Pattern) -> int:
         return sum(len(pattern.findall(line)) for line in lines)
 
@@ -379,16 +387,18 @@ def _reading(lines: list[str]) -> tuple[Reading, str]:
     parens_draw = signed == 0 and bracketed > 0
     # One that writes 6+ 6- and never a sign before a hole writes its signs after the hole.
     signs_after = signed == 0 and count(_PLUSSED) == 0 and count(_SIGNED_AFTER) > 0
-    how = Reading(parens_draw=parens_draw, signs_after=signs_after, dots=count(_DOT_BEFORE) > 0)
+    how = Reading(parens_draw=parens_draw, signs_after=signs_after,
+                  star_bends=bool(harp and _CHIPS["diatonic"].search(harp)), dots=count(_DOT_BEFORE) > 0)
     convention = ("parens" if parens_draw else "signs after" if signs_after else "suffix" if suffixed > signed
                   else "signs")
     return how, convention
 
 
-def parse(body: str) -> Tab:
-    """The tab ``body`` (a ``harmonica-N.txt``) read: the module's docstring says how."""
+def parse(body: str, *, harp: str | None = None) -> Tab:
+    """The tab ``body`` (a ``harmonica-N.txt``) read: the module's docstring says how. ``harp`` is the harp its page
+    names (harptabs.com's chip, ``HarpTab.harp``: "Diatonic", "Chromatic"), None for a tab with none."""
     lines = [expand(line).rstrip() for line in body.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
-    how, convention = _reading(lines)
+    how, convention = _reading(lines, harp)
     scans = [scan(line, **asdict(how)) for line in lines]
     kinds = ["blank" if not line.strip() else "holes" if s.is_row else "text" for line, s in zip(lines, scans)]
     missed = [line.strip() for line, s, kind in zip(lines, scans, kinds)
@@ -451,7 +461,9 @@ def parse(body: str) -> Tab:
     sections = [s for s in sections if s.items or s.label]
     prose = notes + [item.text for s in sections for item in s.items if isinstance(item, Prose)]
     rows = [item for s in sections for item in s.items if isinstance(item, Row)]
-    chromatic = any(h.button or h.hole > 10 for r in rows for g in r.groups for h in g.holes)
+    # A chromatic's: its page says so (a tab that presses no slide), or it presses one
+    chromatic = bool(harp and _CHIPS["chromatic"].search(harp)) or any(
+        h.button or h.hole > 10 for r in rows for g in r.groups for h in g.holes)
     return Tab(notes, sections, convention, named_key(prose), missed, chromatic, how)
 
 

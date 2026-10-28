@@ -6,8 +6,10 @@ the tabber wrote it, every other line's letters made up (a vowel for a vowel, a 
 the spaces, the hyphens and the punctuation kept, so each word keeps its place and its syllables), addresses
 example.com's, and the few lines that name a harp written again in made-up words that still do.
 
-tests/fixtures/harptabs/spellings/ holds tabs of the 146 a study read on 2026-10-28, made the same way (the words inside
-a line of holes made up too, a harp's name kept), each for a spelling harptabs.com's key doesn't give.
+tests/fixtures/harptabs/spellings/ holds six tabs of the 146 a study read on 2026-10-28, made the same way (the words
+inside a line of holes made up too, a harp's name kept), each for a spelling harptabs.com's key doesn't give: ``-3”``
+(17941), dots as durations (26330), signs after the hole (10319), ``*`` a bend on a tab its page calls Diatonic
+(9069), ``-b3`` (2136), ``(3)b`` (4765). ``CHIPS`` is each one's harp chip, as its page shows it.
 """
 
 from __future__ import annotations
@@ -38,15 +40,18 @@ from caracole.viewer.harptab import (
 TABS = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
 SAMPLED = sorted(p.stem for p in TABS.glob("*.txt"))
 SPELLINGS = Path(__file__).parent / "fixtures" / "harptabs" / "spellings"
+CHIPS = {"17941_if-i-die-young": "Diatonic", "26330_vergiss-es-nie-dass-du-lebst": "Diatonic",
+         "10319_dirty-old-town-not-pogues": "Diatonic", "9069_twelve-bar-blues-boogie-different": "Diatonic",
+         "2136_whole-lotta-love": "Diatonic", "4765_en-el-pais-de-la-libertad": None}
 
 
 def tab(stem: str):
     return parse((TABS / f"{stem}.txt").read_text(encoding="utf-8"))
 
 
-def spelled(stem: str):
-    """A tab of tests/fixtures/harptabs/spellings/, read."""
-    return parse((SPELLINGS / f"{stem}.txt").read_text(encoding="utf-8"))
+def spelled(stem: str, harp: str | None = "chip"):
+    """A tab of tests/fixtures/harptabs/spellings/ read with its page's harp chip (``harp``: another, or None)."""
+    return parse((SPELLINGS / f"{stem}.txt").read_text(encoding="utf-8"), harp=CHIPS[stem] if harp == "chip" else harp)
 
 
 def labels(read) -> list[str]:
@@ -225,6 +230,18 @@ def test_dirty_old_town_writes_its_signs_after_the_hole():
     assert read.notes[-1].startswith("Rtu zheirvi")  # its "3+" and "7+" in a line of prose are prose still
 
 
+def test_a_star_after_a_hole_is_a_bend_on_twelve_bar_blues_boogie_as_its_page_says_diatonic():
+    read = spelled("9069_twelve-bar-blues-boogie-different")
+    assert read.reading.star_bends and not read.chromatic and read.readable
+    assert labels(read).count("−3′") == 3 and not any(h.button for r in read.rows() for g in r.groups for h in g.holes)
+    # its turnaround, a line with words inside it, reads as no row still; its holes, as their legend says
+    turnaround = scan(read.missed[0], star_bends=True)
+    assert [g.label() for g in turnaround.groups][:7] == ["−1", "−2", "−3′", "−3′", "1", "2", "3"]
+    assert [g.label() for g in turnaround.groups][-5:] == ["−4′", "−4", "−4′", "4", "−3"]  # b-4/-4 b-4 4 -3
+    # without its chip, as a tab kept before caracole kept chips: a slide, a chromatic's, shown as written
+    assert not spelled("9069_twelve-bar-blues-boogie-different", harp=None).readable
+
+
 def test_whole_lotta_love_bends_a_draw_with_a_b_between_the_sign_and_the_hole():
     read = spelled("2136_whole-lotta-love")
     assert labels(read).count("−3′") == 7  # -b3 (5) and b-3 (2)
@@ -367,6 +384,25 @@ def test_a_digit_in_a_word_is_no_hole_and_a_line_of_words_is_no_row():
 def test_a_chromatics_slide_or_a_hole_past_ten_is_shown_as_written():
     assert not parse("4 <5 -6 7*\nwords to sing here\n").readable
     assert parse("4 5 -6 7\nwords to sing here\n").readable
+
+
+def test_a_tab_harptabs_com_calls_chromatic_is_shown_as_written_though_it_presses_no_slide():
+    body = "4 5 6 -6 7\nla la la la la\n"
+    assert parse(body).readable and parse(body, harp="Diatonic").readable
+    chromatic = parse(body, harp="Chromatic")
+    assert chromatic.chromatic and not chromatic.readable
+
+
+def test_a_star_after_a_hole_is_a_bend_on_a_tab_harptabs_com_calls_diatonic():
+    # Tab 9069's legend: "* = half step bend", "** = whole step bend"; its page's chip says Diatonic
+    body = "-1 -2 -3* -3*/ 1 2 3 -3**/ -2\nla la la la la la la la la\n"
+    read = parse(body, harp="Diatonic")
+    assert read.readable and read.reading == Reading(star_bends=True)
+    assert [g.label() for g in read.rows()[0].groups] == ["−1", "−2", "−3′", "−3′", "1", "2", "3", "−3′′", "−2"]
+    # no chip (a tab kept before, one from the inbox) or another: a slide, as a chromatic's tab writes it
+    for chip in (None, "Tremolo"):
+        assert parse(body, harp=chip).chromatic and not parse(body, harp=chip).readable
+    assert parse("4 <5 -6\nla la la\n", harp="Diatonic").chromatic  # "<" is the slide on any harp
 
 
 def test_a_tab_with_no_row_is_shown_as_written():

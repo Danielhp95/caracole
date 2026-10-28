@@ -108,14 +108,15 @@ def guitar_files(conn: sqlite3.Connection, song_id: int | None = None, *,
 @dataclass(frozen=True)
 class HarmonicaFile:
     """A harmonica tab caracole keeps for a song (``harmonica-N.txt``, harptabs_fetch.py): its name, where it is
-    (relative to the library), its N, and the key its page's Key chip names ("C": the song's on some tabs, the
-    harp's on others), or None."""
+    (relative to the library), its N, the key its page's Key chip names ("C": the song's on some tabs, the
+    harp's on others), and the harp its harp chip names ("Diatonic", "Chromatic"), each None where it names none."""
 
     song_id: int
     name: str
     path: str
     number: int
     key: str | None = None
+    harp: str | None = None
 
     @property
     def page(self) -> str:
@@ -132,17 +133,19 @@ def harmonica_page(name: str) -> str | None:
 
 def harmonica_files(conn: sqlite3.Connection, song_id: int | None = None) -> list[HarmonicaFile]:
     """The harmonica tabs caracole keeps, of the song ``song_id`` or every song's; by song, then N."""
-    sql = ("SELECT f.song_id, f.name, f.path, CASE WHEN json_valid(v.raw) THEN json_extract(v.raw, '$.key') END "
+    sql = ("SELECT f.song_id, f.name, f.path, CASE WHEN json_valid(v.raw) THEN json_extract(v.raw, '$.key') END, "
+           "CASE WHEN json_valid(v.raw) THEN json_extract(v.raw, '$.harp') END "
            "FROM files f JOIN versions v ON v.id = f.version_id WHERE v.kind = ?")
     args: list[object] = [HARMONICA_KIND]
     if song_id is not None:
         sql += " AND f.song_id = ?"
         args.append(song_id)
     found = []
-    for row_song, name, at, key in conn.execute(sql, args):
+    for row_song, name, at, key, harp in conn.execute(sql, args):
         m = HARMONICA_FILE.fullmatch(name)
         if m:
-            found.append(HarmonicaFile(row_song, name, at, int(m.group(1)), key if isinstance(key, str) else None))
+            found.append(HarmonicaFile(row_song, name, at, int(m.group(1)), key if isinstance(key, str) else None,
+                                       harp if isinstance(harp, str) else None))
     return sorted(found, key=lambda f: (f.song_id, f.number))
 
 
