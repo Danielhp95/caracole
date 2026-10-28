@@ -150,6 +150,16 @@ def test_a_flat_five_is_written_in_brackets():
         ("Cm9b5", {0, 2, 3, 6, 10}),
         ("CmMaj9", {0, 2, 3, 7, 11}),
         ("C+9", {0, 2, 4, 8, 10}),
+        # a bracketed extension on a seventh is added to it: C7(9) is C9, C7(13) the seventh with its sixth
+        ("C7(9)", {0, 2, 4, 7, 10}),
+        ("C7(13)", {0, 4, 7, 9, 10}),
+        ("Cm7(9)", {0, 2, 3, 7, 10}),
+        ("C6(9)", {0, 2, 4, 7, 9}),
+        ("Cmaj7(11)", {0, 4, 5, 7, 11}),
+        ("C7+", {0, 4, 8, 10}),  # a plus at the end sharpens the fifth, as "C7+5" does
+        ("C9+", {0, 2, 4, 8, 10}),
+        ("Cmajor", {0, 4, 7}),
+        ("Cminor", {0, 3, 7}),
     ],
 )
 def test_a_chord_knows_its_intervals(text, intervals):

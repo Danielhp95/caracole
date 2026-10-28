@@ -49,7 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from caracole.chordpro import is_chord_line, normalize_chord
+from caracole.chordpro import is_chord_line, normalize_chord, tag_forgotten
 from caracole.db import kv_get_json, kv_set_json
 from caracole.library import KeptFile, kept_files, read_json, read_regular, write_info
 from caracole.songs import AUTO_SHEET, HUMAN_SHEET, Song, list_songs
@@ -175,7 +175,7 @@ def _stated(sheet: str) -> tuple[str, bool] | None:
 
 def chords_in_sheet(markup: str) -> list[str]:
     """The chords of a sheet in UG markup (``[ch]X[/ch]``), in order, with letter names."""
-    names = (m.group(1).strip() for m in _CHORD_TAG.finditer(markup))
+    names = (m.group(1).strip() for line in markup.splitlines() for m in _CHORD_TAG.finditer(tag_forgotten(line)))
     return [normalize_chord(name) for name in names if name]
 
 

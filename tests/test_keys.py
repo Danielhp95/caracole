@@ -132,6 +132,12 @@ def test_lines_that_only_look_like_a_key_line(line):
 # --- the chords --------------------------------------------------------------------------
 
 
+def test_chords_in_sheet_counts_a_chord_nobody_tagged_on_a_line_of_tagged_ones():
+    # As the sheet's own reading of it does (chordpro.py): "Dm/F" is a chord, only not tagged.
+    assert chords_in_sheet("[ch]Am[/ch]    Dm/F    [ch]E[/ch]\nlyrics here") == ["Am", "Dm/F", "E"]
+    assert chords_in_sheet("Amazing [ch]G[/ch] grace") == ["G"]  # a word is no chord
+
+
 def test_chords_in_sheet_reads_the_chord_tags_in_order_with_letter_names():
     sheet = "[Intro]\n[ch]Am[/ch]-[ch]F[/ch]\n[ch]Do[/ch]  [ch]Sol7[/ch]\nWords\n[ch]N.C.[/ch]"
     assert chords_in_sheet(sheet) == ["Am", "F", "C", "G7", "N.C."]

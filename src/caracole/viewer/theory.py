@@ -143,6 +143,7 @@ def parse_chord(text: str, *, strict: bool = True) -> Chord | None:
 # and "+5" the sharp fifth that makes an augmented triad. "Maj" is read before "mM", so "mMaj7" is the
 # minor-major seventh ("mmaj7"), never "mmajaj7".
 _REWRITES = [
+    (re.compile(r"(?<=\d)\((9|11|13)\)"), r"add\1"),  # C7(9), C7(13): the extension is added to what is before it
     (re.compile(r"[()\s]"), ""),
     (re.compile(r"♯"), "#"),
     (re.compile(r"♭"), "b"),
@@ -155,7 +156,10 @@ _REWRITES = [
     (re.compile(r"-(?=\d)"), "b"),
     (re.compile(r"^\+(?!5)"), "aug"),
     (re.compile(r"\+(?=\d)"), "#"),
+    (re.compile(r"(?<=\d)\+$"), "#5"),  # "C7+", "C9+": a plus at the end sharpens the fifth, as "C7+5" does
     (re.compile(r"^\+"), "aug"),
+    (re.compile(r"^major$"), ""),
+    (re.compile(r"^minor$"), "m"),
     (re.compile(r"^min?"), "m"),
     (re.compile(r"Maj|MA|Ma"), "maj"),
     (re.compile(r"^mM"), "mmaj"),

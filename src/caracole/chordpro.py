@@ -17,6 +17,8 @@ from __future__ import annotations
 import re
 import unicodedata
 
+from caracole.viewer.theory import parse_chord
+
 _CHORD = re.compile(r"\[ch\](.*?)\[/ch\]")
 _TAB_MARK = re.compile(r"\[/?tab\]")
 _SECTION = re.compile(r"\s*\[(?!/?(?:ch|tab)\])([^\[\]]+)\]\s*(.*?)\s*")
@@ -53,13 +55,56 @@ def normalize_chord(name: str) -> str:
 def _letter_root(part: str) -> str:
     m = _SOLFEGE.match(part)
     if not m:
-        return part
+        return _capital(part)
     return _SOLFEGE_LETTER[m.group(1).lower()] + part[m.end() :]
+
+
+def _capital(part: str) -> str:
+    """A chord typed in lower case ("am", "em7", "dm", "f#") with its letter capitalised; a word that is no
+    chord once capitalised ("be", "dim", "capo", "x2") stays as it was written."""
+    if not part or part[0] not in "abcdefg":  # (an empty part, "A/"'s bass, is in every string)
+        return part
+    named = part[0].upper() + part[1:]
+    return named if parse_chord(named) is not None else part
+
+
+_WORD = re.compile(r"[^\s|]+")
+
+
+def tag_forgotten(line: str) -> str:
+    """A chord line with the chords nobody tagged tagged: ``[ch]Dm[/ch]   Dm/F   [ch]E[/ch]``.
+
+    Tabbers forget a tag now and then, and a line with one word that is no tag is no chord line: its chords
+    would read as lyrics (a real sheet lost 22 of its 85 chords so). A line that already holds a tag is mended
+    when every other word on it, but its bars, dashes and repeat marks, is a chord (a letter's name, as
+    ``theory.parse_chord`` reads it: "La" and "Be" are no chords here) and there are no more of them than tagged
+    chords; any other line, a lyric with a chord in it, stays as it is. Columns do not move.
+    """
+    tagged = len(_CHORD.findall(line))
+    if not tagged:
+        return line
+
+    def blank(m: re.Match[str]) -> str:
+        return " " * len(m.group())
+
+    bare = _MARK.sub(blank, _CHORD.sub(blank, _TAB_MARK.sub(blank, line)))
+    forgotten = []
+    for m in _WORD.finditer(bare):
+        if _CHORD_LINE_REST.fullmatch(m.group()):
+            continue
+        if parse_chord(m.group()) is None:
+            return line
+        forgotten.append(m)
+    if not forgotten or len(forgotten) > tagged:
+        return line
+    for m in reversed(forgotten):
+        line = f"{line[: m.start()]}[ch]{m.group()}[/ch]{line[m.end() :]}"
+    return line
 
 
 def is_chord_line(line: str) -> bool:
     """Whether a line holds chords and nothing else but bars, dashes, slashes and repeat marks."""
-    line = _TAB_MARK.sub("", line)
+    line = tag_forgotten(_TAB_MARK.sub("", line))
     if not _CHORD.search(line):
         return False
     rest = _MARK.sub(" ", _CHORD.sub(" ", line))
@@ -216,7 +261,7 @@ def _chord_only(line: str) -> str:
 
 def _chord_items(line: str) -> list[tuple[int, str]]:
     """The chords and marks of a chord line, as (display column, ChordPro token), in order."""
-    line = _TAB_MARK.sub("", line)
+    line = tag_forgotten(_TAB_MARK.sub("", line))
     plain = ""
     spans: list[tuple[int, int, str]] = []
     pos = 0

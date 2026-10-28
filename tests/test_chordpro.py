@@ -118,10 +118,30 @@ def test_auto_sheet_is_marked_unverified():
         "[ch]G[/ch] / / / [ch]D[/ch] / / /  x2",
         "[ch]Am[/ch]  [ch]G[/ch]  (x4)",
         "  [ch]C[/ch]",
+        "[ch]Dm[/ch]    Dm/F    [ch]E[/ch]",  # a chord nobody tagged, among tagged ones
+        "[ch]C[/ch]  G7  [ch]Am[/ch]  [ch]F[/ch]",
     ],
 )
 def test_is_chord_line(line):
     assert is_chord_line(line)
+
+
+@pytest.mark.parametrize(
+    ("typed", "name"),
+    [("am", "Am"), ("a", "A"), ("em7", "Em7"), ("bb", "Bb"), ("dm/f", "Dm/F"), ("g#m", "G#m"), ("Am", "Am")],
+)
+def test_a_chord_typed_in_lower_case_is_the_same_chord(typed, name):
+    assert normalize_chord(typed) == name
+
+
+@pytest.mark.parametrize("typed", ["", "A/", "/", "/G", "c/", "x/y"])
+def test_a_name_with_nothing_before_or_after_its_slash_is_left_alone_never_an_error(typed):
+    assert normalize_chord(typed).lower() == typed.lower()  # a trailing slash is a typo, not a crash
+
+
+@pytest.mark.parametrize("typed", ["x2", "n.c.", "intro", "capo", "dim", "be", "bad"])
+def test_a_word_in_a_chord_tag_stays_as_it_was_written_in_lower_case(typed):
+    assert normalize_chord(typed) == typed
 
 
 @pytest.mark.parametrize(
@@ -132,6 +152,11 @@ def test_is_chord_line(line):
         "CHORDS:[ch]Bm[/ch], [ch]G[/ch], [ch]D[/ch]",
         "   [ch]B[/ch]|3    [ch]B[/ch]|3",
         "[Verse 1]",
+        "[ch]G[/ch] La la la",  # words that read as solfège are no chords here, only a letter's name is
+        "I [ch]G[/ch] am here",
+        "Amazing [ch]G[/ch] grace",
+        "[ch]G[/ch] Be Bad Add",
+        "[ch]G[/ch]  C D E F",  # more untagged than tagged: a lyric with a chord in it, as far as anyone can tell
     ],
 )
 def test_is_not_chord_line(line):
@@ -444,3 +469,25 @@ def test_spaces_between_later_chords_stay():
     assert out.splitlines()[-1] == "[C]la l[F]a   con"
     only = to_chordpro("[Verse]\n[ch]C[/ch]   [ch]F[/ch]\n", title="T", artist="A")
     assert only.splitlines()[-1] == "[C] [F]"
+
+
+# --- a chord nobody tagged ------------------------------------------------------------------------------------
+#
+# "Mambeando" (Onda Vaga, Ultimate Guitar) tags every chord but Dm/F on five chord lines. A line holding a word
+# that is no tag is no chord line, so those five read as lyrics: their chord names became plain text and 22 of the
+# sheet's 85 chords were lost to the sheet, its progressions and its key.
+
+FORGOTTEN = "[tab][ch]Am[/ch]    [ch]Am/C[/ch]    [ch]Dm[/ch]    Dm/F    [ch]E[/ch]   x2\nQue lindo que es estar en la tierra[/tab]"
+
+
+def test_a_chord_nobody_tagged_on_a_line_of_tagged_ones_is_a_chord_all_the_same():
+    tagged = FORGOTTEN.replace("    Dm/F    ", "    [ch]Dm/F[/ch]    ")
+    doc = to_chordpro(FORGOTTEN, title="T", artist="A")
+    assert doc == to_chordpro(tagged, title="T", artist="A")  # as if it had been tagged, at its own column
+    assert "[Dm/F]" in doc and "[Am]" in doc and "[*x2]" in doc
+    assert "Am    Am/C" not in doc  # no chord names left as lyrics
+
+
+def test_the_lines_after_a_forgotten_tag_keep_their_chords_in_a_chord_only_line_too():
+    doc = to_chordpro("[ch]Am[/ch]  Dm/F  [ch]E[/ch]\n\nNext line", title="T", artist="A")
+    assert doc.splitlines()[2] == "[Am] [Dm/F] [E]"
