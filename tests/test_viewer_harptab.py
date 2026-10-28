@@ -5,10 +5,16 @@ them (``harmonica-N.txt``, the page's ``<pre>``), named by their ids: every line
 the tabber wrote it, every other line's letters made up (a vowel for a vowel, a consonant for a consonant, the case,
 the spaces, the hyphens and the punctuation kept, so each word keeps its place and its syllables), addresses
 example.com's, and the few lines that name a harp written again in made-up words that still do.
+
+tests/fixtures/harptabs/spellings/ holds six tabs of the 146 a study read on 2026-10-28, made the same way (the words
+inside a line of holes made up too, a harp's name kept), each for a spelling harptabs.com's key doesn't give: ``-3”``
+(17941), dots as durations (26330), signs after the hole (10319), ``*`` a bend on a tab its page calls Diatonic
+(9069), ``-b3`` (2136), ``(3)b`` (4765). ``CHIPS`` is each one's harp chip, as its page shows it.
 """
 
 from __future__ import annotations
 
+import re
 import time
 from collections import Counter
 from pathlib import Path
@@ -17,6 +23,9 @@ import pytest
 
 from caracole.viewer import harp
 from caracole.viewer.harptab import (
+    BRACKETS,
+    DOTS,
+    SIGNS_AFTER,
     Gap,
     Group,
     Hole,
@@ -32,10 +41,35 @@ from caracole.viewer.harptab import (
 
 TABS = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
 SAMPLED = sorted(p.stem for p in TABS.glob("*.txt"))
+SPELLINGS = Path(__file__).parent / "fixtures" / "harptabs" / "spellings"
+CHIPS = {"17941_if-i-die-young": "Diatonic", "26330_vergiss-es-nie-dass-du-lebst": "Diatonic",
+         "10319_dirty-old-town-not-pogues": "Diatonic", "9069_twelve-bar-blues-boogie-different": "Diatonic",
+         "2136_whole-lotta-love": "Diatonic", "4765_en-el-pais-de-la-libertad": None}
 
 
 def tab(stem: str):
     return parse((TABS / f"{stem}.txt").read_text(encoding="utf-8"))
+
+
+def spelled(stem: str, harp: str | None = "chip"):
+    """A tab of tests/fixtures/harptabs/spellings/ read with its page's harp chip (``harp``: another, or None)."""
+    return parse((SPELLINGS / f"{stem}.txt").read_text(encoding="utf-8"), harp=CHIPS[stem] if harp == "chip" else harp)
+
+
+def labels(read) -> list[str]:
+    """The holes of the rows a tab's page draws (``Row.trusted``)."""
+    return [g.label() for r in read.rows() if r.trusted for g in r.groups if g.holes]
+
+
+def dotted(read) -> bool:
+    """Whether its single dots lengthen a hole (``DOTS``, each candidate's in a tab that writes a dot before a hole)."""
+    return DOTS in read.reading.notation.symbols
+
+
+def star_bends(read) -> bool:
+    """Whether its ``*`` after a hole is a bend (``STAR_BENDS``, where the page's chip says Diatonic)."""
+    star = read.reading.notation.meaning("*", "after")
+    return star is not None and star.means == "bend"
 
 
 def sung(stem: str) -> list[Row]:
@@ -58,7 +92,8 @@ def test_thirteen_of_the_fourteen_sampled_tabs_are_read_and_the_private_notation
     unread = [stem for stem in SAMPLED if not tab(stem).readable]
     assert unread == ["29910_knockin-on-heavens-door"]  # "(3)tue (3)te": its tabber's own notation
     knockin = tab("29910_knockin-on-heavens-door")
-    assert knockin.rows() == [] and len(knockin.missed) == 2
+    assert knockin.rows() == [] and len(knockin.missed) == 2  # its two lines of holes, before any row: its notes
+    assert knockin.convention == "brackets" and knockin.reading.q < 0.7  # "(3)": a draw, "tue" read by none
 
 
 @pytest.mark.parametrize("stem", [s for s in SAMPLED if s != "29910_knockin-on-heavens-door"])
@@ -89,11 +124,13 @@ def test_what_each_sampled_tab_holds():
 
 
 def test_how_each_tab_writes_a_draw():
+    # The notation each is read by (test_viewer_harptab_notation.py's), chosen by its score.
     conventions = {stem: tab(stem).convention for stem in SAMPLED}
-    assert conventions.pop("124_heart-of-gold") == "suffix"  # 4B 5D
-    assert conventions.pop("28841_isnt-she-lovely") == "parens"  # (5): no "-" anywhere
-    assert conventions.pop("29910_knockin-on-heavens-door") == "parens"
+    assert conventions.pop("124_heart-of-gold") == "letters"  # 4B 5D
+    assert conventions.pop("28841_isnt-she-lovely") == "brackets"  # (5): no "-" anywhere
+    assert conventions.pop("29910_knockin-on-heavens-door") == "brackets"
     assert set(conventions.values()) == {"signs"}
+    assert all(tab(stem).reading.source == "guessed" for stem in SAMPLED)
 
 
 def test_the_harp_a_tabs_words_name():
@@ -172,13 +209,79 @@ def test_simple_man_names_its_sections_on_a_row_of_holes_and_holds():
     assert intro.lyric is None and intro.groups[0].hold  # (-3) -------
 
 
+# --- the spellings harptabs.com's key doesn't give, in the tabs that write them -------------------------------------
+
+
+def lines_of_holes(stem: str) -> list[str]:
+    """The fixture's lines that hold a number and no word, a verse's name ("[V1]") aside."""
+    text = (SPELLINGS / f"{stem}.txt").read_text(encoding="utf-8")
+    return [line for line in text.splitlines() if re.search(r"\d", line) and not re.search(r"[^\W\d_]{2,}", line)
+            and not re.fullmatch(r"\s*\[\w+\]\s*", line)]
+
+
+def test_if_i_die_young_bends_each_draw_it_marks_with_a_double_quote_a_whole_step():
+    read = spelled("17941_if-i-die-young")
+    text = (SPELLINGS / "17941_if-i-die-young.txt").read_text(encoding="utf-8")
+    assert len(read.rows()) == len(lines_of_holes("17941_if-i-die-young")) == 61
+    assert all(r.unknown == [] for r in read.rows())
+    bent = [h for r in read.rows() for g in r.groups for h in g.holes if h.bend]
+    assert bent == [Hole(3, "draw", 2)] * text.count("”") and len(bent) == 26  # -3”: −3′′, never −3
+
+
+def test_a_tab_that_lengthens_its_holes_with_dots_reads_every_line_of_them():
+    # "the dots extend the note": a dot before a hole (".5", ". 4") and after it ("5 .", "-5.")
+    read = spelled("26330_vergiss-es-nie-dass-du-lebst")
+    assert dotted(read) and read.readable
+    assert len(read.rows()) == len(lines_of_holes("26330_vergiss-es-nie-dass-du-lebst")) == 14
+    assert all(r.unknown == [] for r in read.rows())
+    second = read.rows()[1]  # .5. -4 5 -4 5 .
+    assert [(g.label(), g.hold) for g in second.groups] == [
+        ("5", True), ("−4", False), ("5", False), ("−4", False), ("5", True)]
+
+
+def test_dirty_old_town_writes_its_signs_after_the_hole():
+    read = spelled("10319_dirty-old-town-not-pogues")
+    assert read.convention == "signs after" and read.readable
+    assert [r.lyric is not None for r in read.rows()] == [True] * 4 and all(r.unknown == [] for r in read.rows())
+    assert [g.label() for g in read.rows()[0].groups] == ["6", "−6", "7", "8", "−8", "7", "8", "7", "6"]
+    assert read.notes[-1].startswith("Rtu zheirvi")  # its "3+" and "7+" in a line of prose are prose still
+
+
+def test_a_star_after_a_hole_is_a_bend_on_twelve_bar_blues_boogie_as_its_page_says_diatonic():
+    read = spelled("9069_twelve-bar-blues-boogie-different")
+    assert star_bends(read) and not read.chromatic and read.readable
+    assert labels(read).count("−3′") == 3 and not any(h.button for r in read.rows() for g in r.groups for h in g.holes)
+    # its turnaround, a line with words inside it, reads as no row still; its holes, as their legend says
+    turnaround = scan(read.missed[0], notation=read.reading.notation)
+    assert [g.label() for g in turnaround.holes][:7] == ["−1", "−2", "−3′", "−3′", "1", "2", "3"]
+    assert [g.label() for g in turnaround.holes][-5:] == ["−4′", "−4", "−4′", "4", "−3"]  # b-4/-4 b-4 4 -3
+    # without its chip, as a tab kept before caracole kept chips: a slide, a chromatic's, shown as written
+    assert not spelled("9069_twelve-bar-blues-boogie-different", harp=None).readable
+
+
+def test_whole_lotta_love_bends_a_draw_with_a_b_between_the_sign_and_the_hole():
+    read = spelled("2136_whole-lotta-love")
+    assert labels(read).count("−3′") == 7  # -b3 (5) and b-3 (2)
+    assert "3′" not in labels(read)  # never a blow bent, a note no harp has
+
+
+def test_en_el_pais_de_la_libertad_bends_a_draw_written_in_brackets():
+    read = spelled("4765_en-el-pais-de-la-libertad")
+    assert read.convention == "brackets"
+    first = read.rows()[0]  # 4 ---> 6 ...... 6 5 (4) - 5 (4) 4 (3)b (3)b 3
+    assert [g.label() for g in first.groups if g.holes] == ["4", "6", "6", "5", "−4", "5", "−4", "4", "−3′", "−3′", "3"]
+    assert [g.text for g in first.groups][-3:] == ["(3)b", "(3)b", "3"] and first.unknown == ["-"]
+    assert [g.text for g in first.groups if g.kind == "unread"] == ["-"]  # kept in its place
+
+
 # --- the notation ----------------------------------------------------------------------------------------------
 
 
 def test_each_way_of_writing_a_hole():
-    found = scan("4 +4 -4 −4 –4 4B 4D -3' -3'' -3b -3bb b-3 6o -7o 10 -10")
+    # By harptabs.com's key (the signs, scan's own); 4B and 4D are the letters' (test_viewer_harptab_notation.py).
+    found = scan("4 +4 -4 −4 –4 -3' -3'' -3b -3bb b-3 6o -7o 10 -10")
     assert [g.label() for g in found.groups] == [
-        "4", "4", "−4", "−4", "−4", "4", "−4", "−3′", "−3′′", "−3′", "−3′′", "−3′", "6°", "−7°", "10", "−10"]
+        "4", "4", "−4", "−4", "−4", "−3′", "−3′′", "−3′", "−3′′", "−3′", "6°", "−7°", "10", "−10"]
     assert found.coverage == 1.0 and found.is_row
 
 
@@ -189,17 +292,93 @@ def test_a_bend_of_three_semitones_is_read_as_its_other_spellings_are():
     assert found.coverage == 1.0 and harp.hole_note(0, 3, "draw", 3) is not None
 
 
+def test_a_double_quote_after_a_hole_is_two_bends_as_two_marks_are():
+    # Barrett's key writes a whole-step bend so; of the 128 a study found, 124 on draws 2 and 3, which bend a whole step
+    found = scan('-3" -2” -3\'\' -2bb 4')
+    assert [g.label() for g in found.groups] == ["−3′′", "−2′′", "−3′′", "−2′′", "4"]
+    assert found.coverage == 1.0 and found.unknown == ()
+
+
+def test_what_no_spelling_reads_is_unknown_never_dropped():
+    # a quote after no hole, a lone dash, a bracket left open, a full stop: each the line's own, unread, in its place
+    found = scan('4 " 5 - 6 ( 7 .')
+    assert [g.label() for g in found.groups] == ["4", '"', "5", "-", "6", "(", "7", "."]
+    assert [g.kind for g in found.groups if not g.holes] == ["unread"] * 4
+    assert found.unknown == ('"', "-", "(", ".") and found.coverage == 0.5
+
+
+def test_a_bend_written_between_the_sign_and_the_hole():
+    # Whole Lotta Love's "-b3": the draw bent, as "-3b" and "b-3" are
+    found = scan("-3-b3 3 -bb2 b-3 -3b")
+    assert [g.label() for g in found.groups] == ["−3", "−3′", "3", "−2′′", "−3′", "−3′"]
+    assert found.unknown == ()
+
+
+def test_a_bend_after_a_lone_hole_in_brackets_bends_the_hole():
+    # "(3)b": the draw of a tab that writes a draw in brackets, bent; "(3)'" and "(3)bb" as the hole's own marks are
+    found = scan("(3)b (3)' (4) (3)bb", notation=BRACKETS)
+    assert [g.label() for g in found.groups] == ["−3′", "−3′", "−4", "−3′′"]
+    assert found.unknown == () and found.groups[0].text == "(3)b"
+    assert scan("(-3)b 4").groups[0].label() == "−3′"
+    assert scan("(4 5)b").unknown == ("b",)  # holes together: no bend of theirs
+    assert scan("(3)tue", notation=BRACKETS).unknown == ("tue",)  # a word after it, no bend
+
+
+def test_a_time_signature_or_a_clock_time_is_prose_never_holes():
+    for line in ("Time: 3/4", "3/4 TIME (SLOW)", "4/4", "2/4,", "1:45", "3:02", "21:57 30/03/2018",
+                 "SOLO 4:24", "run time 3:00."):
+        found = scan(line)
+        assert found.holes == () and not found.is_row, line
+    assert parse("Time: 3/4\n\n4 5 6\nla la la\n").notes == ["Time: 3/4"]
+    # a bar or a bend written with "/" beside a hole still reads
+    assert [g.label() for g in scan("4 / 5 /6 -3/ 7").groups] == ["4", "5", "6", "−3", "7"]
+
+
+def test_a_tab_writes_its_signs_after_the_hole_or_before_it_never_both():
+    # "6+ 6-" (Wikibooks' notation), in a tab that writes no sign before a hole: blow 6, draw 6
+    read = parse("6+ 6- 7+ 8+ 8- 7+\nla la la la la la\n")
+    assert read.convention == "signs after"
+    assert [g.label() for g in read.rows()[0].groups] == ["6", "−6", "7", "8", "−8", "7"]
+    assert read.rows()[0].unknown == []
+    # a tab that writes "-6" before the hole: "6-" is no draw, and its "-" no hole's
+    read = parse("-6 6- 7 -7\nla la la la\n")
+    assert read.convention == "signs"
+    assert labels(read) == ["−6", "6", "7", "−7"] and read.rows()[0].unknown == ["-"]
+    assert [g.label() for g in scan("6- 7+ 6-7").holes] == ["6", "7", "6", "−7"]  # harptabs.com's, a line alone
+    assert scan("6+ 6-", notation=SIGNS_AFTER).unknown == () and scan("6--", notation=SIGNS_AFTER).groups[0].hold
+
+
+def test_dots_lengthen_the_hole_before_them_in_a_tab_that_writes_a_dot_before_a_hole():
+    # A German hymn series on harptabs.com: "the dots extend the note"; a dot before a hole, then after one
+    read = parse(". 4   4   -4  5 .  7\nLo-rem ip su: dol si\n.5. -4 5 -4 5 .\nam-et con-se\n")
+    assert dotted(read) and read.convention == "signs"
+    first, second = read.rows()
+    assert [(g.label(), g.hold) for g in first.groups] == [
+        ("4", False), ("4", False), ("−4", False), ("5", True), ("7", False)]
+    assert [g.hold for g in second.groups] == [True, False, False, False, True]
+    assert first.unknown == second.unknown == []
+
+
+def test_a_full_stop_lengthens_nothing_in_a_tab_that_writes_no_dot_before_a_hole():
+    read = parse("1.\n4 5 6.\nla la la\n2.\n")
+    assert not dotted(read) and not star_bends(read) and read.convention == "signs"
+    assert len(read.rows()) == 1 and [g.hold for g in read.rows()[0].groups if g.holes] == [False, False, False]
+    assert read.rows()[0].unknown == ["."]
+
+
 def test_holes_together():
-    found = scan("(4 5 6) (456) {-4 -5} [-2 -5] 7,8B (-4)")
+    found = scan("(4 5 6) (456) {-4 -5} [-2 -5] (-4)")
     assert [(g.kind, g.label()) for g in found.groups] == [
-        ("chord", "(4 5 6)"), ("chord", "(4 5 6)"), ("shake", "{−4 −5}"), ("split", "[−2 −5]"), ("chord", "(7 8)"),
-        ("note", "−4")]
+        ("chord", "(4 5 6)"), ("chord", "(4 5 6)"), ("shake", "{−4 −5}"), ("split", "[−2 −5]"), ("note", "−4")]
 
 
 def test_a_lone_hole_in_brackets_is_a_draw_only_where_the_tab_says_so():
-    assert scan("(5) 4", parens_draw=True).groups[0].holes == (Hole(5, "draw"),)
-    assert scan("(5) 4").groups[0].holes == (Hole(5, "blow"),)
-    assert scan("(-5)", parens_draw=True).groups[0].holes == (Hole(5, "draw"),)
+    assert scan("(5) 4", notation=BRACKETS).groups[0].holes == (Hole(5, "draw"),)
+    assert scan("(4 5)", notation=BRACKETS).groups[0].holes == (Hole(4, "draw"), Hole(5, "draw"))  # "se aspiran"
+    # By harptabs.com's key, brackets round one hole mean nothing: the hole is read, the brackets kept as written
+    signs = scan("(5) 4")
+    assert [(g.kind, g.text) for g in signs.groups] == [("unread", "("), ("note", "5"), ("unread", ")"), ("note", "4")]
+    assert signs.holes[0].holes == (Hole(5, "blow"),) and signs.coverage == 0.5
 
 
 def test_holds_bars_and_repeats_are_read_and_hold_the_hole_before_them():
@@ -219,14 +398,35 @@ def test_a_repeat_mark_is_read_written_either_way():
 
 
 def test_a_digit_in_a_word_is_no_hole_and_a_line_of_words_is_no_row():
-    assert scan("the 2nd verse, 4th time").groups == ()
+    assert scan("the 2nd verse, 4th time").holes == ()
     assert not scan("Play it 3 times then go to 4").is_row
     assert scan("").groups == () and not scan("   ").is_row
 
 
-def test_a_chromatics_slide_or_a_hole_past_ten_is_shown_as_written():
+def test_a_chromatics_slide_or_its_pages_chip_is_shown_as_written():
     assert not parse("4 <5 -6 7*\nwords to sing here\n").readable
     assert parse("4 5 -6 7\nwords to sing here\n").readable
+    assert not parse("4 5 -6 7\nwords to sing here\n", harp="Chromatic").readable
+    assert parse("4 5 -6 7\nwords to sing here\n", harp="Diatonic").readable
+
+
+def test_a_tab_harptabs_com_calls_chromatic_is_shown_as_written_though_it_presses_no_slide():
+    body = "4 5 6 -6 7\nla la la la la\n"
+    assert parse(body).readable and parse(body, harp="Diatonic").readable
+    chromatic = parse(body, harp="Chromatic")
+    assert chromatic.chromatic and not chromatic.readable
+
+
+def test_a_star_after_a_hole_is_a_bend_on_a_tab_harptabs_com_calls_diatonic():
+    # Tab 9069's legend: "* = half step bend", "** = whole step bend"; its page's chip says Diatonic
+    body = "-1 -2 -3* -3*/ 1 2 3 -3**/ -2\nla la la la la la la la la\n"
+    read = parse(body, harp="Diatonic")
+    assert read.readable and star_bends(read) and not dotted(read)
+    assert labels(read) == ["−1", "−2", "−3′", "−3′", "1", "2", "3", "−3′′", "−2"]
+    # no chip (a tab kept before, one from the inbox) or another: a slide, as a chromatic's tab writes it
+    for chip in (None, "Tremolo"):
+        assert parse(body, harp=chip).chromatic and not parse(body, harp=chip).readable
+    assert parse("4 <5 -6\nla la la\n", harp="Diatonic").chromatic  # "<" is the slide on any harp
 
 
 def test_a_tab_with_no_row_is_shown_as_written():

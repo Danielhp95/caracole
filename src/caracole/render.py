@@ -845,7 +845,8 @@ def _tab_harps(cfg: Config, song: Song, tabs: list[HarmonicaFile], files: Mappin
             continue
         try:
             text = read_regular(cfg.library_dir / kept.path).decode("utf-8", errors="replace")
-            found = harpfit.choose(parse_tab(text), cho=cho, key=key[0], key_source=key[1], page_key=tab.key)
+            found = harpfit.choose(parse_tab(text, harp=tab.harp), cho=cho, key=key[0], key_source=key[1],
+                                   page_key=tab.key)
         except OSError:
             continue  # its page says why (_render_harmonica)
         except Exception:  # a tab the overlay can't read must never cost the sheet's viewer
@@ -862,7 +863,7 @@ def _render_harmonica(conn: sqlite3.Connection, cfg: Config, song: Song, folder:
                       back: str | None) -> _Done:
     """Write a page for each harmonica tab the song keeps (harptabs_fetch.py), ``harmonica-N.html`` beside its
     ``harmonica-N.txt`` (viewer/harptab_page.py), from the tab's text and what its version says of it (its page, its
-    key, its difficulty, its views, its rating), with the song's chord sheet ``sheet`` (its ChordPro and its key as
+    key, its harp, its difficulty, its views, its rating), with the song's chord sheet ``sheet`` (its ChordPro and its key as
     keys.py found it: the human one, else the auto one), for the harp that plays with the record. ``back`` names the
     song's sheet viewer, which its ‹ Chord sheet opens. Each page is recorded (``_note_written``) and written only
     when its bytes change.
@@ -893,7 +894,7 @@ def _render_harmonica(conn: sqlite3.Connection, cfg: Config, song: Song, folder:
         try:
             html = build_harmonica_viewer(
                 text, title=clean_title(song.title), artist=song.artist, tab_file=tab.name, url=version.url,
-                page_key=tab.key, facts=raw, cho=cho, key=key, key_source=key_source, back=back)
+                page_key=tab.key, harp=tab.harp, facts=raw, cho=cho, key=key, key_source=key_source, back=back)
         except Exception:  # a tab the page can't read must never cost the song's other pages
             log.warning("no viewer for %s: cannot build %s", song.display, tab.page, exc_info=True)
             ok = False

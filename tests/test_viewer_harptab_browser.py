@@ -1,11 +1,14 @@
 """harmonica-N.html in Chromium (viewer/harptab_page.py, harptab.js): each hole drawn over its syllable, wrapping
 between words on a phone and never parting a hole from its syllable; a hole tapped heard at its note on the harp
 chosen, a line's ▶ playing it hole by hole, lighting each, and stopping; the harp's −/+ and Notes; dark mode; a tab
-caracole can't read, as its text. The sound is recorded as test_viewer_sound.py records it (``SCHEDULE``)."""
+caracole can't read, as its text; how a tab was read, what it couldn't read kept in place, its effects on their
+holes, and a row read with low confidence as written. The sound is recorded as test_viewer_sound.py records it
+(``SCHEDULE``)."""
 
 from __future__ import annotations
 
 import tempfile
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -382,3 +385,67 @@ def test_the_pages_harp_diagrams_have_draw_above_the_holes_and_blow_below(tmp_pa
     draw_above_blow(charts)
     assert len(plain) == 1
     draw_above_blow(plain)
+
+
+# --- how a tab was read: Spokey Dokey, in its tabber's own notation ------------------------------------------------
+
+SPOKEY = (TABS.parent / "legends" / "693_spokey-dokey.txt").read_text(encoding="utf-8")
+UNREAD = "[...document.querySelectorAll('#sheet .u')].map((u) => u.textContent)"
+WAHS = "[...document.querySelectorAll('#sheet .h .fx')].map((f) => f.textContent)"
+
+
+@pytest.mark.parametrize("size", [PHONE, {"width": 1280, "height": 900, "mobile": False}], ids=["390", "1280"])
+def test_spokey_dokey_says_how_it_was_read_and_keeps_what_it_couldnt_read_in_place(tmp_path, size):
+    with opened(tmp_path, written(tmp_path, SPOKEY), **size) as b:
+        said = b.js("document.querySelector('.head .legend').textContent")
+        unread = b.js(UNREAD)
+        # the $ of 4d-$-5d, between draw 4 and draw 5, on their line, seen
+        around = b.js("""(() => {
+          const u = [...document.querySelectorAll('#sheet .u')].find((x) => x.textContent === '$');
+          const line = u.closest('p'), parts = [...line.querySelectorAll('.h, .u, .jn')];
+          const at = parts.indexOf(u), r = u.getBoundingClientRect();
+          return [parts[at - 2].textContent, parts[at - 1].textContent, parts[at + 1].textContent,
+                  parts[at + 2].textContent, r.width > 0 && r.height > 0];
+        })()""")
+        wahs = b.js(WAHS)
+        b.click("#notes")
+        named = b.js("document.querySelector('#sheet .h[data-i=\"0\"]').textContent")
+        wahs_with_notes, unread_with_notes = b.js(WAHS), b.js(UNREAD)
+        wide = b.js(WIDE)
+    assert said.startswith("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the tab's own legend")
+    assert Counter(unread) == Counter({"3": 4, "$": 2, "(DV)": 1})
+    assert around == ["−4", "‿", "‿", "−5", True]
+    assert wahs == ["wah"] * 11
+    # 3*d, draw 3 bent a semitone, on the page's D harp: C5; Notes keeps the effects and what it couldn't read
+    assert named == "C5" and wahs_with_notes == wahs and unread_with_notes == unread
+    assert wide[0] <= wide[1]
+
+
+def test_spokey_dokeys_legend_is_its_own_block_and_a_wah_is_on_its_hole(tmp_path):
+    with opened(tmp_path, written(tmp_path, SPOKEY)) as b:
+        legend = b.js("[...document.querySelectorAll('#sheet .tab-legend p.l')].map((p) => p.textContent)")
+        inside = b.js("""(() => {
+          const f = document.querySelector('#sheet .h .fx'), h = f.closest('.h').getBoundingClientRect();
+          const r = f.getBoundingClientRect();
+          return r.left >= h.left - 0.5 && r.right <= h.right + 0.5 && r.width > 0;
+        })()""")
+        said = b.js("document.querySelector('#sheet .h .fx').closest('.h').getAttribute('aria-label')")
+    assert legend == ["(w) = Wah effect", "(h) = Hold", "* = bend", "D= draw", "b= blow"]
+    assert inside is True and said.endswith(", wah")
+
+
+def test_a_row_read_with_low_confidence_is_shown_as_written_in_place(tmp_path):
+    # Bent blows on holes 2 and 3, a row no harp plays, between two rows that read well: its text, as written
+    text = "8 -8 7 -6\nla la la la\n\n3b 3b 2b 2b\nlo lo lo lo\n\n-4 -5 6\nli li li\n"
+    with opened(tmp_path, written(tmp_path, text)) as b:
+        kinds = b.js("[...document.querySelector('#sheet .sec').children].map((e) => e.className)")
+        shown = b.js("""(() => {
+          const pre = document.querySelector('#sheet pre.asw'), style = getComputedStyle(pre);
+          return [pre.textContent, /mono/.test(style.fontFamily), pre.querySelectorAll('.h, .rp').length,
+                  pre.getBoundingClientRect().height > 0];
+        })()""")
+        played = b.js("document.querySelectorAll('#sheet .rp').length")
+        wide = b.js(WIDE)
+    assert kinds == ["l hl", "gap", "tab asw", "gap", "l hl"]
+    assert shown == ["3b 3b 2b 2b\nlo lo lo lo", True, 0, True]
+    assert played == 2 and wide[0] <= wide[1]

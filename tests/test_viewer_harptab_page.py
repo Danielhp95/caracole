@@ -18,6 +18,7 @@ from caracole.viewer.theory import Key, parse_chord, spelling
 from test_viewer_harpfit import LINES, a_sheet, a_tab
 
 TABS = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
+SPOKEY = (TABS.parent / "legends" / "693_spokey-dokey.txt").read_text(encoding="utf-8")
 HOTEL = (TABS / "588_hotel-california.txt").read_text(encoding="utf-8")
 KNOCKIN = (TABS / "29910_knockin-on-heavens-door.txt").read_text(encoding="utf-8")
 JUKE = (TABS / "1882_juke.txt").read_text(encoding="utf-8")
@@ -112,12 +113,69 @@ def test_the_harp_as_the_tab_says_or_its_key_or_the_songs_or_the_usual():
     assert data_of(page(HOTEL))["positions"] is None and data_of(page(HOTEL))["why"] == {}
 
 
-def test_how_to_read_the_holes_and_what_harptabs_com_says_of_the_tab():
-    assert text_of(page(facts=FACTS), "legend") == "4 blow −4 draw −3′ bent (4 5) together · Beginner · 224k views · 3.3★"
-    assert text_of(page(facts={"views": 1_100_000, "rating": None}), "legend").endswith("together · 1.1M views")
+def test_how_the_tab_was_read_and_what_harptabs_com_says_of_it():
+    assert text_of(page(facts=FACTS), "legend") == "Read as: 4 blow · - draw, guessed (1.00) · Beginner · 224k views · 3.3★"
+    assert text_of(page(facts={"views": 1_100_000, "rating": None}), "legend").endswith("(1.00) · 1.1M views")
     # as harptabs.com writes a count under a thousand: 400, never "0k"
-    assert text_of(page(facts={"views": 400}), "legend").endswith("together · 400 views")
-    assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("together")
+    assert text_of(page(facts={"views": 400}), "legend").endswith("(1.00) · 400 views")
+    assert text_of(page(facts={"views": "lots", "rating": True}), "legend").endswith("guessed (1.00)")
+    # each symbol as the tab writes it
+    assert '<code class="sy">-</code> draw' in page()
+
+
+def test_spokey_dokey_says_it_was_read_by_its_own_legend():
+    html = page(SPOKEY, facts={"difficulty": "Expert", "views": 23000})
+    assert text_of(html, "legend") == ("Read as: b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the "
+                                       "tab's own legend · Expert · 23k views")
+    guessed = page("\n".join(line for line in SPOKEY.split("\n") if " = " not in line and "= " not in line))
+    assert re.fullmatch(r"Read as: b blow · d draw · \* bend · - joins, guessed \(0\.8\d\)", text_of(guessed, "legend"))
+    data = data_of(html)
+    assert data["reading"] == {"name": "letters", "source": "legend", "q": 0.96, "margin": 0.87,
+                               "said": "b blow · d draw · * bend · - joins · (h) hold · (w) wah"}
+
+
+def test_its_data_carries_each_holes_effects_and_runs_for_the_script_to_draw_again():
+    data = data_of(page(SPOKEY))
+    groups = data["groups"]
+    assert groups[0] == ["note", [[3, "d", 1, 0]]]  # 3*d: nothing more, nothing more carried
+    wah = [g for g in groups if len(g) > 2 and g[2].get("fx")]
+    assert len(wah) == 11 and all(g[2]["fx"] == ["wah"] for g in wah)
+    assert ["note", [[3, "d", 2, 0]], {"join": 1}] in groups  # 3**d-, run into the next
+    shown = re.findall(r'<b class="h" data-i="(\d+)"', page(SPOKEY))
+    assert [int(i) for i in shown] == list(range(len(groups)))
+
+
+def test_what_the_tab_couldnt_read_is_shown_in_place_as_written():
+    html = page(SPOKEY)
+    rows = re.findall(r'<p class="l holes">(.*?)<button', html, re.S)
+    seventh = unescape(re.sub(r"<[^>]+>", "", rows[6]))
+    assert seventh.startswith("−3′‿−3 3 2 3 −3′‿−3 4 −4‿$‿−5 −4‿$‿−5 4‿5 4‿5")
+    assert '<span class="u">$</span>' in rows[6] and '<span class="u">(DV)</span>' in html
+    assert re.search(r'<span class="cell"><span class="u">3</span><span class="jn" aria-hidden="true">‿</span></span>'
+                     r'<span class="cell"><b class="h"', rows[1])  # each with its tie, which a line never parts
+    # an effect a label on its hole, a hold the page's own
+    assert '<small class="fx">wah</small></b>' in html and '<span class="hold" aria-hidden="true">…</span>' in html
+    assert 'aria-label="draw 3 bent 1, wah"' in html
+
+
+def test_the_tabs_legend_is_its_own_block_never_words():
+    html = page(SPOKEY)
+    block = re.search(r'<div class="tab-legend">(.*?)</div>', html, re.S).group(1)
+    assert re.findall(r'<p class="l">(.*?)</p>', block) == ["(w) = Wah effect", "(h) = Hold", "* = bend", "D= draw",
+                                                           "b= blow"]
+    assert 'class="l words"' not in html
+
+
+def test_a_row_read_with_low_confidence_is_its_text_as_written():
+    html = page("4 -4 5 -5 6\nla la la la la\n\n3b 3b 2b 2b\nlo lo lo lo\n\n-4 -5 6\nli li li\n")
+    assert '<pre class="tab asw">3b 3b 2b 2b\nlo lo lo lo</pre>' in html
+    data = data_of(html)
+    assert len(data["rows"]) == 2 and len(re.findall(r'class="rp"', html)) == 2  # its holes neither drawn nor played
+
+
+def test_the_foot_says_the_holes_were_placed_only_where_a_row_has_words():
+    assert "caracole placed each hole over its syllable" in page()
+    assert "placed each hole" not in page(SPOKEY) and "as its tabber wrote it.</p>" in page(SPOKEY)
 
 
 def test_back_to_the_songs_sheet_or_the_library():
@@ -145,6 +203,19 @@ def test_a_tab_it_cant_read_is_its_text_as_written_never_an_error():
     data = data_of(html)
     assert "groups" not in data and "rows" not in data
     assert "as its tabber wrote it.</p>" in html and "placed each hole" not in html
+
+
+def test_the_harp_harptabs_com_names_reaches_the_reading():
+    # A tab its page calls Chromatic is its text as written, a slide pressed or not; Diatonic, a "*" is a bend
+    chromatic = page(HOTEL, harp="Chromatic")
+    assert '<pre class="tab">' in chromatic and 'class="h"' not in chromatic
+    assert text_of(chromatic, "facts") == "Harmonica tab, as its tabber wrote it: caracole can't read its notation."
+    assert '<pre class="tab">' not in page(HOTEL, harp="Diatonic")
+    starred = "-1 -2 -3* -3**\nla la la la\n"
+    assert '<pre class="tab">' in page(starred)  # no chip: "*" is a chromatic's slide
+    data = data_of(page(starred, harp="Diatonic"))
+    assert [hole for kind, hole in data["groups"]] == [[[1, "d", 0, 0]], [[2, "d", 0, 0]], [[3, "d", 1, 0]],
+                                                        [[3, "d", 2, 0]]]
 
 
 def test_everything_it_was_given_is_escaped():
