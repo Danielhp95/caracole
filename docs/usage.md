@@ -2386,7 +2386,8 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   harp, 4th position, aeolian"), "the tab's" on the harp the song's harmonica
   tab plays on, and what it plays ("Plays A, D and Em; E as Em."). Under it,
   the key on that harp: Scale, the pentatonic or Blues over its ten holes,
-  blow above, draw below, the bends beyond, the tonic in rust, the key's
+  as you hold the harp, draw above and blow below, the bends beyond (the
+  draw bends above, the blow bends below), the tonic in rust, the key's
   notes dark, the rest faint, and the harp's notes outside the key ("Outside B
   minor: C."); then a card per chord, the holes that play it lit ("draw 4–6",
   "draw 4–6 · as Em, the minor stand-in") or "no chord here". It follows the

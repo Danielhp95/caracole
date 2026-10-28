@@ -990,9 +990,9 @@ a.ver-main .ver-name { color: var(--accent); }
 .sw.k-bent { box-shadow: inset 0 0 0 1.5px var(--pull); }
 .sw.b-draw { background: var(--away); }
 .sw.b-none { box-shadow: inset 0 0 0 1.5px var(--muted); }
-/* A harp's holes: blow above the comb, draw below, bends beyond (the key's card). The key's tonic filled in the
-   accent, a note of its scale filled dark, any other outlined and faint; a bent note in the scale outlined in --pull,
-   one outside it a faint dot. On a chord's card, the run that plays it filled in its breath's colour (blow the
+/* A harp's holes: draw above the comb, blow below, as a player holds it, bends beyond (the key's card). The key's
+   tonic filled in the accent, a note of its scale filled dark, any other outlined and faint; a bent note in the scale
+   outlined in --pull, one outside it a faint dot. On a chord's card, the run that plays it filled in its breath's colour (blow the
    accent, draw --away) on a soft band (dashed for a minor stand-in), its other notes outlined, the rest faint. */
 .harp { display: block; width: 100%; height: auto; margin-top: calc(4px * var(--nk)); }
 .hx-lab { fill: var(--muted); font-size: 9px; font-weight: 600; }

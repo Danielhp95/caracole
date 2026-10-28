@@ -34,15 +34,16 @@ positions. With a ukulele or a baritone chosen, it is theirs and named so; with 
    its minor stand-in), or "Plays none of the song's chords: melody only." Under the circle: "Tap a harp.
    Shaded: the ones that play the song's chords."
 2. **The key on that harp**: "Bm on a D harp", its position; chips Scale · Minor pentatonic (Major pentatonic in
-   a major key) · Blues; then the harp's ten holes: a comb of hole numbers 1 to 10, the blow notes above it, the
-   draw notes below, and each hole's bends beyond its row (the blow bends of holes 8 to 10 above, the draw bends
-   of holes 1 to 6 below, the deepest farthest). Each note is its name in a circle: the tonic filled in the
+   a major key) · Blues; then the harp's ten holes as a player holds it: a comb of hole numbers 1 to 10, the draw
+   notes above it, the blow notes below, and each hole's bends beyond its row (the draw bends of holes 1 to 6
+   above, the blow bends of holes 8 to 10 below, the deepest farthest; the owner's call, after the build, which had
+   blow above). Each note is its name in a circle: the tonic filled in the
    accent colour, a note of the scale filled dark, any other outlined and faint; a bent note in the scale
    outlined in `--pull`, one outside it a faint dot. A legend (the tonic, in the scale, bent) and one line: the
    harp's notes outside the key ("Outside B minor: C.") or "Every note it blows or draws is in B minor." Nothing
    about how well the tab fits the record (the owner removed that line).
 3. **A card per chord**, in the order the guitar tab lists them: the chord's name as it sounds, and "Am shape"
-   when the capo or the transposition makes the shape another; the harp's ten holes (blow row, comb, draw row, no
+   when the capo or the transposition makes the shape another; the harp's ten holes (draw row, comb, blow row, no
    bends) with the run of holes that plays it filled in its breath's colour (blow the accent, draw `--away`) on a
    soft band (dashed for a minor stand-in), the chord's other notes outlined in their breath's colour, the rest
    faint; then one line: "draw 4–6", "blow 1–3 · as F#, its triad", "draw 4–6 · as Em, the minor stand-in", or

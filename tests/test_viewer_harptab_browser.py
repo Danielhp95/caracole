@@ -369,3 +369,16 @@ def test_the_window_narrowed_with_the_focus_in_the_rail_puts_it_on_the_bar(tmp_p
         assert b.wait("document.getElementById('necks').hidden")
         focus = b.js("document.activeElement.id")
     assert focus == "h-down"  # the bar's first control, where the rail's button was
+
+
+def test_the_pages_harp_diagrams_have_draw_above_the_holes_and_blow_below(tmp_path):
+    from test_viewer_harptab_page import TAB_D
+    from test_viewer_overlay import ROWS, draw_above_blow
+
+    with opened(tmp_path, with_sheet(tmp_path), **WIDE_SCREEN) as b:
+        charts = b.js(ROWS)
+    with opened(tmp_path, written(tmp_path, TAB_D), **WIDE_SCREEN) as b:  # no sheet: the page's harp's notes alone
+        plain = b.js(ROWS)
+    draw_above_blow(charts)
+    assert len(plain) == 1
+    draw_above_blow(plain)
