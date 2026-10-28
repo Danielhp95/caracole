@@ -507,9 +507,10 @@ def _read_hole(text: str, m: re.Match, notation: Notation, tokens: _Tokens, limi
     while tokens.after is not None and pos < limit:
         s = tokens.after.match(text, pos, limit)
         sym = s and notation.meaning(s.group(), "after")
-        if sym and sym.means in BREATHS and s.group() in _SIGNS and s.end() < len(text) \
-                and (text[s.end()] in _SIGNS or text[s.end()].isalnum()):
-            break  # 6+ 6-, never 6-7 (a sign before the 7) nor 6-- (a hold)
+        if sym and sym.means in BREATHS and s.group() in _SIGNS and (
+                (s.end() < len(text) and (text[s.end()] in _SIGNS or text[s.end()].isalnum()))
+                or (read.start > 0 and text[read.start - 1].isdigit())):
+            break  # 6+ 6-, never 6-7 (a sign before the 7), 6-- (a hold) nor 456- (holes glued, the sign whose?)
         if not s or not _marks([(s.start(), s.end(), s.group(), sym)], read):
             break
         pos = s.end()

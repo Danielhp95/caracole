@@ -71,7 +71,7 @@ TOKENS = [
     (LETTERS, "4", ["?4"]), (LETTERS, "-4", ["?-4"]), (LETTERS, "3*d(W)", ["−3′", "?(W)"]),
     # the two-sign system: + and - after the hole
     (SIGNS_AFTER, "6+", ["6"]), (SIGNS_AFTER, "6-", ["−6"]), (SIGNS_AFTER, "10-", ["−10"]),
-    (SIGNS_AFTER, "6", ["6"]), (SIGNS_AFTER, "6--", ["6…"]), (SIGNS_AFTER, "6-7", ["6", "?-", "7"]), (SIGNS_AFTER, "4-'", ["−4′"]),
+    (SIGNS_AFTER, "6", ["6"]), (SIGNS_AFTER, "6--", ["6…"]), (SIGNS_AFTER, "6-7", ["6", "?-", "7"]), (SIGNS_AFTER, "456-", ["4", "5", "6", "?-"]), (SIGNS_AFTER, "4-'", ["−4′"]),
     # David Barrett's: a hole alone drawn, + blown
     (BARRETT, "3", ["−3"]), (BARRETT, "4+", ["4"]), (BARRETT, "3'", ["−3′"]), (BARRETT, "2’’", ["−2′′"]),
     (BARRETT, "-4", ["?-", "−4"]),
