@@ -147,8 +147,8 @@ def test_the_page_holds_the_file_and_loads_alphatab_by_its_hash(app, conn, cfg, 
     at = alphatab.load(fake_alphatab)
     assert f'<script type="application/octet-stream" id="gp">{b64(SYNTHETIC.read_bytes())}</script>' in html
     assert (f'<script src="{at.href}" integrity="{at.integrity}" crossorigin="anonymous"></script>') in html
-    assert "<h1>Synthetic Study</h1>" in html and '<p class="by">caracole tests</p>' in html
-    assert "Guitar Pro 1 · guitar-1.gp" in html
+    assert "<h1>Synthetic Study</h1>" in html and '<header class="top">' in html
+    assert '<span class="by">caracole tests</span>' in html and 'title="guitar-1.gp">Guitar Pro 1</span>' in html
     assert f'href="/#song={song.id}"' in html and f'href="/{quote(path)}" download>Download<' in html
     assert ">Sheet<" not in html  # the song has no sheet viewer
     # The page's own script and stylesheet, and the empty stylesheet that keeps alphaTab's shared rules out.
@@ -181,7 +181,7 @@ def test_the_page_links_the_song_s_sheet_viewer(app, conn, cfg):
     path = keep_guitar(conn, cfg, song, SYNTHETIC.read_bytes(), name="guitar-2.gp5")
     html = text(get(app, guitar_url(path)))
     assert f'href="/{quote("Soda Stereo/De Música Ligera/sheet.html")}">Sheet<' in html
-    assert "Guitar Pro 2 · guitar-2.gp5" in html
+    assert 'title="guitar-2.gp5">Guitar Pro 2</span>' in html
 
 
 def test_every_format_alphatab_reads_is_shown_and_a_power_tab_file_is_refused(app, conn, cfg):

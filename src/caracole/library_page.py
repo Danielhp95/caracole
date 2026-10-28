@@ -280,6 +280,7 @@ from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
 from caracole.page_icon import LINK as PAGE_ICON
+from caracole.page_icon import mark as page_mark
 from caracole.progressions import catalogue, library_progressions
 from caracole.songbook_section import songbooks_data
 from caracole.songs import HUMAN_SHEET, Song, is_export, list_songs
@@ -405,7 +406,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
            else _CSP.replace("__FORMS__", "'none'"))
     return (
         _HEAD.replace("__CSP__", csp).replace("__ICON__", PAGE_ICON).replace("__STYLE__", _PAGE_STYLE)
-        + _BODY.replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
+        + _BODY.replace("__MARK__", page_mark()).replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
         .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"

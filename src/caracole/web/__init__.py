@@ -15,6 +15,8 @@ A small server from the standard library (``http.server``), in these parts:
   candidate is ``caracole review --song``. Each takes caracole's lock
   and keeps the pause after the last request any caracole sent, as it does
   from a terminal, so the server is never more aggressive than the CLI.
+- top.py: the header every page caracole serve writes itself opens with, one line: the "¿" and the name, the
+  page's title, its links.
 - status.py: the one line a request shows on its song's card, read from its
   job's steps and, once it is over, from the song's state; outcome.py: the
   requests page's own view of it, the running one's steps and a finished

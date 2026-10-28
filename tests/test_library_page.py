@@ -2600,7 +2600,7 @@ COMPACT = """
     return node ? Math.round(node.getBoundingClientRect().height) : null;
   };
   return { line: tall("#list .line-action .btn"), more: tall("#list .line-more"), artist: tall("#list button.artist"),
-           file: tall("#list .line-panel .btn.small"), letter: tall("#jump button"), tool: tall(".toolbar .tool"),
+           file: tall("#list .line-panel .btn.small"), letter: tall("#jump button"), tool: tall("#tools .tool"),
            menu: tall("#sort") };
 })()
 """
@@ -3396,22 +3396,76 @@ def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_p
         path = write_library_page(cfg.library_dir, html)
         phone_page.open(path.as_uri())
         top = phone_page.js(FIRST_SONG)
-        assert top < 400, top  # under the header, the bar and the buttons: more than half the screen is songs
+        assert top < 240, top  # one bar, then the search: most of the screen is songs
         assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
-        # The numbers sit beside the title, and Filter, Sort and Select are one row, a thumb's worth each.
-        title = phone_page.js("document.querySelector('h1').getBoundingClientRect().top")
-        stats = phone_page.js("document.getElementById('summary').getBoundingClientRect().top")
-        assert abs(title - stats) < 16, (title, stats)
+        # Filter, Sort and Select are in the search's own row, a thumb's worth each.
+        field = phone_page.js("Math.round(document.querySelector('.searchbar .field').getBoundingClientRect().top)")
         row = phone_page.js(f"{TOOLS}.map((c) => [Math.round(c.getBoundingClientRect().top), "
                             "c.getBoundingClientRect().height, c.id || c.className])")
         assert [c for _, _, c in row] == ["filter", "sort", "tool pick-toggle"], row
-        assert max(t for t, _, _ in row) - min(t for t, _, _ in row) < 8, row
+        assert max(abs(t - field) for t, _, _ in row) < 8, (field, row)
         assert min(h for _, h, _ in row) >= 44, row
-        assert phone_page.js("document.querySelector('.toolbar').scrollWidth <= innerWidth")
+        assert phone_page.js("document.querySelector('.searchbar').scrollWidth <= innerWidth")
+        # The tabs and Requests share the first line without touching, the wordmark is its "¿" alone, and the placeholder
+        # is short enough to read in the field that is left beside three buttons.
+        assert phone_page.js("document.getElementById('q').placeholder") == "Search 3 songs"
+        tabs = phone_page.js("document.getElementById('tab-songbooks').getBoundingClientRect().right")
+        links = phone_page.js("(document.querySelector('.masthead .links') || { getBoundingClientRect: () => ({ left: 9999 }) })"
+                              ".getBoundingClientRect().left")
+        assert tabs <= links, (tabs, links)
+        assert phone_page.js("document.querySelector('.masthead .app .word').getBoundingClientRect().width") <= 1
+        assert phone_page.js("document.querySelector('.masthead .app svg.mark').getBoundingClientRect().width") > 8
 
 
-# The toolbar's buttons shown: Filter, Sort and Select (the tags aside).
-TOOLS = "[...document.querySelectorAll('.toolbar .tools > .tool, .toolbar .tools select')].filter((c) => c.checkVisibility())"
+ONE_BAR = """
+(() => {
+  const box = (s) => { const r = document.querySelector(s).getBoundingClientRect(); return Math.round(r.top + r.height / 2); };  // its middle
+  const q = document.getElementById("q");
+  const here = (id) => { const e = document.getElementById(id); return e.checkVisibility() ? e.getBoundingClientRect().height : 0; };
+  document.body.setAttribute("data-bar", JSON.stringify({
+    word: box(".masthead .app"), tabs: box(".masthead .tabs"), links: document.querySelector(".masthead .links") ? box(".masthead .links") : null,
+    field: box(".searchbar .field"), filter: box("#filter"), list: box("#list article"),
+    title: document.querySelector("h1").getBoundingClientRect().width, placeholder: q.placeholder,
+    mark: (() => { const m = document.querySelector(".masthead .app svg.mark"); const w = document.querySelector(".masthead .app");
+      return m ? [Math.round(m.getBoundingClientRect().height), Math.round(m.getBoundingClientRect().right) <= Math.round(w.getBoundingClientRect().right),
+        getComputedStyle(m.querySelector("path")).stroke === getComputedStyle(w).color] : null; })(),
+    hint: [document.getElementById("bar-status").textContent, here("bar-status")], count: here("count"),
+    stats: Array.from(document.querySelectorAll("#summary .stat")).map((s) => s.textContent),
+  }));
+  q.value = "wo"; q.dispatchEvent(new Event("input", { bubbles: true }));  // two letters: your songs alone, no site asked
+  setTimeout(() => document.body.setAttribute("data-narrowed",
+    JSON.stringify([here("count") > 0, document.getElementById("count").textContent])), 1500);
+})();
+"""
+
+
+@in_chromium
+def test_the_top_is_one_bar_then_the_search_with_its_tools(conn, cfg, tmp_path):
+    # The wordmark, the tabs and Requests are one line; the search and Filter, Sort and Select the next; no title, hint
+    # or count at rest. The numbers say what needs attention (wanted songs) and the placeholder how many songs there are.
+    from caracole.library_page import WebControls
+
+    for n, (artist, title) in enumerate((("Radiohead", "Creep"), ("Oasis", "Wonderwall"), ("Muse", "Hysteria"))):
+        song = add_song(conn, artist, title)
+        if n:
+            update_song(conn, song.id, status="found")
+    served = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok", active=1))
+    for html, sites in ((served, ", or the sites"), (page(conn, cfg), "")):
+        path = write_library_page(cfg.library_dir, with_script(html, ONE_BAR))
+        dom = dump_dom(path, tmp_path, size="1280,900")
+        bar = attribute_of(dom, "data-bar")
+        assert bar["placeholder"] == "Search 3 songs" + sites, bar
+        assert abs(bar["word"] - bar["tabs"]) < 16 and (bar["links"] is None or abs(bar["word"] - bar["links"]) < 16), bar
+        assert abs(bar["filter"] - bar["field"]) < 8 and bar["list"] < 215, bar  # the tools are the search's row
+        assert bar["title"] <= 1, bar  # the h1 is there for a screen reader alone
+        assert bar["mark"] and 14 <= bar["mark"][0] <= 28 and bar["mark"][1] and bar["mark"][2], bar  # the icon's "¿", in the wordmark's colour
+        assert bar["hint"] == ["", 0] and bar["count"] == 0, bar  # nothing to say at rest
+        assert bar["stats"] == ["1 wanted"], bar
+        assert attribute_of(dom, "data-narrowed") == [True, "1 of 3 songs"]  # said once the list is narrowed
+
+
+# The buttons shown beside the search: Filter, Sort and Select (the tags aside).
+TOOLS = "[...document.querySelectorAll('#tools > .tool, #tools select')].filter((c) => c.checkVisibility())"
 
 
 @in_chromium
@@ -3440,7 +3494,9 @@ def test_on_a_desktop_filter_sort_and_select_are_one_line_and_review_shows_once_
     dom = dump_dom(write_library_page(cfg.library_dir, with_script(page(conn, cfg), tops)), tmp_path, size="1280,900")
     assert not re.search(r'data-show="review"[^>]*hidden', dom)
     toolbar = re.search(r'<div class="toolbar">(.*?)<nav class="jump"', dom, re.S).group(1)
-    assert 'id="sort"' in toolbar and 'id="filter-panel"' in toolbar and 'id="view' not in toolbar
+    bar = re.search(r'<div class="searchbar"[^>]*>(.*?)<section class="results"', dom, re.S).group(1)
+    assert 'id="sort"' in bar and 'id="filter"' in bar and 'id="tools"' in bar  # beside the search
+    assert 'id="filter-panel"' in toolbar and 'id="sort"' not in toolbar and 'id="view' not in toolbar  # the panel, and the tags
     assert len(noted(dom, "data-tops")) == 3
     assert max(noted(dom, "data-tops")) - min(noted(dom, "data-tops")) < 8  # one line: it all fits
 
@@ -3721,7 +3777,7 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     assert clicks["pick"] == {"panel": True, "open": True, "expanded": "true", "focus": "radiohead/creep"}, clicks
     assert clicks["countdown"]["text"].startswith("Removing in 5 s") and clicks["countdown"]["focus"] == "Undo", clicks
     assert clicks["countdown"]["waits"] is True
-    assert clicks["undone"] == {"text": "Not removed", "focus": "Remove", "sends": True}, clicks
+    assert clicks["undone"] == {"text": "Not removed", "focus": "⋯", "sends": True}, clicks  # back on what leads to Remove
     assert clicks["select"] == {"boxes": 5, "lines": 5, "size": [44, 44]}, clicks
     assert clicks["book"] == {"selecting": True, "count": "1 selected", "picked": True}, clicks
 

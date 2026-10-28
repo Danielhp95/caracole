@@ -504,21 +504,39 @@ const caracoleCard = (icons, rows) => {
   }) : null;
 
   // The song's progressions (``items``: { text, said, go }): chips that find your songs that play each.
+  // The song's progressions, a chip each: four of them, the rest one press away ("+2"); a long string of numerals is
+  // cut short in its chip (rows.css, ``prog-text``), the whole of it in its tooltip and for a screen reader.
+  const PROGS_SHOWN = 4;
   const progressions = (items) => {
     const found = listOf(items).filter((p) => p && p.text);
     if (!found.length) return null;
     const box = el("div", "progressions");
     const label = el("p", "card-label", "Progressions");
-    label.appendChild(el("em", null, "find your songs that play one"));
+    label.title = "Find your songs that play one";
     box.appendChild(label);
     const row = el("div", "progs");
-    for (const p of found) {
-      const go = withGlyph(el("button", "prog"), "search", String(p.text));
+    const chips = found.map((p) => {
+      const go = el("button", "prog");
       go.type = "button";
+      go.append(glyph("search"), el("span", "prog-text", String(p.text)));
       go.title = String(p.said || p.text);
       go.setAttribute("aria-label", String(p.said || p.text));
       go.addEventListener("click", p.go);
       row.appendChild(go);
+      return go;
+    });
+    const rest = chips.slice(PROGS_SHOWN);
+    if (rest.length) {
+      for (const c of rest) c.hidden = true;
+      const more = el("button", "progs-more", "+" + rest.length);
+      more.type = "button";
+      more.setAttribute("aria-label", "Show " + many(rest.length, "more progression"));
+      more.addEventListener("click", () => {
+        for (const c of rest) c.hidden = false;
+        more.remove();
+        rest[0].focus();
+      });
+      row.appendChild(more);
     }
     box.appendChild(row);
     return box;
@@ -539,25 +557,51 @@ const caracoleCard = (icons, rows) => {
     }
     return box;
   };
-  // The card's foot: what changes the song (``actions``, then ``book``, Add to a songbook…), and at its far end
-  // ``info``, info.json, a quiet download, and ``remove``, Remove, alone.
+  // The card's foot: what changes the song (``actions``, then ``book``, Add to a songbook…), and at its far end a "⋯"
+  // that opens ``info``, info.json, a quiet download, and ``remove``, Remove, alone: neither is what you came to do.
+  // Escape, or a press anywhere else, closes it.
   const foot = (s, parts) => {
     const p = parts || {};
     const box = el("div", "foot");
     for (const node of listOf(p.actions)) if (node) box.appendChild(node);
     if (p.book) box.appendChild(p.book);
-    let pushed = false;
+    const behind = [];
     if (p.info && p.info.href) {
       const info = downloadLink(p.info, "info.json", "Download what caracole knows of " + String(s.title) +
         ", info.json");
       info.replaceChild(glyph("info"), info.firstChild);
-      info.classList.add("info-file", "push");
-      pushed = true;
-      box.appendChild(info);
+      info.classList.add("info-file");
+      behind.push(info);
     }
-    if (p.remove) {
-      if (!pushed) p.remove.classList.add("push");
-      box.appendChild(p.remove);
+    if (p.remove) behind.push(p.remove);
+    if (behind.length) {
+      const more = el("details", "foot-more");
+      const summary = el("summary", "btn small foot-more-btn");
+      const said = "More for " + String(s.title);
+      summary.setAttribute("aria-label", said);
+      summary.title = said;
+      const dots = el("span", null, "⋯");
+      dots.setAttribute("aria-hidden", "true");
+      summary.appendChild(dots);
+      const menu = el("div", "foot-menu");
+      for (const node of behind) menu.appendChild(node);
+      more.append(summary, menu);
+      more.addEventListener("toggle", () => {
+        if (!more.open) return;
+        const away = (e) => { if (!more.contains(e.target)) more.open = false; };
+        document.addEventListener("click", away, true);
+        more.addEventListener("toggle", () => document.removeEventListener("click", away, true), { once: true });
+      });
+      menu.addEventListener("click", (e) => {  // what it was opened for is chosen: it goes
+        if (e.target.closest("button, a")) more.open = false;
+      });
+      more.addEventListener("keydown", (e) => {
+        if (e.key !== "Escape" || !more.open) return;
+        e.stopPropagation();
+        more.open = false;
+        summary.focus();
+      });
+      box.appendChild(more);
     }
     return box.childNodes.length ? box : null;
   };

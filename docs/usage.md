@@ -1971,18 +1971,20 @@ loads nothing from the network. Its browser tab shows caracole's mark, an
 inverted question mark (¿) on its rust-red square, drawn inside the page itself,
 as every page caracole writes or serves shows it (the sheet viewers and the
 songbooks from their next render); caracole serve answers a browser's own
-`/favicon.ico` with it too. It has two tabs under its header: **Library**,
-your songs, and **Songbooks** (see [The Songbooks tab](#the-songbooks-tab));
-the address remembers which (`#tab=songbooks`). Its header is short, so that on
-a phone the first song starts well within the first screen: the library's
-numbers beside its title (served, the Requests link on the line above), the
-tabs, the search box, then the toolbar: **Filter**, **Sort** and, set apart
-after a divider, **Select** (see below), at the right, one row on a phone too;
-before them, the filters on, each a tag ("Wanted ×", "Harmonica ×", "A minor
-×", "by Queen ×") that lets it go, then **Clear**, which lets them all go, never
-the search (on a phone the tags go under the buttons).
-The search box stays at the top as the page scrolls under it, with an edge to
-show it.
+`/favicon.ico` with it too. Its top is one bar, so that the first song starts
+well within the first screen, on a phone too: caracole's "¿" mark and name (the
+mark alone on a phone), the two tabs, **Library**, your songs, and
+**Songbooks** (see [The Songbooks tab](#the-songbooks-tab); the address
+remembers which, `#tab=songbooks`), the number of songs wanted or ignored when
+there are any, and, served, the Requests link at the end. Under it the search
+box, which says how many songs there are ("Search 8 songs, or the sites"), with
+**Filter**, **Sort** and, set apart after a divider, **Select** (see below)
+beside it, icons alone on a phone. The filters on come under it, each a tag
+("Wanted ×", "Harmonica ×", "A minor ×", "by Queen ×") that lets it go, then
+**Clear**, which lets them all go, never the search. The search bar stays at the
+top as the page scrolls under it, with an edge to show it. Nothing is said above
+the list until there is something to say: how many songs a search or a filter
+leaves ("3 of 8 songs"), or how the search of the sites goes.
 
 It shows your songs as dense lines, grouped by artist: each artist's name over
 their songs, artists A to Z ("The Beatles" under B, Chinese names by their
@@ -2024,7 +2026,8 @@ YouTube: auto-chords works out the chords next", "Auto sheet from YouTube
 audio"), with a link to the video once there is one, instead of offering to buy
 it; and, served, Look in the index.
 
-Then what you play from it, a tile each, in this order: its **Chord sheet**
+Then what you play from it, a tile each (from 720 px a row each: its name and version, the source it
+came from with that source's mark, its formats at the end), in this order: its **Chord sheet**
 (the accent's; **Auto sheet** in its own colour when that is its only sheet,
 **Ukulele chords** for Ultimate Guitar's Ukulele Chords), its **Guitar Pro**
 file (**Guitar tab** when it has a text tab and no Guitar Pro file), its
@@ -2077,14 +2080,17 @@ file, Open where the page shows it, and Download. A harmonica tab with its page
 beside it opens that page, from its tile and its row, its text a download.
 
 Then its progressions, as it plays them ("vi–IV–I–V"), each a chip that shows
-your songs with that progression (below); where else to find it, links that
+your songs with that progression (below): four show, a long string of numerals
+cut short in its chip (the whole of it in its tooltip), the rest behind **+2**;
+where else to find it, links that
 leave caracole (↗): its MuseScore pages, each a possible match, as on the
 to-do page, and for a song without a sheet, its search and buy links. At its
 foot, served, **Fetch again** (below) and **Use LaCuerda's sheet**; **Add to a
 songbook…** (see Songbooks, below), for a song the page had when it was loaded
 (one that Get it or a request brought since has it once the page is loaded
-again); and at the far end, info.json, a quiet download, and, served, **Remove**,
-in red. When Fetch now has the line's button, the sheet's tile opens it all the
+again); and at the far end a **⋯** that opens info.json, a quiet download, and,
+served, **Remove**, in red (Escape, or a press elsewhere, closes it). When Fetch
+now has the line's button, the sheet's tile opens it all the
 same, as its title does. A line drawn again (a request over) keeps its card
 open, its drawer closed.
 
@@ -2195,7 +2201,7 @@ their soft border, and so does the search box. The pages `caracole serve`
 writes itself (Requests, Look up and its search box, a song's pick) do the
 same.
 
-**Select**, at the toolbar's end, puts a
+**Select**, last of the tools beside the search, puts a
 box at the start of each song's line: tick songs in the order they go in the
 songbook (each box shows its place, and a screen reader says it: "Pick Creep by
 Radiohead, 2nd"). A tap anywhere on a line ticks it, or unticks it: while you
@@ -3602,7 +3608,11 @@ Who can reach it, below).
   (UG's slugs write AC/DC as "Acdc" and 宋冬野 as "Song Dongye"), is your own
   line; one new to the library since the page loaded says In your library and
   Get it again, and is looked up as your song: no second song, and no line
-  added to wanted.txt. A song your library hasn't, from Ultimate Guitar,
+  added to wanted.txt. In the results, on this page and the lookup page, a song
+  you have a sheet for stands out: its name in the text's colour on a faint wash
+  of the accent colour with an edge to it, where every other line, a site's or
+  one of yours still wanted, has a muted name on a plain one (its pill, In your
+  library, is left to a screen reader). A song your library hasn't, from Ultimate Guitar,
   LaCuerda or gtptabs.com, also has **Add for tonight's run** under its chevron: it
   goes into wanted.txt under the site's names, as Request does with Fetch it
   now unticked (a song only LaCuerda has as `caracole add --lacuerda …`, the

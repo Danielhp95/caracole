@@ -115,6 +115,11 @@
   font-size: .88rem; font-weight: 550; cursor: pointer; }
 .prog:hover { border-color: var(--control-edge); }
 .prog svg.glyph { flex: none; width: 14px; height: 14px; color: var(--artist); }
+.prog-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.prog { max-width: 16rem; }
+.progs-more { min-height: 32px; padding: 0 11px; border: 1px dashed var(--border-strong); border-radius: 999px; background: none; color: var(--muted);
+  font: inherit; font-size: .85rem; font-weight: 650; cursor: pointer; }
+.progs-more:hover { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .find-elsewhere { display: grid; gap: 6px; }
 .find-elsewhere .card-label { margin: 0; }
 .find-elsewhere .subhead { margin: 0 0 4px; }
@@ -124,7 +129,17 @@
 .line:not(.hit) > .line-panel > .foot { flex-wrap: wrap; align-items: center; gap: 8px; margin: 0; padding-top: 12px;
   border-top: 1px solid var(--border); }
 .foot .btn svg.glyph { flex: none; width: 16px; height: 16px; margin-right: 7px; color: var(--muted); }
-.foot .push { margin-left: auto; }
+/* "⋯", at the foot's far end: info.json and Remove, in a menu that opens upward over the card. */
+.foot-more { position: relative; margin-left: auto; }
+.foot-more > summary { list-style: none; }
+.foot-more > summary::-webkit-details-marker { display: none; }
+.foot-more-btn { min-width: 38px; padding: 0 10px; font-size: 1.15rem; line-height: 1; color: var(--muted); }
+.foot-more[open] > .foot-more-btn { border-color: var(--control-edge); background: var(--raised); color: var(--text); }
+.foot-menu { position: absolute; right: 0; bottom: calc(100% + 6px); z-index: 3; display: grid; gap: 4px; min-width: 12.5rem;
+  padding: 6px; border: 1px solid var(--border-strong); border-radius: 12px; background: var(--surface);
+  box-shadow: var(--pop-shadow); }
+.foot-menu form { margin: 0; }
+.foot-menu .btn, .foot-menu .info-file { justify-content: flex-start; width: 100%; }
 .info-file { display: inline-flex; align-items: center; min-height: 36px; padding: 0 6px; }
 .info-file svg.glyph { width: 15px; height: 15px; margin-right: 4px; }
 .btn.remove { border-color: color-mix(in srgb, var(--failed) 45%, transparent); background: transparent;
@@ -132,9 +147,20 @@
 .btn.remove svg.glyph { color: var(--failed); }
 .btn.remove:hover { border-color: var(--failed); background: var(--failed-bg); }
 
+/* From 720 px what you play from is a row each, not a grid of tiles: its name and version, the source it came from (its
+   mark and name, which opens that source's versions), its formats at the end. A phone keeps the tile. */
+@media (min-width: 720px) {
+  .tiles { grid-template-columns: 1fr; gap: 8px; }
+  .tile { flex-direction: row; align-items: center; gap: 4px 16px; }
+  .tile-open { flex: 1 1 auto; padding: 8px 4px 8px 12px; border-radius: 11px 0 0 11px; }
+  .tile-versions { flex: none; padding: 0; }
+  .tile-downloads { flex: none; margin: 0 12px 0 0; padding: 0; border: 0; border-radius: 0; background: none; }
+}
+
 /* A thumb's targets: every chip, download, button and close of the card, 44 px. */
 @media (pointer: coarse) {
-  .vchip, .dl, .prog, .vrow .btn, .inuse, .info-file { min-height: 44px; }
+  .vchip, .dl, .prog, .vrow .btn, .inuse, .info-file, .progs-more { min-height: 44px; }
+  .foot-more-btn { min-width: 44px; }
   .dl { min-width: 44px; justify-content: center; }
   .drawer-head { padding-right: 60px; }
   .drawer-close { top: 1px; width: 44px; height: 44px; }

@@ -475,16 +475,18 @@ def test_a_lookups_progress_shows_on_the_running_card_and_on_its_songs_line(cfg,
 # --- in Chromium: on a phone it stacks; every control a thumb's size; light and dark -------------------------
 
 
-CHECKS = (UNFOLD + noting("data-short", small_targets(".app a"))
-          + noting("data-wide", "document.documentElement.scrollWidth")
-          + noting("data-page", "window.innerWidth"))
+def checks(width):
+    # The mark and name that lead home are a thumb's size on a touch screen, and with a mouse as big as they read.
+    return (UNFOLD + noting("data-short", small_targets("a.app" if width >= 500 else ""))
+            + noting("data-wide", "document.documentElement.scrollWidth")
+            + noting("data-page", "window.innerWidth"))
 
 
 @pytest.mark.parametrize("width", [390, 1280])
 @in_chromium
 def test_the_page_fits_its_width_and_every_control_is_a_thumbs_size_in_light_and_dark(tmp_path, width):
     path = tmp_path / "requests.html"
-    path.write_text(mockup_page().replace("</body>", f"<script>{CHECKS}</script>\n</body>"), encoding="utf-8")
+    path.write_text(mockup_page().replace("</body>", f"<script>{checks(width)}</script>\n</body>"), encoding="utf-8")
     for scheme in ("light", "dark"):
         dom = browser.dump_dom(path.as_uri(), (width, 900), mobile=width < 500, touch=width < 500,
                                media={"prefers-color-scheme": scheme})

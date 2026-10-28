@@ -9,9 +9,11 @@
   :root { --pop-shadow: 0 18px 40px rgb(0 0 0 / 55%); --seg-on: var(--raised);
     --accent-soft: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
 }
-.toolbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 2px; }
+.toolbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.toolbar .tags:has(> :not([hidden])) { margin-top: 8px; }
 .tags { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
-.tools { display: flex; flex: none; align-items: center; gap: 8px; min-width: 0; margin-left: auto; }
+.tools { display: flex; flex: none; align-items: center; gap: 8px; min-width: 0; }
+.bar-row .tool { min-height: 40px; border-radius: 12px; }
 .tool { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 12px; border: 1px solid
   var(--control-edge); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit;
   font-size: .88rem; font-weight: 600; white-space: nowrap; cursor: pointer; }
@@ -99,17 +101,23 @@ html.sheet-open { overflow: hidden; }
 [data-lit~="harmonica"] .line-holds .glyph.glyph-harmonica,
 [data-lit~="score"] .line-holds .glyph.glyph-score { color: var(--accent); }
 @media (max-width: 719px) {
-  .tools { flex: 1 1 100%; order: -1; gap: 6px; }
+  .masthead.lib { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "app tabs links" "sum sum sum"; gap: 4px 8px; }
+  .masthead.lib .app .word { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .masthead.lib .tab { padding: 0 8px; }
+  .tools { gap: 6px; }
   .tools .divider { display: none; }
-  .tools .pick-toggle { margin-left: auto; }
-  .tool { gap: 6px; padding: 0 9px; }
-  .tool-menu select.tool { padding-left: 31px; }
-  .tool-menu .glyph { left: 9px; }
+  /* Icons alone beside the search, a thumb's worth each: the words are there for a screen reader, and Filter keeps the
+     number of its filters on. */
+  .bar-row .tool { justify-content: center; min-width: 44px; min-height: 44px; padding: 0; font-size: 0; }
+  .bar-row .tool-menu select.tool { width: 44px; padding: 0; }
+  .bar-row .tool-menu .glyph { left: 50%; transform: translate(-50%, -50%); }
+  .bar-row .tool .filter-n { position: absolute; top: -5px; right: -5px; font-size: .7rem; }
+  .bar-row .tool#filter { position: relative; }
   .tags { flex-basis: 100%; }
 }
 /* A thumb's targets: every control of the toolbar and of the panel. */
 @media (pointer: coarse) {
-  .tool, .tag, .clear-filters, .clear-all, .fchip, .tonics button { min-height: 44px; }
+  .tool, .bar-row .tool, .tag, .clear-filters, .clear-all, .fchip, .tonics button { min-height: 44px; }
   .seg [role="radio"] { min-height: 44px; }
   .clear-filters, .clear-all { min-width: 44px; }
 }

@@ -37,6 +37,14 @@ def test_the_page_carries_its_token_and_allows_its_own_script_and_style_alone():
     assert "innerHTML" not in SCRIPT and "eval(" not in SCRIPT
 
 
+def test_the_page_opens_with_the_one_line_header_and_no_paragraph_before_the_search():
+    page = lookup_page("tok")
+    header = re.search(r'<header class="top">(.*?)</header>', page, re.S).group(1)
+    assert "<h1>Look up a song</h1>" in header and 'class="mark"' in header
+    assert re.findall(r'<a class="navlink" href="([^"]*)">([^<]*)', header) == [("/", "Library"), ("/jobs", "Requests")]
+    assert 'class="lede"' not in page and "offline copies" not in page and 'class="masthead"' not in page
+
+
 def test_a_screen_reader_hears_the_progress_line_and_not_the_whole_sheet_again():
     # The reader holds the sheet: a live region around it would read the whole sheet out at each step.
     page = lookup_page("tok")
@@ -375,6 +383,51 @@ def test_the_results_are_the_librarys_rows_and_a_song_you_have_opens_its_viewer(
     assert browser.wait("document.querySelector('h1') && document.querySelector('h1').textContent === "
                         "'De Música Ligera'")
     assert queue.snapshot() == []  # opening it asked for nothing
+
+
+# Each row of the results: whether it is a song you have, its name's colour against the page's (--text, --muted), the
+# wash behind it (--accent at --have-tint) and the width of its pill ("In your library", or "Found").
+HAVE_ROWS = """
+(() => {
+  const probe = (css) => { const p = document.createElement('i'); p.style.cssText = css; document.body.appendChild(p);
+    const s = getComputedStyle(p); const got = [s.color, s.backgroundColor]; p.remove(); return got; };
+  const ink = probe('color: var(--text)')[0], quiet = probe('color: var(--muted)')[0];
+  const tint = probe('background-color: color-mix(in srgb, var(--accent) var(--have-tint), var(--surface))')[1];
+  return [...document.querySelectorAll('#results .rows > article.row.hit')].map((a) => {
+    const name = getComputedStyle(a.querySelector('.row-title')), row = getComputedStyle(a), pill = a.querySelector('.badge.found');
+    return { have: a.classList.contains('have'), ink: name.color === ink, quiet: name.color === quiet,
+      tinted: row.backgroundColor === tint && tint !== 'rgba(0, 0, 0, 0)', pill: pill ? pill.getBoundingClientRect().width : null };
+  });
+})()
+"""
+
+
+@in_chromium
+def test_a_song_you_have_stands_out_from_the_ones_you_have_not_on_the_lookup_page_too(cfg, live, browser):
+    from helpers.rendered import rendered_song
+
+    from caracole.songs import update_song
+    from conftest import add_song
+
+    base, _ = live
+    conn = db.connect(cfg.db_path)
+    found = rendered_song(conn, cfg)  # Soda Stereo - De Música Ligera, a sheet kept
+    update_song(conn, found.id, status="found")
+    wanted = add_song(conn, "Radiohead", "Creep")  # yours, nothing kept yet
+    update_song(conn, wanted.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    conn.close()
+    index_songs(cfg, [("soda-stereo", "de-musica-ligera", 2), ("radiohead", "creep", 2), ("oasis", "creep", 1)])
+    browser.open(base + "/lookup")
+    browser.type("musica ligera")
+    assert browser.wait(f"{HITS} >= 2")
+    rows = browser.js(HAVE_ROWS)
+    assert len(rows) == 2 and all(r["have"] and r["ink"] and r["tinted"] for r in rows), rows  # its row and UG's
+    assert all(0 < r["pill"] <= 1 for r in rows), rows  # "Found", "In your library": said to a screen reader alone
+    browser.open(base + "/lookup")
+    browser.type("creep")
+    assert browser.wait(f"{HITS} >= 2")
+    rows = browser.js(HAVE_ROWS)
+    assert rows and not any(r["have"] or r["tinted"] or r["ink"] for r in rows) and all(r["quiet"] for r in rows), rows
 
 
 @in_chromium

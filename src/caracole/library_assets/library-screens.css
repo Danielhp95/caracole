@@ -2,7 +2,7 @@
 @media (min-width: 720px) {
   .jump { flex-wrap: wrap; overflow: visible; }
   .searchbar { margin: 0 -24px; padding: 12px 24px 8px; }
-  .masthead.lib { grid-template-areas: "app links" "title links"; align-items: end; padding: 28px 0 8px; }
+  .masthead.lib { padding-top: 18px; }
 }
 /* A thumb's targets: the pages' links, the letters and "+ N more" (the toolbar's and the Filter panel's are
    filter.css's). Every .btn has its 44 px from BASE_STYLE, and a line's, its chevron and an artist's name theirs from

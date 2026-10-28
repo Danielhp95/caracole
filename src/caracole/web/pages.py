@@ -36,6 +36,7 @@ from caracole.inline import sha256_source
 from caracole.library_assets import BASE_STYLE, PICKER_STYLE, STEPS_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.stamps import shown, stamp
+from caracole.web.top import top
 
 if TYPE_CHECKING:  # songbooks.py imports Refused, and status.py imports songbooks.py
     from caracole.web.jobs import Job, Stage, Step
@@ -142,10 +143,7 @@ def page(title: str, body: str, *, head: str = "") -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
         f"{head}{PAGE_ICON}<title>{escape(title)} · caracole</title>\n<style>{PAGE_STYLE}</style>\n</head>\n<body>\n"
-        '<div class="page">\n<header class="masthead">\n  <div>\n'
-        '    <p class="app"><a href="/">caracole</a></p>\n'
-        f"    <h1>{escape(title)}</h1>\n  </div>\n"
-        '  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a></nav>\n</header>\n'
+        f'<div class="page">\n{top(title)}'
         f"{body}\n</div>\n</body>\n</html>\n"
     )
 
@@ -252,18 +250,14 @@ def jobs_page(jobs: list[Job], lines: Mapping[int, Line], *, outcomes: Mapping[i
     waiting = any(job.active for job in jobs)
     kept = f"job={opened}&" if opened is not None else ""
     if not waiting:
-        note = ""
+        lede = ""
     elif refresh:
-        note = (f"This page refreshes itself every {REFRESH} seconds while one waits or runs. "
-                f'<a href="/jobs?{escape(kept)}refresh=0">Stop refreshing</a>')
+        lede = (f'<p class="lede">Refreshing every {REFRESH} seconds. '
+                f'<a href="/jobs?{escape(kept)}refresh=0">Stop refreshing</a></p>')
     else:
         again = f"/jobs?job={opened}" if opened is not None else "/jobs"
-        note = f'This page stays as it is: <a href="{again}">refresh it</a> to see how they go.'
-    lede = (
-        '<p class="lede">Requests run one at a time, each a caracole command under its lock, as from a '
-        "terminal: a song looked up now is one <code>caracole get</code>, a few requests about a second apart. "
-        f"{note}</p>"
-    )
+        lede = f'<p class="lede">Paused. <a href="{again}">Refresh</a> to see how they go.</p>'
+
     if not jobs:
         items = '<p class="empty">No requests yet. Request a song from <a href="/">the library</a>.</p>'
         return page("Requests", lede + items)

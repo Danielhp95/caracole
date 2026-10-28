@@ -1,8 +1,5 @@
-/* caracole serve's Guitar Pro page (guitar_page.py), after base.css: the song's name and its links, the bar of
+/* caracole serve's Guitar Pro page (guitar_page.py), after base.css: the song's name (top.py's line) and its links, the bar of
    controls, which stays at the top (playback on one row, the tracks on the next), and the score alphaTab draws. */
-.gp .masthead { align-items: flex-start; }
-.gp .by { margin: 4px 0 0; color: var(--muted); }
-.gp .file { margin: 2px 0 0; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
 .gp-bar { position: sticky; top: 0; z-index: 5; display: grid; gap: 8px; margin: 8px -16px 0; padding: 8px 16px;
   border-bottom: 1px solid var(--border); background: var(--bg); }
 .gp-play { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; min-width: 0; }

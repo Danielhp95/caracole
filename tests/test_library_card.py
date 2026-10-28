@@ -346,7 +346,11 @@ def test_an_auto_sheet_alone_is_its_own_tile_in_its_colour(conn, cfg, tmp_path):
 
 REMOVE = """
 const card = noteCard("Hotel California");
-const go = lineOf("Hotel California").querySelector(".foot form.remove button");
+const more = lineOf("Hotel California").querySelector(".foot > details.foot-more");
+const go = more.querySelector("form.remove button");
+const closed = { open: more.open, shown: go.checkVisibility(), said: more.querySelector("summary").getAttribute("aria-label") };
+more.open = true;
+const opened = go.checkVisibility();
 const style = getComputedStyle(go);
 const failed = getComputedStyle(document.documentElement).getPropertyValue("--failed").trim();
 const probe = document.createElement("span");
@@ -354,7 +358,8 @@ probe.style.color = failed;
 document.body.appendChild(probe);
 note("remove", { foot: card.foot, said: go.getAttribute("aria-label"), color: style.color,
   failed: getComputedStyle(probe).color, background: style.backgroundColor, border: style.borderTopColor,
-  last: lineOf("Hotel California").querySelector(".foot").lastElementChild.className });
+  last: lineOf("Hotel California").querySelector(".foot").lastElementChild.className, closed, opened,
+  menu: more.querySelector(".foot-menu").lastElementChild.className });
 """
 
 
@@ -362,7 +367,9 @@ def test_remove_says_remove_and_is_red_and_last(conn, cfg, tmp_path):
     put(cfg, hotel(conn, cfg), "info.json")
     remove = attribute_of(run(conn, cfg, tmp_path, REMOVE, controls=SERVED), "data-remove")
     assert remove["foot"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "info.json", "Remove"]
-    assert remove["last"].split()[0] == "remove"
+    assert remove["last"].split()[0] == "foot-more" and remove["menu"].split()[0] == "remove"  # last, behind ⋯
+    assert remove["closed"] == {"open": False, "shown": False, "said": "More for Hotel California"}
+    assert remove["opened"] is True  # ⋯ opens info.json and Remove
     assert remove["said"] == "Remove Hotel California by Eagles from caracole"
     # Red from the start, its words and edge, yet outlined: never filled, never the main thing to do.
     assert remove["color"] == remove["failed"] and remove["background"] == "rgba(0, 0, 0, 0)"
@@ -386,7 +393,7 @@ PROGS = """
 const line = openCard("Synthetic Song");
 const chips = Array.from(line.querySelectorAll(".progressions .prog"));
 const before = { label: text(line.querySelector(".progressions .card-label").firstChild),
-  em: text(line.querySelector(".progressions .card-label em")),
+  em: text(line.querySelector(".progressions .card-label em")), hint: line.querySelector(".progressions .card-label").title,
   chips: chips.map((c) => [text(c), c.getAttribute("aria-label"), !!c.querySelector("svg.glyph-search")]) };
 chips[0].click();
 note("progs", { before, hash: location.hash,
@@ -399,10 +406,59 @@ def test_progressions_are_search_chips_that_filter(conn, cfg, tmp_path):
 
     progression_library(conn, cfg)
     progs = attribute_of(run(conn, cfg, tmp_path, PROGS), "data-progs")
-    assert (progs["before"]["label"], progs["before"]["em"]) == ("Progressions", "find your songs that play one")
+    assert (progs["before"]["label"], progs["before"]["em"]) == ("Progressions", None)  # no line of words about it
+    assert progs["before"]["hint"] == "Find your songs that play one"  # the label says it as a tooltip
     assert progs["before"]["chips"][0][0] == "vi–IV–I–V" and progs["before"]["chips"][0][2] is True
     assert progs["before"]["chips"][0][1].startswith("Your songs with I–V–vi–IV")
     assert "prog=I+V+vi+IV" in progs["hash"] and progs["titles"] == ["In A Minor", "Synthetic Song"]
+
+
+TILE_ROWS = """
+const line = openCard("Hotel California");
+const mid = (n) => { const b = n.getBoundingClientRect(); return Math.round(b.top + b.height / 2); };
+note("rows", Array.from(line.querySelectorAll(".tiles > .tile")).map((t) => ({
+  name: text(t.querySelector(".tile-name")), height: Math.round(t.getBoundingClientRect().height),
+  mids: [t.querySelector(".tile-open"), t.querySelector(".tile-versions"), t.querySelector(".tile-downloads")]
+    .filter(Boolean).map(mid),
+  mark: !!t.querySelector(".tile-versions .vchip [data-source]"),
+  visible: Array.from(line.querySelectorAll(".foot button, .foot a, .foot summary")).filter((n) => n.checkVisibility())
+    .map((n) => text(n)) })));
+"""
+
+
+def test_a_tile_is_one_row_and_its_source_keeps_its_mark_beside_its_name(conn, cfg, tmp_path):
+    # What you play from, a row each: its name and version, the source it came from with that source's mark, its
+    # downloads at the end. Under the card's foot only Fetch again, Add to a songbook and ⋯ show.
+    hotel(conn, cfg)
+    rows = attribute_of(run(conn, cfg, tmp_path, TILE_ROWS, controls=SERVED, size="1280,900"), "data-rows")
+    assert rows and all(r["height"] <= 76 for r in rows), rows
+    assert all(max(r["mids"]) - min(r["mids"]) <= 16 for r in rows), rows  # one line
+    [sheet] = [r for r in rows if r["name"] == "Chord sheet"]
+    assert sheet["mark"] is True, sheet  # "From" the source's icon and its name
+    assert rows[0]["visible"] == ["Fetch again", "Use LaCuerda's sheet", "Add to a songbook…", "⋯"], rows[0]["visible"]
+
+
+MANY = """
+const card = caracoleCard({}, caracoleRows({}));
+const long = "I–V7/IV–IV–I–vi–V7/V–V7–I–V7/IV–IV–iv–I–vi–V7–I";
+const box = card.progressions(["a", "b", "c", "d", "e", "f"].map((k, n) => ({ text: n ? "I–IV–V" + n : long,
+  said: "Your songs with " + k, go: () => {} })));
+document.body.appendChild(box);
+const shown = () => Array.from(box.querySelectorAll(".prog")).filter((c) => c.checkVisibility());
+const first = shown().map((c) => [Math.round(c.getBoundingClientRect().width), c.getAttribute("aria-label")]);
+const more = box.querySelector("button.progs-more");
+const before = { n: first.length, widest: Math.max(...first.map((f) => f[0])), said: first[0][1], more: more ? text(more) : null };
+if (more) more.click();
+note("many", { before, after: shown().length, gone: !box.querySelector("button.progs-more") || !box.querySelector("button.progs-more").checkVisibility() });
+"""
+
+
+def test_progressions_are_short_chips_four_and_a_button_for_the_rest(conn, cfg, tmp_path):
+    many = attribute_of(run(conn, cfg, tmp_path, MANY), "data-many")
+    assert many["before"]["n"] == 4 and many["before"]["more"] == "+2", many  # four, and the rest one press away
+    assert many["before"]["widest"] <= 17 * 16, many  # a string of numerals is cut, never a wide chip
+    assert many["before"]["said"] == "Your songs with a"  # the whole of it for a screen reader
+    assert many["after"] == 6 and many["gone"] is True, many
 
 
 # --- its layout: 390 px and a desktop, the drawer under its tile's row ----------------------------------------
@@ -435,15 +491,11 @@ def test_the_card_fits_with_the_drawer_under_its_tile(conn, cfg, tmp_path, size)
         left, right, _, bottom = at["tile"]
         assert left <= at["point"] <= right, (kind, at)  # its pointer over its tile
         assert at["drawer"][2] >= bottom, (kind, at)  # under it
-    if size == "390,844":  # one tile a row: right under its own
-        assert len({t[0] for t in layout["tiles"]}) == 1
-        assert layout["sheet"]["after"].startswith("tile tile-sheet")
-        assert layout["guitar"]["after"].startswith("tile tile-guitar")
-    else:  # four a row, the drawer under the row: after its last tile, the score's row under the drawer
-        assert [t[2] for t in layout["tiles"]].count(layout["tiles"][0][2]) == 4, layout["tiles"]
-        assert layout["sheet"]["after"].startswith("tile tile-lyrics")
-        assert layout["guitar"]["after"].startswith("tile tile-lyrics")
-        assert layout["tiles"][4][2] >= layout["guitar"]["drawer"][3], layout
+    # One tile a row, on a phone and from 720 px: the drawer right under its own, the tiles after it under the drawer.
+    assert len({t[0] for t in layout["tiles"]}) == 1 and len({t[2] for t in layout["tiles"]}) == len(layout["tiles"])
+    assert layout["sheet"]["after"].startswith("tile tile-sheet")
+    assert layout["guitar"]["after"].startswith("tile tile-guitar")
+    assert layout["tiles"][4][2] >= layout["guitar"]["drawer"][3], layout  # the score's row under the guitar's drawer
 
 
 def test_a_drawer_left_open_in_a_folded_card_is_placed_again_when_the_card_opens_after_a_resize(conn, cfg, tmp_path):
@@ -460,7 +512,7 @@ def test_a_drawer_left_open_in_a_folded_card_is_placed_again_when_the_card_opens
         b.open(path.as_uri())
         assert b.wait("!!window.kit && !!document.querySelector('#list .line-more')", 15)
         b.js("kit.openCard('Hotel California'); kit.chipOf('Hotel California', 'gtptabs', 'guitar').click()")
-        assert b.js(after).startswith("tile tile-lyrics")  # four a row: under the row
+        assert b.js(after).startswith("tile tile-guitar")  # a row a tile: right under its own
         b.js("kit.lineOf('Hotel California').querySelector('.line-more').click()")  # folded, its drawer left open
         b.js("window.resized = 0; addEventListener('resize', () => { window.resized += 1; })")  # after the page's own
         b.send("Emulation.setDeviceMetricsOverride", width=390, height=844, deviceScaleFactor=1, mobile=False)

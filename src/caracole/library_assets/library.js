@@ -483,8 +483,11 @@
       showLine(p, view);
     }
     for (const b of r.held) b.disabled = false;
+    // Remove is behind the card's "⋯": the button when its menu is open, else the "⋯" that leads to it.
     const go = focusBack && from ? from.querySelector("form.remove button") : null;
-    if (go) go.focus();
+    const menu = focusBack && from ? from.querySelector(".foot-more > summary") : null;
+    if (go && go.checkVisibility()) go.focus();
+    else if (menu) menu.focus();
   };
   const undoRemoval = (id) => stopRemoval(id, { line: { tone: "kept", text: "Not removed" } }, true);
   const startRemoval = (s, item) => {
@@ -1142,6 +1145,7 @@
       onSearch: server ? () => searchFor(String(s.artist)) : null,  // served, the name searches; the funnel filters
     });
     line.dataset.id = String(s.id);  // the Select mode finds the song's line by it
+    if (s.status === "found") line.classList.add("have");  // set apart among a search's results (rows.css)
     // How the song's request goes, on a line of its own, and its lookup's steps under it.
     const job = server ? jobOfSong(id) : null;
     if (job) {
@@ -1344,6 +1348,7 @@
   const arrived = new Map();  // song id -> the data of a song new to the library since the page loaded
   // A song removed since the page loaded counts nowhere, though its line says Removed until the next load.
   const counted = (s) => s.status !== "removed";
+  const narrow = window.matchMedia ? window.matchMedia("(max-width: 719px)") : null;  // a phone: the placeholder is short
   const summarize = () => {
     const by = { found: 0, wanted: 0, ignored: 0 };
     const every = songs.concat(Array.from(arrived.values())).filter(counted);
@@ -1356,13 +1361,13 @@
       item.appendChild(document.createTextNode(" " + word));
       summary.appendChild(item);
     };
-    stat(every.length, every.length === 1 ? "song" : "songs");
-    stat(by.found, "found");
-    stat(by.wanted, "wanted");
+    if (by.wanted) stat(by.wanted, "wanted");
     if (by.ignored) stat(by.ignored, "ignored");
+    input.placeholder = "Search " + plural(every.length, "song") + (server && !(narrow && narrow.matches) ? ", or the sites" : "");
     const when = String(data.generated || "").replace("T", " ").slice(0, 16);
     if (when) byId("updated").textContent = "Updated by caracole " + when + " UTC. ";
   };
+  if (narrow && narrow.addEventListener) narrow.addEventListener("change", () => summarize());
   const smooth = () => (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches
     ? "auto" : "smooth");
 
@@ -1440,7 +1445,8 @@
   const tell = () => {
     const total = songs.filter(counted).length;
     const n = shownNow.filter((i) => counted(songs[i])).length;
-    count.textContent = n === total ? plural(total, "song") : n + " of " + plural(total, "song");
+    count.hidden = n === total;
+    count.textContent = n === total ? "" : n + " of " + plural(total, "song");
     filterLive.textContent = plural(n, "song");
     showN.textContent = "Show " + plural(n, "song");
   };
@@ -1894,7 +1900,7 @@
   const drawBar = (none, key) => {
     const q = normal(state.q);
     if (server && state.all) return;  // the search of the sites says how it goes
-    if (!q) say(server ? "Type to search your songs and the sites" : "Filter your songs as you type");
+    else if (!q) say("");  // before anything is typed the placeholder says what the bar searches
     else if (key) say(none ? "None of yours match: the sites know no keys" : "A key filters your songs alone: the sites know no keys");
     else if (server && !typedEnough(q)) say(none ? "None of yours match: three letters search the sites too"
       : "Three letters or more search the sites too");

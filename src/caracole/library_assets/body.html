@@ -1,28 +1,37 @@
 <body class="drawing">
 <div class="page">
 <header class="masthead lib">
-  <p class="app">caracole</p>
-  <div class="title-line">
-    <h1>Your library</h1>
-    <ul class="summary" id="summary" aria-label="The library in numbers"></ul>
+  <h1 class="visually-hidden">Your library</h1>
+  <p class="app">__MARK__<span class="word">caracole</span></p>
+  <div class="tabs" role="tablist" aria-label="Your songs, or your songbooks">
+    <button type="button" class="tab" role="tab" id="tab-library" aria-controls="library-view"
+      aria-selected="true">Library</button>
+    <button type="button" class="tab" role="tab" id="tab-songbooks" aria-controls="songbooks" aria-selected="false"
+      tabindex="-1">Songbooks <span class="n"></span></button>
   </div>
+  <ul class="summary" id="summary" aria-label="What needs attention"></ul>
   __NAV__
 </header>
-<div class="tabs" role="tablist" aria-label="Your songs, or your songbooks">
-  <button type="button" class="tab" role="tab" id="tab-library" aria-controls="library-view"
-    aria-selected="true">Library</button>
-  <button type="button" class="tab" role="tab" id="tab-songbooks" aria-controls="songbooks" aria-selected="false"
-    tabindex="-1">Songbooks <span class="n"></span></button>
-</div>
 <div class="view" id="library-view" role="tabpanel" aria-labelledby="tab-library">
 <div class="bar-edge" id="bar-edge" aria-hidden="true"></div>
 <div class="searchbar" role="search">
   <label class="visually-hidden" for="q">Search your songs</label>
   <div class="bar-row">
     <div class="field">
-      <input id="q" type="search" placeholder="Artist, title or key" autocomplete="off" autocapitalize="off"
+      <input id="q" type="search" placeholder="Search your songs" autocomplete="off" autocapitalize="off"
         autocorrect="off" spellcheck="false" enterkeyhint="search" aria-describedby="bar-status">
       <button type="button" id="clear" class="clear" aria-label="Clear the search" hidden>×</button>
+    </div>
+    <div class="tools" id="tools">
+      <button type="button" class="tool" id="filter" aria-expanded="false" aria-controls="filter-panel">Filter <span
+        class="filter-n" id="filter-count" hidden></span></button>
+      <label class="tool-menu"><span class="visually-hidden">Sort</span>
+        <select id="sort" class="tool">
+          <option value="artist">Artist A–Z</option>
+          <option value="title">Title A–Z</option>
+          <option value="recent">Recently added</option>
+        </select>
+      </label>
     </div>
   </div>
   <p class="bar-status" id="bar-status" aria-live="polite"></p>
@@ -35,17 +44,6 @@ __REQUEST__</section>
     <button type="button" class="tag person" id="artist" hidden></button>
     <button type="button" class="clear-filters" id="clear-filters" aria-label="Clear every filter (the search stays)"
       hidden>Clear</button>
-  </div>
-  <div class="tools" id="tools">
-    <button type="button" class="tool" id="filter" aria-expanded="false" aria-controls="filter-panel">Filter <span
-      class="filter-n" id="filter-count" hidden></span></button>
-    <label class="tool-menu"><span class="visually-hidden">Sort</span>
-      <select id="sort" class="tool">
-        <option value="artist">Artist A–Z</option>
-        <option value="title">Title A–Z</option>
-        <option value="recent">Recently added</option>
-      </select>
-    </label>
   </div>
   <dialog class="filter-panel" id="filter-panel" aria-label="Filter your songs">
     <div class="grab" aria-hidden="true"></div>

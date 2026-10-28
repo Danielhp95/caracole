@@ -75,10 +75,10 @@ from typing import Any
 from caracole.inline import json_block, sha256_source
 from caracole.library_assets import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
+from caracole.web.top import LIBRARY, top
 
 STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
-.lede { max-width: 72ch; margin: 2px 0 14px; color: var(--muted); }
 .search { position: sticky; top: 0; z-index: 2; padding: 10px 0; background: var(--bg); }
 .search input { width: 100%; height: 54px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--control-edge);
   background: var(--surface); color: var(--text); font: inherit; font-size: 1.15rem; box-shadow: var(--shadow); }
@@ -454,6 +454,7 @@ function librarySong(s) {
     more: [here.childNodes.length ? here : null, {heading: "Files", links: others}].filter(Boolean),
   });
   row.classList.add("hit");
+  if (s.status === "found") row.classList.add("have");  // set apart from the sites' rows (rows.css)
   row.dataset.song = String(s.id);
   const main = row.querySelector(".row-action a");
   if (main) main.setAttribute("aria-label", opens.label + " of " + s.display);
@@ -747,17 +748,7 @@ LOOKUP_CSP = (
 
 _BODY = """<body>
 <div class="page" id="lookup" data-csrf="__CSRF__">
-<header class="masthead">
-  <div>
-    <p class="app"><a href="/">caracole</a></p>
-    <h1>Look up a song</h1>
-  </div>
-  <nav class="links" aria-label="Pages"><a class="navlink" href="/">Library</a><a class="navlink" href="/jobs">Requests</a></nav>
-</header>
-<p class="lede">Type a song or an artist. caracole searches your library and its offline copies of Ultimate Guitar's
-  and LaCuerda's indexes as you type, asking no site anything; pick a song, or one of its versions, and its sheet is
-  here in seconds.</p>
-<div class="search" role="search">
+__TOP__<div class="search" role="search">
   <label class="visually-hidden" for="q">Song or artist</label>
   <input id="q" type="search" placeholder="Song or artist" autocomplete="off" autocapitalize="off" autocorrect="off"
     spellcheck="false" enterkeyhint="search">
@@ -799,7 +790,8 @@ def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
         f"{PAGE_ICON}<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
-        + _BODY.replace("__CSRF__", token)
+        + _BODY.replace("__TOP__", top("Look up a song", LIBRARY + '<a class="navlink" href="/jobs">Requests</a>'))
+        .replace("__CSRF__", token)
         + json_block("icons", dict(icons or {}))
         + f"<script>{ROWS_SCRIPT}</script>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"
     )

@@ -31,7 +31,7 @@
   const picked = [];  // song ids, in the order they were picked: the songbook's order
   let sending = false;  // on caracole serve, until the server answers the bar's form
 
-  // Last in the toolbar, after a divider: set apart from the filters before it (Filter, Sort), as it filters nothing.
+  // Last among the tools, after a divider: set apart from the filters before it (Filter, Sort), as it filters nothing.
   const toggle = el("button", "tool pick-toggle");
   toggle.type = "button";
   toggle.title = "Pick songs for a songbook";
@@ -39,7 +39,7 @@
   toggle.append(caracoleRows({}).glyph("select"), "Select");
   const divider = el("span", "divider");
   divider.setAttribute("aria-hidden", "true");
-  (toolbar.querySelector(".tools") || toolbar).append(divider, toggle);
+  (document.getElementById("tools") || toolbar).append(divider, toggle);
 
   const bar = el("section", "pickbar");
   bar.hidden = true;

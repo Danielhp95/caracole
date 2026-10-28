@@ -243,3 +243,18 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   .nothing .btn, .did-you-mean .btn, .looked-line .btn, .lacuerda-search .btn { min-height: 44px; }
   .why-unseen summary { min-height: 44px; padding: 12px 0 0; }
 }
+/* A search's results (index.html's, the lookup page's): a song you have fetched stands out from the ones you have not.
+   Yours (rows.js ``have``: a song with a sheet) is a line or row on a faint wash of the accent with an edge in it, its
+   name in the text's colour; every other, a site's or one of yours still wanted, a muted name on a plain line. The
+   weight is one for all, and the pill ("In your library", "Found") the wash says is left to a screen reader. Only the
+   results: the library's own list is all yours. */
+#results .line h3, #results .row-title { font-weight: 500; }
+#results .line:not(.have) h3, #results .row.hit:not(.have):not(.artist-hit) .row-title { color: var(--muted); }
+#results .line.have, #results .row.have { background: color-mix(in srgb, var(--accent) var(--have-tint), var(--surface));
+  box-shadow: inset 4px 0 0 var(--accent); }
+#results .have .badge.found { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; }
+/* The wash of a box's first or last line follows the box's rounded corners. */
+#results .rows > .row.have:first-child { border-top-left-radius: 13px; border-top-right-radius: 13px; }
+#results .rows > .row.have:last-child { border-bottom-left-radius: 13px; border-bottom-right-radius: 13px; }
+#results .groups > section:last-child > .lines:last-child > .line.have:last-child { border-radius: 0 0 11px 11px; }

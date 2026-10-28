@@ -88,8 +88,8 @@ def phone(tmp_path):
         yield page
 
 
-# Each control the toolbar shows, left to right: what it is, its words, and where it is.
-TOOLBAR = """[...document.querySelectorAll('.toolbar button, .toolbar select, .toolbar .divider')]
+# Each tool beside the search, left to right: what it is, its words, and where it is.
+TOOLBAR = """[...document.querySelectorAll('#tools button, #tools select, #tools .divider')]
   .filter((n) => n.checkVisibility() && !document.getElementById('filter-panel').contains(n))
   .map((n) => { const r = n.getBoundingClientRect();
     const g = n.querySelector('svg.glyph') || (n.matches('select') ? n.parentElement.querySelector('svg.glyph') : null);
@@ -99,7 +99,7 @@ TOOLBAR = """[...document.querySelectorAll('.toolbar button, .toolbar select, .t
   .sort((a, b) => a.left - b.left)"""
 
 
-def test_the_toolbar_is_tags_filter_sort_and_select(shelf, laptop):
+def test_the_tools_beside_the_search_are_filter_sort_and_select(shelf, laptop):
     laptop.open(shelf.as_uri())
     tools = laptop.js(TOOLBAR)
     assert [t["id"] for t in tools] == ["filter", "sort", "divider", "tool pick-toggle"], tools
@@ -107,14 +107,17 @@ def test_the_toolbar_is_tags_filter_sort_and_select(shelf, laptop):
     assert [t["glyph"] for t in tools if t["id"] != "divider"] == [
         "glyph glyph-sliders", "glyph glyph-sort", "glyph glyph-select"], tools
     assert max(t["top"] + t["height"] / 2 for t in tools) - min(t["top"] + t["height"] / 2 for t in tools) <= 2
-    assert tools[0]["left"] > 1280 / 2  # at the right, the tags' room before them
+    assert tools[0]["left"] > 1280 / 2  # at the right, the search's room before them
     assert laptop.js(f"[{FILTER}.getAttribute('aria-expanded'), {FILTER}.getAttribute('aria-controls')]") == [
         "false", "filter-panel"]
     assert laptop.js(f"{PANEL}.tagName === 'DIALOG' && !{PANEL}.open")
     # A filter on: Filter counts it, in the accent.
     laptop.open(shelf.as_uri() + "#show=wanted")
     tools = laptop.js(TOOLBAR)
-    assert [t["text"] for t in tools] == ["Wanted", "Clear", "Filter 1", "Artist A–Z", "", "Select"], tools
+    assert [t["text"] for t in tools] == ["Filter 1", "Artist A–Z", "", "Select"], tools
+    tags = laptop.js("[...document.querySelectorAll('#tags button')].filter((b) => b.checkVisibility())"
+                     ".map((b) => [b.textContent.trim(), Math.round(b.getBoundingClientRect().top)])")
+    assert [t for t, _ in tags] == ["Wanted", "Clear"] and min(top for _, top in tags) >= max(t["top"] + t["height"] for t in tools), tags  # the filters on, under the search
     assert laptop.js(f"{FILTER}.classList.contains('on')")
     assert laptop.js(f"getComputedStyle({FILTER}).borderTopColor") != laptop.js(
         "getComputedStyle(document.querySelector('.pick-toggle')).borderTopColor")

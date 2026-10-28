@@ -15,9 +15,9 @@
   --accent: #b4441e;
   --accent-hover: #9a3915;
   --on-accent: #ffffff;
-  /* A second accent, an artist's name over their songs: indigo, away from the rust, the badges and the sites' marks.
-     Contrast 6.77:1 on --raised, 7.78:1 on --surface; in the dark, 7.49:1 and 8.63:1. */
-  --artist: #3448b0;
+  /* A second accent, an artist's name over their songs: umber, a warm brown of the rust's family, which sits on the
+     paper as the buttons do. Contrast 7.0:1 on --raised, 8.0:1 on --surface; in the dark, 7.9:1 and 9.1:1. */
+  --artist: #7a4219;
   --focus: #1f6feb;
   --shadow: 0 1px 2px rgb(31 30 28 / 6%), 0 6px 18px rgb(31 30 28 / 5%);
   /* A song opened in the library, a card over the list, and what is sunk in it (its chips, its tiles' downloads). */
@@ -30,6 +30,8 @@
   --review: #5b34a8; --review-bg: #ece4fa;
   --auto: #0e5c6e; --auto-bg: #dbf0f5;
   --failed: #a3261b; --failed-bg: #fbe1dd;
+  /* How much of --accent washes a song you have fetched, among a search's results (rows.css). */
+  --have-tint: 9%;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -45,7 +47,7 @@
     --accent: #f0895c;
     --accent-hover: #f5a47f;
     --on-accent: #1b0e07;
-    --artist: #a5b4fc;
+    --artist: #e3b48a;
     --focus: #6ea8fe;
     --shadow: none;
     --card: #211f1e;
@@ -57,6 +59,7 @@
     --review: #c6adff; --review-bg: #2b2047;
     --auto: #8fd6e8; --auto-bg: #102f37;
     --failed: #ff9d92; --failed-bg: #3d1713;
+    --have-tint: 15%;
   }
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -81,12 +84,32 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
   line-height: 1.2; text-transform: uppercase; }
 .app a { display: inline-block; padding: 4px 0; text-decoration: none; }
 @media (hover: hover) { .app a:hover { text-decoration: underline; text-underline-offset: 3px; } }
+.app .mark { flex: none; width: auto; height: 1.5em; }
 .links { display: flex; flex-wrap: wrap; gap: 8px; }
 .navlink { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-radius: 999px;
   border: 1px solid var(--border); background: var(--surface); text-decoration: none; font-weight: 600; }
 .navlink:hover { border-color: var(--border-strong); }
 .navlink .n { min-width: 22px; padding: 0 7px; border-radius: 999px; background: var(--accent); color: var(--on-accent);
   font-size: .78rem; line-height: 22px; text-align: center; font-variant-numeric: tabular-nums; }
+/* The header of the pages caracole serve writes itself (web/top.py): the "¿" and the name, which lead home, the page's
+   title after them, its links at the end, all one line; a muted line under it for what the page is of. On a phone the
+   mark alone leads, a thumb's target. */
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 14px 0 6px; }
+.top .app { display: inline-flex; flex: none; align-items: center; gap: 7px; margin: 0; text-decoration: none; }
+@media (hover: hover) { .top .app:hover .word { text-decoration: underline; text-underline-offset: 3px; } }
+.top .sep { flex: none; color: var(--muted); font-size: 1.3rem; line-height: 1; }
+.top h1 { flex: 0 1 auto; min-width: 0; margin: 0; overflow: hidden; font-size: 1.3rem; line-height: 1.25;
+  letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
+.top .links { flex: none; margin-left: auto; }
+.top .navlink { padding: 0 14px; font-size: .92rem; }
+.top-sub { margin: 0 0 4px; color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+@media (max-width: 559px) {
+  .top .app .word { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
+    white-space: nowrap; }
+}
+@media (pointer: coarse) {
+  .top .app { min-width: 44px; min-height: 44px; justify-content: center; }
+}
 .btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 13px;
   border-radius: 11px; border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit;
   font-size: .9rem; font-weight: 550; text-decoration: none; overflow-wrap: anywhere; cursor: pointer; }

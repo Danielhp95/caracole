@@ -31,6 +31,7 @@ from urllib.parse import quote
 from caracole.inline import sha256_source
 from caracole.library_assets import BASE_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
+from caracole.web.top import top
 from caracole.web.alphatab import AlphaTab
 
 HERE = Path(__file__).resolve().parent
@@ -69,6 +70,8 @@ def build_page(*, title: str, artist: str, song_id: int, path: str, label: str, 
         links.append(f'<a class="navlink" href="/{escape(quote(sheet))}">Sheet</a>')
     links.append(f'<a class="navlink" href="{escape(href)}" download>Download</a>')
     name = path.rsplit("/", 1)[-1]
+    sub_line = (f'<span class="by">{escape(artist)}</span> · ' if artist else "") + (
+        f'<span class="file" title="{escape(name, quote=True)}">{escape(label)}</span>')
     return "".join((
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
@@ -77,12 +80,8 @@ def build_page(*, title: str, artist: str, song_id: int, path: str, label: str, 
         f"<title>{escape(title)} · {escape(label)} · caracole</title>\n",
         f"<style>{style()}</style>\n",
         f'<style id="alphaTabStyle">{SHARED_STUB}</style>\n',
-        '</head>\n<body>\n<div class="page gp">\n<header class="masthead">\n<div>\n',
-        '<p class="app"><a href="/">caracole</a></p>\n',
-        f"<h1>{escape(title)}</h1>\n",
-        f'<p class="by">{escape(artist)}</p>\n' if artist else "",
-        f'<p class="file">{escape(label)} · {escape(name)}</p>\n</div>\n',
-        f'<nav class="links" aria-label="This song">{"".join(links)}</nav>\n</header>\n',
+        '</head>\n<body>\n<div class="page gp">\n',
+        top(title, "".join(links), label="This song", sub=sub_line),
         _BAR,
         '<p class="gp-status" id="gp-status" role="status">Loading alphaTab…</p>\n',
         '<div class="score" id="score"></div>\n',

@@ -299,7 +299,7 @@ def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, con
     assert 'data-status="found"' in shown
     assert 'action="/fetch"' in card(dom, "Wonderwall")  # the other line is as it was
     # The counts follow: one found song now, in the masthead and on the buttons.
-    assert re.search(r'<li class="stat"><b>1</b> found</li>', dom)
+    assert re.search(r'<li class="stat"><b>1</b> wanted</li>', dom)  # the numbers say what needs attention alone
     assert re.search(r'data-show="found"[^>]*>Found <span class="n">1</span>', dom)
 
 
@@ -387,8 +387,8 @@ def test_a_requested_song_gets_a_line_of_its_own_on_the_page(serve, cfg, conn, t
     seen = attribute(dom, "data-seen")
     assert "Adding to the library…" in seen or "Queued…" in seen, seen
     assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
-    # The masthead counts it.
-    assert re.search(r'<li class="stat"><b>2</b> songs</li><li class="stat"><b>1</b> found</li>', dom)
+    # The masthead counts what is wanted, and the bar's placeholder the songs.
+    assert re.search(r'<li class="stat"><b>1</b> wanted</li>', dom) and 'placeholder="Search 2 songs, or the sites"' in dom
     # One song: no list of requests.
     assert re.search(r'<aside[^>]*id="tray"[^>]*hidden', dom)
 
@@ -869,6 +869,12 @@ def test_the_page_moves_nothing_as_it_loads_even_on_a_slow_machine(serve, cfg, c
 
 # --- Remove ---------------------------------------------------------------------------------------------
 
+
+def press_remove(page, item):
+    """Remove, from the "⋯" at the card's foot that holds it: the menu opened, then the button pressed."""
+    page.js(f"document.querySelector('{item} .foot-more').open = true")
+    page.click(f"{item} form.remove button")
+
 # The library in numbers, as the masthead, the Filter panel's Status and the count over the list say it.
 COUNTS = """(() => ({
   summary: Array.from(document.querySelectorAll("#summary .stat")).map((s) => s.textContent),
@@ -920,7 +926,7 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
         page.js(f"window.song = document.querySelector('{item}'); window.song.scrollIntoView({{ block: 'center' }})")
         assert page.js(SHIFTS) and page.js(COUNTDOWN)
         tapped = time.monotonic()
-        page.click(f"{item} form.remove button")
+        press_remove(page, item)
         assert page.wait(f"{line} !== null && {line}.textContent === 'Removed'", timeout=20), page.js("window.lines")
         gone = page.js("""(() => { const c = window.song;
             return [c.querySelector('h3').textContent, c.querySelectorAll('a, button, form').length,
@@ -958,10 +964,10 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
     assert [s for s in shifts if s["value"] > 0 and s["moved"] != ["links"]] == [], shifts
     # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
     searched = left == "#q=creep"
-    assert counts == {"summary": ["12 songs", "0 found", "12 wanted"],
+    assert counts == {"summary": ["12 wanted"],
                       "chips": {"all": "0" if searched else "12", "found": "0", "wanted": "0" if searched else "12",
                                 "review": "0"},
-                      "count": "0 of 12 songs" if searched else "12 songs"}, counts
+                      "count": "0 of 12 songs" if searched else ""}, counts  # said once the list is narrowed
 
 
 def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cfg, conn, tmp_path):
@@ -983,7 +989,7 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
         page.open(url)
         page.click(f"{item} .line-more")  # Remove… waits under "⋯"
         page.js(f"window.song = document.querySelector('{item}')")
-        page.click(f"{item} form.remove button")
+        press_remove(page, item)
         assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
         page.js("""(() => { const form = document.querySelector("form.request-form");
           form.elements.namedItem("artist").value = "Muse"; form.elements.namedItem("title").value = "Uprising";
@@ -1012,7 +1018,7 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
     uprising = find_song(conn, override_key("Muse - Uprising"))
     assert uprising.id == creep.id  # its id again
     assert shown == {"creep": ["Creep", "Removed", "Radiohead"], "list": ["Song", "Creep"],
-                     "requested": ["Uprising"], "summary": ["2 songs", "1 found", "1 wanted"]}, shown
+                     "requested": ["Uprising"], "summary": ["1 wanted"]}, shown
     assert picks == ["Pick Song by Band"]
     assert (creeps, uprisings) == ([], ["Uprising"])
 
@@ -1084,7 +1090,7 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
     uprising = find_song(conn, override_key("Muse - Uprising"))
     assert uprising.id == creep.id  # its id again
     assert shown == {"creep": ["Creep", "Removed", None], "list": ["Song", "Creep"],
-                     "requested": ["Uprising"], "summary": ["2 songs", "1 found", "1 wanted"],
+                     "requested": ["Uprising"], "summary": ["1 wanted"],
                      "said": {"list": ["Removed"], "set": []}}, shown
     assert picks == ["0 selected", "Pick Song by Band"]  # Creep's pick gone with it: its id is Uprising's now
     assert creeps == []
@@ -1105,14 +1111,14 @@ def test_a_removed_song_counts_no_more_under_needs_review(serve, cfg, conn, tmp_
         assert page.js(COUNTS)["chips"]["review"] == "1" and page.js(f"{chip}.hidden") is False
         page.click(f"{item} .line-more")  # Remove… waits under "⋯"
         page.js(f"window.song = document.querySelector('{item}')")
-        page.click(f"{item} form.remove button")
+        press_remove(page, item)
         assert page.wait("window.song.querySelector('.progress')?.textContent === 'Removed'", timeout=20)
         counts, hidden = page.js(COUNTS), page.js(f"{chip}.hidden")
         page.js("document.querySelector('#filter-panel [data-show=all]').click()")
         page.js(f"{chip}.click()")  # chosen all the same
         listed = page.js("Array.from(document.querySelectorAll('#list article h3')).map((h) => h.textContent)")
         count = page.js("document.getElementById('count').textContent")
-    assert counts["summary"] == ["1 song", "0 found", "1 wanted"]
+    assert counts["summary"] == ["1 wanted"]
     assert counts["chips"] == {"all": "1", "found": "0", "wanted": "1", "review": "0"}, counts
     assert hidden is (left == ""), hidden
     assert (listed, count) == ([], "0 of 1 song")
@@ -1131,13 +1137,14 @@ def test_undo_keeps_the_song_and_nothing_is_sent(serve, cfg, conn, tmp_path, siz
         page.open(url)
         page.click(f"{item} .line-more")  # Remove… waits under "⋯"
         tapped = time.monotonic()
-        page.click(f"{item} form.remove button")
+        press_remove(page, item)
         assert page.wait(f"{line} !== null && !!{line}.querySelector('button.undo')")
         page.press("Enter")  # the focus is on Undo
         assert page.wait(f"{line}.textContent === 'Not removed'"), page.js(f"{line}.textContent")
         time.sleep(max(0.0, tapped + QUICK["undo"] / 1000 + 0.3 - time.monotonic()))  # past its seconds
         after = page.js(f"""(() => {{ const go = document.querySelector('{item} form.remove button');
-            return {{ line: {line}.textContent, enabled: !go.disabled, focus: document.activeElement === go,
+            return {{ line: {line}.textContent, enabled: !go.disabled,
+                      focus: document.activeElement === document.querySelector('{item} .foot-more > summary'),  // back on the "⋯" that leads to Remove
                       gone: document.querySelectorAll('.gone').length }}; }})()""")
     assert after == {"line": "Not removed", "enabled": True, "focus": True, "gone": 0}, after
     assert not any(b"confirm=1" in body for _, target, body in runner.posted), runner.posted

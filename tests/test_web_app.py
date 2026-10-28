@@ -1514,6 +1514,17 @@ def test_the_search_finds_your_songs_by_a_progression_typed_or_named(app, conn):
     assert none["progression"]["songs"] == 0 and none["library"] == []
 
 
+def test_a_hit_that_is_a_song_of_yours_says_its_status_so_a_page_can_tell_a_found_one_from_a_wanted_one(app, conn):
+    creep_index(conn)
+    mine = add_song(conn, "Radiohead", "Creep")
+    update_song(conn, mine.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep")
+    [hit] = [h for h in as_json(get(app, "/api/search?q=creep"))["index"] if h["song"] == mine.id]
+    assert hit["library"]["status"] == "wanted"
+    update_song(conn, mine.id, status="found")
+    [hit] = [h for h in as_json(get(app, "/api/search?q=creep"))["index"] if h["song"] == mine.id]
+    assert hit["library"]["status"] == "found"
+
+
 def test_a_library_song_found_comes_as_its_card_has_it_its_viewer_first(app, cfg, conn):
     # The lookup page draws it as index.html's row does: its viewer opens it, and every file says where it
     # came from. Its links are the card's, relative to the library, as the server serves them.

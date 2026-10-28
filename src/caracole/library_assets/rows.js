@@ -412,6 +412,9 @@ const caracoleRows = (icons, does) => {
   const opener = (files) => listOf(files).find((f) => f && f.primary && /[.](html|pdf)$/i.test(String(f.name || "")))
     || null;
   const yours = (hit) => (hit && hit.library && typeof hit.library === "object" ? hit.library : null);
+  // A song of yours that caracole has found a sheet for (not one still wanted, ignored or never fetched): what a
+  // search's results set apart (rows.css, a line or row of class ``have``).
+  const held = (mine) => Boolean(mine) && mine.status === "found";
   // Under a hit's "⋯", given ``later(pick, display, row, button)``: the song into wanted.txt under the site's
   // names, for the nightly run to look up (index.html's results; /lookup gets songs now alone).
   const laterGroup = (later, pick, display, row) => {
@@ -495,6 +498,7 @@ const caracoleRows = (icons, does) => {
       badges: [...(mine ? [{ kind: "found", text: "In your library" }] : []), ...instrumentBadges(ugInstruments(hit.counts))],
       action: main, more });
     row.classList.add("hit");
+    if (held(mine)) row.classList.add("have");
     row.dataset.ug = String(hit.ug || "");
     row.dataset.source = "ug";
     nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
@@ -586,6 +590,7 @@ const caracoleRows = (icons, does) => {
       nameDoes(row, main, mine ? "Get " + display + " again" : "Get " + display);
     }
     row.classList.add("hit");
+    if (held(yours(hit))) row.classList.add("have");
     row.dataset.source = String(hit.source || "");
     return row;
   };
@@ -680,6 +685,7 @@ const caracoleRows = (icons, does) => {
       badges: [...badges, ...instrumentBadges([...(ug ? ugInstruments(ug.counts) : []), ...(ht ? ["harmonica"] : [])])],
       action: main, more, status: gone ? "removed" : "" });
     line.classList.add("hit");
+    if (held(mine)) line.classList.add("have");
     if (gone) line.classList.add("removed-hit");
     line.dataset.hit = String(it.key || "");
     line.dataset.source = ug ? "ug" : lc ? "lacuerda" : gtp ? "gtptabs" : ht ? "harptabs" : "removed";

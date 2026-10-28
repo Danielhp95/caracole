@@ -712,6 +712,56 @@ def test_a_song_of_yours_keeps_its_title_link_and_a_removed_songs_name_adds_it_a
     assert "Radiohead - Creep" in cfg.wanted_file.read_text(encoding="utf-8")
 
 
+# What each line of the results looks like, read from the page: whether it is a song you have, its name's colour and
+# weight against the page's own (--text, --muted), the wash behind it and the edge (--accent at --have-tint), and the
+# width of its "In your library" pill, which a song you have shows to a screen reader alone.
+HAVE = """
+(() => {
+  const probe = (css) => { const p = document.createElement('i'); p.style.cssText = css; document.body.appendChild(p);
+    const s = getComputedStyle(p); const got = [s.color, s.backgroundColor]; p.remove(); return got; };
+  const ink = probe('color: var(--text)')[0], quiet = probe('color: var(--muted)')[0];
+  const tint = probe('background-color: color-mix(in srgb, var(--accent) var(--have-tint), var(--surface))')[1];
+  return [...document.querySelectorAll('#results article.line')].map((a) => {
+    const name = getComputedStyle(a.querySelector('h3')), line = getComputedStyle(a), pill = a.querySelector('.badge.found');
+    return [a.querySelector('h3').textContent, { have: a.classList.contains('have'), ink: name.color === ink,
+      quiet: name.color === quiet, weight: name.fontWeight, tinted: line.backgroundColor === tint && tint !== 'rgba(0, 0, 0, 0)',
+      edge: line.boxShadow !== 'none', pill: pill ? pill.getBoundingClientRect().width : null }];
+  });
+})()
+"""
+
+
+def keep_sheet(cfg, song):
+    conn = db.connect(cfg.db_path)
+    folder = song_dir(cfg.library_dir, song)
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "sheet.pdf").write_bytes(b"%PDF-1.4")
+    update_song(conn, song.id, status="found")
+    conn.close()
+
+
+def test_a_song_you_have_stands_out_from_the_ones_you_have_not(cfg, live, browser):
+    # A found song: its name in the text's colour on a wash of the accent with an edge, no pill to see. Every other
+    # line, a wanted song of yours or a site's: a muted name on a plain line. The weight is the same for all.
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "karma-police", 2), ("radiohead", "airbag", 2), ("radiohead", "no-surprises", 2)])
+    (karma, _) = library(cfg, ("Radiohead", "Karma Police"), ("Radiohead", "Creep"))
+    keep_sheet(cfg, karma)
+    browser.open(base)
+    (airbag,) = library(cfg, ("Radiohead", "Airbag"))  # kept since the page loaded: the page has no line of it yet
+    keep_sheet(cfg, airbag)
+    search(browser, "radiohead")
+    assert browser.wait(f"{answer_to('radiohead')} && document.querySelectorAll('#results article.line').length >= 4")
+    lines = dict(browser.js(HAVE))
+    assert lines["Karma Police"] == {"have": True, "ink": True, "quiet": False, "weight": "500", "tinted": True,
+                                     "edge": True, "pill": None}, lines  # yours, with its own line
+    assert lines["Airbag"]["have"] and lines["Airbag"]["tinted"] and lines["Airbag"]["edge"], lines
+    assert lines["Airbag"]["ink"] and 0 < lines["Airbag"]["pill"] <= 1, lines  # the sites' row says it, to a screen reader
+    for title in ("Creep", "No Surprises"):  # a wanted song of yours, and one only a site has
+        assert lines[title] == {"have": False, "ink": False, "quiet": True, "weight": "500", "tinted": False,
+                                "edge": False, "pill": None}, (title, lines)
+
+
 def test_clearing_the_box_leaves_the_results_as_escape_does(cfg, live, browser):
     base, queue, _ = live
     sites(cfg, **WONDERWALL)
@@ -1317,9 +1367,9 @@ def test_the_bar_and_its_results_fit_a_phone(cfg, live, phone):
           musescore=["https://musescore.com/song/a_rather_long_song_title_1-5"])
     removed(cfg, "The Red Hot Chili Peppers and Friends", "A Rather Long Song Title 9")
     phone.open(base + "#show=found")  # Found pressed: the results' head says so, with Show all of yours
-    # The box alone across the bar, a thumb's height: typing searches, so no button beside it.
+    # The box, a thumb's height, and Filter, Sort and Select beside it across the bar: typing searches, so no button for that.
     field = phone.js("(() => { const q = document.getElementById('q').getBoundingClientRect(); "
-                     "return [q.left, innerWidth - q.right, q.height]; })()")
+                     "return [q.left, innerWidth - document.getElementById('tools').getBoundingClientRect().right, q.height]; })()")
     assert field[0] <= 17 and field[1] <= 17 and field[2] >= 44, field
     search(phone, "a rather long song title")
     assert phone.wait(f"{answer_to('a rather long song title')} && {HITS} >= 4 && "

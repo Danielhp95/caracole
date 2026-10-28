@@ -562,8 +562,8 @@ def _group_key(artist: str) -> str:
 
 
 def _owners(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit], songs: list[Song]) -> list[dict[str, Any]]:
-    """Each site hit's song of your library (``_Mine``, by its names), as ``song`` and ``library`` (its names
-    and its card's links), and whether its artist is your song's (``same_artist``); None for one your library
+    """Each site hit's song of your library (``_Mine``, by its names), as ``song`` and ``library`` (its names,
+    its status and its card's links), and whether its artist is your song's (``same_artist``); None for one your library
     hasn't."""
     from caracole.library_page import result_cards
 
@@ -573,7 +573,8 @@ def _owners(app: WebApp, conn: sqlite3.Connection, hits: Sequence[SiteHit], song
     return [{"song": song.id if song else None,
              "same_artist": song is not None and owners_of.same_artist(song, h.artist_key, h.artist),
              "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
-                         "links": cards[song.id]["links"]} if song else None} for h, song in zip(hits, owners)]
+                         "status": song.status, "links": cards[song.id]["links"]} if song else None}
+            for h, song in zip(hits, owners)]
 
 
 def _skipped(app: WebApp, conn: sqlite3.Connection) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
@@ -694,7 +695,7 @@ def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], ind
     hits = [{**hit, **_keys(hit["artist"], hit["title"]), "song": song.id if song else None,
              "same_artist": song is not None and owners_of.same_artist(song, hit["ug"].split("/", 1)[0], hit["artist"]),
              "library": {"id": song.id, "artist": song.artist, "title": song.title, "display": song.display,
-                         "links": cards[song.id]["links"]} if song else None}
+                         "status": song.status, "links": cards[song.id]["links"]} if song else None}
             for hit, song in zip(index, owners)]
     return library, hits
 

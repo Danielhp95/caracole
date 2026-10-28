@@ -7,18 +7,18 @@
   body.drawing .page { visibility: hidden; animation: drawn 0s 2s forwards; }
 }
 @keyframes drawn { to { visibility: visible; } }
-.summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
-/* The library's header: caracole and, served, the Requests link on one line, the title with its numbers beside it
-   on the next. */
-.masthead.lib { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "app links" "title title";
-  align-items: center; gap: 2px 12px; padding: 10px 0 6px; }
-.masthead.lib .app { grid-area: app; margin: 0; }
-.masthead.lib .links { grid-area: links; flex-wrap: nowrap; }
-.masthead.lib .navlink { min-height: 40px; padding: 0 13px; font-size: .9rem; }
-.title-line { grid-area: title; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; min-width: 0; }
-.title-line .summary { gap: 0; margin: 0; }
-.title-line .stat { padding: 0; background: none; }
-.title-line .stat + .stat::before { content: "·"; margin: 0 6px; color: var(--muted); }
+.summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+/* The library's header, one line: caracole, the two tabs, what needs attention (wanted songs) and, served, the Requests
+   link at the end. Placed by area, so that a number changing its width moves nothing; on a phone the numbers, when there
+   are any, are a line of their own. */
+.masthead.lib { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "app tabs sum links";
+  align-items: center; gap: 4px 14px; padding: 12px 0 0; }
+.masthead.lib .app { grid-area: app; display: flex; align-items: center; gap: 7px; margin: 0; font-size: 1.05rem; }
+.masthead.lib .tabs { grid-area: tabs; margin: 0; border-bottom: 0; }
+.masthead.lib .summary { grid-area: sum; gap: 8px; margin: 0; }
+.masthead.lib .summary:empty { display: none; }
+.masthead.lib .links { grid-area: links; }
+.masthead.lib .navlink { min-height: 36px; padding: 0 12px; font-size: .9rem; }
 .stat { padding: 3px 10px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: .82rem;
   font-variant-numeric: tabular-nums; }
 .stat b { color: var(--text); font-weight: 650; }
@@ -42,17 +42,19 @@
 .bar-edge { height: 0; }
 .field { position: relative; }
 .field input {
-  width: 100%; height: 50px; padding: 0 48px 0 16px; border-radius: 14px; border: 1px solid var(--border);
+  width: 100%; height: 46px; padding: 0 16px; border-radius: 14px; border: 1px solid var(--border);
   background: var(--surface); color: var(--text); font: inherit; font-size: 1rem; -webkit-appearance: none; appearance: none;
 }
 .field input::placeholder { color: var(--muted); opacity: 1; }
+.field input:not(:placeholder-shown) { padding-right: 48px; }  /* room for the clear button */
 .field input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
 .field input:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
-.clear { position: absolute; top: 3px; right: 3px; width: 44px; height: 44px; border: 0; border-radius: 12px;
+.clear { position: absolute; top: 1px; right: 1px; width: 44px; height: 44px; border: 0; border-radius: 12px;
   background: transparent; color: var(--muted); font-size: 1.5rem; line-height: 1; cursor: pointer; }
 .bar-row { display: flex; align-items: center; gap: 8px; }
 .bar-row .field { flex: 1; min-width: 0; }
 /* One line, its height kept: what typing and Enter do, or how the search of the sites goes. */
+.bar-status:empty { min-height: 0; margin: 0; }
 .bar-status { min-height: 1.35em; margin: 6px 2px 0; overflow: hidden; color: var(--muted); font-size: .8rem;
   line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
@@ -97,6 +99,7 @@
   background: transparent; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 650; cursor: pointer; }
 .jump button:hover { background: var(--raised); color: var(--text); }
 .count { margin: 8px 0 0; color: var(--muted); font-size: .85rem; }
+.count[hidden] { display: none; }
 /* The songs: by artist, one box of groups, each artist's name and how many of their songs are yours on a band over
    their lines; by title or by when they came, one box of lines. */
 .lines, .groups { border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
