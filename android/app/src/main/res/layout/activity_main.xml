@@ -59,6 +59,29 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent" />
 
+        <!-- The size a pinch is at ("135%"), near the top of the page while it lasts (SizeLabel); said once at its
+             end rather than read here at each step. -->
+        <TextView
+            android:id="@+id/size_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|center_horizontal"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/size_label"
+            android:elevation="4dp"
+            android:fontFeatureSettings="tnum"
+            android:gravity="center"
+            android:importantForAccessibility="no"
+            android:minWidth="76dp"
+            android:paddingStart="16dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="6dp"
+            android:textColor="@color/on_bar"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
         <LinearLayout
             android:id="@+id/empty"
             android:layout_width="match_parent"

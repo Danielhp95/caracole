@@ -8,17 +8,25 @@ whether its letters read in either case (``fold``). Each compiles into its token
 (``PRESETS``), the commonest first:
 
 - ``signs``, harptabs.com's own key: ``4`` or ``+4`` blow, ``-4`` (``−4``, ``–4``) draw; a bend after the hole,
-  ``'`` ``''`` ``'''`` or ``b`` ``bb`` ``bbb`` (``-3'``, ``-3bb``), or before it (``b-3``); an overblow or an overdraw
-  ``o`` (``6o``, ``-7o``); a chromatic's slide pressed in, ``<`` or ``*``;
+  ``'`` ``''`` ``'''`` or ``b`` ``bb`` ``bbb`` (``-3'``, ``-3bb``), ``"`` or ``”`` two (``-3"``, as ``-3''``: Barrett's
+  key prints a whole-step bend so), before it (``b-3``) or between its sign and it (``-b3``); an overblow or an
+  overdraw ``o`` (``6o``, ``-7o``); a chromatic's slide pressed in, ``<`` or ``*``;
 - ``brackets``, the Spanish tabs' "aspirar": a hole alone blown, ``(5)`` drawn, every unsigned hole in brackets a
-  draw; ``-`` joins two;
+  draw, a bend after the brackets the hole's (``(3)b``); ``-`` joins two;
 - ``letters``: ``4B`` or ``4b`` blow, ``4D`` or ``4d`` draw, a bend ``*`` or ``'`` before the letter (``3*d``), ``-``
   joining two (``3*d-3d``), ``7,8B`` holes 7 and 8 blown; a hole with no letter is unread;
-- ``suffix signs`` (``6+ 6-``) and ``barrett`` (a hole alone drawn, ``4+`` blown).
+- ``signs after`` (``6+ 6-``, Wikibooks' two signs) and ``barrett`` (a hole alone drawn, ``4+`` blown).
 
 What every notation shares: holes together, ``(4 5 6)`` or ``(456)`` a chord, ``{-4 -5}`` a head shake, ``[-2 -5]`` a
 tongue split; holds (``----``, ``....``, ``___``, ``(hold)``), bars, ``~``, repeat marks (``x2``, ``(x2)``, ``2x``,
-``(2x)``) and a leading label (``Intro:``, ``FILL 1 :``).
+``(2x)``) and a leading label (``Intro:``, ``FILL 1 :``). A time signature or a clock time (``Time: 3/4``, ``1:45``)
+is prose, never holes.
+
+**What the whole tab says** changes each candidate alike: where it writes a dot before a hole (``. 4``, ``.5``, a
+German hymn series' "the dots extend the note"), a single dot lengthens the hole before it (``DOTS``); where the
+page's chip (``parse``'s ``harp``) calls the harp diatonic, ``*`` after a hole may be a bend (``-3*``, ``-3**``):
+one more candidate, ``signs`` with it (``STAR_BENDS``), before ``signs`` (the chip makes it the commoner reading
+there), and a slide is a note no Richter harp plays; Chromatic, the tab is a chromatic's.
 
 **Which notation** (``read``). The tab is scanned under each candidate and the best kept by Q = P × T, as CleverCSV
 picks a CSV's dialect: P, the share of the lines of holes' characters the notation explains (the lines any candidate
@@ -50,7 +58,7 @@ melisma: "air--"), or, before every place, the next word. What a row couldn't re
 against. A row's ``placement`` counts how each found its place.
 
 **Readable or not** (``Tab.readable``). A tab with no row drawn, whose reading isn't confident, or for a chromatic
-harmonica (a slide, or the page's chip) is shown as its tabber wrote it: its page says so.
+harmonica (its page says Chromatic, or it presses a slide) is shown as its tabber wrote it: its page says so.
 """
 
 from __future__ import annotations
@@ -129,29 +137,32 @@ def _symbols(at: str, means: str, *texts: str, count: int = 1) -> tuple[Symbol, 
     return tuple(Symbol(t, means, at, count) for t in texts)
 
 
+_TWO_BENDS = _symbols("after", "bend", '"', "”", count=2)  # a whole step: Barrett's "3”"
 SIGNS = Notation("signs", (
     *_symbols("before", "draw", "-", "−", "–"), *_symbols("before", "blow", "+"),
     *_symbols("before", "bend", "b"), *_symbols("before", "slide", "<"),
-    *_symbols("after", "bend", "'", "’", "`", "b"), *_symbols("after", "over", "o"),
+    *_symbols("after", "bend", "'", "’", "`", "b"), *_TWO_BENDS, *_symbols("after", "over", "o"),
     *_symbols("after", "slide", "<", "*"),
 ))
 BRACKETS = Notation("brackets", (
     *_symbols("before", "blow", "+"), *_symbols("around", "draw", "()"),
-    *_symbols("after", "bend", "'", "’", "b"), *_symbols("between", "join", "-"),
+    *_symbols("after", "bend", "'", "’", "b"), *_TWO_BENDS, *_symbols("between", "join", "-"),
 ))
 LETTERS = Notation("letters", (
     *_symbols("after", "blow", "b"), *_symbols("after", "draw", "d"), *_symbols("after", "bend", "*", "'", "’"),
-    *_symbols("between", "join", "-"), *_symbols("between", "together", ","),
+    *_TWO_BENDS, *_symbols("between", "join", "-"), *_symbols("between", "together", ","),
 ), bare=None, fold=True)
-SUFFIX_SIGNS = Notation("suffix signs", (
+SIGNS_AFTER = Notation("signs after", (
     *_symbols("after", "blow", "+"), *_symbols("after", "draw", "-", "−", "–"),
-    *_symbols("after", "bend", "'", "’"),
-), bare=None)
+    *_symbols("after", "bend", "'", "’"), *_TWO_BENDS,
+))
 BARRETT = Notation("barrett", (
-    *_symbols("after", "blow", "+"), *_symbols("after", "bend", "'", "’"),
+    *_symbols("after", "blow", "+"), *_symbols("after", "bend", "'", "’"), *_TWO_BENDS,
 ), bare="draw")
-PRESETS = (SIGNS, BRACKETS, LETTERS, SUFFIX_SIGNS, BARRETT)  # the commonest first: a tie goes to the first
+PRESETS = (SIGNS, BRACKETS, LETTERS, SIGNS_AFTER, BARRETT)  # the commonest first: a tie goes to the first
 PRESET = {n.name: n for n in PRESETS}
+DOTS = Symbol(".", "hold", "after")  # each candidate's, in a tab that writes a dot before a hole
+STAR_BENDS = SIGNS.changed((Symbol("*", "bend", "after"),))  # a candidate where the page's chip says Diatonic
 
 _NUM = r"(?:10|[1-9])"
 _KINDS = {"(": "chord", "{": "shake", "[": "split"}
@@ -159,6 +170,11 @@ _KINDS = {"(": "chord", "{": "shake", "[": "split"}
 _DECOR = re.compile(r"-{2,}|_+|\.{2,}|~+|\|+|\^|\*|,|;|/|\\|:|\(x\s?\d+\)|x\s?\d+\b|\(\d+x\)|\b\d+x\b|\(hold\)|hold\b|>|=",
                     re.I)
 _HOLD = re.compile(r"-{2,}|\.{2,}|_+|\(hold\)|hold", re.I)
+# A time signature, a clock time, a date (Time: 3/4, 1:45, 30/03/2018): prose, never holes.
+_TIME = re.compile(r"(?<![\w/:.+−–-])\d{1,2}(?:[/:]\d{1,4})+(?![\w/:])")
+_DOT_BEFORE = re.compile(r"(?<![.\w])\.[ \t]*[-+−–]?(?:10|[1-9])(?!\d)")  # . 4  .5  .-6: a dot before a hole
+_CHIPS = {"Diatonic": re.compile(r"(?i)\bdiatonic\b"), "Chromatic": re.compile(r"(?i)\bchromatic\b")}
+_SIGNS = "+-−–"
 _LEAD_LABEL = re.compile(r"^\s*(?P<label>\(?[A-Za-z][A-Za-z ]{0,14}(?:\d{1,2})?\)?)\s*[:;]+\s*")
 _LABEL_WORDS = re.compile(
     r"(?i)^\W*(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|"
@@ -417,7 +433,7 @@ def _tokens(notation: Notation) -> _Tokens:
         start=re.compile(f"(?P<pre>{pre})(?P<num>{_NUM})", flags),
         before=one(before),
         after=one(after),
-        apart=(re.compile(_alt(texts("after", *EFFECTS, "mark"), alone=True), flags)
+        apart=(re.compile(r"(?<![^\W\d_])(?:" + _alt(texts("after", *EFFECTS, "mark"), alone=True) + ")", flags)
                if texts("after", *EFFECTS, "mark") else None),
         join=one([s.text for s in notation.symbols if s.at == "between" and s.means != "together"]),
         together=re.compile(rf"(?P<body>{_NUM}(?:(?:{_alt(together)}){_NUM})+)", flags) if together else None,
@@ -490,7 +506,11 @@ def _read_hole(text: str, m: re.Match, notation: Notation, tokens: _Tokens, limi
     pos = read.end
     while tokens.after is not None and pos < limit:
         s = tokens.after.match(text, pos, limit)
-        if not s or not _marks([(s.start(), s.end(), s.group(), notation.meaning(s.group(), "after"))], read):
+        sym = s and notation.meaning(s.group(), "after")
+        if sym and sym.means in BREATHS and s.group() in _SIGNS and s.end() < len(text) \
+                and (text[s.end()] in _SIGNS or text[s.end()].isalnum()):
+            break  # 6+ 6-, never 6-7 (a sign before the 7) nor 6-- (a hold)
+        if not s or not _marks([(s.start(), s.end(), s.group(), sym)], read):
             break
         pos = s.end()
         options.append((pos, (read.breath, read.bend, read.over, read.slide, list(read.effects), list(read.used))))
@@ -519,12 +539,19 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     tokens = _tokens(notation)
     label = None
     lead = _LEAD_LABEL.match(text)
-    if lead and tokens.start.search(text[lead.end():]) and not lead.group("label").strip().isdigit():
+    if (lead and tokens.start.search(text[lead.end():]) and not lead.group("label").strip().isdigit()
+            and not any(m.start() < lead.end() for m in _TIME.finditer(text))):  # "SOLO 4:24": a time, no label
         label = lead.group("label").strip("() ")
         text = " " * lead.end() + text[lead.end():]
     covered = [False] * len(text)
     used: Counter = Counter()
     groups: list[Group] = []
+    prose = [False] * len(text)  # a time, never holes (_TIME): unread
+    for m in _TIME.finditer(text):
+        prose[m.start():m.end()] = [True] * (m.end() - m.start())
+
+    def taken(a: int, b: int) -> bool:
+        return any(covered[a:b]) or any(prose[a:b])
 
     def mark(a: int, b: int) -> None:
         covered[a:b] = [True] * (b - a)
@@ -537,6 +564,8 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
 
     # Holes in brackets: a chord, a shake, a split, or a hole alone, its breath the brackets' where they give one.
     for m in _BRACKET.finditer(text):
+        if taken(m.start(), m.end()):
+            continue
         reads, pos, end = [], m.start("body"), m.end("body")
         pos = _SEPARATOR.match(text, pos, end).end()
         while pos < end:
@@ -550,7 +579,7 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
             continue
         stop = m.end()
         outer = _Read(m.start(), m.end(), 0)
-        while tokens.after is not None:  # (3)b: a mark after the brackets is their hole's
+        while tokens.after is not None and len(reads) == 1:  # (3)b: a mark after the brackets is their hole's
             s = tokens.after.match(text, stop)
             if not s or not _marks([(s.start(), s.end(), s.group(), notation.meaning(s.group(), "after"))], outer):
                 break
@@ -576,8 +605,8 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
             # A hole alone in brackets that its notation gives no meaning to (harptabs.com's "(5)"): the hole is
             # read, the brackets are not.
             r = reads[0]
-            groups.append(Group(holes, "note", r.start, r.digit, text[r.start:r.end], "hold" in effects,
-                                _others(effects)))
+            groups.append(Group((Hole(r.num, breaths[0], r.bend, r.over, r.slide),), "note", r.start, r.digit,
+                                text[r.start:r.end], "hold" in r.effects, _others(tuple(r.effects))))
             mark(r.start, r.end)
             continue
         groups.append(Group(holes, kind, m.start(), reads[0].digit, text[m.start():stop], "hold" in effects,
@@ -586,7 +615,7 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     # Holes together, one mark for all: 7,8B.
     if tokens.together is not None:
         for m in tokens.together.finditer(text):
-            if any(covered[m.start():m.end()]) or (m.start() and text[m.start() - 1].isalnum()):
+            if taken(m.start(), m.end()) or (m.start() and text[m.start() - 1].isalnum()):
                 continue
             last = tokens.start.match(text, m.end() - len(re.search(_NUM + "$", m.group("body")).group(0)))
             read = last and _read_hole(text, last, notation, tokens, len(text))
@@ -605,10 +634,10 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     # Single holes.
     pos = 0
     while (found := tokens.start.search(text, pos)) is not None:
-        if any(covered[found.start():found.end()]):
-            pos = found.start() + 1 if covered[found.start()] else found.end()
+        if taken(found.start(), found.end()):
+            pos = found.start() + 1 if covered[found.start()] or prose[found.start()] else found.end()
             continue
-        read = _read_hole(text, found, notation, tokens, _free_until(covered, found.end()))
+        read = _read_hole(text, found, notation, tokens, _free_until(covered, prose, found.end()))
         if read is None:
             pos = found.end()
             continue
@@ -626,7 +655,7 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     # hold is the group's before it.
     if tokens.apart is not None:
         for m in tokens.apart.finditer(text):
-            if any(covered[m.start():m.end()]):
+            if taken(m.start(), m.end()):
                 continue
             sym = notation.meaning(m.group(0), "after")
             mark(m.start(), m.end())
@@ -637,7 +666,7 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     if tokens.join is not None:
         for m in tokens.join.finditer(text):
             a, b = m.start(), m.end()
-            if any(covered[a:b]) or a == 0 or b >= len(text) or text[a - 1].isspace() or text[b].isspace() \
+            if taken(a, b) or a == 0 or b >= len(text) or text[a - 1].isspace() or text[b].isspace() \
                     or text[a - 1] == m.group(0)[0] or text[b] == m.group(0)[-1]:
                 continue
             sym = notation.meaning(m.group(0), "between")
@@ -645,7 +674,7 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
             used[(m.group(0), sym.means, "between", 1)] += 1
             joins.append((a, sym.means))
     for m in _DECOR.finditer(text):
-        if any(covered[m.start():m.end()]):
+        if taken(m.start(), m.end()):
             continue
         mark(m.start(), m.end())
         if _HOLD.fullmatch(m.group(0)):
@@ -669,17 +698,17 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     unknown = []
     for m in _WORD.finditer(text):
         rest = "".join(ch for i, ch in enumerate(m.group(0), m.start()) if not covered[i])
-        if rest.strip("-+.()[]{}'\""):
+        if rest:  # nothing dropped as if read: a " left over is a bend no hole took
             unknown.append(rest)
     letters = sum(not ch.isspace() for ch in text)
     good = sum(1 for i, ch in enumerate(text) if covered[i] and not ch.isspace())
     return Scan(tuple(groups), good / letters if letters else 0.0, tuple(unknown), label, used)
 
 
-def _free_until(covered: list[bool], start: int) -> int:
-    """Where the first covered character from ``start`` is (a hole's marks stop there)."""
+def _free_until(covered: list[bool], prose: list[bool], start: int) -> int:
+    """Where the first character from ``start`` read already, or prose, is (a hole's marks stop there)."""
     for i in range(start, len(covered)):
-        if covered[i]:
+        if covered[i] or prose[i]:
             return i
     return len(covered)
 
@@ -884,7 +913,12 @@ def read(lines: list[str], *, harp_chip: str | None = None, notation: Notation |
         if made is not None:
             found = made[1]
             candidates.append((made[0], "legend"))
-        candidates += [(p, "guessed") for p in PRESETS]
+        for preset in PRESETS:  # where the chip says Diatonic, "*" a bend before a slide: the commoner there
+            if preset is SIGNS and harp_chip == "Diatonic":
+                candidates.append((STAR_BENDS, "guessed"))
+            candidates.append((preset, "guessed"))
+        if any(_DOT_BEFORE.search(line) for line in lines):  # "the dots extend the note"
+            candidates = [(n.changed((DOTS,)), source) for n, source in candidates]
     scanned = [[scan(line, notation=n) if line.strip() else Scan((), 0.0, ()) for line in lines]
                for n, _ in candidates]
     scored = [i for i in range(len(lines)) if any(s[i].is_row or s[i].missed for s in scanned)]
@@ -956,7 +990,7 @@ def _row_confidence(found: Scan, harp_chip: str | None) -> float:
 def parse(body: str, *, harp: str | None = None, notation: Notation | None = None) -> Tab:
     """The tab ``body`` (a ``harmonica-N.txt``) read: the module's docstring says how. ``harp`` is the page's chip
     ("Diatonic", "Chromatic"), ``notation`` one to read it by, whatever the others score ("pinned")."""
-    chip = harp if harp in ("Diatonic", "Chromatic") else None
+    chip = next((name for name, pattern in _CHIPS.items() if harp and pattern.search(harp)), None)
     lines = [expand(line).rstrip() for line in body.replace("\r\n", "\n").replace("\r", "\n").split("\n")]
     legends = legend(lines)
     in_legend = {n for block in legends for n in block.at}

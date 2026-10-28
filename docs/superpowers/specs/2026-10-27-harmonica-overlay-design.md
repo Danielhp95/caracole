@@ -34,15 +34,16 @@ positions. With a ukulele or a baritone chosen, it is theirs and named so; with 
    its minor stand-in), or "Plays none of the song's chords: melody only." Under the circle: "Tap a harp.
    Shaded: the ones that play the song's chords."
 2. **The key on that harp**: "Bm on a D harp", its position; chips Scale · Minor pentatonic (Major pentatonic in
-   a major key) · Blues; then the harp's ten holes: a comb of hole numbers 1 to 10, the blow notes above it, the
-   draw notes below, and each hole's bends beyond its row (the blow bends of holes 8 to 10 above, the draw bends
-   of holes 1 to 6 below, the deepest farthest). Each note is its name in a circle: the tonic filled in the
+   a major key) · Blues; then the harp's ten holes as a player holds it: a comb of hole numbers 1 to 10, the draw
+   notes above it, the blow notes below, and each hole's bends beyond its row (the draw bends of holes 1 to 6
+   above, the blow bends of holes 8 to 10 below, the deepest farthest; the owner's call, after the build, which had
+   blow above). Each note is its name in a circle: the tonic filled in the
    accent colour, a note of the scale filled dark, any other outlined and faint; a bent note in the scale
    outlined in `--pull`, one outside it a faint dot. A legend (the tonic, in the scale, bent) and one line: the
    harp's notes outside the key ("Outside B minor: C.") or "Every note it blows or draws is in B minor." Nothing
    about how well the tab fits the record (the owner removed that line).
 3. **A card per chord**, in the order the guitar tab lists them: the chord's name as it sounds, and "Am shape"
-   when the capo or the transposition makes the shape another; the harp's ten holes (blow row, comb, draw row, no
+   when the capo or the transposition makes the shape another; the harp's ten holes (draw row, comb, blow row, no
    bends) with the run of holes that plays it filled in its breath's colour (blow the accent, draw `--away`) on a
    soft band (dashed for a minor stand-in), the chord's other notes outlined in their breath's colour, the rest
    faint; then one line: "draw 4–6", "blow 1–3 · as F#, its triad", "draw 4–6 · as Em, the minor stand-in", or
@@ -101,12 +102,15 @@ aside a sheet where it carries `data-sheet`.
 The builder's calls:
 
 - **The bar.** The neck sits right after the key, the first of the tools at the end, tinted while the sheet is open.
-  A sixth 44 px target leaves the key 44 px less: from 360 px the guitar stays beside the neck, as the mockup has it,
-  and the key between − and + says less ("capo 2 · +1" for "shapes · capo 2 · +1" at 390 px; "capo 2" over "+1" at
-  360 px; "Ab mixolydian" shrunk, then cut short), a screen reader still hearing all of it. Below 360 px (320) there is
-  no room for both: the neck takes the guitar's place, and the settings' All chord shapes shows the strip. On a
-  harmonica tab's page (no guitar) all four tools fit; at 320 px the harp's name is a little smaller ("Ab harp" at
-  11.5 px). Nothing overflows, and every target stays 44 px.
+  A sixth 44 px target would leave the key 44 px less. First built with the guitar kept beside the neck from 360 px,
+  the key saying less there ("capo 2 · +1" at 390 px, "Ab mixolydian" cut short). The owner then chose: **"Let it
+  replace the guitar icon in small phones."** Below 440 px the neck takes the guitar's place,
+  the key keeps its room and its words as before ("Ab mixolydian" over "shapes · capo 2 · +1" whole at 390 px), and
+  the settings' All chord shapes shows the strip. From 440 px the guitar is beside the neck, with room for the
+  longest key a little smaller; 440 rather than the bar's phone width, 420, which left 420 to 433 px cutting "Ab
+  mixolydian" short, so no key is ever cut beside both. On a harmonica tab's page (no guitar) all four
+  tools fit; at 320 px the harp's name is a little smaller ("Ab harp" at 11.5 px). Nothing overflows, and every target
+  stays 44 px.
 - **Assistive tech.** The sheet is a dialog that is not modal (`role="dialog"`, no `aria-modal`), named "Necks and
   harps" as the neck is (`aria-haspopup="dialog"`, `aria-expanded`, `aria-controls`); the rail stays the
   complementary "Chord necks". The focus goes to the tab shown as it opens, back to the neck as it closes (✕, Escape,

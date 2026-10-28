@@ -76,6 +76,11 @@ Only the text grows or shrinks. The page reflows to the screen's width, so it ne
 scrolls sideways. The size holds for every page and across restarts. Settings shows it ("Text size: 120%"), and
 **Reset** sets it back to 100%. A sheet's own **Aa** still works, and the two multiply.
 
+While the fingers are down, a small label near the top of the page shows the size ("135%"). At a limit it shows
+the limit ("250%", "50%"), so you can see why the text stopped growing. The label fades out about a second after the
+fingers lift. With Android's "Remove animations" on, it disappears without fading. A screen reader announces the
+final size once, at the end of the pinch.
+
 A touch of one finger reaches the page as before: a scroll, a tap, a swipe. A second finger makes the touch a
 pinch, and the page sees none of it.
 
@@ -94,7 +99,7 @@ Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the la
 emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
 the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running caracole serve. EndToEndTest opens
 the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
-page and a sheet, larger and smaller, and checks that the chords stay over their syllables:
+page and a sheet, larger and smaller, and checks the size label and that the chords stay over their syllables:
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk

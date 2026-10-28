@@ -205,6 +205,19 @@ def test_a_tab_it_cant_read_is_its_text_as_written_never_an_error():
     assert "as its tabber wrote it.</p>" in html and "placed each hole" not in html
 
 
+def test_the_harp_harptabs_com_names_reaches_the_reading():
+    # A tab its page calls Chromatic is its text as written, a slide pressed or not; Diatonic, a "*" is a bend
+    chromatic = page(HOTEL, harp="Chromatic")
+    assert '<pre class="tab">' in chromatic and 'class="h"' not in chromatic
+    assert text_of(chromatic, "facts") == "Harmonica tab, as its tabber wrote it: caracole can't read its notation."
+    assert '<pre class="tab">' not in page(HOTEL, harp="Diatonic")
+    starred = "-1 -2 -3* -3**\nla la la la\n"
+    assert '<pre class="tab">' in page(starred)  # no chip: "*" is a chromatic's slide
+    data = data_of(page(starred, harp="Diatonic"))
+    assert [hole for kind, hole in data["groups"]] == [[[1, "d", 0, 0]], [[2, "d", 0, 0]], [[3, "d", 1, 0]],
+                                                        [[3, "d", 2, 0]]]
+
+
 def test_everything_it_was_given_is_escaped():
     html = page("4 5\n<b>la</b> & <script>\n", title="<i>Song</i>", artist="A & B")
     assert "<b>la</b>" not in html and "&lt;b&gt;la&lt;/b&gt;" in html

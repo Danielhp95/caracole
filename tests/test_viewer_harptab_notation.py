@@ -25,7 +25,7 @@ from caracole.viewer.harptab import (
     MARGIN,
     PRESETS,
     SIGNS,
-    SUFFIX_SIGNS,
+    SIGNS_AFTER,
     Hole,
     Legend,
     Notation,
@@ -70,8 +70,8 @@ TOKENS = [
     (LETTERS, "3-4b", ["?3~", "4"]), (LETTERS, "4d-$-5d", ["−4~", "?$~", "−5"]), (LETTERS, "7,8B", ["(7 8)"]),
     (LETTERS, "4", ["?4"]), (LETTERS, "-4", ["?-4"]), (LETTERS, "3*d(W)", ["−3′", "?(W)"]),
     # the two-sign system: + and - after the hole
-    (SUFFIX_SIGNS, "6+", ["6"]), (SUFFIX_SIGNS, "6-", ["−6"]), (SUFFIX_SIGNS, "10-", ["−10"]),
-    (SUFFIX_SIGNS, "6", ["?6"]), (SUFFIX_SIGNS, "4-'", ["−4′"]),
+    (SIGNS_AFTER, "6+", ["6"]), (SIGNS_AFTER, "6-", ["−6"]), (SIGNS_AFTER, "10-", ["−10"]),
+    (SIGNS_AFTER, "6", ["6"]), (SIGNS_AFTER, "6--", ["6…"]), (SIGNS_AFTER, "6-7", ["6", "?-", "7"]), (SIGNS_AFTER, "4-'", ["−4′"]),
     # David Barrett's: a hole alone drawn, + blown
     (BARRETT, "3", ["−3"]), (BARRETT, "4+", ["4"]), (BARRETT, "3'", ["−3′"]), (BARRETT, "2’’", ["−2′′"]),
     (BARRETT, "-4", ["?-", "−4"]),
@@ -85,9 +85,9 @@ def test_each_preset_reads_its_tokens(notation, token, found):
 
 
 def test_the_presets_and_their_order_the_commonest_first():
-    assert [n.name for n in PRESETS] == ["signs", "brackets", "letters", "suffix signs", "barrett"]
-    assert (SIGNS.bare, BRACKETS.bare, LETTERS.bare, SUFFIX_SIGNS.bare, BARRETT.bare) == (
-        "blow", "blow", None, None, "draw")
+    assert [n.name for n in PRESETS] == ["signs", "brackets", "letters", "signs after", "barrett"]
+    assert (SIGNS.bare, BRACKETS.bare, LETTERS.bare, SIGNS_AFTER.bare, BARRETT.bare) == (
+        "blow", "blow", None, "blow", "draw")
     assert LETTERS.fold and not SIGNS.fold
 
 
@@ -159,7 +159,7 @@ def test_an_unusual_reading_must_beat_a_commoner_one_by_the_margin():
 
 @pytest.mark.parametrize(("body", "name"), [
     ("4B 6B 5D 5B 4D 4B 3B\n", "letters"),
-    ("6+ 6-   7+  8+  8- 7+  8+  7+   6+\nI faund my lavo by tha gesworks creft\n", "suffix signs"),
+    ("6+ 6-   7+  8+  8- 7+  8+  7+   6+\nI faund my lavo by tha gesworks creft\n", "signs after"),
     ("2 3' 4+ 4' 4 5 4 4' 4+ 3' 4+ 3' 2 2’’ 1 1+ 1 2\n", "barrett"),
     ("-4 -4 5 -5 6 -6 6 -5\n", "signs"),
 ])

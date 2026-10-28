@@ -18,7 +18,7 @@ from caracole.viewer.book import BookSong, build_songbook
 
 from test_viewer_harptab_browser import bar_harp, opened, with_sheet
 from test_viewer_necks import contrast, to_song
-from test_viewer_overlay import IN_C, SHAPES, SLID_IN, SONG, seen
+from test_viewer_overlay import IN_C, ROWS, SHAPES, SLID_IN, SONG, draw_above_blow, seen
 
 pytestmark = CHROMIUM_MARKS  # every test here opens a page in Chromium
 
@@ -202,6 +202,16 @@ def test_on_a_sheet_guitar_comes_first_and_a_harp_tapped_on_the_circle_is_the_on
     assert not top["slim"]["on"]
 
 
+def test_on_a_phone_each_harp_has_its_draw_row_above_the_holes_and_its_blow_row_below(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, SONG)) as b:
+        open_sheet(b)
+        to_harmonica(b)
+        harp(b, "D")
+        charts = b.js(ROWS)
+    assert len(charts) == 1 + 8
+    draw_above_blow(charts)
+
+
 def test_on_a_harmonica_tabs_page_harmonica_comes_first_and_the_bars_harp_is_the_circles_both_ways(tmp_path):
     with opened(tmp_path, with_sheet(tmp_path)) as b:
         closed = sheet(b)
@@ -310,9 +320,8 @@ def test_nothing_overflows_and_every_target_is_a_thumbs_on_a_sheet(tmp_path, wid
         touch(b, "#necks .ov-grip")
         assert b.wait(FULL)
         full = sheet(b)
-    # The neck after the key; from 360 px the guitar beside it, narrower the guitar's strip in ⋯ (All chord shapes)
-    guitar_too = ["shapes"] if width >= 360 else []
-    assert bar["ids"] == ["t-down", "t-up", "necks-open", *guitar_too, "size", "scroll", "more"], (width, bar)
+    # On a phone the neck after the key, in the guitar's place: the strip is ⋯'s All chord shapes
+    assert bar["ids"] == ["t-down", "t-up", "necks-open", "size", "scroll", "more"], (width, bar)
     assert bar["smallest"] >= 44 and bar["row"], (width, bar)
     for now, small in (guitar, harmonica):
         assert not now["sideways"] and now["inside"] and small == [], (width, now, small)

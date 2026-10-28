@@ -8,4 +8,6 @@
     <color name="text">#1F1B19</color>
     <color name="muted">#6B625D</color>
     <color name="status">#F5E9E3</color>
+    <!-- The size label's edge (drawable/size_label.xml): apart from an accent-coloured page under it. -->
+    <color name="label_edge">#FFFFFF</color>
 </resources>

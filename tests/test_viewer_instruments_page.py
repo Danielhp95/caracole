@@ -66,7 +66,7 @@ def choose(b: Browser, name: str) -> None:
 
 def strip(b: Browser) -> list:
     if b.js("document.getElementById('strip').hidden"):
-        b.js("document.getElementById('shapes').click()")
+        b.js("document.getElementById('strip-toggle').click()")  # All chord shapes, the strip's switch in ⋯
     return b.js("[...document.querySelectorAll('#strip button')].map((x) => x.lastChild.textContent)")
 
 

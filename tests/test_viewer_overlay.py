@@ -206,6 +206,58 @@ def test_a_transposition_moves_every_harp_and_a_capo_none(tmp_path):
     assert capo["chords"][0]["shape"] == ""  # Bm shapes sound Bm: no other shape to name
 
 
+# --- the harp's rows: draw above the comb, blow below, as the owner holds a harp -----------------------------------
+
+# Each harp diagram the overlay draws: the middle (on the screen) of each note of its draw row and of its blow row, of
+# its comb of hole numbers and of its row labels; each bent note's breath, hole, depth and middle; the run's band.
+ROWS = """(() => [...document.querySelectorAll('#necks svg.harp')].map((svg) => {
+  const mid = (el) => { const r = el.getBoundingClientRect(); return (r.top + r.bottom) / 2; };
+  const label = (word) => { const t = [...svg.querySelectorAll('.hx-lab')].find((l) => l.textContent === word);
+    return t ? mid(t) : null; };
+  const run = svg.querySelector('.hx-run');
+  return {draw: [...svg.querySelectorAll('.hx[data-row=draw]')].map(mid),
+    blow: [...svg.querySelectorAll('.hx[data-row=blow]')].map(mid), comb: mid(svg.querySelector('.hx-comb')),
+    labels: [label('draw'), label('blow')],
+    bends: [...svg.querySelectorAll('.hx[data-row=bend]')].map((g) => [g.classList.contains('draw') ? 'draw' : 'blow',
+      Number(g.dataset.hole), Number(g.dataset.depth), mid(g)]),
+    run: run && [run.classList.contains('draw') ? 'draw' : 'blow', mid(run)]};
+}))()"""
+
+
+def draw_above_blow(charts: list[dict], *, bends: bool = True) -> None:
+    """Each diagram has its draw row above the comb and its blow row below it, its labels with them, a run's band on
+    its own breath's row; each hole's draw bends above the draw row and its blow bends below the blow row, each
+    deeper bend farther out. With ``bends``, some diagram (the key's card) shows both breaths' bends."""
+    assert charts
+    for chart in charts:
+        assert len(chart["draw"]) == len(chart["blow"]) == 10, chart
+        assert max(chart["draw"]) < chart["comb"] < min(chart["blow"]), chart
+        assert chart["labels"][0] < chart["comb"] < chart["labels"][1], chart
+        if chart["run"]:
+            breath, y = chart["run"]
+            assert abs(y - sum(chart[breath]) / 10) < 1, chart
+        by_hole: dict[tuple[str, int], list[tuple[int, float]]] = {}
+        for breath, hole, depth, y in chart["bends"]:
+            assert (y < min(chart["draw"])) if breath == "draw" else (y > max(chart["blow"])), chart
+            by_hole.setdefault((breath, hole), []).append((depth, y))
+        for (breath, _), bent in by_hole.items():
+            ys = [y for _, y in sorted(bent)]
+            assert ys == (sorted(ys, reverse=True) if breath == "draw" else sorted(ys)), chart  # deeper, farther
+    if bends:
+        assert {(b[0], b[1]) for c in charts for b in c["bends"]} >= {("draw", 1), ("draw", 3), ("blow", 10)}
+
+
+@in_chromium
+def test_each_harp_has_its_draw_row_above_the_holes_and_its_blow_row_below(tmp_path):
+    with open_viewer(tmp_path, written(tmp_path, SONG), **DESKTOP) as b:
+        harmonica(b)
+        harp(b, "D")
+        charts = b.js(ROWS)
+    assert len(charts) == 1 + 8  # the key's card, then a card per chord
+    draw_above_blow(charts)
+    assert {c["run"][0] for c in charts if c["run"]} == {"draw", "blow"}  # both breaths' bands, each on its row
+
+
 # --- the slim bar -----------------------------------------------------------------------------------------------
 
 

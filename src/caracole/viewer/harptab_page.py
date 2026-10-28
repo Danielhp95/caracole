@@ -112,6 +112,7 @@ def build_harmonica_viewer(
     tab_file: str,
     url: str | None = None,
     page_key: str | None = None,
+    harp: str | None = None,
     facts: Mapping[str, Any] | None = None,
     cho: str | None = None,
     key: str | None = None,
@@ -121,12 +122,13 @@ def build_harmonica_viewer(
     """The page of the harmonica tab ``text`` (a ``harmonica-N.txt``'s body) of the song ``title`` by ``artist``.
 
     ``tab_file`` names the text beside the page, which its foot links; ``url`` is the tab's page on harptabs.com,
-    ``page_key`` the key it names, ``facts`` what else it says (``difficulty``, ``views``, ``rating``: the version's
+    ``page_key`` the key it names, ``harp`` the harp ("Diatonic", "Chromatic": harptab.py ``parse`` reads the tab
+    for it), ``facts`` what else it says (``difficulty``, ``views``, ``rating``: the version's
     ``raw``, harptabs.HarpTab.raw). ``cho`` is the song's chord sheet (its human one, else its auto one, as render.py
     writes it), with ``key`` and ``key_source``, its key as keys.py found it: the harp that plays with the record, and
     the song's key for the positions. ``back`` names the song's sheet viewer beside the page ("sheet.html"), which
     ‹ Chord sheet opens; with none, ‹ Library."""
-    tab = parse(text)
+    tab = parse(text, harp=harp)
     choice = harpfit.choose(tab, cho=cho, key=key, key_source=key_source, page_key=page_key)
     data = _data(tab, choice)
     data["overlay"] = _overlay_data(choice, cho, key, key_source)

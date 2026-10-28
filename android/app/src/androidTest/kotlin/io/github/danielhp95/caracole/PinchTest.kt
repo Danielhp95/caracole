@@ -1,7 +1,9 @@
 package io.github.danielhp95.caracole
 
 import android.util.Log
+import android.view.View
 import android.webkit.WebView
+import android.widget.TextView
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -29,7 +31,9 @@ import kotlin.math.roundToInt
  *         io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
  *
  * Fingers apart make the text larger, together smaller, in steps of [TextZoom.STEP], of the size Android's font size
- * gives the pages, and the size is kept; Settings' Reset applies when the library screen comes back. A page reflows: never zoomed as a picture, never wider than the
+ * gives the pages, and the size is kept; Settings' Reset applies when the library screen comes back. While the fingers
+ * are down the size shows over the page ("135%", the limit at a limit), and it goes about a second after they lift;
+ * Reset shows none. A page reflows: never zoomed as a picture, never wider than the
  * screen. On a sheet each chord stays over its syllable, above its line and clear of the next, a row's chords at one
  * height, at a larger size and a smaller one; with Pinyin, over its reading, over its character (a Chinese sheet, when
  * the library has one). The viewer's own Aa multiplies the size. `-e shots <ms>` holds each sheet for a screenshot
@@ -74,8 +78,11 @@ class PinchTest {
             record("Android's font size", own)
             assertEquals(TextZoom.DEFAULT, zoom(main))
 
-            // The library page: fingers apart, larger text, kept in the settings; the page reflowed.
-            pinch(main, 0.3f, 0.8f)
+            // The library page: fingers apart, larger text, kept in the settings; the page reflowed. The size shows
+            // while the fingers are down, and for a second after they lift.
+            pinch(main, 0.3f, 0.8f) { showsTheSize(main, "the library page, fingers apart") }
+            val lifted = System.currentTimeMillis()
+            assertEquals("the size, just after the pinch", "${zoom(main)}%", label(main))
             val larger = zoomAfter(main, TextZoom.DEFAULT)
             record("library: fingers apart", larger)
             assertTrue("larger: $larger", larger > TextZoom.DEFAULT)
@@ -85,26 +92,43 @@ class PinchTest {
             main.onActivity { shown = it.findViewById<WebView>(R.id.web).settings.textZoom }
             assertEquals(TextZoom.applied(own, larger), shown)
             reflowed(main, "the library page at $larger")
+            waitUntil("the size to go", 5_000) { label(main) == null }
+            val gone = System.currentTimeMillis() - lifted
+            record("library: the size gone after (ms)", gone)
+            assertTrue("the size went $gone ms after the pinch", gone in 900..3_000)
+
+            // Further apart, past the limit: the size stops there, and the label shows it.
+            pinch(main, 0.2f, 0.95f) {
+                waitUntil("the limit shown") { label(main) == "${TextZoom.MAX}%" }
+                Pages.shot("library-limit", hold)
+            }
+            assertEquals(TextZoom.MAX, zoomAfter(main, larger))
 
             // Fingers together: smaller again.
             pinch(main, 0.8f, 0.3f)
-            val smaller = zoomAfter(main, larger)
+            val smaller = zoomAfter(main, TextZoom.MAX)
             record("library: fingers together", smaller)
-            assertTrue("smaller: $smaller", smaller < larger)
+            assertTrue("smaller: $smaller", smaller < TextZoom.MAX)
             assertEquals(smaller, settings.textZoom)
             reflowed(main, "the library page at $smaller")
 
-            // Settings' Reset, then back to the library screen: the pages' own size.
+            // Settings' Reset, then back to the library screen: the pages' own size, and no label for it.
+            waitUntil("the size to go", 5_000) { label(main) == null }
             settings.textZoom = TextZoom.DEFAULT
             main.moveToState(Lifecycle.State.STARTED)
             main.moveToState(Lifecycle.State.RESUMED)
             assertEquals(TextZoom.DEFAULT, zoom(main))
+            Thread.sleep(300)
+            assertEquals("a label for Reset", null, label(main))
 
             // A sheet viewer, at the pages' own size, then larger, then smaller.
             open(main, evaluate(main, """document.querySelector('a[href$="sheet.html"]').href""") as String)
             val atOwn = sheet(main, "sheet-100")
 
-            pinch(main, 0.3f, 0.8f)
+            pinch(main, 0.3f, 0.8f) {
+                showsTheSize(main, "the sheet, fingers apart")
+                Pages.shot("sheet-mid-pinch", hold)
+            }
             val big = zoomAfter(main, TextZoom.DEFAULT)
             val bigSheet = sheet(main, "sheet-$big")
             // Only the text grew: a chord's name as many times wider as the size is larger.
@@ -182,6 +206,22 @@ class PinchTest {
             (now == last).also { last = now }
         }
         return last
+    }
+
+    /** The size over the page ("135%"), or null when none shows: gone, or faded out. */
+    private fun label(main: ActivityScenario<MainActivity>): String? {
+        var text: String? = null
+        main.onActivity {
+            val pill = it.findViewById<TextView>(R.id.size_label)
+            if (pill.visibility == View.VISIBLE && pill.alpha > 0f) text = pill.text.toString()
+        }
+        return text
+    }
+
+    /** With the fingers still down: the label shows the size the page is at. */
+    private fun showsTheSize(main: ActivityScenario<MainActivity>, what: String) {
+        waitUntil("$what: the size shown") { label(main) == "${zoom(main)}%" }
+        record("$what: shown", label(main) ?: "nothing")
     }
 
     /** The page at its own scale, and no wider than the screen. */

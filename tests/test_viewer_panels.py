@@ -420,7 +420,7 @@ def instrument(b: Browser, value: str) -> None:
 def test_the_instrument_is_a_select_that_switches_the_instrument(tmp_path):
     with viewer(tmp_path, written(tmp_path, IN_E)) as b:
         b.click("#more")
-        b.click("#shapes")
+        b.click("#strip-toggle")  # the strip, from the settings: on a phone the bar's neck has the guitar's place
         guitar = b.js(MENU)
         instrument(b, "ukulele")
         uke = b.js(MENU)
