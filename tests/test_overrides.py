@@ -882,7 +882,7 @@ def test_a_harmonica_entry_is_found_by_its_songs_key_changed_and_taken_out(tmp_p
     ('"A - B" = "letters"', "a table of its harmonica tabs"),
     ('"A - B" = {"harmonica.txt" = "letters"}', "harmonica-N.txt"),
     ('"A - B" = {"harmonica-1.txt" = "staff"}', "signs, brackets, letters, signs after, barrett or legend"),
-    ('"A - B" = {"harmonica-1.txt" = {as = "staff"}}', "signs, brackets, letters, signs after, barrett"),
+    ('"A - B" = {"harmonica-1.txt" = {as = "staff"}}', "signs, brackets, letters, signs after or barrett"),
     ('"A - B" = {"harmonica-1.txt" = {"*" = "squeak"}}', "what a symbol means"),
     ('"A - B" = {"harmonica-1.txt" = 3}', "a notation's name or a table"),
     ('"A" = {"harmonica-1.txt" = "letters"}', "Artist - Title"),

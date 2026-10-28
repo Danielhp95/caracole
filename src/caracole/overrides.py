@@ -36,6 +36,11 @@ Tables:
 - ``[harptabs]``: "Artist - Title" → the harptabs.com tab (its page) you picked
   (``HarpTabsPick``): harptabs_fetch.py keeps that tab for the song, as its next
   ``harmonica-N.txt`` beside any it has, whoever the page names as its artist.
+- ``[harmonica]``: "Artist - Title" → a table of the song's harmonica tabs (``harmonica-1.txt``) and how
+  each is read, whatever caracole guesses (``add_harmonica``, caracole serve's page of readings, ``caracole
+  harmonica``): a notation's name ("signs", "brackets", "letters", "signs after", "barrett"), "legend" (the
+  tab's own), or a table, a notation (``as``) and what its symbols mean (``{as = "signs", "*" = "bend"}``):
+  viewer/harptab.py ``check_spec`` and ``pinned``. render.py reads each tab's page by it.
 
 Keys are canonicalized when loaded, so they're matched the same way songs are.
 Writers use tomlkit, so your comments and layout survive.
@@ -79,7 +84,8 @@ _ARTIST_HOST = "https://www.ultimate-guitar.com"
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda",
-           "harptabs", "version"}
+           "harptabs", "version", "harmonica"}
+_HARMONICA_TAB = re.compile(r"harmonica-[1-9][0-9]{0,3}\.txt")  # a harmonica tab's name, as inbox.py keeps it
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
 NO_VIDEO = "none"
@@ -126,6 +132,7 @@ class Overrides:
     lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
     harptabs: Mapping[str, HarpTabsPick] = field(default_factory=dict)
     version: Mapping[str, str] = field(default_factory=dict)
+    harmonica: Mapping[str, Mapping[str, str | Mapping[str, str]]] = field(default_factory=dict)
     tables: frozenset[str] = frozenset()
 
     def has_table(self, name: str) -> bool:
@@ -482,12 +489,37 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
 
     version = {_song_key(k, f"[version] {k!r}"): _version(v, f"[version] {k!r}") for k, v in table("version").items()}
 
+    harmonica: dict[str, dict[str, str | Mapping[str, str]]] = {}
+    for k, v in table("harmonica").items():
+        where = f"[harmonica] {k!r}"
+        key = _song_key(k, where)
+        if not isinstance(v, Mapping):
+            raise OverridesError(f"{where}: expected a table of its harmonica tabs, each \"harmonica-1.txt\" = how "
+                                 "it is read")
+        harmonica.setdefault(key, {}).update((tab, _harmonica_reading(spec, f"{where} {tab!r}"))
+                                             for tab, spec in v.items())
+
     return Overrides(
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
         artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, version=version,
-        tables=frozenset(data),
+        harmonica=harmonica, tables=frozenset(data),
     )
+
+
+def _harmonica_reading(spec: Any, where: str) -> str | dict[str, str]:
+    """A ``[harmonica]`` tab's entry, its name checked (``harmonica-N.txt``) and how it is read (viewer/harptab.py
+    ``check_spec``, imported for an entry alone: the viewer's notations)."""
+    tab = where.rsplit(" ", 1)[-1].strip("'\"")
+    if not _HARMONICA_TAB.fullmatch(tab):
+        raise OverridesError(f"{where}: expected a harmonica tab's name, harmonica-N.txt")
+    from caracole.viewer.harptab import check_spec
+
+    try:
+        check_spec(spec)
+    except ValueError as e:
+        raise OverridesError(f"{where}: {e}") from e
+    return spec if isinstance(spec, str) else {str(k): str(v) for k, v in spec.items()}
 
 
 def _video(value: Any, where: str) -> str | None:
@@ -707,6 +739,56 @@ def add_version(path: Path, display: str, query: str | None) -> None:
             t[display] = value
         elif t[keys[-1]] != value:  # the last one counts
             t[keys[-1]] = value
+
+    _edit(path, change)
+
+
+def add_harmonica(path: Path, display: str, tab: str, reading: str | Mapping[str, str] | None) -> None:
+    """Set how the song's harmonica tab ``tab`` (``harmonica-1.txt``) is read in ``[harmonica]``: a notation's name,
+    "legend", or a table (an inline one, ``{as = "signs", "*" = "bend"}``); with None, take it out, and the song's
+    entry with its last tab. The song's entry is found by its key, as the table is read (the last one counts), so
+    the song written another way changes the entry it has, a hand-written ``[harmonica."Artist - Title"]`` too; the
+    same reading again, or nothing to take out, writes nothing."""
+    wanted = override_key(display)
+    if reading is not None:
+        reading = _harmonica_reading(reading, f"[harmonica] {display!r} {tab!r}")
+    elif not _HARMONICA_TAB.fullmatch(tab):
+        raise OverridesError(f"[harmonica] {display!r} {tab!r}: expected a harmonica tab's name, harmonica-N.txt")
+
+    def inline(entries: Mapping[str, Any]) -> Any:
+        """An inline table of ``entries``, a table among them inline too: written afresh, as tomlkit spaces the
+        entries of one it made itself."""
+        made = tomlkit.inline_table()
+        for k, v in entries.items():
+            made[k] = inline(v) if isinstance(v, Mapping) else v
+        return made
+
+    def change(doc) -> None:
+        if reading is None and "harmonica" not in doc:
+            return
+        t = _table_of(doc, "harmonica")
+        key = next((k for k in reversed(list(t)) if _names_song(k, wanted)), None)  # the last one counts
+        current = t[key] if key is not None else None
+        if current is not None and not isinstance(current, Mapping):
+            raise OverridesError(f"[harmonica] {key!r}: expected a table of its harmonica tabs")
+        if reading is None and (current is None or tab not in current):
+            return
+        if reading is not None and current is not None and current.get(tab) == reading:
+            return
+        entries = {k: (v.unwrap() if hasattr(v, "unwrap") else v) for k, v in (current or {}).items()}
+        if reading is None:
+            del entries[tab]
+        else:
+            entries[tab] = reading
+        if not entries:
+            del t[key]
+        elif current is not None and not isinstance(current, tomlkit.items.InlineTable):
+            if reading is None:  # [harmonica."Artist - Title"], written by hand: its lines and comments stay
+                del current[tab]
+            else:
+                current[tab] = inline(reading) if isinstance(reading, Mapping) else reading
+        else:
+            t[key if key is not None else display] = inline(entries)
 
     _edit(path, change)
 
