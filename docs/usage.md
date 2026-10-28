@@ -2831,9 +2831,12 @@ the library page link it, the tab's text beside it.
   alone), one it calls diatonic may write "-3*" for a bend. A single dot
   lengthens a note in a tab that writes a dot before a hole (". 4 5 ."), and a
   time ("Time: 3/4", "1:45") is never holes.
-- **How it was read**, under the harp: "Read as: b blow · d draw · * bend ·
-  - joins · (h) hold · (w) wah, from the tab's own legend", each symbol as the
-  tab writes it, or "Read as: 4 blow · - draw, guessed (0.99)", how surely.
+- **How it was read**, under the harp. A tab caracole reads by harptabs.com's
+  own key has that key's legend, as it always had ("4 blow · −4 draw · −3′
+  bent · (4 5) together"). Any other says how it was read: "Read as: b blow ·
+  d draw · * bend · - joins · (h) hold · (w) wah, from the tab's own legend",
+  each symbol as the tab writes it, or "…, guessed (0.86)", how surely, or
+  "…, as you set it" (below).
   What its notation couldn't read stays in its place as written, muted ("$",
   "(DV)"), never guessed; an effect is a small label on its hole ("wah"),
   notes run together a ‿ between them; the tab's legend is a block of its own.
@@ -2841,6 +2844,49 @@ the library page link it, the tab's text beside it.
   read) is its text as written, its words under it, in place, and the rest of
   the tab is drawn; a tab read with little confidence, or for a chromatic
   harmonica, is all its text as written, and the page says so.
+- **Read it another way.** Where caracole guesses wrong, say how the tab is
+  read, and it stays so: `[harmonica]` in overrides.toml (see
+  [overrides.toml](#overridestoml-your-decisions)), a notation for the song's
+  tab, the tab's own legend, or a notation with a symbol read another way.
+  Served by `caracole serve`, the Read as line's last words ("guessed (0.86)",
+  "as you set it") open the server's page of the readings caracole weighs for
+  the tab, best first, each with its Q and a button that reads it so, harptabs.com's
+  own among them (**As harptabs.com writes it**), and **Back to caracole's
+  guess** when you set one (a tab read by harptabs.com's key, or shown as
+  written, has a "Change how it's read" link at its foot instead). From a file
+  there is no link: `caracole harmonica` does the same from a terminal.
+  Either way the song's pages are made again. A reading you set is drawn even
+  where caracole would show the tab as written (each line it reads with little
+  confidence still is), as yours.
+
+#### caracole harmonica
+
+`caracole harmonica "ARTIST - TITLE"` says how each of the song's harmonica
+tabs is read and the readings caracole weighs, best first, each by what you
+would write to read it so. It only reads: no wait for another caracole.
+
+    $ caracole harmonica "Cowboy Bebop - Spokey Dokey"
+    harmonica-1.txt: read as b blow · d draw · * bend · - joins · (h) hold · (w) wah, from the tab's own legend (Q 0.96)
+      legend       Q 0.96  b blow · d draw · * bend · - joins · (h) hold · (w) wah
+      letters      Q 0.86  b blow · d draw · * bend · - joins
+      brackets     Q 0.29  4 blow · b bend · - joins
+      …
+
+- `--as NOTATION` reads the tab so, whatever caracole guesses: `signs`
+  (harptabs.com's), `brackets`, `letters`, `signs after`, `barrett`, or
+  `legend` (the tab's own; a tab with none is refused). `--symbol
+  SYMBOL=MEANING` (repeatable) reads one of the notation's symbols another
+  way: `--as signs --symbol "*=bend"`. A meaning is one of blow, draw, bend,
+  double bend, triple bend, overblow, slide, joins, together, hold, wah,
+  vibrato, shake, trill, glissando, staccato or mark; a "4" in the symbol
+  stands for its hole where you say where it is written ("(4)=draw", "4=blow").
+- `--clear` takes the tab's entry out: caracole guesses again.
+- `--tab harmonica-2.txt` names the tab, for a song that keeps more than one.
+
+`--as` and `--clear` write overrides.toml under caracole's lock, waiting for
+it as a lookup does, then make the song's pages again. A tab the song hasn't
+got, a notation caracole doesn't know, or both options at once exit 2 and
+write nothing.
 - **The harp**, in the header and the bar. A tab's holes are the same on any
   harp, and sound in its key: caracole starts on the harp that plays with the
   record, the one that puts the most of the tab's sung notes on the chords the
@@ -3817,6 +3863,19 @@ Who can reach it, below).
   --mine`, which makes that version your version, as a request of its own
   ("Your version now"). The auto sheet's viewer kept beside a human sheet and
   a kept version's page get none (409), as above.
+- **How a harmonica tab is read.** A harmonica tab's page links
+  `/harmonica?page=<its path in the library>` (its Read as line's source, or
+  "Change how it's read" at its foot): a page of the server's own with the
+  readings caracole weighs for the tab, best first, each with its Q and a
+  button (`POST /harmonica/pin`), and Back to caracole's guess (`POST
+  /harmonica/clear`) when you set one. Each queues `caracole harmonica SONG
+  --tab=… --as=…` (or `--clear`), which writes `[harmonica]` under caracole's
+  lock and makes the song's pages again: the change of the song's own, never
+  one of its requests, as Make this my version is ("Its harmonica tab read as
+  you set it", Open the tab). The page says how it goes and, once done, what
+  overrides.toml says now. A page that is no harmonica tab caracole wrote is
+  refused (404), a reading that is none (400), the tab read so already or no
+  pin to take out (409).
 - **A sheet's versions.** The sheet viewer's Make this the one and Keep it
   open `/versions?sheet=…&tab=…&do=choose|keep` in the same tab (the viewer
   runs in a sandbox, with no way to send a form), and `do=clear` is Back to
@@ -4280,8 +4339,10 @@ and can live in git. `caracole review` writes `[match]`, `[alias]`, `[pin]`,
 `[ignore]` and `[reject]` for you, `caracole youtube --song … --url` or
 `--none` writes `[youtube]`, `caracole get --lacuerda` and `caracole add
 --lacuerda` (Get it and Add for tonight's run on a LaCuerda song) write
-`[lacuerda]`, and `caracole render --version … --mine` (Make this my version)
-writes `[version]`; you write the rest by hand. These are all the tables:
+`[lacuerda]`, `caracole render --version … --mine` (Make this my version)
+writes `[version]`, and `caracole harmonica --as` (or caracole serve's page of
+a harmonica tab's readings) writes `[harmonica]`; you write the rest by hand.
+These are all the tables:
 
 ```toml
 [alias]        # source artist -> UG artist slug(s): fixes every song by that artist
@@ -4320,6 +4381,10 @@ tab_ids = [1601668]
 
 [harptabs]     # the harptabs.com tab a song's harmonica tab comes from
 "Billy Joel - Piano Man" = "https://www.harptabs.com/tab/23862/piano-man-c-harmonica"
+
+[harmonica]    # how a song's harmonica tab is read, whatever caracole guesses
+"Cowboy Bebop - Spokey Dokey" = {"harmonica-1.txt" = "letters"}
+"Little Walter - Juke" = {"harmonica-1.txt" = {as = "signs", "*" = "bend"}}
 ```
 
 - **Song keys** are written `"Artist - Title"`. They match the way songs
@@ -4475,6 +4540,16 @@ tab_ids = [1601668]
   tab you name is asked for at once; one gone from the site (404) is asked for
   again after 30 days. Get it on a harptabs.com row of caracole serve's search,
   and `caracole get --harptabs`, write it.
+- **`[harmonica]`** says how each of a song's harmonica tabs is read, by its
+  file's name (`harmonica-1.txt`): a notation (`"signs"`, harptabs.com's own;
+  `"brackets"`; `"letters"`; `"signs after"`; `"barrett"`), `"legend"` (the
+  tab's own, while it has one), or a table, a notation (`as`, signs by default)
+  and what its symbols mean (`{as = "signs", "*" = "bend"}`; see [caracole
+  harmonica](#caracole-harmonica)). The tab's page, and the song's sheet viewers'
+  harp, follow it at the next render; `caracole harmonica --as` makes them
+  again at once. A song written another way still finds its entry, an entry
+  for a tab the song no longer keeps does nothing, and a removed song's entry
+  waits, as every table's does.
 
 Each table may appear only once in the file: add lines under a table it has
 already, as the to-do page's lines say. An unknown table, a key other than

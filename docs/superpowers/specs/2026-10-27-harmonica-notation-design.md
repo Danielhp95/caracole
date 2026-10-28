@@ -99,7 +99,8 @@ Its lines are a `Legend` on the page, never words sung to the same tune.
 
 - **Read as.** The header's fixed "4 blow · −4 draw · −3′ bent" becomes the notation used, its symbols as the tab
   writes them, those the tab uses: "Read as: b blow · d draw · * bend · (w) wah · (h) hold, from the tab's own
-  legend", or "Read as: 4 blow · - draw · ' bend, guessed (0.99)", the number Q.
+  legend", or "Read as: … , guessed (0.86)", the number Q. The owner's later choice: a tab caracole reads by
+  harptabs.com's own key, guessed, keeps the fixed legend and says no more (``Reading.standard``).
 - **Nothing read is lost.** A row is its groups and its unread spans, each at its column: `$`, `(DV)`, the first
   hole of `3-4b` (a number with no letter, in a notation that needs one) are shown verbatim, muted, in place, never
   guessed. Effects are small labels on their hole ("wah"; a hold is the page's `…`); joins (`3*d-3d`) are kept, a mark
@@ -126,7 +127,9 @@ The page keeps its rules: its scripts and styles by hash, `createElement` alone,
 - The page's chip goes in as `parse(…, harp=…)` (harp-spellings): Chromatic is a chromatic tab; Diatonic makes a
   slide unplayable in T.
 - `parse(body, notation=…)` takes a notation given (a preset, or a preset changed by a small table, as the legend
-  changes one): no score is kept for the others, its source "pinned". The owner's override builds on it.
+  changes one): no score is kept for the others, its source "pinned", drawn whatever its Q. The owner's override,
+  overrides.toml's `[harmonica]` (`harptab.pinned`), `caracole harmonica` and caracole serve's `/harmonica`, builds on
+  it.
 
 ## Not here
 
