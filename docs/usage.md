@@ -2813,7 +2813,11 @@ the library page link it, the tab's text beside it.
   in their brackets ("(4 5)" a chord, "{−4 −5}" a shake, "[−2 −5]" a split). A
   phone wraps a line between its words, never parting a hole from its
   syllable. Rows played alone, later verses sung to the same tune and the
-  tabber's notes come as the tab gives them.
+  tabber's notes come as the tab gives them. A tab that writes its words
+  above its holes is read so, where the lines above fit the rows, syllable for
+  hole, clearly better than those below. A line beside a row that starts as a
+  section's name but goes on in words ("End of the road") is sung, and a line
+  of a few holes ("do 3, slip to 6") is never a row's words.
 - **The tabbers' notations.** No two tabbers write holes quite alike, so
   caracole reads each tab in every notation it knows and keeps the one that
   explains the most of the tab's lines of holes as notes a harmonica plays:
@@ -2837,6 +2841,9 @@ the library page link it, the tab's text beside it.
   d draw · * bend · - joins · (h) hold · (w) wah, from the tab's own legend",
   each symbol as the tab writes it, or "…, guessed (0.86)", how surely, or
   "…, as you set it" (below).
+  The tabber's words inside a line of holes ("BOM BOM (percussions)",
+  "(Chorus)", a syllable written against its hole, "(3)tue") stay in their
+  place as text, and the line is drawn all the same.
   What its notation couldn't read stays in its place as written, muted ("$",
   "(DV)"), never guessed; an effect is a small label on its hole ("wah"),
   notes run together a ‿ between them; the tab's legend is a block of its own.

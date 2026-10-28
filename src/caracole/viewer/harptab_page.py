@@ -378,8 +378,10 @@ def _section_html(n: int, section: Section, data: dict[str, Any]) -> str:
 
 
 def _written_html(row: Row) -> str:
-    """A row read with low confidence: its line as written, and its words under it, in the tab's own columns."""
-    lines = [row.text.rstrip()] + ([row.lyric.rstrip()] if row.lyric is not None else [])
+    """A row read with low confidence: its line as written, and its words under it (above it, where the tab writes
+    them so), in the tab's own columns."""
+    words = [row.lyric.rstrip()] if row.lyric is not None else []
+    lines = words + [row.text.rstrip()] if row.above else [row.text.rstrip()] + words
     return f'<pre class="tab asw">{escape(chr(10).join(lines))}</pre>'
 
 
@@ -418,9 +420,12 @@ def _cells(groups: list[Group], data: dict[str, Any], space: str) -> str:
 
 def _group_html(group: Group, data: dict[str, Any]) -> str:
     """A group of holes as the page shows it before its script runs, which draws it again as the harp and Notes
-    ask; ``data-i``, its place in the data's ``groups``. What the notation couldn't read is its text, as written."""
+    ask; ``data-i``, its place in the data's ``groups``. What the notation couldn't read is its text, as written;
+    the tabber's words in the row ("BOM BOM", "(Chorus)", "tue" against its hole) are text, in their place."""
     if group.kind == "unread":
         return f'<span class="u">{escape(group.text)}</span>'
+    if group.kind == "words":
+        return f'<span class="tw">{escape(group.text)}</span>'
     i = len(data["groups"])
     more: dict[str, Any] = {}
     if group.effects:

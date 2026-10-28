@@ -198,10 +198,10 @@ def test_a_sheet_whose_pdf_fails_still_gets_its_tabs_page(conn, cfg):
 
 def test_a_tab_it_cant_read_gets_a_page_of_its_text(conn, cfg):
     song = add_song(conn, "Placeholder Band", "Synthetic Song")
-    keep_tab(conn, cfg, song, "ARMONICA C\n(3)mua (3)do (3)be (3)pi\n")
+    keep_tab(conn, cfg, song, "ARMONICA C\n↑3 ↓3 ↑4 ↓4\n")
     render(conn, cfg)
     text = (song_dir(cfg.library_dir, song) / "harmonica-1.html").read_text("utf-8")
-    assert '<pre class="tab">ARMONICA C\n(3)mua (3)do (3)be (3)pi</pre>' in text
+    assert '<pre class="tab">ARMONICA C\n↑3 ↓3 ↑4 ↓4</pre>' in text
 
 
 def test_a_tab_its_page_calls_chromatic_gets_a_page_of_its_text_and_marks_no_harp(conn, cfg):

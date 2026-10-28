@@ -20,7 +20,7 @@ from test_viewer_harpfit import LINES, a_sheet, a_tab
 TABS = Path(__file__).parent / "fixtures" / "harptabs" / "tabs"
 SPOKEY = (TABS.parent / "legends" / "693_spokey-dokey.txt").read_text(encoding="utf-8")
 HOTEL = (TABS / "588_hotel-california.txt").read_text(encoding="utf-8")
-KNOCKIN = (TABS / "29910_knockin-on-heavens-door.txt").read_text(encoding="utf-8")
+ARROWS = "ARMONICA C\n↑3 ↓3 ↑4 ↓4 ↑5\n↓5 ↑6 ↓6 ↑6\n"  # a notation no tabber's key here gives
 JUKE = (TABS / "1882_juke.txt").read_text(encoding="utf-8")
 FACTS = {"title": "hotel california", "artist": "The Eagles", "key": None, "difficulty": "Beginner", "views": 224000,
          "rating": 3.3}
@@ -196,6 +196,17 @@ def test_a_row_read_with_low_confidence_is_its_text_as_written():
     assert len(data["rows"]) == 2 and len(re.findall(r'class="rp"', html)) == 2  # its holes neither drawn nor played
 
 
+def test_the_tabbers_words_in_a_row_are_text_in_their_place():
+    html = page("6 -6 -6 -6 6 -6 -7 6 -6 BOM BOM (percussions)\n")
+    assert '<span class="tw">BOM BOM (percussions)</span>' in html and 'class="u"' not in html
+    assert len(data_of(html)["groups"]) == 9  # the holes alone: the words play nothing
+
+
+def test_a_row_read_with_low_confidence_keeps_its_words_above_it_where_the_tab_writes_them_so():
+    html = page("Lo rem ip\n4 5 6\n\nDo lor sit\n-4 -5 -6\n\nAm et con\n3b 3b 2b\n\nSed do ei\n-4 -5 -6\n")
+    assert '<pre class="tab asw">Am et con\n3b 3b 2b</pre>' in html
+
+
 def test_the_foot_says_the_holes_were_placed_only_where_a_row_has_words():
     assert "caracole placed each hole over its syllable" in page()
     assert "placed each hole" not in page(SPOKEY) and "as its tabber wrote it.</p>" in page(SPOKEY)
@@ -217,8 +228,8 @@ def test_its_foot_links_the_tabs_text_and_its_page_on_harptabs_com_alone():
 
 
 def test_a_tab_it_cant_read_is_its_text_as_written_never_an_error():
-    html = page(KNOCKIN, page_key="C")
-    assert '<pre class="tab">' in html and "(3)mua (3)do" in html
+    html = page(ARROWS, page_key="C")
+    assert '<pre class="tab">' in html and "↑3 ↓3 ↑4" in html
     assert text_of(html, "facts") == "Harmonica tab, as its tabber wrote it: caracole can't read its notation."
     assert 'class="h"' not in html and 'class="rp"' not in html
     assert 'id="h-up"' not in html and 'id="notes"' not in html and 'id="size"' in html and 'id="scroll"' in html

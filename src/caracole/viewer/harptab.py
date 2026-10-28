@@ -30,7 +30,7 @@ there), and a slide is a note no Richter harp plays; Chromatic, the tab is a chr
 
 **Which notation** (``read``). The tab is scanned under each candidate and the best kept by Q = P × T, as CleverCSV
 picks a CSV's dialect: P, the share of the lines of holes' characters the notation explains (the lines any candidate
-reads as holes, so each is judged on the same text); T, the share of the holes it reads a Richter harp plays
+reads as holes, the tabber's words in them aside, so each is judged on the same text); T, the share of the holes it reads a Richter harp plays
 (``harp.hole_note``; a slide is playable unless the page's chip says Diatonic). A tie goes to the commoner. The
 margin is the winner's score over the best candidate that reads the tab differently; a notation less common than
 such a rival must beat it by ``MARGIN``, and the winner's Q must reach ``TAB_Q``, else the tab is its text as written.
@@ -47,13 +47,21 @@ weighs, best first, for caracole serve's page of them; ``spec_of`` the pin of ea
 own key, guessed, the tab using nothing else, whose page says no more than that key's legend.
 
 **The lines.** A line is a row of holes when at least ``HOLE_SHARE`` of its characters read as holes, holes together
-or holds (``scan``); a row reads with confidence its own P × T, and one under ``ROW_TRUST``, or a line that holds
+or holds (``scan``), or of them, the tabber's words in it aside (``Scan.is_row``: "6 -6 7 BOM BOM (percussions)",
+"(3)tue (2)te", holes and their words after them), where it writes three tokens holding holes one after another, or
+holes in each, and no more words than holes. Those words, an aside in brackets (its numbers no holes) and a syllable
+written against its hole, are kept in their place as text (a group of kind "words"). A row reads with confidence its
+own P × T (its words aside), and one under ``ROW_TRUST``, or a line that holds
 three holes but reads under ``HOLE_SHARE``, is a row shown as written (``Row.trusted``). Nothing read is lost: what a
 row's notation can't read is kept in its place (a group of kind "unread": ``$``, ``(DV)``). The line under a row is
-its words when it is a line of text that is no section's name and no address. A line of text alone between blank
-lines after the first row is the tabber's prose; so is a block that holds an address or starts as an instruction does
-("Repeat…", "Listen…"); a longer block is words sung to the same tune (a later verse). Before the first row, every line
-is the tabber's notes. A short line that names a section ("Verse", "chorus-", "[Bridge]") starts one.
+its words when it is a line of text that is no section's name, no address and no line of holes too few to be a row
+(``Scan.holey``: "do 3, slip to 6"). A line of text alone between blank lines after the first row is the tabber's
+prose; so is a block that holds an address or starts as an instruction does ("Repeat…", "Listen…"); a longer block is
+words sung to the same tune (a later verse). Before the first row, every line is the tabber's notes. A short line that
+names a section ("Verse", "chorus-", "[Bridge]") starts one; right above or below a row, one that starts so but goes
+on in words ("End of the road") is sung. A tab that writes each row's words above it (``_above``: the lines of words
+above its rows fit them, syllables to holes, clearly better than those below) pairs each row with the line above it
+(``Row.above``), its first line no note.
 
 **Holes over syllables** (``align``). Each syllable start of a row's words (a word's first letter, and each letter
 after a hyphen or a comma inside one) takes the hole written nearest it, within ``REACH`` columns of where the hole is
@@ -90,6 +98,8 @@ TAB_Q = 0.5  # the least Q a tab is drawn at
 MARGIN = 0.05  # how far a notation must beat a commoner one that reads the tab differently
 ROW_TRUST = 0.5  # the least confidence (its own P × T) a row is drawn at
 LEGEND_WEIGHT = 0.2  # how much a tab's legend weighs: a candidate's score × (1 + this × its agreement)
+ABOVE_LEAD = 2.0  # how far the words above a tab's rows must fit them better than those below, at least (``_above``)
+ABOVE_SHARE = 1 / 6  # … and at least this share of its rows
 
 # --- the notation ---------------------------------------------------------------------------------------------
 
@@ -180,13 +190,18 @@ _DECOR = re.compile(r"-{2,}|_+|\.{2,}|~+|\|+|\^|\*|,|;|/|\\|:|\(x\s?\d+\)|x\s?\d
 _HOLD = re.compile(r"-{2,}|\.{2,}|_+|\(hold\)|hold", re.I)
 # A time signature, a clock time, a date (Time: 3/4, 1:45, 30/03/2018): prose, never holes.
 _TIME = re.compile(r"(?<![\w/:.+−–-])\d{1,2}(?:[/:]\d{1,4})+(?![\w/:])")
+# The tabber's words in brackets, "(percussions)", "(nur Vers 1 + 2 !)": prose, never holes, its numbers too.
+_ASIDE = re.compile(r"\((?P<body>[^()]*)\)")
 _DOT_BEFORE = re.compile(r"(?<![.\w])\.[ \t]*[-+−–]?(?:10|[1-9])(?!\d)")  # . 4  .5  .-6: a dot before a hole
 _CHIPS = {"Diatonic": re.compile(r"(?i)\bdiatonic\b"), "Chromatic": re.compile(r"(?i)\bchromatic\b")}
 _SIGNS = "+-−–"
 _LEAD_LABEL = re.compile(r"^\s*(?P<label>\(?[A-Za-z][A-Za-z ]{0,14}(?:\d{1,2})?\)?)\s*[:;]+\s*")
-_LABEL_WORDS = re.compile(
-    r"(?i)^\W*(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|"
-    r"pre-?chorus|break|ending|end|repeat|harp|harmonica|part|melody|theme|next verse|last verse|verso|estrofa)\b")
+_LABEL_WORD = (r"(?:verse|chorus|bridge|intro|outro|solo|riff|refrain|instrumental|fill|coro|estribillo|interlude|"
+               r"pre-?chorus|break|ending|end|repeat|harp|harmonica|part|melody|theme|next verse|last verse|verso|"
+               r"estrofa)\b")
+_LABEL_WORDS = re.compile(r"(?i)^\W*" + _LABEL_WORD)
+# What a section's name holds besides its words: a number, a repeat mark, punctuation ("Verse 2", "Chorus (x2)").
+_LABEL_REST = re.compile(r"(?i)" + _LABEL_WORD + r"|\b(?:x\s?\d+|\d+x|\d+)\b|[^\w]")
 _CHORUS = re.compile(r"(?i)chorus|coro|estribillo|refr[aeá]i?n")
 _URL = re.compile(r"https?://|www\.", re.I)
 # A line that tells the player something rather than being sung: its block is the tabber's prose.
@@ -222,7 +237,8 @@ class Hole:
 @dataclass(frozen=True)
 class Group:
     """What one place of a row plays: a hole (``kind`` "note"), or holes together ("chord", "shake", "split"), or
-    what its notation couldn't read, kept as written ("unread", no holes); the column its text starts at (tabs
+    what its notation couldn't read, kept as written ("unread", no holes), or the tabber's words in it ("words", no
+    holes: "BOM BOM", "(Chorus)", "tue" against its hole); the column its text starts at (tabs
     expanded), the column of its first hole's number, its text as written, whether it is held (``----`` after it),
     its other ``effects`` ("wah"), and whether it runs into the next group (``join``: ``3*d-3d``)."""
 
@@ -240,7 +256,7 @@ class Group:
         return self.col + len(self.text)
 
     def label(self) -> str:
-        if self.kind == "unread":
+        if not self.holes and self.kind in ("unread", "words"):
             return self.text
         inner = " ".join(h.label() for h in self.holes)
         return {"note": inner, "chord": f"({inner})", "shake": f"{{{inner}}}", "split": f"[{inner}]"}[self.kind]
@@ -258,6 +274,16 @@ class Scan:
     unknown: tuple[str, ...]
     label: str | None = None
     used: Counter = field(default_factory=Counter, compare=False)
+    free: int = 0  # its words standing free: tokens of three letters or more and no digit ("slip", "BOM")
+    prose: float = 0.0  # the share of its characters that are the tabber's words, kept as text (kind "words")
+    run: int = 0  # the most tokens holding holes it writes one after another, a bar or a hold between them no break
+    tokens: int = 0  # its tokens, bars and holds aside
+
+    @property
+    def explained(self) -> float:
+        """The share of its characters, its words aside, its notation explains."""
+        rest = 1 - self.prose
+        return min(1.0, self.coverage / rest) if rest > 0 else 0.0
 
     @property
     def holes(self) -> tuple[Group, ...]:
@@ -266,12 +292,22 @@ class Scan:
 
     @property
     def is_row(self) -> bool:
-        return bool(self.holes) and self.coverage >= HOLE_SHARE
+        """Whether it is a row of holes: ``HOLE_SHARE`` of it read; or of it, its words aside ("6 -6 7 BOM BOM",
+        "(2)te (3)tue"), where it writes three tokens holding holes one after another at least (or holes in every
+        token: "(4)tue (45)tu") and no more words than holes."""
+        return bool(self.holes) and (self.coverage >= HOLE_SHARE or (
+            self.explained >= HOLE_SHARE and self.run >= min(3, self.tokens) and len(self.holes) >= self.free))
 
     @property
     def missed(self) -> bool:
         """Whether it holds holes its notation couldn't read enough of to make it a row."""
         return not self.is_row and len(self.holes) >= 3 and self.coverage >= MISSED_SHARE
+
+    @property
+    def holey(self) -> bool:
+        """Whether it is a line of holes too few or too mixed to be a row ("do 3, slip to 6"): never a row's words.
+        Two holes at least, and twice as many as its words standing free."""
+        return len(self.holes) >= 2 and len(self.holes) >= 2 * self.free
 
 
 @dataclass
@@ -291,6 +327,7 @@ class Row:
     line: int = -1
     confidence: float = 1.0
     trusted: bool = True
+    above: bool = False  # its words written above it (a tab that writes them so, ``_above``)
 
 
 @dataclass(frozen=True)
@@ -565,9 +602,13 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     covered = [False] * len(text)
     used: Counter = Counter()
     groups: list[Group] = []
-    prose = [False] * len(text)  # a time, never holes (_TIME): unread
+    prose = [False] * len(text)  # a time or the tabber's words in brackets: never holes, kept as words
     for m in _TIME.finditer(text):
         prose[m.start():m.end()] = [True] * (m.end() - m.start())
+    for m in _ASIDE.finditer(text):
+        if (any(_is_word(w, alone=True) for w in m.group("body").split()) and not _DECOR.fullmatch(m.group(0))
+                and not (tokens.apart and tokens.apart.fullmatch(m.group(0)))):  # never "(hold)", nor a "(wah)"
+            prose[m.start():m.end()] = [True] * (m.end() - m.start())
 
     def taken(a: int, b: int) -> bool:
         return any(covered[a:b]) or any(prose[a:b])
@@ -698,15 +739,22 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
         mark(m.start(), m.end())
         if _HOLD.fullmatch(m.group(0)):
             _effect_before(groups, m.start(), "hold")
-    # What it couldn't read, in place.
+    # What it couldn't read, in place: the tabber's words ("BOM", "(Chorus)", "tue" against its hole, an aside in
+    # brackets) as words, together where only spaces part them; anything else unread.
     for m in _WORD.finditer(text):
         a = m.start()
         for i in range(m.start(), m.end() + 1):
             if i == m.end() or covered[i]:
                 if i > a:
-                    groups.append(Group((), "unread", a, a, text[a:i]))
+                    alone = a == m.start() and i == m.end()
+                    words = any(prose[a:i]) or _is_word(text[a:i], alone=alone)
+                    groups.append(Group((), "words" if words else "unread", a, a, text[a:i]))
                 a = i + 1
     groups.sort(key=lambda g: g.col)
+    for n in range(len(groups) - 1, 0, -1):
+        one, two = groups[n - 1], groups[n]
+        if one.kind == two.kind == "words" and not text[one.end:two.col].strip():
+            groups[n - 1:n + 1] = [Group((), "words", one.col, one.col, text[one.col:two.end])]
     for at, means in joins:
         before = [n for n, g in enumerate(groups) if g.col < at]
         if before:
@@ -721,7 +769,36 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
             unknown.append(rest)
     letters = sum(not ch.isspace() for ch in text)
     good = sum(1 for i, ch in enumerate(text) if covered[i] and not ch.isspace())
-    return Scan(tuple(groups), good / letters if letters else 0.0, tuple(unknown), label, used)
+    free = sum(1 for w in _WORD.findall(text) if not re.search(r"\d", w) and sum(c.isalpha() for c in w) >= 3)
+    said = sum(not ch.isspace() for g in groups if g.kind == "words" for ch in g.text)
+    return Scan(tuple(groups), good / letters if letters else 0.0, tuple(unknown), label, used, free,
+                said / letters if letters else 0.0, *_run(text, groups, covered))
+
+
+def _is_word(text: str, *, alone: bool) -> bool:
+    """Whether what a line couldn't read is the tabber's word: letters and no digit, a vowel among them, two at
+    least where it stands ``alone`` (one against a hole: "(45)u"); never "SB", "z" or "X"."""
+    letters = [c for c in _fold_accents(text).casefold() if c.isalpha()]
+    return (not re.search(r"\d", text) and len(letters) >= (2 if alone else 1)
+            and any(c in "aeiouyøæåœ" for c in letters))
+
+
+def _run(text: str, groups: list[Group], covered: list[bool]) -> tuple[int, int]:
+    """The most tokens holding holes a line writes one after another, and its tokens, a bar or a hold neither."""
+    holed = [False] * len(text)
+    for g in groups:
+        if g.holes:
+            holed[g.col:g.end] = [True] * (g.end - g.col)
+    best = run = count = 0
+    for m in _WORD.finditer(text):
+        if any(holed[m.start():m.end()]):
+            run += 1
+            count += 1
+            best = max(best, run)
+        elif not all(covered[m.start():m.end()]):
+            run = 0
+            count += 1
+    return best, count
 
 
 def _free_until(covered: list[bool], prose: list[bool], start: int) -> int:
@@ -997,10 +1074,13 @@ def _weighed(lines: list[str], candidates: list[tuple[Notation, str]], harp_chip
                for n, _ in candidates]
     scored = [i for i in range(len(lines)) if any(s[i].is_row or s[i].missed for s in scanned)]
     sizes = {i: sum(not ch.isspace() for ch in lines[i]) for i in scored}
+    # the tabber's words in a line of holes aside, the most any candidate finds (a notation that can't read "(3)"
+    # can't tell "tue" after it), the same for every candidate, so each is judged on the same text
+    said = {i: max(s[i].prose for s in scanned) * sizes[i] for i in scored}
     results = []
     for k, (n, source) in enumerate(candidates):
-        chars = sum(sizes.values())
-        explained = sum(scanned[k][i].coverage * sizes[i] for i in scored) / chars if chars else 0.0
+        chars = sum(sizes[i] - said[i] for i in scored)
+        explained = min(1.0, sum(scanned[k][i].coverage * sizes[i] for i in scored) / chars) if chars else 0.0
         holes = [h for i in scored for g in scanned[k][i].holes for h in g.holes]
         playable = sum(_playable(h, harp_chip) for h in holes) / len(holes) if holes else 0.0
         weight = 1 + LEGEND_WEIGHT * _agreement(n, found) if found else 1.0
@@ -1159,7 +1239,7 @@ def said(used: Counter) -> list[tuple[str, str]]:
 def _row_confidence(found: Scan, harp_chip: str | None) -> float:
     """A row's own P × T: the share of it its notation explains, times the share of its holes a harp plays."""
     holes = [h for g in found.holes for h in g.holes]
-    return found.coverage * (sum(_playable(h, harp_chip) for h in holes) / len(holes) if holes else 0.0)
+    return found.explained * (sum(_playable(h, harp_chip) for h in holes) / len(holes) if holes else 0.0)
 
 
 def _prepared(body: str, harp: str | None) -> tuple[str | None, list[str], list[Legend], set[int]]:
@@ -1180,10 +1260,12 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
     kinds = ["legend" if n in in_legend else "blank" if not line.strip() else "holes" if s.is_row
              else "missed" if s.missed else "text" for n, (line, s) in enumerate(zip(lines, scans))]
 
+    above = _above(lines, kinds, scans)
     notes: list[str] = []
     sections = [Section(None)]
     seen_row = False
     block: list[str] = []
+    last_text = -1  # the line block's last is
 
     def flush() -> None:
         if not block:
@@ -1212,29 +1294,34 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
             i = here.at[-1] + 1
             continue
         if kind == "holes" or (kind == "missed" and seen_row):  # before the first row, a line of the notes
-            flush()
             found = scans[i]
             lyric = None
-            if i + 1 < len(lines) and kinds[i + 1] == "text" and not _is_label(lines[i + 1]) \
-                    and not _URL.search(lines[i + 1]):
+            if above:  # the line just above it, unless it is a section's name, a row's or the tabber's notes' end
+                if last_text == i - 1 and block and _sung(lines[i - 1], scans[i - 1]):
+                    block.pop()
+                    lyric = lines[i - 1]
+            elif i + 1 < len(lines) and kinds[i + 1] == "text" and _sung(lines[i + 1], scans[i + 1]):
                 lyric = lines[i + 1]
+            flush()
             label = found.label
             if label and _is_label(label + ":"):
                 sections.append(Section(label))
                 label = None
             confidence = _row_confidence(found, chip)
             row = Row(list(found.groups), lyric, label, list(found.unknown), text=line, line=i, confidence=confidence,
-                      trusted=kind == "holes" and confidence >= ROW_TRUST)
+                      trusted=kind == "holes" and confidence >= ROW_TRUST, above=above and lyric is not None)
             align(row)
             sections[-1].items.append(row)
             seen_row = True
-            i += 2 if lyric is not None else 1
+            i += 2 if lyric is not None and not above else 1
             continue
-        if _is_label(line) and (seen_row or _LABEL_WORDS.search(line)):
+        beside = any(0 <= j < len(kinds) and kinds[j] in ("holes", "missed") for j in (i - 1, i + 1))
+        if _is_label(line, beside_row=beside) and (seen_row or _LABEL_WORDS.search(line)):
             flush()
             sections.append(Section(_label_text(line)))
         else:
             block.append(line if seen_row else line.strip())
+            last_text = i
         i += 1
     flush()
     for s in sections:
@@ -1269,14 +1356,50 @@ def named_key(lines: list[str]) -> str | None:
     return None
 
 
-def _is_label(line: str) -> bool:
+_VOWEL_RUN = re.compile(r"[aeiouyøæåœ]+")
+
+
+def _syllables(line: str) -> int:
+    """A line's syllables, near enough: its runs of vowels, accents folded ("Øl, øl og mere øl.": 6)."""
+    return len(_VOWEL_RUN.findall(_fold_accents(line).casefold()))
+
+
+def _above(lines: list[str], kinds: list[str], scans: list[Scan]) -> bool:
+    """Whether a tab writes each row's words above it, not under it: the lines of words above its rows fit them,
+    syllables to holes, better than those below, by ``ABOVE_LEAD`` and ``ABOVE_SHARE`` of its rows at least. A line
+    of words is one most of whose tokens hold two letters or more (not 8834's note lengths, "h q q"), no section's
+    name, no address and no line of holes."""
+    def fit(j: int, holes: int) -> float:
+        if not (0 <= j < len(lines) and kinds[j] == "text" and _sung(lines[j], scans[j])):
+            return 0.0
+        tokens = lines[j].split()
+        if 2 * sum(sum(c.isalpha() for c in t) >= 2 for t in tokens) < len(tokens):
+            return 0.0
+        found = _syllables(lines[j])
+        return 1 - abs(found - holes) / max(found, holes) if max(found, holes) else 0.0
+
+    rows = [n for n, kind in enumerate(kinds) if kind == "holes"]
+    up = sum(fit(n - 1, len(scans[n].holes)) for n in rows)
+    down = sum(fit(n + 1, len(scans[n].holes)) for n in rows)
+    return up - down >= max(ABOVE_LEAD, ABOVE_SHARE * len(rows))
+
+
+def _sung(line: str, found: Scan) -> bool:
+    """Whether a line of text by a row may be its words: no section's name, no address, no line of holes."""
+    return not _is_label(line, beside_row=True) and not _URL.search(line) and not found.holey
+
+
+def _is_label(line: str, *, beside_row: bool = False) -> bool:
+    """Whether a line names a section: "[Bridge]", "Chorus", "Verse 2", "fade:". Right above or below a row
+    (``beside_row``), a line that starts as one but goes on in words ("End of the road", "Break my heart") is sung."""
     words = line.split()
     stripped = line.strip()
     if not words or len(stripped) > 32 or _URL.search(stripped):
         return False
     if re.fullmatch(r"\[[^\]]+\]|\([^)]+\)", stripped) and len(words) <= 4:
         return True
-    if _LABEL_WORDS.search(stripped) and len(words) <= 4:
+    if _LABEL_WORDS.search(stripped) and len(words) <= 4 and (
+            not beside_row or ":" in stripped or not _LABEL_REST.sub("", stripped).strip()):
         return True
     return len(words) <= 3 and stripped[-1] in ":-" and not stripped.endswith("--")
 
