@@ -32,8 +32,9 @@ auto-chords), then follow [deploy.md's Ubuntu
 part](deploy.md#ubuntu-2404-without-nix) from section 6, with
 `/nix/var/nix/profiles/caracole/bin/caracole` in place of
 `/opt/caracole/bin/caracole`. The package's wrapper does what section 5's
-does, and brings what section 12 installs. Of section 1's packages, install
-`curl` (the failure alert) and `sqlite3` (the backup).
+does, and `#autochords` brings what section 12's first two blocks install: its
+unit block is still yours. Of section 1's packages, install `curl` (the failure
+alert) and `sqlite3` (the backup).
 
 ```sh
 sudo -i nix profile add --profile /nix/var/nix/profiles/caracole github:Danielhp95/caracole

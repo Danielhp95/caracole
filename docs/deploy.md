@@ -8,9 +8,9 @@ network. Two ways to set it up:
   downloads checked against their SHA-256, and systemd units that do what the
   module does.
 
-[The first run](#the-first-run), [Logs](#logs) and [When something is
-wrong](#when-something-is-wrong) are the same for both. Either way the machine
-gets:
+[The first run](#the-first-run), [Checking auto-chords](#checking-auto-chords),
+[Logs](#logs) and [When something is wrong](#when-something-is-wrong) are the
+same for both. Either way the machine gets:
 
 | What | Does |
 |---|---|
@@ -181,21 +181,32 @@ run takes from YouTube, or that of a video you paste on the library page.
   services.caracole.autochords.enable = true;
 ```
 
-`caracole-autochords.service` then runs after each run that succeeds, with no
-network. The nightly run, caracole-web and `caracole-admin` run the
-`autochords` package, which has torch, the model files and yt-dlp, and the run
-takes the audio of up to three songs a night that have no human sheet from
-YouTube: against YouTube's robots.txt and terms, the owner's choice, on the
-terms [usage.md](usage.md#audio-from-youtube) gives. caracole-web makes a song's
-sheet from a YouTube video you paste on the library page, the models running in
-it, so it runs without `MemoryDenyWriteExecute` then, as the auto-chords unit and
-`caracole-admin` do. For purchases alone:
+The switch builds the `autochords` package, about 3 GB more: torch, librosa,
+beat_this, and yt-dlp with the ffmpeg and deno it runs. Its wrapper points at
+the two model files `nix/autochords.nix` fetches, checked by their hashes (JKU's
+server is sometimes down: [When something is wrong](#when-something-is-wrong)).
+Then:
+
+- `caracole-autochords.service` runs after each run that succeeds, with no
+  network, the models on the CPU, a few minutes a song.
+- The nightly run, caracole-web and `caracole-admin` run that package. The run
+  takes the audio of up to three songs a night that have no human sheet from
+  YouTube: against YouTube's robots.txt and terms, the owner's choice, on the
+  terms [usage.md](usage.md#audio-from-youtube) gives.
+- caracole-web makes a song's sheet from a YouTube video, pasted in the request
+  form or suggested for a search, the models running in it, so it runs without
+  `MemoryDenyWriteExecute`, as the auto-chords unit and `caracole-admin` do; the
+  nightly run keeps it.
+
+For purchases alone, with no yt-dlp run and no YouTube on the library page:
 
 ```nix
   services.caracole.settings.providers.youtube.enabled = false;
 ```
 
-To run it now: `sudo systemctl start caracole-autochords.service`.
+The videos the page suggests come with a thumbnail from YouTube's image host,
+`i.ytimg.com`, a provider of its own: `settings.providers.ytimg.enabled = false`
+drops the thumbnails alone. Then [check that it works](#checking-auto-chords).
 
 ### 5. The library page on your network
 
@@ -480,7 +491,6 @@ Description=caracole nightly run: sync, match, fetch and write the library
 Wants=network-online.target
 After=network-online.target
 OnFailure=caracole-notify-failure@%n.service
-#OnSuccess=caracole-autochords.service
 
 [Service]
 Type=oneshot
@@ -549,11 +559,14 @@ if [ "$EUID" -ne 0 ]; then
   echo "caracole-admin starts a system unit as the caracole user: run it with sudo" >&2
   exit 1
 fi
-# Each setting of units.conf and sandbox.conf, as a --property; with auto-chords, MemoryDenyWriteExecute=no.
+# Each setting of units.conf and sandbox.conf, as a --property.
 mapfile -t properties < <(sed -n 's/^[A-Z]/--property=&/p' /etc/caracole/units.conf /etc/caracole/sandbox.conf)
+# With auto-chords (section 12), as its unit, without MemoryDenyWriteExecute: PyTorch generates code.
+mdwe=yes
+if [ -e /etc/systemd/system/caracole-autochords.service ]; then mdwe=no; fi
 # --pty on a terminal (review and remove ask questions), --pipe otherwise.
 exec systemd-run --quiet --collect --wait --pty --pipe "${properties[@]}" \
-  --property=MemoryDenyWriteExecute=yes -- /opt/caracole/bin/caracole "$@"
+  --property=MemoryDenyWriteExecute=$mdwe -- /opt/caracole/bin/caracole "$@"
 EOF
 sudo chmod 0755 /usr/local/sbin/caracole-admin
 sudo caracole-admin --version   # caracole 0.1.0
@@ -642,7 +655,8 @@ such as a full tailnet name.
 ### 12. Auto-chords
 
 Optional, as on NixOS (section 4). torch comes from PyTorch's CPU-only index
-(PyPI's brings GB of CUDA), then caracole's `autochords` extra:
+(PyPI's brings GB of CUDA), then caracole's `autochords` extra, both at section
+2's versions:
 
 ```sh
 sudo apt install ffmpeg unzip
@@ -655,9 +669,11 @@ sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracol
 ```
 
 The model files `nix/autochords.nix` pins (JKU's server is sometimes down: try
-again later), then deno and yt-dlp, for audio from YouTube; Ubuntu's yt-dlp is
-too old for it. For purchases alone, leave those two out, and set
-`enabled = false` under `[providers.youtube]` in caracole.toml:
+again later), then, for audio from YouTube, yt-dlp and deno, the JavaScript
+runtime it solves YouTube's player with: deno at nixpkgs' version, yt-dlp at its
+latest (Ubuntu's is too old for YouTube). For purchases alone, leave those two
+out, and turn YouTube off:
+`printf '\n[providers.youtube]\nenabled = false\n' | sudo tee -a /etc/caracole/caracole.toml`.
 
 ```sh
 cd "$(mktemp -d)"
@@ -678,8 +694,10 @@ sudo ln -sfn ../yt-dlp/bin/yt-dlp /opt/caracole/bin/yt-dlp
 ```
 
 The unit runs after each run that succeeds, with no network, and may generate
-code, as PyTorch and numba do; `caracole-admin` may too, and so may caracole-web,
-which makes a song's sheet from a YouTube video pasted on the library page:
+code, as PyTorch and numba do. So may caracole-web, which makes a song's sheet
+from a YouTube video, and `caracole-admin`, once this unit exists (section 8).
+Two drop-ins give caracole.service its `OnSuccess=` and caracole-web its
+`MemoryDenyWriteExecute=no`:
 
 ```sh
 sudo tee /etc/systemd/system/caracole-autochords.service > /dev/null <<'EOF'
@@ -700,12 +718,17 @@ EOF
 sudo mkdir -p /etc/systemd/system/caracole-autochords.service.d
 sudo ln -sfn /etc/caracole/units.conf /etc/systemd/system/caracole-autochords.service.d/caracole.conf
 sudo ln -sfn /etc/caracole/sandbox.conf /etc/systemd/system/caracole-autochords.service.d/sandbox.conf
-sudo sed -i 's/^#OnSuccess=/OnSuccess=/' /etc/systemd/system/caracole.service
-sudo sed -i 's/MemoryDenyWriteExecute=yes/MemoryDenyWriteExecute=no/' /usr/local/sbin/caracole-admin
-sudo sed -i 's/MemoryDenyWriteExecute=yes/MemoryDenyWriteExecute=no/' /etc/systemd/system/caracole-web.service
+printf '[Unit]\nOnSuccess=caracole-autochords.service\n' |
+  sudo tee /etc/systemd/system/caracole.service.d/autochords.conf > /dev/null
+printf '[Service]\nMemoryDenyWriteExecute=no\n' |
+  sudo tee /etc/systemd/system/caracole-web.service.d/autochords.conf > /dev/null
+sudo systemd-analyze verify caracole.service caracole-web.service caracole-autochords.service \
+  caracole-notify-failure@caracole-autochords.service.service   # silent when all is well
 sudo systemctl daemon-reload && sudo systemctl restart caracole-web.service
 sudo caracole-admin autochords   # auto-chords: 0 generated, 0 skipped, 0 failed
 ```
+
+Then [check that it works](#checking-auto-chords).
 
 ### 13. Upgrades
 
@@ -720,11 +743,12 @@ test -n "$REV" &&
 sudo uv venv --allow-existing --python $PY $VENV &&
 sudo uv pip install --compile-bytecode --python $VENV/bin/python \
   -c /opt/caracole/constraints.txt "caracole @ git+https://github.com/Danielhp95/caracole@$REV" &&
-# With auto-chords, section 12's two installs, into this commit's: take the # off these four lines.
-# sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
-#   --index-url https://download.pytorch.org/whl/cpu torch torchaudio torchcodec &&
-# sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
-#   "caracole[autochords] @ git+https://github.com/Danielhp95/caracole@$REV" &&
+if [ -e /etc/systemd/system/caracole-autochords.service ]; then   # with auto-chords, section 12's two installs
+  sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
+    --index-url https://download.pytorch.org/whl/cpu torch torchaudio torchcodec &&
+  sudo uv pip install --compile-bytecode --python $VENV/bin/python -c /opt/caracole/constraints.txt \
+    "caracole[autochords] @ git+https://github.com/Danielhp95/caracole@$REV"
+fi &&
 sudo ln -sfn releases/$REV /opt/caracole/current &&
 sudo systemctl restart caracole-web.service
 ```
@@ -760,6 +784,42 @@ A file you pass `caracole-admin` must be one user `caracole` can read, outside
 time: a command started during the nightly run waits for it, but a lookup
 (`get`, or a song asked for on the library page) only for the run's next pause
 ([usage.md](usage.md#one-step-at-a-time)).
+
+## Checking auto-chords
+
+On either system, once it is on (NixOS section 4, Ubuntu section 12):
+
+```sh
+systemctl show -p OnSuccess caracole.service                    # OnSuccess=caracole-autochords.service
+systemctl show -p MemoryDenyWriteExecute caracole-web.service   # MemoryDenyWriteExecute=no
+sudo systemctl start --no-block caracole-autochords.service     # now, rather than after the next run
+journalctl -u caracole-autochords -f                            # its last line: auto-chords: 0 generated, 0 skipped, 0 failed
+```
+
+The library page's request form then has a **YouTube video** field, and after
+the next nightly run the Sites tab's YouTube line counts its yt-dlp runs. Where
+the form has no such field, it says why, "No sheets from YouTube here: …", and
+the Sites tab's YouTube line, Off, says it in full once opened:
+
+| It says | Then |
+|---|---|
+| auto-chords isn't installed | NixOS: `autochords.enable`. Ubuntu: section 12's two installs, which an upgrade makes again in each new commit (section 13) |
+| auto-chords' model files are missing | `CARACOLE_BTC_WEIGHTS` or `CARACOLE_BEAT_CHECKPOINT` names no file: on Ubuntu, section 12's downloads |
+| yt-dlp is missing | Ubuntu: section 12's yt-dlp, linked into `/opt/caracole/bin` |
+| YouTube is turned off | `[providers.youtube] enabled = false`: auto-chords for purchases alone |
+
+Then one song from end to end, one nobody has charted, from a video of it. It
+goes into wanted.txt if the library hasn't got it; its audio, lyrics, chords,
+PDF and viewer come in a few minutes, a line a stage, then `Done in …`:
+
+```sh
+sudo caracole-admin youtube --song "Artist - Title" --url "https://www.youtube.com/watch?v=…" --sheet
+```
+
+On the library page, the same is a video pasted in the request form, or **Make
+the sheet** on the video it suggests for a search the sites have no sheet for,
+with its thumbnail from `i.ytimg.com`. Either way the sheet opens in the
+viewer, as any other.
 
 ## Logs
 
