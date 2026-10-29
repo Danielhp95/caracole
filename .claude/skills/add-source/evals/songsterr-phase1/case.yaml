@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: songsterr-phase1
+expected_outcome: |
+  Phase 1 alone: a report for the owner's go/no-go on songsterr.com as a caracole source, and no code.
+  It says what songsterr.com answered to caracole's own user agent (robots.txt, a page, any bot
+  protection), quotes its robots rules and its terms on automated access, says what it holds and what
+  needs an account or a subscription, how a wanted.txt "Artist - Title" line would match its songs, what
+  file caracole would keep, and leaves the decision on the terms to the owner with a recommendation.

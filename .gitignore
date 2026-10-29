@@ -9,4 +9,8 @@ result-*
 *.egg-info/
 dist/
 build/
-.claude/
+# .claude/ is each checkout's own (handoff notes, worktrees, eval workspaces), but for the project's skills
+.claude/*
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/add-source/
