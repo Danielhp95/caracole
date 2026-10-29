@@ -19,11 +19,16 @@ with linked audio is due when:
 
 For each song due, BTC recognizes the chords, beat_this finds the beats, and
 ``merge.build_sheet`` lays the chords out over LRCLIB's lyrics: the synced ones
-when their duration matches the audio's within 2 s (otherwise their timings
-belong to another cut of the song), with each chord over the word sung when it
-starts where they time each word (enhanced LRC); else the plain ones, else none (a
-chord chart alone). The sheet is kept with a ``versions`` row of provider ``auto``,
-and the song becomes found.
+when their duration matches the audio's within 2 s; when it doesn't (LRCLIB timed
+them for another cut of the song: a video with a spoken intro, say), the synced
+ones moved by the shift ``align.lyrics_offset`` finds from the chords and the
+beats, word stamps and all, when it finds one clearly, which the sheet says on a
+line after the song's name, after the video's for audio from YouTube (``Lyrics'
+timing shifted 12.0 s later to fit this audio``), and the version's
+``raw["lyrics_shift"]`` keeps; with each chord over the
+word sung when it starts where they time each word (enhanced LRC); else the plain
+ones, else none (a chord chart alone). The sheet is kept with a ``versions`` row
+of provider ``auto``, and the song becomes found.
 
 Two kinds of failure are told apart, because only one is the purchase's:
 
@@ -57,9 +62,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from caracole.autochords.align import lyrics_offset, shifted_lrc
 from caracole.autochords.beats import detect_beats
 from caracole.autochords.btc import BTCRecognizer
-from caracole.autochords.merge import NO_CHORD, ChordSegment, LrcLine, build_sheet, parse_lrc_words, youtube_credit
+from caracole.autochords.merge import (
+    NO_CHORD,
+    ChordSegment,
+    LrcLine,
+    build_sheet,
+    parse_lrc,
+    parse_lrc_words,
+    youtube_credit,
+)
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
 from caracole.keys import estimate_key
@@ -224,13 +238,13 @@ def autochords_pending(
             continue
         video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
         try:
-            text, used, key = _make_sheet(song, *models, source=_from_youtube(video))
+            text, used, key, shift = _make_sheet(song, *models, source=_from_youtube(video))
         except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
             stats.failed += 1
             stats.failures.append(_unreadable(conn, song, e, stamp))
             continue
         try:
-            _keep(conn, cfg, song, text, used, key, stamp, video=video)
+            _keep(conn, cfg, song, text, used, key, stamp, video=video, shift=shift)
         except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
             _error(stats, song, e)
             continue
@@ -444,14 +458,62 @@ def _sung_lyrics(song: Song) -> Lyrics | None:
     return lyrics if lyrics is not None and lyrics.has_lyrics else None
 
 
-def _synced_for(lyrics: Lyrics | None, audio: Path) -> str | None:
-    """The synced lyrics, if their timings fit this audio file: the durations agree within 2 s."""
+@dataclass(frozen=True)
+class _Timed:
+    """Synced lyrics that fit the audio: their LRC text and, when LRCLIB timed them for audio of
+    another length, the seconds they were shifted by to fit it (``shift``, 0.0 for none) and how
+    much longer the audio is (``longer``, less than 0 for shorter)."""
+
+    text: str
+    shift: float | None = None
+    longer: float = 0.0
+
+    def note(self) -> str | None:
+        """What the sheet says of a shift, so that a wrong one shows; None for lyrics that fit as timed."""
+        if self.shift is None:
+            return None
+        if self.shift:
+            later = "later" if self.shift > 0 else "earlier"
+            return f"Lyrics' timing shifted {abs(self.shift):.1f} s {later} to fit this audio"
+        than = "shorter" if self.longer > 0 else "longer"
+        return f"Lyrics' timing unshifted: LRCLIB's audio is {abs(self.longer):.1f} s {than}"
+
+
+def _synced_for(
+    song: Song,
+    lyrics: Lyrics | None,
+    audio: Path,
+    heard: Sequence[ChordSegment],
+    beats: Sequence[float],
+    downbeats: Sequence[float],
+) -> _Timed | None:
+    """The synced lyrics, if their timings fit this audio file: as they are when the durations agree
+    within 2 s, else moved by the shift ``align.lyrics_offset`` finds clearly from the chords heard
+    and the beats; None when it finds none."""
     if lyrics is None or not lyrics.synced or lyrics.duration is None:
         return None
     duration = read_audio(audio).duration_s
-    if duration is None or abs(lyrics.duration - duration) > SYNC_TOLERANCE_S:
+    if duration is None:
         return None
-    return lyrics.synced
+    longer = duration - lyrics.duration
+    if abs(longer) <= SYNC_TOLERANCE_S:
+        return _Timed(lyrics.synced)
+    lines = parse_lrc(lyrics.synced)
+    try:
+        found = lyrics_offset(lines, heard, beats, downbeats, audio_s=duration, lyrics_s=lyrics.duration)
+    except Exception:  # noqa: BLE001 - a bug here must not pass for a purchase auto-chords can't read
+        log.exception("%s: looking for how far to shift LRCLIB's timed lyrics failed; the plain lyrics instead",
+                      song.display)
+        return None
+    than = "longer" if longer > 0 else "shorter"
+    if found.offset is None:
+        log.info("%s: the audio is %.1f s %s than LRCLIB's timed lyrics, and no shift fits them to it clearly "
+                 "(%s): the plain lyrics instead", song.display, abs(longer), than, found.why)
+        return None
+    log.info("%s: the audio is %.1f s %s than LRCLIB's timed lyrics, which fit it shifted by %+.1f s (%s)",
+             song.display, abs(longer), than, found.offset, found.why)
+    text = shifted_lrc(lyrics.synced, found.offset) if found.offset else lyrics.synced
+    return _Timed(text, found.offset, longer)
 
 
 def _word_timed(synced: str | None) -> list[LrcLine] | None:
@@ -470,10 +532,12 @@ def _from_youtube(video: Video | None) -> str | None:
 
 def _make_sheet(
     song: Song, recognizer: Recognizer, beats_fn: BeatsFn, *, source: str | None = None
-) -> tuple[str, str, str | None]:
-    """One song's auto sheet, which lyrics it used, and the key of the chords heard (None when
-    they fit no key); all of it comes from its audio file. ``source`` says where that came
-    from, when it wasn't a purchase.
+) -> tuple[str, str, str | None, float | None]:
+    """One song's auto sheet, which lyrics it used, the key of the chords heard (None when
+    they fit no key), and the seconds its timed lyrics were shifted by to fit the audio (None
+    when LRCLIB timed them for audio of the same length, or they weren't used); all of it comes
+    from its audio file. ``source`` says where that came from, when it wasn't a purchase, on the
+    sheet's line after the song's name; the shift has the line after it.
 
     The key is estimated from the chords as recognized, each weighed by how long it sounds,
     before they are snapped to beats and laid out.
@@ -483,8 +547,12 @@ def _make_sheet(
     key = estimate_key((s.label, s.end - s.start) for s in segments if s.label != NO_CHORD)
     beats, downbeats = beats_fn(audio)
     lyrics = _sung_lyrics(song)
-    synced = _synced_for(lyrics, audio)
+    timed = _synced_for(song, lyrics, audio, segments, beats, downbeats)
+    synced = timed.text if timed is not None else None
     plain = lyrics.plain if lyrics is not None else None
+    # The shift on a line of its own after the credit: render.py takes that line for the credit, and the viewer of
+    # a sheet from YouTube draws the video in its place, so the shift is the first of the sheet's own words
+    note = "\n".join(part for part in (source, timed.note() if timed is not None else None) if part)
     text = build_sheet(
         segments,
         title=song.title,
@@ -494,9 +562,10 @@ def _make_sheet(
         plain=plain,
         beats=beats,
         downbeats=downbeats,
-        source=source,
+        source=note or None,
     )
-    return text, "synced" if synced else "plain" if plain else "none", key
+    shift = timed.shift if timed is not None else None
+    return text, "synced" if synced else "plain" if plain else "none", key, shift
 
 
 def _keep(
@@ -509,16 +578,21 @@ def _keep(
     stamp: str,
     *,
     video: Video | None = None,
+    shift: float | None = None,
 ) -> None:
     """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
 
-    The key heard goes into the version's ``raw``, for ``keys.song_key``. Audio from YouTube
-    (``video``) gives the version the video's address, so info.json names it, and its fields.
+    The key heard goes into the version's ``raw``, for ``keys.song_key``, and so does the shift
+    of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``). Audio from
+    YouTube (``video``) gives the version the video's address, so info.json names it, and its
+    fields.
     """
     audio = Path(song.audio_path or "")
     raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": used}
     if key is not None:
         raw["key"] = key
+    if shift is not None:
+        raw["lyrics_shift"] = shift
     if video is not None:
         raw["youtube"] = video.as_json()
     version_id = upsert_version(

@@ -1821,8 +1821,10 @@ words, and leaves it out with the notes before a first section. Its viewer shows
 YouTube's icon, the video's title as a link to it, and its channel instead (see
 [The sheet viewer](#the-sheet-viewer)); info.json gives the video's address as
 the auto sheet's source. A sheet made before named the address too: its .cho and
-PDF name the video as above at the next render. The to-do page and index.html
-say where each song stands.
+PDF name the video as above at the next render. The line after it says how far
+the lyrics' timing was shifted, when it was (see
+[Timed lyrics of another length](#timed-lyrics-of-another-length)). The to-do
+page and index.html say where each song stands.
 
 **A sheet from a video, now.** For a song you know the video of, caracole makes the sheet at
 once, rather than a night apart: on the library page caracole serve serves, or with
@@ -1838,9 +1840,10 @@ its lyrics from LRCLIB, asked with the audio's length when its wanted.txt line g
 timed lyrics LRCLIB picks fit the audio; the chords from the audio (auto-chords, a few minutes on
 a CPU); its PDF and its viewer, `sheet (auto).html`, the viewer a UG sheet gets; then the pages.
 The chords go over the lyrics, a line each, each chord on the first letter of a word, as on
-Ultimate Guitar, when LRCLIB's timed lyrics are
-as long as the audio within 2 seconds; otherwise (a video with a long intro, say) a chord chart
-comes first and the lyrics after it, and with no lyrics on LRCLIB, the chart alone. Without
+Ultimate Guitar, when LRCLIB has timed lyrics (see
+[Timed lyrics of another length](#timed-lyrics-of-another-length) for audio longer or shorter
+than LRCLIB's); otherwise a chord chart comes first and the lyrics after it, and with no lyrics
+on LRCLIB, the chart alone. Without
 `--url`, the video under `[youtube]`, else the one its search picks. It refuses a song with a
 human sheet, an ignored one or one with a purchase linked, and one `[youtube]` says `"none"` for
 without a video given, and exits 1 then, as it does for a video YouTube won't give, audio
@@ -1859,6 +1862,30 @@ audio from another video keeps it until then. So is a video whose download
 failed 3 times for any reason but the network (a format YouTube no longer
 offers, say): the next run searches again, without that one, and the song is no
 miss.
+
+### Timed lyrics of another length
+
+LRCLIB times its lyrics against one release of a song. When the audio auto-chords works from,
+a video or a purchase, is as long as that release within 2 seconds, the chords go over the
+timed lyrics as they are. When it isn't (a spoken intro, credits after the song, a longer fade,
+another cut), auto-chords works out how far to shift the lyrics from the chords and beats it
+heard, and nothing else: every shift within 30 seconds either way, a quarter beat apart, and the
+whole difference in length, each scored by how well the lines then start on bars and chord
+changes, sit over chords rather than talk or silence, sing a line sung twice over the same
+chords twice, and keep the audio's music within the release's length; no shift, and the whole
+difference at the start, are a little preferred. It shifts them only when one shift wins
+clearly, each word's time with its line's where LRCLIB times words; otherwise the sheet is a
+chord chart, then the plain lyrics, as before. A shifted sheet says so after the song's name,
+on the line after the video's for audio from YouTube, and its viewer and its .cho with it (its
+PDF as it does the video's line: where the song starts with words):
+
+    Audio from YouTube: Vikingos veganos (HyperFanes)
+    Lyrics' timing shifted 12.0 s later to fit this audio
+
+or `Lyrics' timing unshifted: LRCLIB's audio is 12.0 s shorter` for lyrics that fit as they
+are timed though the lengths differ (credits after the song). A wrong shift shows there, and
+on chords that don't fit the words; another video under `[youtube]`, or a purchase, makes the
+sheet again.
 
 ## The to-do page
 

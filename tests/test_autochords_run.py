@@ -431,8 +431,117 @@ def test_lyrics_that_time_each_word_put_each_chord_over_its_word(conn, cfg, tmp_
     assert lines[i - 1] == "[ch]C[/ch]" + " " * 16 + "[ch]G[/ch]"
 
 
+def test_synced_lyrics_within_the_tolerance_are_laid_out_as_ever_with_no_shift_looked_for(
+        conn, cfg, tmp_path, monkeypatch):
+    import caracole.autochords.run as ac_run
+    from caracole.autochords import build_sheet
+
+    def no_alignment(*args, **kwargs):
+        raise AssertionError("no shift is looked for when the lengths agree")
+
+    monkeypatch.setattr(ac_run, "lyrics_offset", no_alignment)
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), seconds=10.0, lyrics_status="found",
+                   lyrics_json=lyrics_json(synced=SYNCED, duration=11.5))
+    run(conn, cfg)
+    assert auto_sheet(cfg, conn, s) == build_sheet(
+        FakeRecognizer().recognize(s.audio_path), title="River Road", artist="Nobody", synced=SYNCED,
+        plain="Walking down the river road\nSinging to the morning light", beats=BEATS, downbeats=DOWNBEATS)
+    raw = get_version(conn, kept_files(conn, s.id)[0].version_id).raw
+    assert raw["lyrics"] == "synced" and "lyrics_shift" not in raw
+
+
+# A song at 120 BPM whose audio has 12 s of talk first, which BTC hears as no chord: then 16 bars
+# of C G Am F, a line sung every two bars from its first. LRCLIB timed the lines for the release,
+# which starts with the band and ends 2 s after it.
+TALK = 12.0
+BAND = [(TALK + 2.0 * k, TALK + 2.0 * (k + 1), ("C", "G", "Am", "F")[k % 4]) for k in range(16)]
+SUNG = ["One for the longships", "two for the oars", "three for the lentils", "four for the shores",
+        "Five for the fjords", "six for the snow", "seven for the turnips", "eight rows to go"]
+RELEASE_LRC = "".join(f"[00:{4 * k:02d}.00]{line}\n" for k, line in enumerate(SUNG)) + "[00:32.00]\n"
+TALKED_BEATS = [TALK + 0.5 * k for k in range(69)]
+
+
+def talk_first(conn, tmp_path, *, name=None):
+    return with_audio(conn, tmp_path, add_song(conn, "Nobody", "Longships"), seconds=TALK + 34.0, name=name,
+                      lyrics_status="found", lyrics_json=lyrics_json(synced=RELEASE_LRC, duration=34.0))
+
+
+def test_synced_lyrics_for_audio_with_a_talk_first_are_shifted_to_fit_it(conn, cfg, tmp_path):
+    s = talk_first(conn, tmp_path)
+    run(conn, cfg, Heard((0.0, TALK, "N"), *BAND), lambda path: (TALKED_BEATS, TALKED_BEATS[::4]))
+    lines = auto_sheet(cfg, conn, s).splitlines()
+    assert lines[:3] == ["auto-generated, unverified", "Nobody - Longships",
+                         "Lyrics' timing shifted 12.0 s later to fit this audio"]
+    assert "[Lyrics]" not in lines
+    for line, chord in zip(SUNG, ("C", "Am", "C", "Am", "C", "Am", "C", "Am"), strict=True):
+        assert lines[lines.index(line) - 1].startswith(f"[ch]{chord}[/ch]"), line
+    raw = get_version(conn, kept_files(conn, s.id)[0].version_id).raw
+    assert (raw["lyrics"], raw["lyrics_shift"]) == ("synced", 12.0)
+
+
+def test_shifted_lyrics_that_time_each_word_keep_each_chord_over_its_word(conn, cfg, tmp_path):
+    # G comes in 2 s into the first line, with "home": laid out by its time in the line alone, it
+    # would go over "longship".
+    words = "[00:00.00]<00:00.00>Row <00:00.30>the <00:00.60>longship <00:02.00>home\n"
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "Longships"), seconds=TALK + 34.0,
+                   lyrics_status="found",
+                   lyrics_json=lyrics_json(synced=words + RELEASE_LRC.split("\n", 1)[1], duration=34.0))
+    run(conn, cfg, Heard((0.0, TALK, "N"), *BAND), lambda path: (TALKED_BEATS, TALKED_BEATS[::4]))
+    lines = auto_sheet(cfg, conn, s).splitlines()
+    assert lines[2] == "Lyrics' timing shifted 12.0 s later to fit this audio"
+    i = lines.index("Row the longship home")
+    assert lines[i - 1] == "[ch]C[/ch]" + " " * 16 + "[ch]G[/ch]"
+
+
+def test_a_youtube_sheet_says_the_shift_on_the_line_after_the_one_that_names_its_video(conn, cfg, tmp_path):
+    from caracole.db import kv_set_json
+    from caracole.render import _auto_sheet
+
+    s = talk_first(conn, tmp_path, name="youtube/1-lzN7Thn3FV4.wav")
+    video = {"id": "lzN7Thn3FV4", "title": "Longships", "channel": "Nobody", "duration": 46.0,
+             "url": "https://www.youtube.com/watch?v=lzN7Thn3FV4"}
+    kv_set_json(conn, f"youtube:{s.id}", {"video": video, "source": "pasted", "audio": s.audio_path})
+    run(conn, cfg, Heard((0.0, TALK, "N"), *BAND), lambda path: (TALKED_BEATS, TALKED_BEATS[::4]))
+    assert auto_sheet(cfg, conn, s).splitlines()[2:5] == [
+        "Audio from YouTube: Longships (Nobody)", "Lyrics' timing shifted 12.0 s later to fit this audio", ""]
+    # The viewer draws the video in place of the credit's line; the shift stays, the sheet's first words.
+    [kept] = kept_files(conn, s.id)
+    sheet = _auto_sheet(conn, cfg.library_dir, kept)
+    assert sheet.credit == "Audio from YouTube: Longships (Nobody)"
+    assert sheet.markup.startswith("Lyrics' timing shifted 12.0 s later to fit this audio\n")
+
+
+def test_synced_lyrics_no_shift_fits_clearly_give_way_to_the_plain_ones(conn, cfg, tmp_path):
+    # The band plays from the first second to the last, the same four chords throughout: twelve
+    # seconds more of it at the start fit the lines as well as twelve more at the end.
+    s = talk_first(conn, tmp_path)
+    band = [(2.0 * k, 2.0 * (k + 1), ("C", "G", "Am", "F")[k % 4]) for k in range(23)]
+    beats = [0.5 * k for k in range(93)]
+    run(conn, cfg, Heard(*band), lambda path: (beats, beats[::4]))
+    lines = auto_sheet(cfg, conn, s).splitlines()
+    assert lines[3] == "[Chords]" and lines[lines.index("[Lyrics]") + 1] == SUNG[0]
+    raw = get_version(conn, kept_files(conn, s.id)[0].version_id).raw
+    assert raw["lyrics"] == "plain" and "lyrics_shift" not in raw
+
+
+def test_a_shift_that_fails_to_be_found_leaves_the_plain_lyrics_and_blames_no_purchase(
+        conn, cfg, tmp_path, monkeypatch, caplog):
+    import caracole.autochords.run as ac_run
+
+    def broken(*args, **kwargs):
+        raise ZeroDivisionError("a bug")
+
+    monkeypatch.setattr(ac_run, "lyrics_offset", broken)
+    s = talk_first(conn, tmp_path)
+    stats = run(conn, cfg, Heard((0.0, TALK, "N"), *BAND), lambda path: (TALKED_BEATS, TALKED_BEATS[::4]))
+    assert (stats.generated, stats.failures) == (1, [])
+    assert "[Lyrics]" in auto_sheet(cfg, conn, s).splitlines()
+    assert kv_get(conn, failed_key(s)) is None
+    assert "ZeroDivisionError: a bug" in caplog.text
+
+
 def test_plain_lyrics_used_when_the_synced_duration_does_not_match(conn, cfg, tmp_path):
-    # LRCLIB's record is another cut of the song: its timings would put chords on the wrong lines.
+    # LRCLIB's record is another cut of the song, and two lines are too few to tell where they go.
     s = with_audio(
         conn,
         tmp_path,

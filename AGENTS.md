@@ -389,7 +389,12 @@ Rules a change there keeps (the Invariants below are the others):
   Cancel (test_viewer_panels.py, test_web_server.py's download in the real sandbox).
 - `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
-  beat_this; run.py runs them over the library.
+  beat_this; run.py runs them over the library. align.py, pure Python too, is run.py's: how far
+  to shift timed lyrics LRCLIB timed for audio of another length, from the chords and beats alone
+  (`lyrics_offset`: candidate shifts scored, the best taken only by a clear margin, else the plain
+  lyrics as before; `shifted_lrc` moves line and word stamps alike, so word-timed lines keep their
+  words; the shift said on a line of the sheet's after the song's name, after the video's credit
+  for audio from YouTube, and kept as `raw["lyrics_shift"]`).
 - `tests/`: named after what they cover (test_fetch.py is ug/fetch.py's), and
   `test_commands_*.py` for the CLI. conftest.py has the `conn` and `cfg` fixtures (every
   directory under `tmp_path`, in /dev/shm if it will do; `conn` copies a database migrated once
