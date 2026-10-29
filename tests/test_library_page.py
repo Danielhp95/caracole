@@ -1960,7 +1960,8 @@ def sourced_library(conn, cfg):
 # Notes each icon on the page: its source, its accessible name, and whether the image loaded.
 MARKS = """
 (() => {
-  const marks = Array.from(document.querySelectorAll("#list .source")).map((m) => ({
+  // The marks of where things came from: a line's sites' marks are its own (song_sites.py, tested on their own).
+  const marks = Array.from(document.querySelectorAll("#list .source:not(.line-sites > *)")).map((m) => ({
     source: m.dataset.source, tag: m.tagName.toLowerCase(), text: m.textContent,
     name: m.getAttribute("alt") || m.getAttribute("aria-label"), role: m.getAttribute("role"),
     loaded: m.tagName === "IMG" ? m.complete && m.naturalWidth > 0 : null,
@@ -2735,7 +2736,10 @@ def test_a_line_shows_its_title_what_it_holds_its_key_and_main_action(conn, cfg,
     # What it holds, not where each came from (its files say that); found, it needs no badge.
     assert re.search(r'<h3[^>]*>Creep</h3>', top) and re.search(r'<span class="line-holds"><svg [^>]*aria-label="Chord '
                                                                r'sheet".*<svg [^>]*aria-label="Lyrics"', top), top
-    assert 'class="source' not in top and 'class="badge' not in top
+    # Its sites' marks say which sites have it (song_sites.py): no other mark says where a file came from.
+    sites = re.search(r'<span class="line-sites">(.*?)</span><span class="line-holds">', top)
+    assert sites and 'data-source="ug" data-state="have"' in sites.group(1), top
+    assert 'class="source' not in top.replace(sites.group(0), "") and 'class="badge' not in top
     assert "Key G major (from the tab)" in top
     main = re.search(r'<div class="line-action"><a ([^>]*)>Open PDF</a>', creep)
     assert main and 'href="Radiohead/Creep/sheet.pdf"' in main.group(1)
@@ -2811,10 +2815,12 @@ def test_an_auto_sheet_from_youtube_audio_shows_where_it_came_from(conn, cfg, tm
     line = line_of(shown, "Creep")
     top = line.split('class="line-panel"', 1)[0]
     # Its line holds an auto sheet (its glyph, in the auto sheet's colour), and its button says what it opens ("Auto
-    # sheet PDF"): no badge, and no mark of where it came from. A touch screen shows no title: the button's name says
-    # it is an auto sheet too, for a screen reader.
+    # sheet PDF"): no badge, and no mark of where it came from but its sites' (YouTube's among them, on its route). A
+    # touch screen shows no title: the button's name says it is an auto sheet too, for a screen reader.
     assert re.search(r'<svg class="glyph glyph-sheet auto"[^>]*aria-label="Auto sheet"', top), top
-    assert 'class="source' not in top and 'class="badge' not in top
+    sites = re.search(r'<span class="line-sites">(.*?)</span><span class="line-holds">', top)
+    assert sites and 'title="YouTube: has it" data-source="youtube" data-state="have"' in sites.group(1), top
+    assert 'class="source' not in top.replace(sites.group(0), "") and 'class="badge' not in top
     assert re.search(r'<div class="line-action"><a [^>]*title="Auto sheet PDF"[^>]*>Open PDF</a>', line), line
     assert 'aria-label="Open PDF of Creep by Radiohead, an auto sheet"' in line, line
     # The video waits behind the line's chevron, with the rest of what a card said; its text says it came from there.
@@ -3002,7 +3008,9 @@ LINE_PARTS = """
       holds: holds ? Array.from(holds.children).map((g) => ({ said: g.getAttribute("aria-label"),
         tip: g.querySelector("title") ? g.querySelector("title").textContent : null, cls: g.getAttribute("class"),
         svg: g.namespaceURI === "http://www.w3.org/2000/svg" && g.localName === "svg" })) : null,
-      marks: outside(l, ".source").map((m) => m.dataset.source),
+      marks: outside(l, ".source").filter((m) => !m.closest(".line-sites")).map((m) => m.dataset.source),
+      sites: Array.from(l.querySelectorAll(".line-sites .source")).map((m) => [m.dataset.source, m.dataset.state,
+        m.title, m.getAttribute(m.localName === "img" ? "alt" : "aria-label")]),
       key: shown ? shown.textContent : null,
       more: more ? { glyph: chevron ? chevron.getAttribute("class") : null,
         hidden: chevron ? chevron.getAttribute("aria-hidden") : null, title: more.title,
@@ -3044,8 +3052,8 @@ def test_a_found_songs_line_has_no_status_badge(conn, cfg, tmp_path):
 
 @in_chromium
 def test_a_wanted_songs_line_keeps_its_badge(conn, cfg, tmp_path):
-    # A song that needs something, or isn't plainly yours, says so: Wanted, Not found, Needs review (a found song's
-    # too), Ignored.
+    # A song that needs something, or isn't plainly yours, says so: Wanted, Needs review (a found song's too), Ignored.
+    # One UG's index had nothing for says nothing: its sites' marks say which site has what.
     add_song(conn, "Eagles", "Desperado")
     lost = add_song(conn, "The Beatles", "Yesterday")
     update_song(conn, lost.id, match_decision="not_found")
@@ -3056,8 +3064,38 @@ def test_a_wanted_songs_line_keeps_its_badge(conn, cfg, tmp_path):
     skipped = add_song(conn, "Some Artist", "Some Interlude")
     parts = line_parts(conn, cfg, tmp_path, Overrides(ignore=frozenset({skipped.key})))
     assert {title: p["badges"] for title, p in parts.items()} == {
-        "Desperado": ["Wanted"], "Yesterday": ["Not found"], "Crep": ["Needs review"], "Creep": ["Needs review"],
+        "Desperado": ["Wanted"], "Yesterday": [], "Crep": ["Needs review"], "Creep": ["Needs review"],
         "Some Interlude": ["Ignored"]}, parts
+
+
+@in_chromium
+def test_a_line_marks_which_sites_have_the_song_had_nothing_or_were_not_asked(conn, cfg, tmp_path):
+    # In place of a "Not found" that named no site: every site that is on, in its colours where it has the song (its
+    # icon where caracole has one, else its letters), grey where it had nothing, faint where it wasn't asked yet; the
+    # tooltip and the name a screen reader hears say which.
+    from helpers.icon_files import png
+
+    from caracole import icons
+    from caracole.db import kv_set
+
+    icons.keep_icon(cfg.cache_dir, "harptabs", icons.sanitize(png(32)))
+    s = add_song(conn, "Cowboy Bebop", "Digging my potato")
+    update_song(conn, s.id, match_decision="not_found", matched_at="2026-10-16T03:31:00Z")
+    vid = upsert_version(conn, provider="harptabs", tab_id="7", song_id=s.id, slot="guitar", kind="harmonica",
+                         rating=None, votes=None, version=None, label=None, url="https://www.harptabs.com/x", raw={},
+                         now="2026-10-17T03:30:00Z")
+    keep_file(conn, cfg.library_dir, song=s, version_id=vid, name="harmonica-1.txt", data=b"4 -4 5", rank=1)
+    kv_set(conn, f"gtptabs:checked:{s.id}", "2026-10-13T03:00:00Z")
+    parts = line_parts(conn, cfg, tmp_path)
+    potato = parts["Digging my potato"]
+    assert potato["badges"] == [] and potato["marks"] == [], potato
+    sites = {source: (state, tip) for source, state, tip, _ in potato["sites"]}
+    assert list(sites) == ["ug", "lacuerda", "lrclib", "gtptabs", "harptabs", "gametabs", "musescore"], sites
+    assert sites["harptabs"] == ("have", "harptabs.com: has it")
+    assert sites["ug"] == ("none", "Ultimate Guitar: nothing for it (looked 2026-10-16)")
+    assert sites["gtptabs"] == ("none", "gtptabs.com: nothing for it (looked 2026-10-13)")
+    assert sites["lacuerda"] == ("unasked", "LaCuerda: not asked yet")
+    assert all(tip == said for _, _, tip, said in potato["sites"]), potato
 
 
 @in_chromium
@@ -3795,9 +3833,11 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     line = re.search(r'<p class="progress"[^>]*>(.*?)</p>', queued, re.S)
     assert line and 'role="status"' in line.group(0) and "Queued behind 1 request…" in line.group(1)
     assert 'href="jobs?job=4#job-4"' in line.group(1) and "/fetch" not in queued
-    # Not found: Fetch now still asks; the status says so; the menu looks in the index, and finds the chords elsewhere.
+    # Not found: Fetch now still asks; UG's mark says it had nothing, and no badge; the menu looks in the index, and
+    # finds the chords elsewhere.
     lost = line_of(shown, "Yesterday")
-    assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', lost) and ">Not found<" in lost
+    assert re.search(r'<div class="line-action"><form[^>]*action="/fetch"', lost) and ">Not found<" not in lost
+    assert 'data-source="ug" data-state="none"' in lost.split('class="line-panel"', 1)[0]
     menu = lost.split('class="line-panel"', 1)[1]
     assert re.search(rf'href="/review\?song={s["lost"].id}"[^>]*>Look in the index</a>', menu)
     assert "Scores on MuseScore" in menu and "Find the chords" in menu and "yesterday-680101 (possible match)" in menu

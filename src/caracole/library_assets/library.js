@@ -52,6 +52,9 @@
     return names && typeof names === "object" && own.call(names, String(text)) ? String(names[String(text)]) : text;
   };
   const listOf = (value) => (Array.isArray(value) ? value : []);
+  // The sites' column of a line (rows.js siteMarks), as wide as the most marks a song has, so that the lines line up.
+  document.documentElement.style.setProperty("--sites",
+    String(songs.reduce((most, s) => Math.max(most, listOf(s && s.sites).length), 0)));
   // Served by caracole serve: its forms' token, and the songs it is fetching already. The one place the page tells
   // the two apart: the file on disk has no ``server``, and nor has caracole's Android app's offline copy, which is
   // that file (web/offline_routes.py), so both ask nothing of anyone, wherever they are opened.
@@ -944,10 +947,11 @@
     }
     return { held: false, action: null };
   };
-  // A line's one word for where its song stands, when it needs something or isn't plainly yours: Needs review, Not
-  // found, Wanted or Ignored. A song found, nearly every one, says nothing: null.
+  // A line's one word for where its song stands, when it needs something or isn't plainly yours: Needs review, Wanted
+  // or Ignored. A song found, nearly every one, says nothing: null; nor does one UG's index has nothing for, whose
+  // sites' marks say which site has what (``sites``).
   const statusOf = (s) => (SHOWS.review(s) ? { kind: "review", text: "Needs review" }
-    : s.notFound && s.status === "wanted" ? { kind: "missing", text: "Not found" }
+    : s.notFound && s.status === "wanted" ? null
     : s.status === "found" ? null
     : { kind: s.status, text: label(STATUS_TEXT, s.status) || s.status });
   // What a song holds, for its line's glyphs (rows.js ``holds``), read from its files and its instruments: its sheet
@@ -1131,6 +1135,7 @@
       title: shownName(s, s.title),
       href: primary ? primary.href : "",
       artist: artists.length > 1 ? artists.join(", ") : shownName(s, s.artist),  // shown where no group names it
+      sites: listOf(s.sites),  // which sites have it, had nothing, or weren't asked yet (song_sites.py)
       holds: holdingsOf(s),  // its glyphs, in place of where each came from: the card says that
       status: s.status,
       key: keyed ? s.key : "",

@@ -187,10 +187,10 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
 .selecting .line > .pick { grid-area: pick; align-self: center; }
 .selecting .line.picked { background: var(--raised); box-shadow: inset 3px 0 0 var(--accent); }
 @media (min-width: 720px) {
-  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem 6.5rem 2.75rem;
-    grid-template-areas: "pick title by status src key"; }
-  .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem 6.5rem 2.75rem;
-    grid-template-areas: "pick title status src key"; }
+  .selecting .line { grid-template-columns: 44px minmax(0, 1fr) minmax(0, .6fr) 6.5rem calc(var(--sites, 0) * 18px)
+    6.5rem 2.75rem; grid-template-areas: "pick title by status sites src key"; }
+  .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem calc(var(--sites, 0) * 18px)
+    6.5rem 2.75rem; grid-template-areas: "pick title status sites src key"; }
 }
 .pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .selecting .page { padding-bottom: 104px; }

@@ -122,6 +122,22 @@ const caracoleRows = (icons, does) => {
     mark.dataset.source = key;
     return mark;
   };
+  // Which sites have a song of yours (``sites``, song_sites.py): each site's mark, in its colours where the site has
+  // it, grey where it had nothing, fainter and dashed where it wasn't asked yet; its tooltip and its name say which.
+  const SITE_STATES = ["have", "none", "unasked"];
+  const siteMarks = (sites) => {
+    const box = el("span", "line-sites");
+    for (const site of listOf(sites)) {
+      const mark = site && typeof site === "object" ? sourceMark(String(site.source || "")) : null;
+      if (!mark) continue;
+      mark.dataset.state = SITE_STATES.indexOf(site.state) >= 0 ? site.state : "unasked";
+      const said = String(site.said || "");
+      mark.title = said;
+      mark.setAttribute(mark.localName === "img" ? "alt" : "aria-label", said);
+      box.appendChild(mark);
+    }
+    return box;
+  };
   const safeHref = (href, external) => {
     const value = String(href || "");
     if (external) return /^https?:/i.test(value) ? value : "#";
@@ -269,7 +285,8 @@ const caracoleRows = (icons, does) => {
     : r.action && typeof r.action === "object" ? link(r.action, "btn small primary", isWeb(r.action.href)) : null);
   // A dense list's line (``dense``): index.html's songs, under their artist's name. Its title, which opens what
   // ``href`` says; then the artist (where no group above names it: ``onSearch`` and ``onArtist`` make it what a
-  // group's name is, artistOf), the status's badges, what a song of yours holds (``holds``, HOLDS' names, its glyphs)
+  // group's name is, artistOf), the status's badges, which sites have a song of yours (``sites``, siteMarks), what it
+  // holds (``holds``, HOLDS' names, its glyphs)
   // or else the marks of where a site's song came from (``sources``, else ``source``); its key, as a chip; its main
   // action and its chevron. One line from 720px; on a phone the title, the key, the action and the chevron, and under
   // them the artist and the badges, when there are any.
@@ -300,6 +317,10 @@ const caracoleRows = (icons, does) => {
       facts.title = String(r.facts);  // the whole of it, where its column cuts it short
     }
     if (status.childNodes.length) meta.appendChild(status);
+    if (Array.isArray(r.sites)) {
+      const sites = siteMarks(r.sites);
+      if (sites.childNodes.length) meta.appendChild(sites);
+    }
     if (Array.isArray(r.holds)) {
       const holds = holdsOf(r.holds);
       if (holds.childNodes.length) meta.appendChild(holds);

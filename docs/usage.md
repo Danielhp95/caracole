@@ -2099,8 +2099,15 @@ button, and a song that needs something says so under its title. A line has the
 song's title, which opens its sheet (the sheet viewer, see [The sheet
 viewer](#the-sheet-viewer), else the PDF, else the text); its status when it
 needs something, one word: Wanted, Needs review when caracole isn't sure of the
-match, Not found when the offline index has no such song, or Ignored (a found
-song, nearly every one, says nothing); what it holds, a small icon each, named
+match, or Ignored (a found song, nearly every one, says nothing); which sites
+have the song, each site that is on a small mark of its own (Ultimate Guitar,
+LaCuerda, LRCLIB, gtptabs.com, harptabs.com, gametabs.net, MuseScore, and
+YouTube for a song caracole takes the audio of): in its colours where the site
+has it (MuseScore's a possible match, by the title), grey where it was asked and
+had nothing, fainter on a dashed edge where it wasn't asked yet, its tooltip
+saying which ("Ultimate Guitar: nothing for it (looked 2026-10-16)"), so a song
+Ultimate Guitar's index has no chords for, once marked "Not found", shows where
+its harmonica tab came from; what it holds, a small icon each, named
 by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
 own colour, for one the audio model wrote; "Ukulele chords", a ukulele, for
 Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab", from
