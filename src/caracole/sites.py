@@ -13,8 +13,13 @@ the page asks none.
 
 from __future__ import annotations
 
+import hashlib
+import json
+import sqlite3
 from dataclasses import dataclass
+from typing import Any
 
+from caracole.db import kv_get_json, kv_set_json
 from caracole.http import ROBOTS_DISALLOW
 
 
@@ -74,3 +79,143 @@ def more_paths(site: Site) -> int:
     """How many paths caracole's robots table closes for ``site``'s hosts beyond those it names."""
     every = {path for host in site.hosts for path in ROBOTS_DISALLOW.get(host, ())}
     return len(every - {path for path, _ in site.paths})
+
+
+# --- what each index holds ------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Indexed:
+    """What a site's index holds: its songs (distinct song keys; gametabs.net's ``tracks``), and the smaller line,
+    what the site counts itself."""
+
+    songs: int
+    unit: str
+    detail: str
+
+
+@dataclass(frozen=True)
+class Progress:
+    """How far an index read a little each night has got: ``done`` of ``of`` ``what``."""
+
+    done: int
+    of: int
+    what: str
+
+
+Figures = tuple[Indexed | None, Progress | None]
+
+# Counting a million rows (UG's index, MuseScore's) takes longer than building the rest of the page, and the page is
+# built on every served load. So the counts of the indexes read from sitemaps are kept in kv ``COUNTS``, each with
+# the stamp of the index's own records when counted: every change to such a table comes with a change to its
+# ``<provider>:sitemaps`` record, written in the same transaction (ug/index.py, site_index.py), and harptabs.com's
+# rows keyed again with its ``harptabs:index:keys``. ``refresh_counts`` keeps them, under caracole's lock, as
+# todo.write_pages writes the pages; ``index_figures`` only reads, and counts again whatever stamp has moved since,
+# so the figures are never stale, only slower until the next write.
+COUNTS = "sites:counts"
+_RECORDS = {
+    "ug": ("ug:sitemaps",),
+    "gtptabs": ("gtptabs:sitemaps",),
+    "musescore": ("musescore:sitemaps",),
+    "harptabs": ("harptabs:sitemaps", "harptabs:index:keys"),
+    "gametabs": ("gametabs:sitemaps",),
+}
+
+
+def _one(conn: sqlite3.Connection, sql: str, args: tuple = ()) -> int:
+    return conn.execute(sql, args).fetchone()[0] or 0
+
+
+def _counted(conn: sqlite3.Connection, key: str) -> list[int]:
+    """What ``index_figures`` counts of a site's table: its songs, its rows, and gametabs.net's games."""
+    if key == "ug":
+        return [_one(conn, "SELECT COUNT(*) FROM (SELECT DISTINCT artist_key, song_key FROM ug_index)"),
+                _one(conn, "SELECT COUNT(*) FROM ug_index")]
+    if key == "gtptabs":
+        return [_one(conn, "SELECT COUNT(*) FROM (SELECT DISTINCT artist_key, title_key FROM gtptabs_index)"),
+                _one(conn, "SELECT COUNT(*) FROM gtptabs_index")]
+    if key == "musescore":  # its sitemaps give a score's title alone, never its artist: songs are titles
+        return [_one(conn, "SELECT COUNT(DISTINCT title_key) FROM musescore_index"),
+                _one(conn, "SELECT COUNT(*) FROM musescore_index")]
+    if key == "harptabs":
+        from caracole.harptabs import TAB
+
+        return list(conn.execute("SELECT COUNT(DISTINCT key), COUNT(*) FROM harptabs_index WHERE kind = ?",
+                                 (TAB,)).fetchone())
+    from caracole.gametabs import GAME, TAB
+
+    # A track is a game's title: a slug's number (main-theme-108) is one more tab of it, never part of its key.
+    tracks, tabs = conn.execute("SELECT COUNT(*), COALESCE(SUM(n), 0) FROM (SELECT COUNT(*) AS n FROM gametabs_index "
+                                "WHERE kind = ? GROUP BY game, key)", (TAB,)).fetchone()
+    return [tracks, tabs, _one(conn, "SELECT COUNT(*) FROM gametabs_index WHERE kind = ?", (GAME,))]
+
+
+def _stamp(conn: sqlite3.Connection, key: str) -> str:
+    rows = conn.execute(f"SELECT key, value FROM kv WHERE key IN ({','.join('?' * len(_RECORDS[key]))}) "
+                        "ORDER BY key", _RECORDS[key]).fetchall()
+    return hashlib.sha256(json.dumps([list(r) for r in rows]).encode()).hexdigest()
+
+
+def _counts(conn: sqlite3.Connection, key: str, kept: dict[str, Any]) -> list[int]:
+    entry = kept.get(key)
+    if isinstance(entry, dict) and entry.get("stamp") == _stamp(conn, key) and isinstance(entry.get("counts"), list):
+        return [int(n) for n in entry["counts"]]
+    return _counted(conn, key)
+
+
+def refresh_counts(conn: sqlite3.Connection) -> None:
+    """Count again each index whose records changed since its counts were kept, and keep them. A writer's: caracole's
+    lock held (todo.write_pages), never caracole serve building its page."""
+    kept = kv_get_json(conn, COUNTS, default={}) or {}
+    fresh = {}
+    for key in _RECORDS:
+        stamp = _stamp(conn, key)
+        entry = kept.get(key)
+        fresh[key] = (entry if isinstance(entry, dict) and entry.get("stamp") == stamp
+                      else {"stamp": stamp, "counts": _counted(conn, key)})
+    if fresh != kept:
+        kv_set_json(conn, COUNTS, fresh)
+
+
+def index_figures(conn: sqlite3.Connection) -> dict[str, Figures]:
+    """What each site's index holds, and how far it has got, by site, in ``SITES``' order: (None, None) for a site
+    with no index (LRCLIB and YouTube, asked song by song). Reads alone: nothing is written."""
+    from caracole.gametabs_index import index_state as game_pages
+    from caracole.harptabs_index import index_state as artist_pages
+    from caracole.lacuerda import LETTERS
+    from caracole.lacuerda_index import index_size, letters_read
+    from caracole.ug.index import index_coverage
+
+    kept = kv_get_json(conn, COUNTS, default={}) or {}
+    figures: dict[str, Figures] = {s.key: (None, None) for s in SITES}
+
+    songs, tabs = _counts(conn, "ug", kept)
+    coverage = index_coverage(conn)  # while a build or refresh has sitemaps left, how many it has read
+    progress = None
+    if coverage.listed and coverage.left:
+        progress = Progress(len(coverage.listed) - len(coverage.left), len(coverage.listed), "sitemaps read")
+    figures["ug"] = Indexed(songs, "songs", f"{tabs:,} tabs, from its sitemap"), progress
+
+    # The songs caracole knows (the artist pages read, its search's), never the site's own total, which the listings
+    # give each artist and the smaller line sums; and the letters whose every listing page is read.
+    artists, known = index_size(conn)
+    listed = _one(conn, "SELECT SUM(songs) FROM lacuerda_index WHERE title = ''")
+    figures["lacuerda"] = (Indexed(known, "songs", f"of {listed:,} its listings count, {artists:,} artists"),
+                           Progress(len(letters_read(conn)), len(LETTERS), "letters read"))
+
+    songs, tabs = _counts(conn, "gtptabs", kept)
+    figures["gtptabs"] = Indexed(songs, "songs", f"{tabs:,} tabs, from its sitemaps"), None
+
+    songs, scores = _counts(conn, "musescore", kept)
+    figures["musescore"] = Indexed(songs, "songs", f"titles of {scores:,} scores, from its sitemaps"), None
+
+    songs, tabs = _counts(conn, "harptabs", kept)
+    state = artist_pages(conn)
+    figures["harptabs"] = (Indexed(songs, "songs", f"{tabs:,} tabs, from its sitemap"),
+                           Progress(state.read, state.artists, "artist pages read") if state.artists else None)
+
+    tracks, tabs, games = _counts(conn, "gametabs", kept)
+    pages = game_pages(conn)
+    figures["gametabs"] = (Indexed(tracks, "tracks", f"{tabs:,} tabs of {games:,} games"),
+                           Progress(pages.read, pages.pages, "game pages read") if pages.pages else None)
+    return figures
