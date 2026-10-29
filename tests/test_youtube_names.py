@@ -30,6 +30,8 @@ from caracole.youtube_names import clean_channel, guess
     # The owner's example, a fan's upload: the song first, the band after, the channel neither. The plain rule takes
     # the first part for the artist; the owner swaps them in the form.
     ("Somos vikingos veganos - Hyperfanes", "kintanedu", ("Somos vikingos veganos", "Hyperfanes")),
+    # The owner's second example: the artist's own upload, an em dash, a Visualizer: never "Silvana" and "Estrada".
+    ("Silvana Estrada — Qué Problema (Visualizer)", "Silvana Estrada", ("Silvana Estrada", "Qué Problema")),
 ])
 def test_a_videos_title_and_channel_give_artist_and_title(title, channel, expected):
     assert guess(title, channel) == expected

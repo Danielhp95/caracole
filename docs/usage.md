@@ -3965,8 +3965,9 @@ Who can reach it, below).
   filled in from what you searched until you type into a field yourself:
   "Muse - Hysteria" is the artist and the title; with no dash, the longest run
   of its first words that is an artist's whole name your library, Ultimate
-  Guitar's index, LaCuerda's, gtptabs.com's or harptabs.com's knows is the
-  artist, and the rest the title ("Silvana Estrada Qué problema"), as is "Qué
+  Guitar's index, LaCuerda's, gtptabs.com's or harptabs.com's knows, or the
+  channel of the YouTube video suggested for it, is the artist, and the rest
+  the title ("Silvana Estrada Qué problema"), as is "Qué
   problema by Silvana Estrada"; else an artist's name alone when an artist
   leads, else all of it the title. A query is never cut at its first space: a
   one-word name is an artist only of yours or with five songs or more on a
@@ -4019,8 +4020,9 @@ Who can reach it, below).
   the video shows as a row: its thumbnail, its title (a link to it on
   YouTube), its channel and length, and **Make the sheet**, which opens the
   request form filled in with what you searched ("Nick Cani - Vikingos
-  veganos", or "Silvana Estrada Qué problema" where an index knows Silvana
-  Estrada: the artist and the title, as above) and the video, for you to check
+  veganos", or "silvana estrada que problema" when the video is Silvana
+  Estrada's own channel's or an index knows her: the artist as the channel
+  writes it and the title, as above) and the video, for you to check
   and send;
   nothing more goes until you press Request. A query is asked once in 30 days
   (its words in any order), and the row comes back for it with no request. At
