@@ -225,6 +225,20 @@ def test_without_lyrics_on_lrclib_the_sheet_is_the_chords_alone(setup, conn, fak
     assert "[Chords]" in text and "[Lyrics]" not in text
 
 
+def test_lrclib_failing_leaves_the_chords_alone_and_says_what_comes_of_the_lyrics(setup, conn, fake, sites, tmp_path,
+                                                                                monkeypatch):
+    # LRCLIB overloaded, as it was on the owner's example: the sheet is made all the same, and the lyrics wait.
+    lrclib, _ = sites
+    monkeypatch.setattr(lrclib, "handler", lambda request: httpx.Response(503, text="Service Unavailable"))
+    vikingos(fake, tmp_path)
+    result, heard = make(setup)
+    assert result.ok
+    assert heard.ends()["lyrics"] == ("failed", "LRCLIB answered 503: the sheet has no lyrics yet; tonight's run asks "
+                                                "LRCLIB again, and auto-chords then makes the sheet again with them")
+    assert heard.ends()["chords"] == ("done", "chords alone: no lyrics from LRCLIB")
+    assert get_song(conn, find_song(conn, result_key(conn)).id).lyrics_status == "pending"  # never a miss
+
+
 def test_timed_lyrics_of_another_cut_give_a_chart_then_the_lyrics(setup, conn, fake, sites, tmp_path):
     lrclib, _ = sites
     lrclib.records[:] = [record(150.0)]  # LRCLIB knows the record; the video has a long intro

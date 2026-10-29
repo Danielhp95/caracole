@@ -308,11 +308,14 @@ class _Sheet:
         if answered_any(self.conn, self.run_id, "lrclib", client.requests_made):
             record_ok(self.conn, "lrclib", self.now)
         self._song_again()
+        later = ("the sheet has no lyrics yet; tonight's run asks LRCLIB again, and auto-chords then makes the sheet "
+                 "again with them")
         if stats.budget_exhausted:
-            return "skipped", "LRCLIB's budget is spent: the sheet has no lyrics yet"
+            return "skipped", f"LRCLIB's budget is spent: {later}"
         if stats.failures:
             _, e = stats.failures[0]
-            return "failed", f"LRCLIB failed ({e}): the sheet has no lyrics yet"
+            status = getattr(e, "status", None)
+            return "failed", f"LRCLIB answered {status}: {later}" if status else f"LRCLIB failed ({e}): {later}"
         if stats.found:
             found = song_lyrics(self.song)
             return "done", "found, timed" if found is not None and found.synced else "found"
