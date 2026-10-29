@@ -118,6 +118,18 @@ def parse_search(text: str) -> list[Video]:
     return videos
 
 
+def parse_video(text: str, video_id: str) -> Video:
+    """A video's fields from yt-dlp's ``--dump-single-json`` of it; an answer of another video, or none, is an error."""
+    try:
+        data = json.loads(text)
+    except (ValueError, RecursionError) as e:
+        raise ProviderError(PROVIDER, watch_url(video_id), None, f"yt-dlp's answer isn't JSON: {e}") from e
+    if not isinstance(data, dict) or data.get("id") != video_id:
+        raise ProviderError(PROVIDER, watch_url(video_id), None, "yt-dlp answered for no such video")
+    return Video(video_id, str(data.get("title") or ""), str(data.get("channel") or data.get("uploader") or ""),
+                 _number(data.get("duration")), live=data.get("live_status") in ("is_live", "is_upcoming"))
+
+
 # --- choosing the song's video ---------------------------------------------------------------------
 
 
@@ -502,6 +514,15 @@ class YtDlp:
         target = f"ytsearch{n}:{query}"
         out = self._run(["--flat-playlist", "--dump-single-json"], target, "search", self._timeouts[0])
         return parse_search(out)
+
+    def video(self, video_id: str) -> Video:
+        """A video's metadata, one run and no download (``--skip-download --dump-single-json``, the video's plain
+        address after ``--``): its title, channel and length."""
+        if not VIDEO_ID.fullmatch(video_id):
+            raise ValueError(f"not a YouTube video id: {video_id!r}")
+        url = watch_url(video_id)
+        out = self._run(["--skip-download", "--flat-playlist", "--dump-single-json"], url, "video", self._timeouts[0])
+        return parse_video(out, video_id)
 
     def download(self, video_id: str, into: Path) -> Download:
         """The video's audio, in ``into`` as ``audio.<ext>``, and the video as yt-dlp reported it."""

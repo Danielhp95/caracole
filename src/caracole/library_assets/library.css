@@ -145,12 +145,12 @@ section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
 /* In an artist's group its header names the artist: its lines leave the name out, and the column with it. */
 section.artist .line-by { display: none; }
 @media (min-width: 720px) {
-  section.artist .line { grid-template-columns: minmax(0, 1fr) 6.5rem calc(var(--sites, 0) * 18px) 6.5rem 2.75rem
-    7.5rem var(--line-more); grid-template-areas: "title status sites src key act more"; }
+  section.artist .line { grid-template-columns: minmax(0, 1fr) 6.5rem var(--sites-w) 6.5rem 2.75rem 7.5rem
+    var(--line-more); grid-template-areas: "title status sites src key act more"; }
   /* A site's line has no key: its status and counts ("chords ×9 · tabs ×2") take most of that room, its marks the
      rest, the rest where yours are (rows.css). */
-  section.artist .line.hit { grid-template-columns: minmax(0, 1fr) 12rem 4.25rem 7.5rem var(--line-more);
-    grid-template-areas: "title status src act more"; }
+  section.artist .line.hit { grid-template-columns: minmax(0, 1fr) calc(16.25rem - var(--sources-w)) var(--sources-w)
+    7.5rem var(--line-more); grid-template-areas: "title status src act more"; }
 }
 .badge.missing { color: var(--failed); background: var(--failed-bg); }
 /* A song caracole removed while the page was open: it says so, and nothing more, until the page is loaded again. */
@@ -219,6 +219,17 @@ form.youtube-sheet .f { flex: 1 1 260px; }
   .yt-thumb { width: 96px; height: 72px; }
 }
 @media (pointer: coarse) { .youtube-row .btn { min-height: 44px; } }
+/* A YouTube video's link pasted into the box (library.js linkMode): its panel in the results' place. */
+.link-off { display: none !important; }
+.results.link-mode .request { display: none; }
+.link-panel { display: grid; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); }
+.link-media { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.link-media:empty { display: none; }
+.link-note { margin: 0; }
+.link-form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
+.link-form .f { flex: 1 1 200px; }
+@media (pointer: coarse) { .link-form .btn { min-height: 44px; } }
 .foot { display: flex; }
 .foot form { margin: 0; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }

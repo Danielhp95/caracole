@@ -300,7 +300,7 @@ def test_the_search_of_youtube_is_refused_where_its_gate_refuses_it(able, queue,
     assert post(app, "/youtube/search", {"q": "Estopa - Como Camarón"}, accept="application/json").status == 409
     record_block(conn, "youtube", datetime.now(UTC), "bot check")
     refused = post(app, "/youtube/search", {"q": "Someone - Something"}, accept="application/json")
-    assert refused.status == 429 and "cooling down" in answer(refused)["error"]
+    assert refused.status == 429 and "paused after a block" in answer(refused)["error"]
     assert queue.snapshot() == []
 
 
@@ -334,3 +334,100 @@ def test_the_served_page_may_show_images_of_the_server_alone_and_the_file_none(a
     assert "img-src data: 'self';" in policy.search(body).group(1)
     html = build_library_page(conn, able, Overrides(), datetime(2026, 10, 29, tzinfo=UTC))
     assert "img-src data:;" in policy.search(html).group(1)
+
+
+# --- a pasted video ------------------------------------------------------------------------------------------
+
+
+def video_answer(app, link=PASTED):
+    from urllib.parse import quote
+
+    response = get(app, f"/api/youtube/video?url={quote(link)}", accept="application/json")
+    return response.status, answer(response)
+
+
+def known_video(conn, *, thumb=True, title="Somos vikingos veganos - Hyperfanes", channel="kintanedu"):
+    from caracole.db import kv_set_json
+
+    kv_set_json(conn, f"youtube-search:video:{VIKINGOS}", {
+        "at": "2026-10-29T10:00:00Z", "thumb": thumb,
+        "video": {"id": VIKINGOS, "title": title, "channel": channel, "duration": 222.0, "url": WATCH}})
+
+
+def test_a_pasted_video_not_read_yet_may_be_read(able, queue, conn):
+    status, said = video_answer(app_for(able, queue))
+    assert status == 200
+    assert said == {"id": VIKINGOS, "url": WATCH, "state": "auto", "video": None, "guess": {"artist": "", "title": ""},
+                    "song": None}
+    assert queue.snapshot() == []  # reading the answer asks nothing
+
+
+def test_a_known_video_comes_with_its_guessed_name_and_thumbnail(able, queue, conn):
+    known_video(conn)
+    _, said = video_answer(app_for(able, queue), f"youtu.be/{VIKINGOS}?si=x")
+    assert said["state"] == "found" and said["video"] == {
+        "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu", "duration": 222.0,
+        "thumb": f"/youtube/thumb/{VIKINGOS}.jpg"}
+    assert said["guess"] == {"artist": "Somos vikingos veganos", "title": "Hyperfanes"}
+    add_song(conn, "Hyperfanes", "Otra")  # a band the library knows: the title is read the other way round
+    assert video_answer(app_for(able, queue))[1]["guess"] == {"artist": "Hyperfanes", "title": "Somos vikingos veganos"}
+
+
+def test_a_video_whose_song_has_a_sheet_says_so(able, queue, conn):
+    known_video(conn, title="Nick Cani - Vikingos veganos", channel="Nick Cani")
+    song = add_song(conn, "Nick Cani", "Vikingos veganos")
+    _, said = video_answer(app_for(able, queue))
+    assert said["song"] == {"id": song.id, "display": "Nick Cani - Vikingos veganos", "has_sheet": False,
+                            "sheet": None}
+    keep_human_sheet(conn, able, song)
+    said = video_answer(app_for(able, queue))[1]["song"]
+    assert said["has_sheet"] is True and said["sheet"].endswith("sheet.txt")
+
+
+def test_where_no_sheet_can_be_made_a_pasted_video_says_why(cfg, queue, conn, monkeypatch):
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    _, said = video_answer(app_for(cfg, queue))
+    assert (said["state"], said["why"]) == ("off", "auto-chords isn't installed")
+
+
+def test_a_link_that_is_no_video_is_refused(able, queue, conn):
+    status, said = video_answer(app_for(able, queue), "https://www.youtube.com/@nickcani")
+    assert status == 400 and said["error"] == "Not a YouTube video link."
+
+
+def test_reading_a_pasted_video_is_one_job_of_no_songs(able, queue, conn):
+    from caracole.web.jobs import YOUTUBE_SEARCH, youtube_video_steps
+
+    app = app_for(able, queue)
+    response = post(app, "/youtube/video", {"url": PASTED}, accept="application/json")
+    assert response.status == 202, response.body
+    [job] = queue.snapshot()
+    assert answer(response) == {"job": job.id, "url": f"/api/jobs/{job.id}"}
+    assert job.song_key == f"{YOUTUBE_SEARCH}video:{VIKINGOS}"
+    assert [(s.label, s.args) for s in job.steps] == youtube_video_steps(VIKINGOS)
+    assert job.steps[0].args == ("youtube", f"--video={VIKINGOS}", "--progress")
+    assert answer(post(app, "/youtube/video", {"url": f"youtu.be/{VIKINGOS}"}, accept="application/json"))["job"] == job.id
+    known_video(conn)
+    assert post(app, "/youtube/video", {"url": "https://youtu.be/oNOFfl3Hx3s"}, accept="application/json").status == 202
+    assert post(app, "/youtube/video", {"url": PASTED}, accept="application/json").status == 409  # read already
+
+
+@pytest.mark.parametrize("link", [
+    f"https://m.youtube.com/watch?v={VIKINGOS}&si=abc", f"music.youtube.com/watch?v={VIKINGOS}&list=RD1",
+    f"https://www.youtube.com/shorts/{VIKINGOS}", f"youtu.be/{VIKINGOS}?si=x", f"https://youtube.com/live/{VIKINGOS}",
+])
+def test_the_request_forms_youtube_field_takes_a_videos_every_link(able, queue, conn, link):
+    post(app_for(able, queue), "/request", {"artist": "Nick Cani", "title": "Vikingos veganos", "youtube": link})
+    [job] = queue.snapshot()
+    assert f"--url={WATCH}" in job.steps[0].args  # its plain address, whatever was pasted
+
+
+def test_a_video_the_library_has_a_song_of_is_named_as_that_song(able, queue, conn):
+    from caracole.db import kv_set_json
+
+    known_video(conn)  # its title says "Somos vikingos veganos - Hyperfanes"
+    song = add_song(conn, "Nick Cani", "Vikingos veganos")
+    kv_set_json(conn, f"youtube:{song.id}", {"video": {"id": VIKINGOS, "title": "x"}, "source": "pasted"})
+    said = video_answer(app_for(able, queue))[1]
+    assert said["guess"] == {"artist": "Nick Cani", "title": "Vikingos veganos"}
+    assert said["song"]["display"] == "Nick Cani - Vikingos veganos" and said["song"]["has_sheet"] is False

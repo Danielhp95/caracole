@@ -33,7 +33,8 @@ version's (``EXPORTING``). A sheet made from a YouTube video is one ``caracole y
 (``YOUTUBE_SHEET`` and the song's identity key), so it never joins the song's lookup, nor a lookup it; one at a
 time a song. A video suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
 a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
-``YOUTUBE_SEARCH_STAGES``. Each command takes caracole's lock (a
+``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
+``YOUTUBE_SEARCH`` and ``video:<id>``). Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -328,6 +329,12 @@ def youtube_search_steps(query: str) -> list[tuple[str, tuple[str, ...]]]:
     return [("Searching YouTube", ("youtube", f"--search={query}", "--progress"))]
 
 
+def youtube_video_steps(video_id: str) -> list[tuple[str, tuple[str, ...]]]:
+    """A video pasted into the library page's search box, its title, channel and length read for its song's name:
+    ``caracole youtube --video --progress``, one yt-dlp run with no download, and its thumbnail (youtube_search.py)."""
+    return [("Reading the video", ("youtube", f"--video={video_id}", "--progress"))]
+
+
 def harptabs_artist_steps(path: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
     """Read a harptabs.com artist's page into its index now: ``caracole harptabs --artist``, one request."""
     return [(f"Reading harptabs.com's page for {name}", ("harptabs", f"--artist={path}"))]
@@ -398,7 +405,8 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         names.update(STAGES)
     if any(_searches(step.args) for step in steps):
         names.update(SEARCH_STAGES)
-    if any(step.args[:1] == ("youtube",) and any(a.startswith("--search=") for a in step.args) for step in steps):
+    if any(step.args[:1] == ("youtube",) and any(a.startswith(("--search=", "--video=")) for a in step.args)
+           for step in steps):
         names.update(YOUTUBE_SEARCH_STAGES)
     if any(step.args[:1] == (VERSIONS,) and not _looks_up(step.args) for step in steps):
         names.update((name, label) for name, label in KEEP_STAGES if name not in names)

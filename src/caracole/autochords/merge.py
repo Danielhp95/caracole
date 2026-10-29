@@ -539,7 +539,9 @@ def _beat_grid(beats: Sequence[float], *, until: float) -> list[float]:
         base = grid[-1]
         if b - base < period / 2:
             continue  # the same beat detected twice
-        missing = round((b - base) / period) - 1
+        # Beats are in milliseconds, so one exactly half a period on is common, and round() takes 0.5 to 0: that one
+        # is a beat, with none missing before it, never -1 of them.
+        missing = max(0, round((b - base) / period) - 1)
         step = (b - base) / (missing + 1)
         grid.extend(round(base + step * k, 3) for k in range(1, missing + 1))
         grid.append(b)

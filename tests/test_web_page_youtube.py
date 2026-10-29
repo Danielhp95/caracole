@@ -49,6 +49,7 @@ class FakeSheet:
     def __init__(self):
         self.ran: list[tuple[str, ...]] = []
         self.searches: list[str] = []
+        self.videos: list[str] = []
         self.hold = threading.Event()
         self.cfg = None
 
@@ -75,6 +76,29 @@ class FakeSheet:
         stage("thumbnail", "done")
         return 0
 
+    def video(self, video_id, stage):
+        """``caracole youtube --video``: what the real one keeps of the owner's example video, and its thumbnail."""
+        from caracole.db import kv_set_json
+        from caracole.youtube_search import KV_PREFIX, thumb_path
+
+        self.videos.append(video_id)
+        stage("video", "running")
+        conn = db.connect(self.cfg.db_path)
+        try:
+            kv_set_json(conn, f"{KV_PREFIX}video:{video_id}", {
+                "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "thumb": True,
+                "video": {"id": video_id, "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu",
+                          "duration": 222.0, "url": f"https://www.youtube.com/watch?v={video_id}"}})
+            conn.commit()
+        finally:
+            conn.close()
+        path = thumb_path(self.cfg, video_id)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(JPEG)
+        stage("video", "done")
+        stage("thumbnail", "done")
+        return 0
+
     def __call__(self, args, emit):
         self.ran.append(tuple(args))
 
@@ -84,6 +108,9 @@ class FakeSheet:
         searching = next((a.split("=", 1)[1] for a in args if a.startswith("--search=")), None)
         if searching is not None:
             return self.search(searching, stage)
+        video = next((a.split("=", 1)[1] for a in args if a.startswith("--video=")), None)
+        if video is not None:
+            return self.video(video, stage)
         for name in ("song", "audio", "lyrics"):
             stage(name, "running")
             stage(name, "done")
@@ -120,11 +147,14 @@ def serve(cfg, runner):
     app = WebApp(cfg, queue, allowed=allowed_hosts("127.0.0.1"), csrf="tok", searches_lacuerda=False,
                  timers={"poll": 100, "idle": 100, "undo": 100})
     posted = Posted()
+    posted.read = []  # the addresses of every GET the server answered
     answer = app.handle
 
     def handle(request):
         if request.method == "POST":
             posted.append((request.target, {k: v[0] for k, v in parse_qs(request.body.decode()).items()}))
+        else:
+            posted.read.append(request.target)
         return answer(request)
 
     app.handle = handle
@@ -297,3 +327,98 @@ def test_make_the_sheet_fills_in_the_artist_an_index_knows_from_a_query_with_no_
                         "document.querySelector(`form.request-form [name=${n}]`).value)")
     assert fields == ["Silvana Estrada", "Que problema", f"https://www.youtube.com/watch?v={VIKINGOS}"]
     assert [p for p, _ in posted] == ["/youtube/search"]  # nothing sent until you press Request
+
+
+PASTE = ("(() => { const q = document.getElementById('q'); q.focus(); q.value = %s; "
+         "q.dispatchEvent(new Event('input', { bubbles: true })); })()")
+
+
+def paste(browser, text):
+    """``text`` pasted into the search box: one input event, as a paste is."""
+    browser.js(PASTE % json.dumps(text))
+
+
+def test_a_pasted_youtube_link_is_a_song_to_add_its_name_guessed_and_one_press_adds_it(able, live, sheet, browser):
+    base, posted = live
+    browser.open(base)
+    paste(browser, PASTED)
+    panel = "document.querySelector('#found .link-panel')"
+    names = f"['artist', 'title'].map((n) => {panel}.querySelector(`input[name=${{n}}]`).value)"
+    assert browser.wait(f"{panel} !== null && {panel}.querySelector('img.yt-thumb') !== null", timeout=20), \
+        browser.js("document.getElementById('found').textContent")
+    assert sheet.videos == [VIKINGOS] and [p for p, _ in posted] == ["/youtube/video"]
+    assert browser.js(names) == ["Somos vikingos veganos", "Hyperfanes"]  # guessed: the owner checks it
+    assert browser.js(f"{panel}.querySelector('.yt-meta').textContent") == "kintanedu · 3:42"
+    # A link is no words to search: no site search, no LaCuerda, no YouTube suggestion for it.
+    assert not any(t.startswith("/api/search") for t in posted.read)
+    assert browser.js("document.getElementById('bar-status').textContent") == "A YouTube video: add it as a song"
+    # The owner puts the name right, and adds it: the request, with the video's plain address.
+    browser.js(f"{panel}.querySelector('input[name=artist]').focus()")
+    browser.js(f"{panel}.querySelector('input[name=artist]').select()")
+    browser.type("Nick Cani")
+    browser.js(f"{panel}.querySelector('input[name=title]').focus()")
+    browser.js(f"{panel}.querySelector('input[name=title]').select()")
+    browser.type("Vikingos veganos")
+    browser.click("#found .link-panel button[type=submit]")
+    path, fields = posted.next(1)
+    assert path == "/request" and (fields["artist"], fields["title"], fields["youtube"]) == (
+        "Nick Cani", "Vikingos veganos", PASTED)  # as pasted: the server keeps its plain address
+    assert browser.wait("(document.querySelector('#requested-list .progress') || {}).dataset.tone === 'running'")
+    assert sheet.ran[-1][:2] == ("youtube", "--sheet")
+    assert f"--url=https://www.youtube.com/watch?v={VIKINGOS}" in sheet.ran[-1]
+
+
+def test_a_pasted_link_youtube_cant_be_asked_about_now_is_offered_unnamed(able, live, sheet, browser):
+    from caracole.health import record_block
+
+    conn = db.connect(able.db_path)
+    try:
+        record_block(conn, "youtube", datetime.now(UTC), "bot check")
+        conn.commit()
+    finally:
+        conn.close()
+    base, posted = live
+    browser.open(base)
+    paste(browser, f"youtu.be/{VIKINGOS}?si=abc")
+    note = "document.querySelector('#found .link-note')"
+    assert browser.wait(f"{note} !== null && {note}.textContent.startsWith(\"Can't read\")")
+    assert browser.js(f"{note}.textContent") == "Can't read the video (YouTube is paused after a block): name it, then add it."
+    assert browser.js("[...document.querySelectorAll('#found .link-panel input')].map((i) => i.value)") == ["", ""]
+    assert posted == [] and sheet.videos == []
+
+
+def test_where_no_sheet_can_be_made_a_pasted_link_says_why(cfg, sheet, browser, monkeypatch):
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    server, queue, base, posted = serve(cfg, sheet)
+    try:
+        browser.open(base)
+        paste(browser, PASTED)
+        note = "document.querySelector('#found .link-note')"
+        assert browser.wait(f"{note} !== null && {note}.textContent.startsWith('No sheets')")
+        assert browser.js(f"{note}.textContent") == "No sheets from YouTube here: auto-chords isn't installed."
+        assert browser.js("document.querySelector('#found .link-form').hidden") is True
+        assert posted == []
+    finally:
+        server.shutdown()
+        server.server_close()
+        queue.stop()
+
+
+def test_the_box_knows_a_videos_link_in_every_shape_and_nothing_else(able, live, sheet, browser):
+    # The page reads a link as youtube_urls.video_id_from_url does: a video's link is a song to add (its panel), any
+    # other text words to search.
+    base, posted = live
+    browser.open(base)
+    mode = "document.getElementById('results').classList.contains('link-mode')"
+    for text, video in [
+        (PASTED, True), (f"youtu.be/{VIKINGOS}?si=abc", True), (f"https://m.youtube.com/watch?v={VIKINGOS}", True),
+        (f"music.youtube.com/watch?v={VIKINGOS}&list=RD", True), (f"https://www.youtube.com/shorts/{VIKINGOS}", True),
+        (f"youtube.com/watch?feature=share&v={VIKINGOS}", True), ("https://www.youtube.com/@nickcani", False),
+        ("https://www.youtube.com/watch?v=short", False), ("https://vimeo.com/76979871", False),
+        ("nick cani vikingos", False), (f"https://youtube.com.evil.example/watch?v={VIKINGOS}", False),
+    ]:
+        paste(browser, text)
+        if video:
+            assert browser.wait(mode), text
+        else:
+            assert browser.wait(f"!{mode} && document.getElementById('found').dataset.query === {json.dumps(text)}"), text

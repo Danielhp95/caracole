@@ -169,3 +169,31 @@ run tries again.", "YouTube is paused after a block, until …"). The details ar
   /youtube/thumb/<id>.jpg`, the served page's policy gaining `img-src 'self'` for it alone.
 - *The row:* the thumbnail, the title (a link to the video), the channel and length, and **Make the sheet**, which
   opens the request form with the query's artist and title and the video's address filled in; the owner sends it.
+
+
+## A pasted link (same day, later)
+
+"Make it so that if I paste a youtube link, it already detects it as an attempt to add it as a song."
+
+- *Detection:* the served library page's box reads a link as youtube_urls.py does (`youtubeVideo` in library.js:
+  watch, youtu.be, shorts, embed, live, v, on www, m or music; other parameters ignored). A link is no query: no
+  site, LaCuerda or YouTube search; a panel takes the results' place, and Enter goes to it.
+- *The name:* `GET /api/youtube/video` reads what caracole knows (no request). A video not read yet is read once
+  (`POST /youtube/video`, `caracole youtube --video`: one yt-dlp run, `--skip-download --flat-playlist
+  --dump-single-json` of its plain address after `--`, then its thumbnail through `ytimg`, no wait), under the
+  search suggestion's gate keyed `video:<id>`: once in 30 days, the hour's 10 shared with the searches *(my call:
+  one cap for everything the page asks YouTube by itself)*, none while YouTube cools down, the same failure backoff.
+  youtube_names.py guesses "Artist - Title": a two-part title split, turned round when the second part is an
+  artist the library or an offline index knows, or the channel's name; else the channel (its "- Topic", VEVO,
+  Official gone) and the title without its noise ("(Official Video)", "[Letra]", "HD", "Remastered 2011"). The
+  owner's example ("Somos vikingos veganos - Hyperfanes", by the channel kintanedu) is a fan's "Song - Band": the
+  plain rule takes "Somos vikingos veganos" for the artist unless Hyperfanes is known; the fields are the owner's
+  to put right. A song of the library's for the video (its audio's or its paste's) is named as that song.
+- *The press:* Add and make the sheet fills the request form (artist, title, the video's plain address) and sends
+  it: `POST /request`, then `caracole youtube --sheet`, as before. Nothing is downloaded before the press.
+- *When it can't:* gate closed or YouTube paused: the panel with empty names and why ("Can't read the video
+  (YouTube is paused after a block): name it, then add it."). No auto-chords here: the panel says why and offers no
+  form *(my call: the request would be refused; "offers nothing that would fail")*. A song of yours with a human
+  sheet: "… already has a sheet." with Open.
+- *The file on disk:* the line `caracole youtube --song 'Artist - Title' --url URL --sheet`, to run where caracole
+  runs.

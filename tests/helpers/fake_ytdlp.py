@@ -12,6 +12,8 @@ was given, and its process id.
 - A download (a watch URL) writes the video's bytes where ``-o`` says (``data``, or the bytes of
   the file ``copy`` names: real audio, for a length to read), the extension filled in, and prints
   the fields of its ``--print after_move:`` template as JSON.
+- A video's metadata (``--skip-download``, a watch URL) prints the video's fields as yt-dlp's
+  ``--dump-single-json`` does, and writes nothing.
 - Either can instead fail as yt-dlp does (``ERROR: ...`` on stderr, exit 1), or hang a while
   (``sleep``): a run that sleeps it out says so (``woke``), one stopped first never does.
 """
@@ -63,6 +65,10 @@ if spec is None:
     sys.stderr.write("ERROR: [youtube] %s: Video unavailable\n" % (vid.group(1) if vid else target))
     sys.exit(1)
 answer(spec)
+if "--skip-download" in argv:
+    print(json.dumps({"_type": "video", **{k: spec[k] for k in ("id", "title", "channel", "uploader", "duration")
+                                            if k in spec}}))
+    sys.exit(0)
 template = argv[argv.index("-o") + 1]
 path = Path(template.replace("%(ext)s", spec.get("ext", "m4a")))
 path.write_bytes(Path(spec["copy"]).read_bytes() if spec.get("copy") else spec.get("data", "fake audio").encode("utf-8"))

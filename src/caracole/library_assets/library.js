@@ -156,6 +156,29 @@
   const HAN = /\p{Script=Han}/u;
   const typedEnough = (text) => (normal(text).match(/[\p{L}\p{N}]/gu) || []).length >= (HAN.test(text) ? 2 : 3);
   const searchesAsYouType = (text) => Boolean(server) && sitesCan(text) && typedEnough(text);
+  // The id of the YouTube video a link names, as youtube_urls.video_id_from_url reads one (watch?v=, youtu.be/,
+  // /shorts/, /embed/, /live/, /v/, on www, m or music, with or without its scheme; its other parameters, pp= or si=,
+  // don't matter); "" for anything else. A pasted link is a song to add, not words to search (linkMode).
+  const YT_HOST = /^(?:(?:www|m|music)\.)?youtube\.com$/;
+  const YT_ID = /^[A-Za-z0-9_-]{11}$/;
+  const youtubeVideo = (text) => {
+    const t = String(text || "").trim();
+    if (!t || /\s/.test(t) || (/^[a-z][a-z0-9+.-]*:/i.test(t) && !/^https?:\/{2}/i.test(t))) return "";
+    const bare = t.replace(/^https?:\/{2}/i, "").split("#")[0];
+    const cut = bare.search(/[/?]/);
+    const host = (cut < 0 ? bare : bare.slice(0, cut)).toLowerCase();
+    const rest = cut < 0 ? "" : bare.slice(cut);
+    const ask = rest.indexOf("?");
+    const raw = ask < 0 ? rest : rest.slice(0, ask);
+    const path = raw.replace(/\/+$/, "");
+    let id = "";
+    if (host === "youtu.be") id = raw.replace(/^\/+|\/+$/g, "");
+    else if (YT_HOST.test(host)) {
+      const m = path.match(/^\/(?:shorts|embed|live|v)\/([A-Za-z0-9_-]{11})$/);
+      id = m ? m[1] : path === "/watch" && ask >= 0 ? new URLSearchParams(rest.slice(ask + 1)).get("v") || "" : "";
+    }
+    return YT_ID.test(id) ? id : "";
+  };
   const songKeys = songs.map((s) => keyId(s.key));
   // Whether song i matches what is typed: each word in its search text, or its title's initials whole, and
   // each key typed.
@@ -1597,9 +1620,10 @@
       list.appendChild(el("p", "empty", "No songs match “" + state.q + "”."));
       if (!query.keys.length && server) {  // the offline indexes have no keys
         // Back from the sites' results with Escape: the way to them again.
-        if (typedEnough(state.q)) list.appendChild(button("Search the sites for “" + state.q.trim() + "”", "primary", () => enterAll()));
+        if (youtubeVideo(state.q)) list.appendChild(button("Add this YouTube video as a song", "primary", () => enterAll()));
+        else if (typedEnough(state.q)) list.appendChild(button("Search the sites for “" + state.q.trim() + "”", "primary", () => enterAll()));
       } else if (!query.keys.length) {
-        list.appendChild(fileAnswer(state.q.trim()));
+        list.appendChild(youtubeVideo(state.q) ? fileVideoAnswer(state.q.trim()) : fileAnswer(state.q.trim()));
         answerInList = true;
       }
     } else if (!shown.length) {
@@ -1763,7 +1787,8 @@
     if (searcher) searcher.typed();
     ytKeyAt = performance.now();  // YouTube's search waits for the query to settle too
     // Served, typing searches the sites too, once there is enough to search; the file's Enter shows its line.
-    const sites = server ? searchesAsYouType(state.q) : state.all && sitesCan(state.q);
+    const sites = server ? Boolean(youtubeVideo(state.q)) || searchesAsYouType(state.q)
+      : state.all && sitesCan(state.q);
     if (state.all && !sites) {  // nothing the sites can search: your songs again
       leaveAll(false);
       return;
@@ -1979,6 +2004,18 @@
     then.appendChild(el("code", null, "caracole get 'Artist - Title'"));
     then.appendChild(document.createTextNode(" looks one up now."));
     box.appendChild(then);
+    return box;
+  };
+
+  // The file's answer to a YouTube video's link: the command that adds its song and makes its sheet.
+  const fileVideoAnswer = (link) => {
+    const box = el("div", "file-answer");
+    box.appendChild(el("p", null, "A YouTube video: where caracole runs, this adds its song and makes its sheet:"));
+    const line = el("div", "command");
+    const code = el("code", null, "caracole youtube --song 'Artist - Title' --url " + shellQuote(link) + " --sheet");
+    const copy = button("Copy", "small", () => copyText(code, copy), "Copy the line");
+    line.append(code, copy);
+    box.appendChild(line);
     return box;
   };
 
@@ -2559,7 +2596,7 @@
       found.hidden = !open || answerInList;
       results.hidden = found.hidden;
       if (!found.hidden && found.dataset.query !== q) {
-        found.replaceChildren(fileAnswer(q));
+        found.replaceChildren(youtubeVideo(q) ? fileVideoAnswer(q) : fileAnswer(q));
         found.dataset.query = q;
       }
       return;
@@ -2702,8 +2739,172 @@
     ytWaiting = null;
     ytSend(g, q);
   };
+  // --- a YouTube video's link pasted into the box: a song to add (web/youtube_routes.py) ------------------------
+  // No site is searched for it, nor LaCuerda or YouTube by themselves: its own panel takes the results' place. It asks
+  // /api/youtube/video, which reads what caracole knows of the video with no request; a video not read yet is read
+  // once (POST youtube/video: one yt-dlp run, no download, then its thumbnail), its name guessed from its title and
+  // channel. The panel shows the video, its Artist and Title for you to check, and Add and make the sheet, which sends
+  // the request form (POST /request with the video: caracole youtube --sheet); nothing is downloaded before you
+  // press it. A song of the library's with a sheet says so instead; where no sheet can be made, why.
+  const linkBox = el("div", "link-box");
+  const linkRead = new Set();  // the videos this page asked YouTube about
+  let linkFor = "";  // the video the panel is for
+  let linkPanel = null;
+  const linkMode = (on) => {
+    for (const node of [progNote, allMine, groupsBox, ytBox, lcBox, notesBox]) node.classList.toggle("link-off", on);
+    results.classList.toggle("link-mode", on);
+    linkBox.hidden = !on;
+  };
+  const panelFor = (vid, pasted) => {
+    const box = el("div", "link-panel");
+    const media = el("div", "link-media");
+    const note = el("p", "hint link-note", "Reading the video…");
+    note.setAttribute("role", "status");
+    const form = el("form", "link-form");
+    const field = (name, label) => {
+      const wrap = el("label", "f");
+      wrap.appendChild(el("span", null, label));
+      const input = el("input");
+      input.name = name;
+      input.required = true;
+      input.maxLength = name === "artist" ? 200 : 300;
+      input.autocomplete = "off";
+      input.addEventListener("input", () => { input.dataset.typed = "1"; });
+      wrap.appendChild(input);
+      form.appendChild(wrap);
+      return input;
+    };
+    const artist = field("artist", "Artist");
+    const title = field("title", "Title");
+    const go = el("button", "btn primary", "Add and make the sheet");
+    go.type = "submit";
+    go.title = "Adds the song, takes the audio, works out the chords (a few minutes)";
+    form.appendChild(go);
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const request = document.querySelector("form.request-form");
+      if (!request) return;
+      const set = (name, value) => {
+        const f = request.elements.namedItem(name);
+        if (f) f.value = value;
+      };
+      set("artist", artist.value.trim());
+      set("title", title.value.trim());
+      set("album", "");
+      set("duration", "");
+      set("youtube", pasted);  // as pasted: the server reads its video, and keeps its plain address
+      request.requestSubmit();
+      form.replaceChildren(el("p", "hint", "Added: its line above says how it goes."));
+    });
+    box.append(media, note, form);
+    const fill = (data) => {
+      const d = data && typeof data === "object" ? data : {};
+      const song = d.song && typeof d.song === "object" ? d.song : null;
+      if (d.state === "off") {
+        note.textContent = "No sheets from YouTube here: " + String(d.why || "") + ".";
+        form.hidden = true;
+        return;
+      }
+      if (song && song.has_sheet === true) {
+        note.textContent = String(song.display || "") + " already has a sheet.";
+        if (typeof song.sheet === "string" && song.sheet) {
+          note.append(" ", link({ label: "Open", href: song.sheet }, null, false));
+        }
+        form.hidden = true;
+        return;
+      }
+      const v = d.video && typeof d.video === "object" ? d.video : null;
+      if (v) {
+        const shown = [];
+        if (typeof v.thumb === "string" && YT_THUMB.test(v.thumb)) {
+          const img = el("img", "yt-thumb");
+          img.src = v.thumb;
+          img.alt = "";
+          img.width = 120;
+          img.height = 90;
+          img.decoding = "async";
+          shown.push(img);
+        }
+        const text = el("div", "yt-text");
+        const name = el("h3", "yt-title");
+        name.appendChild(link({ label: String(v.title || "A video"), href: String(d.url || "") }, null, true));
+        text.appendChild(name);
+        const meta = [String(v.channel || ""), ytLength(v.duration)].filter(Boolean).join(" · ");
+        if (meta) text.appendChild(el("p", "yt-meta", meta));
+        shown.push(text);
+        media.replaceChildren(...shown);
+      }
+      const g = d.guess && typeof d.guess === "object" ? d.guess : {};
+      if (!artist.dataset.typed && g.artist) artist.value = String(g.artist);
+      if (!title.dataset.typed && g.title) title.value = String(g.title);
+      note.textContent = d.state === "auto" ? "Reading the video…"
+        : d.state === "found" ? (song ? "In your library as " + String(song.display || "") + "." : "Check the name, then add it.")
+        : "Can't read the video" + (d.why ? " (" + String(d.why) + ")" : "") + ": name it, then add it.";
+    };
+    return { box, fill, focus: () => (artist.value ? go : artist).focus() };
+  };
+  const askVideo = (vid, read) => fetch("api/youtube/video?id=" + encodeURIComponent(vid),
+    { cache: "no-store", headers: { Accept: "application/json" } })
+    .then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, body })))
+    .then(({ ok, body }) => {
+      if (linkFor !== vid || !linkPanel) return;
+      linkPanel.fill(ok ? body : { state: "failed", why: body && body.error ? String(body.error) : "" });
+      if (ok && body && body.state === "auto" && read && !linkRead.has(vid)) readVideo(vid);
+    }, () => {
+      if (linkFor === vid && linkPanel) linkPanel.fill({ state: "failed", why: "caracole serve can't be reached" });
+    });
+  // The video read now (POST youtube/video, a job), then followed: the panel asks again once its title is known
+  // (its name), and once the job is over (its thumbnail).
+  const readVideo = (vid) => {
+    linkRead.add(vid);
+    let early = false;
+    fetch("youtube/video", { method: "POST", headers: { Accept: "application/json" },
+      body: new URLSearchParams({ csrf: String(server.csrf || ""), id: vid }) })
+      .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data || typeof data.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(data.url)) {
+          askVideo(vid, false);
+          return;
+        }
+        const follow = () => fetch(data.url, { cache: "no-store", headers: { Accept: "application/json" } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((job) => {
+            if (!job || typeof job !== "object" || !job.active) {
+              askVideo(vid, false);
+              return;
+            }
+            if (!early && listOf(job.steps).some((x) => x && x.name === "video" && x.state === "done")) {
+              early = true;
+              askVideo(vid, false);
+            }
+            setTimeout(follow, 700);
+          }, () => askVideo(vid, false));
+        follow();
+      }, () => askVideo(vid, false));
+  };
+  const showLink = (vid, pasted) => {
+    linkMode(true);
+    say("A YouTube video: add it as a song");
+    if (linkFor === vid && linkPanel) return;
+    linkFor = vid;
+    linkPanel = panelFor(vid, pasted);
+    linkBox.replaceChildren(linkPanel.box);
+    askVideo(vid, true);
+  };
   const askSources = (now) => {
     const q = normal(state.q);
+    const vid = server ? youtubeVideo(q) : "";
+    if (vid) {  // a link: its panel, and no search of the sites
+      clearTimeout(askTimer);
+      if (asking) asking.abort();
+      askedFor = q;
+      showLink(vid, q);
+      return;
+    }
+    if (results.classList.contains("link-mode")) {
+      linkMode(false);
+      linkFor = "";
+    }
     if (!now && q === askedFor) return;
     clearTimeout(askTimer);
     askTimer = setTimeout(() => sendAsk(q), now ? 0 : SEARCH_PAUSE);
@@ -2907,7 +3108,8 @@
     head.appendChild(backButton);
     head.appendChild(keptNote);
     allMine.hidden = true;
-    found.append(head, progNote, allMine, groupsBox, ytBox, lcBox, notesBox);
+    linkBox.hidden = true;
+    found.append(head, linkBox, progNote, allMine, groupsBox, ytBox, lcBox, notesBox);
   }
   // A key that ends an input method's word (pinyin, kana) is still typing, never a command.
   const composing = (e) => e.isComposing || e.keyCode === 229;
@@ -2916,6 +3118,11 @@
     if (e.key === "Enter") {
       e.preventDefault();
       const q = normal(state.q);
+      if (server && youtubeVideo(q)) {  // a link: on to its panel, nothing searched
+        if (!state.all) enterAll();
+        if (linkPanel) linkPanel.focus();
+        return;
+      }
       if (!server || !state.all) {
         enterAll();
         if (searcher && state.all) searcher.enter(q, false);  // LaCuerda's search too, with the sites' answer

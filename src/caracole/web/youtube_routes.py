@@ -7,6 +7,13 @@
     POST /youtube/search  YouTube's first video for a query (``q``), suggested beside the search's results:
                           ``caracole youtube --search --progress`` queued, one yt-dlp run and its thumbnail, when
                           its gate (youtube_search.py) says so
+    GET  /api/youtube/video?url=
+                          a video pasted into the library page's search box (``url``, any link to it, or ``id``): its id and
+                          plain address, what its gate says (youtube_search.video_gate), its title, channel, length
+                          and thumbnail once read, the song's name guessed from them (youtube_names.py), and the
+                          library's song of it (by its audio, its paste, or the name), with or without a sheet
+    POST /youtube/video   that video's metadata read (``url`` or ``id``): ``caracole youtube --video --progress`` queued, one yt-dlp run
+                          with no download and its thumbnail, when its gate says so
     GET  /youtube/thumb[/<id>.jpg]
                           a suggested video's thumbnail, as caracole kept it in its cache
 
@@ -40,11 +47,18 @@ from caracole.web.app import (
     json_response,
     no_such_song,
     not_ignored,
+    query,
     redirect,
     song_id,
     wants_json,
 )
-from caracole.web.jobs import YOUTUBE_SEARCH, YOUTUBE_SHEET, youtube_search_steps, youtube_sheet_steps
+from caracole.web.jobs import (
+    YOUTUBE_SEARCH,
+    YOUTUBE_SHEET,
+    youtube_search_steps,
+    youtube_sheet_steps,
+    youtube_video_steps,
+)
 from caracole.web.pages import Refused
 from caracole.web.status import details_href
 
@@ -60,6 +74,8 @@ ROUTES = (
     Route("POST", "/youtube/search", lambda app, asked, form: search_youtube(app, form, json=wants_json(asked))),
     Route("GET", "/youtube/thumb/", lambda app, asked: thumbnail(app, address(asked)[len("/youtube/thumb/"):]),
           under=True),
+    Route("GET", "/api/youtube/video", lambda app, asked: pasted_video(app, query(asked))),
+    Route("POST", "/youtube/video", lambda app, asked, form: read_pasted_video(app, form, json=wants_json(asked))),
 )
 THUMB = "/youtube/thumb/"
 QUERY_LIMIT = 200
@@ -189,3 +205,90 @@ def thumbnail(app: WebApp, name: str) -> Response:
         return json_response(404, {"error": "No such thumbnail."})
     return Response(200, data, [("Content-Type", "image/jpeg"),
                                 ("Content-Security-Policy", f"default-src 'none'; {FRAMES}")])
+
+
+# --- a video pasted into the search box ----------------------------------------------------------------------
+
+
+def _pasted_id(link: str, video_id: str = "") -> str:
+    """The id of the video a pasted link names (or ``video_id``, the id itself, as the page sends it once it read
+    the link); Refused (400) for anything else."""
+    from caracole.youtube_urls import VIDEO_ID, video_id_from_url
+
+    if video_id:
+        video = video_id if VIDEO_ID.fullmatch(video_id) else None
+    else:
+        video = video_id_from_url(link.strip()) if len(link) <= VIDEO_LIMIT else None
+    if video is None:
+        raise Refused(400, "Not a video", "Not a YouTube video link.")
+    return video
+
+
+def pasted_video(app: WebApp, asked: dict[str, list[str]]) -> Response:
+    """What the library page offers for a video pasted into its search box, with no request: its ``id`` and plain
+    ``url``; its gate's ``state`` (youtube_search.video_gate: ``found``, ``none``, ``auto``, ``spent``, ``failed``,
+    ``off``) and ``why``; once read, the ``video`` (title, channel, length, the thumbnail's address) and the song's name
+    guessed from them (``guess``, youtube_names.py: a library or offline index's artist turns a title round); and the
+    library's song of it (``song``: by its audio or its paste, else by the guessed name), whether it has a human
+    sheet, and the link to it."""
+    from datetime import UTC, datetime
+
+    from caracole.library_page import sheet_href
+    from caracole.normalize import identity_key
+    from caracole.songs import HUMAN_SHEET, find_song
+    from caracole.youtube_names import guess
+    from caracole.youtube_search import known_artist, song_of_video, video_gate
+    from caracole.youtube_urls import watch_url
+
+    video_id = _pasted_id((asked.get("url") or [""])[0], (asked.get("id") or [""])[0])
+    overrides = app.overrides()
+    with app.db() as conn:
+        said = video_gate(app.cfg, conn, video_id, datetime.now(UTC))
+        video = said.asked.get("video") if said.asked is not None else None
+        video = video if isinstance(video, dict) else None
+        artist, title = (guess(str(video.get("title") or ""), str(video.get("channel") or ""),
+                               known=lambda name: known_artist(conn, name)) if video else ("", ""))
+        song = song_of_video(conn, overrides, video_id)
+        if song is not None:  # the library's own song of the video: its names
+            artist, title = song.artist, song.title
+        elif artist and title:
+            song = find_song(conn, identity_key(artist, title))
+        has_sheet = song is not None and conn.execute(
+            "SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone() is not None
+    why = said.why or (f"YouTube won't give it ({said.asked.get('unavailable')})"
+                       if said.state == "none" and said.asked else "")
+    return json_response(200, {
+        "id": video_id, "url": watch_url(video_id), "state": said.state, **({"why": why} if why else {}),
+        "video": {"title": video.get("title") or "", "channel": video.get("channel") or "",
+                  "duration": video.get("duration"),
+                  "thumb": f"{THUMB}{video_id}.jpg" if said.asked and said.asked.get("thumb") else None}
+        if video else None,
+        "guess": {"artist": artist, "title": title},
+        "song": {"id": song.id, "display": song.display, "has_sheet": has_sheet,
+                 "sheet": sheet_href(app.cfg.library_dir, song) if has_sheet else None} if song is not None else None,
+    })
+
+
+def read_pasted_video(app: WebApp, form: dict[str, str], *, json: bool) -> Response:
+    """A pasted video's title, channel, length and thumbnail read now: ``caracole youtube --video --progress`` queued,
+    a job of no song's (asked again while it waits or runs, that job), when its gate says ``auto``; refused otherwise
+    (400 no video's link, 409 read already this month or no sheet from YouTube here, 429 a cooldown, the hour's
+    lookups spent, or a failure lately). The page follows it on /api/jobs, then asks /api/youtube/video again."""
+    from datetime import UTC, datetime
+
+    from caracole.youtube_search import video_gate
+
+    video_id = _pasted_id(form.get("url", ""), form.get("id", ""))
+    with app.db() as conn:
+        said = video_gate(app.cfg, conn, video_id, datetime.now(UTC))
+    if said.state in ("found", "none"):
+        raise Refused(409, "Read already", "Read already this month.")
+    if said.state == "off":
+        raise Refused(409, "Not here", f"{NOT_HERE}: {said.why}.")
+    if said.state != "auto":
+        raise Refused(429, "Not now", f"Not now: {said.why}.")
+    job, _ = app.submit(f"Read YouTube video {video_id}", YOUTUBE_SEARCH + said.key, youtube_video_steps(video_id),
+                        display=f"YouTube video {video_id}")
+    if json:
+        return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
+    return redirect(f"/{details_href(job.id)}")
