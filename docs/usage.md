@@ -294,6 +294,21 @@ terminal unless `$NO_COLOR` is set; nothing is coloured when the output isn't
 a terminal. Under systemd, each line starts with its priority for the journal
 instead (see [deploy.md](deploy.md#logs)).
 
+Each build of the library page, caracole serve's at `/` or the `index.html` a
+command writes, logs one line of what it put on the page:
+
+    library page served to lenovo:8737: 120 songs (100 found, 15 wanted, 5 ignored; 3 in review), 2 songbooks; database /var/lib/caracole/caracole.sqlite, 12,582,912 bytes, modified 2026-10-29T03:14:07Z; 0.84 s
+
+(`written to …/index.html` for the file). It is information, which `-v` shows,
+and which the journal keeps at the default verbosity too (`-q` leaves it out):
+`journalctl -u caracole-web | grep 'library page'`. A page with no songs, or a
+database caracole serve can't open or read, is a warning instead, which says
+what to check: the database's path, whether it was there before the page
+opened it (opening a missing one makes an empty one), its size, time and
+owner, its schema version and the rows its `songs` table holds, the state and
+library folders, and the uid and gid caracole runs as. The page is answered as
+ever all the same.
+
 An unexpected error, a bug in caracole, ends the command with exit status 1:
 one line that says so, then its traceback, on stderr.
 

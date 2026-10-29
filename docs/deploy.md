@@ -829,6 +829,7 @@ The units write to the journal, each line under its priority
 ```sh
 journalctl -u caracole -p warning     # only what needs you or went wrong
 journalctl -u caracole -b -o cat      # the lines as caracole wrote them, the summary among them
+journalctl -u caracole-web | grep 'library page'   # each library page served: its songs, the database it read
 sudo caracole-admin -v run            # a run now, a line per request, on the terminal
 ```
 
@@ -851,6 +852,12 @@ songs wait for the next one. A bug exits 1, and ntfy says the unit failed
 - **"is at schema version N, but this caracole knows up to M":** a newer
   caracole migrated the database. Go back to it, or restore the copy saved
   before the migration, which the message names.
+- **The library page shows no songs:** `journalctl -u caracole-web | grep
+  'library page'`. Each page served has its line, and one with no songs is a
+  warning that names the database it opened, whether it was there before, its
+  size, owner and schema version, the rows its `songs` table holds, and the
+  uid caracole-web runs as (`-u caracole` for the `index.html` the nightly run
+  wrote; [usage.md](usage.md#what-caracole-prints)).
 - **The library page doesn't load:** `journalctl -u caracole-web -e`; "can't
   listen on" says why. A 421: add the name the browser used to
   `web.allowedHosts` (`--allow-host`). "caracole serve has restarted since this

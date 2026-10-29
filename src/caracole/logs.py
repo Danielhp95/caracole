@@ -14,7 +14,9 @@ root callback, so every command shares it, and undone when the command ends:
   its sd-daemon priority (``<3>`` an error, ``<4>`` a warning, ``<6>``
   information, ``<7>`` debug), a traceback's lines included, so
   ``journalctl -p warning`` finds them; there are no timestamps, as journald
-  keeps its own.
+  keeps its own. There, by default, the information of ``JOURNAL_INFO``'s
+  loggers shows too: the library page's line a build (page_log.py), so the
+  journal says what each page showed (``-q`` still keeps to the problems).
 - **On a terminal**, the level is coloured, unless ``$NO_COLOR`` is set. Never
   anywhere else.
 
@@ -36,6 +38,10 @@ THIRD_PARTY = ("httpx", "httpcore", "urllib3", "requests", "numba", "torch", "to
                "librosa", "audioread", "matplotlib", "PIL", "fsspec", "filelock")
 
 _LEVELS = {QUIET: logging.WARNING, NORMAL: logging.WARNING, VERBOSE: logging.INFO, DEBUG: logging.DEBUG}
+
+# caracole's loggers whose information the journal keeps at the default verbosity, as -v would show it: the library
+# page's line a build (page_log.py), the evidence asked for of what each page showed.
+JOURNAL_INFO = ("caracole.page_log",)
 
 
 PROVIDER_NAMES: Mapping[str, str] = {
@@ -187,16 +193,20 @@ def setup(level: int, *, stream: IO[str] | None = None, env: Mapping[str, str] |
     global _handler
     teardown()
     handler: logging.Handler = _Stderr() if stream is None else logging.StreamHandler(stream)
-    handler.setFormatter(_style(sys.stderr if stream is None else stream, env, level))
+    style = _style(sys.stderr if stream is None else stream, env, level)
+    handler.setFormatter(style)
     if level < DEBUG:
         handler.addFilter(_OthersQuiet())
     root = logging.getLogger()
-    for name in ("", "caracole", *THIRD_PARTY):
+    for name in ("", "caracole", *THIRD_PARTY, *JOURNAL_INFO):
         _saved[name] = logging.getLogger(name).level
     root.setLevel(logging.DEBUG if level >= DEBUG else logging.WARNING)
     logging.getLogger("caracole").setLevel(_LEVELS[level])
     for name in THIRD_PARTY:
         logging.getLogger(name).setLevel(logging.NOTSET if level >= DEBUG else logging.WARNING)
+    if style.journal and level == NORMAL:
+        for name in JOURNAL_INFO:
+            logging.getLogger(name).setLevel(logging.INFO)
     root.addHandler(handler)
     _handler = handler
     _current[:] = [(level, stream, env)]

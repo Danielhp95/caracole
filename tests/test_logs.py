@@ -135,6 +135,30 @@ def test_under_systemd_each_line_carries_its_priority_and_no_timestamp(tmp_path,
     assert all(line.startswith("<3>") for line in lines[1:])  # every line of the traceback
 
 
+def test_under_systemd_the_library_pages_lines_show_by_default_and_nothing_else_of_caracoles_information(
+        tmp_path, log_to):
+    # page_log.py: a line a build of the library page, the journal's evidence of what each page showed.
+    f, env = journal_stream(tmp_path)
+    with f:
+        log_to(logs.NORMAL, stream=f, env=env)
+        logging.getLogger("caracole.page_log").info("library page served to lenovo:8737: 1 song")
+        logging.getLogger("caracole.lyrics").info("a request")
+        logging.getLogger("httpx").info("a library's information")
+        f.seek(0)
+        assert f.read().splitlines() == ["<6>library page served to lenovo:8737: 1 song"]
+        f.seek(0)
+        f.truncate()
+        log_to(logs.QUIET, stream=f, env=env)  # -q: the problems only, in the journal too
+        logging.getLogger("caracole.page_log").info("library page written to /srv/index.html: 1 song")
+        f.seek(0)
+        assert f.read() == ""
+    elsewhere = log_to(logs.NORMAL)  # on a terminal, or piped: as every information line
+    logging.getLogger("caracole.page_log").info("library page written to /srv/index.html: 1 song")
+    assert elsewhere.getvalue() == ""
+    logs.teardown()
+    assert logging.getLogger("caracole.page_log").level == logging.NOTSET  # as setup found it
+
+
 def test_a_journal_stream_that_isnt_this_stream_changes_nothing(tmp_path, log_to):
     f, env = journal_stream(tmp_path)
     with f:

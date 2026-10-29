@@ -1,6 +1,7 @@
 """caracole serve's library page and its forms: a song requested, and a song of the library fetched now.
 
-    GET  /, /index.html   the library page, with its forms (library_page, WebControls)
+    GET  /, /index.html   the library page, with its forms (library_page, WebControls), and its line in the
+                          log (page_log.py)
     POST /request         a song for wanted.txt; with ``fetch``, looked up now too; with ``youtube``, its sheet
                           made from that YouTube video instead (youtube_routes.py)
     POST /fetch           look a song of the library up now, unless it needs review first
@@ -32,43 +33,55 @@ from caracole.web.review_routes import review_first
 
 if TYPE_CHECKING:
     from caracole.wanted import WantedLine
+    from caracole.web.app import Request
 
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
 PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600, "harptabs": 600, "gametabs": 600}
 
 
 ROUTES = (
-    Route("GET", "/", lambda app, asked: library(app)),
-    Route("GET", "/index.html", lambda app, asked: library(app)),
+    Route("GET", "/", lambda app, asked: library(app, asked)),
+    Route("GET", "/index.html", lambda app, asked: library(app, asked)),
     Route("POST", "/request", lambda app, asked, form: request(app, form)),
     Route("POST", "/fetch", lambda app, asked, form: fetch(app, form)),
     Route("GET", "/favicon.ico", lambda app, asked: icon()),
 )
 
 
-def library(app: WebApp) -> Response:
+def library(app: WebApp, asked: Request) -> Response:
+    """The library page, built for this request, and its line in the log (page_log.py: what it holds, the database
+    it read, how long it took and the host it was asked of; a warning for a page with no songs, or a database that
+    can't be read, which is refused as ever)."""
     from caracole.library_page import WebControls, build_library_page
+    from caracole.page_log import PageBuild
     from caracole.web.alphatab import available
 
+    built = PageBuild(app.cfg, "served", asked.headers.get("host") or "no host")
     overrides = app.overrides(" Fix it, then reload this page.")
     from caracole.songs import list_songs
 
     jobs = app.queue.snapshot()
-    with app.db() as conn:
-        busy = _song_ids(conn, app.queue.fetching_keys())
-        held = frozenset(s.id for s in list_songs(conn) if review_first(s, overrides))
-        removing = _song_ids(conn, {job.song_key.removeprefix(REMOVING) for job in jobs
-                                    if job.active and job.song_key.startswith(REMOVING)})
-        # Every request on its way, which the page's script shows where it belongs (``kind``): a
-        # song's on its card, a removal's on its song's, a songbook's change on its songbook's. A
-        # LaCuerda artist page's read, a query of its search, or a harptabs.com artist page's read, is no song's:
-        # what asked for it follows it.
-        active = tuple(views(app, conn, overrides, jobs, only=[
-            j for j in jobs if j.active and not j.song_key.startswith(INDEX_READS)]))
-        controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
-                               timers=app.timers, guitar=available(app.cfg.alphatab_dir))
-        html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
-                                  controls=controls)
+    try:
+        with app.db() as conn:
+            busy = _song_ids(conn, app.queue.fetching_keys())
+            held = frozenset(s.id for s in list_songs(conn) if review_first(s, overrides))
+            removing = _song_ids(conn, {job.song_key.removeprefix(REMOVING) for job in jobs
+                                        if job.active and job.song_key.startswith(REMOVING)})
+            # Every request on its way, which the page's script shows where it belongs (``kind``): a
+            # song's on its card, a removal's on its song's, a songbook's change on its songbook's. A
+            # LaCuerda artist page's read, a query of its search, or a harptabs.com artist page's read, is no
+            # song's: what asked for it follows it.
+            active = tuple(views(app, conn, overrides, jobs, only=[
+                j for j in jobs if j.active and not j.song_key.startswith(INDEX_READS)]))
+            controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
+                                   timers=app.timers, guitar=available(app.cfg.alphatab_dir))
+            html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
+                                      controls=controls, note=built.note)
+    except Refused as e:
+        if isinstance(e.__cause__, (sqlite3.Error, OSError)):  # app.db(): the database can't be opened or read
+            built.failed(e.__cause__)
+        raise
+    built.done()
     # The page's own CSP is in its meta tag; a header CSP would apply on top of it.
     return html_response(200, html, csp=FRAMES)
 

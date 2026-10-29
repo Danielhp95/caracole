@@ -895,15 +895,23 @@ def write_pages(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now
     brought up to date, once after an upgrade
     (``keys.refresh_info_keys``), so it gives the key the page shows. index.html is
     recorded as written (``library_page.write_library_page``), for caracole serve to
-    send to the Android app.
+    send to the Android app, and logged (page_log.py: a line a build, a warning for one with no songs).
     """
     from caracole.keys import refresh_info_keys
-    from caracole.library_page import build_library_page, write_library_page  # it imports this module
+    from caracole.library_page import PAGE_NAME, build_library_page, write_library_page  # it imports this module
+    from caracole.page_log import PageBuild
     from caracole.sites import refresh_counts
 
     refresh_info_keys(conn, cfg.library_dir)
     refresh_counts(conn)  # the Sites tab's counts of each index, which caracole serve's page reads too
     youtube = song_states(conn, overrides, now) if route_problem(cfg) is None else {}  # once, for both pages
     todo = write_todo(cfg.library_dir, build_todo(conn, cfg, overrides, now, youtube=youtube))
-    return todo, write_library_page(cfg.library_dir, build_library_page(conn, cfg, overrides, now, youtube=youtube),
-                                    conn)
+    built = PageBuild(cfg, "written", str(cfg.library_dir / PAGE_NAME))  # its line in the log (page_log.py)
+    try:
+        page = build_library_page(conn, cfg, overrides, now, youtube=youtube, note=built.note)
+    except sqlite3.Error as e:
+        built.failed(e)
+        raise
+    path = write_library_page(cfg.library_dir, page, conn)
+    built.done()
+    return todo, path

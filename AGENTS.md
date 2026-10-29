@@ -52,7 +52,8 @@ section says where things are, and the rules a change there keeps.
 Each step returns a `report.StepResult` (what it did, counted; the songs a provider's error
 left, with the error; what needs the user), which report.py turns into the run's summary on
 stdout and ntfy: a new step plugs in by returning one. The log goes to stderr, set up once
-by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities).
+by the root callback (logs.py: `-v`, `-vv`, `-q`, journal priorities; under systemd, the
+information of `JOURNAL_INFO`'s loggers too at the default verbosity: page_log.py's).
 
 Shared by the steps and the commands:
 
@@ -65,6 +66,7 @@ Shared by the steps and the commands:
 | normalize.py | keys, pinyin, `name_forms`; `name_words`, `holds_run` and `PINYIN_PARTIAL_SCALE`, Chinese in pinyin only as whole words, for search.py and lacuerda_index.py |
 | inline.py | what a page holds inline: a script or a style by its hash, a JSON data block; the standard library alone |
 | pdf_fonts.py | the fonts every PDF is set in (`pdf_fonts`, `CARACOLE_PDF_FONTS`): a folder of `regular`, `bold`, `italic` and `mono` (`in_folder`), and what `metrics` reads of each, the characters it has and their widths as ChordPro's PDF library counts them, which render.py's `pdf_font` (a letter the regular font lacks brings in the CJK font, for the words alone: `fonts_options`, `PDF_FONT_ELEMENTS`) and pdf_text.py's layout read; without the folder, ChordPro's built-in fonts, as before; the standard library alone |
+| page_log.py | the library page's line in the log, one a build (`PageBuild`: caracole serve's at `/`, library_routes.py, with the host; `todo.write_pages`'s `index.html`): its songs found, wanted, ignored and in review, its songbooks, the database's path, size and time, how long it took; a page with no songs, or a database that can't be opened or read, a warning that says what tells why (the database before and after the build opened it, its owner, WAL, schema version and `songs` rows read straight from it, read-only; the folders, the process's uid and gid), the page answered as ever. Information the journal keeps by default (logs.py `JOURNAL_INFO`): `journalctl -u caracole-web \| grep 'library page'` (test_page_log.py) |
 | page_icon.py | the mark in every page's tab, "¿" drawn in SVG (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`); the standard library alone |
 | overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`) |
 | library.py | song folders, safe file access in the synced library |

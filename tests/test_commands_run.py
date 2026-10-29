@@ -204,9 +204,11 @@ def test_a_bug_exits_1_and_leaves_its_traceback_in_the_log_behind_one_line(tmp_p
     assert result.exit_code == 1
     assert ("The match step failed: KeyError: 'boom'. That's a bug in caracole: its traceback is in the log, and "
             "the run exits 1.") in result.stdout.splitlines()
-    first, second, *rest = result.stderr.splitlines()
+    first, second, *rest, page = result.stderr.splitlines()
     assert first == "error: The match step failed: KeyError: 'boom'. That's a bug in caracole; its traceback follows."
     assert second == "Traceback (most recent call last):" and rest[-1] == "KeyError: 'boom'"
+    # Then the pages, written all the same: of a library with no songs, a warning (page_log.py).
+    assert page.startswith("warning: library page written to ") and " with no songs: " in page
 
 
 @pytest.mark.slow
@@ -234,6 +236,10 @@ def test_under_systemd_every_line_carries_its_journal_priority(tmp_path):
                               cwd=tmp_path, stdout=f, stderr=f, timeout=120)
     lines = journal.read_text(encoding="utf-8").splitlines()
     assert done.returncode == 0, lines
+    # The library page it wrote, of a library with no songs: a warning, with what tells why (page_log.py).
+    [page] = [line for line in lines if "library page" in line]
+    assert page.startswith("<4>library page written to ") and " with no songs: " in page
+    lines.remove(page)
     assert lines[:2] == ["<4>First, build the index once: caracole index build (about 10 minutes).",
                          "<4>Until then, no song is matched or looked for on Ultimate Guitar."]
     assert all(line[:3] in ("<3>", "<4>", "<6>", "<7>") for line in lines), lines  # and no blank line

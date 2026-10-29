@@ -276,7 +276,7 @@ import html as html_text
 import json
 import re
 import sqlite3
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -401,11 +401,13 @@ class WebControls:
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
-                       controls: WebControls | None = None, youtube: dict[int, SongState] | None = None) -> str:
+                       controls: WebControls | None = None, youtube: dict[int, SongState] | None = None,
+                       note: Callable[[Mapping[str, Any]], None] | None = None) -> str:
     """The whole page: every song, its files, and the links to find what's missing.
 
     With ``controls``, the page ``caracole serve`` serves: the same, with its forms. ``youtube``: as
-    ``song_cards`` takes it.
+    ``song_cards`` takes it. ``note`` is given the page's data once whole, for its line in the log
+    (page_log.py ``PageBuild.note``).
     """
     songs = song_cards(conn, cfg, overrides, now, youtube=youtube)
     data: dict[str, Any] = {
@@ -430,6 +432,8 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
             song["fetchable"] = song["id"] not in controls.held
     data["songbooks"] = songbooks_data(conn, cfg, overrides)  # the Songbooks tab's (songbooks.js draws it)
     data["sites"] = sites_data(conn, cfg, songs, now)  # the Sites tab's (sites.js draws it)
+    if note is not None:
+        note(data)
     # The page caracole serve serves may also ask it how its requests go (connect-src), and show the thumbnail of a
     # video it suggests for a search (img-src 'self': web/youtube_routes.py's); the file can't.
     csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'").replace("img-src data:", "img-src data: 'self'")
