@@ -19,7 +19,7 @@ from caracole.gametabs import (
     sitemap_child,
     title_key,
 )
-from caracole.http import crawl_delay, robots_disallows
+from caracole.http import robots_disallows
 from caracole.ug.sitemap import iter_locs
 
 # --- the sitemaps -----------------------------------------------------------------------------------------------------
@@ -76,8 +76,8 @@ def test_a_page_url_is_its_path_on_the_site():
 # --- robots.txt -------------------------------------------------------------------------------------------------------
 
 
-def _star_group() -> tuple[list[str], list[str]]:
-    disallow, delay, agent = [], [], None
+def _star_group() -> list[str]:
+    disallow, agent = [], None
     for line in fixture("robots.txt").splitlines():
         field, _, value = line.partition(":")
         name = field.strip().lower()
@@ -85,19 +85,14 @@ def _star_group() -> tuple[list[str], list[str]]:
             agent = value.strip()
         elif agent == "*" and name == "disallow":
             disallow.append(value.strip())
-        elif agent == "*" and name == "crawl-delay":
-            delay.append(value.strip())
-    return disallow, delay
+    return disallow
 
 
 def test_robots_rules_are_the_user_agent_star_group_of_the_live_file():
-    from caracole.http import ROBOTS_CRAWL_DELAY, ROBOTS_DISALLOW
+    from caracole.http import ROBOTS_DISALLOW
 
-    lines, delay = _star_group()
+    lines = _star_group()
     assert list(ROBOTS_DISALLOW["gametabs.net"]) == lines == list(ROBOTS_DISALLOW["www.gametabs.net"])
-    assert delay == ["5"]
-    assert ROBOTS_CRAWL_DELAY["gametabs.net"] == ROBOTS_CRAWL_DELAY["www.gametabs.net"] == 5.0
-    assert crawl_delay(f"{BASE}/tabs/actraiser/fillmore") == 5.0
 
 
 def test_robots_closes_the_api_the_filters_the_logins_and_every_download():

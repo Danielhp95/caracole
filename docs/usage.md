@@ -88,7 +88,7 @@ delay = [10, 20]
 [providers.gametabs]              # text tabs of game music, kept for your songs
 enabled = true                    # false: caracole asks gametabs.net nothing
 budget = 20
-delay = [10, 20]                  # never under its robots.txt's 5 s
+delay = [1, 1]                    # one request a second
 [providers.youtube]               # the audio of songs nobody has charted, with auto-chords
 enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
 budget = 6                        # yt-dlp runs per run, each a search or a download
@@ -203,10 +203,9 @@ already), stops once the hour's lookups have spent half of `lookup_per_hour`,
 so an evening of songs looked up on the spot keeps getting sheets (about
 twenty to thirty an hour with the defaults). What a lookup leaves undone waits
 for the nightly run. Either
-pace sends one request at a time to a site, never less than its robots.txt's
-`Crawl-delay` apart (gametabs.net's asks 5 seconds, the one site caracole reads that
-sets one for every robot), and keeps everything else below: robots.txt, the cache, the blocks and
-cooldowns. Only gtptabs.com, MuseScore, harptabs.com, gametabs.net and YouTube can be turned
+pace sends one request at a time to a site, `delay` apart (gametabs.net's robots.txt
+asks 5 seconds, which caracole does not keep: its pace is a second), and keeps everything else below:
+robots.txt's closed paths, the cache, the blocks and cooldowns. Only gtptabs.com, MuseScore, harptabs.com, gametabs.net and YouTube can be turned
 off: with `enabled = false` under `[providers.gtptabs]`, `[providers.musescore]`,
 `[providers.harptabs]`, `[providers.gametabs]` or `[providers.youtube]`, caracole sends that site nothing, the
 nightly run skips
@@ -259,7 +258,7 @@ its game's page, which caracole reads into a local index (`caracole gametabs
 budget leaves): until a game's page is read, a song is found by its game
 alone. gametabs.net's terms forbid bots and scrapers without its written
 permission; reading it anyway is the owner's choice, on every other rule
-caracole keeps: its robots.txt and its 5-second `Crawl-delay`, caracole's own
+caracole keeps: its robots.txt's closed paths (not its 5-second `Crawl-delay`), caracole's own
 user agent, the paces and budgets, and a block (a 403, a 429 or a challenge)
 honoured with a cooldown and one alert, never worked around. It keeps the tabs
 of your own songs alone, for you, never a mirror of the site.

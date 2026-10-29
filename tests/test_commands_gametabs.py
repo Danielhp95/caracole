@@ -1,6 +1,6 @@
 """``caracole gametabs``, run through the CLI.
 
-Each test writes a caracole.toml rooted in tmp_path, with no pause between requests beyond robots.txt's 5 s, which
+Each test writes a caracole.toml rooted in tmp_path, with no pause between requests, which
 ``_common.sleep`` takes (replaced here, as it records each). gametabs.net is ``FakeGameTabs``
 (helpers/gametabs_site.py) and ntfy a fake too, handed to the clients through
 ``caracole.commands._common.transport_for``, so no request can reach the network.
@@ -53,14 +53,14 @@ def sites(monkeypatch):
     return s
 
 
-def run(tmp_path: Path, *args: str, enabled: bool = True, ntfy: bool = False):
+def run(tmp_path: Path, *args: str, enabled: bool = True, ntfy: bool = False, delay: int = 0):
     lines = [
         f'library_dir = "{tmp_path / "lib"}"',
         f'music_dir = "{tmp_path / "music"}"',
         f'state_dir = "{tmp_path / "state"}"',
         f'cache_dir = "{tmp_path / "cache"}"',
         "[providers.gametabs]",
-        "delay = [0, 0]",
+        f"delay = [{delay}, {delay}]",
         f"enabled = {'true' if enabled else 'false'}",
     ]
     if ntfy:
@@ -88,10 +88,7 @@ def test_gametabs_keeps_a_tab_and_says_what_it_did(tmp_path, sites):
     assert (tmp_path / "lib" / "Hollow Knight" / "Resting Grounds" / "gametab-1.txt").is_file()
     assert (tmp_path / "lib" / "index.html").is_file()
     assert sites.gametabs.requests[-1] == RESTING
-    # robots.txt's Crawl-delay: 5 s between two of its requests, though the pace says none (slept in slices, each a
-    # look for a lookup waiting for the lock).
-    gaps = len(sites.gametabs.requests) - 1
-    assert 5.0 * gaps - 0.5 <= sum(sites.sleeps) <= 5.0 * gaps + 0.5
+    assert sum(sites.sleeps) == 0  # the pace says none, and nothing else adds to it
 
 
 def test_gametabs_with_no_song_asks_nothing(tmp_path, sites):
@@ -139,14 +136,14 @@ def state(tmp_path):
 
 
 def test_index_reads_game_pages_a_budget_at_a_time_even_for_an_empty_library(tmp_path, sites):
-    result = run(tmp_path, "--index", "--budget", "8")
+    result = run(tmp_path, "--index", "--budget", "8", delay=1)
 
     assert result.exit_code == 0, result.output
     assert sites.gametabs.requests == [*SITEMAPS, f"{BASE}/tabs/actraiser"]
     assert result.stdout.splitlines() == [
         "Index: gametabs.net's 6 sitemaps read.",
         "gametabs.net: 1 game page read; 1 of 7 game pages read, 5 tabs in the index.",
-        "The budget of 8 requests is spent: caracole gametabs --index reads the next 6 game pages, about 30 s of "
+        "The budget of 8 requests is spent: caracole gametabs --index reads the next 6 game pages, about 6 s of "
         "requests at this pace.",
     ]
     again = run(tmp_path, "--index")

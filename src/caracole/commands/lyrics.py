@@ -581,11 +581,8 @@ def _gametabs_index(cfg: Config, budget: int | None) -> None:
     typer.echo(f"gametabs.net: {plural(s.read, 'game page')} read{gone}{errors}; {held}, "
                f"{plural(now.tabs, 'tab')} in the index.")
     if s.budget_exhausted:
-        from caracole.gametabs import BASE_URL
-        from caracole.http import crawl_delay
-
         left = max(now.pages - now.read, 0)
-        pace = about(left * max(sum(p.delay) / 2, crawl_delay(BASE_URL)))
+        pace = about(left * sum(p.delay) / 2)
         typer.echo(f"The budget of {plural(policy.budget, 'request')} is spent: caracole gametabs --index reads the "
                    f"next {plural(left, 'game page')}, {pace} of requests at this pace.")
 
