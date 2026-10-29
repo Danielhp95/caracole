@@ -15,6 +15,11 @@ the command writes both again, with its own sheets and failures. It holds
 caracole's lock while it works, so it waits for another caracole writing the
 library (a ``caracole-admin`` command, say), and hands it to a waiting lookup
 between two songs (``_common.hand_over``), since a song takes minutes.
+
+``--song "Artist - Title"`` works on that song alone, now: its purchase, or the
+audio caracole took from YouTube for it, as the library page's sheet from a YouTube
+video does (youtube_sheet.py). It refuses a song that isn't in the library, or is
+ignored, as every command's ``--song`` does.
 """
 
 from __future__ import annotations
@@ -31,6 +36,7 @@ from caracole.commands._common import (
     load_cfg,
     load_ovr,
     open_db,
+    song_named,
     utcnow,
     write_pages,
 )
@@ -46,7 +52,12 @@ def missing_packages() -> list[str]:
 
 def register(app: typer.Typer) -> None:
     @app.command("autochords")
-    def autochords_cmd(ctx: typer.Context) -> None:
+    def autochords_cmd(
+        ctx: typer.Context,
+        song: str | None = typer.Option(
+            None, "--song", metavar='"ARTIST - TITLE"', help="Work on this song alone, now.",
+        ),
+    ) -> None:
         """Write 'sheet (auto).txt' from purchased audio, for songs with no human sheet."""
         missing = missing_packages()
         if missing:
@@ -64,10 +75,11 @@ def register(app: typer.Typer) -> None:
             music = scan_music(conn, cfg.music_dir)
             files = "file" if music.seen == 1 else "files"
             typer.echo(f"Music: {music.seen} {files}, {music.matched} linked")
+            only = {song_named(conn, song, overrides).id} if song is not None else None
             # A song takes minutes: a lookup waiting for the lock goes between two of them.
             handed = _common.handoffs()
             stats = autochords_pending(conn, cfg, overrides=overrides,
-                                       between=lambda: _common.hand_over(cfg, conn))
+                                       between=lambda: _common.hand_over(cfg, conn), only=only)
             typer.echo(f"auto-chords: {stats.summary()}")
             write_pages(conn, cfg, _common.overrides_since(cfg, overrides, handed), utcnow())
         if stats.errors:  # the setup's problems; stats.failures are listed on the to-do page

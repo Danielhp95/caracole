@@ -1651,8 +1651,8 @@ and cache.
   [--title TITLE] [--progression NUMERALS]`** searches your library and the offline UG index, by an
   artist, a title or both; `--key` finds your songs in one key, `--progression` those that play a
   progression (see [caracole search](#caracole-search)).
-- **`caracole autochords`** writes `sheet (auto).txt` from audio you bought, for
-  songs with no human sheet (see [the worked example](#a-worked-example)), then
+- **`caracole autochords [--song "ARTIST - TITLE"]`** writes `sheet (auto).txt` from audio you bought, for
+  songs with no human sheet (see [the worked example](#a-worked-example)), or for that one song alone, then
   rewrites `_todo.md` and `index.html`. It needs the flake's
   `packages.autochords`, with torch, librosa and beat_this; the default package
   says so and exits 1. A purchase it can't read fails that song alone: it

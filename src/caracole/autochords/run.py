@@ -50,7 +50,7 @@ import sys
 import tempfile
 import wave
 from array import array
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -146,6 +146,7 @@ def autochords_pending(
     now: datetime | None = None,
     overrides: Overrides | None = None,
     between: Callable[[], bool] | None = None,
+    only: Collection[int] | None = None,
 ) -> AutoStats:
     """Generate the auto sheets that are due, keep them in the library, and record the run.
 
@@ -160,6 +161,10 @@ def autochords_pending(
     hands caracole's lock to a waiting lookup there (``_common.hand_over``), as
     a song can take minutes. When it says it did, overrides.toml and each song
     after are read again, since the lookup may have changed them.
+
+    ``only``: the ids of the songs to work on (``caracole autochords --song``, a sheet
+    from a YouTube video); the others count nowhere, and the run's record keeps their
+    failures as the last whole run left them.
     """
     stamp = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     if overrides is None:
@@ -168,7 +173,7 @@ def autochords_pending(
     models: tuple[Recognizer, BeatsFn] | None = None
     unavailable = False
     handed = False
-    for n, listed in enumerate(list_songs(conn)):
+    for n, listed in enumerate(s for s in list_songs(conn) if only is None or s.id in only):
         if n and between is not None and between():
             handed = True
             overrides = _overrides_again(cfg, overrides)
@@ -230,17 +235,24 @@ def autochords_pending(
             continue
         stats.generated += 1
         log.info("%s: auto sheet written (%s lyrics)", song.display, used)
-    kv_set_json(
-        conn,
-        STATUS_KEY,
-        {
-            "at": stamp,
-            "generated": stats.generated,
-            "skipped": stats.skipped,
-            "failed": [asdict(f) for f in stats.failures],
-        },
-    )
+    failed = [asdict(f) for f in stats.failures]
+    record = {"at": stamp, "generated": stats.generated, "skipped": stats.skipped, "failed": failed}
+    if only is not None:  # the other songs' failures stay listed, as the last whole run found them
+        before = kv_get_json(conn, STATUS_KEY)
+        before = before if isinstance(before, dict) else {}
+        mine = {_failed_display(conn, i) for i in only}
+        kept = [f for f in before.get("failed") or [] if isinstance(f, dict) and f.get("song") not in mine]
+        record = {**before, "failed": kept + failed} if before else record
+    kv_set_json(conn, STATUS_KEY, record)
     return stats
+
+
+def _failed_display(conn: sqlite3.Connection, song_id: int) -> str | None:
+    """How the run's record names a song's failure: its "Artist - Title"; None for a song gone."""
+    try:
+        return get_song(conn, song_id).display
+    except KeyError:
+        return None
 
 
 def _failed_key(song_id: int) -> str:

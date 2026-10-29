@@ -351,6 +351,31 @@ def test_changed_audio_is_generated_again(conn, cfg, tmp_path):
     assert [f.name for f in kept_files(conn, s.id)] == [AUTO_SHEET]
 
 
+def test_only_the_songs_asked_for_are_worked_on(conn, cfg, tmp_path):
+    # caracole autochords --song, and the library page's sheet from a YouTube video: one song, now.
+    one = with_audio(conn, tmp_path, add_song(conn, "Nick Cani", "Vikingos veganos"), name="one.wav")
+    other = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), name="other.wav")
+    rec = FakeRecognizer()
+    stats = run(conn, cfg, rec, only={one.id})
+    assert rec.calls == [Path(one.audio_path)]
+    assert (stats.generated, stats.skipped, stats.failed) == (1, 0, 0)  # the other song counts nowhere
+    assert get_song(conn, other.id).autochords_mtime is None and kept_files(conn, other.id) == []
+
+
+def test_a_run_for_one_song_keeps_the_other_songs_failures_for_the_to_do_page(conn, cfg, tmp_path):
+    broken = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="broken.wav")
+    one = with_audio(conn, tmp_path, add_song(conn, "Nick Cani", "Vikingos veganos"), name="one.wav")
+    run(conn, cfg, FakeRecognizer(fail_on=("broken.wav", "one.wav")))
+    assert sorted(f["song"] for f in kv_get_json(conn, STATUS)["failed"]) == [
+        "A - Broken Download", "Nick Cani - Vikingos veganos"]
+    # A new download for the one song, which reads now: its failure goes, the other stays.
+    update_song(conn, one.id, audio_mtime=get_song(conn, one.id).audio_mtime + 60)
+    stats = run(conn, cfg, FakeRecognizer(), only={one.id})
+    assert stats.generated == 1 and stats.failures == []
+    assert [f["song"] for f in kv_get_json(conn, STATUS)["failed"]] == ["A - Broken Download"]
+    assert kv_get(conn, failed_key(broken)) is not None
+
+
 def test_a_human_sheet_stops_regeneration(conn, cfg, tmp_path):
     s = with_audio(conn, tmp_path, add_song(conn, "A", "T"))
     run(conn, cfg)
@@ -967,8 +992,8 @@ def write_config(tmp_path: Path, **autochords: Path) -> Path:
     return p
 
 
-def invoke(config: Path):
-    return CliRunner().invoke(build_app(), ["--config", str(config), "autochords"])
+def invoke(config: Path, *args: str):
+    return CliRunner().invoke(build_app(), ["--config", str(config), "autochords", *args])
 
 
 @pytest.fixture
@@ -1096,6 +1121,26 @@ def test_command_rewrites_the_todo_page_and_the_index(tmp_path, monkeypatch, mod
     todo = (tmp_path / "lib" / "_todo.md").read_text(encoding="utf-8")
     assert "1 song: 1 found, 0 wanted" in todo
     assert "Auto sheet text" in (tmp_path / "lib" / "index.html").read_text(encoding="utf-8")
+
+
+def test_command_for_one_song(tmp_path, monkeypatch, models_importable):
+    fake_default_models(monkeypatch)
+    conn = bought(tmp_path)
+    add_song(conn, "Nick Cani", "Vikingos veganos", duration_ms=None)
+    make_wav(tmp_path / "music" / "Nick Cani - Vikingos veganos.wav", 3.0)
+    config = write_config(tmp_path, **model_files(tmp_path))
+    result = invoke(config, "--song", "nick cani - vikingos veganos")
+    assert result.exit_code == 0, result.output
+    assert "auto-chords: 1 generated, 0 skipped, 0 failed" in result.output
+    assert (tmp_path / "lib" / "Nick Cani" / "Vikingos veganos" / AUTO_SHEET).is_file()
+    assert not (tmp_path / "lib" / "Nobody" / "River Road" / AUTO_SHEET).exists()
+
+
+def test_command_for_a_song_that_isnt_there_says_so(tmp_path, models_importable):
+    bought(tmp_path)
+    result = invoke(write_config(tmp_path, **model_files(tmp_path)), "--song", "Nobody - Nothing")
+    assert result.exit_code == 1
+    assert 'No song "Nobody - Nothing" in the library' in result.output
 
 
 def test_command_lists_a_purchase_it_cant_read_on_the_todo_page_at_once(
