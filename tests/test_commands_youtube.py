@@ -769,8 +769,9 @@ def test_video_reads_a_pasted_videos_metadata_and_thumbnail_with_no_download(tmp
     events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
     assert [(e["stage"], e["state"]) for e in events] == [("video", "running"), ("video", "done"),
                                                          ("thumbnail", "running"), ("thumbnail", "done")]
-    again = invoke(config, "--video", f"https://youtu.be/{VIKINGOS}?si=abc")
-    assert again.exit_code == 0 and again.output.startswith("Searched: YouTube's video")
+    for asked_again in (f"https://youtu.be/{VIKINGOS}?si=abc", VIKINGOS):  # a link, or the id, as a job passes it
+        again = invoke(config, "--video", asked_again)
+        assert again.exit_code == 0 and again.output.startswith("Searched: YouTube's video")
     assert len(fake.argvs()) == 1 and len(image_host.asked) == 1  # known this month: nothing asked
 
 
@@ -778,7 +779,7 @@ def test_video_reads_a_pasted_videos_metadata_and_thumbnail_with_no_download(tmp
 def test_a_video_youtube_wont_give_is_kept_as_none(tmp_path, fake, conn, image_host):
     vikingos_video(fake, stderr=f"ERROR: [youtube] {VIKINGOS}: Private video. Sign in if you've been granted access",
                    exit=1)
-    result = invoke(write_config(tmp_path, fake), "--video", PASTED_LINK)
+    result = invoke(write_config(tmp_path, fake), "--video", VIKINGOS)  # the id alone, as the page's job passes it
     assert result.exit_code == 0 and result.output.splitlines()[-1].startswith("Nothing found: YouTube won't give")
     said = kv_get_json(conn, f"youtube-search:video:{VIKINGOS}")
     assert said["video"] is None and "Private video" in said["unavailable"] and image_host.asked == []

@@ -99,7 +99,7 @@ def register(app: typer.Typer) -> None:
                  "caracole serve to suggest.",
         ),
         video: str | None = typer.Option(
-            None, "--video", metavar="URL",
+            None, "--video", metavar="URL|ID",
             help="A YouTube video's title, channel and length (one yt-dlp run, no download) and its thumbnail, kept "
                  "for caracole serve to name a pasted link's song.",
         ),
@@ -332,9 +332,9 @@ def _video(cfg: Config, link: str, *, progress: bool) -> None:
     from caracole.health import answered_any, record_block, record_error, record_ok
     from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
     from caracole.youtube_search import RUN, read_video, record_failure, video_gate, video_key
-    from caracole.youtube_urls import video_id_from_url
+    from caracole.youtube_urls import VIDEO_ID, video_id_from_url
 
-    video_id = video_id_from_url(link)
+    video_id = link.strip() if VIDEO_ID.fullmatch(link.strip()) else video_id_from_url(link)  # an id, as jobs pass it
     if video_id is None:
         fail(f"--video: not a YouTube video's link: {link!r}", 2)
     key = video_key(video_id)
