@@ -96,6 +96,16 @@ def snap_to_beats(segments: Iterable[ChordSegment], beats: Sequence[float]) -> l
     return _merge(snapped)
 
 
+def youtube_credit(title: str, channel: str, video_id: str) -> str:
+    """The line after the song's name (``build_sheet``'s ``source``) of a sheet made from a YouTube video's audio,
+    as its .txt, its .cho and its PDF say it: the video by its title, else its id, and its channel ("Audio from
+    YouTube: Creep (Radiohead - Topic)"), on one line. Its address isn't there: info.json names it, and the sheet's
+    viewer draws its title as a link to it (render.py gives it the video)."""
+    named = " ".join((title or video_id).split())
+    channel = " ".join(channel.split())
+    return f"Audio from YouTube: {named} ({channel})" if channel else f"Audio from YouTube: {named}"
+
+
 def build_sheet(
     segments: Iterable[ChordSegment],
     *,
@@ -108,7 +118,8 @@ def build_sheet(
     source: str | None = None,
 ) -> str:
     """The text of ``sheet (auto).txt``. ``source``, when given, is a line after the song's
-    name that says where its audio came from (a YouTube video, say).
+    name that says where its audio came from (a YouTube video: ``youtube_credit``), which render.py
+    reads as the sheet's credit, apart from its song.
 
     With synced lyrics (LRC), every lyric line gets the chords whose snapped start
     falls between its time and the next line's, at character columns proportional

@@ -584,14 +584,16 @@ def _registered(host: str) -> str:
 
 def page_icons(cache_dir: Path) -> dict[str, dict[str, object]]:
     """Every source for the page: its name, its badge, and its icon when one is kept."""
-    shown: dict[str, dict[str, object]] = {}
-    for key, source in SOURCES.items():
-        entry: dict[str, object] = {"name": source.name, "letters": source.letters}
-        if source.glyph:
-            entry["glyph"] = True
-        else:
-            uri = icon_uri(cache_dir, key)
-            if uri is not None:
-                entry["src"] = uri
-        shown[key] = entry
-    return shown
+    return {key: page_icon(cache_dir, key) for key in SOURCES}
+
+
+def page_icon(cache_dir: Path, key: str) -> dict[str, object]:
+    """One source's mark as a page draws it (rows.js ``sourceMark``; an auto sheet's viewer, YouTube's: render.py):
+    its name, its badge's letters, and its icon as a ``data:`` URI when one is kept, or ``glyph`` for no site."""
+    source = SOURCES[key]
+    entry: dict[str, object] = {"name": source.name, "letters": source.letters}
+    if source.glyph:
+        entry["glyph"] = True
+    elif (uri := icon_uri(cache_dir, key)) is not None:
+        entry["src"] = uri
+    return entry

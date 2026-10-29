@@ -456,6 +456,20 @@ class Browser:
         for kind in ("mousePressed", "mouseReleased"):
             self.send("Input.dispatchMouseEvent", type=kind, x=box[0], y=box[1], button="left", clickCount=1)
 
+    def event(self, method: str, timeout: float = 10.0) -> dict[str, Any] | None:
+        """The params of the first ``method`` event in ``events`` (clear it first for a new one), waited for
+        ``timeout`` seconds at most; None when none came. It asks the browser, not the page, for them: a navigation
+        ``Fetch`` holds (``Fetch.requestPaused``) leaves the page's evaluations waiting."""
+        deadline = time.monotonic() + timeout
+        while True:
+            found = next((e for e in self.events if e.get("method") == method), None)
+            if found is not None:
+                return found.get("params", {})
+            if time.monotonic() >= deadline:
+                return None
+            self._send("Browser.getVersion")  # what the browser sent meanwhile comes in with its answer
+            time.sleep(0.03)
+
     def close(self) -> None:
         try:
             self._send("Browser.close")

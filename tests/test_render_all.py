@@ -23,6 +23,7 @@ from typer.testing import CliRunner
 
 from caracole import render as render_module
 from caracole.autochords import ChordSegment, build_sheet
+from caracole.autochords.merge import youtube_credit
 from caracole.cli import build_app
 from caracole.db import kv_get_json, kv_set_json
 from caracole.lacuerda import parse_version_page
@@ -79,6 +80,10 @@ LC_PAGE = (
 # Built with chr() so no editor or tool turns them into invisible literals.
 ZWSP, BOM, NOTE = chr(0x200B), chr(0xFEFF), chr(0x266A)
 
+# The video an auto sheet's audio came from, as autochords/run.py keeps it in its version's raw (youtube.py's Video).
+VIDEO = {"id": "lzN7Thn3FV4", "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu",
+         "duration": 200.0, "url": "https://www.youtube.com/watch?v=lzN7Thn3FV4"}
+
 
 def output_of(cmd) -> Path:
     """The PDF a chordpro command line writes: its --output= option."""
@@ -129,18 +134,26 @@ def human_sheet(conn, cfg, song, content=UG_SHEET, *, tab_id=85053, tonality="Bm
     return vid
 
 
-def auto_sheet(conn, cfg, song, *, key=None):
+def auto_sheet(conn, cfg, song, *, key=None, video=None, source=None):
     """Keep an auto-chords sheet the way the autochords step does: 'sheet (auto).txt',
-    from a versions row with provider "auto", whose raw data holds the ``key`` heard, if any."""
+    from a versions row with provider "auto", whose raw data holds the ``key`` heard, if any, and the ``video`` its
+    audio came from (``VIDEO``), if any, which the sheet names after the song's name as autochords/run.py writes it
+    (``source``: that line as it is written otherwise, an older caracole's)."""
+    if video is not None and source is None:
+        source = youtube_credit(video["title"], video["channel"], video["id"])
     text = build_sheet(
         [ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G")],
         title=song.title,
         artist=song.artist,
         synced="[00:00.00]made up words to sing\n[00:04.00]only for the test\n",
+        source=source,
     )
+    raw = {"key": key} if key else {}
+    if video is not None:
+        raw["youtube"] = video
     vid = upsert_version(
         conn, provider="auto", tab_id=f"auto-{song.id}", song_id=song.id, slot="sheet",
-        kind="auto", rating=0, votes=0, version=1, label=None, url="", raw={"key": key} if key else {},
+        kind="auto", rating=0, votes=0, version=1, label=None, url=video["url"] if video else "", raw=raw,
         now=FETCHED,
     )
     keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet (auto).txt",
@@ -471,6 +484,58 @@ def test_an_auto_sheet_gets_a_viewer_of_its_own(conn, cfg):
     html = viewer_of(cfg, song, "sheet (auto).html")
     assert 'href="sheet%20%28auto%29.pdf"' in html and "unverified" in html
     assert not (song_dir(cfg.library_dir, song) / "sheet.html").exists()
+
+
+def drawn_part(html: str) -> str:
+    """A viewer's markup before its data and its scripts: what it shows as written."""
+    return html.split("<body>", 1)[1].split("<script", 1)[0]
+
+
+def test_an_auto_sheet_from_youtube_names_the_video_in_words_and_its_viewer_draws_it_from_its_data(conn, cfg):
+    # Written by an older caracole, with the video's address after its name: the .cho and the PDF name it as
+    # autochords/run.py does now, by its title and channel, and the viewer leaves that line to its data's video,
+    # which its script draws, YouTube's mark and a link (test_viewer_credit.py).
+    song = add_song(conn, "Nick Cani", "Vikingos veganos")
+    auto_sheet(conn, cfg, song, video=VIDEO,
+               source=f"Audio from YouTube: {VIDEO['title']} ({VIDEO['channel']}), {VIDEO['url']}")
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet (auto).cho").read_text(encoding="utf-8").splitlines()
+    assert cho[2:6] == ["{comment: auto-generated, unverified}",
+                        "Audio from YouTube: Somos vikingos veganos - Hyperfanes (kintanedu)", "",
+                        "[C]made up words to sing"]
+    pdf = pdf_of(cfg, song, "sheet (auto).pdf").read_bytes()
+    assert b"Audio from YouTube: Somos vikingos veganos - Hyperfanes (kintanedu)" in pdf
+    assert b"youtube.com" not in pdf
+    html = viewer_of(cfg, song, "sheet (auto).html")
+    assert viewer_data(html)["video"] == {"title": VIDEO["title"], "href": VIDEO["url"], "channel": "kintanedu",
+                                          "mark": {"name": "YouTube", "letters": "YT"}}
+    shown = drawn_part(html)
+    assert "Audio from YouTube" not in shown and "youtube.com" not in shown
+    assert '<p class="credit" id="credit" hidden></p>' in shown  # where the script draws it, under the notice
+    assert "made up words" not in shown and ">made </span>" in shown  # the song, as any auto sheet's
+
+
+def test_youtubes_own_icon_goes_into_the_viewers_data_once_caracole_keeps_it(conn, cfg):
+    from caracole.icons import icon_uri, keep_icon, sanitize
+    from helpers.icon_files import png
+
+    keep_icon(cfg.cache_dir, "youtube", sanitize(png(32)))
+    song = add_song(conn, "Nick Cani", "Vikingos veganos")
+    auto_sheet(conn, cfg, song, video=VIDEO)
+    render(conn, cfg)
+    mark = viewer_data(viewer_of(cfg, song, "sheet (auto).html"))["video"]["mark"]
+    assert mark == {"name": "YouTube", "letters": "YT", "src": icon_uri(cfg.cache_dir, "youtube")}
+    assert mark["src"].startswith("data:image/png;base64,")  # inlined: the page loads nothing
+
+
+def test_a_purchases_auto_sheet_and_a_human_sheet_give_their_viewers_no_video(conn, cfg):
+    bought = add_song(conn, "Placeholder Band", "Synthetic Song")
+    auto_sheet(conn, cfg, bought)  # the audio of a purchase linked from Music/
+    human = add_song(conn, "Soda Stereo", "De Música Ligera")
+    human_sheet(conn, cfg, human)
+    render(conn, cfg)
+    for html in (viewer_of(cfg, bought, "sheet (auto).html"), viewer_of(cfg, human)):
+        assert "video" not in viewer_data(html) and 'id="credit"' not in html
 
 
 def test_a_viewer_needs_no_cjk_font(conn, cfg, tmp_path):

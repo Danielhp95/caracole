@@ -58,7 +58,7 @@ from typing import Protocol
 
 from caracole.autochords.beats import detect_beats
 from caracole.autochords.btc import BTCRecognizer
-from caracole.autochords.merge import NO_CHORD, ChordSegment, build_sheet
+from caracole.autochords.merge import NO_CHORD, ChordSegment, build_sheet, youtube_credit
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
 from caracole.keys import estimate_key
@@ -454,11 +454,11 @@ def _synced_for(lyrics: Lyrics | None, audio: Path) -> str | None:
 
 
 def _from_youtube(video: Video | None) -> str | None:
-    """The sheet's line for audio taken from YouTube: which video it was."""
+    """The sheet's line for audio taken from YouTube: which video it was, by its title and channel
+    (``merge.youtube_credit``); the version keeps its address (``_keep``)."""
     if video is None:
         return None
-    named = f"{video.title} ({video.channel})" if video.channel else video.title or video.id
-    return f"Audio from YouTube: {named}, {video.url}"
+    return youtube_credit(video.title, video.channel, video.id)
 
 
 def _make_sheet(

@@ -1806,10 +1806,15 @@ overrides.toml, or run `caracole youtube --song "Artist - Title" --url URL`.
 
 **Then the chords.** The youtube step links the audio to the song as the scan
 links a purchase, and `caracole autochords` (its unit, after each nightly run)
-makes `sheet (auto).txt` from it. Its third line says where the audio came from,
-`Audio from YouTube: Creep (Radiohead - Topic), https://www.youtube.com/watch?v=…`,
-and so does the PDF's first line; info.json gives the video's address as the
-auto sheet's source. The to-do page and index.html say where each song stands.
+makes `sheet (auto).txt` from it. Its third line names the video the audio came
+from by its title and channel, `Audio from YouTube: Creep (Radiohead - Topic)`,
+and so does `sheet (auto).cho`; the PDF prints it where the song starts with
+words, and leaves it out with the notes before a first section. Its viewer shows
+YouTube's icon, the video's title as a link to it, and its channel instead (see
+[The sheet viewer](#the-sheet-viewer)); info.json gives the video's address as
+the auto sheet's source. A sheet made before named the address too: its .cho and
+PDF name the video as above at the next render. The to-do page and index.html
+say where each song stands.
 
 **A sheet from a video, now.** For a song you know the video of, caracole makes the sheet at
 once, rather than a night apart: on the library page caracole serve serves, or with
@@ -2482,6 +2487,13 @@ anywhere else. It links back to `index.html` and to the PDF beside it.
   where you were. It reads as the line it was, muted,
   underlined under the pointer or the keyboard's focus; on a phone it is a
   thumb's target. A kept version's page and a songbook's songs have it too.
+
+- **An auto sheet's video**: under "Auto-generated, unverified", an auto sheet
+  made from a YouTube video's audio shows YouTube's icon (its "YT" badge until
+  caracole has fetched the icon), the video's title, a link to the video, and
+  its channel under it, muted. The link opens YouTube in the same tab, from the
+  folder and from the server's sandbox alike (which opens no other window), and
+  Back returns to the sheet. A sheet from a purchase shows none.
 
 - **Chords over the lyrics**, in bold rust. A long line wraps between words,
   never between a chord and its syllable, and a chord reaches over the words

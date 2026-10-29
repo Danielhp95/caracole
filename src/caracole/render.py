@@ -51,7 +51,14 @@ caracole/viewer) beside it:
   human sheet never collides with them. The fetch steps keep the auto sheet
   until a complete human sheet arrives, so beside a partial human sheet it is
   rendered too. Once they retire it, its outputs are removed as soon as the
-  human sheet's PDF is in place.
+  human sheet's PDF is in place. The line after its song's name, where its audio came
+  from (``merge.build_sheet``'s ``source``), is its ``credit``: the .cho writes it first,
+  in words, and the PDF prints it as it prints that line (pdf_text.py: not with the notes
+  before a first section). Made from a YouTube video's audio (the version's ``raw`` names
+  the video), the credit is the video by its title and channel (``merge.youtube_credit``,
+  in place of an older sheet's line, which gave the video's address too), and its viewer,
+  made from the .cho without that line, draws the video from its data instead
+  (``_video_data``: YouTube's mark, the title a link to the video, the channel).
 
 The viewer is made from the .cho, needs no font, and is written at every pass
 when it has changed (a new key, a PDF now there to link), and when the PDF
@@ -160,10 +167,11 @@ from typing import Any, Literal
 from urllib.parse import parse_qsl, quote, unquote
 
 from caracole import progressions
-from caracole.autochords.merge import AUTO_MARKER
+from caracole.autochords.merge import AUTO_MARKER, youtube_credit
 from caracole.chordpro import to_chordpro
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
+from caracole.icons import YOUTUBE, page_icon
 from caracole.inbox import HARMONICA_PAGE, HarmonicaFile, guitar_files, harmonica_files
 from caracole.library import (
     KeptFile,
@@ -218,6 +226,7 @@ from caracole.viewer.version import (
     version_label,
     version_query,
 )
+from caracole.youtube_urls import VIDEO_ID, watch_url
 
 log = logging.getLogger(__name__)
 
@@ -720,13 +729,16 @@ def _render_song(
             # Beside the human sheet, the version's shapes and swaps were chosen on that sheet, and an export is
             # that sheet's (export_viewer): its viewer offers none
             played = replace(played, at={}, alt={})
+        # An auto sheet from YouTube: its viewer draws the video (its data's) in place of the credit's line
+        video = _video_data(cfg.cache_dir, sheet.video) if sheet.video is not None else None
         own, twin = _render_sheet(conn, cfg, song, folder, kept, text, state_key, played,
                                   start=export_query(played) if song.key in overrides.version else None,
                                   cjk_font=cjk_font, fonts=fonts, runner=runner, force=force, key=mine,
                                   export=not beside,
                                   primary=not sheet.auto or human is None, versions=listed, guitar=guitar,
                                   harmonica=tuple({**h, "harp": harps[h["name"]]} if h["name"] in harps else h
-                                                  for h in harmonica))
+                                                  for h in harmonica),
+                                  video=video, viewer_text=_sheet_cho(song, sheet, credit=False) if video else None)
         done.extend([twin, own] if twin is not None else [own])  # the sheet's own last: done[-1] below
         if done[-1].outcome == "rendered":
             _say_if_keyless(overrides, song, text, mine[0], Path(kept.name).stem + ".pdf")
@@ -747,7 +759,7 @@ def _render_song(
                 progressions.forget(conn, song.id)
         if auto is not None:
             beside = human is not None
-            render(auto, _auto_sheet(cfg.library_dir, auto), _state_key(song.id, auto=beside), beside=beside,
+            render(auto, _auto_sheet(conn, cfg.library_dir, auto), _state_key(song.id, auto=beside), beside=beside,
                    listed=None if beside else _on_page(listed, None))
         if human is not None or auto is not None:
             _remake_exports(conn, cfg, overrides, song, cjk_font=cjk_font, fonts=fonts, runner=runner, force=force)
@@ -1236,7 +1248,7 @@ def _export_source(conn: sqlite3.Connection, cfg: Config, song: Song):
     if (kept := files.get(HUMAN_SHEET)) is not None:
         sheet = _human_sheet(conn, cfg.library_dir, kept)
     elif (kept := files.get(AUTO_SHEET)) is not None:
-        sheet = _auto_sheet(cfg.library_dir, kept)
+        sheet = _auto_sheet(conn, cfg.library_dir, kept)
     else:
         raise RenderError(f"{song.display} keeps no sheet to export")
     found = sheet_keys(conn, cfg.library_dir, song)[1 if sheet.auto else 0]
@@ -1249,9 +1261,11 @@ def _key_of(found: SongKey | None) -> tuple[str | None, str | None]:
     return (found.key, found.source) if found is not None else (None, None)
 
 
-def _sheet_cho(song: Song, sheet: _Sheet) -> str:
-    """The ChordPro text of one of the song's sheets, as ``sheet.cho`` (or ``sheet (auto).cho``) is written."""
-    return _chordpro_text(sheet.markup, title=clean_title(song.title), artist=song.artist,
+def _sheet_cho(song: Song, sheet: _Sheet, *, credit: bool = True) -> str:
+    """The ChordPro text of one of the song's sheets, as ``sheet.cho`` (or ``sheet (auto).cho``) is written: an auto
+    sheet's credit its first line; without ``credit``, none (its viewer's, which draws its video instead)."""
+    markup = f"{sheet.credit}\n{sheet.markup}" if credit and sheet.credit else sheet.markup
+    return _chordpro_text(markup, title=clean_title(song.title), artist=song.artist,
                           key=sheet.key, capo=sheet.capo, auto=sheet.auto)
 
 
@@ -1459,6 +1473,8 @@ def _render_sheet(
     versions: dict[str, Any] | None = None,
     guitar: tuple[str, ...] = (),
     harmonica: tuple[Mapping[str, Any], ...] = (),
+    video: Mapping[str, Any] | None = None,
+    viewer_text: str | None = None,
 ) -> tuple[_Done, _Done | None]:
     """Write one sheet's .cho, ``text`` (``_sheet_cho``), render its PDF in ``version`` unless kv ``state_key``
     says it is up to date, and, for a sheet whose words are Chinese, its PDF in Traditional characters beside it
@@ -1469,7 +1485,9 @@ def _render_sheet(
     ``export``, whether the viewer offers an export (``export_viewer``); ``primary``, whether this is the
     song's sheet the library finds it by (its human one, else its auto one: ``_note_progressions``);
     ``versions``, the song's versions as this viewer lists them (``_on_page``), or None; ``guitar``, the names of the
-    song's Guitar Pro files its viewer links; ``harmonica``, its harmonica tabs, which its viewer names.
+    song's Guitar Pro files its viewer links; ``harmonica``, its harmonica tabs, which its viewer names; ``video``, the
+    YouTube video an auto sheet's audio came from (``_video_data``), which its viewer draws, made from ``viewer_text``
+    (the .cho without the credit's line that names it) in place of ``text``.
 
     The PDF, the viewer and the record of the .cho are made from the text written, never read
     back: a synced device may write there a moment later."""
@@ -1485,8 +1503,9 @@ def _render_sheet(
 
     def viewer() -> bool:
         page = folder / f"{stem}.html"
-        data = _write_viewer(song, text, page, pdf, key=key, transpose=version.t, start=start, export=export,
-                             versions=versions, guitar=guitar, harmonica=harmonica, twin=twin)
+        data = _write_viewer(song, viewer_text or text, page, pdf, key=key, transpose=version.t, start=start,
+                             export=export, versions=versions, guitar=guitar, harmonica=harmonica, twin=twin,
+                             video=video)
         if data is not None:
             _note_written(conn, song.id, page.name, data)
         return data is not None
@@ -1654,14 +1673,16 @@ def _printed(text: str, *, key: str | None, capo: int | None, key_source: str | 
 def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: tuple[str | None, str | None],
                   transpose: int, start: str | None, export: bool = True,
                   versions: dict[str, Any] | None = None, guitar: tuple[str, ...] = (),
-                  harmonica: tuple[Mapping[str, Any], ...] = (), twin: Path | None = None) -> bytes | None:
+                  harmonica: tuple[Mapping[str, Any], ...] = (), twin: Path | None = None,
+                  video: Mapping[str, Any] | None = None) -> bytes | None:
     """Write the sheet's viewer (``viewer.build_viewer``) beside its PDF, linking the PDF when
     there is one (a version page has none: ``pdf`` None), and return the page's bytes. It starts where the
     PDF is: at ``transpose``, in the song's own version (``start``) when it has one, and takes the sheet's
     key (``keys.sheet_keys``) when it has one; with ``export``, it offers Export PDF of this version;
     ``versions`` lists the song's versions, and ``guitar`` its Guitar Pro files caracole serve shows in the
     browser (``inbox.guitar_files``), and ``harmonica`` its harmonica tabs (``inbox.harmonica_files``); ``twin``, the
-    sheet's PDF in Traditional characters, which the PDF's link opens while the viewer shows them, when it is there.
+    sheet's PDF in Traditional characters, which the PDF's link opens while the viewer shows them, when it is there;
+    ``video``, the YouTube video an auto sheet's audio came from, which it draws under its notice.
     A viewer that hasn't changed isn't written again.
 
     The viewer is an extra: None, logged as "no viewer for", when it can't be built (a bug,
@@ -1673,7 +1694,7 @@ def _write_viewer(song: Song, text: str, page: Path, pdf: Path | None, *, key: t
     try:
         html = build_viewer(text, key=key[0], key_source=key[1], transpose=transpose, start=start, pdf=linked,
                             export=export, versions=versions, guitar=guitar, harmonica=harmonica,
-                            pdf_traditional=traditional)
+                            pdf_traditional=traditional, video=video)
     except Exception:  # a sheet the viewer can't read must never cost the PDFs
         log.warning("no viewer for %s: cannot build %s", song.display, page.name, exc_info=True)
         return None
@@ -1784,13 +1805,29 @@ def _state_key(song_id: int, *, auto: bool = False, traditional: bool = False) -
 
 
 @dataclass(frozen=True)
+class _Video:
+    """The YouTube video an auto sheet's audio came from, as autochords/run.py keeps it in the version's ``raw``."""
+
+    id: str
+    title: str
+    channel: str
+
+    @property
+    def url(self) -> str:
+        return watch_url(self.id)
+
+
+@dataclass(frozen=True)
 class _Sheet:
-    """What a song's ChordPro file is made from."""
+    """What a song's ChordPro file is made from: an auto sheet's ``credit`` too, the line on where its audio came
+    from, and the ``video`` it came from, if any (``_auto_sheet``)."""
 
     markup: str
     key: str | None = None
     capo: int | None = None
     auto: bool = False
+    credit: str | None = None
+    video: _Video | None = None
 
 
 def _read_text(path: Path) -> str:
@@ -1837,12 +1874,42 @@ def _capo(meta: Any) -> int | None:
     return sheet_capo(meta)
 
 
-def _auto_sheet(library_dir: Path, kept: KeptFile) -> _Sheet:
-    """An auto-chords sheet without its two header lines, which to_chordpro writes as directives."""
+def _auto_sheet(conn: sqlite3.Connection, library_dir: Path, kept: KeptFile) -> _Sheet:
+    """An auto-chords sheet without its two header lines, which to_chordpro writes as directives, nor the line after
+    them that says where its audio came from, if any (``merge.build_sheet``'s ``source``), which is its ``credit``
+    (``_sheet_cho`` writes it first). Its ``video``, the YouTube video its version names (autochords/run.py), makes
+    the credit as autochords writes one now (``merge.youtube_credit``): an older sheet's gave the video's address."""
     lines = _read_text(library_dir / kept.path).splitlines()
+    credit = None
     if lines and lines[0].strip() == AUTO_MARKER:
         lines = lines[2:]  # the marker, then "Artist - Title"
-    return _Sheet("\n".join(lines), auto=True)
+        if lines and lines[0].strip():  # then where the audio came from, when it said
+            credit, lines = lines[0].strip(), lines[1:]
+    video = _video_of(get_version(conn, kept.version_id).raw)
+    if video is not None and credit is not None:
+        credit = youtube_credit(video.title, video.channel, video.id)
+    return _Sheet("\n".join(lines), auto=True, credit=credit, video=video)
+
+
+def _video_of(raw: Mapping[str, Any]) -> _Video | None:
+    """The YouTube video an auto sheet's version names (``raw``'s ``youtube``: youtube.py's ``Video.as_json``), by
+    its id; None for none, or one with no id YouTube could give."""
+    found = raw.get("youtube")
+    if not isinstance(found, Mapping) or not isinstance(found.get("id"), str) or not VIDEO_ID.fullmatch(found["id"]):
+        return None
+    return _Video(found["id"], _one_line(found.get("title")), _one_line(found.get("channel")))
+
+
+def _one_line(value: Any) -> str:
+    return " ".join(value.split()) if isinstance(value, str) else ""
+
+
+def _video_data(cache_dir: Path, video: _Video) -> dict[str, Any]:
+    """The video an auto sheet's audio came from, as its viewer's data gives it (viewer/page.py's ``video``): its
+    title (its id, for one with none), its address, its channel, and YouTube's mark as the library page draws it
+    (``icons.page_icon``: its icon, once caracole keeps it, else its letters)."""
+    return {"title": video.title or video.id, "href": video.url, "channel": video.channel,
+            "mark": page_icon(cache_dir, YOUTUBE)}
 
 
 # --- the PDF ---------------------------------------------------------------------------

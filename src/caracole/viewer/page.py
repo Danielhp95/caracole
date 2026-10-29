@@ -5,7 +5,8 @@ no server: it loads nothing (a Content-Security-Policy with the hashes of its fi
 scripts, strum.js, overlay.js, instruments.js, winds.js and viewer.js, and its stylesheet makes the browser enforce
 that)
 and links only to the PDF beside it and to the library's index.html two folders up: its ‹ Library, and the
-artist's name under the title, to the library page on their songs (``artist_line``).
+artist's name under the title, to the library page on their songs (``artist_line``); and out, in the same tab, to
+chords-db's credit and, on an auto sheet from YouTube, to the video its audio came from (``_CREDIT``).
 A server may serve it too, only while it is the page caracole wrote, with
 ``viewer_csp(page)`` as its header.
 
@@ -72,6 +73,12 @@ written ``\\u003c``:
   harptabs.com), each ``{"name": "harmonica-1.txt", "href": "harmonica-1.txt", "page": "harmonica-1.html"}`` (its
   text, and its page beside it: harptab_page.py), with the ``key`` its page's Key chip named ("C": the song's on
   some tabs, the harp's on others), if any, for the harmonica's panel; a song with none has none;
+- ``video``: the YouTube video an auto sheet's audio came from (render.py ``_video_data``), ``{"title", "href",
+  "channel", "mark"}``, its ``mark`` YouTube's as the library page draws it (icons.py ``page_icon``: ``name``,
+  ``letters``, and its icon, ``src``, a ``data:`` URI, once caracole keeps it), which the script draws under the notice
+  (``#credit``) in place of the sheet's line that names it, which render.py leaves out of the page's ChordPro text: the
+  mark, the title a link to the video (a YouTube watch address alone; any other, no link), the channel; a sheet from
+  a purchase, or a human one, has none;
 - ``pinyin``, for a sheet whose song holds Chinese: each line of its sections as the page draws it (``#sheet
   section.sec > p.l``, in order: ``_drawn_lines``), the reading of each of its characters (pinyin.py: "" for a
   letter, a space or punctuation), or null for a line with none, for the settings' Pinyin row, which the script
@@ -265,6 +272,7 @@ def build_viewer(
     guitar: tuple[str, ...] | list[str] = (),
     harmonica: tuple[Mapping[str, Any], ...] | list[Mapping[str, Any]] = (),
     pdf_traditional: str | None = None,
+    video: Mapping[str, Any] | None = None,
 ) -> str:
     """The page for a ChordPro sheet (as caracole writes it).
 
@@ -283,12 +291,16 @@ def build_viewer(
     ``harmonica``, the song's harmonica tabs beside the page (render.py, ``inbox.harmonica_files``: ``{"name",
     "href", "page"}`` and the ``key`` its page named, if any), goes in its data as ``harmonicaTabs``; without any,
     the data has none. A tab's ``harp``, the pitch class of the harp it plays on (render.py, harpfit.py), is the
-    data's ``harpTabs`` instead, by the sheet's key.
+    data's ``harpTabs`` instead, by the sheet's key. ``video``, the YouTube video an auto sheet's audio came from
+    (render.py ``_video_data``: ``{"title", "href", "channel", "mark"}``), goes in its data as ``video``, and the page
+    gets a place for it under its notice, ``#credit``, which the script fills; without it, neither.
     """
     sheet, song_key, origin, data = _read_song(cho, key, key_source, transpose)
     data["start"] = start
     if versions is not None:
         data["versions"] = versions
+    if video is not None:
+        data["video"] = dict(video)
     if harmonica:
         data["harmonicaTabs"] = [{k: v for k, v in tab.items() if k != "harp"} for tab in harmonica]
         harps = [tab["harp"] for tab in harmonica if isinstance(tab.get("harp"), int)]
@@ -306,7 +318,7 @@ def build_viewer(
     return _page(
         page_title,
         _body(sheet, title, song_key, origin, pdf, export=export, guitar=bool(guitar), names=names,
-              pdf_traditional=pdf_traditional)
+              pdf_traditional=pdf_traditional, credit=video is not None)
         + json_block("song", data) + (json_block("song-names", names) if names else ""),
         styles=(style,),
         scripts=(_sound(), _overlay(), _instruments(), _winds(), script),
@@ -653,7 +665,7 @@ def key_line_text(key: Key | None, capo: int | None) -> str:
 
 def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: str | None, *,
           export: bool = True, guitar: bool = False, names: Mapping[str, Mapping[str, str]] | None = None,
-          pdf_traditional: str | None = None) -> str:
+          pdf_traditional: str | None = None, credit: bool = False) -> str:
     pdf_link = pdf_line([(pdf, "PDF", pdf_traditional)]) if pdf else ""
     return (
         '<div class="page">\n<header class="head">\n'
@@ -663,7 +675,7 @@ def _body(sheet: Sheet, title: str, key: Key | None, origin: str | None, pdf: st
         + f'<p class="facts" id="facts">{_facts(key, origin, sheet.capo or 0)}</p>\n'
         + _VERSIONS
         + "</header>\n"
-        + _song_html(sheet)
+        + _song_html(sheet, credit=credit)
         + _footer(pdf_link)
         + "</div>\n"
         + _with_guitar(_SHEET_CONTROLS if export else _CONTROLS, guitar)
@@ -695,14 +707,16 @@ def artist_line(artist: str, names: Mapping[str, Mapping[str, str]] | None = Non
             f"<span{zh_attr(artist, names)}>{escape(artist)}</span></a></p>\n")
 
 
-def _song_html(sheet: Sheet, suffix: str = "", named: str = "") -> str:
-    """What follows a song's header, on sheet.html and in a songbook alike: an auto sheet's notice, the
-    rail of necks (a wide screen's: a neck per chord) and the strip of chord shapes the script fills in,
-    and the sheet, marked Chinese when its words or names are (``named``: what a songbook calls the
-    song). ``suffix`` tells a songbook's songs apart ("-3")."""
+def _song_html(sheet: Sheet, suffix: str = "", named: str = "", *, credit: bool = False) -> str:
+    """What follows a song's header, on sheet.html and in a songbook alike: an auto sheet's notice, with
+    ``credit`` the place under it for the video its audio came from (``_CREDIT``), the rail of necks (a wide
+    screen's: a neck per chord) and the strip of chord shapes the script fills in, and the sheet, marked
+    Chinese when its words or names are (``named``: what a songbook calls the song). ``suffix`` tells a
+    songbook's songs apart ("-3")."""
     lang = ' lang="zh"' if has_han(named + sheet.title + "".join(_texts(sheet))) else ""
     return (
         (_NOTICE if sheet.auto else "")
+        + (_CREDIT if credit else "")
         + f'<aside class="necks" id="necks{suffix}" hidden aria-label="Chord necks"></aside>\n'
         + f'<div class="strip" id="strip{suffix}" hidden></div>\n'
         + f'<article class="sheet" id="sheet{suffix}"{lang}>\n{_sheet_html(sheet)}</article>\n'
@@ -710,6 +724,10 @@ def _song_html(sheet: Sheet, suffix: str = "", named: str = "") -> str:
 
 
 _NOTICE = '<p class="notice">Auto-generated, unverified: caracole heard these chords in the recording.</p>\n'
+# Under it, the YouTube video the recording came from (the data's ``video``), drawn by the script: YouTube's mark,
+# the video's title a plain link to it, which a sandbox, a file and the app follow in the same tab as the page's other
+# links (a new window is a popup, which the sandbox refuses: ``viewer_csp``), and its channel.
+_CREDIT = '<p class="credit" id="credit" hidden></p>\n'
 
 
 def _footer(links: str) -> str:

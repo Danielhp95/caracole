@@ -193,11 +193,16 @@ def test_a_song_new_to_the_library_gets_its_sheet_from_the_video(setup, conn, fa
     text = auto_sheet(setup, conn, song)
     lines = text.splitlines()
     assert lines[:3] == ["auto-generated, unverified", "Nick Cani - Vikingos veganos",
-                         f"Audio from YouTube: Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}"]
+                         "Audio from YouTube: Vikingos veganos (HyperFanes)"]
     i = lines.index("Somos vikingos de prueba")
     assert lines[i - 1].startswith("[ch]D[/ch]")  # chords over the words, as a UG sheet has them
     folder = song_dir(setup.library_dir, song)
     assert (folder / "sheet (auto).html").is_file() and (folder / "sheet (auto).pdf").is_file()
+    # Its viewer draws the video from its data, a link, in place of that line (test_viewer_credit.py).
+    page = (folder / "sheet (auto).html").read_text(encoding="utf-8")
+    video = json.loads(page.split('<script type="application/json" id="song">', 1)[1].split("</script>", 1)[0])["video"]
+    assert (video["title"], video["href"], video["channel"]) == (
+        "Vikingos veganos", f"https://www.youtube.com/watch?v={VIKINGOS}", "HyperFanes")
     files = [e[1] for e in heard.events if e[0] == "files"]
     assert files[-1]["viewer"] == "Nick Cani/Vikingos veganos/sheet (auto).html"
     assert ("song", song.id, "Nick Cani - Vikingos veganos") in heard.events
@@ -377,7 +382,7 @@ def test_another_video_replaces_the_audio_and_the_sheet(setup, conn, fake, sites
     result, heard = make(setup, url=f"https://youtu.be/{other}")
     assert result.ok and heard.ends()["chords"][0] == "done"
     text = auto_sheet(setup, conn, find_song(conn, result_key(conn)))
-    assert f"https://www.youtube.com/watch?v={other}" in text
+    assert "Audio from YouTube: Vikingos veganos (en directo) (Nick Cani)" in text
     assert [p.name for p in (setup.cache_dir / "youtube").iterdir()] == [f"1-{other}.wav"]
 
 

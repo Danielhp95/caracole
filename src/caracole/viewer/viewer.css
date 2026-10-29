@@ -121,6 +121,20 @@ a { color: inherit; }
 .vnow[aria-expanded="true"] { background: var(--raised); }
 .notice { margin: 12px 0 0; padding: 8px 12px; border-radius: 10px; background: var(--raised); color: var(--muted);
   font-size: .85rem; }
+/* Under it, the YouTube video the recording came from (page.py _CREDIT, drawn by viewer.js), as a video's card
+   names it: YouTube's mark, beside the video's title, a link in the text's colour, and its channel under the title,
+   muted. A long title wraps rather than widen the page; the link is a thumb's target, 44 px tall, that moves nothing
+   (its padding and margins cancel out), as the artist's is. */
+.credit { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 8px;
+  margin: 10px 0 0; padding: 0 12px; color: var(--muted); font-size: .85rem; line-height: 1.35; }
+.credit[hidden] { display: none; }
+.credit .source { grid-row: 1; width: 16px; height: 16px; border-radius: 4px; }
+.credit .source.letters { display: inline-grid; place-items: center; width: 20px; height: 20px;
+  border: 1px solid var(--border); border-radius: 5px; background: var(--raised); color: var(--text); font-size: 10px;
+  font-weight: 750; letter-spacing: -.02em; line-height: 1; }
+.credit a { grid-column: 2; justify-self: start; padding: calc((44px - 1lh) / 2) 0; margin: calc((1lh - 44px) / 2) 0;
+  color: var(--text); font-weight: 600; overflow-wrap: anywhere; text-underline-offset: 2px; }
+.credit .channel { grid-column: 2; font-size: .8rem; overflow-wrap: anywhere; }
 
 /* The sheet: each chord over the syllable it falls on. A chord and its first word make one
    column (.s); every other word is a column of its own (.w), so a narrow screen wraps a line

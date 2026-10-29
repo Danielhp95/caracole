@@ -403,6 +403,45 @@
     row.hidden = false;
   })();
 
+  // The YouTube video an auto sheet's audio came from (``video``, render.py), under the notice: YouTube's mark (its
+  // icon, a data: URI, else its letters, as the library page draws a source: rows.js sourceMark), named "from YouTube"
+  // for a screen reader; the video's title, a plain link to it, in this tab, as the page's other links (the sandbox
+  // caracole serve gives the page opens no other window); its channel, muted. A watch address alone is a link.
+  (() => {
+    const box = $("credit");
+    const video = data.video && typeof data.video === "object" ? data.video : null;
+    const WATCH = /^https:\/\/www\.youtube\.com\/watch\?v=[A-Za-z0-9_-]{11}$/;
+    if (!box || !video || typeof video.href !== "string" || !WATCH.test(video.href)) return;
+    const info = video.mark && typeof video.mark === "object" ? video.mark : {};
+    const named = "from " + String(info.name || "YouTube");
+    let mark;
+    if (typeof info.src === "string" && /^data:image\/png;base64,[A-Za-z0-9+/]+={0,2}$/.test(info.src)) {
+      mark = document.createElement("img");
+      mark.className = "source";
+      mark.setAttribute("src", info.src);
+      mark.setAttribute("alt", named);
+      mark.setAttribute("width", "16");
+      mark.setAttribute("height", "16");
+    } else {
+      mark = document.createElement("span");
+      mark.className = "source letters";
+      mark.textContent = String(info.letters || "YT");
+      mark.setAttribute("role", "img");
+      mark.setAttribute("aria-label", named);
+    }
+    mark.title = named;
+    box.appendChild(mark);
+    const a = box.appendChild(document.createElement("a"));
+    a.setAttribute("href", video.href);
+    a.textContent = String(video.title || "the video");
+    if (typeof video.channel === "string" && video.channel) {
+      const channel = box.appendChild(document.createElement("span"));
+      channel.className = "channel";
+      channel.textContent = video.channel;
+    }
+    box.hidden = false;
+  })();
+
   // --- naming chords -------------------------------------------------------------------------
   const modeNow = () => (key ? state.mode || key.mode : "");
   const asWritten = () => !state.mode || (key && state.mode === key.mode);

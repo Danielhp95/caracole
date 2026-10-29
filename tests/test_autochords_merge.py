@@ -1,6 +1,6 @@
 """The pure half of auto-chords: snapping, LRC parsing and sheet layout."""
 
-from caracole.autochords.merge import ChordSegment, build_sheet, parse_lrc, snap_to_beats
+from caracole.autochords.merge import ChordSegment, build_sheet, parse_lrc, snap_to_beats, youtube_credit
 
 # 120 BPM: a beat every 0.5 s, so a 4/4 bar lasts 2 s.
 BEATS = [i * 0.5 for i in range(121)]
@@ -419,3 +419,16 @@ def test_no_lyrics_gives_the_chart_only():
     assert sheet == (
         "auto-generated, unverified\nNobody - River Road\n\n[Chords]\n| [ch]G[/ch] | [ch]D[/ch] |\n"
     )
+
+
+def test_audio_from_youtube_is_credited_after_the_songs_name_by_its_title_and_channel_never_its_address():
+    # info.json names the address, and the viewer links the title (render.py gives it the video).
+    credit = youtube_credit("Somos vikingos veganos - Hyperfanes", "kintanedu", "lzN7Thn3FV4")
+    assert credit == "Audio from YouTube: Somos vikingos veganos - Hyperfanes (kintanedu)"
+    sheet = build_sheet([seg(0.0, 2.0, "G")], title="Vikingos veganos", artist="Nick Cani", beats=BEATS[:5],
+                        source=credit)
+    assert sheet.splitlines()[:4] == ["auto-generated, unverified", "Nick Cani - Vikingos veganos", credit, ""]
+    assert youtube_credit("Creep", "", "XFkzRNyygfk") == "Audio from YouTube: Creep"
+    assert youtube_credit("", "Radiohead - Topic", "XFkzRNyygfk") == "Audio from YouTube: XFkzRNyygfk (Radiohead - Topic)"
+    assert youtube_credit("Two\nlines  here", " Some  channel ", "XFkzRNyygfk") == (
+        "Audio from YouTube: Two lines here (Some channel)")  # one line, as the sheet's

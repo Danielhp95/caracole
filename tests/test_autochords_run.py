@@ -232,16 +232,18 @@ def test_an_auto_sheet_from_youtube_audio_says_which_video_it_came_from(conn, cf
     kv_set_json(conn, f"youtube:{s.id}", {"video": video, "source": "search", "audio": s.audio_path})
     run(conn, cfg)
     text = auto_sheet(cfg, conn, s)
-    assert text.startswith("auto-generated, unverified\nRadiohead - Creep\n"
-                           "Audio from YouTube: Creep (Radiohead - Topic), https://www.youtube.com/watch?v=XFkzRNyygfk\n\n")
+    # By its title and channel; its address is info.json's, and the viewer's link (render.py).
+    assert text.startswith("auto-generated, unverified\nRadiohead - Creep\nAudio from YouTube: Creep (Radiohead - Topic)\n\n")
     [kept] = kept_files(conn, s.id)
     v = get_version(conn, kept.version_id)
     assert v.url == video["url"]  # info.json then names the video, not a file of caracole's
     assert v.raw["youtube"] == video and v.raw["audio"] == s.audio_path
     info = json.loads((song_dir(cfg.library_dir, s) / "info.json").read_text(encoding="utf-8"))
     assert info["files"][0]["url"] == video["url"]
-    # The PDF, made from the sheet without its two header lines, says it as its first line.
-    assert _auto_sheet(cfg.library_dir, kept).markup.startswith("Audio from YouTube: Creep (Radiohead - Topic)")
+    # render.py reads that line as the sheet's credit, apart from its song, and the video from the version.
+    sheet = _auto_sheet(conn, cfg.library_dir, kept)
+    assert sheet.credit == "Audio from YouTube: Creep (Radiohead - Topic)" and "YouTube" not in sheet.markup
+    assert sheet.video is not None and sheet.video.url == video["url"]
 
 
 def test_a_purchase_that_took_the_youtube_audios_place_is_a_purchase_again(conn, cfg, tmp_path):
