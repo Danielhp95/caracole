@@ -9,8 +9,9 @@ was given, and its process id.
 
 - A search (``ytsearchN:<query>``) prints the playlist JSON yt-dlp's ``--flat-playlist
   --dump-single-json`` prints: the entries the plan lists for the query, at most N.
-- A download (a watch URL) writes the video's bytes where ``-o`` says, the extension
-  filled in, and prints the fields of its ``--print after_move:`` template as JSON.
+- A download (a watch URL) writes the video's bytes where ``-o`` says (``data``, or the bytes of
+  the file ``copy`` names: real audio, for a length to read), the extension filled in, and prints
+  the fields of its ``--print after_move:`` template as JSON.
 - Either can instead fail as yt-dlp does (``ERROR: ...`` on stderr, exit 1), or hang a while
   (``sleep``): a run that sleeps it out says so (``woke``), one stopped first never does.
 """
@@ -64,7 +65,7 @@ if spec is None:
 answer(spec)
 template = argv[argv.index("-o") + 1]
 path = Path(template.replace("%(ext)s", spec.get("ext", "m4a")))
-path.write_bytes(spec.get("data", "fake audio").encode("utf-8"))
+path.write_bytes(Path(spec["copy"]).read_bytes() if spec.get("copy") else spec.get("data", "fake audio").encode("utf-8"))
 info = {k: spec[k] for k in ("id", "title", "channel", "uploader", "duration") if k in spec}
 info["filepath"] = spec.get("print_path", str(path))
 print(json.dumps(info))

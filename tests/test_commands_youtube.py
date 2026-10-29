@@ -68,7 +68,8 @@ def fake(tmp_path):
     return FakeYtDlp(tmp_path / "bin")
 
 
-def write_config(tmp_path: Path, fake: FakeYtDlp, *, enabled=True, budget=None, models=True, ntfy=False) -> Path:
+def write_config(tmp_path: Path, fake: FakeYtDlp, *, enabled=True, budget=None, models=True, ntfy=False,
+                 chordpro: Path | None = None) -> Path:
     model_dir = tmp_path / "models"
     model_dir.mkdir(exist_ok=True)
     for name in ("btc.pt", "beat.ckpt"):
@@ -79,6 +80,7 @@ def write_config(tmp_path: Path, fake: FakeYtDlp, *, enabled=True, budget=None, 
         f'state_dir = "{tmp_path / "state"}"',
         f'cache_dir = "{tmp_path / "cache"}"',
         f'ytdlp_bin = "{fake.bin}"',
+        *([f'chordpro_bin = "{chordpro}"'] if chordpro else []),
         "[providers.youtube]",
         "delay = [0, 0]",
         f"enabled = {'true' if enabled else 'false'}",
@@ -297,7 +299,10 @@ def test_none_is_written_for_a_song_not_in_the_library_yet(tmp_path, ntfy, fake,
 
 
 @pytest.mark.parametrize("args,said", [
-    (("--url", "https://youtu.be/XFkzRNyygfk"), "--url and --none need --song"),
+    (("--url", "https://youtu.be/XFkzRNyygfk"), "--url, --none and --sheet need --song"),
+    (("--sheet",), "--url, --none and --sheet need --song"),
+    (("--song", "Radiohead - Creep", "--sheet", "--none"), "either --sheet or --none"),
+    (("--song", "Radiohead - Creep", "--progress"), "--progress goes with --sheet"),
     (("--song", "Radiohead - Creep", "--url", "https://vimeo.com/1"), "YouTube video's address"),
     (("--song", "Radiohead - Creep", "--url", "https://youtu.be/XFkzRNyygfk", "--none"), "either --url or --none"),
 ])
@@ -445,3 +450,114 @@ def test_the_song_is_found_by_any_spelling(tmp_path, ntfy, fake, conn):
     result = invoke(write_config(tmp_path, fake), "--song", "宋冬野 - 斑马斑马")
     assert result.exit_code == 0, result.output
     assert db.kv_get(conn, f"youtube:{song.id}") is not None
+
+
+# --- --sheet: a song's auto sheet now (youtube_sheet.py) -------------------------------------------------
+
+VIKINGOS = "lzN7Thn3FV4"
+FAKE_CHORDPRO = """\
+#!{python}
+import sys
+
+out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--output="))
+with open(out, "w", encoding="utf-8") as f:
+    f.write("%PDF-1.4 fake")
+"""
+
+
+@pytest.fixture
+def sheet_sites(monkeypatch, ntfy, tmp_path):
+    """LRCLIB (with no lyrics for anything) beside ntfy, auto-chords' models as fakes, a fake chordpro, and ten
+    seconds of audio for the fake yt-dlp to give."""
+    import wave
+
+    import caracole.autochords.run as ac_run
+    from caracole.autochords import ChordSegment
+
+    asked = []
+
+    def lrclib(request):
+        asked.append(request)
+        if request.url.path.endswith("/get"):
+            return httpx.Response(404, json={"name": "TrackNotFound"})
+        return httpx.Response(200, json=[])
+
+    def transport(provider):
+        if provider == "lrclib":
+            return httpx.MockTransport(lrclib)
+        if provider == "ntfy":
+            return httpx.MockTransport(ntfy.handler)
+        pytest.fail(f"a client for {provider} was made")
+
+    class Recognizer:
+        def __init__(self, weights, *, device="cpu"):
+            pass
+
+        def recognize(self, path):
+            return [ChordSegment(0.0, 5.0, "D"), ChordSegment(5.0, 10.0, "A")]
+
+    monkeypatch.setattr(_common, "transport_for", transport)
+    monkeypatch.setattr(ac_run, "BTCRecognizer", Recognizer)
+    monkeypatch.setattr(ac_run, "detect_beats",
+                        lambda path, checkpoint, device="cpu": ([0.5 * i for i in range(21)], [2.0 * i for i in range(6)]))
+    chordpro = tmp_path / "bin" / "chordpro"
+    chordpro.parent.mkdir(parents=True, exist_ok=True)
+    chordpro.write_text(FAKE_CHORDPRO.format(python=sys.executable), encoding="utf-8")
+    chordpro.chmod(0o755)
+    audio = tmp_path / "audio" / "vikingos.wav"
+    audio.parent.mkdir()
+    with wave.open(str(audio), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(8000)
+        w.writeframes(b"\x00\x00" * 8000 * 10)
+    return chordpro, audio, asked
+
+
+@pytest.mark.slow
+def test_sheet_makes_the_songs_auto_sheet_now_and_says_each_stage(tmp_path, fake, conn, sheet_sites):
+    from caracole.get import read_progress_line
+
+    chordpro, audio, asked = sheet_sites
+    fake.video(VIKINGOS, "Vikingos veganos", "HyperFanes", 10, ext="wav", copy=str(audio))
+    config = write_config(tmp_path, fake, chordpro=chordpro)
+    result = invoke(config, "--song", "Nick Cani - Vikingos veganos", "--url",
+                    f"https://www.youtube.com/watch?v={VIKINGOS}&pp=ygUQdmlraW5nb3MgdmVnYW5vcw%3D%3D",
+                    "--sheet", "--progress")
+    assert result.exit_code == 0, result.output
+    lines = result.output.splitlines()
+    assert f"Audio: downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}." in lines
+    assert "Lyrics: LRCLIB has none." in lines
+    assert "Chords: chords alone: no lyrics from LRCLIB." in lines
+    sheet = tmp_path / "lib" / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt"
+    assert any(line.startswith(f"Sheet: {sheet}, readable after") for line in lines)
+    assert (sheet.parent / "sheet (auto).html").is_file()
+    events = [e for e in map(read_progress_line, lines) if e is not None]
+    assert {"stage": "chords", "state": "done", "detail": "chords alone: no lyrics from LRCLIB"} in events
+    assert events[-1]["done"]["ok"] is True
+    assert "Done in" in result.output and "1 yt-dlp run" in result.output and len(asked) == 2
+
+
+def test_sheet_refuses_a_song_with_a_human_sheet_and_exits_1(tmp_path, fake, conn, sheet_sites):
+    from caracole.library import keep_file
+    from caracole.versions import upsert_version
+
+    chordpro, audio, _ = sheet_sites
+    song = add_song(conn, "Nick Cani", "Vikingos veganos")
+    v = upsert_version(conn, provider="ug", tab_id="1", song_id=song.id, slot="sheet", kind="chords", rating=5,
+                       votes=9, version=1, label=None, url="u", raw={}, now="x")
+    keep_file(conn, tmp_path / "lib", song=song, version_id=v, name="sheet.txt", data=b"[C]x", rank=1)
+    result = invoke(write_config(tmp_path, fake, chordpro=chordpro), "--song", "Nick Cani - Vikingos veganos",
+                    "--url", f"https://youtu.be/{VIKINGOS}", "--sheet")
+    assert result.exit_code == 1
+    assert "No sheet made: Nick Cani - Vikingos veganos has a human sheet" in result.output
+    assert fake.argvs() == []
+
+
+def test_sheet_without_auto_chords_asks_nothing_and_exits_1(tmp_path, fake, conn, sheet_sites, monkeypatch):
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    result = invoke(write_config(tmp_path, fake), "--song", "Nick Cani - Vikingos veganos", "--url",
+                    f"https://youtu.be/{VIKINGOS}", "--sheet")
+    assert result.exit_code == 1
+    assert "caracole makes no sheet from YouTube here: this caracole was built without auto-chords" in result.output
+    assert fake.argvs() == [] and not (tmp_path / "lib" / "wanted.txt").exists()

@@ -1660,7 +1660,7 @@ and cache.
   file changes. It exits 1 when auto-chords can't work at all: the model files
   missing or unusable, or a sheet it can't write into the library. It also
   works out the chords of the audio the youtube step took, as of a purchase.
-- **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none]]`** takes
+- **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]]`** takes
   the audio of the songs no human sheet was found for from YouTube, as the
   nightly run's youtube step does (see [Audio from YouTube](#audio-from-youtube)),
   printing a line per song, such as
@@ -1675,7 +1675,8 @@ and cache.
   yet. It needs the flake's `packages.autochords`, which has auto-chords and
   yt-dlp: without them, or without the model files, it asks nothing and exits 1.
   Turned off, it asks nothing and says so. A cooldown, a block or a spent budget
-  exits 0. The chords come next, from `caracole autochords`.
+  exits 0. The chords come next, from `caracole autochords`. `--sheet` does it all
+  now, for that song: see A sheet from a video, now, under [Audio from YouTube](#audio-from-youtube).
 
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
@@ -1751,7 +1752,8 @@ It is the one place caracole goes against a site's robots.txt; everywhere else
 it honours it. It does so on these terms:
 
 - **Only for a song with no human sheet**, and nothing caracole will still do may
-  find one: the songs the buy list would list. A purchase in Music/ comes
+  find one: the songs the buy list would list; or one you name with its video, from the
+  library page or `caracole youtube --song`, that has no human sheet. A purchase in Music/ comes
   first, and a human sheet found later still takes the auto sheet's place.
 - **Only with auto-chords.** The download is no use without the chords, so a
   caracole without auto-chords (the default package), or without its model
@@ -1799,6 +1801,30 @@ makes `sheet (auto).txt` from it. Its third line says where the audio came from,
 `Audio from YouTube: Creep (Radiohead - Topic), https://www.youtube.com/watch?v=…`,
 and so does the PDF's first line; info.json gives the video's address as the
 auto sheet's source. The to-do page and index.html say where each song stands.
+
+**A sheet from a video, now.** For a song you know the video of, caracole makes the sheet at
+once, rather than a night apart: on the library page caracole serve serves, or with
+
+    caracole youtube --song "Nick Cani - Vikingos veganos" \
+      --url "https://www.youtube.com/watch?v=lzN7Thn3FV4" --sheet
+
+The song goes into wanted.txt if the library hasn't got it, as `caracole add` adds it, and the
+video under `[youtube]`; then, one stage a line (`Audio: downloaded …`, `Lyrics: found, timed.`,
+`Chords: chords over LRCLIB's timed lyrics.`, `Sheet: …/sheet (auto).txt, readable after 94.2 s.`):
+its audio, on the terms above (the budget, the pauses, one run at a time, a block honoured);
+its lyrics from LRCLIB, asked with the audio's length when its wanted.txt line gives none, so the
+timed lyrics LRCLIB picks fit the audio; the chords from the audio (auto-chords, a few minutes on
+a CPU); its PDF and its viewer, `sheet (auto).html`, the viewer a UG sheet gets; then the pages.
+The chords go over the lyrics, a line each, as on Ultimate Guitar, when LRCLIB's timed lyrics are
+as long as the audio within 2 seconds; otherwise (a video with a long intro, say) a chord chart
+comes first and the lyrics after it, and with no lyrics on LRCLIB, the chart alone. Without
+`--url`, the video under `[youtube]`, else the one its search picks. It refuses a song with a
+human sheet, an ignored one or one with a purchase linked, and one `[youtube]` says `"none"` for
+without a video given, and exits 1 then, as it does for a video YouTube won't give, audio
+auto-chords can't read, or a caracole that can't make chords of the audio (which it says before
+it asks anything); a block, a cooldown, a spent budget or a network error waits, and exits 0.
+`--progress` adds a JSON line per stage, for caracole serve. A human sheet found later takes the
+auto sheet's place, as always.
 
 **Errors are never misses** here either: a network error, a timeout (2 minutes
 for a search, 15 for a download) or anything else yt-dlp fails on leaves the

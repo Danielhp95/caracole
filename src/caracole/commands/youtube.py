@@ -17,6 +17,15 @@ nothing, when this caracole can't make chords of the audio (no auto-chords, no m
 files) or has no yt-dlp: the download would be of no use. The chords themselves come
 from ``caracole autochords``, which the caracole-autochords unit runs after each night.
 
+``--song "Artist - Title" --sheet`` makes that song's auto sheet now, as caracole serve's sheet from a
+YouTube video does (youtube_sheet.py): the song added to wanted.txt if it isn't in the library, the video
+(``--url``, else the one under ``[youtube]``, else its search's pick) written there and its audio taken,
+its lyrics from LRCLIB, the chords from the audio, its PDF and viewer, then the pages; ``--progress`` adds a
+JSON line per stage, which caracole serve reads, as ``caracole get --progress`` does. It exits 0 once the
+sheet is made, and for a block, a cooldown, a spent budget or a site's error, which wait; 1 for a song it
+won't make a sheet of, a video YouTube won't give, audio auto-chords can't read, or a caracole that can't
+make chords of the audio, which it says before it asks anything.
+
 Every command module is imported on every start, so the pass is imported inside the command.
 """
 
@@ -74,12 +83,26 @@ def register(app: typer.Typer) -> None:
             False, "--none",
             help="With --song: never take its audio from YouTube (\"none\" under \\[youtube]), and let go of any.",
         ),
+        sheet: bool = typer.Option(
+            False, "--sheet",
+            help="With --song: make its auto sheet now, the song added to the library if it isn't there: the "
+                 "audio, the lyrics from LRCLIB, the chords from the audio, the PDF and the viewer.",
+        ),
+        progress: bool = typer.Option(False, "--progress", help="With --sheet: a JSON line per stage too, for "
+                                                                "caracole serve."),
     ) -> None:
         """Take the audio of songs no one has charted from YouTube (yt-dlp), for auto-chords."""
-        if (url is not None or none) and song is None:
-            raise typer.BadParameter("--url and --none need --song", param_hint="--url/--none")
+        if (url is not None or none or sheet) and song is None:
+            raise typer.BadParameter("--url, --none and --sheet need --song", param_hint="--song")
         if url is not None and none:
             raise typer.BadParameter("either --url or --none, not both", param_hint="--url/--none")
+        if sheet and none:
+            raise typer.BadParameter("either --sheet or --none, not both", param_hint="--sheet/--none")
+        if progress and not sheet:
+            raise typer.BadParameter("--progress goes with --sheet", param_hint="--progress")
+        if sheet:
+            _sheet(load_cfg(ctx), song or "", url, progress=progress)
+            return
         _youtube(load_cfg(ctx), song, url, none)
 
 
@@ -151,6 +174,39 @@ def _youtube(cfg: Config, display: str | None, url: str | None, none: bool) -> N
     if stats.downloaded:
         typer.echo("Next, `caracole autochords` works out the chords from the audio (the caracole-autochords unit "
                    "runs it after each nightly run).")
+
+
+def _sheet(cfg: Config, display: str, url: str | None, *, progress: bool) -> None:
+    """``--sheet``: the song's auto sheet now (youtube_sheet.py), said a stage a line, as ``caracole get`` says
+    its own; nothing is asked when this caracole can't make chords of the audio."""
+    from caracole.commands.get import _Lines
+    from caracole.overrides import OverridesError, override_key
+    from caracole.youtube_fetch import route_problem
+    from caracole.youtube_sheet import SheetRequest, make_sheet
+
+    try:
+        override_key(display)
+    except OverridesError as e:
+        fail(str(e), 2)
+    problem = route_problem(cfg)
+    if problem is not None:
+        hint = f"; {NOT_BUILT}" if "auto-chords" in problem and "built without" in problem else ""
+        fail(f"caracole makes no sheet from YouTube here: {problem}{hint}")
+    artist, _, title = display.partition(" - ")
+    reporter = _Lines(cfg.library_dir, show=False, json_lines=progress)
+    result = make_sheet(cfg, SheetRequest(artist.strip(), title.strip(), url), reporter)
+    reporter.flush()
+    sent = ", ".join(f"{plural(n, 'yt-dlp run') if p == PROVIDER else plural(n, 'LRCLIB request')}"
+                     for p, n in result.requests.items() if n)
+    if result.refused:
+        typer.echo(f"No sheet made: {result.refused}.")
+    else:
+        typer.echo(f"Done in {result.seconds:.1f} s" + (f": {sent}." if sent else ", asking nothing."))
+    if progress:
+        typer.echo(reporter.event({"done": {"seconds": round(result.seconds, 3), "requests": result.requests,
+                                            "ok": result.ok, "refused": result.refused}}))
+    if not result.ok:
+        raise typer.Exit(1)
 
 
 def _decline(cfg: Config, display: str) -> None:

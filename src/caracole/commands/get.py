@@ -31,7 +31,8 @@ if TYPE_CHECKING:
     from caracole.config import Config
     from caracole.get import LookupResult
 
-_SHORT = {"song": "Song", "match": "Match", "sheet": "Sheet", "pdf": "PDF", "lyrics": "Lyrics",
+_SHORT = {"song": "Song", "match": "Match", "sheet": "Sheet", "pdf": "PDF", "lyrics": "Lyrics", "audio": "Audio",
+          "chords": "Chords",  # caracole youtube --sheet's (youtube_sheet.py), said the same way
           "ug": "Ultimate Guitar", "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "harptabs": "harptabs.com", "gametabs": "gametabs.net",
           "pages": "Pages",
           "songbooks": "Songbooks"}
@@ -207,7 +208,7 @@ class _Lines:
         first = not self.files
         sheet = self.library / files["sheet"]
         if first:
-            said = (self.held or "Sheet: ").rstrip(".")
+            said = (self.held or "Sheet").rstrip(".")
             self.held = None
             typer.echo(f"{said}: {sheet}, readable after {seconds:.1f} s.")
             if self.show:
