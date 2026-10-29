@@ -2608,12 +2608,11 @@ def every_control(conn, cfg, *, served: bool = True) -> str:
     return build_library_page(conn, cfg, Overrides(), NOW, controls=controls)
 
 
-# On the file on disk, Select a song, name a songbook and make it: the bar then shows the command to run. On a
-# phone the name field waits under "Make songbook…".
+# On the file on disk, + New songbook: Select a song, name a songbook and make it: the bar then shows the command to
+# run. On a phone the name field shows, unfolded under "Make songbook…".
 MAKE_FROM_DISK = """
-document.querySelector(".pick-toggle").click();
+document.querySelector(".new-book").click();
 document.querySelector("#list .pick input").click();
-if (document.querySelector(".pick-open").checkVisibility()) document.querySelector(".pick-open").click();
 document.querySelector(".pick-name").value = "Campfire 2";
 document.querySelector(".pickbar-form button[type=submit]").click();
 document.body.setAttribute("data-command", String(!document.querySelector(".pick-command").hidden));
@@ -2671,7 +2670,7 @@ BORDERS = """
 def test_fields_menus_and_select_boxes_have_an_edge_of_three_to_one(conn, cfg, tmp_path, scheme):
     from helpers.targets import UNFOLD, noted, noting, weak_edges
 
-    select = 'document.querySelector(".pick-toggle").click();\n'  # its boxes, and its bar's name and menu
+    select = 'document.querySelector(".new-book").click();\n'  # Select: its boxes, and its bar's name and menu
     # The search field is the search bar's, which another change redraws.
     script = UNFOLD + select + noting("data-weak", weak_edges("#q")) + noting("data-borders", BORDERS)
     dom = dump_dom(write_library_page(cfg.library_dir, with_script(every_control(conn, cfg), script)), tmp_path,
@@ -3479,16 +3478,16 @@ def test_on_a_phone_the_first_song_starts_on_the_first_screen(conn, cfg, phone_p
         top = phone_page.js(FIRST_SONG)
         assert top < 240, top  # one bar, then the search: most of the screen is songs
         assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
-        # Filter, Sort and Select are in the search's own row, a thumb's worth each.
+        # Filter and Sort are in the search's own row, a thumb's worth each.
         field = phone_page.js("Math.round(document.querySelector('.searchbar .field').getBoundingClientRect().top)")
         row = phone_page.js(f"{TOOLS}.map((c) => [Math.round(c.getBoundingClientRect().top), "
                             "c.getBoundingClientRect().height, c.id || c.className])")
-        assert [c for _, _, c in row] == ["filter", "sort", "tool pick-toggle"], row
+        assert [c for _, _, c in row] == ["filter", "sort"], row
         assert max(abs(t - field) for t, _, _ in row) < 8, (field, row)
         assert min(h for _, h, _ in row) >= 44, row
         assert phone_page.js("document.querySelector('.searchbar').scrollWidth <= innerWidth")
         # The tabs and Requests share the first line without touching, the wordmark is its "¿" alone, and the placeholder
-        # is short enough to read in the field that is left beside three buttons.
+        # is short enough to read in the field that is left beside two buttons.
         assert phone_page.js("document.getElementById('q').placeholder") == "Search 3 songs"
         tabs = phone_page.js("document.getElementById('tab-songbooks').getBoundingClientRect().right")
         links = phone_page.js("(document.querySelector('.masthead .links') || { getBoundingClientRect: () => ({ left: 9999 }) })"
@@ -3545,7 +3544,7 @@ def test_the_top_is_one_bar_then_the_search_with_its_tools(conn, cfg, tmp_path):
         assert attribute_of(dom, "data-narrowed") == [True, "1 of 3 songs"]  # said once the list is narrowed
 
 
-# The buttons shown beside the search: Filter, Sort and Select (the tags aside).
+# The buttons shown beside the search: Filter and Sort (the tags aside).
 TOOLS = "[...document.querySelectorAll('#tools > .tool, #tools select')].filter((c) => c.checkVisibility())"
 
 
@@ -3560,13 +3559,13 @@ def test_on_a_phone_the_tags_wrap_under_the_buttons_and_nothing_scrolls_sideways
     phone_page.open(write_library_page(cfg.library_dir, served).as_uri() + "#show=wanted&artist=radiohead")
     tools = phone_page.js(f"{TOOLS}.map((c) => Math.round(c.getBoundingClientRect().bottom))")
     tag = phone_page.js("document.getElementById('artist').getBoundingClientRect().top")
-    assert len(tools) == 3 and tag >= max(tools), (tools, tag)
+    assert len(tools) == 2 and tag >= max(tools), (tools, tag)
     assert phone_page.js("document.documentElement.scrollWidth <= innerWidth")
     assert phone_page.js("document.querySelector('.toolbar').scrollWidth <= document.querySelector('.toolbar').clientWidth")
 
 
 @in_chromium
-def test_on_a_desktop_filter_sort_and_select_are_one_line_and_review_shows_once_a_song_needs_it(conn, cfg, tmp_path):
+def test_on_a_desktop_filter_and_sort_are_one_line_and_review_shows_once_a_song_needs_it(conn, cfg, tmp_path):
     from helpers.targets import noted, noting
 
     add_song(conn, "Radiohead", "Creep")
@@ -3578,7 +3577,7 @@ def test_on_a_desktop_filter_sort_and_select_are_one_line_and_review_shows_once_
     bar = re.search(r'<div class="searchbar"[^>]*>(.*?)<section class="results"', dom, re.S).group(1)
     assert 'id="sort"' in bar and 'id="filter"' in bar and 'id="tools"' in bar  # beside the search
     assert 'id="filter-panel"' in toolbar and 'id="sort"' not in toolbar and 'id="view' not in toolbar  # the panel, and the tags
-    assert len(noted(dom, "data-tops")) == 3
+    assert len(noted(dom, "data-tops")) == 2
     assert max(noted(dom, "data-tops")) - min(noted(dom, "data-tops")) < 8  # one line: it all fits
 
 
@@ -3765,7 +3764,7 @@ def test_a_laptop_screen_shows_twenty_odd_lines_under_the_bar_and_a_phone_two_li
 
 # Clicks through what a line offers on the served page, and notes each step: Pick the match opens the picker under
 # its "⋯", the focus on the first candidate; Remove… counts down on the line, the focus on Undo, which keeps the
-# song; Select puts a box on each line; Add to a songbook… picks the song in it.
+# song; + New songbook (Select) puts a box on each line; Add to a songbook… picks the song in it.
 LINE_CLICKS = """
 (() => {
   const notes = {};
@@ -3788,12 +3787,12 @@ LINE_CLICKS = """
     document.activeElement.click();  // Undo
     notes.undone = { text: soda.querySelector(".progress").textContent, focus: document.activeElement.textContent,
                      sends: !soda.querySelector("form.remove button").disabled };
-    document.querySelector(".pick-toggle").click();
+    document.querySelector(".new-book").click();
     const boxes = Array.from(document.querySelectorAll("#list article.line .pick")).filter((p) => p.checkVisibility());
     const r = boxes[0].getBoundingClientRect();
     notes.select = { boxes: boxes.length, lines: document.querySelectorAll("#list article.line").length,
                      size: [Math.round(r.width), Math.round(r.height)] };
-    document.querySelector(".pick-toggle").click();
+    document.querySelector(".pick-done").click();
     const queued = lineOf("Bohemian Rhapsody");
     queued.querySelector(".line-more").click();
     Array.from(queued.querySelectorAll(".line-panel button")).find((b) => b.textContent === "Add to a songbook…").click();

@@ -2105,8 +2105,8 @@ hold (songbooks; requests that wait or run), the address remembering which
 wanted or ignored when there are any. On a phone the tabs fit beside the mark,
 four of them too. Under it the search
 box, which says how many songs there are ("Search 8 songs, or the sites"), with
-**Filter**, **Sort** and, set apart after a divider, **Select** (see below)
-beside it, icons alone on a phone. The filters on come under it, each a tag
+**Filter** and **Sort** beside it, icons alone on a phone. The filters on come
+under it, each a tag
 ("Wanted ×", "Harmonica ×", "A minor ×", "by Queen ×") that lets it go, then
 **Clear**, which lets them all go, never the search. The search bar stays at the
 top as the page scrolls under it, with an edge to show it. Nothing is said above
@@ -2336,22 +2336,25 @@ their soft border, and so does the search box. The pages `caracole serve`
 writes itself (Look up and its search box, a song's pick, Remove's question) do the
 same.
 
-**Select**, last of the tools beside the search, puts a
-box at the start of each song's line: tick songs in the order they go in the
-songbook (each box shows its place, and a screen reader says it: "Pick Creep by
-Radiohead, 2nd"). A tap anywhere on a line ticks it, or unticks it: while you
-select, each line's button and chevron are put away, a request's line still says
-how it goes but without its links (Details), and a tap on its title opens
-nothing, so a tick never opens a file by mistake. A line's **Add to a
-songbook…**, under its chevron, does the same with that song ticked, the bar's menu
-or name field ready. Search, filter and sort between ticks; the bar at the
-bottom counts them, `3 selected`. Give the songbook a name and tap Make
-songbook, or pick a songbook there is in the menu (instead of New songbook)
-to Add to it; Clear unticks them all. The × at the start of the bar, or
-Select pressed again, leaves the mode, and the ticks wait, unseen, for when
-you come back. On a phone the bar is one line,
-`× 3 selected · Make songbook…`, and its button unfolds the menu and the name
-field (its ▾, or Escape, folds them away again). On the file on disk, which
+**Select** picks the songs of a songbook in the library. The Songbooks tab's
+**+ New songbook** turns it on (see [The Songbooks tab](#the-songbooks-tab)),
+the bar's name field ready, and so does a line's **Add to a songbook…**, under
+its chevron, with that song ticked, the bar's menu or name field ready: the
+toolbar beside the search has no button for it. It puts a box at the start of
+each song's line: tick songs in the order they go in the songbook (each box
+shows its place, and a screen reader says it: "Pick Creep by Radiohead, 2nd").
+A tap anywhere on a line ticks it, or unticks it: while you select, each line's
+button and chevron are put away, a request's line still says how it goes but
+without its links (Details), and a tap on its title opens nothing, so a tick
+never opens a file by mistake. Search, filter and sort between ticks; the bar
+at the bottom counts them, `3 selected`. Give the songbook a name and tap Make
+songbook, or pick a songbook there is in the menu (instead of New songbook) to
+Add to it; Clear unticks them all. The × at the start of the bar leaves the
+mode, the focus back on the line's Add to a songbook… you started from (else on
+the Library tab), and the ticks wait, unseen, for when you come back. On a
+phone the bar opens with the menu and the name field unfolded; folded (its ▾,
+or Escape), it is one line, `× 3 selected · Make songbook…`, whose button
+unfolds them again. On the file on disk, which
 can't write anything, Make songbook gives the command to run where caracole
 runs, folded under "The command to run", with Copy beside it:
 `caracole songbook make 'Beach nights' 'Muse - Hysteria' 'Radiohead - Creep'`,
@@ -4272,8 +4275,9 @@ Who can reach it, below).
   keeps your ticks. A make that fails once it runs (songbooks.toml can't be
   written, say) leaves the songbook on the tab as it would have been, its line
   saying it couldn't be made and its status line why, with nothing in it to
-  change, and gives the Select bar back its ticks, the name and why: making it
-  again is one tap. Made again with those ticks under another name, the new
+  change ("Not made: + New songbook can make it again."), and gives the Select
+  bar back its ticks, the name and why: + New songbook, then Make songbook, makes
+  it again. Made again with those ticks under another name, the new
   songbook takes its line; its Forget it takes it off the tab.
 
 Every request runs the `caracole` command line, one command at a time, so the

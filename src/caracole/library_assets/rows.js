@@ -41,11 +41,10 @@ const caracoleRows = (icons, does) => {
     open: ["M5 12h14", "M13 6l6 6-6 6"],
     chevron: ["M6 9l6 6 6-6"],
     search: ["M4 10.5a6.5 6.5 0 1 0 13 0a6.5 6.5 0 1 0-13 0", "M15.5 15.5l5 5"],
-    // the toolbar's: Filter's sliders, Sort's lines shortening by an arrow down, Select's ticked box
+    // the toolbar's: Filter's sliders, Sort's lines shortening by an arrow down
     sliders: ["M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12", "M14 6a2 2 0 1 0 4 0a2 2 0 1 0-4 0",
       "M8 12a2 2 0 1 0 4 0a2 2 0 1 0-4 0", "M16 18a2 2 0 1 0 4 0a2 2 0 1 0-4 0"],
     sort: ["M7 4v16M3 16l4 4 4-4", "M14 6h7M14 12h5M14 18h3"],
-    select: ["M7 3h10a4 4 0 0 1 4 4v10a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4V7a4 4 0 0 1 4-4z", "M8 12l3 3 5-6"],
     refresh: ["M20 12a8 8 0 1 1-2.34-5.66L20 8.5", "M20 3.5v5h-5"],
     book: ["M5 19.5V4.5A1.5 1.5 0 0 1 6.5 3H19v15H6.5A1.5 1.5 0 0 0 5 19.5a1.5 1.5 0 0 0 1.5 1.5H19v-3",
       "M12 7v6M9 10h6"],

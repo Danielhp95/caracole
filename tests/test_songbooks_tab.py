@@ -753,16 +753,25 @@ def test_a_kept_guitar_pro_files_mark_downloads_it_where_no_page_shows_it(serve,
 # --- the songbooks' changes: where they come from, and how they end ---------------------------------------------
 
 
+def new_songbook(page):
+    """+ New songbook, from wherever the page is: the Songbooks tab, its list (on a phone, back from a set list), then
+    its button, which turns Select on, on the library, its bar ready for the name (unfolded on a phone)."""
+    page.click("#tab-songbooks")
+    if not page.js(f"{SHOWN}('#songbooks .new-book')"):
+        page.click("#songbooks .book-back")
+    page.click("#songbooks .new-book")
+    assert page.wait("document.body.classList.contains('selecting')")
+
+
 def test_select_makes_a_songbook_and_the_tab_opens_on_it(serve, cfg, library, tmp_path):
     hold = threading.Event()
     url, posted = serve(Fake(cfg, hold=hold))
     with opened(tmp_path, 390, 844) as page:
         page.open(url)
         assert page.js(SHIFTS) and page.js(ANSWERED)
-        page.click(".pick-toggle")
+        new_songbook(page)
         page.click('#list [data-id="%d"] .pick' % library["Hysteria"].id)
         page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
-        page.click(".pick-open")
         page.click(".pick-name")
         page.type("Beach nights")
         page.click(".pickbar-form button[type=submit]")
@@ -790,7 +799,7 @@ def test_select_adds_to_a_songbook_there_is_and_the_tab_opens_on_it(serve, cfg, 
     with opened(tmp_path) as page:
         page.open(url)
         assert page.js(SHIFTS) and page.js(ANSWERED)
-        page.click(".pick-toggle")
+        new_songbook(page)
         page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
         page.js("(() => { const into = document.querySelector('.pick-into'); into.value = 'Road trip';"
                 " into.dispatchEvent(new Event('change')); })()")
@@ -811,7 +820,7 @@ def test_select_refused_says_why_in_its_bar_and_keeps_the_picks(serve, cfg, libr
     url, _ = serve(Fake(cfg))
     with opened(tmp_path) as page:
         page.open(url)
-        page.click(".pick-toggle")
+        new_songbook(page)
         page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
         page.click(".pick-name")
         page.type("CAMPFIRE")
@@ -832,11 +841,9 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
     url, _ = serve(runner)
     with opened(tmp_path, *size) as page:
         page.open(url)
-        page.click(".pick-toggle")
+        new_songbook(page)
         page.click('#list [data-id="%d"] .pick' % library["Hysteria"].id)
         page.click('#list [data-id="%d"] .pick' % library["Creep"].id)
-        if size[0] < 900:
-            page.click(".pick-open")
         page.click(".pick-name")
         page.type("Brand new")
         page.click(".pickbar-form button[type=submit]")
@@ -852,7 +859,10 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
         books = page.js(BOOKS)
         assert [b[0] for b in books] == ["Campfire", "Road trip", "Brand new"], books
         assert books[2][1] == "2 songs · couldn't be made", books
-        # Nothing on it to change but by making it again, from the Select bar, which has the picks and says why.
+        # Nothing on it to change but by making it again, from the Select bar (+ New songbook), which has the picks
+        # and says why.
+        assert page.js("document.querySelector('#songbooks .book .book-files .hint').textContent") == (
+            "Not made: + New songbook can make it again.")
         assert page.js("document.querySelectorAll('#songbooks .book .set-line button:not([disabled]), "
                        "#songbooks .book .book-more button:not([disabled])').length") == 0
         assert page.js(f"!{SHOWN}('#songbooks .book .add-song')")
@@ -862,10 +872,8 @@ def test_a_make_that_fails_keeps_its_songbook_says_why_and_gives_the_picks_back(
         assert [b.name for b in books_toml(cfg)] == ["Campfire", "Road trip"]
         # Made again once the file can be written: the songbook as new, its controls back.
         runner.fail.clear()
-        page.click("#tab-library")
-        page.click(".pick-toggle")
-        if size[0] < 900:
-            page.click(".pick-open")
+        new_songbook(page)
+        assert page.js("document.querySelector('.pick-name').value") == "Brand new"
         page.click(".pickbar-form button[type=submit]")
         assert page.wait(f"{STATUS} === 'Made·Open songbook'", timeout=20), page.js(STATUS)
         assert page.js(TITLES) == ["Hysteria", "Creep"] and page.js(f"{SHOWN}('#songbooks .book .add-song')")
@@ -884,12 +892,9 @@ def test_a_songbook_that_couldnt_be_made_goes_once_made_under_another_name_or_fo
     url, _ = serve(runner)
 
     def make(name, *titles):
-        page.click("#tab-library")
-        page.click(".pick-toggle")
+        new_songbook(page)
         for title in titles:
             page.click('#list [data-id="%d"] .pick' % library[title].id)
-        if size[0] < 900:
-            page.click(".pick-open")
         page.js("document.querySelector('.pick-name').value = ''")
         page.click(".pick-name")
         page.type(name)

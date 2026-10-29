@@ -213,9 +213,7 @@
     newBook.hidden = !songs.length;  // its songs are picked in the library: with none, there is nothing to pick
     sideEmpty.textContent = books().length || shelf.error ? "" : !songs.length
       ? "No songbook yet. Your library has no songs to pick from: add one first."
-      : server
-      ? "No songbook yet: + New songbook picks its songs in your library."
-      : "No songbook yet. Select songs in your library to make one.";
+      : "No songbook yet: + New songbook picks its songs in your library.";
     sideEmpty.hidden = !sideEmpty.textContent;
     sideError.textContent = shelf.error ? String(shelf.error) : "";
     sideError.hidden = !shelf.error;
@@ -454,7 +452,8 @@
       return go;
     };
     const parts = links.length ? links : coming ? listOf(shelf.fileLabels).map((label) => soon(String(label)))
-      : [el("p", "hint", b.failed ? "Not made: Select can make it again." : b.pending ? "Its files come once it is made."
+      : [el("p", "hint", b.failed ? "Not made: + New songbook can make it again."
+        : b.pending ? "Its files come once it is made."
         : "Not made yet: caracole render, or caracole songbook render, makes its files.")];
     if (b.failed && !links.length) {
       const name = b.name;

@@ -1,6 +1,6 @@
-"""index.html's filters in one Filter button (take B.1), in a real browser: the toolbar's tags, Filter, Sort and
-Select, and the panel Filter opens, a popover under it on a computer and a sheet from the bottom on a phone, with the
-songs' Status, what they have something for and their Key."""
+"""index.html's filters in one Filter button (take B.1), in a real browser: the toolbar's tags, Filter and Sort, and
+the panel Filter opens, a popover under it on a computer and a sheet from the bottom on a phone, with the songs'
+Status, what they have something for and their Key."""
 
 from __future__ import annotations
 
@@ -89,7 +89,7 @@ def phone(tmp_path):
 
 
 # Each tool beside the search, left to right: what it is, its words, and where it is.
-TOOLBAR = """[...document.querySelectorAll('#tools button, #tools select, #tools .divider')]
+TOOLBAR = """[...document.querySelectorAll('#tools > *, #tools select')].filter((n) => !n.matches('label'))
   .filter((n) => n.checkVisibility() && !document.getElementById('filter-panel').contains(n))
   .map((n) => { const r = n.getBoundingClientRect();
     const g = n.querySelector('svg.glyph') || (n.matches('select') ? n.parentElement.querySelector('svg.glyph') : null);
@@ -99,14 +99,30 @@ TOOLBAR = """[...document.querySelectorAll('#tools button, #tools select, #tools
   .sort((a, b) => a.left - b.left)"""
 
 
-def test_the_tools_beside_the_search_are_filter_sort_and_select(shelf, laptop):
+# The search bar's row: where its field ends, where the row ends, and its field's middle.
+ROW = """(() => { const f = document.querySelector('.searchbar .field').getBoundingClientRect(),
+  r = document.querySelector('.bar-row').getBoundingClientRect();
+  return { field: Math.round(f.right), right: Math.round(r.right), middle: f.top + f.height / 2 }; })()"""
+
+
+def in_the_search_row(page):
+    """The tools beside the search: in its row, at its end, the field reaching the first; songs are picked for a
+    songbook from the Songbooks tab's + New songbook or a song's Add to a songbook…, no tool of the library's."""
+    tools, row = page.js(TOOLBAR), page.js(ROW)
+    assert [t["id"] for t in tools] == ["filter", "sort"], tools
+    assert [t["glyph"] for t in tools] == ["glyph glyph-sliders", "glyph glyph-sort"], tools
+    assert page.js("document.querySelector('.pick-toggle, #tools .divider')") is None
+    assert all(abs(t["top"] + t["height"] / 2 - row["middle"]) <= 1 for t in tools), (tools, row)
+    assert tools[-1]["right"] == row["right"] and tools[0]["left"] - row["field"] == 8, (tools, row)
+    assert tools[1]["left"] - tools[0]["right"] <= 8, tools
+    assert page.js("document.documentElement.scrollWidth <= innerWidth")
+    return tools
+
+
+def test_the_tools_beside_the_search_are_filter_and_sort(shelf, laptop):
     laptop.open(shelf.as_uri())
-    tools = laptop.js(TOOLBAR)
-    assert [t["id"] for t in tools] == ["filter", "sort", "divider", "tool pick-toggle"], tools
-    assert [t["text"] for t in tools] == ["Filter", "Artist A–Z", "", "Select"], tools
-    assert [t["glyph"] for t in tools if t["id"] != "divider"] == [
-        "glyph glyph-sliders", "glyph glyph-sort", "glyph glyph-select"], tools
-    assert max(t["top"] + t["height"] / 2 for t in tools) - min(t["top"] + t["height"] / 2 for t in tools) <= 2
+    tools = in_the_search_row(laptop)
+    assert [t["text"] for t in tools] == ["Filter", "Artist A–Z"], tools
     assert tools[0]["left"] > 1280 / 2  # at the right, the search's room before them
     assert laptop.js(f"[{FILTER}.getAttribute('aria-expanded'), {FILTER}.getAttribute('aria-controls')]") == [
         "false", "filter-panel"]
@@ -114,13 +130,19 @@ def test_the_tools_beside_the_search_are_filter_sort_and_select(shelf, laptop):
     # A filter on: Filter counts it, in the accent.
     laptop.open(shelf.as_uri() + "#show=wanted")
     tools = laptop.js(TOOLBAR)
-    assert [t["text"] for t in tools] == ["Filter 1", "Artist A–Z", "", "Select"], tools
+    assert [t["text"] for t in tools] == ["Filter 1", "Artist A–Z"], tools
     tags = laptop.js("[...document.querySelectorAll('#tags button')].filter((b) => b.checkVisibility())"
                      ".map((b) => [b.textContent.trim(), Math.round(b.getBoundingClientRect().top)])")
     assert [t for t, _ in tags] == ["Wanted", "Clear"] and min(top for _, top in tags) >= max(t["top"] + t["height"] for t in tools), tags  # the filters on, under the search
     assert laptop.js(f"{FILTER}.classList.contains('on')")
     assert laptop.js(f"getComputedStyle({FILTER}).borderTopColor") != laptop.js(
-        "getComputedStyle(document.querySelector('.pick-toggle')).borderTopColor")
+        "getComputedStyle(document.getElementById('sort')).borderTopColor")
+
+
+def test_on_a_phone_the_tools_are_filter_and_sort_as_icons(shelf, phone):
+    phone.open(shelf.as_uri())
+    tools = in_the_search_row(phone)
+    assert [(t["right"] - t["left"], t["height"]) for t in tools] == [(44, 44), (44, 44)], tools  # a thumb's each
 
 
 def test_filter_opens_a_popover_and_escape_closes_it_returning_focus(shelf, laptop):
@@ -221,17 +243,65 @@ def test_the_sheets_controls_are_a_thumbs_target_on_a_touch_screen(shelf, phone)
     assert phone.js("document.documentElement.scrollWidth <= innerWidth")
 
 
-def test_select_sits_last_and_still_starts_picking(shelf, laptop):
-    laptop.open(shelf.as_uri() + "#show=wanted")
-    tools = laptop.js(TOOLBAR)
-    assert tools[-1]["id"] == "tool pick-toggle" and tools[-2]["id"] == "divider", tools
-    laptop.click(".pick-toggle")
-    assert laptop.wait("document.body.classList.contains('selecting') && !document.querySelector('.pickbar').hidden")
-    laptop.click("#list article.line")  # a tap anywhere on a line picks it, on the filtered list
-    assert laptop.wait("document.querySelector('.pick-count').textContent === '1 selected'")
-    assert laptop.js("document.querySelector('#list article.picked h3').textContent") == "Hysteria"
-    laptop.click(".pick-toggle")
-    assert laptop.wait("!document.body.classList.contains('selecting')")
+# Sort, where a press at its middle lands, and the menu it opens: open, the focus on it, and the size each order is
+# drawn at there. The browser's own menu, a popup the page can't see into, draws each option in its own font: an
+# option at 0 px is a menu of empty rows, as a phone's icons alone (the words' font-size 0) once gave it.
+SORT = """(() => { const s = document.getElementById('sort'), r = s.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  return { x, y, width: Math.round(r.width), on: document.elementFromPoint(x, y) === s, open: s.matches(':open'),
+           focus: document.activeElement === s, words: s.selectedOptions[0].textContent,
+           options: [...s.options].map((o) => parseFloat(getComputedStyle(o).fontSize)) }; })()"""
+
+
+@pytest.mark.parametrize("width,mobile", [(1280, False), (719, False), (600, False), (390, False), (390, True)])
+def test_sort_opens_a_menu_that_shows_its_orders_at_every_width(shelf, tmp_path, width, mobile):
+    with browser.Browser(tmp_path / "chrome", width=width, height=844, mobile=mobile) as page:
+        page.open(shelf.as_uri())
+        sort = page.js(SORT)
+        assert sort["on"] and not sort["open"], sort  # nothing over it: a press lands on the menu itself
+        assert sort["width"] == 44 if width < 720 else sort["width"] > 44, sort  # its icon alone on a phone
+        if mobile:  # a thumb's tap
+            page.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": sort["x"], "y": sort["y"]}])
+            page.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+        else:
+            page.click("#sort")
+        assert page.wait("document.getElementById('sort').matches(':open')"), page.js(SORT)
+        sort = page.js(SORT)
+        assert sort["focus"] and sort["words"] == "Artist A–Z", sort
+        assert min(sort["options"]) >= 12, sort  # each order there to read, as wide as its words
+
+
+@pytest.mark.parametrize("size", [(1280, 900), (390, 844)], ids=["laptop", "phone"])
+def test_new_songbook_starts_picking_in_the_library_as_it_was_left(shelf, tmp_path, size):
+    # Select (a box on each line, a bar to name the songbook) starts from the Songbooks tab's + New songbook, on the
+    # library as you left it, here its wanted songs alone, or from a song's Add to a songbook…, that song picked. The
+    # bar's × leaves it, the focus back where it began, or on the Library tab once that is out of sight.
+    def leave():
+        page.click(".pick-done")
+        assert page.wait("!document.body.classList.contains('selecting') && document.querySelector('.pickbar').hidden")
+        return page.js("document.activeElement.id")
+
+    count = "document.querySelector('.pick-count').textContent"
+    with browser.Browser(tmp_path / "chrome", width=size[0], height=size[1], mobile=size[0] < 500) as page:
+        page.open(shelf.as_uri() + "#show=wanted")
+        page.click("#tab-songbooks")
+        page.click("#songbooks .new-book")
+        assert page.wait("document.body.classList.contains('selecting') && !document.querySelector('.pickbar').hidden")
+        assert page.js("document.getElementById('library-view').checkVisibility()")
+        assert page.js("document.activeElement === document.querySelector('.pick-name')")  # its name, to type
+        assert page.js(TITLES) == ["Hysteria", "Wonderwall"]
+        page.click("#list article.line")  # a tap anywhere on a line picks it, on the filtered list
+        assert page.wait(f"{count} === '1 selected'")
+        assert page.js("document.querySelector('#list article.picked h3').textContent") == "Hysteria"
+        assert leave() == "tab-library"
+        page.js("[...document.querySelectorAll('#list article.line')].find((l) => l.querySelector('h3').textContent === "
+                "'Wonderwall').querySelector('.line-more').id = 'wonderwall-more'")
+        page.click("#wonderwall-more")
+        page.js("[...document.querySelectorAll('#list .line-panel button')].find((b) => b.checkVisibility() && "
+                "b.textContent === 'Add to a songbook…').id = 'add-to-book'")
+        page.click("#add-to-book")
+        assert page.wait(f"document.body.classList.contains('selecting') && {count} === '2 selected'"), page.js(count)
+        assert leave() == "add-to-book"  # the picks stay, for when Select is on again
 
 
 # --- what a song has something for -------------------------------------------------------------------------------
