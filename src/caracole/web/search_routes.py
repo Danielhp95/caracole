@@ -357,8 +357,9 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     """The search's answer (``search.found``'s): your songs, the artists the query names, the index's
     songs, which leads, and the row Enter may act on (``best``: a song of yours by its id, or an
     Ultimate Guitar song by its keys; None for none). A song of your library comes as its card
-    has it (``_rows``). ``names``: the artist and the title the query names (``search.request_names``), which
-    the pages fill their form by name in with."""
+    has it (``_rows``). ``names``: the artist and the title the query names (``search.request_names``, the
+    channel of the YouTube video suggested for it a name it knows too), which the pages fill their form by name in
+    with."""
     from caracole.search import (
         STRONG,
         LibraryHit,
@@ -375,6 +376,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
         suggestions,
     )
     from caracole.songs import list_songs
+    from caracole.youtube_names import clean_channel
 
     mine = search_library(conn, q, LIBRARY_HITS)
     # A song of yours by its title matches well: nothing to suggest, and no close spelling looked for.
@@ -423,7 +425,10 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     lead = "song" if leads and answer.lead == "artist" else answer.lead
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
-    named = request_names(conn, q, songs)
+    youtube = _youtube_suggestion(app, conn, q, mine, index_found, lc_artists, lacuerda)
+    video = (youtube or {}).get("video") or {}
+    channel = clean_channel(str(video.get("channel") or ""))  # the video suggested: its channel may name the artist
+    named = request_names(conn, q, songs, names=[channel] if channel else [])
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": lead,
             "best": pick, "hint": hint, "progression": progression, "unseen": unseen,
             # the artist and the title the query names, which the request form is filled in with; None for none
@@ -447,7 +452,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "lacuerda_search": (_lacuerda_search_gate(app, conn, q, lc_artists, lacuerda, mine)
                                 if app.searches_lacuerda else None),
             # YouTube's first video for a query with no sheet on the sites, suggested (youtube_routes.py)
-            "youtube": _youtube_suggestion(app, conn, q, mine, index_found, lc_artists, lacuerda),
+            "youtube": youtube,
             "suggest": [_suggestion_json(app, conn, s, songs) for s in (() if yours else close or ())],
             "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
 

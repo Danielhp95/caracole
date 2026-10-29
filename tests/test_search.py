@@ -2684,3 +2684,22 @@ def test_gtptabs_and_harptabs_artists_are_known_too(conn):
     harptabs_index(conn)
     assert request_names(conn, "Silvana Estrada Que problema") == ("Silvana Estrada", "Que problema")
     assert request_names(conn, "Billy Joel Uptown girl") == ("Billy Joel", "Uptown girl")
+
+
+def test_the_artist_of_the_video_suggested_for_a_query_is_known_for_it(conn):
+    # The owner's "silvana estrada que problema" with an empty Ultimate Guitar index: YouTube's first video for it is
+    # Silvana Estrada's own (channel "Silvana Estrada"), so the query's first two words are its artist, written as
+    # the channel writes them. Never "Silvana" and "Estrada": not even once the library has the song a mistake
+    # filed so (artist "Silvana", title "Estrada"), whose one-word artist the longer name goes before.
+    from caracole.search import request_names
+
+    assert request_names(conn, "silvana estrada que problema") is None  # nothing knows her: the title alone
+    assert request_names(conn, "silvana estrada que problema", names=("Silvana Estrada",)) == (
+        "Silvana Estrada", "que problema")
+    add_song(conn, "Silvana", "Estrada")
+    songs = list_songs(conn)
+    assert request_names(conn, "silvana estrada que problema", songs, names=("Silvana Estrada",)) == (
+        "Silvana Estrada", "que problema")
+    # A channel that names no run of the query's first words is no artist of it.
+    assert request_names(conn, "que problema", names=("Silvana Estrada",)) is None
+    assert request_names(conn, "vikingos veganos", names=("kintanedu",)) is None

@@ -41,10 +41,18 @@ JPEG = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
         b"\xff\xc0\x00\x0b\x08\x01\x68\x01\xe0\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x12\x34\xff\xd9")
 
 
+VIKINGOS_VIDEO = {"id": VIKINGOS, "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu",
+                  "duration": 222.0}
+SILVANA = "7e4wO8wrHh0"  # the owner's second example: the artist's own upload
+SILVANA_VIDEO = {"id": SILVANA, "title": "Silvana Estrada — Qué Problema (Visualizer)", "channel": "Silvana Estrada",
+                 "duration": 206.0}
+
+
 class FakeSheet:
     """``caracole youtube --sheet --progress``: its stages said, up to the chords, which run until ``hold`` is set.
     ``caracole youtube --search --progress`` (``searches``: the queries asked), once ``cfg`` is set: what the real one
-    keeps, the video the owner gave as YouTube's first and its thumbnail, at once."""
+    keeps, the video the owner gave as YouTube's first (``example``: Vikingos veganos, unless a test sets another) and
+    its thumbnail, at once."""
 
     def __init__(self):
         self.ran: list[tuple[str, ...]] = []
@@ -52,6 +60,7 @@ class FakeSheet:
         self.videos: list[str] = []
         self.hold = threading.Event()
         self.cfg = None
+        self.example = VIKINGOS_VIDEO
 
     def search(self, query, stage):
         from caracole.youtube_search import KV_PREFIX, query_key, thumb_path
@@ -64,12 +73,11 @@ class FakeSheet:
 
             kv_set_json(conn, KV_PREFIX + query_key(query), {
                 "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "query": query, "thumb": True,
-                "video": {"id": VIKINGOS, "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu",
-                          "duration": 222.0, "url": f"https://www.youtube.com/watch?v={VIKINGOS}"}})
+                "video": {**self.example, "url": f"https://www.youtube.com/watch?v={self.example['id']}"}})
             conn.commit()
         finally:
             conn.close()
-        path = thumb_path(self.cfg, VIKINGOS)
+        path = thumb_path(self.cfg, self.example["id"])
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(JPEG)
         stage("video", "done")
@@ -87,8 +95,7 @@ class FakeSheet:
         try:
             kv_set_json(conn, f"{KV_PREFIX}video:{video_id}", {
                 "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "thumb": True,
-                "video": {"id": video_id, "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu",
-                          "duration": 222.0, "url": f"https://www.youtube.com/watch?v={video_id}"}})
+                "video": {**self.example, "id": video_id, "url": f"https://www.youtube.com/watch?v={video_id}"}})
             conn.commit()
         finally:
             conn.close()
@@ -422,3 +429,37 @@ def test_the_box_knows_a_videos_link_in_every_shape_and_nothing_else(able, live,
             assert browser.wait(mode), text
         else:
             assert browser.wait(f"!{mode} && document.getElementById('found').dataset.query === {json.dumps(text)}"), text
+
+
+def test_the_owners_silvana_estrada_never_comes_out_as_silvana_and_estrada(able, live, sheet, browser):
+    # The owner's session, as caracole serve's requests kept it: no Ultimate Guitar index at all; the query typed in
+    # lower case, "silvana estrada que problema", whose first video on YouTube is Silvana Estrada's own upload, "Silvana
+    # Estrada — Qué Problema (Visualizer)"; then that video's link pasted. Make the sheet fills the request form in with
+    # the artist the video's channel names at the query's start and the title after her; the pasted link's panel with
+    # the name its title gives. Never artist "Silvana" and title "Estrada".
+    from test_web_page_search import answer_to, search
+
+    base, posted = live
+    sheet.example = SILVANA_VIDEO
+    browser.open(base)
+    query = "silvana estrada que problema"
+    search(browser, query)
+    row = "document.querySelector('#found .youtube-row')"
+    assert browser.wait(f"{answer_to(query)} && {row} !== null", timeout=20), \
+        browser.js("document.getElementById('found').textContent")
+    assert browser.js(f"{row}.querySelector('.yt-meta').textContent") == "Silvana Estrada · 3:26"
+    assert browser.wait("(document.querySelector('form.request-form [name=artist]') || {}).value === 'Silvana Estrada'")
+    browser.click("#found .youtube-row button")
+    assert browser.wait("document.getElementById('request-box').open")
+    fields = browser.js("['artist', 'title', 'youtube'].map((n) => "
+                        "document.querySelector(`form.request-form [name=${n}]`).value)")
+    assert fields[:2] != ["Silvana", "Estrada"]
+    assert fields == ["Silvana Estrada", "que problema", f"https://www.youtube.com/watch?v={SILVANA}"]
+    assert [p for p, _ in posted] == ["/youtube/search"]  # nothing sent until you press Request
+    # The link pasted: its panel, the name read from the video's title.
+    paste(browser, f"https://www.youtube.com/watch?v={SILVANA}")
+    panel = "document.querySelector('#found .link-panel')"
+    names = f"['artist', 'title'].map((n) => {panel}.querySelector(`input[name=${{n}}]`).value)"
+    assert browser.wait(f"{panel} !== null && {names}.join('|') === 'Silvana Estrada|Qué Problema'", timeout=20), \
+        browser.js(f"{panel} && {names}")
+    assert [p for p, _ in posted] == ["/youtube/search", "/youtube/video"]
