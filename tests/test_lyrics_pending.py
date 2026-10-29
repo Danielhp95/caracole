@@ -136,6 +136,24 @@ def test_lookup_uses_the_first_artist_the_clean_title_the_album_and_the_duration
     })]
 
 
+def test_a_length_given_for_a_song_with_none_of_its_own_goes_to_lrclib(conn, tmp_path):
+    # A sheet from a YouTube video: LRCLIB is asked with the audio's length, so the timed lyrics it gives fit it.
+    lrclib = FakeLrclib([record(duration=240.0), record(id=7, duration=213.0)])
+    own = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=None)
+    run(lrclib, conn, tmp_path, durations={own.id: 212.6})
+    assert lrclib.requests == [("get", {"artist_name": "Soda Stereo", "track_name": "De Música Ligera",
+                                        "duration": "213"})]
+    assert lyrics_from_json(get_song(conn, own.id).lyrics_json).lrclib_id == 7
+
+
+def test_a_songs_own_length_wins_over_one_given(conn, tmp_path):
+    lrclib = FakeLrclib([record()])
+    add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
+    song = get_song(conn, 1)
+    run(lrclib, conn, tmp_path, durations={song.id: 240.0})
+    assert lrclib.requests[0][1]["duration"] == "213"
+
+
 def test_a_miss_is_recorded_with_its_time_and_writes_nothing(conn, tmp_path):
     lrclib = FakeLrclib([load("get_hit.json")])
     song = add_song(conn, "Soda Stereo", "Canción Inexistente")

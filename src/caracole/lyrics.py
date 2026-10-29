@@ -465,9 +465,11 @@ def fetch_pending_lyrics(
     *,
     recheck_missing_after: timedelta = RECHECK_MISSING_AFTER,
     only: Collection[int] | None = None,
+    durations: Mapping[int, float] | None = None,
 ) -> LyricsStats:
     """Look up the lyrics of every song that has none yet, newest first (of ``only``'s ids, when given:
-    a lookup's one song).
+    a lookup's one song). ``durations``: a length in seconds by song id, for a song whose line gives
+    none (a sheet from a YouTube video asks with its audio's, so the timed lyrics LRCLIB gives fit it).
 
     Ignored songs are skipped. Songs LRCLIB had no lyrics for are asked again
     once their ``lyrics_at`` is older than ``recheck_missing_after``, after the
@@ -488,8 +490,9 @@ def fetch_pending_lyrics(
     stamp = stamps.stamp(now)
 
     def turn(song: Song) -> LyricsResult:  # a re-check of a miss goes past the cache
+        duration = song.duration_s if song.duration_s is not None else (durations or {}).get(song.id)
         return fetch_lyrics(client, artist=song.artists[0], title=song.title, album=song.album,
-                            duration_s=song.duration_s, cache=song.lyrics_status != "missing")
+                            duration_s=duration, cache=song.lyrics_status != "missing")
 
     songs = (s for s in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only)
     for song, result in each_song(songs, stats, turn, site="LRCLIB"):
