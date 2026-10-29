@@ -821,6 +821,26 @@ def test_a_file_that_will_not_decode_fails_alone(conn, cfg, tmp_path, caplog):
     assert get_song(conn, good.id).status == "found"
 
 
+def test_a_bug_laying_out_the_sheet_blames_no_audio_and_the_song_stays_due(conn, cfg, tmp_path, monkeypatch):
+    # What failed after the audio was heard is caracole's, never the file's: no "couldn't read", no kv record that
+    # would leave the song alone until its file changes, and the run fails (exit 1, the unit's alert).
+    import caracole.autochords.run as ac_run
+
+    s = with_audio(conn, tmp_path, add_song(conn, "Estopa", "Vacaciones"), lyrics_status="missing")
+
+    def broken(*args, **kwargs):
+        raise ZeroDivisionError("division by zero")
+
+    monkeypatch.setattr(ac_run, "build_sheet", broken)
+    stats = run(conn, cfg)
+    assert stats.generated == 0 and stats.failed == 1
+    assert failures(stats) == []
+    assert len(stats.errors) == 1 and "Estopa - Vacaciones" in stats.errors[0]
+    assert kv_get_json(conn, failed_key(s)) is None
+    monkeypatch.undo()
+    assert run(conn, cfg).generated == 1  # still due: the next run makes its sheet
+
+
 @pytest.mark.parametrize("change", ["downloaded again", "converted"])
 def test_a_file_that_failed_is_tried_again_only_once_it_changes(conn, cfg, tmp_path, change):
     bad = with_audio(conn, tmp_path, add_song(conn, "A", "Broken Download"), name="bad.wav")

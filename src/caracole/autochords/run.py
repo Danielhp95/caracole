@@ -44,6 +44,8 @@ Two kinds of failure are told apart, because only one is the purchase's:
   unusable, models that fail on a generated test tone (a sandbox that stops
   them, a checkpoint that won't load), or a sheet that can't be kept in the
   library. The songs stay due, and ``caracole autochords`` exits 1.
+- **A bug laying out the sheet**, once the models have heard the file (``_hear``),
+  is caracole's, never the file's: that song stays due, and the run exits 1.
 
 Each run is recorded in kv ``autochords:status`` for the to-do page:
 ``{"at", "generated", "skipped", "failed": [{"song", "error", "audio"}]}``,
@@ -243,10 +245,15 @@ def autochords_pending(
             continue
         video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
         try:
-            text, used, key, shift = _make_sheet(song, *models, source=_from_youtube(video))
+            heard = _hear(song, *models)
         except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
             stats.failed += 1
             stats.failures.append(_unreadable(conn, song, e, stamp))
+            continue
+        try:
+            text, used, key, shift = _make_sheet(song, heard, source=_from_youtube(video))
+        except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
+            _error(stats, song, e)
             continue
         try:
             _keep(conn, cfg, song, text, used, key, stamp, video=video, shift=shift)
@@ -550,9 +557,26 @@ def _from_youtube(video: Video | None) -> str | None:
     return youtube_credit(video.title, video.channel, video.id)
 
 
-def _make_sheet(
-    song: Song, recognizer: Recognizer, beats_fn: BeatsFn, *, source: str | None = None
-) -> tuple[str, str, str | None, float | None]:
+@dataclass(frozen=True)
+class _Heard:
+    """What the models heard in a song's audio file: its chords and its beats."""
+
+    audio: Path
+    segments: list[ChordSegment]
+    beats: Sequence[float]
+    downbeats: Sequence[float]
+
+
+def _hear(song: Song, recognizer: Recognizer, beats_fn: BeatsFn) -> _Heard:
+    """The models over the song's audio file: what fails here is the file's (one that won't decode, say), which
+    ``_unreadable`` records; what fails after it, laying out the sheet, is a bug of caracole's."""
+    audio = Path(song.audio_path or "")
+    segments = recognizer.recognize(audio)
+    beats, downbeats = beats_fn(audio)
+    return _Heard(audio, list(segments), beats, downbeats)
+
+
+def _make_sheet(song: Song, heard: _Heard, *, source: str | None = None) -> tuple[str, str, str | None, float | None]:
     """One song's auto sheet, which lyrics it used, the key of the chords heard (None when
     they fit no key), and the seconds its timed lyrics were shifted by to fit the audio (None
     when LRCLIB timed them for audio of the same length, or they weren't used); all of it comes
@@ -562,10 +586,8 @@ def _make_sheet(
     The key is estimated from the chords as recognized, each weighed by how long it sounds,
     before they are snapped to beats and laid out.
     """
-    audio = Path(song.audio_path or "")
-    segments = recognizer.recognize(audio)
+    audio, segments, beats, downbeats = heard.audio, heard.segments, heard.beats, heard.downbeats
     key = estimate_key((s.label, s.end - s.start) for s in segments if s.label != NO_CHORD)
-    beats, downbeats = beats_fn(audio)
     lyrics = _sung_lyrics(song)
     timed = _synced_for(song, lyrics, audio, segments, beats, downbeats)
     synced = timed.text if timed is not None else None

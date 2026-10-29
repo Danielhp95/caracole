@@ -803,3 +803,27 @@ def test_audio_from_youtube_is_credited_after_the_songs_name_by_its_title_and_ch
     assert youtube_credit("", "Radiohead - Topic", "XFkzRNyygfk") == "Audio from YouTube: XFkzRNyygfk (Radiohead - Topic)"
     assert youtube_credit("Two\nlines  here", " Some  channel ", "XFkzRNyygfk") == (
         "Audio from YouTube: Two lines here (Some channel)")  # one line, as the sheet's
+
+
+def test_a_beat_half_a_period_after_the_last_is_a_beat_never_a_crash():
+    # Beats come in milliseconds, so one exactly half a period after the last is common (Estopa's "Vacaciones"):
+    # round() takes 0.5 to 0, which made "-1 beats missing" and a division by zero.
+    grid = merge._beat_grid([0.0, 0.5, 1.0, 1.25, 1.5, 2.0], until=2.0)
+    assert 1.25 in grid
+    assert grid == sorted(grid) and len(grid) == len(set(grid))
+
+
+def test_any_beats_make_an_ordered_grid():
+    import random
+
+    rng = random.Random(1551456)
+    for _ in range(3000):
+        period = rng.choice([0.25, 0.4, 0.416, 0.5, 0.6])
+        beats, t = [], rng.uniform(0, 2)
+        for _ in range(rng.randint(0, 40)):
+            beats.append(round(t, 3))
+            t += period * rng.choice([0.5, 0.5, 1, 1, 1, 1.5, 2, 3])
+        grid = merge._beat_grid(beats, until=t + 2)
+        assert grid == sorted(grid), beats
+        segs = [ChordSegment(0.0, t / 2, "C"), ChordSegment(t / 2, t + 1, "G")]
+        snap_to_beats(segs, beats)  # and the chords snap to it
