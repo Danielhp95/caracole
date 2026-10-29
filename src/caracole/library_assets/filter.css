@@ -114,7 +114,10 @@ html.sheet-open { overflow: hidden; }
   /* Icons alone beside the search, a thumb's worth each: the words are there for a screen reader, and Filter keeps the
      number of its filters on. */
   .bar-row .tool { justify-content: center; min-width: 44px; min-height: 44px; padding: 0; font-size: 0; }
-  .bar-row .tool-menu select.tool { width: 44px; padding: 0; }
+  /* Sort's orders keep their words: the browser draws its menu in its options' own font, which they would inherit
+     at 0 px (a menu of empty rows), and indents them by the menu's padding. */
+  .bar-row .tool-menu select.tool { width: 44px; padding: 0 12px; }
+  .bar-row .tool-menu option { font-size: .88rem; }
   .bar-row .tool-menu .glyph { left: 50%; transform: translate(-50%, -50%); }
   .bar-row .tool .filter-n { position: absolute; top: -5px; right: -5px; font-size: .7rem; }
   .bar-row .tool#filter { position: relative; }

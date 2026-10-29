@@ -221,6 +221,34 @@ def test_the_sheets_controls_are_a_thumbs_target_on_a_touch_screen(shelf, phone)
     assert phone.js("document.documentElement.scrollWidth <= innerWidth")
 
 
+# Sort, where a press at its middle lands, and the menu it opens: open, the focus on it, and the size each order is
+# drawn at there. The browser's own menu, a popup the page can't see into, draws each option in its own font: an
+# option at 0 px is a menu of empty rows, as a phone's icons alone (the words' font-size 0) once gave it.
+SORT = """(() => { const s = document.getElementById('sort'), r = s.getBoundingClientRect();
+  const x = r.left + r.width / 2, y = r.top + r.height / 2;
+  return { x, y, width: Math.round(r.width), on: document.elementFromPoint(x, y) === s, open: s.matches(':open'),
+           focus: document.activeElement === s, words: s.selectedOptions[0].textContent,
+           options: [...s.options].map((o) => parseFloat(getComputedStyle(o).fontSize)) }; })()"""
+
+
+@pytest.mark.parametrize("width,mobile", [(1280, False), (719, False), (600, False), (390, False), (390, True)])
+def test_sort_opens_a_menu_that_shows_its_orders_at_every_width(shelf, tmp_path, width, mobile):
+    with browser.Browser(tmp_path / "chrome", width=width, height=844, mobile=mobile) as page:
+        page.open(shelf.as_uri())
+        sort = page.js(SORT)
+        assert sort["on"] and not sort["open"], sort  # nothing over it: a press lands on the menu itself
+        assert sort["width"] == 44 if width < 720 else sort["width"] > 44, sort  # its icon alone on a phone
+        if mobile:  # a thumb's tap
+            page.send("Input.dispatchTouchEvent", type="touchStart", touchPoints=[{"x": sort["x"], "y": sort["y"]}])
+            page.send("Input.dispatchTouchEvent", type="touchEnd", touchPoints=[])
+        else:
+            page.click("#sort")
+        assert page.wait("document.getElementById('sort').matches(':open')"), page.js(SORT)
+        sort = page.js(SORT)
+        assert sort["focus"] and sort["words"] == "Artist A–Z", sort
+        assert min(sort["options"]) >= 12, sort  # each order there to read, as wide as its words
+
+
 def test_select_sits_last_and_still_starts_picking(shelf, laptop):
     laptop.open(shelf.as_uri() + "#show=wanted")
     tools = laptop.js(TOOLBAR)
