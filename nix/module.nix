@@ -123,8 +123,8 @@ let
   # auto-chords package has. So with auto-chords on, the run is that package's,
   # with the model paths, as caracole-admin and caracole-web are: their pages
   # say whether caracole takes that audio, so they must find what the run
-  # finds. None of them imports torch, and yt-dlp's deno runs without its JIT,
-  # so MemoryDenyWriteExecute stays.
+  # finds. The run imports no torch, and yt-dlp's deno runs without its JIT,
+  # so its MemoryDenyWriteExecute stays; caracole-web's goes (below).
   runPackage = if cfg.autochords.enable then cfg.autochords.package else cfg.package;
   runEnv = cacheEnv // lib.optionalAttrs cfg.autochords.enable modelEnv;
 
@@ -603,8 +603,12 @@ in
     # request runs caracole commands in this unit, one at a time, each under
     # caracole's lock, so it has the nightly run's folders, network and sandbox.
     # With auto-chords on, it runs the nightly run's package (runPackage), and
-    # none of those commands (get, add, review, match, fetch, render, remove,
-    # songbook and lacuerda) runs yt-dlp.
+    # one of those commands, a sheet from a YouTube video (`caracole youtube
+    # --sheet`, src/caracole/youtube_sheet.py), runs yt-dlp on the youtube
+    # step's terms and then auto-chords' models, whose PyTorch generates code at
+    # run time: so, as in the auto-chords unit and caracole-admin, without
+    # MemoryDenyWriteExecute. Without auto-chords it keeps it, and the page
+    # offers no such sheet.
     systemd.services.caracole-web = lib.mkIf cfg.web.enable {
       description = "caracole web: the library page and song requests";
       wantedBy = [ "multi-user.target" ];
@@ -631,7 +635,8 @@ in
           # Straight back to starting, not through `failed`, which would start
           # OnFailure= and send an alert on every try.
           RestartMode = "direct";
-        };
+        }
+        // lib.optionalAttrs cfg.autochords.enable { MemoryDenyWriteExecute = false; };
     };
 
     networking.firewall.allowedTCPPorts = lib.mkIf (cfg.web.enable && cfg.web.openFirewall) [

@@ -400,7 +400,8 @@ Rules a change there keeps (the Invariants below are the others):
   (`services.caracole`: units, timer, `caracole-admin`; no `credentials` option, as caracole reads no
   secret, so no unit and not `caracole-admin` loads one; with auto-chords on, the nightly
   unit runs the auto-chords package, for its youtube step, and caracole-web and
-  `caracole-admin` run it too, so their pages agree), module-check.nix
+  `caracole-admin` run it too, so their pages agree; caracole-web then without MemoryDenyWriteExecute, as the
+  auto-chords unit and `caracole-admin`, since a sheet from a YouTube video runs the models in it), module-check.nix
   (`checks.module`).
 - `docs/`: usage.md (configuration, commands, the to-do page, overrides.toml, the library
   folder), deploy.md (a server: the NixOS module, or Ubuntu 24.04 without Nix, whose units

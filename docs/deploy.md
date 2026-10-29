@@ -174,8 +174,8 @@ sudo systemctl start caracole.timer caracole-web.service
 ### 4. Auto-chords
 
 For a song nobody has charted, a local model writes `sheet (auto).txt` from its
-audio: a track you bought, dropped into the music folder, or audio the nightly
-run takes from YouTube.
+audio: a track you bought, dropped into the music folder, audio the nightly
+run takes from YouTube, or that of a video you paste on the library page.
 
 ```nix
   services.caracole.autochords.enable = true;
@@ -186,7 +186,10 @@ network. The nightly run, caracole-web and `caracole-admin` run the
 `autochords` package, which has torch, the model files and yt-dlp, and the run
 takes the audio of up to three songs a night that have no human sheet from
 YouTube: against YouTube's robots.txt and terms, the owner's choice, on the
-terms [usage.md](usage.md#audio-from-youtube) gives. For purchases alone:
+terms [usage.md](usage.md#audio-from-youtube) gives. caracole-web makes a song's
+sheet from a YouTube video you paste on the library page, the models running in
+it, so it runs without `MemoryDenyWriteExecute` then, as the auto-chords unit and
+`caracole-admin` do. For purchases alone:
 
 ```nix
   services.caracole.settings.providers.youtube.enabled = false;
@@ -675,7 +678,8 @@ sudo ln -sfn ../yt-dlp/bin/yt-dlp /opt/caracole/bin/yt-dlp
 ```
 
 The unit runs after each run that succeeds, with no network, and may generate
-code, as PyTorch and numba do; `caracole-admin` may too:
+code, as PyTorch and numba do; `caracole-admin` may too, and so may caracole-web,
+which makes a song's sheet from a YouTube video pasted on the library page:
 
 ```sh
 sudo tee /etc/systemd/system/caracole-autochords.service > /dev/null <<'EOF'
@@ -698,6 +702,7 @@ sudo ln -sfn /etc/caracole/units.conf /etc/systemd/system/caracole-autochords.se
 sudo ln -sfn /etc/caracole/sandbox.conf /etc/systemd/system/caracole-autochords.service.d/sandbox.conf
 sudo sed -i 's/^#OnSuccess=/OnSuccess=/' /etc/systemd/system/caracole.service
 sudo sed -i 's/MemoryDenyWriteExecute=yes/MemoryDenyWriteExecute=no/' /usr/local/sbin/caracole-admin
+sudo sed -i 's/MemoryDenyWriteExecute=yes/MemoryDenyWriteExecute=no/' /etc/systemd/system/caracole-web.service
 sudo systemctl daemon-reload && sudo systemctl restart caracole-web.service
 sudo caracole-admin autochords   # auto-chords: 0 generated, 0 skipped, 0 failed
 ```

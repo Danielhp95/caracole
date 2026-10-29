@@ -456,13 +456,16 @@ let
         tailnetWeb.serviceConfig.ExecStart;
     # Its pages and the commands it runs (get, add, fetch, render, ...) rewrite _todo.md and index.html,
     # which say whether caracole takes audio from YouTube (src/caracole/youtube_fetch.py
-    # route_problem): with auto-chords on, they must say it as the nightly run does.
+    # route_problem): with auto-chords on, they must say it as the nightly run does. A sheet from a
+    # YouTube video (`caracole youtube --sheet`) runs auto-chords' models in it, whose PyTorch generates
+    # code at run time: without MemoryDenyWriteExecute then, as caracole-autochords.service.
     "with auto-chords on, caracole-web.service runs the auto-chords package, with the model paths" =
       webAutochordsUnit.serviceConfig.ExecStart
       == "${lib.getExe stubAutochords} --config ${webAutochordsConfigFile} serve --address 127.0.0.1 --port 8737"
       && webAutochordsUnit.environment.CARACOLE_BTC_WEIGHTS == "/models/btc.pt"
       && webAutochordsUnit.environment.CARACOLE_BEAT_CHECKPOINT == "/models/beat_this.ckpt"
-      && webAutochordsUnit.serviceConfig.MemoryDenyWriteExecute;
+      && webAutochordsUnit.serviceConfig.MemoryDenyWriteExecute == false
+      && hardened webAutochordsUnit.serviceConfig;
     "caracole-web.service is hardened as caracole.service is, MemoryDenyWriteExecute included" =
       hardened webSc && webSc.MemoryDenyWriteExecute && webSc.RestrictNamespaces;
     "caracole-web.service runs as caracole, with a group-writable umask" = sameUser webSc;
