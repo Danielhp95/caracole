@@ -1810,7 +1810,7 @@ once, rather than a night apart: on the library page caracole serve serves, or w
 
 The song goes into wanted.txt if the library hasn't got it, as `caracole add` adds it, and the
 video under `[youtube]`; then, one stage a line (`Audio: downloaded …`, `Lyrics: found, timed.`,
-`Chords: chords over LRCLIB's timed lyrics.`, `Sheet: …/sheet (auto).txt, readable after 94.2 s.`):
+`Chords: chords over LRCLIB's timed lyrics.`, `Sheet: …/sheet (auto).txt, readable after 54.8 s.`):
 its audio, on the terms above (the budget, the pauses, one run at a time, a block honoured);
 its lyrics from LRCLIB, asked with the audio's length when its wanted.txt line gives none, so the
 timed lyrics LRCLIB picks fit the audio; the chords from the audio (auto-chords, a few minutes on
