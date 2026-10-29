@@ -8,6 +8,7 @@
    Every .btn has its 44 px from BASE_STYLE, and a line's, its chevron and an artist's name theirs from ROWS_STYLE. */
 @media (pointer: coarse) {
   .tab, .btn.more-by { min-height: 44px; }
+  .tab { min-width: 44px; justify-content: center; }  /* Sites, the shortest name */
   .progress .undo { min-width: 44px; min-height: 44px; }
   .jump button { min-width: 44px; height: 44px; }
 }

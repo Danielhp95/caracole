@@ -267,7 +267,7 @@ def test_a_song_counts_once_per_site(conn, cfg):
     data = sites_data(conn, cfg, cards, NOW)
     assert line(data, "gtptabs")["kept"] == {"count": 2, "unit": "Guitar Pro files", "songs": 1, "detail": None}
     assert line(data, "ug")["kept"]["count"] == 1
-    assert line(data, "lacuerda")["kept"] == {"count": 1, "unit": "sheets", "songs": 1, "detail": None}
+    assert line(data, "lacuerda")["kept"] == {"count": 1, "unit": "sheet", "songs": 1, "detail": None}
     assert data["songs"] == 2
 
 
@@ -296,7 +296,7 @@ def test_harmonica_and_game_tabs_and_auto_sheets_from_youtube(conn, cfg):
     data = sites_data(conn, cfg, cards, NOW)
     assert line(data, "harptabs")["kept"]["count"] == 1
     assert line(data, "gametabs")["kept"]["count"] == 1
-    assert line(data, "youtube")["kept"] == {"count": 1, "unit": "auto sheets", "songs": 1, "detail": None}
+    assert line(data, "youtube")["kept"] == {"count": 1, "unit": "auto sheet", "songs": 1, "detail": None}
 
 
 RUN = {"run_id": "2026-10-29T07:00:00Z", "started": "2026-10-29T07:00:00Z", "finished": "2026-10-29T07:41:00Z",

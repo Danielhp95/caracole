@@ -47,13 +47,17 @@ file, and none of it loads anything from the network.
   the page's own are, and every job's view is told back ("caracole:job"); ``showLine`` writes a request's
   line.
 
-- tabs.js, before songbooks.js: the page's tabs (body.html's tablist in the masthead: Library, Songbooks and, served,
-  Requests, the last), each a ``tab-NAME`` button whose ``aria-controls`` names its panel, ``#tab=NAME`` in the
+- tabs.js, before songbooks.js: the page's tabs (body.html's tablist in the masthead: Library, Songbooks, Sites and,
+  served, Requests, the last), each a ``tab-NAME`` button whose ``aria-controls`` names its panel, ``#tab=NAME`` in the
   address (none for the library); clicked, or with the tablist's keys, a tab shows its panel and hides the others,
   as a link to the page that names a tab does (a request line's Details), and Back to an address that names another.
   Its seam, ``window.caracoleTabs`` (``show``, ``current``), and "caracole:tab", which every tab's script hears: a
   tab put in body.html is one more, with no change to it.
-- requests.css and requests.js, after songbooks.js: the Requests tab, on the page caracole serve serves alone (the
+- sites.css and sites.js, after songbooks.js: the Sites tab, in the file as served: a line a site, drawn once from
+  the data's ``sites`` (sites.py: what each site's index holds, what your library keeps from it, the last nightly
+  run's requests, its status), its icon ``caracoleRows``' ``sourceMark``; a line is a button that opens under itself
+  to robots.txt in words, the site's terms, its index, pace and last request. It asks nothing of anyone.
+- requests.css and requests.js, after sites.js: the Requests tab, on the page caracole serve serves alone (the
   file on disk has neither tab nor panel): every request the server remembers, drawn from ``/requests.json``
   (web/feed.py) with createElement and textContent, asked again while it shows (each request drawn again only
   when it changed, its Output as you left it); its Cancel, Try again and Get it from there post with fetch(), the

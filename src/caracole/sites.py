@@ -270,6 +270,14 @@ _FILES = {"gtptabs": (re.compile(r"guitar-\d+\..+"), "Guitar Pro files"),
           "harptabs": (re.compile(r"harmonica-\d+\.txt"), "harmonica tabs"),
           "gametabs": (re.compile(r"gametab-\d+\.txt"), "tabs")}
 _SHEETS = {"ug": "sheets", "lacuerda": "sheets", "youtube": "auto sheets"}
+_ONE = {"sheets": "sheet", "auto sheets": "auto sheet", "Guitar Pro files": "Guitar Pro file", "links": "link",
+        "harmonica tabs": "harmonica tab", "tabs": "tab", "songs": "song", "tracks": "track", "requests": "request",
+        "yt-dlp runs": "yt-dlp run"}
+
+
+def _unit(n: int, units: str) -> str:
+    """``units`` as one of them is named when ``n`` is 1 ("1 sheet"); lyrics are lyrics."""
+    return _ONE.get(units, units) if n == 1 else units
 
 
 def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
@@ -281,7 +289,7 @@ def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
         if key == "ug":
             beside = sum(max(len((c.get("versions") or {}).get("list") or []) - 1, 0) for c in mine)
             detail = f"+ {beside:,} other versions kept beside them" if beside else None
-        return {"count": count, "unit": _SHEETS[key], "songs": count, "detail": detail}
+        return {"count": count, "unit": _unit(count, _SHEETS[key]), "songs": count, "detail": detail}
     if key == "lrclib":
         names = [{f.get("name") for f in c.get("files") or [] if f.get("source") == key} for c in cards]
         mine = [n for n in names if n & set(_LYRICS)]
@@ -290,11 +298,12 @@ def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
                 "detail": f"{synced:,} of them synced" if mine else None}
     if key == "musescore":  # the possible matches the to-do page and a song's card link: caracole downloads none
         links = [len(c.get("museScore") or []) for c in cards]
-        return {"count": sum(links), "unit": "links", "songs": sum(1 for n in links if n), "detail": None}
+        return {"count": sum(links), "unit": _unit(sum(links), "links"), "songs": sum(1 for n in links if n),
+                "detail": None}
     pattern, unit = _FILES[key]
     each = [sum(1 for f in c.get("files") or [] if f.get("source") == key and pattern.fullmatch(f.get("name") or ""))
             for c in cards]
-    return {"count": sum(each), "unit": unit, "songs": sum(1 for n in each if n), "detail": None}
+    return {"count": sum(each), "unit": _unit(sum(each), unit), "songs": sum(1 for n in each if n), "detail": None}
 
 
 def _pace(cfg: Config, key: str) -> str:
@@ -331,13 +340,14 @@ def sites_data(conn: sqlite3.Connection, cfg: Config, cards: list[dict[str, Any]
         status = status_of(conn, cfg, site.key, now, partial=partial)
         night = None
         if run is not None and status.state != "off":
-            night = {"used": int(requests.get(site.key, 0)),
-                     "budget": int(budgets.get(site.key, cfg.provider(site.key).budget)),
-                     "unit": "yt-dlp runs" if site.key == "youtube" else "requests"}
+            budget = int(budgets.get(site.key, cfg.provider(site.key).budget))
+            night = {"used": int(requests.get(site.key, 0)), "budget": budget,
+                     "unit": _unit(budget, "yt-dlp runs" if site.key == "youtube" else "requests")}
         last = conn.execute("SELECT MAX(at) FROM events WHERE provider = ?", (site.key,)).fetchone()[0]
         lines.append({
             "key": site.key, "name": SOURCES[site.key].name, "role": site.role, "domain": site.domain,
-            "indexed": None if indexed is None else {"songs": indexed.songs, "unit": indexed.unit,
+            "indexed": None if indexed is None else {"songs": indexed.songs,
+                                                     "unit": _unit(indexed.songs, indexed.unit),
                                                      "detail": indexed.detail},
             "asked": site.asked,
             "progress": None if progress is None else {"done": progress.done, "of": progress.of,

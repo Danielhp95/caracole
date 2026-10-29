@@ -1070,8 +1070,9 @@ def _haystack(texts: list[str]) -> str:
 # is: its __init__.py). BASE_STYLE, PICKER_STYLE, ROWS_STYLE and ROWS_SCRIPT, the ones caracole serve's own
 # pages share, are importable from here too.
 STYLESHEETS = ("base.css", "picker.css", "library.css", "filter.css", "rows.css", "card.css", "steps.css",
-               "library-screens.css", "songbooks.css", "requests.css")
-SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "tabs.js", "songbooks.js", "requests.js", "drawn.js")
+               "library-screens.css", "songbooks.css", "sites.css", "requests.css")
+SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "tabs.js", "songbooks.js", "sites.js", "requests.js",
+           "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)
 _PAGE_SCRIPT = "".join(read_asset(name) for name in SCRIPTS)

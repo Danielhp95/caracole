@@ -2071,10 +2071,11 @@ songbooks from their next render); caracole serve answers a browser's own
 `/favicon.ico` with it too. Its top is one bar, so that the first song starts
 well within the first screen, on a phone too: caracole's "¿" mark and name (the
 mark alone on a phone), the tabs, **Library**, your songs, **Songbooks**
-(see [The Songbooks tab](#the-songbooks-tab)) and, served, **Requests**, the
-last (see Requests, under [caracole serve](#caracole-serve)), each counting
-what it holds (songbooks; requests that wait or run), the address remembering
-which (`#tab=songbooks`, `#tab=requests`), and at the end the number of songs
+(see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
+tab](#the-sites-tab)) and, served, **Requests**, the last (see Requests, under
+[caracole serve](#caracole-serve)), Songbooks and Requests counting what they
+hold (songbooks; requests that wait or run), the address remembering which
+(`#tab=songbooks`, `#tab=sites`, `#tab=requests`), and at the end the number of songs
 wanted or ignored when there are any. On a phone the tabs fit beside the mark,
 four of them too. Under it the search
 box, which says how many songs there are ("Search 8 songs, or the sites"), with
@@ -2363,6 +2364,51 @@ songs, a song from your library or the indexes (**Add a song**), another name,
 or deleted (see [caracole serve](#caracole-serve) below). On a touch
 screen each grip, chip, button, ×, title, guitar and menu is a thumb's target,
 44 pixels at least.
+
+#### The Sites tab
+
+The third tab says what caracole has from each website it reads, a line a
+site, in this order: Ultimate Guitar, LaCuerda, LRCLIB, gtptabs.com,
+MuseScore, harptabs.com, gametabs.net and YouTube, each with its icon (its
+lettered badge while caracole has fetched none). Over them, the totals: the
+sites, the songs their indexes hold, the things your library keeps from them,
+and the last nightly run, when it started and ended and the requests it sent
+("No run yet" before the first). Each line has four figures:
+
+- **Indexed**: the songs the site's index holds, distinct songs rather than
+  versions (UG's index holds about twice as many tabs as songs); gametabs.net's
+  are tracks of games. For LaCuerda, the songs caracole knows (the artist pages
+  it has read, for your songs' artists, the most popular ones and what
+  LaCuerda's search answered), never the total its listings count, which the
+  line opened gives. Where an index is read a little each night, a meter says
+  how far it has got (LaCuerda's letters, harptabs.com's artist pages,
+  gametabs.net's game pages, UG's sitemaps while a build has some left).
+  LRCLIB and YouTube have no index: they are asked song by song.
+- **In your library**: what caracole keeps from the site for your songs, in its
+  own unit (sheets, lyrics, Guitar Pro files, MuseScore's links, harmonica tabs,
+  tabs, auto sheets from YouTube's audio), and what share of your songs that is.
+- **Last run**: the requests the last nightly run sent the site, out of its
+  budget (YouTube: yt-dlp runs). A command run by hand, or a lookup, isn't counted.
+- **Status**: **OK**, **Indexing** (its index isn't read whole yet),
+  **Cooling down** (after a block: until when and why), **Errors** (nothing has
+  worked since its last error) or **Off** (`enabled = false` in caracole.toml,
+  or YouTube without auto-chords). The to-do page's provider health table follows
+  the same rule.
+
+A line opens under itself: what the site's robots.txt closes, in a sentence,
+with the paths worth naming (each one's meaning on hover) and how many more it
+closes; the site's terms, for the three caracole reads by your choice
+(harptabs.com, gametabs.net, YouTube); its index's own counts; caracole's pace
+with it; and its last request. On a phone the line keeps the site and its
+status, and its figures move into what it opens.
+
+The tab sends no request: every figure is read from caracole's database and
+caracole.toml. The file on disk shows them as they were when the page was last
+written (the nightly run writes it before its end, so the file's last run may
+have no end yet); `caracole serve` shows them as they are. Counting a million
+rows of UG's index on every load would be slow, so caracole keeps each index's
+counts (kv `sites:counts`) whenever it writes the pages, and counts again only
+an index changed since.
 
 Each song's entry in the page's data (the `<script type="application/json"
 id="songs">` block) has the same `key` and `key_source` as its info.json, and

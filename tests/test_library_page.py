@@ -298,7 +298,8 @@ def test_the_masthead_links_no_page_and_requests_are_its_last_tab_served(conn, c
     written = masthead(whole)
     assert "_todo.md" not in written and "To-do" not in written and "<nav" not in written
     assert [(name, panel) for name, panel, _, _ in TAB.findall(written)] == [("library", "library-view"),
-                                                                            ("songbooks", "songbooks")]
+                                                                            ("songbooks", "songbooks"),
+                                                                            ("sites", "sites")]
     assert 'id="requests"' not in whole
     # Served, the requests are the last tab, counting those that wait or run, as Songbooks counts its songbooks:
     # no page of their own, and no link at the top right.
@@ -308,6 +309,7 @@ def test_the_masthead_links_no_page_and_requests_are_its_last_tab_served(conn, c
     assert "<nav" not in served and "navlink" not in served and "_todo.md" not in served
     assert TAB.findall(served) == [("library", "library-view", "Library", ""),
                                    ("songbooks", "songbooks", "Songbooks ", ""),
+                                   ("sites", "sites", "Sites", ""),
                                    ("requests", "requests", "Requests ", "2")]
     assert re.search(r'<section class="view reqs" id="requests" role="tabpanel" aria-labelledby="tab-requests" '
                      r'hidden></section>', whole)

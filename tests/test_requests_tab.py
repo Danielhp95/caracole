@@ -528,8 +528,7 @@ def with_feed(fed: dict):
 
 
 # What the page shows once the tab has drawn the mockup's six requests: where its tabs are, how wide it got, and its
-# controls short of a thumb's size; then, with a fourth tab put before Requests, as the Sites tab will be, where its
-# tabs are.
+# controls short of a thumb's size; then, with Songbooks counting twelve, where its four tabs are.
 DRAWN = """
 (() => {
   const tabs = () => Array.from(document.querySelectorAll(".masthead [role=tab]")).map((t) => {
@@ -553,11 +552,6 @@ DRAWN = """
       tabs: tabs(), page: innerWidth, edge: Math.round(document.querySelector(".masthead").getBoundingClientRect().right),
     }));
     __SHORT__
-    const sites = document.getElementById("tab-songbooks").cloneNode(true);
-    sites.id = "tab-sites";
-    sites.firstChild.textContent = "Sites ";
-    sites.querySelector(".n").textContent = "12";
-    document.getElementById("tab-requests").before(sites);
     document.querySelector("#tab-songbooks .n").textContent = "12";
     document.body.setAttribute("data-four", JSON.stringify({ tabs: tabs(),
       wide: document.documentElement.scrollWidth }));
@@ -579,7 +573,8 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_four_tabs_in_light_an
                                media={"prefers-color-scheme": scheme}, budget_ms=20000)
         shown = noted(dom, "data-shown")
         assert shown["selected"] == "tab-requests" and shown["library"] is True, shown
-        assert [t[0] for t in shown["tabs"]] == ["tab-library", "tab-songbooks", "tab-requests"]  # Requests last
+        assert [t[0] for t in shown["tabs"]] == ["tab-library", "tab-songbooks", "tab-sites",
+                                                 "tab-requests"]  # Requests last
         assert shown["groups"] == ["Now", "Today"]
         assert shown["ids"] == ["req-6", "req-7", "req-5", "req-4", "req-3", "req-2"]
         assert shown["chips"] == ["✓ Song: done", "✓ Match UG: done", "✓ Sheet UG: done", "PDF: running",
@@ -592,7 +587,7 @@ def test_the_tab_draws_every_request_and_fits_a_phone_with_four_tabs_in_light_an
         if width < 500:  # on a touch screen every control is a thumb's size, its Output open; a mouse keeps compact tabs
             assert noted(dom, "data-short") == [], scheme
         assert noted(dom, "data-wide") <= shown["page"], scheme  # no sideways scroll
-        # The tabs on one line, inside the page; and so they stay with a fourth tab before Requests.
+        # The four tabs on one line, inside the page; and so they stay with a count of two digits.
         four = noted(dom, "data-four")
         for tabs in (shown["tabs"], four["tabs"]):
             assert len({top for *_, top in tabs}) == 1 and tabs[-1][2] <= shown["edge"], (tabs, shown["edge"])
