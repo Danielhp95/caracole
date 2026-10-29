@@ -211,6 +211,23 @@ def test_words_without_a_stamp_go_with_the_word_stamped_before_them():
     ]
 
 
+def test_a_chord_on_a_syllable_goes_on_its_words_first_letter():
+    # C comes in on "ful", a syllable of "beautiful": it goes on the "b", never on "day", the
+    # word start nearest the syllable. Chinese characters are each a word of their own.
+    synced = (
+        "[00:08.00]<00:08.00>Oh <00:08.50>beau<00:09.00>ti<00:09.50>ful <00:10.50>day\n"
+        "[00:12.00]<00:12.00>第<00:12.50>一<00:13.00>行<00:13.50>歌<00:14.00>词<00:14.50>在<00:15.00>这\n"
+    )
+    segs = [seg(8.0, 9.5, "G"), seg(9.5, 10.5, "C"), seg(10.5, 12.0, "D"), seg(12.0, 14.0, "Em"),
+            seg(14.0, 16.0, "A")]
+    assert words_sheet(segs, synced).splitlines()[3:] == [
+        "[ch]G[/ch]  [ch]C[/ch]         [ch]D[/ch]",
+        "Oh beautiful day",
+        "[ch]Em[/ch]  [ch]A[/ch]",
+        "第一行歌词在这",
+    ]
+
+
 def test_words_before_the_first_word_stamp_start_with_the_line():
     # "So" has no stamp: it is sung at the line's time, and G goes over it rather than over
     # "here", a fifth of a second later.

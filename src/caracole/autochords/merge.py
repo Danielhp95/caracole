@@ -189,8 +189,9 @@ def build_sheet(
 
     ``synced_words`` is the same lyrics read with their word stamps (``parse_lrc_words``),
     for lyrics that time each word (enhanced LRC); given, it is what is laid out, and a
-    line whose word stamps can be trusted puts each chord over the word sung when it
-    starts (``_word_column``). A line without them keeps the columns by time.
+    line whose word stamps can be trusted takes each chord's column from the word sung
+    when it starts (``_word_column``), its first letter, rather than from its time. A
+    line without them keeps the columns by time.
 
     With plain lyrics only, the sheet is a chord chart of the whole song, four
     bars per line, followed by the lyrics. With no lyrics, it is the chart alone.
@@ -265,7 +266,7 @@ def _synced_body(
             chart = _chart(segs, bars, gap_start, gap_end - tol)
         end = gap_start if chart else gap_end
         span = max(end - t, _EPS)
-        timed = _trusted_words(sung_words[i], t, after, tol)
+        timed = _trusted_words(sung_words[i], text, t, after, tol)
         placed = [
             (
                 _word_column(timed, s.start, tol)
@@ -293,12 +294,15 @@ def _synced_body(
 
 
 def _trusted_words(
-    words: WordStarts | None, t: float, until: float | None, tol: float
+    words: WordStarts | None, text: str, t: float, until: float | None, tol: float
 ) -> WordStarts | None:
     """A sung line's word stamps, when they can place its chords: in the order sung, the
     first no earlier than the line's time ``t``, the last no later than the next LRC entry's
     (``until``), within ``tol``. None otherwise, and the line's chords go by time alone.
-    Words before the first word stamp start with the line, at ``t``."""
+
+    Each stamp's column becomes the start of its word in ``text`` (``_own_word``), so a
+    chord on a syllable goes on its word's first letter; words before the first word stamp
+    start with the line, at ``t``."""
     if not words:
         return None
     times = [w for w, _ in words]
@@ -306,7 +310,17 @@ def _trusted_words(
         return None
     if times[0] < t - tol - _EPS or (until is not None and times[-1] > until + tol + _EPS):
         return None
-    return words if words[0][1] == 0 else ((min(t, times[0]), 0), *words)
+    starts = _word_starts(text)
+    own = tuple((w, _own_word(text, starts, col)) for w, col in words)
+    return own if words[0][1] == 0 else ((min(t, times[0]), 0), *own)
+
+
+def _own_word(text: str, starts: Sequence[int], col: int) -> int:
+    """The start of the word ``col`` is in, of ``starts`` (``_word_starts`` of ``text``):
+    the last one at or before it with no space between; ``col`` itself when there is none,
+    for ``_on_words`` to move as it moves any column."""
+    i = bisect.bisect_right(starts, col) - 1
+    return starts[i] if i >= 0 and " " not in text[starts[i] : col] else col
 
 
 def _word_column(words: WordStarts, start: float, tol: float) -> int:
