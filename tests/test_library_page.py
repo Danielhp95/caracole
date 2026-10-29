@@ -3969,3 +3969,25 @@ def test_the_lines_read_in_dark_mode(conn, cfg, tmp_path):
         assert reads["holds"] is None if size == "390,844" else reads["holds"] >= 3, (size, scheme, reads)
         assert (reads["box"] < 0.05) if scheme == "dark" else (reads["box"] > 0.8), (scheme, reads)  # no white box at night
         assert noted(dom, "data-weak") == [], scheme
+
+
+def test_the_page_data_holds_the_sites(conn, cfg):
+    from caracole.library_page import WebControls
+    from caracole.sites import SITES
+
+    add_song(conn, "Radiohead", "Creep")
+    for html in (page(conn, cfg), build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"))):
+        sites = data_of(html)["sites"]
+        assert [s["key"] for s in sites["list"]] == [s.key for s in SITES]
+        assert sites["songs"] == 1
+
+
+def test_building_the_page_sends_no_request(conn, cfg, monkeypatch):
+    import caracole.commands._common as common
+
+    def no_requests(*args, **kwargs):
+        raise AssertionError("the library page asked for a transport")
+
+    monkeypatch.setattr(common, "transport_for", no_requests)
+    add_song(conn, "Radiohead", "Creep")
+    assert data_of(page(conn, cfg))["sites"]["list"]

@@ -292,6 +292,7 @@ from caracole.overrides import Overrides
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.page_icon import mark as page_mark
 from caracole.progressions import catalogue, library_progressions
+from caracole.sites import sites_data
 from caracole.songbook_section import songbooks_data
 from caracole.songs import HUMAN_SHEET, Song, is_export, list_songs
 from caracole.todo import search_links, songs_to_buy
@@ -414,6 +415,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         for song in songs:
             song["fetchable"] = song["id"] not in controls.held
     data["songbooks"] = songbooks_data(conn, cfg, overrides)  # the Songbooks tab's (songbooks.js draws it)
+    data["sites"] = sites_data(conn, cfg, songs, now)  # the Sites tab's (sites.js draws it)
     # The page caracole serve serves may also ask it how its requests go (connect-src); the file can't.
     csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'") if controls is not None
            else _CSP.replace("__FORMS__", "'none'"))

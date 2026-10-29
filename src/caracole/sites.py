@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime
@@ -258,3 +259,103 @@ def status_of(conn: sqlite3.Connection, cfg: Config, provider: str, now: datetim
     if s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
         return Status("errors", "Errors", s.last_error)  # nothing has worked since the last error
     return Status("indexing", "Indexing") if partial else Status("ok", "OK")
+
+
+# --- the tab's data -------------------------------------------------------------------------------------------------
+
+_LYRICS = ("lyrics.txt", "lyrics.lrc")
+# What a song keeps from each site, by its files' names (library_page's cards give each file's ``source``): a site
+# whose things are files, each counted; the sheet's sites count songs by their sheet's source.
+_FILES = {"gtptabs": (re.compile(r"guitar-\d+\..+"), "Guitar Pro files"),
+          "harptabs": (re.compile(r"harmonica-\d+\.txt"), "harmonica tabs"),
+          "gametabs": (re.compile(r"gametab-\d+\.txt"), "tabs")}
+_SHEETS = {"ug": "sheets", "lacuerda": "sheets", "youtube": "auto sheets"}
+
+
+def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
+    """What your library keeps from a site: how many of its things, in its unit, for how many of your songs."""
+    detail = None
+    if key in _SHEETS:
+        mine = [c for c in cards if c.get("source") == key]
+        count = len(mine)
+        if key == "ug":
+            beside = sum(max(len((c.get("versions") or {}).get("list") or []) - 1, 0) for c in mine)
+            detail = f"+ {beside:,} other versions kept beside them" if beside else None
+        return {"count": count, "unit": _SHEETS[key], "songs": count, "detail": detail}
+    if key == "lrclib":
+        names = [{f.get("name") for f in c.get("files") or [] if f.get("source") == key} for c in cards]
+        mine = [n for n in names if n & set(_LYRICS)]
+        synced = sum(1 for n in mine if "lyrics.lrc" in n)
+        return {"count": len(mine), "unit": "lyrics", "songs": len(mine),
+                "detail": f"{synced:,} of them synced" if mine else None}
+    if key == "musescore":  # the possible matches the to-do page and a song's card link: caracole downloads none
+        links = [len(c.get("museScore") or []) for c in cards]
+        return {"count": sum(links), "unit": "links", "songs": sum(1 for n in links if n), "detail": None}
+    pattern, unit = _FILES[key]
+    each = [sum(1 for f in c.get("files") or [] if f.get("source") == key and pattern.fullmatch(f.get("name") or ""))
+            for c in cards]
+    return {"count": sum(each), "unit": unit, "songs": sum(1 for n in each if n), "detail": None}
+
+
+def _pace(cfg: Config, key: str) -> str:
+    low, high = cfg.provider(key).delay
+    spread = f"{low:g} s" if low == high else f"{low:g}–{high:g} s"
+    return f"{spread} between {'runs' if key == 'youtube' else 'requests'}"
+
+
+def _shown(value: Any) -> str | None:
+    from caracole.stamps import parse, shown
+
+    at = parse(value) if isinstance(value, str) else None
+    return shown(at, local=True) if at is not None else None
+
+
+def sites_data(conn: sqlite3.Connection, cfg: Config, cards: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
+    """The Sites tab's data, the library page's ``data["sites"]``: the last nightly run (kv ``run:last``, which
+    pipeline.py keeps of the nightly run alone: never a daytime command's run, whose run id is of the same shape),
+    the totals, and a line a site. ``cards``: the page's songs (library_page.song_cards), what your library keeps
+    from each site is counted from. Read with no request and nothing written."""
+    from caracole.icons import SOURCES
+    from caracole.lacuerda_index import index_state as listings
+
+    run = kv_get_json(conn, "run:last", default=None)
+    run = run if isinstance(run, dict) and run.get("started") else None
+    requests = run.get("requests") if run and isinstance(run.get("requests"), dict) else {}
+    budgets = run.get("budgets") if run and isinstance(run.get("budgets"), dict) else {}
+    figures = index_figures(conn)
+    lines = []
+    for site in SITES:
+        indexed, progress = figures[site.key]
+        partial = (not listings(conn).complete if site.key == "lacuerda"
+                   else progress is not None and progress.done < progress.of)
+        status = status_of(conn, cfg, site.key, now, partial=partial)
+        night = None
+        if run is not None and status.state != "off":
+            night = {"used": int(requests.get(site.key, 0)),
+                     "budget": int(budgets.get(site.key, cfg.provider(site.key).budget)),
+                     "unit": "yt-dlp runs" if site.key == "youtube" else "requests"}
+        last = conn.execute("SELECT MAX(at) FROM events WHERE provider = ?", (site.key,)).fetchone()[0]
+        lines.append({
+            "key": site.key, "name": SOURCES[site.key].name, "role": site.role, "domain": site.domain,
+            "indexed": None if indexed is None else {"songs": indexed.songs, "unit": indexed.unit,
+                                                     "detail": indexed.detail},
+            "asked": site.asked,
+            "progress": None if progress is None else {"done": progress.done, "of": progress.of,
+                                                       "what": progress.what},
+            "kept": _kept(site.key, cards),
+            "night": night,
+            "status": {"state": status.state, "label": status.label, "detail": status.detail},
+            "pace": _pace(cfg, site.key),
+            "last": _shown(last),
+            "robots": {"text": site.robots, "paths": [list(p) for p in site.paths], "more": more_paths(site)},
+            "terms": site.terms,
+        })
+    return {
+        "run": None if run is None else {
+            "started": _shown(run["started"]), "finished": _shown(run.get("finished")),
+            "requests": sum(int(n) for p, n in requests.items() if p != "youtube")},
+        "totals": {"sites": len(SITES), "indexed": sum(s["indexed"]["songs"] for s in lines if s["indexed"]),
+                   "kept": sum(s["kept"]["count"] for s in lines)},
+        "songs": len(cards),
+        "list": lines,
+    }

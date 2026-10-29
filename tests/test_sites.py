@@ -11,7 +11,8 @@ from caracole.db import kv_set_json
 from caracole.http import ROBOTS_DISALLOW
 from caracole.lacuerda import LETTERS
 from caracole.lacuerda_index import letters_read
-from caracole.sites import SITES, Indexed, Progress, Status, index_figures, more_paths, refresh_counts, status_of
+from caracole.sites import (SITES, Indexed, Progress, Status, index_figures, more_paths, refresh_counts, sites_data,
+                            status_of)
 from caracole.stamps import shown
 from caracole.youtube_fetch import route_problem
 
@@ -245,3 +246,113 @@ def test_a_partial_index_reads_indexing_unless_something_is_wrong(conn, cfg):
     assert status_of(conn, cfg, "harptabs", NOW, partial=True) == Status("indexing", "Indexing", None)
     health.record_block(conn, "harptabs", NOW - timedelta(hours=1), "HTTP 429")
     assert status_of(conn, cfg, "harptabs", NOW, partial=True).state == "cooling"
+
+
+# --- what your library keeps, the last run, the tab's data ------------------------------------------------------
+
+
+def card(source=None, files=(), muse=(), versions=None):
+    """A song's card as library_page.song_cards gives it, with what sites_data reads of it."""
+    return {"source": source, "files": [{"name": n, "source": s} for n, s in files],
+            "museScore": [{"href": h} for h in muse], "versions": versions}
+
+
+def line(data, key):
+    return next(s for s in data["list"] if s["key"] == key)
+
+
+def test_a_song_counts_once_per_site(conn, cfg):
+    cards = [card("ug", [("sheet.txt", "ug"), ("guitar-1.gp5", "gtptabs"), ("guitar-2.gp", "gtptabs")]),
+             card("lacuerda", [("sheet.txt", "lacuerda")])]
+    data = sites_data(conn, cfg, cards, NOW)
+    assert line(data, "gtptabs")["kept"] == {"count": 2, "unit": "Guitar Pro files", "songs": 1, "detail": None}
+    assert line(data, "ug")["kept"]["count"] == 1
+    assert line(data, "lacuerda")["kept"] == {"count": 1, "unit": "sheets", "songs": 1, "detail": None}
+    assert data["songs"] == 2
+
+
+def test_lyrics_count_songs_and_the_synced_ones(conn, cfg):
+    cards = [card(files=[("lyrics.txt", "lrclib"), ("lyrics.lrc", "lrclib")]), card(files=[("lyrics.txt", "lrclib")]),
+             card()]
+    assert line(sites_data(conn, cfg, cards, NOW), "lrclib")["kept"] == {
+        "count": 2, "unit": "lyrics", "songs": 2, "detail": "1 of them synced"}
+
+
+def test_musescore_counts_its_links_and_the_songs_they_are_for(conn, cfg):
+    cards = [card(muse=["https://musescore.com/song/a-1", "https://musescore.com/song/a-2"]), card()]
+    assert line(sites_data(conn, cfg, cards, NOW), "musescore")["kept"] == {
+        "count": 2, "unit": "links", "songs": 1, "detail": None}
+
+
+def test_ug_counts_the_versions_kept_beside_the_sheet(conn, cfg):
+    cards = [card("ug", versions={"list": [{}, {}, {}]}), card("ug", versions={"list": [{}]}), card("ug")]
+    assert line(sites_data(conn, cfg, cards, NOW), "ug")["kept"] == {
+        "count": 3, "unit": "sheets", "songs": 3, "detail": "+ 2 other versions kept beside them"}
+
+
+def test_harmonica_and_game_tabs_and_auto_sheets_from_youtube(conn, cfg):
+    cards = [card(files=[("harmonica-1.txt", "harptabs"), ("harmonica-1.html", "harptabs")]),
+             card(files=[("gametab-1.txt", "gametabs")]), card("youtube", [("sheet (auto).txt", "youtube")])]
+    data = sites_data(conn, cfg, cards, NOW)
+    assert line(data, "harptabs")["kept"]["count"] == 1
+    assert line(data, "gametabs")["kept"]["count"] == 1
+    assert line(data, "youtube")["kept"] == {"count": 1, "unit": "auto sheets", "songs": 1, "detail": None}
+
+
+RUN = {"run_id": "2026-10-29T07:00:00Z", "started": "2026-10-29T07:00:00Z", "finished": "2026-10-29T07:41:00Z",
+       "requests": {"ug": 58, "lrclib": 37, "lacuerda": 30}, "budgets": {"ug": 60, "lrclib": 200, "lacuerda": 30}}
+
+
+def test_the_last_run_is_the_nightly_runs_record_alone(conn, cfg):
+    kv_set_json(conn, "run:last", RUN)
+    conn.execute("INSERT INTO events (run, at, provider, url, status, decision) VALUES "
+                 "('2026-10-29T15:02:00Z', '2026-10-29T15:02:00Z', 'ug', 'https://x', 200, 'ok')")
+    data = sites_data(conn, cfg, [], NOW)
+    assert data["run"] == {"started": shown(datetime(2026, 10, 29, 7, 0, tzinfo=UTC), local=True),
+                           "finished": shown(datetime(2026, 10, 29, 7, 41, tzinfo=UTC), local=True), "requests": 125}
+    assert line(data, "ug")["night"] == {"used": 58, "budget": 60, "unit": "requests"}
+    assert line(data, "gtptabs")["night"] == {"used": 0, "budget": 20, "unit": "requests"}
+    assert line(data, "ug")["last"] == shown(datetime(2026, 10, 29, 15, 2, tzinfo=UTC), local=True)
+
+
+def test_a_run_with_no_end_yet_gives_its_start_alone(conn, cfg):
+    kv_set_json(conn, "run:last", {**RUN, "finished": None})
+    run = sites_data(conn, cfg, [], NOW)["run"]
+    assert run["finished"] is None
+    assert run["started"] == shown(datetime(2026, 10, 29, 7, 0, tzinfo=UTC), local=True)
+
+
+def test_no_nightly_run_yet(conn, cfg):
+    data = sites_data(conn, cfg, [], NOW)
+    assert data["run"] is None
+    assert all(s["night"] is None for s in data["list"])
+    assert all(s["last"] is None for s in data["list"])
+
+
+def test_an_off_site_has_no_night(conn, cfg):
+    kv_set_json(conn, "run:last", RUN)
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    data = sites_data(conn, off, [], NOW)
+    assert line(data, "gtptabs")["night"] is None
+    assert line(data, "gtptabs")["status"]["state"] == "off"
+
+
+def test_each_line_says_its_pace_its_robots_and_its_terms(conn, cfg):
+    data = sites_data(conn, cfg, [], NOW)
+    assert [s["key"] for s in data["list"]] == [s.key for s in SITES]
+    assert line(data, "ug")["pace"] == "10–20 s between requests"
+    assert line(data, "gametabs")["pace"] == "1 s between requests"
+    assert line(data, "youtube")["pace"] == "15–30 s between runs"
+    assert line(data, "ug")["robots"]["paths"][0] == ["/search.php", "its search"]
+    assert line(data, "ug")["robots"]["more"] == more_paths(site("ug"))
+    assert line(data, "harptabs")["terms"] == site("harptabs").terms
+    assert line(data, "ug")["name"] == "Ultimate Guitar"
+    assert line(data, "lrclib")["indexed"] is None and line(data, "lrclib")["asked"] == "Asked song by song"
+    assert data["totals"] == {"sites": 8, "indexed": 0, "kept": 0}
+
+
+def test_a_partial_index_reads_indexing(conn, cfg):
+    conn.execute("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) "
+                 "VALUES ('artist/1/billy-joel', 'artist', 1, 'billy joel', 'sitemap.xml')")
+    assert line(sites_data(conn, cfg, [], NOW), "harptabs")["status"]["state"] == "indexing"
+    assert line(sites_data(conn, cfg, [], NOW), "lacuerda")["status"]["state"] == "indexing"  # no listing read yet
