@@ -56,6 +56,8 @@ from caracole.stamps import shown
 
 if TYPE_CHECKING:
     import sqlite3
+    from collections.abc import Callable
+    from datetime import datetime
 
     from caracole.config import Config
     from caracole.overrides import Overrides
@@ -238,7 +240,6 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
     from caracole.youtube_fetch import route_problem
     from caracole.youtube_search import (
         RUN,
-        fetch_thumbnail,
         query_key,
         record_failure,
         search,
@@ -305,20 +306,46 @@ def _search(cfg: Config, query: str, *, progress: bool) -> None:
             end(f"Nothing found: YouTube has no video for {shown_query}.", "done")
             return
         say("video", "done", f"{found.title} ({found.channel})")
-        say("thumbnail", "running")
-        client = make_client(cfg, conn, PROVIDER, run_id, policy=replace(cfg.provider(PROVIDER), budget=1))
-        try:
-            kept = fetch_thumbnail(cfg, conn, client, found.id, query, now)
-            say("thumbnail", "done" if kept else "skipped", "kept" if kept else "none")
-        except ProviderBlocked as e:
-            state = record_block(conn, PROVIDER, now, str(e))
-            _common.alert_block(cfg, PROVIDER, f"{e}\nNo more requests until {shown(state.cooldown_until)}.")
-            say("thumbnail", "skipped", f"YouTube blocked caracole ({e})")
-        except (BudgetExhausted, ProviderError) as e:
-            say("thumbnail", "skipped", f"no thumbnail ({e})")
-        finally:
-            client.close()
+        _thumbnail(cfg, conn, found.id, query, run_id, now, say)
     typer.echo(f"Searched: YouTube's first video for {shown_query} is {found.title} ({found.channel}), {found.url}.")
+
+
+def _thumbnail(cfg: Config, conn: sqlite3.Connection, video_id: str, query: str, run_id: str, now: datetime,
+               say: Callable[[str, str, str], None]) -> None:
+    """A suggested video's thumbnail, right after the search, from YouTube's image host (provider ``ytimg``: no pause,
+    its own cooldown and alert); none while it cools down or is turned off, and none is no failure."""
+    from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
+    from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
+    from caracole.youtube_search import THUMBS_PROVIDER, fetch_thumbnail
+
+    if not cfg.provider(THUMBS_PROVIDER).enabled:
+        say("thumbnail", "skipped", "turned off")
+        return
+    if is_cooling(conn, THUMBS_PROVIDER, now):
+        say("thumbnail", "skipped", f"paused after a block, until {shown(get_state(conn, THUMBS_PROVIDER).cooldown_until)}")
+        return
+    say("thumbnail", "running", "")
+    client = make_client(cfg, conn, THUMBS_PROVIDER, run_id)
+    try:
+        kept = fetch_thumbnail(cfg, conn, client, video_id, query, now)
+        say("thumbnail", "done" if kept else "skipped", "kept" if kept else "none")
+    except ProviderBlocked as e:
+        state = record_block(conn, THUMBS_PROVIDER, now, str(e))
+        _common.alert_block(cfg, THUMBS_PROVIDER, f"{e}\nNo more thumbnails until {shown(state.cooldown_until)} "
+                                                  f"(block #{state.strikes}).")
+        say("thumbnail", "skipped", f"YouTube's images blocked caracole; paused until {shown(state.cooldown_until)}")
+        return
+    except BudgetExhausted:
+        say("thumbnail", "skipped", "budget spent")
+        return
+    except ProviderError as e:
+        record_error(conn, THUMBS_PROVIDER, now, str(e))
+        say("thumbnail", "skipped", "no thumbnail")
+        return
+    finally:
+        client.close()
+    if answered_any(conn, run_id, THUMBS_PROVIDER, client.requests_made):
+        record_ok(conn, THUMBS_PROVIDER, now)
 
 
 def _decline(cfg: Config, display: str) -> None:

@@ -255,15 +255,15 @@ class Status:
 
 def status_of(conn: sqlite3.Connection, cfg: Config, provider: str, now: datetime, *, partial: bool = False) -> Status:
     """A provider's status, one rule for the Sites tab and the to-do page's health table: off (turned off in
-    caracole.toml, or YouTube without auto-chords), cooling down after a block, errors since its last good run, else
-    OK, or Indexing while its index is ``partial``."""
+    caracole.toml, or YouTube, or its image host, without auto-chords), cooling down after a block, errors since its
+    last good run, else OK, or Indexing while its index is ``partial``."""
     from caracole.health import get_state
     from caracole.stamps import shown
     from caracole.youtube_fetch import route_problem
 
     if not cfg.provider(provider).enabled:
         return Status("off", "Off", f"[providers.{provider}] enabled = false")
-    if provider == "youtube" and (problem := route_problem(cfg)):
+    if provider in ("youtube", "ytimg") and (problem := route_problem(cfg)):
         return Status("off", "Off", problem)
     s = get_state(conn, provider)
     if s.cooldown_until and now < s.cooldown_until:
