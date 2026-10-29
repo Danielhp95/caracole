@@ -214,26 +214,42 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
   button.artist, button.artist-only { min-width: 44px; min-height: 44px; }
   .on-ug { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; }
 }
-/* What a search says beside its results (rows.js): where caracole looked, small marks, each the site's own on a pill
-   (lookedMarks): grey where it searched (the site's index whole, or empty yet), amber in part, red blocked, hollow
-   turned off; a mark's letters as a site line's badge has them, an icon in grey. A mark is no control: its tooltip
-   says why. */
-.looked { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; margin: 0; padding: 0;
+/* Under a search box, what each site found (rows.js countMarks): a pill a site, its own mark (an icon in its colours,
+   else its letters) and its count, in the text's colour where it found some; quieter where it found none, the pill
+   unfilled, the icon grey, the count muted. Its state in a glyph as well as a colour: amber and a pie with a slice cut
+   in part, red and a ban blocked, "off" on a dashed edge turned off, a dashed edge where its index is empty yet. Your
+   songs first, by the page's "¿". The row wraps a pill at a time on a narrow screen. A mark is no control: its
+   tooltip says why. While the next answer comes the row is dimmed (.busy), and while the marks show, the words beside
+   them (the counts said, "Searching the sites…") are a screen reader's alone (.counted). */
+.counts-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; min-width: 0; }
+.counts { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; min-width: 0; margin: 0; padding: 0;
   list-style: none; }
-.looked-mark { display: inline-grid; place-items: center; min-width: 24px; height: 20px; padding: 0 4px;
-  border-radius: 5px; background: var(--raised); color: var(--muted); cursor: default; }
-.looked-mark .source { width: auto; height: auto; border: 0; border-radius: 0; background: none; color: inherit;
-  font-size: 10px; font-weight: 750; letter-spacing: .02em; vertical-align: 0; }
-.looked-mark img.source { width: 14px; height: 14px; filter: grayscale(1); opacity: .75; }
-.looked-mark[data-state="partial"] { background: var(--wanted-bg); color: var(--wanted);
+.counts-row.busy > .counts { opacity: .5; }
+.counts-row.counted > .counts:not([hidden]) ~ * { position: absolute; width: 1px; height: 1px; min-height: 0;
+  margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.count-mark { display: inline-flex; flex: none; align-items: center; gap: 4px; height: 22px; padding: 0 6px 0 3px;
+  border-radius: 6px; background: var(--raised); color: var(--text); font-size: .8rem; font-weight: 700;
+  line-height: 1; font-variant-numeric: tabular-nums; white-space: nowrap; cursor: default; }
+.count-mark .source { width: 16px; height: 16px; vertical-align: 0; }
+.count-mark .source.letters { width: auto; min-width: 18px; height: 16px; padding: 0 2px; border-radius: 4px;
+  font-size: 9px; }
+.count-mark .yours-mark { flex: none; width: auto; height: 15px; color: var(--accent); }
+.count-mark svg.glyph { flex: none; width: 12px; height: 12px; stroke-width: 2.6; }
+.count-mark[data-n="0"] { background: transparent; color: var(--muted); font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--border); }
+.count-mark[data-n="0"] img.source, .count-mark[data-n="0"] .yours-mark { filter: grayscale(1); opacity: .6; }
+.count-mark[data-n="0"] .source.letters { color: var(--muted); }
+.count-mark[data-state="empty"] { box-shadow: none; outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+.count-mark[data-state="partial"] { background: var(--wanted-bg); color: var(--wanted);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--wanted) 45%, transparent); }
-.looked-mark[data-state="blocked"] { background: var(--failed-bg); color: var(--failed);
+.count-mark[data-state="blocked"] { background: var(--failed-bg); color: var(--failed); padding-right: 5px;
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--failed) 45%, transparent); }
-.looked-mark[data-state="partial"] img.source, .looked-mark[data-state="blocked"] img.source { opacity: 1; }
-.looked-mark[data-state="off"] { background: transparent; box-shadow: inset 0 0 0 1px var(--border-strong); }
-.looked-mark[data-state="off"] img.source { opacity: .45; }
-/* A search that found nothing on the sites (nothingFound): a line of the list, its query in its quotes, quiet; its
-   marks under it on a phone, in the column of a site's marks from 720px (a row's: where its facts are, from 900px). */
+.count-mark[data-state="blocked"] img.source { filter: grayscale(1); opacity: .6; }
+.count-mark[data-state="off"] { background: transparent; color: var(--muted); font-weight: 600; box-shadow: none;
+  outline: 1px dashed var(--border-strong); outline-offset: -1px; }
+.count-mark[data-state="off"] img.source { filter: grayscale(1); opacity: .45; }
+.count-mark[data-state="off"] .source.letters { color: var(--muted); }
+/* A search that found nothing on the sites (nothingFound): a line of the list, its query in its quotes, quiet. */
 .line.miss h3, .row.miss .row-title { color: var(--muted); font-style: italic; font-weight: 500; }
 .miss-more .actions { align-items: center; gap: 8px 16px; }
 .miss-more .why-unseen { margin: 0; }
@@ -246,22 +262,18 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .why-unseen p { max-width: 72ch; margin: 6px 0 0; }
 .why-unseen pre { margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--raised); white-space: pre-wrap; }
 .why-unseen pre code { padding: 0; background: none; }
-/* Under results: "Searched" and the marks, then Ask LaCuerda and the fold, in one muted line. */
-.looked-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 14px 0 0; }
-.looked-where { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
-.looked-said { color: var(--muted); font-size: .82rem; }
-.looked-line .why-unseen { flex: 1 1 100%; margin: 0; }
-.looked-line .read-outcome { flex: 1 1 100%; margin: 0; }
+/* Under results: Ask LaCuerda, then the fold for an artist the index may not see. */
+.notes-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 14px 0 0; }
+.notes-line .why-unseen { flex: 1 1 100%; margin: 0; }
+.notes-line .read-outcome { flex: 1 1 100%; margin: 0; }
 @media (min-width: 720px) {
-  .line.miss { grid-template-columns: minmax(0, 1fr) auto 7.5rem var(--line-more);
-    grid-template-areas: "title src act more"; }
-  .line.miss .looked { grid-area: src; justify-content: flex-end; }
+  .line.miss { grid-template-columns: minmax(0, 1fr) 7.5rem var(--line-more); grid-template-areas: "title act more"; }
 }
 /* LaCuerda's own search, a line under the results: what it does now, or its button. */
 .lacuerda-search { margin: 14px 0 0; }
 .lacuerda-search .hint { margin: 0; }
 @media (pointer: coarse) {
-  .nothing .btn, .did-you-mean .btn, .looked-line .btn, .lacuerda-search .btn { min-height: 44px; }
+  .nothing .btn, .did-you-mean .btn, .notes-line .btn, .lacuerda-search .btn { min-height: 44px; }
   .why-unseen summary { min-height: 44px; padding: 12px 0 0; }
 }
 /* A search's results (index.html's, the lookup page's): a song you have fetched stands out from the ones you have not.

@@ -87,6 +87,9 @@ STYLE = BASE_STYLE + ROWS_STYLE + """
 .search input:focus { border-color: var(--focus); outline: none;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
 .status { min-height: 1.4em; margin: 6px 2px 0; color: var(--muted); font-size: .85rem; }
+/* Under the box, what each site found (ROWS_STYLE's .counts-row), then the words; at rest the words' line alone. */
+.said-row { margin: 6px 2px 0; }
+.said-row > .status { flex: 1 1 12rem; min-width: 0; margin: 0; }
 .group { margin: 18px 0 6px; color: var(--muted); font-size: .78rem; font-weight: 700; letter-spacing: .08em;
   text-transform: uppercase; }
 .rows.hits { margin-top: 6px; }
@@ -137,6 +140,8 @@ const csrf = root.dataset.csrf;
 const q = document.getElementById("q");
 const bar = document.querySelector(".search");
 const status = document.getElementById("status");
+const counts = document.getElementById("bar-counts");  // the marks of what each site found, beside the words
+const saidRow = status.parentElement;
 const results = document.getElementById("results");
 const byName = document.getElementById("by-name-box");
 const reader = document.getElementById("reader");
@@ -195,6 +200,19 @@ function group(title, rows) {
   for (const row of rows) list.append(row);
   return [el("h2", "group", title), list];
 }
+// The line under the box: words, a live region. ``marks``: the marks beside them say it (the counts, "Searching…"),
+// so the words are a screen reader's while those show; anything else shows, after the marks or alone.
+function say(text, marks) {
+  saidRow.classList.toggle("counted", Boolean(marks));
+  status.textContent = text;
+}
+// What each site found, as marks under the box (ROWS_SCRIPT's countMarks), your songs first: an answer's, or none
+// (null), where the results are no search's (an artist's songs) or there is none yet; dimmed while the next comes.
+function showCounts(data) {
+  counts.replaceChildren(...(data ? rowKit.countMarks(data, data.library.length) : []));
+  counts.hidden = !data;
+  saidRow.classList.remove("busy");
+}
 // The sticky search box covers the top of the page: what is scrolled into view lands below it.
 function measureBar() { document.documentElement.style.setProperty("--bar", Math.ceil(bar.offsetHeight + 8) + "px"); }
 
@@ -206,23 +224,28 @@ function search() {
     results.replaceChildren();
     root.classList.remove("missed");
     shownFor = null;
-    status.textContent = text ? "Keep typing…" : "";
+    showCounts(null);
+    say(text ? "Keep typing…" : "");
     return;
   }
   const mine = ++typed;
   if (inflight) inflight.abort();
   inflight = new AbortController();
-  status.textContent = "Searching…";
+  say("Searching…", true);
+  saidRow.classList.add("busy");
   fetch("/api/search?q=" + encodeURIComponent(text) + "&box=" + SEARCH_BOX,
         {signal: inflight.signal, headers: {"Accept": "application/json"}})
     .then(r => r.json())
     .then(data => {
       if (mine !== typed) return;
       if (data.superseded) { timer = setTimeout(search, 150); return; }
-      if (data.error) { status.textContent = data.error; return; }  // the database, say
+      saidRow.classList.remove("busy");
+      if (data.error) { say(data.error); return; }  // the database, say
       show(data, text);
     })
-    .catch(e => { if (e.name !== "AbortError") status.textContent = "The search failed: " + e.message; });
+    .catch(e => {
+      if (e.name !== "AbortError") { saidRow.classList.remove("busy"); say("The search failed: " + e.message); }
+    });
 }
 
 function show(data, text) {
@@ -244,8 +267,10 @@ function show(data, text) {
   // artist's row, whose Their songs lists their songs; a song's, as the search's rows of it are (suggestedSong).
   const meant = rowKit.didYouMean(data.suggest, (s) => openSuggested(s), suggestedSong);
   const first = objects(data.suggest).find(x => x.artist);
-  status.textContent = (n ? "" : "Nothing matches") +
-    (meant && first ? (n ? "Did you mean " : " · did you mean ") + rowKit.meantName(first) + "?" : n ? "" : ".");
+  // What each site found, under the box, as the library page's bar shows it; in words for a screen reader.
+  showCounts(data);
+  say(rowKit.countsSaid(data, data.library.length) +
+      (meant && first ? " · did you mean " + rowKit.meantName(first) + "?" : ""), true);
   if (meant) results.append(meant);
   if (data.library.length) results.append(...group("In your library", data.library.map(librarySong)));
   // LaCuerda's: its artists, then its songs (the index holds every artist, and the songs of the pages caracole read);
@@ -265,11 +290,10 @@ function show(data, text) {
                                                                                 ...ht.map(htSong)]));
   // gametabs.net's: its tracks of games, the game the artist, with its mark and their instruments' badges.
   if (gt.length) results.append(...group("On gametabs.net", gt.map(htSong)));
-  // What the search says beside its results, as the library page's bar says it (ROWS_SCRIPT's): nothing found, a
-  // band, "Not on the sites", over one row: the query, where caracole looked, and Look up (the form by name) where a
-  // row's Get it is; under its "⋯", Ask LaCuerda for a name under a letter its listings aren't read to yet, whose page
-  // may say, and why it may not see an artist. Else where it looked, in one muted line, when a site wasn't searched
-  // whole.
+  // What the search says beside its results, as the library page says it (ROWS_SCRIPT's): nothing found, a band,
+  // "Not on the sites", over one row: the query, and Look up (the form by name) where a row's Get it is; under its
+  // "⋯", Ask LaCuerda for a name under a letter its listings aren't read to yet, whose page may say, and why it may not
+  // see an artist. Else those two in a line under the results (notesLine). Where it looked is the marks under the box.
   const unlisted = data.lacuerda_unlisted && typeof data.lacuerda_unlisted === "object" ? data.lacuerda_unlisted : null;
   // Ask LaCuerda, the one LaCuerda button: LaCuerda's search while its gate lets one go by hand, else the name's page.
   const does = {
@@ -283,7 +307,7 @@ function show(data, text) {
     const same = focused && [...miss.querySelectorAll(focused.tagName)].find(x => x.className === focused.className);
     if (same) same.focus();
   } else {
-    const line = rowKit.lookedLine(data, text, does);
+    const line = rowKit.notesLine(data, text, does);
     if (line) results.append(line);
   }
   root.classList.toggle("missed", !n);  // one Look up: the form by name waits for the row's
@@ -370,7 +394,7 @@ function pickBest() {
   const lcArtists = (Array.isArray(data.lacuerda_artists) ? data.lacuerda_artists : [])
     .filter(a => a && typeof a === "object");
   if (data.lacuerda_leads === true && lcArtists.length) { openSiteArtist(lcArtists[0], false); return; }
-  if (results.querySelector(".hit")) status.textContent = "Nothing stands out: pick one, or type more.";
+  if (results.querySelector(".hit")) say("Nothing stands out: pick one, or type more.");
 }
 
 // An artist of the offline index, with its most tabbed songs said: Songs lists every one (ROWS_SCRIPT's row).
@@ -380,8 +404,8 @@ function getArtist(key, offset, signal) {
   return fetch("/api/artist?key=" + encodeURIComponent(key) + "&offset=" + offset,
                {signal, headers: {"Accept": "application/json"}})
     .then(r => r.json())
-    .then(data => { if (data.error) { status.textContent = data.error; return null; } return data; })
-    .catch(e => { if (e.name !== "AbortError") status.textContent = "The list failed: " + e.message; return null; });
+    .then(data => { if (data.error) { say(data.error); return null; } return data; })
+    .catch(e => { if (e.name !== "AbortError") say("The list failed: " + e.message); return null; });
 }
 
 // An artist's songs in place of the results, yours by them first; typing again, or All results, brings those back.
@@ -389,7 +413,7 @@ function openArtist(a, focus) {
   const mine = ++typed;
   if (inflight) inflight.abort();
   inflight = new AbortController();
-  status.textContent = "Listing " + a.artist + "'s songs…";
+  say("Listing " + a.artist + "'s songs…");
   getArtist(a.artist_key, 0, inflight.signal).then(data => { if (data && mine === typed) showArtist(data, focus); });
 }
 
@@ -397,12 +421,13 @@ function showArtist(data, focus) {
   results.replaceChildren();
   root.classList.remove("missed");
   artistOpen = data.artist_key;
+  showCounts(null);  // what is listed is no search's answer
   const head = el("div", "artist-head");
   const name = el("h2", null, data.artist);
   name.tabIndex = -1;
   head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
   results.append(head);
-  status.textContent = data.artist + ": " + many(data.total, "song") + ".";  // one line: nothing below it moves
+  say(data.artist + ": " + many(data.total, "song") + ".");  // one line: nothing below it moves
   if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
   const [heading, list] = group("On Ultimate Guitar, the most tabbed first", data.songs.map(ugSong));
   results.append(heading, list);
@@ -492,10 +517,10 @@ function getSiteArtist(who, signal) {
   return fetch("/api/artist?" + asked, {signal, headers: {"Accept": "application/json"}})
     .then(r => r.json().then(data => ({status: r.status, data})))
     .then(({status: code, data}) => {
-      if (data.error) { if (!(who.quiet && code === 404)) status.textContent = data.error; return null; }
+      if (data.error) { if (!(who.quiet && code === 404)) say(data.error); return null; }
       return data;
     })
-    .catch(e => { if (e.name !== "AbortError") status.textContent = "The list failed: " + e.message; return null; });
+    .catch(e => { if (e.name !== "AbortError") say("The list failed: " + e.message); return null; });
 }
 
 function openSiteArtist(a, focus) {
@@ -503,7 +528,7 @@ function openSiteArtist(a, focus) {
   if (inflight) inflight.abort();
   inflight = new AbortController();
   const harp = a.source === "harptabs";
-  status.textContent = "Listing the songs of " + a.artist + (harp ? " on harptabs.com…" : " on LaCuerda…");
+  say("Listing the songs of " + a.artist + (harp ? " on harptabs.com…" : " on LaCuerda…"));
   getSiteArtist(harp ? {harptabs: a.path} : {slug: a.slug}, inflight.signal)
     .then(data => { if (data && mine === typed) showSiteArtist(data, focus); });
 }
@@ -514,9 +539,9 @@ function openSiteArtist(a, focus) {
 function readThenShow(who, go, offer) {
   const mine = typed;
   go.disabled = true;
-  rowKit.readArtistPage(csrf, who, words => { status.textContent = words; }).then(read => {
+  rowKit.readArtistPage(csrf, who, words => { say(words); }).then(read => {
     if (mine !== typed || !offer.isConnected) return;
-    if (read.error) { go.disabled = false; status.textContent = read.error; return; }
+    if (read.error) { go.disabled = false; say(read.error); return; }
     getSiteArtist(Object.assign({quiet: true}, who)).then(page => {
       if (mine !== typed || !offer.isConnected) return;
       if (page && page.read) { showSiteArtist(page, true); return; }
@@ -525,7 +550,7 @@ function readThenShow(who, go, offer) {
       offer.querySelectorAll(".read-outcome").forEach(x => x.remove());
       const said = rowKit.readOutcome(read.job, Boolean(who.harptabs));
       offer.append(said);
-      status.textContent = said.firstChild.textContent.trim();
+      say(said.firstChild.textContent.trim());
     });
   });
 }
@@ -536,13 +561,14 @@ function showSiteArtist(data, focus) {
   results.replaceChildren();
   root.classList.remove("missed");
   artistOpen = harp ? "harptabs:" + data.path : "lacuerda:" + data.slug;
+  showCounts(null);
   const head = el("div", "artist-head");
   const name = el("h2", null, data.artist);
   name.tabIndex = -1;
   head.append(name, button("All results", "small", backToSearch, "Back to all the results"));
   results.append(head);
-  status.textContent = data.artist + ": " + (data.read ? many(harp ? data.songs.length : data.total, "song") + " on " +
-    site + "." : "caracole hasn't read their page on " + site + " yet.");
+  say(data.artist + ": " + (data.read ? many(harp ? data.songs.length : data.total, "song") + " on " +
+    site + "." : "caracole hasn't read their page on " + site + " yet."));
   if (data.library.length) results.append(...group("Yours by " + data.artist, data.library.map(librarySong)));
   results.append(...rowKit.siteArtistSongs(data, group, (pick, display) => lookUp(pick, display), null,
     (go, offer) => readThenShow(harp ? {harptabs: data.path} : {slug: data.slug}, go, offer)));
@@ -762,7 +788,10 @@ __TOP__<div class="search" role="search">
   <label class="visually-hidden" for="q">Song or artist</label>
   <input id="q" type="search" placeholder="Song or artist" autocomplete="off" autocapitalize="off" autocorrect="off"
     spellcheck="false" enterkeyhint="search">
-  <p class="status" id="status" aria-live="polite"></p>
+  <div class="said-row counts-row">
+    <ul class="counts" id="bar-counts" aria-label="Found on each site" hidden></ul>
+    <p class="status" id="status" aria-live="polite"></p>
+  </div>
 </div>
 <div id="results"></div>
 <details class="by-name" id="by-name-box">

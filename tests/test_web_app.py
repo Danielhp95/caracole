@@ -2015,11 +2015,12 @@ def test_the_search_says_where_it_looked_a_chip_a_site_with_its_detail(app, conn
     lacuerda_index(conn, letters=("_num", "a", "b", "c"))
     record_block(conn, "musescore", datetime(2026, 10, 19, tzinfo=UTC), "HTTP 403: a challenge")
     looked = as_json(get(app, "/api/search?q=lynrd"))["looked"]
-    # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com: done, done, partial (the letters read whole run up to C),
-    # blocked, empty.
+    # UG, gtptabs.com, LaCuerda, MuseScore, harptabs.com, gametabs.net: done, done, partial (the letters read whole run
+    # up to C), blocked, empty, empty.
     assert [(s["source"], s["state"], s["label"]) for s in looked] == [
         ("ug", "done", "UG ✓"), ("gtptabs", "done", "gtptabs.com ✓"), ("lacuerda", "partial", "LaCuerda: up to C"),
-        ("musescore", "blocked", "MuseScore blocked"), ("harptabs", "empty", "harptabs.com: empty")]
+        ("musescore", "blocked", "MuseScore blocked"), ("harptabs", "empty", "harptabs.com: empty"),
+        ("gametabs", "empty", "gametabs.net: empty")]
     detail = {s["source"]: s["detail"] for s in looked}
     assert detail["lacuerda"] == ("LaCuerda's index is still being read: 2 artists so far, with #, A–C read whole; "
                                   "the nightly run reads the rest.")
@@ -2043,7 +2044,38 @@ def test_the_search_says_a_site_whose_index_is_empty_is_empty(app, conn):
     looked = {s["source"]: (s["state"], s["label"]) for s in as_json(get(app, "/api/search?q=creep"))["looked"]}
     assert looked == {"ug": ("empty", "UG: empty"), "gtptabs": ("empty", "gtptabs.com: empty"),
                       "lacuerda": ("empty", "LaCuerda: empty"), "musescore": ("empty", "MuseScore: empty"),
-                      "harptabs": ("empty", "harptabs.com: empty")}
+                      "harptabs": ("empty", "harptabs.com: empty"), "gametabs": ("empty", "gametabs.net: empty")}
+
+
+def test_the_search_says_how_far_gametabs_nets_index_has_got_a_mark_of_its_own_last(app, cfg, conn):
+    # Empty before its sitemaps are read; in part while its game pages, which name each tab's composers, aren't all
+    # read; whole once they are; off while it is turned off. Last, after harptabs.com's.
+    import dataclasses
+
+    from test_search import gametabs_index
+
+    from caracole.config import ProviderPolicy
+    from caracole.gametabs import GAME
+
+    def mark(on=app):
+        looked = as_json(get(on, "/api/search?q=hollow+knight"))["looked"]
+        assert looked[-1]["source"] == "gametabs" and looked[-2]["source"] == "harptabs"
+        return {k: looked[-1][k] for k in ("name", "state", "label", "detail")}
+
+    assert mark() == {"name": "gametabs.net", "state": "empty", "label": "gametabs.net: empty",
+                      "detail": "gametabs.net's index is empty: the nightly run reads its sitemaps."}
+    gametabs_index(conn)  # the sitemaps, and two of the seven game pages read
+    assert mark() == {"name": "gametabs.net", "state": "partial", "label": "gametabs.net: 2 of 7 games",
+                      "detail": "gametabs.net's game pages are still being read: 2 of 7 so far; caracole gametabs "
+                                "--index reads the rest."}
+    conn.execute("DELETE FROM gametabs_index WHERE kind = ? AND path NOT IN (SELECT path FROM gametabs_games)", (GAME,))
+    conn.commit()
+    assert mark() == {"name": "gametabs.net", "state": "done", "label": "gametabs.net ✓",
+                      "detail": "gametabs.net: caracole's copy of its index, searched whole."}
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    assert mark(WebApp(off, JobQueue(Recorder()), allowed=ALLOWED, csrf="tok")) == {
+        "name": "gametabs.net", "state": "off", "label": "gametabs.net: off",
+        "detail": "gametabs.net is turned off in caracole.toml."}
 
 
 def test_the_search_gives_gametabs_nets_tracks_and_their_tabs_and_none_while_it_is_turned_off(app, cfg, conn):

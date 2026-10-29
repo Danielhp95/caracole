@@ -113,14 +113,15 @@ line however many sites have it, each site's mark and counts on it, its
 identity its ``data-hit``) and MuseScore's pages (``titleLine``); for the
 lookup page, rows (``ugHit``, ``artistHit``, ``siteHit``, ``siteArtist`` and
 ``siteArtistSongs``, LaCuerda's artists and their songs); and for both what a
-search says beside its results: for a query that found nothing on the sites, a
-line of the list under a quiet band, "Not on the sites · searched 5"
-(``nothingFound``: the query, where caracole looked as small marks,
-``lookedMarks`` from ``looked``, and Request where a song's Open is; under its
-chevron, Ask LaCuerda · 1 request for a name under a letter LaCuerda's listings
+search says beside its results: under the box, what each site found, a mark and a
+count each, your songs first (``countMarks``, from ``looked`` and the answer's rows;
+``countsSaid``, the same in words for the line a screen reader hears); for a query
+that found nothing on the sites, a line of the list under a quiet band, "Not on
+the sites" (``nothingFound``: the query, and Request where a song's Open is; under
+its chevron, Ask LaCuerda · 1 request for a name under a letter LaCuerda's listings
 aren't read to yet, and "Why can't caracole find it?" folded, from ``unseen``);
-under results, the same marks in one muted line when a site wasn't searched whole
-(``lookedLine``); and, on the lookup page, the closest artists' names and songs'
+under results, those two in a line of their own (``notesLine``); and, on the lookup
+page, the closest artists' names and songs'
 titles the indexes have (``didYouMean``, from ``suggest``: a row each, an artist's
 with Their songs, a song's as the search's rows of it are), and what the line under
 the search box calls the first (``meantName``: "Hotel California by Eagles"). With them
@@ -155,9 +156,11 @@ LaCuerda, under the groups. MuseScore's pages, titles alone, come last under a
 header of their own, and harptabs.com's harmonica tabs after them (``titleLine``, by
 each one's ``source``). A row for one instrument says which (``instrumentBadges``:
 Ukulele for UG's Ukulele Chords, Harmonica for harptabs.com's, Score for MuseScore's;
-a song's card's ``instruments``, ``instruments_of``), and nothing is filtered by one. Under them, where caracole looked: "Searched" and
-a small mark a site in one muted line (grey searched, amber in part, red blocked), each one's detail its tooltip.
-A query that found nothing on the sites ends the list with a line of its own under a quiet band (rows.js
+a song's card's ``instruments``, ``instruments_of``), and nothing is filtered by one. Under the box, in the
+bar kept at the top, what each site found: your songs' count by the page's "¿", then each site's mark and its
+count, 0 quieter, its index's state in a colour and a glyph (amber and a pie in part, red and a ban blocked, a
+dashed edge empty or turned off), each one's detail its tooltip; the counts in words are the line's live region,
+a screen reader's while the marks show. A query that found nothing on the sites ends the list with a line of its own under a quiet band (rows.js
 ``nothingFound``), whose Request opens the request form, the one Request then; a typo's "Did you mean" is an
 artist's band of its own, first, whose "Their 7 songs on UG ›" opens that artist's group from ``/api/artist``.
 A line's Get it (``POST /lookup``) shows its request's

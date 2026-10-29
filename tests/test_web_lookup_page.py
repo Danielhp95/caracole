@@ -504,7 +504,10 @@ def test_enter_on_an_artists_name_lists_their_songs_and_asks_for_nothing(cfg, li
     assert browser.wait(f"{ARTIST_NAME} === 'Eagles'")
     titles = browser.js("[...document.querySelectorAll('#results .hit .row-title')].map(t => t.textContent)")
     assert titles == ["Hotel California", "Desperado"]  # theirs, the most tabbed first: not Third Day's Eagles
+    # In words under the box, in place of the search's marks: what is listed is no longer the search's answer.
     assert browser.js("document.getElementById('status').textContent") == "Eagles: 2 songs."
+    assert browser.js("document.getElementById('status').getBoundingClientRect().width") > 1
+    assert browser.js("document.getElementById('bar-counts').checkVisibility()") is False
     browser.press("Enter")  # again: still nothing asked for
     import time
 
@@ -513,6 +516,9 @@ def test_enter_on_an_artists_name_lists_their_songs_and_asks_for_nothing(cfg, li
     browser.click("#results .artist-head button")  # All results
     assert browser.wait("document.querySelector('#results .artist-hit') !== null")
     assert browser.js("document.activeElement.id") == "q"
+    assert browser.wait("document.getElementById('bar-counts').checkVisibility()")  # the search's marks again
+    # Ultimate Guitar's mark counts its songs: the Eagles' two, and Third Day's Eagles.
+    assert browser.js("document.querySelector('#bar-counts li[data-source=ug]').dataset.n") == "3"
 
 
 @in_chromium
@@ -549,6 +555,9 @@ def test_enter_with_no_clear_best_asks_for_nothing_and_says_so(cfg, live, browse
     assert browser.wait(f"{HITS} > 0")
     browser.press("Enter")
     assert browser.wait("/Nothing stands out/.test(document.getElementById('status').textContent)")
+    # Said in words beside the marks, which stay: the answer does.
+    assert browser.js("document.getElementById('status').getBoundingClientRect().width") > 1
+    assert browser.js("document.getElementById('bar-counts').checkVisibility()")
     time.sleep(0.5)
     assert queue.snapshot() == []
 
@@ -569,7 +578,7 @@ def test_a_word_of_an_artists_name_leads_with_them_and_enter_lists_their_songs(c
     groups = browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)")
     # The artist first, Sam Grow's song after; LaCuerda's listings not read to L, Ask LaCuerda under them.
     assert groups == ["Artists on Ultimate Guitar", "On Ultimate Guitar"]
-    assert browser.js("document.querySelector('#results .looked-line .ask-lacuerda').textContent") == \
+    assert browser.js("document.querySelector('#results .notes-line .ask-lacuerda').textContent") == \
         "Ask LaCuerda for “Lynyrd Skynyrd” (1 request)"
     browser.press("Enter")
     assert browser.wait(f"{ARTIST_NAME} === 'Lynyrd Skynyrd'")
@@ -589,7 +598,7 @@ def test_a_close_spelling_says_did_you_mean_and_the_name_lists_their_songs(cfg, 
     # A group of the page's own, "Did you mean", an artist's row each (UG's mark, their songs counted, Their songs),
     # then what found nothing: its band and line.
     assert browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)") == [
-        "Did you mean", "Not on the sites · searched 5"]
+        "Did you mean", "Not on the sites"]
     assert browser.js("[...document.querySelectorAll('#results .suggestion')].map((s) => [s.querySelector("
                       "'.row-title').textContent, s.querySelector('.source').dataset.source, s.querySelector("
                       "'.row-facts').textContent, s.querySelector('.row-action button').textContent])") == [

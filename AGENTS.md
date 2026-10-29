@@ -130,7 +130,7 @@ Rules a change there keeps (the Invariants below are the others):
   a search refused or failed has the button its words name: test_web_page_lacuerda_search.py). One
   LaCuerda button on the screen at a time, worded Ask LaCuerda: the search's own, "Ask LaCuerda for “…”
   (1 request)", only where the results offer no name's page; where they do (`lacuerda_unlisted`), Ask
-  LaCuerda's under the chevron of `nothingFound`'s line or in `lookedLine` stands for both, sending the search while its gate says
+  LaCuerda's under the chevron of `nothingFound`'s line or in `notesLine` stands for both, sending the search while its gate says
   `auto` or `button` (the searcher's `ask`, which the pages' `does.ask` tries first) and reading the
   name's page else, the search's line then its words alone. A test that drives
   the pages for something else passes `WebApp(searches_lacuerda=False)`, which caracole serve never
@@ -150,12 +150,17 @@ Rules a change there keeps (the Invariants below are the others):
   index has got ("harptabs.com: 1,204 of 10,428 artists", its name and tooltip). gametabs.net's tracks of games
   (`search.search_gametabs`, `/api/search`'s `gametabs`) are songs whose artist is their game, a line in the game's
   group, their tabs under its "⋯" (rows.js `gameTabsOf`), each Get it a lookup that keeps that tab (`gametabs`,
-  `caracole get --gametabs`, `[gametabs]`), their instruments badges, none while it is turned off; it has no `looked`
-  mark of its own yet (`caracole search` and `caracole index stats` say how far its game index has got).
-  What a search says beside its results is rows.js's, shared by both pages: `nothingFound` (a query that found
-  nothing on the sites: a line of the list under a quiet band, "Not on the sites · searched 5", the query, the marks
-  of `looked`, Request where a song's Open is, the one Request then, and no Back to your songs; under its chevron Ask
-  LaCuerda and `unseen` folded), `lookedLine` (the same marks, `lookedMarks`, in one muted line under results) and,
+  `caracole get --gametabs`, `[gametabs]`), their instruments badges, none while it is turned off; its `looked` mark
+  says how far its game pages are read ("gametabs.net: 2 of 7 games", search_routes.py `_gametabs_looked`).
+  What a search says beside its results is rows.js's, shared by both pages: `countMarks` (under the box, in the bar
+  kept at the top, what each site found: your songs' count by the page's "¿", then a mark of `looked`'s and a count
+  a site, its songs as the lines show them (`foundOn`; the library page's, library.js `foundNow`, with those "+ N
+  more" listed since), 0 quieter, a state in a colour and a glyph, never a
+  colour alone, no control; `countsSaid`, the counts in words, the line's live region and the box's description, a
+  screen reader's alone while the marks show: library.js `drawCounts`, lookup_page.py `showCounts`), `nothingFound`
+  (a query that found nothing on the sites: a line of the list under a quiet band, "Not on the sites", the query,
+  Request where a song's Open is, the one Request then, and no Back to your songs, its marks the row under the box's;
+  under its chevron Ask LaCuerda and `unseen` folded), `notesLine` (those two under results) and,
   on the lookup page, `didYouMean` (`/api/search`'s `suggest`, a row each, a song's as the search's rows are,
   before any result); the library page draws a suggestion as an artist's band of its own, first, a song suggested a
   line in it (`indexLine`, or your own line), which leaves the miss's line in place (library.js `mergeSites`,

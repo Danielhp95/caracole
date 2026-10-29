@@ -66,6 +66,11 @@
 .bar-status:empty { min-height: 0; margin: 0; }
 .bar-status { min-height: 1.35em; margin: 6px 2px 0; overflow: hidden; color: var(--muted); font-size: .8rem;
   line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+/* Under the box: what each site found, its mark and its count (rows.css .counts-row), then the words, one line cut
+   short, after the marks or on the next line; at rest, nothing, and no room kept. */
+.bar-said { min-height: 22px; margin: 6px 2px 0; }
+.bar-said:has(> .counts[hidden]):has(> .bar-status:empty) { min-height: 0; margin: 0; }
+.bar-said > .bar-status { flex: 1 1 12rem; margin: 0; }
 .searching-all .toolbar, .searching-all .jump, .searching-all .count, .searching-all .list { display: none; }
 .waiting-sites .results .request, .waiting-sites .footer { display: none; }
 /* A search that found nothing on the sites has its Request in its line: the form shows only once that opens it. */
@@ -131,7 +136,7 @@ section.artist:first-child > .artist-title { border-radius: 11px 11px 0 0; }
 .artist-title .filter-mark { display: inline-block; margin-left: 5px; }
 .artist-title button.artist-only { align-self: center; color: var(--artist); }
 .artist-title button.artist-only .filter-mark { margin-left: 0; }
-.artist-counts, .miss-count { color: var(--muted); font-size: .82rem; font-weight: 500; letter-spacing: 0; }
+.artist-counts { color: var(--muted); font-size: .82rem; font-weight: 500; letter-spacing: 0; }
 /* A search that found nothing on the sites (rows.js nothingFound): a band as an artist's, as tall, quiet: in the text's
    colour and smaller, over its one line, whose chevron opens a plain panel, as a site's song's does (card.css raises
    a song of yours). */

@@ -219,9 +219,28 @@ WONDERWALL = dict(ug=[("oasis", "wonderwall", 9), ("ryan-adams", "wonderwall", 3
                   gtptabs=["https://gtptabs.com/tabs/15/oasis/wonderwall.html"],
                   musescore=["https://musescore.com/song/wonderwall-1524"])
 RYAN = "#results .hit[data-ug='ryan-adams/wonderwall']"
-# The marks of where caracole looked, under SCOPE: each one's site and state.
-LOOKED = "[...document.querySelectorAll('SCOPE .looked li')].map((c) => [c.dataset.source, c.dataset.state])"
+# The row of marks under the search box (rows.js countMarks): each mark's site ("library" for yours), its state, and
+# the count beside it (none where the site wasn't searched: blocked, or turned off).
+COUNTS = ("[...document.querySelectorAll('#bar-counts > li')].map((c) => [c.dataset.source, c.dataset.state, "
+          "c.dataset.n === undefined ? null : Number(c.dataset.n)])")
+# Each mark's name for a screen reader, its tooltip, its description.
+COUNT_WORDS = ("[...document.querySelectorAll('#bar-counts > li')].map((c) => { const m = c.firstElementChild; "
+               "return [m.getAttribute('aria-label') || m.getAttribute('alt'), c.title, "
+               "m.getAttribute('aria-description')]; })")
+# What each mark shows beside its icon: its count (or "off"), and the glyphs that say a state without its colour.
+COUNT_SHOWN = ("[...document.querySelectorAll('#bar-counts > li')].map((c) => [(c.querySelector('.count-n, .count-off') "
+               "|| { textContent: '' }).textContent, [...c.querySelectorAll('svg.glyph')].map((g) => "
+               "g.getAttribute('class').replace('glyph glyph-', ''))])")
+COUNTS_SHOWN = "document.getElementById('bar-counts').checkVisibility()"
+# Whether the words under the box show, or are there for a screen reader alone, as the marks say them.
+WORDS_SHOWN = "(document.getElementById('bar-status').getBoundingClientRect().width > 1)"
+# No line under the results says where caracole looked: the marks under the box say it, once.
+NO_SEARCHED_LINE = ("!document.querySelector('#results .looked, #results .looked-line, #results .count-mark') && "
+                    "!/Searched/.test(document.getElementById('results').textContent)")
 BUSY = "(document.getElementById('found').getAttribute('aria-busy') === 'true')"
+# The lookup page's words under its box, and whether they show.
+LOOKUP_STATUS = "document.getElementById('status').textContent"
+LOOKUP_WORDS_SHOWN = "(document.getElementById('status').getBoundingClientRect().width > 1)"
 
 
 def test_typing_lists_your_songs_and_the_indexes_without_enter(cfg, live, browser):
@@ -243,10 +262,13 @@ def test_typing_lists_your_songs_and_the_indexes_without_enter(cfg, live, browse
     assert browser.wait("document.getElementById('found').dataset.query === 'wonderwall'")
     assert browser.js(LINES) == [["Oasis", [["Wonderwall", "ug+gtptabs"]]], ["Ryan Adams", [["Wonderwall", "ug"]]],
                                  ["MuseScore", [["Wonderwall", "musescore"]]]]
-    # Where caracole looked, in one muted line under the results: LaCuerda's and harptabs.com's indexes are empty, the
-    # rest searched whole.
-    assert browser.js(LOOKED.replace("SCOPE", "#results .looked-line")) == [
-        ["ug", "done"], ["gtptabs", "done"], ["lacuerda", "empty"], ["musescore", "done"], ["harptabs", "empty"]]
+    # What each site found, a mark and a count under the box: LaCuerda's, harptabs.com's and gametabs.net's indexes are
+    # empty, the rest searched whole; none of yours.
+    assert browser.js(COUNTS) == [["library", "done", 0], ["ug", "done", 2], ["gtptabs", "done", 1],
+                                  ["lacuerda", "empty", 0], ["musescore", "done", 1], ["harptabs", "empty", 0],
+                                  ["gametabs", "empty", 0]]
+    assert browser.js(STATUS) == "2 on Ultimate Guitar · 1 on gtptabs.com · 1 on MuseScore"
+    assert browser.js(NO_SEARCHED_LINE)
     assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing').length") == 0
     link = browser.js("(() => { const a = document.querySelector('#results .hit[data-source=\"musescore\"] .line-action a');"
                       " return [a.href, a.target, a.rel]; })()")
@@ -1102,12 +1124,12 @@ def blocking(cfg, source):
 
 NOTHING = "#results .nothing"
 # A search that found nothing on the sites: its band, its line's query, its Request (its words, and its name for a
-# screen reader), and what the marks of where caracole looked say together.
+# screen reader), and whether it shows marks of its own (none: the row under the box has them).
 MISS = ("(() => { const s = document.querySelector('#results .nothing'); const l = s.querySelector('article'); "
         "const go = l.querySelector('.line-action button, .row-action button'); "
         "return { band: s.querySelector('h2').textContent, query: l.querySelector('h2, h3').textContent, "
         "request: [go.textContent, go.getAttribute('aria-label')], "
-        "said: s.querySelector('.looked').getAttribute('aria-label') }; })()")
+        "marks: s.querySelectorAll('.source, .looked, .count-mark').length }; })()")
 # What its chevron (its "⋯" on the lookup page) holds: whether it is open, its buttons, and the fold of why caracole
 # may not see an artist (its summary, folded or not, its code).
 DRAWER = ("(() => { const s = document.querySelector('#results .nothing'); const p = s.querySelector('.line-panel, "
@@ -1115,23 +1137,23 @@ DRAWER = ("(() => { const s = document.querySelector('#results .nothing'); const
           "buttons: p ? [...p.querySelectorAll('button')].map((b) => b.textContent) : [], "
           "why: f ? f.querySelector('summary').textContent : null, folded: f ? !f.open : null, "
           "code: f ? [...f.querySelectorAll('code')].map((x) => x.textContent) : [] }; })()")
-# Each mark of where caracole looked, under SCOPE: its name for a screen reader, its tooltip, its description.
-MARK_WORDS = ("[...document.querySelectorAll('SCOPE .looked li')].map((c) => { const m = c.firstElementChild; "
-              "return [m.getAttribute('aria-label') || m.getAttribute('alt'), c.title, "
-              "m.getAttribute('aria-description')]; })")
 # What the results show that requests a song by name, by its words.
 REQUESTS = ("[...document.querySelectorAll('#results button, #results summary')].filter((b) => b.checkVisibility() && "
             "/Request/.test(b.textContent)).map((b) => b.textContent.replace(/^[+]/, '').trim())")
 BACK = ("[...document.querySelectorAll('#results button')].some((b) => b.textContent === 'Back to your songs' && "
         "b.checkVisibility())")
 OLD_NOTES = "document.querySelectorAll('#results .skipped, #results .index-hint, #results .read-page.unlisted').length"
-# Where caracole looked, with LaCuerda's listings read to C and MuseScore blocking caracole.
-EVERYWHERE = [["ug", "done"], ["gtptabs", "empty"], ["lacuerda", "partial"], ["musescore", "blocked"],
-              ["harptabs", "empty"]]
-SAID_EVERYWHERE = "Searched Ultimate Guitar, gtptabs.com, LaCuerda (in part) and harptabs.com; MuseScore blocked"
-# The colour and the fill of the mark of a site in STATE, under SCOPE.
-SHADE = ("(() => { const s = getComputedStyle(document.querySelector('SCOPE .looked li[data-state=\"STATE\"]')); "
+# What nothing found looks like under the box, with LaCuerda's listings read to C and MuseScore blocking caracole:
+# none of yours, nothing where it searched, MuseScore not searched.
+NOWHERE = [["library", "done", 0], ["ug", "done", 0], ["gtptabs", "empty", 0], ["lacuerda", "partial", 0],
+           ["musescore", "blocked", None], ["harptabs", "empty", 0], ["gametabs", "empty", 0]]
+NOWHERE_SAID = ["0 of your songs", "0 on Ultimate Guitar", "0 on gtptabs.com: index empty",
+                "0 on LaCuerda: index in part, up to C", "MuseScore: blocked", "0 on harptabs.com: index empty",
+                "0 on gametabs.net: index empty"]
+# The colour and the fill of the mark under the box of a site in STATE, or of SOURCE's.
+SHADE = ("(() => { const s = getComputedStyle(document.querySelector('#bar-counts li[data-state=\"STATE\"]')); "
          "return [s.color, s.backgroundColor]; })()")
+COUNT_COLOUR = ("getComputedStyle(document.querySelector('#bar-counts li[data-source=\"SOURCE\"] .count-n')).color")
 
 
 def css_colour(page, value):
@@ -1148,30 +1170,31 @@ def test_a_query_that_finds_nothing_is_one_line_under_a_quiet_band_its_request_w
     browser.open(base)
     search(browser, "lynrd")
     assert browser.wait(f"{answer_to('lynrd')} && !!document.querySelector('{NOTHING}')")
-    assert browser.js(MISS) == {"band": "Not on the sites · searched 4",  # MuseScore blocks caracole: left out
-                                "query": "“lynrd”", "request": ["Request", "Request “lynrd” by name"],
-                                "said": SAID_EVERYWHERE}
+    # Its band says so in words, and its line has no marks of its own: the row under the box has each site, at 0.
+    assert browser.js(MISS) == {"band": "Not on the sites", "query": "“lynrd”",
+                                "request": ["Request", "Request “lynrd” by name"], "marks": 0}
     # A line of the list's, in the groups' box where an artist's band would be; no result of the sites.
     assert browser.js(f"document.querySelector('{NOTHING}').parentElement.matches('#results .groups')")
     assert browser.js(f"document.querySelector('{NOTHING} article').matches('.line:not(.hit)') && {HITS} === 0")
-    assert browser.js(LOOKED.replace("SCOPE", NOTHING)) == EVERYWHERE
-    # Each mark: the site by name, and how far where it wasn't searched whole; its detail its tooltip and description.
-    words = browser.js(MARK_WORDS.replace("SCOPE", NOTHING))
-    assert [w[0] for w in words] == ["Ultimate Guitar", "gtptabs.com: empty", "LaCuerda: up to C", "MuseScore blocked",
-                                     "harptabs.com: empty"]
-    assert all(w[1] and w[1] == w[2] for w in words), words
-    assert "still being read: 1 artist so far, with #, A–C read whole" in words[2][1]
-    assert words[3][1] == "MuseScore is blocking caracole, so its index is empty."
-    # Grey where it searched (an index empty yet too), amber in part, red only where a site blocks caracole.
-    done, empty, partial, blocked = (browser.js(SHADE.replace("SCOPE", NOTHING).replace("STATE", state))
+    assert browser.js(COUNTS) == NOWHERE
+    # Each mark: its count and its site, and how far where it wasn't searched whole; its detail in its tooltip, after
+    # its name, and its description.
+    words = browser.js(COUNT_WORDS)
+    assert [w[0] for w in words] == NOWHERE_SAID
+    assert all(w[1] == w[0] + "\n" + w[2] for w in words[1:]), words
+    assert "still being read: 1 artist so far, with #, A–C read whole" in words[3][1]
+    assert words[4][2] == "MuseScore is blocking caracole, so its index is empty."
+    # Quiet where it found nothing (an index empty yet too), amber in part, red only where a site blocks caracole.
+    done, empty, partial, blocked = (browser.js(SHADE.replace("STATE", state))
                                      for state in ("done", "empty", "partial", "blocked"))
     assert done == empty and done[0] == css_colour(browser, "var(--muted)"), (done, empty)
     assert partial[0] == css_colour(browser, "var(--wanted)") and blocked[0] == css_colour(browser, "var(--failed)")
-    # One Request; no Back to your songs (the box's × and Escape go back); a short line under the box.
+    # One Request; no Back to your songs (the box's × and Escape go back); the words under the box a screen reader's.
     assert browser.js(REQUESTS) == ["Request"]
     assert browser.js("document.getElementById('request-box').checkVisibility()") is False
     assert browser.js(BACK) is False
-    assert browser.js(STATUS) == "Nothing on the sites"
+    assert browser.js(STATUS) == "Nothing on the sites" and browser.js(WORDS_SHOWN) is False
+    assert browser.js(NO_SEARCHED_LINE)
     assert browser.js(OLD_NOTES) == 0 and browser.js("document.querySelector('#results .did-you-mean')") is None
     # Its chevron opens the rest: Ask LaCuerda (L is unread), and why caracole may not see an artist, folded.
     assert browser.js(DRAWER)["open"] is False
@@ -1214,28 +1237,146 @@ def test_ask_lacuerda_is_offered_only_for_a_name_under_a_letter_its_listings_don
     assert browser.js(DRAWER)["buttons"] == []
 
 
-def test_a_query_with_results_says_where_caracole_looked_in_one_muted_line_of_the_same_marks(cfg, live, browser):
+def game_and_harp_indexes(cfg):
+    """gametabs.net's index (two of its seven game pages read) and harptabs.com's (two of its three artists' pages), as
+    test_search.py makes them."""
+    from test_search import gametabs_index, harptabs_index
+
+    conn = db.connect(cfg.db_path)
+    gametabs_index(conn)
+    harptabs_index(conn)
+    conn.commit()
+    conn.close()
+
+
+# Where each part of the bar is, top to bottom: the box, the row of marks, the results; and whether the row is in the
+# bar kept at the top.
+PLACES = ("(() => { const at = (s) => document.querySelector(s).getBoundingClientRect(); return { field: at('.searchbar "
+          ".field').bottom, top: at('#bar-counts').top, bottom: at('#bar-counts').bottom, results: at('#results .groups')"
+          ".top, kept: document.querySelector('.searchbar').contains(document.getElementById('bar-counts')) }; })()")
+
+
+def test_what_each_site_found_is_its_mark_and_count_under_the_box_and_no_line_under_the_results_says_it_again(
+        cfg, live, browser):
     base, _, _ = live
     sites(cfg, ug=[("radiohead", "creep", 4)])
     read_to(cfg, ("_num", "a", "b", "c"))
     blocking(cfg, "musescore")
+    game_and_harp_indexes(cfg)
+    library(cfg, ("Hollow Knight", "Resting Grounds"))
     browser.open(base)
-    search(browser, "radiohead")
-    assert browser.wait(f"{answer_to('radiohead')} && {HITS} >= 1 && !!document.querySelector('#results .looked-line')")
-    assert browser.js(LOOKED.replace("SCOPE", "#results .looked-line")) == EVERYWHERE
-    assert browser.js("document.querySelector('#results .looked-line .looked').getAttribute('aria-label')") == (
-        SAID_EVERYWHERE)
-    assert browser.js("document.querySelector('#results .looked-line').textContent").startswith("Searched")
-    assert browser.js("document.querySelectorAll('#results .notes p, #results .nothing, #results .did-you-mean').length") == 0
+    search(browser, "hollow knight")
+    assert browser.wait(f"{answer_to('hollow knight')} && {HITS} >= 1 && {COUNTS_SHOWN}")
+    # Under the box, in the bar kept at the top, above the results: your songs first (the page's own mark), then each
+    # site in the order caracole searches them, and how many it found there.
+    place = browser.js(PLACES)
+    assert place["field"] <= place["top"] < place["bottom"] <= place["results"] and place["kept"], place
+    assert browser.js(COUNTS) == [["library", "done", 1], ["ug", "done", 0], ["gtptabs", "empty", 0],
+                                  ["lacuerda", "partial", 0], ["musescore", "blocked", None],
+                                  ["harptabs", "partial", 0], ["gametabs", "partial", 5]]
+    assert browser.js("document.querySelector('#bar-counts li[data-source=library] svg.yours-mark') !== null")
+    # Its count beside each; a glyph for what its colour says too: in part (a ring not yet whole), blocked (a ban).
+    # Nothing where it wasn't searched.
+    assert browser.js(COUNT_SHOWN) == [["1", []], ["0", []], ["0", []], ["0", ["part"]], ["", ["blocked"]],
+                                       ["0", ["part"]], ["5", ["part"]]]
+    # Each mark's name, for a screen reader: its count on its site, and how far its index has got; its detail in its
+    # tooltip, after the name, and its description.
+    words = browser.js(COUNT_WORDS)
+    assert [w[0] for w in words] == [
+        "1 of your songs", "0 on Ultimate Guitar", "0 on gtptabs.com: index empty",
+        "0 on LaCuerda: index in part, up to C", "MuseScore: blocked",
+        "0 on harptabs.com: index in part, 2 of 3 artists", "5 on gametabs.net: index in part, 2 of 7 games"]
+    assert words[0] == ["1 of your songs", "1 of your songs", None]
+    assert words[5][1:] == [
+        "0 on harptabs.com: index in part, 2 of 3 artists\nharptabs.com's artist pages are still being read: 2 of 3 "
+        "artists so far; caracole harptabs --index reads the rest.",
+        "harptabs.com's artist pages are still being read: 2 of 3 artists so far; caracole harptabs --index reads the "
+        "rest."]
+    assert browser.js("document.getElementById('bar-counts').getAttribute('aria-label')") == "Found on each site"
+    # In the text's colour where it found something, muted where it found nothing; amber in part, red blocked.
+    assert browser.js(COUNT_COLOUR.replace("SOURCE", "library")) == css_colour(browser, "var(--text)")
+    assert browser.js(COUNT_COLOUR.replace("SOURCE", "ug")) == css_colour(browser, "var(--muted)")
+    assert browser.js(SHADE.replace("STATE", "partial"))[0] == css_colour(browser, "var(--wanted)")
+    assert browser.js(SHADE.replace("STATE", "blocked"))[0] == css_colour(browser, "var(--failed)")
+    # The words a screen reader hears as the answer comes, which the box is described by: the counts that aren't 0.
+    assert browser.js(STATUS) == "1 of your songs · 5 on gametabs.net"
+    assert browser.js(WORDS_SHOWN) is False
+    assert browser.js("document.getElementById('bar-status').getAttribute('aria-live')") == "polite"
+    assert browser.js("document.getElementById('q').getAttribute('aria-describedby')") == "bar-status"
+    # Nothing under the results says it again; what stays there is what may find more: Ask LaCuerda (H is unread),
+    # and why caracole may not see an artist.
+    assert browser.js(NO_SEARCHED_LINE)
+    assert browser.js("document.querySelector('#results .notes-line .ask-lacuerda').textContent") == (
+        "Ask LaCuerda for “hollow knight” (1 request)")
+    assert browser.js("!!document.querySelector('#results .notes-line details.why-unseen')")
     assert browser.js(OLD_NOTES) == 0
-    line = browser.js("document.querySelector('#results .looked-line').getBoundingClientRect().height")
-    assert line < 44, line  # one line: the marks, and Ask LaCuerda (R is unread)
-    shades = [browser.js(SHADE.replace("SCOPE", "#results .looked-line").replace("STATE", state))
-              for state in ("done", "partial", "blocked")]
-    assert len({colour for colour, _ in shades}) == 3, shades
     # Under results the request form is the one Request, and Back to your songs the way back.
     assert browser.js(REQUESTS) == ["Not in the list? Request it by name"]
     assert browser.js(BACK) is True
+    # Another answer, other counts: heard as words, the marks drawn again. A site's count is its songs, as its lines
+    # show them: the three of Billy Joel's group (his artist's, his most viewed songs), never one for the artist.
+    search(browser, "billy joel")
+    assert browser.wait(f"{answer_to('billy joel')} && {HITS} >= 1")
+    harp = browser.js("Number(document.querySelector('#bar-counts li[data-source=harptabs]').dataset.n)")
+    lines = browser.js("document.querySelectorAll('#results article.line .line-sources .source[data-source=harptabs]')"
+                       ".length")
+    assert harp == lines == 3 and browser.js(STATUS) == "3 on harptabs.com"
+    assert browser.js(NO_SEARCHED_LINE)
+
+
+def test_the_row_under_the_box_says_in_words_what_no_mark_can(cfg, live, browser):
+    # Before anything is typed nothing; a hint in words before three letters; "Searching the sites…" in words until the
+    # first answer; then the marks, which stay (dimmed) while the next query's answer comes; Escape leaves them.
+    base, _, asked = live
+    sites(cfg, ug=[("radiohead", "creep", 4), ("radiohead", "karma-police", 2)])
+    browser.open(base)
+    assert browser.js(STATUS) == "" and browser.js(COUNTS_SHOWN) is False
+    search(browser, "ra")
+    assert browser.wait(f"{STATUS} === 'None of yours match: three letters search the sites too'")
+    assert browser.js(WORDS_SHOWN) and browser.js(COUNTS_SHOWN) is False
+    asked.held = threading.Event()
+    browser.type("d")
+    assert browser.wait(f"{STATUS} === 'Searching the sites…'")
+    assert browser.js(WORDS_SHOWN) and browser.js(COUNTS_SHOWN) is False  # no answer yet: words alone
+    asked.held.set()
+    assert browser.wait(f"{answer_to('rad')} && {COUNTS_SHOWN}")
+    assert browser.js(WORDS_SHOWN) is False
+    counts = browser.js(COUNTS)
+    asked.held = threading.Event()
+    browser.type("io")
+    assert browser.wait(f"{STATUS} === 'Searching the sites…'")
+    # The answer before stays until the next one comes, dimmed; the words are a screen reader's.
+    assert browser.js(COUNTS) == counts and browser.js(COUNTS_SHOWN) and browser.js(WORDS_SHOWN) is False
+    assert browser.js("document.querySelector('.searchbar .bar-said').classList.contains('busy')")
+    assert float(browser.js("getComputedStyle(document.getElementById('bar-counts')).opacity")) < 1
+    asked.held.set()
+    asked.held = None
+    assert browser.wait(f"{answer_to('radio')} && !document.querySelector('.searchbar .bar-said.busy')")
+    assert browser.js(COUNTS_SHOWN) and float(browser.js(
+        "getComputedStyle(document.getElementById('bar-counts')).opacity")) == 1
+    browser.press("Escape")  # your songs again: the line says what typing and Enter do
+    assert browser.wait(f"!{COUNTS_SHOWN}")
+    assert browser.js(WORDS_SHOWN) and browser.js(STATUS) == "None of yours match: Enter searches the sites"
+
+
+def test_what_follows_an_answer_is_said_in_words_beside_its_marks(cfg, live, browser):
+    # "+ 3 more by Estopa": what it listed, in words after the marks, which stay, as the answer does, Ultimate
+    # Guitar's counting the songs its lines show now.
+    base, _, _ = live
+    sites(cfg, ug=[("estopa", f"cancion-{n}", 1) for n in range(6)])
+    browser.open(base)
+    search(browser, "estopa")
+    assert browser.wait(f"{answer_to('estopa')} && !!document.querySelector('#results .more-by') && {COUNTS_SHOWN}")
+    counts = browser.js(COUNTS)
+    assert counts[1] == ["ug", "done", 3] and browser.js(STATUS) == "3 on Ultimate Guitar"
+    browser.click("#results .more-by")
+    assert browser.wait(f"{STATUS} === 'Estopa: 6 songs on Ultimate Guitar'")
+    assert browser.js(WORDS_SHOWN) and browser.js(COUNTS_SHOWN)
+    assert browser.js(COUNTS) == [counts[0], ["ug", "done", 6]] + counts[2:]
+    row = browser.js("(() => { const c = document.getElementById('bar-counts').getBoundingClientRect(); "
+                     "const w = document.getElementById('bar-status').getBoundingClientRect(); "
+                     "return [w.left >= c.right, Math.abs((w.top + w.bottom) - (c.top + c.bottom)) < 8]; })()")
+    assert row == [True, True], row  # beside the marks, on their line
 
 
 def test_a_typo_is_an_artist_band_first_whose_row_lists_their_songs_then_the_miss(cfg, live, browser):
@@ -1261,9 +1402,12 @@ def test_a_typo_is_an_artist_band_first_whose_row_lists_their_songs_then_the_mis
     assert browser.js(GROUPS) == ["Did you mean Lynyrd Skynyrd · UG 5"]
     assert browser.js(TITLES) == ["Free Bird", "Sweet Home Alabama", "Simple Man", "That Smell", "Tuesdays Gone"]
     assert browser.js("document.activeElement.matches('#results section.artist')")
-    # Results now: the miss gives way to the one muted line under them.
+    # Results now: the miss gives way, what was listed said in words beside the marks under the box, and no line
+    # under the results says where caracole looked.
     assert browser.js("document.querySelector('#results .nothing')") is None
-    assert browser.js("!!document.querySelector('#results .looked-line')")
+    assert browser.js(STATUS) == "Lynyrd Skynyrd: 5 songs on Ultimate Guitar" and browser.js(WORDS_SHOWN)
+    assert browser.js(COUNTS_SHOWN) and browser.js(NO_SEARCHED_LINE)
+    assert browser.js(COUNTS)[1] == ["ug", "done", 5]  # the songs its lines show now
     assert len(asked) == searched and queue.snapshot() == []  # their songs came from /api/artist: no search, no site
 
 
@@ -1287,11 +1431,15 @@ def test_the_lookup_page_shows_the_same_band_and_line(cfg, live, browser):
     sites(cfg, ug=[("radiohead", "creep", 4)])
     browser.open(base + "lookup?q=lynrd")
     assert browser.wait(f"!!document.querySelector('{NOTHING}')")
-    assert browser.js(MISS) == {
-        "band": "Not on the sites · searched 5", "query": "“lynrd”", "request": ["Look up", "Look up “lynrd” by name"],
-        "said": "Searched Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore and harptabs.com"}
+    assert browser.js(MISS) == {"band": "Not on the sites", "query": "“lynrd”",
+                                "request": ["Look up", "Look up “lynrd” by name"], "marks": 0}
     assert browser.js(f"document.querySelector('{NOTHING} article').matches('.row:not(.hit)')")
-    assert browser.js(LOOKED.replace("SCOPE", NOTHING))[0] == ["ug", "done"]
+    # The same row of marks under its box, each site at 0, and the words a screen reader's.
+    assert browser.js(COUNTS) == [["library", "done", 0], ["ug", "done", 0], ["gtptabs", "empty", 0],
+                                  ["lacuerda", "empty", 0], ["musescore", "empty", 0], ["harptabs", "empty", 0],
+                                  ["gametabs", "empty", 0]]
+    assert browser.js(LOOKUP_STATUS) == "Nothing on the sites" and browser.js(LOOKUP_WORDS_SHOWN) is False
+    assert browser.js(NO_SEARCHED_LINE)
     assert browser.js("document.getElementById('by-name-box').checkVisibility()") is False  # one Look up
     browser.click(f"{NOTHING} .row-more")
     assert browser.js(DRAWER)["buttons"] == ["Ask LaCuerda · 1 request"]  # LaCuerda's listings: none read
@@ -1303,6 +1451,31 @@ def test_the_lookup_page_shows_the_same_band_and_line(cfg, live, browser):
     assert browser.js("document.activeElement.name") == "artist"
     assert browser.js("document.querySelector('#results .did-you-mean')") is None  # no artist spelled close to it
     assert queue.snapshot() == []
+
+
+def test_the_lookup_page_says_what_each_site_found_as_the_library_page_does(cfg, live, browser):
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    read_to(cfg, ("_num", "a", "b", "c"))
+    blocking(cfg, "musescore")
+    game_and_harp_indexes(cfg)
+    library(cfg, ("Hollow Knight", "Resting Grounds"))
+    browser.open(base + "lookup?q=hollow%20knight")
+    assert browser.wait(f"{HITS} >= 1 && {COUNTS_SHOWN}")
+    assert browser.js(COUNTS) == [["library", "done", 1], ["ug", "done", 0], ["gtptabs", "empty", 0],
+                                  ["lacuerda", "partial", 0], ["musescore", "blocked", None],
+                                  ["harptabs", "partial", 0], ["gametabs", "partial", 5]]
+    assert [w[0] for w in browser.js(COUNT_WORDS)][-1] == "5 on gametabs.net: index in part, 2 of 7 games"
+    place = browser.js("(() => { const c = document.getElementById('bar-counts').getBoundingClientRect(); return "
+                       "[document.querySelector('.search').contains(document.getElementById('bar-counts')), "
+                       "c.top >= document.getElementById('q').getBoundingClientRect().bottom, "
+                       "c.bottom <= document.getElementById('results').getBoundingClientRect().top]; })()")
+    assert place == [True, True, True]
+    assert browser.js(LOOKUP_STATUS) == "1 of your songs · 5 on gametabs.net"
+    assert browser.js(LOOKUP_WORDS_SHOWN) is False
+    assert browser.js(NO_SEARCHED_LINE)  # no muted line under the rows says it again: Ask LaCuerda is there alone
+    assert browser.js("document.querySelector('#results .notes-line .ask-lacuerda').textContent") == (
+        "Ask LaCuerda for “hollow knight” (1 request)")
 
 
 def test_a_query_found_nowhere_whose_artist_an_index_lists_fills_both_forms_by_name_in_with_them(cfg, live, browser):
@@ -1383,7 +1556,9 @@ def test_a_title_spelled_close_that_you_have_is_your_own_line_in_its_band(cfg, l
     assert browser.js(LINES) == [["Eagles", [["Hotel California", "yours"]]]]  # one line: your own, which opens it
     assert browser.js("document.querySelector('#results section.meant article.line[data-id] .line-action a')"
                       ".textContent") == "Open PDF"
-    assert browser.js(STATUS) == "Nothing on the sites · did you mean Hotel California by Eagles?"
+    # Your song is among the results: the words say it first, as the marks do.
+    assert browser.js(STATUS) == "1 of your songs · nothing on the sites · did you mean Hotel California by Eagles?"
+    assert browser.js(COUNTS)[0] == ["library", "done", 1]
     assert queue.snapshot() == []
 
 
@@ -1393,14 +1568,14 @@ def test_the_lookup_page_suggests_a_title_as_a_row_whose_get_it_looks_it_up(cfg,
     browser.open(base + "lookup?q=hotl%20califronia")
     assert browser.wait("!!document.querySelector('#results .did-you-mean .hit')")
     assert browser.js("[...document.querySelectorAll('#results h2.group')].map(h => h.textContent)") == [
-        "Did you mean", "Not on the sites · searched 5"]
+        "Did you mean", "Not on the sites"]
     row = "#results .did-you-mean .hit"
     assert browser.js(f"[document.querySelector('{row} .row-title').textContent, document.querySelector('{row} "
                       f".row-artist').textContent, document.querySelector('{row} .source').dataset.source, "
                       f"document.querySelector('{row} .row-action button').textContent]") == [
         "Hotel California", "Eagles", "ug", "Get it"]
-    assert browser.js("document.getElementById('status').textContent") == (
-        "Nothing matches · did you mean Hotel California by Eagles?")
+    assert browser.js(LOOKUP_STATUS) == "Nothing on the sites · did you mean Hotel California by Eagles?"
+    assert browser.js(LOOKUP_WORDS_SHOWN) is False and browser.js(COUNTS_SHOWN)
     browser.click(f"{row} .row-action button")
     args = posted(queue)
     assert args[:3] == ("get", "--progress", "--ug=eagles/hotel-california") and args[-2:] == ("Eagles",
@@ -1457,14 +1632,14 @@ READS = """(() => {
     return Math.round((hi + 0.05) / (lo + 0.05) * 100) / 100;
   };
   const read = {};
-  for (const [name, selector] of [["band", ".nothing > h2"], ["searched", ".nothing > h2 .miss-count"],
+  for (const [name, selector] of [["band", ".nothing > h2"],
       ["query", ".nothing article h3"], ["request", ".nothing .line-action button"],
       ["name", "section.meant .artist-name"], ["counts", "section.meant .artist-counts"], ["their", ".their-songs"],
-      ["done", ".nothing .looked li[data-state=done] .source"], ["empty", ".nothing .looked li[data-state=empty] .source"],
-      ["partial", ".nothing .looked li[data-state=partial] .source"],
-      ["blocked", ".nothing .looked li[data-state=blocked] .source"], ["ask", ".nothing .ask-lacuerda"],
+      ["done", "#bar-counts li[data-source=ug] .count-n"], ["empty", "#bar-counts li[data-state=empty] .source"],
+      ["partial", "#bar-counts li[data-state=partial] .count-n"],
+      ["blocked", "#bar-counts li[data-state=blocked] .source"], ["ask", ".nothing .ask-lacuerda"],
       ["why", ".nothing .why-unseen summary"]]) {
-    const n = document.querySelector("#results " + selector);
+    const n = document.querySelector(selector.startsWith("#") ? selector : "#results " + selector);
     read[name] = n ? ratio(n) : null;
   }
   read.box = Math.round(lum(behind(document.querySelector("#results .nothing article"))) * 1000) / 1000;
@@ -1509,6 +1684,55 @@ def test_the_miss_and_a_typos_band_fit_a_phone_and_read_in_light_and_dark(cfg, l
         weak = {name: value for name, value in reads.items() if name != "box" and (value is None or value < 4.5)}
         assert weak == {}, reads
         assert (reads["box"] < 0.05) if dark else (reads["box"] > 0.8), reads  # its own mode: no white box at night
+    finally:
+        phone.close()
+
+
+# How the row of marks under the box sits on a phone: each mark whole, within the page's 16 px gutters, none over
+# another, and on how many lines.
+ROW_FITS = """(() => {
+  const items = [...document.querySelectorAll('#bar-counts > li')];
+  const marks = items.map((c) => c.getBoundingClientRect());
+  const apart = (a, b) => a.right <= b.left + 0.5 || b.right <= a.left + 0.5 || a.bottom <= b.top + 0.5 ||
+    b.bottom <= a.top + 0.5;
+  return { n: marks.length, inside: marks.every((r) => r.left >= 15.5 && r.right <= innerWidth - 15.5),
+    apart: marks.every((a, i) => marks.every((b, j) => i === j || apart(a, b))),
+    whole: items.every((c) => c.scrollWidth <= c.clientWidth + 1),
+    lines: new Set(marks.map((r) => Math.round(r.top))).size };
+})()"""
+# What each mark's count (or "off") and letters say against what is behind them: WCAG's ratio, as READS has it.
+COUNT_READS = READS.split("  const read = {};")[0] + """  return [...document.querySelectorAll('#bar-counts > li')]
+    .flatMap((c) => [...c.querySelectorAll('.count-n, .count-off, span.source')].map((n) => [c.dataset.source + ' ' +
+      n.className, ratio(n)]));
+})()"""
+
+
+@pytest.mark.parametrize("dark", [False, True], ids=["light", "dark"])
+@pytest.mark.parametrize("where", ["library", "lookup"])
+def test_the_row_of_marks_wraps_cleanly_on_a_phone_and_reads_in_light_and_dark(cfg, live, tmp_path, where, dark):
+    base, _, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    read_to(cfg, ("_num", "a", "b", "c"))
+    blocking(cfg, "musescore")
+    game_and_harp_indexes(cfg)
+    library(cfg, ("Hollow Knight", "Resting Grounds"))
+    phone = driven(tmp_path, width=390, height=844, mobile=True)
+    try:
+        if dark:
+            phone.send("Emulation.setEmulatedMedia", features=[{"name": "prefers-color-scheme", "value": "dark"}])
+        if where == "library":
+            phone.open(base)
+            search(phone, "hollow knight")
+            assert phone.wait(f"{answer_to('hollow knight')} && {COUNTS_SHOWN}")
+        else:
+            phone.open(base + "lookup?q=hollow%20knight")
+            assert phone.wait(f"{HITS} >= 1 && {COUNTS_SHOWN}")
+        assert phone.js(NO_SIDEWAYS)
+        fits = phone.js(ROW_FITS)
+        assert fits["n"] == 7 and fits["inside"] and fits["apart"] and fits["whole"] and fits["lines"] <= 2, fits
+        weak = [(what, ratio) for what, ratio in phone.js(COUNT_READS) if ratio < 4.5]
+        assert weak == [], weak
+        assert phone.js(small_targets()) == []  # a mark is no control: nothing here to tap
     finally:
         phone.close()
 

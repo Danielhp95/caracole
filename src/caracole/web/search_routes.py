@@ -75,8 +75,9 @@ searched one only in part (``partial``): LaCuerda's index while the nightly run 
 listings, with the letters read so far, and harptabs.com's while its artist pages aren't all read
 (harptabs_index.py, "2 of 10,428 artists"). Of gametabs.net it reads its sitemaps' and game pages' tables
 (``search.search_gametabs``: ``gametabs``, a track of a game a song, the game its artist, its tabs the most viewed
-first, each with the instruments and composers its game's page said; none while gametabs.net is turned off, and no
-mark among ``looked``'s yet). A song's Get it on a gametabs.net row looks the song up and keeps that tab
+first, each with the instruments and composers its game's page said; none while gametabs.net is turned off; its
+mark among ``looked``'s says how far its game pages are read). A song's Get it on a gametabs.net row looks the song up
+and keeps that tab
 (``gametabs``: ``caracole get --gametabs``, recorded under ``[gametabs]``).
 ``looked`` says the same of every site, Ultimate Guitar's index too, as the
 pages' marks show it (``_looked``: a state, a short label, a line of detail), and
@@ -454,7 +455,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             # YouTube's first video for a query with no sheet on the sites, suggested (youtube_routes.py)
             "youtube": youtube,
             "suggest": [_suggestion_json(app, conn, s, songs) for s in (() if yours else close or ())],
-            "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
+            "skipped": skipped, "partial": partial, "looked": _looked(app, conn, skipped, partial)}
 
 
 SUGGESTED_KEY = {"ug": "artist_key", "lacuerda": "slug", "harptabs": "path"}  # what /api/artist takes of each site
@@ -673,13 +674,14 @@ def _harptabs_left_out(app: WebApp, conn: sqlite3.Connection) -> tuple[str, str]
                        "caracole harptabs --index reads the rest")
 
 
-def _looked(conn: sqlite3.Connection, skipped: list[dict[str, str]],
+def _looked(app: WebApp, conn: sqlite3.Connection, skipped: list[dict[str, str]],
             partial: list[dict[str, str]]) -> list[dict[str, str]]:
-    """Where the search looked, a site a mark on the pages: Ultimate Guitar's index, gtptabs.com's, LaCuerda's and
-    MuseScore's, each with its ``state`` (``done``: searched whole; ``partial``: LaCuerda's while its listings are
-    read; ``empty``, ``blocked``: MuseScore's, while it blocks caracole; ``off``: turned off in caracole.toml), its
-    ``label`` ("UG ✓", "LaCuerda: up to C": the letters read whole run from the first to C) and its ``detail``, one
-    line: what ``skipped`` and ``partial`` say of it."""
+    """Where the search looked, a site a mark on the pages: Ultimate Guitar's index, gtptabs.com's, LaCuerda's,
+    MuseScore's, harptabs.com's and gametabs.net's, each with its ``state`` (``done``: searched whole; ``partial``:
+    LaCuerda's while its listings are read, harptabs.com's while its artist pages are, gametabs.net's while its game
+    pages are; ``empty``, ``blocked``: MuseScore's, while it blocks caracole; ``off``: turned off in caracole.toml),
+    its ``label`` ("UG ✓", "LaCuerda: up to C": the letters read whole run from the first to C) and its ``detail``,
+    one line: what ``skipped`` and ``partial`` say of it (of gametabs.net, ``_gametabs_looked``)."""
     from caracole.lacuerda import LETTERS
     from caracole.lacuerda_index import letters_read, letters_text
 
@@ -719,7 +721,30 @@ def _looked(conn: sqlite3.Connection, skipped: list[dict[str, str]],
         else:
             state, label, detail = "empty", f"{name}: empty", f"{name}'s {why.removeprefix('its ')}."
         looked.append({"source": source, "name": name, "state": state, "label": label, "detail": detail})
+    looked.append(_gametabs_looked(app, conn))
     return looked
+
+
+def _gametabs_looked(app: WebApp, conn: sqlite3.Connection) -> dict[str, str]:
+    """gametabs.net's mark among ``looked``: turned off, its index empty before its sitemaps are read, in part while
+    its game pages, which name each tab's composers, aren't all read (gametabs_index.py, "2 of 7 games"), else whole.
+    Its tracks are found by their titles whatever the game pages read, by a composer only on a page read."""
+    from caracole.gametabs_index import index_state
+
+    name = "gametabs.net"
+    mark = {"source": "gametabs", "name": name}
+    if not app.cfg.provider("gametabs").enabled:
+        return {**mark, "state": "off", "label": f"{name}: off", "detail": f"{name} is turned off in caracole.toml."}
+    if conn.execute("SELECT 1 FROM gametabs_index LIMIT 1").fetchone() is None:
+        return {**mark, "state": "empty", "label": f"{name}: empty",
+                "detail": f"{name}'s index is empty: the nightly run reads its sitemaps."}
+    state = index_state(conn)
+    if state.read < state.pages:
+        return {**mark, "state": "partial", "label": f"{name}: {state.read:,} of {state.pages:,} games",
+                "detail": f"{name}'s game pages are still being read: {state.read:,} of {state.pages:,} so far; "
+                          "caracole gametabs --index reads the rest."}
+    return {**mark, "state": "done", "label": f"{name} ✓",
+            "detail": f"{name}: caracole's copy of its index, searched whole."}
 
 
 def _rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], index: list[dict[str, Any]],

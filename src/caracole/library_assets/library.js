@@ -12,6 +12,8 @@
   const input = byId("q");
   const clear = byId("clear");
   const barStatus = byId("bar-status");
+  const barCounts = byId("bar-counts");  // beside it, the marks of what each site found (drawCounts)
+  const barSaid = barStatus.parentElement;
   const results = byId("results");
   const found = byId("found");
   const sort = byId("sort");
@@ -285,7 +287,8 @@
   // ROWS_SCRIPT's, which the lookup page shares; and a song's card (card.js), drawn with them.
   const rowKit = caracoleRows(ICONS);
   const { sourceMark, glyph, link, resultRow, artistFilter, artistSearch, artistOnly, button, many, indexLine,
-    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, lookedLine } = rowKit;
+    titleLine, readArtistPage, lacuerdaSearcher, readOutcome, songsOn, meantName, nothingFound, notesLine, countMarks,
+    countsSaid } = rowKit;
   const card = caracoleCard(ICONS, rowKit);
   // The file a song opens with, from its title and its line's button: its viewer, else its PDF, else its text
   // (the data marks it primary).
@@ -1961,13 +1964,53 @@
   // when its gate sends one, or offered as a button, a line under the results (rows.js lacuerdaSearcher, lcBox), or by
   // Ask LaCuerda's, the one LaCuerda button, where the results offer a name's page too; its rows come in a new answer
   // once it is over. On the file, which can ask nothing, Enter shows the line that searches the sites.
-  const say = (text) => {
+  // The line under the box: words, a live region, which the box is described by. ``marks``: the marks beside them
+  // say it (the counts, "Searching the sites…"), so the words are a screen reader's while those show; anything else
+  // shows, after the marks ("Estopa: 60 songs on Ultimate Guitar", an error) or alone.
+  const say = (text, marks) => {
+    barSaid.classList.toggle("counted", Boolean(marks));
     if (barStatus.textContent === text) return;
     barStatus.textContent = text;
     barStatus.title = text;  // one line on a phone: the whole of it on hovering
   };
+  // What each site found, as marks under the box (rows.js countMarks), your songs the results show (``mine``) first,
+  // drawn by drawGroups: the answer on the screen's, while the sites' results show and the box holds no link, and
+  // dimmed while the next answer comes (searching); each site's count its songs as the lines show them (foundNow),
+  // those "+ N more" and Their songs listed since too. The same in words, and the artist or the song it may have
+  // meant, said again once they change, unless what follows the answer is said ("Estopa: 60 songs on Ultimate
+  // Guitar"), which stays until the next. Called with nothing, it only takes them away where they can't show.
+  let countsFor = null;  // the answer's data the marks are drawn from, and what they counted
+  let countsKey = "";
+  const drawCounts = (mine) => {
+    const q = normal(state.q);
+    if (!(server && state.all && q && answer && answer.model && !youtubeVideo(q))) {
+      countsFor = null;
+      barCounts.hidden = true;
+      barCounts.replaceChildren();
+      return;
+    }
+    if (mine === undefined) return;
+    const found = foundNow(answer.model);
+    const key = mine + " " + JSON.stringify(found);
+    if (countsFor === answer.data && countsKey === key) return;
+    const fresh = countsFor !== answer.data;
+    countsFor = answer.data;
+    countsKey = key;
+    barCounts.replaceChildren(...countMarks(answer.data, mine, found));
+    barCounts.hidden = false;
+    if (!fresh && !barSaid.classList.contains("counted")) return;  // what followed the answer stays said
+    const meant = objects(answer.data.suggest).filter((x) => x.artist);
+    say(countsSaid(answer.data, mine, found) + (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""),
+      true);
+  };
+  const searching = (on) => {
+    if (on) found.setAttribute("aria-busy", "true");
+    else found.removeAttribute("aria-busy");
+    barSaid.classList.toggle("busy", on);
+  };
   const drawBar = (none, key) => {
     const q = normal(state.q);
+    drawCounts();
     if (server && state.all) return;  // the search of the sites says how it goes
     else if (!q) say("");  // before anything is typed the placeholder says what the bar searches
     else if (key) say(none ? "None of yours match: the sites know no keys" : "A key filters your songs alone: the sites know no keys");
@@ -2120,6 +2163,23 @@
     }
     return model;
   };
+  // How many songs of each site the results show (the marks under the box count them: drawCounts): a line each that
+  // has the site's row, but a song it may have meant; an artist the query names there none of whose songs is listed,
+  // one; a title alone (MuseScore's pages, harptabs.com's tabs by their title), one.
+  const FOUND_SITES = ["ug", "gtptabs", "lacuerda", "harptabs", "gametabs"];
+  const foundNow = (model) => {
+    const n = { ug: 0, gtptabs: 0, lacuerda: 0, musescore: model.titles.length, harptabs: model.harps.length,
+      gametabs: 0 };
+    for (const item of model.items.values()) {
+      if (!item.meant) for (const source of FOUND_SITES) if (item[source]) n[source] += 1;
+    }
+    for (const g of model.groups.values()) {
+      for (const source of ["ug", "lacuerda", "harptabs"]) {
+        if (g[source] && !g.items.some((item) => item[source] && !item.meant)) n[source] += 1;
+      }
+    }
+    return n;
+  };
   // Whether an answer's model holds nothing of the sites (an artist, a song, a title, a song you removed): its search
   // found nothing there, and says so as a line of the list (nothingFound). An artist it may have meant, once listed,
   // or a name LaCuerda's page was read for, is something; a song it may have meant is not.
@@ -2261,7 +2321,7 @@
       if (!page || answer !== was || !state.all) return;
       const got = objects(page.songs);
       if (source === "ug") {
-        for (const h of got) addSong(was.model, "ug", h, m);
+        for (const h of got) addSong(was.model, "ug", h, m).meant = false;  // listed now: found, no guess
         m.ugOffset += got.length;
         m.ugListed = got.length ? Math.max(m.ugListed, m.ugOffset) : Number(m.ug.songs);
         say(m.name + ": " + many(page.total, "song") + " on Ultimate Guitar");
@@ -2279,7 +2339,7 @@
   };
   // A LaCuerda artist's songs the index holds (/api/artist?lacuerda=), all of them, in their group.
   const listLaCuerda = (m, page) => {
-    for (const h of objects(page.songs)) addSong(answer.model, "lacuerda", h, m);
+    for (const h of objects(page.songs)) addSong(answer.model, "lacuerda", h, m).meant = false;
     m.lcListed = true;
     if (m.tail && m.tail.offer) {
       m.tail.offer.remove();
@@ -2289,7 +2349,7 @@
   };
   // A harptabs.com artist's songs the index holds (/api/artist?harptabs=), all of them, in their group.
   const listHarptabs = (m, page) => {
-    for (const h of objects(page.songs)) addSong(answer.model, "harptabs", h, m);
+    for (const h of objects(page.songs)) addSong(answer.model, "harptabs", h, m).meant = false;
     m.htListed = true;
     if (m.tail && m.tail.htOffer) {
       m.tail.htOffer.remove();
@@ -2357,7 +2417,7 @@
         const got = objects(page.songs);
         g.ug = { artist_key: page.artist_key, artist: page.artist, songs: page.total, tabs: page.tabs,
           group_key: s.group_key, top: [] };
-        for (const h of got) addSong(model, "ug", h, g);
+        for (const h of got) addSong(model, "ug", h, g).meant = false;  // listed now: found, no guess
         g.ugOffset = got.length;
         g.ugListed = got.length;
         say(String(page.artist) + ": " + many(page.total, "song") + " on Ultimate Guitar");
@@ -2524,6 +2584,7 @@
       allMine.appendChild(button("All " + mine.length + " of your songs", "small", () => leaveAll(true)));
     }
     allMine.hidden = !allMine.childNodes.length;
+    drawCounts(mine.length);
     const said = keptSaid();
     if (keptNote.firstChild.textContent !== said) keptNote.firstChild.textContent = said;
     keptNote.hidden = !said;
@@ -2559,11 +2620,11 @@
     }
     return model.card;
   };
-  // Under results, where it looked in one muted line, when a site wasn't searched whole (lookedLine).
+  // Under results, what may find more: Ask LaCuerda, why caracole may not see an artist (notesLine).
   const notesOf = (model) => {
     if (model.line === undefined) {
       const says = saysOf(model);
-      model.line = lookedLine(says.data, answer.q, says.does);
+      model.line = notesLine(says.data, answer.q, says.does);
     }
     return model.line ? [model.line] : [];
   };
@@ -2916,8 +2977,8 @@
     const mine = asked;
     if (asking) asking.abort();
     asking = new AbortController();
-    say("Searching the sites…");
-    found.setAttribute("aria-busy", "true");
+    say("Searching the sites…", true);
+    searching(true);
     fetch("api/search?q=" + encodeURIComponent(q) + "&box=" + SEARCH_BOX, {
       signal: asking.signal, cache: "no-store", headers: { Accept: "application/json" },
     }).then((r) => r.json().catch(() => null).then((body) => ({ ok: r.ok, status: r.status, body })))
@@ -2928,7 +2989,7 @@
           askTimer = setTimeout(() => sendAsk(q), SEARCH_PAUSE);
           return;
         }
-        found.removeAttribute("aria-busy");
+        searching(false);
         heard();
         if (!reply.ok || !data || data.error) {
           say(failure(reply).line.text);
@@ -2937,7 +2998,7 @@
         showSites(data, q);
       }, (e) => {
         if (mine !== asked || (e && e.name === "AbortError")) return;
-        found.removeAttribute("aria-busy");
+        searching(false);
         heard();
         say(UNREACHABLE.line.text);
       });
@@ -2972,26 +3033,9 @@
       say("Type three letters or more to search the sites");
       return;
     }
-    const index = objects(data.index);
-    const artists = objects(data.artists);
-    const gtp = objects(data.gtptabs);
-    const ms = objects(data.musescore);
-    const harps = objects(data.harptabs);
-    const htArtists = objects(data.harptabs_artists);
+    // What each site found is the marks under the box, drawn with the groups (drawCounts).
     const lcArtists = objects(data.lacuerda_artists);
     const lc = objects(data.lacuerda);
-    const parts = [];
-    if (index.length || artists.length) parts.push((index.length + artists.length) + " on Ultimate Guitar");
-    if (lc.length || lcArtists.length) {
-      parts[data.lacuerda_leads === true ? "unshift" : "push"]((lc.length + lcArtists.length) + " on LaCuerda");
-    }
-    if (gtp.length) parts.push(gtp.length + " on gtptabs.com");
-    if (ms.length) parts.push(ms.length + " on MuseScore");
-    if (harps.length || htArtists.length) parts.push((harps.length + htArtists.length) + " on harptabs.com");
-    if (objects(data.gametabs).length) parts.push(objects(data.gametabs).length + " on gametabs.net");
-    const meant = objects(data.suggest).filter((x) => x.artist);
-    say((parts.length ? parts.join(" · ") : "Nothing on the sites") +
-      (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""));
     prefill(data.lead || (lcArtists.length && !lc.length ? "artist" : null),  // an artist LaCuerda alone knows
       q === normal(state.q) ? data.names : null);
     if (focusFirst && q === normal(state.q)) {
@@ -3094,7 +3138,7 @@
     if (asking) asking.abort();
     asked += 1;
     askedFor = null;
-    found.removeAttribute("aria-busy");
+    searching(false);
     waiting = true;
     document.body.classList.remove("waiting-sites");
     settleSpots();

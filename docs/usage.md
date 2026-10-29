@@ -3782,23 +3782,38 @@ Who can reach it, below).
   your own typing stops a search: two people searching at the same moment (on
   two phones, or the library page and the lookup page) each wait their turn
   and get their answer (`/api/search`'s `box`, an id each search box makes). The
-  line under the box says "Searching the sites…", then how many each site has.
-  Under the results, one muted line says where caracole looked when a site
-  wasn't searched whole: "Searched" and a small mark a site, the site's own
-  icon (else its letters, UG, LC, GT, MS, HT): grey where it searched (UG's
-  index whole, or one the nightly run hasn't filled yet), amber in part
-  (LaCuerda, while the nightly run still reads its listings), red where a site
-  blocks caracole (MuseScore), hollow turned off in caracole.toml. Each mark's
-  tooltip says why in one line ("LaCuerda's index is still being read: 2,957
-  artists so far, with #, A–C read whole; the nightly run reads the rest."),
-  and a screen reader hears them all ("Searched Ultimate Guitar, LaCuerda (in
-  part) and harptabs.com; MuseScore blocked").
+  line under the box says "Searching the sites…" until the first answer comes.
+  Then it is a row of marks, one a place searched, each with how many songs it
+  found there: your songs first (the results' own, by caracole's "¿"), then
+  Ultimate Guitar, gtptabs.com, LaCuerda, MuseScore, harptabs.com and
+  gametabs.net, each by its own icon (else its letters: UG, GT, LC, MS, HT,
+  GM). A site counts its songs as the results' lines show them (those "+ N
+  more" lists too): an artist's most tabbed songs among them, a song once,
+  and an artist none of whose songs is listed (a LaCuerda artist whose page
+  caracole hasn't read) once. One that found something is in the text's colour,
+  one that found nothing quieter, at 0. A mark also says how far caracole's copy
+  of the site's index has got, in a colour and a glyph: amber with a pie cut
+  where it is read in part (LaCuerda, while the nightly run still reads its
+  listings; harptabs.com, its artist pages; gametabs.net, its game pages, which
+  name each tab's composers), red with a ban and no count where a site blocks
+  caracole (MuseScore), a dashed edge where its index is empty yet, and "off" on
+  a dashed edge where it is turned off in caracole.toml. Each mark's tooltip
+  says it in words, then why, in one line ("0 on LaCuerda: index in part, up to
+  C", then "LaCuerda's index is still being read: 2,957 artists so far, with #,
+  A–C read whole; the nightly run reads the rest."); a screen reader hears each
+  mark that way ("7 on Ultimate Guitar"), and, as an answer comes, the counts
+  that aren't 0 ("1 of your songs · 7 on Ultimate Guitar · 5 on gametabs.net").
+  A mark is no button. While the next query's answer comes the row dims, and
+  what follows an answer (an artist's songs listed by "+ N more", an error) is
+  said in words after the marks. Nothing under the results says it again: only
+  Ask LaCuerda, and "Why can't caracole find it?", when they apply.
 
   When a query finds nothing on the sites, the list ends with a line of its
-  own, under a quiet band, "Not on the sites · searched 5": the query in its
-  quotes, the same marks, and **Request** where a song's Open is, which opens
-  the request form below, filled in from the query (the form shows only then:
-  one Request), and the line under the box says "Nothing on the sites". Its
+  own, under a quiet band, "Not on the sites": the query in its quotes, and
+  **Request** where a song's Open is, which opens the request form below,
+  filled in from the query (the form shows only then: one Request); the marks
+  under the box say where caracole looked, every site at 0, and a screen reader
+  hears "Nothing on the sites". Its
   chevron holds the rest: Ask LaCuerda · 1 request, only while LaCuerda's
   listings don't reach the name's letter (LaCuerda's search first, as under
   results), and "Why can't caracole find it?", folded: Ultimate Guitar's
@@ -3814,9 +3829,10 @@ Who can reach it, below).
   it, for a song you have), your songs of theirs under it as an artist's are,
   then "Their 7 songs on UG ›", which lists their songs in the band (fifty of
   Ultimate Guitar's, with "+ N more", or those LaCuerda's or harptabs.com's
-  index holds, or the offer to read their page), with no request; the line
-  under the box names the first: "Nothing on the sites · did you mean Stephen
-  Foster?", "… · did you mean Beautiful Dreamer by Stephen Foster?". Enter
+  index holds, or the offer to read their page), with no request; what a
+  screen reader hears under the box names the first: "Nothing on the sites ·
+  did you mean Stephen Foster?", "… · did you mean Beautiful Dreamer by Stephen
+  Foster?". Enter
   still only moves to the first line. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
   common words), takes no lock and spends no budget, and so does "+ N more".
@@ -3940,7 +3956,9 @@ Who can reach it, below).
   stands out, and sends LaCuerda's search as the library page's Enter does. A query spelled close to
   artists' names or songs' titles shows "Did you mean" first, a row each: an artist's, whose Their
   songs lists that artist's songs, as their row's Songs does; a song's, as the search's rows are
-  (Get it, or your own row); the line under the box names the first. A query that finds nothing
+  (Get it, or your own row); what a screen reader hears under the box names the first. Under its box, the same row
+  of marks as the library page's says what each site found, and goes while an artist's songs are
+  listed in place of the results. A query that finds nothing
   shows the same band and line as the library page, its row's
   Look up where a song's Get it is (the form under the results, filled in as
   the library page's request form is, which shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for

@@ -253,7 +253,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
 
 
 def bar_of(html):
-    found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\n</div>', html, re.S)
+    found = re.search(r'<div class="searchbar"[^>]*>.*?<p class="bar-status"[^>]*></p>\s*</div>\n</div>', html, re.S)
     assert found, html[:3000]
     return found.group(0)
 
@@ -268,6 +268,10 @@ def test_the_bar_has_a_status_line_and_no_search_all_button_in_both_pages(conn, 
         assert 'id="all"' not in bar and "Search all" not in html
         status = re.search(r'<p class="bar-status" id="bar-status"[^>]*>', bar)
         assert status and 'aria-live="polite"' in status.group(0)
+        # Before the words, the marks of what each site found, hidden until an answer comes; no live region of their
+        # own: the words say them.
+        marks = re.search(r'<ul class="counts" id="bar-counts"([^>]*)></ul>\s*<p class="bar-status"', bar)
+        assert marks and " hidden" in marks.group(1) and "aria-live" not in marks.group(1)
         assert re.search(r'<input id="q"[^>]*aria-describedby="bar-status"', bar, re.S)
         assert re.search(r'<section class="results" id="results" aria-label="Search results">', html)
 

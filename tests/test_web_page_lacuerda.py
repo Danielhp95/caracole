@@ -165,9 +165,9 @@ def test_an_artist_whose_page_caracole_never_read_is_read_on_asking_then_listed_
     assert browser.wait(f"{answer_to('joaquin sabina')} && "
                         "!!document.querySelector('#results section.artist .read-page button')")
     assert browser.js(GROUPS) == ["Joaquín Sabina · LaCuerda 241"]
-    mark = browser.js("(() => { const c = document.querySelector('#results .looked-line li[data-state=partial]'); "
+    mark = browser.js("(() => { const c = document.querySelector('#bar-counts li[data-state=partial]'); "
                       "return [c.dataset.source, c.firstElementChild.getAttribute('aria-label'), c.title]; })()")
-    assert mark[:2] == ["lacuerda", "LaCuerda: E, J only"] and "still being read" in mark[2]
+    assert mark[:2] == ["lacuerda", "1 on LaCuerda: index in part, E, J only"] and "still being read" in mark[2]
     assert "E, J read whole" in mark[2]
     assert "241 songs" in browser.js("document.querySelector('#results .read-page').textContent")
     assert queue.snapshot() == []  # the search asks nothing: reading their page is a button of its own
@@ -202,7 +202,7 @@ def test_a_name_under_a_letter_lacuerda_hasnt_listed_yet_is_read_on_asking_then_
     sites(cfg, ug=[("radiohead", "creep", 4)], gtptabs=["https://gtptabs.com/tabs/2/bunbury/el-extranjero.html"])
     lacuerda(cfg, complete=False)
     search(browser, base, "bunbury")
-    ask = "#results .looked-line .ask-lacuerda"  # gtptabs.com has a song of theirs: under the results
+    ask = "#results .notes-line .ask-lacuerda"  # gtptabs.com has a song of theirs: under the results
     assert browser.wait(f"{answer_to('bunbury')} && !!document.querySelector('{ask}')")
     offer = browser.js(f"document.querySelector('{ask}').title")
     assert offer.startswith("LaCuerda's list doesn't reach B yet") and "“bunbury”" in offer
