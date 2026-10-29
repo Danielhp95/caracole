@@ -206,7 +206,8 @@ def test_auto_sheet_kept_with_its_version_and_the_song_becomes_found(conn, cfg, 
     )
     assert (v.rating, v.votes, v.version, v.label) == (0, 0, 1, None)
     assert v.url == "file://" + s.audio_path
-    assert v.raw == {"audio": s.audio_path, "model": "btc_large_voca", "lyrics": "plain", "key": "G"}
+    assert v.raw == {"audio": s.audio_path, "model": "btc_large_voca", "lyrics": "plain", "columns": "display",
+                     "key": "G"}
     assert v.fetched_at == "2026-10-18T04:05:00Z"
 
     song = get_song(conn, s.id)
@@ -607,6 +608,26 @@ def test_sheet_made_before_the_lyrics_arrived_is_made_again_once(conn, cfg, tmp_
 
     rec = FakeRecognizer()
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_sheet_laid_out_by_characters_over_lyrics_wider_than_them_is_made_again_once(conn, cfg, tmp_path):
+    # An older caracole wrote a chord over a Chinese line at its character's index, half its display column, so
+    # the converted sheet had it on an earlier character: such a sheet is made again, once. One over lines of
+    # letters one column wide each was right as it was.
+    zh = with_audio(conn, tmp_path, add_song(conn, "宋冬野", "斑马斑马"), name="zh.wav", lyrics_status="found",
+                    lyrics_json=lyrics_json(synced="[00:00.50]第一行歌词在这里\n[00:05.20]第二行歌词在这里\n"))
+    en = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), name="en.wav", lyrics_status="found",
+                    lyrics_json=lyrics_json(synced=SYNCED))
+    assert run(conn, cfg).generated == 2
+    for s in (zh, en):  # as an older caracole kept them, with nothing to say how their columns count
+        vid = next(f.version_id for f in kept_files(conn, s.id) if f.name == AUTO_SHEET)
+        assert get_version(conn, vid).raw["columns"] == "display"
+        conn.execute("UPDATE versions SET raw = json_remove(raw, '$.columns') WHERE id = ?", (vid,))
+    rec = FakeRecognizer()
+    stats = run(conn, cfg, rec)
+    assert (stats.generated, stats.skipped, rec.calls) == (1, 1, [Path(zh.audio_path)])
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (2, [])
 
 
 def test_missing_lyrics_are_not_waited_for(conn, cfg, tmp_path):

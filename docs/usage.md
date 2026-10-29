@@ -1668,6 +1668,9 @@ and cache.
   file changes. It exits 1 when auto-chords can't work at all: the model files
   missing or unusable, or a sheet it can't write into the library. It also
   works out the chords of the audio the youtube step took, as of a purchase.
+  A song's sheet is made again when its audio changes, when its lyrics arrive after it, and once for a sheet
+  an older caracole laid over timed lyrics in Chinese, Japanese or Korean (or with accents written apart from
+  their letters), whose chords went to the left of where they belonged in its PDF and its viewer.
 - **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]] [--search QUERY]`** takes
   the audio of the songs no human sheet was found for from YouTube, as the
   nightly run's youtube step does (see [Audio from YouTube](#audio-from-youtube)),

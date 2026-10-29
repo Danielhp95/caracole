@@ -11,7 +11,10 @@ with linked audio is due when:
 - it has no human sheet (no kept ``sheet.txt``);
 - it is not ignored;
 - its audio changed since its last auto sheet, or that sheet was made before
-  the song's lyrics arrived;
+  the song's lyrics arrived, or by an older caracole over timed lyrics with a
+  character not one column wide (Chinese, say), whose chords it wrote at their
+  characters' indexes rather than their display columns (its version's ``raw``
+  has no ``columns``): once more;
 - that file hasn't already failed;
 - no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,
@@ -74,6 +77,7 @@ from caracole.autochords.merge import (
     parse_lrc_words,
     youtube_credit,
 )
+from caracole.chordpro import display_columns
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
 from caracole.keys import estimate_key
@@ -92,6 +96,7 @@ PROVIDER = "auto"
 MODEL = "btc_large_voca"
 SYNC_TOLERANCE_S = 2.0  # LRCLIB's own tolerance when it matches a duration
 STATUS_KEY = "autochords:status"  # kv: the last run, for the to-do page
+COLUMNS = "display"  # what a sheet's chord lines count, in its version's raw: display columns (merge._on_words)
 ERROR_CHARS = 300  # an error as the to-do page lists it: one line, if a long one
 TONE_SECONDS = 2.0
 TONE_HZ = (261.63, 329.63, 392.0)  # C major: C4, E4 and G4
@@ -357,9 +362,24 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     auto = kept.get(AUTO_SHEET)
     if auto is None:
         return None
-    if get_version(conn, auto.version_id).raw.get("lyrics") == "none" and _sung_lyrics(song):
+    raw = get_version(conn, auto.version_id).raw
+    if raw.get("lyrics") == "none" and _sung_lyrics(song):
         return None  # made before LRCLIB answered: once more, now with the words
+    if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and _wider_lines(song):
+        return None  # its chords at their characters' indexes, before they went at display columns: once more
     return "up to date"
+
+
+def _wider_lines(song: Song) -> bool:
+    """Whether the song's timed lyrics have a line whose display columns aren't its characters' indexes: a
+    Chinese character is two columns wide, a combining accent none. False for lyrics that can't be read."""
+    try:
+        lyrics = _sung_lyrics(song)
+    except (TypeError, ValueError):
+        return False
+    if lyrics is None or not lyrics.synced:
+        return False
+    return any(display_columns(text) != list(range(len(text) + 1)) for _, text in parse_lrc(lyrics.synced))
 
 
 def _models(
@@ -583,12 +603,13 @@ def _keep(
     """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
 
     The key heard goes into the version's ``raw``, for ``keys.song_key``, and so does the shift
-    of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``). Audio from
+    of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), and what its
+    chord lines' columns count (``columns``: ``COLUMNS``). Audio from
     YouTube (``video``) gives the version the video's address, so info.json names it, and its
     fields.
     """
     audio = Path(song.audio_path or "")
-    raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": used}
+    raw: dict[str, object] = {"audio": song.audio_path, "model": MODEL, "lyrics": used, "columns": COLUMNS}
     if key is not None:
         raw["key"] = key
     if shift is not None:
