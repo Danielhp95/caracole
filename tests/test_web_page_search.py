@@ -1008,6 +1008,30 @@ def test_not_in_the_list_requests_a_song_by_name_filled_in_from_the_query(cfg, l
                         "document.querySelector('#requested article h3').textContent === 'Hysteria'")
 
 
+SILVANA = [("silvana-estrada", "tregua", 1), ("silvana-estrada", "te-guardo", 2), ("silvanas", "adio-maria", 1),
+           ("marisa-monte", "na-estrada", 2), ("que", "algo", 1)]
+REQUEST_FIELDS = "['artist', 'title'].map((n) => document.querySelector(`form.request-form [name=${n}]`).value)"
+
+
+def test_a_query_with_no_dash_fills_the_request_form_in_with_the_artist_an_index_knows(cfg, live, browser):
+    # The owner's "Silvana Estrada Que problema": the artist the Ultimate Guitar index knows, then the title it lacks,
+    # never the query cut at its first space; a query no known artist starts is the title alone, to be edited.
+    base, queue, _ = live
+    sites(cfg, ug=SILVANA)
+    browser.open(base)
+    for query, fields in (("Que problema", ["", "Que problema"]),
+                          ("Silvana Estrada Qué problema", ["Silvana Estrada", "Qué problema"])):
+        search(browser, query)
+        assert browser.wait(answer_to(query))
+        assert browser.js(REQUEST_FIELDS) == fields, query  # filled in as the answer is drawn
+    assert browser.js("document.getElementById('request-box').getClientRects().length > 0")  # under the results
+    browser.click("#request-box > summary")
+    browser.click("form.request-form button[type=submit]")
+    assert posted(queue)[-2:] == ("Silvana Estrada", "Qué problema")
+    assert browser.wait("!document.getElementById('requested').hidden && "
+                        "document.querySelector('#requested article h3').textContent === 'Qué problema'")
+
+
 def keyed(page, text):
     """``text`` typed with real keys, each pressed and let go: a key the page's script takes is never typed."""
     for character in text:
@@ -1279,6 +1303,33 @@ def test_the_lookup_page_shows_the_same_band_and_line(cfg, live, browser):
     assert browser.js("document.activeElement.name") == "artist"
     assert browser.js("document.querySelector('#results .did-you-mean')") is None  # no artist spelled close to it
     assert queue.snapshot() == []
+
+
+def test_a_query_found_nowhere_whose_artist_an_index_lists_fills_both_forms_by_name_in_with_them(cfg, live, browser):
+    # harptabs.com's sitemap lists Silvana Estrada, whose page caracole hasn't read: no site has the song, and both
+    # pages' Request (Look up) fill their form in with her name, then the title.
+    base, queue, _ = live
+    sites(cfg, ug=[("radiohead", "creep", 4)])
+    conn = db.connect(cfg.db_path)
+    conn.execute("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) "
+                 "VALUES ('artist/4321/silvana-estrada', 'artist', 4321, 'silvana-estrada', 'sitemap')")
+    conn.commit()
+    conn.close()
+    query = "Silvana Estrada Que problema"
+    browser.open(base)
+    search(browser, query)
+    assert browser.wait(f"{answer_to(query)} && !!document.querySelector('{NOTHING} .line-action button')")
+    browser.click(f"{NOTHING} .line-action button")
+    assert browser.wait("document.getElementById('request-box').open")
+    assert browser.js(REQUEST_FIELDS) == ["Silvana Estrada", "Que problema"]
+    assert browser.wait("document.activeElement === document.querySelector('form.request-form [name=artist]')")
+    browser.open(base + "lookup?q=" + quote(query))
+    assert browser.wait(f"!!document.querySelector('{NOTHING} .row-action button')")
+    browser.click(f"{NOTHING} .row-action button")
+    assert browser.wait("document.getElementById('by-name-box').open")
+    assert browser.js("[document.querySelector('#by-name [name=artist]').value, "
+                      "document.querySelector('#by-name [name=title]').value]") == ["Silvana Estrada", "Que problema"]
+    assert queue.snapshot() == []  # filled in, for you to check: nothing sent
 
 
 EAGLES = [("eagles", "hotel-california", 6), ("eagles", "take-it-easy", 2), ("gipsy-kings", "hotel-california", 1)]

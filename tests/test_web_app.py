@@ -1449,6 +1449,20 @@ def test_the_search_answers_json_from_your_library_and_the_offline_index(app, co
     assert (second["ug"], second["song"]) == ("stone-temple-pilots/creep", None)
 
 
+def test_the_search_says_the_artist_and_title_its_query_names_for_the_request_form(app, conn):
+    # search.request_names: "Artist - Title", or a known artist's whole name and then the title; none for a query
+    # that says nothing of it, which the pages fill in as the title (or the artist, when an artist leads).
+    creep_index(conn)
+    add_song(conn, "Silvana Estrada", "Tregua")
+    names = {q: as_json(get(app, "/api/search?q=" + quote(q)))["names"] for q in (
+        "Silvana Estrada Qué problema", "stone temple pilots plush", "Nick Cani - Vikingos veganos", "Que problema",
+        "creep", "radiohead")}
+    assert names == {"Silvana Estrada Qué problema": {"artist": "Silvana Estrada", "title": "Qué problema"},
+                     "stone temple pilots plush": {"artist": "stone temple pilots", "title": "plush"},
+                     "Nick Cani - Vikingos veganos": {"artist": "Nick Cani", "title": "Vikingos veganos"},
+                     "Que problema": None, "creep": None, "radiohead": None}
+
+
 def test_the_search_finds_your_songs_by_a_progression_typed_or_named(app, conn):
     from caracole.db import kv_set_json
     from caracole.progressions import KV, sheet_progressions

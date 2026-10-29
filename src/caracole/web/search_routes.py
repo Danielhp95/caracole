@@ -357,12 +357,14 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     """The search's answer (``search.found``'s): your songs, the artists the query names, the index's
     songs, which leads, and the row Enter may act on (``best``: a song of yours by its id, or an
     Ultimate Guitar song by its keys; None for none). A song of your library comes as its card
-    has it (``_rows``)."""
+    has it (``_rows``). ``names``: the artist and the title the query names (``search.request_names``), which
+    the pages fill their form by name in with."""
     from caracole.search import (
         STRONG,
         LibraryHit,
         found,
         lacuerda_leads,
+        request_names,
         search_gametabs,
         search_gtptabs,
         search_harptabs,
@@ -421,8 +423,11 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     lead = "song" if leads and answer.lead == "artist" else answer.lead
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
+    named = request_names(conn, q, songs)
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": lead,
             "best": pick, "hint": hint, "progression": progression, "unseen": unseen,
+            # the artist and the title the query names, which the request form is filled in with; None for none
+            "names": None if named is None else {"artist": named[0], "title": named[1]},
             "removed": [{"artist": h.artist, "title": h.title, "key": h.key, "removed_at": h.removed_at,
                          **_key_parts(h.key)} for h in removed],
             "gtptabs": _gtptabs_rows(app, conn, gtptabs if "gtptabs" not in left_out else [], songs),

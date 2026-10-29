@@ -297,13 +297,16 @@ function show(data, text) {
   if (lcLine) results.append(lcLine);
 }
 
-// "Look “…” up by name": the form under the results, filled in from the query ("Artist - Title", else the title), open
-// and in view, the focus on its first field still empty.
+// "Look “…” up by name": the form under the results, filled in from the query ("Artist - Title"; else the artist and
+// the title the search's answer reads in it, ``names``: a known artist's whole name first, or "Title by Artist"; else
+// the title, never the query cut at a space), open and in view, the focus on its first field still empty.
 function byNameFrom(text) {
   const f = document.getElementById("by-name");
   const [first, ...rest] = text.split(" - ");
-  f.artist.value = rest.length ? first.trim() : "";
-  f.title.value = rest.length ? rest.join(" - ").trim() : text;
+  const names = shownFor === text && shownData && shownData.names && typeof shownData.names === "object"
+    && shownData.names.artist && shownData.names.title ? shownData.names : null;
+  f.artist.value = rest.length ? first.trim() : names ? String(names.artist) : "";
+  f.title.value = rest.length ? rest.join(" - ").trim() : names ? String(names.title) : text;
   byName.open = true;
   byName.scrollIntoView({block: "center"});
   (f.artist.value ? f.title : f.artist).focus({preventScroll: true});

@@ -3921,8 +3921,8 @@ Who can reach it, below).
   songs lists that artist's songs, as their row's Songs does; a song's, as the search's rows are
   (Get it, or your own row); the line under the box names the first. A query that finds nothing
   shows the same band and line as the library page, its row's
-  Look up where a song's Get it is (the form under the results, filled in,
-  which shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
+  Look up where a song's Get it is (the form under the results, filled in as
+  the library page's request form is, which shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
   them, as typing their name would. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there. Here your
   song keeps its own row, with Fetch again, and each site's row of it its own:
@@ -3941,8 +3941,16 @@ Who can reach it, below).
   song has neither, and the file, which can ask nothing, never has them.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" (where they found nothing on the sites, the line's Request opens it) takes an artist, a title and, optionally, the album and the length,
-  filled in from what you searched ("Muse - Hysteria"; an artist's name alone
-  when an artist leads, else a title) until you type into a field yourself. The song goes into wanted.txt at once,
+  filled in from what you searched until you type into a field yourself:
+  "Muse - Hysteria" is the artist and the title; with no dash, the longest run
+  of its first words that is an artist's whole name your library, Ultimate
+  Guitar's index, LaCuerda's, gtptabs.com's or harptabs.com's knows is the
+  artist, and the rest the title ("Silvana Estrada Qué problema"), as is "Qué
+  problema by Silvana Estrada"; else an artist's name alone when an artist
+  leads, else all of it the title. A query is never cut at its first space: a
+  one-word name is an artist only of yours or with five songs or more on a
+  site ("Que problema" is a title, though Ultimate Guitar has an artist Que),
+  and a song's title whole is a title ("Love Me Tender"). The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
   it is), then `caracole add` runs to put it in the library.
 - **A sheet from a YouTube video.** Where caracole can make chords of audio
@@ -3990,7 +3998,9 @@ Who can reach it, below).
   the video shows as a row: its thumbnail, its title (a link to it on
   YouTube), its channel and length, and **Make the sheet**, which opens the
   request form filled in with what you searched ("Nick Cani - Vikingos
-  veganos": the artist and the title) and the video, for you to check and send;
+  veganos", or "Silvana Estrada Qué problema" where an index knows Silvana
+  Estrada: the artist and the title, as above) and the video, for you to check
+  and send;
   nothing more goes until you press Request. A query is asked once in 30 days
   (its words in any order), and the row comes back for it with no request. At
   most 10 such searches an hour; none while YouTube cools down after a block;

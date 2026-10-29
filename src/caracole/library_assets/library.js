@@ -2616,7 +2616,8 @@
     if (meta) text.appendChild(el("p", "yt-meta", meta));
     row.appendChild(text);
     row.appendChild(button("Make the sheet", "small primary", () => {
-      prefill(answer && answer.q === q ? answer.data.lead : null);
+      const read = answer && answer.q === q ? answer.data : {};
+      prefill(read.lead, read.names);
       const form = document.querySelector("form.request-form");
       const field = form && form.elements.namedItem("youtube");
       if (field) field.value = String(video.url || "");
@@ -2790,7 +2791,8 @@
     const meant = objects(data.suggest).filter((x) => x.artist);
     say((parts.length ? parts.join(" · ") : "Nothing on the sites") +
       (meant.length ? " · did you mean " + meantName(meant[0]) + "?" : ""));
-    prefill(data.lead || (lcArtists.length && !lc.length ? "artist" : null));  // an artist LaCuerda alone knows
+    prefill(data.lead || (lcArtists.length && !lc.length ? "artist" : null),  // an artist LaCuerda alone knows
+      q === normal(state.q) ? data.names : null);
     if (focusFirst && q === normal(state.q)) {
       focusFirst = false;
       toFirstResult();
@@ -2875,7 +2877,8 @@
     render();
     save();
     if (server) {
-      prefill(answer && answer.q === normal(state.q) ? answer.data.lead : null);
+      const read = answer && answer.q === normal(state.q) ? answer.data : {};
+      prefill(read.lead, read.names);
       askSources(true);
     }
   };
@@ -3357,8 +3360,10 @@
       });
     }
     // The request form, under the results: a line for the song at once, under the bar, which says how its
-    // request goes. It is filled in from what was searched ("Artist - Title", or the artist alone when an
-    // artist leads, else the title), each field until you type into it yourself.
+    // request goes. It is filled in from what was searched: "Artist - Title"; else the artist and the title the
+    // search's answer reads in it (``names``: "Title by Artist", or the longest run of its first words that is a
+    // known artist's whole name, then the title: "Silvana Estrada Que problema"); else the artist alone when an
+    // artist leads, else the title, never the query cut at a space. Each field until you type into it yourself.
     const requestForm = document.querySelector("form.request-form");
     const typedInto = new Set();
     if (requestForm) {
@@ -3366,10 +3371,12 @@
         const field = requestForm.elements.namedItem(name);
         if (field) field.addEventListener("input", () => typedInto.add(name));
       }
-      prefill = (lead) => {
+      prefill = (lead, names) => {
         const q = normal(state.q);
         const [first, ...rest] = q.split(" - ");
+        const read = names && typeof names === "object" && names.artist && names.title ? names : null;
         const values = rest.length ? { artist: first.trim(), title: rest.join(" - ").trim() }
+          : read ? { artist: String(read.artist), title: String(read.title) }
           : lead === "artist" ? { artist: q, title: "" } : { artist: "", title: q };
         for (const name of ["artist", "title"]) {
           const field = requestForm.elements.namedItem(name);

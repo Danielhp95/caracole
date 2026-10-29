@@ -278,3 +278,22 @@ def test_a_search_with_no_sheet_suggests_youtubes_first_video_and_fills_the_requ
     search(browser, "vikingos veganos - nick cani")
     assert browser.wait(f"{answer_to('vikingos veganos - nick cani')} && {row} !== null")
     assert sheet.searches == ["Nick Cani - Vikingos veganos"] and len(posted) == 1
+
+
+def test_make_the_sheet_fills_in_the_artist_an_index_knows_from_a_query_with_no_dash(able, live, sheet, browser):
+    # "Silvana Estrada Que problema": the artist Ultimate Guitar's index knows, the title it lacks, as the request
+    # form's own guess has them (/api/search's names), never the query cut at its first space.
+    from test_web_page_search import SILVANA, answer_to, search, sites
+
+    base, posted = live
+    sites(able, ug=SILVANA)
+    browser.open(base)
+    search(browser, "Silvana Estrada Que problema")
+    row = "document.querySelector('#found .youtube-row')"
+    assert browser.wait(f"{answer_to('Silvana Estrada Que problema')} && {row} !== null", timeout=20)
+    browser.click("#found .youtube-row button")
+    assert browser.wait("document.getElementById('request-box').open")
+    fields = browser.js("['artist', 'title', 'youtube'].map((n) => "
+                        "document.querySelector(`form.request-form [name=${n}]`).value)")
+    assert fields == ["Silvana Estrada", "Que problema", f"https://www.youtube.com/watch?v={VIKINGOS}"]
+    assert [p for p, _ in posted] == ["/youtube/search"]  # nothing sent until you press Request
