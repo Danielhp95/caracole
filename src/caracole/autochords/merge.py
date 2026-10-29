@@ -113,7 +113,8 @@ def build_sheet(
 
     With synced lyrics (LRC), every lyric line gets the chords whose snapped start
     falls between its time and the next line's, at character columns proportional
-    to their time within the line. A change up to half a beat before a line's
+    to their time within the line, each then moved to the start of the nearest
+    word (``_on_words``). A change up to half a beat before a line's
     time counts as the start of that line, since singers often come in just
     after the downbeat. Where the voice rests for at least two bars, the chords
     go on chord-only lines of bars instead, such as ``| G | D | Em | C |``.
