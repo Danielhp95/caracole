@@ -11,6 +11,13 @@ Only ``merge`` is imported here: it is pure Python, while ``btc`` and ``beats``
 need torch, librosa and beat_this, which only the auto-chords environment has.
 """
 
-from caracole.autochords.merge import ChordSegment, build_sheet, parse_lrc, snap_to_beats
+from caracole.autochords.merge import (
+    ChordSegment,
+    LrcLine,
+    build_sheet,
+    parse_lrc,
+    parse_lrc_words,
+    snap_to_beats,
+)
 
-__all__ = ["ChordSegment", "build_sheet", "parse_lrc", "snap_to_beats"]
+__all__ = ["ChordSegment", "LrcLine", "build_sheet", "parse_lrc", "parse_lrc_words", "snap_to_beats"]

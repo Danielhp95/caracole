@@ -5273,8 +5273,11 @@ NUC, the `caracole-autochords` unit runs it after each nightly run, see
 [deploy.md](deploy.md#4-auto-chords)). It links the new file to the song by
 its tags and duration (tags in two scripts, such as "Song Dongye (宋冬野)",
 work too), finds the chords and the beats, and writes
-`sheet (auto).txt`. With no timed lyrics to lay the chords over, the sheet is
-a chord chart by bars followed by the plain lyrics. It starts with
+`sheet (auto).txt`. With timed lyrics, each chord goes over the line sung when
+it starts, and over the word, where the lyrics time each word too (enhanced
+LRC, `<00:12.30>word`; most of LRCLIB's time their lines alone). With no timed
+lyrics to lay the chords over, the sheet is a chord chart by bars followed by
+the plain lyrics. It starts with
 "auto-generated, unverified", the song counts as found, and the next render
 makes `sheet (auto).pdf` with the Chinese font. A complete human sheet found
 later takes its place; a partial one is rendered beside it, and the auto

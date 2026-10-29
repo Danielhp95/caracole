@@ -31,6 +31,12 @@ _STAMP_RUN = re.compile(r"(?:\s*\[\d+:\d{1,2}(?:[.:]\d+)?\])+")
 _STAMP = re.compile(r"\[(\d+):(\d{1,2})(?:[.:](\d+))?\]")
 _TAG = re.compile(r"\[([A-Za-z#]+):(.*)\]")
 _WORD_STAMP = re.compile(r"<\d+:\d{1,2}(?:[.:]\d+)?>")
+_WORD_TIME = re.compile(r"<(\d+):(\d{1,2})(?:[.:](\d+))?>")  # _WORD_STAMP, read
+# A line's text after its stamps, piece by piece: a word stamp, a run of spaces, or a run of
+# other characters up to the next word stamp.
+_WORD_PIECE = re.compile(rf"({_WORD_STAMP.pattern})|(\s+)|((?:(?!{_WORD_STAMP.pattern})\S)+)")
+
+WordStarts = tuple[tuple[float, int], ...]
 
 
 @dataclass(frozen=True)
@@ -42,17 +48,43 @@ class ChordSegment:
     label: str
 
 
+@dataclass(frozen=True)
+class LrcLine:
+    """A timed LRC line as ``parse_lrc_words`` reads it.
+
+    ``time`` and ``text`` are what ``parse_lrc`` gives for it. ``words``: for each
+    enhanced-LRC word stamp (``<mm:ss.xx>word``), the time it marks and the column
+    in ``text`` where its word begins (its syllable, for a stamp inside a word), in
+    the order written; None when no word stamp of the line comes before a word.
+    """
+
+    time: float
+    text: str
+    words: WordStarts | None = None
+
+
 def parse_lrc(text: str) -> list[tuple[float, str]]:
     """The timed lines of an LRC file, sorted by time.
 
     Reads ``[mm:ss.xx]``, ``[mm:ss.xxx]``, ``[mm:ss:xx]`` and ``[mm:ss]`` stamps,
-    several stamps on one line, and enhanced-LRC word stamps (dropped). Metadata
-    tags such as ``[ar:…]`` and ``[ti:…]`` are ignored, except ``[offset:±ms]``:
-    a positive offset makes every line appear earlier. A stamp with no text is
-    kept as ``""``, because LRC files mark instrumental breaks that way.
+    several stamps on one line, and enhanced-LRC word stamps (dropped; ``parse_lrc_words``
+    keeps them). Metadata tags such as ``[ar:…]`` and ``[ti:…]`` are ignored, except
+    ``[offset:±ms]``: a positive offset makes every line appear earlier. A stamp with
+    no text is kept as ``""``, because LRC files mark instrumental breaks that way.
+    """
+    return [(line.time, line.text) for line in parse_lrc_words(text)]
+
+
+def parse_lrc_words(text: str) -> list[LrcLine]:
+    """The timed lines of an LRC file, as ``parse_lrc`` reads them, each with its word stamps.
+
+    A word stamp times the word (or syllable) written right after it; of several in a row,
+    the last one does, and one after a line's last word (where that word ends) times
+    nothing. ``[offset:±ms]`` moves the word stamps as it moves the lines. A line stamped
+    with several times keeps its word stamps as written for each of them.
     """
     offset = 0.0
-    timed: list[tuple[float, str]] = []
+    timed: list[tuple[float, str, list[tuple[float, int]]]] = []
     for raw in text.lstrip("\ufeff").splitlines():
         line = raw.strip()
         stamps = _STAMP_RUN.match(line)
@@ -64,12 +96,47 @@ def parse_lrc(text: str) -> list[tuple[float, str]]:
                 except ValueError:
                     pass
             continue
-        lyric = " ".join(_WORD_STAMP.sub("", line[stamps.end() :]).split())
+        lyric, words = _stamped_words(line[stamps.end() :])
         for m in _STAMP.finditer(stamps.group()):
-            minutes, seconds, fraction = m.groups()
-            t = int(minutes) * 60 + int(seconds) + (float(f"0.{fraction}") if fraction else 0.0)
-            timed.append((t, lyric))
-    return sorted(((round(max(0.0, t - offset), 3), s) for t, s in timed), key=lambda x: x[0])
+            timed.append((_seconds(*m.groups()), lyric, words))
+
+    def moved(t: float) -> float:
+        return round(max(0.0, t - offset), 3)
+
+    lines = [
+        LrcLine(moved(t), lyric, tuple((moved(w), col) for w, col in words) if words else None)
+        for t, lyric, words in timed
+    ]
+    return sorted(lines, key=lambda line: line.time)
+
+
+def _seconds(minutes: str, seconds: str, fraction: str | None) -> float:
+    """The time a stamp's parts name, in seconds."""
+    return int(minutes) * 60 + int(seconds) + (float(f"0.{fraction}") if fraction else 0.0)
+
+
+def _stamped_words(rest: str) -> tuple[str, list[tuple[float, int]]]:
+    """A line's text after its line stamps, as ``parse_lrc`` gives it (word stamps out,
+    words one space apart), and the time and column of each word a word stamp times."""
+    text = ""
+    words: list[tuple[float, int]] = []
+    stamp: float | None = None  # a word stamp, waiting for the word it times
+    space = False
+    for m in _WORD_PIECE.finditer(rest):
+        stamped, spaces, chars = m.groups()
+        if stamped:
+            stamp = _seconds(*_WORD_TIME.fullmatch(stamped).groups())
+        elif spaces:
+            space = bool(text)
+        else:
+            if space:
+                text += " "
+                space = False
+            if stamp is not None:
+                words.append((stamp, len(text)))
+                stamp = None
+            text += chars
+    return text, words
 
 
 def snap_to_beats(segments: Iterable[ChordSegment], beats: Sequence[float]) -> list[ChordSegment]:
@@ -103,6 +170,7 @@ def build_sheet(
     title: str,
     artist: str,
     synced: str | None = None,
+    synced_words: Sequence[LrcLine] | None = None,
     plain: str | None = None,
     beats: Sequence[float] | None = None,
     downbeats: Sequence[float] | None = None,
@@ -119,11 +187,20 @@ def build_sheet(
     after the downbeat. Where the voice rests for at least two bars, the chords
     go on chord-only lines of bars instead, such as ``| G | D | Em | C |``.
 
+    ``synced_words`` is the same lyrics read with their word stamps (``parse_lrc_words``),
+    for lyrics that time each word (enhanced LRC); given, it is what is laid out, and a
+    line whose word stamps can be trusted puts each chord over the word sung when it
+    starts (``_word_column``). A line without them keeps the columns by time.
+
     With plain lyrics only, the sheet is a chord chart of the whole song, four
     bars per line, followed by the lyrics. With no lyrics, it is the chart alone.
     """
     segs = snap_to_beats(segments, beats or [])
-    lines = parse_lrc(synced) if synced else []
+    if synced_words:
+        lines = [(line.time, line.text) for line in synced_words]
+        words: list[WordStarts | None] | None = [line.words for line in synced_words]
+    else:
+        lines, words = (parse_lrc(synced) if synced else []), None
     until = max([s.end for s in segs] + [t for t, _ in lines] + [0.0])
     grid = _beat_grid(beats or [], until=until)
     beat = _period(grid) or DEFAULT_BEAT
@@ -131,7 +208,7 @@ def build_sheet(
     bar = _period(bars) or BEATS_PER_BAR * beat
     out = [AUTO_MARKER, f"{artist} - {title}", *([source.strip()] if source and source.strip() else []), ""]
     if any(text for _, text in lines):
-        out += _synced_body(segs, lines, tol=beat / 2, bars=bars, bar=bar)
+        out += _synced_body(segs, lines, tol=beat / 2, bars=bars, bar=bar, words=words)
     else:
         chart = _chart(segs, bars, _bar_at(bars, segs[0].start), segs[-1].end) if segs else []
         if chart:
@@ -156,14 +233,17 @@ def _synced_body(
     tol: float,
     bars: list[float],
     bar: float,
+    words: Sequence[WordStarts | None] | None = None,
 ) -> list[str]:
     # Each sung line, with the time of the LRC entry after it and whether that
     # entry is empty, which is how LRC files mark a break.
     sung: list[tuple[float, str, float | None, bool]] = []
+    sung_words: list[WordStarts | None] = []  # each sung line's word stamps (``words``)
     for j, (t, text) in enumerate(lines):
         if text:
             after = lines[j + 1] if j + 1 < len(lines) else None
             sung.append((t, text, after[0] if after else None, after is not None and not after[1]))
+            sung_words.append(words[j] if words else None)
     windows = [after - t for t, _, after, _ in sung if after is not None]
     # A line is sung for about the median line length; any longer silence is instrumental.
     typical = statistics.median(windows) if windows else GAP_BARS * bar
@@ -185,8 +265,14 @@ def _synced_body(
             chart = _chart(segs, bars, gap_start, gap_end - tol)
         end = gap_start if chart else gap_end
         span = max(end - t, _EPS)
+        timed = _trusted_words(sung_words[i], t, after, tol)
         placed = [
-            (max(0, int((s.start - t) / span * len(text))), s.label)
+            (
+                _word_column(timed, s.start, tol)
+                if timed
+                else max(0, int((s.start - t) / span * len(text))),
+                s.label,
+            )
             for s in segs
             if t - tol <= s.start < end - tol
         ]
@@ -204,6 +290,36 @@ def _synced_body(
         elif block_start:
             out.append("")
     return out
+
+
+def _trusted_words(
+    words: WordStarts | None, t: float, until: float | None, tol: float
+) -> WordStarts | None:
+    """A sung line's word stamps, when they can place its chords: in the order sung, the
+    first no earlier than the line's time ``t``, the last no later than the next LRC entry's
+    (``until``), within ``tol``. None otherwise, and the line's chords go by time alone.
+    Words before the first word stamp start with the line, at ``t``."""
+    if not words:
+        return None
+    times = [w for w, _ in words]
+    if any(b < a for a, b in itertools.pairwise(times)):
+        return None
+    if times[0] < t - tol - _EPS or (until is not None and times[-1] > until + tol + _EPS):
+        return None
+    return words if words[0][1] == 0 else ((min(t, times[0]), 0), *words)
+
+
+def _word_column(words: WordStarts, start: float, tol: float) -> int:
+    """The column of the word sung when a chord starts at ``start``: the word starting
+    nearest it within ``tol`` (a voice a little ahead of the beat or behind it), else the
+    last word started before it (a chord that comes in mid-word goes over that word's
+    start); 0 before the first word stamped. A word with no stamp of its own goes with the
+    word stamped before it."""
+    near = [(abs(w - start), col) for w, col in words if abs(w - start) <= tol + _EPS]
+    if near:
+        return min(near)[1]
+    started = [col for w, col in words if w <= start]
+    return started[-1] if started else 0
 
 
 def _bar_starts(

@@ -1,7 +1,14 @@
 """The pure half of auto-chords: snapping, LRC parsing and sheet layout."""
 
 from caracole.autochords import merge
-from caracole.autochords.merge import ChordSegment, build_sheet, parse_lrc, snap_to_beats
+from caracole.autochords.merge import (
+    ChordSegment,
+    LrcLine,
+    build_sheet,
+    parse_lrc,
+    parse_lrc_words,
+    snap_to_beats,
+)
 
 # 120 BPM: a beat every 0.5 s, so a 4/4 bar lasts 2 s.
 BEATS = [i * 0.5 for i in range(121)]
@@ -85,6 +92,49 @@ def test_parse_lrc_negative_offset_and_colon_fractions():
     assert parse_lrc("[offset:-250]\n[00:01:50]One\n[1:05]Two\n") == [(1.75, "One"), (65.25, "Two")]
 
 
+def test_parse_lrc_words_keeps_when_each_word_starts():
+    # Enhanced LRC: a stamp before each word, the last one where the line's last word ends.
+    text = (
+        "[offset:+500]\n"
+        "[00:12.00]<00:12.00>Walking <00:12.60>down  <00:13.20>the <00:13.50>river <00:14.40>road <00:15.80>\n"
+        "[00:16.00] <00:16.00> Hel<00:16.40>lo <00:17.00>world\n"
+        "[00:18.00]\n"
+        "[00:19.00]A line with no word stamps\n"
+    )
+    assert parse_lrc_words(text) == [
+        LrcLine(
+            11.5,
+            "Walking down the river road",
+            ((11.5, 0), (12.1, 8), (12.7, 13), (13.0, 17), (13.9, 23)),
+        ),
+        # A stamp inside a word times a syllable: "lo" starts at column 3.
+        LrcLine(15.5, "Hello world", ((15.5, 0), (15.9, 3), (16.5, 6))),
+        LrcLine(17.5, "", None),
+        LrcLine(18.5, "A line with no word stamps", None),
+    ]
+
+
+def test_parse_lrc_words_reads_the_lines_parse_lrc_reads():
+    text = (
+        "﻿[ar:Nobody]\n"
+        "[offset:+500]\n"
+        "[00:12.50]First line\n"
+        "[00:10][01:02.250]<00:10.00>Repeated <00:10.50>line\n"
+        "[00:15.00]<00:15.00>\n"
+        "[00:16.00] <00:16.20>Word<00:16.50> <00:16.80>sync <3 <00:17:20>again\n"
+        "[00:20.00]\t<00:20.00>宋<00:20.30>冬<00:20.60>野  \n"
+        "a line with no stamp\n"
+    )
+    lines = parse_lrc_words(text)
+    assert [(line.time, line.text) for line in lines] == parse_lrc(text)
+    words = {(line.time, line.text): line.words for line in lines}
+    # A line stamped twice keeps the word stamps as written, for both of its times.
+    assert words[(9.5, "Repeated line")] == words[(61.75, "Repeated line")] == ((9.5, 0), (10.0, 9))
+    assert words[(14.5, "")] is None
+    assert words[(15.5, "Word sync <3 again")] == ((15.7, 0), (16.3, 5), (16.7, 13))
+    assert words[(19.5, "宋冬野")] == ((19.5, 0), (19.8, 1), (20.1, 2))
+
+
 def test_build_sheet_places_chords_over_lyric_lines():
     synced = (
         "[00:08.00]Walking down the river road\n"
@@ -113,6 +163,124 @@ def test_build_sheet_places_chords_over_lyric_lines():
         "[ch]C[/ch]       [ch]G[/ch]\n"
         "Nothing left to say\n"
     )
+
+
+def words_sheet(segs, synced, **kw) -> str:
+    """The sheet of lyrics that time their words, laid out by those timings."""
+    return build_sheet(
+        segs, title="T", artist="A", synced=synced, synced_words=parse_lrc_words(synced), beats=BEATS, **kw
+    )
+
+
+def test_a_chord_goes_over_the_word_sung_when_it_starts():
+    synced = (
+        "[00:08.00]<00:08.00>Walking <00:08.50>down <00:09.00>the <00:09.50>river <00:10.00>road\n"
+        "[00:12.00]<00:12.00>Singing <00:12.50>to <00:13.00>the <00:13.50>morning <00:14.50>light\n"
+    )
+    # D comes in with "road", where the linear guess would say column 13; C in the middle of
+    # "morning", sung from 13.5 s to 14.5 s, and goes over its start.
+    segs = [seg(8.0, 10.0, "G"), seg(10.0, 12.0, "D"), seg(12.0, 14.0, "Em"), seg(14.0, 16.0, "C")]
+    assert words_sheet(segs, synced).splitlines()[3:] == [
+        "[ch]G[/ch]                      [ch]D[/ch]",
+        "Walking down the river road",
+        "[ch]Em[/ch]             [ch]C[/ch]",
+        "Singing to the morning light",
+    ]
+
+
+def test_a_chord_goes_over_the_word_sung_within_half_a_beat_of_it():
+    # The singer comes in late on "river" and early on "road"; "down" and "the" come quick, and C,
+    # which starts with "down", goes over it.
+    synced = (
+        "[00:08.00]<00:08.00>Walking <00:08.50>down <00:08.70>the <00:09.60>river <00:10.30>road\n"
+        "[00:12.00]Singing to the morning light\n"
+    )
+    segs = [seg(8.0, 8.5, "G"), seg(8.5, 9.5, "C"), seg(9.5, 10.5, "D"), seg(10.5, 12.0, "G")]
+    assert words_sheet(segs, synced).splitlines()[3:5] == [
+        "[ch]G[/ch]       [ch]C[/ch]        [ch]D[/ch]     [ch]G[/ch]",
+        "Walking down the river road",
+    ]
+
+
+def test_words_without_a_stamp_go_with_the_word_stamped_before_them():
+    synced = "[00:08.00]Oh <00:09.00>baby, <00:10.00>please don't go\n[00:12.00]Singing to the morning light\n"
+    segs = [seg(8.0, 9.0, "G"), seg(9.0, 10.0, "D"), seg(10.0, 12.0, "Em")]
+    assert words_sheet(segs, synced).splitlines()[3:5] == [
+        "[ch]G[/ch]  [ch]D[/ch]     [ch]Em[/ch]",
+        "Oh baby, please don't go",
+    ]
+
+
+def test_words_before_the_first_word_stamp_start_with_the_line():
+    # "So" has no stamp: it is sung at the line's time, and G goes over it rather than over
+    # "here", a fifth of a second later.
+    synced = "[00:08.00]So <00:08.20>here we <00:10.00>are\n[00:12.00]Singing to the morning light\n"
+    segs = [seg(8.0, 10.0, "G"), seg(10.0, 12.0, "D")]
+    assert words_sheet(segs, synced).splitlines()[3:5] == [
+        "[ch]G[/ch]          [ch]D[/ch]",
+        "So here we are",
+    ]
+
+
+def test_a_line_without_word_stamps_keeps_the_linear_guess():
+    stamped = "[00:12.00]<00:12.00>Singing <00:12.50>to <00:13.00>the <00:13.50>morning <00:14.50>light\n"
+    synced = "[00:08.00]Walking down the river road\n" + stamped
+    segs = [seg(8.0, 10.0, "G"), seg(10.0, 12.0, "D"), seg(12.0, 14.0, "Em"), seg(14.0, 16.0, "C")]
+    lines = words_sheet(segs, synced).splitlines()
+    # D starts halfway through the first line's 4 s: column 27 // 2 = 13, as with plain LRC.
+    assert lines[3:5] == ["[ch]G[/ch]            [ch]D[/ch]", "Walking down the river road"]
+    assert lines[5] == "[ch]Em[/ch]             [ch]C[/ch]"
+
+
+def test_plain_lrc_read_for_its_words_gives_the_same_sheet_byte_for_byte():
+    synced = (
+        "[00:04.00]Line one of the verse\n"
+        "[00:08.00]Line two of the verse\n"
+        "[00:11.00]\n"
+        "[00:12.00]Line three of the verse\n"
+        "[00:16.00]Line four of the verse\n"
+        "[00:28.00]Back to singing again\n"
+        "[00:32.00]And the very last line\n"
+    )
+    progression = ["Am", "F", "G", "D", "Em", "C", "G", "D", "Em", "C", "G", "D", "G", "D", "Am", "F"]
+    segs = [seg(0.5 + 2.5 * k, 0.5 + 2.5 * (k + 1), name) for k, name in enumerate(progression)]
+    plain = build_sheet(segs, title="T", artist="A", synced=synced, beats=BEATS, downbeats=BEATS[::4])
+    assert "[Intro]" in plain and "[Instrumental]" in plain and "[Outro]" in plain
+    assert words_sheet(segs, synced, downbeats=BEATS[::4]) == plain
+
+
+def test_word_stamps_that_cant_be_right_fall_back_to_the_linear_guess():
+    plain = "[00:08.00]Walking down the river road\n[00:12.00]Singing to the morning light\n"
+    segs = [seg(8.0, 10.0, "G"), seg(10.0, 12.0, "D"), seg(12.0, 14.0, "Em"), seg(14.0, 16.0, "C")]
+    expected = build_sheet(segs, title="T", artist="A", synced=plain, beats=BEATS)
+    second = "[00:12.00]Singing to the morning light\n"
+    for first in (
+        # out of order
+        "[00:08.00]<00:08.00>Walking <00:09.50>down <00:09.00>the <00:10.00>river road\n",
+        # past the next line's start
+        "[00:08.00]<00:08.00>Walking down the <00:13.00>river road\n",
+        # before the line's own start
+        "[00:08.00]<00:02.00>Walking down the <00:10.00>river road\n",
+    ):
+        assert words_sheet(segs, first + second) == expected, first
+
+
+def test_a_line_stamped_twice_places_by_its_words_where_they_fit():
+    # The chorus's word stamps time its first time; the second time falls back to the linear guess.
+    synced = (
+        "[00:08.00][00:16.00]<00:08.00>Walking <00:08.50>down <00:09.00>the <00:09.50>river <00:10.00>road\n"
+        "[00:12.00]Singing to the morning light\n"
+    )
+    segs = [seg(8.0, 10.0, "G"), seg(10.0, 12.0, "D"), seg(12.0, 16.0, "Em"), seg(16.0, 18.0, "C"),
+            seg(18.0, 20.0, "G")]
+    assert words_sheet(segs, synced).splitlines()[3:] == [
+        "[ch]G[/ch]                      [ch]D[/ch]",
+        "Walking down the river road",
+        "[ch]Em[/ch]",
+        "Singing to the morning light",
+        "[ch]C[/ch]            [ch]G[/ch]",
+        "Walking down the river road",
+    ]
 
 
 def test_chords_on_a_short_line_never_touch():
