@@ -3234,6 +3234,118 @@ def test_a_badge_never_covers_the_key_column(conn, cfg, tmp_path, width):
         assert all(right <= mark[0] for mark in b["marks"]), b
 
 
+# A site's song put among Eagles' songs, on all five sites a search names (rows.js indexLine: a line of class "hit"),
+# then every line's marks measured as drawn (their box and the outline around it): its sites' (siteMarks), a hit's
+# sources'; their cell, the line's other parts, the line, and the first box around each mark that cuts what overflows
+# it. Then Hotel California's card, opened, its marks the same way.
+MARKS_DRAWN = """
+(() => {
+  const hit = window.caracole.resultRow({ dense: true, title: "Take It Easy",
+    sources: ["ug", "lacuerda", "gtptabs", "harptabs", "gametabs"],
+    badges: [{ kind: "found", text: "In your library" }], facts: "chords ×9 · tabs ×2 · LaCuerda ×2" });
+  hit.classList.add("hit");
+  (document.querySelector("#list section.artist .lines") || document.querySelector("#list .lines")).appendChild(hit);
+  const box = (n) => { const b = n.getBoundingClientRect(); return [b.left, b.right, b.top, b.bottom]; };
+  const drawn = (m) => {
+    const s = getComputedStyle(m);
+    const out = s.outlineStyle === "none" ? 0 : Math.max(0, parseFloat(s.outlineWidth) + parseFloat(s.outlineOffset));
+    const [l, r, t, b] = box(m);
+    return [l - out, r + out, t - out, b + out];
+  };
+  const inside = (a, b) => a[0] >= b[0] - 0.5 && a[1] <= b[1] + 0.5 && a[2] >= b[2] - 0.5 && a[3] <= b[3] + 0.5;
+  const cutBy = (m) => {  // the first box around the mark that hides what leaves it, and leaves part of the mark out
+    for (let n = m.parentElement; n && n !== document.body; n = n.parentElement) {
+      const s = getComputedStyle(n);
+      if ((s.overflowX !== "visible" || s.overflowY !== "visible") && !inside(drawn(m), box(n))) return n.className;
+    }
+    return null;
+  };
+  const content = (m) => {  // how wide an icon is drawn inside its edge and padding
+    const s = getComputedStyle(m);
+    return m.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+  };
+  const mark = (m) => ({ source: m.dataset.source, box: drawn(m), cut: cutBy(m),
+    icon: m.localName === "img" ? content(m) : null });
+  const parts = ".line-title, .line-by, .line-status, .line-holds, .line-key, .line-action, .line-more";
+  const lines = Array.from(document.querySelectorAll("#list .line")).map((l) => {
+    const cell = l.querySelector(".line-sites, .line-sources");
+    return { title: l.querySelector("h3").textContent, line: box(l), cell: cell ? box(cell) : null,
+      marks: cell ? Array.from(cell.children).map(mark) : [],
+      parts: Array.from(l.querySelectorAll(parts)).filter((p) => p.checkVisibility() && box(p)[1] > box(p)[0])
+        .map((p) => ({ part: p.className, box: box(p) })) };
+  });
+  const page = [document.documentElement.scrollWidth, document.documentElement.clientWidth];
+  const hotel = Array.from(document.querySelectorAll("#list .line")).find((l) => l.querySelector("h3").textContent ===
+    "Hotel California");
+  hotel.querySelector(".line-more").click();
+  const card = Array.from(hotel.querySelectorAll(".line-panel .source")).filter((m) => m.checkVisibility()).map(mark);
+  document.body.setAttribute("data-marks", JSON.stringify({ lines, card, page }));
+})();
+"""
+
+
+def _overlap(a, b):
+    """Whether two boxes ([left, right, top, bottom]) share more than half a pixel each way."""
+    return a[0] < b[1] - 0.5 and b[0] < a[1] - 0.5 and a[2] < b[3] - 0.5 and b[2] < a[3] - 0.5
+
+
+@in_chromium
+@pytest.mark.parametrize(("size", "touch", "fragment", "scheme"), [
+    ("1280,900", False, "", "dark"), ("1280,900", False, "#sort=title", "light"), ("1024,800", False, "", "light"),
+    ("900,800", False, "", "light"), ("820,1180", True, "", "light"), ("720,800", False, "#sort=title", "dark"),
+    ("390,844", True, "", "dark")])
+def test_every_mark_of_a_line_shows_whole_at_every_width(conn, cfg, tmp_path, size, touch, fragment, scheme):
+    # Eight sites' marks (YouTube's among them, on its route; harptabs.com's its icon, the rest their letters), beside a
+    # status badge, a key, Open or Fetch now and the chevron: each mark whole, its dashed edge too, inside its cell,
+    # which covers no other part of the line and leaves it nowhere; a hit's five sites' marks the same; and nothing in
+    # the song's card cut either.
+    from helpers.icon_files import png
+    from helpers.library_songs import hotel_california, with_versions
+
+    from caracole import icons
+    from caracole.library_page import WebControls
+    from caracole.youtube_fetch import SongState
+
+    icons.keep_icon(cfg.cache_dir, "harptabs", icons.sanitize(png(32)))
+    hotel = hotel_california(conn, cfg)
+    with_versions(conn, cfg, hotel)
+    review = add_song(conn, "Eagles", "Desperado")
+    update_song(conn, review.id, review=True)  # Needs review, and Fetch now
+    lost = add_song(conn, "Cowboy Bebop", "Digging my potato")
+    update_song(conn, lost.id, match_decision="not_found", matched_at="2026-10-16T03:31:00Z")
+    youtube = {s.id: SongState("queued") for s in (hotel, review, lost)}
+    html = build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok"), youtube=youtube)
+    path = write_library_page(cfg.library_dir, with_script(html, MARKS_DRAWN))
+    drawn = attribute_of(dump_dom(path, tmp_path, fragment, size=size, touch=touch,
+                                  media={"prefers-color-scheme": scheme}), "data-marks")
+    wide, width = drawn["page"]
+    assert wide <= width, drawn["page"]
+    lines = {line["title"]: line for line in drawn["lines"]}
+    assert {title: len(line["marks"]) for title, line in lines.items()} == {
+        "Hotel California": 8, "Desperado": 8, "Digging my potato": 8, "Take It Easy": 5}, lines
+    for title, line in lines.items():
+        cell = line["cell"]
+        assert line["line"][0] - 0.5 <= cell[0] and cell[1] <= line["line"][1] + 0.5, (title, cell, line["line"])
+        for n, mark in enumerate(line["marks"]):
+            left, right, top, bottom = mark["box"]
+            assert mark["cut"] is None, (title, mark)
+            assert cell[0] - 0.5 <= left and right <= cell[1] + 0.5, (title, mark, cell)
+            assert cell[2] - 0.5 <= top and bottom <= cell[3] + 0.5, (title, mark, cell)
+            assert not any(_overlap(mark["box"], other["box"]) for other in line["marks"][n + 1:]), (title, mark)
+        assert not [p for p in line["parts"] if _overlap(cell, p["box"])], (title, cell, line["parts"])
+    # harptabs.com's icon, whatever the site's state, a pixel inside its square: as big on every line.
+    assert {m["icon"] for line in lines.values() for m in line["marks"] if m["source"] == "harptabs"} == {14}, lines
+    # Eight in one row, but from 720px to 900px, where they would leave the title no room: four a row. A hit's five in
+    # one. From 720px a site's mark is where it is on every line, so that they line up.
+    wide = int(size.split(",")[0])
+    rows = {title: len({round(m["box"][2]) for m in line["marks"]}) for title, line in lines.items()}
+    eight = 2 if 720 <= wide < 900 else 1
+    assert rows == {"Hotel California": eight, "Desperado": eight, "Digging my potato": eight, "Take It Easy": 1}, rows
+    if wide >= 720:
+        assert len({lines[t]["marks"][-1]["box"][0] for t in ("Hotel California", "Desperado", "Digging my potato")}) == 1
+    assert drawn["card"] and [m for m in drawn["card"] if m["cut"]] == [], drawn["card"]
+
+
 # --- lines on the served page: every state a card showed -----------------------------------------
 
 

@@ -2186,7 +2186,9 @@ has it (MuseScore's a possible match, by the title), grey where it was asked and
 had nothing, fainter on a dashed edge where it wasn't asked yet, its tooltip
 saying which ("Ultimate Guitar: nothing for it (looked 2026-10-16)"), so a song
 Ultimate Guitar's index has no chords for, once marked "Not found", shows where
-its harmonica tab came from; what it holds, a small icon each, named
+its harmonica tab came from (every mark whole, in one row, but four a row in a
+window 720 to 900 px wide, where the line is two rows of them tall, so the
+title keeps its room; under the title on a phone); what it holds, a small icon each, named
 by its tooltip and for a screen reader: its chord sheet ("Auto sheet", in its
 own colour, for one the audio model wrote; "Ukulele chords", a ukulele, for
 Ultimate Guitar's Ukulele Chords), a Guitar Pro file (else a text tab, "Guitar tab", from
