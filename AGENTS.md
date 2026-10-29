@@ -560,8 +560,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
     commands/index.py), and `caracole harptabs --index` and `caracole gametabs --index` their `--budget`,
     `BUILD_BUDGET` by default. Then `BudgetExhausted`. Between any two requests to a provider, a
-    random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com, MuseScore,
-    harptabs.com and gametabs.net, 1–2 s for LRCLIB).
+    random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com, MuseScore
+    and harptabs.com, 1–2 s for LRCLIB, 1 s for gametabs.net).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
     lookups run it), `caracole versions --keep`, one tab page asked for now, and `--keep-more`, as
     many as one lookup's budget lets (`--choose` and
@@ -589,10 +589,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     `_common._pause_after_last_request` its first after the last one any caracole sent
     (kv `http:last_request:<provider>`, to the fraction of a second, else `events`), as bulk
     work's client paces its next one once its process let a lookup go first
-    (`_LockedClient._after_a_lookup`). No gap
-    is shorter than the host's robots.txt `Crawl-delay` (`http.ROBOTS_CRAWL_DELAY`, from
-    the same `User-agent: *` groups as the rules below: gametabs.net's 5 s alone, which a lookup's pace
-    keeps too: `test_gametabs.py::test_robots_rules_are_the_user_agent_star_group_of_the_live_file`).
+    (`_LockedClient._after_a_lookup`). The gap between two requests is the pace's alone: no
+    robots.txt `Crawl-delay` adds to it (gametabs.net's asks 5 s; the owner chose, on 2026-10-28, that caracole
+    does not keep it).
   - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `harptabs`, `gametabs`, `youtube`) can be
     turned off (`enabled = false`): then it gets no client and its step is skipped.
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
@@ -649,8 +648,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   - **The second exception: a site whose terms forbid automated access, where the owner chose
     it.** A site's terms against bots, scrapers or copying do not stop caracole at a site the
     owner chose, named below with its terms; the owner's rule, for any site they name here.
-    Everything else above binds caracole there, as at every site: robots.txt honoured, its
-    `Crawl-delay` included; caracole's own user agent; the paces and budgets; one request at a
+    Everything else above binds caracole there, as at every site: robots.txt honoured (its
+    disallowed paths; its `Crawl-delay` is not kept); caracole's own user agent; the paces and budgets; one request at a
     time; never a login, a file behind one, or an API robots.txt closes; a 403, a 429 or a
     challenge a block (`ProviderBlocked`, the cooldown, one alert); and nothing worked around (no
     other user agent, cookies, login, proxies, API keys or captcha). The exception is what is
@@ -678,7 +677,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
       permission"; the owner chose to read it anyway on 2026-10-28, knowing them. Its robots.txt
       allows tab and game pages and the sitemaps, closes `/api/`, `/tabs?*`, the pages behind a
       login (`/preparing-tab-file-download`, every attachment's download, among them) and more,
-      and asks a `Crawl-delay` of 5 s. Provider `gametabs` (gametabs.py, gametabs_fetch.py,
+      and asks a `Crawl-delay` of 5 s, which caracole does not keep: its pace is one request a second
+      (`config.DEFAULT_PROVIDERS`). Provider `gametabs` (gametabs.py, gametabs_fetch.py,
       gametabs_index.py) keeps the text tab each tab page shows to anyone, never an attachment
       (Guitar Pro, MIDI, PDF: a login's), for the songs of wanted.txt and a lookup's song alone,
       never a tab page for a song nobody asked for and never a mirror (its sitemaps, then the pages

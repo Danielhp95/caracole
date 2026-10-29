@@ -58,8 +58,8 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     # Harmonica tabs, kept for your wanted songs alone (harptabs.py): its sitemap, then a song's candidate pages.
     "harptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
     # Text tabs of game music, kept for your wanted songs alone (gametabs.py): its sitemaps, a song's candidate pages,
-    # then its game pages. Its robots.txt asks 5 s between two requests (http.ROBOTS_CRAWL_DELAY), under this pace.
-    "gametabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
+    # then its game pages, one request a second.
+    "gametabs": ProviderPolicy(budget=20, delay=(1.0, 1.0)),
     # yt-dlp, for the audio of a song nobody has charted (youtube.py): a budget of yt-dlp runs,
     # each a search or a download, so six are three songs a night. A run sends several requests,
     # which yt-dlp's own pauses space out; these pauses go between two runs.

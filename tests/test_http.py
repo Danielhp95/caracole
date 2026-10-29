@@ -118,19 +118,7 @@ def test_pause_counts_time_already_elapsed(tmp_path):
     assert sleeps == [6.0]
 
 
-def test_a_quick_pace_still_keeps_a_crawl_delay_robots_txt_asks_for(tmp_path, monkeypatch):
-    # An interactive lookup's gap is about a second, or none; a host's Crawl-delay is the floor.
-    from caracole import http
-
-    monkeypatch.setitem(http.ROBOTS_CRAWL_DELAY, "tabs.ultimate-guitar.com", 5.0)
-    sleeps: list[float] = []
-    client, _ = make_client(tmp_path, ok(), sleeps=sleeps, delay=(0.0, 0.0))
-    client.get("https://tabs.ultimate-guitar.com/tab/1")
-    client.get("https://tabs.ultimate-guitar.com/tab/2")
-    assert sleeps == [5.0]
-
-
-def test_a_zero_gap_sends_back_to_back_without_a_crawl_delay(tmp_path):
+def test_a_zero_gap_sends_back_to_back(tmp_path):
     sleeps: list[float] = []
     client, rec = make_client(tmp_path, ok(), sleeps=sleeps, delay=(0.0, 0.0))
     client.get("https://tabs.ultimate-guitar.com/tab/1")
@@ -138,22 +126,12 @@ def test_a_zero_gap_sends_back_to_back_without_a_crawl_delay(tmp_path):
     assert sleeps == [] and len(rec.requests) == 2
 
 
-def test_gametabs_is_the_one_host_caracole_asks_with_a_crawl_delay_for_every_user_agent():
-    # MuseScore's Crawl-delay: 30 is in its BingPreview group, not in User-agent: *; gametabs.net's 5 is in it.
-    from caracole.http import ROBOTS_CRAWL_DELAY, crawl_delay
-
-    assert dict(ROBOTS_CRAWL_DELAY) == {"gametabs.net": 5.0, "www.gametabs.net": 5.0}
-    assert crawl_delay("https://musescore.com/sitemaps/song-index.xml") == 0.0
-    assert crawl_delay("https://gametabs.net/tabs/actraiser/fillmore") == 5.0
-    assert crawl_delay("not a url \x00") == 0.0
-
-
-def test_a_pace_quicker_than_gametabs_crawl_delay_waits_for_it(tmp_path):
+def test_gametabs_is_paced_by_its_policy_alone(tmp_path):
     sleeps: list[float] = []
-    client, _ = make_client(tmp_path, ok(), sleeps=sleeps, delay=(0.0, 1.0))
+    client, _ = make_client(tmp_path, ok(), sleeps=sleeps, delay=(1.0, 1.0))
     client.get("https://gametabs.net/tabs/actraiser/fillmore")
     client.get("https://gametabs.net/tabs/actraiser/sacrifices")
-    assert sleeps == [5.0]
+    assert sleeps == [1.0]
 
 
 def test_budget_exhausted_before_request(tmp_path):

@@ -5,8 +5,7 @@ Rules this module enforces (plan §6, "Politeness"):
 - every raw response worth keeping (a 200 or 404 the caller accepts) is cached
   forever, and a cached URL never costs a request again;
 - a request budget, with a random pause before every network request, redirect
-  hops included, never shorter than the host's robots.txt ``Crawl-delay``
-  (``ROBOTS_CRAWL_DELAY``). The policy sets the pace: bulk work's (10-20 s
+  hops included. The policy sets the pace: bulk work's (10-20 s
   between requests to UG, a run's budget) or an interactive lookup's (about a
   second, a few requests for one song), which commands/_common.py picks;
 - one request at a time;
@@ -278,23 +277,6 @@ def _robots_pattern(rule: str) -> re.Pattern[str]:
 
 _ROBOTS = {host: [(rule, _robots_pattern(rule)) for rule in rules] for host, rules in ROBOTS_DISALLOW.items()}
 
-# The Crawl-delay of each host's "User-agent: *" group, in seconds, from the same robots.txt files: gametabs.net's
-# 5 s alone (musescore.com's "Crawl-delay: 30" is its BingPreview group's). A host listed here gets at least this long
-# between two requests, whatever the pace.
-ROBOTS_CRAWL_DELAY: dict[str, float] = {"gametabs.net": 5.0, "www.gametabs.net": 5.0}
-
-
-def crawl_delay(url: str) -> float:
-    """The seconds robots.txt asks between two requests to ``url``'s host (``ROBOTS_CRAWL_DELAY``), or 0."""
-    import httpx
-
-    try:
-        host = httpx.URL(url).host
-    except (httpx.InvalidURL, ValueError):
-        return 0.0
-    return ROBOTS_CRAWL_DELAY.get(host, 0.0)
-
-
 # What robots_disallows answers for a string httpx can't parse as a URL.
 NOT_A_URL = "not a valid URL"
 
@@ -369,8 +351,7 @@ class PoliteClient:
       If-Modified-Since; a 304 returns the cached body, and the copy counts as
       fetched then.
     - Before every network request except the first, it pauses for a random
-      time in ``policy.delay``, never less than the host's ``crawl_delay``,
-      minus the time already elapsed. A subclass may spend the pause otherwise
+      time in ``policy.delay``, minus the time already elapsed. A subclass may spend the pause otherwise
       (``_wait``): commands/_common.py's hands caracole's lock to a waiting lookup.
     - ``policy.budget`` network requests per run; after that ``BudgetExhausted``.
     - A URL robots.txt disallows (``robots_disallows``) is never requested: when
@@ -578,7 +559,7 @@ class PoliteClient:
     def _pause(self, url: str) -> None:
         if self._last_request is None:
             return
-        target = max(self._rng.uniform(*self.policy.delay), crawl_delay(url))
+        target = self._rng.uniform(*self.policy.delay)
         remaining = target - (self._clock() - self._last_request)
         if remaining > 0:
             self._wait(remaining)

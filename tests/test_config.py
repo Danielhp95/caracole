@@ -25,6 +25,7 @@ def test_defaults(tmp_path):
     assert cfg.providers["ug"] == ProviderPolicy(budget=60, delay=(10.0, 20.0))
     assert cfg.providers["lrclib"] == ProviderPolicy(budget=200, delay=(1.0, 2.0))
     assert cfg.providers["lacuerda"] == ProviderPolicy(budget=30, delay=(10.0, 20.0))
+    assert cfg.providers["gametabs"] == ProviderPolicy(budget=20, delay=(1.0, 1.0))
     assert cfg.match == MatchPolicy(accept=90, margin=8, review=75, artist_gate=90)
     assert cfg.rank == RankPolicy(
         coverage_threshold=0.8, line_match=85, prior_votes=10, scored_sheets=3,
