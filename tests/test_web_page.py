@@ -303,7 +303,8 @@ def test_fetch_now_shows_its_progress_on_the_line_then_its_files(serve, cfg, con
     assert re.search(r'data-show="found"[^>]*>Found <span class="n">1</span>', dom)
 
 
-# Notes each line's glyphs of what its song holds, its badges and how many marks of where things came from it shows.
+# Notes each line's glyphs of what its song holds, its badges and how many marks of where things came from it shows
+# beside its sites' marks (song_sites.py's, its own).
 HOLDS = """
 (() => {
   const held = {};
@@ -311,7 +312,7 @@ HOLDS = """
     held[l.querySelector("h3").textContent] = {
       holds: Array.from(l.querySelectorAll(".line-holds svg")).map((g) => g.getAttribute("aria-label")),
       badges: Array.from(l.querySelectorAll(".line-status .badge")).map((b) => b.textContent),
-      marks: l.querySelectorAll(".line-meta .source").length,
+      marks: l.querySelectorAll(".line-meta .source:not(.line-sites > *)").length,
     };
   }
   document.body.setAttribute("data-held", JSON.stringify(held));

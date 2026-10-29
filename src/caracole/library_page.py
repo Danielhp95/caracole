@@ -33,8 +33,9 @@ songs you have, whatever the search or a filter leaves out ("Soda Stereo · you
 have 2"); by title or by when they came,
 they stand alone, each with its artist. A line holds the song's title, which
 opens its sheet (its viewer, else its PDF, else its text), its status when it
-needs something (Wanted, Needs review, Not found, Ignored: a found song says
-nothing), what it holds, a glyph each (its sheet, a Guitar Pro file or a tab, a
+needs something (Wanted, Needs review, Ignored: a found song says nothing), which
+sites have it, had nothing for it or weren't asked yet (``sites``, song_sites.py:
+a site's mark each, rows.js ``siteMarks``), what it holds, a glyph each (its sheet, a Guitar Pro file or a tab, a
 harmonica tab, its lyrics, a score: rows.js ``glyph``, read from its files and
 ``instruments``), its key as a chip and its main action: Open, or, served, Fetch
 now or Pick the match. Everything else a song has is under its chevron, which
@@ -242,7 +243,7 @@ A pick posts with fetch() as the other forms do, and the song's line says how
 it goes; while any request of the song waits or runs, the picker offers no
 pick, and the line's "Pick the match" (a request that ended in a review)
 opens it.
-A song not found carries ``notFound``, says "Not found", and its served line's "⋯" links to
+A song not found carries ``notFound`` (its line says so by UG's grey mark), and its served line's "⋯" links to
 ``/review?song=ID``, which offers what ``caracole search`` finds for it: a
 search per song would cost every page a moment each.
 
@@ -440,16 +441,18 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
     if youtube:
         to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
     musescore = cfg.provider("musescore").enabled
+    pages = {s.id: _musescore_links(conn, s, overrides) for s in library} if musescore else {}
     asked = None if songs is None else {s.id for s in songs}  # a card or a few: their rows alone
     met = _lacuerda_versions(conn, asked)
     ug = _ug_versions(conn, cfg, overrides, library)
     cards = [_song(cfg.library_dir, s, overrides, keys.get(s.id), s.id in to_buy,
-                   sources.get(s.id, {}), _musescore_links(conn, s, overrides) if musescore else [],
+                   sources.get(s.id, {}), pages.get(s.id, []),
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
                    transpose=pdf_transpose(conn, overrides, s), lacuerda=met.get(s.id, []),
                    versions=ug.get(s.id), guitar=browsable.get(s.id), ukulele=s.id in ukulele)
              for s in library]
     _add_picks(conn, library, cards)
+    _add_sites(conn, cfg, library, cards, origins=origins, lacuerda=met, musescore=pages, youtube=youtube)
     played = library_progressions(conn)  # each song's, as its last render read its sheet
     chinese = chinese_songs(conn)
     for song, card in zip(library, cards, strict=True):
@@ -524,6 +527,24 @@ def _add_picks(conn: sqlite3.Connection, library: list[Song], songs: list[dict[s
                 card["candidates"] = choices
         elif song.match_decision == "not_found" and card["status"] != "ignored" and not card["lacuerda"]:
             card["notFound"] = True  # not for the sheet picked on LaCuerda, still to come: that is the song's
+
+
+def _add_sites(conn: sqlite3.Connection, cfg: Config, library: list[Song], cards: list[dict[str, Any]], *,
+               origins: Mapping[int, Mapping[str, str]], lacuerda: Mapping[int, list[Any]],
+               musescore: Mapping[int, list[Any]], youtube: Mapping[int, SongState]) -> None:
+    """Give each song's data its ``sites``: which sites have it, which had nothing and which weren't asked yet, its
+    line's marks in place of a "Not found" that named no site (song_sites.py)."""
+    from caracole.song_sites import checked, musescore_read, shown, song_sites
+
+    sites = shown(cfg)
+    checks = checked(conn)
+    read = "musescore" in sites and musescore_read(conn)
+    for song, card in zip(library, cards, strict=True):
+        state = youtube.get(song.id)
+        card["sites"] = song_sites(song, sites, origins=origins.get(song.id, {}), checks=checks,
+                                   lacuerda=bool(lacuerda.get(song.id)),
+                                   musescore=bool(musescore.get(song.id)) if "musescore" in sites else None,
+                                   musescore_read=read, youtube=state.state if state else None)
 
 
 _TAB_KINDS = {"chords": "Chords", "tabs": "Tabs", "ukulele": "Ukulele Chords"}

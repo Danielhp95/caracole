@@ -136,8 +136,8 @@ section.nothing .line.miss > .line-panel { gap: 6px; padding: 4px 0 8px; }
 /* In an artist's group its header names the artist: its lines leave the name out, and the column with it. */
 section.artist .line-by { display: none; }
 @media (min-width: 720px) {
-  section.artist .line { grid-template-columns: minmax(0, 1fr) 6.5rem 6.5rem 2.75rem 7.5rem var(--line-more);
-    grid-template-areas: "title status src key act more"; }
+  section.artist .line { grid-template-columns: minmax(0, 1fr) 6.5rem calc(var(--sites, 0) * 18px) 6.5rem 2.75rem
+    7.5rem var(--line-more); grid-template-areas: "title status sites src key act more"; }
   /* A site's line has no key: its status and counts ("chords ×9 · tabs ×2") take most of that room, its marks the
      rest, the rest where yours are (rows.css). */
   section.artist .line.hit { grid-template-columns: minmax(0, 1fr) 12rem 4.25rem 7.5rem var(--line-more);

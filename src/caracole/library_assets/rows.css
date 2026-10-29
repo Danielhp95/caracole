@@ -134,6 +134,15 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-holds svg.glyph { flex: none; width: 16px; height: 16px; }
 .line-holds svg.glyph.auto { color: var(--auto); }
 .line-sources { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
+/* Which sites have a song of yours (rows.js siteMarks): a site's mark in its colours where it has the song, grey where
+   it had nothing, fainter on a dashed edge where it wasn't asked yet; a mark a little smaller than a link's. From
+   720px their column is as wide as the most marks a line has (library.js's --sites), so the lines line up. */
+.line-sites { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; }
+.line-sites .source { width: 14px; height: 14px; vertical-align: 0; }
+.line-sites .source.letters, .line-sites .source.glyph { width: 16px; height: 16px; border-radius: 4px; font-size: 8px; }
+.line-sites .source[data-state="none"] { filter: grayscale(1); opacity: .45; }
+.line-sites .source[data-state="unasked"] { filter: grayscale(1); opacity: .3; outline: 1px dashed var(--muted);
+  outline-offset: 1px; }
 .line-action { grid-area: act; justify-self: end; display: flex; min-width: 0; }
 .line-action form { margin: 0; }
 .line-action .btn { min-height: 28px; padding: 0 8px; border-color: transparent; border-radius: 8px;
@@ -162,17 +171,18 @@ a.line-title:hover h3 { text-decoration: underline; text-decoration-thickness: 1
 .line-panel { grid-column: 1 / -1; display: grid; gap: 6px; padding: 4px 0 8px; }
 .line-panel .note, .line-panel .facts { margin: 0; }
 .line-panel .foot { flex-wrap: wrap; justify-content: flex-start; gap: 8px; margin-top: 2px; }
-/* From 720px: the status, then what a song of yours holds where a site's song has its marks, then the key. A site's
+/* From 720px: the status, which sites have a song of yours, then what it holds where a site's song has its marks, then the key. A site's
    song has no key: its status and counts take most of that room, its marks the rest, beside its action, the columns
    around them where yours are. */
 @media (min-width: 720px) {
-  .line { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem 6.5rem 2.75rem 7.5rem var(--line-more);
-    grid-template-areas: "title by status src key act more"; padding: 0 4px 0 12px; }
+  .line { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 6.5rem calc(var(--sites, 0) * 18px) 6.5rem 2.75rem
+    7.5rem var(--line-more); grid-template-areas: "title by status sites src key act more"; padding: 0 4px 0 12px; }
   .line.hit { grid-template-columns: minmax(0, 1fr) minmax(0, .6fr) 12rem 4.25rem 7.5rem var(--line-more);
     grid-template-areas: "title by status src act more"; }
   .line-meta { display: contents; }
   .line-by { grid-area: by; justify-self: start; max-width: 100%; }
   .line-status { grid-area: status; }
+  .line-sites { grid-area: sites; }
   .line-holds { display: flex; grid-area: src; }
   .line-sources { grid-area: src; }
   .line-action .btn, .line-busy { min-height: 24px; }
