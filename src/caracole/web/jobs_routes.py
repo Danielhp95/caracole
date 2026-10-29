@@ -1,7 +1,7 @@
-"""caracole serve's requests: the requests page, /jobs.json for the pages' scripts, and the API's jobs.
+"""caracole serve's requests: the library page's Requests tab, /jobs.json for the pages' scripts, and the API's jobs.
 
-    GET  /jobs            the requests, a line each, and what each command printed
-                          (?job=N: its output open; ?refresh=0: no reloading)
+    GET  /requests.json   every request, as the library page's Requests tab draws it (feed.py), for the
+                          page's script (?open=N,M: those requests' output with what each command printed)
     GET  /jobs.json       the requests, a line each, for the page's script (?jobs=N,M: only those
                           jobs, each with its song's card once it is over)
     GET  /api/jobs[/<id>] the requests as data: each step with its state (Job.as_json)
@@ -9,11 +9,12 @@
                           runs, nor one that is over; an add's wanted.txt line stays
     POST /jobs/again      a request that is over (``job``), its steps queued again: Try again
 
-The requests page (pages.py) shows the request that runs with its steps and those queued under it, each
-with Cancel, then the finished ones newest first, each as outcome.py says it: its outcome, a reason, when
-it finished and its next step (Open, Pick the match, Get it from there, Request by name, Try again…), read
-from its line and its song (``song_of``: for a song a fetch left without a sheet, what the local indexes
-have elsewhere, ``outcome.elsewhere``).
+The Requests tab (feed.py, drawn by library_assets/requests.js) shows the request that runs with its steps and
+those queued under it, each with Cancel, then the finished ones newest first, each as outcome.py says it: its
+outcome, a reason, when it finished and its next step (Open, Pick the match, Get it from there, Request by name, Try
+again…), read from its line and its song (``song_of``: for a song a fetch left without a sheet, what the local
+indexes have elsewhere, ``outcome.elsewhere``). Cancel and Try again answer a form with the tab (``REQUESTS``), and
+the page's script with data.
 
 Each job is shown as the page's script reads it (``views``): its song (its id, and its identity key, which
 an id songs.id gives again once the newest song is removed never shares), its line (status.py, as a song's
@@ -23,7 +24,7 @@ songbooks as its Songbooks tab has them now, which the page draws again: a songb
 (``caracole get`` makes the songbooks its song is in again) and a removal each change them. A job says
 what it is about (``kind``: a song's, a removal's, a songbook's), so the page shows each where it
 belongs. Every route that queues a job answers the page's script with its view (``WebApp.queued``).
-app.py checks that /jobs.json is asked for by the page's own script, as a write would be.
+app.py checks that /jobs.json and /requests.json are asked for by the page's own script, as a write would be.
 """
 
 from __future__ import annotations
@@ -33,13 +34,11 @@ from contextlib import closing
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from caracole.web import pages
 from caracole.web.app import (
     Response,
     Route,
     WebApp,
     address,
-    html_response,
     json_response,
     overrides_or_none,
     query,
@@ -48,7 +47,7 @@ from caracole.web.app import (
 from caracole.web.jobs import EXPORTING, INDEX_READS, LACUERDA_SEARCH, LOOKUP, READING, REMOVING, Job, JobStarted
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
-from caracole.web.status import SongFacts, details_href, job_line, song_line
+from caracole.web.status import REQUESTS, SongFacts, details_href, job_line, song_line
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
@@ -58,24 +57,23 @@ MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
 
 
 ROUTES = (
-    Route("GET", "/jobs", lambda app, asked: jobs_page(app, query(asked))),
+    Route("GET", "/requests.json", lambda app, asked: requests_json(app, query(asked)), script_only=True),
     Route("GET", "/jobs.json", lambda app, asked: jobs_json(app, query(asked)), script_only=True),
     Route("GET", "/api/jobs", lambda app, asked: api_jobs(app)),
     Route("GET", "/api/jobs/", lambda app, asked: api_job(app, address(asked)[len("/api/jobs/"):]), under=True),
-    Route("POST", "/jobs/cancel", lambda app, asked, form: cancel(app, form), page="the requests page"),
-    Route("POST", "/jobs/again", lambda app, asked, form: again(app, form), page="the requests page"),
+    Route("POST", "/jobs/cancel", lambda app, asked, form: cancel(app, form)),
+    Route("POST", "/jobs/again", lambda app, asked, form: again(app, form)),
 )
 
 
-def jobs_page(app: WebApp, asked: dict[str, list[str]]) -> Response:
-    """Every request: the one that runs and those queued, then the finished ones, each with its outcome and
-    its next step (outcome.py); its output open only when asked for (``?job=N``)."""
+def requests_json(app: WebApp, asked: dict[str, list[str]]) -> Response:
+    """Every request, as the Requests tab draws it (feed.py): the one that runs and those queued, then the finished
+    ones, each with its outcome and its next step (outcome.py); what each command printed only for the requests the
+    tab has opened (``?open=N,M``). The database or overrides.toml unreadable, the lines say only how the jobs went."""
+    from caracole.web.feed import feed
     from caracole.web.outcome import outcome
 
-    try:
-        opened = int(asked.get("job", [""])[0])
-    except ValueError:
-        opened = None
+    opened = _job_ids(asked.get("open")) or frozenset()
     jobs = app.queue.snapshot()
     songs: dict[int, tuple[int | None, SongFacts | None]] = {}
     books: dict[int, str | None] = {}
@@ -92,13 +90,12 @@ def jobs_page(app: WebApp, asked: dict[str, list[str]]) -> Response:
              for job in jobs}
     outcomes = {job.id: outcome(job, lines[job.id], facts.get(job.id), song_id=songs.get(job.id, (None,))[0])
                 for job in jobs if not job.active}
-    still = asked.get("refresh") == ["0"]
-    return html_response(200, pages.jobs_page(jobs, lines, outcomes=outcomes, facts=facts, opened=opened,
-                                              refresh=not still, picks=picks_waiting(app, jobs), csrf=app.csrf))
+    return json_response(200, feed(jobs, lines, outcomes=outcomes, facts=facts, picks=picks_waiting(app, jobs),
+                                   opened=opened))
 
 
 def cancel(app: WebApp, form: dict[str, str]) -> Response:
-    """A request that hasn't started, taken out of the queue (``JobQueue.cancel``); back to the requests page.
+    """A request that hasn't started, taken out of the queue (``JobQueue.cancel``); back to the Requests tab.
     One that runs is never stopped halfway, and one that is over stays in the history."""
     job_id = _form_job(form)
     try:
@@ -109,14 +106,14 @@ def cancel(app: WebApp, form: dict[str, str]) -> Response:
                                                   "halfway: it runs to its end.") from None
         raise Refused(409, "Over already", "That request is over: there's nothing left to cancel.") from None
     if job is None:
-        raise Refused(404, "No such request", "That request isn't queued any more: reload the requests page.")
-    response = redirect("/jobs")
+        raise Refused(404, "No such request", "That request isn't queued any more.")
+    response = redirect(f"/{REQUESTS}")
     response.data = {"cancelled": job.id}
     return response
 
 
 def again(app: WebApp, form: dict[str, str]) -> Response:
-    """A request that is over, its steps queued again as a new request (Try again); back to the requests page.
+    """A request that is over, its steps queued again as a new request (Try again); back to the Requests tab.
     It is queued as any request is (``JobQueue.submit``): a song's request waiting or running is the answer. A
     LaCuerda artist's read, or a query of its search, is one of ``app._reads``, as the search's Read is, so the
     answers the searches kept go once it is over; a search the page sent by itself is asked by hand now, past the
@@ -141,7 +138,7 @@ def again(app: WebApp, form: dict[str, str]) -> Response:
     if job.song_key.startswith(INDEX_READS):  # once read, the searches' answers kept go, as a first read's
         with app._searching:
             app._reads.add(queued.id)
-    return app.queued(queued, "/jobs")
+    return app.queued(queued, f"/{REQUESTS}")
 
 
 def _with_songbooks(args: tuple[str, ...]) -> tuple[str, ...]:
@@ -271,7 +268,7 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     A fetch that is over and left no sheet is "Not found" only if it looked the
     song up during the job (``ug.fetch.checked_since``): a cooldown, a block, a
     spent budget or an error looks nothing up, and the song isn't missing; for the
-    requests page, it says whether that fetch asked Ultimate Guitar at all
+    Requests tab, it says whether that fetch asked Ultimate Guitar at all
     (``asked_ug``: not for a song the offline index lacks whose artist's page isn't
     known) and what the local indexes have of the song elsewhere
     (``outcome.elsewhere``). Make this my version (``jobs.EXPORTING``) is about the

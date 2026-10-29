@@ -322,7 +322,7 @@ def test_not_found_with_something_elsewhere_gets_it_from_there():
     gtp = SongFacts(checked_now=True, asked_ug=True, elsewhere=("gtptabs", "https://gtptabs.com/tabs/x.html"))
     assert said(job, gtp, song_id=3) == Outcome(
         "missing", "Not found", "Ultimate Guitar has no chords for it; gtptabs.com's index lists a page for it.",
-        Action("Get it from there", post="/lookup", fields=(("song", "3"), ("then", "jobs"))))
+        Action("Get it from there", post="/lookup", fields=(("song", "3"),)))
     # A song the index didn't match: LaCuerda's sheet first, and what caracole search finds beside it.
     unmatched = ended({"sheet": ("skipped", NOT_IN_INDEX)})
     lc = SongFacts(not_found=True, checked_now=True,
@@ -330,7 +330,7 @@ def test_not_found_with_something_elsewhere_gets_it_from_there():
     assert said(unmatched, lc, song_id=3) == Outcome(
         "missing", "Not found", "Not in the offline Ultimate Guitar index under this name; LaCuerda has a sheet.",
         Action("Get it from there", post="/lookup", fields=(
-            ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"), ("then", "jobs"))),
+            ("song", "3"), ("lacuerda", "https://acordes.lacuerda.net/estopa/como_camaron.shtml"))),
         also=SEARCH)
     # A Guitar Pro file the lookup itself downloaded is in the library already: the song's line has it.
     got = ended({"sheet": ("skipped", ""), "gtptabs": ("done", "Guitar Pro file downloaded")})

@@ -101,9 +101,14 @@ html.sheet-open { overflow: hidden; }
 [data-lit~="harmonica"] .line-holds .glyph.glyph-harmonica,
 [data-lit~="score"] .line-holds .glyph.glyph-score { color: var(--accent); }
 @media (max-width: 719px) {
-  .masthead.lib { grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "app tabs links" "sum sum sum"; gap: 4px 8px; }
+  .masthead.lib { grid-template-columns: auto minmax(0, 1fr); grid-template-areas: "app tabs" "sum sum"; gap: 4px 8px; }
+  .masthead.lib .summary { justify-self: start; }
   .masthead.lib .app .word { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .masthead.lib .tab { padding: 0 8px; }
+  /* The tabs a phone's width fits, four of them beside the mark (Library, Songbooks, Sites, Requests), each a thumb's
+     height: narrower, their counts too. */
+  .masthead.lib .tabs { gap: 0; }
+  .masthead.lib .tab { gap: 3px; padding: 0 4px; font-size: .86rem; }
+  .masthead.lib .tab .n { min-width: 16px; padding: 0 4px; }
   .tools { gap: 6px; }
   .tools .divider { display: none; }
   /* Icons alone beside the search, a thumb's worth each: the words are there for a screen reader, and Filter keeps the

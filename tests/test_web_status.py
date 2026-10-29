@@ -151,7 +151,7 @@ def test_a_failed_request_says_its_error_in_one_short_sentence_with_a_link_to_th
                  outputs=[["Added"], [], ["Ultimate Guitar GET … → 200", error], []])
     line = job_line(failed, None)
     assert line == Line("failed", "Ultimate Guitar lists Joaquín Sabina only by bare tab ids, which caracole "
-                                  "can't see.", details="jobs?job=3#job-3")
+                                  "can't see.", details="#tab=requests&job=3")
     # Under systemd the log's lines start with their priority.
     journal = job("failed", states=["failed"], outputs=[["<3>error: wanted.txt can't be written."]])
     assert job_line(journal, None).text == "wanted.txt can't be written."
@@ -209,8 +209,8 @@ def test_a_line_as_json():
         "tone": "ready", "text": "Ready", "link": {"label": "Open sheet", "href": "a/b.pdf"}, "details": None}
     assert Line("queued", "Queued…").as_json() == {"tone": "queued", "text": "Queued…", "link": None,
                                                     "details": None}
-    # Details: the request's output on /jobs, after the line's own link.
-    assert Line("failed", "No.", details="jobs?job=2#job-2").as_json()["details"] == "jobs?job=2#job-2"
+    # Details: the request's output in the library page's Requests tab, after the line's own link.
+    assert Line("failed", "No.", details="#tab=requests&job=2").as_json()["details"] == "#tab=requests&job=2"
 
 
 # --- a lookup: one `caracole get`, its stages on the line -------------------------------------------

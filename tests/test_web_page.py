@@ -412,9 +412,9 @@ def test_several_requests_show_as_one_short_list(serve, cfg, conn, tmp_path):
     assert [href for href, _, _ in lines] == ["Muse/Hysteria/sheet.pdf", "Oasis/Wonderwall/sheet.pdf",
                                               "Radiohead/Creep/sheet.pdf"]
     assert "step-chips" not in tray.group(1)  # one line each: the songs' lines have the steps
-    assert "3 requests" in tray.group(1) and 'href="jobs"' in tray.group(1)
+    assert "3 requests" in tray.group(1) and 'href="#tab=requests"' in tray.group(1)  # Details: the Requests tab
     # One Details link, the list's own: its lines say how each goes, and the cards link their details.
-    assert tray.group(1).count(">Details<") == 1 and "jobs?job=" not in tray.group(1)
+    assert tray.group(1).count(">Details<") == 1 and "job=" not in tray.group(1)
     # The lines in the list aren't read out a second time: the cards' are.
     assert 'role="status"' not in tray.group(1)
     # Folded, on a desktop too: a pill in the corner, over no card.
@@ -464,7 +464,7 @@ def test_a_failed_request_says_why_in_one_sentence_with_its_details(serve, cfg, 
 
     line = re.search(r'<p class="progress"[^>]*>.*?</p>', card(dom, "Creep"), re.S).group(0)
     assert 'data-tone="failed"' in line and "UG answered 503 for Radiohead's page." in line
-    assert "It waits" not in line and 'href="jobs?job=1#job-1"' in line and "Details" in line
+    assert "It waits" not in line and 'href="#tab=requests&amp;job=1"' in line and "Details" in line
     assert 'action="/fetch"' in card(dom, "Creep")  # it can be asked for again
 
 
@@ -710,42 +710,6 @@ def test_a_request_that_ends_in_a_review_offers_its_picker_on_the_line(serve, cf
     assert 'action="/review"' in shown and 'action="/fetch"' not in shown
 
 
-def test_a_requests_picker_on_the_requests_page_takes_the_requests_whole_width(serve, cfg, conn, tmp_path):
-    # A request is a line with its Output folded beside it; the picker under it spans the whole request, not
-    # the line's column alone.
-    from helpers.chromium import Chromium
-
-    from caracole.web.jobs import fetch_steps
-
-    creep = in_review(conn)
-
-    def refuses(args, emit):
-        if args[0] == "fetch":
-            emit('error: "Radiohead - Creep" needs review first: run `caracole review`.')
-            return 1
-        return 0
-
-    refuses.down, refuses.polls = 0, Polls()
-
-    def ended_in_a_review(app):
-        app.queue.submit("Fetch Radiohead - Creep", creep.key, fetch_steps(creep.display), fetching=True,
-                         display=creep.display)
-        app.queue.run_pending()
-
-    url = serve(refuses, "", before=ended_in_a_review)
-    with Chromium(tmp_path / "profile") as browser:
-        tab = browser.open(url + "jobs?refresh=0")
-        tab.wait_for("document.querySelector('#job-1 .waits form.pick-form') !== null")
-        widths = tab.eval("""(() => {
-          const job = document.querySelector("#job-1");
-          const style = getComputedStyle(job);
-          const inside = job.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-          return [document.querySelector("#job-1 .waits").getBoundingClientRect().width, inside];
-        })()""")
-    waits, inside = widths
-    assert waits >= inside - 1, widths
-
-
 # --- a line's own button ------------------------------------------------------------------------------
 
 
@@ -959,9 +923,9 @@ def test_remove_counts_down_on_the_line_then_removes_the_song_there(serve, cfg, 
     assert gone == ["Creep", 0, "status", "/", left]  # still the library, as you left it; nothing left to open
     assert find_song(conn, creep.key) is None
     # Its line keeps its place, its size and its request line where it was, Removed, until the page is loaded again:
-    # nothing on the screen moves (the line's dot, by a pixel, as its words change: no shift at all; the masthead's
-    # Requests counts what runs, as on every page that asks for something).
-    assert [s for s in shifts if s["value"] > 0 and s["moved"] != ["links"]] == [], shifts
+    # nothing on the screen moves (the line's dot, by a pixel, as its words change: no shift at all; nor the masthead,
+    # whose Requests tab counts what runs).
+    assert [s for s in shifts if s["value"] > 0] == [], shifts
     # It counts no more: the masthead, the buttons and the count agree on twelve songs left.
     searched = left == "#q=creep"
     assert counts == {"summary": ["12 wanted"],

@@ -141,7 +141,7 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
         body = urlencode({"csrf": "tok", "artist": "Radiohead", "title": "Creep"}).encode()
         status, headers, _ = ask(server, "POST", "/request", body=body, headers={
             "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "same-origin"})
-        assert status == 303 and headers["Location"] == "/jobs?job=1#job-1"
+        assert status == 303 and headers["Location"] == "/#tab=requests&job=1"
         assert "Radiohead - Creep" in (tmp_path / "lib" / "wanted.txt").read_text(encoding="utf-8")
         for _ in range(200):
             job = queue.snapshot()[0]
@@ -150,7 +150,7 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
             time.sleep(0.05)
         assert job.state == "done", [s.output for s in job.steps]
         # The server wrote the line; caracole add found it there and synced it into the database. It ran
-        # at -v, so the requests page has the detail too.
+        # at -v, so the Requests tab has the detail too.
         output = job.steps[0].output
         assert "Radiohead - Creep is in wanted.txt already; the next `caracole run` looks for it." in output, output
         assert any(line.startswith("wanted.txt line ") for line in output), output
@@ -160,7 +160,7 @@ def test_a_request_runs_caracole_add_for_real(tmp_path, monkeypatch):
         finally:
             conn.close()
         status, _, page = ask(server, "GET", "/jobs")
-        assert status == 200 and b"Add Radiohead - Creep" in page and b"Done" in page
+        assert status == 404  # no page of their own: the library page's Requests tab
     finally:
         queue.stop()
         server.shutdown()
@@ -262,8 +262,8 @@ def test_a_phone_on_the_lan_cancels_a_request(cfg, conn, tmp_path):
     # Over plain HTTP to a LAN or tailnet address a page is no secure context: the browser sends no
     # Sec-Fetch-Site, and the server compares the form's Origin with Host. Under Referrer-Policy no-referrer a
     # form posted from the server's own page says Origin "null", so every form from a phone was refused;
-    # same-origin names the page's origin to its own server, and nothing to another site. The requests page
-    # has no script: its Cancel is a plain form.
+    # same-origin names the page's origin to its own server, and nothing to another site. The library page's
+    # Requests tab posts its Cancel with fetch(), which carries that Origin as a form does.
     from caracole.web.jobs import add_steps
 
     lan = "caracole.test"
@@ -272,14 +272,14 @@ def test_a_phone_on_the_lan_cancels_a_request(cfg, conn, tmp_path):
     server = running(app)  # its queue never started: the request waits
     try:
         with Chromium(tmp_path / "profile", local=[lan]) as browser:
-            tab = browser.open(f"http://{lan}:{server.server_address[1]}/jobs?refresh=0")
+            tab = browser.open(f"http://{lan}:{server.server_address[1]}/#tab=requests")
             tab.wait_for("document.readyState === 'complete' && "
-                         "document.querySelector('form[action=\"/jobs/cancel\"] button') !== null")
+                         "document.querySelector('#req-1 form[action=\"/jobs/cancel\"] button') !== null")
             assert tab.eval("window.isSecureContext") is False  # as a phone on the LAN sees it
             tab.eval("window.before = true")
-            tab.click('form[action="/jobs/cancel"] button')
-            tab.wait_for("window.before === undefined && document.readyState === 'complete'")  # the page it went to
-            assert tab.eval("document.title").startswith("Requests"), tab.eval("document.body.innerText")
+            tab.click('#req-1 form[action="/jobs/cancel"] button')
+            tab.wait_for("document.querySelector('#req-1 .req-says').textContent === 'Cancelled'")
+            assert tab.eval("window.before") is True  # the page stayed where it was
         assert [j.state for j in app.queue.snapshot() if j.id == job.id] == ["cancelled"]
     finally:
         server.shutdown()

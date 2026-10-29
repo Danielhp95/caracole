@@ -10,9 +10,9 @@ file, and none of it loads anything from the network.
   (``pointer: coarse``) every button is a thumb's target, 44 px; a mouse keeps the compact ones.
 - picker.css (``PICKER_STYLE``): the picker of a song in review's candidates, under a song's "⋯" and on
   the pages caracole serve writes itself (web/pages.py), which build the same markup.
-- steps.css (``STEPS_STYLE``): a request's steps as chips (web/outcome.py's): the requests page's running
-  card (web/pages.py), and on index.html a song's line, or a search result's row, while its lookup runs
-  (library.js), the same markup.
+- steps.css (``STEPS_STYLE``): a request's steps as chips (web/outcome.py's): on index.html the Requests tab's
+  running request (requests.js), and a song's line, or a search result's row, while its lookup runs (library.js),
+  the same markup.
 - rows.css and rows.js (``ROWS_STYLE``, ``ROWS_SCRIPT``): a list's rows and dense lines, the marks
   of where each thing came from and the pages' glyphs (``glyph``: inline SVG, a stroke in the text's colour, made
   with createElementNS), ``caracoleRows``: index.html's songs (``resultRow``'s ``dense`` lines)
@@ -40,12 +40,24 @@ file, and none of it loads anything from the network.
   mode ends; refused, the bar says why), and its menu follows the songbooks once a request is over
   ("caracole:songbooks"); on the file on disk it shows the caracole songbook command to run instead,
   folded beside Copy. The Songbooks tab's "+ New songbook" turns it on ("caracole:new-songbook").
-  songbooks.js runs after select.js: the tabs (body.html's Library and Songbooks, ``#tab=songbooks`` and
-  ``book=`` in the address), and the tab itself, drawn from the data's ``songbooks``
+  songbooks.js runs after select.js and tabs.js: the Songbooks tab (``book=`` in the address), drawn from the
+  data's ``songbooks``
   (songbook_section.py) with createElement and textContent: the songbooks as lines, the one opened as a
   set list. library.js gives it its seam, ``window.caracoleLibrary``: ``track`` follows a job it posted as
   the page's own are, and every job's view is told back ("caracole:job"); ``showLine`` writes a request's
   line.
+
+- tabs.js, before songbooks.js: the page's tabs (body.html's tablist in the masthead: Library, Songbooks and, served,
+  Requests, the last), each a ``tab-NAME`` button whose ``aria-controls`` names its panel, ``#tab=NAME`` in the
+  address (none for the library); clicked, or with the tablist's keys, a tab shows its panel and hides the others,
+  as a link to the page that names a tab does (a request line's Details), and Back to an address that names another.
+  Its seam, ``window.caracoleTabs`` (``show``, ``current``), and "caracole:tab", which every tab's script hears: a
+  tab put in body.html is one more, with no change to it.
+- requests.css and requests.js, after songbooks.js: the Requests tab, on the page caracole serve serves alone (the
+  file on disk has neither tab nor panel): every request the server remembers, drawn from ``/requests.json``
+  (web/feed.py) with createElement and textContent, asked again while it shows (each request drawn again only
+  when it changed, its Output as you left it); its Cancel, Try again and Get it from there post with fetch(), the
+  request they queue followed on its song's line (``caracoleLibrary.track``).
 
 - drawn.js: the last script, once every other has drawn what it draws: the page shows. Until then
   library.css keeps it unseen (its body is ``drawing``), so a slow machine that paints it before its
@@ -53,7 +65,7 @@ file, and none of it loads anything from the network.
   the library shown though you left the Songbooks tab open); two seconds on, it shows all the same.
 
 - head.html, body.html, request.html and requested.html: index.html's skeleton, whose
-  ``__BLANKS__`` library_page.py fills in: the policy, the style, the masthead's links and, served,
+  ``__BLANKS__`` library_page.py fills in: the policy, the style and, served, the Requests tab and its panel,
   the request form and the songs just requested. body.html also holds the guitar a set list marks a
   song with a Guitar Pro file by (``#guitar-glyph``, an inline SVG in a template songbooks.js clones:
   the HTML parser gives it its namespace).

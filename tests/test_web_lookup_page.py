@@ -41,7 +41,7 @@ def test_the_page_opens_with_the_one_line_header_and_no_paragraph_before_the_sea
     page = lookup_page("tok")
     header = re.search(r'<header class="top">(.*?)</header>', page, re.S).group(1)
     assert "<h1>Look up a song</h1>" in header and 'class="mark"' in header
-    assert re.findall(r'<a class="navlink" href="([^"]*)">([^<]*)', header) == [("/", "Library"), ("/jobs", "Requests")]
+    assert re.findall(r'<a class="navlink" href="([^"]*)">([^<]*)', header) == [("/", "Library"), ("/#tab=requests", "Requests")]
     assert 'class="lede"' not in page and "offline copies" not in page and 'class="masthead"' not in page
 
 

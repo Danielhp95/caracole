@@ -183,7 +183,7 @@ def test_make_this_the_one_looks_the_song_up_with_that_tab(app, queue, recorder,
     done = get(app, where)
     assert 'http-equiv="refresh"' not in text(done)
     assert "it is the one now" not in shown(done)  # the fake command changed nothing: the page says so
-    assert "Done, but it isn't the one" in shown(done) and f'href="/{details_href(1)}"' in text(done)
+    assert "Done, but it isn't the one" in shown(done) and 'href="/#tab=requests&amp;job=1"' in text(done)
 
 
 def test_make_this_the_one_says_its_the_one_only_once_the_sheet_is_that_version(app, queue, recorder, conn, cfg):
@@ -198,7 +198,7 @@ def test_make_this_the_one_says_its_the_one_only_once_the_sheet_is_that_version(
     waits = shown(get(app, where))
     assert "it is the one now" not in waits and "The one now: Ver 1 · 4.5★ (10)" in waits
     assert "recorded under [pin] in overrides.toml" in waits and "the nightly run" in waits
-    assert f'href="/{details_href(1)}"' in text(get(app, where))
+    assert 'href="/#tab=requests&amp;job=1"' in text(get(app, where))
     other = chords(conn, song, OTHER, rating=4.86, votes=408, number=3)
     keep_file(conn, cfg.library_dir, song=song, version_id=other, name="sheet.txt", data=b"[G]Otra\n", rank=1)
     done = get(app, where)
@@ -456,7 +456,7 @@ def test_keep_more_queues_one_job_under_the_songs_key(app, queue, recorder, conn
     first = post(app, "/versions/keep-more", {"song": str(song.id)})
     again = post(app, "/versions/keep-more", {"song": str(song.id)})
     assert first.status == again.status == 303
-    assert header(first, "location") == header(again, "location") == f"/{details_href(1)}"  # one job
+    assert header(first, "location") == header(again, "location") == f"/{details_href(1)}" == "/#tab=requests&job=1"  # one job
     assert queue.active_count() == 1 and song.key in queue.fetching_keys()  # it asks Ultimate Guitar for pages
     job = queue.job(1)
     assert job.song_key == song.key and job.title == f"Fetch the other versions of {DISPLAY}"

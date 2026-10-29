@@ -11,7 +11,7 @@ there even when the queue is full or the server stops (``wanted_line``, which
 the lookup page's requests share, search_routes.py). A request and a fetch
 then queue their commands (jobs.py): a song looked up now (``fetch``, a
 fetch, a lookup) is one ``caracole get --progress``. Without JavaScript, the
-answer sends the browser to the request on /jobs. The library page's script
+answer sends the browser to the request in the Requests tab. The library page's script
 asks for JSON (``Accept: application/json``) and gets the job, as /jobs.json
 gives it (``WebApp.queued``), so it stays on the page and shows the song's
 progress on its card.

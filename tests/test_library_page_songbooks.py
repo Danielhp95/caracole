@@ -528,7 +528,7 @@ def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands
     # Hysteria's fetch runs: its line links its details, which a tap would no more reach than a file.
     hysteria = next(s for s in data_of(page(conn, cfg))["songs"] if s["title"] == "Hysteria")
     running = {"id": 7, "kind": "song", "songId": hysteria["id"], "state": "running", "display": "Muse - Hysteria",
-               "line": {"tone": "running", "text": "Fetching from Ultimate Guitar…", "details": "/jobs#job-7"}}
+               "line": {"tone": "running", "text": "Fetching from Ultimate Guitar…", "details": "#tab=requests&job=7"}}
     controls = WebControls(csrf="tok", busy=frozenset({hysteria["id"]}), active=1, jobs=(running,))
     out = run_in_page(page(conn, cfg, controls), cfg, tmp_path, LINE_TARGETS + """
       const byTitle = (title) => qa("#list [data-id]").find((a) => a.querySelector("h3").textContent === title);

@@ -320,7 +320,7 @@ def _to_try(
 
 def asked_lately(song: Song, now: datetime) -> bool:
     """Whether LaCuerda was asked about the song in the last 30 days, so that a pass, a lookup's among them,
-    leaves it alone until they are over (``_songs_to_try``), your pick too; for the requests page, which then
+    leaves it alone until they are over (``_songs_to_try``), your pick too; for the Requests tab, which then
     offers no LaCuerda sheet (web/outcome.py)."""
     return not stamps.before(song.lacuerda_checked_at, stamps.utc(now) - RECHECK_AFTER)
 

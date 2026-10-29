@@ -1,7 +1,7 @@
-"""What the requests page says of a request: the running one's steps, and how a finished one ended.
+"""What the Requests tab says of a request: the running one's steps, and how a finished one ended.
 
 The library page's song lines keep status.py's ``Line``, and draw a lookup's steps under it (``progress``);
-the requests page (pages.py) reads that same line and says it its own way, never from anything else than
+the Requests tab (feed.py) reads that same line and says it its own way, never from anything else than
 the job and what the library knows of its song:
 
 - **Steps** (``steps``), for the request that runs: a lookup's stages (get.py's ``STAGES``) as a few steps
@@ -143,7 +143,7 @@ class Outcome:
 
 
 def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
-    """The request's steps, as the requests page draws the one that runs; ``facts``: its song's, for where its
+    """The request's steps, as the Requests tab draws the one that runs; ``facts``: its song's, for where its
     sheet came from."""
     if job.stages:
         return _lookup_steps(job, facts)
@@ -285,7 +285,7 @@ def _not_found(job: Job, facts: SongFacts | None, song_id: int | None) -> Outcom
     where = facts.elsewhere if facts is not None else None
     if where is not None and song_id is not None and where[0] in _ELSEWHERE:
         source, url = where
-        fields = (("song", str(song_id)), *((("lacuerda", url),) if source == "lacuerda" else ()), ("then", "jobs"))
+        fields = (("song", str(song_id)), *((("lacuerda", url),) if source == "lacuerda" else ()))
         return Outcome("missing", "Not found", _joined(head, _ELSEWHERE[source]),
                        Action("Get it from there", post="/lookup", fields=fields), search)
     return Outcome("missing", "Not found", _sentence(head),

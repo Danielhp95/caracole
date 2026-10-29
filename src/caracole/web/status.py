@@ -1,4 +1,5 @@
-"""The one line a request shows on its song's card: its progress, then how it ended; /jobs says it its own way.
+"""The one line a request shows on its song's card: its progress, then how it ended; the Requests tab says it its
+own way.
 
 It is read from the job (jobs.py) and, once the job is over, from what the
 library knows of its song (``SongFacts``), never from which commands the job
@@ -19,7 +20,7 @@ ran. So a job of other commands reads the same way:
   stage's words). A command that printed no error is named by its step. A fetch that fails on a song with no sheet that
   needs review, or wasn't found, says so instead, as a done one would: those
   are the fetch's usual refusals, worded for a terminal.
-- **Done**: "Ready", with a link to the song's sheet (the requests page's Open;
+- **Done**: "Ready", with a link to the song's sheet (the Requests tab's Open;
   on the library page the song's line opens it itself, and its request's line
   says "Ready" alone: ``song_line``); "Needs review", with a
   link to the song's picker when its review has candidates to pick from
@@ -47,9 +48,9 @@ ran. So a job of other commands reads the same way:
   one's, in the words ``caracole harptabs --artist`` ends with. An add of a
   song whose sheet you picked on LaCuerda says that tonight's run gets that sheet.
 
-A line that ends in a failure or a wait also links to the job's output on
-/jobs (``Line.details``). Every link is relative to the library page, which
-``caracole serve`` serves at /. The requests page reads the same line and says
+A line that ends in a failure or a wait also links to the job's output in
+the library page's Requests tab (``Line.details``, ``#tab=requests&job=N``). Every link is relative to the
+library page, which ``caracole serve`` serves at /. The Requests tab (feed.py) reads the same line and says
 it as an outcome, a reason and the next step (outcome.py), and a lookup's steps
 under it, which the library page draws under the song's line too.
 """
@@ -66,6 +67,7 @@ from caracole.web.jobs import EXPORTING, INDEX_READS, READING, REMOVING, Job, St
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
+REQUESTS = "#tab=requests"  # the library page's Requests tab
 READY = "Ready"  # a song's request that ended with its sheet there
 MAX_TEXT = 160  # characters of an error's sentence
 _ERROR = re.compile(r"^(?:<\d>)?error: (.+)$")
@@ -130,7 +132,7 @@ class SongFacts:
     fetch left without a sheet, what the local indexes have of it on another site (a
     source and its page: ``outcome.elsewhere``), and ``asked_ug`` that the fetch
     itself asked Ultimate Guitar (``checked_since``), so that what the song lacks, UG
-    lacks; both the requests page alone says, and the line here never reads them.
+    lacks; both the Requests tab alone says, and the line here never reads them.
     ``sheet_from`` is where its sheet came from,
     the site's tag ("UG", "LaCuerda": ``icons.tag``, its kept sheet's version), for a
     lookup's Sheet step (outcome.py); "" without a sheet.
@@ -151,7 +153,8 @@ class SongFacts:
 @dataclass(frozen=True)
 class Line:
     """``tone``: queued, running, ready, added, removed, review, waiting, missing, failed or cancelled; ``link``: (label, href),
-    where to go next; ``details``: the job's output on /jobs, for a line that ends in a failure or a wait."""
+    where to go next; ``details``: the job's output in the Requests tab, for a line that ends in a failure or a
+    wait."""
 
     tone: str
     text: str
@@ -164,8 +167,9 @@ class Line:
 
 
 def details_href(job_id: int) -> str:
-    """The job's output on /jobs, open."""
-    return f"jobs?job={job_id}#job-{job_id}"
+    """The job's output in the library page's Requests tab, open (relative to the library page, as every link here
+    is: ``/`` before it from any other page)."""
+    return f"{REQUESTS}&job={job_id}"
 
 
 def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page: str | None = None) -> Line:

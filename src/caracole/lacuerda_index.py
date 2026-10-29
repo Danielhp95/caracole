@@ -649,7 +649,7 @@ def find(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_ROWS,
 def sheet_page(conn: sqlite3.Connection, artists: Sequence[str], title: str) -> str | None:
     """The page of the best Letra y Acordes version the index holds of a song, by its artists' names (each of
     their forms, ``name_forms``) and its title, compared by their keys: the sheet a lookup would keep with
-    ``--lacuerda``; None when the index holds none. It reads the table alone, for the requests page, which
+    ``--lacuerda``; None when the index holds none. It reads the table alone, for the Requests tab, which
     offers it for a song Ultimate Guitar has no chords for (web/outcome.py)."""
     keys = [k for k in dict.fromkeys(name_key(form) for name in artists for form in (name, *name_forms(name))) if k]
     song = title_key(title)

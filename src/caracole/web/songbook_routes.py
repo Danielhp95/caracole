@@ -7,7 +7,7 @@
 
 A songbook form queues its ``caracole songbook`` command (songbooks.py checks
 it first, against songbooks.toml and the database): to a form, the answer is
-its line on /jobs; to the page's script, its job, as a fetch's, which names the
+its line in the Requests tab; to the page's script, its job, as a fetch's, which names the
 songbook it changes (``songbook``: its name before and after); once the job is
 over, /jobs.json gives it with the songbooks as the library page's Songbooks tab
 has them now (``songbooks``, jobs_routes.py), which the page draws again.
@@ -41,7 +41,7 @@ def change(app: WebApp, form: dict[str, str], *, route: str) -> Response:
     except (sqlite3.Error, OSError) as e:
         raise unreadable(e) from e
     queued, _ = app.submit(job.title, job.key, job.steps)
-    return app.queued(queued, f"/jobs#job-{queued.id}")  # its songbook says how it goes
+    return app.queued(queued)  # its songbook says how it goes
 
 
 def get_missing(app: WebApp, form: dict[str, str]) -> Response:
@@ -71,7 +71,7 @@ def get_missing(app: WebApp, form: dict[str, str]) -> Response:
     book = render_job(name, max(job.id for job in lookups))
     # A queue full now refuses the songbook alone: the lookups run all the same, and the nightly run makes it.
     made, _ = app.submit(book.title, book.key, book.steps)
-    response = app.queued(made, f"/jobs#job-{made.id}")  # its songbook says how it goes
+    response = app.queued(made)  # its songbook says how it goes
     response.data = {**(response.data or {}), "jobs": [app.job_view(job) for job in lookups],  # each on its line
                      "left": len(songs) - len(lookups)}
     return response
@@ -106,6 +106,6 @@ def add_song(app: WebApp, form: dict[str, str]) -> Response:
         queued = app.queue.submit_all(requests)
     except QueueFull:
         raise Refused(503, "The queue is full", full) from None
-    response = app.queued(queued[-1][0], f"/jobs#job-{queued[-1][0].id}")
+    response = app.queued(queued[-1][0])
     response.data = {**(response.data or {}), "jobs": [app.job_view(j) for j, _ in queued[:-1]]}
     return response

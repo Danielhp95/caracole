@@ -28,8 +28,7 @@
                           caracole read their page
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), the LaCuerda
                           song (``lacuerda``), the harptabs.com tab (``harptabs``) or the gametabs.net
-                          tab (``gametabs``), you picked;
-                          ``then=jobs``, from the requests page's Get it from there: back there
+                          tab (``gametabs``), you picked
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
     POST /lacuerda/search ask LaCuerda's search for the songs of a query (``q``) and put them into its index:
@@ -159,6 +158,7 @@ from caracole.web.library_routes import (
     wanted_line,
 )
 from caracole.web.pages import Refused
+from caracole.web.status import details_href
 
 if TYPE_CHECKING:
     from caracole.search import IndexFound, IndexHit, LibraryHit, SiteArtist, SiteHit, Suggestion
@@ -219,8 +219,6 @@ def lookup(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
     job, _ = queue_lookup(app, form)
     if wants_json:  # the lookup page follows its address; the library page, its line (view)
         return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}", "view": app.job_view(job)})
-    if form.get("then") == "jobs":  # the requests page, where the lookup shows as it runs
-        return redirect("/jobs")
     return redirect(f"/lookup?job={job.id}")
 
 
@@ -865,7 +863,7 @@ def harptabs_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Res
         app._reads.add(job.id)
     if wants_json:
         return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
-    return redirect(f"/jobs#job-{job.id}")
+    return redirect(f"/{details_href(job.id)}")
 
 
 def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:
@@ -896,7 +894,7 @@ def lacuerda_read(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Res
         app._reads.add(job.id)
     if wants_json:
         return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
-    return redirect(f"/jobs#job-{job.id}")
+    return redirect(f"/{details_href(job.id)}")
 
 
 def _lacuerda_search_gate(app: WebApp, conn: sqlite3.Connection, q: str, lc_artists: Sequence[SiteArtist],
@@ -957,7 +955,7 @@ def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> R
         app._reads.add(job.id)
     if wants_json:
         return json_response(202, {"job": job.id, "url": f"/api/jobs/{job.id}"})
-    return redirect(f"/jobs#job-{job.id}")
+    return redirect(f"/{details_href(job.id)}")
 
 
 def _artist_songs(app: WebApp, conn: sqlite3.Connection, key: str, offset: int) -> Response:

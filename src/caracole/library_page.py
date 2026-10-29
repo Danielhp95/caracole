@@ -195,9 +195,19 @@ to this page as it was left (Remove sends the address after # along, ``back``),
 at the song's line: ``song=ID`` in the address, which the script scrolls to and
 focuses, then drops.
 
-**Two tabs.** Library, all of the above, and Songbooks (``#tab=songbooks`` in
-the address, ``book=NAME`` the songbook open; library_assets/songbooks.js draws
-it from the data's ``songbooks``, songbook_section.py's): on the left the
+**The tabs.** Library, all of the above, Songbooks and, served, Requests, the last (library_assets/tabs.js:
+``#tab=NAME`` in the address, none for the library; a tab put in body.html, before Requests, is one more).
+
+Requests (``#tab=requests``; ``job=N`` opens that request's output and brings it into view: a request line's
+Details, and where the server sends a form back) is every request caracole serve remembers, drawn from
+``/requests.json`` (web/feed.py) by library_assets/requests.js, and counted on its tab while some wait or run, as
+Songbooks counts its songbooks: under Now the one that runs, with its steps, and those queued, each with Cancel;
+then what ended, newest first under Today and Earlier, each with its outcome, its reason, its next step (Open, Pick
+the match, Get it from there, Try again…) and when it ended, and every one with its Output folded away. The file on
+disk has no such tab, as it can ask nothing of anyone.
+
+Songbooks (``#tab=songbooks`` in the address, ``book=NAME`` the songbook open;
+library_assets/songbooks.js draws it from the data's ``songbooks``, songbook_section.py's): on the left the
 songbooks as lines, each with how many songs, how many still without a sheet and
 when caracole last made its files, and "+ New songbook" (Select, on the
 library); on the right, side by side from 900 px and one at a time on a phone,
@@ -355,7 +365,7 @@ class WebControls:
 
     ``csrf`` is the token every form posts back; ``busy`` holds the songs with a
     fetch queued or running, whose lines say so instead of offering another;
-    ``active`` is how many requests are queued or running, for the masthead;
+    ``active`` is how many requests are queued or running, the Requests tab's count;
     ``held`` holds the songs a fetch must wait for a review of, whose lines say so;
     ``removing`` holds the songs with a removal queued or running, whose lines
     say so instead of offering Remove; ``jobs`` are the requests queued or
@@ -364,8 +374,9 @@ class WebControls:
     on its songbook in the Songbooks tab (``kind``). ``timers``, which only the tests that
     drive the page on real time set (``WebApp(timers=...)``), are the script's
     timers in milliseconds in place of its own: ``poll``, between two asks of
-    ``/jobs.json`` (1500), and ``undo``, Remove's countdown (5000); the page
-    users get carries none. ``guitar``: whether it shows Guitar Pro files in the browser (it has alphaTab:
+    ``/jobs.json``, and of ``/requests.json`` while the Requests tab shows a request that waits or runs
+    (1500), ``idle``, between two asks of ``/requests.json`` while it shows none (10000), and ``undo``, Remove's
+    countdown (5000); the page users get carries none. ``guitar``: whether it shows Guitar Pro files in the browser (it has alphaTab:
     web/alphatab.py), so a song's Guitar Pro files offer Open in the browser beside Download.
     """
 
@@ -408,7 +419,8 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
            else _CSP.replace("__FORMS__", "'none'"))
     return (
         _HEAD.replace("__CSP__", csp).replace("__ICON__", PAGE_ICON).replace("__STYLE__", _PAGE_STYLE)
-        + _BODY.replace("__MARK__", page_mark()).replace("__NAV__", _nav(controls)).replace("__REQUEST__", _request_form(controls))
+        + _BODY.replace("__MARK__", page_mark()).replace("__TABREQUESTS__", _requests_tab(controls))
+        .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls))
         .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
@@ -1056,8 +1068,8 @@ def _haystack(texts: list[str]) -> str:
 # is: its __init__.py). BASE_STYLE, PICKER_STYLE, ROWS_STYLE and ROWS_SCRIPT, the ones caracole serve's own
 # pages share, are importable from here too.
 STYLESHEETS = ("base.css", "picker.css", "library.css", "filter.css", "rows.css", "card.css", "steps.css",
-               "library-screens.css", "songbooks.css")
-SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "songbooks.js", "drawn.js")
+               "library-screens.css", "songbooks.css", "requests.css")
+SCRIPTS = ("rows.js", "card.js", "library.js", "select.js", "tabs.js", "songbooks.js", "requests.js", "drawn.js")
 _SCRIPT = read_asset("library.js")  # the page's own
 _PAGE_STYLE = "".join(read_asset(name) for name in STYLESHEETS)
 _PAGE_SCRIPT = "".join(read_asset(name) for name in SCRIPTS)
@@ -1080,12 +1092,22 @@ TEMPLATES = ("head.html", "body.html", "request.html", "requested.html")
 _HEAD, _BODY, _REQUEST, _REQUESTED = (read_asset(name) for name in TEMPLATES)
 
 
-def _nav(controls: WebControls | None) -> str:
-    """The masthead's links: caracole serve's requests; on the file, none, and no nav."""
+def _requests_tab(controls: WebControls | None) -> str:
+    """The masthead's last tab, served: Requests, counting those that wait or run as Songbooks counts its songbooks
+    (an empty count shows none); on the file, which can ask nothing of anyone, none. A tab that goes before it goes
+    before it in body.html."""
     if controls is None:
         return ""
-    n = f'<span class="n">{controls.active}</span>' if controls.active else ""
-    return f'<nav class="links" aria-label="Pages"><a class="navlink" href="/jobs">Requests{n}</a></nav>'
+    n = str(controls.active) if controls.active else ""
+    return ('<button type="button" class="tab" role="tab" id="tab-requests" aria-controls="requests" '
+            f'aria-selected="false" tabindex="-1">Requests <span class="n">{n}</span></button>')
+
+
+def _requests_panel(controls: WebControls | None) -> str:
+    """The Requests tab's panel, served (requests.js draws it from ``/requests.json``); on the file, none."""
+    if controls is None:
+        return ""
+    return '<section class="view reqs" id="requests" role="tabpanel" aria-labelledby="tab-requests" hidden></section>\n'
 
 
 def _request_form(controls: WebControls | None) -> str:

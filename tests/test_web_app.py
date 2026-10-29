@@ -123,17 +123,19 @@ NAVLINK = re.compile(r'<a class="navlink" href="([^"]*)">([^<]*)')
 def test_the_served_mastheads_link_neither_the_to_do_page_nor_the_lookup_page(app, conn):
     # The library page's bar does what the lookup page does: no page's masthead links /lookup, and none links
     # _todo.md, which the nightly run still writes. The lookup page answers still, for a lookup posted without
-    # JavaScript and for the /lookup?q= links there are.
+    # JavaScript and for the /lookup?q= links there are. The library page links no page at all: its requests are
+    # its last tab.
     add_song(conn, "Radiohead", "Creep")
-    assert NAVLINK.findall(NAV.search(text(get(app, "/"))).group(1)) == [("/jobs", "Requests")]
-    pages = ("/jobs", "/review?song=999", "/review?song=1", "/nothing.pdf")
+    library = text(get(app, "/"))
+    assert NAV.search(library) is None and 'id="tab-requests"' in library
+    pages = ("/review?song=999", "/review?song=1", "/nothing.pdf")
     for page in (get(app, path) for path in pages):
         assert NAVLINK.findall(NAV.search(text(page)).group(1)) == [("/", "Library")], page.status
     assert get(app, "/lookup").status == 200 and get(app, "/lookup?q=creep").status == 200
 
 
 def test_every_answer_keeps_the_page_to_itself(app, conn):
-    for response in (get(app, "/"), get(app, "/jobs"), get(app, "/nothing.pdf")):
+    for response in (get(app, "/"), get(app, "/lookup"), get(app, "/nothing.pdf")):
         assert header(response, "x-content-type-options") == "nosniff"
         assert header(response, "x-frame-options") == "DENY"
         assert "frame-ancestors 'none'" in header(response, "content-security-policy")
@@ -150,7 +152,7 @@ def test_the_busy_songs_and_the_queue_show_on_the_page(app, conn, queue):
     assert post(app, "/fetch", {"song": str(creep.id)}).status == 303
     body = text(get(app, "/"))
     assert f'"busy":[{creep.id}]' in body and '"active":1' in body
-    assert 'Requests<span class="n">1</span>' in body
+    assert 'Requests <span class="n">1</span>' in body
     # The requests waiting or running, each with its line, so the cards show it at once.
     server = json.loads(JSON_BLOCK.search(body).group(1))["server"]
     assert [(j["id"], j["songId"], j["line"]["text"]) for j in server["jobs"]] == [(1, creep.id, "Queued…")]
@@ -204,7 +206,7 @@ def test_a_request_is_written_to_wanted_txt_exactly_as_caracole_add_writes_it(ap
     fields = {"artist": "  Soda   Stereo ", "title": "De Música | Ligera #1", "album": "Canción Animal",
               "duration": "3:33", "fetch": "1"}
     response = post(app, "/request", fields)
-    assert response.status == 303 and header(response, "location") == "/jobs?job=1#job-1"
+    assert response.status == 303 and header(response, "location") == "/#tab=requests&job=1"
 
     other = tmp_path / "other"
     result = CliRunner().invoke(build_app(), ["--config", str(config_file(other)), "-v", "add", "  Soda   Stereo ",
@@ -235,7 +237,7 @@ def test_fetch_it_now_on_a_song_whose_add_still_waits_fetches_it_too(app, queue)
     # The queue is busy (another song's fetch, a nightly run holding the lock): the add waits.
     assert post(app, "/request", {"artist": "Radiohead", "title": "Creep"}).status == 303
     again = post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
-    assert again.status == 303 and header(again, "location") == "/jobs?job=1#job-1"
+    assert again.status == 303 and header(again, "location") == "/#tab=requests&job=1"
     job = queue.snapshot()[0]
     assert job.fetching and job.title == "Fetch Radiohead - Creep"
     queue.run_pending()
@@ -298,7 +300,7 @@ def test_a_full_queue_still_keeps_the_song_in_wanted_txt(app, cfg, queue):
 def test_fetch_now_looks_that_song_up_now(app, conn, queue):
     creep = add_song(conn, "Radiohead", "Creep")
     response = post(app, "/fetch", {"song": str(creep.id)})
-    assert response.status == 303 and header(response, "location") == "/jobs?job=1#job-1"
+    assert response.status == 303 and header(response, "location") == "/#tab=requests&job=1"
     job = queue.snapshot()[0]
     assert [s.args for s in job.steps] == [("get", "--progress", "--", "Radiohead", "Creep")]
     assert job.fetching and job.song_key == creep.key
@@ -488,7 +490,7 @@ def test_a_removal_confirmed_for_another_song_than_the_id_now_names_is_refused(a
     assert post(app, "/remove", {"song": "x"}).status == 400
 
 
-def test_a_removal_says_how_it_goes_on_jobs_and_on_the_songs_own_card(app, conn, cfg, queue):
+def test_a_removal_says_how_it_goes_in_the_requests_tab_and_on_the_songs_own_card(app, conn, cfg, queue):
     creep = a_kept_song(conn, cfg)
     post(app, "/remove", {"song": str(creep.id), "key": creep.key, "confirm": "1"})
     # The page's script follows it on the song's card: a removal, of that song, never a song just requested.
@@ -496,14 +498,13 @@ def test_a_removal_says_how_it_goes_on_jobs_and_on_the_songs_own_card(app, conn,
     assert server["removing"] == [creep.id]
     [view] = server["jobs"]
     assert view["kind"] == "remove" and view["songId"] == creep.id and view["line"]["text"] == "Queued…"
-    (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
-    line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
-    assert "Radiohead - Creep" in line and "Remove Radiohead" not in line and "Queued, next" in line
+    [item] = tab_requests(app)
+    assert (item["display"], item["says"]["text"]) == ("Radiohead - Creep", "Queued, next")
     queue.run_pending()
     conn.execute("DELETE FROM songs WHERE id = ?", (creep.id,))  # as caracole remove does
-    (job_id, item), = JOB_ITEM.findall(text(get(app, "/jobs")))
-    line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
-    assert "Removed" in line and "Added" not in line  # not a request that added a song
+    [item] = tab_requests(app)
+    job_id = item["id"]
+    assert item["says"] == {"tone": "removed", "text": "Removed"}  # not a request that added a song
     [view] = answer(get_json(app, f"/jobs.json?jobs={job_id}"))["jobs"]
     assert view["line"]["text"] == "Removed" and view["display"] == "Radiohead - Creep"
     # Its song is gone, and the view still names it: the page knows which card says Removed.
@@ -552,7 +553,7 @@ def test_a_request_from_the_pages_script_is_answered_with_its_job_not_a_redirect
     assert response.status == 200 and header(response, "location") is None
     assert answer(response) == {"job": {
         "id": 1, "display": "Radiohead - Creep", "songId": None, "kind": "song", "state": "queued", "fetching": True,
-        "line": {"tone": "queued", "text": "Queued…", "link": None, "details": None}, "details": "jobs?job=1#job-1"}}
+        "line": {"tone": "queued", "text": "Queued…", "link": None, "details": None}, "details": "#tab=requests&job=1"}}
     assert queue.snapshot()[0].display == "Radiohead - Creep"
 
 
@@ -669,7 +670,7 @@ def test_a_done_fetch_without_a_sheet_is_not_found_only_when_it_looked_the_song_
     update_song(conn, creep.id, match_decision="accept", match_artist_key="radiohead", match_song_key="creep",
                 ug_dirty=False, ug_checked_at="2026-10-01T00:00:00Z")  # fetched before, and clean
     for how, line in [
-        ("nothing", {"tone": "waiting", "text": "Not fetched yet", "link": None, "details": "jobs?job=1#job-1"}),
+        ("nothing", {"tone": "waiting", "text": "Not fetched yet", "link": None, "details": "#tab=requests&job=1"}),
         ("finished", {"tone": "missing", "text": "Not found",
                       "link": {"label": "see the to-do page", "href": "_todo.md"}, "details": None}),
     ]:
@@ -788,7 +789,7 @@ def test_a_clean_song_fetched_now_is_missing_only_when_ug_answered(cfg, conn, tm
         assert job["line"]["tone"] == "missing"
     else:
         assert job["line"] == {"tone": "waiting", "text": "Not fetched yet", "link": None,
-                               "details": "jobs?job=1#job-1"}, queue.snapshot()[0].steps[-1].output
+                               "details": "#tab=requests&job=1"}, queue.snapshot()[0].steps[-1].output
         from caracole.songs import get_song
 
         assert get_song(conn, signos.id).ug_dirty is True  # so the next run fetches it: it does wait
@@ -886,14 +887,13 @@ def test_a_failed_requests_line_is_its_error_with_a_link_to_its_output(cfg, conn
     job = answer(get_json(app, "/jobs.json"))["jobs"][0]
     assert job["state"] == "failed" and job["line"] == {
         "tone": "failed", "text": "The page under [artist_url] for Radiohead, UG answers 404 for it.",
-        "link": None, "details": "jobs?job=1#job-1"}
-    # On /jobs it is Failed, the error its reason, and the output right under it, behind its Output toggle: no
-    # link to the same page, and Try again.
-    item = dict(JOB_ITEM.findall(text(get(app, "/jobs"))))["1"]
-    line = re.search(r'<p class="line">(.*?)</p>', item, re.S).group(1)
-    assert '<span class="says failed">Failed</span>' in line and "<a " not in line and "Details" not in item
-    assert '<p class="reason">The page under [artist_url] for Radiohead, UG answers 404 for it.</p>' in item
-    assert 'action="/jobs/again"' in item and ">Try again</button>" in item
+        "link": None, "details": "#tab=requests&job=1"}
+    # In the Requests tab it is Failed, the error its reason, and the output right under it, behind its Output
+    # toggle: no link to the same tab, and Try again.
+    [item] = tab_requests(app)
+    assert item["says"] == {"tone": "failed", "text": "Failed"} and "Details" not in json.dumps(item)
+    assert item["reason"] == "The page under [artist_url] for Radiohead, UG answers 404 for it."
+    assert item["actions"] == [{"label": "Try again", "primary": False, "post": "/jobs/again", "fields": {"job": "1"}}]
 
 
 @pytest.mark.parametrize("token,headers", [
@@ -922,7 +922,7 @@ def in_review(conn, cands=REVIEW):
 def test_a_pick_queues_caracole_review_then_the_fetch(app, conn, queue):
     creep = in_review(conn)
     response = post(app, "/review", {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN, "fetch": "1"})
-    assert response.status == 303 and header(response, "location") == "/jobs#job-1"
+    assert response.status == 303 and header(response, "location") == "/#tab=requests&job=1"
     job = queue.snapshot()[0]
     # caracole review --song matches again and rewrites the pages itself: no `caracole match` step.
     assert [s.args for s in job.steps] == [
@@ -936,7 +936,7 @@ def test_a_pick_queues_caracole_review_then_the_fetch(app, conn, queue):
 
 def test_a_pick_from_the_pages_script_is_answered_with_its_job_and_names_its_song(app, conn, queue):
     # The card's picker posts as the page's script, which stays on the page and shows the pick on the card's
-    # line, as Fetch now does; a form without the script still goes to the request on /jobs.
+    # line, as Fetch now does; a form without the script still goes to the request in the Requests tab.
     creep = in_review(conn)
     fields = {"song": str(creep.id), "pick": "radiohead/creep", "shown": SHOWN, "fetch": "1"}
     response = post(app, "/review", fields, accept=JSON)
@@ -944,12 +944,13 @@ def test_a_pick_from_the_pages_script_is_answered_with_its_job_and_names_its_son
     job = answer(response)["job"]
     assert (job["id"], job["songId"], job["display"], job["fetching"]) == (1, creep.id, "Radiohead - Creep", True)
     assert job["line"] == {"tone": "queued", "text": "Queued…", "link": None, "details": None}
-    # Like every request, it is the song's on /jobs and in the page's list of requests; its title says the pick.
+    # Like every request, it is the song's in the Requests tab and the page's list of requests; its title says the
+    # pick.
     [queued] = queue.snapshot()
     assert queued.display == "Radiohead - Creep"
     assert queued.title == "Pick radiohead/creep for Radiohead - Creep, and fetch it"
-    item = job_item(text(get(app, "/jobs")), 1)
-    assert '<span class="song">Radiohead - Creep</span>' in item and "Pick radiohead/creep for" in item
+    [item] = tab_requests(app)
+    assert item["display"] == "Radiohead - Creep" and item["output"]["meta"].startswith("Pick radiohead/creep for")
     # A refusal is one sentence, as the card's line says it.
     again = post(app, "/review", fields, accept=JSON)
     assert again.status == 409 and answer(again) == {
@@ -1063,11 +1064,18 @@ def picker_of(body: str) -> str:
     return found.group(1)
 
 
-def job_item(body: str, job_id: int) -> str:
-    """A request on /jobs: its line, its folded output and what waits under it (JOB_ITEM)."""
-    items = dict(JOB_ITEM.findall(body))
-    assert str(job_id) in items, body[-2000:]
-    return items[str(job_id)]
+def tab_requests(app, opened: str = "") -> list[dict]:
+    """Every request as the library page's Requests tab draws them (/requests.json, feed.py), in order; ``opened``,
+    the requests whose output comes with what each command printed ("1,2")."""
+    fed = answer(get_json(app, "/requests.json" + (f"?open={opened}" if opened else "")))
+    return [r for g in fed["groups"] for r in g["requests"]]
+
+
+def tab_request(app, job_id: int, opened: bool = False) -> dict:
+    """A request as the Requests tab draws it."""
+    shown = {r["id"]: r for r in tab_requests(app, str(job_id) if opened else "")}
+    assert job_id in shown, shown
+    return shown[job_id]
 
 
 def test_the_picker_has_a_page_of_its_own_with_no_script(app, conn):
@@ -1129,30 +1137,15 @@ def test_the_pickers_page_says_why_a_song_in_review_has_nothing_to_pick(app, con
     assert response.status == 409 and "Radiohead - Creep is ignored in overrides.toml" in shown(response)
 
 
-def test_a_request_that_ends_in_a_review_shows_its_picker_on_the_requests_page(app, conn, queue):
+def test_a_request_that_ends_in_a_review_leads_to_its_picker(app, conn, queue):
     post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
     creep = in_review(conn)  # what its `caracole add` found
-    assert 'action="/review"' not in text(get(app, "/jobs"))  # not while it runs
+    assert "/review" not in json.dumps(tab_requests(app))  # not while it runs
     queue.run_pending()
-    body = text(get(app, "/jobs"))
-    job = job_item(body, 1)
-    assert "isn't sure which Ultimate Guitar song" in job
-    form = picker_of(job)
-    assert f'name="song" value="{creep.id}"' in form and 'value="radiohead/creep" required' in form
-    assert "autofocus" not in form  # the page has other things to read
-
-
-def test_while_the_requests_page_refreshes_it_links_to_the_picker_instead(app, conn, queue):
-    # A reload every 10 seconds would undo a choice half made.
-    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
-    creep = in_review(conn)
-    queue.run_pending()
-    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})  # waits: the page refreshes
-    body = text(get(app, "/jobs"))
-    job = job_item(body, 1)
-    assert 'action="/review"' not in job and f'href="/review?song={creep.id}"' in job
-    still = text(get(app, "/jobs?refresh=0"))
-    assert 'action="/review"' in job_item(still, 1)
+    job = tab_request(app, 1)
+    assert job["says"] == {"tone": "review", "text": "Needs review"}
+    assert job["reason"] == "caracole isn't sure which Ultimate Guitar song it is."
+    assert job["actions"] == [{"label": "Pick the match", "primary": True, "href": f"/review?song={creep.id}"}]
 
 
 def test_a_request_whose_song_was_picked_since_shows_no_picker(app, conn, queue):
@@ -1160,7 +1153,7 @@ def test_a_request_whose_song_was_picked_since_shows_no_picker(app, conn, queue)
     creep = in_review(conn)
     queue.run_pending()
     update_song(conn, creep.id, review=False, match_decision="accept")
-    assert "/review" not in text(get(app, "/jobs"))
+    assert "/review" not in json.dumps(tab_requests(app))
 
 
 # --- a song not found: caracole search's hits ---------------------------------------------------
@@ -1223,8 +1216,9 @@ def test_a_request_that_ends_not_found_links_to_its_search_hits(app, conn, queue
     post(app, "/request", {"artist": "Radio Head", "title": "Crep"})
     crep = not_found(conn)
     queue.run_pending()
-    job = job_item(text(get(app, "/jobs")), 1)
-    assert f'href="/review?song={crep.id}"' in job and 'action="/review"' not in job
+    job = tab_request(app, 1)
+    assert {"label": "See what caracole search finds", "primary": False, "href": f"/review?song={crep.id}"} in (
+        job["actions"])
 
 
 class CliRunnerJobs:
@@ -1280,7 +1274,7 @@ def cli_config(cfg, tmp_path: Path) -> Path:
 
 def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cfg, conn, tmp_path, monkeypatch):
     # Fetch it now is ticked by default; its `caracole get` matches the song to candidates only, so it has
-    # no Ultimate Guitar sheet to fetch. The request waits for the pick its picker, right under it, gives.
+    # no Ultimate Guitar sheet to fetch. The request waits for the pick its Pick the match leads to.
     from datetime import UTC, datetime
 
     import httpx
@@ -1305,26 +1299,22 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
     [job] = queue.snapshot()
     assert [s.state for s in job.steps] == ["done"], runner.outputs
     assert "isn't sure which Ultimate Guitar song" in runner.outputs[0]
-    article = job_item(text(get(app, "/jobs")), 1)
+    item = tab_request(app, 1)
     # Its line, the one its card shows (status.py), says the song needs review and sends you to its picker,
     # not to the to-do page: no failure.
     from caracole.songs import list_songs
 
     [song] = list_songs(conn)
-    line = re.search(r'<p class="line">(.*?)</p>', article, re.S).group(0)
-    assert '<span class="says review">Needs review' in line and "Failed" not in line and "error" not in line
-    assert f'href="/review?song={song.id}">Pick the match</a>' in article and "to-do" not in article
+    assert item["says"] == {"tone": "review", "text": "Needs review"} and "error" not in item.get("reason", "")
+    assert item["actions"] == [{"label": "Pick the match", "primary": True, "href": f"/review?song={song.id}"}]
+    assert "to-do" not in json.dumps(item)
     view = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"][0]
     assert view["line"]["link"] == {"label": "Pick the match", "href": f"review?song={song.id}"}
     assert view["card"]["candidates"]  # the card it is drawn again as has the picker the line names
-    fetch = re.search(r'<li class="step [^"]*"><div class="step-head"><span>The sheet</span>.*?</li>',
-                      article, re.S).group(0)
-    assert '<span class="badge review">Waits for a pick</span>' in fetch and "Failed" not in fetch
-    assert "Pick it below" in shown_text(fetch)
-    # The lookup's own words are there, folded away with the request's output; the picker is below it.
-    assert "isn&#x27;t sure which Ultimate Guitar song" in fetch and '<details class="output">' in article
-    assert article.index('<form class="pick-form"') > article.index("</details>")
-    assert picker_of(article)
+    # The lookup's own words are there, in the request's output: its sheet waits for a pick, never failed.
+    [sheet] = [stage for stage in item["output"]["stages"] if stage["label"] == "The sheet"]
+    assert sheet["badge"] == {"tone": "review", "text": "Waits for a pick"} and "Pick the match" in sheet["note"]
+    assert "isn't sure which Ultimate Guitar song" in sheet["detail"]
 
 
 def test_a_request_whose_fetch_failed_otherwise_still_shows_failed(cfg, conn):
@@ -1339,9 +1329,10 @@ def test_a_request_whose_fetch_failed_otherwise_still_shows_failed(cfg, conn):
     post(app, "/request", {"artist": "Radiohead", "title": "Creep", "fetch": "1"})
     creep = in_review(conn)
     queue.run_pending()
-    article = job_item(text(get(app, "/jobs")), 1)
-    assert '<span class="badge failed">Failed</span>' in article and "Waits for a pick" not in article
-    assert f'name="song" value="{creep.id}"' in picker_of(article)
+    item = tab_request(app, 1)
+    badges = [s["badge"] for s in item["output"]["stages"] + item["output"]["steps"]]
+    assert {"tone": "failed", "text": "Failed"} in badges and "Waits for a pick" not in json.dumps(item)
+    assert item["actions"][0] == {"label": "Pick the match", "primary": True, "href": f"/review?song={creep.id}"}
 
 
 # --- what every write must carry --------------------------------------------------------------
@@ -1378,19 +1369,14 @@ def test_other_methods_and_paths_are_refused(app):
     assert post(app, "/elsewhere", {}).status == 404
 
 
-# --- the requests page ---------------------------------------------------------------------------
+# --- the Requests tab's data ------------------------------------------------------------------------
 
 
-JOB_ITEM = re.compile(r'<li class="job[^"]*" id="job-(\d+)">(.*?)</li>\n', re.S)
-
-
-def test_the_requests_page_has_one_line_per_request_its_output_collapsed(app, conn, cfg, queue):
+def test_the_requests_tab_has_each_request_newest_first_its_output_folded(app, conn, cfg, queue):
     post(app, "/request", {"artist": "Evil", "title": "<script>alert(1)</script>", "fetch": "1"})
-    body = text(get(app, "/jobs"))
-    assert '<meta http-equiv="refresh" content="10">' in body  # while one waits or runs
-    assert "<script>alert" not in body and "&lt;script&gt;alert(1)&lt;/script&gt;" in body
-    (job_id, item), = JOB_ITEM.findall(body)
-    assert job_id == "1" and "Queued, next" in item
+    [item] = tab_requests(app)
+    assert item["display"] == "Evil - <script>alert(1)</script>"  # data: the tab writes it with textContent
+    assert item["says"]["text"] == "Queued, next"
     queue.run_pending()
     creep = add_song(conn, "Radiohead", "Creep")
     post(app, "/fetch", {"song": str(creep.id)})
@@ -1398,44 +1384,18 @@ def test_the_requests_page_has_one_line_per_request_its_output_collapsed(app, co
     folder = song_dir(cfg.library_dir, creep)
     folder.mkdir(parents=True)
     (folder / "sheet.pdf").write_bytes(b"%PDF")
-    body = text(get(app, "/jobs"))
-    assert 'http-equiv="refresh"' not in body
-    items = dict(JOB_ITEM.findall(body))
-    assert list(items) == ["2", "1"]  # newest first
-    newest = items["2"]
-    line = re.search(r'<p class="line">(.*?)</p>', newest, re.S).group(1)
-    assert "Radiohead - Creep" in line and '<span class="says ready">Ready</span>' in line
-    assert '<a class="btn act primary" href="/Radiohead/Creep/sheet.pdf">Open</a>' in newest
-    # The commands and what each printed are there, folded away.
-    assert '<details class="output">' in newest and "<details open" not in body
-    # A fetch now is one `caracole get`, its stages listed each with its state.
-    assert "Look it up now" in newest and "The sheet" in newest and "<pre>ok" in newest and "Done" in newest
-
-
-def test_a_requests_output_opens_when_its_details_link_asks_for_it(app, queue):
-    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
-    post(app, "/request", {"artist": "Oasis", "title": "Wonderwall"})
-    queue.run_pending()
-    items = dict(JOB_ITEM.findall(text(get(app, "/jobs?job=1"))))
-    assert '<details class="output" open>' in items["1"] and "<details class=\"output\" open>" not in items["2"]
-    assert '<details class="output" open>' not in text(get(app, "/jobs?job=x"))
-
-
-def test_the_requests_page_can_stop_refreshing_so_an_output_can_be_read(app, queue):
-    post(app, "/request", {"artist": "Radiohead", "title": "Creep"})
-    body = text(get(app, "/jobs"))
-    assert 'href="/jobs?refresh=0"' in body and "Stop refreshing" in body
-    still = text(get(app, "/jobs?refresh=0"))
-    assert 'http-equiv="refresh"' not in still and 'href="/jobs"' in still
-    assert 'href="/jobs?refresh=0"' not in still
-    # A request's output stays open either way.
-    assert 'href="/jobs?job=1&amp;refresh=0"' in text(get(app, "/jobs?job=1"))
-    assert 'href="/jobs?job=1"' in text(get(app, "/jobs?job=1&refresh=0"))
-
-
-def test_the_requests_page_with_nothing_queued(app):
-    body = text(get(app, "/jobs"))
-    assert "No requests yet" in body
+    items = tab_requests(app)
+    assert [i["id"] for i in items] == [2, 1]  # newest first
+    newest = items[0]
+    assert (newest["display"], newest["says"]) == ("Radiohead - Creep", {"tone": "ready", "text": "Ready"})
+    assert newest["actions"] == [{"label": "Open", "primary": True, "href": "/Radiohead/Creep/sheet.pdf"}]
+    # A fetch now is one `caracole get`, its stages listed each with its state; what it printed comes once the
+    # tab opens its output.
+    output = newest["output"]
+    assert "The sheet" in [s["label"] for s in output["stages"]]
+    assert [(s["label"], s["badge"]["text"]) for s in output["steps"]] == [("Look it up now", "Done")]
+    assert "lines" not in output["steps"][0]
+    assert tab_request(app, 2, opened=True)["output"]["steps"][0]["lines"] == ["ok"]
 
 
 # --- looking a song up as you type ---------------------------------------------------------------

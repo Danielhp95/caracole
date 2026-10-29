@@ -5,11 +5,11 @@
 
 A pick from the picker is ``caracole review --song "A - T" --pick ARTIST/SONG``
 (or ``--none --seen ARTIST/SONG…``), queued and answered like a fetch (to the
-page's script, its job; to a form, its line on /jobs), and fetched after it
+page's script, its job; to a form, its line in the Requests tab), and fetched after it
 when asked: the server writes no overrides.toml itself. The candidates the
 page showed must be the song's now, and the song's own request goes first.
-The picker is on the cards too (library_page.py), and under a request on /jobs
-that ended in a review (``picks_waiting``).
+The picker is on the cards too (library_page.py); a request that ended in a review leads to its page
+(``picks_waiting``).
 """
 
 from __future__ import annotations
@@ -101,7 +101,7 @@ def review(app: WebApp, form: dict[str, str]) -> Response:
     if not new:
         raise Refused(409, "Wait for its request",
                       f"A request for {song.display} is waiting or running: pick once it ends.")
-    return app.queued(job, f"/jobs#job-{job.id}")  # the card's line says how it goes, as Fetch now's
+    return app.queued(job)  # the card's line says how it goes, as Fetch now's
 
 
 def review_first(song: Song, overrides: Overrides) -> bool:
@@ -128,7 +128,7 @@ def review_first(song: Song, overrides: Overrides) -> bool:
 
 def picks_waiting(app: WebApp, jobs: list[Job]) -> dict[str, pages.Pick]:
     """The songs of finished requests that wait for a pick now, by key; none when the database or
-    overrides.toml can't be read: the requests page still shows the requests."""
+    overrides.toml can't be read: the Requests tab still shows the requests."""
     from caracole.overrides import OverridesError, load_overrides
     from caracole.songs import find_song
 

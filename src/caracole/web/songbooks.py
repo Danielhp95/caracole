@@ -86,7 +86,7 @@ OPENS = frozenset({"make", "add", "render"})
 
 @dataclass(frozen=True)
 class SongbookJob:
-    """A form, as the job to queue: its title on the requests page, its key (one job for the same
+    """A form, as the job to queue: its title in the Requests tab, its key (one job for the same
     change sent twice) and its one step."""
 
     title: str

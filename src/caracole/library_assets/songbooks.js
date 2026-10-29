@@ -9,16 +9,15 @@
   "use strict";
   const byId = (id) => document.getElementById(id);
   const panel = byId("songbooks");
-  const libraryView = byId("library-view");
-  const tabLibrary = byId("tab-library");
   const tabBooks = byId("tab-songbooks");
+  const tabs = window.caracoleTabs || null;  // tabs.js: which tab shows
   let data;
   try {
     data = JSON.parse(byId("songs").textContent);
   } catch (err) {
     return;
   }
-  if (!panel || !libraryView || !tabLibrary || !tabBooks) return;
+  if (!panel || !tabBooks || !tabs) return;
   const listOf = (value) => (Array.isArray(value) ? value : []);
   const el = (tag, cls, text) => {
     const node = document.createElement(tag);
@@ -66,15 +65,14 @@
   };
 
   // --- the tab, and the address ---------------------------------------------------------------------------
-  // #tab=songbooks shows it, and book=NAME the songbook open; the library's own words in the address stay.
-  const state = { tab: "library", book: "" };
+  // #tab=songbooks shows it (tabs.js), and book=NAME the songbook open; the library's own words in the address stay.
+  const state = { book: "" };
   try {
-    const params = new URLSearchParams(location.hash.slice(1));
-    if (params.get("tab") === "songbooks") state.tab = "songbooks";
-    state.book = params.get("book") || "";
+    state.book = new URLSearchParams(location.hash.slice(1)).get("book") || "";
   } catch (err) {
-    // A malformed address: the library.
+    // A malformed address: no songbook open.
   }
+  const onBooks = () => tabs.current() === "songbooks";
   const save = () => {
     let params = new URLSearchParams();
     try {
@@ -82,39 +80,16 @@
     } catch (err) {
       // A malformed address: the tab's words alone.
     }
-    params.delete("tab");
     params.delete("book");
-    if (state.tab === "songbooks") {
-      params.set("tab", "songbooks");
-      if (state.book) params.set("book", state.book);
-    }
+    if (onBooks() && state.book) params.set("book", state.book);
     try {
       history.replaceState(null, "", "#" + params.toString());
     } catch (err) {
       // Some browsers refuse this for local files: the page works the same.
     }
   };
-  const showTab = (name, focus) => {
-    const onBooks = name === "songbooks";
-    tabLibrary.setAttribute("aria-selected", String(!onBooks));
-    tabBooks.setAttribute("aria-selected", String(onBooks));
-    tabLibrary.tabIndex = onBooks ? -1 : 0;
-    tabBooks.tabIndex = onBooks ? 0 : -1;
-    libraryView.hidden = onBooks;
-    panel.hidden = !onBooks;
-    document.body.classList.toggle("on-songbooks", onBooks);
-    state.tab = onBooks ? "songbooks" : "library";
-    save();
-    if (focus) (onBooks ? tabBooks : tabLibrary).focus();
-  };
-  tabLibrary.addEventListener("click", () => showTab("library"));
-  tabBooks.addEventListener("click", () => showTab("songbooks"));
-  tabBooks.parentNode.addEventListener("keydown", (e) => {  // the tabs' own keys: ← → Home End
-    if (["ArrowLeft", "ArrowRight", "Home", "End"].indexOf(e.key) < 0) return;
-    e.preventDefault();
-    const onBooks = e.key === "End" || (e.key !== "Home" && document.activeElement === tabLibrary);
-    showTab(onBooks ? "songbooks" : "library", true);
-  });
+  const showTab = (name) => tabs.show(name);
+  document.addEventListener("caracole:tab", save);
 
   // --- the jobs it shows ---------------------------------------------------------------------------------
   const newest = new Map();  // a songbook's name -> the newest view of a change of it
@@ -1211,5 +1186,5 @@
   }
   if (wide.addEventListener) wide.addEventListener("change", draw);
   draw();
-  showTab(state.tab);
+  save();
 })();

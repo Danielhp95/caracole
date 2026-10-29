@@ -141,7 +141,7 @@ def test_the_select_bar_makes_a_songbook_of_the_songs_in_the_order_picked(app, s
     songs = setup[3]
     response = post(app, "/songbook/make", {"name": "  Beach   nights ",
                                             "songs": f"{songs['hysteria'].id},{songs['soda'].id}"})
-    assert response.status == 303 and header(response, "location") == "/jobs#job-1"
+    assert response.status == 303 and header(response, "location") == "/#tab=requests&job=1"
     job = queue.snapshot()[0]
     assert job.title == 'Make the songbook "Beach nights" (2 songs)'
     assert steps(queue) == [[("songbook", "make", "--", "Beach nights", "Muse - Hysteria",
@@ -423,10 +423,13 @@ def test_a_songbook_made_says_made_with_its_page_to_open_and_never_that_the_nigh
     assert (line["tone"], line["text"]) == ("ready", "Made"), line
     assert line["link"] == {"label": "Open songbook", "href": "_songbooks/Beach%20nights/songbook.html"}
     assert get(app, "/" + line["link"]["href"]).status == 200  # the page caracole wrote, which it serves
-    jobs = get(app, "/jobs").body.decode("utf-8")
-    assert '<span class="says ready">Made</span>' in jobs
-    assert '<a class="btn act primary" href="/_songbooks/Beach%20nights/songbook.html">Open songbook</a>' in jobs
-    assert "nightly run" not in jobs  # a song's line, "Added: the nightly run looks for it", misleads here
+    sent = {"host": HOST, "accept": JSON, "sec-fetch-site": "same-origin", "x-caracole-form-token": "tok"}
+    fed = json.loads(app.handle(Request("GET", "/requests.json", sent)).body)
+    [made] = [r for g in fed["groups"] for r in g["requests"]]
+    assert made["says"] == {"tone": "ready", "text": "Made"}  # the Requests tab
+    assert made["actions"] == [{"label": "Open songbook", "primary": True,
+                                "href": "/_songbooks/Beach%20nights/songbook.html"}]
+    assert "nightly run" not in json.dumps(made)  # a song's line, "Added: the nightly run looks for it", misleads here
     # Added to: its page again. Renamed, its card is beside the line: no link. Deleted: no page to open, nor
     # the older lines.
     for n, path, fields, done, page in [
@@ -720,7 +723,7 @@ def test_a_songbook_with_every_sheet_offers_nothing_to_get(app, setup, campfire)
 def test_get_the_missing_songs_queues_a_lookup_of_each_in_order_then_the_songbook_again(app, setup, queue, gig):
     queue._limit = 10
     response = post(app, "/songbook/get", {"name": "gig"})
-    assert response.status == 303 and header(response, "location") == "/jobs#job-3"
+    assert response.status == 303 and header(response, "location") == "/#tab=requests&job=3"
     assert steps(queue) == [
         [("get", "--progress", "--no-songbooks", "--", "Muse", "Hysteria")],  # the songbook is made once, after them
         [("get", "--progress", "--no-songbooks", "--", "Muse", "Uprising")],

@@ -34,7 +34,7 @@ caracole can't read: the answer of the songs, ``canc=1``, was never captured liv
 otherwise would fail every time) isn't sent by the page by itself again for ``FAILED_FOR`` (an hour; kv
 ``lacuerda:search-failed``, each query's key with when and what it said), and after ``FAILURES_PAUSE``
 (3) failed in the last hour the page sends none by itself: ``gate`` says ``failed``, and the page
-offers it by hand, as the requests page's Try again and a terminal ask it. A search that answers drops
+offers it by hand, as the Requests tab's Try again and a terminal ask it. A search that answers drops
 its query's failure.
 """
 

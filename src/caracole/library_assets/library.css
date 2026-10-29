@@ -8,17 +8,26 @@
 }
 @keyframes drawn { to { visibility: visible; } }
 .summary { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
-/* The library's header, one line: caracole, the two tabs, what needs attention (wanted songs) and, served, the Requests
-   link at the end. Placed by area, so that a number changing its width moves nothing; on a phone the numbers, when there
-   are any, are a line of their own. */
-.masthead.lib { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; grid-template-areas: "app tabs sum links";
+/* The library's header, one line: caracole, the tabs (Library, Songbooks and, served, Requests), and what needs
+   attention (wanted songs) at its end. Placed by area, so that a number changing its width (a tab's count) moves
+   nothing; on a phone the numbers, when there are any, are a line of their own. */
+.masthead.lib { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "app tabs sum";
   align-items: center; gap: 4px 14px; padding: 12px 0 0; }
 .masthead.lib .app { grid-area: app; display: flex; align-items: center; gap: 7px; margin: 0; font-size: 1.05rem; }
-.masthead.lib .tabs { grid-area: tabs; margin: 0; border-bottom: 0; }
-.masthead.lib .summary { grid-area: sum; gap: 8px; margin: 0; }
+.masthead.lib .tabs { grid-area: tabs; min-width: 0; margin: 0; border-bottom: 0; }
+.masthead.lib .summary { grid-area: sum; justify-self: end; gap: 8px; margin: 0; }
 .masthead.lib .summary:empty { display: none; }
-.masthead.lib .links { grid-area: links; }
-.masthead.lib .navlink { min-height: 36px; padding: 0 12px; font-size: .9rem; }
+/* The page's tabs, in the masthead (tabs.js): each shows its panel; a count beside its name (songbooks, requests that
+   wait or run), none when there are none. */
+.tabs { display: flex; gap: 2px; margin: 2px 0 0; border-bottom: 1px solid var(--border); }
+.tab { display: inline-flex; flex: none; align-items: center; gap: 6px; min-height: 36px; margin-bottom: -1px;
+  padding: 0 12px; border: 0; border-bottom: 3px solid transparent; background: none; color: var(--muted); font: inherit;
+  font-size: .95rem; font-weight: 650; white-space: nowrap; cursor: pointer; }
+.tab:hover { color: var(--text); }
+.tab[aria-selected="true"] { border-bottom-color: var(--accent); color: var(--text); }
+.tab .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised); color: var(--muted);
+  font-size: .75rem; line-height: 20px; text-align: center; font-variant-numeric: tabular-nums; }
+.tab .n:empty { display: none; }
 .stat { padding: 3px 10px; border-radius: 999px; background: var(--raised); color: var(--muted); font-size: .82rem;
   font-variant-numeric: tabular-nums; }
 .stat b { color: var(--text); font-weight: 650; }

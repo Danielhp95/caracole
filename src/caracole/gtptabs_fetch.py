@@ -262,7 +262,7 @@ def songs_with_a_guitar_file(conn: sqlite3.Connection) -> set[int]:
 def title_page(conn: sqlite3.Connection, song: Song, now: datetime) -> str | None:
     """The gtptabs.com page whose sitemaps list the song's title under one of its artists, for a song a pass
     would look up there now: no Guitar Pro or Power Tab file, and not looked up on gtptabs.com in the last 30
-    days; None otherwise. It reads the index alone, for the requests page, which offers it for a song Ultimate
+    days; None otherwise. It reads the index alone, for the Requests tab, which offers it for a song Ultimate
     Guitar has no chords for (web/outcome.py)."""
     marks = ",".join("?" for _ in GUITAR_FILE_KINDS)
     if conn.execute(f"SELECT 1 FROM files f JOIN versions v ON v.id = f.version_id WHERE f.song_id = ? "

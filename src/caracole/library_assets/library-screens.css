@@ -4,11 +4,10 @@
   .searchbar { margin: 0 -24px; padding: 12px 24px 8px; }
   .masthead.lib { padding-top: 18px; }
 }
-/* A thumb's targets: the pages' links, the letters and "+ N more" (the toolbar's and the Filter panel's are
-   filter.css's). Every .btn has its 44 px from BASE_STYLE, and a line's, its chevron and an artist's name theirs from
-   ROWS_STYLE. */
+/* A thumb's targets: the tabs, the letters and "+ N more" (the toolbar's and the Filter panel's are filter.css's).
+   Every .btn has its 44 px from BASE_STYLE, and a line's, its chevron and an artist's name theirs from ROWS_STYLE. */
 @media (pointer: coarse) {
-  .masthead.lib .navlink, .btn.more-by { min-height: 44px; }
+  .tab, .btn.more-by { min-height: 44px; }
   .progress .undo { min-width: 44px; min-height: 44px; }
   .jump button { min-width: 44px; height: 44px; }
 }

@@ -1,6 +1,7 @@
 """caracole serve's Export PDF: ``GET /export.pdf``, a sheet's PDF in the version the viewer was left in, downloaded
 at once, and with ``mine=1`` Make this my version too."""
 
+import json
 import subprocess
 import threading
 from pathlib import Path
@@ -105,7 +106,8 @@ def test_mine_queues_make_this_my_version_and_still_answers_the_pdf(app, queue, 
     [done] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
     assert done["line"] == {"tone": "ready", "text": "Your version now",
                             "link": {"label": "Open sheet", "href": sheet_href(cfg.library_dir, song)}, "details": None}
-    assert "Your version now" in text(get(app, "/jobs")) and "Added" not in text(get(app, "/jobs"))
+    shown = json.dumps(answer(get_json(app, "/requests.json")))  # the Requests tab says what it made
+    assert "Your version now" in shown and "Added" not in shown
 
 
 def test_mine_is_a_plain_link_with_no_token_but_the_host_check_still_holds(app, queue, recorder, conn, cfg, printed):

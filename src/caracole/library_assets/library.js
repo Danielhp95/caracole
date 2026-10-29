@@ -557,7 +557,7 @@
   // The forms post with fetch(), so the page stays where it is, and each song's line says on a line of its own how
   // its request goes. /jobs.json gives each request's line, and its song's data once it is over; the page asks
   // it every POLL ms while one it shows waits or runs. Without JavaScript the forms post as forms, and the
-  // server sends the browser to the request on /jobs.
+  // server sends the browser to the request in the Requests tab (requests.js).
   const POLL = paced("poll", 1500);
   const BACKGROUND_POLL = 6000;  // a page in a background tab asks less often
   const UNREACHABLE = { line: { tone: "failed", text: "caracole serve can't be reached: is it running?" } };
@@ -578,7 +578,7 @@
     return i !== undefined && lines.get(i) === node;
   };
   // A request's line, written into p only when it changed, so a screen reader hears each change once.
-  // Its link says where to go next; details, the request's output on /jobs, follows it. ``counted``: a song's line or
+  // Its link says where to go next; details, the request's output in the Requests tab, follows it. ``counted``: a song's line or
   // a result's row (showRequest), which says how many of its lookup's steps are over, "· 4 of 7 done" (the view's
   // ``count``, while it runs).
   const showLine = (p, view, counted) => {
@@ -610,7 +610,7 @@
     if (focused) focusOn(p);  // its link is gone: the focus stays on the line
   };
   // A lookup's steps (the view's ``steps``: outcome.py's, each its name, the site it names and its state) as chips
-  // under its request line ``p`` (steps.css's, the requests page's markup): those done ticked, the one that runs lit
+  // under its request line ``p`` (steps.css's, the Requests tab's markup): those done ticked, the one that runs lit
   // and the current step, those to come grey, a failed one crossed; a plain one ("Match: not on UG") its name alone.
   // No live region: the line above says how it goes; this is a list to read. None in the view (a request that runs no
   // lookup, or ended Ready, its steps folded away): none drawn.
@@ -923,7 +923,7 @@
       const job = jobOfSong(s.id);
       if (job && job.kind === "remove") return held(null);
       const going = el("a", "line-busy", "Removing…");
-      going.href = "/jobs";
+      going.href = "#tab=requests";
       going.title = "See the requests";
       return held(going);
     }
@@ -1685,8 +1685,11 @@
   };
   // Back (or Forward) to a step of the list's: the list as the address has it, its query, its results, its artist,
   // show, sort, key and progression; an address that changes none of them (the Songbooks tab's, say) moves nothing.
+  // A link to the page's own address goes there the same way (the Requests tab's Request by name, #q=…), and one to a
+  // song's line (its Open in the library, #song=ID) brings that line into view, as when the page loads with it.
   window.addEventListener("popstate", () => {
     const at = addressed();
+    requestAnimationFrame(toSong);
     if (Object.keys(at).every((name) => at[name] === state[name])) return;
     const all = at.all;
     Object.assign(state, at, { all: state.all });
@@ -2910,19 +2913,10 @@
     // The Songbooks tab shows a songbook's change on its songbook, and a lookup on its song's set list lines.
     document.dispatchEvent(new CustomEvent("caracole:job", { detail: view }));
   };
+  // The Requests tab's count: the requests that wait or run, none when none do.
   const requestsCount = (n) => {
-    const nav = document.querySelector('.navlink[href="/jobs"]');
-    if (!nav) return;
-    let badge = nav.querySelector(".n");
-    if (!n) {
-      if (badge) badge.remove();
-      return;
-    }
-    if (!badge) {
-      badge = el("span", "n");
-      nav.appendChild(badge);
-    }
-    badge.textContent = String(n);
+    const badge = document.querySelector("#tab-requests .n");
+    if (badge) badge.textContent = n ? String(n) : "";
   };
 
   // A song caracole removed: its line says so until the page is loaded again, with nothing left to open, fetch or
@@ -3279,21 +3273,21 @@
   // Back from a page of caracole serve's about a song (Remove's question): its line in view, and the focus
   // on it, as the A-Z strip leaves a group; the address keeps the rest. In the next frame, once every script
   // has drawn what it draws (the Songbooks tab, shown as it was left).
-  let back = NaN;
-  try {
-    back = Number(new URLSearchParams(location.hash.slice(1)).get("song"));
-  } catch (err) {
-    // A malformed address: nothing to show.
+  function toSong() {
+    let back = NaN;
+    try {
+      back = Number(new URLSearchParams(location.hash.slice(1)).get("song"));
+    } catch (err) {
+      // A malformed address: nothing to show.
+    }
+    if (!back) return;
+    const i = byIndex.get(back);
+    const item = i === undefined ? null : lines.get(i);
+    if (item && item.isConnected) {
+      item.scrollIntoView({ block: "center" });
+      item.focus({ preventScroll: true });
+    }
+    save();
   }
-  if (back) {
-    requestAnimationFrame(() => {
-      const i = byIndex.get(back);
-      const item = i === undefined ? null : lines.get(i);
-      if (item && item.isConnected) {
-        item.scrollIntoView({ block: "center" });
-        item.focus({ preventScroll: true });
-      }
-      save();
-    });
-  }
+  requestAnimationFrame(toSong);
 })();

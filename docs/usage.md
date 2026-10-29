@@ -2071,10 +2071,13 @@ as every page caracole writes or serves shows it (the sheet viewers and the
 songbooks from their next render); caracole serve answers a browser's own
 `/favicon.ico` with it too. Its top is one bar, so that the first song starts
 well within the first screen, on a phone too: caracole's "¿" mark and name (the
-mark alone on a phone), the two tabs, **Library**, your songs, and
-**Songbooks** (see [The Songbooks tab](#the-songbooks-tab); the address
-remembers which, `#tab=songbooks`), the number of songs wanted or ignored when
-there are any, and, served, the Requests link at the end. Under it the search
+mark alone on a phone), the tabs, **Library**, your songs, **Songbooks**
+(see [The Songbooks tab](#the-songbooks-tab)) and, served, **Requests**, the
+last (see Requests, under [caracole serve](#caracole-serve)), each counting
+what it holds (songbooks; requests that wait or run), the address remembering
+which (`#tab=songbooks`, `#tab=requests`), and at the end the number of songs
+wanted or ignored when there are any. On a phone the tabs fit beside the mark,
+four of them too. Under it the search
 box, which says how many songs there are ("Search 8 songs, or the sites"), with
 **Filter**, **Sort** and, set apart after a divider, **Select** (see below)
 beside it, icons alone on a phone. The filters on come under it, each a tag
@@ -2297,7 +2300,7 @@ screen. With a mouse they keep their compact sizes. Fields, menus and the
 Select boxes have an edge you can see against the page, in light and dark mode
 (3:1 at least, as WCAG 1.4.11 asks), while the boxes the songs are in keep
 their soft border, and so does the search box. The pages `caracole serve`
-writes itself (Requests, Look up and its search box, a song's pick) do the
+writes itself (Look up and its search box, a song's pick, Remove's question) do the
 same.
 
 **Select**, last of the tools beside the search, puts a
@@ -3660,8 +3663,8 @@ Who can reach it, below).
   index holds every artist of its listings, but only the songs of the artist
   pages caracole has read; LaCuerda's search finds the rest. Once a query has
   settled, the box unchanged for 1.5 s, the page sends it by itself, one request
-  at a lookup's pace (`caracole lacuerda --search`, a request of its own on the
-  requests page), when the query has a word of 4 letters or more, LaCuerda's
+  at a lookup's pace (`caracole lacuerda --search`, a request of its own in the
+  Requests tab), when the query has a word of 4 letters or more, LaCuerda's
   index has no song that matches it well (letters inside a word never do:
   "maná" is no "Mañana Clara"), nor the artist it names with their page read
   (all their songs are there already), nor has your library (a song of yours
@@ -3763,7 +3766,7 @@ Who can reach it, below).
   Enter acts on.
 
   `/lookup`, the lookup page, still answers, though no page's header links to
-  it any more (the requests page's has Library alone): the same search of your library
+  it any more: the same search of your library
   and the Ultimate Guitar and LaCuerda indexes, whose Get it (or a song's name,
   which does the same) reads the sheet on the page as it arrives, stage by
   stage. Its Enter acts on the song you clearly meant (one of
@@ -3884,7 +3887,7 @@ Who can reach it, below).
   While a song is looked up (Fetch now, Fetch again, a search result's Get it,
   Get the missing songs, the Songbooks tab's Add a song, Try again), the line
   counts the steps over ("Fetching the lyrics from LRCLIB… · 4 of 7 done"),
-  and under it each step is a chip, as on the requests page: Song, Match UG
+  and under it each step is a chip, as in the Requests tab: Song, Match UG
   (the offline index it matched in, Ultimate Guitar's), Sheet (then the site
   it asks, Sheet UG or Sheet LaCuerda, switching when it falls back to the
   other, and once done the site the sheet came from), PDF, Lyrics, Extras and
@@ -3939,13 +3942,17 @@ Who can reach it, below).
   width ("2 requests · 1 to go"), so that it covers no song; it opens upwards
   to a line per song, with no steps (the songs' lines have them), and closes;
   a request that ended Ready says just **Ready**, its song's name opening the
-  sheet. Its one Details link opens the requests
-  page. A songbook's change and a removal stay out of it: the songbook, in
+  sheet. Its one Details link opens the Requests
+  tab. A songbook's change and a removal stay out of it: the songbook, in
   the Songbooks tab, or the song's line, where you asked says how each goes. A screen reader hears each song's request line as
   it changes, to the last one, and Fetch now hands the keyboard focus to that
   line as it goes. The page asks the server how its requests go every 1.5 seconds
   while one waits or runs (`/jobs.json`), less often in a background tab.
-- **Requests**, the page at `/jobs`, shows what runs now, then what ended:
+- **Requests**, the library page's last tab (`#tab=requests`; there is no
+  page of its own), shows what runs now, then what ended, as `/requests.json`
+  gives it, asked again every 1.5 seconds while one waits or runs and every 10
+  seconds otherwise, only while the tab shows; its tab counts the requests that
+  wait or run:
   - **Now**: the request that runs, as a card with its song, how long ago it
     started ("started 12 s ago"), its line ("Rendering the sheet…") and its
     steps, the one running highlighted and those done ticked: for a lookup,
@@ -3989,8 +3996,8 @@ Who can reach it, below).
       nobody asked; then, when the local indexes have it elsewhere, what: a
       sheet LaCuerda's index holds, or a page gtptabs.com's index lists for a
       song with no Guitar Pro file, and **Get it from there**, the lookup a
-      search's Get it runs (with that LaCuerda sheet picked), back on this
-      page. A site a new lookup would skip again isn't offered: one cooling
+      search's Get it runs (with that LaCuerda sheet picked), which the
+      tab then shows. A site a new lookup would skip again isn't offered: one cooling
       down after a block, one the lookup skipped for a block or a spent
       budget, LaCuerda once asked about the song this month and gtptabs.com
       once looked up for it this month. With nothing elsewhere, a song the
@@ -4015,27 +4022,27 @@ Who can reach it, below).
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and
-  what each printed (they run at `-v`, so that is the whole story), and a
-  lookup's stages with their states and why one was skipped. A song's Details
-  link on the library page opens that request's output. The page refreshes
-  itself every 10 seconds while one waits or runs; Stop refreshing keeps it
-  still. The song's line on the library page still says it the short way
-  (Not found · see the to-do page, above). A request that ended in a review
-  (`caracole add` found only candidates) shows the song's picker under it
-  while the page is still, so you pick at once; with Fetch it now ticked, its
-  lookup has no UG song to fetch until then: it says Needs review, not a
-  failure, and in its output the lookup's sheet stage Waits for a pick. While
-  the page refreshes itself, which would undo a choice half made, its Pick the
-  match opens the picker's own page instead. `/api/jobs` and
+  what each printed (they run at `-v`, so that is the whole story; the tab
+  asks for it once you open it), and a lookup's stages with their states and
+  why one was skipped. A song's Details link on the library page opens that
+  request's output in the tab (`#tab=requests&job=N`), the page staying where
+  it is; each refresh draws again only the requests that changed, each where
+  it was, its Output as you left it. Cancel, Try again and Get it from there
+  post from the tab, which stays where it is, and the song's line follows the
+  request they queue. The song's line on the library page still says it the
+  short way (Not found · see the to-do page, above). A request that ended in a
+  review (`caracole add` found only candidates) says Needs review, with
+  **Pick the match**, the picker's own page; with Fetch it now ticked, its
+  lookup has no UG song to fetch until then: it is not a failure, and in its
+  output the lookup's sheet stage Waits for a pick. `/api/jobs` and
   `/api/jobs/N` give each request as JSON: its steps (a lookup's stages),
   each with its state, its song and the library files its sheet can be read
   in. These JSON addresses (`/api/…`) answer caracole's own pages, the address
   bar and programs such as curl; a browser fetching one for another site's
   page gets 403.
-- **Without JavaScript**, the forms still work: a request sends you to its
-  line on `/jobs`, its output open; a pick, to its line; a lookup, to the
-  lookup page, which follows it (one from the requests page's Get it from
-  there, back to `/jobs`).
+- **Without JavaScript**, the forms still post: a request, or a pick, sends you
+  to the library page's Requests tab (`/#tab=requests&job=N`), which shows it
+  once JavaScript runs; a lookup, to the lookup page, which follows it.
 - **A sheet's PDF.** The sheet viewer's Export PDF is a link to
   `/export.pdf?sheet=<the viewer's path in the library>&<its address after
   #>`, which makes the PDF of that version now and sends it as a download,
@@ -4141,7 +4148,7 @@ Who can reach it, below).
   The songbook's status line, under its name, says how its change goes
   ("Queued…", "Moving the song…", then "Moved"; "Changed", "Renamed", "Taken
   out", "Deleted"; once done, Made and Added link the songbook's phone page,
-  Open songbook, as their lines on `/jobs` do), and a lookup's line goes under
+  Open songbook, as their lines in the Requests tab do), and a lookup's line goes under
   its song in the set list (and on the song's own line in the library); the
   lookups stay out of the list of requests in the corner. While a rename or a
   deletion runs, the songbook's controls wait. Once a change is over the set
@@ -4309,9 +4316,10 @@ tailnet, never the internet.
   Download and make it mine is a plain link (`/export.pdf?…&mine=1`), with no
   token, so a page on another site could change a song's saved version with a
   link of its own. Nothing is lost: Reset, or another version made yours,
-  undoes it. `/jobs.json`, which the page's script reads,
-  is refused the same way, and needs the same token in an
-  `X-Caracole-Form-Token` header: a song's line then says the server has restarted.
+  undoes it. `/jobs.json` and `/requests.json`, which the page's script reads,
+  are refused the same way, and need the same token in an
+  `X-Caracole-Form-Token` header: a song's line, or the Requests tab, then says
+  the server has restarted.
   Only the served page may ask the server anything from its script (its
   Content-Security-Policy has `connect-src 'self'`); `index.html` on disk asks
   nothing of anyone.

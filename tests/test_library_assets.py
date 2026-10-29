@@ -61,8 +61,8 @@ def test_every_file_of_the_folder_is_text_index_html_inlines():
 def test_caracole_serves_own_pages_inline_the_shared_files_too():
     from caracole.web import lookup_page, pages
 
-    # A request's steps: the requests page's running card and the library page's song lines draw the same chips.
-    assert pages.PAGE_STYLE.startswith(text_of("base.css") + text_of("picker.css") + text_of("steps.css"))
+    # A song in review's picker: its page and the library page's song lines draw the same one.
+    assert pages.PAGE_STYLE.startswith(text_of("base.css") + text_of("picker.css"))
     assert f"style-src {sha256_source(pages.PAGE_STYLE)};" in pages.PAGE_CSP
     assert lookup_page.STYLE.startswith(text_of("base.css") + text_of("rows.css"))
     html = lookup_page.lookup_page("tok")

@@ -70,7 +70,7 @@ Shared by the steps and the commands:
 | download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |
 | notify.py | ntfy |
 | site_index.py | a site's sitemaps into a table, resumed across runs; one that answers cut short, before its closing `</urlset>` or `</sitemapindex>`, an error that leaves the table as it was, never fewer rows |
-| stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`, in UTC; `local=True`, the requests page's, in the server's zone, named); a stored time missing or unreadable is older than any (`before`); the standard library alone |
+| stamps.py | how caracole stores a time (ISO 8601 UTC to the second, a naive time is UTC) and shows one (`shown`, in UTC; `local=True`, the Requests tab's, in the server's zone, named); a stored time missing or unreadable is older than any (`before`); the standard library alone |
 | provider_pass.py | one song at a time through a provider (`each_song`, `PassStats`): the lyrics, LaCuerda, gtptabs.com and YouTube passes share its ladder of errors that are never misses, and name the songs an error left (`failures`) |
 | keys.py | a song's musical key and where it came from; a key named by its letter alone (UG's `A`, a sheet's `Key: A`, LaCuerda's `Tono: La`) is its parallel minor where the sheet's chords say so, one rule for every reader (`theory.bare_key`: their key is that minor, or has its notes, or the minor's a capo lower, and neither major's, or is the relative minor of the letter's major, that minor (`C` over Am F C G Am, A minor), and no chord plays that tonic major, A or A7; keys.py reads sheet.json's capo, page.py's `_song_key` a sheet's `{key}` by `theory.named_key` and trusts a keys.py source's key as given): Hotel California's `A`, capo 2, is A minor, sounding B minor (test_keys.py, test_viewer_theory.py) |
 | removal.py | `caracole remove` and the web page's Remove; the tombstones it leaves are songs.py's |
@@ -165,7 +165,9 @@ Rules a change there keeps (the Invariants below are the others):
   library.js knows a song gone by its removal done on the page, or by a view or a card of `/jobs.json` that names
   another song's identity under its id (the view's `identity`, `jobs_routes.view`): removed elsewhere, its line
   says Removed, the song that has the id now is new to the page, and select.js and songbooks.js let it go
-  (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity alone). The page's Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
+  (`caracole:gone`; songbooks.js's set lists show a lookup on a line of the same identity alone). The page's tabs are
+  tabs.js's (body.html's tablist, `tab-NAME` buttons, `#tab=NAME`, `window.caracoleTabs`, "caracole:tab"; Requests
+  last, served alone: a tab goes before it, test_requests_tab.py fits four on a phone). Its Songbooks tab (`#tab=songbooks`) is songbooks.js's, drawn from the
   data's `songbooks` (songbook_section.py: each songbook's set list, where it plays each song as
   `songbook.plays_in` says it, each song's Guitar Pro mark, `guitar`: a file kept, else none,
   and the setting's menus' names, the theory's, and the instruments), which `/jobs.json`
@@ -341,8 +343,10 @@ Rules a change there keeps (the Invariants below are the others):
   (`test_web_server.py::test_a_phone_on_the_lan_cancels_a_request`). Beyond a wanted.txt line, every change runs as a
   `caracole` command queued in jobs.py (One caracole at a time, below). The one line a request
   shows is status.py's, read from the job's steps and the song's state, never from which commands
-  ran: a step's label is that line while it runs ("Adding to the library…"). The requests page
-  (/jobs) says that line its own way (outcome.py), and the library page's lines read only its steps
+  ran: a step's label is that line while it runs ("Adding to the library…"). The library page's Requests tab,
+  its last (`#tab=requests`, library_assets/requests.js, drawn from `/requests.json`: web/feed.py; no page of its own,
+  every link and redirect to a request is `/#tab=requests&job=N`, status.py `details_href`), says that line its own
+  way (outcome.py), and the library page's lines read only its steps
   (`outcome.progress`: a lookup's chips under its line while it runs, kept when it ends otherwise than
   Ready), never the rest: a finished one's outcome, a reason from its stages and its song's state
   (never made up: Not found says Ultimate Guitar has no chords only once the fetch asked it,

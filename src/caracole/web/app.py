@@ -4,7 +4,7 @@ of its answers, what every route shares and the checks every request passes.
 Each area's routes are a module of its own, a ``*_routes.py`` of caracole.web, whose ``ROUTES`` (each a
 ``Route``: a method, an address and what answers it) the router gathers from every such module, and whose
 docstring lists them and says how they answer: library_routes.py (the library page, a song requested,
-Fetch now), review_routes.py (the picker), jobs_routes.py (the requests page, Cancel and Try again,
+Fetch now), review_routes.py (the picker), jobs_routes.py (the Requests tab's data, Cancel and Try again,
 /jobs.json, /api/jobs),
 search_routes.py (the lookup page, search as you type, a song looked up now, a LaCuerda artist's page
 read, LaCuerda's own search), remove_routes.py (Remove), songbook_routes.py (the songbook forms), export_routes.py (a
@@ -22,7 +22,7 @@ nothing here. This module answers the rest:
 There is no sign-in: whoever can reach the server may use it (security.py).
 Every request must name the server by a name it answers to (421 otherwise).
 Every POST must pass the cross-origin check and carry the form token (403),
-be a form (415) and be small (413). /jobs.json, which no form asks for, must
+be a form (415) and be small (413). /jobs.json and /requests.json, which no form asks for, must
 pass the same cross-origin check and carry the form token in an
 ``X-Caracole-Form-Token`` header (403). One GET changes something, with
 neither, by the owner's choice (security.py): ``/export.pdf?…&mine=1``
@@ -117,7 +117,7 @@ class Route:
     request)`` a GET or HEAD; ``answer(app, request, form)`` a POST, once the form passed every check
     (``page``: what a refusal of the form calls the page it came from). ``under``: every address that
     starts with ``path`` too. ``script_only``: a read the page's own script alone makes, checked as a write
-    is (/jobs.json)."""
+    is (/jobs.json, /requests.json)."""
 
     method: str  # "GET" (which answers HEAD too) or "POST"
     path: str
@@ -304,7 +304,7 @@ class WebApp:
         return Response(405, b"", [("Allow", "GET, HEAD, POST")])
 
     def _script_read_refused(self, request: Request) -> Response | None:
-        """Why a read only the page's script makes (/jobs.json) is refused to anything else, as a write would be;
+        """Why a read only the page's script makes (/jobs.json, /requests.json) is refused to anything else, as a write would be;
         None for the page's script."""
         if not cross_origin_ok("POST", request.headers, request.headers.get("host")):  # checked as a write
             return message_response(403, "Refused", "This came from another site, so caracole refused it.")
@@ -369,7 +369,7 @@ class WebApp:
             raise Refused(503, "The queue is full", full) from None
 
     def queued(self, job: Job, location: str | None = None) -> Response:
-        """A request queued: to the browser, its line on /jobs (its output open, unless ``location`` says
+        """A request queued: to the browser, its line in the library page's Requests tab (its output open, unless ``location`` says
         where else); to the page's script, the job itself."""
         response = redirect(location or f"/{details_href(job.id)}")
         response.data = {"job": self.job_view(job)}

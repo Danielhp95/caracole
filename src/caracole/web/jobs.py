@@ -2,7 +2,7 @@
 
 A job is a list of steps; a step is one run of the ``caracole`` command line, in
 a child process with the server's environment and config, at ``-v``, so the
-requests page has the whole story. A step's label is what the song's card says
+Requests tab has the whole story. A step's label is what the song's card says
 while it runs ("Adding to the library…": status.py), and a job keeps the song
 it is for (``display``), for the page's list of requests. A request is
 ``caracole add``; a song looked up now (Fetch it now, a card's Fetch now, the
@@ -641,7 +641,7 @@ def child_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
     """
     env = dict(os.environ if base is None else base)
     env["PYTHONPATH"] = os.pathsep.join(p for p in sys.path if p)
-    env["PYTHONUNBUFFERED"] = "1"  # so each line shows on the requests page as it is printed
+    env["PYTHONUNBUFFERED"] = "1"  # so each line shows in the Requests tab as it is printed
     return env
 
 

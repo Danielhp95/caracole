@@ -17,7 +17,7 @@ fetched.
 Each post names the version's song by the viewer it came from (``sheet``), or by its id (``song``), as the library
 page's song card posts it, ``tab`` the version; Fetch them, which only the card posts, has no page of its own. A
 post by ``sheet`` goes to the versions page that shows how it goes; one by ``song`` answers as the library page's
-other requests do (``WebApp.queued``: its line on /jobs, or the job to the page's script).
+other requests do (``WebApp.queued``: its line in the Requests tab, or the job to the page's script).
 
 A sheet viewer served from the library runs in a sandbox, with no way to post a form to the server, so its
 switcher links ``GET /versions?…``, a page of the server's own with no script, whose form ``POST``s with the
@@ -349,9 +349,9 @@ def _how_it_goes(app: WebApp, do: str, asked: _Asked, job: Job | None) -> tuple[
         return "", ""
     if job.state == "failed":
         last = next((line for step in job.steps for line in reversed(step.output) if line.strip()), "")
-        details = f' <a href="/{details_href(job.id)}">Output</a>'
+        details = f' <a href="/{escape(details_href(job.id), quote=True)}">Output</a>'
         return f'<p class="says failed">Failed{": " + escape(last) if last else "."}{details}</p>\n', ""
-    if job.state == "cancelled":  # taken out of the queue on the requests page: it never ran
+    if job.state == "cancelled":  # taken out of the queue in the Requests tab: it never ran
         return '<p class="says cancelled">Cancelled before it ran.</p>\n', ""
     if job.state != "done":
         state = "Queued: it runs after the requests before it." if job.state == "queued" else _RUNNING[do]
@@ -362,14 +362,14 @@ def _how_it_goes(app: WebApp, do: str, asked: _Asked, job: Job | None) -> tuple[
         if page is None:
             why = _stage_detail(job, "version")
             return (f'<p class="says failed">Done, but it wasn\'t kept{": " + escape(why) if why else ""}. See the '
-                    f'request\'s <a href="/{details_href(job.id)}">output</a>.</p>\n', "")
+                    f'request\'s <a href="/{escape(details_href(job.id), quote=True)}">output</a>.</p>\n', "")
         return ('<p class="says done">Done: it is kept beside the sheet.</p>\n',
                 f'<a class="btn primary" href="/{asked.folder}/{quote(page)}">Open it</a>\n')
     from caracole.sheet_versions import SHEET_PAGE
 
     # caracole get exits 0 on a block, a spent budget or the hour's cap, the sheet as it was: what the job did is
     # the song's state, read again, never the command's exit.
-    output = f'<a href="/{details_href(job.id)}">output</a>'
+    output = f'<a href="/{escape(details_href(job.id), quote=True)}">output</a>'
     if do == "choose":
         assert asked.version is not None
         if not asked.version.chosen:

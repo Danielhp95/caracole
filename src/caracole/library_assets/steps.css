@@ -1,5 +1,5 @@
 
-/* A request's steps (web/outcome.py's), as chips: the requests page's running card, and on the library page a song's
+/* A request's steps (web/outcome.py's), as chips: the Requests tab's running card, and on the library page a song's
    line, or a search result's row, while its lookup runs (library.js). Those done ticked in the found colour, the one
    that runs lit, those to come grey, a failed one red; a plain one, over and no failure ("Match: not on UG"), dashed
    and muted. The site a step names is bold: "Sheet LaCuerda". */

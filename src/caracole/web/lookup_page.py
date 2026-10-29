@@ -676,7 +676,7 @@ function progress(job) {
          + (running ? "; still getting: " + running.label.toLowerCase() : "") : "Done.");
   } else if (job.active) {
     said(job.state === "queued" ? "Waiting for the request before it…" : (running ? doing(running) : "Working…"));
-  } else if (job.state === "cancelled") {  // on the requests page, before it ran
+  } else if (job.state === "cancelled") {  // in the Requests tab, before it ran
     said("Cancelled before it ran: look it up again to get it.");
   } else {
     const failed = job.steps.filter(s => s.detail && s.state !== "done").map(s => s.label + ": " + s.detail);
@@ -698,7 +698,7 @@ function links(files) {
     box.append(a);
   }
   const jobs = el("a", "btn small", "Requests");
-  jobs.href = "/jobs";
+  jobs.href = "/#tab=requests";
   box.append(jobs);
 }
 
@@ -797,7 +797,7 @@ def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
         f"{PAGE_ICON}<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
-        + _BODY.replace("__TOP__", top("Look up a song", LIBRARY + '<a class="navlink" href="/jobs">Requests</a>'))
+        + _BODY.replace("__TOP__", top("Look up a song", LIBRARY + '<a class="navlink" href="/#tab=requests">Requests</a>'))
         .replace("__CSRF__", token)
         + json_block("icons", dict(icons or {}))
         + f"<script>{ROWS_SCRIPT}</script>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"

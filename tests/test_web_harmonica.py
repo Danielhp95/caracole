@@ -201,7 +201,7 @@ def test_a_job_that_failed_says_so_with_its_output(cfg, spokey):
     after = get(app, dict(response.headers)["Location"])
     job = int(dict(response.headers)["Location"].rsplit("=", 1)[1])
     assert "Failed: overrides.toml can't be written" in shown(after)
-    assert f'href="/{details_href(job)}"' in text(after)
+    assert f'href="/#tab=requests&amp;job={job}"' in text(after) and details_href(job) == f"#tab=requests&job={job}"
 
 
 def test_a_pins_request_is_the_songs_change_never_one_of_its_requests(app, spokey):
@@ -214,5 +214,5 @@ def test_a_pins_request_is_the_songs_change_never_one_of_its_requests(app, spoke
     [done] = answer(get_json(app, "/jobs.json?jobs=1"))["jobs"]
     assert done["line"] == {"tone": "ready", "text": "Its harmonica tab read as you set it",
                             "link": {"label": "Open the tab", "href": quote(PAGE)}, "details": None}
-    requests = text(get(app, "/jobs"))
+    requests = json.dumps(answer(get_json(app, "/requests.json")))  # the Requests tab says what it did
     assert "Its harmonica tab read as you set it" in requests and "Added" not in requests

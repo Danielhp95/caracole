@@ -240,7 +240,7 @@ def _how_it_goes(asked: _Asked, job: Job | None) -> str:
     if job.state == "failed":
         last = next((line for step in job.steps for line in reversed(step.output) if line.strip()), "")
         return (f'<p class="says failed">Failed{": " + escape(last) if last else "."} '
-                f'<a href="/{details_href(job.id)}">Output</a></p>\n')
+                f'<a href="/{escape(details_href(job.id), quote=True)}">Output</a></p>\n')
     if job.state == "cancelled":
         return '<p class="says cancelled">Cancelled before it ran.</p>\n'
     if job.state != "done":
@@ -252,8 +252,8 @@ def _how_it_goes(asked: _Asked, job: Job | None) -> str:
         if asked.pin is None:
             return '<p class="says done">Done: caracole guesses how it is read again.</p>\n'
         return (f'<p class="says failed">Done, but the [harmonica] entry is still there: see the request\'s '
-                f'<a href="/{details_href(job.id)}">output</a>.</p>\n')
+                f'<a href="/{escape(details_href(job.id), quote=True)}">output</a>.</p>\n')
     if asked.pin is None:
         return (f'<p class="says failed">Done, but no [harmonica] entry pins it: see the request\'s '
-                f'<a href="/{details_href(job.id)}">output</a>.</p>\n')
+                f'<a href="/{escape(details_href(job.id), quote=True)}">output</a>.</p>\n')
     return f'<p class="says done">Done: read as {escape(_said(asked.now))}, as you set it.</p>\n'

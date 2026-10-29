@@ -233,7 +233,7 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     # A phone's digits-only keypad has no ":", so the length field gets the full keyboard.
     duration = re.search(r'<input name="duration"[^>]*>', form.group(1), re.S).group(0)
     assert "inputmode" not in duration and "m:ss or seconds" in form.group(1)
-    assert 'href="/jobs"' in shell
+    assert 'id="tab-requests"' in shell and 'id="requests"' in shell  # the Requests tab, and its panel
     assert "form-action 'self'" in csp_of(html) and "form-action 'none'" not in csp_of(html)
     # Its script may ask the server how the requests go, and nothing else.
     assert "connect-src 'self'" in csp_of(html) and "default-src 'none'" in csp_of(html)
@@ -286,17 +286,33 @@ def masthead(html: str) -> str:
     return re.search(r'<header class="masthead lib">(.*?)</header>', html, re.S).group(1)
 
 
-def test_the_masthead_links_no_to_do_page_written_or_served(conn, cfg):
+TAB = re.compile(r'<button type="button" class="tab" role="tab" id="tab-(\w+)" aria-controls="([\w-]+)"[^>]*>'
+                 r'([^<]*)(?:<span class="n">([^<]*)</span>)?</button>')
+
+
+def test_the_masthead_links_no_page_and_requests_are_its_last_tab_served(conn, cfg):
     from caracole.library_page import WebControls
 
-    # The file links no page at all: no To-do link, and no empty landmark where the links were.
-    written = masthead(JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW)))
+    # The file links no page at all: no To-do link, no landmark of links, and no Requests tab, as nothing can be asked.
+    whole = JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW))
+    written = masthead(whole)
     assert "_todo.md" not in written and "To-do" not in written and "<nav" not in written
-    # Served, the masthead has Requests alone.
-    served = masthead(JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW,
-                                                            controls=WebControls(csrf="tok", active=2))))
-    assert re.findall(r'<a class="navlink" href="([^"]*)">([^<]*)', served) == [("/jobs", "Requests")]
-    assert '<nav class="links" aria-label="Pages">' in served and "_todo.md" not in served
+    assert [(name, panel) for name, panel, _, _ in TAB.findall(written)] == [("library", "library-view"),
+                                                                            ("songbooks", "songbooks")]
+    assert 'id="requests"' not in whole
+    # Served, the requests are the last tab, counting those that wait or run, as Songbooks counts its songbooks:
+    # no page of their own, and no link at the top right.
+    whole = JSON_BLOCK.sub("", build_library_page(conn, cfg, Overrides(), NOW,
+                                                  controls=WebControls(csrf="tok", active=2)))
+    served = masthead(whole)
+    assert "<nav" not in served and "navlink" not in served and "_todo.md" not in served
+    assert TAB.findall(served) == [("library", "library-view", "Library", ""),
+                                   ("songbooks", "songbooks", "Songbooks ", ""),
+                                   ("requests", "requests", "Requests ", "2")]
+    assert re.search(r'<section class="view reqs" id="requests" role="tabpanel" aria-labelledby="tab-requests" '
+                     r'hidden></section>', whole)
+    idle = masthead(build_library_page(conn, cfg, Overrides(), NOW, controls=WebControls(csrf="tok")))
+    assert TAB.findall(idle)[-1] == ("requests", "requests", "Requests ", "")  # none waits: no count shown
 
 
 # --- files ---------------------------------------------------------------------------
@@ -3770,7 +3786,7 @@ def test_every_action_a_card_had_is_on_the_line_or_its_menu(conn, cfg, tmp_path)
     assert re.search(r'<form[^>]*action="/review"', crep.split('class="line-panel"', 1)[1])
     # Being removed: it says so where its button was, with no fetch and no other removal.
     going = line_of(shown, "Wonderwall")
-    assert re.search(r'<div class="line-action"><a class="line-busy" href="/jobs"[^>]*>Removing…</a>', going)
+    assert re.search(r'<div class="line-action"><a class="line-busy" href="#tab=requests"[^>]*>Removing…</a>', going)
     assert "/fetch" not in going and "/remove" not in going
     # Its request queued: its line says how it goes, a line of its own, Details and all.
     queued = line_of(shown, "Bohemian Rhapsody")
