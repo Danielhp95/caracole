@@ -5314,7 +5314,10 @@ its tags and duration (tags in two scripts, such as "Song Dongye (宋冬野)",
 work too), finds the chords and the beats, and writes
 `sheet (auto).txt`. With timed lyrics, each chord goes over the line sung when
 it starts, and over the word, where the lyrics time each word too (enhanced
-LRC, `<00:12.30>word`; most of LRCLIB's time their lines alone). With no timed
+LRC, `<00:12.30>word`; most of LRCLIB's time their lines alone). Over Chinese
+words, each character is a word, and a chord's column in the sheet is the
+character's as a monospace font shows it, two columns wide, as a human sheet on
+UG is typed: the PDF and the viewer put it before that character. With no timed
 lyrics to lay the chords over, the sheet is a chord chart by bars followed by
 the plain lyrics. It starts with
 "auto-generated, unverified", the song counts as found, and the next render

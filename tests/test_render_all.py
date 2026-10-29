@@ -134,18 +134,23 @@ def human_sheet(conn, cfg, song, content=UG_SHEET, *, tab_id=85053, tonality="Bm
     return vid
 
 
-def auto_sheet(conn, cfg, song, *, key=None, video=None, source=None):
+AUTO_CHORDS = (ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G"))
+AUTO_LYRICS = "[00:00.00]made up words to sing\n[00:04.00]only for the test\n"
+
+
+def auto_sheet(conn, cfg, song, *, key=None, video=None, source=None, chords=AUTO_CHORDS, synced=AUTO_LYRICS):
     """Keep an auto-chords sheet the way the autochords step does: 'sheet (auto).txt',
     from a versions row with provider "auto", whose raw data holds the ``key`` heard, if any, and the ``video`` its
     audio came from (``VIDEO``), if any, which the sheet names after the song's name as autochords/run.py writes it
-    (``source``: that line as it is written otherwise, an older caracole's)."""
+    (``source``: that line as it is written otherwise, an older caracole's). The sheet lays the ``chords`` heard out
+    over the ``synced`` lyrics."""
     if video is not None and source is None:
         source = youtube_credit(video["title"], video["channel"], video["id"])
     text = build_sheet(
-        [ChordSegment(0.0, 4.0, "C"), ChordSegment(4.0, 8.0, "G")],
+        chords,
         title=song.title,
         artist=song.artist,
-        synced="[00:00.00]made up words to sing\n[00:04.00]only for the test\n",
+        synced=synced,
         source=source,
     )
     raw = {"key": key} if key else {}
@@ -489,6 +494,20 @@ def test_an_auto_sheet_gets_a_viewer_of_its_own(conn, cfg):
 def drawn_part(html: str) -> str:
     """A viewer's markup before its data and its scripts: what it shows as written."""
     return html.split("<body>", 1)[1].split("<script", 1)[0]
+
+
+def test_a_chinese_auto_sheets_cho_and_viewer_have_each_chord_before_the_character_it_was_laid_over(conn, cfg):
+    # D comes in halfway through the first line, on its character 4, 词: the auto sheet writes it at that
+    # character's display column, 8, which the .cho reads as before 词, and the viewer draws it over 词.
+    song = add_song(conn, "宋冬野", "斑马斑马")
+    auto_sheet(conn, cfg, song, chords=(ChordSegment(8.0, 10.0, "G"), ChordSegment(10.0, 16.0, "D")),
+               synced="[00:08.00]第一行歌词在这里\n[00:12.00]第二行歌词在这里\n")
+    render(conn, cfg)
+    cho = (song_dir(cfg.library_dir, song) / "sheet (auto).cho").read_text(encoding="utf-8").splitlines()
+    assert cho[3:] == ["[G]第一行歌[D]词在这里", "第二行歌词在这里"]
+    shown = drawn_part(viewer_of(cfg, song, "sheet (auto).html"))
+    over = re.findall(r'role="button">([^<]+)</b><span class="y">([^<]+)</span>', shown)
+    assert over == [("G", "第"), ("D", "词")]
 
 
 def test_an_auto_sheet_from_youtube_names_the_video_in_words_and_its_viewer_draws_it_from_its_data(conn, cfg):

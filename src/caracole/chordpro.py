@@ -9,7 +9,8 @@ UG sheets, LaCuerda sheets (once ``lacuerda.py`` has turned ``<A>X</A>`` into
 
 A chord's position is its display column in the chord line once the tags are
 removed, as UG shows the sheet in a monospace font. East Asian wide characters
-(Chinese, for one) take two columns there, so they count as two here too.
+(Chinese, for one) take two columns there, so they count as two here too
+(``display_columns``), and auto-chords writes its chord lines in those columns.
 """
 
 from __future__ import annotations
@@ -276,16 +277,20 @@ def _chord_items(line: str) -> list[tuple[int, str]]:
     for m in _MARK.finditer(plain):
         if not any(s <= m.start() < e for s, e, _ in spans):
             spans.append((m.start(), m.end(), f"[*{m.group().strip()}]"))
-    columns = _columns(plain)
+    columns = display_columns(plain)
     return [(columns[s], token) for s, _, token in sorted(spans) if token]
 
 
-def _columns(text: str) -> list[int]:
-    """The display column at which each character of ``text`` starts."""
+def display_columns(text: str) -> list[int]:
+    """The display column at which each character of ``text`` starts, then the one where it ends, as a monospace
+    font shows it: a wide East Asian character (Chinese, kana, Hangul, full-width punctuation) two columns, a
+    combining mark none, a tab up to the next stop. ``merge_chord_line`` reads a chord line's columns so, and a
+    lyric line's characters by the same widths; autochords/merge.py writes its chord lines in these columns."""
     cols, col = [], 0
     for ch in text:
         cols.append(col)
         col = (col // TAB_STOP + 1) * TAB_STOP if ch == "\t" else col + _width(ch)
+    cols.append(col)
     return cols
 
 

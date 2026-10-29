@@ -16,7 +16,7 @@ import itertools
 import re
 import statistics
 import unicodedata
-from collections.abc import Iterable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, replace
 
 NO_CHORD = "N"
@@ -193,7 +193,9 @@ def build_sheet(
     With synced lyrics (LRC), every lyric line gets the chords whose snapped start
     falls between its time and the next line's, at character columns proportional
     to their time within the line, each then moved to the start of the nearest
-    word (``_on_words``). A change up to half a beat before a line's
+    word (``_on_words``) and written at that word's display column, where the
+    ChordPro converter reads it (a Chinese character is two columns wide). A
+    change up to half a beat before a line's
     time counts as the start of that line, since singers often come in just
     after the downbeat. Where the voice rests for at least two bars, the chords
     go on chord-only lines of bars instead, such as ``| G | D | Em | C |``.
@@ -423,7 +425,7 @@ def _chart(segs: Sequence[ChordSegment], bars: Sequence[float], lo: float, hi: f
 
 
 def _chord_line(placed: Sequence[tuple[int, str]]) -> str:
-    """A chord line in UG markup, each chord at its column, at least one space apart."""
+    """A chord line in UG markup, each chord at its display column, at least one space apart."""
     visible = 0
     out = ""
     for col, name in placed:
@@ -441,23 +443,37 @@ _APOSTROPHES = "'\u2019"
 
 
 def _on_words(text: str, placed: Sequence[tuple[int, str]]) -> list[tuple[int, str]]:
-    """The chords of a lyric line, each moved to the start of the word nearest its column.
+    """The chords of a lyric line, each moved to the start of the word nearest its column (a character's index in
+    ``text``), at that word's display column: where a monospace font shows it, and the ChordPro converter reads a
+    chord line's columns (``chordpro.display_columns``: a Chinese character two columns wide, a combining accent
+    none). On a line of letters one column wide each, as a Latin one is, the two are the same.
 
     They keep their order, one a word: a chord whose word start is the previous chord's, or
     under its name, takes the first word start clear of that name and a space, or, with no word
     left, the column right after it, where ``_chord_line`` would lay it out anyway.
     """
-    starts = _word_starts(text)
+    shown = _shown(text)
+    starts = [shown(i) for i in _word_starts(text)]
     out: list[tuple[int, str]] = []
     free = 0  # the first column clear of the previous chord's name and a space
     for col, name in placed:
-        at = _word_start(text, col)
+        at = shown(_word_start(text, col))
         if at < free:
             later = bisect.bisect_left(starts, free)
             at = starts[later] if later < len(starts) else free
         out.append((at, name))
         free = at + len(name) + 1
     return out
+
+
+def _shown(text: str) -> Callable[[int], int]:
+    """The display column of a character of ``text`` by its index, and of a column past its end, a space each."""
+    # Imported here: chordpro.py imports the viewer, whose sheet.py imports this module.
+    from caracole.chordpro import display_columns
+
+    columns = display_columns(text)
+    end = len(text)
+    return lambda i: columns[i] if i < end else columns[end] + i - end
 
 
 def _word_start(text: str, col: int) -> int:

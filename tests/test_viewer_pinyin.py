@@ -15,6 +15,8 @@ from pathlib import Path
 
 import pytest
 
+from caracole.autochords import ChordSegment, build_sheet, parse_lrc_words
+from caracole.chordpro import to_chordpro
 from caracole.viewer import build_viewer, viewer_csp
 from caracole.viewer.book import BookSong, build_songbook, songbook_csp
 from caracole.viewer.pinyin import readings
@@ -348,6 +350,26 @@ def test_each_chord_stays_over_its_character_with_the_reading_between_them(tmp_p
     assert not seen["sideways"]
     if size is PHONE:  # the long line wraps, between columns: each chord with its reading and its character
         assert len({round(c["glyph"]["bottom"]) for c in on if c["line"] == 0}) > 1
+
+
+@in_chromium
+def test_an_auto_sheets_chords_are_over_the_characters_sung_when_they_start(tmp_path):
+    # Auto-chords lays each chord over the character sung when it starts, at its display column (a Chinese
+    # character two columns wide), as a sheet's .cho is made from it (render.py's to_chordpro).
+    synced =("[00:08.00]<00:08.00>斑<00:08.50>马<00:09.00>斑<00:09.50>马 <00:10.00>你<00:10.50>不<00:11.00>要"
+              "<00:11.50>睡\n[00:12.00]<00:12.00>我<00:12.50>love<00:13.50>你，<00:14.00>baby <00:15.00>再见\n")
+    heard = [ChordSegment(8.0, 9.0, "C"), ChordSegment(9.0, 10.5, "G"), ChordSegment(10.5, 12.0, "Am"),
+             ChordSegment(12.0, 13.5, "F"), ChordSegment(13.5, 15.0, "C"), ChordSegment(15.0, 16.0, "G")]
+    sheet = build_sheet(heard, title="斑马斑马", artist="宋冬野", synced=synced, synced_words=parse_lrc_words(synced),
+                        beats=[i * 0.5 for i in range(41)])
+    cho = to_chordpro("\n".join(sheet.splitlines()[3:]), title="斑马斑马", artist="宋冬野", auto=True)
+    with open_viewer(tmp_path, written(tmp_path, cho), **DESKTOP) as b:
+        off = chords(b)
+        turn_on(b)
+        b.click("#panel [data-close]")
+        on = chords(b)
+    assert places(off) == [("斑", 0), ("斑", 0), ("不", 0), ("我", 1), ("你", 1), ("再", 1)]
+    assert_aligned(off, on)
 
 
 @in_chromium

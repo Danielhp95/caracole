@@ -1,5 +1,7 @@
 """The pure half of auto-chords: snapping, LRC parsing and sheet layout."""
 
+import unicodedata
+
 from caracole.autochords import merge
 from caracole.autochords.merge import (
     ChordSegment,
@@ -10,6 +12,7 @@ from caracole.autochords.merge import (
     snap_to_beats,
     youtube_credit,
 )
+from caracole.chordpro import merge_chord_line, to_chordpro
 
 # 120 BPM: a beat every 0.5 s, so a 4/4 bar lasts 2 s.
 BEATS = [i * 0.5 for i in range(121)]
@@ -224,7 +227,7 @@ def test_a_chord_on_a_syllable_goes_on_its_words_first_letter():
     assert words_sheet(segs, synced).splitlines()[3:] == [
         "[ch]G[/ch]  [ch]C[/ch]         [ch]D[/ch]",
         "Oh beautiful day",
-        "[ch]Em[/ch]  [ch]A[/ch]",
+        "[ch]Em[/ch]      [ch]A[/ch]",  # A over 词, the line's character 4, at column 8
         "第一行歌词在这",
     ]
 
@@ -308,13 +311,41 @@ def test_chords_on_a_short_line_never_touch():
     assert sheet.splitlines()[3:5] == ["[ch]G[/ch] [ch]D[/ch] [ch]Em[/ch]", "Oh"]
 
 
-def test_columns_count_characters_in_cjk_lines():
-    # The ChordPro converter inserts a chord before the character at its column,
-    # so a column is a character index, not a display width.
+def test_a_chord_over_a_cjk_line_is_written_at_its_characters_display_column():
+    # A chord line's columns are display columns, as a monospace font shows them and the ChordPro converter
+    # reads them: a Chinese character is two wide. D comes in halfway through the line's 4 s, on its character
+    # 4, 词, whose column is 8, and the converted line has it before 词.
     synced = "[00:08.00]第一行歌词在这里\n[00:12.00]第二行歌词在这里\n"
     segs = [seg(8.0, 10.0, "G"), seg(10.0, 16.0, "D")]
     sheet = build_sheet(segs, title="斑马斑马", artist="宋冬野", synced=synced, beats=BEATS)
-    assert sheet.splitlines()[3:5] == ["[ch]G[/ch]   [ch]D[/ch]", "第一行歌词在这里"]
+    lines = sheet.splitlines()
+    assert lines[3:5] == ["[ch]G[/ch]       [ch]D[/ch]", "第一行歌词在这里"]
+    assert merge_chord_line(*lines[3:5]) == "[G]第一行歌[D]词在这里"
+
+
+def converted(sheet: str) -> list[str]:
+    """An auto sheet's song as render.py converts it to ChordPro: without the sheet's marker and name, nor the
+    directives to_chordpro writes in their place."""
+    return to_chordpro("\n".join(sheet.splitlines()[3:]), title="T", artist="A", auto=True).splitlines()[3:]
+
+
+def test_a_cjk_auto_sheet_converts_with_each_chord_before_the_character_sung_when_it_starts():
+    synced = (
+        "[00:08.00]<00:08.00>第<00:08.50>一<00:09.00>行<00:09.50>歌<00:10.00>词<00:10.50>在<00:11.00>这"
+        "<00:11.50>里\n"
+        "[00:12.00]<00:12.00>我<00:12.50>love<00:13.50>你，<00:14.00>baby <00:15.00>再<00:15.50>见\n"
+    )
+    segs = [seg(8.0, 9.0, "G"), seg(9.0, 10.5, "C"), seg(10.5, 12.0, "D"), seg(12.0, 13.5, "Em"),
+            seg(13.5, 15.0, "A"), seg(15.0, 16.0, "D")]
+    sheet = words_sheet(segs, synced)
+    # 我0 l1 o2 v3 e4 你5 ，6 b7 a8 b9 y10 _11 再12 见13 start at columns 0 2 3 4 5 6 8 10 11 12 13 14 15 17.
+    assert sheet.splitlines()[3:] == [
+        "[ch]G[/ch]   [ch]C[/ch]     [ch]D[/ch]",
+        "第一行歌词在这里",
+        "[ch]Em[/ch]    [ch]A[/ch]        [ch]D[/ch]",
+        "我love你，baby 再见",
+    ]
+    assert converted(sheet) == ["[G]第一[C]行歌词[D]在这里", "[Em]我love[A]你，baby [D]再见"]
 
 
 def test_a_mid_word_column_moves_to_the_nearest_word_start():
@@ -370,8 +401,6 @@ def test_a_chord_sits_on_a_words_first_letter_never_on_the_punctuation_before_it
 
 
 def test_accents_and_apostrophes_are_inside_a_word():
-    import unicodedata
-
     # m0 i1 _2 c3 o4 r5 a6 z7 ó8 n9 _10 e11 s12 t13 á14 _15 a16 q17 u18 í19
     text = "mi corazón está aquí"
     assert [merge._word_start(text, c) for c in (6, 8, 9, 14, 19)] == [3, 11, 11, 16, 16]
@@ -401,6 +430,54 @@ def test_each_chinese_or_japanese_character_starts_a_word():
     assert [merge._word_start("我love你", c) for c in (2, 3, 4, 5)] == [1, 1, 5, 5]
     # Korean is written with spaces between its words: 사0 랑1 해2 요3 _4 너5 를6.
     assert [merge._word_start("사랑해요 너를", c) for c in (1, 2, 3, 6)] == [0, 0, 5, 5]
+
+
+def laid_out(text: str, placed: list[tuple[int, str]]) -> str:
+    """A lyric line with chords at these columns (its characters), as an auto sheet lays them out, converted
+    to ChordPro."""
+    return merge_chord_line(merge._chord_line(merge._on_words(text, placed)), text)
+
+
+def test_each_chord_converts_before_the_word_it_was_laid_over_in_any_script():
+    # 我0 l1 o2 v3 e4 你5 ，6 b7 a8 b9 y10 _11 再12 见13: Chinese, Latin and a full-width comma on one line.
+    assert laid_out("我love你，baby 再见", [(0, "G"), (2, "C"), (5, "D"), (8, "Em"), (12, "A")]) == (
+        "[G]我[C]love[D]你，[Em]baby [A]再见"
+    )
+    # The full-width comma is two columns wide and no word: a chord on it goes on the character before it.
+    assert laid_out("第一行，歌词在这里", [(0, "G"), (3, "D"), (4, "Em")]) == "[G]第一[D]行，[Em]歌词在这里"
+    assert laid_out("君の名は", [(0, "G"), (2, "D")]) == "[G]君の[D]名は"
+    # Hangul is two columns wide too, its words spaced: 사0 랑1 해2 요3 _4 너5 를6.
+    assert laid_out("사랑해요 너를", [(0, "G"), (5, "D")]) == "[G]사랑해요 [D]너를"
+    # An accent written as a combining mark after its letter takes no column of its own.
+    decomposed = unicodedata.normalize("NFD", "mi corazón está aquí")
+    assert laid_out(decomposed, [(0, "G"), (12, "D")]) == unicodedata.normalize("NFD", "[G]mi corazón [D]está aquí")
+
+
+def test_on_a_cjk_line_a_chord_clears_the_name_before_it_by_display_columns():
+    text = "第一行歌词在这里"
+    # G and a space take two columns, and 一 starts two columns in: D stays on it.
+    assert merge._on_words(text, [(0, "G"), (1, "D")]) == [(0, "G"), (2, "D")]
+    # Am7 and a space take four, two characters: D goes on the first one clear of them, 行.
+    assert merge._on_words(text, [(0, "Am7"), (1, "D")]) == [(0, "Am7"), (4, "D")]
+    assert laid_out(text, [(0, "Am7"), (1, "D")]) == "[Am7]第一[D]行歌词在这里"
+    # With no character left, right after the name before it; past the line's end, a column is a space.
+    assert merge._on_words("第一", [(0, "Am"), (0, "D")]) == [(0, "Am"), (3, "D")]
+    assert laid_out("第一", [(0, "Am"), (0, "D")]) == "[Am]第[D]一"
+    assert merge._on_words("第一", [(0, "G"), (3, "D")]) == [(0, "G"), (5, "D")]
+    assert laid_out("第一", [(0, "G"), (3, "D")]) == "[G]第一 [D]"
+
+
+def test_a_latin_line_is_laid_out_as_when_columns_counted_its_characters():
+    # Letters one column wide each, precomposed accents among them: a display column is the character's index,
+    # and the chord line is byte for byte the one caracole wrote when columns counted characters.
+    text = "¿Dónde estás, mi corazón? Can't stop (oh) rock 'n' roll"
+    placed = [(0, "G"), (3, "D"), (9, "Em"), (16, "C"), (27, "Am7"), (31, "D"), (40, "Bb"), (47, "F#m"), (60, "E7")]
+    line = merge._chord_line(merge._on_words(text, placed))
+    assert line == (" [ch]G[/ch]     [ch]D[/ch]      [ch]Em[/ch] [ch]C[/ch]        [ch]Am7[/ch]   [ch]D[/ch]     "
+                    "[ch]Bb[/ch]        [ch]F#m[/ch]         [ch]E7[/ch]")
+    assert merge_chord_line(line, text) == (
+        "¿[G]Dónde [D]estás, [Em]mi [C]corazón? [Am7]Can't [D]stop ([Bb]oh) rock '[F#m]n' roll     [E7]"
+    )
 
 
 def test_a_line_of_one_word_keeps_every_chord_on_it_in_order():
