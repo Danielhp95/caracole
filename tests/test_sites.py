@@ -5,9 +5,11 @@ from __future__ import annotations
 import dataclasses
 from datetime import UTC, datetime, timedelta
 
+import pytest
+
 from caracole import health, icons
 from caracole.config import ProviderPolicy
-from caracole.db import kv_set_json
+from caracole.db import kv_set, kv_set_json
 from caracole.http import ROBOTS_DISALLOW
 from caracole.lacuerda import LETTERS
 from caracole.lacuerda_index import letters_read
@@ -45,9 +47,8 @@ def test_the_three_sites_of_the_owners_exceptions_carry_their_terms():
     assert {s.key for s in SITES if s.terms} == {"harptabs", "gametabs", "youtube"}
 
 
-def test_gametabs_says_it_asks_five_seconds_and_caracole_asks_once_a_second():
+def test_gametabs_says_its_robots_txt_asks_five_seconds():
     assert "5 s" in site("gametabs").robots
-    assert "once a second" in site("gametabs").robots
 
 
 def test_lacuerda_closes_nothing():
@@ -356,3 +357,80 @@ def test_a_partial_index_reads_indexing(conn, cfg):
                  "VALUES ('artist/1/billy-joel', 'artist', 1, 'billy joel', 'sitemap.xml')")
     assert line(sites_data(conn, cfg, [], NOW), "harptabs")["status"]["state"] == "indexing"
     assert line(sites_data(conn, cfg, [], NOW), "lacuerda")["status"]["state"] == "indexing"  # no listing read yet
+
+
+# --- the final review's fixes -----------------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("key", ["gtptabs", "musescore", "harptabs", "gametabs"])
+def test_a_sitemap_index_read_in_part_reads_indexing(conn, cfg, key):
+    # Read a budget at a time across nights: until every sitemap is, its count is partial, never OK.
+    assert line(sites_data(conn, cfg, [], NOW), key)["status"]["state"] == "indexing"
+    kv_set(conn, f"{key}:index:complete_at", "2026-10-28T03:00:00Z")
+    assert line(sites_data(conn, cfg, [], NOW), key)["status"]["state"] == "ok"
+
+
+def test_a_ug_index_never_built_whole_reads_indexing(conn, cfg):
+    ug_rows(conn, (1, "eagles", "hotel california"))
+    assert line(sites_data(conn, cfg, [], NOW), "ug")["status"]["state"] == "indexing"
+    kv_set(conn, "ug:index:built_at", "2026-10-28T03:00:00Z")
+    assert line(sites_data(conn, cfg, [], NOW), "ug")["status"]["state"] == "ok"
+
+
+def test_youtubes_note_claims_no_more_than_its_closed_paths():
+    # gametabs.net's Crawl-delay isn't kept either (d19226e): YouTube is the one site whose closed paths caracole asks.
+    assert "The one site caracole goes against robots.txt for" not in site("youtube").terms
+    assert "closed paths" in site("youtube").terms
+
+
+def test_the_crawl_delay_reported_is_the_one_gametabs_robots_txt_asks():
+    from pathlib import Path
+
+    from caracole.sites import CRAWL_DELAY_ASKED
+
+    robots = (Path(__file__).parent / "fixtures" / "gametabs" / "robots.txt").read_text()
+    star = robots[robots.index("User-agent: *"):]
+    assert f"Crawl-delay: {CRAWL_DELAY_ASKED['gametabs']:g}" in star
+
+
+def test_gametabs_sentence_says_the_pace_caracole_keeps_there(conn, cfg):
+    robots = line(sites_data(conn, cfg, [], NOW), "gametabs")["robots"]["text"]
+    assert "asks for 5 s between requests" in robots and "caracole waits 1 s, by your choice" in robots
+    slow = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (10.0, 20.0))})
+    robots = line(sites_data(conn, slow, [], NOW), "gametabs")["robots"]["text"]
+    assert "caracole waits 10–20 s" in robots and "by your choice" not in robots
+
+
+def test_the_total_kept_leaves_musescores_links_out(conn, cfg):
+    # caracole downloads nothing from MuseScore: its links are no thing your library keeps.
+    cards = [card("ug", muse=["https://musescore.com/song/a-1", "https://musescore.com/song/a-2"])]
+    data = sites_data(conn, cfg, cards, NOW)
+    assert line(data, "musescore")["kept"]["count"] == 2
+    assert data["totals"]["kept"] == 1
+
+
+def test_counts_kept_in_another_shape_are_counted_again(conn):
+    from caracole.db import kv_get_json
+
+    ug_rows(conn, (1, "eagles", "hotel california"), (2, "eagles", "desperado"))
+    refresh_counts(conn)
+    kept = kv_get_json(conn, "sites:counts")
+    kept["ug"]["counts"] = [5]  # what an older caracole, or a hand, left
+    kept["gametabs"]["counts"] = "many"
+    kv_set_json(conn, "sites:counts", kept)
+    figures = index_figures(conn)
+    assert figures["ug"][0].songs == 2
+    assert figures["gametabs"][0].songs == 0
+    refresh_counts(conn)  # and the next write keeps them right
+    assert kv_get_json(conn, "sites:counts")["ug"]["counts"] == [2, 2]
+
+
+def test_counts_kept_by_another_version_of_the_counting_are_counted_again(conn, monkeypatch):
+    from caracole import sites
+
+    ug_rows(conn, (1, "eagles", "hotel california"))
+    refresh_counts(conn)
+    ug_rows(conn, (2, "eagles", "desperado"))
+    assert index_figures(conn)["ug"][0].songs == 1  # kept
+    monkeypatch.setattr(sites, "COUNTS_VERSION", sites.COUNTS_VERSION + 1)
+    assert index_figures(conn)["ug"][0].songs == 2

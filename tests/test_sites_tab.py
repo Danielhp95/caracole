@@ -14,7 +14,7 @@ from helpers.browser import Browser, in_chromium
 from helpers.songbooks import keep_sheet
 
 from caracole.config import ProviderPolicy
-from caracole.db import kv_set_json
+from caracole.db import kv_set, kv_set_json
 from caracole.library_page import WebControls, build_library_page, write_library_page
 from caracole.overrides import Overrides
 from conftest import add_song
@@ -31,6 +31,7 @@ def figures(conn, cfg):
     conn.executemany("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
                      "VALUES (?, 'eagles', ?, 'Chords', 'tabs1.xml', '2026-10-01T00:00:00Z', '')",
                      [(1, "hotel california"), (2, "hotel california"), (3, "desperado")])
+    kv_set(conn, "ug:index:built_at", "2026-10-28T03:00:00Z")
     kv_set_json(conn, "run:last", {"run_id": "2026-10-29T07:00:00Z", "started": "2026-10-29T07:00:00Z",
                                    "finished": "2026-10-29T07:41:00Z", "requests": {"ug": 58}, "budgets": {"ug": 60}})
 
@@ -148,3 +149,17 @@ def test_an_off_site_is_dimmed_and_says_off(conn, cfg):
              state: g.querySelector('.badge').className};
     """)
     assert out == {"off": True, "badge": "Off", "state": "badge off"}
+
+
+@in_chromium
+def test_on_a_phone_an_opened_lines_figures_keep_their_lines_apart(conn, cfg):
+    figures(conn, cfg)
+    out = run_in_page(build_library_page(conn, cfg, Overrides(), NOW), cfg, """
+      const line = q('.site-line[data-site="ug"]');
+      line.click();
+      const more = document.getElementById(line.getAttribute('aria-controls'));
+      const kept = more.querySelectorAll('.more-figures dd')[1];
+      out = {text: kept.innerText, small: getComputedStyle(kept.querySelector('small')).display};
+    """, size=(390, 844))
+    assert out["small"] == "block", out
+    assert "\n" in out["text"], out  # "1 sheet" over "50% of your songs", never "1 sheet50% of your songs"

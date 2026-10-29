@@ -50,7 +50,7 @@
 .more-figures dt { color: var(--muted); font-size: .72rem; font-weight: 700; letter-spacing: .04em;
   text-transform: uppercase; }
 .more-figures dd { margin: 0; }
-.more-figures small { color: var(--muted); }
+.more-figures small { display: block; color: var(--muted); font-size: .76rem; }
 .robots-tag { display: inline-block; padding: 0 6px; border-radius: 5px; background: var(--raised); color: var(--muted);
   font: 700 .68rem/18px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .02em;
   text-transform: none; }

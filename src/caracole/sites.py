@@ -68,16 +68,21 @@ SITES: tuple[Site, ...] = (
          terms="Its terms forbid copying. Kept by your choice: one tab a song, privately."),
     Site("gametabs", "Video-game music tabs", "gametabs.net", ("gametabs.net", "www.gametabs.net"),
          "Closes its API, its filters and every download behind a login. Its robots.txt asks for 5 s between "
-         "requests; caracole asks once a second, by your choice.",
+         "requests; {pace}.",
          (("/api/", "its API"), ("/tabs?*", "filtered lists"),
           ("/preparing-tab-file-download", "downloads (a login's)")),
          terms="Its terms forbid bots. Read by your choice since 28 Oct 2026."),
     Site("youtube", "Audio for auto-chords", "youtube.com", (),
          "Closes /results and /youtubei/, which yt-dlp uses: caracole goes against them, by your choice.",
          (("/results", "search results"), ("/youtubei/", "the player's API")),
-         terms="The one site caracole goes against robots.txt for: a few of your songs a night.",
+         terms="The one site whose closed paths caracole asks for, by your choice: a few of your songs a night.",
          asked="Searched song by song"),
 )
+
+
+# The pace a site's robots.txt asks for, where it asks one (gametabs.net's Crawl-delay, tests/fixtures/gametabs/
+# robots.txt), which caracole reports beside its own: since d19226e no Crawl-delay is a floor.
+CRAWL_DELAY_ASKED = {"gametabs": 5.0}
 
 
 def more_paths(site: Site) -> int:
@@ -118,6 +123,7 @@ Figures = tuple[Indexed | None, Progress | None]
 # todo.write_pages writes the pages; ``index_figures`` only reads, and counts again whatever stamp has moved since,
 # so the figures are never stale, only slower until the next write.
 COUNTS = "sites:counts"
+COUNTS_VERSION = 1  # of what ``_counted`` counts: a change to it counts every index again
 _RECORDS = {
     "ug": ("ug:sitemaps",),
     "gtptabs": ("gtptabs:sitemaps",),
@@ -158,14 +164,22 @@ def _counted(conn: sqlite3.Connection, key: str) -> list[int]:
 def _stamp(conn: sqlite3.Connection, key: str) -> str:
     rows = conn.execute(f"SELECT key, value FROM kv WHERE key IN ({','.join('?' * len(_RECORDS[key]))}) "
                         "ORDER BY key", _RECORDS[key]).fetchall()
-    return hashlib.sha256(json.dumps([list(r) for r in rows]).encode()).hexdigest()
+    return hashlib.sha256(json.dumps([COUNTS_VERSION, [list(r) for r in rows]]).encode()).hexdigest()
+
+
+def _stored(key: str, entry: Any, stamp: str) -> list[int] | None:
+    """A site's counts as kept, when kept for its records as they are now (``stamp``) and of the shape ``_counted``
+    gives; None for any other entry, which another caracole or a hand may have written: it is counted again."""
+    counts = entry.get("counts") if isinstance(entry, dict) and entry.get("stamp") == stamp else None
+    if (isinstance(counts, list) and len(counts) == (3 if key == "gametabs" else 2)
+            and all(isinstance(n, int) and not isinstance(n, bool) for n in counts)):
+        return counts
+    return None
 
 
 def _counts(conn: sqlite3.Connection, key: str, kept: dict[str, Any]) -> list[int]:
-    entry = kept.get(key)
-    if isinstance(entry, dict) and entry.get("stamp") == _stamp(conn, key) and isinstance(entry.get("counts"), list):
-        return [int(n) for n in entry["counts"]]
-    return _counted(conn, key)
+    counts = _stored(key, kept.get(key), _stamp(conn, key))
+    return counts if counts is not None else _counted(conn, key)
 
 
 def refresh_counts(conn: sqlite3.Connection) -> None:
@@ -175,9 +189,8 @@ def refresh_counts(conn: sqlite3.Connection) -> None:
     fresh = {}
     for key in _RECORDS:
         stamp = _stamp(conn, key)
-        entry = kept.get(key)
-        fresh[key] = (entry if isinstance(entry, dict) and entry.get("stamp") == stamp
-                      else {"stamp": stamp, "counts": _counted(conn, key)})
+        counts = _stored(key, kept.get(key), stamp)
+        fresh[key] = {"stamp": stamp, "counts": counts if counts is not None else _counted(conn, key)}
     if fresh != kept:
         kv_set_json(conn, COUNTS, fresh)
 
@@ -306,10 +319,23 @@ def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
     return {"count": sum(each), "unit": _unit(sum(each), unit), "songs": sum(1 for n in each if n), "detail": None}
 
 
-def _pace(cfg: Config, key: str) -> str:
+def _spread(cfg: Config, key: str) -> str:
     low, high = cfg.provider(key).delay
-    spread = f"{low:g} s" if low == high else f"{low:g}–{high:g} s"
-    return f"{spread} between {'runs' if key == 'youtube' else 'requests'}"
+    return f"{low:g} s" if low == high else f"{low:g}–{high:g} s"
+
+
+def _pace(cfg: Config, key: str) -> str:
+    return f"{_spread(cfg, key)} between {'runs' if key == 'youtube' else 'requests'}"
+
+
+def _robots(cfg: Config, site: Site) -> str:
+    """A site's robots.txt in words, gametabs.net's with the pace caracole keeps there: robots.txt's Crawl-delay is no
+    floor (d19226e), so the sentence says whether caracole waits less, by the owner's choice, or more."""
+    asked = CRAWL_DELAY_ASKED.get(site.key)
+    if asked is None:
+        return site.robots
+    waits = f"caracole waits {_spread(cfg, site.key)}"
+    return site.robots.format(pace=waits + (", by your choice" if cfg.provider(site.key).delay[0] < asked else ""))
 
 
 def _shown(value: Any) -> str | None:
@@ -317,6 +343,21 @@ def _shown(value: Any) -> str | None:
 
     at = parse(value) if isinstance(value, str) else None
     return shown(at, local=True) if at is not None else None
+
+
+def _whole(conn: sqlite3.Connection, key: str) -> bool:
+    """Whether a site's sitemaps were all read once: UG's index built whole, a site_index.py site's every sitemap read
+    (``complete_at``), each read a budget at a time across nights; until then its count is partial."""
+    if key == "ug":
+        from caracole.ug.index import index_state
+
+        return index_state(conn) == "complete"
+    from caracole import gametabs_fetch, gtptabs_fetch, harptabs_fetch, musescore_fetch
+    from caracole.site_index import complete_at
+
+    read = {"gtptabs": gtptabs_fetch.SITE, "musescore": musescore_fetch.SITE, "harptabs": harptabs_fetch.SITE,
+            "gametabs": gametabs_fetch.SITE}
+    return key not in read or complete_at(conn, read[key]) is not None
 
 
 def sites_data(conn: sqlite3.Connection, cfg: Config, cards: list[dict[str, Any]], now: datetime) -> dict[str, Any]:
@@ -336,7 +377,7 @@ def sites_data(conn: sqlite3.Connection, cfg: Config, cards: list[dict[str, Any]
     for site in SITES:
         indexed, progress = figures[site.key]
         partial = (not listings(conn).complete if site.key == "lacuerda"
-                   else progress is not None and progress.done < progress.of)
+                   else progress is not None and progress.done < progress.of) or not _whole(conn, site.key)
         status = status_of(conn, cfg, site.key, now, partial=partial)
         night = None
         if run is not None and status.state != "off":
@@ -357,7 +398,7 @@ def sites_data(conn: sqlite3.Connection, cfg: Config, cards: list[dict[str, Any]
             "status": {"state": status.state, "label": status.label, "detail": status.detail},
             "pace": _pace(cfg, site.key),
             "last": _shown(last),
-            "robots": {"text": site.robots, "paths": [list(p) for p in site.paths], "more": more_paths(site)},
+            "robots": {"text": _robots(cfg, site), "paths": [list(p) for p in site.paths], "more": more_paths(site)},
             "terms": site.terms,
         })
     return {
@@ -365,7 +406,8 @@ def sites_data(conn: sqlite3.Connection, cfg: Config, cards: list[dict[str, Any]
             "started": _shown(run["started"]), "finished": _shown(run.get("finished")),
             "requests": sum(int(n) for p, n in requests.items() if p != "youtube")},
         "totals": {"sites": len(SITES), "indexed": sum(s["indexed"]["songs"] for s in lines if s["indexed"]),
-                   "kept": sum(s["kept"]["count"] for s in lines)},
+                   # MuseScore's are links to open yourself: caracole keeps nothing of theirs
+                   "kept": sum(s["kept"]["count"] for s in lines if s["key"] != "musescore")},
         "songs": len(cards),
         "list": lines,
     }
