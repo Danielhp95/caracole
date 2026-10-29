@@ -142,7 +142,7 @@ def test_a_link_that_isnt_a_youtube_video_is_refused(able, queue, conn):
         response = post(app, "/youtube", {"artist": "Nick Cani", "title": "Vikingos veganos", "youtube": value},
                         accept="application/json")
         assert response.status == 400, value
-        assert "YouTube video's address" in answer(response)["error"]
+        assert answer(response)["error"] == "Not a YouTube video link."
     assert queue.snapshot() == [] and not able.wanted_file.exists()
 
 
@@ -152,16 +152,14 @@ def test_where_no_chords_can_be_made_it_says_why_and_queues_nothing(cfg, queue, 
     response = post(app, "/youtube", {"artist": "Nick Cani", "title": "Vikingos veganos", "youtube": PASTED},
                     accept="application/json")
     assert response.status == 409
-    assert answer(response)["error"].startswith("No sheet from a YouTube video here: this caracole was built "
-                                                "without auto-chords")
+    assert answer(response)["error"] == "No sheets from YouTube here: auto-chords isn't installed."
     assert queue.snapshot() == [] and not cfg.wanted_file.exists()
 
 
 @pytest.mark.parametrize("case,said", [
-    ("human", "Nick Cani - Vikingos veganos has a human sheet: caracole makes no sheet of it from YouTube."),
+    ("human", "Nick Cani - Vikingos veganos already has a sheet."),
     ("ignored", "Nick Cani - Vikingos veganos is ignored in overrides.toml."),
-    ("purchase", "Nick Cani - Vikingos veganos has its audio already, a purchase in Music/: auto-chords works "
-                 "from that."),
+    ("purchase", "Nick Cani - Vikingos veganos has bought audio in Music/: auto-chords uses that."),
 ])
 def test_a_song_youtube_isnt_for_is_refused(able, queue, conn, case, said):
     song = add_song(conn, "Nick Cani", "Vikingos veganos")
@@ -206,9 +204,9 @@ def test_where_it_cant_the_request_form_says_why_and_offers_no_field(cfg, queue,
     add_song(conn, "Nick Cani", "Vikingos veganos")
     body, data = page_data(app_for(cfg, queue))
     assert data["server"]["youtube"]["ok"] is False
-    assert data["server"]["youtube"]["why"].startswith("this caracole was built without auto-chords")
+    assert data["server"]["youtube"]["why"] == "auto-chords isn't installed"
     assert '<input name="youtube"' not in body
-    assert '<p class="hint">No sheet from a YouTube video here: this caracole was built without auto-chords' in body
+    assert '<p class="hint">No sheets from YouTube here: auto-chords isn&#x27;t installed.</p>' in body
 
 
 def test_the_file_on_disk_offers_none_of_it(able, conn):
@@ -219,5 +217,5 @@ def test_the_file_on_disk_offers_none_of_it(able, conn):
 
     add_song(conn, "Nick Cani", "Vikingos veganos")
     html = build_library_page(conn, able, Overrides(), datetime(2026, 10, 29, tzinfo=UTC))
-    assert '<input name="youtube"' not in html and '<p class="hint">No sheet from a YouTube video' not in html
+    assert '<input name="youtube"' not in html and '<p class="hint">No sheets from YouTube' not in html
     assert "server" not in json.loads(JSON_BLOCK.search(html).group(1))

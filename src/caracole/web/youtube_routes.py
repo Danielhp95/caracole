@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from caracole.songs import Song
 
 VIDEO_LIMIT = 600  # characters of a pasted address
-NOT_HERE = "No sheet from a YouTube video here"  # how the page and a refusal begin, where none can be made
+NOT_HERE = "No sheets from YouTube here"  # how the page and a refusal begin, where none can be made
 
 ROUTES = (Route("POST", "/youtube", lambda app, asked, form: sheet_from_youtube(app, form)),)
 
@@ -82,16 +82,16 @@ def video_field(form: dict[str, str]) -> str:
     value = form.get("youtube", "").strip()
     video = video_id_from_url(value) if len(value) <= VIDEO_LIMIT else None
     if video is None:
-        raise Refused(400, "Not a video", "That isn't a YouTube video's address: paste it as your browser shows it "
-                                          "(youtube.com/watch?v=…, youtu.be/…).")
+        raise Refused(400, "Not a video", "Not a YouTube video link.")
     return watch_url(video)
 
 
 def youtube_problem(app: WebApp) -> str | None:
-    """Why this caracole makes no sheet from a YouTube video (``youtube_fetch.route_problem``), or None when it does."""
-    from caracole.youtube_fetch import route_problem
+    """Why this caracole makes no sheet from a YouTube video, in a few words (``youtube_fetch.route_reason``), or None
+    when it does."""
+    from caracole.youtube_fetch import route_reason
 
-    return route_problem(app.cfg)
+    return route_reason(app.cfg)
 
 
 def youtube_is_for(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> None:
@@ -102,8 +102,6 @@ def youtube_is_for(conn: sqlite3.Connection, song: Song, overrides: Overrides) -
 
     not_ignored(song, overrides)
     if conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
-        raise Refused(409, "Has a sheet", f"{song.display} has a human sheet: caracole makes no sheet of it from "
-                                          "YouTube.")
+        raise Refused(409, "Has a sheet", f"{song.display} already has a sheet.")
     if song.audio_path and youtube_audio(conn, song) is None:
-        raise Refused(409, "Has its audio", f"{song.display} has its audio already, a purchase in Music/: "
-                                            "auto-chords works from that.")
+        raise Refused(409, "Has its audio", f"{song.display} has bought audio in Music/: auto-chords uses that.")

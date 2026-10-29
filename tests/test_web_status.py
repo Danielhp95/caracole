@@ -295,8 +295,8 @@ def youtube_job(state="running", stages=None):
 
 
 def test_a_sheet_from_youtube_says_its_running_stage():
-    lines = {"song": "Adding to the library…", "audio": "Taking the audio from YouTube…",
-             "lyrics": "Fetching the lyrics from LRCLIB…", "chords": "Working out the chords from the audio…",
+    lines = {"song": "Adding to the library…", "audio": "Getting the audio…",
+             "lyrics": "Fetching the lyrics from LRCLIB…", "chords": "Working out the chords…",
              "pdf": "Rendering the sheet…"}
     for name, text in lines.items():
         assert job_line(youtube_job(stages={name: ("running", "")}), None) == Line("running", text)
@@ -306,14 +306,12 @@ def test_a_sheet_from_youtube_says_its_running_stage():
 
 def test_a_sheet_from_youtube_is_ready_once_its_chords_are_made():
     every = {"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "found, timed"),
-             "chords": ("done", "chords over LRCLIB's timed lyrics"), "pdf": ("done", "made"), "pages": ("done", "")}
+             "chords": ("done", "chords over the lyrics"), "pdf": ("done", "made"), "pages": ("done", "")}
     sheet = SongFacts(sheet="Nick%20Cani/Vikingos%20veganos/sheet%20%28auto%29.html")
     assert job_line(youtube_job("done", every), sheet) == Line("ready", "Ready", ("Open sheet", sheet.sheet))
     # An auto sheet of an earlier video, kept while YouTube cooled down: no new sheet, so not Ready.
-    waited = every | {"audio": ("skipped", "YouTube is cooling down after a block, until 2026-10-30 20:00 UTC"),
-                      "chords": ("skipped", "no audio from the video to work from")}
+    waited = every | {"audio": ("skipped", "YouTube is paused after a block, until 2026-10-30 20:00 UTC"),
+                      "chords": ("skipped", "no audio")}
     assert job_line(youtube_job("done", waited), sheet) == Line("waiting", "Not made yet", details=details_href(5))
-    failed = youtube_job("failed", every | {"audio": ("failed", "the video can't be downloaded (Private video): "
-                                                                 "give it another")})
-    assert job_line(failed, None) == Line("failed", "the video can't be downloaded (Private video): give it another.",
-                                          details=details_href(5))
+    failed = youtube_job("failed", every | {"audio": ("failed", "can't download this video; try another")})
+    assert job_line(failed, None) == Line("failed", "can't download this video; try another.", details=details_href(5))

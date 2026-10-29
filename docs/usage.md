@@ -1810,7 +1810,7 @@ once, rather than a night apart: on the library page caracole serve serves, or w
 
 The song goes into wanted.txt if the library hasn't got it, as `caracole add` adds it, and the
 video under `[youtube]`; then, one stage a line (`Audio: downloaded …`, `Lyrics: found, timed.`,
-`Chords: chords over LRCLIB's timed lyrics.`, `Sheet: …/sheet (auto).txt, readable after 54.8 s.`):
+`Chords: chords over the lyrics.`, `Sheet: …/sheet (auto).txt, readable after 54.8 s.`):
 its audio, on the terms above (the budget, the pauses, one run at a time, a block honoured);
 its lyrics from LRCLIB, asked with the audio's length when its wanted.txt line gives none, so the
 timed lyrics LRCLIB picks fit the audio; the chords from the audio (auto-chords, a few minutes on
@@ -3893,21 +3893,26 @@ Who can reach it, below).
   `caracole youtube --sheet --progress` (see A sheet from a video, now, under
   [Audio from YouTube](#audio-from-youtube)), queued as any request is. A song you have
   with no human sheet, not ignored and with no purchase linked has the same
-  under its line's chevron, **Sheet from a YouTube video**: the address, and
+  under its line's chevron, **From a YouTube video**: the address, and
   Make the sheet, which replaces any audio it had from YouTube. The line then
-  says how it goes ("Taking the audio from YouTube…", "Fetching the lyrics from
-  LRCLIB…", "Working out the chords from the audio…", "Rendering the sheet…"),
-  with its steps as chips: Song, Audio YouTube, Lyrics, Chords, PDF. Ready, its
-  title and its Open open `sheet (auto).html`, and the Requests tab says what
-  the sheet holds (chords over LRCLIB's timed lyrics, a chart then the lyrics,
-  or chords alone). A block, a cooldown, a spent budget or a network error ends
+  says how it goes ("Getting the audio…", "Fetching the lyrics from LRCLIB…",
+  "Working out the chords…", "Rendering the sheet…"), with its steps as chips:
+  Song, Audio YouTube, Lyrics, Chords, PDF. Ready, its title and its Open open
+  `sheet (auto).html`, and the Requests tab says what the sheet holds ("Chords
+  over the lyrics.", "Chords, then the lyrics.", "Chords only, no lyrics."), or
+  why the lyrics wait ("No lyrics yet (LRCLIB unavailable); tonight's run tries
+  again."): the nightly run asks LRCLIB again, and auto-chords makes the sheet
+  again with them. A block, a cooldown, a spent budget or a network error ends
   it **Not made yet**, the step that stopped it red, the reason in the Requests
-  tab, with Try again; a video YouTube won't give or audio auto-chords can't
-  read, **Failed**. A song with a human sheet, ignored or with a purchase is
-  refused before anything is written or queued, and so is a link that isn't a
-  YouTube video's. One at a time a song: asked again while one waits or runs,
-  that one is the answer. Where caracole can't make the chords, the form has no
-  such field, and says why in one line, and the cards offer nothing.
+  tab ("YouTube is paused after a block, until …"), with Try again; a video
+  YouTube won't give ("can't download this video; try another") or audio
+  auto-chords can't read, **Failed**. A song with a human sheet ("… already has
+  a sheet."), ignored or with bought audio is refused before anything is written
+  or queued, and so is a link that isn't a YouTube video's ("Not a YouTube video
+  link."). One at a time a song: asked again while one waits or runs, that one
+  is the answer. Where caracole can't make the chords, the form has no such
+  field and says why in one line ("No sheets from YouTube here: auto-chords
+  isn't installed."), and the cards offer nothing.
 - **Fetch it now.** Ticked, as it is by default, the request is looked up at
   once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
   lyrics and the rest. Each wanted song's line has Fetch now for its button,

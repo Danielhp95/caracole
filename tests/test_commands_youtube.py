@@ -528,12 +528,12 @@ def test_sheet_makes_the_songs_auto_sheet_now_and_says_each_stage(tmp_path, fake
     lines = result.output.splitlines()
     assert f"Audio: downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}." in lines
     assert "Lyrics: LRCLIB has none." in lines
-    assert "Chords: chords alone: no lyrics from LRCLIB." in lines
+    assert "Chords: chords only, no lyrics." in lines
     sheet = tmp_path / "lib" / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt"
     assert any(line.startswith(f"Sheet: {sheet}, readable after") for line in lines)
     assert (sheet.parent / "sheet (auto).html").is_file()
     events = [e for e in map(read_progress_line, lines) if e is not None]
-    assert {"stage": "chords", "state": "done", "detail": "chords alone: no lyrics from LRCLIB"} in events
+    assert {"stage": "chords", "state": "done", "detail": "chords only, no lyrics"} in events
     assert events[-1]["done"]["ok"] is True
     assert "Done in" in result.output and "1 yt-dlp run" in result.output and len(asked) == 2
 
@@ -550,7 +550,7 @@ def test_sheet_refuses_a_song_with_a_human_sheet_and_exits_1(tmp_path, fake, con
     result = invoke(write_config(tmp_path, fake, chordpro=chordpro), "--song", "Nick Cani - Vikingos veganos",
                     "--url", f"https://youtu.be/{VIKINGOS}", "--sheet")
     assert result.exit_code == 1
-    assert "No sheet made: Nick Cani - Vikingos veganos has a human sheet" in result.output
+    assert "No sheet made: Nick Cani - Vikingos veganos already has a sheet." in result.output
     assert fake.argvs() == []
 
 

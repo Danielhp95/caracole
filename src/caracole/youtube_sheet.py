@@ -62,10 +62,8 @@ STAGES = (
 )
 # What the chords stage says the sheet holds, by the lyrics auto-chords laid the chords over
 # (autochords/run.py's version ``raw["lyrics"]``), which caracole serve's Ready says.
-HOLDS = {"synced": "chords over LRCLIB's timed lyrics",
-         "plain": "a chord chart, then LRCLIB's lyrics (their timings don't fit this audio)",
-         "none": "chords alone: no lyrics from LRCLIB"}
-NO_AUDIO = "no audio from the video to work from"
+HOLDS = {"synced": "chords over the lyrics", "plain": "chords, then the lyrics", "none": "chords only, no lyrics"}
+NO_AUDIO = "no audio"
 
 
 @dataclass(frozen=True)
@@ -174,7 +172,7 @@ class _Sheet:
         req = self.request
         key = identity_key(req.artist, req.title)
         if key in self.overrides.ignore:
-            raise _Stop(f"{req.display} is ignored in overrides.toml: take it out of [ignore] first")
+            raise _Stop(f"{req.display} is ignored in overrides.toml")
         song = find_song(self.conn, key)
         said = "in the library"
         if song is None:
@@ -190,13 +188,13 @@ class _Sheet:
                 raise _Stop(f"{req.display} is in wanted.txt, line {line.line_no}, but couldn't be synced")
             said = f"added to wanted.txt, line {line.line_no}"
         if song.status == "ignored":
-            raise _Stop(f"{song.display} is ignored in overrides.toml: take it out of [ignore] first")
+            raise _Stop(f"{song.display} is ignored in overrides.toml")
         if self.conn.execute("SELECT 1 FROM files WHERE song_id = ? AND name = ?", (song.id, HUMAN_SHEET)).fetchone():
-            raise _Stop(f"{song.display} has a human sheet: caracole makes no sheet of it from YouTube")
+            raise _Stop(f"{song.display} already has a sheet")
         if song.audio_path and youtube_audio(self.conn, song) is None:
-            raise _Stop(f"{song.display} has its audio already, a purchase in Music/: auto-chords works from that")
+            raise _Stop(f"{song.display} has bought audio in Music/: auto-chords uses that")
         if req.url is None and song.key in self.overrides.youtube and self.overrides.youtube[song.key] is None:
-            raise _Stop(f'[youtube] says "none" for {song.display}: give it a video to take the audio from')
+            raise _Stop(f'[youtube] says "none" for {song.display}: give it a video')
         if req.url is not None:
             try:
                 add_youtube(self.cfg.overrides_file, song.display, req.url)
@@ -230,7 +228,7 @@ class _Sheet:
         if is_cooling(self.conn, PROVIDER, self.now):
             until = get_state(self.conn, PROVIDER).cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
-            return "skipped", f"YouTube is cooling down after a block, until {when}: try again then"
+            return "skipped", f"YouTube is paused after a block, until {when}"
         heard: list[tuple[str, Record]] = []
         runner = make_youtube(self.cfg, self.conn, self.run_id)
         try:
@@ -242,7 +240,7 @@ class _Sheet:
             message = (f"{e}\nNo more yt-dlp runs until {until} (block #{state.strikes}). Nothing was marked "
                        "missing.")
             alert_block(self.cfg, PROVIDER, message)
-            return "skipped", f"YouTube blocked caracole ({e}): no more yt-dlp runs until {until}"
+            return "skipped", f"YouTube blocked caracole; paused until {until}"
         finally:
             self.result.requests[PROVIDER] = runner.requests_made
             runner.close()
@@ -251,20 +249,19 @@ class _Sheet:
         self._song_again()
         if stats.budget_exhausted or not heard:
             budget = self.cfg.provider(PROVIDER).budget
-            return "skipped", f"YouTube's budget of {budget} yt-dlp runs is spent: try again later"
+            return "skipped", f"YouTube's budget of {budget} runs is spent; try again later"
         outcome, record = heard[-1]
         got = record.video
         if outcome == DOWNLOADED_NOW and got is not None:
             named = f"{got.title} ({got.channel})" if got.channel else got.title or got.id
             return "done", f"downloaded {named}, {got.url}"
         if outcome == MISSED:
-            return self._fail("no video on YouTube fits: give it one")
+            return self._fail("no video fits; give it one")
         if outcome == PASSED_OVER:
-            why = record.unusable_reason or "YouTube won't give it without a login"
-            return self._fail(f"the video can't be downloaded ({why}): give it another")
+            return self._fail("can't download this video; try another")
         if outcome == GAVE_UP:
-            return self._fail(f"the video can't be downloaded: {record.error}")
-        return "failed", f"yt-dlp failed ({record.error}): try again later"
+            return self._fail("can't download this video; try another")
+        return "failed", "download failed; try again later"
 
     def _audio_length(self) -> float | None:
         """The audio's length in seconds: as yt-dlp reported it, else as its file says."""
@@ -291,7 +288,7 @@ class _Sheet:
         if is_cooling(self.conn, "lrclib", self.now):
             until = get_state(self.conn, "lrclib").cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
-            return "skipped", f"LRCLIB is cooling down after a block, until {when}: the sheet has no lyrics yet"
+            return "skipped", f"no lyrics yet (LRCLIB paused until {when})"
         length = self._audio_length() if self.result.states.get("audio") == "done" else None
         client = make_client(self.cfg, self.conn, "lrclib", self.run_id)
         try:
@@ -301,21 +298,17 @@ class _Sheet:
             state = record_block(self.conn, "lrclib", self.now, str(e))
             until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
             alert_block(self.cfg, "lrclib", f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
-            return "skipped", f"LRCLIB blocked caracole ({e}): no more requests to it until {until}"
+            return "skipped", f"no lyrics yet (LRCLIB blocked caracole; paused until {until})"
         finally:
             self.result.requests["lrclib"] = client.requests_made
             client.close()
         if answered_any(self.conn, self.run_id, "lrclib", client.requests_made):
             record_ok(self.conn, "lrclib", self.now)
         self._song_again()
-        later = ("the sheet has no lyrics yet; tonight's run asks LRCLIB again, and auto-chords then makes the sheet "
-                 "again with them")
         if stats.budget_exhausted:
-            return "skipped", f"LRCLIB's budget is spent: {later}"
+            return "skipped", "no lyrics yet (LRCLIB's budget spent); tonight's run tries again"
         if stats.failures:
-            _, e = stats.failures[0]
-            status = getattr(e, "status", None)
-            return "failed", f"LRCLIB answered {status}: {later}" if status else f"LRCLIB failed ({e}): {later}"
+            return "failed", "no lyrics yet (LRCLIB unavailable); tonight's run tries again"
         if stats.found:
             found = song_lyrics(self.song)
             return "done", "found, timed" if found is not None and found.synced else "found"
@@ -341,14 +334,14 @@ class _Sheet:
                                    now=self.now, overrides=self.overrides, only={self.song.id})
         self._song_again()
         if stats.errors:
-            return self._fail(f"auto-chords can't run here: {stats.errors[0]}")
+            return self._fail(f"auto-chords can't run here ({stats.errors[0]})")
         if stats.failures:
-            return self._fail(f"auto-chords can't read the audio: {stats.failures[0].error}")
+            return self._fail("auto-chords can't read the audio")
         kept = self.conn.execute(
             "SELECT version_id FROM files WHERE song_id = ? AND name = ?", (self.song.id, AUTO_SHEET)).fetchone()
         made = kept is not None and self.song.autochords_mtime == self.song.audio_mtime
         if not made:
-            return self._fail("auto-chords made no sheet of it: the log says why")
+            return self._fail("auto-chords made no sheet; see the log")
         used = get_version(self.conn, kept[0]).raw.get("lyrics")
         holds = HOLDS.get(str(used), "chords")
         return "done", holds if stats.generated else f"up to date: {holds}"
@@ -357,7 +350,7 @@ class _Sheet:
         from caracole.render import render_all
 
         if self.result.states.get("chords") != "done":
-            return "skipped", "no sheet to render"
+            return "skipped", "no sheet"
         stats = render_all(self.conn, self.cfg, self.overrides, runner=self.runner, now=self.now,
                            song_ids={self.song.id})
         if stats.font_error:

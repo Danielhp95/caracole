@@ -178,7 +178,7 @@ def test_a_song_new_to_the_library_gets_its_sheet_from_the_video(setup, conn, fa
     assert ends["song"] == ("done", f"added to wanted.txt, line 16; recorded under [youtube]: https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["audio"] == ("done", f"downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}")
     assert ends["lyrics"] == ("done", "found, timed")
-    assert ends["chords"] == ("done", "chords over LRCLIB's timed lyrics")
+    assert ends["chords"] == ("done", "chords over the lyrics")
     assert ends["pdf"] == ("done", "made")
     # A song comes from a wanted.txt line, and the video goes under [youtube], as caracole youtube --url writes it.
     assert "Nick Cani - Vikingos veganos" in setup.wanted_file.read_text(encoding="utf-8")
@@ -220,7 +220,7 @@ def test_without_lyrics_on_lrclib_the_sheet_is_the_chords_alone(setup, conn, fak
     result, heard = make(setup)
     assert result.ok
     assert heard.ends()["lyrics"] == ("done", "LRCLIB has none")
-    assert heard.ends()["chords"] == ("done", "chords alone: no lyrics from LRCLIB")
+    assert heard.ends()["chords"] == ("done", "chords only, no lyrics")
     text = auto_sheet(setup, conn, find_song(conn, result_key(conn)))
     assert "[Chords]" in text and "[Lyrics]" not in text
 
@@ -233,9 +233,8 @@ def test_lrclib_failing_leaves_the_chords_alone_and_says_what_comes_of_the_lyric
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok
-    assert heard.ends()["lyrics"] == ("failed", "LRCLIB answered 503: the sheet has no lyrics yet; tonight's run asks "
-                                                "LRCLIB again, and auto-chords then makes the sheet again with them")
-    assert heard.ends()["chords"] == ("done", "chords alone: no lyrics from LRCLIB")
+    assert heard.ends()["lyrics"] == ("failed", "no lyrics yet (LRCLIB unavailable); tonight's run tries again")
+    assert heard.ends()["chords"] == ("done", "chords only, no lyrics")
     assert get_song(conn, find_song(conn, result_key(conn)).id).lyrics_status == "pending"  # never a miss
 
 
@@ -245,7 +244,7 @@ def test_timed_lyrics_of_another_cut_give_a_chart_then_the_lyrics(setup, conn, f
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok
-    assert heard.ends()["chords"][1].startswith("a chord chart, then LRCLIB's lyrics")
+    assert heard.ends()["chords"] == ("done", "chords, then the lyrics")
     text = auto_sheet(setup, conn, find_song(conn, result_key(conn)))
     assert "[Chords]" in text and "[Lyrics]" in text
 
@@ -273,9 +272,9 @@ def keep_human_sheet(conn, cfg, song):
 
 
 @pytest.mark.parametrize("case,said", [
-    ("human", "has a human sheet: caracole makes no sheet of it from YouTube"),
+    ("human", "already has a sheet"),
     ("ignored", "is ignored in overrides.toml"),
-    ("purchase", "has its audio already, a purchase in Music/"),
+    ("purchase", "has bought audio in Music/"),
 ])
 def test_a_song_youtube_isnt_for_is_refused_and_youtube_is_asked_nothing(setup, conn, fake, sites, tmp_path,
                                                                           case, said):
@@ -319,8 +318,8 @@ def test_a_block_cools_youtube_down_sends_one_alert_and_makes_nothing(setup, con
     result, heard = make(setup)
     assert result.ok  # a wait, never a failure
     state, detail = heard.ends()["audio"]
-    assert state == "skipped" and detail.startswith("YouTube blocked caracole")
-    assert heard.ends()["chords"] == ("skipped", "no audio from the video to work from")
+    assert state == "skipped" and detail.startswith("YouTube blocked caracole; paused until ")
+    assert heard.ends()["chords"] == ("skipped", "no audio")
     assert heard.ends()["pdf"][0] == "skipped"
     assert is_cooling(conn, "youtube", NOW) and get_state(conn, "youtube").strikes == 1
     assert len(ntfy.posts) == 1 and ntfy.posts[0].headers["title"] == "caracole: YouTube blocked"
@@ -334,14 +333,14 @@ def test_while_youtube_cools_down_it_asks_nothing(setup, conn, fake, sites, tmp_
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok and fake.argvs() == []
-    assert heard.ends()["audio"][0] == "skipped" and "cooling down after a block" in heard.ends()["audio"][1]
+    assert heard.ends()["audio"][0] == "skipped" and "paused after a block" in heard.ends()["audio"][1]
 
 
 def test_a_video_youtube_wont_give_fails_for_good(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path, stderr="ERROR: [youtube] lzN7Thn3FV4: Private video. Sign in if you've been granted "
                                     "access to this video", exit=1)
     result, heard = make(setup)
-    assert not result.ok and result.failed and "give it another" in result.failed
+    assert not result.ok and result.failed == "can't download this video; try another"
     assert heard.ends()["audio"][0] == "failed" and heard.ends()["chords"][0] == "skipped"
 
 
@@ -349,13 +348,13 @@ def test_a_network_error_is_a_wait(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path, stderr="ERROR: [Errno -3] Temporary failure in name resolution", exit=1)
     result, heard = make(setup)
     assert result.ok and heard.ends()["audio"][0] == "failed"
-    assert "try again later" in heard.ends()["audio"][1]
+    assert heard.ends()["audio"][1] == "download failed; try again later"
 
 
 def test_audio_auto_chords_cant_read_fails(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path)
     result, heard = make(setup, recognizer=Recognizer(fail=True))
-    assert not result.ok and result.failed.startswith("auto-chords can't read the audio")
+    assert not result.ok and result.failed == "auto-chords can't read the audio"
     assert heard.ends()["chords"][0] == "failed" and heard.ends()["pdf"][0] == "skipped"
 
 
@@ -366,7 +365,7 @@ def test_the_audio_it_has_is_not_asked_for_again(setup, conn, fake, sites, tmp_p
     result, heard = make(setup, recognizer=recognizer)
     assert result.ok and len(fake.argvs()) == 1 and recognizer.calls == []
     assert heard.ends()["audio"] == ("done", f"it has the audio of https://www.youtube.com/watch?v={VIKINGOS} already")
-    assert heard.ends()["chords"] == ("done", "up to date: chords over LRCLIB's timed lyrics")
+    assert heard.ends()["chords"] == ("done", "up to date: chords over the lyrics")
 
 
 def test_another_video_replaces_the_audio_and_the_sheet(setup, conn, fake, sites, tmp_path):

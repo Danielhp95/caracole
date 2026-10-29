@@ -313,6 +313,7 @@ from caracole.youtube_fetch import (
     UNUSABLE,
     SongState,
     route_problem,
+    route_reason,
     song_states,
     videos_by_audio,
 )
@@ -414,7 +415,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         "icons": page_icons(cfg.cache_dir),  # each source's name, badge and inlined icon (icons.py)
         "catalogue": catalogue(),  # the progressions with a name, by key: #prog= finds each name's every reading
     }
-    problem = route_problem(cfg) if controls is not None else None
+    problem = route_reason(cfg) if controls is not None else None
     if controls is not None:
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
                           "removing": sorted(controls.removing), "jobs": list(controls.jobs),
@@ -1153,15 +1154,11 @@ def _requests_panel(controls: WebControls | None) -> str:
 
 # The request form's YouTube video field, served where this caracole makes a sheet from one (web/youtube_routes.py).
 _YOUTUBE_FIELD = (
-    '<label class="f youtube-field"><span>YouTube video <em>(optional: the sheet made from it)</em></span>'
+    '<label class="f youtube-field"><span>YouTube video <em>(optional)</em></span>'
     '<input name="youtube" maxlength="600" autocomplete="off" inputmode="url" spellcheck="false" '
     'placeholder="youtube.com/watch?v=…"></label>'
 )
-_YOUTUBE_HINT = (
-    '<p class="hint">With a YouTube video, caracole makes the song\'s sheet from it instead, as <code>caracole '
-    'youtube --sheet</code> does: its audio taken with yt-dlp, the chords worked out from it (a few minutes), over '
-    'LRCLIB\'s lyrics. A human sheet found later takes its place.</p>'
-)
+_YOUTUBE_HINT = '<p class="hint">With a YouTube video, the sheet is made from it (a few minutes).</p>'
 
 
 def _request_form(controls: WebControls | None, youtube_problem: str | None = None) -> str:
@@ -1173,7 +1170,7 @@ def _request_form(controls: WebControls | None, youtube_problem: str | None = No
         field, hint = _YOUTUBE_FIELD, _YOUTUBE_HINT
     else:
         field = ""
-        hint = f'<p class="hint">No sheet from a YouTube video here: {html_text.escape(youtube_problem)}.</p>'
+        hint = f'<p class="hint">No sheets from YouTube here: {html_text.escape(youtube_problem)}.</p>'
     return (_REQUEST.replace("__CSRF__", html_text.escape(controls.csrf, quote=True))
             .replace("__YOUTUBE__", field).replace("__YOUTUBEHINT__", hint))
 

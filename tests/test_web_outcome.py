@@ -492,7 +492,7 @@ def youtube_job(state="running", stages=None):
 
 
 EVERY = {"song": ("done", "added to wanted.txt, line 16"), "audio": ("done", "downloaded Vikingos veganos"),
-         "lyrics": ("done", "found, timed"), "chords": ("done", "chords over LRCLIB's timed lyrics"),
+         "lyrics": ("done", "found, timed"), "chords": ("done", "chords over the lyrics"),
          "pdf": ("done", "made"), "pages": ("done", "")}
 SHEET = SongFacts(sheet="Nick%20Cani/Vikingos%20veganos/sheet%20%28auto%29.html")
 
@@ -505,9 +505,9 @@ def test_a_sheet_from_youtube_shows_its_steps_audio_from_youtube():
     assert progress(job, line, None) == {"steps": [c.as_json() for c in steps(job)], "count": "2 of 5 done"}
     ready = youtube_job("done", EVERY)
     assert progress(ready, job_line(ready, SHEET), SHEET) == {}  # Ready: its steps fold away
-    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube blocked caracole (bot): no more yt-dlp "
-                                                               "runs until 2026-10-30 20:00 UTC"),
-                                          "chords": ("skipped", "no audio from the video to work from")})
+    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube blocked caracole; paused until "
+                                                               "2026-10-30 20:00 UTC"),
+                                          "chords": ("skipped", "no audio")})
     # The audio a block stopped is the step that stopped it, drawn failed; those it left with nothing to do go.
     assert progress(waited, job_line(waited, SHEET), SHEET)["steps"] == [
         {"name": "Song", "source": "", "state": "done"}, {"name": "Audio", "source": "YouTube", "state": "failed"},
@@ -517,20 +517,17 @@ def test_a_sheet_from_youtube_shows_its_steps_audio_from_youtube():
 def test_a_sheet_from_youtube_says_what_it_holds_or_what_stopped_it():
     ready = youtube_job("done", EVERY)
     assert outcome(ready, job_line(ready, SHEET), SHEET) == Outcome(
-        "ready", "Ready", "Chords over LRCLIB's timed lyrics.", Action("Open", href="/" + SHEET.sheet))
-    no_words = youtube_job("done", EVERY | {"lyrics": ("skipped", "LRCLIB is cooling down after a block, until "
-                                                                 "2026-10-30 20:00 UTC: the sheet has no lyrics yet"),
-                                            "chords": ("done", "chords alone: no lyrics from LRCLIB")})
+        "ready", "Ready", "Chords over the lyrics.", Action("Open", href="/" + SHEET.sheet))
+    no_words = youtube_job("done", EVERY | {"lyrics": ("failed", "no lyrics yet (LRCLIB unavailable); tonight's run "
+                                                                "tries again"),
+                                            "chords": ("done", "chords only, no lyrics")})
     assert outcome(no_words, job_line(no_words, SHEET), SHEET).reason == (
-        "LRCLIB is cooling down after a block, until 2026-10-30 20:00 UTC: the sheet has no lyrics yet.")
-    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube is cooling down after a block, until "
-                                                               "2026-10-30 20:00 UTC: try again then"),
-                                          "chords": ("skipped", "no audio from the video to work from"),
-                                          "pdf": ("skipped", "no sheet to render")})
+        "No lyrics yet (LRCLIB unavailable); tonight's run tries again.")
+    waited = youtube_job("done", EVERY | {"audio": ("skipped", "YouTube is paused after a block, until "
+                                                               "2026-10-30 20:00 UTC"),
+                                          "chords": ("skipped", "no audio"), "pdf": ("skipped", "no sheet")})
     said = outcome(waited, job_line(waited, None), None)
-    assert said == Outcome("waiting", "Not made yet",
-                           "YouTube is cooling down after a block, until 2026-10-30 20:00 UTC: try again then.",
+    assert said == Outcome("waiting", "Not made yet", "YouTube is paused after a block, until 2026-10-30 20:00 UTC.",
                            Action("Try again", post="/jobs/again", fields=(("job", "6"),)))
-    failed = youtube_job("failed", EVERY | {"chords": ("failed", "auto-chords can't read the audio: RuntimeError: "
-                                                                 "Format not recognised.")})
+    failed = youtube_job("failed", EVERY | {"chords": ("failed", "auto-chords can't read the audio")})
     assert outcome(failed, job_line(failed, None), None).word == "Failed"

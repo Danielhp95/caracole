@@ -643,7 +643,7 @@ def test_a_sheet_from_youtube_is_one_caracole_youtube_sheet_whose_progress_is_it
     from caracole.youtube_sheet import STAGES
 
     steps = youtube_sheet_steps("Nick Cani - Vikingos veganos", "https://www.youtube.com/watch?v=lzN7Thn3FV4")
-    assert steps == [("Making the sheet from YouTube", (
+    assert steps == [("Making the sheet", (
         "youtube", "--sheet", "--progress", "--url=https://www.youtube.com/watch?v=lzN7Thn3FV4",
         "--song=Nick Cani - Vikingos veganos"))]
     progress = ['caracole-progress: {"song":{"id":7,"display":"Nick Cani - Vikingos veganos"}}',

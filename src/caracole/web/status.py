@@ -92,8 +92,10 @@ STAGE_LINES = {
     "pages": "Writing the library page",
     "songbooks": "Remaking its songbooks",
     "search": "Searching LaCuerda",  # caracole lacuerda --search's (jobs.SEARCH_STAGES)
-    "audio": "Taking the audio from YouTube",  # caracole youtube --sheet's (youtube_sheet.STAGES)
-    "chords": "Working out the chords from the audio",
+    "audio": "Getting the audio",  # caracole youtube --sheet's (youtube_sheet.STAGES)
+    "chords": "Working out the chords",
+    "video": "Searching YouTube",  # caracole youtube --search's (jobs.YOUTUBE_SEARCH_STAGES)
+    "thumbnail": "Getting the thumbnail",
 }
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site

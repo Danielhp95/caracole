@@ -384,7 +384,7 @@
     if (removing.has(id) || busy.has(id) || (asked && isActive(asked))) return null;
     const form = songForm("youtube-sheet", "/youtube", s);
     const label = el("label", "f");
-    label.appendChild(el("span", null, "Sheet from a YouTube video"));
+    label.appendChild(el("span", null, "From a YouTube video"));
     const field = el("input");
     field.name = "youtube";
     field.required = true;
@@ -398,8 +398,7 @@
     go.type = "submit";
     go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
       " from this YouTube video");
-    go.title = "Takes its audio with yt-dlp, works out the chords (a few minutes) and lays them over LRCLIB's " +
-      "lyrics, as caracole youtube --sheet does";
+    go.title = "Chords from its audio, lyrics from LRCLIB (a few minutes)";
     form.append(label, go);
     postInPlace(form, go, s);
     return form;

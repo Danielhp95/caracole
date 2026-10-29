@@ -116,6 +116,20 @@ def route_problem(cfg: Config) -> str | None:
     return None
 
 
+def route_reason(cfg: Config) -> str | None:
+    """``route_problem`` in a few words, for a page ("auto-chords isn't installed"); None when there is none."""
+    problem = route_problem(cfg)
+    if problem is None:
+        return None
+    if problem.startswith("turned off"):
+        return "YouTube is turned off"
+    if "built without auto-chords" in problem:
+        return "auto-chords isn't installed"
+    if problem.startswith("auto-chords"):
+        return "auto-chords' model files are missing"
+    return "yt-dlp is missing"
+
+
 def audio_dir(cfg: Config) -> Path:
     return cfg.cache_dir / AUDIO_FOLDER
 
