@@ -1,5 +1,6 @@
 """The pure half of auto-chords: snapping, LRC parsing and sheet layout."""
 
+from caracole.autochords import merge
 from caracole.autochords.merge import ChordSegment, build_sheet, parse_lrc, snap_to_beats
 
 # 120 BPM: a beat every 0.5 s, so a 4/4 bar lasts 2 s.
@@ -98,7 +99,9 @@ def test_build_sheet_places_chords_over_lyric_lines():
         seg(18.0, 20.0, "G"),
     ]
     sheet = build_sheet(segs, title="River Road", artist="Nobody", synced=synced, beats=BEATS)
-    # D starts halfway through the first line's 4 s: column 27 // 2 = 13.
+    # D starts halfway through the first line's 4 s: column 27 // 2 = 13, the start of "the".
+    # G starts halfway through the last line's: column 19 // 2 = 9, the "e" of "left", so it
+    # moves to that word's start, column 8.
     assert sheet == (
         "auto-generated, unverified\n"
         "Nobody - River Road\n"
@@ -107,7 +110,7 @@ def test_build_sheet_places_chords_over_lyric_lines():
         "Walking down the river road\n"
         "[ch]Em[/ch]\n"
         "Singing to the morning light\n"
-        "[ch]C[/ch]        [ch]G[/ch]\n"
+        "[ch]C[/ch]       [ch]G[/ch]\n"
         "Nothing left to say\n"
     )
 
@@ -126,6 +129,110 @@ def test_columns_count_characters_in_cjk_lines():
     segs = [seg(8.0, 10.0, "G"), seg(10.0, 16.0, "D")]
     sheet = build_sheet(segs, title="斑马斑马", artist="宋冬野", synced=synced, beats=BEATS)
     assert sheet.splitlines()[3:5] == ["[ch]G[/ch]   [ch]D[/ch]", "第一行歌词在这里"]
+
+
+def test_a_mid_word_column_moves_to_the_nearest_word_start():
+    # N0 o1 t2 h3 i4 n5 g6 _7 l8 e9 f10 t11 _12 t13 o14 _15 s16 a17 y18
+    text = "Nothing left to say"
+    columns = [0, 3, 4, 5, 7, 9, 10, 11, 13, 18]
+    # 4 is as far from "Nothing" as from "left": a tie goes to the earlier word.
+    assert [merge._word_start(text, c) for c in columns] == [0, 0, 0, 8, 8, 8, 8, 13, 13, 16]
+
+
+def test_chords_laid_inside_one_word_go_on_the_next_words_in_order():
+    # Three changes in the first 1.5 s of a 4 s line: columns 0, 2 and 4, all inside
+    # "Everything", where they used to sit on its letters.
+    synced = "[00:08.00]Everything you want\n[00:12.00]Singing to the morning light\n"
+    segs = [seg(8.0, 8.5, "G"), seg(8.5, 9.0, "D"), seg(9.0, 16.0, "Em")]
+    sheet = build_sheet(segs, title="T", artist="A", synced=synced, beats=BEATS)
+    assert sheet.splitlines()[3:5] == [
+        "[ch]G[/ch]          [ch]D[/ch]   [ch]Em[/ch]",
+        "Everything you want",
+    ]
+
+
+def test_one_chord_a_word_and_none_under_the_name_before_it():
+    # Each chord after the first takes the first word start clear of the chord before it
+    # and a space; with no word left, it goes right after that chord.
+    assert merge._on_words("Everything you want", [(0, "G"), (2, "D"), (4, "Em")]) == [
+        (0, "G"),
+        (11, "D"),
+        (15, "Em"),
+    ]
+    assert merge._on_words("Oh my love", [(0, "Cmaj7"), (3, "D")]) == [(0, "Cmaj7"), (6, "D")]
+    assert merge._on_words("Oh my love", [(0, "G"), (3, "D")]) == [(0, "G"), (3, "D")]
+    assert merge._on_words("Hi there", [(3, "G"), (6, "D"), (7, "Em")]) == [
+        (3, "G"),
+        (5, "D"),
+        (7, "Em"),
+    ]
+
+
+def test_a_chord_sits_on_a_words_first_letter_never_on_the_punctuation_before_it():
+    assert merge._word_start("¿Dónde estás?", 0) == 1
+    assert merge._word_start("¿Dónde estás?", 6) == 7
+    assert merge._word_start("¿Dónde estás?", 12) == 7  # the closing "?" is the last word's
+    assert merge._word_start("(oh) yeah", 0) == 1
+    assert merge._word_start("\u201cHey,\u201d she said", 0) == 1
+    # ¡0 A1 y2 ,3 _4 a5 y6 ,7 _8 a9 y10 !11
+    assert [merge._word_start("¡Ay, ay, ay!", c) for c in (0, 3, 4, 11)] == [1, 1, 5, 9]
+    # The chord ringing as the line starts goes on its first word, not on the "¿".
+    synced = "[00:08.00]¿Dónde estás?\n[00:12.00]Aquí estoy\n"
+    segs = [seg(6.0, 16.0, "G")]
+    sheet = build_sheet(segs, title="T", artist="A", synced=synced, beats=BEATS)
+    assert sheet.splitlines()[3:5] == [" [ch]G[/ch]", "¿Dónde estás?"]
+
+
+def test_accents_and_apostrophes_are_inside_a_word():
+    import unicodedata
+
+    # m0 i1 _2 c3 o4 r5 a6 z7 ó8 n9 _10 e11 s12 t13 á14 _15 a16 q17 u18 í19
+    text = "mi corazón está aquí"
+    assert [merge._word_start(text, c) for c in (6, 8, 9, 14, 19)] == [3, 11, 11, 16, 16]
+    # The same words with each accent a combining mark after its letter: the "n" after
+    # "o\u0301" (column 10) is still inside "corazón".
+    decomposed = unicodedata.normalize("NFD", text)
+    assert merge._word_start(decomposed, 10) == 12
+    # c0 a1 n2 '3 t4 _5 s6 t7 o8 p9
+    assert merge._word_start("can't stop", 4) == 6
+    assert merge._word_start("can\u2019t stop", 4) == 6
+    # l0 '1 a2 m3 o4 u5 r6 _7 t8
+    assert merge._word_start("l'amour toujours", 2) == 0
+    # An apostrophe that isn't between two letters is a quote: r0 o1 c2 k3 _4 '5 n6 '7 _8 r9
+    assert [merge._word_start("rock 'n' roll", c) for c in (5, 7)] == [6, 6]
+    assert merge._word_start("'cause I said so", 0) == 1
+
+
+def test_each_chinese_or_japanese_character_starts_a_word():
+    # The "，" is no word: as near the character before it as the one after it, it takes
+    # the one before.
+    text = "第一行，歌词在这里"
+    assert [merge._word_start(text, c) for c in range(len(text))] == [0, 1, 2, 2, 4, 5, 6, 7, 8]
+    assert [merge._word_start("君の名は", c) for c in range(4)] == [0, 1, 2, 3]
+    # The long vowel mark goes on the kana before it: ラ0 ー1 メ2 ン3.
+    assert merge._word_start("ラーメン", 1) == 0
+    # A Latin word among Chinese characters is one word: 我0 l1 o2 v3 e4 你5.
+    assert [merge._word_start("我love你", c) for c in (2, 3, 4, 5)] == [1, 1, 5, 5]
+    # Korean is written with spaces between its words: 사0 랑1 해2 요3 _4 너5 를6.
+    assert [merge._word_start("사랑해요 너를", c) for c in (1, 2, 3, 6)] == [0, 0, 5, 5]
+
+
+def test_a_line_of_one_word_keeps_every_chord_on_it_in_order():
+    assert merge._word_start("Everything", 7) == 0
+    assert merge._on_words("Everything", [(0, "G"), (6, "D")]) == [(0, "G"), (2, "D")]
+    assert merge._on_words("Oh", [(0, "G"), (0, "D"), (1, "Em")]) == [
+        (0, "G"),
+        (2, "D"),
+        (4, "Em"),
+    ]
+
+
+def test_a_chord_past_the_lines_end_stays_where_it_is():
+    assert merge._word_start("Hi there", 8) == 8
+    assert merge._word_start("Hi there", 12) == 12
+    assert merge._on_words("Hi there", [(1, "G"), (10, "D")]) == [(0, "G"), (10, "D")]
+    # So does every chord of a line with no word in it.
+    assert [merge._word_start("♪ ♪", c) for c in range(3)] == [0, 1, 2]
 
 
 def test_lrc_without_lyric_lines_falls_back_to_plain():
@@ -245,7 +352,8 @@ def test_line_after_a_break_shows_the_chord_already_sounding():
         "[Instrumental]",
         "| [ch]G[/ch] | [ch]G[/ch] | [ch]D[/ch] | [ch]D[/ch] |",
         "",
-        "[ch]D[/ch]         [ch]G[/ch]",
+        # G comes at column 21 // 2 = 10, inside "singing": on its start, column 8.
+        "[ch]D[/ch]       [ch]G[/ch]",
         "Back to singing again",
         "And the very last line",
     ]

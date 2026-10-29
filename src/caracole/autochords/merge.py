@@ -15,6 +15,7 @@ import bisect
 import itertools
 import re
 import statistics
+import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, replace
 
@@ -194,7 +195,7 @@ def _synced_body(
             if ringing:
                 placed.insert(0, (0, ringing[-1]))
         if placed:
-            out.append(_chord_line(placed))
+            out.append(_chord_line(_on_words(text, placed)))
         out.append(text)
         block_start = bool(chart) or (rest and nxt is not None)
         if chart:
@@ -288,6 +289,75 @@ def _chord_line(placed: Sequence[tuple[int, str]]) -> str:
         out += " " * (col - visible) + f"[ch]{name}[/ch]"
         visible = col + len(name)
     return out
+
+
+# The letters of the scripts written without spaces between words: Chinese characters and kana.
+_UNSPACED = re.compile(
+    "[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\U00020000-\U0002ebef]"
+)
+_APOSTROPHES = "'\u2019"
+
+
+def _on_words(text: str, placed: Sequence[tuple[int, str]]) -> list[tuple[int, str]]:
+    """The chords of a lyric line, each moved to the start of the word nearest its column.
+
+    They keep their order, one a word: a chord whose word start is the previous chord's, or
+    under its name, takes the first word start clear of that name and a space, or, with no word
+    left, the column right after it, where ``_chord_line`` would lay it out anyway.
+    """
+    starts = _word_starts(text)
+    out: list[tuple[int, str]] = []
+    free = 0  # the first column clear of the previous chord's name and a space
+    for col, name in placed:
+        at = _word_start(text, col)
+        if at < free:
+            later = bisect.bisect_left(starts, free)
+            at = starts[later] if later < len(starts) else free
+        out.append((at, name))
+        free = at + len(name) + 1
+    return out
+
+
+def _word_start(text: str, col: int) -> int:
+    """The column of the word start in ``text`` nearest ``col``; a tie goes to the earlier word.
+
+    A word starts at a letter or digit that doesn't go on the word before it: the line's first, or
+    one after a space, punctuation or a quote, so a chord goes on "¿[G]Dónde" and "([G]oh", never
+    on the "¿" or the "(". An accent, precomposed or combining, and an apostrophe between two
+    letters ("can't", "l'amour") are inside a word. Each Chinese character and kana starts a word,
+    as those scripts have no spaces (a long vowel mark, "ー", goes on the kana before it); Hangul,
+    written with spaces, has words as Latin letters do. A column at or past the line's end, or in a
+    line with no word ("♪"), stays where it is.
+    """
+    starts = _word_starts(text)
+    if not starts or col >= len(text):
+        return col
+    return starts[_nearest(starts, col)]
+
+
+def _word_starts(text: str) -> list[int]:
+    """The columns where the words of ``text`` start, as ``_word_start`` reads them."""
+    starts = []
+    for i, c in enumerate(text):
+        kind = unicodedata.category(c)
+        if _UNSPACED.match(c):
+            if kind == "Lo":
+                starts.append(i)
+            continue
+        if kind[0] not in "LN":
+            continue
+        before = text[i - 1] if i else ""
+        if i > 1 and before in _APOSTROPHES:
+            before = text[i - 2]  # an apostrophe between two letters joins them
+        if not _in_word(before):
+            starts.append(i)
+    return starts
+
+
+def _in_word(c: str) -> bool:
+    """Whether a letter after ``c`` goes on the word ``c`` is in: a letter, a mark or a digit of a
+    script written with spaces."""
+    return bool(c) and unicodedata.category(c)[0] in "LMN" and not _UNSPACED.match(c)
 
 
 def _merge(segs: list[ChordSegment]) -> list[ChordSegment]:

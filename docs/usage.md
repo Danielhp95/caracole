@@ -1832,7 +1832,8 @@ its audio, on the terms above (the budget, the pauses, one run at a time, a bloc
 its lyrics from LRCLIB, asked with the audio's length when its wanted.txt line gives none, so the
 timed lyrics LRCLIB picks fit the audio; the chords from the audio (auto-chords, a few minutes on
 a CPU); its PDF and its viewer, `sheet (auto).html`, the viewer a UG sheet gets; then the pages.
-The chords go over the lyrics, a line each, as on Ultimate Guitar, when LRCLIB's timed lyrics are
+The chords go over the lyrics, a line each, each chord on the first letter of a word, as on
+Ultimate Guitar, when LRCLIB's timed lyrics are
 as long as the audio within 2 seconds; otherwise (a video with a long intro, say) a chord chart
 comes first and the lyrics after it, and with no lyrics on LRCLIB, the chart alone. Without
 `--url`, the video under `[youtube]`, else the one its search picks. It refuses a song with a
