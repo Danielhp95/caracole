@@ -20,8 +20,9 @@ with linked audio is due when:
 For each song due, BTC recognizes the chords, beat_this finds the beats, and
 ``merge.build_sheet`` lays the chords out over LRCLIB's lyrics: the synced ones
 when their duration matches the audio's within 2 s (otherwise their timings
-belong to another cut of the song), else the plain ones, else none (a chord
-chart alone). The sheet is kept with a ``versions`` row of provider ``auto``,
+belong to another cut of the song), with each chord over the word sung when it
+starts where they time each word (enhanced LRC); else the plain ones, else none (a
+chord chart alone). The sheet is kept with a ``versions`` row of provider ``auto``,
 and the song becomes found.
 
 Two kinds of failure are told apart, because only one is the purchase's:
@@ -58,7 +59,7 @@ from typing import Protocol
 
 from caracole.autochords.beats import detect_beats
 from caracole.autochords.btc import BTCRecognizer
-from caracole.autochords.merge import NO_CHORD, ChordSegment, build_sheet, youtube_credit
+from caracole.autochords.merge import NO_CHORD, ChordSegment, LrcLine, build_sheet, parse_lrc_words, youtube_credit
 from caracole.config import Config
 from caracole.db import kv_delete, kv_get_json, kv_set_json
 from caracole.keys import estimate_key
@@ -453,6 +454,12 @@ def _synced_for(lyrics: Lyrics | None, audio: Path) -> str | None:
     return lyrics.synced
 
 
+def _word_timed(synced: str | None) -> list[LrcLine] | None:
+    """The synced lyrics read with their word stamps, when they time words (enhanced LRC)."""
+    lines = parse_lrc_words(synced) if synced else []
+    return lines if any(line.words for line in lines) else None
+
+
 def _from_youtube(video: Video | None) -> str | None:
     """The sheet's line for audio taken from YouTube: which video it was, by its title and channel
     (``merge.youtube_credit``); the version keeps its address (``_keep``)."""
@@ -483,6 +490,7 @@ def _make_sheet(
         title=song.title,
         artist=song.artist,
         synced=synced,
+        synced_words=_word_timed(synced),
         plain=plain,
         beats=beats,
         downbeats=downbeats,

@@ -154,9 +154,13 @@ run tries again.", "YouTube is paused after a block, until …"). The details ar
   the cooldown, one alert. A queued job of no song's (`jobs.YOUTUBE_SEARCH`, among `INDEX_READS`), not the request
   thread, never `caracole get`; it is bulk work, so it waits for a nightly run rather than cutting in *(my call: "a
   lookup never runs yt-dlp")*.
-- *The thumbnail:* `https://i.ytimg.com/vi/<id>/hqdefault.jpg`, one request through a `PoliteClient` of provider
-  `youtube` (so its 15–30 s pause after the search applies: the row shows as soon as the video is known, its
-  thumbnail when the job ends) *(my call: no new provider for one image a search)*. i.ytimg.com's robots.txt,
+- *The thumbnail:* `https://i.ytimg.com/vi/<id>/hqdefault.jpg`, one request right after the search, through a
+  `PoliteClient` of provider `ytimg`, YouTube's image host, with no pause: the owner's "I want NO wait for getting
+  the thumbnail" (a first version used provider `youtube`, whose 15–30 s pause held it back). Its own cooldown and
+  alert: a thumbnail block never pauses YouTube's audio, nor a yt-dlp block the thumbnails (none is asked then
+  anyway, as no search runs); switchable, `[providers.ytimg] enabled = false` giving rows without thumbnails; a
+  row in the to-do page's Provider health, off where YouTube's route is, and none in the Sites tab, which lists
+  the sites caracole reads, not this one image host. i.ytimg.com's robots.txt,
   checked by hand on 2026-10-29, closes `/sb/` alone for `User-agent: *`: pinned in
   tests/fixtures/youtube/ytimg-robots.txt and `ROBOTS_DISALLOW`. Kept only when its bytes are a JPEG
   (`checked_jpeg`: the start marker, its segments walked to a frame of 1–2048 px a side and on to the scan, its end

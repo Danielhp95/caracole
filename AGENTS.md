@@ -574,12 +574,15 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     once the library has a song, artist pages with what is left, `harptabs_index.artist_pass`),
     `gametabs` 20 requests (its sitemap index and six children, then a song's candidates,
     `gametabs_fetch.CANDIDATES` (4) at most, then, once the library has a song, game pages with what is left,
-    `gametabs_index.game_pass`), `youtube` 6 yt-dlp runs
+    `gametabs_index.game_pass`), `youtube` 6 yt-dlp runs, `ytimg` 20 requests (YouTube's image host: the
+    thumbnail of a video suggested for a search, one image a video, youtube_search.py)
     (`config.DEFAULT_PROVIDERS`); `caracole index build` at least 100 (`BUILD_BUDGET`,
     commands/index.py), and `caracole harptabs --index` and `caracole gametabs --index` their `--budget`,
     `BUILD_BUDGET` by default. Then `BudgetExhausted`. Between any two requests to a provider, a
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com, MuseScore
-    and harptabs.com, 1–2 s for LRCLIB, 1 s for gametabs.net).
+    and harptabs.com, 1–2 s for LRCLIB, 1 s for gametabs.net, none for `ytimg`: the owner's choice of
+    2026-10-29, a thumbnail comes right after its search, YouTube's 15–30 s between yt-dlp runs and its last
+    request never holding it back; everything else below binds it).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
     lookups run it), `caracole versions --keep`, one tab page asked for now, and `--keep-more`, as
     many as one lookup's budget lets (`--choose` and
@@ -610,8 +613,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     (`_LockedClient._after_a_lookup`). The gap between two requests is the pace's alone: no
     robots.txt `Crawl-delay` adds to it (gametabs.net's asks 5 s; the owner chose, on 2026-10-28, that caracole
     does not keep it).
-  - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `harptabs`, `gametabs`, `youtube`) can be
-    turned off (`enabled = false`): then it gets no client and its step is skipped.
+  - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `harptabs`, `gametabs`, `youtube`, `ytimg`)
+    can be turned off (`enabled = false`): then it gets no client and its step is skipped (`ytimg` off: a
+    suggested video's row without its thumbnail).
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
     more that run, `health.record_block` cools the provider down for 24 h × 2^(k−1) + 2 h after
     the k-th block in a row (so the next nightly run is always skipped), one ntfy alert goes out
@@ -657,7 +661,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     library page, the owner's explicit choice of 2026-10-29 (`youtube_search.py`, `caracole youtube --search`,
     a queued job, never `caracole get`): metadata alone (`ytsearch1:`, `--flat-playlist --dump-single-json`,
     the query after `--`, `make_youtube`'s pauses and lock), its thumbnail from `i.ytimg.com/vi/<id>/hqdefault.jpg`
-    (a `PoliteClient` of provider `youtube`, its pause after the run, one request, kept in `cache_dir` once
+    (a `PoliteClient` of provider `ytimg`, right after the search with no pause, one request, cached forever,
+    its own cooldown and alert, so that a block of either never cools the other, kept in `cache_dir` once
     `checked_jpeg` reads a JPEG), only for a query with no sheet on the sites, a query once in 30 days (kv
     `youtube-search:<key>`, which keeps the video for the page), at most `SEARCHES_PER_HOUR` (10) an hour
     (`events`, runs named `youtube-search:`), none while YouTube cools down, none of a query that failed

@@ -12,9 +12,11 @@ alone" (LaCuerda's own search is the first), on the YouTube exception's terms (A
   plugins or remote code, ``--flat-playlist --dump-single-json`` of ``ytsearch1:`` with the query after ``--``
   (``YtDlp.search``): one result's metadata, never a download, never a playlist's page. A bot check, a 429 or
   a 403 is ``ProviderBlocked``: the cooldown, and one ntfy alert.
-- **Its thumbnail**, once a video: ``https://i.ytimg.com/vi/<id>/hqdefault.jpg``, one request through a
-  ``PoliteClient`` of provider ``youtube`` (its pause after the search, its budget of one, robots.txt: i.ytimg.com
-  closes ``/sb/`` alone, http.py ``ROBOTS_DISALLOW``), kept only when its bytes are a JPEG (``checked_jpeg``: its
+- **Its thumbnail**, once a video, right after the search: ``https://i.ytimg.com/vi/<id>/hqdefault.jpg``, one
+  request through a ``PoliteClient`` of provider ``ytimg`` (``THUMBS_PROVIDER``), YouTube's image host, with no pause
+  by the owner's choice (config.py), never while it cools down after a block of its own, nor when turned off; its
+  robots.txt honoured (i.ytimg.com closes ``/sb/`` alone, http.py ``ROBOTS_DISALLOW``), its answer cached forever,
+  so a video's thumbnail is never asked twice; kept only when its bytes are a JPEG (``checked_jpeg``: its
   segments walked to the image, a size of 1 to ``MAX_SIDE`` pixels a side, ``MAX_BYTES`` at most), in
   ``cache_dir/youtube-thumbs/<id>.jpg``, never in the library; caracole serve sends it (``GET /youtube/thumb/``).
 - **When** (``gate``, read with no request and no lock): only where this caracole can make a sheet from the video
@@ -52,6 +54,7 @@ if TYPE_CHECKING:
     from caracole.youtube import Video, YtDlp
 
 PROVIDER = "youtube"
+THUMBS_PROVIDER = "ytimg"  # YouTube's image host: a provider of its own, with no pause (config.py)
 SEARCHES_PER_HOUR = 10  # the page's searches of YouTube in the last hour, at most
 ASKED_FOR = timedelta(days=30)  # a query searched once in this long
 FAILED_FOR = timedelta(hours=1)  # a search that failed: not sent again for this long

@@ -93,6 +93,10 @@ delay = [1, 1]                    # one request a second
 enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
 budget = 6                        # yt-dlp runs per run, each a search or a download
 delay = [15, 30]                  # seconds between two yt-dlp runs
+[providers.ytimg]                 # YouTube's image host: a suggested video's thumbnail
+enabled = true                    # false: suggestions come without thumbnails
+budget = 20
+delay = [0, 0]                    # no wait: right after the search
 
 [match]                           # how sure a match must be, on a 0-100 score
 accept = 90                       # accept at this score or more...
@@ -185,9 +189,10 @@ under `[ntfy]`, which an older caracole read, is now an unknown key like any
 other: delete it, and the token.
 
 **Providers** are exactly `ug`, `lrclib`, `lacuerda`, `gtptabs`, `musescore`,
-`harptabs`, `gametabs` and `youtube`. Any other `[providers.…]` table is an error, like any other
+`harptabs`, `gametabs`, `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
+the library page suggests for a search). Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
-(YouTube's go unused: a lookup runs no yt-dlp).
+(YouTube's and its image host's go unused: a lookup runs no yt-dlp).
 
 **Two paces.** Bulk work, the nightly run, `caracole index build` and every
 command but `caracole get`, keeps `budget` and `delay`: 10–20 seconds between
@@ -205,10 +210,13 @@ twenty to thirty an hour with the defaults). What a lookup leaves undone waits
 for the nightly run. Either
 pace sends one request at a time to a site, `delay` apart (gametabs.net's robots.txt
 asks 5 seconds, which caracole does not keep: its pace is a second), and keeps everything else below:
-robots.txt's closed paths, the cache, the blocks and cooldowns. Only gtptabs.com, MuseScore, harptabs.com, gametabs.net and YouTube can be turned
+robots.txt's closed paths, the cache, the blocks and cooldowns. YouTube's image host has no `delay`
+by default, your choice: a suggested video's thumbnail comes right after its search, one image a
+video, its own cooldown after a block, apart from YouTube's. Only gtptabs.com, MuseScore, harptabs.com,
+gametabs.net, YouTube and YouTube's image host can be turned
 off: with `enabled = false` under `[providers.gtptabs]`, `[providers.musescore]`,
-`[providers.harptabs]`, `[providers.gametabs]` or `[providers.youtube]`, caracole sends that site nothing, the
-nightly run skips
+`[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]` or `[providers.ytimg]`, caracole sends
+that site nothing, the nightly run skips
 its step, and the to-do page's Provider health says it is off. The other three
 are what caracole is built on, so `enabled` in their tables is an unknown key.
 YouTube is on only where caracole can make chords of what it downloads (see
@@ -1829,7 +1837,8 @@ its audio, on the terms above (the budget, the pauses, one run at a time, a bloc
 its lyrics from LRCLIB, asked with the audio's length when its wanted.txt line gives none, so the
 timed lyrics LRCLIB picks fit the audio; the chords from the audio (auto-chords, a few minutes on
 a CPU); its PDF and its viewer, `sheet (auto).html`, the viewer a UG sheet gets; then the pages.
-The chords go over the lyrics, a line each, as on Ultimate Guitar, when LRCLIB's timed lyrics are
+The chords go over the lyrics, a line each, each chord on the first letter of a word, as on
+Ultimate Guitar, when LRCLIB's timed lyrics are
 as long as the audio within 2 seconds; otherwise (a video with a long intro, say) a chord chart
 comes first and the lyrics after it, and with no lyrics on LRCLIB, the chart alone. Without
 `--url`, the video under `[youtube]`, else the one its search picks. It refuses a song with a
@@ -3943,9 +3952,11 @@ Who can reach it, below).
   query has settled (the box unchanged for 1.5 s; Enter sends it at once): one
   yt-dlp run of `ytsearch1:` for the video's title, channel and length, never a
   download (`caracole youtube --search`, a request of its own in the Requests
-  tab), then its thumbnail from YouTube's image host (`i.ytimg.com/vi/…/hqdefault.jpg`,
-  one request, kept in caracole's cache once its bytes are a JPEG, and served
-  by caracole serve). A line under the results says "Looking on YouTube…", then
+  tab), then, with no wait, its thumbnail from YouTube's image host
+  (`i.ytimg.com/vi/…/hqdefault.jpg`, provider `ytimg`: one request, never twice
+  for a video, kept in caracole's cache once its bytes are a JPEG, and served by
+  caracole serve; a block there pauses thumbnails alone, and rows come without
+  them meanwhile). A line under the results says "Looking on YouTube…", then
   the video shows as a row: its thumbnail, its title (a link to it on
   YouTube), its channel and length, and **Make the sheet**, which opens the
   request form filled in with what you searched ("Nick Cani - Vikingos
@@ -5274,8 +5285,11 @@ NUC, the `caracole-autochords` unit runs it after each nightly run, see
 [deploy.md](deploy.md#4-auto-chords)). It links the new file to the song by
 its tags and duration (tags in two scripts, such as "Song Dongye (宋冬野)",
 work too), finds the chords and the beats, and writes
-`sheet (auto).txt`. With no timed lyrics to lay the chords over, the sheet is
-a chord chart by bars followed by the plain lyrics. It starts with
+`sheet (auto).txt`. With timed lyrics, each chord goes over the line sung when
+it starts, and over the word, where the lyrics time each word too (enhanced
+LRC, `<00:12.30>word`; most of LRCLIB's time their lines alone). With no timed
+lyrics to lay the chords over, the sheet is a chord chart by bars followed by
+the plain lyrics. It starts with
 "auto-generated, unverified", the song counts as found, and the next render
 makes `sheet (auto).pdf` with the Chinese font. A complete human sheet found
 later takes its place; a partial one is rendered beside it, and the auto

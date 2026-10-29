@@ -425,3 +425,11 @@ def test_the_interactive_pace_is_set_per_provider(tmp_path):
 def test_an_interactive_pace_of_the_wrong_kind_is_a_config_error(tmp_path, toml, where):
     with pytest.raises(ConfigError, match=rf"\[providers\.ug\]\.{where} must be"):
         load(tmp_path, f"[providers.ug]\n{toml}\n")
+
+
+def test_youtubes_image_host_is_a_switchable_provider_with_no_pause(tmp_path):
+    # The thumbnail of a video suggested for a search, one image a video, with no wait: the owner's choice.
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert cfg.provider("ytimg") == ProviderPolicy(budget=20, delay=(0.0, 0.0), lookup_delay=(0.0, 0.0))
+    p = write(tmp_path, "[providers.ytimg]\nenabled = false\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).provider("ytimg").enabled is False

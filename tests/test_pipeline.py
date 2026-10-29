@@ -1073,9 +1073,10 @@ def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     assert "| harptabs | OK | 2026-10-18 03:30 UTC |  | 1 |" in page
     assert "| gametabs | OK | 2026-10-18 03:30 UTC |  | 4 |" in page
     rows = [line for line in page.split("## Provider health", 1)[1].splitlines() if line.startswith("| ")]
-    # Every provider this run asked; YouTube, which needs auto-chords and its models, is off here, never used.
-    assert [row for row in rows if "never" in row] == [next(row for row in rows if row.startswith("| youtube |"))]
-    assert "| youtube | off: " in page
+    # Every provider this run asked; YouTube and its image host, which need auto-chords and its models, are off here,
+    # never used.
+    assert [row.split(" |")[0] for row in rows if "never" in row] == ["| youtube", "| ytimg"]
+    assert "| youtube | off: " in page and "| ytimg | off: " in page
 
 
 def health_row(cfg, provider):

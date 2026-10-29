@@ -572,9 +572,11 @@ SEARCHED = "Nick Cani - Vikingos veganos"
 
 @pytest.fixture
 def image_host(monkeypatch, ntfy):
-    """i.ytimg.com beside ntfy: ``answer`` is what a thumbnail's request gets; every request kept."""
+    """i.ytimg.com (provider ``ytimg``) beside ntfy: ``answer`` is what a thumbnail's request gets; every request
+    kept, and every pause caracole takes (``slept``), which a thumbnail never waits for."""
     host = type("ImageHost", (), {})()
     host.asked = []
+    host.slept = []
     host.answer = httpx.Response(200, content=THUMB, headers={"content-type": "image/jpeg"})
 
     def handler(request):
@@ -584,13 +586,14 @@ def image_host(monkeypatch, ntfy):
         return host.answer
 
     def transport(provider):
-        if provider == "youtube":
+        if provider == "ytimg":
             return httpx.MockTransport(handler)
         if provider == "ntfy":
             return httpx.MockTransport(ntfy.handler)
         pytest.fail(f"a client for {provider} was made")
 
     monkeypatch.setattr(_common, "transport_for", transport)
+    monkeypatch.setattr(_common, "sleep", host.slept.append)
     return host
 
 
@@ -691,3 +694,45 @@ def test_search_where_no_sheet_can_be_made_asks_nothing(tmp_path, fake, conn, im
 def test_search_goes_alone(tmp_path, fake, conn, image_host, args):
     result = invoke(write_config(tmp_path, fake), *args)
     assert result.exit_code == 2 and "--search goes alone" in result.output
+
+
+
+@pytest.mark.slow
+def test_the_thumbnail_comes_right_after_the_search_with_no_pause(tmp_path, fake, conn, image_host):
+    # YouTube's pause between two yt-dlp runs is 15–30 s; the thumbnail is YouTube's image host's, a provider of its
+    # own with none: neither that pause nor YouTube's last request (the search, just now) delays it.
+    vikingos_found(fake)
+    config = write_config(tmp_path, fake)
+    config.write_text(config.read_text().replace("delay = [0, 0]", "delay = [15, 30]"), encoding="utf-8")
+    result = invoke(config, "--search", SEARCHED)
+    assert result.exit_code == 0, result.output
+    assert image_host.asked == [f"https://i.ytimg.com/vi/{VIKINGOS}/hqdefault.jpg"]
+    assert image_host.slept == []  # not a slice of a pause, before the search or after it
+    ran = conn.execute("SELECT provider, url FROM events ORDER BY id").fetchall()
+    assert [p for p, _ in ran] == ["youtube", "ytimg"]  # the search's run, then the thumbnail, each its own provider
+
+
+@pytest.mark.slow
+def test_a_thumbnail_block_cools_down_youtubes_images_alone(tmp_path, fake, conn, image_host, ntfy):
+    vikingos_found(fake)
+    image_host.answer = httpx.Response(429, text="Too Many Requests")
+    config = write_config(tmp_path, fake, ntfy=True)
+    result = invoke(config, "--search", SEARCHED)
+    assert result.exit_code == 0 and result.output.splitlines()[-1].startswith("Searched:")  # the video, all the same
+    assert is_cooling(conn, "ytimg", _common.utcnow()) and not is_cooling(conn, "youtube", _common.utcnow())
+    assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: YouTube's images blocked"]
+    assert not (tmp_path / "cache" / "youtube-thumbs" / f"{VIKINGOS}.jpg").exists()
+    # While it cools down, the next suggestion comes without a thumbnail, and the image host is asked nothing.
+    fake.search("Nick Cani - Vegan Vikings", entry(OTHER, "Vegan Vikings", "Nick Cani", 223))
+    again = invoke(config, "--search", "Nick Cani - Vegan Vikings")
+    assert again.exit_code == 0 and again.output.splitlines()[-1].startswith("Searched:")
+    assert len(image_host.asked) == 1 and len(fake.argvs()) == 2
+
+
+def test_youtubes_images_turned_off_give_rows_without_thumbnails(tmp_path, fake, conn, image_host):
+    vikingos_found(fake)
+    config = write_config(tmp_path, fake)
+    config.write_text(config.read_text() + "[providers.ytimg]\nenabled = false\n", encoding="utf-8")
+    result = invoke(config, "--search", SEARCHED)
+    assert result.exit_code == 0 and result.output.splitlines()[-1].startswith("Searched:")
+    assert image_host.asked == []

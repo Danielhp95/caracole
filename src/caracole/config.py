@@ -64,10 +64,14 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     # each a search or a download, so six are three songs a night. A run sends several requests,
     # which yt-dlp's own pauses space out; these pauses go between two runs.
     "youtube": ProviderPolicy(budget=6, delay=(15.0, 30.0)),
+    # YouTube's image host, i.ytimg.com: the thumbnail of a video the library page suggests for a search, one image a
+    # video, never asked twice (youtube_search.py). No pause, the owner's choice of 2026-10-29: a provider of its own,
+    # so that YouTube's pause between yt-dlp runs never holds it back, and a block of either cools the other nothing.
+    "ytimg": ProviderPolicy(budget=20, delay=(0.0, 0.0), lookup_delay=(0.0, 0.0)),
 }
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"gtptabs", "musescore", "harptabs", "gametabs", "youtube"})
+SWITCHABLE = frozenset({"gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg"})
 
 
 @dataclass(frozen=True)

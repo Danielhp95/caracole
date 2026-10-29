@@ -411,6 +411,26 @@ def test_synced_lyrics_used_when_their_duration_matches_the_audio(conn, cfg, tmp
     assert get_version(conn, kept_files(conn, s.id)[0].version_id).raw["lyrics"] == "synced"
 
 
+def test_lyrics_that_time_each_word_put_each_chord_over_its_word(conn, cfg, tmp_path):
+    synced = (
+        "[00:00.50]<00:00.50>Walking <00:01.50>down <00:02.00>the <00:03.00>river <00:04.00>road\n"
+        "[00:05.20]Singing to the morning light\n"
+    )
+    s = with_audio(
+        conn,
+        tmp_path,
+        add_song(conn, "Nobody", "River Road"),
+        seconds=10.0,
+        lyrics_status="found",
+        lyrics_json=lyrics_json(synced=synced, duration=10.0),
+    )
+    run(conn, cfg, Heard((0.0, 3.0, "C"), (3.0, 10.0, "G")))
+    lines = auto_sheet(cfg, conn, s).splitlines()
+    i = lines.index("Walking down the river road")
+    # G comes in with "river"; laid out by its time in the line alone, it would go 3 letters before.
+    assert lines[i - 1] == "[ch]C[/ch]" + " " * 16 + "[ch]G[/ch]"
+
+
 def test_plain_lyrics_used_when_the_synced_duration_does_not_match(conn, cfg, tmp_path):
     # LRCLIB's record is another cut of the song: its timings would put chords on the wrong lines.
     s = with_audio(
@@ -509,6 +529,7 @@ def test_build_sheet_gets_the_song_beats_and_lyrics(conn, cfg, tmp_path, monkeyp
     assert seen["segments"] == [ChordSegment(0.0, 5.0, "C"), ChordSegment(5.0, 10.0, "G")]
     assert (seen["title"], seen["artist"]) == ("River Road - Remastered 2011", "Nobody")
     assert seen["synced"] == SYNCED
+    assert seen["synced_words"] is None  # its lines time no word
     assert seen["plain"] == "Walking down the river road\nSinging to the morning light"
     assert (seen["beats"], seen["downbeats"]) == (BEATS, DOWNBEATS)
 

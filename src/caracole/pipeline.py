@@ -69,7 +69,8 @@ from caracole.report import (
 from caracole.songs import ensure_current_keys, list_songs
 
 log = logging.getLogger(__name__)
-PROVIDERS = tuple(p for p in DEFAULT_PROVIDERS if p != "youtube")  # each gets a polite client; YouTube, yt-dlp
+# Each gets a polite client; YouTube yt-dlp, and its image host none: only a search's suggestion asks it.
+PROVIDERS = tuple(p for p in DEFAULT_PROVIDERS if p not in ("youtube", "ytimg"))
 clock = time.monotonic  # what the run's duration is measured with; tests replace it
 
 
