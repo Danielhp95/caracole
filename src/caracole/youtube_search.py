@@ -50,7 +50,9 @@ if TYPE_CHECKING:
 
     from caracole.config import Config
     from caracole.http import Client
+    from caracole.overrides import Overrides
     from caracole.search import IndexFound, LibraryHit, SiteArtist, SiteHit
+    from caracole.songs import Song
     from caracole.youtube import Video, YtDlp
 
 PROVIDER = "youtube"
@@ -61,9 +63,10 @@ FAILED_FOR = timedelta(hours=1)  # a search that failed: not sent again for this
 FAILURES_PAUSE = 3  # searches failed within FAILED_FOR that stop every search for that long
 RUN = "youtube-search:"  # how a search's run is named in events
 KV_PREFIX = "youtube-search:"  # + the query's key: when it was searched, and the video it found
+VIDEO_KEY = "video:"  # + a pasted video's id: the key of its metadata, beside the queries' keys
 FAILED_KEY = "youtube-search:failed"  # {query's key: {"at", "error"}}, those of the last FAILED_FOR
 ERROR_CHARS = 200
-STATES = ("found", "none", "auto", "failed", "spent")
+STATES = ("found", "none", "auto", "failed", "spent", "off")
 THUMB_URL = "https://i.ytimg.com/vi/{id}/hqdefault.jpg"  # 480 × 360
 THUMBS = "youtube-thumbs"  # in cache_dir: never cache_dir/youtube/, whose files tidy() lets go of
 MAX_BYTES = 256 * 1024
@@ -146,19 +149,43 @@ def gate(cfg: Config, conn: sqlite3.Connection, query: str, *, on_screen: bool, 
     """What a search of ``query`` is now, with no request (module docstring); None when none is for it: no word,
     a sheet on the screen already (``on_screen``: ``sheet_on_screen``), or a caracole that makes no sheet from a
     video (``youtube_fetch.route_problem``)."""
-    from caracole.health import is_cooling
     from caracole.youtube_fetch import route_problem
 
     key = query_key(query)
     if not key or on_screen or route_problem(cfg) is not None:
         return None
+    return _gate(conn, key, now)
+
+
+def video_key(video_id: str) -> str:
+    """A pasted video's key, beside the queries': its record and its failures go under it."""
+    return VIDEO_KEY + video_id
+
+
+def video_gate(cfg: Config, conn: sqlite3.Connection, video_id: str, now: datetime) -> Gate:
+    """What reading a pasted video's metadata is now, with no request, as a search's (``gate``): its title, channel,
+    length and thumbnail kept within 30 days (``found``, or ``none`` for a video YouTube wouldn't give), else the
+    same cooldown, hourly cap (shared with the searches) and failures; ``off`` where caracole makes no sheet from a
+    video (``youtube_fetch.route_reason``, its ``why``)."""
+    from caracole.youtube_fetch import route_reason
+
+    key = video_key(video_id)
+    reason = route_reason(cfg)
+    if reason is not None:
+        return Gate("off", key, why=reason)
+    return _gate(conn, key, now)
+
+
+def _gate(conn: sqlite3.Connection, key: str, now: datetime) -> Gate:
+    from caracole.health import is_cooling
+
     was = searched(conn, key, now)
     if was is not None:
         return Gate("found" if isinstance(was.get("video"), dict) else "none", key, was)
     if is_cooling(conn, PROVIDER, now):
-        return Gate("spent", key, why="YouTube is cooling down after a block")
+        return Gate("spent", key, why="YouTube is paused after a block")
     if searches_used(conn, now) >= SEARCHES_PER_HOUR:
-        return Gate("spent", key, why=f"this hour's {SEARCHES_PER_HOUR} searches of YouTube are spent")
+        return Gate("spent", key, why=f"this hour's {SEARCHES_PER_HOUR} YouTube lookups are spent")
     why = failed(conn, key, now)
     if why is not None:
         return Gate("failed", key, why=why)
@@ -176,6 +203,67 @@ def search(conn: sqlite3.Connection, runner: YtDlp, query: str, now: datetime) -
     if failures.pop(query_key(query), None) is not None:
         kv_set_json(conn, FAILED_KEY, failures)
     return video
+
+
+def read_video(conn: sqlite3.Connection, runner: YtDlp, video_id: str, now: datetime) -> Video | None:
+    """A pasted video's metadata (one yt-dlp run, no download), recorded under its key with it, or with none for a
+    video YouTube won't give (``VideoUnavailable``: private, removed, a login's), which is said, never retried
+    within 30 days. A block, a spent budget or any other error propagates and records nothing."""
+    from caracole.youtube import VideoUnavailable
+
+    key = video_key(video_id)
+    try:
+        video = runner.video(video_id)
+        said: dict[str, Any] = {"at": stamps.stamp(now), "video": video.as_json(), "thumb": False}
+    except VideoUnavailable as e:
+        video, said = None, {"at": stamps.stamp(now), "video": None, "unavailable": str(e.message or e)[:ERROR_CHARS]}
+    kv_set_json(conn, KV_PREFIX + key, said)
+    failures = _failures(conn, now)
+    if failures.pop(key, None) is not None:
+        kv_set_json(conn, FAILED_KEY, failures)
+    return video
+
+
+def song_of_video(conn: sqlite3.Connection, overrides: Overrides, video_id: str) -> Song | None:
+    """The library's song a video is the audio of, or under ``[youtube]`` for: its record's, else its paste's."""
+    from caracole.songs import find_song, get_song
+    from caracole.youtube_fetch import RECORD_PREFIX, load_record
+
+    for row in conn.execute("SELECT key FROM kv WHERE key LIKE ?", (f"{RECORD_PREFIX}%",)):
+        song_id = row[0].removeprefix(RECORD_PREFIX)
+        if song_id.isdigit():
+            record = load_record(conn, int(song_id))
+            if record.video is not None and record.video.id == video_id:
+                try:
+                    return get_song(conn, int(song_id))
+                except KeyError:
+                    continue
+    for key, pasted in overrides.youtube.items():
+        if pasted == video_id:
+            song = find_song(conn, key)
+            if song is not None:
+                return song
+    return None
+
+
+def known_artist(conn: sqlite3.Connection, name: str) -> bool:
+    """Whether ``name`` is an artist the library or an offline index knows, read with no request: a song of yours by
+    them, Ultimate Guitar's index or LaCuerda's."""
+    from caracole.normalize import identity_key, slug_key
+
+    key = slug_key(name)
+    if not key:
+        return False
+    artist = identity_key(name, "x").split("/")[0]
+    for sql, value in (("SELECT 1 FROM songs WHERE key LIKE ? LIMIT 1", artist + "/%"),
+                       ("SELECT 1 FROM ug_index WHERE artist_key = ? LIMIT 1", key),
+                       ("SELECT 1 FROM lacuerda_index WHERE artist_key = ? LIMIT 1", key)):
+        try:
+            if conn.execute(sql, (value,)).fetchone():
+                return True
+        except sqlite3.Error:
+            continue
+    return False
 
 
 # --- the thumbnail -----------------------------------------------------------------------------------------
@@ -216,10 +304,11 @@ def checked_jpeg(data: bytes) -> bytes | None:
     return None
 
 
-def fetch_thumbnail(cfg: Config, conn: sqlite3.Connection, client: Client, video_id: str, query: str,
+def fetch_thumbnail(cfg: Config, conn: sqlite3.Connection, client: Client, video_id: str, key: str,
                     now: datetime) -> bool:
     """The video's thumbnail, once (one request; none once it is kept), kept in ``cache_dir/youtube-thumbs/`` when
-    its bytes are a JPEG (``checked_jpeg``), and the query's search record says so; whether it is kept now. A
+    its bytes are a JPEG (``checked_jpeg``), and the record of ``key`` (a query's, a pasted video's) says so; whether
+    it is kept now. A
     thumbnail YouTube hasn't (404) or that isn't a JPEG is none; a block or an error propagates."""
     from caracole.youtube_urls import VIDEO_ID
 
@@ -239,9 +328,9 @@ def fetch_thumbnail(cfg: Config, conn: sqlite3.Connection, client: Client, video
         except BaseException:
             tmp.unlink(missing_ok=True)
             raise
-    said = searched(conn, query_key(query), now)
+    said = searched(conn, key, now)
     if said is not None and isinstance(said.get("video"), dict) and said["video"].get("id") == video_id:
-        kv_set_json(conn, KV_PREFIX + query_key(query), {**said, "thumb": True})
+        kv_set_json(conn, KV_PREFIX + key, {**said, "thumb": True})
     return True
 
 

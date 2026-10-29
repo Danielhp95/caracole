@@ -133,11 +133,11 @@ def test_none_goes_while_youtube_cools_down_or_once_the_hours_searches_are_spent
                      "'ok')", (f"youtube-search:2026-10-29T19:{n:02d}:00Z", f"2026-10-29T19:{n:02d}:00Z",
                                f"ytsearch1:song {n}"))
     said = gate(able, conn, QUERY, on_screen=False, now=NOW)
-    assert (said.state, said.why) == ("spent", f"this hour's {SEARCHES_PER_HOUR} searches of YouTube are spent")
+    assert (said.state, said.why) == ("spent", f"this hour's {SEARCHES_PER_HOUR} YouTube lookups are spent")
     assert gate(able, conn, QUERY, on_screen=False, now=NOW + timedelta(hours=1)).state == "auto"
     record_block(conn, "youtube", NOW, "bot check")
     assert gate(able, conn, QUERY, on_screen=False, now=NOW + timedelta(hours=1)).why == (
-        "YouTube is cooling down after a block")
+        "YouTube is paused after a block")
 
 
 def test_a_search_that_failed_isnt_sent_for_an_hour_nor_any_after_three_failed(able, conn):
@@ -168,3 +168,59 @@ def test_a_sheet_on_the_screen_is_a_strong_song_or_an_artist_named_whole():
     lc = SiteHit("lacuerda", "Vikingos veganos", "https://acordes.lacuerda.net/x", STRONG, sheet="x-2.shtml")
     assert sheet_on_screen([], none, [], [lc]) and not sheet_on_screen([], none, [], [replace(lc, sheet=None)])
     assert sheet_on_screen([], none, [SiteArtist("lacuerda", "Estopa", "estopa", "u", STRONG)], [])
+
+
+# --- a pasted video ---------------------------------------------------------------------------------------------
+
+
+def test_a_pasted_video_goes_by_the_same_gate_under_its_own_key(able, conn, cfg, monkeypatch):
+    from caracole.youtube_search import video_gate
+
+    said = video_gate(able, conn, VIDEO["id"], now=NOW)
+    assert (said.state, said.key) == ("auto", f"video:{VIDEO['id']}")
+    kv_set_json(conn, f"{KV_PREFIX}video:{VIDEO['id']}", {"at": "2026-10-20T10:00:00Z", "video": VIDEO, "thumb": True})
+    assert video_gate(able, conn, VIDEO["id"], now=NOW).state == "found"
+    record_failure(conn, f"video:{'x' * 11}", NOW, "HTTP Error 500")
+    assert video_gate(able, conn, "x" * 11, now=NOW).state == "failed"
+    record_block(conn, "youtube", NOW, "bot check")
+    assert video_gate(able, conn, "y" * 11, now=NOW).why == "YouTube is paused after a block"
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    off = video_gate(able, conn, "y" * 11, now=NOW)
+    assert (off.state, off.why) == ("off", "auto-chords isn't installed")
+
+
+def test_pasted_videos_and_searches_share_the_hours_cap(able, conn):
+    from caracole.youtube_search import video_gate
+
+    for n in range(SEARCHES_PER_HOUR):
+        run = f"youtube-search:{'video:' if n % 2 else ''}2026-10-29T19:{n:02d}:00Z"
+        conn.execute("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, 'youtube', 'x', "
+                     "NULL, 'ok')", (run, f"2026-10-29T19:{n:02d}:00Z"))
+    assert video_gate(able, conn, VIDEO["id"], now=NOW).state == "spent"
+    assert gate(able, conn, QUERY, on_screen=False, now=NOW).state == "spent"
+
+
+def test_the_song_a_video_is_the_audio_or_the_paste_of(conn):
+    from conftest import add_song
+
+    from caracole.overrides import Overrides
+    from caracole.youtube_search import song_of_video
+
+    song = add_song(conn, "Nick Cani", "Vikingos veganos")
+    assert song_of_video(conn, Overrides(), VIDEO["id"]) is None
+    assert song_of_video(conn, Overrides(youtube={song.key: VIDEO["id"]}), VIDEO["id"]).id == song.id
+    kv_set_json(conn, f"youtube:{song.id}", {"video": VIDEO, "source": "pasted", "audio": "/x.m4a"})
+    assert song_of_video(conn, Overrides(), VIDEO["id"]).id == song.id
+
+
+def test_an_artist_is_known_by_your_songs_and_the_offline_indexes(conn):
+    from conftest import add_song
+
+    from caracole.youtube_search import known_artist
+
+    assert not known_artist(conn, "Hyperfanes")
+    add_song(conn, "Hyperfanes", "Otra")
+    assert known_artist(conn, "Hyperfanes") and known_artist(conn, "hyperfanes")
+    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen) "
+                 "VALUES (1, 'nick-cani', 'vegan-vikings', 'chords', '1', 'x')")
+    assert known_artist(conn, "Nick Cani") and not known_artist(conn, "Somos vikingos veganos")

@@ -3388,6 +3388,20 @@ def test_the_file_page_filters_your_songs_and_enter_shows_the_command(conn, cfg,
 
 
 @in_chromium
+def test_a_youtube_link_on_the_file_page_says_the_command_that_adds_its_song(conn, cfg, tmp_path):
+    # The file asks nothing of anyone: a pasted video's link gets the line that makes its sheet where caracole runs.
+    add_song(conn, "Radiohead", "Creep")
+    path = write_library_page(cfg.library_dir, page(conn, cfg))
+    dom = dump_dom(path, tmp_path, "#q=" + quote("https://www.youtube.com/watch?v=lzN7Thn3FV4&pp=ygUQdmlraW5n"))
+    import html as html_module
+
+    shown = html_module.unescape(listing(dom))
+    assert ("<code>caracole youtube --song 'Artist - Title' --url "
+            "'https://www.youtube.com/watch?v=lzN7Thn3FV4&pp=ygUQdmlraW5n' --sheet</code>") in shown
+    assert "caracole search" not in shown
+
+
+@in_chromium
 def test_with_none_of_your_songs_matching_the_file_page_says_what_to_run_at_once(conn, cfg, tmp_path):
     add_song(conn, "Radiohead", "Creep")
     path = write_library_page(cfg.library_dir, page(conn, cfg))

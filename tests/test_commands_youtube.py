@@ -659,7 +659,7 @@ def test_a_block_cools_youtube_down_alerts_once_and_keeps_nothing(tmp_path, fake
     assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: YouTube blocked"]
     assert image_host.asked == [] and kv_get_json(conn, "youtube-search:cani-nick-veganos-vikingos") is None
     again = invoke(write_config(tmp_path, fake, ntfy=True), "--search", SEARCHED)
-    assert "cooling down" in again.output and len(fake.argvs()) == 1  # nothing retried
+    assert "paused after a block" in again.output and len(fake.argvs()) == 1  # nothing retried
 
 
 @pytest.mark.slow
@@ -693,7 +693,7 @@ def test_search_where_no_sheet_can_be_made_asks_nothing(tmp_path, fake, conn, im
 @pytest.mark.parametrize("args", [("--search", "x", "--song", "Radiohead - Creep"), ("--search", "x", "--sheet")])
 def test_search_goes_alone(tmp_path, fake, conn, image_host, args):
     result = invoke(write_config(tmp_path, fake), *args)
-    assert result.exit_code == 2 and "--search goes alone" in result.output
+    assert result.exit_code == 2 and "--video go alone" in result.output
 
 
 
@@ -736,3 +736,66 @@ def test_youtubes_images_turned_off_give_rows_without_thumbnails(tmp_path, fake,
     result = invoke(config, "--search", SEARCHED)
     assert result.exit_code == 0 and result.output.splitlines()[-1].startswith("Searched:")
     assert image_host.asked == []
+
+
+# --- --video: a pasted video's metadata (youtube_search.read_video) ------------------------------------------
+
+PASTED_LINK = "https://www.youtube.com/watch?v=lzN7Thn3FV4&pp=ygUQdmlraW5nb3MgdmVnYW5vcw%3D%3D"
+
+
+def vikingos_video(fake, **spec):
+    fake.video(VIKINGOS, "Somos vikingos veganos - Hyperfanes", "kintanedu", 222, **spec)
+
+
+@pytest.mark.slow
+def test_video_reads_a_pasted_videos_metadata_and_thumbnail_with_no_download(tmp_path, fake, conn, image_host):
+    from caracole.get import read_progress_line
+
+    vikingos_video(fake)
+    config = write_config(tmp_path, fake)
+    config.write_text(config.read_text().replace("delay = [0, 0]", "delay = [15, 30]"), encoding="utf-8")
+    result = invoke(config, "--video", PASTED_LINK, "--progress")
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[-1] == (f"Searched: YouTube's video {VIKINGOS} is Somos vikingos veganos - "
+                                              "Hyperfanes (kintanedu).")
+    [argv] = fake.argvs()
+    assert argv[-2:] == ["--", f"https://www.youtube.com/watch?v={VIKINGOS}"]  # its plain address: no tracking
+    assert {"--skip-download", "--flat-playlist", "--dump-single-json", "--no-cookies"} <= set(argv)
+    assert argv[argv.index("--retries") + 1] == "0" and "-x" not in argv and "-o" not in argv
+    assert not (tmp_path / "cache" / "youtube").exists()  # nothing downloaded
+    assert image_host.asked == [f"https://i.ytimg.com/vi/{VIKINGOS}/hqdefault.jpg"] and image_host.slept == []
+    said = kv_get_json(conn, f"youtube-search:video:{VIKINGOS}")
+    assert said["video"]["title"] == "Somos vikingos veganos - Hyperfanes" and said["thumb"] is True
+    events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    assert [(e["stage"], e["state"]) for e in events] == [("video", "running"), ("video", "done"),
+                                                         ("thumbnail", "running"), ("thumbnail", "done")]
+    again = invoke(config, "--video", f"https://youtu.be/{VIKINGOS}?si=abc")
+    assert again.exit_code == 0 and again.output.startswith("Searched: YouTube's video")
+    assert len(fake.argvs()) == 1 and len(image_host.asked) == 1  # known this month: nothing asked
+
+
+@pytest.mark.slow
+def test_a_video_youtube_wont_give_is_kept_as_none(tmp_path, fake, conn, image_host):
+    vikingos_video(fake, stderr=f"ERROR: [youtube] {VIKINGOS}: Private video. Sign in if you've been granted access",
+                   exit=1)
+    result = invoke(write_config(tmp_path, fake), "--video", PASTED_LINK)
+    assert result.exit_code == 0 and result.output.splitlines()[-1].startswith("Nothing found: YouTube won't give")
+    said = kv_get_json(conn, f"youtube-search:video:{VIKINGOS}")
+    assert said["video"] is None and "Private video" in said["unavailable"] and image_host.asked == []
+
+
+@pytest.mark.slow
+def test_a_block_reading_a_video_cools_youtube_down_and_alerts_once(tmp_path, fake, conn, image_host, ntfy):
+    vikingos_video(fake, stderr="ERROR: [youtube] Sign in to confirm you’re not a bot.", exit=1)
+    result = invoke(write_config(tmp_path, fake, ntfy=True), "--video", PASTED_LINK)
+    assert result.exit_code == 0 and "YouTube blocked caracole" in result.output
+    assert is_cooling(conn, "youtube", _common.utcnow())
+    assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: YouTube blocked"]
+    assert kv_get_json(conn, f"youtube-search:video:{VIKINGOS}") is None
+
+
+@pytest.mark.parametrize("link", ["https://vimeo.com/1", "nick cani", "https://www.youtube.com/@nickcani"])
+def test_video_takes_a_youtube_videos_link_alone(tmp_path, fake, conn, image_host, link):
+    result = invoke(write_config(tmp_path, fake), "--video", link)
+    assert result.exit_code == 2 and "not a YouTube video" in result.output
+    assert fake.argvs() == []

@@ -1671,7 +1671,7 @@ and cache.
   A song's sheet is made again when its audio changes, when its lyrics arrive after it, and once for a sheet
   an older caracole laid over timed lyrics in Chinese, Japanese or Korean (or with accents written apart from
   their letters), whose chords went to the left of where they belonged in its PDF and its viewer.
-- **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]] [--search QUERY]`** takes
+- **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]] [--search QUERY | --video URL]`** takes
   the audio of the songs no human sheet was found for from YouTube, as the
   nightly run's youtube step does (see [Audio from YouTube](#audio-from-youtube)),
   printing a line per song, such as
@@ -1692,7 +1692,10 @@ and cache.
   as the library page's suggestion does (see A YouTube video for a search, under
   caracole serve), within the same gate: it prints `Searched: YouTube's first
   video for “…” is TITLE (CHANNEL), URL.`, `Nothing found: …` or `Not searched:
-  …` and why, and exits 0.
+  …` and why, and exits 0. `--video URL` reads one video's title, channel and
+  length the same way (no download), and its thumbnail, as a link pasted into the
+  library page's search box does: `Searched: YouTube's video ID is TITLE
+  (CHANNEL).`
 
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
@@ -1790,8 +1793,9 @@ it honours it. It does so on these terms:
   with only the paths, language, proxy and certificate settings it needs.
 - **Audio alone**, as m4a, never a playlist, at most 100 MB, kept outside the
   synced library, in the cache (see [the library folder](#the-library-folder)).
-- **A search's first video**, from the library page: metadata alone, one
-  yt-dlp run, at most 10 an hour, a query once in 30 days, and its thumbnail
+- **A search's first video**, or a video whose link you paste, from the
+  library page: metadata alone, one yt-dlp run, at most 10 an hour for both
+  together, a query or a video once in 30 days, and its thumbnail
   from `i.ytimg.com` (whose robots.txt closes only `/sb/`), kept in the cache
   (see A YouTube video for a search, under caracole serve).
 
@@ -3999,6 +4003,25 @@ Who can reach it, below).
   yt-dlp run: YouTube cools down, and one ntfy message goes out. This is the
   owner's choice of 29 Oct 2026, on the YouTube terms of [Audio from
   YouTube](#audio-from-youtube); the file on disk never does it.
+- **A pasted YouTube link.** Paste (or type) a video's link into the search
+  box (`youtube.com/watch?v=…`, `youtu.be/…`, `m.` or `music.youtube.com`,
+  `/shorts/…`; its `pp=` or `si=` don't matter) and it is a song to add, not words
+  to search: nothing is searched for it. Its panel takes the results' place:
+  "Reading the video…" while caracole reads its title, channel and length (one
+  yt-dlp run, no download, then its thumbnail, within the gate of a search's
+  video: once in 30 days a video, 10 an hour with the searches, none while
+  YouTube cools down or after a failure in the hour), then the video, its
+  **Artist** and **Title** guessed for you to check, and **Add and make the
+  sheet**, which sends the request with the video (Getting the audio…, the
+  lyrics, the chords, the PDF). The guess: a title "Artist - Title" split there
+  (turned round when the second part is an artist your library or an index
+  knows, or the channel), else the channel as the artist (no "- Topic", VEVO,
+  Official) and the title without "(Official Video)", "[Letra]", "HD" and such.
+  A video caracole can't read now is offered with the names empty, and why;
+  a song of yours with a sheet says so, with Open; where no sheet can be made,
+  the panel says why. Enter goes to the panel. The request form's YouTube field
+  takes the same links. On the file on disk, the line to run instead:
+  `caracole youtube --song 'Artist - Title' --url URL --sheet`.
 - **Fetch it now.** Ticked, as it is by default, the request is looked up at
   once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
   lyrics and the rest. Each wanted song's line has Fetch now for its button,
