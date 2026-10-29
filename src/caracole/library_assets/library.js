@@ -1761,6 +1761,7 @@
     state.q = input.value;
     focusFirst = false;  // an Enter before: what it waited for is typed over
     if (searcher) searcher.typed();
+    ytKeyAt = performance.now();  // YouTube's search waits for the query to settle too
     // Served, typing searches the sites too, once there is enough to search; the file's Enter shows its line.
     const sites = server ? searchesAsYouType(state.q) : state.all && sitesCan(state.q);
     if (state.all && !sites) {  // nothing the sites can search: your songs again
@@ -2576,6 +2577,130 @@
   const searcher = server ? lacuerdaSearcher(server.csrf, () => normal(state.q), (q) => {
     if (state.all && normal(state.q) === q) askSources(true);
   }, (line) => lcBox.replaceChildren(line)) : null;
+  // A YouTube video suggested for a search with no sheet on the sites (web/youtube_routes.py): /api/search's
+  // ``youtube``. "found": a row, its thumbnail, title (a link to the video), channel and length, and Make the sheet,
+  // which fills the request form in with the query and the video for you to send. "auto": sent by itself (POST
+  // youtube/search: one yt-dlp run, then the thumbnail) once the query has settled, the box unchanged for YT_SETTLE ms,
+  // or at once by Enter; followed on /api/jobs, the sites searched again once the video is known and once it is over.
+  // Once a query a page. Any other state shows nothing.
+  const YT_SETTLE = 1500;
+  const YT_THUMB = /^[/]youtube[/]thumb[/][A-Za-z0-9_-]{11}[.]jpg$/;
+  const ytBox = el("div", "youtube-box");
+  const ytSent = new Set();  // the keys this page asked YouTube for
+  const ytShownAt = new Map();  // when each query's first answer showed
+  let ytRunning = "";  // the key whose search is on its way
+  let ytTimer = 0;
+  let ytKeyAt = 0;
+  let ytWaiting = null;  // { gate, q }
+  const ytLength = (seconds) => {
+    const s = Math.round(Number(seconds));
+    return s > 0 ? Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0") : "";
+  };
+  const ytRow = (video, q) => {
+    const row = el("article", "youtube-row");
+    if (typeof video.thumb === "string" && YT_THUMB.test(video.thumb)) {
+      const img = el("img", "yt-thumb");
+      img.src = video.thumb;
+      img.alt = "";
+      img.width = 120;
+      img.height = 90;
+      img.decoding = "async";
+      row.appendChild(img);
+    }
+    const text = el("div", "yt-text");
+    text.appendChild(el("p", "yt-label", "On YouTube"));
+    const title = el("h3", "yt-title");
+    title.appendChild(link({ label: String(video.title || "A video"), href: String(video.url || "") }, null, true));
+    text.appendChild(title);
+    const meta = [String(video.channel || ""), ytLength(video.duration)].filter(Boolean).join(" · ");
+    if (meta) text.appendChild(el("p", "yt-meta", meta));
+    row.appendChild(text);
+    row.appendChild(button("Make the sheet", "small primary", () => {
+      prefill(answer && answer.q === q ? answer.data.lead : null);
+      const form = document.querySelector("form.request-form");
+      const field = form && form.elements.namedItem("youtube");
+      if (field) field.value = String(video.url || "");
+      requestByName();
+    }, "Make the sheet from " + String(video.title || "this video") + " on YouTube"));
+    return row;
+  };
+  const ytSend = (gate, q) => {
+    const key = String(gate.key);
+    ytSent.add(key);
+    ytRunning = key;
+    const said = el("p", "hint youtube-said", "Looking on YouTube…");
+    said.setAttribute("role", "status");
+    ytBox.replaceChildren(said);
+    const again = () => {
+      if (state.all && normal(state.q) === q) askSources(true);
+    };
+    const over = () => {
+      ytRunning = "";
+      if (ytBox.contains(said)) ytBox.replaceChildren();
+      again();
+    };
+    let early = false;
+    fetch("youtube/search", { method: "POST", headers: { Accept: "application/json" },
+      body: new URLSearchParams({ csrf: String(server.csrf || ""), q }) })
+      .then((r) => r.json().catch(() => null).then((data) => ({ ok: r.ok, data })))
+      .then(({ ok, data }) => {
+        if (!ok || !data || typeof data.url !== "string" || !/^[/]api[/]jobs[/]\d+$/.test(data.url)) {
+          over();
+          return;
+        }
+        const follow = () => fetch(data.url, { cache: "no-store", headers: { Accept: "application/json" } })
+          .then((r) => (r.ok ? r.json() : null))
+          .then((job) => {
+            if (!job || typeof job !== "object" || !job.active) {
+              over();
+              return;
+            }
+            if (!early && listOf(job.steps).some((s) => s && s.name === "video" && s.state === "done")) {
+              early = true;  // the video is known: its row now, its thumbnail once it is over
+              again();
+            }
+            setTimeout(follow, 700);
+          }, over);
+        follow();
+      }, over);
+  };
+  const ytFire = () => {
+    ytTimer = 0;
+    const w = ytWaiting;
+    if (!w) return;
+    if (!state.all || normal(state.q) !== w.q || ytSent.has(String(w.gate.key))) {
+      ytWaiting = null;
+      return;
+    }
+    const wait = Math.max(ytKeyAt, ytShownAt.get(w.q) || 0) + YT_SETTLE - performance.now();
+    if (wait > 0) {
+      ytTimer = setTimeout(ytFire, wait);
+      return;
+    }
+    ytWaiting = null;
+    ytSend(w.gate, w.q);
+  };
+  const ytShow = (gate, q) => {
+    if (!ytShownAt.has(q)) ytShownAt.set(q, performance.now());
+    const g = gate && typeof gate === "object" && typeof gate.key === "string" && gate.key ? gate : null;
+    if (!g) return null;
+    if (g.state === "found" && g.video && typeof g.video === "object") return ytRow(g.video, q);
+    if (ytRunning && ytRunning === g.key) return ytBox.firstChild;
+    if (g.state === "auto" && !ytSent.has(g.key)) {
+      ytWaiting = { gate: g, q };
+      clearTimeout(ytTimer);
+      ytTimer = setTimeout(ytFire, YT_SETTLE);
+    }
+    return null;
+  };
+  // Enter, the query's answer on the screen: its YouTube search at once, when the answer says it may go.
+  const ytEnter = (q) => {
+    const g = answer && answer.q === q && answer.data ? answer.data.youtube : null;
+    if (!server || !g || typeof g !== "object" || g.state !== "auto" || ytSent.has(String(g.key)) || ytRunning) return;
+    clearTimeout(ytTimer);
+    ytWaiting = null;
+    ytSend(g, q);
+  };
   const askSources = (now) => {
     const q = normal(state.q);
     if (!now && q === askedFor) return;
@@ -2639,6 +2764,8 @@
     // Sent, if Enter came first; with no button of its own beside Ask LaCuerda's, which sends it then.
     const lcLine = searcher && !data.short ? searcher.show(data.lacuerda_search, q, Boolean(answer.model.unlisted)) : null;
     lcBox.replaceChildren(...(lcLine ? [lcLine] : []));
+    const ytLine = server && !data.short ? ytShow(data.youtube, q) : null;
+    ytBox.replaceChildren(...(ytLine ? [ytLine] : []));
     if (data.short) {
       say("Type three letters or more to search the sites");
       return;
@@ -2757,6 +2884,8 @@
     state.all = false;
     focusFirst = false;
     if (searcher) searcher.leave();  // an Enter waiting for the answer: LaCuerda's search with it too
+    clearTimeout(ytTimer);  // and YouTube's, waiting for the query to settle
+    ytWaiting = null;
     clearTimeout(askTimer);
     if (asking) asking.abort();
     asked += 1;
@@ -2775,7 +2904,7 @@
     head.appendChild(backButton);
     head.appendChild(keptNote);
     allMine.hidden = true;
-    found.append(head, progNote, allMine, groupsBox, lcBox, notesBox);
+    found.append(head, progNote, allMine, groupsBox, ytBox, lcBox, notesBox);
   }
   // A key that ends an input method's word (pinyin, kana) is still typing, never a command.
   const composing = (e) => e.isComposing || e.keyCode === 229;
@@ -2790,6 +2919,7 @@
       } else if (answer && answer.q === q) {  // the query's answer is in: its first result
         const line = searcher && searcher.enter(q, true);  // and LaCuerda's search now, when its gate sends one
         if (line) lcBox.replaceChildren(line);
+        ytEnter(q);  // and YouTube's, when the answer says it may go
         toFirstResult();
       } else {  // on its way: its first result once it is drawn, the search sent now, LaCuerda's with its answer
         focusFirst = true;

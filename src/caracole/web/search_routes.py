@@ -441,6 +441,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
             "lacuerda_leads": leads,
             "lacuerda_search": (_lacuerda_search_gate(app, conn, q, lc_artists, lacuerda, mine)
                                 if app.searches_lacuerda else None),
+            # YouTube's first video for a query with no sheet on the sites, suggested (youtube_routes.py)
+            "youtube": _youtube_suggestion(app, conn, q, mine, index_found, lc_artists, lacuerda),
             "suggest": [_suggestion_json(app, conn, s, songs) for s in (() if yours else close or ())],
             "skipped": skipped, "partial": partial, "looked": _looked(conn, skipped, partial)}
 
@@ -913,6 +915,19 @@ def _lacuerda_search_gate(app: WebApp, conn: sqlite3.Connection, q: str, lc_arti
         return None
     why = {"why": said.failure.said(f"“{q}”") + "."} if said.failure is not None else {}
     return {"state": said.state, "query": q, "key": said.key, **why}
+
+
+def _youtube_suggestion(app: WebApp, conn: sqlite3.Connection, q: str, mine: Sequence[LibraryHit],
+                        index: IndexFound, lc_artists: Sequence[SiteArtist],
+                        lc_songs: Sequence[SiteHit]) -> dict[str, Any] | None:
+    """What the answer says of a YouTube video for ``q`` (youtube_routes.suggested), with no request: none while the
+    answer has a sheet for it (``youtube_search.sheet_on_screen``), or where caracole makes no sheet from a video."""
+    from caracole.web.youtube_routes import suggested
+    from caracole.youtube_search import sheet_on_screen
+
+    if not app.searches_youtube:
+        return None
+    return suggested(app, conn, q, on_screen=sheet_on_screen(mine, index, lc_artists, lc_songs))
 
 
 def lacuerda_search(app: WebApp, form: dict[str, str], *, wants_json: bool) -> Response:

@@ -260,6 +260,9 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # /preparing-tab-file-download is every attachment's download (a login's); /tabs?* its filters; /api/ its API.
     "gametabs.net": _GAMETABS,
     "www.gametabs.net": _GAMETABS,
+    # YouTube's image host, of which caracole asks a suggested video's thumbnail alone (youtube_search.py); /sb/ is
+    # a video's storyboard frames.
+    "i.ytimg.com": ("/sb/",),
     "tabs.ultimate-guitar.com": (
         "/forum/", "/tab/print?", "/components/", "/contribution/", "/user/tab/", "/download/public/",
         "/tab/download", "/tab/track/", "/tab/applicature/transpose", "/user/tab/view?*",

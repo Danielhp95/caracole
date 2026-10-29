@@ -561,3 +561,133 @@ def test_sheet_without_auto_chords_asks_nothing_and_exits_1(tmp_path, fake, conn
     assert result.exit_code == 1
     assert "caracole makes no sheet from YouTube here: this caracole was built without auto-chords" in result.output
     assert fake.argvs() == [] and not (tmp_path / "lib" / "wanted.txt").exists()
+
+
+# --- --search: a video suggested for a search (youtube_search.py) ------------------------------------------
+
+THUMB = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+         b"\xff\xc0\x00\x0b\x08\x01\x68\x01\xe0\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x12\x34\xff\xd9")
+SEARCHED = "Nick Cani - Vikingos veganos"
+
+
+@pytest.fixture
+def image_host(monkeypatch, ntfy):
+    """i.ytimg.com beside ntfy: ``answer`` is what a thumbnail's request gets; every request kept."""
+    host = type("ImageHost", (), {})()
+    host.asked = []
+    host.answer = httpx.Response(200, content=THUMB, headers={"content-type": "image/jpeg"})
+
+    def handler(request):
+        host.asked.append(str(request.url))
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404)
+        return host.answer
+
+    def transport(provider):
+        if provider == "youtube":
+            return httpx.MockTransport(handler)
+        if provider == "ntfy":
+            return httpx.MockTransport(ntfy.handler)
+        pytest.fail(f"a client for {provider} was made")
+
+    monkeypatch.setattr(_common, "transport_for", transport)
+    return host
+
+
+def vikingos_found(fake):
+    fake.search(SEARCHED, entry(VIKINGOS, "Somos vikingos veganos - Hyperfanes", "kintanedu", 222),
+                entry(OTHER, "Not this one", "someone", 200))
+
+
+@pytest.mark.slow
+def test_search_keeps_youtubes_first_video_and_its_thumbnail_for_the_page(tmp_path, fake, conn, image_host):
+    from caracole.youtube_search import query_key
+
+    vikingos_found(fake)
+    config = write_config(tmp_path, fake)
+    result = invoke(config, "--search", SEARCHED)
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[-1] == (f"Searched: YouTube's first video for “{SEARCHED}” is Somos vikingos "
+                                              f"veganos - Hyperfanes (kintanedu), https://www.youtube.com/watch?v={VIKINGOS}.")
+    # One yt-dlp run: the first result's metadata alone, the query after "--", nothing retried, nothing downloaded.
+    [argv] = fake.argvs()
+    assert argv[-2:] == ["--", f"ytsearch1:{SEARCHED}"]
+    assert {"--flat-playlist", "--dump-single-json", "--ignore-config", "--no-cookies"} <= set(argv)
+    assert argv[argv.index("--retries") + 1] == "0" and "-x" not in argv
+    assert image_host.asked == [f"https://i.ytimg.com/vi/{VIKINGOS}/hqdefault.jpg"]
+    assert (tmp_path / "cache" / "youtube-thumbs" / f"{VIKINGOS}.jpg").read_bytes() == THUMB
+    said = kv_get_json(conn, f"youtube-search:{query_key(SEARCHED)}")
+    assert said["video"]["id"] == VIKINGOS and said["thumb"] is True
+    # Asked again within 30 days, nothing is asked: the page shows it from the record.
+    again = invoke(config, "--search", "vikingos veganos - nick cani")
+    assert again.exit_code == 0 and again.output.startswith("Searched: YouTube's first video for")
+    assert len(fake.argvs()) == 1 and len(image_host.asked) == 1
+
+
+@pytest.mark.slow
+def test_search_with_progress_says_its_stages(tmp_path, fake, conn, image_host):
+    from caracole.get import read_progress_line
+
+    vikingos_found(fake)
+    result = invoke(write_config(tmp_path, fake), "--search", SEARCHED, "--progress")
+    assert result.exit_code == 0, result.output
+    events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    assert [(e["stage"], e["state"]) for e in events] == [("video", "running"), ("video", "done"),
+                                                         ("thumbnail", "running"), ("thumbnail", "done")]
+
+
+@pytest.mark.slow
+def test_a_thumbnail_that_isnt_a_jpeg_is_none_and_the_video_is_suggested_all_the_same(tmp_path, fake, conn,
+                                                                                     image_host):
+    vikingos_found(fake)
+    image_host.answer = httpx.Response(200, content=b"<html>not an image</html>", headers={"content-type": "text/html"})
+    result = invoke(write_config(tmp_path, fake), "--search", SEARCHED)
+    assert result.exit_code == 0 and result.output.startswith("Searched:")
+    assert not (tmp_path / "cache" / "youtube-thumbs" / f"{VIKINGOS}.jpg").exists()
+
+
+@pytest.mark.slow
+def test_a_block_cools_youtube_down_alerts_once_and_keeps_nothing(tmp_path, fake, conn, image_host, ntfy):
+    fake.search(SEARCHED, stderr="ERROR: [youtube] Sign in to confirm you’re not a bot.", exit=1)
+    result = invoke(write_config(tmp_path, fake, ntfy=True), "--search", SEARCHED)
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[-1].startswith("Not searched: YouTube blocked caracole")
+    assert is_cooling(conn, "youtube", _common.utcnow())
+    assert [p.headers.get("title") for p in ntfy.posts] == ["caracole: YouTube blocked"]
+    assert image_host.asked == [] and kv_get_json(conn, "youtube-search:cani-nick-veganos-vikingos") is None
+    again = invoke(write_config(tmp_path, fake, ntfy=True), "--search", SEARCHED)
+    assert "cooling down" in again.output and len(fake.argvs()) == 1  # nothing retried
+
+
+@pytest.mark.slow
+def test_an_error_is_no_miss_and_isnt_sent_again_within_the_hour(tmp_path, fake, conn, image_host):
+    fake.search(SEARCHED, stderr="ERROR: [youtube] Unable to download API page: HTTP Error 500", exit=1)
+    config = write_config(tmp_path, fake)
+    result = invoke(config, "--search", SEARCHED)
+    assert result.exit_code == 0 and result.output.startswith("Not searched: yt-dlp failed")
+    assert kv_get_json(conn, "youtube-search:cani-nick-veganos-vikingos") is None
+    again = invoke(config, "--search", SEARCHED)
+    assert "failed less than an hour ago" in again.output and len(fake.argvs()) == 1
+
+
+@pytest.mark.slow
+def test_a_search_that_finds_nothing_is_kept_as_none(tmp_path, fake, conn, image_host):
+    fake.search(SEARCHED)  # no entry
+    result = invoke(write_config(tmp_path, fake), "--search", SEARCHED)
+    assert result.exit_code == 0 and result.output.splitlines()[-1] == (
+        f"Nothing found: YouTube has no video for “{SEARCHED}”.")
+    assert kv_get_json(conn, "youtube-search:cani-nick-veganos-vikingos")["video"] is None
+    assert image_host.asked == []
+
+
+def test_search_where_no_sheet_can_be_made_asks_nothing(tmp_path, fake, conn, image_host, monkeypatch):
+    monkeypatch.setattr(yf, "autochords_missing", lambda: ["torch"])
+    result = invoke(write_config(tmp_path, fake), "--search", SEARCHED)
+    assert result.exit_code == 0 and result.output.startswith("Not searched: no sheet from YouTube here")
+    assert fake.argvs() == []
+
+
+@pytest.mark.parametrize("args", [("--search", "x", "--song", "Radiohead - Creep"), ("--search", "x", "--sheet")])
+def test_search_goes_alone(tmp_path, fake, conn, image_host, args):
+    result = invoke(write_config(tmp_path, fake), *args)
+    assert result.exit_code == 2 and "--search goes alone" in result.output

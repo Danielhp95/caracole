@@ -1660,7 +1660,7 @@ and cache.
   file changes. It exits 1 when auto-chords can't work at all: the model files
   missing or unusable, or a sheet it can't write into the library. It also
   works out the chords of the audio the youtube step took, as of a purchase.
-- **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]]`** takes
+- **`caracole youtube [--song "ARTIST - TITLE" [--url URL | --none] [--sheet [--progress]]] [--search QUERY]`** takes
   the audio of the songs no human sheet was found for from YouTube, as the
   nightly run's youtube step does (see [Audio from YouTube](#audio-from-youtube)),
   printing a line per song, such as
@@ -1677,6 +1677,11 @@ and cache.
   Turned off, it asks nothing and says so. A cooldown, a block or a spent budget
   exits 0. The chords come next, from `caracole autochords`. `--sheet` does it all
   now, for that song: see A sheet from a video, now, under [Audio from YouTube](#audio-from-youtube).
+  `--search QUERY` asks YouTube for the query's first video and its thumbnail,
+  as the library page's suggestion does (see A YouTube video for a search, under
+  caracole serve), within the same gate: it prints `Searched: YouTube's first
+  video for “…” is TITLE (CHANNEL), URL.`, `Nothing found: …` or `Not searched:
+  …` and why, and exits 0.
 
 **The pages.** A command that changes what `_todo.md` and `index.html` show
 rewrites both when it is done: `match` (not `--dry-run`), `render`, `scan`,
@@ -1774,6 +1779,10 @@ it honours it. It does so on these terms:
   with only the paths, language, proxy and certificate settings it needs.
 - **Audio alone**, as m4a, never a playlist, at most 100 MB, kept outside the
   synced library, in the cache (see [the library folder](#the-library-folder)).
+- **A search's first video**, from the library page: metadata alone, one
+  yt-dlp run, at most 10 an hour, a query once in 30 days, and its thumbnail
+  from `i.ytimg.com` (whose robots.txt closes only `/sb/`), kept in the cache
+  (see A YouTube video for a search, under caracole serve).
 
 **Which video.** caracole asks yt-dlp's search for `ytsearch8:<artist> <title>`
 and picks the upload whose title is the song's and whose channel or title names
@@ -3739,8 +3748,10 @@ Who can reach it, below).
   still only moves to the first line. Searching asks no site anything: it reads the indexes
   alone (5–25 ms a query on Ultimate Guitar's, up to about 0.15 s for very
   common words), takes no lock and spends no budget, and so does "+ N more".
+  The two exceptions follow: LaCuerda's own search, and a YouTube video
+  suggested for a song the sites have no sheet of.
 
-  **LaCuerda's own search** is the one request a search may bring. LaCuerda's
+  **LaCuerda's own search** is one of the two requests a search may bring. LaCuerda's
   index holds every artist of its listings, but only the songs of the artist
   pages caracole has read; LaCuerda's search finds the rest. Once a query has
   settled, the box unchanged for 1.5 s, the page sends it by itself, one request
@@ -3913,6 +3924,28 @@ Who can reach it, below).
   is the answer. Where caracole can't make the chords, the form has no such
   field and says why in one line ("No sheets from YouTube here: auto-chords
   isn't installed."), and the cards offer nothing.
+- **A YouTube video for a search.** Where caracole can make a sheet from a
+  video (as above), a search the sites have no sheet for (no strong song of
+  yours, of Ultimate Guitar's index or of LaCuerda's with chords, and no artist
+  either names whole) asks YouTube once for its first video, by itself, once the
+  query has settled (the box unchanged for 1.5 s; Enter sends it at once): one
+  yt-dlp run of `ytsearch1:` for the video's title, channel and length, never a
+  download (`caracole youtube --search`, a request of its own in the Requests
+  tab), then its thumbnail from YouTube's image host (`i.ytimg.com/vi/…/hqdefault.jpg`,
+  one request, kept in caracole's cache once its bytes are a JPEG, and served
+  by caracole serve). A line under the results says "Looking on YouTube…", then
+  the video shows as a row: its thumbnail, its title (a link to it on
+  YouTube), its channel and length, and **Make the sheet**, which opens the
+  request form filled in with what you searched ("Nick Cani - Vikingos
+  veganos": the artist and the title) and the video, for you to check and send;
+  nothing more goes until you press Request. A query is asked once in 30 days
+  (its words in any order), and the row comes back for it with no request. At
+  most 10 such searches an hour; none while YouTube cools down after a block;
+  none of a query whose search failed in the last hour, and none at all for an
+  hour once three failed. A bot check, a 429 or a 403 is a block, as for every
+  yt-dlp run: YouTube cools down, and one ntfy message goes out. This is the
+  owner's choice of 29 Oct 2026, on the YouTube terms of [Audio from
+  YouTube](#audio-from-youtube); the file on disk never does it.
 - **Fetch it now.** Ticked, as it is by default, the request is looked up at
   once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
   lyrics and the rest. Each wanted song's line has Fetch now for its button,
@@ -5014,7 +5047,9 @@ Syncthing's way, a few MB a song. caracole deletes a song's file there once a
 purchase or a human sheet takes its place, or `"none"` under `[youtube]` turns
 YouTube down for it, and any file there no song names; deleting the folder
 yourself costs only downloads, and only for songs that have no auto sheet yet:
-the next run, or `caracole youtube`, downloads their videos again.
+the next run, or `caracole youtube`, downloads their videos again. The
+thumbnails of the videos the library page suggests for a search are beside it,
+in `cache_dir/youtube-thumbs/<video id>.jpg`, a few dozen KB each.
 
 Folder names keep their accents and scripts, but never contain a path
 separator or a character file systems reserve: `AC/DC` becomes `AC-DC`. An

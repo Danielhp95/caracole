@@ -13,6 +13,7 @@ import json
 import threading
 import time
 from dataclasses import replace
+from datetime import UTC, datetime
 from urllib.parse import parse_qs
 
 import pytest
@@ -36,12 +37,43 @@ VIKINGOS = "lzN7Thn3FV4"
 PASTED = f"https://www.youtube.com/watch?v={VIKINGOS}&pp=ygUQdmlraW5nb3MgdmVnYW5vcw%3D%3D"
 
 
+JPEG = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+        b"\xff\xc0\x00\x0b\x08\x01\x68\x01\xe0\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x12\x34\xff\xd9")
+
+
 class FakeSheet:
-    """``caracole youtube --sheet --progress``: its stages said, up to the chords, which run until ``hold`` is set."""
+    """``caracole youtube --sheet --progress``: its stages said, up to the chords, which run until ``hold`` is set.
+    ``caracole youtube --search --progress`` (``searches``: the queries asked), once ``cfg`` is set: what the real one
+    keeps, the video the owner gave as YouTube's first and its thumbnail, at once."""
 
     def __init__(self):
         self.ran: list[tuple[str, ...]] = []
+        self.searches: list[str] = []
         self.hold = threading.Event()
+        self.cfg = None
+
+    def search(self, query, stage):
+        from caracole.youtube_search import KV_PREFIX, query_key, thumb_path
+
+        self.searches.append(query)
+        stage("video", "running")
+        conn = db.connect(self.cfg.db_path)
+        try:
+            from caracole.db import kv_set_json
+
+            kv_set_json(conn, KV_PREFIX + query_key(query), {
+                "at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"), "query": query, "thumb": True,
+                "video": {"id": VIKINGOS, "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu",
+                          "duration": 222.0, "url": f"https://www.youtube.com/watch?v={VIKINGOS}"}})
+            conn.commit()
+        finally:
+            conn.close()
+        path = thumb_path(self.cfg, VIKINGOS)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(JPEG)
+        stage("video", "done")
+        stage("thumbnail", "done")
+        return 0
 
     def __call__(self, args, emit):
         self.ran.append(tuple(args))
@@ -49,6 +81,9 @@ class FakeSheet:
         def stage(name, state, detail=""):
             emit(PROGRESS_PREFIX + json.dumps({"stage": name, "state": state, "detail": detail}))
 
+        searching = next((a.split("=", 1)[1] for a in args if a.startswith("--search=")), None)
+        if searching is not None:
+            return self.search(searching, stage)
         for name in ("song", "audio", "lyrics"):
             stage(name, "running")
             stage(name, "done")
@@ -107,6 +142,7 @@ def sheet():
 
 @pytest.fixture
 def live(able, sheet):
+    sheet.cfg = able
     server, queue, base, posted = serve(able, sheet)
     yield base, posted
     server.shutdown()
@@ -208,3 +244,37 @@ def test_where_no_sheet_can_be_made_the_form_says_why_and_nothing_offers_one(cfg
         server.shutdown()
         server.server_close()
         queue.stop()
+
+
+def test_a_search_with_no_sheet_suggests_youtubes_first_video_and_fills_the_request_form_with_it(able, live, sheet,
+                                                                                               browser):
+    # The query settles: the page asks YouTube once (POST /youtube/search, a job), then shows the video's row, its
+    # thumbnail from caracole serve; Make the sheet fills the request form in, for the owner to send.
+    from test_web_page_search import answer_to, search, sites
+
+    base, posted = live
+    sites(able, ug=[("radiohead", "creep", 4)])
+    browser.open(base)
+    search(browser, "Nick Cani - Vikingos veganos")
+    row = "document.querySelector('#found .youtube-row')"
+    assert browser.wait(f"{answer_to('Nick Cani - Vikingos veganos')} && {row} !== null", timeout=20), \
+        browser.js("document.getElementById('found').textContent")
+    assert sheet.searches == ["Nick Cani - Vikingos veganos"]
+    assert [p for p, _ in posted] == ["/youtube/search"]
+    assert browser.wait(f"{row}.querySelector('img.yt-thumb') !== null && "
+                        f"{row}.querySelector('img.yt-thumb').naturalWidth === 480")  # its thumbnail, served
+    assert browser.js(f"{row}.querySelector('img').getAttribute('src')") == f"/youtube/thumb/{VIKINGOS}.jpg"
+    assert browser.js(f"{row}.querySelector('.yt-meta').textContent") == "kintanedu · 3:42"
+    title = browser.js(f"{row}.querySelector('.yt-title a').getAttribute('href')")
+    assert title == f"https://www.youtube.com/watch?v={VIKINGOS}"
+    browser.click("#found .youtube-row button")
+    assert browser.wait("document.getElementById('request-box').open")
+    fields = browser.js("['artist', 'title', 'youtube'].map((n) => "
+                        "document.querySelector(`form.request-form [name=${n}]`).value)")
+    assert fields == ["Nick Cani", "Vikingos veganos", f"https://www.youtube.com/watch?v={VIKINGOS}"]
+    assert len(posted) == 1  # nothing sent until you press Request
+    # Searched again, the row comes back from what was kept ("found": the page sends nothing for it).
+    browser.press("Escape")
+    search(browser, "vikingos veganos - nick cani")
+    assert browser.wait(f"{answer_to('vikingos veganos - nick cani')} && {row} !== null")
+    assert sheet.searches == ["Nick Cani - Vikingos veganos"] and len(posted) == 1

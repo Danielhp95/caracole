@@ -43,6 +43,7 @@ from caracole.commands._common import (
     fail,
     load_cfg,
     load_ovr,
+    make_client,
     make_youtube,
     open_db,
     run_id_for,
@@ -88,10 +89,20 @@ def register(app: typer.Typer) -> None:
             help="With --song: make its auto sheet now, the song added to the library if it isn't there: the "
                  "audio, the lyrics from LRCLIB, the chords from the audio, the PDF and the viewer.",
         ),
-        progress: bool = typer.Option(False, "--progress", help="With --sheet: a JSON line per stage too, for "
-                                                                "caracole serve."),
+        progress: bool = typer.Option(False, "--progress", help="With --sheet or --search: a JSON line per stage "
+                                                                "too, for caracole serve."),
+        search: str | None = typer.Option(
+            None, "--search", metavar="QUERY",
+            help="YouTube's first video for the query (one yt-dlp run, no download) and its thumbnail, kept for "
+                 "caracole serve to suggest.",
+        ),
     ) -> None:
         """Take the audio of songs no one has charted from YouTube (yt-dlp), for auto-chords."""
+        if search is not None:
+            if song is not None or url is not None or none or sheet:
+                raise typer.BadParameter("--search goes alone", param_hint="--search")
+            _search(load_cfg(ctx), " ".join(search.split()), progress=progress)
+            return
         if (url is not None or none or sheet) and song is None:
             raise typer.BadParameter("--url, --none and --sheet need --song", param_hint="--song")
         if url is not None and none:
@@ -99,7 +110,7 @@ def register(app: typer.Typer) -> None:
         if sheet and none:
             raise typer.BadParameter("either --sheet or --none, not both", param_hint="--sheet/--none")
         if progress and not sheet:
-            raise typer.BadParameter("--progress goes with --sheet", param_hint="--progress")
+            raise typer.BadParameter("--progress goes with --sheet or --search", param_hint="--progress")
         if sheet:
             _sheet(load_cfg(ctx), song or "", url, progress=progress)
             return
@@ -207,6 +218,107 @@ def _sheet(cfg: Config, display: str, url: str | None, *, progress: bool) -> Non
                                             "ok": result.ok, "refused": result.refused}}))
     if not result.ok:
         raise typer.Exit(1)
+
+
+NOT_SEARCHED = "Not searched: "
+
+
+def _search(cfg: Config, query: str, *, progress: bool) -> None:
+    """``--search``: YouTube's first video for ``query`` and its thumbnail (youtube_search.py), as caracole serve's
+    library page asks for them. Its last line starts with what came of it, which the request's line shows
+    (web/status.py): "Searched: " (the video, found now or within 30 days), "Nothing found: " or "Not searched: "
+    (no word, no sheet from YouTube here, a cooldown, the hour's searches spent, a search that failed lately, a
+    block, a spent budget, or an error, which is remembered for an hour). It exits 0 but for a bug."""
+    from contextlib import closing
+    from dataclasses import replace
+
+    from caracole.get import progress_line
+    from caracole.health import answered_any, record_block, record_error, record_ok
+    from caracole.http import BudgetExhausted, ProviderBlocked, ProviderError
+    from caracole.youtube_fetch import route_problem
+    from caracole.youtube_search import (
+        RUN,
+        fetch_thumbnail,
+        query_key,
+        record_failure,
+        search,
+    )
+    from caracole.youtube_search import gate as search_gate
+
+    shown_query = f"“{query}”"
+
+    def say(stage: str, state: str, detail: str = "") -> None:
+        if progress:
+            typer.echo(progress_line({"stage": stage, "state": state, "detail": detail}))
+
+    def end(line: str, state: str = "skipped") -> None:
+        say("video", state, line)
+        typer.echo(line)
+
+    if not query_key(query):
+        end(f"{NOT_SEARCHED}{shown_query} has no word to search for.")
+        return
+    problem = route_problem(cfg)
+    if problem is not None:
+        end(f"{NOT_SEARCHED}no sheet from YouTube here ({problem}).")
+        return
+    say("video", "running", "asking YouTube")
+    with exclusive(cfg, f"youtube --search {query}"), closing(open_db(cfg)) as conn:
+        now = utcnow()
+        said = search_gate(cfg, conn, query, on_screen=False, now=now)
+        if said is not None and said.asked is not None:
+            video = said.asked.get("video")
+            if isinstance(video, dict):
+                end(f"Searched: YouTube's first video for {shown_query} is {video.get('title')} "
+                    f"({video.get('channel')}), {video.get('url')}.", "done")
+            else:
+                end(f"Nothing found: YouTube had no video for {shown_query} lately.", "done")
+            return
+        if said is None or said.state in ("spent", "failed"):
+            end(f"{NOT_SEARCHED}{said.why if said else 'nothing to search for'}; try again later.")
+            return
+        run_id = RUN + run_id_for(now)
+        runner = make_youtube(cfg, conn, run_id)
+        runner.policy = replace(runner.policy, budget=1)  # one run: the search
+        try:
+            found = search(conn, runner, query, now)
+        except ProviderBlocked as e:
+            state = record_block(conn, PROVIDER, now, str(e))
+            message = f"{e}\nNo more yt-dlp runs until {shown(state.cooldown_until)} (block #{state.strikes})."
+            _common.alert_block(cfg, PROVIDER, message)
+            end(f"{NOT_SEARCHED}YouTube blocked caracole ({e}); no more yt-dlp runs until "
+                f"{shown(state.cooldown_until)}.")
+            return
+        except BudgetExhausted:
+            end(f"{NOT_SEARCHED}YouTube's budget is spent; try again later.")
+            return
+        except ProviderError as e:
+            record_error(conn, PROVIDER, now, str(e))
+            record_failure(conn, query_key(query), now, str(e.message or e))
+            end(f"{NOT_SEARCHED}yt-dlp failed ({e.message or e}); try again later.")
+            return
+        finally:
+            runner.close()
+        if answered_any(conn, run_id, PROVIDER, runner.requests_made):
+            record_ok(conn, PROVIDER, now)
+        if found is None:
+            end(f"Nothing found: YouTube has no video for {shown_query}.", "done")
+            return
+        say("video", "done", f"{found.title} ({found.channel})")
+        say("thumbnail", "running")
+        client = make_client(cfg, conn, PROVIDER, run_id, policy=replace(cfg.provider(PROVIDER), budget=1))
+        try:
+            kept = fetch_thumbnail(cfg, conn, client, found.id, query, now)
+            say("thumbnail", "done" if kept else "skipped", "kept" if kept else "none")
+        except ProviderBlocked as e:
+            state = record_block(conn, PROVIDER, now, str(e))
+            _common.alert_block(cfg, PROVIDER, f"{e}\nNo more requests until {shown(state.cooldown_until)}.")
+            say("thumbnail", "skipped", f"YouTube blocked caracole ({e})")
+        except (BudgetExhausted, ProviderError) as e:
+            say("thumbnail", "skipped", f"no thumbnail ({e})")
+        finally:
+            client.close()
+    typer.echo(f"Searched: YouTube's first video for {shown_query} is {found.title} ({found.channel}), {found.url}.")
 
 
 def _decline(cfg: Config, display: str) -> None:

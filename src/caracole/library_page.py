@@ -430,9 +430,10 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
             song["fetchable"] = song["id"] not in controls.held
     data["songbooks"] = songbooks_data(conn, cfg, overrides)  # the Songbooks tab's (songbooks.js draws it)
     data["sites"] = sites_data(conn, cfg, songs, now)  # the Sites tab's (sites.js draws it)
-    # The page caracole serve serves may also ask it how its requests go (connect-src); the file can't.
-    csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'") if controls is not None
-           else _CSP.replace("__FORMS__", "'none'"))
+    # The page caracole serve serves may also ask it how its requests go (connect-src), and show the thumbnail of a
+    # video it suggests for a search (img-src 'self': web/youtube_routes.py's); the file can't.
+    csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'").replace("img-src data:", "img-src data: 'self'")
+           if controls is not None else _CSP.replace("__FORMS__", "'none'"))
     return (
         _HEAD.replace("__CSP__", csp).replace("__ICON__", PAGE_ICON).replace("__STYLE__", _PAGE_STYLE)
         + _BODY.replace("__MARK__", page_mark()).replace("__TABREQUESTS__", _requests_tab(controls))

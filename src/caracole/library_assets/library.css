@@ -203,6 +203,22 @@ body.with-tray .page { padding-bottom: 88px; }
 .fields .youtube-field { grid-column: 1 / -1; }
 form.youtube-sheet { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 0; }
 form.youtube-sheet .f { flex: 1 1 260px; }
+/* A YouTube video suggested for a search with no sheet (library.js ytRow): its thumbnail, its words, Make the sheet. */
+.youtube-box:empty { display: none; }
+.youtube-box { margin: 14px 0 0; }
+.youtube-said { margin: 0; }
+.youtube-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
+  padding: 10px 12px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.yt-thumb { display: block; width: 120px; height: 90px; object-fit: cover; border-radius: 8px; background: var(--border); }
+.yt-text { min-width: 0; }
+.yt-title { margin: 0; font-size: 1rem; overflow-wrap: anywhere; }
+.yt-label, .yt-meta { margin: 0; color: var(--muted); font-size: .85rem; }
+@media (max-width: 559px) {
+  .youtube-row { grid-template-columns: auto minmax(0, 1fr); }
+  .youtube-row > .btn { grid-column: 1 / -1; }
+  .yt-thumb { width: 96px; height: 72px; }
+}
+@media (pointer: coarse) { .youtube-row .btn { min-height: 44px; } }
 .foot { display: flex; }
 .foot form { margin: 0; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }

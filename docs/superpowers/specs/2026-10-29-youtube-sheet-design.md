@@ -121,3 +121,47 @@ deploy.md's Ubuntu section 12). Without auto-chords it keeps it, and the page of
 - The song's lyrics fetched earlier are not asked again with the audio's length; their timings may
   belong to another cut, and the sheet then has the chart and the lyrics apart.
 - No aligning of timed lyrics to audio of another length (an offset search): research, not plumbing.
+
+## After the owner's review (same day)
+
+"Reduce the textual verbosity of the different related pages", and "find in youtube the first video that shows up
+when searching for the song that I search for and fetch the thumbnail from youtube, so that it shows up as a
+suggestion for going through the youtube flow."
+
+**Shorter words.** Every text the flow puts on a page is cut to a few plain words: the request form's help ("Added to
+wanted.txt. Fetch it now gets its sheet right away.", "With a YouTube video, the sheet is made from it (a few
+minutes)."), the field's label ("YouTube video (optional)"), why there is none ("No sheets from YouTube here:
+auto-chords isn't installed.", `youtube_fetch.route_reason`), the card's ("From a YouTube video"), the progress
+("Getting the audio…", "Working out the chords…"), the refusals ("… already has a sheet.", "Not a YouTube video
+link."), and the Requests tab's reasons ("Chords over the lyrics.", "No lyrics yet (LRCLIB unavailable); tonight's
+run tries again.", "YouTube is paused after a block, until …"). The details are in docs/usage.md.
+
+**A video suggested for a search** (youtube_search.py, `caracole youtube --search`, `POST /youtube/search`):
+
+- *Where it fires:* on the served library page alone, for a query the answer has no sheet for
+  (`sheet_on_screen`): no strong song of yours by its title, of Ultimate Guitar's index, or of LaCuerda's with
+  chords, and no artist either names whole *(my call: a search for an artist is no song to make a sheet of; weak
+  hits are no sheet)*; once the query has settled (the box unchanged for 1.5 s), or at once by Enter; only where
+  `route_problem` is None. The suggestion is a row under the results' groups, above LaCuerda's line.
+- *The gate* (`gate`, no request): a query (its words' key, any order) once in 30 days, kv
+  `youtube-search:<key>`, which keeps the video, so the row comes back with no request; at most **10** searches an
+  hour (`events`, runs named `youtube-search:`); none while YouTube cools down; none of a query that failed in the
+  hour, and none at all for the hour after **3** failed. No button: the owner asked for a suggestion, not another
+  way to ask *(my call)*.
+- *The search:* `YtDlp.search(query, 1)` through `make_youtube` (the pause from the youtube provider's 15–30 s
+  after the last run, the lock, `--retries 0`, its own environment, no cookies, login, config or plugins,
+  `--flat-playlist --dump-single-json`, the query after `--`), a budget of one run. A block is `ProviderBlocked`:
+  the cooldown, one alert. A queued job of no song's (`jobs.YOUTUBE_SEARCH`, among `INDEX_READS`), not the request
+  thread, never `caracole get`; it is bulk work, so it waits for a nightly run rather than cutting in *(my call: "a
+  lookup never runs yt-dlp")*.
+- *The thumbnail:* `https://i.ytimg.com/vi/<id>/hqdefault.jpg`, one request through a `PoliteClient` of provider
+  `youtube` (so its 15–30 s pause after the search applies: the row shows as soon as the video is known, its
+  thumbnail when the job ends) *(my call: no new provider for one image a search)*. i.ytimg.com's robots.txt,
+  checked by hand on 2026-10-29, closes `/sb/` alone for `User-agent: *`: pinned in
+  tests/fixtures/youtube/ytimg-robots.txt and `ROBOTS_DISALLOW`. Kept only when its bytes are a JPEG
+  (`checked_jpeg`: the start marker, its segments walked to a frame of 1–2048 px a side and on to the scan, its end
+  marker, 256 KB at most) *(my call: the bytes as fetched once checked, no re-encoding, which would need a library
+  caracole hasn't got)*, in `cache_dir/youtube-thumbs/`, and checked again when caracole serve sends it from `GET
+  /youtube/thumb/<id>.jpg`, the served page's policy gaining `img-src 'self'` for it alone.
+- *The row:* the thumbnail, the title (a link to the video), the channel and length, and **Make the sheet**, which
+  opens the request form with the query's artist and title and the video's address filled in; the owner sends it.

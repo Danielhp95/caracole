@@ -219,3 +219,118 @@ def test_the_file_on_disk_offers_none_of_it(able, conn):
     html = build_library_page(conn, able, Overrides(), datetime(2026, 10, 29, tzinfo=UTC))
     assert '<input name="youtube"' not in html and '<p class="hint">No sheets from YouTube' not in html
     assert "server" not in json.loads(JSON_BLOCK.search(html).group(1))
+
+
+# --- a video suggested for a search ----------------------------------------------------------------------
+
+SEARCHED = "Nick Cani - Vikingos veganos"
+JPEG = (b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00"
+        b"\xff\xc0\x00\x0b\x08\x01\x68\x01\xe0\x01\x01\x11\x00\xff\xda\x00\x08\x01\x01\x00\x00\x3f\x00\x12\x34\xff\xd9")
+
+
+def get(app, path, **headers):
+    return app.handle(Request("GET", path, {"host": HOST, **headers}))
+
+
+def search_answer(app, q=SEARCHED):
+    from urllib.parse import quote
+
+    response = get(app, f"/api/search?q={quote(q)}", accept="application/json")
+    assert response.status == 200, response.body
+    return answer(response)
+
+
+def searched_already(conn, *, thumb=True, video=True):
+    from caracole.db import kv_set_json
+    from caracole.youtube_search import query_key
+
+    kv_set_json(conn, f"youtube-search:{query_key(SEARCHED)}", {
+        "at": "2026-10-29T10:00:00Z", "query": SEARCHED, "thumb": thumb,
+        "video": {"id": VIKINGOS, "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu",
+                  "duration": 222.0, "url": WATCH} if video else None})
+
+
+def test_a_search_with_no_sheet_says_youtube_may_be_searched_for_it(able, queue, conn):
+    from caracole.youtube_search import query_key
+
+    said = search_answer(app_for(able, queue))["youtube"]
+    assert said == {"state": "auto", "query": SEARCHED, "key": query_key(SEARCHED)}
+
+
+def test_a_search_with_a_sheet_or_where_none_can_be_made_says_nothing_of_youtube(able, cfg, queue, conn):
+    add_song(conn, "Nick Cani", "Vikingos veganos")  # yours, by its title: a sheet on the screen
+    assert search_answer(app_for(able, queue))["youtube"] is None
+    assert search_answer(app_for(cfg, queue), "Someone - Something")["youtube"] is None  # no yt-dlp here
+
+
+def test_a_video_found_this_month_comes_back_with_its_thumbnail_and_no_request(able, queue, conn):
+    searched_already(conn)
+    said = search_answer(app_for(able, queue), "vikingos veganos nick cani")["youtube"]
+    assert said["state"] == "found" and said["video"] == {
+        "id": VIKINGOS, "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu", "duration": 222.0,
+        "url": WATCH, "thumb": f"/youtube/thumb/{VIKINGOS}.jpg"}
+    assert queue.snapshot() == []
+
+
+def test_the_search_of_youtube_is_one_job_of_no_songs(able, queue, conn):
+    from caracole.web.jobs import YOUTUBE_SEARCH, youtube_search_steps
+    from caracole.youtube_search import query_key
+
+    app = app_for(able, queue)
+    response = post(app, "/youtube/search", {"q": SEARCHED}, accept="application/json")
+    assert response.status == 202, response.body
+    [job] = queue.snapshot()
+    assert answer(response) == {"job": job.id, "url": f"/api/jobs/{job.id}"}
+    assert job.song_key == YOUTUBE_SEARCH + query_key(SEARCHED)
+    assert [(s.label, s.args) for s in job.steps] == youtube_search_steps(SEARCHED)
+    again = post(app, "/youtube/search", {"q": "vikingos veganos nick cani"}, accept="application/json")
+    assert answer(again)["job"] == job.id and len(queue.snapshot()) == 1  # the one on its way
+
+
+def test_the_search_of_youtube_is_refused_where_its_gate_refuses_it(able, queue, conn):
+    from datetime import UTC, datetime
+
+    from caracole.health import record_block
+
+    app = app_for(able, queue)
+    assert post(app, "/youtube/search", {"q": ""}, accept="application/json").status == 400
+    searched_already(conn)
+    assert post(app, "/youtube/search", {"q": SEARCHED}, accept="application/json").status == 409
+    add_song(conn, "Estopa", "Como Camarón")
+    assert post(app, "/youtube/search", {"q": "Estopa - Como Camarón"}, accept="application/json").status == 409
+    record_block(conn, "youtube", datetime.now(UTC), "bot check")
+    refused = post(app, "/youtube/search", {"q": "Someone - Something"}, accept="application/json")
+    assert refused.status == 429 and "cooling down" in answer(refused)["error"]
+    assert queue.snapshot() == []
+
+
+def test_a_kept_thumbnail_is_served_as_an_image_that_runs_nothing(able, queue, conn):
+    from caracole.youtube_search import thumb_path
+
+    app = app_for(able, queue)
+    assert get(app, f"/youtube/thumb/{VIKINGOS}.jpg").status == 404  # not kept
+    path = thumb_path(able, VIKINGOS)
+    path.parent.mkdir(parents=True)
+    path.write_bytes(JPEG)
+    response = get(app, f"/youtube/thumb/{VIKINGOS}.jpg")
+    assert response.status == 200 and response.body == JPEG
+    headers = dict(response.headers)
+    assert headers["Content-Type"] == "image/jpeg" and headers["X-Content-Type-Options"] == "nosniff"
+    assert headers["Content-Security-Policy"].startswith("default-src 'none'")
+    path.write_bytes(b"<svg onload=alert(1)>")  # a file there that is no JPEG is never sent
+    assert get(app, f"/youtube/thumb/{VIKINGOS}.jpg").status == 404
+    for name in ("../../caracole.sqlite", f"{VIKINGOS}.png", "x.jpg", ""):
+        assert get(app, f"/youtube/thumb/{name}").status == 404, name
+
+
+def test_the_served_page_may_show_images_of_the_server_alone_and_the_file_none(able, queue, conn):
+    from datetime import UTC, datetime
+
+    from caracole.library_page import build_library_page
+    from caracole.overrides import Overrides
+
+    policy = re.compile(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">')
+    body, _ = page_data(app_for(able, queue))
+    assert "img-src data: 'self';" in policy.search(body).group(1)
+    html = build_library_page(conn, able, Overrides(), datetime(2026, 10, 29, tzinfo=UTC))
+    assert "img-src data:;" in policy.search(html).group(1)

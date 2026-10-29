@@ -229,7 +229,8 @@ class WebApp:
     routes keep between two requests."""
 
     def __init__(self, cfg: Config, queue: JobQueue, *, allowed: frozenset[str], csrf: str | None = None,
-                 timers: Mapping[str, int] | None = None, searches_lacuerda: bool = True):
+                 timers: Mapping[str, int] | None = None, searches_lacuerda: bool = True,
+                 searches_youtube: bool = True):
         self.cfg = cfg
         self.queue = queue
         self.allowed = allowed
@@ -238,6 +239,9 @@ class WebApp:
         # Whether the pages may send LaCuerda's own search (search_routes.py): False for the tests alone that drive
         # the pages for something else, whose queue it would join; caracole serve never sets it.
         self.searches_lacuerda = searches_lacuerda
+        # Whether the library page may send YouTube's search for a query with no sheet (youtube_routes.py): False for
+        # the tests alone that drive the page for something else where a sheet from a video can be made.
+        self.searches_youtube = searches_youtube
         self._wanted = threading.Lock()  # one append to wanted.txt at a time, of the server's threads
         self._ended: dict[int, tuple[int | None, SongFacts | None]] = {}  # job id -> its song's id and facts
         self._ended_lock = threading.Lock()

@@ -31,7 +31,9 @@ harmonica`` (harmonica_routes.py), under a key of its own (``READING``), the son
 version's (``EXPORTING``). A sheet made from a YouTube video is one ``caracole youtube --sheet --progress``
 (``youtube_sheet_steps``), its JSON lines its stages (youtube_sheet.py's), under a key of its own too
 (``YOUTUBE_SHEET`` and the song's identity key), so it never joins the song's lookup, nor a lookup it; one at a
-time a song. Each command takes caracole's lock (a
+time a song. A video suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
+a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
+``YOUTUBE_SEARCH_STAGES``. Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -307,14 +309,23 @@ def lacuerda_artist_steps(slug: str, name: str) -> list[tuple[str, tuple[str, ..
 
 LACUERDA_SEARCH = "lacuerda-search:"  # a query of LaCuerda's search: its job's key, the query's key after it
 HARPTABS_ARTIST = "harptabs-artist:"  # a harptabs.com artist page's read: its job's key, the page's path after it
-INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST)  # what a site's index reads: jobs of no song's
+YOUTUBE_SEARCH = "youtube-search:"  # a video suggested for a search: its job's key, the query's key after it
+# what a site's index reads, and a search's suggestion: jobs of no song's
+INDEX_READS = (LACUERDA_ARTIST, LACUERDA_SEARCH, HARPTABS_ARTIST, YOUTUBE_SEARCH)
 SEARCH_STAGES = (("search", "Search LaCuerda"),)  # ``caracole lacuerda --search --progress``'s one stage
+YOUTUBE_SEARCH_STAGES = (("video", "Search YouTube"), ("thumbnail", "Its thumbnail"))  # ``caracole youtube --search``'s
 
 
 def lacuerda_search_steps(query: str, *, auto: bool) -> list[tuple[str, tuple[str, ...]]]:
     """Ask LaCuerda's search for a query's songs now: ``caracole lacuerda --search --progress``, one request;
     ``auto``, sent by the page by itself, within its share of the hour's lookups (``--auto``)."""
     return [("Searching LaCuerda", ("lacuerda", f"--search={query}", "--progress", *(("--auto",) if auto else ())))]
+
+
+def youtube_search_steps(query: str) -> list[tuple[str, tuple[str, ...]]]:
+    """YouTube's first video for a query, suggested beside the search's results: ``caracole youtube --search
+    --progress``, one yt-dlp run and the video's thumbnail (youtube_search.py)."""
+    return [("Searching YouTube", ("youtube", f"--search={query}", "--progress"))]
 
 
 def harptabs_artist_steps(path: str, name: str) -> list[tuple[str, tuple[str, ...]]]:
@@ -387,6 +398,8 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         names.update(STAGES)
     if any(_searches(step.args) for step in steps):
         names.update(SEARCH_STAGES)
+    if any(step.args[:1] == ("youtube",) and any(a.startswith("--search=") for a in step.args) for step in steps):
+        names.update(YOUTUBE_SEARCH_STAGES)
     if any(step.args[:1] == (VERSIONS,) and not _looks_up(step.args) for step in steps):
         names.update((name, label) for name, label in KEEP_STAGES if name not in names)
     if any(_sheets_from_youtube(step.args) for step in steps):

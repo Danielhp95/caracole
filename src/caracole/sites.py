@@ -75,7 +75,8 @@ SITES: tuple[Site, ...] = (
     Site("youtube", "Audio for auto-chords", "youtube.com", (),
          "Closes /results and /youtubei/, which yt-dlp uses: caracole goes against them, by your choice.",
          (("/results", "search results"), ("/youtubei/", "the player's API")),
-         terms="The one site whose closed paths caracole asks for, by your choice: a few of your songs a night.",
+         terms="The one site whose closed paths caracole asks for, by your choice: a few of your songs a night, "
+               "the videos you give it, and a search's first video.",
          asked="Searched song by song"),
 )
 
