@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
-from caracole import icons
+import dataclasses
+from datetime import UTC, datetime, timedelta
+
+from caracole import health, icons
+from caracole.config import ProviderPolicy
 from caracole.db import kv_set_json
 from caracole.http import ROBOTS_DISALLOW
 from caracole.lacuerda import LETTERS
 from caracole.lacuerda_index import letters_read
-from caracole.sites import SITES, Indexed, Progress, index_figures, more_paths, refresh_counts
+from caracole.sites import SITES, Indexed, Progress, Status, index_figures, more_paths, refresh_counts, status_of
+from caracole.stamps import shown
+from caracole.youtube_fetch import route_problem
 
 
 def site(key):
@@ -198,9 +204,44 @@ def test_reading_the_figures_writes_nothing(conn):
 def test_writing_the_pages_keeps_the_counts(conn, cfg):
     from caracole.overrides import Overrides
     from caracole.todo import write_pages
-    from datetime import UTC, datetime
 
     ug_rows(conn, (1, "eagles", "hotel california"))
     write_pages(conn, cfg, Overrides(), datetime(2026, 10, 29, 3, 41, tzinfo=UTC))
     ug_rows(conn, (2, "eagles", "desperado"))
     assert index_figures(conn)["ug"][0].songs == 1
+
+
+# --- a site's status ---------------------------------------------------------------------------------------------
+
+NOW = datetime(2026, 10, 29, 3, 41, tzinfo=UTC)
+
+
+def test_a_site_turned_off_is_off_with_the_setting_that_turned_it_off(conn, cfg):
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    assert status_of(conn, off, "gtptabs", NOW) == Status("off", "Off", "[providers.gtptabs] enabled = false")
+
+
+def test_youtube_without_auto_chords_is_off_with_why(conn, cfg):
+    assert route_problem(cfg) is not None  # the tests' caracole has no models and no yt-dlp
+    assert status_of(conn, cfg, "youtube", NOW) == Status("off", "Off", route_problem(cfg))
+
+
+def test_a_cooldown_reads_until_when_and_why(conn, cfg):
+    state = health.record_block(conn, "musescore", NOW - timedelta(hours=1), "challenge page")
+    status = status_of(conn, cfg, "musescore", NOW)
+    assert (status.state, status.label) == ("cooling", "Cooling down")
+    assert shown(state.cooldown_until, local=True) in status.detail
+    assert "challenge page" in status.detail
+
+
+def test_errors_since_the_last_good_run(conn, cfg):
+    health.record_ok(conn, "ug", NOW - timedelta(days=1))
+    health.record_error(conn, "ug", NOW - timedelta(hours=2), "HTTP 502")
+    assert status_of(conn, cfg, "ug", NOW) == Status("errors", "Errors", "HTTP 502")
+
+
+def test_a_partial_index_reads_indexing_unless_something_is_wrong(conn, cfg):
+    assert status_of(conn, cfg, "harptabs", NOW) == Status("ok", "OK", None)
+    assert status_of(conn, cfg, "harptabs", NOW, partial=True) == Status("indexing", "Indexing", None)
+    health.record_block(conn, "harptabs", NOW - timedelta(hours=1), "HTTP 429")
+    assert status_of(conn, cfg, "harptabs", NOW, partial=True).state == "cooling"

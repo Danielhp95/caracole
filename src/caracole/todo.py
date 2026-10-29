@@ -31,6 +31,7 @@ from caracole.musescore import song_pages
 from caracole.match import NO_ALIAS_STEPS, PERFORMER_CATCH_ALLS
 from caracole.normalize import clean_title, has_han, slug_key
 from caracole.overrides import ARTIST_PAGE_SHAPE, TAB_PAGE_SHAPE, VIDEO_SHAPE, Overrides
+from caracole.sites import status_of
 from caracole.songs import Song, list_songs
 from caracole.stamps import shown
 from caracole.ug.fetch import artist_is_known, fetch_due, needs_artist_page, pasted_page_problem
@@ -735,17 +736,15 @@ def _health(conn: sqlite3.Connection, cfg: Config, now: datetime) -> list[str]:
     requests = last.get("requests", {})
     out = ["## Provider health", "", "| Provider | Status | Last OK | Last error | Requests last run |",
            "|---|---|---|---|---|"]
-    youtube_off = route_problem(cfg)
     for p in PROVIDERS:
         s = get_state(conn, p)
-        if not cfg.provider(p).enabled:
-            status = f"off ([providers.{p}] enabled = false)"
-        elif p == "youtube" and youtube_off:
-            status = f"off: {md(youtube_off)}"
-        elif s.cooldown_until and now < s.cooldown_until:
+        at = status_of(conn, cfg, p, now)  # the Sites tab's rule, in this table's words
+        if at.state == "off":
+            status = f"off ({at.detail})" if not cfg.provider(p).enabled else f"off: {md(at.detail or '')}"
+        elif at.state == "cooling":
             blocks = f"{s.strikes} block{'s' if s.strikes != 1 else ''}"
             status = f"cooling down until {_fmt(s.cooldown_until)} ({blocks})"
-        elif s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
+        elif at.state == "errors":
             status = "errors"  # nothing has worked since the last error
         else:
             status = "OK"

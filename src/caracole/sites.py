@@ -17,10 +17,14 @@ import hashlib
 import json
 import sqlite3
 from dataclasses import dataclass
-from typing import Any
+from datetime import datetime
+from typing import TYPE_CHECKING, Any
 
 from caracole.db import kv_get_json, kv_set_json
 from caracole.http import ROBOTS_DISALLOW
+
+if TYPE_CHECKING:
+    from caracole.config import Config
 
 
 @dataclass(frozen=True)
@@ -219,3 +223,38 @@ def index_figures(conn: sqlite3.Connection) -> dict[str, Figures]:
     figures["gametabs"] = (Indexed(tracks, "tracks", f"{tabs:,} tabs of {games:,} games"),
                            Progress(pages.read, pages.pages, "game pages read") if pages.pages else None)
     return figures
+
+
+# --- a site's status ------------------------------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class Status:
+    """Where a site stands: ``state`` one of "ok", "indexing", "cooling", "errors", "off"; ``label`` its badge's word;
+    ``detail`` why, in a line, or None."""
+
+    state: str
+    label: str
+    detail: str | None = None
+
+
+def status_of(conn: sqlite3.Connection, cfg: Config, provider: str, now: datetime, *, partial: bool = False) -> Status:
+    """A provider's status, one rule for the Sites tab and the to-do page's health table: off (turned off in
+    caracole.toml, or YouTube without auto-chords), cooling down after a block, errors since its last good run, else
+    OK, or Indexing while its index is ``partial``."""
+    from caracole.health import get_state
+    from caracole.stamps import shown
+    from caracole.youtube_fetch import route_problem
+
+    if not cfg.provider(provider).enabled:
+        return Status("off", "Off", f"[providers.{provider}] enabled = false")
+    if provider == "youtube" and (problem := route_problem(cfg)):
+        return Status("off", "Off", problem)
+    s = get_state(conn, provider)
+    if s.cooldown_until and now < s.cooldown_until:
+        blocks = f"{s.strikes} block{'s' if s.strikes != 1 else ''} in a row"
+        why = f": {s.last_error}" if s.last_error else ""
+        return Status("cooling", "Cooling down", f"Until {shown(s.cooldown_until, local=True)}, after {blocks}{why}")
+    if s.last_error_at and (s.last_ok is None or s.last_ok < s.last_error_at):
+        return Status("errors", "Errors", s.last_error)  # nothing has worked since the last error
+    return Status("indexing", "Indexing") if partial else Status("ok", "OK")
