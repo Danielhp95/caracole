@@ -26,20 +26,22 @@ file, and none of it loads anything from the network.
 - library.css, library-screens.css and library.js: index.html's own. library-screens.css comes
   after rows.css, as its scroll margin and its thumb's targets are a line's too. filter.css, after
   library.css: the toolbar over the songs (body.html's ``.toolbar``: the filters on as tags, then
-  Filter, Sort and Select) and the panel Filter opens (``#filter-panel``, a ``<dialog>``: a popover
+  Filter and Sort) and the panel Filter opens (``#filter-panel``, a ``<dialog>``: a popover
   from 720 px, a sheet from the bottom on a phone), which library.js fills and opens.
 - songbooks.css, select.js and songbooks.js: the Songbooks tab, and the Select mode that makes a songbook.
   select.js runs after library.js: it finds the songs' lines by their song's id (any element of
   ``#list`` with a ``data-id``), puts a box on each and a bar to name the songbook, and builds
-  everything with createElement and textContent, as the page does. While it is on, a tap anywhere
+  everything with createElement and textContent, as the page does. The Songbooks tab's "+ New songbook"
+  turns it on ("caracole:new-songbook"), and a line's "Add to a songbook…" with that song picked
+  ("caracole:pick"): the library's toolbar has no button for it. While it is on, a tap anywhere
   on a line picks it (the stylesheet puts its action and its chevron away, and lets the taps through to
-  the line). A line's "Add to a songbook…" turns it on with that song picked ("caracole:pick"). The
+  the line); the bar's × turns it off, the focus back where it began (else on the Library tab). The
   bar is one line: on a phone, "2 selected · Make songbook…", which unfolds the menu and the name
   field. On caracole serve songbooks.js posts the bar's songbook (the server's token, the songs' ids in
   the order picked; its "caracole:sent" says how the server answered: on its way, the picks go and the
   mode ends; refused, the bar says why), and its menu follows the songbooks once a request is over
   ("caracole:songbooks"); on the file on disk it shows the caracole songbook command to run instead,
-  folded beside Copy. The Songbooks tab's "+ New songbook" turns it on ("caracole:new-songbook").
+  folded beside Copy.
   songbooks.js runs after select.js and tabs.js: the Songbooks tab (``book=`` in the address), drawn from the
   data's ``songbooks``
   (songbook_section.py) with createElement and textContent: the songbooks as lines, the one opened as a

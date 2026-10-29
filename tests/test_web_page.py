@@ -967,7 +967,8 @@ def test_a_song_that_gets_a_removed_songs_id_is_a_new_song_on_the_page(serve, cf
           list: Array.from(document.querySelectorAll('#list h3')).map((h) => h.textContent),
           requested: Array.from(document.querySelectorAll('#requested article h3')).map((h) => h.textContent),
           summary: Array.from(document.querySelectorAll('#summary .stat')).map((s) => s.textContent) }))()""")
-        page.click(".pick-toggle")
+        page.click("#tab-songbooks")
+        page.click("#songbooks .new-book")  # Select, on the library
         picks = page.js("Array.from(document.querySelectorAll('#list .pick-label')).map((l) => l.textContent)")
         page.click(".pick-done")
         page.click("#tab-songbooks")  # Campfire, open beside the list: Add a song offers the removed song no more
@@ -1022,7 +1023,8 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
     })()""" % creeps_line
     with browser.Browser(tmp_path / "chrome", width=1280, height=800) as page:
         page.open(url)
-        page.click(".pick-toggle")  # Creep picked for a songbook: the picks stay once Select is left
+        page.click("#tab-songbooks")
+        page.click("#songbooks .new-book")  # Creep picked for a songbook: the picks stay once Select is left
         page.click(f'#list [data-id="{creep.id}"] .pick')
         page.click(".pick-done")
         page.click("#tab-songbooks")
@@ -1042,7 +1044,8 @@ def test_a_song_removed_elsewhere_whose_id_comes_back_is_a_new_song_on_the_page(
           requested: Array.from(document.querySelectorAll('#requested article h3')).map((h) => h.textContent),
           summary: Array.from(document.querySelectorAll('#summary .stat')).map((s) => s.textContent),
           said: window.said }; })()""" % creeps_line)
-        page.click(".pick-toggle")
+        page.click("#tab-songbooks")
+        page.click("#songbooks .new-book")
         picks = page.js("[document.querySelector('.pick-count').textContent].concat(Array.from("
                         "document.querySelectorAll('#list .pick-label')).map((l) => l.textContent))")
         page.click(".pick-done")

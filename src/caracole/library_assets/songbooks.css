@@ -192,7 +192,6 @@ button.plays:hover, button.plays[aria-expanded="true"] { border-color: var(--acc
   .selecting section.artist .line { grid-template-columns: 44px minmax(0, 1fr) 6.5rem calc(var(--sites, 0) * 18px)
     6.5rem 2.75rem; grid-template-areas: "pick title status sites src key"; }
 }
-.pick-toggle[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .selecting .page { padding-bottom: 104px; }
 .selecting:has(.pickbar.open, .pick-command:not([hidden])) .page { padding-bottom: 300px; }
 .pickbar { position: fixed; z-index: 10; left: 0; right: 0; bottom: 0; border-top: 1px solid var(--border);

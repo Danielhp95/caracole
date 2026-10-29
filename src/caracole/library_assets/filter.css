@@ -1,5 +1,5 @@
-/* The toolbar over the songs: the filters on as tags, each with its ×, and Clear, at the left; Filter, Sort and, past a
-   divider, Select at the right (select.js puts it there). On a phone the buttons are one row, the tags under it. */
+/* The toolbar over the songs: the filters on as tags, each with its ×, and Clear, at the left; Filter and Sort at the
+   right. On a phone the buttons are one row, the tags under it. */
 :root {
   --pop-shadow: 0 14px 36px rgb(31 30 28 / 16%), 0 2px 6px rgb(31 30 28 / 8%);
   --seg-on: var(--surface);
@@ -29,7 +29,6 @@
 .tool-menu .glyph { position: absolute; top: 50%; left: 12px; transform: translateY(-50%); pointer-events: none; }
 .tool-menu select.tool { padding-left: 35px; -webkit-appearance: none; appearance: none; field-sizing: content;
   min-width: 0; max-width: 100%; }
-.divider { width: 1px; height: 24px; margin: 0 2px; background: var(--border-strong); }
 .tag { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 6px 0 10px; border: 1px solid
   color-mix(in srgb, var(--accent) 55%, transparent); border-radius: 999px; background: var(--accent-soft);
   color: var(--text); font: inherit; font-size: .84rem; font-weight: 600; cursor: pointer; }
@@ -110,7 +109,6 @@ html.sheet-open { overflow: hidden; }
   .masthead.lib .tab { gap: 3px; padding: 0 4px; font-size: .86rem; }
   .masthead.lib .tab .n { min-width: 16px; padding: 0 4px; }
   .tools { gap: 6px; }
-  .tools .divider { display: none; }
   /* Icons alone beside the search, a thumb's worth each: the words are there for a screen reader, and Filter keeps the
      number of its filters on. */
   .bar-row .tool { justify-content: center; min-width: 44px; min-height: 44px; padding: 0; font-size: 0; }

@@ -3,7 +3,6 @@
   "use strict";
   const byId = (id) => document.getElementById(id);
   const list = byId("list");
-  const toolbar = document.querySelector(".toolbar");
   let data;
   try {
     data = JSON.parse(byId("songs").textContent);
@@ -11,7 +10,7 @@
     return;
   }
   const songs = new Map((Array.isArray(data.songs) ? data.songs : []).map((s) => [String(s.id), s]));
-  if (!list || !toolbar || !songs.size) return;
+  if (!list || !songs.size) return;
   // Served by caracole serve (the data's ``server``), else the file on disk, or the Android app's copy of it.
   const server = data.server && typeof data.server === "object" ? data.server : null;
   const names = (list) => (Array.isArray(list) ? list : []).map((b) => String(b && b.name || "")).filter(Boolean);
@@ -30,22 +29,13 @@
     names.map(shellQuote).join(" ");
   const picked = [];  // song ids, in the order they were picked: the songbook's order
   let sending = false;  // on caracole serve, until the server answers the bar's form
-
-  // Last among the tools, after a divider: set apart from the filters before it (Filter, Sort), as it filters nothing.
-  const toggle = el("button", "tool pick-toggle");
-  toggle.type = "button";
-  toggle.title = "Pick songs for a songbook";
-  toggle.setAttribute("aria-pressed", "false");
-  toggle.append(caracoleRows({}).glyph("select"), "Select");
-  const divider = el("span", "divider");
-  divider.setAttribute("aria-hidden", "true");
-  (document.getElementById("tools") || toolbar).append(divider, toggle);
+  let cameFrom = null;  // what had the focus when Select began: + New songbook, or a line's Add to a songbook…
 
   const bar = el("section", "pickbar");
   bar.hidden = true;
   bar.setAttribute("aria-label", "Make a songbook");
   const inner = el("div", "pickbar-in");
-  // The way out, as the Select button is, which the page has scrolled away by now: the picks stay.
+  // The way out: the picks stay.
   const done = el("button", "pick-done");
   done.type = "button";
   done.setAttribute("aria-label", "Leave Select");
@@ -153,8 +143,8 @@
     paintAll();
   };
   // A box on each song's line, as the page's script puts them in the list (it keeps each line it made), once
-  // Select is pressed: until then a line holds nothing to tick (the file's sends nothing, and a review's
-  // picker is the line's only choice).
+  // Select is on: until then a line holds nothing to tick (the file's sends nothing, and a review's picker is the
+  // line's only choice).
   const selecting = () => document.body.classList.contains("selecting");
   const decorate = () => {
     if (!selecting()) return;
@@ -205,17 +195,22 @@
     }
   });
 
+  // Select is turned on by the Songbooks tab's + New songbook or a line's Add to a songbook…, and off by the bar's ×
+  // or once the server has the bar's songbook.
   const setMode = (on) => {
+    if (on) cameFrom = document.activeElement;
     document.body.classList.toggle("selecting", on);
-    toggle.setAttribute("aria-pressed", on ? "true" : "false");  // its name stays "Select": pressed or not
     const inBar = bar.contains(document.activeElement);
     bar.hidden = !on;
     setOpen(false);
-    if (!on && inBar) toggle.focus({ preventScroll: true });  // not lost with the bar
     decorate();
     paintAll();
+    if (!on && inBar) {  // not lost with the bar: back where Select began, if it shows (a line's), else the Library tab
+      const back = cameFrom && cameFrom !== document.body && cameFrom.isConnected && cameFrom.checkVisibility()
+        ? cameFrom : byId("tab-library");
+      if (back) back.focus({ preventScroll: true });
+    }
   };
-  toggle.addEventListener("click", () => setMode(!selecting()));
   done.addEventListener("click", () => setMode(false));
   // A line's "Add to a songbook…" (library.js): Select, that song picked, and the bar's menu or name field to
   // say which songbook (unfolded on a phone).

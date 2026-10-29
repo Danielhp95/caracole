@@ -266,10 +266,12 @@ def run_in_page(html: str, cfg, tmp_path: Path, body: str, *, size: str = "1280,
     return out
 
 
+# Select, as the Songbooks tab's + New songbook turns it on: on the library, its bar ready for the name (unfolded on a
+# phone).
 PICK = """
   const card = (title) => qa("#list article").find((a) => a.querySelector("h3").textContent === title);
   const pick = (title) => { const box = card(title).querySelector(".pick input"); box.click(); };
-  q(".pick-toggle").click();
+  q(".new-book").click();
 """
 
 
@@ -298,7 +300,7 @@ def test_the_command_to_copy_quotes_each_word_so_no_shell_expands_it(conn, cfg, 
     title = 'Wow!Wow $HOME `id` "x"'  # bash and zsh expand ! even inside double quotes
     add_song(conn, "Rock'n Band", title)
     out = run_in_page(page(conn, cfg), cfg, tmp_path, """
-      q(".pick-toggle").click();
+      q(".new-book").click();
       qa("#list article")[0].querySelector(".pick input").click();
       q(".pick-name").value = "It's $5!";
       q(".pickbar-form button[type=submit]").click();
@@ -317,7 +319,7 @@ def test_the_command_to_copy_runs_for_a_name_that_starts_with_a_dash(conn, cfg, 
 
     add_song(conn, artist, "Je dis aime")
     out = run_in_page(page(conn, cfg), cfg, tmp_path, f"""
-      q(".pick-toggle").click();
+      q(".new-book").click();
       qa("#list article")[0].querySelector(".pick input").click();
       q(".pick-name").value = {json.dumps(name)};
       q(".pickbar-form button[type=submit]").click();
@@ -371,16 +373,13 @@ def test_select_mode_says_its_state_and_each_picks_place_to_a_screen_reader(libr
     conn, cfg = library
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + """
       pick("Hysteria"); pick("Creep");
-      const toggle = q(".pick-toggle");
       const name = (title) => Array.from(card(title).querySelector(".pick").childNodes)  // its label, read aloud
         .filter((n) => !(n.getAttribute && n.getAttribute("aria-hidden") === "true")).map((n) => n.textContent).join("");
-      out = {on: [toggle.textContent, toggle.getAttribute("aria-pressed")],
+      out = {bar: [q(".pickbar").tagName, q(".pickbar").getAttribute("aria-label")],
              names: ["Hysteria", "Creep", "De Música Ligera"].map(name),
-             option: q(".pick-into option").textContent};
-      toggle.click();
-      out.off = [toggle.textContent, toggle.getAttribute("aria-pressed")];
+             option: q(".pick-into option").textContent, done: q(".pick-done").getAttribute("aria-label")};
     """)
-    assert out["on"] == ["Select", "true"] and out["off"] == ["Select", "false"]  # pressed, never "Done, pressed"
+    assert out["bar"] == ["SECTION", "Make a songbook"] and out["done"] == "Leave Select"
     assert out["names"] == ["Pick Hysteria by Muse, 1st", "Pick Creep by Radiohead, 2nd",
                             "Pick De Música Ligera by Soda Stereo"]
     assert out["option"] == "New songbook"  # fits the bar at 360 px
@@ -426,7 +425,7 @@ def test_picks_survive_a_search_and_select_mode_works_on_a_phone(library, tmp_pa
 LINES_PICK = """
   const line = (title) => qa("#list .line").find((a) => a.querySelector("h3").textContent === title);
   const pickLine = (title) => { line(title).querySelector(".pick input").click(); };
-  q(".pick-toggle").click();
+  q(".new-book").click();
 """
 
 
@@ -481,8 +480,7 @@ def test_the_select_bars_style_leaves_a_reviews_picker_as_it_is(library, tmp_pat
       const box = form.querySelector("input[type=checkbox][name=fetch]");
       out = {form: getComputedStyle(form).display, radio: Math.round(radio.getBoundingClientRect().width),
              box: Math.round(box.getBoundingClientRect().width)};
-      q(".pick-toggle").click();
-      q(".pick-open").click();  // on a phone the bar's fields show once asked for
+      q(".new-book").click();  // on a phone the bar's fields show, unfolded for the name
       const bar = q(".pickbar form");
       Object.assign(out, {bar: getComputedStyle(bar).display,
                           name: Math.round(bar.querySelector("input[type=text]").getBoundingClientRect().height)});
@@ -537,12 +535,12 @@ def test_while_selecting_a_line_shows_no_file_or_action_and_a_tap_anywhere_lands
       const before = titles.map((t) => targets(byTitle(t)).controls.length);
       const note = byTitle("Karma Police").querySelector(".note").checkVisibility();
       const details = byTitle("Hysteria").querySelector(".progress a").checkVisibility();
-      q(".pick-toggle").click();
+      q(".new-book").click();
       await Promise.resolve();  // the boxes come with the list's observer
       const lines = Object.fromEntries(titles.map((t) => [t, targets(byTitle(t))]));
       const hidden = [byTitle("Karma Police").querySelector(".note").checkVisibility(),
                       byTitle("Hysteria").querySelector(".progress a").checkVisibility()];
-      q(".pick-toggle").click();
+      q(".pick-done").click();
       const after = titles.map((t) => targets(byTitle(t)).controls.length);
       out = {before, note, details, lines, hidden, after};
     """, size=size)
@@ -579,7 +577,8 @@ def test_on_a_phone_a_tap_on_a_line_picks_it_and_opens_nothing(library, tmp_path
     with phone:
         phone.open(path.as_uri())
         assert phone.wait(f"document.querySelector({json.dumps(creep)}) !== null")
-        phone.click(".pick-toggle")
+        phone.click("#tab-songbooks")
+        phone.click("#songbooks .new-book")  # Select, on the library
         phone.click(creep + " .line-title")  # the title opens the sheet, but not while selecting
         assert phone.js(picked) == [True, False]
         phone.click(creep + " .line-status")  # nor does its status do anything but untick it
@@ -613,8 +612,10 @@ BAR = """
 def test_on_a_phone_the_select_bar_is_one_line_that_opens_its_name_field_and_its_menu(library, tmp_path):
     conn, cfg = library
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
-      pick("Creep"); pick("Hysteria");
       const open = q(".pick-open"), done = q(".pick-done"), count = q(".pick-count");
+      const started = Object.assign(bar(), {focus: document.activeElement === q(".pick-name")});
+      open.click();  // folded away, to pick
+      pick("Creep"); pick("Hysteria");
       const folded = Object.assign(bar(), {
         line: [done, count, open].map(middle), said: [count.textContent, open.textContent],
         names: [done.getAttribute("aria-label"), open.getAttribute("aria-controls") === q(".pickbar-form").id],
@@ -631,10 +632,13 @@ def test_on_a_phone_the_select_bar_is_one_line_that_opens_its_name_field_and_its
       const into = q(".pick-into");
       into.value = "Campfire";
       into.dispatchEvent(new Event("change"));
-      out = {folded, opened, back, adds: open.textContent, scroll: document.documentElement.scrollWidth,
+      out = {started, folded, opened, back, adds: open.textContent, scroll: document.documentElement.scrollWidth,
              page: innerWidth};
     """, size="390,844")
     folded, opened, back = out["folded"], out["opened"], out["back"]
+    # + New songbook opens it unfolded, the name field ready to type in.
+    assert out["started"]["fields"] == [True, True, True] and out["started"]["focus"], out["started"]
+    assert out["started"]["expanded"] == "true"
     # One line: the way out, the count and the button that names the songbook, each a thumb's target.
     assert folded["said"] == ["2 selected", "Make songbook…"]
     assert max(folded["line"]) - min(folded["line"]) <= 2 and folded["height"] <= 66, folded
@@ -674,22 +678,21 @@ def test_the_cross_leaves_select_mode_and_keeps_the_picks(library, tmp_path):
     conn, cfg = library
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + """
       pick("Creep");
-      q(".pick-open").click();
       q(".pick-done").focus();
       q(".pick-done").click();
       // Out of the mode a picked song looks like any other (where the picks show again).
       const look = (n) => { const c = getComputedStyle(n); return [c.borderLeftColor, c.boxShadow, c.backgroundColor]; };
       const same = () => JSON.stringify(look(card("Creep"))) === JSON.stringify(look(card("Hysteria")));
-      const left = {bar: q(".pickbar").hidden, pressed: q(".pick-toggle").getAttribute("aria-pressed"),
-                    focus: document.activeElement === q(".pick-toggle"),
+      const left = {bar: q(".pickbar").hidden, selecting: document.body.classList.contains("selecting"),
+                    focus: document.activeElement.id,  // + New songbook is out of sight: the Library tab
                     open: card("Creep").querySelector("a.btn.primary").checkVisibility(), same: same()};
-      q(".pick-toggle").click();
+      q(".new-book").click();
       out = {left, count: q(".pick-count").textContent, creep: card("Creep").classList.contains("picked"),
              fields: q(".pick-name").checkVisibility()};
     """, size="390,844")
-    assert out["left"] == {"bar": True, "pressed": "false", "focus": True, "open": True, "same": True}
+    assert out["left"] == {"bar": True, "selecting": False, "focus": "tab-library", "open": True, "same": True}
     assert out["count"] == "1 selected" and out["creep"]  # back in, the picks are as they were
-    assert not out["fields"]  # and the bar is one line again
+    assert out["fields"]  # and the bar ready for the name again
 
 
 @in_chromium
@@ -702,8 +705,7 @@ def test_on_the_file_the_command_to_run_folds_away_beside_copy(library, tmp_path
     update_song(conn, hysteria["id"], match_decision="not_found")  # its line says what to run to find it
     out = run_in_page(page(conn, cfg), cfg, tmp_path, PICK + BAR + """
       const hint = card("Hysteria").querySelector(".pick-hint").checkVisibility();
-      pick("Creep"); pick("Hysteria");
-      if (q(".pick-open").checkVisibility()) q(".pick-open").click();
+      pick("Creep"); pick("Hysteria");  // the bar's fields there (unfolded on a phone by + New songbook)
       const before = bar().height;
       q(".pick-name").value = "Friday set";
       q(".pickbar-form button[type=submit]").click();
