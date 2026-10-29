@@ -44,7 +44,17 @@ from caracole.web.app import (
     query,
     redirect,
 )
-from caracole.web.jobs import EXPORTING, INDEX_READS, LACUERDA_SEARCH, LOOKUP, READING, REMOVING, Job, JobStarted
+from caracole.web.jobs import (
+    EXPORTING,
+    INDEX_READS,
+    LACUERDA_SEARCH,
+    LOOKUP,
+    READING,
+    REMOVING,
+    Job,
+    JobStarted,
+    song_key_of,
+)
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
 from caracole.web.status import REQUESTS, SongFacts, details_href, job_line, song_line
@@ -246,7 +256,7 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     if kind == "song":
         seen.update(progress(job, line, facts))
     if song_id is not None and songbook is None:
-        seen["identity"] = job.song_key.removeprefix(REMOVING)
+        seen["identity"] = song_key_of(job.song_key)
     if songbook is not None:
         seen["songbook"] = songbook
     return seen
@@ -286,7 +296,7 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
 
     removal = job.song_key.startswith(REMOVING)
     export = job.song_key.startswith((EXPORTING, READING))  # a change of the song's own: by its id
-    song = _song_by_id(conn, job.song_id) if export else find_song(conn, job.song_key.removeprefix(REMOVING))
+    song = _song_by_id(conn, job.song_id) if export else find_song(conn, song_key_of(job.song_key))
     facts = None
     if song is not None:
         ignored = song.status == "ignored" or (overrides is not None and song.key in overrides.ignore)

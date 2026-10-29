@@ -1,7 +1,8 @@
 """caracole serve's library page and its forms: a song requested, and a song of the library fetched now.
 
     GET  /, /index.html   the library page, with its forms (library_page, WebControls)
-    POST /request         a song for wanted.txt; with ``fetch``, looked up now too
+    POST /request         a song for wanted.txt; with ``fetch``, looked up now too; with ``youtube``, its sheet
+                          made from that YouTube video instead (youtube_routes.py)
     POST /fetch           look a song of the library up now, unless it needs review first
     GET  /favicon.ico     the pages' icon (page_icon.py), for a browser that asks for it by this name
 
@@ -83,7 +84,12 @@ def icon() -> Response:
 
 def request(app: WebApp, form: dict[str, str]) -> Response:
     """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued; with ``lacuerda``, the
-    LaCuerda song you picked, which its command records for the nightly run (Add for tonight's run)."""
+    LaCuerda song you picked, which its command records for the nightly run (Add for tonight's run); with
+    ``youtube``, its sheet made from that YouTube video in place of a lookup (youtube_routes.py)."""
+    if form.get("youtube", "").strip():
+        from caracole.web.youtube_routes import sheet_from_youtube
+
+        return sheet_from_youtube(app, form)
     lacuerda = lacuerda_field(form)
     line, note = wanted_line(app, form)
     display = f"{line.artist} - {line.title}"

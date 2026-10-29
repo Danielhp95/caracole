@@ -36,9 +36,11 @@ A small server from the standard library (``http.server``), in these parts:
   read: the readings caracole weighs, one pinned in overrides.toml),
   guitar_routes.py (a song's Guitar Pro file
   drawn and played in the browser: guitar_page.py, with alphaTab's bundle,
-  alphatab.py) and offline_routes.py (``/api/offline``, what caracole's Android
+  alphatab.py), offline_routes.py (``/api/offline``, what caracole's Android
   app copies of the library to read it offline: every file the library page
-  caracole wrote links to, as the server sends each).
+  caracole wrote links to, as the server sends each) and youtube_routes.py (a
+  song's auto sheet from a YouTube video pasted on the library page: ``caracole
+  youtube --sheet`` queued).
   pages.py: the pages it writes itself (a song's picker, Remove's question, errors).
 - songbooks.py: the songbook forms, each queued as its ``caracole songbook``
   command (songbook_routes.py). Each songbook's page is one of the pages

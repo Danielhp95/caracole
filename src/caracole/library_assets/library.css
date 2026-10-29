@@ -199,6 +199,10 @@ section.artist .line-by { display: none; }
 .tray .progress { font-size: .85rem; }
 body.with-tray .page { padding-bottom: 88px; }
 .youtube { margin: 0; color: var(--auto); font-size: .85rem; }
+/* A sheet from a YouTube video: the request form's field, across it, and a song's own under its chevron. */
+.fields .youtube-field { grid-column: 1 / -1; }
+form.youtube-sheet { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin: 0; }
+form.youtube-sheet .f { flex: 1 1 260px; }
 .foot { display: flex; }
 .foot form { margin: 0; }
 .btn.quiet { background: transparent; border-color: transparent; color: var(--muted); }

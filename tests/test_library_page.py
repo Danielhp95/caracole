@@ -237,8 +237,11 @@ def test_the_served_page_has_the_request_form_and_its_token(conn, cfg):
     assert "form-action 'self'" in csp_of(html) and "form-action 'none'" not in csp_of(html)
     # Its script may ask the server how the requests go, and nothing else.
     assert "connect-src 'self'" in csp_of(html) and "default-src 'none'" in csp_of(html)
-    assert data_of(html)["server"] == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id],
-                                       "jobs": [job], "guitar": False}
+    served = data_of(html)["server"]
+    youtube = served.pop("youtube")  # whether a sheet can be made from a YouTube video here: test_web_youtube.py
+    assert served == {"csrf": 't0k"<en', "busy": [wanted.id], "active": 2, "removing": [found.id], "jobs": [job],
+                      "guitar": False}
+    assert set(youtube) == {"ok", "why", "off"}
     # Where the songs just requested go, and the list of requests.
     assert re.search(r'<section class="requested" id="requested"[^>]*hidden>', shell)
     assert re.search(r'<aside class="tray" id="tray"[^>]*hidden>', shell)

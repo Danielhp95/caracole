@@ -11,8 +11,9 @@ read, LaCuerda's own search), remove_routes.py (Remove), songbook_routes.py (the
 sheet's PDF in the version its viewer was left in, downloaded at once, and Make this my version), versions_routes.py
 (a sheet's Ultimate Guitar versions: Make this the one, Keep it, back to caracole's pick), harmonica_routes.py (how
 a harmonica tab is read: its readings, one pinned, back to caracole's guess), guitar_routes.py
-(a song's Guitar Pro file in the browser, and alphaTab's bundle) and offline_routes.py (what caracole's Android
-app copies of the library, and the library page it starts from). A new route, or a new module of them, changes
+(a song's Guitar Pro file in the browser, and alphaTab's bundle), offline_routes.py (what caracole's Android
+app copies of the library, and the library page it starts from) and youtube_routes.py (a song's auto sheet from a
+YouTube video pasted on the library page). A new route, or a new module of them, changes
 nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as

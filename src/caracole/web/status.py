@@ -47,6 +47,10 @@ ran. So a job of other commands reads the same way:
   harptabs.com artist page's read (``jobs.HARPTABS_ARTIST``), as a LaCuerda
   one's, in the words ``caracole harptabs --artist`` ends with. An add of a
   song whose sheet you picked on LaCuerda says that tonight's run gets that sheet.
+  A sheet from a YouTube video (``jobs.YOUTUBE_SHEET``) says Ready once its
+  chords stage made the sheet (an auto sheet of an earlier video is none of
+  its doing), else "Not made yet" (a block, a cooldown, a spent budget or a
+  site's error, which exit 0), the Requests tab saying which stage stopped it.
 
 A line that ends in a failure or a wait also links to the job's output in
 the library page's Requests tab (``Line.details``, ``#tab=requests&job=N``). Every link is relative to the
@@ -63,7 +67,7 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.web.jobs import EXPORTING, INDEX_READS, READING, REMOVING, Job, Stage, Step
+from caracole.web.jobs import EXPORTING, INDEX_READS, READING, REMOVING, YOUTUBE_SHEET, Job, Stage, Step
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -88,6 +92,8 @@ STAGE_LINES = {
     "pages": "Writing the library page",
     "songbooks": "Remaking its songbooks",
     "search": "Searching LaCuerda",  # caracole lacuerda --search's (jobs.SEARCH_STAGES)
+    "audio": "Taking the audio from YouTube",  # caracole youtube --sheet's (youtube_sheet.STAGES)
+    "chords": "Working out the chords from the audio",
 }
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
@@ -210,6 +216,11 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
         return Line("ready", DONE[action], ("Open songbook", opens) if opens else None)
     if job.song_key.startswith(INDEX_READS):  # no song's: its command's last word says what the site answered
         return _artist_read(job.steps, details)
+    if job.song_key.startswith(YOUTUBE_SHEET):  # Ready once its chords are made, never on an earlier sheet
+        made = any(stage.name == "chords" and stage.state == "done" for stage in job.stages)
+        if made and song is not None and song.sheet:
+            return Line("ready", READY, ("Open sheet", song.sheet))
+        return Line("waiting", "Not made yet", details=details)
     if song is not None and song.sheet:
         return Line("ready", READY, ("Open sheet", song.sheet))
     if song is not None and song.ignored:

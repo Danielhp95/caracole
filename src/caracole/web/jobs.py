@@ -28,7 +28,10 @@ one, kept, its versions not kept fetched (Fetch them, ``--keep-more``), or its p
 would that; its JSON lines are the job's stages too (Keep it's and Fetch them's ``KEEP_STAGES``, and a lookup's for
 ``--choose`` and ``--clear``, which run one). A harmonica tab's reading pinned, or taken out, is ``caracole
 harmonica`` (harmonica_routes.py), under a key of its own (``READING``), the song's change, as Make this my
-version's (``EXPORTING``). Each command takes caracole's lock (a
+version's (``EXPORTING``). A sheet made from a YouTube video is one ``caracole youtube --sheet --progress``
+(``youtube_sheet_steps``), its JSON lines its stages (youtube_sheet.py's), under a key of its own too
+(``YOUTUBE_SHEET`` and the song's identity key), so it never joins the song's lookup, nor a lookup it; one at a
+time a song. Each command takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -134,6 +137,12 @@ class Job:
         """Whether one of its commands looks its song up: ``caracole get``, or ``caracole versions --choose`` or
         ``--clear``, which run one (its stages are a lookup's)."""
         return any(_looks_up(step.args) for step in self.steps)
+
+    @property
+    def from_youtube(self) -> bool:
+        """Whether it makes its song's sheet from a YouTube video (``caracole youtube --sheet``): its stages are
+        youtube_sheet.py's."""
+        return any(_sheets_from_youtube(step.args) for step in self.steps)
 
     def as_json(self) -> dict[str, Any]:
         """The job as plain data: its steps, each with a state (a lookup's stages; else its commands)."""
@@ -283,8 +292,9 @@ def _fetches(steps: Sequence[Step]) -> bool:
 
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
-    --progress``, or ``caracole lacuerda --search --progress``."""
-    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",)) and "--progress" in _options(args))
+    --progress``, ``caracole lacuerda --search --progress``, or ``caracole youtube --sheet --progress``."""
+    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",))
+                                     and "--progress" in _options(args))
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
@@ -317,6 +327,27 @@ def _searches(args: Sequence[str]) -> bool:
     return args[:1] == ("lacuerda",) and any(arg.startswith("--search=") for arg in args)
 
 
+YOUTUBE_SHEET = "youtube:"  # a sheet from a YouTube video: its job's key, the song's identity key after it
+
+
+def youtube_sheet_steps(display: str, url: str) -> list[tuple[str, tuple[str, ...]]]:
+    """Make a song's auto sheet from a YouTube video now: ``caracole youtube --sheet --progress``, one process for
+    every stage (youtube_sheet.py's ``STAGES``): the audio with yt-dlp, the lyrics, the chords, the PDF. ``url`` is
+    the video's plain address (youtube_urls.watch_url)."""
+    return [("Making the sheet from YouTube",
+             ("youtube", "--sheet", "--progress", f"--url={url}", f"--song={display}"))]
+
+
+def _sheets_from_youtube(args: Sequence[str]) -> bool:
+    """Whether a step's command makes a song's sheet from a YouTube video (``caracole youtube --sheet``)."""
+    return args[:1] == ("youtube",) and "--sheet" in args
+
+
+def song_key_of(job_key: str) -> str:
+    """The song's identity key in a job's key: a removal's and a sheet from YouTube's have theirs after a prefix."""
+    return job_key.removeprefix(REMOVING).removeprefix(YOUTUBE_SHEET)
+
+
 def _pick(steps: Sequence[Step]) -> tuple[str, ...]:
     """The Ultimate Guitar song and tab, the LaCuerda song, the harptabs.com tab and the gametabs.net tab, a lookup's
     ``caracole get`` was given (``--ug``, ``--tab``, ``--lacuerda``, ``--harptabs``, ``--gametabs``), and what a ``caracole versions`` does (``--choose``,
@@ -347,7 +378,8 @@ def _afresh(stages: Sequence[Stage]) -> None:
 
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
-    it's it hasn't, and a search of LaCuerda's (``SEARCH_STAGES``); none for other commands."""
+    it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), and a sheet from a YouTube video's
+    (youtube_sheet.py's ``STAGES``); none for other commands."""
     from caracole.get import STAGES
 
     names: dict[str, str] = {}
@@ -357,6 +389,10 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         names.update(SEARCH_STAGES)
     if any(step.args[:1] == (VERSIONS,) and not _looks_up(step.args) for step in steps):
         names.update((name, label) for name, label in KEEP_STAGES if name not in names)
+    if any(_sheets_from_youtube(step.args) for step in steps):
+        from caracole.youtube_sheet import STAGES as SHEET_STAGES
+
+        names.update((name, label) for name, label in SHEET_STAGES if name not in names)
     return [Stage(name, label) for name, label in names.items()]
 
 

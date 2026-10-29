@@ -3880,6 +3880,31 @@ Who can reach it, below).
   when an artist leads, else a title) until you type into a field yourself. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
   it is), then `caracole add` runs to put it in the library.
+- **A sheet from a YouTube video.** Where caracole can make chords of audio
+  (`packages.autochords`, its model files and yt-dlp, and YouTube not turned off),
+  the request form has a **YouTube video** field too: search for "Nick Cani -
+  Vikingos veganos", press Request on the line that says it isn't on the sites,
+  paste `https://www.youtube.com/watch?v=lzN7Thn3FV4` (as your browser shows
+  it: its playlist and tracking go), and Request. The request then makes the
+  song's sheet from the video in place of a lookup, Fetch it now or not:
+  `caracole youtube --sheet --progress` (see A sheet from a video, now, under
+  [Audio from YouTube](#audio-from-youtube)), queued as any request is. A song you have
+  with no human sheet, not ignored and with no purchase linked has the same
+  under its line's chevron, **Sheet from a YouTube video**: the address, and
+  Make the sheet, which replaces any audio it had from YouTube. The line then
+  says how it goes ("Taking the audio from YouTube…", "Fetching the lyrics from
+  LRCLIB…", "Working out the chords from the audio…", "Rendering the sheet…"),
+  with its steps as chips: Song, Audio YouTube, Lyrics, Chords, PDF. Ready, its
+  title and its Open open `sheet (auto).html`, and the Requests tab says what
+  the sheet holds (chords over LRCLIB's timed lyrics, a chart then the lyrics,
+  or chords alone). A block, a cooldown, a spent budget or a network error ends
+  it **Not made yet**, the step that stopped it red, the reason in the Requests
+  tab, with Try again; a video YouTube won't give or audio auto-chords can't
+  read, **Failed**. A song with a human sheet, ignored or with a purchase is
+  refused before anything is written or queued, and so is a link that isn't a
+  YouTube video's. One at a time a song: asked again while one waits or runs,
+  that one is the answer. Where caracole can't make the chords, the form has no
+  such field, and says why in one line, and the cards offer nothing.
 - **Fetch it now.** Ticked, as it is by default, the request is looked up at
   once instead, as `caracole get` does it: its sheet in seconds, then its PDF,
   lyrics and the rest. Each wanted song's line has Fetch now for its button,

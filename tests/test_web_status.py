@@ -275,3 +275,45 @@ def test_a_refused_lookup_says_why_in_its_stages_words():
     assert job_line(refused, None) == Line(
         "failed", "Radiohead - Creep is ignored in overrides.toml: take it out of [ignore] to look it up.",
         details=details_href(1))
+
+
+# --- a sheet from a YouTube video ------------------------------------------------------------------------
+
+
+def youtube_job(state="running", stages=None):
+    from caracole.web.jobs import YOUTUBE_SHEET, Stage, youtube_sheet_steps
+    from caracole.youtube_sheet import STAGES
+
+    said = stages or {}
+    made = [Step(label, tuple(args)) for label, args in
+            youtube_sheet_steps("Nick Cani - Vikingos veganos", "https://www.youtube.com/watch?v=lzN7Thn3FV4")]
+    if state != "running":
+        made[0].state = "done" if state == "done" else "failed"
+    return Job(5, "YouTube sheet", YOUTUBE_SHEET + "nick cani/vikingos veganos", made, state=state,
+               display="Nick Cani - Vikingos veganos",
+               stages=[Stage(name, label, *said.get(name, ("waiting", ""))) for name, label in STAGES])
+
+
+def test_a_sheet_from_youtube_says_its_running_stage():
+    lines = {"song": "Adding to the library…", "audio": "Taking the audio from YouTube…",
+             "lyrics": "Fetching the lyrics from LRCLIB…", "chords": "Working out the chords from the audio…",
+             "pdf": "Rendering the sheet…"}
+    for name, text in lines.items():
+        assert job_line(youtube_job(stages={name: ("running", "")}), None) == Line("running", text)
+    waiting = youtube_job(stages={"song": ("running", "waiting for another caracole (pid 9: run)")})
+    assert job_line(waiting, None).text == "Waiting for another caracole…"
+
+
+def test_a_sheet_from_youtube_is_ready_once_its_chords_are_made():
+    every = {"song": ("done", ""), "audio": ("done", "downloaded"), "lyrics": ("done", "found, timed"),
+             "chords": ("done", "chords over LRCLIB's timed lyrics"), "pdf": ("done", "made"), "pages": ("done", "")}
+    sheet = SongFacts(sheet="Nick%20Cani/Vikingos%20veganos/sheet%20%28auto%29.html")
+    assert job_line(youtube_job("done", every), sheet) == Line("ready", "Ready", ("Open sheet", sheet.sheet))
+    # An auto sheet of an earlier video, kept while YouTube cooled down: no new sheet, so not Ready.
+    waited = every | {"audio": ("skipped", "YouTube is cooling down after a block, until 2026-10-30 20:00 UTC"),
+                      "chords": ("skipped", "no audio from the video to work from")}
+    assert job_line(youtube_job("done", waited), sheet) == Line("waiting", "Not made yet", details=details_href(5))
+    failed = youtube_job("failed", every | {"audio": ("failed", "the video can't be downloaded (Private video): "
+                                                                 "give it another")})
+    assert job_line(failed, None) == Line("failed", "the video can't be downloaded (Private video): give it another.",
+                                          details=details_href(5))

@@ -370,6 +370,40 @@
     postInPlace(form, go, s, (body) => body.view);
     return form;
   };
+  // A sheet from a YouTube video (web/youtube_routes.py), under a song's chevron, served: for a song with no human
+  // sheet, not ignored and with no purchase linked (the data's ``youtubeSheet``), the video's address and Make the
+  // sheet (POST /youtube with the song: caracole youtube --sheet, its audio, its lyrics, its chords, its PDF), which
+  // posts in place, the song's line then saying how it goes; none while a request of the song waits or runs. Where
+  // this caracole makes none (``server.youtube``: no auto-chords, no model files, no yt-dlp, or YouTube off), none:
+  // the request form says why, once, rather than every card of a song with no sheet.
+  const YOUTUBE = server && server.youtube && typeof server.youtube === "object" ? server.youtube : null;
+  const youtubeSheet = (s) => {
+    if (!YOUTUBE || YOUTUBE.ok !== true || s.youtubeSheet !== true) return null;
+    const id = Number(s.id);
+    const asked = jobOfSong(id);
+    if (removing.has(id) || busy.has(id) || (asked && isActive(asked))) return null;
+    const form = songForm("youtube-sheet", "/youtube", s);
+    const label = el("label", "f");
+    label.appendChild(el("span", null, "Sheet from a YouTube video"));
+    const field = el("input");
+    field.name = "youtube";
+    field.required = true;
+    field.maxLength = 600;
+    field.autocomplete = "off";
+    field.spellcheck = false;
+    field.setAttribute("inputmode", "url");
+    field.placeholder = "youtube.com/watch?v=…";
+    label.appendChild(field);
+    const go = el("button", "btn small", "Make the sheet");
+    go.type = "submit";
+    go.setAttribute("aria-label", "Make the sheet of " + String(s.title) + " by " + String(s.artist) +
+      " from this YouTube video");
+    go.title = "Takes its audio with yt-dlp, works out the chords (a few minutes) and lays them over LRCLIB's " +
+      "lyrics, as caracole youtube --sheet does";
+    form.append(label, go);
+    postInPlace(form, go, s);
+    return form;
+  };
   // The LaCuerda sheet of each song of yours that the bar's search found (a LaCuerda row of it with chords, which
   // mergeSites folds into its line), by song id: its line offers it until the page is loaded again.
   const lacuerdaFound = new Map();
@@ -1095,6 +1129,8 @@
     }
     const fromYouTube = youtubeNote(s);
     if (fromYouTube) more.push(fromYouTube);
+    const fromVideo = server ? youtubeSheet(s) : null;
+    if (fromVideo) more.push(fromVideo);
     const picked = lacuerdaNote(s);
     if (picked) more.push(picked);
     if (server && s.notFound && s.status === "wanted" && !removing.has(id)) {
@@ -2902,6 +2938,11 @@
         if (again.contains(document.activeElement)) focusOn(p);
         again.remove();
       }
+      const fromVideo = item.querySelector("form.youtube-sheet");
+      if (fromVideo && isActive(view)) {  // so too a sheet from a YouTube video
+        if (fromVideo.contains(document.activeElement)) focusOn(p);
+        fromVideo.remove();
+      }
       const picker = item.querySelector("form.pick-form");
       if (picker && isActive(view)) {  // POST /review would refuse a pick now: the line is drawn again after
         const box = picker.closest("details.picker");
@@ -3241,7 +3282,9 @@
             refused.add(spot);
             return;
           }
-          for (const name of ["artist", "title", "album", "duration"]) field(name).value = "";
+          for (const name of ["artist", "title", "album", "duration", "youtube"]) {
+            if (field(name)) field(name).value = "";  // a YouTube video's field only where a sheet can be made of one
+          }
           typedInto.clear();
           const id = Number(view.id);
           const shown = spots.has(id) ? [id, spots.get(id)] : spotOf(view);

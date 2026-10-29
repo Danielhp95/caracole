@@ -633,3 +633,46 @@ def test_the_child_never_imports_a_module_from_the_folder_it_runs_in(tmp_path, m
     lines = []
     assert runner(["--version"], lines.append) == 0, lines
     assert lines == ["caracole 0.1.0"]
+
+
+# --- a sheet from a YouTube video ----------------------------------------------------------------------
+
+
+def test_a_sheet_from_youtube_is_one_caracole_youtube_sheet_whose_progress_is_its_stages():
+    from caracole.web.jobs import YOUTUBE_SHEET, song_key_of, youtube_sheet_steps
+    from caracole.youtube_sheet import STAGES
+
+    steps = youtube_sheet_steps("Nick Cani - Vikingos veganos", "https://www.youtube.com/watch?v=lzN7Thn3FV4")
+    assert steps == [("Making the sheet from YouTube", (
+        "youtube", "--sheet", "--progress", "--url=https://www.youtube.com/watch?v=lzN7Thn3FV4",
+        "--song=Nick Cani - Vikingos veganos"))]
+    progress = ['caracole-progress: {"song":{"id":7,"display":"Nick Cani - Vikingos veganos"}}',
+                'caracole-progress: {"stage":"audio","state":"running","detail":""}',
+                "yt-dlp: downloading"]
+    queue = JobQueue(FakeRunner(lines={"youtube": progress}))
+    job, new = queue.submit("YouTube sheet", YOUTUBE_SHEET + "nick cani/vikingos veganos", steps,
+                            display="Nick Cani - Vikingos veganos")
+    assert new and [s.name for s in job.stages] == [name for name, _ in STAGES]
+    assert song_key_of(job.song_key) == "nick cani/vikingos veganos"
+    queue.run_pending()
+    done = queue.job(job.id)
+    assert done.state == "done" and done.song_id == 7 and done.from_youtube and not done.looks_up
+    assert {s.name: s.state for s in done.stages}["audio"] == "done"  # over: nothing left running
+    assert done.steps[0].output == ["yt-dlp: downloading"]  # its progress is data, not output
+
+
+def test_a_sheet_from_youtube_never_joins_the_songs_lookup_nor_a_lookup_it():
+    from caracole.web.jobs import YOUTUBE_SHEET, youtube_sheet_steps
+
+    queue = JobQueue(FakeRunner())
+    lookup, _ = queue.submit("Fetch Nick Cani - Vikingos veganos", "nick cani/vikingos veganos",
+                             lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)
+    sheet, new = queue.submit("YouTube sheet", YOUTUBE_SHEET + "nick cani/vikingos veganos",
+                              youtube_sheet_steps("Nick Cani - Vikingos veganos", "https://youtu.be/x"))
+    assert new and sheet.id != lookup.id
+    again, new = queue.submit("YouTube sheet", YOUTUBE_SHEET + "nick cani/vikingos veganos",
+                              youtube_sheet_steps("Nick Cani - Vikingos veganos", "https://youtu.be/y"))
+    assert not new and again.id == sheet.id  # one at a time a song: the one waiting is the answer
+    after, new = queue.submit("Fetch Nick Cani - Vikingos veganos", "nick cani/vikingos veganos",
+                              lookup_steps("Nick Cani", "Vikingos veganos"), fetching=True)
+    assert not new and after.id == lookup.id

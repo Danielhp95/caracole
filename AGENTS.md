@@ -322,7 +322,12 @@ Rules a change there keeps (the Invariants below are the others):
   colour the last part ended in and cut the header's first line, so an alphaTab upgrade re-checks it:
   test_web_guitar_browser.py reads the header's pixels); a song's kept Guitar Pro files are
   `inbox.guitar_files`, which library_page.py (`guitarPage`), songbook_section.py (a set list's `guitar`) and render.py
-  (the viewer's `guitar`) read too. offline_routes.py is `GET /api/offline`, the manifest caracole's Android app
+  (the viewer's `guitar`) read too. youtube_routes.py is `POST /youtube` (and the request form's YouTube video,
+  `POST /request` with `youtube`): a song's auto sheet from the video pasted, `caracole youtube --sheet --progress`
+  queued under `jobs.YOUTUBE_SHEET` and the song's key (never joining its lookup), its stages its line's steps
+  (status.py, outcome.py `YOUTUBE_STEPS`); offered only where `youtube_fetch.route_problem` says it can be made,
+  the request form saying why not otherwise (library_page.py `server.youtube`, a card's `youtubeSheet`).
+  offline_routes.py is `GET /api/offline`, the manifest caracole's Android app
   copies the library by (read-only: each file the written index.html links to, as `WebApp._file` sends it now,
   its bytes' SHA-256 and its headers; test_web_offline.py). web/__init__.py names its parts, and web/app.py's
   docstring the modules of routes and the checks every request passes. app.py is the router and

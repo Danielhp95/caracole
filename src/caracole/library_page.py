@@ -182,6 +182,12 @@ under the bar, and two requests or more also show in a corner, folded to one lin
 JavaScript the forms post as forms. The file on disk has none of it, and lets
 no form be sent and nothing be asked.
 
+A sheet from a YouTube video (web/youtube_routes.py): where this caracole makes one (``youtube_fetch.route_problem``,
+the data's ``server.youtube``), the request form has a YouTube video field, whose request makes the song's sheet
+from it in place of a lookup, and a song's card (its ``youtubeSheet``: no human sheet, not ignored, no purchase)
+has Sheet from a YouTube video under its "⋯" (library.js ``youtubeSheet``), posting ``POST /youtube`` in place;
+elsewhere the form says why in one line, and the cards offer nothing.
+
 Remove stays on the page: one tap and the song's own line says "Removing in 5 s
 · Undo", the focus on Undo, with what goes in one sentence under it (the
 server's answer to the question, ``removal.brief``: caracole's files of the
@@ -308,6 +314,7 @@ from caracole.youtube_fetch import (
     SongState,
     route_problem,
     song_states,
+    videos_by_audio,
 )
 
 if TYPE_CHECKING:
@@ -407,10 +414,15 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
         "icons": page_icons(cfg.cache_dir),  # each source's name, badge and inlined icon (icons.py)
         "catalogue": catalogue(),  # the progressions with a name, by key: #prog= finds each name's every reading
     }
+    problem = route_problem(cfg) if controls is not None else None
     if controls is not None:
         data["server"] = {"csrf": controls.csrf, "busy": sorted(controls.busy), "active": controls.active,
                           "removing": sorted(controls.removing), "jobs": list(controls.jobs),
-                          "guitar": controls.guitar}
+                          "guitar": controls.guitar,
+                          # A sheet from a YouTube video (web/youtube_routes.py): whether this caracole makes one,
+                          # why not, and whether you turned YouTube off, when the cards say nothing of it.
+                          "youtube": {"ok": problem is None, "why": problem,
+                                      "off": not cfg.provider("youtube").enabled}}
         if controls.timers is not None:
             data["server"]["timers"] = dict(controls.timers)
         for song in songs:
@@ -423,7 +435,7 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     return (
         _HEAD.replace("__CSP__", csp).replace("__ICON__", PAGE_ICON).replace("__STYLE__", _PAGE_STYLE)
         + _BODY.replace("__MARK__", page_mark()).replace("__TABREQUESTS__", _requests_tab(controls))
-        .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls))
+        .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls, problem))
         .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)
         + f"<script>{_PAGE_SCRIPT}</script>\n</body>\n</html>\n"
@@ -454,6 +466,7 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
         youtube = song_states(conn, overrides, now, songs=library) if route_problem(cfg) is None else {}
     if youtube:
         to_buy = {i for i in to_buy if i not in youtube or youtube[i].state == DECLINED}
+    from_youtube = videos_by_audio(conn)  # the audio caracole took from YouTube: any other linked is a purchase
     musescore = cfg.provider("musescore").enabled
     pages = {s.id: _musescore_links(conn, s, overrides) for s in library} if musescore else {}
     asked = None if songs is None else {s.id for s in songs}  # a card or a few: their rows alone
@@ -463,7 +476,8 @@ def song_cards(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now:
                    sources.get(s.id, {}), pages.get(s.id, []),
                    _youtube_note(youtube.get(s.id)), origins=origins.get(s.id, {}), exports=exports.get(s.id, {}),
                    transpose=pdf_transpose(conn, overrides, s), lacuerda=met.get(s.id, []),
-                   versions=ug.get(s.id), guitar=browsable.get(s.id), ukulele=s.id in ukulele)
+                   versions=ug.get(s.id), guitar=browsable.get(s.id), ukulele=s.id in ukulele,
+                   purchase=bool(s.audio_path) and s.audio_path not in from_youtube)
              for s in library]
     _add_picks(conn, library, cards)
     _add_sites(conn, cfg, library, cards, origins=origins, lacuerda=met, musescore=pages, youtube=youtube)
@@ -804,7 +818,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
           origins: dict[str, str] | None = None, exports: Mapping[str, str] | None = None,
           transpose: int = 0, lacuerda: list[dict[str, Any]] | None = None,
           versions: _UgVersions | None = None, guitar: Mapping[str, str] | None = None,
-          ukulele: bool = False) -> dict[str, Any]:
+          ukulele: bool = False, purchase: bool = False) -> dict[str, Any]:
     """One song's data; ``for_buying`` when the to-do page's buy list holds it (``todo.songs_to_buy``),
     ``sources`` the site each file caracole downloaded for it came from, by name, ``musescore``
     the song's MuseScore pages, and ``youtube`` where the song stands on the YouTube route.
@@ -820,7 +834,9 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     and that chip's drawer, kept ones listed and the rest counted. ``guitar``: the address of caracole serve's Guitar
     Pro page of each of its Guitar Pro files, by name (``guitar_pages``). ``ukulele``: its sheet is UG's Ukulele
     Chords version (``ukulele_sheets``), which its sheet's files say. ``autoSheet``: an auto sheet beside its human
-    one (``_auto_sheet``), the sheet tile's Auto chip.
+    one (``_auto_sheet``), the sheet tile's Auto chip. ``purchase``: its audio is a purchase linked from Music/,
+    which auto-chords works from; ``youtubeSheet``, whether a sheet from a YouTube video is for it (no human sheet,
+    not ignored, no purchase: web/youtube_routes.py), which its served card offers.
     """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
@@ -859,6 +875,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "links": links,
         "buy": buy,
         "youtube": youtube if status != "ignored" else None,
+        "youtubeSheet": status != "ignored" and not purchase and not any(n in names for n in _HUMAN_SHEETS),
         "lacuerda": _lacuerda_pick(song, overrides, status),
         "lacuerdaVersions": lacuerda or [],
         "lacuerdaSheet": _lacuerda_sheet(song, overrides, status, origins or {},
@@ -1134,10 +1151,31 @@ def _requests_panel(controls: WebControls | None) -> str:
     return '<section class="view reqs" id="requests" role="tabpanel" aria-labelledby="tab-requests" hidden></section>\n'
 
 
-def _request_form(controls: WebControls | None) -> str:
+# The request form's YouTube video field, served where this caracole makes a sheet from one (web/youtube_routes.py).
+_YOUTUBE_FIELD = (
+    '<label class="f youtube-field"><span>YouTube video <em>(optional: the sheet made from it)</em></span>'
+    '<input name="youtube" maxlength="600" autocomplete="off" inputmode="url" spellcheck="false" '
+    'placeholder="youtube.com/watch?v=…"></label>'
+)
+_YOUTUBE_HINT = (
+    '<p class="hint">With a YouTube video, caracole makes the song\'s sheet from it instead, as <code>caracole '
+    'youtube --sheet</code> does: its audio taken with yt-dlp, the chords worked out from it (a few minutes), over '
+    'LRCLIB\'s lyrics. A human sheet found later takes its place.</p>'
+)
+
+
+def _request_form(controls: WebControls | None, youtube_problem: str | None = None) -> str:
+    """The request form, served: with its YouTube video field where this caracole makes a sheet from one, else a
+    line that says why not (``youtube_fetch.route_problem``); on the file, none."""
     if controls is None:
         return ""
-    return _REQUEST.replace("__CSRF__", html_text.escape(controls.csrf, quote=True))
+    if youtube_problem is None:
+        field, hint = _YOUTUBE_FIELD, _YOUTUBE_HINT
+    else:
+        field = ""
+        hint = f'<p class="hint">No sheet from a YouTube video here: {html_text.escape(youtube_problem)}.</p>'
+    return (_REQUEST.replace("__CSRF__", html_text.escape(controls.csrf, quote=True))
+            .replace("__YOUTUBE__", field).replace("__YOUTUBEHINT__", hint))
 
 
 def _requested(controls: WebControls | None) -> str:
