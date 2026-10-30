@@ -18,12 +18,15 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from html import escape
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from caracole.inline import sha256_source
 from caracole.library_assets import BASE_STYLE, PICKER_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.web.top import top
+
+if TYPE_CHECKING:
+    from caracole.library_name import LibraryName
 
 PAGE_STYLE = BASE_STYLE + PICKER_STYLE + """
 .pick-page { max-width: 46rem; }
@@ -57,13 +60,17 @@ PAGE_CSP = (f"default-src 'none'; style-src {sha256_source(PAGE_STYLE)}; img-src
             "frame-ancestors 'none'; base-uri 'none'")
 
 
-def page(title: str, body: str, *, head: str = "") -> str:
+def page(title: str, body: str, *, head: str = "", library_name: LibraryName | None = None) -> str:
+    """A page of the server's own: ``title`` in its header and its tab's, and, with ``library_name``, the library
+    the server shows (library_name.py) in both, with its badge and its icon."""
+    shown = library_name.title(title) if library_name is not None else f"{title} · caracole"
+    icon = library_name.icon() if library_name is not None else PAGE_ICON
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
-        f"{head}{PAGE_ICON}<title>{escape(title)} · caracole</title>\n<style>{PAGE_STYLE}</style>\n</head>\n<body>\n"
-        f'<div class="page">\n{top(title)}'
+        f"{head}{icon}<title>{escape(shown)}</title>\n<style>{PAGE_STYLE}</style>\n</head>\n<body>\n"
+        f'<div class="page">\n{top(title, library_name=library_name)}'
         f"{body}\n</div>\n</body>\n</html>\n"
     )
 
@@ -135,7 +142,7 @@ def _choice(value: str, name: str, why: str, *, cls: str = "choice", autofocus: 
             "</span></label>")
 
 
-def review_page(pick: Pick, csrf: str) -> str:
+def review_page(pick: Pick, csrf: str, *, library_name: LibraryName | None = None) -> str:
     """A song in review's picker on a page of its own, for the Requests tab to link to; or a song not
     found's, with what ``caracole search`` finds for it."""
     if pick.search:
@@ -145,11 +152,13 @@ def review_page(pick: Pick, csrf: str) -> str:
     else:
         lede = (f'<p class="lede">caracole isn\'t sure which Ultimate Guitar song {escape(pick.display)} is. '
                 "Pick it here, as <code>caracole review</code> would ask you.</p>")
-    return page("Pick the match", f'<div class="pick-page">{lede}{picker_form(pick, csrf, focus=True)}</div>')
+    return page("Pick the match", f'<div class="pick-page">{lede}{picker_form(pick, csrf, focus=True)}</div>',
+                library_name=library_name)
 
 
 def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str], stays: list[str],
-                notes: list[str], *, waiting: int = 0, back: str = "", library: str = "/") -> str:
+                notes: list[str], *, waiting: int = 0, back: str = "", library: str = "/",
+                library_name: LibraryName | None = None) -> str:
     """Whether to remove a song, with what goes and what stays (``removal.describe``); the form confirms it.
     Both answers go back to ``library``, the library page as it was left: ``back``, its address after #,
     goes along with the form."""
@@ -171,7 +180,8 @@ def remove_page(display: str, song_id: int, key: str, csrf: str, goes: list[str]
             + '  <button class="btn danger" type="submit">Remove it</button>\n'
             f'  <a class="btn" href="{escape(library, quote=True)}">Keep it</a>\n</form>')
     said = "".join(f'<p class="message">{escape(note)}</p>\n' for note in notes)
-    return page(f"Remove {display}?", lede + items("It takes", goes) + items("It leaves", stays) + said + form)
+    return page(f"Remove {display}?", lede + items("It takes", goes) + items("It leaves", stays) + said + form,
+                library_name=library_name)
 
 
 class Refused(Exception):
@@ -182,7 +192,7 @@ class Refused(Exception):
         self.status, self.title, self.message = status, title, message
 
 
-def message_page(title: str, message: str) -> str:
+def message_page(title: str, message: str, *, library_name: LibraryName | None = None) -> str:
     """An error, said plainly, and the way back."""
     return page(title, f'<p class="message">{escape(message)}</p>\n'
-                       '<p><a class="btn" href="/">Back to the library</a></p>')
+                       '<p><a class="btn" href="/">Back to the library</a></p>', library_name=library_name)

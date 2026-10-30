@@ -16,7 +16,8 @@ read from a sitemap written here (as ``caracole index build --from`` reads one),
 download from gtptabs.com is (Greensleeves' melody and chords, written below in alphaTex and exported by alphaTab
 itself), every sheet and the songbook rendered by the real chordpro, and the pages written. Then caracole serve's
 own app answers on a free port of 127.0.0.1, its queue never started (no job runs, no command, no request), and the
-LaCuerda search the pages send by themselves off (``WebApp(searches_lacuerda=False)``), and a headless Chromium,
+LaCuerda search the pages send by themselves off (``WebApp(searches_lacuerda=False)``), its pages badged Demo
+(``WebApp(badge="Demo")``, as ``caracole serve --label Demo`` badges them: library_name.py), and a headless Chromium,
 which resolves no host name (tests/helpers/browser.py), takes each picture at twice its CSS size.
 """
 
@@ -383,7 +384,7 @@ def serve(cfg, port: int = 0):
     def refuse(args, emit):
         raise RuntimeError(f"the demo runs no command: {args}")
 
-    app = WebApp(cfg, JobQueue(refuse), allowed=allowed_hosts("127.0.0.1"), searches_lacuerda=False)
+    app = WebApp(cfg, JobQueue(refuse), allowed=allowed_hosts("127.0.0.1"), searches_lacuerda=False, badge="Demo")
     server = make_server(app, "127.0.0.1", port)
     threading.Thread(target=server.serve_forever, args=(0.05,), daemon=True).start()
     return server, f"http://127.0.0.1:{server.server_address[1]}/"

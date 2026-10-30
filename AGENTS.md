@@ -59,7 +59,7 @@ Shared by the steps and the commands:
 
 | Module | What for |
 |---|---|
-| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone) |
+| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name) |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
 | health.py | cooldowns, `events` |
@@ -68,6 +68,7 @@ Shared by the steps and the commands:
 | pdf_fonts.py | the fonts every PDF is set in (`pdf_fonts`, `CARACOLE_PDF_FONTS`): a folder of `regular`, `bold`, `italic` and `mono` (`in_folder`), and what `metrics` reads of each, the characters it has and their widths as ChordPro's PDF library counts them, which render.py's `pdf_font` (a letter the regular font lacks brings in the CJK font, for the words alone: `fonts_options`, `PDF_FONT_ELEMENTS`) and pdf_text.py's layout read; without the folder, ChordPro's built-in fonts, as before; the standard library alone |
 | page_log.py | the library page's line in the log, one a build (`PageBuild`: caracole serve's at `/`, library_routes.py, with the host; `todo.write_pages`'s `index.html`): its songs found, wanted, ignored and in review, its songbooks, the database's path, size and time, how long it took; a page with no songs, or a database that can't be opened or read, a warning that says what tells why (the database before and after the build opened it, its owner, WAL, schema version and `songs` rows read straight from it, read-only; the folders, the process's uid and gid), the page answered as ever. Information the journal keeps by default (logs.py `JOURNAL_INFO`): `journalctl -u caracole-web \| grep 'library page'` (test_page_log.py) |
 | page_icon.py | the mark in every page's tab, "¿" drawn in SVG (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`); the standard library alone |
+| library_name.py | which library a page shows (`LibraryName`): its name after caracole's in the header and the tab's title of index.html and every page caracole serve writes itself (top.py, pages.py, lookup_page.py, guitar_page.py: `WebApp.library_name`), and, on caracole serve's alone, a badge for a library that isn't the owner's usual one, with the "¿" in its colour (`scratch_badge`, once at start: `caracole serve --label`, else `SCRATCH` for a config file, library folder or state folder in a temporary folder; never the NixOS or Ubuntu service's /var/lib/caracole nor a library run by hand at home: test_library_name.py); never on the written index.html, a viewer or a songbook's page; the standard library alone |
 | overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`) |
 | library.py | song folders, safe file access in the synced library |
 | download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |

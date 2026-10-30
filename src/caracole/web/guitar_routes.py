@@ -96,7 +96,8 @@ def guitar(app: WebApp, target: str) -> Response:
     sheet = sheet_href(app.cfg.library_dir, song)
     viewer = _viewer_path(sheet)
     html = guitar_page.build_page(title=song.title, artist=", ".join(song.artists or [song.artist]), song_id=song.id,
-                                  path=path, label=f"Guitar Pro {file.number}", data=data, at=at, sheet=viewer)
+                                  path=path, label=f"Guitar Pro {file.number}", data=data, at=at, sheet=viewer,
+                                  library_name=app.library_name)
     # A sandbox, an origin of its own; downloads, for its Download link (the file is sent as an attachment).
     csp = f"sandbox allow-scripts allow-downloads; {guitar_page.policy(at)}; {FRAMES}"
     return html_response(200, html, csp=csp)

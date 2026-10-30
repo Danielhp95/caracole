@@ -339,7 +339,7 @@ def _body(app: WebApp, do: str, asked: _Asked, job: Job | None) -> str:
     head = f'<meta http-equiv="refresh" content="{pages.REFRESH}">\n' if job is not None and job.active else ""
     title = {"choose": "Make this the one", "keep": "Keep a version", "clear": "Back to caracole's pick"}[do]
     return pages.page(f"{title} · {song.display}", f'{lede}{form}{says}<div class="confirm">\n{links}\n</div>',
-                      head=head)
+                      head=head, library_name=app.library_name)
 
 
 def _how_it_goes(app: WebApp, do: str, asked: _Asked, job: Job | None) -> tuple[str, str]:

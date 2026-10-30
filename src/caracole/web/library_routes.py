@@ -74,7 +74,8 @@ def library(app: WebApp, asked: Request) -> Response:
             active = tuple(views(app, conn, overrides, jobs, only=[
                 j for j in jobs if j.active and not j.song_key.startswith(INDEX_READS)]))
             controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
-                                   timers=app.timers, guitar=available(app.cfg.alphatab_dir))
+                                   timers=app.timers, guitar=available(app.cfg.alphatab_dir),
+                                   badge=app.library_name.badge)
             html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
                                       controls=controls, note=built.note)
     except Refused as e:

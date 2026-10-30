@@ -45,6 +45,7 @@ folder.
 Here is every key with its default. The commented-out keys have none.
 
 ```toml
+# name = "..."                    # what the pages call the library; default: library_dir's folder name
 # data_dir = "..."                # one folder for the four below (see below)
 library_dir = "~/Tabs"            # sheets, lyrics, _todo.md, index.html, wanted.txt
 music_dir = "~/Music"             # tracks you bought; read only, used only for auto-chords
@@ -2167,8 +2168,11 @@ inverted question mark (¿) on its rust-red square, drawn inside the page itself
 as every page caracole writes or serves shows it (the sheet viewers and the
 songbooks from their next render); caracole serve answers a browser's own
 `/favicon.ico` with it too. Its top is one bar, so that the first song starts
-well within the first screen, on a phone too: caracole's "¿" mark and name (the
-mark alone on a phone), the tabs, **Library**, your songs, **Songbooks**
+well within the first screen, on a phone too: caracole's "¿" mark and name, then
+the library's (caracole.toml's `name`, one line of 80 characters at most, else
+the library folder's name: "Tabs"), which the browser tab's title says too
+("caracole · Tabs"; on a phone the mark alone, the library's name in the title),
+the tabs, **Library**, your songs, **Songbooks**
 (see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
 tab](#the-sites-tab)) and, served, **Requests**, the last (see Requests, under
 [caracole serve](#caracole-serve)), Songbooks and Requests counting what they
@@ -3667,11 +3671,33 @@ is no progression exits with status 2.
 
 ### caracole serve
 
-`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…`
+`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]… [--label TEXT]`
 serves the library page over HTTP, at `http://127.0.0.1:8737/` by default,
 with what the file on disk can't do. It has no sign-in: anyone who can reach it
 can read the library and request songs, so keep it on a network you trust (see
 Who can reach it, below).
+
+Every page it serves names the library it shows, after caracole's name in its
+header and in the browser tab's title ("caracole · Tabs", "Look up · caracole ·
+Tabs"), as `index.html` does. A server of a library that isn't your usual one
+says so on every page it writes itself, with a badge beside the name, first in
+each title ("Scratch library · caracole · test-lib") and on a line of its own
+under the header on a phone, and the tab's "¿" in the badge's amber, so that
+its pages are never taken for your library's. It prints the badge when it
+starts. How it knows:
+
+- `--label TEXT` names the badge (40 characters at most): `--label Demo`,
+  `--label Test`. `--label ""` shows none, wherever the library is.
+- Without it, a library whose config file, library folder or state folder is in
+  a temporary folder (`/tmp`, `/var/tmp`, `/dev/shm`, or `$TMPDIR`, `$TEMP`,
+  `$TMP`) is badged **Scratch library**: a test library made in nix develop's
+  temporary folder, say. Your libraries never are: the NixOS service's and
+  Ubuntu's in `/var/lib/caracole`, and a library you run by hand from your home
+  folder. A temporary folder that holds your home folder, or is `/`, counts for
+  nothing.
+
+The sheet viewers and the songbooks' pages are the files caracole wrote into
+the library, sent as they are: they carry no badge.
 
 - **Search as you type.** The library page's search box filters your songs as
   you type, here as on the file, and from the third letter (the second with a

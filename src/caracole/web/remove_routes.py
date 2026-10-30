@@ -55,7 +55,8 @@ def remove(app: WebApp, form: dict[str, str]) -> Response:
         goes, stays, notes = describe(plan, app.cfg)
         question = html_response(200, pages.remove_page(song.display, song.id, song.key, app.csrf, goes, stays,
                                                         notes, waiting=app.queue.active_count(), back=back,
-                                                        library=_library_at(back, song.id)))
+                                                        library=_library_at(back, song.id),
+                                                        library_name=app.library_name))
         question.data = {"removal": {"song": song.id, "key": song.key, "display": song.display,
                                      "brief": brief(plan), "goes": goes, "stays": stays, "notes": notes}}
         return question

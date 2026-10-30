@@ -230,7 +230,8 @@ def _body(app: WebApp, asked: _Asked, job: Job | None) -> str:
     body += _how_it_goes(asked, job)
     head = f'<meta http-equiv="refresh" content="{pages.REFRESH}">\n' if job is not None and job.active else ""
     back = f'<a class="btn" href="/{asked.folder}/{quote(tab.page)}">Back to the tab</a>'
-    return pages.page(f"How it's read · {song.display}", f'{body}<div class="confirm">\n{back}\n</div>', head=head)
+    return pages.page(f"How it's read · {song.display}", f'{body}<div class="confirm">\n{back}\n</div>', head=head,
+                      library_name=app.library_name)
 
 
 def _how_it_goes(asked: _Asked, job: Job | None) -> str:
