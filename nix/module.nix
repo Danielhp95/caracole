@@ -2,8 +2,9 @@
 # (with auto-chords on, the auto-chords package's, which also takes a few songs'
 # audio from YouTube), an optional auto-chords unit after it with no network, an
 # optional caracole-web (`caracole serve`: the library page and song requests),
-# an ntfy message when one fails, and `caracole-admin` for the interactive
-# commands. Everything
+# an ntfy message when one fails, `caracole-admin` for the interactive
+# commands, and /etc/caracole/service, which tells a caracole started by hand
+# with no --config that the service is here. Everything
 # caracole keeps sits in one folder, dataDir, unless an option moves a part.
 {
   config,
@@ -656,5 +657,15 @@ in
     };
 
     environment.systemPackages = [ caracoleAdmin ];
+
+    # The service's marker, readable by everyone: a caracole started by hand with no --config (from a
+    # shell, a checkout's dev shell) runs on its home folders, so it warns before it writes there and
+    # builds no index there unasked (src/caracole/service.py), naming these folders and caracole-admin.
+    environment.etc."caracole/service".text = ''
+      # caracole runs here as a service (services.caracole): `sudo caracole-admin COMMAND` runs a
+      # command on its library. caracole started without --config reads this file (src/caracole/service.py).
+      state_dir = ${builtins.toJSON cfg.stateDir}
+      library_dir = ${builtins.toJSON cfg.libraryDir}
+    '';
   };
 }

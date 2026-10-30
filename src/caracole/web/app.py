@@ -63,6 +63,7 @@ from urllib.parse import parse_qs, unquote, urlsplit
 
 from caracole import db
 from caracole.config import Config
+from caracole.library_name import LibraryName
 from caracole.web import pages
 from caracole.web.files import NotServed, read_library_file, read_written_page
 from caracole.web.jobs import Job, JobQueue, QueueFull
@@ -162,8 +163,10 @@ def html_response(status: int, html: str, *, csp: str = pages.PAGE_CSP) -> Respo
     return Response(status, html.encode("utf-8"), [("Content-Type", HTML), ("Content-Security-Policy", csp)])
 
 
-def message_response(status: int, title: str, message: str) -> Response:
-    response = html_response(status, pages.message_page(title, message))
+def message_response(status: int, title: str, message: str, *, library_name: LibraryName | None = None) -> Response:
+    """A message page (pages.py's), and the message as data for a page's script; ``library_name``, the library the
+    server shows, on the page."""
+    response = html_response(status, pages.message_page(title, message, library_name=library_name))
     response.data = {"error": message}
     return response
 
@@ -230,9 +233,12 @@ class WebApp:
 
     def __init__(self, cfg: Config, queue: JobQueue, *, allowed: frozenset[str], csrf: str | None = None,
                  timers: Mapping[str, int] | None = None, searches_lacuerda: bool = True,
-                 searches_youtube: bool = True):
+                 searches_youtube: bool = True, badge: str | None = None):
         self.cfg = cfg
         self.queue = queue
+        # Which library its pages say they show (library_name.py): the library's name, and ``badge`` for one that
+        # isn't the usual library (``caracole serve`` decides: library_name.scratch_badge).
+        self.library_name = LibraryName(cfg.library_name, badge)
         self.allowed = allowed
         self.csrf = csrf or secrets.token_urlsafe(32)
         self.timers = timers  # the library page script's, for the tests alone (``WebControls.timers``)
@@ -261,11 +267,15 @@ class WebApp:
         self._song_forms: dict[tuple, tuple[frozenset[str], frozenset[str]]] = {}
         self._reads: set[int] = set()  # LaCuerda artist pages being read (jobs): the answers kept go once one is
 
+    def message(self, status: int, title: str, message: str) -> Response:
+        """``message_response``, its page saying the library the server shows."""
+        return message_response(status, title, message, library_name=self.library_name)
+
     def handle(self, request: Request) -> Response:
         try:
             response = self._route(request)
         except Refused as e:  # a route's refusal: its page, or, to the page's script, data
-            response = message_response(e.status, e.title, e.message)
+            response = self.message(e.status, e.title, e.message)
         if response.data is not None and wants_json(request):  # the page's script: no redirect, no page
             response = json_response(200 if response.status == 303 else response.status, response.data)
         return self.finish(response)
@@ -291,7 +301,7 @@ class WebApp:
         try:
             path = unquote(urlsplit(request.target).path, errors="strict")
         except (UnicodeDecodeError, ValueError):
-            return message_response(400, "Not an address", "That address can't be read.")
+            return self.message(400, "Not an address", "That address can't be read.")
         method = request.method
         if method in ("GET", "HEAD"):
             if path.startswith("/api/") and not own_page_read(request.headers):
@@ -303,7 +313,7 @@ class WebApp:
         if method == "POST":
             route = route_for("POST", path)
             if route is None:
-                return message_response(404, "Not here", "There's nothing to send to at this address.")
+                return self.message(404, "Not here", "There's nothing to send to at this address.")
             form = self._form(request, page=route.page)
             return form if isinstance(form, Response) else route.answer(self, request, form)
         return Response(405, b"", [("Allow", "GET, HEAD, POST")])
@@ -312,10 +322,10 @@ class WebApp:
         """Why a read only the page's script makes (/jobs.json, /requests.json) is refused to anything else, as a write would be;
         None for the page's script."""
         if not cross_origin_ok("POST", request.headers, request.headers.get("host")):  # checked as a write
-            return message_response(403, "Refused", "This came from another site, so caracole refused it.")
+            return self.message(403, "Refused", "This came from another site, so caracole refused it.")
         if not same_token(request.headers.get(TOKEN_HEADER), self.csrf):
-            return message_response(403, "Refused", "caracole serve has restarted since this page was opened: "
-                                                    "reload it.")
+            return self.message(403, "Refused", "caracole serve has restarted since this page was opened: "
+                                                "reload it.")
         return None
 
     def _form(self, request: Request, *, page: str = "the library") -> dict[str, str] | Response:
@@ -323,20 +333,20 @@ class WebApp:
         reload ``page``, and tells a page's script so (``reload``)."""
         headers = request.headers
         if not cross_origin_ok("POST", headers, headers.get("host")):
-            return message_response(403, "Refused", "This came from another site, so caracole refused it.")
+            return self.message(403, "Refused", "This came from another site, so caracole refused it.")
         kind = headers.get("content-type", "").split(";")[0].strip().lower()
         if kind != "application/x-www-form-urlencoded":
-            return message_response(415, "Not a form", "caracole reads only forms sent from its own pages.")
+            return self.message(415, "Not a form", "caracole reads only forms sent from its own pages.")
         if len(request.body) > MAX_BODY:
-            return message_response(413, "Too long", "That form is too long.")
+            return self.message(413, "Too long", "That form is too long.")
         try:
             fields = parse_qs(request.body.decode("utf-8"), keep_blank_values=True, max_num_fields=20)
         except (UnicodeDecodeError, ValueError):
-            return message_response(400, "Not a form", "That form can't be read.")
+            return self.message(400, "Not a form", "That form can't be read.")
         form = {name: values[0] for name, values in fields.items()}
         if not same_token(form.get("csrf"), self.csrf):
-            refused = message_response(403, "Refused", "This form is older than the server, or not from its "
-                                                       f"pages: reload {page} and try again.")
+            refused = self.message(403, "Refused", "This form is older than the server, or not from its "
+                                                   f"pages: reload {page} and try again.")
             refused.data = {**(refused.data or {}), "reload": True}
             return refused
         return form
@@ -403,11 +413,11 @@ class WebApp:
                 try:
                     return self._written_page(path[1:], page)
                 except NotServed:  # index.html links it all the same: say why it isn't sent
-                    return message_response(404, "Not sent", page.refused)
+                    return self.message(404, "Not sent", page.refused)
             data, kind, download = read_library_file(self.cfg.library_dir, path[1:],
                                                      hidden=(self.cfg.state_dir, self.cfg.cache_dir))
         except NotServed:
-            return message_response(404, "Not found", "There's no such page or file in the library.")
+            return self.message(404, "Not found", "There's no such page or file in the library.")
         headers = [("Content-Type", kind)]
         if download:
             headers.append(("Content-Disposition", self._download_header(path[1:])))

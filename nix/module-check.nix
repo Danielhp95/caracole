@@ -605,6 +605,9 @@ let
     "without the flake, the module builds the same packages from nix/package.nix" =
       standalone.services.caracole.package.drvPath == defaultPackage.drvPath
       && standalone.services.caracole.autochords.package.drvPath == autochordsPackage.drvPath;
+    # A caracole started by hand with no --config reads it (src/caracole/service.py); the build below loads it.
+    "the service leaves its marker in /etc/caracole/service" =
+      nuc.environment.etc ? "caracole/service" && moved.environment.etc ? "caracole/service";
     "the whole system evaluates" =
       nucAutochords.system.build.toplevel.drvPath != ""
       && moved.system.build.toplevel.drvPath != ""
@@ -650,6 +653,8 @@ else
       adminMovedScript = lib.getExe adminMoved;
       movedTmpfiles = "${movedTmpfiles}/lib/tmpfiles.d/caracole.conf";
       passAsFile = [
+        "serviceMarker"
+        "movedServiceMarker"
         "loadCases"
         "runUnit"
         "timerUnit"
@@ -667,6 +672,8 @@ else
         (loads moved movedLayout)
         (loads libraryAlone libraryAloneLayout)
       ];
+      serviceMarker = nuc.environment.etc."caracole/service".text;
+      movedServiceMarker = moved.environment.etc."caracole/service".text;
       runUnit = unitText nuc "caracole.service";
       timerUnit = unitText nuc "caracole.timer";
       notifyUnit = unitText nuc "caracole-notify-failure.service";
@@ -706,6 +713,22 @@ else
           print("generated caracole.toml loads:", case["config"])
       cfg = load_config(Path(cases[0]["config"]), env=cases[0]["env"])
       assert cfg.ntfy.url == "https://ntfy.example/caracole", cfg.ntfy.url
+      EOF
+
+      # The service's marker names its folders as caracole reads it, so that a caracole started by hand
+      # with no --config warns before it writes into its home folders, naming the service's.
+      PYTHONPATH=${source}/src python3 - <<'EOF'
+      import os
+      from pathlib import Path
+
+      from caracole.service import find
+
+      for name, data in (("serviceMarkerPath", "/var/lib/caracole"), ("movedServiceMarkerPath", "/data/caracole")):
+          found = find({"CARACOLE_SERVICE_FILE": os.environ[name]})
+          assert found is not None, name
+          assert found.state_dir == Path(f"{data}/state"), (name, found)
+          assert found.library_dir == Path(f"{data}/library"), (name, found)
+          print("the service's marker names", found.state_dir, "and", found.library_dir)
       EOF
 
       # Each unit's command line, as systemd reads it, parses with caracole's own CLI,
@@ -817,6 +840,7 @@ else
 
       mkdir -p $out/data-caracole
       cp "$configFile" $out/caracole.toml
+      cp "$serviceMarkerPath" $out/service
       cp "$runUnitPath" $out/caracole.service
       cp "$timerUnitPath" $out/caracole.timer
       cp "$notifyUnitPath" $out/caracole-notify-failure.service

@@ -68,6 +68,7 @@
   font-weight: 600; }
 .req-note { margin: 6px 0 0; color: var(--review); font-size: .85rem; }
 .req .badge:is(.waiting, .skipped, .cancelled) { color: var(--ignored); background: var(--ignored-bg); }
+.req .badge.interrupted { color: var(--wanted); background: var(--wanted-bg); }  /* the server stopped it */
 .req-output pre { max-height: 22rem; margin: 6px 0 0; padding: 10px; overflow: auto; border-radius: 8px;
   background: var(--bg); font: .8rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   white-space: pre-wrap; overflow-wrap: anywhere; }

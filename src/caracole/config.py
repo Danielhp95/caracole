@@ -137,6 +137,8 @@ class Config:
     cache_dir: Path
     overrides_file: Path
     wanted_file: Path
+    # What the pages call the library (caracole.toml's ``name``); None: its folder's name (``library_name``).
+    name: str | None = None
     user_agent: str = DEFAULT_USER_AGENT
     chordpro_bin: str = "chordpro"
     ytdlp_bin: str = "yt-dlp"
@@ -157,12 +159,18 @@ class Config:
     def db_path(self) -> Path:
         return self.state_dir / "caracole.sqlite"
 
+    @property
+    def library_name(self) -> str:
+        """What the pages call the library (library_name.py): caracole.toml's ``name``, else its folder's name
+        ("Tabs" for ~/Tabs), else "library"."""
+        return self.name or self.library_dir.name or "library"
+
     def provider(self, name: str) -> ProviderPolicy:
         return self.providers[name]
 
 
 _TOP_KEYS = {
-    "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
+    "name", "data_dir", "library_dir", "music_dir", "state_dir", "cache_dir", "overrides_file",
     "wanted_file",
     "user_agent", "chordpro_bin", "ytdlp_bin", "cjk_font", "pdf_fonts",
     "providers", "match", "rank", "ntfy", "autochords",
@@ -207,6 +215,23 @@ def _optional_string(table: Mapping[str, Any], key: str, where: str) -> str | No
     if value is None:
         return None
     return _string(value, where) or None
+
+
+NAME_LIMIT = 80  # characters of caracole.toml's ``name``
+
+
+def _name(data: Mapping[str, Any]) -> str | None:
+    """caracole.toml's ``name``, one line of ``NAME_LIMIT`` characters at most, its ends trimmed; None when it's
+    absent or blank."""
+    value = _optional_string(data, "name", "name")
+    if value is None or not value.strip():
+        return None
+    value = value.strip()
+    if any(c in value for c in "\r\n\t\v\f") or not value.isprintable():
+        raise ConfigError(f"name must be one line of text, not {_shown(value)}")
+    if len(value) > NAME_LIMIT:
+        raise ConfigError(f"name must be {NAME_LIMIT} characters at most, not {len(value)}")
+    return value
 
 
 def _bool(value: Any, where: str) -> bool:
@@ -387,6 +412,7 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         cache_dir=cache_dir,
         overrides_file=overrides_file,
         wanted_file=wanted_file,
+        name=_name(data),
         user_agent=_string(data.get("user_agent", DEFAULT_USER_AGENT), "user_agent"),
         chordpro_bin=_string(data.get("chordpro_bin", "chordpro"), "chordpro_bin"),
         ytdlp_bin=ytdlp_bin,

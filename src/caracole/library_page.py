@@ -299,7 +299,7 @@ from caracole.library_assets import read as read_asset
 from caracole.musescore import song_pages
 from caracole.normalize import clean_title, fold, has_han, romanize, slug_key
 from caracole.overrides import Overrides
-from caracole.page_icon import LINK as PAGE_ICON
+from caracole.library_name import LibraryName
 from caracole.page_icon import mark as page_mark
 from caracole.progressions import catalogue, library_progressions
 from caracole.sites import sites_data
@@ -390,7 +390,9 @@ class WebControls:
     ``/jobs.json``, and of ``/requests.json`` while the Requests tab shows a request that waits or runs
     (1500), ``idle``, between two asks of ``/requests.json`` while it shows none (10000), and ``undo``, Remove's
     countdown (5000); the page users get carries none. ``guitar``: whether it shows Guitar Pro files in the browser (it has alphaTab:
-    web/alphatab.py), so a song's Guitar Pro files offer Open in the browser beside Download.
+    web/alphatab.py), so a song's Guitar Pro files offer Open in the browser beside Download. ``badge``: the server's
+    badge for a library that isn't the usual one (library_name.py: "Scratch library", ``caracole serve --label``),
+    beside the library's name and first in the title; the file never has one.
     """
 
     csrf: str
@@ -401,6 +403,7 @@ class WebControls:
     jobs: tuple[dict[str, Any], ...] = ()
     timers: Mapping[str, int] | None = None
     guitar: bool = False
+    badge: str | None = None
 
 
 def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrides, now: datetime, *,
@@ -441,9 +444,13 @@ def build_library_page(conn: sqlite3.Connection, cfg: Config, overrides: Overrid
     # video it suggests for a search (img-src 'self': web/youtube_routes.py's); the file can't.
     csp = (_CSP.replace("__FORMS__", "'self'; connect-src 'self'").replace("img-src data:", "img-src data: 'self'")
            if controls is not None else _CSP.replace("__FORMS__", "'none'"))
+    # Which library it is (library_name.py): its name after caracole's, and the server's badge beside it, if any
+    shown = LibraryName(cfg.library_name, controls.badge if controls is not None else None)
     return (
-        _HEAD.replace("__CSP__", csp).replace("__ICON__", PAGE_ICON).replace("__STYLE__", _PAGE_STYLE)
-        + _BODY.replace("__MARK__", page_mark()).replace("__TABREQUESTS__", _requests_tab(controls))
+        _HEAD.replace("__CSP__", csp).replace("__ICON__", shown.icon()).replace("__STYLE__", _PAGE_STYLE)
+        .replace("__TITLE__", html_text.escape(shown.title()))
+        + _BODY.replace("__MARK__", page_mark()).replace("__LIBRARY__", shown.markup("p"))
+        .replace("__TABREQUESTS__", _requests_tab(controls))
         .replace("__REQUESTS__", _requests_panel(controls)).replace("__REQUEST__", _request_form(controls, problem))
         .replace("__REQUESTED__", _requested(controls))
         + json_block("songs", data)

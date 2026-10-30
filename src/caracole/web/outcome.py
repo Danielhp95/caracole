@@ -40,7 +40,10 @@ the job and what the library knows of its song:
   requests it by name (the library page's request form, filled in: ``/#q=Artist - Title``); Failed and
   Not fetched yet try again (``POST /jobs/again``: the same steps, queued again), a failed removal by
   asking what goes again (``POST /remove``, its question, as of now); a songbook made opens it. A
-  request cancelled before it ran says so, Cancelled, with no next step: you took it out of the queue.
+  request cancelled before it ran says so, Cancelled, with no next step: you took it out of the queue. One the
+  server stopped before it was over (jobs.py's ``INTERRUPTED``: a restart, a crash) says Interrupted, whether it
+  ran or waited, and tries again, a removal by asking what goes again, as a failed one does; its step and stage
+  that ran then are drawn failed.
 
 A reason is a site's own answer, worded for a person: a lookup's stage that ended in a wait or an error
 says which site, what it answered and what waits ("LRCLIB answered 503: the lyrics wait for tonight's
@@ -61,7 +64,7 @@ from urllib.parse import urlencode
 
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
 from caracole.icons import tag
-from caracole.web.jobs import INDEX_READS, LOOKUP, REMOVING, Job, Stage
+from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage
 from caracole.web.status import READY, Line, SongFacts
 
 if TYPE_CHECKING:
@@ -114,6 +117,8 @@ NOT_ASKED = ("caracole didn't ask Ultimate Guitar this time (a cooldown, a block
              "the output says which).")
 IN_REVIEW = "caracole isn't sure which Ultimate Guitar song it is."
 CANCELLED = "Taken out of the queue before it ran."
+INTERRUPTED_RAN = "caracole serve stopped while it ran: run it again to finish it."
+INTERRUPTED_WAITED = "caracole serve stopped before it ran: Try again runs it."
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs.com's index lists a page for it"}
 
 
@@ -167,7 +172,8 @@ def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
         if step.state == "skipped":
             continue
         name = COMMAND_STEPS.get(step.args[0] if step.args else "", step.label)
-        chips.append(Chip(name, step.state if step.state in ("waiting", "running", "done", "failed") else "done"))
+        state = "failed" if step.state == INTERRUPTED else step.state
+        chips.append(Chip(name, state if state in ("waiting", "running", "done", "failed") else "done"))
     return chips
 
 
@@ -197,8 +203,8 @@ def _youtube_steps(job: Job) -> list[Chip]:
     by_name = {stage.name: stage for stage in job.stages}
     chips = []
     for name, names in YOUTUBE_STEPS:
-        states = ["failed" if n == "audio" and by_name[n].state == "skipped" and by_name[n].detail
-                  else by_name[n].state for n in names if n in by_name]
+        states = ["failed" if (n == "audio" and by_name[n].state == "skipped" and by_name[n].detail)
+                  or by_name[n].state == INTERRUPTED else by_name[n].state for n in names if n in by_name]
         state = _state(states)
         if state is not None:
             chips.append(Chip(name, state, YOUTUBE_SOURCE if name == "Audio" else ""))
@@ -208,8 +214,10 @@ def _youtube_steps(job: Job) -> list[Chip]:
 def _sheet_waited(stage: Stage) -> str:
     """A stage's state as its step reads it: the sheet's, skipped for a block, a cooldown or a spent budget, is
     ``failed``, as a site's error leaves it, never a step with nothing to do for the song: it is the step that stopped
-    a lookup that ends Not fetched yet."""
-    return "failed" if stage.name == "sheet" and stage.state == "skipped" and _waited(stage.detail) else stage.state
+    a lookup that ends Not fetched yet. A stage the server stopped (``INTERRUPTED``) is drawn failed too."""
+    if stage.state == INTERRUPTED or (stage.name == "sheet" and stage.state == "skipped" and _waited(stage.detail)):
+        return "failed"
+    return stage.state
 
 
 def _match(stage: Stage, state: str) -> Chip:
@@ -271,10 +279,13 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
     ``song_id``: its song's, for the actions that name it."""
     again = Action("Try again", post="/jobs/again", fields=(("job", str(job.id)),))
     tone, text = line.tone, line.text
+    if job.song_key.startswith(REMOVING) and (tone == "failed" or job.state == INTERRUPTED):
+        # what goes is asked again, as of now: never removed unasked
+        again = (Action("Try again", post="/remove", fields=(("song", str(job.song_id)),))
+                 if job.song_id is not None else None)
+    if job.state == INTERRUPTED:  # the server stopped before it was over
+        return Outcome("waiting", "Interrupted", INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED, again)
     if tone == "failed":
-        if job.song_key.startswith(REMOVING):  # what goes is asked again, as of now: never removed unasked
-            again = (Action("Try again", post="/remove", fields=(("song", str(job.song_id)),))
-                     if job.song_id is not None else None)
         return Outcome("failed", "Failed", _sentence(text), again)
     if tone == "removed":
         return Outcome("removed", text)

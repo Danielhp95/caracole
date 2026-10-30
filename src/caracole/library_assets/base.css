@@ -103,9 +103,21 @@ code { font: .9em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; padd
 .top .links { flex: none; margin-left: auto; }
 .top .navlink { padding: 0 14px; font-size: .92rem; }
 .top-sub { margin: 0 0 4px; color: var(--muted); font-size: .92rem; overflow-wrap: anywhere; }
+/* Which library the page shows (library_name.py): its name after caracole's, muted, behind a thin rule, and the badge
+   of a library that isn't the usual one ("Scratch library", "Demo") after it, a pill in --wanted's colours with a
+   dashed edge. On a phone, with a badge, the two are a line of their own under the header; with none, the name is in
+   the tab's title alone. */
+.libname { display: inline-flex; flex: 0 1 auto; align-items: center; gap: 8px; min-width: 0; margin: 0;
+  padding-left: 12px; border-left: 1px solid var(--border-strong); color: var(--muted); font-size: .95rem;
+  font-weight: 600; letter-spacing: normal; line-height: 1.3; text-transform: none; }
+.libname .name { min-width: 0; max-width: 18em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.libname .scratch { flex: none; padding: 1px 9px; border: 1px dashed currentColor; border-radius: 999px;
+  color: var(--wanted); background: var(--wanted-bg); font-size: .72rem; font-weight: 750; letter-spacing: .06em;
+  line-height: 1.5; text-transform: uppercase; white-space: nowrap; }
 @media (max-width: 559px) {
-  .top .app .word { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden; clip: rect(0 0 0 0);
-    white-space: nowrap; }
+  .top .app .word, .top .libname:not(:has(.scratch)) { position: absolute; width: 1px; height: 1px; margin: -1px;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .top .libname { order: 1; flex-basis: 100%; padding-left: 0; border-left: 0; }
 }
 @media (pointer: coarse) {
   .top .app { min-width: 44px; min-height: 44px; justify-content: center; }

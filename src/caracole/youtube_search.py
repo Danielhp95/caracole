@@ -246,26 +246,6 @@ def song_of_video(conn: sqlite3.Connection, overrides: Overrides, video_id: str)
     return None
 
 
-def known_artist(conn: sqlite3.Connection, name: str) -> bool:
-    """Whether ``name`` is an artist the library or an offline index knows, read with no request: a song of yours by
-    them, Ultimate Guitar's index or LaCuerda's."""
-    from caracole.normalize import identity_key, slug_key
-
-    key = slug_key(name)
-    if not key:
-        return False
-    artist = identity_key(name, "x").split("/")[0]
-    for sql, value in (("SELECT 1 FROM songs WHERE key LIKE ? LIMIT 1", artist + "/%"),
-                       ("SELECT 1 FROM ug_index WHERE artist_key = ? LIMIT 1", key),
-                       ("SELECT 1 FROM lacuerda_index WHERE artist_key = ? LIMIT 1", key)):
-        try:
-            if conn.execute(sql, (value,)).fetchone():
-                return True
-        except sqlite3.Error:
-            continue
-    return False
-
-
 # --- the thumbnail -----------------------------------------------------------------------------------------
 
 

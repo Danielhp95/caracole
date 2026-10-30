@@ -33,7 +33,7 @@ from urllib.parse import parse_qsl, quote, urlencode, urlsplit
 
 from caracole.web import pages
 from caracole.web.app import Response, Route, WebApp, html_response, not_ignored
-from caracole.web.jobs import MINE, READING, Job
+from caracole.web.jobs import INTERRUPTED, MINE, READING, Job
 from caracole.web.pages import Refused
 from caracole.web.status import details_href
 
@@ -230,7 +230,8 @@ def _body(app: WebApp, asked: _Asked, job: Job | None) -> str:
     body += _how_it_goes(asked, job)
     head = f'<meta http-equiv="refresh" content="{pages.REFRESH}">\n' if job is not None and job.active else ""
     back = f'<a class="btn" href="/{asked.folder}/{quote(tab.page)}">Back to the tab</a>'
-    return pages.page(f"How it's read · {song.display}", f'{body}<div class="confirm">\n{back}\n</div>', head=head)
+    return pages.page(f"How it's read · {song.display}", f'{body}<div class="confirm">\n{back}\n</div>', head=head,
+                      library_name=app.library_name)
 
 
 def _how_it_goes(asked: _Asked, job: Job | None) -> str:
@@ -243,6 +244,10 @@ def _how_it_goes(asked: _Asked, job: Job | None) -> str:
                 f'<a href="/{escape(details_href(job.id), quote=True)}">Output</a></p>\n')
     if job.state == "cancelled":
         return '<p class="says cancelled">Cancelled before it ran.</p>\n'
+    if job.state == INTERRUPTED:  # a restart stopped it before it was over (history.py)
+        details = f' <a href="/{escape(details_href(job.id), quote=True)}">Output</a>'
+        return ('<p class="says waiting">Interrupted: caracole serve stopped before it was over.'
+                f'{details}</p>\n')
     if job.state != "done":
         state = ("Queued: it runs after the requests before it." if job.state == "queued"
                  else "Reading it as you set it…")

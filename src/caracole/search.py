@@ -46,11 +46,8 @@ isn't a catch-all's, and None when an artist leads or nothing is that good.
 Beside an artist whose whole name is the query, one whose name is only near it
 ("Beagles" for "eagles") is left out, with the songs only its name matched.
 ``artist_songs`` lists all of an artist's songs, and ``library_by_artist``
-yours. ``request_names`` says which words of a query are the artist and which
-the title, for the pages' forms by name, only where the query tells: "Artist -
-Title", "Title by Artist", or a known artist's whole name first ("Silvana
-Estrada Que problema"; the suggested YouTube video's channel a name it knows
-too), never a cut at the first space. The only popularity
+yours. Which words of a query are the artist and which the title, for the pages'
+forms by name, is song_names.py's (``read_names``). The only popularity
 the index holds is how many tabs a song or an artist has, so that orders the
 ties, and the artist with a
 more tabbed song than any song titled like it leads. Nothing here asks any
@@ -150,7 +147,6 @@ from caracole.normalize import (
     PINYIN_PARTIAL_SCALE,
     has_han,
     holds_run,
-    identity_key,
     name_forms,
     name_words,
     original_part,
@@ -1825,101 +1821,6 @@ def library_by_artist(songs: Sequence[Song], name: str, artist_key: str | None =
         if forms & wanted or matched:
             mine.append(song)
     return sorted(mine, key=lambda s: (clean_title(s.title).casefold(), s.id))
-
-
-# --- the names a request is filled in with ----------------------------------------------------------
-
-ONE_WORD_ARTIST = 5  # a one-word name starting a query is its artist with this many songs in an index, or yours
-_DASH = re.compile(r"\s+[-–—]\s+")  # "Artist - Title", as wanted.txt reads it
-_BY = re.compile(r"\s+by\s+", re.IGNORECASE)  # "Title by Artist"
-
-
-def request_names(conn: sqlite3.Connection, query: str, songs: Sequence[Song] = (), *,
-                  names: Sequence[str] = ()) -> tuple[str, str] | None:
-    """The artist and the title a search's query names, for the request form the pages fill in from it: "Artist -
-    Title" (a dash with a space on each side, as wanted.txt reads it), whoever the artist; "Title by Artist", the
-    words after its last " by " a known artist's whole name ("Que problema by Silvana Estrada"); else the longest
-    run of its first words that is a known artist's whole name, the rest the title ("Silvana Estrada Que
-    problema"). Known: an artist of your library (``songs``), of Ultimate Guitar's index or the artist pages
-    caracole read, of LaCuerda's listings, or of gtptabs.com's or harptabs.com's index (``_known_artist``), or one of
-    ``names``, any of one word or more: the channel of the YouTube video suggested for the query, which named the
-    artist the owner typed in lower case ("Silvana Estrada", for "silvana estrada que problema"). Each as typed, its
-    spaces folded, but an artist of yours as your library writes them, else one of ``names`` as it is written.
-
-    None for a query that says nothing of it, which the pages fill in as the title (or as the artist, when an
-    artist leads), to be edited: never a cut at the first space ("Silvana" and "Estrada"). So none for a query
-    no known artist starts (or ends, after " by "), nor for a song's title whole, yours or an index's ("Love Me
-    Tender" is no song "Me Tender" by Love); and a one-word name is a known artist only of yours or with
-    ``ONE_WORD_ARTIST`` songs in an index ("Que problema" is no song "problema" by Que, an artist of one song on
-    Ultimate Guitar). A name never ends with a word names leave out ("Joaquín Sabina y …": ``identity_key``)."""
-    text = " ".join(query.split())
-    dash = _DASH.search(text)
-    if dash is not None and name_words(text[:dash.start()]) and name_words(text[dash.end():]):
-        return text[:dash.start()], text[dash.end():]
-    words = text.split()
-    for by in reversed(list(_BY.finditer(text))):
-        title, artist = text[:by.start()], text[by.end():]
-        known = _known_artist(conn, artist, songs, names) if name_words(title) else None
-        if known is not None:
-            return (known, title) if not _known_title(conn, text, songs) else None
-    for n in range(len(words) - 1, 0, -1):
-        artist, title = " ".join(words[:n]), " ".join(words[n:])
-        if n > 1 and identity_key(artist, "") == identity_key(" ".join(words[:n - 1]), ""):
-            continue  # "Joaquín Sabina y nos dieron las diez": "y" ends no name
-        known = _known_artist(conn, artist, songs, names) if name_words(title) else None
-        if known is not None:
-            return (known, title) if not _known_title(conn, text, songs) else None
-    return None
-
-
-def _known_artist(conn: sqlite3.Connection, name: str, songs: Sequence[Song],
-                  names: Sequence[str] = ()) -> str | None:
-    """The artist ``name`` is, as your library writes them (``library_by_artist``), else as one of ``names`` writes
-    them, else as written; None for a name no index knows as an artist's whole name, or a one-word one with fewer
-    than ``ONE_WORD_ARTIST`` songs in every index. No one's name ("misc", ``no_ones``) is none."""
-    from caracole.lacuerda_index import name_key
-
-    if placeholder_artist(name) or not name_words(name):
-        return None
-    wanted = {compact(f) for f in name_forms(name)} - {""}
-    for song in library_by_artist(songs, name):
-        for artist in dict.fromkeys(song.artists or [song.artist]):
-            if wanted & {compact(f) for f in name_forms(artist)}:
-                return artist
-    for given in names:
-        if not placeholder_artist(given) and wanted & {compact(f) for f in name_forms(given)}:
-            return " ".join(given.split())
-    forms = [f for f in name_forms(name) if f and not no_ones(f)]
-    if not forms:
-        return None
-    least = ONE_WORD_ARTIST if len(name_words(name)) == 1 else 1
-    marks = ", ".join("?" * len(forms))
-    counts = [max(_song_counts(conn, forms).values(), default=0), gtptabs_songs(conn, name)]
-    lc_keys = list(dict.fromkeys(k for k in (name_key(f) for f in [name, *forms]) if k))
-    if lc_keys:  # LaCuerda's listings: an artist's row counts their songs
-        counts.append(conn.execute(f"SELECT COALESCE(MAX(songs), 0) FROM lacuerda_index WHERE artist_key IN "
-                                   f"({', '.join('?' * len(lc_keys))}) AND title = ''", lc_keys).fetchone()[0])
-    # harptabs.com's artists, by their page's key: as many tabs as their page says once read, else one, a name
-    counts.append(conn.execute(
-        "SELECT COALESCE(MAX(COALESCE(a.tabs, 1)), 0) FROM harptabs_index i LEFT JOIN harptabs_artists a "
-        f"ON a.path = i.path WHERE i.kind = 'artist' AND i.key IN ({marks}) AND (a.name IS NULL OR a.name != '')",
-        forms).fetchone()[0])
-    return " ".join(name.split()) if max(counts) >= least else None
-
-
-def _known_title(conn: sqlite3.Connection, title: str, songs: Sequence[Song]) -> bool:
-    """Whether ``title``, whole, is a song's title: yours, Ultimate Guitar's or LaCuerda's."""
-    from caracole.lacuerda_index import title_key
-
-    mine = identity_key("", title).partition("/")[2]
-    if mine and any(s.key.partition("/")[2] == mine for s in songs):
-        return True
-    key = slug_key(title)
-    if key and conn.execute("SELECT 1 FROM ug_index WHERE song_key = ? LIMIT 1", (key,)).fetchone():
-        return True
-    lc = title_key(title)
-    return bool(lc and conn.execute("SELECT 1 FROM lacuerda_index WHERE title_key = ? AND title != '' LIMIT 1",
-                                    (lc,)).fetchone())
 
 
 def bare_id_hint(query: str, hits: Sequence[IndexHit | ArtistHit], *, artist: str | None = None,

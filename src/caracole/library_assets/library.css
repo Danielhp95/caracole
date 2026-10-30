@@ -11,9 +11,19 @@
 /* The library's header, one line: caracole, the tabs (Library, Songbooks and, served, Requests), and what needs
    attention (wanted songs) at its end. Placed by area, so that a number changing its width (a tab's count) moves
    nothing; on a phone the numbers, when there are any, are a line of their own. */
-.masthead.lib { display: grid; grid-template-columns: auto auto minmax(0, 1fr); grid-template-areas: "app tabs sum";
-  align-items: center; gap: 4px 14px; padding: 12px 0 0; }
+.masthead.lib { display: grid; grid-template-columns: auto auto auto minmax(0, 1fr);
+  grid-template-areas: "app name tabs sum"; align-items: center; gap: 4px 14px; padding: 12px 0 0; }
 .masthead.lib .app { grid-area: app; display: flex; align-items: center; gap: 7px; margin: 0; font-size: 1.05rem; }
+/* The library's name, and a badge for one that isn't the usual library (base.css's .libname): on a phone, the badge
+   and the name a line of their own under the tabs, and with no badge, the name in the tab's title alone. */
+.masthead.lib .libname { grid-area: name; }
+@media (max-width: 719px) {
+  .masthead.lib .libname { position: absolute; width: 1px; height: 1px; margin: -1px; overflow: hidden;
+    clip: rect(0 0 0 0); white-space: nowrap; }
+  .masthead.lib:has(.scratch) { grid-template-areas: "app tabs" "name name" "sum sum"; }
+  .masthead.lib .libname:has(.scratch) { position: static; justify-self: start; width: auto; height: auto; margin: 0;
+    padding-left: 0; border-left: 0; overflow: visible; clip: auto; }
+}
 .masthead.lib .tabs { grid-area: tabs; min-width: 0; margin: 0; border-bottom: 0; }
 .masthead.lib .summary { grid-area: sum; justify-self: end; gap: 8px; margin: 0; }
 .masthead.lib .summary:empty { display: none; }

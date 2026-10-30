@@ -10,7 +10,7 @@
     GET  /api/youtube/video?url=
                           a video pasted into the library page's search box (``url``, any link to it, or ``id``): its id and
                           plain address, what its gate says (youtube_search.video_gate), its title, channel, length
-                          and thumbnail once read, the song's name guessed from them (youtube_names.py), and the
+                          and thumbnail once read, the song's name read from them (song_names.py), and the
                           library's song of it (by its audio, its paste, or the name), with or without a sheet
     POST /youtube/video   that video's metadata read (``url`` or ``id``): ``caracole youtube --video --progress`` queued, one yt-dlp run
                           with no download and its thumbnail, when its gate says so
@@ -228,7 +228,7 @@ def pasted_video(app: WebApp, asked: dict[str, list[str]]) -> Response:
     """What the library page offers for a video pasted into its search box, with no request: its ``id`` and plain
     ``url``; its gate's ``state`` (youtube_search.video_gate: ``found``, ``none``, ``auto``, ``spent``, ``failed``,
     ``off``) and ``why``; once read, the ``video`` (title, channel, length, the thumbnail's address) and the song's name
-    guessed from them (``guess``, youtube_names.py: a library or offline index's artist turns a title round); and the
+    read from them (song_names.py ``read_names``: the title's, its channel's song); and the
     library's song of it (``song``: by its audio or its paste, else by the guessed name), whether it has a human
     sheet, and the link to it."""
     from datetime import UTC, datetime
@@ -236,8 +236,8 @@ def pasted_video(app: WebApp, asked: dict[str, list[str]]) -> Response:
     from caracole.library_page import sheet_href
     from caracole.normalize import identity_key
     from caracole.songs import HUMAN_SHEET, find_song
-    from caracole.youtube_names import guess
-    from caracole.youtube_search import known_artist, song_of_video, video_gate
+    from caracole.song_names import read_names
+    from caracole.youtube_search import song_of_video, video_gate
     from caracole.youtube_urls import watch_url
 
     video_id = _pasted_id((asked.get("url") or [""])[0], (asked.get("id") or [""])[0])
@@ -246,8 +246,8 @@ def pasted_video(app: WebApp, asked: dict[str, list[str]]) -> Response:
         said = video_gate(app.cfg, conn, video_id, datetime.now(UTC))
         video = said.asked.get("video") if said.asked is not None else None
         video = video if isinstance(video, dict) else None
-        artist, title = (guess(str(video.get("title") or ""), str(video.get("channel") or ""),
-                               known=lambda name: known_artist(conn, name)) if video else ("", ""))
+        artist, title = (read_names(conn, str(video.get("title") or ""), channel=str(video.get("channel") or ""))
+                         or ("", "")) if video else ("", "")
         song = song_of_video(conn, overrides, video_id)
         if song is not None:  # the library's own song of the video: its names
             artist, title = song.artist, song.title

@@ -72,12 +72,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from html import escape
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from caracole.inline import json_block, sha256_source
 from caracole.library_assets import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.web.top import LIBRARY, top
+
+if TYPE_CHECKING:
+    from caracole.library_name import LibraryName
 
 STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
@@ -313,6 +316,7 @@ function show(data, text) {
   root.classList.toggle("missed", !n);  // one Look up: the form by name waits for the row's
   shownFor = text;
   shownData = data;
+  fillByName(text);
   if (lcChanged === text) lcChanged = null;
   if (enterFor === text) { enterFor = null; pickBest(); }  // before LaCuerda's search: a song it looks up goes first
   // LaCuerda's own search, under the results: sent by itself once the query settles, or by an Enter that came first;
@@ -321,16 +325,34 @@ function show(data, text) {
   if (lcLine) results.append(lcLine);
 }
 
-// "Look “…” up by name": the form under the results, filled in from the query ("Artist - Title"; else the artist and
-// the title the search's answer reads in it, ``names``: a known artist's whole name first, or "Title by Artist"; else
-// the title, never the query cut at a space), open and in view, the focus on its first field still empty.
+// The form by name under the results, filled in as each answer is drawn, as the library page's request form is: with
+// the artist and the title the search's answer reads in the query (``names``: song_names.py's reading, the server's;
+// the page splits no text itself); else all of it the artist's name when an artist leads (or one LaCuerda alone
+// knows), else the title, never the query cut at a space. A field you typed into keeps what you typed, until a lookup
+// is sent.
+const typedByName = new Set();
+for (const name of ["artist", "title"]) {
+  document.getElementById("by-name")[name].addEventListener("input", () => typedByName.add(name));
+}
+function fillByName(text) {
+  const f = document.getElementById("by-name");
+  const data = shownFor === text && shownData ? shownData : {};
+  const objects = (value) => (Array.isArray(value) ? value : []).filter(x => x && typeof x === "object");
+  const names = data.names && typeof data.names === "object" && data.names.artist && data.names.title
+    ? data.names : null;
+  const artistLeads = data.lead === "artist" || (objects(data.lacuerda_artists).length > 0 &&
+                                                 !objects(data.lacuerda).length);
+  const values = names ? {artist: String(names.artist), title: String(names.title)}
+    : artistLeads ? {artist: text, title: ""} : {artist: "", title: text};
+  for (const name of ["artist", "title"]) {
+    if (!typedByName.has(name)) f[name].value = values[name];
+  }
+}
+
+// "Look “…” up by name": that form, filled in, open and in view, the focus on its first field still empty.
 function byNameFrom(text) {
   const f = document.getElementById("by-name");
-  const [first, ...rest] = text.split(" - ");
-  const names = shownFor === text && shownData && shownData.names && typeof shownData.names === "object"
-    && shownData.names.artist && shownData.names.title ? shownData.names : null;
-  f.artist.value = rest.length ? first.trim() : names ? String(names.artist) : "";
-  f.title.value = rest.length ? rest.join(" - ").trim() : names ? String(names.title) : text;
+  fillByName(text);
   byName.open = true;
   byName.scrollIntoView({block: "center"});
   (f.artist.value ? f.title : f.artist).focus({preventScroll: true});
@@ -757,7 +779,9 @@ document.getElementById("by-name").addEventListener("submit", e => {
   e.preventDefault();
   const f = e.target;
   const artist = f.artist.value.trim(), title = f.title.value.trim();
-  if (artist && title) lookUp({artist, title}, artist + " - " + title);
+  if (!artist || !title) return;
+  typedByName.clear();
+  lookUp({artist, title}, artist + " - " + title);
 });
 
 // Where a search found nothing, the form by name shows only once its row's Look up opens it: folded again, it goes, and
@@ -821,15 +845,19 @@ __TOP__<div class="search" role="search">
 """
 
 
-def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
-    """The whole page, with the form token every POST carries and each source's mark (``icons.page_icons``)."""
+def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None, *, library_name: LibraryName | None = None) -> str:
+    """The whole page, with the form token every POST carries and each source's mark (``icons.page_icons``);
+    ``library_name``, the library the server shows (library_name.py), in its header and its tab's title."""
     token = escape(csrf, quote=True)
+    title = library_name.title("Look up") if library_name is not None else "Look up · caracole"
+    links = LIBRARY + '<a class="navlink" href="/#tab=requests">Requests</a>'
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
-        f"{PAGE_ICON}<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
-        + _BODY.replace("__TOP__", top("Look up a song", LIBRARY + '<a class="navlink" href="/#tab=requests">Requests</a>'))
+        f"{library_name.icon() if library_name is not None else PAGE_ICON}<title>{escape(title)}</title>\n"
+        f"<style>{STYLE}</style>\n</head>\n"
+        + _BODY.replace("__TOP__", top("Look up a song", links, library_name=library_name))
         .replace("__CSRF__", token)
         + json_block("icons", dict(icons or {}))
         + f"<script>{ROWS_SCRIPT}</script>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"

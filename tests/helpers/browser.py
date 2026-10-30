@@ -439,12 +439,16 @@ class Browser:
         for character in text:
             self.send("Input.insertText", text=character)
 
-    def press(self, key: str = "Enter") -> None:
+    def press(self, key: str = "Enter", modifiers: int = 0) -> None:
+        """The key ``key`` pressed and let go (" " is Space), with ``modifiers`` held: DevTools' bits, Alt 1, Ctrl 2,
+        Meta 4, Shift 8."""
         codes = {"Enter": 13, "Escape": 27, "Tab": 9, "Home": 36, "End": 35, "ArrowLeft": 37, "ArrowUp": 38,
-                 "ArrowRight": 39, "ArrowDown": 40}
+                 "ArrowRight": 39, "ArrowDown": 40, " ": 32}
+        code = "Space" if key == " " else key
+        text = {"Enter": "\r", " ": " "}.get(key) if not modifiers & 7 else None
         for kind in ("keyDown", "keyUp"):
-            self.send("Input.dispatchKeyEvent", type=kind, key=key, code=key, windowsVirtualKeyCode=codes[key],
-                      **({"text": "\r"} if key == "Enter" and kind == "keyDown" else {}))
+            self.send("Input.dispatchKeyEvent", type=kind, key=key, code=code, windowsVirtualKeyCode=codes[key],
+                      modifiers=modifiers, **({"text": text} if text and kind == "keyDown" else {}))
 
     def click(self, selector: str) -> None:
         """A real click (the mouse, pressed and let go) in the middle of the element ``selector`` finds."""

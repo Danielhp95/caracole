@@ -53,7 +53,7 @@ def picker(app: WebApp, song_field: str) -> Response:
     if not pick.choices:
         raise Refused(409, "Nothing to pick", f"caracole search finds nothing close to {song.display} in the "
                                               "offline Ultimate Guitar index.")
-    return html_response(200, pages.review_page(pick, app.csrf))
+    return html_response(200, pages.review_page(pick, app.csrf, library_name=app.library_name))
 
 
 def review(app: WebApp, form: dict[str, str]) -> Response:

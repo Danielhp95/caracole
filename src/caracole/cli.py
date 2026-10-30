@@ -6,7 +6,9 @@ added without editing this file.
 
 The root callback sets the log up for every command (``caracole.logs``): what a
 command reports goes to stdout, its log to stderr, at the verbosity of ``-v``,
-``-vv`` or ``-q``. ``main`` turns a bug into one line that says so, then its
+``-vv`` or ``-q``. ``--home`` tells a caracole with no ``--config`` that its home
+folders are meant even on a machine that runs caracole as a service (service.py,
+``commands._common.load_cfg``). ``main`` turns a bug into one line that says so, then its
 traceback, and exit status 1.
 """
 
@@ -31,6 +33,7 @@ class AppState:
 
     config_path: Path | None = None
     verbosity: int = logs.NORMAL  # logs.QUIET, NORMAL, VERBOSE or DEBUG
+    home: bool = False  # --home: caracole's home defaults, meant, beside caracole's service (service.py)
 
 
 def _version_callback(value: bool) -> None:
@@ -68,12 +71,17 @@ def build_app(extra_modules: Iterable[str] = ()) -> typer.Typer:
             help="Say more on stderr: -v adds a line per request, -vv debugging and other libraries' logs.",
         ),
         quiet: bool = typer.Option(False, "--quiet", "-q", help="Say only what went wrong, or needs you."),
+        home: bool = typer.Option(
+            False, "--home",
+            help="With no --config on a machine that runs caracole as a service: use the home folders all the "
+                 "same, an index build included, with no warning.",
+        ),
         version: bool = typer.Option(
             False, "--version", callback=_version_callback, is_eager=True, help="Show the version."
         ),
     ) -> None:
         level = logs.verbosity(verbose, quiet)
-        ctx.obj = AppState(config_path=config, verbosity=level)
+        ctx.obj = AppState(config_path=config, verbosity=level, home=home)
         logs.setup(level)
         ctx.call_on_close(logs.teardown)
 

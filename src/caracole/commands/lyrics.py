@@ -116,7 +116,7 @@ def register(app: typer.Typer) -> None:
         ),
     ) -> None:
         """Look for LaCuerda chord sheets for Spanish songs without a complete one."""
-        cfg = load_cfg(ctx)
+        cfg = load_cfg(ctx, builds_index="lacuerda --index" if index else None)
         if sum((index, artist is not None, search is not None)) > 1:
             _common.fail("--index reads every artist's listing, --artist one artist's page and --search one query "
                          "of LaCuerda's search: give one of them", 2)
@@ -134,7 +134,7 @@ def register(app: typer.Typer) -> None:
     @app.command("gtptabs")
     def gtptabs_cmd(ctx: typer.Context) -> None:
         """Download a Guitar Pro file from gtptabs.com for each song that has none."""
-        _gtptabs(load_cfg(ctx))
+        _gtptabs(load_cfg(ctx, builds_index="gtptabs"))
 
     @app.command("harptabs")
     def harptabs_cmd(
@@ -159,7 +159,7 @@ def register(app: typer.Typer) -> None:
             _common.fail("--index reads every artist's page and --artist one artist's: give one of them", 2)
         if budget is not None and not index:
             _common.fail("--budget goes with --index", 2)
-        cfg = load_cfg(ctx)
+        cfg = load_cfg(ctx, builds_index="harptabs --index" if index else None)
         if artist is not None:
             _harptabs_artist(cfg, " ".join(artist.split()))
         elif index:
@@ -183,7 +183,7 @@ def register(app: typer.Typer) -> None:
         """Keep a text tab from gametabs.net for each song that has none and a tab there of its game or composer."""
         if budget is not None and not index:
             _common.fail("--budget goes with --index", 2)
-        cfg = load_cfg(ctx)
+        cfg = load_cfg(ctx, builds_index="gametabs --index" if index else None)
         if index:
             _gametabs_index(cfg, budget)
         else:
@@ -192,7 +192,7 @@ def register(app: typer.Typer) -> None:
     @app.command("musescore")
     def musescore_cmd(ctx: typer.Context) -> None:
         """Read MuseScore's song sitemaps into the index the to-do page's links come from."""
-        _musescore(load_cfg(ctx))
+        _musescore(load_cfg(ctx, builds_index="musescore"))
 
 
 def _lyrics(cfg: Config) -> None:

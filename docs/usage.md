@@ -25,6 +25,7 @@ backups.
 - [Fonts for Chinese sheets](#fonts-for-chinese-sheets)
 - [The library folder](#the-library-folder)
 - [A worked example](#a-worked-example)
+- [Keeping the database](#keeping-the-database)
 - [Running it on a server](#running-it-on-a-server)
 
 ## Configure
@@ -45,6 +46,7 @@ folder.
 Here is every key with its default. The commented-out keys have none.
 
 ```toml
+# name = "..."                    # what the pages call the library; default: library_dir's folder name
 # data_dir = "..."                # one folder for the four below (see below)
 library_dir = "~/Tabs"            # sheets, lyrics, _todo.md, index.html, wanted.txt
 music_dir = "~/Music"             # tracks you bought; read only, used only for auto-chords
@@ -134,8 +136,10 @@ whole number.
 it, `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/caracole`, else `~/.local/state/caracole`. `cache_dir` works the
 same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
-`~/.cache/caracole`. The state folder holds `caracole.sqlite` and
-`caracole.lock`: back it up, but don't sync it. The cache keeps every
+`~/.cache/caracole`. The state folder holds `caracole.sqlite`,
+`caracole.lock` and caracole serve's `requests.jsonl`, and in `backups/` the last
+three copies of the database (see [Keeping the database](#keeping-the-database)):
+back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
 goes when the PDF is done, so caracole must be able to write there. Its
@@ -378,7 +382,8 @@ that turn out to be one song (斑馬斑馬 and 斑马斑马, say) become one.
 ### caracole add
 
 `caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS] [--lacuerda URL]` (or
-`caracole add "ARTIST - TITLE"`) appends the line
+`caracole add "ARTIST - TITLE"`, one text read as
+[below](#one-text-read-as-a-songs-name)) appends the line
 for you, then syncs the file at once and rewrites `_todo.md` and
 `index.html`:
 
@@ -452,8 +457,9 @@ A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
 new; the next caracole run looks for it.`
 
 A song needs its artist: caracole looks it up by artist and title. Given one
-name with no " - " (`caracole add Wonderwall`), `caracole add` writes nothing
-and exits 2. It lists your songs of that title, then what
+text that doesn't say who its artist is (`caracole add Wonderwall`, or "Love Me
+Tender": see [below](#one-text-read-as-a-songs-name)), `caracole add` writes
+nothing and exits 2. It lists your songs of that title, then what
 `caracole search Wonderwall` lists first, five hits numbered as the search
 numbers them, each with its `caracole add "Oasis" "Wonderwall"` line (a hit
 scoring under 90 has none: it may well be another song), and
@@ -467,11 +473,75 @@ nothing can be found by it: `caracole add misc 斑马` adds the line, and warns
 that caracole may never find the song, and that `caracole search "斑马"` lists
 the songs of that title with their artists.
 
+### One text, read as a song's name
+
+`caracole add TEXT`, `caracole get TEXT` and every form caracole serve fills in
+from what you typed or pasted (the library page's request form and its Make the
+sheet, the lookup page's form by name, a pasted YouTube link's names, and
+`POST /request` or `POST /lookup` sent one text, `q`, in place of an artist and
+a title) read the artist and the title of one text the same way, on the server,
+so the same text gives the same names everywhere; no page splits a text itself.
+Two arguments, `caracole add ARTIST TITLE`, are the names themselves, never read.
+
+First, what a video's title adds to a song's name goes: a bracket of such words
+alone ("(Official Video)", "[Videoclip Oficial]", "(Letra)", "(Visualizer)"), a
+last part of them ("… | Official Video"), two or more of them at the end ("… Con
+Letra") or one of a format's ("HD", "4K", "MV"), and quotes around it.
+"(feat. …)", "(En Vivo)" and a title that ends with one such word ("Radio
+Video") stay. Then the first of these rules that reads the text names the song:
+
+1. **Artist - Title.** A dash with a space on each side (an en or em dash, "|",
+   "~" or "//" too), the first one, with words on both sides, whoever they are:
+   "Silvana Estrada – Que problema", "宋冬野 - 斑马斑马"; "Muse - Hysteria - Live"
+   is "Hysteria - Live" by Muse. Turned round when the second part is a known
+   artist and the first isn't, as in a fan's upload: "Somos vikingos veganos -
+   Hyperfanes" is Hyperfanes's song once caracole knows them.
+2. **A known artist first, or after "by".** The longest run of first words that
+   is a known artist's whole name, then the title: "silvana estrada que
+   problema", once caracole knows her; or "Que problema by Silvana Estrada".
+   Where both read a text, the artist of more words. Neither reads a song's
+   title whole, yours, Ultimate Guitar's or LaCuerda's: "Love Me Tender" is a
+   title, not "Me Tender" by Love, and so is "Stand by Me".
+3. **A video's channel.** A pasted video's title that neither reads is its
+   channel's song, the channel's name without "- Topic", VEVO or Official:
+   "Creep" from "Radiohead - Topic" is Radiohead's.
+4. **The video suggested for a search.** A query that neither reads, whose
+   suggested video is that very song (the video's title, read by these rules,
+   is the query's words), names the video's artist: "creep", when YouTube's
+   first video for it is Radiohead's "Creep".
+
+Else the text doesn't say who its artist is, and it is never cut at its first
+space ("Silvana" and "Estrada"): the command lists the songs of that name and
+adds or looks up nothing (exit 2, below), a page fills it in as the title (or as
+the artist's name, when an artist leads) for you to finish, and `/request` or
+`/lookup` refuses it.
+
+A known artist is one of your library's, as your library writes them ("bjork"
+is your Björk); the channel of the video the text is the title of, or of the
+video suggested for a search, as the channel writes it ("Silvana Estrada", for
+"silvana estrada que problema", when her own upload is YouTube's first video);
+or an artist of Ultimate Guitar's index (and the artist pages caracole read),
+LaCuerda's listings, gtptabs.com's or harptabs.com's, read locally, never asked
+of a site. A name of one word is weak proof: an index's needs five songs there
+("Que problema" is a title, though Ultimate Guitar has an artist Que, of one
+song), and your library's counts only once it is credible, when a song of
+theirs has a sheet from a site (not one auto-chords made), the library has two
+songs or more of theirs, or an index knows them too. So one mistaken line in
+wanted.txt, "Silvana - Estrada", makes no artist "Silvana" that would cut the
+next "silvana estrada que problema" at its first space.
+
+The commands say how they read a text, unless that is the text as written:
+
+    $ caracole add "Silvana Estrada – Que problema"
+    Read “Silvana Estrada – Que problema” as Silvana Estrada - Que problema.
+    Added Silvana Estrada - Que problema to wanted.txt; the next `caracole run` looks for it.
+
 ### caracole get
 
 `caracole get "ARTIST - TITLE"` (or `caracole get ARTIST TITLE`) is for the
-song you want to play now. One name alone (`caracole get Wonderwall`) looks
-nothing up and exits 2: like `caracole add`, it lists your songs of that
+song you want to play now; one text is read as
+[above](#one-text-read-as-a-songs-name). One that doesn't say who its artist is
+(`caracole get Wonderwall`) looks nothing up and exits 2: like `caracole add`, it lists your songs of that
 title and the offline index's songs, each scoring 90 or more with its
 `caracole get --ug oasis/wonderwall "Oasis - Wonderwall"` line. It does the nightly run's work for that song alone,
 at once, sheet first, and says where the sheet is the moment it is kept:
@@ -906,6 +976,10 @@ harptabs --index reads the rest.`, and once gametabs.net's sitemaps are read,
 how far its game index has got: `gametabs.net: 93 of 1658 game pages read, 512
 tabs; caracole gametabs --index reads the rest.`
 
+An index built in one database moves into another with **`caracole index
+export`** and **`caracole index merge`** (see [caracole index export and
+merge](#caracole-index-export-and-merge)).
+
 ### caracole match --dry-run
 
 Matching is local: no requests, and it takes seconds. `caracole match` matches
@@ -1036,6 +1110,10 @@ configuration it would take, and why it waits.
     Skipped in a caracole without auto-chords.
 14. **render**: write ChordPro files and PDFs.
 15. **todo**: rewrite `_todo.md` and `index.html`.
+16. **backup**: copy the database whole into the state folder's `backups/`,
+    keeping the last three (see [caracole backup](#caracole-backup)),
+    but only after a run no step of which failed: a block, a cooldown or a spent
+    budget is no failure, a bug is, and then the copies of the nights before stay.
 
 Every step runs even when an earlier one failed, so the to-do page is always
 rewritten. Until the index is built, the index and match steps are skipped;
@@ -2212,8 +2290,11 @@ inverted question mark (¿) on its rust-red square, drawn inside the page itself
 as every page caracole writes or serves shows it (the sheet viewers and the
 songbooks from their next render); caracole serve answers a browser's own
 `/favicon.ico` with it too. Its top is one bar, so that the first song starts
-well within the first screen, on a phone too: caracole's "¿" mark and name (the
-mark alone on a phone), the tabs, **Library**, your songs, **Songbooks**
+well within the first screen, on a phone too: caracole's "¿" mark and name, then
+the library's (caracole.toml's `name`, one line of 80 characters at most, else
+the library folder's name: "Tabs"), which the browser tab's title says too
+("caracole · Tabs"; on a phone the mark alone, the library's name in the title),
+the tabs, **Library**, your songs, **Songbooks**
 (see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
 tab](#the-sites-tab)) and, served, **Requests**, the last (see Requests, under
 [caracole serve](#caracole-serve)), Songbooks and Requests counting what they
@@ -3713,11 +3794,33 @@ is no progression exits with status 2.
 
 ### caracole serve
 
-`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…`
+`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]… [--label TEXT]`
 serves the library page over HTTP, at `http://127.0.0.1:8737/` by default,
 with what the file on disk can't do. It has no sign-in: anyone who can reach it
 can read the library and request songs, so keep it on a network you trust (see
 Who can reach it, below).
+
+Every page it serves names the library it shows, after caracole's name in its
+header and in the browser tab's title ("caracole · Tabs", "Look up · caracole ·
+Tabs"), as `index.html` does. A server of a library that isn't your usual one
+says so on every page it writes itself, with a badge beside the name, first in
+each title ("Scratch library · caracole · test-lib") and on a line of its own
+under the header on a phone, and the tab's "¿" in the badge's amber, so that
+its pages are never taken for your library's. It prints the badge when it
+starts. How it knows:
+
+- `--label TEXT` names the badge (40 characters at most): `--label Demo`,
+  `--label Test`. `--label ""` shows none, wherever the library is.
+- Without it, a library whose config file, library folder or state folder is in
+  a temporary folder (`/tmp`, `/var/tmp`, `/dev/shm`, or `$TMPDIR`, `$TEMP`,
+  `$TMP`) is badged **Scratch library**: a test library made in nix develop's
+  temporary folder, say. Your libraries never are: the NixOS service's and
+  Ubuntu's in `/var/lib/caracole`, and a library you run by hand from your home
+  folder. A temporary folder that holds your home folder, or is `/`, counts for
+  nothing.
+
+The sheet viewers and the songbooks' pages are the files caracole wrote into
+the library, sent as they are: they carry no badge.
 
 - **Search as you type.** The library page's search box filters your songs as
   you type, here as on the file, and from the third letter (the second with a
@@ -4007,7 +4110,8 @@ Who can reach it, below).
   listed in place of the results. A query that finds nothing
   shows the same band and line as the library page, its row's
   Look up where a song's Get it is (the form under the results, filled in as
-  the library page's request form is, which shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
+  each answer is drawn, as the library page's request form is, until you type
+  into a field; it shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
   them, as typing their name would. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there. Here your
   song keeps its own row, with Fetch again, and each site's row of it its own:
@@ -4026,17 +4130,15 @@ Who can reach it, below).
   song has neither, and the file, which can ask nothing, never has them.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" (where they found nothing on the sites, the line's Request opens it) takes an artist, a title and, optionally, the album and the length,
-  filled in from what you searched until you type into a field yourself:
-  "Muse - Hysteria" is the artist and the title; with no dash, the longest run
-  of its first words that is an artist's whole name your library, Ultimate
-  Guitar's index, LaCuerda's, gtptabs.com's or harptabs.com's knows, or the
-  channel of the YouTube video suggested for it, is the artist, and the rest
-  the title ("Silvana Estrada Qué problema"), as is "Qué
-  problema by Silvana Estrada"; else an artist's name alone when an artist
-  leads, else all of it the title. A query is never cut at its first space: a
-  one-word name is an artist only of yours or with five songs or more on a
-  site ("Que problema" is a title, though Ultimate Guitar has an artist Que),
-  and a song's title whole is a title ("Love Me Tender"). The song goes into wanted.txt at once,
+  filled in from what you searched until you type into a field yourself, with
+  the artist and the title the search's answer reads in it (`/api/search`'s
+  `names`, read as [one text](#one-text-read-as-a-songs-name) is, with the
+  YouTube video suggested for the query): "Muse - Hysteria", "Silvana Estrada
+  Qué problema" once caracole knows her, "Qué problema by Silvana Estrada";
+  else all of it the artist's name when an artist leads, else the title, never
+  the query cut at its first space. `POST /request` (and `POST /lookup`) sent
+  one text, `q`, in place of the artist and the title reads it the same way, and
+  refuses one that doesn't say who its artist is. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
   it is), then `caracole add` runs to put it in the library.
 - **A sheet from a YouTube video.** Where caracole can make chords of audio
@@ -4083,11 +4185,12 @@ Who can reach it, below).
   them meanwhile). A line under the results says "Looking on YouTube…", then
   the video shows as a row: its thumbnail, its title (a link to it on
   YouTube), its channel and length, and **Make the sheet**, which opens the
-  request form filled in with what you searched ("Nick Cani - Vikingos
-  veganos", or "silvana estrada que problema" when the video is Silvana
-  Estrada's own channel's or an index knows her: the artist as the channel
-  writes it and the title, as above) and the video, for you to check
-  and send;
+  request form filled in with what you searched, read with the video
+  ("Nick Cani - Vikingos veganos"; "silvana estrada que problema" when the
+  video is Silvana Estrada's own channel's or an index knows her: the artist as
+  the channel writes it and the title; "creep" when the video is Radiohead's
+  "Creep": rule 4 of [one text](#one-text-read-as-a-songs-name)) and the video,
+  for you to check and send;
   nothing more goes until you press Request. A query is asked once in 30 days
   (its words in any order), and the row comes back for it with no request. At
   most 10 such searches an hour; none while YouTube cools down after a block;
@@ -4106,10 +4209,11 @@ Who can reach it, below).
   YouTube cools down or after a failure in the hour), then the video, its
   **Artist** and **Title** guessed for you to check, and **Add and make the
   sheet**, which sends the request with the video (Getting the audio…, the
-  lyrics, the chords, the PDF). The guess: a title "Artist - Title" split there
-  (turned round when the second part is an artist your library or an index
-  knows, or the channel), else the channel as the artist (no "- Topic", VEVO,
-  Official) and the title without "(Official Video)", "[Letra]", "HD" and such.
+  lyrics, the chords, the PDF). The guess is the video's title read as
+  [one text](#one-text-read-as-a-songs-name) is, its channel the artist where
+  nothing else names one: "Estopa - Como Camarón [Videoclip Oficial] HD" is
+  Estopa's "Como Camarón", typed into either page's box as pasted, and "Creep"
+  from "Radiohead - Topic" is Radiohead's.
   A video caracole can't read now is offered with the names empty, and why;
   a song of yours with a sheet says so, with Open; where no sheet can be made,
   the panel says why. Enter goes to the panel. The request form's YouTube field
@@ -4331,7 +4435,24 @@ Who can reach it, below).
       in a word and a sentence;
     - Make this my version's **Your version now** · **Open sheet** (Export
       PDF's Download and make it mine): never its song's request, whose line
-      on the library page stays its own.
+      on the library page stays its own;
+    - **Interrupted**: caracole serve stopped (a restart, a crash, Ctrl-C)
+      while the request ran, or before it ran: what it did by then, its
+      song's line says; **Try again** queues it again (a removal asks what
+      goes first). Its Output keeps what its command printed until then, the
+      step it was in marked Interrupted.
+
+  The tab keeps the last 100 requests of the last 30 days, and a restart
+  keeps them: caracole serve writes them to `requests.jsonl` in the state
+  folder as they go, a line each time one is queued, starts or ends, and
+  reads them back when it starts, its new requests numbered after them, so a
+  `job=N` link never names another. It is caracole serve's own file, which no
+  command reads or writes and which takes no lock: a JSON object a line, each
+  command's last 200 lines kept, each line of 1,000 characters at most. It is
+  written again whole when it grows (more than three lines a request kept, or
+  4 MB), through a temporary file renamed over it, so it never grows without
+  bound and a crash leaves it whole; a line it can't read (cut short by a
+  crash, say) is left out. Delete it to forget them all, the server stopped.
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and
@@ -4496,7 +4617,7 @@ a nightly run holding the lock lets it go first at its next pause. The
 queue holds 20 requests and one per song: asking again for a song gives its
 request, and Fetch it now on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
-loses no song. A songbook change waits in the queue like a request; the same
+loses no song, and the Requests tab keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the
 command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,
@@ -4555,7 +4676,8 @@ tab](#the-songbooks-tab)). Open in the browser is
 each request, where [alphaTab](https://www.alphatab.net) draws and plays the
 file: the song's title and artist, links back to the song in the library, to
 its sheet viewer when it has one and to the file as a download, then a bar
-that stays at the top while the score scrolls: **Play** (Pause while it plays)
+that stays at the top while the score scrolls: **Play** (Pause while it plays;
+the space bar plays and pauses too, wherever you are on the page)
 and **Stop**, the **Tempo** (50 to 125 %) and **Tab only** or **Score and tab**
 on one row, and under it the file's **tracks**, a button each with its name
 (whole when you point at a name cut short) and its kind (6 strings, 4 strings,
@@ -5454,6 +5576,126 @@ Dongye", and the to-do page lists the song as "No human sheet found yet",
 queued, then downloaded, then with its chords done. The auto sheet says which
 video its audio came from, on its third line. A purchase dropped into Music/
 later takes the video's place.
+
+## Keeping the database
+
+The database holds what took the longest to get: the indexes of every site,
+built from days of polite requests (Ultimate Guitar's sitemaps, LaCuerda's
+listings, harptabs.com's artist pages, gametabs.net's game pages), besides your
+songs' state. The cache can be lost, at the cost of requests; the database is
+better kept.
+
+### caracole backup
+
+The nightly run's last step copies the database whole into `backups/` in the
+state folder, as `caracole-2026-10-30T034512Z.sqlite` (the time in UTC), and
+keeps the last three: about 430 MB each for a library with every index. Each
+copy is the database as it stood at one moment, whatever another caracole
+writes meanwhile (SQLite's `VACUUM INTO`), checked by SQLite before it takes the
+place of the oldest, and readable by caracole's user alone. With no room for a
+copy (the database's size and 64 MB to spare), no copy is made and none is
+deleted: the summary says `No backup tonight: no room for a copy …`. A copy
+that fails SQLite's check fails the run, so that you hear of it; the copies
+there were stay. The summary says nothing of a copy made; `caracole -v run`
+logs its name and size.
+
+    caracole backup            # a copy now, under caracole's lock: it waits for a run
+    caracole backup --list     # the copies there are, the newest last
+
+`caracole backup` exits 1 when there is no room for a copy, or the copy fails
+its check. To put a copy back, stop caracole, take the database's `-wal` and
+`-shm` files away with it, and copy the backup into its place:
+[deploy.md](deploy.md#restoring-the-database) says how on a server.
+
+### The service's library, and your home's
+
+caracole started with no `--config` and no `CARACOLE_CONFIG` uses its home
+folders (`~/.local/state/caracole`, `~/Tabs`; see [Configure](#configure)). On
+a machine that runs caracole as a service, whose units and `sudo caracole-admin`
+name its config, those are another library than the service's: an index built
+from a shell, or from a checkout's dev shell, would land in the home database,
+days of requests the service never sees. The service leaves a marker for it,
+`/etc/caracole/service`, readable by everyone: the NixOS module writes it, and
+so do [deploy.md](deploy.md)'s Ubuntu steps. It names the service's folders:
+
+```toml
+state_dir = "/var/lib/caracole/state"
+library_dir = "/var/lib/caracole/library"
+```
+
+Where it is, caracole on its home defaults:
+
+- **builds no index**: `caracole run`, `index build`, `index refresh`,
+  `gtptabs`, `musescore`, `harptabs --index`, `gametabs --index` and `lacuerda
+  --index` exit 2 before they write or ask anything, naming both places, with
+  the two ways on: `sudo caracole-admin gametabs --index` builds the service's,
+  `caracole --home gametabs --index` the home one all the same;
+- **warns once** before any other command writes or sends a request (as it
+  takes caracole's lock, or as `caracole add` writes its line), naming both
+  places and the `sudo caracole-admin` line for the service, then goes on;
+  `caracole serve` warns as it starts, and its commands, on the same folders,
+  say nothing more;
+- **says nothing** for a command that only reads: `search`, `index stats`,
+  `versions`, `songbook list` and `show`, `backup --list`, `remove --list`,
+  `match --dry-run`.
+
+`--home`, a root option (`caracole --home COMMAND`), says the home folders are
+meant: no warning, no refusal. A config named, by `--config` or
+`CARACOLE_CONFIG`, is never warned about, and neither are home folders that are
+the service's own (the marker's `state_dir`). An index already built in the
+home database moves into the service's with the two commands below.
+
+### caracole index export and merge
+
+    caracole index export FILE [--site SITE]...   # the site indexes into a new SQLite file
+    caracole index merge FILE [--site SITE]...    # what FILE read more recently, into this database
+
+The sites are `ug`, `lacuerda`, `gtptabs`, `musescore`, `harptabs` and
+`gametabs`; with no `--site`, every one. **`caracole index export`** copies each
+site's tables into a file of its own, with the records of how far each index has
+got: Ultimate Guitar's index with its sitemaps' records (and when it was built
+and refreshed) and the tabs of the artist pages caracole read; LaCuerda's
+listings, artist pages and search answers; the sitemaps of gtptabs.com,
+MuseScore, harptabs.com and gametabs.net; harptabs.com's artist pages and
+gametabs.net's game pages. Nothing of your songs. It reads the database as it
+stands at one moment, takes no lock (so it runs beside a nightly run), and
+writes no file over another: name a new one.
+
+**`caracole index merge`** takes caracole's lock (it waits for a run) and first
+checks the file: an export, of the same schema version as this database, whose
+tables have its columns. Else it exits 2, changing nothing. Then, a site at a
+time, it takes what the file read more recently:
+
+- a sitemap, or a LaCuerda listing page, the file read or found unchanged later
+  than the database did, or one the database never read, replaces the
+  database's rows of it and its record, as reading it again would; new
+  Ultimate Guitar tabs mark the songs they are for to be fetched again, as a
+  refresh does;
+- a harptabs.com artist page or a gametabs.net game page the file read later,
+  or one the database never read, replaces its tabs; the tabs of Ultimate
+  Guitar's artist pages, a tab at a time, likewise;
+- LaCuerda's artist pages and search answers carry no time, so only those the
+  database lacks come in: the database's own stay;
+- how far each index has got moves on, never back: read whole, refreshed or
+  built at the later time.
+
+What the file lacks, or read earlier, stays: a merge never loses a page or a
+sitemap. Before it changes anything, it backs the database up into `backups/`
+(`caracole-2026-10-29T183000Z-before-merge.sqlite`, one of the three kept), and
+without room for that copy it merges nothing. Then the keys of the rows it took
+are made current, made again whole where another caracole made them. It says
+what each site took, and its tables' rows before and after:
+
+    Backed up the database to /var/lib/caracole/state/backups/caracole-2026-10-29T183000Z-before-merge.sqlite first.
+    Merged /var/lib/caracole/state/indexes.sqlite into /var/lib/caracole/state/caracole.sqlite:
+      Ultimate Guitar: nothing read more recently.
+      harptabs.com: 10,413 artist pages; harptabs_index 37,545 rows (unchanged), harptabs_artists 15 → 10,428, harptabs_artist_tabs 30 → 21,498.
+      gametabs.net: nothing read more recently.
+
+Merging the same file again changes nothing, and writes nothing, no backup
+either: `Nothing to merge: … holds everything … does, read as recently.` To move
+your home database's indexes into a service's, see
+[deploy.md](deploy.md#moving-an-index-into-the-service).
 
 ## Running it on a server
 
