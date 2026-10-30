@@ -158,7 +158,7 @@ def test_a_sanitized_icon_is_small():
 
 
 def test_every_source_has_a_name_a_tag_and_a_badge():
-    for key in ("ug", "lacuerda", "lrclib", "gtptabs", "musescore", "youtube", "auto", "inbox"):
+    for key in ("ug", "lacuerda", "lrclib", "megalobiz", "gtptabs", "musescore", "youtube", "auto", "inbox"):
         source = icons.SOURCES[key]
         assert source.key == key and source.name and source.tag and source.letters
         assert source.label == f"from {source.name}"
@@ -267,7 +267,7 @@ def test_each_site_is_asked_with_its_own_client_and_no_glyph_is_fetched(conn, tm
     assert sorted(run.fetched) == ["lacuerda", "ug"]
     assert lacuerda.asked == ["acordes.lacuerda.net/favicon.ico"]
     # The rest have no client this time: they wait, unmarked, for one that has.
-    assert sorted(run.waiting) == ["gametabs", "gtptabs", "harptabs", "lrclib", "musescore", "youtube"]
+    assert sorted(run.waiting) == ["gametabs", "gtptabs", "harptabs", "lrclib", "megalobiz", "musescore", "youtube"]
 
 
 HOME = b"""<!doctype html><html><head><title>MuseScore</title>
@@ -407,6 +407,38 @@ def test_the_sources_in_use_are_those_the_library_has_something_from(conn):
     assert icons.sources_in_use(conn) == {"ug", "auto", "lrclib", "musescore"}
 
 
+def megalobiz_lyrics(conn, song):
+    from caracole.lyrics import Lyrics
+    from caracole.songs import update_song
+
+    lyrics = Lyrics(plain="Una línea", synced="[00:01.00]Una línea", instrumental=False, duration=391.0,
+                    lrclib_id=None, raw={"id": 24519}, provider="megalobiz",
+                    url="https://megalobiz.com/lrc/24519/hotel-california")
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json())
+
+
+def test_lyrics_come_from_the_site_that_answered(conn):
+    from conftest import add_song
+
+    from caracole.songs import update_song
+
+    theirs, lrclibs = add_song(conn, "Eagles", "Hotel California"), add_song(conn, "Eagles", "Desperado")
+    megalobiz_lyrics(conn, theirs)
+    update_song(conn, lrclibs.id, lyrics_status="found")
+    kept = icons.kept_sources(conn)
+    assert [icons.source_of(name, kept.get(theirs.id, {})) for name in ("lyrics.txt", "lyrics.lrc")] == [
+        "megalobiz", "megalobiz"]
+    assert icons.source_of("lyrics.txt", kept.get(lrclibs.id, {})) == "lrclib"
+    assert icons.sources_in_use(conn) == {"megalobiz", "lrclib"}
+
+
+def test_lyrics_from_megalobiz_alone_put_no_lrclib_mark_in_use(conn):
+    from conftest import add_song
+
+    megalobiz_lyrics(conn, add_song(conn, "Eagles", "Hotel California"))
+    assert icons.sources_in_use(conn) == {"megalobiz"}
+
+
 def test_an_auto_sheet_made_from_youtube_audio_comes_from_youtube(conn, cfg):
     # autochords/run.py keeps the video in the auto sheet's version when its audio came from YouTube
     # (youtube_fetch.py); a purchase's auto sheet is the audio model's alone.
@@ -478,6 +510,7 @@ def icon_sites():
         "ug": Site("ug", {"/favicon.ico": (200, png(32))}),
         "lacuerda": Site("lacuerda", {"/favicon.ico": (200, ico((32, bmp_image(32))))}),
         "lrclib": Site("lrclib", {"/favicon.ico": (200, ico((16, bmp_image(16)), (32, bmp_image(32))))}),
+        "megalobiz": Site("megalobiz", {"/favicon.ico": (200, png(32))}),
         "gtptabs": Site("gtptabs", {"/favicon.ico": (200, ico((16, bmp_image(16))))}),
         "musescore": Site("musescore", {"/favicon.ico": (403, b"Just a moment...")}),
         "youtube": Site("youtube", {"/favicon.ico": (200, ico((16, bmp_image(16))))}),
@@ -517,7 +550,8 @@ def test_caracole_icons_fetches_what_is_missing_and_rewrites_the_pages(tmp_path,
     assert "MuseScore blocked caracole" in out
     assert "index.html" in out and (tmp_path / "lib" / "index.html").is_file()
     assert sorted(p.name for p in (tmp_path / "cache" / "icons").iterdir()) == [
-        "gametabs.png", "gtptabs.png", "harptabs.png", "lacuerda.png", "lrclib.png", "ug.png", "youtube.png"]
+        "gametabs.png", "gtptabs.png", "harptabs.png", "lacuerda.png", "lrclib.png", "megalobiz.png", "ug.png",
+        "youtube.png"]
     conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     assert is_cooling(conn, "musescore", datetime.now(UTC))
     conn.close()

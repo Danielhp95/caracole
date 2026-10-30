@@ -106,3 +106,17 @@ def test_the_misses_are_read_under_each_steps_own_prefix(module):
 
     prefix = importlib.import_module(f"caracole.{module}").CHECKED_PREFIX
     assert prefix in song_sites.CHECKED.values()
+
+
+def test_lyrics_from_megalobiz_leave_lrclib_with_nothing_timed(conn, cfg):
+    # Megalobiz's lyrics show on the song's card (its Lyrics tile links to their page), not as a mark of the line;
+    # LRCLIB's mark never claims lyrics it didn't give.
+    from caracole.lyrics import Lyrics
+
+    s = add_song(conn, "Eagles", "Hotel California")
+    update_song(conn, s.id, lyrics_status="found", lyrics_json=Lyrics(
+        plain="x", synced="[00:01.00]x", instrumental=False, duration=None, lrclib_id=None, provider="megalobiz",
+        url="https://megalobiz.com/lrc/1/x").to_json(), lyrics_at="2026-10-15T03:30:00Z")
+    sites = sites_of(conn, cfg, s)
+    assert "megalobiz" not in sites
+    assert sites["lrclib"] == ("none", "LRCLIB: nothing timed for it (looked 2026-10-15)")

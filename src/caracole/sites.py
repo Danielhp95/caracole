@@ -54,6 +54,10 @@ SITES: tuple[Site, ...] = (
          "Its robots.txt is empty: nothing is closed. caracole keeps its own pace all the same."),
     Site("lrclib", "Lyrics, many synced to the music", "lrclib.net", (),
          "An API with no robots rules: nothing is closed to caracole.", asked="Asked song by song"),
+    Site("megalobiz", "Timed lyrics, where LRCLIB has none", "megalobiz.com", ("megalobiz.com",),
+         "Its official API has no robots rules; its site closes only accounts and editors. caracole keeps the "
+         "API's fair use: your songs alone, its limits, and each song's lyrics links back to its page.",
+         asked="Asked song by song"),
     Site("gtptabs", "Guitar Pro files", "gtptabs.com", ("gtptabs.com",),
          "Closes its Russian half, its search and its storage (an artist's “Download all”).",
          (("/ru/", "the Russian half of the site"), ("/search/", "its search"),
@@ -304,7 +308,7 @@ def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
             beside = sum(max(len((c.get("versions") or {}).get("list") or []) - 1, 0) for c in mine)
             detail = f"+ {beside:,} other versions kept beside them" if beside else None
         return {"count": count, "unit": _unit(count, _SHEETS[key]), "songs": count, "detail": detail}
-    if key == "lrclib":
+    if key in ("lrclib", "megalobiz"):  # each song's lyrics are one site's (icons.kept_sources)
         names = [{f.get("name") for f in c.get("files") or [] if f.get("source") == key} for c in cards]
         mine = [n for n in names if n & set(_LYRICS)]
         synced = sum(1 for n in mine if "lyrics.lrc" in n)

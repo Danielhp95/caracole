@@ -255,7 +255,9 @@ const caracoleCard = (icons, rows) => {
       if (chips.length === 1 && chips[0].fixed) {
         const c = chips[0];
         row.appendChild(el("span", "lead", "From"));
-        const one = el("span", "vchip one");
+        // A source that asks a link back to its page (``href``: Megalobiz's lyrics) is that link.
+        const one = c.href ? anchor(c.href, "vchip one", { external: true }) : el("span", "vchip one");
+        if (c.href) one.setAttribute("aria-label", t.name + ": " + nameOf(c.source) + ", its page there");
         const mark = sourceMark(c.source);
         if (mark) one.appendChild(mark);
         one.appendChild(el("span", "vchip-name", nameOf(c.source)));
@@ -389,7 +391,7 @@ const caracoleCard = (icons, rows) => {
       made.push(t);
     }
 
-    // Lyrics, plain and timed: LRCLIB's.
+    // Lyrics, plain and timed: LRCLIB's, or Megalobiz's, whose chip links to their page there (``lyricsFrom``).
     const lyrics = LYRICS.map(named).filter(Boolean);
     if (lyrics.length) {
       lyrics.forEach(claim);
@@ -399,9 +401,11 @@ const caracoleCard = (icons, rows) => {
       if (plain) downloads.push(downloadLink(plain, "Text", "Download the lyrics of " + title));
       if (timed) downloads.push(downloadLink(timed, "Timed (.lrc)", "Download the timed lyrics of " + title));
       const source = lyrics[0].source;
+      const from = s.lyricsFrom && s.lyricsFrom.source === source && typeof s.lyricsFrom.href === "string"
+        ? s.lyricsFrom.href : null;
       made.push({ kind: "lyrics", glyph: "lyrics", name: "Lyrics", open: { href: lyrics[0].href },
         said: "Open the lyrics of " + title, from: timed ? "synced to the recording" : "plain", lead: "From",
-        chips: source ? [{ source, count: 1, fixed: true }] : [], downloads });
+        chips: source ? [{ source, count: 1, fixed: true, href: from }] : [], downloads });
     }
 
     // Scores you filed.

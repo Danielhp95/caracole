@@ -66,6 +66,35 @@ def version(conn, song, tab_id, *, slot="sheet", kind="chords", raw=None, ver=1,
 # --- the data ------------------------------------------------------------------------
 
 
+def test_lyrics_from_megalobiz_link_back_to_its_page(conn, cfg):
+    # Megalobiz's fair use: a link to the record's page wherever its lyrics are shown. The card's Lyrics tile has it.
+    from caracole.lyrics import Lyrics
+
+    theirs, lrclibs = add_song(conn, "Eagles", "Hotel California"), add_song(conn, "Eagles", "Desperado")
+    lyrics = Lyrics(plain="Una línea", synced="[00:01.00]Una línea", instrumental=False, duration=391.0,
+                    lrclib_id=None, raw={}, provider="megalobiz", url="https://megalobiz.com/lrc/24519/hotel-california")
+    update_song(conn, theirs.id, lyrics_status="found", lyrics_json=lyrics.to_json())
+    update_song(conn, lrclibs.id, lyrics_status="found",
+                lyrics_json=Lyrics(plain="x", synced=None, instrumental=False, duration=None, lrclib_id=1).to_json())
+    put(cfg, theirs, "lyrics.txt", "lyrics.lrc")
+    put(cfg, lrclibs, "lyrics.txt")
+    songs = songs_of(page(conn, cfg))
+    card = songs[theirs.display]
+    assert card["lyricsFrom"] == {"source": "megalobiz", "href": "https://megalobiz.com/lrc/24519/hotel-california"}
+    assert {f["name"]: f["source"] for f in card["files"]} == {"lyrics.txt": "megalobiz", "lyrics.lrc": "megalobiz"}
+    assert songs[lrclibs.display]["lyricsFrom"] is None
+
+
+def test_a_lyrics_page_off_megalobizs_site_is_no_link(conn, cfg):
+    from caracole.lyrics import Lyrics
+
+    song = add_song(conn, "Eagles", "Hotel California")
+    lyrics = Lyrics(plain="x", synced="[00:01.00]x", instrumental=False, duration=None, lrclib_id=None,
+                    provider="megalobiz", url="http://elsewhere.example/lrc/1")
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=lyrics.to_json())
+    assert songs_of(page(conn, cfg))[song.display]["lyricsFrom"] is None
+
+
 def test_every_song_is_in_the_json_with_its_status_and_facts(conn, cfg):
     s1 = add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-01T00:00:00Z")
     s2 = add_song(conn, "Radiohead", "Creep - Remastered 2009", added_at="2026-10-05T00:00:00Z")

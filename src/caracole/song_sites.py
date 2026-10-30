@@ -6,7 +6,8 @@ Every site caracole asks that is on (``shown``), in one order (``ORDER``), is on
   LaCuerda's sheets caracole met, LRCLIB's lyrics or its word that the song is an instrumental, MuseScore's index a
   page of its title (a possible match), YouTube the audio of its auto sheet;
 - ``none``: it was asked and had nothing: UG's index matched nothing (``not_found``), LaCuerda was asked
-  (``lacuerda_checked_at``), LRCLIB's lyrics missing, the misses of gtptabs.com, harptabs.com and gametabs.net (kv
+  (``lacuerda_checked_at``), LRCLIB's lyrics missing (or none timed, where Megalobiz's came: its lyrics show on the
+  song's card, not as a mark), the misses of gtptabs.com, harptabs.com and gametabs.net (kv
   ``<site>:checked:<song id>``, which a song with a file from there never reads as one), MuseScore's index read and no
   page of its title, nothing on YouTube that fits;
 - ``unasked``: not asked yet: the nightly run gets there.
@@ -82,7 +83,9 @@ def song_sites(song: Song, sites: tuple[str, ...], *, origins: Mapping[str, str]
             elif song.lacuerda_checked_at:
                 state, looked = NONE, song.lacuerda_checked_at
         elif site == "lrclib":
-            if song.lyrics_status in ("found", "instrumental"):
+            if origins.get("lyrics.txt", "lrclib") != "lrclib":  # another site's lyrics: LRCLIB had none timed
+                state, looked = NONE, song.lyrics_at
+            elif song.lyrics_status in ("found", "instrumental"):
                 state = HAVE
             elif song.lyrics_status == "missing":
                 state, looked = NONE, song.lyrics_at
@@ -110,6 +113,8 @@ def _said(site: str, state: str, looked: str | None, song: Song) -> str:
         if site == "musescore":
             return f"{name}: a possible match, by its title"
         return f"{name}: has it"
+    if state == NONE and site == "lrclib" and song.lyrics_status == "found":
+        return f"{name}: nothing timed for it" + (f" (looked {looked[:10]})" if looked else "")
     if state == NONE:
         return f"{name}: nothing for it" + (f" (looked {looked[:10]})" if looked else "")
     if site == "ug" and song.match_decision == "review":

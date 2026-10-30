@@ -127,6 +127,27 @@ def test_tiles_in_order_with_their_open_links(conn, cfg, tmp_path):
     assert served["said"] == "Open the Guitar Pro tab of Hotel California"
 
 
+def test_lyrics_from_megalobiz_link_back_to_their_page_from_the_tile(conn, cfg, tmp_path):
+    # Megalobiz's fair use asks a link to the record's page wherever its lyrics show: the Lyrics tile's source is it.
+    from caracole.lyrics import Lyrics
+    from caracole.songs import update_song
+
+    song = hotel(conn, cfg)
+    url = "https://megalobiz.com/lrc/24519/hotel-california"
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=Lyrics(
+        plain="x", synced="[00:01.00]x", instrumental=False, duration=None, lrclib_id=None, provider="megalobiz",
+        url=url).to_json())
+    script = """
+    openCard("Hotel California");
+    const chip = lineOf("Hotel California").querySelector(".tile-lyrics .tile-versions .vchip");
+    note("chip", { tag: chip.tagName.toLowerCase(), href: chip.getAttribute("href"), target: chip.target,
+                   rel: chip.rel, said: chip.getAttribute("aria-label"), name: text(chip.querySelector(".vchip-name")) });
+    """
+    chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
+    assert chip == {"tag": "a", "href": url, "target": "_blank", "rel": "noopener noreferrer",
+                    "said": "Lyrics: Megalobiz, its page there", "name": "Megalobiz"}
+
+
 def test_a_tab_of_game_music_is_a_tile_of_its_own_opened_as_text(conn, cfg, tmp_path):
     song = add_song(conn, "Hollow Knight", "Resting Grounds")
     for number in (1, 2):

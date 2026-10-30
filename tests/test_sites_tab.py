@@ -21,7 +21,7 @@ from conftest import add_song
 from test_library_page_songbooks import sha
 
 NOW = datetime(2026, 10, 29, 3, 41, tzinfo=UTC)
-ORDER = ["ug", "lacuerda", "lrclib", "gtptabs", "musescore", "harptabs", "gametabs", "youtube"]
+ORDER = ["ug", "lacuerda", "lrclib", "megalobiz", "gtptabs", "musescore", "harptabs", "gametabs", "youtube"]
 
 
 def figures(conn, cfg):
@@ -78,7 +78,7 @@ def test_the_written_file_draws_the_ledger(conn, cfg):
     assert out["sites"] == ORDER
     assert "2 songs" in out["ug"] and "1 sheet" in out["ug"] and "58 / 60" in out["ug"] and "OK" in out["ug"]
     assert out["icon"] is True
-    assert "8 sites" in out["head"] and "58 requests" in out["head"]
+    assert "9 sites" in out["head"] and "58 requests" in out["head"]
 
 
 @in_chromium

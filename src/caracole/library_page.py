@@ -293,7 +293,7 @@ from caracole.icons import kept_sources, page_icons, source_of
 from caracole.inbox import SCORE_EXTENSIONS, guitar_files, harmonica_page
 from caracole.inline import json_block, sha256_source
 from caracole.keys import SongKey, key_name, song_key
-from caracole.library import song_dir, write_atomic
+from caracole.library import lyrics_from, song_dir, write_atomic
 from caracole.library_assets import BASE_STYLE, PICKER_STYLE, ROWS_SCRIPT, ROWS_STYLE  # noqa: F401
 from caracole.library_assets import read as read_asset
 from caracole.musescore import song_pages
@@ -874,6 +874,7 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "key_source": key.source if key else None,
         "transpose": transpose,  # what its PDF is moved by (render.pdf_transpose): [version] wins over [transpose]
         "lyrics": song.lyrics_status,
+        "lyricsFrom": lyrics_from(song),  # the page its lyrics' site asks a link to: its card's Lyrics tile has it
         "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
         "files": files,
         "instruments": instruments_of(names, ukulele=ukulele),  # what it holds for one instrument, its line's marks

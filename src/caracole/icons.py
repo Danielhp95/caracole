@@ -1,7 +1,7 @@
 """Where a sheet, a tab or a file came from, shown by its site's own icon (index.html, search).
 
 Each source (``SOURCES``) is a value of ``versions.provider`` ("ug", "lacuerda", "gtptabs",
-"harptabs", "gametabs", "inbox", "auto"), LRCLIB for the lyrics, or YouTube for an auto sheet made from the audio
+"harptabs", "gametabs", "inbox", "auto"), LRCLIB or Megalobiz for the lyrics, or YouTube for an auto sheet made from the audio
 caracole took from there. A site's icon is its favicon, fetched once
 (``fetch_icons``) and kept in ``cache_dir/icons/<source>.png``; the page inlines it as a
 ``data:`` URI, so index.html still loads nothing from the network. A source with no icon
@@ -101,6 +101,7 @@ SOURCES: Mapping[str, Source] = {
         _site("ug", "Ultimate Guitar", "UG", "UG", "https://www.ultimate-guitar.com/"),
         _site("lacuerda", "LaCuerda", "LaCuerda", "LC", "https://acordes.lacuerda.net/"),
         _site("lrclib", "LRCLIB", "LRCLIB", "LR", "https://lrclib.net/"),
+        _site("megalobiz", "Megalobiz", "Megalobiz", "MZ", "https://megalobiz.com/"),
         _site("gtptabs", "gtptabs.com", "gtptabs", "GT", "https://gtptabs.com/"),
         _site("musescore", "MuseScore", "MuseScore", "MS", "https://musescore.com/"),
         _site("harptabs", "harptabs.com", "harptabs", "HT", "https://www.harptabs.com/"),
@@ -121,7 +122,8 @@ SHEETS = SHEET_FILE_NAMES  # a song's sheet, the human one first
 def kept_sources(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     """Where each kept file came from, by song and file name: its version's provider; YouTube for
     an auto sheet made from audio caracole took from there (autochords/run.py keeps the video in
-    its version's ``raw``), a purchase's being the audio model's alone."""
+    its version's ``raw``), a purchase's being the audio model's alone; and the lyrics files of a song
+    whose lyrics another site than LRCLIB gave (``Lyrics.provider``: Megalobiz's)."""
     found: dict[int, dict[str, str]] = {}
     for song_id, name, provider, from_youtube in conn.execute(
         "SELECT f.song_id, f.name, v.provider, "
@@ -129,12 +131,25 @@ def kept_sources(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
         "FROM files f JOIN versions v ON v.id = f.version_id"
     ):
         found.setdefault(song_id, {})[name] = YOUTUBE if provider == AUTO and from_youtube else provider
+    for song_id, provider in _lyrics_providers(conn):
+        if provider != LYRICS:
+            found.setdefault(song_id, {}).update(dict.fromkeys(_LYRICS_FILES, provider))
     return found
+
+
+def _lyrics_providers(conn: sqlite3.Connection) -> list[tuple[int, str]]:
+    """The site each found song's lyrics came from, by song id: LRCLIB's for lyrics that name none (stored before
+    caracole asked another site), and a provider caracole has no source for counts as LRCLIB's too."""
+    rows = conn.execute(
+        "SELECT id, CASE WHEN json_valid(lyrics_json) THEN json_extract(lyrics_json, '$.provider') END "
+        "FROM songs WHERE lyrics_status = 'found'"
+    ).fetchall()
+    return [(song_id, provider if provider in SOURCES else LYRICS) for song_id, provider in rows]
 
 
 def source_of(name: str, kept: Mapping[str, str]) -> str | None:
     """Where a song's file ``name`` came from, given its ``kept`` files' sources (``kept_sources``):
-    a file it made from one kept comes from where that did; lyrics from LRCLIB; an auto sheet
+    a file it made from one kept comes from where that did; lyrics from LRCLIB (``kept`` names another site's); an auto sheet
     from the audio model. None for a file of caracole's own (info.json), or one put there by hand."""
     if name in kept:
         return kept[name]
@@ -407,10 +422,9 @@ class IconRun:
 
 def sources_in_use(conn: sqlite3.Connection) -> set[str]:
     """The sources the library has something from, which its pages show a mark for: a version
-    of theirs (a kept file, a sheet or a tab picked), LRCLIB's lyrics, MuseScore's pages."""
+    of theirs (a kept file, a sheet or a tab picked), lyrics of theirs (LRCLIB's, Megalobiz's), MuseScore's pages."""
     used = {row[0] for row in conn.execute("SELECT DISTINCT provider FROM versions")}
-    if conn.execute("SELECT 1 FROM songs WHERE lyrics_status = 'found' LIMIT 1").fetchone():
-        used.add(LYRICS)
+    used |= {provider for _, provider in _lyrics_providers(conn)}
     if conn.execute("SELECT 1 FROM musescore_index LIMIT 1").fetchone():
         used.add("musescore")
     return used

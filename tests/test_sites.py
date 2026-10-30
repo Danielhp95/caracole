@@ -65,7 +65,14 @@ def test_the_rest_of_a_sites_closed_paths_are_counted():
 
 def test_only_the_sites_with_no_index_say_how_they_are_asked():
     assert {s.key: s.asked for s in SITES if s.asked} == {
-        "lrclib": "Asked song by song", "youtube": "Searched song by song"}
+        "lrclib": "Asked song by song", "megalobiz": "Asked song by song", "youtube": "Searched song by song"}
+
+
+def test_megalobiz_is_an_api_whose_fair_use_caracole_keeps():
+    megalobiz = site("megalobiz")
+    assert megalobiz.role.startswith("Timed lyrics") and megalobiz.domain == "megalobiz.com"
+    assert "no robots" in megalobiz.robots and "links back" in megalobiz.robots
+    assert megalobiz.paths == () and more_paths(megalobiz) == len(ROBOTS_DISALLOW["megalobiz.com"])
 
 
 # --- what each index holds ---------------------------------------------------------------------------------------
@@ -279,6 +286,15 @@ def test_lyrics_count_songs_and_the_synced_ones(conn, cfg):
         "count": 2, "unit": "lyrics", "songs": 2, "detail": "1 of them synced"}
 
 
+def test_megalobizs_lyrics_count_as_lrclibs_do(conn, cfg):
+    cards = [card(files=[("lyrics.txt", "megalobiz"), ("lyrics.lrc", "megalobiz")]),
+             card(files=[("lyrics.txt", "lrclib")])]
+    data = sites_data(conn, cfg, cards, NOW)
+    assert line(data, "megalobiz")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1,
+                                               "detail": "1 of them synced"}
+    assert line(data, "lrclib")["kept"]["count"] == 1
+
+
 def test_musescore_counts_its_links_and_the_songs_they_are_for(conn, cfg):
     cards = [card(muse=["https://musescore.com/song/a-1", "https://musescore.com/song/a-2"]), card()]
     assert line(sites_data(conn, cfg, cards, NOW), "musescore")["kept"] == {
@@ -349,7 +365,7 @@ def test_each_line_says_its_pace_its_robots_and_its_terms(conn, cfg):
     assert line(data, "harptabs")["terms"] == site("harptabs").terms
     assert line(data, "ug")["name"] == "Ultimate Guitar"
     assert line(data, "lrclib")["indexed"] is None and line(data, "lrclib")["asked"] == "Asked song by song"
-    assert data["totals"] == {"sites": 8, "indexed": 0, "kept": 0}
+    assert data["totals"] == {"sites": 9, "indexed": 0, "kept": 0}
 
 
 def test_a_partial_index_reads_indexing(conn, cfg):
