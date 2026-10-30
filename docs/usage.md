@@ -965,6 +965,10 @@ harptabs --index reads the rest.`, and once gametabs.net's sitemaps are read,
 how far its game index has got: `gametabs.net: 93 of 1658 game pages read, 512
 tabs; caracole gametabs --index reads the rest.`
 
+An index built in one database moves into another with **`caracole index
+export`** and **`caracole index merge`** (see [caracole index export and
+merge](#caracole-index-export-and-merge)).
+
 ### caracole match --dry-run
 
 Matching is local: no requests, and it takes seconds. `caracole match` matches
@@ -5547,7 +5551,60 @@ Where it is, caracole on its home defaults:
 `--home`, a root option (`caracole --home COMMAND`), says the home folders are
 meant: no warning, no refusal. A config named, by `--config` or
 `CARACOLE_CONFIG`, is never warned about, and neither are home folders that are
-the service's own (the marker's `state_dir`).
+the service's own (the marker's `state_dir`). An index already built in the
+home database moves into the service's with the two commands below.
+
+### caracole index export and merge
+
+    caracole index export FILE [--site SITE]...   # the site indexes into a new SQLite file
+    caracole index merge FILE [--site SITE]...    # what FILE read more recently, into this database
+
+The sites are `ug`, `lacuerda`, `gtptabs`, `musescore`, `harptabs` and
+`gametabs`; with no `--site`, every one. **`caracole index export`** copies each
+site's tables into a file of its own, with the records of how far each index has
+got: Ultimate Guitar's index with its sitemaps' records (and when it was built
+and refreshed) and the tabs of the artist pages caracole read; LaCuerda's
+listings, artist pages and search answers; the sitemaps of gtptabs.com,
+MuseScore, harptabs.com and gametabs.net; harptabs.com's artist pages and
+gametabs.net's game pages. Nothing of your songs. It reads the database as it
+stands at one moment, takes no lock (so it runs beside a nightly run), and
+writes no file over another: name a new one.
+
+**`caracole index merge`** takes caracole's lock (it waits for a run) and first
+checks the file: an export, of the same schema version as this database, whose
+tables have its columns. Else it exits 2, changing nothing. Then, a site at a
+time, it takes what the file read more recently:
+
+- a sitemap, or a LaCuerda listing page, the file read or found unchanged later
+  than the database did, or one the database never read, replaces the
+  database's rows of it and its record, as reading it again would; new
+  Ultimate Guitar tabs mark the songs they are for to be fetched again, as a
+  refresh does;
+- a harptabs.com artist page or a gametabs.net game page the file read later,
+  or one the database never read, replaces its tabs; the tabs of Ultimate
+  Guitar's artist pages, a tab at a time, likewise;
+- LaCuerda's artist pages and search answers carry no time, so only those the
+  database lacks come in: the database's own stay;
+- how far each index has got moves on, never back: read whole, refreshed or
+  built at the later time.
+
+What the file lacks, or read earlier, stays: a merge never loses a page or a
+sitemap. Before it changes anything, it backs the database up into `backups/`
+(`caracole-2026-10-29T183000Z-before-merge.sqlite`, one of the three kept), and
+without room for that copy it merges nothing. Then the keys of the rows it took
+are made current, made again whole where another caracole made them. It says
+what each site took, and its tables' rows before and after:
+
+    Backed up the database to /var/lib/caracole/state/backups/caracole-2026-10-29T183000Z-before-merge.sqlite first.
+    Merged /var/lib/caracole/state/indexes.sqlite into /var/lib/caracole/state/caracole.sqlite:
+      Ultimate Guitar: nothing read more recently.
+      harptabs.com: 10,413 artist pages; harptabs_index 37,545 rows (unchanged), harptabs_artists 15 → 10,428, harptabs_artist_tabs 30 → 21,498.
+      gametabs.net: nothing read more recently.
+
+Merging the same file again changes nothing, and writes nothing, no backup
+either: `Nothing to merge: … holds everything … does, read as recently.` To move
+your home database's indexes into a service's, see
+[deploy.md](deploy.md#moving-an-index-into-the-service).
 
 ## Running it on a server
 

@@ -154,6 +154,13 @@ def forget(conn: sqlite3.Connection, page: str) -> None:
     conn.execute("DELETE FROM ug_artist_tabs WHERE page = ?", (page,))
 
 
+def refile(conn: sqlite3.Connection, pages: Iterable[str]) -> None:
+    """File the tabs of these pages again (``_file``), as tabs merged from another database's index came in
+    (index_transfer.py)."""
+    for page in pages:
+        _file(conn, page)
+
+
 def _file(conn: sqlite3.Connection, page: str) -> None:
     """File the page's tabs: the artist under the index's key of most of the page's tabs the index lists, a
     song under the index's key of one of its tabs, and the rest under their names' slug keys."""

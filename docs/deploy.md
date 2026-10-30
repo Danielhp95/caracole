@@ -9,8 +9,9 @@ network. Two ways to set it up:
   module does.
 
 [The first run](#the-first-run), [Checking auto-chords](#checking-auto-chords),
-[Logs](#logs), [Restoring the database](#restoring-the-database) and [When
-something is wrong](#when-something-is-wrong) are the same for both. Either way the machine gets:
+[Logs](#logs), [Moving an index into the service](#moving-an-index-into-the-service),
+[Restoring the database](#restoring-the-database) and [When something is
+wrong](#when-something-is-wrong) are the same for both. Either way the machine gets:
 
 | What | Does |
 |---|---|
@@ -851,6 +852,26 @@ sudo caracole-admin -v run            # a run now, a line per request, on the te
 A block, a cooldown or a spent budget is no failure: the run exits 0 and the
 songs wait for the next one. A bug exits 1, and ntfy says the unit failed
 ([usage.md](usage.md#caracole-run)).
+
+## Moving an index into the service
+
+An index built by a `caracole` of your own, on your home folders
+(`~/.local/state/caracole`), moves into the service's database as a file:
+exported as you, put where user `caracole` can read it (the sandbox hides
+`/home` and `/tmp`), merged there, and deleted:
+
+```sh
+caracole index export /tmp/caracole-indexes.sqlite        # add --site harptabs, say, for one site's
+sudo install -o caracole -g caracole -m 0600 /tmp/caracole-indexes.sqlite /var/lib/caracole/state/indexes.sqlite
+sudo caracole-admin index merge /var/lib/caracole/state/indexes.sqlite
+sudo rm /var/lib/caracole/state/indexes.sqlite && rm /tmp/caracole-indexes.sqlite
+```
+
+The merge takes what the file read more recently, page by page and sitemap by
+sitemap, and leaves the rest as the service has it, after a copy of its
+database in `backups/` ([usage.md](usage.md#caracole-index-export-and-merge)).
+Both caracoles must be at the same schema version: the merge says so when they
+aren't, and changes nothing.
 
 ## Restoring the database
 

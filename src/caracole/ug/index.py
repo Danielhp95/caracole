@@ -70,10 +70,10 @@ SITEMAP_INDEX_URL = "https://www.ultimate-guitar.com/sitemap.xml"
 # The most URLs one sitemap may list (sitemaps.org); UG fills every numbered tab sitemap.
 SITEMAP_MAX_URLS = 50_000
 
-_SITEMAPS_KEY = "ug:sitemaps"
-_LISTED_KEY = "ug:index:listed"
-_BUILT_KEY = "ug:index:built_at"
-_REFRESHED_KEY = "ug:index:refreshed_at"
+SITEMAPS_KEY = "ug:sitemaps"
+LISTED_KEY = "ug:index:listed"
+BUILT_KEY = "ug:index:built_at"
+REFRESHED_KEY = "ug:index:refreshed_at"
 _SITEMAP_FILE = re.compile(r"sitemap(\d+|_last|_ukulele\d+)\.xml(?:\.gz)?")
 _NO_VALIDATORS = {"etag": None, "last_modified": None}
 
@@ -422,7 +422,7 @@ def _validators_of(entry: Mapping[str, Any]) -> dict[str, str | None]:
 
 
 def _indexed(conn: sqlite3.Connection) -> dict[str, dict[str, Any]]:
-    return kv_get_json(conn, _SITEMAPS_KEY, default={}) or {}
+    return kv_get_json(conn, SITEMAPS_KEY, default={}) or {}
 
 
 def _store(conn: sqlite3.Connection, name: str, rows: list[IndexRow], tabs: TabCounts,
@@ -436,7 +436,7 @@ def _store(conn: sqlite3.Connection, name: str, rows: list[IndexRow], tabs: TabC
         marked = mark_dirty_for_new(conn, new)
         indexed = _indexed(conn)
         indexed[name] = {**validators, "indexed_at": _iso(now), "rows": len(rows), "tabs": tabs.as_json()}
-        kv_set_json(conn, _SITEMAPS_KEY, indexed)
+        kv_set_json(conn, SITEMAPS_KEY, indexed)
     return new, marked
 
 
@@ -446,7 +446,7 @@ def _tab_sitemap_urls(conn: sqlite3.Connection, client: Client) -> list[str]:
     urls = tab_sitemaps(_locs(resp.content, SITEMAP_INDEX_URL, resp.status))
     if not urls:
         raise ProviderError("ug", SITEMAP_INDEX_URL, resp.status, "the sitemap index lists no tab sitemaps")
-    kv_set_json(conn, _LISTED_KEY, [sitemap_name(u) for u in urls])
+    kv_set_json(conn, LISTED_KEY, [sitemap_name(u) for u in urls])
     return urls
 
 
@@ -549,7 +549,7 @@ def build_index(conn: sqlite3.Connection, client: Client | None, now: datetime, 
     closes are dropped first.
     """
     dropped = len(_drop_closed(conn))
-    first = kv_get(conn, _BUILT_KEY) is None
+    first = kv_get(conn, BUILT_KEY) is None
     if from_dir is not None:
         files = _sitemap_files(Path(from_dir))
         names = tuple(name for name, _ in files)
@@ -583,8 +583,8 @@ def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, *,
     if progress is not None:
         progress(_plan(conn, client, urls, wanted, dropped))
     stats = _index_sitemaps(conn, client, wanted, now, progress)
-    kv_set(conn, _REFRESHED_KEY, _iso(now))
-    if kv_get(conn, _BUILT_KEY) is None:
+    kv_set(conn, REFRESHED_KEY, _iso(now))
+    if kv_get(conn, BUILT_KEY) is None:
         done = _indexed(conn)
         if all(sitemap_name(u) in done for u in urls):
             mark_built(conn, now)
@@ -594,7 +594,7 @@ def refresh_index(conn: sqlite3.Connection, client: Client, now: datetime, *,
 
 def mark_built(conn: sqlite3.Connection, now: datetime) -> None:
     """Record that the index holds every tab sitemap: a build finished, or a refresh read what one left."""
-    kv_set(conn, _BUILT_KEY, _iso(now))
+    kv_set(conn, BUILT_KEY, _iso(now))
 
 
 def index_state(conn: sqlite3.Connection) -> str:
@@ -606,7 +606,7 @@ def index_state(conn: sqlite3.Connection) -> str:
     """
     if conn.execute("SELECT 1 FROM ug_index LIMIT 1").fetchone() is None:
         return "empty"
-    return "complete" if kv_get(conn, _BUILT_KEY) is not None else "partial"
+    return "complete" if kv_get(conn, BUILT_KEY) is not None else "partial"
 
 
 def index_count(conn: sqlite3.Connection) -> int:
@@ -627,8 +627,8 @@ def index_stats(conn: sqlite3.Connection) -> dict[str, Any]:
         "artists": conn.execute("SELECT COUNT(DISTINCT artist_key) FROM ug_index").fetchone()[0],
         "newest_tab_id": conn.execute("SELECT MAX(tab_id) FROM ug_index").fetchone()[0],
         "sitemaps": len(_indexed(conn)),
-        "built_at": kv_get(conn, _BUILT_KEY),
-        "refreshed_at": kv_get(conn, _REFRESHED_KEY),
+        "built_at": kv_get(conn, BUILT_KEY),
+        "refreshed_at": kv_get(conn, REFRESHED_KEY),
     }
 
 
@@ -658,7 +658,7 @@ def index_coverage(conn: sqlite3.Connection) -> Coverage:
     tabs = sum((TabCounts.from_json(e["tabs"]) for e in entries.values() if isinstance(e.get("tabs"), dict)),
                TabCounts())
     known = tuple(sorted(entries, key=sitemap_order))
-    listed = kv_get_json(conn, _LISTED_KEY)
+    listed = kv_get_json(conn, LISTED_KEY)
     if not isinstance(listed, list):
         return Coverage(None, known, (), (), tabs)
     listed = tuple(str(n) for n in listed)

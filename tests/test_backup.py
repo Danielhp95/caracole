@@ -203,7 +203,7 @@ def test_a_run_ends_with_a_copy_which_the_log_names_and_the_summary_leaves_out(c
 
     backup_step = next(s for s in default_steps() if s.name == "backup")
     with caplog.at_level(logging.INFO, logger="caracole"):
-        report, out = run_steps(conn, cfg, step("sync"), backup_step)
+        report, _ = run_steps(conn, cfg, step("sync"), backup_step)
 
     [made] = backup.backups(cfg.state_dir)
     assert made.path.name == "caracole-2026-10-29T034512Z.sqlite"

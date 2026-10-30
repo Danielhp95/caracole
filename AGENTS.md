@@ -61,6 +61,7 @@ Shared by the steps and the commands:
 | Module | What for |
 |---|---|
 | config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone) |
+| index_transfer.py | `caracole index export` and `merge` (commands/index.py): every site's index (`SITES`: its tables and the kv records of its progress) into a new SQLite file, in one read transaction, with its `caracole_export` table (format, schema, sites); and such a file into the database under the lock, refused whole (`TransferError`, status 2) for another schema or other columns, else per site what the file read more recently: a sitemap or LaCuerda listing page by its record's time (UG's rows upserted as a refresh stores them, its new tabs' songs marked), harptabs.com's artist and gametabs.net's game pages by `read_at`, UG's artist pages' tabs a row at a time, LaCuerda's artist pages and search rows only where the database has none; progress records move on, never back; backed up first (backup.py, `before-merge`) only when something changes, so a second merge writes nothing; each index's `ensure_current_keys` after, whole where the file's keys record differs |
 | service.py | whether this machine runs caracole as a service: its marker, `/etc/caracole/service` (`MARKER`, a few lines of TOML naming its `state_dir` and `library_dir`), which nix/module.nix and deploy.md's Ubuntu steps write, and `CARACOLE_SERVICE_FILE` another, which conftest.py points at no file for every test; `elsewhere`, the service when a caracole with no config named (no `--config`, no `CARACOLE_CONFIG`) would use another database than its: then `_common.load_cfg` refuses a command that builds an index (`builds_index=`, its words: run, index build and refresh, gtptabs, musescore, harptabs, gametabs and lacuerda `--index`) with status 2, and any other says `warning` once before it writes (`_common.warn_elsewhere`, as it first takes the lock, or as add and serve write first), unless the root `--home`; the standard library alone |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
@@ -907,7 +908,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   `make_youtube` hold it until closed. Every command that asks UG, LRCLIB, LaCuerda,
   gtptabs.com, MuseScore or YouTube for pages or writes the library takes it;
   `search`, `match --dry-run`, `index stats`, `remove --list`, `songbook list`,
-  `songbook show` and `versions` (the list alone) only read and never wait.
+  `songbook show`, `versions` (the list alone), `backup --list` and `index export` (one read transaction)
+  only read and never wait.
   `add` writes its wanted.txt line first, and a `--lacuerda` pick (overrides.toml is in the
   library) only once it holds the lock, failing when the lock file can't be opened
   (`test_commands_sources.py::test_add_with_lacuerda_writes_no_pick_without_caracoles_lock`).
