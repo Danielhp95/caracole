@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from caracole.web.status import Line, SongFacts
 
 STATE_TEXT = {"queued": "Queued", "running": "Running", "done": "Done", "failed": "Failed",
-              "waiting": "Waiting", "skipped": "Skipped", "cancelled": "Cancelled"}
+              "waiting": "Waiting", "skipped": "Skipped", "cancelled": "Cancelled", "interrupted": "Interrupted"}
 # The next steps that are the request's way on; the others (Try again, Request by name…) are plain buttons.
 PRIMARY = frozenset({"Open", "Pick the match", "Get it from there", "Open songbook", "See what caracole search finds"})
 SEARCH = "See what caracole search finds"

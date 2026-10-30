@@ -130,8 +130,8 @@ whole number.
 it, `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/caracole`, else `~/.local/state/caracole`. `cache_dir` works the
 same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
-`~/.cache/caracole`. The state folder holds `caracole.sqlite` and
-`caracole.lock`: back it up, but don't sync it. The cache keeps every
+`~/.cache/caracole`. The state folder holds `caracole.sqlite`,
+`caracole.lock` and caracole serve's `requests.jsonl`: back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
 goes when the PDF is done, so caracole must be able to write there. Its
@@ -4311,7 +4311,24 @@ the library, sent as they are: they carry no badge.
       in a word and a sentence;
     - Make this my version's **Your version now** · **Open sheet** (Export
       PDF's Download and make it mine): never its song's request, whose line
-      on the library page stays its own.
+      on the library page stays its own;
+    - **Interrupted**: caracole serve stopped (a restart, a crash, Ctrl-C)
+      while the request ran, or before it ran: what it did by then, its
+      song's line says; **Try again** queues it again (a removal asks what
+      goes first). Its Output keeps what its command printed until then, the
+      step it was in marked Interrupted.
+
+  The tab keeps the last 100 requests of the last 30 days, and a restart
+  keeps them: caracole serve writes them to `requests.jsonl` in the state
+  folder as they go, a line each time one is queued, starts or ends, and
+  reads them back when it starts, its new requests numbered after them, so a
+  `job=N` link never names another. It is caracole serve's own file, which no
+  command reads or writes and which takes no lock: a JSON object a line, each
+  command's last 200 lines kept, each line of 1,000 characters at most. It is
+  written again whole when it grows (more than three lines a request kept, or
+  4 MB), through a temporary file renamed over it, so it never grows without
+  bound and a crash leaves it whole; a line it can't read (cut short by a
+  crash, say) is left out. Delete it to forget them all, the server stopped.
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and
@@ -4476,7 +4493,7 @@ a nightly run holding the lock lets it go first at its next pause. The
 queue holds 20 requests and one per song: asking again for a song gives its
 request, and Fetch it now on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
-loses no song. A songbook change waits in the queue like a request; the same
+loses no song, and the Requests tab keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the
 command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,

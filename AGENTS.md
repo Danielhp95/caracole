@@ -891,8 +891,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   song, as it is an `OverridesError` or a `SongbookFileError` in overrides.toml or
   songbooks.toml), and write one with `library.write_atomic`: a random temporary name opened
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
-  Nothing private or bulky goes there: the database, the lock, the HTTP
-  cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in
+  Nothing private or bulky goes there: the database, the lock, caracole serve's request history
+  (`requests.jsonl`, 0600), the HTTP cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in
   `state_dir` and `cache_dir`, and chordpro works on a copy in a 0700 folder under the cache
   (render.py). tests/test_library_safety.py. A removal deletes only what caracole
   wrote in the song's folder (`removal._caracoles`: kept files, the outputs of a kept sheet (its Traditional PDF among them) or
@@ -959,6 +959,15 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (the library page's script; without it, a page of its own), having asked what goes
   (`removal.plan_removal`, which only reads, and `removal.brief`); its job's song key is
   `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.
+  Beyond wanted.txt, the one thing it writes is its own request history, `state_dir/requests.jsonl`
+  (web/history.py), no table of caracole.sqlite: a file no command reads or writes, whose one writer
+  is caracole serve's queue, under the queue's own lock (`JobQueue._save`), so it needs caracole's
+  lock no more than wanted.txt does, and the database keeps its rule that every change to it is a
+  caracole command's. A line a request appended in one write as it changes; written again whole
+  (a temporary file, synced, renamed over it) when it starts and when it grows past three lines a
+  request kept or `MAX_BYTES`; a line it can't read skipped; the last `jobs.KEEP` (100) requests of
+  `DAYS` (30) read back, the next ids after theirs, one that waited or ran then `INTERRUPTED`, as is
+  one the server ends as it stops (`JobQueue.stop`): over, Try again queues it (test_web_history.py).
 - **wanted.txt is the one source of songs.** `sources.sync_sources` syncs it alone, and a song's
   album, duration, ISRC and variant are what its line says now, kept in its record alone
   (`songs.upsert_song`; `test_songs.py::test_a_song_keeps_what_its_line_says_in_its_own_record_alone`).

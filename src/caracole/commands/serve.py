@@ -7,7 +7,8 @@ whoever can reach it can read the library and request songs, so it belongs on a
 network you trust. A request runs the caracole command line, one command at a
 time, under caracole's lock. Its pages name the library, and a library that isn't
 the usual one (in a temporary folder, or ``--label``) carries a badge on them
-(library_name.py). The server code is imported inside the command, as every
+(library_name.py). Its requests' history is kept in the state folder, its
+own file, and read back when it starts again (web/history.py). The server code is imported inside the command, as every
 command module is imported on every start.
 """
 
@@ -58,6 +59,7 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
     from caracole.library_name import LABEL_LIMIT, SCRATCH, scratch_badge
     from caracole.web import server
     from caracole.web.app import WebApp
+    from caracole.web.history import FILE_NAME, History
     from caracole.web.jobs import CaracoleRunner, JobQueue
     from caracole.web.security import allowed_hosts
 
@@ -68,7 +70,9 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
     if label is not None and len(label.strip()) > LABEL_LIMIT:
         fail(f"--label: {LABEL_LIMIT} characters at most", 2)
     badge = scratch_badge(cfg, label=label, config_path=config_path)
-    app = WebApp(cfg, JobQueue(CaracoleRunner(config_path)), allowed=hosts, badge=badge)
+    # Its requests' history, its own file in the state folder, read back from the last server's (history.py)
+    queue = JobQueue(CaracoleRunner(config_path), history=History(cfg.state_dir / FILE_NAME))
+    app = WebApp(cfg, queue, allowed=hosts, badge=badge)
     typer.echo("It answers to " + ", ".join(sorted(hosts)) + " and any IP address; --allow-host adds a name.")
     if badge is not None:
         why = (": it serves a library in a temporary folder; --label sets another badge, --label \"\" none"
