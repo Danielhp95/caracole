@@ -885,7 +885,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (`test_removal.py::test_the_next_sync_brings_nothing_back_until_you_ask_for_the_song_again`,
   `test_songs.py::test_a_wanted_line_brings_a_removed_song_back_as_new`).
 - **Schema changes go through db.py**: bump `SCHEMA_VERSION` and add the script to
-  `_MIGRATIONS`. `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
+  `_MIGRATIONS`. A trigger states no conflict clause: an upsert's `DO UPDATE` aborts on a conflict in
+  any trigger it fires, whatever `OR IGNORE` says, so a trigger looks up what it would repeat (schema 14,
+  `test_index.py::test_a_tab_renamed_to_a_new_key_of_words_the_index_knows_is_stored`). `_migrate` copies an existing database to `caracole.sqlite.v<N>.bak`
   (`VACUUM INTO`, under a name of its own, then renamed), then runs each script in one `BEGIN IMMEDIATE`
   transaction with its `PRAGMA user_version` (a script never begins or commits one itself); one connection
   migrates at a time, of every thread and process (an flock on `caracole.sqlite.migrating`, the version read

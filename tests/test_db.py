@@ -744,3 +744,25 @@ def test_a_version_12_database_gains_gametabs_tables_and_keeps_its_rows(tmp_path
         assert c.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] == 0
     c.close()
     assert columns(path.with_name("caracole.sqlite.v12.bak"), "gametabs_index") == ([], 12)
+
+
+def test_a_version_13_database_stores_a_tab_renamed_to_a_new_key_of_words_it_knows(tmp_path):
+    # As the nightly run met it: the words' trigger left a DO UPDATE to abort on a word it already held.
+    path = tmp_path / "state" / "caracole.sqlite"
+    path.parent.mkdir()
+    old = sqlite3.connect(path)
+    old.executescript("".join(db._MIGRATIONS[n] for n in range(1, 14)) + "\nPRAGMA user_version = 13;")
+    old.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+                "VALUES (1, 'blur', 'hello-world', 'chords', '1', '2026-10-18T03:30:00Z', 'blur/1')")
+    old.commit()
+    old.close()
+
+    c = db.connect(path)
+    assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
+    c.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) "
+              "VALUES (1, 'blur', 'hello-moon-moon', 'chords', '1', '2026-10-19T03:30:00Z', 'blur/1') "
+              "ON CONFLICT (tab_id) DO UPDATE SET song_key = excluded.song_key")
+    assert c.execute("SELECT song_key FROM ug_index").fetchall()[0][0] == "hello-moon-moon"
+    assert key_words(c) == ["blur", "hello", "moon", "world"]
+    c.close()
+    assert columns(path.with_name("caracole.sqlite.v13.bak"), "ug_index")[1] == 13

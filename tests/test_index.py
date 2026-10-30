@@ -375,6 +375,15 @@ def test_upsert_rows_returns_new_ids_keeps_first_seen_and_dedupes(conn):
     ]
 
 
+def test_a_tab_renamed_to_a_new_key_of_words_the_index_knows_is_stored(conn):
+    # The upsert's DO UPDATE carries its own conflict policy, which takes the place of any a trigger it fires states.
+    upsert_rows(conn, [row(1, song="hello-world"), row(2, song="moon")], "40", NOW)
+    assert upsert_rows(conn, [row(1, song="hello-moon-moon-tide")], "40", LATER) == []
+    assert [r[2] for r in rows(conn)] == ["hello-moon-moon-tide", "moon"]
+    words = [r[0] for r in conn.execute("SELECT term FROM ug_key_words ORDER BY term")]
+    assert words == ["hello", "moon", "oasis", "tide", "world"]
+
+
 class Asked:
     """A connection that counts what it is asked: each ``execute`` and ``executemany``, a round trip each."""
 

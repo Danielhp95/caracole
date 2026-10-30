@@ -46,7 +46,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -515,9 +515,21 @@ CREATE INDEX IF NOT EXISTS gametabs_game_tabs_game ON gametabs_game_tabs(game);
 
 # Each script runs in one transaction with its PRAGMA user_version (see _migrate),
 # so a script must not BEGIN or COMMIT itself.
+# ug_keys_words again, with no conflict clause of its own: an upsert's DO UPDATE (ug/index.py ``upsert_rows``,
+# index_transfer.py) aborts on a conflict in any trigger it fires, whatever policy the trigger states, so a tab renamed
+# to a new key of a word the table holds failed the statement. The row's words are looked up instead, as ug_index's
+# triggers look up ug_keys (schema 5). No row changes.
+_SCHEMA_V14 = """
+DROP TRIGGER ug_keys_words;
+CREATE TRIGGER ug_keys_words AFTER INSERT ON ug_keys BEGIN
+  INSERT INTO ug_key_words(term) SELECT DISTINCT value FROM """ + _KEY_WORDS.format(key="new.key") + """
+  WHERE value != '' AND NOT EXISTS (SELECT 1 FROM ug_key_words WHERE term = value);
+END;
+"""
+
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
                7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11, 12: _SCHEMA_V12,
-               13: _SCHEMA_V13}
+               13: _SCHEMA_V13, 14: _SCHEMA_V14}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

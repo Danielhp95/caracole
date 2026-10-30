@@ -373,6 +373,17 @@ def test_ug_takes_each_sitemap_indexed_more_recently_and_marks_the_songs_its_new
     assert conn.execute("SELECT 1 FROM ug_artists WHERE artist_key = 'oasis'").fetchone() is not None
 
 
+def test_a_tab_the_file_names_anew_in_words_the_database_knows_is_merged(home, conn, tmp_path):
+    ug_sitemap(conn, "1", ["blur/hello-world-chords-1", "blur/moon-chords-2"], EARLY)
+    ug_listed(conn, ["1"], EARLY)
+    ug_sitemap(home, "1", ["blur/hello-moon-chords-1", "blur/moon-chords-2"], LATE)
+    ug_listed(home, ["1"], LATE)
+
+    merge(conn, export(home, tmp_path, ["ug"]), state=tmp_path / "state")
+
+    assert [r[2] for r in rows(conn, "ug_index")] == ["hello-moon", "moon"]
+
+
 def test_ug_artist_pages_tabs_are_taken_where_read_more_recently(home, conn, tmp_path):
     page = "https://www.ultimate-guitar.com/artist/634073"
     artist_tab(conn, page, 2001, "Banma", EARLY)
