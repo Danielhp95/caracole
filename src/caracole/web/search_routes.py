@@ -28,7 +28,8 @@
                           caracole read their page
     POST /lookup          look a song up now: the UG song (``ug``) or tab (``tab``), the LaCuerda
                           song (``lacuerda``), the harptabs.com tab (``harptabs``) or the gametabs.net
-                          tab (``gametabs``), you picked
+                          tab (``gametabs``), you picked; a song by its ``artist`` and ``title``, or one text,
+                          ``q``, read as song_names.py reads it
     POST /lacuerda/artist read a LaCuerda artist's page into its index, by ``slug`` or ``name``:
                           ``caracole lacuerda --artist`` queued, a request per slug tried, usually one
     POST /lacuerda/search ask LaCuerda's search for the songs of a query (``q``) and put them into its index:
@@ -156,6 +157,7 @@ from caracole.web.library_routes import (
     gametabs_field,
     harptabs_field,
     lacuerda_field,
+    named_form,
     wanted_line,
 )
 from caracole.web.pages import Refused
@@ -236,7 +238,9 @@ def queue_lookup(app: WebApp, form: dict[str, str]) -> tuple[Job, str]:
 def lookup_request(app: WebApp, form: dict[str, str]) -> tuple[dict[str, Any], str, str]:
     """``queue_lookup`` short of queueing: the arguments of its ``JobQueue.submit`` (wanted.txt written already, for
     a song new to the library), the song's name, and what to say when the queue is full. The library page's Add a
-    song (songbook_routes.py) queues it with the songbook's change, both or neither."""
+    song (songbook_routes.py) queues it with the songbook's change, both or neither. One text, ``q``, in place of
+    the artist and the title, is read as every page reads one (``library_routes.named_form``)."""
+    form = named_form(app, form)
     pick, ug = _pick(form)
     lacuerda = lacuerda_field(form)
     harptabs = harptabs_field(form)
@@ -359,15 +363,13 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     """The search's answer (``search.found``'s): your songs, the artists the query names, the index's
     songs, which leads, and the row Enter may act on (``best``: a song of yours by its id, or an
     Ultimate Guitar song by its keys; None for none). A song of your library comes as its card
-    has it (``_rows``). ``names``: the artist and the title the query names (``search.request_names``, the
-    channel of the YouTube video suggested for it a name it knows too), which the pages fill their form by name in
-    with."""
+    has it (``_rows``). ``names``: the artist and the title the query names (song_names.py ``read_names``, with the
+    YouTube video suggested for it), which the pages fill their form by name in with, and Make the sheet."""
     from caracole.search import (
         STRONG,
         LibraryHit,
         found,
         lacuerda_leads,
-        request_names,
         search_gametabs,
         search_gtptabs,
         search_harptabs,
@@ -377,8 +379,8 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
         search_removed,
         suggestions,
     )
+    from caracole.song_names import read_names
     from caracole.songs import list_songs
-    from caracole.youtube_names import clean_channel
 
     mine = search_library(conn, q, LIBRARY_HITS)
     # A song of yours by its title matches well: nothing to suggest, and no close spelling looked for.
@@ -428,9 +430,10 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     pick = None if best is None else (
         {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
     youtube = _youtube_suggestion(app, conn, q, mine, index_found, lc_artists, lacuerda)
+    # The video suggested: its channel may name the artist, and its title the song.
     video = (youtube or {}).get("video") or {}
-    channel = clean_channel(str(video.get("channel") or ""))  # the video suggested: its channel may name the artist
-    named = request_names(conn, q, songs, names=[channel] if channel else [])
+    named = read_names(conn, q, songs=songs,
+                       video=(str(video.get("title") or ""), str(video.get("channel") or "")) if video else None)
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": lead,
             "best": pick, "hint": hint, "progression": progression, "unseen": unseen,
             # the artist and the title the query names, which the request form is filled in with; None for none

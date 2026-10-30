@@ -211,16 +211,3 @@ def test_the_song_a_video_is_the_audio_or_the_paste_of(conn):
     assert song_of_video(conn, Overrides(youtube={song.key: VIDEO["id"]}), VIDEO["id"]).id == song.id
     kv_set_json(conn, f"youtube:{song.id}", {"video": VIDEO, "source": "pasted", "audio": "/x.m4a"})
     assert song_of_video(conn, Overrides(), VIDEO["id"]).id == song.id
-
-
-def test_an_artist_is_known_by_your_songs_and_the_offline_indexes(conn):
-    from conftest import add_song
-
-    from caracole.youtube_search import known_artist
-
-    assert not known_artist(conn, "Hyperfanes")
-    add_song(conn, "Hyperfanes", "Otra")
-    assert known_artist(conn, "Hyperfanes") and known_artist(conn, "hyperfanes")
-    conn.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen) "
-                 "VALUES (1, 'nick-cani', 'vegan-vikings', 'chords', '1', 'x')")
-    assert known_artist(conn, "Nick Cani") and not known_artist(conn, "Somos vikingos veganos")

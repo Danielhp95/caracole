@@ -277,6 +277,25 @@ def test_a_request_the_file_cant_hold_is_refused_and_nothing_is_written(app, cfg
     assert not cfg.wanted_file.exists() and queue.snapshot() == []
 
 
+def test_a_request_or_a_lookup_given_one_text_reads_its_names_as_every_page_does(app, conn, cfg, queue):
+    # ``q`` in place of an artist and a title: song_names.py reads it, as /api/search's names are read for the pages.
+    creep_index(conn)
+    assert post(app, "/request", {"q": "Silvana Estrada – Que problema"}).status == 303
+    assert post(app, "/lookup", {"q": "stone temple pilots plush"}, accept=JSON).status == 202
+    assert {s.args for j in queue.snapshot() for s in j.steps} == {
+        ("add", "--", "Silvana Estrada", "Que problema"), ("get", "--progress", "--", "stone temple pilots", "plush")}
+    assert cfg.wanted_file.read_text(encoding="utf-8").endswith(
+        "\nSilvana Estrada - Que problema\nstone temple pilots - plush\n")
+    # A text that doesn't say who its artist is: refused, nothing written. Given an artist and a title, ``q`` is
+    # nothing.
+    for path in ("/request", "/lookup"):
+        refused = post(app, path, {"q": "silvana estrada que problema"})
+        assert refused.status == 400 and "Artist - Title" in shown(refused)
+    assert post(app, "/request", {"q": "Que problema", "artist": "Nick Cani", "title": "Tregua"}).status == 303
+    assert len(queue.snapshot()) == 3 and "Nick Cani - Tregua" in cfg.wanted_file.read_text(encoding="utf-8")
+    assert post(app, "/request", {"q": "x" * 501}).status == 400
+
+
 def test_a_line_break_cant_add_a_second_song(app, cfg, queue):
     assert post(app, "/request", {"artist": "Radiohead", "title": "Creep\nOasis - Wonderwall"}).status == 303
     from caracole.wanted import parse_wanted

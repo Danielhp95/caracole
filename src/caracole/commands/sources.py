@@ -2,7 +2,8 @@
 
 wanted.txt is caracole's one source of songs. ``add_song`` is the one way a command adds
 a song: ``caracole add`` and ``caracole search --add`` both call it, and each says
-in its own words what it did. With ``--lacuerda`` (a LaCuerda song you picked, as
+in its own words what it did. One text, ``caracole add TEXT``, is read as the pages read a query (song_names.py,
+``_common.read_song_text``). With ``--lacuerda`` (a LaCuerda song you picked, as
 ``caracole search --add`` and caracole serve's Add for tonight's run pick one), the
 pick goes under ``[lacuerda]`` in overrides.toml too, for the nightly run to keep. It also matches the song against the offline
 index at once, as the nightly match step would, so a name that isn't quite
@@ -23,7 +24,17 @@ from typing import TYPE_CHECKING
 import typer
 
 from caracole import db
-from caracole.commands._common import LOCK_NAME, exclusive, fail, load_cfg, open_db, utcnow, warn, write_pages
+from caracole.commands._common import (
+    LOCK_NAME,
+    exclusive,
+    fail,
+    load_cfg,
+    open_db,
+    read_song_text,
+    utcnow,
+    warn,
+    write_pages,
+)
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -65,14 +76,15 @@ def register(app: typer.Typer) -> None:
         duration_ms = _duration_ms(duration)
         _lacuerda_pick(lacuerda)
         cfg = load_cfg(ctx)
-        if title is None:  # one text: "Artist - Title", else one name, which names no song
-            artist, sep, title = artist.partition(" - ")
-            if not sep and not any(c.isalnum() for c in artist):
+        if title is None:  # one text, read as the pages read a query (song_names.py); else one name, no song
+            if not any(c.isalnum() for c in artist):
                 fail("can't add this song: a song needs an artist and a title", 2)
-            if not sep:
+            named = read_song_text(cfg, artist)
+            if named is None:
                 from caracole.commands.search import offer_songs
 
                 offer_songs(cfg, " ".join(artist.split()), "add")
+            artist, title = named
         _add(cfg, artist, title, album, duration_ms, lacuerda)
 
     @app.command("sync")

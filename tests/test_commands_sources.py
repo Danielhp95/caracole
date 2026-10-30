@@ -389,6 +389,35 @@ def test_add_with_one_text_holding_a_dash_adds_the_song(tmp_path):
     assert blank.exit_code == 2 and "a song needs an artist and a title" in blank.output
 
 
+def test_add_with_one_text_reads_its_names_as_the_pages_do(tmp_path):
+    # song_names.py: an en or em dash as wanted.txt reads one, a known artist's whole name first, a fan's "Song -
+    # Band" turned round once the band is known; a song's title whole is one name, which adds nothing.
+    ug_index(tmp_path, (1, "stone-temple-pilots", "creep", "chords"), (2, "elvis-presley", "love-me-tender", "chords"),
+             *((70 + i, "hyperfanes", f"song-{i}", "chords") for i in range(5)),
+             *((80 + i, "love", f"song-{i}", "chords") for i in range(8)))
+    for one_name in ("Love Me Tender", "silvana estrada que problema"):
+        offered = run(tmp_path, "add", one_name)
+        assert offered.exit_code == 2 and f'"{one_name}" is one name' in offered.output, offered.output
+    dashed = run(tmp_path, "add", "Silvana Estrada – Que problema")
+    assert dashed.exit_code == 0, dashed.output
+    assert "Read “Silvana Estrada – Que problema” as Silvana Estrada - Que problema." in dashed.output
+    known = run(tmp_path, "add", "stone temple pilots plush")
+    assert known.exit_code == 0, known.output
+    assert "Read “stone temple pilots plush” as stone temple pilots - plush." in known.output
+    turned = run(tmp_path, "add", "Somos vikingos veganos - Hyperfanes")
+    assert turned.exit_code == 0, turned.output
+    # Your library knows her now, by two words: her next song is read so.
+    assert run(tmp_path, "add", "silvana estrada tregua").exit_code == 0
+    assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith(
+        "\nSilvana Estrada - Que problema\nstone temple pilots - plush\nHyperfanes - Somos vikingos veganos\n"
+        "Silvana Estrada - tregua\n")
+    plain = run(tmp_path, "add", "Radiohead - Creep")  # written as it is read: no line says how
+    assert plain.exit_code == 0 and "Read “" not in plain.output
+    # Two arguments are the names themselves, never read.
+    assert run(tmp_path, "add", "Somos vikingos veganos", "Hyperfanes").exit_code == 0
+    assert wanted_file(tmp_path).read_text(encoding="utf-8").endswith("\nSomos vikingos veganos - Hyperfanes\n")
+
+
 @pytest.mark.parametrize("artist", ["misc", "Unknown", "Various Artists"])
 def test_add_warns_when_the_artist_is_a_placeholder(tmp_path, artist):
     # The owner's wanted.txt has "misc - 斑马": no one's name, so nothing can be found by it.

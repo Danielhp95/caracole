@@ -370,7 +370,8 @@ that turn out to be one song (斑馬斑馬 and 斑马斑马, say) become one.
 ### caracole add
 
 `caracole add ARTIST TITLE [--album ALBUM] [--duration M:SS] [--lacuerda URL]` (or
-`caracole add "ARTIST - TITLE"`) appends the line
+`caracole add "ARTIST - TITLE"`, one text read as
+[below](#one-text-read-as-a-songs-name)) appends the line
 for you, then syncs the file at once and rewrites `_todo.md` and
 `index.html`:
 
@@ -444,8 +445,9 @@ A song you [removed](#caracole-remove) comes back with `caracole add`, as new:
 new; the next caracole run looks for it.`
 
 A song needs its artist: caracole looks it up by artist and title. Given one
-name with no " - " (`caracole add Wonderwall`), `caracole add` writes nothing
-and exits 2. It lists your songs of that title, then what
+text that doesn't say who its artist is (`caracole add Wonderwall`, or "Love Me
+Tender": see [below](#one-text-read-as-a-songs-name)), `caracole add` writes
+nothing and exits 2. It lists your songs of that title, then what
 `caracole search Wonderwall` lists first, five hits numbered as the search
 numbers them, each with its `caracole add "Oasis" "Wonderwall"` line (a hit
 scoring under 90 has none: it may well be another song), and
@@ -459,11 +461,75 @@ nothing can be found by it: `caracole add misc 斑马` adds the line, and warns
 that caracole may never find the song, and that `caracole search "斑马"` lists
 the songs of that title with their artists.
 
+### One text, read as a song's name
+
+`caracole add TEXT`, `caracole get TEXT` and every form caracole serve fills in
+from what you typed or pasted (the library page's request form and its Make the
+sheet, the lookup page's form by name, a pasted YouTube link's names, and
+`POST /request` or `POST /lookup` sent one text, `q`, in place of an artist and
+a title) read the artist and the title of one text the same way, on the server,
+so the same text gives the same names everywhere; no page splits a text itself.
+Two arguments, `caracole add ARTIST TITLE`, are the names themselves, never read.
+
+First, what a video's title adds to a song's name goes: a bracket of such words
+alone ("(Official Video)", "[Videoclip Oficial]", "(Letra)", "(Visualizer)"), a
+last part of them ("… | Official Video"), two or more of them at the end ("… Con
+Letra") or one of a format's ("HD", "4K", "MV"), and quotes around it.
+"(feat. …)", "(En Vivo)" and a title that ends with one such word ("Radio
+Video") stay. Then the first of these rules that reads the text names the song:
+
+1. **Artist - Title.** A dash with a space on each side (an en or em dash, "|",
+   "~" or "//" too), the first one, with words on both sides, whoever they are:
+   "Silvana Estrada – Que problema", "宋冬野 - 斑马斑马"; "Muse - Hysteria - Live"
+   is "Hysteria - Live" by Muse. Turned round when the second part is a known
+   artist and the first isn't, as in a fan's upload: "Somos vikingos veganos -
+   Hyperfanes" is Hyperfanes's song once caracole knows them.
+2. **A known artist first, or after "by".** The longest run of first words that
+   is a known artist's whole name, then the title: "silvana estrada que
+   problema", once caracole knows her; or "Que problema by Silvana Estrada".
+   Where both read a text, the artist of more words. Neither reads a song's
+   title whole, yours, Ultimate Guitar's or LaCuerda's: "Love Me Tender" is a
+   title, not "Me Tender" by Love, and so is "Stand by Me".
+3. **A video's channel.** A pasted video's title that neither reads is its
+   channel's song, the channel's name without "- Topic", VEVO or Official:
+   "Creep" from "Radiohead - Topic" is Radiohead's.
+4. **The video suggested for a search.** A query that neither reads, whose
+   suggested video is that very song (the video's title, read by these rules,
+   is the query's words), names the video's artist: "creep", when YouTube's
+   first video for it is Radiohead's "Creep".
+
+Else the text doesn't say who its artist is, and it is never cut at its first
+space ("Silvana" and "Estrada"): the command lists the songs of that name and
+adds or looks up nothing (exit 2, below), a page fills it in as the title (or as
+the artist's name, when an artist leads) for you to finish, and `/request` or
+`/lookup` refuses it.
+
+A known artist is one of your library's, as your library writes them ("bjork"
+is your Björk); the channel of the video the text is the title of, or of the
+video suggested for a search, as the channel writes it ("Silvana Estrada", for
+"silvana estrada que problema", when her own upload is YouTube's first video);
+or an artist of Ultimate Guitar's index (and the artist pages caracole read),
+LaCuerda's listings, gtptabs.com's or harptabs.com's, read locally, never asked
+of a site. A name of one word is weak proof: an index's needs five songs there
+("Que problema" is a title, though Ultimate Guitar has an artist Que, of one
+song), and your library's counts only once it is credible, when a song of
+theirs has a sheet from a site (not one auto-chords made), the library has two
+songs or more of theirs, or an index knows them too. So one mistaken line in
+wanted.txt, "Silvana - Estrada", makes no artist "Silvana" that would cut the
+next "silvana estrada que problema" at its first space.
+
+The commands say how they read a text, unless that is the text as written:
+
+    $ caracole add "Silvana Estrada – Que problema"
+    Read “Silvana Estrada – Que problema” as Silvana Estrada - Que problema.
+    Added Silvana Estrada - Que problema to wanted.txt; the next `caracole run` looks for it.
+
 ### caracole get
 
 `caracole get "ARTIST - TITLE"` (or `caracole get ARTIST TITLE`) is for the
-song you want to play now. One name alone (`caracole get Wonderwall`) looks
-nothing up and exits 2: like `caracole add`, it lists your songs of that
+song you want to play now; one text is read as
+[above](#one-text-read-as-a-songs-name). One that doesn't say who its artist is
+(`caracole get Wonderwall`) looks nothing up and exits 2: like `caracole add`, it lists your songs of that
 title and the offline index's songs, each scoring 90 or more with its
 `caracole get --ug oasis/wonderwall "Oasis - Wonderwall"` line. It does the nightly run's work for that song alone,
 at once, sheet first, and says where the sheet is the moment it is kept:
@@ -3987,7 +4053,8 @@ the library, sent as they are: they carry no badge.
   listed in place of the results. A query that finds nothing
   shows the same band and line as the library page, its row's
   Look up where a song's Get it is (the form under the results, filled in as
-  the library page's request form is, which shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
+  each answer is drawn, as the library page's request form is, until you type
+  into a field; it shows only then), Ask LaCuerda and the fold under its "⋯". A row's artist searches for
   them, as typing their name would. `/lookup?q=WORDS` opens it with
   that search, and a lookup posted without JavaScript lands there. Here your
   song keeps its own row, with Fetch again, and each site's row of it its own:
@@ -4006,17 +4073,15 @@ the library, sent as they are: they carry no badge.
   song has neither, and the file, which can ask nothing, never has them.
 - **Request a song.** Under the results, "Not in the list? Request it by
   name" (where they found nothing on the sites, the line's Request opens it) takes an artist, a title and, optionally, the album and the length,
-  filled in from what you searched until you type into a field yourself:
-  "Muse - Hysteria" is the artist and the title; with no dash, the longest run
-  of its first words that is an artist's whole name your library, Ultimate
-  Guitar's index, LaCuerda's, gtptabs.com's or harptabs.com's knows, or the
-  channel of the YouTube video suggested for it, is the artist, and the rest
-  the title ("Silvana Estrada Qué problema"), as is "Qué
-  problema by Silvana Estrada"; else an artist's name alone when an artist
-  leads, else all of it the title. A query is never cut at its first space: a
-  one-word name is an artist only of yours or with five songs or more on a
-  site ("Que problema" is a title, though Ultimate Guitar has an artist Que),
-  and a song's title whole is a title ("Love Me Tender"). The song goes into wanted.txt at once,
+  filled in from what you searched until you type into a field yourself, with
+  the artist and the title the search's answer reads in it (`/api/search`'s
+  `names`, read as [one text](#one-text-read-as-a-songs-name) is, with the
+  YouTube video suggested for the query): "Muse - Hysteria", "Silvana Estrada
+  Qué problema" once caracole knows her, "Qué problema by Silvana Estrada";
+  else all of it the artist's name when an artist leads, else the title, never
+  the query cut at its first space. `POST /request` (and `POST /lookup`) sent
+  one text, `q`, in place of the artist and the title reads it the same way, and
+  refuses one that doesn't say who its artist is. The song goes into wanted.txt at once,
   as `caracole add ARTIST TITLE` writes it (a song listed already is left as
   it is), then `caracole add` runs to put it in the library.
 - **A sheet from a YouTube video.** Where caracole can make chords of audio
@@ -4063,11 +4128,12 @@ the library, sent as they are: they carry no badge.
   them meanwhile). A line under the results says "Looking on YouTube…", then
   the video shows as a row: its thumbnail, its title (a link to it on
   YouTube), its channel and length, and **Make the sheet**, which opens the
-  request form filled in with what you searched ("Nick Cani - Vikingos
-  veganos", or "silvana estrada que problema" when the video is Silvana
-  Estrada's own channel's or an index knows her: the artist as the channel
-  writes it and the title, as above) and the video, for you to check
-  and send;
+  request form filled in with what you searched, read with the video
+  ("Nick Cani - Vikingos veganos"; "silvana estrada que problema" when the
+  video is Silvana Estrada's own channel's or an index knows her: the artist as
+  the channel writes it and the title; "creep" when the video is Radiohead's
+  "Creep": rule 4 of [one text](#one-text-read-as-a-songs-name)) and the video,
+  for you to check and send;
   nothing more goes until you press Request. A query is asked once in 30 days
   (its words in any order), and the row comes back for it with no request. At
   most 10 such searches an hour; none while YouTube cools down after a block;
@@ -4086,10 +4152,11 @@ the library, sent as they are: they carry no badge.
   YouTube cools down or after a failure in the hour), then the video, its
   **Artist** and **Title** guessed for you to check, and **Add and make the
   sheet**, which sends the request with the video (Getting the audio…, the
-  lyrics, the chords, the PDF). The guess: a title "Artist - Title" split there
-  (turned round when the second part is an artist your library or an index
-  knows, or the channel), else the channel as the artist (no "- Topic", VEVO,
-  Official) and the title without "(Official Video)", "[Letra]", "HD" and such.
+  lyrics, the chords, the PDF). The guess is the video's title read as
+  [one text](#one-text-read-as-a-songs-name) is, its channel the artist where
+  nothing else names one: "Estopa - Como Camarón [Videoclip Oficial] HD" is
+  Estopa's "Como Camarón", typed into either page's box as pasted, and "Creep"
+  from "Radiohead - Topic" is Radiohead's.
   A video caracole can't read now is offered with the names empty, and why;
   a song of yours with a sheet says so, with Open; where no sheet can be made,
   the panel says why. Enter goes to the panel. The request form's YouTube field

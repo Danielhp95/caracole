@@ -2,7 +2,8 @@
 
     GET  /, /index.html   the library page, with its forms (library_page, WebControls), and its line in the
                           log (page_log.py)
-    POST /request         a song for wanted.txt; with ``fetch``, looked up now too; with ``youtube``, its sheet
+    POST /request         a song for wanted.txt, its ``artist`` and ``title`` (or one text, ``q``, read as
+                          song_names.py reads it); with ``fetch``, looked up now too; with ``youtube``, its sheet
                           made from that YouTube video instead (youtube_routes.py)
     POST /fetch           look a song of the library up now, unless it needs review first
     GET  /favicon.ico     the pages' icon (page_icon.py), for a browser that asks for it by this name
@@ -36,6 +37,7 @@ if TYPE_CHECKING:
     from caracole.web.app import Request
 
 LIMITS = {"artist": 200, "title": 300, "album": 300, "duration": 12}  # characters
+TEXT_LIMIT = 500  # a request's one text, ``q``, in characters
 PICK_LIMITS = {"ug": 300, "tab": 600, "lacuerda": 600, "harptabs": 600, "gametabs": 600}
 
 
@@ -99,7 +101,9 @@ def icon() -> Response:
 def request(app: WebApp, form: dict[str, str]) -> Response:
     """A song for wanted.txt, as ``caracole add`` writes it, and its commands queued; with ``lacuerda``, the
     LaCuerda song you picked, which its command records for the nightly run (Add for tonight's run); with
-    ``youtube``, its sheet made from that YouTube video in place of a lookup (youtube_routes.py)."""
+    ``youtube``, its sheet made from that YouTube video in place of a lookup (youtube_routes.py). One text, ``q``,
+    in place of the artist and the title, is read as every page reads one (``named_form``)."""
+    form = named_form(app, form)
     if form.get("youtube", "").strip():
         from caracole.web.youtube_routes import sheet_from_youtube
 
@@ -137,6 +141,25 @@ def fetch(app: WebApp, form: dict[str, str]) -> Response:
     job, _ = app.submit(f"Fetch {song.display}", song.key, lookup_steps(song.artist, song.title), fetching=True,
                         display=song.display)
     return app.queued(job)
+
+
+def named_form(app: WebApp, form: dict[str, str]) -> dict[str, str]:
+    """``form`` with the artist and the title its one text ``q`` names (song_names.py ``read_names``, as the pages'
+    forms are filled in from a query), when it gives neither; as it is otherwise. Refused for a text too long, or one
+    that doesn't say who its artist is: nothing is written then."""
+    from caracole.song_names import read_names
+
+    text = " ".join(form.get("q", "").split())
+    if not text or form.get("artist", "").strip() or form.get("title", "").strip():
+        return form
+    if len(text) > TEXT_LIMIT:
+        raise Refused(400, "Too long", f"The text is too long: {TEXT_LIMIT} characters at most.")
+    with app.db() as conn:
+        named = read_names(conn, text)
+    if named is None or not all(named):
+        raise Refused(400, "Not a song", f"“{text}” doesn't say who the artist is: write it as “Artist - Title”, or "
+                                         "give the artist and the title.")
+    return {**form, "artist": named[0], "title": named[1]}
 
 
 def wanted_line(app: WebApp, form: dict[str, str]) -> tuple[WantedLine, str]:
