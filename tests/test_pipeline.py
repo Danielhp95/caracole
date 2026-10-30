@@ -243,7 +243,7 @@ def test_default_steps_are_in_plan_order():
 
     assert [s.name for s in default_steps()] == [
         "sync", "icons", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs", "gametabs",
-        "musescore", "youtube", "render", "todo",
+        "musescore", "youtube", "render", "todo", "backup",
     ]
     providers = {s.name: s.provider for s in default_steps()}
     assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"

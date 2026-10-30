@@ -207,6 +207,21 @@ def nothing(tmp_path, sites, conn) -> None:
     pass
 
 
+def an_export(tmp_path, sites, conn) -> None:
+    """An index export of another database, with one game page of gametabs.net's."""
+    from caracole import gametabs_index
+    from caracole.gametabs import GamePage, ListedTab
+    from caracole.index_transfer import export
+
+    other = db.connect(tmp_path / "other" / "caracole.sqlite")
+    try:
+        gametabs_index.store_game_page(other, "tabs/actraiser", GamePage("ActRaiser", 1, (
+            ListedTab("tabs/actraiser/fillmore", "Fillmore"),)), _common.utcnow())
+        export(other, tmp_path / "indexes.sqlite", ["gametabs"], now=_common.utcnow())
+    finally:
+        other.close()
+
+
 def requested(tmp_path, sites, conn) -> bool:
     return bool(sites.requests)
 
@@ -230,6 +245,14 @@ def todo_written(tmp_path, sites, conn) -> bool:
 
 def rendered(tmp_path, sites, conn) -> bool:
     return db.kv_get(conn, "render:status") is not None
+
+
+def backed_up(tmp_path, sites, conn) -> bool:
+    return any((tmp_path / "state" / "backups").glob("caracole-*.sqlite"))
+
+
+def merged(tmp_path, sites, conn) -> bool:
+    return conn.execute("SELECT COUNT(*) FROM gametabs_games").fetchone()[0] > 0
 
 
 def removed(tmp_path, sites, conn) -> bool:
@@ -277,6 +300,8 @@ WRITERS = [
     Case(("search", "stone temple pilots creep", "--add", "1"), a_song_to_match,
          added_to_wanted_txt),
     Case(("remove", "--yes", "Radiohead - Creep"), a_song_to_match, removed),
+    Case(("backup",), nothing, backed_up),
+    Case(("index", "merge", "{tmp}/indexes.sqlite"), an_export, merged),
 ]
 
 
@@ -296,14 +321,15 @@ def test_a_command_that_writes_waits_for_another_caracole(tmp_path, config, site
     assert case.done(tmp_path, sites, conn), result.output
 
 
-READERS = [("search", "creep"), ("match", "--dry-run"), ("index", "stats"), ("remove", "--list")]
+READERS = [("search", "creep"), ("match", "--dry-run"), ("index", "stats"), ("remove", "--list"),
+           ("backup", "--list"), ("index", "export", "{tmp}/indexes.sqlite")]
 
 
 @pytest.mark.parametrize("args", READERS, ids=" ".join)
 def test_a_command_that_only_reads_doesnt_wait(tmp_path, config, sites, conn, args):
     a_song_to_match(tmp_path, sites, conn)
     with another_caracole(tmp_path):
-        started = Started(config, list(args))
+        started = Started(config, [arg.format(tmp=tmp_path) for arg in args])
         started.thread.join(10)
         waited = started.thread.is_alive()
     result = started.finished()

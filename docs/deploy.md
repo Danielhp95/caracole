@@ -9,8 +9,9 @@ network. Two ways to set it up:
   module does.
 
 [The first run](#the-first-run), [Checking auto-chords](#checking-auto-chords),
-[Logs](#logs) and [When something is wrong](#when-something-is-wrong) are the
-same for both. Either way the machine gets:
+[Logs](#logs), [Moving an index into the service](#moving-an-index-into-the-service),
+[Restoring the database](#restoring-the-database) and [When something is
+wrong](#when-something-is-wrong) are the same for both. Either way the machine gets:
 
 | What | Does |
 |---|---|
@@ -29,7 +30,7 @@ hides:
 |---|---|
 | `library` | sheets, lyrics, guitar parts, `_todo.md`, `index.html`, `wanted.txt`, `overrides.toml`, `songbooks.toml`, `_inbox/`: synced to your devices |
 | `music` | audio you bought, read-only, for auto-chords |
-| `state` | the database and caracole's lock, `caracole`'s alone: back it up, never sync it |
+| `state` | the database, its last three copies (`backups/`, made at the end of each nightly run) and caracole's lock, `caracole`'s alone: back it up, never sync it |
 | `cache` | every raw HTTP response, kept forever: losing it costs only requests |
 
 caracole keeps no secret: no credential, no token, no sign-in. ntfy is a
@@ -141,7 +142,8 @@ copy, made with SQLite's online backup:
     repository = "/mnt/backup/restic/caracole"; # or sftp:host:/path, s3:…
     passwordFile = "/etc/restic/caracole-password";
     paths = [ caracole.stateDir caracole.libraryDir caracole.musicDir ];
-    exclude = [ "${caracole.stateDir}/caracole.sqlite*" ];
+    # The live database goes in as the copy below; backups/ holds caracole's own nightly copies.
+    exclude = [ "${caracole.stateDir}/caracole.sqlite*" "${caracole.stateDir}/backups" ];
     backupPrepareCommand = ''
       if [ -f ${caracole.stateDir}/caracole.sqlite ]; then
         ${lib.getExe' pkgs.sqlite "sqlite3"} ${caracole.stateDir}/caracole.sqlite \
@@ -401,7 +403,18 @@ data_dir = "/var/lib/caracole"
 [ntfy]
 url = "https://ntfy.sh/caracole-change-me"   # a long random topic
 EOF
+sudo tee /etc/caracole/service > /dev/null <<'EOF'
+# caracole runs here as a service: `sudo caracole-admin COMMAND` runs a command on its library.
+# caracole started without --config reads this file (docs/usage.md, "The service's library").
+state_dir = "/var/lib/caracole/state"
+library_dir = "/var/lib/caracole/library"
+EOF
 ```
+
+The last file, the NixOS module's too, tells a caracole you start yourself
+with no `--config` that this machine runs caracole as a service: it builds no
+index into your home folders, and warns before it writes there
+([usage.md](usage.md#the-services-library-and-your-homes)).
 
 To keep the data elsewhere, put its path in place of `/var/lib/caracole` in
 every file of this part.
@@ -613,7 +626,7 @@ Description=Back up caracole's state, library and music with restic
 Type=oneshot
 ExecStartPre=/bin/sh -c 'cd /var/lib/caracole/state && if [ -f caracole.sqlite ]; then sqlite3 caracole.sqlite ".backup caracole-backup.sqlite"; fi'
 ExecStart=/usr/bin/restic -r /mnt/backup/restic/caracole -p /etc/restic/caracole-password \
-  backup --exclude=/var/lib/caracole/state/caracole.sqlite* \
+  backup --exclude=/var/lib/caracole/state/caracole.sqlite* --exclude=/var/lib/caracole/state/backups \
   /var/lib/caracole/state /var/lib/caracole/library /var/lib/caracole/music
 ExecStartPost=/usr/bin/restic -r /mnt/backup/restic/caracole -p /etc/restic/caracole-password \
   forget --prune --keep-daily 7 --keep-weekly 5 --keep-monthly 12
@@ -780,7 +793,10 @@ the library page. Then read `_todo.md` in the library, or the library page: what
 needs you comes first.
 
 A file you pass `caracole-admin` must be one user `caracole` can read, outside
-`/home`, `/root` and `/tmp`, which the sandbox hides. One caracole works at a
+`/home`, `/root` and `/tmp`, which the sandbox hides. A `caracole` you run
+yourself, with no `--config`, uses your home folders, not the service's: both
+systems leave `/etc/caracole/service`, so it says so, and builds no index there
+unless you add `--home` ([usage.md](usage.md#the-services-library-and-your-homes)). One caracole works at a
 time: a command started during the nightly run waits for it, but a lookup
 (`get`, or a song asked for on the library page) only for the run's next pause
 ([usage.md](usage.md#one-step-at-a-time)).
@@ -836,6 +852,53 @@ sudo caracole-admin -v run            # a run now, a line per request, on the te
 A block, a cooldown or a spent budget is no failure: the run exits 0 and the
 songs wait for the next one. A bug exits 1, and ntfy says the unit failed
 ([usage.md](usage.md#caracole-run)).
+
+## Moving an index into the service
+
+An index built by a `caracole` of your own, on your home folders
+(`~/.local/state/caracole`), moves into the service's database as a file:
+exported as you, put where user `caracole` can read it (the sandbox hides
+`/home` and `/tmp`), merged there, and deleted:
+
+```sh
+caracole index export /tmp/caracole-indexes.sqlite        # add --site harptabs, say, for one site's
+sudo install -o caracole -g caracole -m 0600 /tmp/caracole-indexes.sqlite /var/lib/caracole/state/indexes.sqlite
+sudo caracole-admin index merge /var/lib/caracole/state/indexes.sqlite
+sudo rm /var/lib/caracole/state/indexes.sqlite && rm /tmp/caracole-indexes.sqlite
+```
+
+The merge takes what the file read more recently, page by page and sitemap by
+sitemap, and leaves the rest as the service has it, after a copy of its
+database in `backups/` ([usage.md](usage.md#caracole-index-export-and-merge)).
+Both caracoles must be at the same schema version: the merge says so when they
+aren't, and changes nothing.
+
+## Restoring the database
+
+Each nightly run that went well ends with a whole copy of the database in
+`/var/lib/caracole/state/backups/`, the last three kept
+([usage.md](usage.md#caracole-backup)); `sudo caracole-admin backup` makes one
+now. To put one back, stop caracole, set the database aside with its `-wal`
+and `-shm` files (a `-wal` left beside another database would be read into
+it), and copy the backup into its place:
+
+```sh
+sudo systemctl stop caracole.timer caracole-web.service caracole.service   # and caracole-autochords.service
+sudo caracole-admin backup --list   # the copies, the newest last
+sudo sh -c 'cd /var/lib/caracole/state && mkdir -p -m 0700 before-restore &&
+  for f in caracole.sqlite caracole.sqlite-wal caracole.sqlite-shm; do
+    if [ -e "$f" ]; then mv "$f" before-restore/; fi
+  done &&
+  install -o caracole -g caracole -m 0600 backups/caracole-2026-10-29T034512Z.sqlite caracole.sqlite'
+sudo systemctl start caracole.timer caracole-web.service
+```
+
+The nightly runs after it do again what the nights since the copy did, from
+the HTTP cache where they can. A copy a newer caracole made stops every
+command with status 2, as the database itself would; an older one is
+migrated as an upgrade migrates the database. `before-restore/` is yours to
+delete once all is well. restic's copy (NixOS section 3, Ubuntu section 10)
+is restored the same way.
 
 ## When something is wrong
 

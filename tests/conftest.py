@@ -120,6 +120,14 @@ def _no_real_yt_dlp(monkeypatch, tmp_path_factory):
     monkeypatch.setenv("CARACOLE_YTDLP_BIN", str(tmp_path_factory.getbasetemp() / "no-real-yt-dlp-in-tests"))
 
 
+@pytest.fixture(autouse=True)
+def _no_real_service(monkeypatch, tmp_path_factory):
+    """No test sees the machine's caracole service: with ``CARACOLE_SERVICE_FILE`` naming no file, a command on
+    the home defaults finds no marker (service.py), whatever /etc/caracole/service holds where the suite runs. A
+    test of the guard names a marker of its own (test_service_guard.py)."""
+    monkeypatch.setenv("CARACOLE_SERVICE_FILE", str(tmp_path_factory.getbasetemp() / "no-caracole-service-in-tests"))
+
+
 _migrated: dict[tuple, bytes] = {}
 
 

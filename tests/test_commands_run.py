@@ -199,7 +199,8 @@ def test_a_bug_exits_1_and_leaves_its_traceback_in_the_log_behind_one_line(tmp_p
         raise KeyError("boom")
 
     steps = pipeline.default_steps
-    monkeypatch.setattr(pipeline, "default_steps", lambda: [pipeline.Step("match", broken), *steps()[-1:]])
+    monkeypatch.setattr(pipeline, "default_steps",
+                        lambda: [pipeline.Step("match", broken), *(s for s in steps() if s.name == "todo")])
     result = run(tmp_path)
     assert result.exit_code == 1
     assert ("The match step failed: KeyError: 'boom'. That's a bug in caracole: its traceback is in the log, and "

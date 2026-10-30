@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from caracole.commands._common import fail, load_cfg
+from caracole.commands._common import fail, load_cfg, warn_elsewhere
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -67,11 +67,13 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
         hosts = allowed_hosts(address, hostname=socket.gethostname(), extra=allow_host)
     except ValueError as e:
         fail(f"--allow-host: {e}", 2)
+    warn_elsewhere()  # once, here: its commands, run on the same home defaults, then say nothing of it (--home)
     if label is not None and len(label.strip()) > LABEL_LIMIT:
         fail(f"--label: {LABEL_LIMIT} characters at most", 2)
     badge = scratch_badge(cfg, label=label, config_path=config_path)
     # Its requests' history, its own file in the state folder, read back from the last server's (history.py)
-    queue = JobQueue(CaracoleRunner(config_path), history=History(cfg.state_dir / FILE_NAME))
+    queue = JobQueue(CaracoleRunner(config_path, home=config_path is None),
+                     history=History(cfg.state_dir / FILE_NAME))
     app = WebApp(cfg, queue, allowed=hosts, badge=badge)
     typer.echo("It answers to " + ", ".join(sorted(hosts)) + " and any IP address; --allow-host adds a name.")
     if badge is not None:

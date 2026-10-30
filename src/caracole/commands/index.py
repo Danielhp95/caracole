@@ -1,4 +1,4 @@
-"""Index commands: ``caracole index build``, ``caracole index refresh`` and ``caracole index stats``.
+"""Index commands: ``caracole index build``, ``refresh``, ``stats``, ``export`` and ``merge``.
 
 The local UG index is built once from Ultimate Guitar's sitemaps, or from
 sitemap files you already have, and the nightly run refreshes it. A block or
@@ -14,6 +14,12 @@ the time left, then what the index holds and, for a partial index, how to
 resume and where. On a terminal the sitemap lines share one live line; in a
 journal or a pipe each is a plain line (``caracole.progress.Console``). A
 refresh says less: a line per changed sitemap, then one line for it all.
+
+``export`` and ``merge`` move every site's index between two databases as a
+file (index_transfer.py): an export reads in one transaction and takes no lock,
+so it may run beside the nightly run; a merge takes caracole's lock, backs the
+database up first, and says what each site took. A refused merge (another
+schema, other columns, no export) exits 2 and changes nothing.
 """
 
 from __future__ import annotations
@@ -55,7 +61,8 @@ def console() -> Console:
 
 
 def register(app: typer.Typer) -> None:
-    index = typer.Typer(help="The local index of Ultimate Guitar's tabs, built from its sitemaps.",
+    index = typer.Typer(help="The local index of Ultimate Guitar's tabs, built from its sitemaps; and every site's "
+                             "index, moved between two databases (export, merge).",
                         no_args_is_help=True)
     app.add_typer(index, name="index")
 
@@ -68,17 +75,39 @@ def register(app: typer.Typer) -> None:
         ),
     ) -> None:
         """Index every UG tab sitemap: about 42 requests, 10-20 s apart (about 10 minutes)."""
-        _build(load_cfg(ctx), from_dir)
+        _build(load_cfg(ctx, builds_index="index build"), from_dir)
 
     @index.command("refresh")
     def refresh_cmd(ctx: typer.Context) -> None:
         """Re-read the sitemaps where new tabs appear, as the nightly run does."""
-        _refresh(load_cfg(ctx))
+        _refresh(load_cfg(ctx, builds_index="index refresh"))
 
     @index.command("stats")
     def stats_cmd(ctx: typer.Context) -> None:
         """How many tabs, of which types, and how many artists the index holds."""
         _stats(load_cfg(ctx))
+
+    sites = "ug, lacuerda, gtptabs, musescore, harptabs or gametabs"
+
+    @index.command("export")
+    def export_cmd(
+        ctx: typer.Context,
+        file: Path = typer.Argument(..., metavar="FILE", help="The new SQLite file to write; it must not exist."),
+        site: list[str] = typer.Option([], "--site", metavar="SITE",
+                                       help=f"Only this site's index: {sites}; repeat for more."),
+    ) -> None:
+        """Copy every site's index, with its progress, into a new SQLite file, for `caracole index merge`."""
+        _export(load_cfg(ctx), file, site)
+
+    @index.command("merge")
+    def merge_cmd(
+        ctx: typer.Context,
+        file: Path = typer.Argument(..., metavar="FILE", help="A file `caracole index export` wrote."),
+        site: list[str] = typer.Option([], "--site", metavar="SITE",
+                                       help=f"Only this site's index: {sites}; repeat for more."),
+    ) -> None:
+        """Take into this database what an export read more recently, page by page; backed up first."""
+        _merge(load_cfg(ctx), file, site)
 
 
 # --- caracole index build ------------------------------------------------------------------------
@@ -171,6 +200,61 @@ def _stats(cfg: Config) -> None:
         rest = "" if game.complete else "; caracole gametabs --index reads the rest"
         typer.echo(f"gametabs.net: {game.read:,} of {game.pages:,} game pages read, "
                    f"{game.tabs:,} tab{'' if game.tabs == 1 else 's'}{rest}.")
+
+
+# --- caracole index export and merge -------------------------------------------------------------
+
+
+def _export(cfg: Config, file: Path, sites: list[str]) -> None:
+    from caracole import backup
+    from caracole import index_transfer as transfer
+
+    with closing(open_db(cfg)) as conn:
+        try:
+            exported = transfer.export(conn, file, sites or None, now=utcnow())
+        except transfer.TransferError as e:
+            fail(f"index export: {e}", 2)
+    titles = [f"{transfer.SITES[name].title}'s" for name in exported.sites]
+    named = titles[0] if len(titles) == 1 else ", ".join(titles[:-1]) + " and " + titles[-1]
+    typer.echo(f"Exported {named} {'index' if len(titles) == 1 else 'indexes'} to {exported.path} "
+               f"({backup.size_text(exported.size)}):")
+    for name in exported.sites:
+        typer.echo(f"  {transfer.SITES[name].title}: "
+                   + ", ".join(f"{table} {exported.rows[table]:,}" + (" rows" if n == 0 else "")
+                               for n, table in enumerate(transfer.SITES[name].tables)) + ".")
+
+
+def _merge(cfg: Config, file: Path, sites: list[str]) -> None:
+    from caracole import backup
+    from caracole import index_transfer as transfer
+
+    with exclusive(cfg, "index merge"), closing(open_db(cfg)) as conn:
+        try:
+            merged = transfer.merge(conn, file, sites or None, state_dir=cfg.state_dir, now=utcnow())
+        except transfer.TransferError as e:
+            fail(f"index merge: {e}", 2)
+        except backup.BackupError as e:
+            fail(f"index merge: no backup, so no merge: {e}. Nothing changed.")
+    if not merged.changed:
+        typer.echo(f"Nothing to merge: {cfg.db_path} holds everything {file} does, read as recently.")
+        return
+    if merged.backup is not None:
+        typer.echo(f"Backed up the database to {merged.backup} first.")
+    typer.echo(f"Merged {file} into {cfg.db_path}:")
+    for done in merged.sites:
+        title = transfer.SITES[done.site].title
+        if not done.changed:
+            typer.echo(f"  {title}: nothing read more recently.")
+            continue
+        what = [transfer.counted(n, noun) for noun, n in done.taken]
+        if done.records:
+            what.append("its progress (" + ", ".join(done.records) + ")")
+        rows = []
+        for n, (table, (before, after)) in enumerate(done.rows.items()):
+            unit = " rows" if n == 0 else ""
+            rows.append(f"{table} {after:,}{unit} (unchanged)" if before == after else
+                        f"{table} {before:,} → {after:,}{unit}")
+        typer.echo(f"  {title}: {', '.join(what)}; {', '.join(rows)}.")
 
 
 # --- shared ------------------------------------------------------------------------------------
