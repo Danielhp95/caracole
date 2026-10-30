@@ -33,6 +33,7 @@ from caracole.commands._common import (
     read_song_text,
     utcnow,
     warn,
+    warn_elsewhere,
     write_pages,
 )
 
@@ -76,6 +77,7 @@ def register(app: typer.Typer) -> None:
         duration_ms = _duration_ms(duration)
         _lacuerda_pick(lacuerda)
         cfg = load_cfg(ctx)
+        warn_elsewhere()  # before the text is read against the database, or a line written: beside the service
         if title is None:  # one text, read as the pages read a query (song_names.py); else one name, no song
             if not any(c.isalnum() for c in artist):
                 fail("can't add this song: a song needs an artist and a title", 2)
@@ -210,6 +212,7 @@ def add_song(
     from caracole.songs import find_song, removed_song
     from caracole.wanted import append_wanted, find_wanted, sync_wanted
 
+    warn_elsewhere()  # the line is written before the lock: beside caracole's service, say so first
     path = cfg.wanted_file
     try:
         listed = find_wanted(path, artist, title) is not None

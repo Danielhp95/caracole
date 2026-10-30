@@ -61,6 +61,7 @@ Shared by the steps and the commands:
 | Module | What for |
 |---|---|
 | config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone) |
+| service.py | whether this machine runs caracole as a service: its marker, `/etc/caracole/service` (`MARKER`, a few lines of TOML naming its `state_dir` and `library_dir`), which nix/module.nix and deploy.md's Ubuntu steps write, and `CARACOLE_SERVICE_FILE` another, which conftest.py points at no file for every test; `elsewhere`, the service when a caracole with no config named (no `--config`, no `CARACOLE_CONFIG`) would use another database than its: then `_common.load_cfg` refuses a command that builds an index (`builds_index=`, its words: run, index build and refresh, gtptabs, musescore, harptabs, gametabs and lacuerda `--index`) with status 2, and any other says `warning` once before it writes (`_common.warn_elsewhere`, as it first takes the lock, or as add and serve write first), unless the root `--home`; the standard library alone |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
 | health.py | cooldowns, `events` |
@@ -430,8 +431,9 @@ Rules a change there keeps (the Invariants below are the others):
   secret, so no unit and not `caracole-admin` loads one; with auto-chords on, the nightly
   unit runs the auto-chords package, for its youtube step, and caracole-web and
   `caracole-admin` run it too, so their pages agree; caracole-web then without MemoryDenyWriteExecute, as the
-  auto-chords unit and `caracole-admin`, since a sheet from a YouTube video runs the models in it), module-check.nix
-  (`checks.module`).
+  auto-chords unit and `caracole-admin`, since a sheet from a YouTube video runs the models in it; and
+  `/etc/caracole/service`, the service's marker, service.py's), module-check.nix
+  (`checks.module`, which loads the marker with service.py).
 - `docs/`: usage.md (configuration, commands, the to-do page, overrides.toml, the library
   folder), deploy.md (a server: the NixOS module, or Ubuntu 24.04 without Nix, whose units
   and caracole-admin do what nix/module.nix's do, so a change to a unit there changes them

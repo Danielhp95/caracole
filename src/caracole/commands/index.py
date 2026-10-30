@@ -68,12 +68,12 @@ def register(app: typer.Typer) -> None:
         ),
     ) -> None:
         """Index every UG tab sitemap: about 42 requests, 10-20 s apart (about 10 minutes)."""
-        _build(load_cfg(ctx), from_dir)
+        _build(load_cfg(ctx, builds_index="index build"), from_dir)
 
     @index.command("refresh")
     def refresh_cmd(ctx: typer.Context) -> None:
         """Re-read the sitemaps where new tabs appear, as the nightly run does."""
-        _refresh(load_cfg(ctx))
+        _refresh(load_cfg(ctx, builds_index="index refresh"))
 
     @index.command("stats")
     def stats_cmd(ctx: typer.Context) -> None:

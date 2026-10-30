@@ -26,7 +26,7 @@ def register(app: typer.Typer) -> None:
         from caracole import pipeline
         from caracole.report import style_for, summary_text
 
-        cfg = load_cfg(ctx)
+        cfg = load_cfg(ctx, builds_index="run")
         with exclusive(cfg, "run"), closing(open_db(cfg)) as conn:
             report = pipeline.run_pipeline(cfg, conn=conn)
         quiet = ctx.obj is not None and ctx.obj.verbosity == logs.QUIET

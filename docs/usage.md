@@ -25,7 +25,7 @@ backups.
 - [Fonts for Chinese sheets](#fonts-for-chinese-sheets)
 - [The library folder](#the-library-folder)
 - [A worked example](#a-worked-example)
-- [The database's copies](#the-databases-copies)
+- [Keeping the database](#keeping-the-database)
 - [Running it on a server](#running-it-on-a-server)
 
 ## Configure
@@ -132,7 +132,7 @@ it, `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
 `~/.cache/caracole`. The state folder holds `caracole.sqlite` and
 `caracole.lock`, and in `backups/` the last three copies of the database (see
-[The database's copies](#the-databases-copies)): back it up, but don't sync it. The cache keeps every
+[Keeping the database](#keeping-the-database)): back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
 goes when the PDF is done, so caracole must be able to write there. Its
@@ -1094,7 +1094,7 @@ configuration it would take, and why it waits.
 14. **render**: write ChordPro files and PDFs.
 15. **todo**: rewrite `_todo.md` and `index.html`.
 16. **backup**: copy the database whole into the state folder's `backups/`,
-    keeping the last three (see [The database's copies](#the-databases-copies)),
+    keeping the last three (see [caracole backup](#caracole-backup)),
     but only after a run no step of which failed: a block, a cooldown or a spent
     budget is no failure, a bug is, and then the copies of the nights before stay.
 
@@ -5482,7 +5482,7 @@ queued, then downloaded, then with its chords done. The auto sheet says which
 video its audio came from, on its third line. A purchase dropped into Music/
 later takes the video's place.
 
-## The database's copies
+## Keeping the database
 
 The database holds what took the longest to get: the indexes of every site,
 built from days of polite requests (Ultimate Guitar's sitemaps, LaCuerda's
@@ -5511,6 +5511,43 @@ logs its name and size.
 its check. To put a copy back, stop caracole, take the database's `-wal` and
 `-shm` files away with it, and copy the backup into its place:
 [deploy.md](deploy.md#restoring-the-database) says how on a server.
+
+### The service's library, and your home's
+
+caracole started with no `--config` and no `CARACOLE_CONFIG` uses its home
+folders (`~/.local/state/caracole`, `~/Tabs`; see [Configure](#configure)). On
+a machine that runs caracole as a service, whose units and `sudo caracole-admin`
+name its config, those are another library than the service's: an index built
+from a shell, or from a checkout's dev shell, would land in the home database,
+days of requests the service never sees. The service leaves a marker for it,
+`/etc/caracole/service`, readable by everyone: the NixOS module writes it, and
+so do [deploy.md](deploy.md)'s Ubuntu steps. It names the service's folders:
+
+```toml
+state_dir = "/var/lib/caracole/state"
+library_dir = "/var/lib/caracole/library"
+```
+
+Where it is, caracole on its home defaults:
+
+- **builds no index**: `caracole run`, `index build`, `index refresh`,
+  `gtptabs`, `musescore`, `harptabs --index`, `gametabs --index` and `lacuerda
+  --index` exit 2 before they write or ask anything, naming both places, with
+  the two ways on: `sudo caracole-admin gametabs --index` builds the service's,
+  `caracole --home gametabs --index` the home one all the same;
+- **warns once** before any other command writes or sends a request (as it
+  takes caracole's lock, or as `caracole add` writes its line), naming both
+  places and the `sudo caracole-admin` line for the service, then goes on;
+  `caracole serve` warns as it starts, and its commands, on the same folders,
+  say nothing more;
+- **says nothing** for a command that only reads: `search`, `index stats`,
+  `versions`, `songbook list` and `show`, `backup --list`, `remove --list`,
+  `match --dry-run`.
+
+`--home`, a root option (`caracole --home COMMAND`), says the home folders are
+meant: no warning, no refusal. A config named, by `--config` or
+`CARACOLE_CONFIG`, is never warned about, and neither are home folders that are
+the service's own (the marker's `state_dir`).
 
 ## Running it on a server
 

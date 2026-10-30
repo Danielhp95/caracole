@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from caracole.commands._common import fail, load_cfg
+from caracole.commands._common import fail, load_cfg, warn_elsewhere
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -55,7 +55,8 @@ def _serve(cfg: Config, config_path: Path | None, address: str, port: int, allow
         hosts = allowed_hosts(address, hostname=socket.gethostname(), extra=allow_host)
     except ValueError as e:
         fail(f"--allow-host: {e}", 2)
-    app = WebApp(cfg, JobQueue(CaracoleRunner(config_path)), allowed=hosts)
+    warn_elsewhere()  # once, here: its commands, run on the same home defaults, then say nothing of it (--home)
+    app = WebApp(cfg, JobQueue(CaracoleRunner(config_path, home=config_path is None)), allowed=hosts)
     typer.echo("It answers to " + ", ".join(sorted(hosts)) + " and any IP address; --allow-host adds a name.")
     try:
         server.serve(app, address, port, announce=typer.echo)

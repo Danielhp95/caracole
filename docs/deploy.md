@@ -402,7 +402,18 @@ data_dir = "/var/lib/caracole"
 [ntfy]
 url = "https://ntfy.sh/caracole-change-me"   # a long random topic
 EOF
+sudo tee /etc/caracole/service > /dev/null <<'EOF'
+# caracole runs here as a service: `sudo caracole-admin COMMAND` runs a command on its library.
+# caracole started without --config reads this file (docs/usage.md, "The service's library").
+state_dir = "/var/lib/caracole/state"
+library_dir = "/var/lib/caracole/library"
+EOF
 ```
+
+The last file, the NixOS module's too, tells a caracole you start yourself
+with no `--config` that this machine runs caracole as a service: it builds no
+index into your home folders, and warns before it writes there
+([usage.md](usage.md#the-services-library-and-your-homes)).
 
 To keep the data elsewhere, put its path in place of `/var/lib/caracole` in
 every file of this part.
@@ -781,7 +792,10 @@ the library page. Then read `_todo.md` in the library, or the library page: what
 needs you comes first.
 
 A file you pass `caracole-admin` must be one user `caracole` can read, outside
-`/home`, `/root` and `/tmp`, which the sandbox hides. One caracole works at a
+`/home`, `/root` and `/tmp`, which the sandbox hides. A `caracole` you run
+yourself, with no `--config`, uses your home folders, not the service's: both
+systems leave `/etc/caracole/service`, so it says so, and builds no index there
+unless you add `--home` ([usage.md](usage.md#the-services-library-and-your-homes)). One caracole works at a
 time: a command started during the nightly run waits for it, but a lookup
 (`get`, or a song asked for on the library page) only for the run's next pause
 ([usage.md](usage.md#one-step-at-a-time)).

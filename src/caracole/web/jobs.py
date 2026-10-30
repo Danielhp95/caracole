@@ -703,7 +703,10 @@ def child_env(base: Mapping[str, str] | None = None) -> dict[str, str]:
 
 
 class CaracoleRunner:
-    """Runs ``python -P -m caracole -v [--config FILE] ARGS…`` and hands each line it prints to ``emit``.
+    """Runs ``python -P -m caracole -v [--config FILE | --home] ARGS…`` and hands each line it prints to ``emit``.
+
+    ``home``: caracole serve runs on its home defaults, and its commands on them too, saying nothing of a
+    service beside them (service.py): the server said it once, as it started.
 
     ``-m`` alone would put the working directory first on the child's
     ``sys.path``, which the ``caracole`` script never does: started from the
@@ -711,9 +714,9 @@ class CaracoleRunner:
     there. ``-P`` (Python 3.11) leaves it out.
     """
 
-    def __init__(self, config_path: Path | None, *, python: str = sys.executable):
+    def __init__(self, config_path: Path | None, *, python: str = sys.executable, home: bool = False):
         self._argv = [python, "-P", "-m", "caracole", "-v",
-                      *(["--config", str(config_path)] if config_path else [])]
+                      *(["--config", str(config_path)] if config_path else ["--home"] if home else [])]
         self._env = child_env()
         self._lock = threading.Lock()
         self._process: subprocess.Popen[str] | None = None

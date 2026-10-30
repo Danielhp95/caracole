@@ -79,14 +79,48 @@ def warn(message: str) -> None:
     logs.say(logging.WARNING, message)
 
 
-def load_cfg(ctx: typer.Context) -> Config:
-    """The config, the one way a command reads it."""
+_unwarned: str | None = None  # what a command on the home defaults beside the service says first (load_cfg)
+
+
+def load_cfg(ctx: typer.Context, *, builds_index: str | None = None) -> Config:
+    """The config, the one way a command reads it.
+
+    With no config named (no ``--config``, no ``CARACOLE_CONFIG``) on a machine that runs caracole as a service
+    (service.py), caracole's home defaults are another library than the service's: a command that builds an
+    index, ``builds_index`` (its words, "gametabs --index"), exits 2 saying so, and any other owes a warning, said
+    once before its first write (``warn_elsewhere``: as it takes caracole's lock), unless ``--home``.
+    """
+    from caracole import service
+
+    global _unwarned
     path = ctx.obj.config_path if ctx.obj is not None else None
     try:
         cfg = load_config(path)
     except ConfigError as e:
         fail(f"config: {e}", 2)
+    _unwarned = None
+    home = ctx.obj is not None and getattr(ctx.obj, "home", False)
+    found = None if home else service.elsewhere(cfg, os.environ, explicit=path is not None)
+    if found is not None:
+        if builds_index is not None:
+            fail(service.refusal(cfg, found, builds_index), 2)
+        _unwarned = service.warning(cfg, found, _command_words(ctx))
     return cfg
+
+
+def _command_words(ctx: typer.Context) -> str:
+    """The command as typed, without the program's name: "songbook add", "get"."""
+    return " ".join(ctx.command_path.split()[1:]) or ctx.command_path
+
+
+def warn_elsewhere() -> None:
+    """The warning ``load_cfg`` found the command owes, said once: on the home defaults beside caracole's service.
+    Taking caracole's lock says it (every command that writes or sends requests takes it); one that writes first
+    (``caracole add``, ``caracole serve``) calls this itself."""
+    global _unwarned
+    if _unwarned is not None:
+        said, _unwarned = _unwarned, None
+        warn(said)
 
 
 def _reason(e: OSError | sqlite3.Error) -> str:
@@ -185,6 +219,7 @@ _handoffs = 0  # how many times this process handed the lock to a waiting lookup
 def _acquire(cfg: Config, what: str, *, fatal: bool = True, interactive: bool = False,
              on_wait: Callable[[str], None] | None = None) -> Path:
     """Take caracole's lock, waiting for another process that holds it; see ``exclusive``."""
+    warn_elsewhere()
     path = cfg.state_dir / LOCK_NAME
     if path in _held:
         fd, depth = _held[path]
