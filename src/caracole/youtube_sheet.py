@@ -16,7 +16,8 @@ serve reads into the job's stages):
   YouTube cools down after a block. A block starts (or extends) the cooldown and sends one ntfy alert.
 - ``lyrics``: LRCLIB, for a song with none yet, at the bulk pace, asked with the audio's length when the
   song's line gives none, so the timed lyrics LRCLIB picks fit the audio (``fetch_pending_lyrics``'s
-  ``durations``). A song whose lyrics came earlier keeps them.
+  ``durations``). A song whose lyrics came earlier keeps them. Then Megalobiz, the same way, for the timed
+  lyrics LRCLIB left the song without (megalobiz_fetch.py): they put each chord over its word.
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), once the audio is the
   video's; a waiting lookup goes first (``_common.hand_over``), as the models take minutes. The chords go
   over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py).
@@ -277,19 +278,72 @@ class _Sheet:
             log.info("The length of %s can't be read: %s", self.song.audio_path, e)
             return None
 
-    def lyrics(self) -> tuple[str, str] | str:
+    def lyrics(self) -> tuple[str, str]:
+        """LRCLIB's lyrics, then Megalobiz's timed ones where LRCLIB left the song without (megalobiz_fetch.py):
+        timed lyrics put each chord over its word."""
+        if self.song.lyrics_status == "instrumental":
+            return "done", "already there"
+        length = self._audio_length() if self.result.states.get("audio") == "done" else None
+        lrclib = ("done", "already there") if self.song.lyrics_status == "found" else self._lrclib(length)
+        timed = self._megalobiz(length)
+        if timed is None:
+            return lrclib
+        self._song_again()
+        if self.song.lyrics_status == "pending":  # neither answered: the lyrics wait, as the last one to fail says
+            return lrclib if timed[0] == "done" else timed
+        if lrclib[0] != "done":  # LRCLIB failed, Megalobiz found them
+            return timed
+        return "done", f"{lrclib[1]}; {timed[1]}"
+
+    def _megalobiz(self, length: float | None) -> tuple[str, str] | None:
+        """Megalobiz asked about the song, at the bulk pace as LRCLIB is here; None when there is nothing to ask it
+        (lyrics timed already, Megalobiz turned off or cooling down)."""
+        from caracole.commands._common import alert_block, make_client
+        from caracole.health import answered_any, is_cooling, record_block, record_error, record_ok
+        from caracole.http import BudgetExhausted, ProviderBlocked
+        from caracole.megalobiz_fetch import megalobiz_lyrics, songs_to_ask
+
+        self._song_again()
+        if (not self.cfg.provider("megalobiz").enabled or is_cooling(self.conn, "megalobiz", self.now)
+                or not songs_to_ask(self.conn, self.now, only={self.song.id})):
+            return None
+        client = make_client(self.cfg, self.conn, "megalobiz", self.run_id)
+        try:
+            stats = megalobiz_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
+                                     durations={self.song.id: length} if length else None)
+        except ProviderBlocked as e:
+            state = record_block(self.conn, "megalobiz", self.now, str(e))
+            until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
+            alert_block(self.cfg, "megalobiz", f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
+            return "skipped", f"Megalobiz blocked caracole; paused until {until}"
+        except BudgetExhausted:
+            return "skipped", "Megalobiz's budget spent; tonight's run asks it"
+        finally:
+            self.result.requests["megalobiz"] = client.requests_made
+            client.close()
+        if answered_any(self.conn, self.run_id, "megalobiz", client.requests_made):
+            record_ok(self.conn, "megalobiz", self.now)
+        if stats.failures:
+            record_error(self.conn, "megalobiz", self.now, str(stats.failures[0][1]))
+            return "failed", "no timed lyrics yet (Megalobiz unavailable); tonight's run tries again"
+        if stats.budget_exhausted:
+            return "skipped", "Megalobiz's budget spent; tonight's run asks it"
+        if stats.found:
+            return "done", "found on Megalobiz, timed"
+        if stats.timed:
+            return "done", "timed from Megalobiz"
+        return "done", "nor has Megalobiz" if self.song.lyrics_status == "missing" else "Megalobiz has no timed ones"
+
+    def _lrclib(self, length: float | None) -> tuple[str, str]:
         from caracole.commands._common import alert_block, make_client
         from caracole.health import answered_any, get_state, is_cooling, record_block, record_ok
         from caracole.http import ProviderBlocked
         from caracole.lyrics import fetch_pending_lyrics, song_lyrics
 
-        if self.song.lyrics_status in ("found", "instrumental"):
-            return "done", "already there"
         if is_cooling(self.conn, "lrclib", self.now):
             until = get_state(self.conn, "lrclib").cooldown_until
             when = until.strftime("%Y-%m-%d %H:%M UTC") if until else "later"
             return "skipped", f"no lyrics yet (LRCLIB paused until {when})"
-        length = self._audio_length() if self.result.states.get("audio") == "done" else None
         client = make_client(self.cfg, self.conn, "lrclib", self.run_id)
         try:
             stats = fetch_pending_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},

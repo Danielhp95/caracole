@@ -17,6 +17,8 @@ import httpx
 import pytest
 from conftest import add_song
 from helpers.fake_ytdlp import FakeYtDlp, entry
+from helpers.megalobiz_site import FakeMegalobiz
+from helpers.megalobiz_site import record as megalobiz_record
 from helpers.rendered import fake_chordpro
 
 from caracole.autochords import ChordSegment
@@ -117,11 +119,16 @@ class Ntfy:
 
 
 @pytest.fixture
-def sites(monkeypatch):
+def megalobiz():
+    return FakeMegalobiz()  # with no record: Megalobiz has nothing for the song
+
+
+@pytest.fixture
+def sites(monkeypatch, megalobiz):
     lrclib, ntfy = Lrclib(record(200.0)), Ntfy()
 
     def transport(provider):
-        handlers = {"lrclib": lrclib.handler, "ntfy": ntfy.handler}
+        handlers = {"lrclib": lrclib.handler, "ntfy": ntfy.handler, "megalobiz": lambda r: megalobiz.handler(r)}
         if provider not in handlers:
             pytest.fail(f"a client for {provider} was made")
         return httpx.MockTransport(handlers[provider])
@@ -224,10 +231,23 @@ def test_without_lyrics_on_lrclib_the_sheet_is_the_chords_alone(setup, conn, fak
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok
-    assert heard.ends()["lyrics"] == ("done", "LRCLIB has none")
+    assert heard.ends()["lyrics"] == ("done", "LRCLIB has none; nor has Megalobiz")
     assert heard.ends()["chords"] == ("done", "chords only, no lyrics")
     text = auto_sheet(setup, conn, find_song(conn, result_key(conn)))
     assert "[Chords]" in text and "[Lyrics]" not in text
+
+
+def test_without_lyrics_on_lrclib_megalobizs_timed_ones_put_the_chords_over_the_words(setup, conn, fake, sites,
+                                                                                     megalobiz, tmp_path):
+    lrclib, _ = sites
+    lrclib.records.clear()
+    megalobiz.records.append(megalobiz_record(lrc_id=8, title="Vikingos veganos", artist="Nick Cani", duration=200.0))
+    vikingos(fake, tmp_path)
+    result, heard = make(setup)
+    assert result.ok
+    assert heard.ends()["lyrics"] == ("done", "LRCLIB has none; found on Megalobiz, timed")
+    assert heard.ends()["chords"] == ("done", "chords over the lyrics")
+    assert megalobiz.requests[0][1]["duration"] == "200"  # asked with the audio's length, as LRCLIB is
 
 
 def test_lrclib_failing_leaves_the_chords_alone_and_says_what_comes_of_the_lyrics(setup, conn, fake, sites, tmp_path,

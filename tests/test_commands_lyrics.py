@@ -19,6 +19,7 @@ import httpx
 import pytest
 from conftest import add_song, subprocess_pythonpath
 from helpers.lacuerda_site import listing_page
+from helpers.megalobiz_site import FakeMegalobiz, record
 from typer.testing import CliRunner
 
 from caracole import db
@@ -111,11 +112,12 @@ class FakeNtfy:
 class Sites:
     def __init__(self):
         self.lrclib = FakeLrclib()
+        self.megalobiz = FakeMegalobiz()
         self.lacuerda = FakeLaCuerda()
         self.ntfy = FakeNtfy()
 
     def transport(self, provider: str) -> httpx.BaseTransport:
-        fakes = {"lrclib": self.lrclib, "lacuerda": self.lacuerda, "ntfy": self.ntfy}
+        fakes = {"lrclib": self.lrclib, "megalobiz": self.megalobiz, "lacuerda": self.lacuerda, "ntfy": self.ntfy}
         if provider not in fakes:
             pytest.fail(f"a client for {provider} was made")
         return httpx.MockTransport(fakes[provider].handler)
@@ -130,7 +132,7 @@ def sites(monkeypatch):
     return s
 
 
-def write_config(tmp_path: Path, *, budgets=None, ntfy=False) -> Path:
+def write_config(tmp_path: Path, *, budgets=None, ntfy=False, off=()) -> Path:
     budgets = budgets or {}
     lines = [
         f'library_dir = "{tmp_path / "lib"}"',
@@ -138,10 +140,12 @@ def write_config(tmp_path: Path, *, budgets=None, ntfy=False) -> Path:
         f'state_dir = "{tmp_path / "state"}"',
         f'cache_dir = "{tmp_path / "cache"}"',
     ]
-    for provider in ("lrclib", "lacuerda"):
+    for provider in ("lrclib", "megalobiz", "lacuerda"):
         lines += [f"[providers.{provider}]", "delay = [0, 0]"]
         if provider in budgets:
             lines.append(f"budget = {budgets[provider]}")
+        if provider in off:
+            lines.append("enabled = false")
     if ntfy:
         lines += ["[ntfy]", f'url = "{NTFY}"']
     path = tmp_path / "caracole.toml"
@@ -201,13 +205,57 @@ def test_lyrics_looks_up_pending_songs_and_reports_the_counts(tmp_path, sites):
     finally:
         conn.close()
     assert logged == len(sites.lrclib.requests) == 3
+    # Then Megalobiz, for the song LRCLIB missed: it has none either, so the song is missing.
+    assert "Megalobiz: 0 found, 0 timed, 1 missing, 0 errors" in result.stdout
+    assert sites.megalobiz.endpoints() == ["search"]
 
 
 def test_lyrics_with_nothing_to_look_up(tmp_path, sites):
     result = run(tmp_path, "lyrics")
     assert result.exit_code == 0, result.output
     assert "No song is waiting for lyrics." in result.stdout
-    assert sites.lrclib.requests == []
+    assert sites.lrclib.requests == [] and sites.megalobiz.requests == []
+
+
+def test_lyrics_asks_megalobiz_for_a_song_lrclib_missed(tmp_path, sites):
+    sites.megalobiz.records.append(record())
+    (song_id,) = seed(tmp_path, ("Eagles", "Hotel California"))
+    result = run(tmp_path, "lyrics")
+    assert result.exit_code == 0, result.output
+    assert "Lyrics: 0 found, 1 missing, 0 instrumental, 0 errors" in result.stdout
+    assert "Megalobiz: 1 found, 0 timed, 0 missing, 0 errors" in result.stdout
+    stored = song(tmp_path, song_id)
+    assert stored.lyrics_status == "found" and json.loads(stored.lyrics_json)["provider"] == "megalobiz"
+    conn = open_db(tmp_path)
+    try:
+        logged = conn.execute("SELECT COUNT(*) FROM events WHERE provider = 'megalobiz'").fetchone()[0]
+    finally:
+        conn.close()
+    assert logged == len(sites.megalobiz.requests) == 2
+
+
+def test_lyrics_with_megalobiz_turned_off_asks_it_nothing(tmp_path, sites):
+    sites.megalobiz.records.append(record())
+    (song_id,) = seed(tmp_path, ("Eagles", "Hotel California"))
+    result = run(tmp_path, "lyrics", off=("megalobiz",))
+    assert result.exit_code == 0, result.output
+    assert "Megalobiz" not in result.stdout and sites.megalobiz.requests == []
+    assert song(tmp_path, song_id).lyrics_status == "missing"
+
+
+def test_a_megalobiz_block_cools_it_down_and_leaves_lrclibs_answer(tmp_path, sites):
+    sites.megalobiz.failing["search"] = 429
+    (song_id,) = seed(tmp_path, ("Eagles", "Hotel California"))
+    result = run(tmp_path, "lyrics", ntfy=True)
+    assert result.exit_code == 0, result.output
+    assert "Megalobiz blocked caracole" in result.stdout
+    conn = open_db(tmp_path)
+    try:
+        assert is_cooling(conn, "megalobiz", _common.utcnow())
+    finally:
+        conn.close()
+    assert song(tmp_path, song_id).lyrics_status == "missing"
+    assert len(sites.ntfy.posts) == 1
 
 
 def test_lyrics_errors_leave_songs_pending_and_say_so(tmp_path, sites):
@@ -1008,7 +1056,8 @@ def test_the_pages_after_a_lookup_went_first_read_overrides_toml_again(tmp_path,
     monkeypatch.setattr(cmd, "write_pages", lambda conn, cfg, o, now: seen.append([*o.pin.values()]))
     result = run(tmp_path, command)
     assert result.exit_code == 0, result.output
-    assert seen == [[(2,)]]
+    # `caracole lyrics` writes them after each site's pass: after Megalobiz's too, for the song LRCLIB missed.
+    assert seen and all(pins == [(2,)] for pins in seen)
 
 
 @pytest.mark.parametrize("command,provider", [("lyrics", "lrclib"), ("lacuerda", "lacuerda")])
@@ -1044,7 +1093,7 @@ def test_registering_the_commands_imports_neither_pass(tmp_path):
     src = Path(__file__).resolve().parents[1] / "src"
     passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch", "caracole.lacuerda_index",
               "caracole.lacuerda_search", "caracole.gtptabs", "caracole.gtptabs_fetch", "caracole.musescore",
-              "caracole.musescore_fetch")
+              "caracole.musescore_fetch", "caracole.megalobiz", "caracole.megalobiz_fetch")
     code = (
         "import sys, typer\n"
         "from caracole.commands import lyrics\n"

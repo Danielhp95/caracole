@@ -339,6 +339,22 @@ def test_write_info_gives_the_songs_key_and_where_it_came_from(conn, tmp_path):
     assert info["identity_key"] == s.key  # the song's identity, which "key" held before
 
 
+def test_write_info_links_lyrics_from_megalobiz_to_their_page(conn, tmp_path):
+    from caracole.lyrics import Lyrics
+    from caracole.songs import get_song, update_song
+
+    lib = tmp_path / "Library"
+    s = add_song(conn, "Eagles", "Hotel California")
+    url = "https://megalobiz.com/lrc/24519/hotel-california"
+    update_song(conn, s.id, lyrics_status="found", lyrics_json=Lyrics(
+        plain="x", synced="[00:01.00]x", instrumental=False, duration=None, lrclib_id=None, provider="megalobiz",
+        url=url).to_json())
+    info = json.loads(write_info(conn, lib, get_song(conn, s.id)).read_text(encoding="utf-8"))
+    assert info["lyrics_from"] == {"source": "megalobiz", "href": url}
+    other = add_song(conn, "Eagles", "Desperado")
+    assert json.loads(write_info(conn, lib, other).read_text(encoding="utf-8"))["lyrics_from"] is None
+
+
 def test_write_info_of_a_song_whose_key_is_unknown(conn, tmp_path):
     lib = tmp_path / "Library"
     s = add_song(conn)

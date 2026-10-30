@@ -298,6 +298,28 @@ def drop_file(conn: sqlite3.Connection, library_dir: Path, *, song: Song, name: 
     conn.execute("DELETE FROM files WHERE song_id = ? AND name = ?", (song.id, name))
 
 
+# The sites whose lyrics link back to their record's page, and where those pages are (megalobiz.py: its fair use asks
+# it wherever its lyrics are shown). LRCLIB asks none.
+LYRICS_PAGES = {"megalobiz": "https://megalobiz.com/"}
+
+
+def lyrics_from(song: Song) -> dict[str, str] | None:
+    """Where a song's lyrics link back to (``lyrics.Lyrics.url``), as ``{"source", "href"}``, for a site of
+    ``LYRICS_PAGES`` and a page on it alone; None for any other, or lyrics that can't be read. Read from the stored
+    JSON alone: the pages import no lyrics module."""
+    try:
+        stored = json.loads(song.lyrics_json) if isinstance(song.lyrics_json, str) else song.lyrics_json
+    except (ValueError, RecursionError):
+        return None
+    if not isinstance(stored, dict) or song.lyrics_status != "found":
+        return None
+    provider, url = stored.get("provider"), stored.get("url")
+    site = LYRICS_PAGES.get(provider) if isinstance(provider, str) else None
+    if site is None or not isinstance(url, str) or not url.startswith(site):
+        return None
+    return {"source": provider, "href": url}
+
+
 def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
     """Write info.json: the song, where it came from, and what was kept or picked.
 
@@ -340,6 +362,7 @@ def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
         "status": song.status,
         "sources": song.source_ids,
         "lyrics": song.lyrics_status,
+        "lyrics_from": lyrics_from(song),  # Megalobiz's page of the song's lyrics, which its fair use asks to link
         "match": {
             "decision": song.match_decision, "step": song.match_step, "score": song.match_score,
             "artist_key": song.match_artist_key, "song_key": song.match_song_key,

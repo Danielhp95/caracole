@@ -47,6 +47,7 @@ JOURNAL_INFO = ("caracole.page_log",)
 PROVIDER_NAMES: Mapping[str, str] = {
     "ug": "Ultimate Guitar",
     "lrclib": "LRCLIB",
+    "megalobiz": "Megalobiz",
     "lacuerda": "LaCuerda",
     "gtptabs": "gtptabs.com",
     "musescore": "MuseScore",

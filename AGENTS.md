@@ -5,7 +5,7 @@ What a coding agent needs before changing caracole. User documentation: README.m
 ## What caracole is
 
 caracole is a Python CLI, run every night by a NixOS service, that builds a private library
-of sing-along chord sheets (Ultimate Guitar, LaCuerda), lyrics (LRCLIB), PDFs (ChordPro)
+of sing-along chord sheets (Ultimate Guitar, LaCuerda), lyrics (LRCLIB, then Megalobiz for timed ones), PDFs (ChordPro)
 Guitar Pro files (downloaded from gtptabs.com, or filed from what the user drops
 into `_inbox/`) and harmonica tabs (harptabs.com) for the songs in `wanted.txt`. For a song
 nobody has charted, `caracole autochords` writes a sheet from audio with local models
@@ -37,7 +37,8 @@ section says where things are, and the rules a change there keeps.
 | icons | icons.py (each source's mark) |
 | index | ug/sitemap.py, ug/index.py |
 | match | match.py, ug/lookup.py |
-| lyrics | lyrics.py |
+| lyrics | lyrics.py (LRCLIB; `Lyrics.provider` and `.url`, who answered and the page to link back to; `fits`, the matching rule another site's picker keeps; kv `lyrics:failed:`, the songs LRCLIB failed on) |
+| megalobiz | megalobiz.py (Megalobiz's public API: its search and a record read, `pick_result`; `MegalobizParseError`), megalobiz_fetch.py (the step: the songs LRCLIB left, missing, failed on or plain only, `songs_to_ask`; a miss kv `megalobiz:checked:`, asked again after 30 days; an error puts a song LRCLIB missed back to pending; the link back its fair use asks, info.json's `lyrics_from` and the card's Lyrics tile, `library.lyrics_from`); also in `caracole lyrics`, a lookup and a sheet from a YouTube video |
 | fetch | ug/fetch.py (UG's chords and text tabs, and its Ukulele Chords as the sheet of a song with no chords there: `UKULELE_KINDS`, `sheet_group`), ug/page.py (tab pages; `KINDS`, the types caracole uses: chords, tabs, ukulele), ug/artist.py (artist pages), ug/artist_tabs.py (the tabs of every artist page read, kept for searches: `ug_artist_tabs`, schema 7), rank.py, coverage.py, versions.py, sheet_versions.py (a song's UG chords versions in rank order, or its ukulele chords ones when its sheet is one (`sheet_kind`, `group_of`), the one and those kept beside it as `version-<tab>.txt`, `.json`, `.html`: the versions the fetch scores, written by ug/fetch.py's `_keep_beside` with no request more, a pinned sheet's from the cache alone; `in_library`, the list as the library holds it, and `in_library_of`, many songs' in a few queries, the library page's; `may_keep`, those a keep may still keep, the page's count of the rest; `as_data`, the pages' JSON) |
 | lacuerda | lacuerda.py (URLs, parsing, its search's pages), lacuerda_fetch.py (the sheets; `may_ask`, the songs LaCuerda may have, for the step and the to-do page; `popular_pages`, the most popular artists' pages once the listings are read whole), lacuerda_index.py (its listings of every artist, for searches; `backfill_cached`, the artist pages the HTTP cache holds; `store_search`, what its search answered), lacuerda_search.py (its own search, one query at the lookup pace, `caracole lacuerda --search`; `gate`, whether the pages may send it) |
 | scan | music.py (Music/), inbox.py (`_inbox/`), musicxml.py |
@@ -540,7 +541,7 @@ Traps:
 ## How work is done here
 
 - Test first: a test that fails (on the missing name or an assertion), then the code.
-- Never a live request in a test: not to ultimate-guitar.com, lrclib.net, lacuerda.net,
+- Never a live request in a test: not to ultimate-guitar.com, lrclib.net, megalobiz.com, lacuerda.net,
   gtptabs.com, musescore.com or YouTube. Give `PoliteClient` an
   `httpx.MockTransport` as `transport=`; CLI tests monkeypatch
   `caracole.commands._common.transport_for` (and `_common.sleep`); pipeline tests pass
@@ -586,7 +587,9 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   - **Bulk work**: the nightly run (its index refresh included), `caracole index build`
     and every command but `caracole get`, `caracole versions`, `caracole lacuerda --artist`
     and `--search`, and `caracole harptabs --artist`. Budgets per run:
-    `ug` 60, `lrclib` 200, `lacuerda` 30 (its sheets first, then its listings of every
+    `ug` 60, `lrclib` 200, `megalobiz` 60 (a search and a record a song, `megalobiz_fetch.py`; and never more than
+    its `per_day`, 900 a UTC day, every run's, command's and lookup's together, counted in `events`:
+    `_common.within_the_day`, under its API's 1,000 a day), `lacuerda` 30 (its sheets first, then its listings of every
     artist, then, once those are read whole, the pages of its most popular artists not read in
     30 days, `lacuerda_fetch.POPULAR_PAGES` (10) at most), `gtptabs` 20, `musescore` 10,
     `harptabs` 20 requests (its sitemap, then a song's candidates, `harptabs_fetch.CANDIDATES` (8) at most, then,
@@ -599,7 +602,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     commands/index.py), and `caracole harptabs --index` and `caracole gametabs --index` their `--budget`,
     `BUILD_BUDGET` by default. Then `BudgetExhausted`. Between any two requests to a provider, a
     random pause from its `delay` (10–20 s for UG, LaCuerda, gtptabs.com, MuseScore
-    and harptabs.com, 1–2 s for LRCLIB, 1 s for gametabs.net, none for `ytimg`: the owner's choice of
+    and harptabs.com, 1–2 s for LRCLIB, 2–4 s for Megalobiz (2–3 s a lookup's: its API allows 30 a minute),
+    1 s for gametabs.net, none for `ytimg`: the owner's choice of
     2026-10-29, a thumbnail comes right after its search, YouTube's 15–30 s between yt-dlp runs and its last
     request never holding it back; everything else below binds it).
   - **An interactive lookup**: `caracole get`, one song asked for just now (caracole serve's
@@ -632,7 +636,7 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     (`_LockedClient._after_a_lookup`). The gap between two requests is the pace's alone: no
     robots.txt `Crawl-delay` adds to it (gametabs.net's asks 5 s; the owner chose, on 2026-10-28, that caracole
     does not keep it).
-  - Only a provider in `config.SWITCHABLE` (`gtptabs`, `musescore`, `harptabs`, `gametabs`, `youtube`, `ytimg`)
+  - Only a provider in `config.SWITCHABLE` (`megalobiz`, `gtptabs`, `musescore`, `harptabs`, `gametabs`, `youtube`, `ytimg`)
     can be turned off (`enabled = false`): then it gets no client and its step is skipped (`ytimg` off: a
     suggested video's row without its thumbnail).
   - A 403, a 429 or a challenge page raises `ProviderBlocked`: the client sends nothing
@@ -657,7 +661,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
     tests/fixtures/musescore/robots.txt, tests/fixtures/harptabs/robots.txt,
     tests/fixtures/gametabs/robots.txt and tests/fixtures/youtube/ytimg-robots.txt, checked by hand on
     2026-10-29). LaCuerda's
-    robots.txt is empty. A search (`caracole search`, `/api/search`) reads the local indexes
+    robots.txt is empty, and so are LRCLIB's and Megalobiz's API hosts' (none; megalobiz.com's, whose favicon
+    caracole asks, closes only accounts and editors: tests/fixtures/megalobiz/robots.txt). A search (`caracole search`, `/api/search`) reads the local indexes
     alone, `lacuerda_index` among them, asks no site and takes no lock
     (`test_web_app.py::test_a_search_asks_no_site_and_takes_no_lock`); the exceptions are YouTube's first
     video for a search, under YouTube's exception below, and
@@ -753,9 +758,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   - Every accepted 200 and 404 is cached forever, in `cache_dir/http/<provider>/`.
 - **Errors are never misses.** A block, a spent budget, an HTTP or network error, or a page
   that won't parse (`PageParseError`, `GtpTabsParseError`, `LaCuerdaParseError`,
-  `LrclibParseError`, `HarpTabsParseError`, `GameTabsParseError`) never makes a song not found, its lyrics missing or
+  `LrclibParseError`, `MegalobizParseError`, `HarpTabsParseError`, `GameTabsParseError`) never makes a song not found,
+  its lyrics missing or
   its Guitar Pro file or harmonica tab a miss: the song waits for the next run (http.py, pipeline.py,
-  provider_pass.py, ug/fetch.py, lyrics.py, lacuerda_fetch.py, gtptabs_fetch.py, harptabs_fetch.py,
+  provider_pass.py, ug/fetch.py, lyrics.py, megalobiz_fetch.py, lacuerda_fetch.py, gtptabs_fetch.py, harptabs_fetch.py,
   gametabs_fetch.py;
   `test_pipeline.py::test_ug_block_cools_down_and_never_marks_not_found`,
   `test_fetch.py::test_parse_error_is_not_a_miss`,
@@ -768,6 +774,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   its `Retry-After` (seconds or a date, 30 s at most, within the budget and the pace; a host of
   `http.RETRY_AFTER_503` alone), and a second 503, or one without it, is an error
   (`test_lyrics_pending.py::test_a_503_from_get_is_an_error_and_the_song_waits_never_missing`).
+  A song's lyrics are missing only once every site asked answered a miss: LRCLIB's miss, then Megalobiz's (a search
+  with no result that fits, or a record gone, 404), which asks again after 30 days; an error there puts a song LRCLIB
+  missed back to pending, and a song LRCLIB failed on is never missing whatever Megalobiz answers
+  (`test_megalobiz_fetch.py::test_an_error_on_a_song_lrclib_missed_puts_it_back_to_pending`).
   On gtptabs.com only an artist page that answered without a candidate is a miss, asked
   about again after 30 days; on harptabs.com only candidates that all answered, none by the
   song's artist (or gone, 404), asked about again after 30 days (harptabs_fetch.py,

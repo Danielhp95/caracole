@@ -15,7 +15,7 @@ import json
 import math
 import os
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -36,7 +36,10 @@ class ProviderPolicy:
     one song asked for just now (``caracole get``, or caracole serve's lookups),
     or one LaCuerda artist's page (``caracole lacuerda --artist``), sends
     ``lookup_requests`` at most, a random gap from ``lookup_delay`` apart, and
-    every lookup of an hour together ``lookup_per_hour``.
+    every lookup of an hour together ``lookup_per_hour``. A site that counts
+    each address's requests a day (Megalobiz's API) has ``per_day``: what every
+    run and lookup of the UTC day sent it together never goes past it
+    (``_common.make_client`` gives a client what the day leaves, at most).
     """
 
     budget: int
@@ -45,11 +48,16 @@ class ProviderPolicy:
     lookup_delay: tuple[float, float] = (0.5, 1.5)
     lookup_requests: int = 6
     lookup_per_hour: int = 60
+    per_day: int | None = None  # requests a UTC day, every run's and lookup's together; caracole.toml can't set it
 
 
 DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     "ug": ProviderPolicy(budget=60, delay=(10.0, 20.0)),
     "lrclib": ProviderPolicy(budget=200, delay=(1.0, 2.0)),
+    # Timed lyrics for the songs LRCLIB has none of, or none timed (megalobiz.py): a search and a record a song. Its
+    # API allows 30 requests a minute and 1,000 a day from one address: 2-4 s apart (a lookup's 2-3 s), and 900 a
+    # UTC day at most, every run's and lookup's together, which leaves its own count some slack.
+    "megalobiz": ProviderPolicy(budget=60, delay=(2.0, 4.0), lookup_delay=(2.0, 3.0), per_day=900),
     "lacuerda": ProviderPolicy(budget=30, delay=(10.0, 20.0)),
     # Guitar Pro files, downloaded for you: its robots.txt allows /tabs/download/ (gtptabs.py).
     "gtptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
@@ -71,7 +79,7 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
 }
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg"})
+SWITCHABLE = frozenset({"megalobiz", "gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg"})
 
 
 @dataclass(frozen=True)
@@ -337,8 +345,8 @@ def load_config(path: Path | None = None, env: Mapping[str, str] | None = None) 
         enabled = _bool(table.get("enabled", base.enabled), f"{where}.enabled")
         lookup_delay = (_delay(table["lookup_delay"], where, "lookup_delay") if "lookup_delay" in table
                         else base.lookup_delay)
-        providers[name] = ProviderPolicy(
-            budget=budget, delay=delay, enabled=enabled, lookup_delay=lookup_delay,
+        providers[name] = replace(  # what caracole.toml can't set (per_day) stays the default's
+            base, budget=budget, delay=delay, enabled=enabled, lookup_delay=lookup_delay,
             lookup_requests=_count(table.get("lookup_requests", base.lookup_requests), f"{where}.lookup_requests"),
             lookup_per_hour=_count(table.get("lookup_per_hour", base.lookup_per_hour), f"{where}.lookup_per_hour"),
         )

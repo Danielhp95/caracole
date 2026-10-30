@@ -78,15 +78,15 @@ if TYPE_CHECKING:
     from caracole.overrides import Overrides
 
 # Each provider's command, for the lock.
-_COMMANDS = {"lrclib": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs", "harptabs": "harptabs",
-             "gametabs": "gametabs", "musescore": "musescore"}
+_COMMANDS = {"lrclib": "lyrics", "megalobiz": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs",
+             "harptabs": "harptabs", "gametabs": "gametabs", "musescore": "musescore"}
 LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the help, which imports no pass
 
 
 def register(app: typer.Typer) -> None:
     @app.command("lyrics")
     def lyrics_cmd(ctx: typer.Context) -> None:
-        """Fetch lyrics from LRCLIB for songs that have none yet."""
+        """Fetch lyrics from LRCLIB for songs that have none yet, then timed ones from Megalobiz where it has none."""
         _lyrics(load_cfg(ctx))
 
     @app.command("lacuerda")
@@ -207,18 +207,46 @@ def _lyrics(cfg: Config) -> None:
     def ran(s: LyricsStats) -> bool:
         return bool(s.tried or s.budget_exhausted)
 
+    handed = _common.handoffs()  # a lookup LRCLIB's pass lets go first may change overrides.toml: Megalobiz's reads it
     s = _provider_pass(cfg, "lrclib", run, overrides, ran)
-    if s is None:
+    if s is not None:
+        if not ran(s):
+            typer.echo("No song is waiting for lyrics.")
+        else:
+            counts = f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental"
+            typer.echo(f"Lyrics: {counts}, {plural(s.errors, 'error')}")
+            if s.errors:
+                typer.echo("Songs with an error stay pending; the next run asks LRCLIB again.")
+            if s.budget_exhausted:
+                _budget_spent(cfg, "lrclib")
+    _megalobiz(cfg, _common.overrides_since(cfg, overrides, handed))
+
+
+def _megalobiz(cfg: Config, overrides: Overrides) -> None:
+    """Megalobiz's pass after LRCLIB's, as the nightly run's step follows LRCLIB's: the songs LRCLIB left without
+    timed lyrics. Nothing, not a word, when it is turned off or has no song to ask about."""
+    from caracole.megalobiz_fetch import MegalobizStats, megalobiz_lyrics, songs_to_ask
+
+    if not cfg.provider("megalobiz").enabled:
         return
-    if not ran(s):
-        typer.echo("No song is waiting for lyrics.")
+    with closing(open_db(cfg)) as conn:
+        if not songs_to_ask(conn, utcnow()):
+            return
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime) -> MegalobizStats:
+        return megalobiz_lyrics(conn, client, cfg.library_dir, now)
+
+    def ran(s: MegalobizStats) -> bool:
+        return bool(s.tried or s.budget_exhausted)
+
+    s = _provider_pass(cfg, "megalobiz", run, overrides, ran)
+    if s is None or not ran(s):
         return
-    counts = f"{s.found} found, {s.missing} missing, {s.instrumental} instrumental"
-    typer.echo(f"Lyrics: {counts}, {plural(s.errors, 'error')}")
+    typer.echo(f"Megalobiz: {s.found} found, {s.timed} timed, {s.missing} missing, {plural(s.errors, 'error')}")
     if s.errors:
-        typer.echo("Songs with an error stay pending; the next run asks LRCLIB again.")
+        typer.echo("Songs with an error wait; the next run asks LRCLIB, then Megalobiz, again.")
     if s.budget_exhausted:
-        _budget_spent(cfg, "lrclib")
+        _budget_spent(cfg, "megalobiz")
 
 
 def _lacuerda(cfg: Config) -> None:

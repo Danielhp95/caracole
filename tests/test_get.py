@@ -15,6 +15,7 @@ from pathlib import Path
 
 import httpx
 import pytest
+from helpers.megalobiz_site import FakeMegalobiz, record
 from helpers.ug_pages import make_tab_page_html, version_dict
 
 from caracole import db
@@ -49,6 +50,7 @@ class Sites:
     def __init__(self):
         self.pages: dict[str, tuple[int, str]] = {}
         self.lyrics: dict[tuple[str, str], str] = {}
+        self.megalobiz = FakeMegalobiz()  # with no record: a search finds nothing
         self.requests: list[str] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
@@ -63,6 +65,8 @@ class Sites:
             if request.url.path == "/api/search":
                 return httpx.Response(200, json=[])
             return httpx.Response(404, json={"name": "TrackNotFound"})
+        if request.url.host == "api.megalobiz.com":
+            return self.megalobiz.handler(request)
         status, body = self.pages.get(url, (404, "<html><title>Oops! We couldn't find that page.</title></html>"))
         return httpx.Response(status, text=body)
 
@@ -71,6 +75,9 @@ class Sites:
 
     def lrclib(self) -> list[str]:
         return [u for u in self.requests if "lrclib.net" in u]
+
+    def megalobiz_asked(self) -> list[str]:
+        return [u for u in self.requests if "megalobiz.com" in u]
 
 
 @pytest.fixture
@@ -83,7 +90,8 @@ def sites(monkeypatch) -> Sites:
 
 def write_cfg(tmp_path: Path, extra: str = ""):
     providers = "".join(f"[providers.{p}]\ndelay = [0, 0]\nlookup_delay = [0, 0]\n{extra if p == 'ug' else ''}"
-                        for p in ("ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs", "gametabs"))
+                        for p in ("ug", "lrclib", "megalobiz", "lacuerda", "gtptabs", "musescore", "harptabs",
+                                  "gametabs"))
     path = tmp_path / "caracole.toml"
     path.write_text(f'data_dir = "{tmp_path}"\n{providers}', encoding="utf-8")
     return load_config(path, env={"HOME": str(tmp_path / "home")})
@@ -425,6 +433,38 @@ def test_a_song_the_matcher_isnt_sure_of_says_so_and_still_gets_its_lyrics(cfg, 
     assert find_song(conn, "somebody/creep").match_decision == "review"
     assert progress.states()["sheet"] == "skipped" and "pick" in result.details["sheet"]
     assert sites.ug() == [] and progress.states()["lyrics"] == "done"
+
+
+def test_a_lookup_asks_megalobiz_for_timed_lyrics_lrclib_has_none_of(cfg, conn, sites):
+    # LRCLIB has Creep's lyrics plain; Megalobiz has them timed: the song's lyrics are Megalobiz's.
+    from caracole.lyrics import lyrics_from_json
+
+    serve_creep(sites, conn)
+    sites.megalobiz.records.append(record(lrc_id=5, title="Creep", artist="Radiohead", duration=None))
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["lyrics"] == "done"
+    assert result.details["lyrics"] == "found; timed lyrics from Megalobiz"
+    assert [u.split("?")[0].rsplit("/", 1)[-1] for u in sites.megalobiz_asked()] == ["search", "5"]
+    lyrics = lyrics_from_json(get_song(conn, find_song(conn, "radiohead/creep").id).lyrics_json)
+    assert (lyrics.provider, lyrics.url) == ("megalobiz", "https://megalobiz.com/lrc/5/creep")
+
+
+def test_a_lookup_whose_lyrics_megalobiz_lacks_keeps_lrclibs(cfg, conn, sites):
+    serve_creep(sites, conn)
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    assert result.details["lyrics"] == "found; Megalobiz has no timed ones"
+    assert len(sites.megalobiz_asked()) == 1
+
+
+def test_a_megalobiz_error_in_a_lookup_leaves_lrclibs_lyrics_and_no_miss(cfg, conn, sites):
+    serve_creep(sites, conn)
+    sites.megalobiz.failing["search"] = 502
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    assert progress.states()["lyrics"] == "done" and result.ok
+    assert result.details["lyrics"].startswith("found; Megalobiz failed (megalobiz: 502")
+    assert "502" in get_state(conn, "megalobiz").last_error
 
 
 def test_a_lookup_waiting_for_the_lock_says_where_it_is_let_in(cfg, conn, sites):

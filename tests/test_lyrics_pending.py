@@ -353,6 +353,28 @@ def test_the_songs_left_once_lrclib_is_given_up_on_are_named_too(conn, tmp_path)
     ]
 
 
+def test_the_songs_an_error_left_are_remembered_for_megalobiz_until_lrclib_answers(conn, tmp_path):
+    # Megalobiz is asked about a song LRCLIB failed on (megalobiz_fetch.py), never one LRCLIB hasn't been asked about.
+    from caracole.db import kv_get
+    from caracole.lyrics import FAILED
+
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    run(FakeLrclib(broken={"Soda Stereo": 500}), conn, tmp_path)
+    assert kv_get(conn, f"{FAILED}{song.id}") == STAMP
+    run(FakeLrclib([load("get_hit.json")]), conn, tmp_path)
+    assert kv_get(conn, f"{FAILED}{song.id}") is None
+
+
+def test_the_songs_left_once_lrclib_is_given_up_on_are_remembered_too(conn, tmp_path):
+    from caracole.db import kv_get
+    from caracole.lyrics import FAILED
+
+    names = ["Uno", "Dos", "Tres", "Cuatro"]
+    songs = [add_song(conn, name, "Canción", added_at=f"2026-10-0{i + 1}T00:00:00Z") for i, name in enumerate(names)]
+    run(FakeLrclib(broken={name: 500 for name in names}), conn, tmp_path)
+    assert all(kv_get(conn, f"{FAILED}{s.id}") == STAMP for s in songs)
+
+
 # --- LRCLIB too busy: its 503 ------------------------------------------------------
 #
 # LRCLIB documents its 503 as ServerOverloaded: "temporarily busy; retry after the Retry-After header (usually 1

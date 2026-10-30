@@ -34,7 +34,8 @@ class Sites:
     """LRCLIB answers every request with ``lrclib`` (503: overloaded, with Retry-After: 1, as live, so caracole asks
     each once more after a second); LaCuerda has three
     pages of artists for each initial, as its listings of every artist are paged; UG must not be
-    asked at all, and gtptabs.com, harptabs.com, gametabs.net and MuseScore are turned off; ntfy takes every post."""
+    asked at all, and Megalobiz, gtptabs.com, harptabs.com, gametabs.net and MuseScore are turned off; ntfy takes every
+    post."""
 
     def __init__(self, lrclib: int = 503):
         self.lrclib = lrclib
@@ -87,7 +88,7 @@ def write_config(tmp_path: Path, *, ntfy: bool = False) -> Path:
     ]
     for provider in ("ug", "lrclib", "lacuerda"):
         lines += [f"[providers.{provider}]", "delay = [0, 0]"]
-    for provider in ("gtptabs", "harptabs", "gametabs", "musescore"):  # sites these tests leave out
+    for provider in ("megalobiz", "gtptabs", "harptabs", "gametabs", "musescore"):  # sites these tests leave out
         lines += [f"[providers.{provider}]", "enabled = false"]
     if ntfy:
         lines += ["[ntfy]", f'url = "{NTFY}"']

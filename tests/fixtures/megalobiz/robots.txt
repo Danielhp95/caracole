@@ -1,0 +1,28 @@
+User-Agent: *
+Allow: /
+Disallow: /auth/
+Disallow: /history
+Disallow: /seo/
+Disallow: /song/details
+Disallow: /song/new
+Disallow: /song/edit
+Disallow: /album/details
+Disallow: /album/new
+Disallow: /album/edit
+Disallow: /artist/details
+Disallow: /artist/new
+Disallow: /artist/edit
+Disallow: /genre/details
+Disallow: /genre/new
+Disallow: /genre/edit
+Disallow: /lrc/details
+Disallow: /lrc/new
+Disallow: /lrc/edit
+Disallow: /playlist/details
+Disallow: /playlist/new
+Disallow: /playlist/edit
+
+User-Agent: BitChord
+Disallow: /
+
+Sitemap: https://megalobiz.com/sitemap.xml

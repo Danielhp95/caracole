@@ -203,6 +203,21 @@ def test_lyrics_json_roundtrip():
         assert lyrics_from_json(lyrics.to_json()) == lyrics
 
 
+def test_stored_lyrics_say_which_provider_answered_and_where_its_page_is():
+    lyrics = Lyrics(plain="una línea", synced="[00:01.00]una línea", instrumental=False, duration=200.0,
+                    lrclib_id=None, raw={"id": 7}, provider="megalobiz", url="https://megalobiz.com/lrc/7/x")
+    assert lyrics_from_json(lyrics.to_json()) == lyrics
+    assert json.loads(lyrics.to_json())["provider"] == "megalobiz"
+
+
+def test_lyrics_stored_before_they_said_their_provider_are_lrclibs():
+    stored = json.loads(Lyrics.from_record(load("get_hit.json")).to_json())
+    del stored["provider"], stored["url"]
+    lyrics = lyrics_from_json(json.dumps(stored))
+    assert (lyrics.provider, lyrics.url) == ("lrclib", None)
+    assert Lyrics.from_record(load("get_hit.json")).provider == "lrclib"
+
+
 def test_lyrics_from_json_accepts_every_stored_form():
     raw = load("get_hit.json")
     lyrics = Lyrics.from_record(raw)

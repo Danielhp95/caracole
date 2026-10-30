@@ -34,6 +34,7 @@ from typing import Any, Literal, Protocol
 from rapidfuzz import fuzz
 
 from caracole import stamps
+from caracole.db import kv_delete, kv_set
 from caracole.http import Client, ProviderError, Response, read_once_more
 from caracole.library import song_dir, write_atomic
 from caracole.normalize import clean_title, fold, slug_key
@@ -118,11 +119,14 @@ def plain_from_synced(synced: str) -> str:
 
 @dataclass(frozen=True)
 class Lyrics:
-    """A song's lyrics, from one LRCLIB record.
+    """A song's lyrics, from one record of one provider.
 
     ``plain`` is "" when there are none (an instrumental, say), ``synced`` is
-    LRC text or None, ``duration`` is LRCLIB's in seconds, and ``raw`` is the
-    record as LRCLIB sent it.
+    LRC text or None, ``duration`` is the record's in seconds, and ``raw`` is the
+    record as the provider sent it (Megalobiz's without its lyrics: they are in
+    ``synced``). ``provider`` is who answered, LRCLIB's or Megalobiz's
+    (megalobiz_fetch.py), and ``url`` the record's page, which caracole links to
+    wherever it credits them (Megalobiz's fair use asks it; LRCLIB's have none).
     """
 
     plain: str
@@ -131,6 +135,8 @@ class Lyrics:
     duration: float | None
     lrclib_id: int | None
     raw: Mapping[str, Any] = field(default_factory=dict, repr=False, hash=False)
+    provider: str = PROVIDER
+    url: str | None = None
 
     @classmethod
     def from_record(cls, raw: Mapping[str, Any]) -> Lyrics:
@@ -166,6 +172,8 @@ class Lyrics:
                 "duration": self.duration,
                 "lrclib_id": self.lrclib_id,
                 "raw": dict(self.raw),
+                "provider": self.provider,
+                "url": self.url,
             },
             ensure_ascii=False,
         )
@@ -175,7 +183,8 @@ def lyrics_from_json(value: str | Mapping[str, Any] | None) -> Lyrics | None:
     """Read lyrics stored with ``Lyrics.to_json``; None when nothing is stored.
 
     The value may also be already decoded (a JSON column read as a dict), or a
-    bare LRCLIB record, which is read with ``Lyrics.from_record``.
+    bare LRCLIB record, which is read with ``Lyrics.from_record``. Lyrics stored
+    before they named their provider are LRCLIB's.
     """
     if isinstance(value, str):
         value = json.loads(value) if value.strip() else None
@@ -186,6 +195,7 @@ def lyrics_from_json(value: str | Mapping[str, Any] | None) -> Lyrics | None:
     if "raw" not in value or "plain" not in value:
         return Lyrics.from_record(value)
     plain, synced, raw = value["plain"], value.get("synced"), value["raw"]
+    provider, url = value.get("provider"), value.get("url")
     return Lyrics(
         plain=plain if isinstance(plain, str) else "",
         synced=synced if isinstance(synced, str) else None,
@@ -193,6 +203,8 @@ def lyrics_from_json(value: str | Mapping[str, Any] | None) -> Lyrics | None:
         duration=_float(value.get("duration")),
         lrclib_id=_int(value.get("lrclib_id")),
         raw=dict(raw) if isinstance(raw, Mapping) else {},
+        provider=provider if isinstance(provider, str) and provider else PROVIDER,
+        url=url if isinstance(url, str) and url else None,
     )
 
 
@@ -303,6 +315,25 @@ def _artist_matches(want: str, got: str) -> bool:
     )
 
 
+def fits(*, artist: str, title: str, duration_s: float | None, got_artist: str, got_title: str,
+         got_duration: float | None) -> tuple[int, float] | None:
+    """Whether a record (``got_*``) is the song, by ``pick_candidate``'s rules, which another provider's picker
+    keeps too (megalobiz.py): None when it isn't; else its band, 0 within ±2 s of the song's duration, 1 within
+    ±10 s, 2 beyond (only for a record whose title and artist keys equal the song's), and how far off it is (0, 0.0
+    when the song's duration isn't known)."""
+    want_title, want_artist = _key(clean_title(title)), _key(artist)
+    got_t, got_a = _key(clean_title(got_title)), _key(got_artist)
+    if fuzz.ratio(want_title, got_t) < _TEXT_MATCH or not _artist_matches(want_artist, got_a):
+        return None
+    if duration_s is None:
+        return 0, 0.0
+    delta = abs(got_duration - duration_s) if got_duration is not None else math.inf
+    band = 0 if delta <= _CLOSE_S else 1 if delta <= _TEXT_MATCH_S else 2
+    if band == 2 and (got_t, got_a) != (want_title, want_artist):
+        return None
+    return band, delta
+
+
 def pick_candidate(
     cands: Iterable[Any], *, artist: str, title: str, duration_s: float | None
 ) -> Mapping[str, Any] | None:
@@ -322,8 +353,6 @@ def pick_candidate(
 
     Without a duration, synced lyrics win. Remaining ties keep LRCLIB's order.
     """
-    want_title = _key(clean_title(title))
-    want_artist = _key(artist)
     best: Mapping[str, Any] | None = None
     best_rank: tuple[float, ...] | None = None
     for order, cand in enumerate(cands):
@@ -333,20 +362,12 @@ def pick_candidate(
         kind = _kind(lyrics)
         if kind is None:
             continue
-        got_title = _key(clean_title(_text(cand.get("trackName") or cand.get("name"))))
-        got_artist = _key(_text(cand.get("artistName")))
-        if fuzz.ratio(want_title, got_title) < _TEXT_MATCH:
+        fit = fits(artist=artist, title=title, duration_s=duration_s, got_artist=_text(cand.get("artistName")),
+                   got_title=_text(cand.get("trackName") or cand.get("name")), got_duration=lyrics.duration)
+        if fit is None:
             continue
-        if not _artist_matches(want_artist, got_artist):
-            continue
-        if duration_s is None:
-            rank: tuple[float, ...] = (kind, order)
-        else:
-            delta = abs(lyrics.duration - duration_s) if lyrics.duration is not None else math.inf
-            band = 0 if delta <= _CLOSE_S else 1 if delta <= _TEXT_MATCH_S else 2
-            if band == 2 and (got_title, got_artist) != (want_title, want_artist):
-                continue
-            rank = (band, kind, delta, order)
+        band, delta = fit
+        rank: tuple[float, ...] = (kind, order) if duration_s is None else (band, kind, delta, order)
         if best_rank is None or rank < best_rank:
             best, best_rank = cand, rank
     return best
@@ -444,6 +465,9 @@ class LyricsStats(PassStats):
 
 
 RECHECK_MISSING_AFTER = timedelta(days=30)
+# + song id: when LRCLIB's last lookup of the song failed, an error or the pass given up before it, kept until LRCLIB
+# answers about it; Megalobiz asks about such a song (megalobiz_fetch.py), never one LRCLIB hasn't been asked about.
+FAILED = "lyrics:failed:"
 
 
 def _songs_to_look_up(conn: sqlite3.Connection, now: datetime, recheck_after: timedelta) -> list[Song]:
@@ -489,7 +513,9 @@ def fetch_pending_lyrics(
     ``BudgetExhausted`` ends the pass (``budget_exhausted``); any other
     ``ProviderError`` counts in ``errors`` and leaves the song as it was, for the
     next run. Once the client gives up on the provider for this run
-    (``ProviderUnavailable``), the pass ends.
+    (``ProviderUnavailable``), the pass ends. Every song an error left
+    (``failures``) is remembered for Megalobiz (kv ``lyrics:failed:``, ``FAILED``)
+    until LRCLIB answers about it.
     """
     stats = LyricsStats()
     stamp = stamps.stamp(now)
@@ -502,12 +528,15 @@ def fetch_pending_lyrics(
     songs = (s for s in _songs_to_look_up(conn, now, recheck_missing_after) if only is None or s.id in only)
     for song, result in each_song(songs, stats, turn, site="LRCLIB"):
         _record(conn, library_dir, song, result, stamp)
+        kv_delete(conn, f"{FAILED}{song.id}")
         if result.status == "found":
             stats.found += 1
         elif result.status == "instrumental":
             stats.instrumental += 1
         else:
             stats.missing += 1
+    for song, _ in stats.failures:
+        kv_set(conn, f"{FAILED}{song.id}", stamp)
     return stats
 
 

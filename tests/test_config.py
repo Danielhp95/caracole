@@ -205,6 +205,16 @@ def test_only_gtptabs_and_musescore_can_be_turned_off(tmp_path):
             load_config(p, env={"HOME": str(tmp_path)})
 
 
+def test_megalobiz_is_a_switchable_provider_under_its_apis_rate_limits(tmp_path):
+    # 30 requests a minute and 1,000 a day from one address: 2-4 s apart, 60 a run, and 900 a UTC day at most.
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert cfg.provider("megalobiz") == ProviderPolicy(budget=60, delay=(2.0, 4.0), lookup_delay=(2.0, 3.0),
+                                                       per_day=900)
+    p = write(tmp_path, "[providers.megalobiz]\nenabled = false\nbudget = 30\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).provider("megalobiz") == ProviderPolicy(
+        budget=30, delay=(2.0, 4.0), enabled=False, lookup_delay=(2.0, 3.0), per_day=900)
+
+
 def test_gtptabs_enabled_must_be_true_or_false(tmp_path):
     p = write(tmp_path, '[providers.gtptabs]\nenabled = "no"\n')
     with pytest.raises(ConfigError, match=r'\[providers\.gtptabs\]\.enabled must be true or false, not "no"'):

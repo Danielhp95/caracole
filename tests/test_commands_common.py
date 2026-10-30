@@ -426,6 +426,36 @@ def test_lookups_share_a_budget_per_site_per_hour(cfg, conn, site):
         spent.close()
 
 
+def log_today(conn, provider: str, n: int, *, run: str, at: datetime) -> None:
+    stamp = at.strftime("%Y-%m-%dT%H:%M:%SZ")
+    conn.executemany("INSERT INTO events (run, at, provider, url, status, decision) VALUES (?, ?, ?, ?, ?, ?)",
+                     [(run, stamp, provider, "https://api.megalobiz.com/api/public/v1/search", 200, "ok")] * n)
+
+
+def test_a_site_with_a_daily_cap_gets_what_the_utc_day_leaves_of_it(cfg, conn, site):
+    # Megalobiz allows an address 1,000 requests a day: caracole sends 900 at most, every run's and lookup's together.
+    midnight = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+    log_today(conn, "megalobiz", 600, run="2026-10-19T03:30:00Z", at=midnight)
+    log_today(conn, "megalobiz", 280, run="lookup:2026-10-19T12:00:00Z", at=midnight)
+    log_today(conn, "megalobiz", 500, run="2026-10-18T03:30:00Z", at=midnight - timedelta(seconds=1))  # yesterday
+    bulk = make_client(cfg, conn, "megalobiz", "run")
+    try:
+        assert bulk.policy.budget == 20  # 900 a day, 880 sent today
+    finally:
+        bulk.close()
+    log_today(conn, "megalobiz", 17, run="lookup:2026-10-19T12:00:00Z", at=midnight)
+    lookup = make_client(cfg, conn, "megalobiz", _common.lookup_run_id(_common.utcnow()), interactive=True)
+    try:
+        assert lookup.policy.budget == 3
+    finally:
+        lookup.close()
+    other = make_client(cfg, conn, "lrclib", "run")  # a site with no daily cap keeps its budget
+    try:
+        assert other.policy.budget == 200
+    finally:
+        other.close()
+
+
 def test_a_lookups_first_request_waits_only_the_short_gap_after_the_last_one(cfg, conn, site, pauses):
     bulk = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
     bulk.get("https://tabs.ultimate-guitar.com/tab/1")

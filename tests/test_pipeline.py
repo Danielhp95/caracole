@@ -160,10 +160,10 @@ def test_unexpected_error_marks_the_run_failed_but_later_steps_still_run(conn, c
 def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
-    assert report.requests == {"ug": 7, "lrclib": 3, "lacuerda": 0, "gtptabs": 0, "musescore": 0, "harptabs": 0,
-                               "gametabs": 0}
-    assert ("Requests: Ultimate Guitar 7, LRCLIB 3, LaCuerda 0, gtptabs.com 0, MuseScore 0, harptabs.com 0, "
-            "gametabs.net 0."
+    assert report.requests == {"ug": 7, "lrclib": 3, "megalobiz": 0, "lacuerda": 0, "gtptabs": 0, "musescore": 0,
+                               "harptabs": 0, "gametabs": 0}
+    assert ("Requests: Ultimate Guitar 7, LRCLIB 3, Megalobiz 0, LaCuerda 0, gtptabs.com 0, MuseScore 0, "
+            "harptabs.com 0, gametabs.net 0."
             in report.summary().splitlines())
 
 
@@ -242,8 +242,8 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "icons", "index", "match", "lyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs", "gametabs",
-        "musescore", "youtube", "render", "todo",
+        "sync", "icons", "index", "match", "lyrics", "megalobiz", "fetch", "lacuerda", "scan", "gtptabs", "harptabs",
+        "gametabs", "musescore", "youtube", "render", "todo",
     ]
     providers = {s.name: s.provider for s in default_steps()}
     assert providers["fetch"] == "ug" and providers["gtptabs"] == "gtptabs" and providers["musescore"] == "musescore"
@@ -354,7 +354,7 @@ def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
     off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
     made = make_services(off, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "musescore", "harptabs", "gametabs"}
+        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "lacuerda", "musescore", "harptabs", "gametabs"}
     finally:
         made.close()
     steps = [s for s in default_steps() if s.name == "gtptabs"]
@@ -367,7 +367,8 @@ def test_the_run_makes_a_client_for_every_provider_turned_on(conn, cfg):
 
     made = make_services(cfg, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs", "gametabs"}
+        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "lacuerda", "gtptabs", "musescore", "harptabs",
+                                     "gametabs"}
     finally:
         made.close()
 
@@ -475,6 +476,64 @@ def test_a_gametabs_block_cools_it_down_and_marks_no_song(conn, cfg):
     assert is_cooling(conn, "gametabs", NOW + timedelta(hours=25))
     assert kv_get_json(conn, f"gametabs:checked:{song.id}") is None
     assert site.requests[-1] == "https://gametabs.net/tabs/hollow-knight/resting-grounds"  # nothing after the block
+
+
+def test_megalobiz_follows_lrclib_and_gives_a_song_it_missed_timed_lyrics(conn, cfg):
+    from conftest import add_song
+    from helpers.megalobiz_site import FakeMegalobiz
+    from test_lyrics_pending import FakeLrclib
+
+    from caracole.lyrics import lyrics_from_json
+    from caracole.pipeline import default_steps
+    from caracole.songs import get_song
+
+    names = [s.name for s in default_steps()]
+    assert names.index("megalobiz") == names.index("lyrics") + 1
+    song = add_song(conn, "Eagles", "Hotel California", duration_ms=391000)
+    lrclib, site = FakeLrclib(), FakeMegalobiz([None])
+    svc = Services(clients={"lrclib": lrclib.client(cfg.cache_dir), "megalobiz": site.client(cfg.cache_dir, now=NOW)},
+                   notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name in ("lyrics", "megalobiz")]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.steps["lyrics"].startswith("0 found, 1 missing")
+    assert report.steps["megalobiz"] == "1 found, 0 timed, 0 missing, 0 errors"
+    stored = get_song(conn, song.id)
+    assert stored.lyrics_status == "found" and lyrics_from_json(stored.lyrics_json).provider == "megalobiz"
+
+
+def test_a_megalobiz_block_cools_it_down_and_marks_no_song(conn, cfg):
+    from conftest import add_song
+    from helpers.megalobiz_site import FakeMegalobiz
+
+    from caracole.pipeline import default_steps
+    from caracole.songs import get_song, update_song
+
+    song = add_song(conn, "Eagles", "Hotel California")
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-10-01T00:00:00Z")
+    site = FakeMegalobiz([None], failing={"search": 429})
+    out = Outbox()
+    svc = Services(clients={"megalobiz": site.client(cfg.cache_dir, now=NOW)}, notifier=out.notifier())
+    steps = [s for s in default_steps() if s.name == "megalobiz"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.blocked == ["megalobiz"] and report.steps["megalobiz"].startswith("blocked")
+    assert is_cooling(conn, "megalobiz", NOW + timedelta(hours=25))
+    assert kv_get_json(conn, f"megalobiz:checked:{song.id}") is None
+    assert get_song(conn, song.id).lyrics_status == "missing"
+    assert len(site.requests) == 1  # nothing after the block
+
+
+def test_megalobiz_turned_off_is_skipped(conn, cfg):
+    from dataclasses import replace
+
+    from caracole.config import ProviderPolicy
+    from caracole.pipeline import default_steps
+
+    off = replace(cfg, providers={**cfg.providers, "megalobiz": ProviderPolicy(budget=60, delay=(2.0, 4.0),
+                                                                            enabled=False)})
+    steps = [s for s in default_steps() if s.name == "megalobiz"]
+    report = run_pipeline(off, conn=conn, services=Services(clients={}, notifier=Outbox().notifier()), steps=steps,
+                          now=NOW)
+    assert report.steps["megalobiz"] == "skipped: megalobiz is off ([providers.megalobiz] enabled = false)"
 
 
 def test_the_gametabs_step_keeps_a_tab_and_reads_game_pages_with_what_the_budget_leaves(conn, cfg):
@@ -1062,12 +1121,13 @@ def todo_step():
 
 def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     # The page is written before the run ends; a first run must not say "never" after 80 good requests.
-    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, lacuerda=5, gtptabs=3, musescore=2,
-                                                   harptabs=1, gametabs=4),
+    run_pipeline(cfg, conn=conn, services=services(Outbox(), ug=60, lrclib=10, megalobiz=6, lacuerda=5, gtptabs=3,
+                                                   musescore=2, harptabs=1, gametabs=4),
                  steps=todo_step(), now=NOW)
     page = todo_page(cfg)
     assert "| ug | OK | 2026-10-18 03:30 UTC |  | 60 |" in page
     assert "| lrclib | OK | 2026-10-18 03:30 UTC |  | 10 |" in page
+    assert "| megalobiz | OK | 2026-10-18 03:30 UTC |  | 6 |" in page
     assert "| gtptabs | OK | 2026-10-18 03:30 UTC |  | 3 |" in page
     assert "| musescore | OK | 2026-10-18 03:30 UTC |  | 2 |" in page
     assert "| harptabs | OK | 2026-10-18 03:30 UTC |  | 1 |" in page
@@ -1187,8 +1247,8 @@ def test_with_auto_chords_the_run_makes_a_yt_dlp_runner_that_holds_the_lock(conn
     made = make_services(ycfg, conn, "2026-10-19T03:30:00Z")
     lock = ycfg.state_dir / _common.LOCK_NAME
     try:
-        assert set(made.clients) == {"ug", "lrclib", "lacuerda", "gtptabs", "musescore", "harptabs", "gametabs",
-                                     "youtube"}
+        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "lacuerda", "gtptabs", "musescore", "harptabs",
+                                     "gametabs", "youtube"}
         assert made.clients["youtube"].policy.budget == 6
         assert lock in _common._held
     finally:

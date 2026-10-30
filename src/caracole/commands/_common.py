@@ -601,6 +601,27 @@ def lookup_policy(cfg: Config, conn: sqlite3.Connection, provider: str, now: dat
     return replace(p, budget=max(0, min(p.lookup_requests, p.lookup_per_hour - used)), delay=p.lookup_delay)
 
 
+def requests_today(conn: sqlite3.Connection, provider: str, now: datetime | None = None) -> int:
+    """How many requests every caracole sent the provider since UTC midnight: every run's, command's and lookup's
+    (``events``)."""
+    midnight = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT00:00:00Z")
+    sent = ",".join("?" * len(_SENT))
+    return conn.execute(
+        f"SELECT COUNT(*) FROM events WHERE provider = ? AND at >= ? AND decision IN ({sent})",
+        (provider, midnight, *_SENT),
+    ).fetchone()[0]
+
+
+def within_the_day(conn: sqlite3.Connection, provider: str, policy: ProviderPolicy,
+                   now: datetime | None = None) -> ProviderPolicy:
+    """``policy`` with no more requests than the UTC day leaves of its ``per_day`` (Megalobiz's API counts an
+    address's requests a day, and resets at midnight UTC): a site with none keeps its budget."""
+    if policy.per_day is None:
+        return policy
+    left = max(0, policy.per_day - requests_today(conn, provider, now))
+    return policy if policy.budget <= left else replace(policy, budget=left)
+
+
 def make_client(
     cfg: Config,
     conn: sqlite3.Connection,
@@ -624,13 +645,15 @@ def make_client(
     the lock to a waiting lookup in its pauses. ``interactive``, a lookup's
     (``caracole get``), keeps ``lookup_policy``: a gap of about a second, and a
     few requests; its run id starts with ``lookup:`` so the hourly budget counts
-    them, and it never hands the lock over.
+    them, and it never hands the lock over. Either way, a site with a ``per_day``
+    (Megalobiz) gets no more than what the UTC day leaves of it (``within_the_day``).
     """
     if interactive and not run_id.startswith(LOOKUP_RUN):
         run_id = LOOKUP_RUN + run_id
     lock = _acquire(cfg, f"{provider} requests", interactive=interactive)
     try:
         policy = policy or (lookup_policy(cfg, conn, provider) if interactive else cfg.provider(provider))
+        policy = within_the_day(conn, provider, policy)
         seen = _handoffs  # a lookup let go first in the pause before its first request counts too
         _pause_after_last_request(conn, provider, policy.delay, cfg=None if interactive else cfg)
         log = EventLog(conn, run_id)

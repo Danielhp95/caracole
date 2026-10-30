@@ -264,6 +264,14 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
     # /preparing-tab-file-download is every attachment's download (a login's); /tabs?* its filters; /api/ its API.
     "gametabs.net": _GAMETABS,
     "www.gametabs.net": _GAMETABS,
+    # Megalobiz's site, whose favicon caracole asks (icons.py): its robots.txt allows all but its accounts and editors
+    # (tests/fixtures/megalobiz/robots.txt, 2026-10-30). Its API host, api.megalobiz.com, has no robots.txt (404).
+    "megalobiz.com": (
+        "/auth/", "/history", "/seo/", "/song/details", "/song/new", "/song/edit", "/album/details", "/album/new",
+        "/album/edit", "/artist/details", "/artist/new", "/artist/edit", "/genre/details", "/genre/new",
+        "/genre/edit", "/lrc/details", "/lrc/new", "/lrc/edit", "/playlist/details", "/playlist/new",
+        "/playlist/edit",
+    ),
     # YouTube's image host, of which caracole asks a suggested video's thumbnail alone (youtube_search.py); /sb/ is
     # a video's storyboard frames.
     "i.ytimg.com": ("/sb/",),

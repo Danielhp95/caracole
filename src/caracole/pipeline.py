@@ -1,11 +1,11 @@
 """The nightly ``caracole run`` (plan §6).
 
-Steps, in order: sync → icons → index → match → lyrics → fetch → lacuerda →
+Steps, in order: sync → icons → index → match → lyrics → megalobiz → fetch → lacuerda →
 scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo. Each step runs even
 if an earlier one failed, so the to-do page is always rewritten.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. So are gtptabs, harptabs, gametabs, musescore and youtube when caracole.toml
+  the run once it blocks. So are megalobiz, gtptabs, harptabs, gametabs, musescore and youtube when caracole.toml
   turns one off: it gets no client then. A block records a cooldown (24 h, doubling)
   and sends one ntfy message; it is expected behaviour, not a failed run.
 - The youtube step runs yt-dlp (youtube.py, youtube_fetch.py) only in a caracole
@@ -276,6 +276,21 @@ def _lyrics(ctx: StepContext) -> StepResult:
         failures=s.failures, title="Lyrics",
         done=_counted((s.found, "found"), (s.missing, "missing"), (s.instrumental, "instrumental")),
         retry="the lyrics of {songs} will be tried again on the next run",
+    )
+
+
+def _megalobiz(ctx: StepContext) -> StepResult:
+    """Megalobiz's timed lyrics for the songs LRCLIB's step left without (megalobiz_fetch.py)."""
+    from caracole.megalobiz_fetch import megalobiz_lyrics
+
+    s = megalobiz_lyrics(ctx.conn, ctx.services.client("megalobiz"), ctx.cfg.library_dir, ctx.now)
+    return _provider_result(
+        ctx, "megalobiz", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run",
+        spent=s.budget_exhausted,
+        status=f"{s.found} found, {s.timed} timed, {s.missing} missing, {plural(s.errors, 'error')}",
+        failures=s.failures, title="Megalobiz",
+        done=_counted((s.found, "found"), (s.timed, "now timed"), (s.missing, "missing")),
+        retry="the lyrics of {songs} will be asked of Megalobiz again on the next run",
     )
 
 
@@ -574,6 +589,8 @@ def default_steps() -> list[Step]:
         Step("index", _index, provider="ug"),
         Step("match", _match),
         Step("lyrics", _lyrics, provider="lrclib"),
+        # Right after LRCLIB: timed lyrics for the songs it left without, before the fetch scores sheets by them.
+        Step("megalobiz", _megalobiz, provider="megalobiz"),
         Step("fetch", _fetch, provider="ug"),
         Step("lacuerda", _lacuerda, provider="lacuerda"),
         Step("scan", _scan),
