@@ -4619,7 +4619,8 @@ tab](#the-songbooks-tab)). Open in the browser is
 each request, where [alphaTab](https://www.alphatab.net) draws and plays the
 file: the song's title and artist, links back to the song in the library, to
 its sheet viewer when it has one and to the file as a download, then a bar
-that stays at the top while the score scrolls: **Play** (Pause while it plays)
+that stays at the top while the score scrolls: **Play** (Pause while it plays;
+the space bar plays and pauses too, wherever you are on the page)
 and **Stop**, the **Tempo** (50 to 125 %) and **Tab only** or **Score and tab**
 on one row, and under it the file's **tracks**, a button each with its name
 (whole when you point at a name cut short) and its kind (6 strings, 4 strings,
