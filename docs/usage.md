@@ -25,6 +25,7 @@ backups.
 - [Fonts for Chinese sheets](#fonts-for-chinese-sheets)
 - [The library folder](#the-library-folder)
 - [A worked example](#a-worked-example)
+- [The database's copies](#the-databases-copies)
 - [Running it on a server](#running-it-on-a-server)
 
 ## Configure
@@ -130,7 +131,8 @@ it, `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/caracole`, else `~/.local/state/caracole`. `cache_dir` works the
 same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
 `~/.cache/caracole`. The state folder holds `caracole.sqlite` and
-`caracole.lock`: back it up, but don't sync it. The cache keeps every
+`caracole.lock`, and in `backups/` the last three copies of the database (see
+[The database's copies](#the-databases-copies)): back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
 goes when the PDF is done, so caracole must be able to write there. Its
@@ -1091,6 +1093,10 @@ configuration it would take, and why it waits.
     Skipped in a caracole without auto-chords.
 14. **render**: write ChordPro files and PDFs.
 15. **todo**: rewrite `_todo.md` and `index.html`.
+16. **backup**: copy the database whole into the state folder's `backups/`,
+    keeping the last three (see [The database's copies](#the-databases-copies)),
+    but only after a run no step of which failed: a block, a cooldown or a spent
+    budget is no failure, a bug is, and then the copies of the nights before stay.
 
 Every step runs even when an earlier one failed, so the to-do page is always
 rewritten. Until the index is built, the index and match steps are skipped;
@@ -5475,6 +5481,36 @@ Dongye", and the to-do page lists the song as "No human sheet found yet",
 queued, then downloaded, then with its chords done. The auto sheet says which
 video its audio came from, on its third line. A purchase dropped into Music/
 later takes the video's place.
+
+## The database's copies
+
+The database holds what took the longest to get: the indexes of every site,
+built from days of polite requests (Ultimate Guitar's sitemaps, LaCuerda's
+listings, harptabs.com's artist pages, gametabs.net's game pages), besides your
+songs' state. The cache can be lost, at the cost of requests; the database is
+better kept.
+
+### caracole backup
+
+The nightly run's last step copies the database whole into `backups/` in the
+state folder, as `caracole-2026-10-30T034512Z.sqlite` (the time in UTC), and
+keeps the last three: about 430 MB each for a library with every index. Each
+copy is the database as it stood at one moment, whatever another caracole
+writes meanwhile (SQLite's `VACUUM INTO`), checked by SQLite before it takes the
+place of the oldest, and readable by caracole's user alone. With no room for a
+copy (the database's size and 64 MB to spare), no copy is made and none is
+deleted: the summary says `No backup tonight: no room for a copy …`. A copy
+that fails SQLite's check fails the run, so that you hear of it; the copies
+there were stay. The summary says nothing of a copy made; `caracole -v run`
+logs its name and size.
+
+    caracole backup            # a copy now, under caracole's lock: it waits for a run
+    caracole backup --list     # the copies there are, the newest last
+
+`caracole backup` exits 1 when there is no room for a copy, or the copy fails
+its check. To put a copy back, stop caracole, take the database's `-wal` and
+`-shm` files away with it, and copy the backup into its place:
+[deploy.md](deploy.md#restoring-the-database) says how on a server.
 
 ## Running it on a server
 

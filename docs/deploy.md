@@ -9,8 +9,8 @@ network. Two ways to set it up:
   module does.
 
 [The first run](#the-first-run), [Checking auto-chords](#checking-auto-chords),
-[Logs](#logs) and [When something is wrong](#when-something-is-wrong) are the
-same for both. Either way the machine gets:
+[Logs](#logs), [Restoring the database](#restoring-the-database) and [When
+something is wrong](#when-something-is-wrong) are the same for both. Either way the machine gets:
 
 | What | Does |
 |---|---|
@@ -29,7 +29,7 @@ hides:
 |---|---|
 | `library` | sheets, lyrics, guitar parts, `_todo.md`, `index.html`, `wanted.txt`, `overrides.toml`, `songbooks.toml`, `_inbox/`: synced to your devices |
 | `music` | audio you bought, read-only, for auto-chords |
-| `state` | the database and caracole's lock, `caracole`'s alone: back it up, never sync it |
+| `state` | the database, its last three copies (`backups/`, made at the end of each nightly run) and caracole's lock, `caracole`'s alone: back it up, never sync it |
 | `cache` | every raw HTTP response, kept forever: losing it costs only requests |
 
 caracole keeps no secret: no credential, no token, no sign-in. ntfy is a
@@ -141,7 +141,8 @@ copy, made with SQLite's online backup:
     repository = "/mnt/backup/restic/caracole"; # or sftp:host:/path, s3:…
     passwordFile = "/etc/restic/caracole-password";
     paths = [ caracole.stateDir caracole.libraryDir caracole.musicDir ];
-    exclude = [ "${caracole.stateDir}/caracole.sqlite*" ];
+    # The live database goes in as the copy below; backups/ holds caracole's own nightly copies.
+    exclude = [ "${caracole.stateDir}/caracole.sqlite*" "${caracole.stateDir}/backups" ];
     backupPrepareCommand = ''
       if [ -f ${caracole.stateDir}/caracole.sqlite ]; then
         ${lib.getExe' pkgs.sqlite "sqlite3"} ${caracole.stateDir}/caracole.sqlite \
@@ -613,7 +614,7 @@ Description=Back up caracole's state, library and music with restic
 Type=oneshot
 ExecStartPre=/bin/sh -c 'cd /var/lib/caracole/state && if [ -f caracole.sqlite ]; then sqlite3 caracole.sqlite ".backup caracole-backup.sqlite"; fi'
 ExecStart=/usr/bin/restic -r /mnt/backup/restic/caracole -p /etc/restic/caracole-password \
-  backup --exclude=/var/lib/caracole/state/caracole.sqlite* \
+  backup --exclude=/var/lib/caracole/state/caracole.sqlite* --exclude=/var/lib/caracole/state/backups \
   /var/lib/caracole/state /var/lib/caracole/library /var/lib/caracole/music
 ExecStartPost=/usr/bin/restic -r /mnt/backup/restic/caracole -p /etc/restic/caracole-password \
   forget --prune --keep-daily 7 --keep-weekly 5 --keep-monthly 12
@@ -836,6 +837,33 @@ sudo caracole-admin -v run            # a run now, a line per request, on the te
 A block, a cooldown or a spent budget is no failure: the run exits 0 and the
 songs wait for the next one. A bug exits 1, and ntfy says the unit failed
 ([usage.md](usage.md#caracole-run)).
+
+## Restoring the database
+
+Each nightly run that went well ends with a whole copy of the database in
+`/var/lib/caracole/state/backups/`, the last three kept
+([usage.md](usage.md#caracole-backup)); `sudo caracole-admin backup` makes one
+now. To put one back, stop caracole, set the database aside with its `-wal`
+and `-shm` files (a `-wal` left beside another database would be read into
+it), and copy the backup into its place:
+
+```sh
+sudo systemctl stop caracole.timer caracole-web.service caracole.service   # and caracole-autochords.service
+sudo caracole-admin backup --list   # the copies, the newest last
+sudo sh -c 'cd /var/lib/caracole/state && mkdir -p -m 0700 before-restore &&
+  for f in caracole.sqlite caracole.sqlite-wal caracole.sqlite-shm; do
+    if [ -e "$f" ]; then mv "$f" before-restore/; fi
+  done &&
+  install -o caracole -g caracole -m 0600 backups/caracole-2026-10-29T034512Z.sqlite caracole.sqlite'
+sudo systemctl start caracole.timer caracole-web.service
+```
+
+The nightly runs after it do again what the nights since the copy did, from
+the HTTP cache where they can. A copy a newer caracole made stops every
+command with status 2, as the database itself would; an older one is
+migrated as an upgrade migrates the database. `before-restore/` is yours to
+delete once all is well. restic's copy (NixOS section 3, Ubuntu section 10)
+is restored the same way.
 
 ## When something is wrong
 

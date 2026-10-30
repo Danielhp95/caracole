@@ -1,8 +1,9 @@
 """The nightly ``caracole run`` (plan §6).
 
 Steps, in order: sync → icons → index → match → lyrics → fetch → lacuerda →
-scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo. Each step runs even
-if an earlier one failed, so the to-do page is always rewritten.
+scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo → backup. Each step runs
+even if an earlier one failed, so the to-do page is always rewritten; the backup alone, a whole copy of the
+database (backup.py), waits for a run no step of which failed.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
   the run once it blocks. So are gtptabs, harptabs, gametabs, musescore and youtube when caracole.toml
@@ -47,6 +48,7 @@ from caracole.notify import Notifier
 from caracole.overrides import Overrides, OverridesError, load_overrides
 from caracole.report import (
     BUILD_INDEX,
+    ERROR,
     FINISH_INDEX,
     Action,
     Failure,
@@ -543,6 +545,29 @@ def _todo(ctx: StepContext) -> StepResult:
     return StepResult(todo=_needs_you(page))
 
 
+def _backup(ctx: StepContext) -> StepResult:
+    """A whole copy of the database into state_dir/backups/, the newest three kept (backup.py), once every step
+    before it went as well as a step goes: a block or a spent budget is no failure, but a bug is, and then the
+    copies of the nights before stay. The summary says nothing of a copy made, only of one that wasn't; a copy
+    that fails its check fails the run, so that its alert says so."""
+    from caracole import backup
+
+    if ctx.report.errors:
+        return StepResult(problems=[Problem("No backup tonight: a step failed, so the copies of the nights before "
+                                            "stay as they are.")], status="skipped: a step failed")
+    try:
+        made = backup.make(ctx.conn, ctx.cfg.state_dir, ctx.now)
+    except backup.BackupError as e:
+        ctx.report.errors.append(f"backup: {e}")
+        return StepResult(problems=[Problem(f"No backup tonight: {e}. The copies of the nights before stay as "
+                                            "they are; the run exits 1.", ERROR)], status=f"failed: {e}")
+    if isinstance(made, backup.Skipped):
+        return StepResult(problems=[Problem(f"No backup tonight: {made.reason}.")], status=f"skipped: {made.reason}")
+    # No line of the summary: every night has one. The log and kv run:last say which.
+    return StepResult(status=f"backed up to {made.backup.path.name} ({backup.size_text(made.backup.size)}), "
+                             f"{made.kept} kept")
+
+
 def _needs_you(page: Path) -> NeedsYou:
     """How many things the to-do page just written lists for you."""
     from caracole.library import read_regular
@@ -586,6 +611,8 @@ def default_steps() -> list[Step]:
         Step("youtube", _youtube, provider="youtube"),
         Step("render", _render),
         Step("todo", _todo),
+        # Last: the database as the night left it, once every step went as well as a step goes.
+        Step("backup", _backup),
     ]
 
 
