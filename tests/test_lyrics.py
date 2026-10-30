@@ -45,7 +45,8 @@ from caracole.lyrics import (
 
 FIXTURES = Path(__file__).parent / "fixtures" / "lrclib"
 
-# LRCLIB's error bodies. A miss on /api/get currently comes back as the 503 (spike).
+# LRCLIB's error bodies. A miss on /api/get is its 404. Its 503 is ServerOverloaded, "temporarily busy" as its
+# docs say: an error, never a miss (the spike took one for a miss, wrongly).
 NOT_FOUND = (
     404,
     {"code": 404, "name": "TrackNotFound", "message": "Failed to find specified track"},
@@ -287,7 +288,7 @@ def test_get_sends_clean_title_original_artist_and_album():
         "album_name": "Canción Animal",
         "duration": 213,
     }
-    assert set(call.accept) == {200, 404, 503}
+    assert set(call.accept) == {200, 404}  # a 503 is LRCLIB too busy: an error, never a miss
 
 
 def test_unknown_album_and_duration_are_not_sent():
@@ -370,27 +371,37 @@ def test_get_record_without_lyrics_falls_back_to_search():
     assert client.endpoints() == ["/get", "/search"]
 
 
-def test_503_then_empty_search_is_missing():
-    client = FakeClient(get=OVERLOADED, search=(200, load("search_empty.json")))
+def test_404_then_empty_search_is_missing():
+    client = FakeClient(get=NOT_FOUND, search=(200, load("search_empty.json")))
     assert fetch(client) == LyricsResult("missing", None)
     assert client.endpoints() == ["/get", "/search"]
 
 
+def test_a_503_from_get_is_an_error_never_a_miss():
+    # Once taken for /api/get's miss (the spike), which a search finding nothing then made "missing" for 30 days:
+    # it is LRCLIB's ServerOverloaded, busy, and the song waits for the next run.
+    client = FakeClient(get=OVERLOADED, search=(200, load("search_empty.json")))
+    with pytest.raises(ProviderError) as raised:
+        fetch(client)
+    assert raised.value.status == 503
+    assert client.endpoints() == ["/get"]
+
+
 def test_search_without_a_matching_candidate_is_missing():
-    client = FakeClient(get=OVERLOADED, search=(200, [track("Persiana Americana")]))
+    client = FakeClient(get=NOT_FOUND, search=(200, [track("Persiana Americana")]))
     assert fetch(client) == LyricsResult("missing", None)
 
 
 def test_search_error_leaves_song_pending():
     error = ProviderError("lrclib", "https://lrclib.net/api/search", 500, "internal server error")
-    client = FakeClient(get=OVERLOADED, search=error)
+    client = FakeClient(get=NOT_FOUND, search=error)
     with pytest.raises(ProviderError) as raised:
         fetch(client)
     assert raised.value is error
 
 
 def test_overloaded_search_leaves_song_pending():
-    client = FakeClient(get=OVERLOADED, search=OVERLOADED)
+    client = FakeClient(get=NOT_FOUND, search=OVERLOADED)
     with pytest.raises(ProviderError) as raised:
         fetch(client)
     assert raised.value.status == 503
@@ -398,7 +409,7 @@ def test_overloaded_search_leaves_song_pending():
 
 @pytest.mark.parametrize("body", [{"code": 500, "name": "Oops"}, pytest.param(DEEP, id="nested too deep")])
 def test_unreadable_search_body_is_an_error_not_a_miss(body):
-    client = FakeClient(get=OVERLOADED, search=(200, body))
+    client = FakeClient(get=NOT_FOUND, search=(200, body))
     with pytest.raises(ProviderError):
         fetch(client)
 
@@ -428,27 +439,27 @@ def test_instrumental_found_by_search():
     ],
 )
 def test_search_title_joins_han_split_by_punctuation(title, searched):
-    client = FakeClient(get=OVERLOADED, search=(200, []))
+    client = FakeClient(get=NOT_FOUND, search=(200, []))
     fetch(client, artist="Artista", title=title, album=None, duration_s=None)
     assert client.calls[0].params["track_name"] == title
     assert client.calls[1].params["track_name"] == searched
 
 
 def test_lookup_reads_the_cache_forever_by_default():
-    client = FakeClient(get=OVERLOADED, search=(200, []))
+    client = FakeClient(get=NOT_FOUND, search=(200, []))
     fetch(client)
     assert [(c.cache, c.max_age) for c in client.calls] == [(True, None), (True, None)]
 
 
 def test_cache_options_reach_every_request():
     # A re-check of a missing song must get past the cached miss on both endpoints.
-    client = FakeClient(get=OVERLOADED, search=(200, []))
+    client = FakeClient(get=NOT_FOUND, search=(200, []))
     fetch(client, cache=False)
     assert [(c.cache, c.max_age) for c in client.calls] == [(False, None), (False, None)]
 
 
 def test_banma_plain_only_found_with_duration_253(tmp_path):
-    client = FakeClient(get=OVERLOADED, search=(200, load("search_banma.json")))
+    client = FakeClient(get=NOT_FOUND, search=(200, load("search_banma.json")))
     result = fetch(client, artist="宋冬野", title="斑马斑马", album="安和桥北", duration_s=253.0)
     assert result.status == "found"
     assert result.lyrics.lrclib_id == 29499942

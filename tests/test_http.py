@@ -502,6 +502,8 @@ def test_a_cached_answer_the_caller_rejects_is_asked_again(tmp_path):
 
 
 def test_accepted_503_is_returned_not_cached(tmp_path):
+    # Accepted, a 503 is the caller's to read, and asked again; never retried (``RETRY_AFTER_503`` is for a 503 the
+    # caller rejects).
     client, rec = make_client(tmp_path, ok(b'{"name": "ServerOverloaded"}', status=503))
     assert client.get("https://lrclib.net/api/get", accept=(200, 404, 503)).status == 503
     assert client.get("https://lrclib.net/api/get", accept=(200, 404, 503)).status == 503
@@ -627,8 +629,8 @@ def lrclib_outage(get_status):
 
 
 def test_an_accepted_503_does_not_reset_the_error_count(tmp_path):
-    # /api/get accepts 503 (LRCLIB's answer to a miss); in an outage it must not hide
-    # /api/search's errors from the breaker.
+    # A caller that accepts a 5xx (none does now: LRCLIB's 503 was once taken for a miss) must not hide the
+    # errors between from the breaker.
     client, rec = make_client(tmp_path, lrclib_outage(503), max_consecutive_errors=3)
     for i in range(3):
         assert client.get(f"https://lrclib.net/api/get?n={i}", accept=(200, 404, 503)).status == 503
@@ -648,6 +650,175 @@ def test_an_accepted_404_resets_the_error_count(tmp_path):
         assert not isinstance(e.value, ProviderUnavailable)
     assert client.get("https://lrclib.net/api/get?n=3", accept=(200, 404, 503)).status == 404
     assert len(rec.requests) == 7
+
+
+# --- LRCLIB's 503: busy, asked once more after its Retry-After ----------------------------------------------
+#
+# LRCLIB documents its 503 as ServerOverloaded: "temporarily busy; retry after the Retry-After header (usually 1
+# second)". Live, on 2026-10-29: an /api/search answered 503 with Retry-After: 1, the next request 7 s later 200.
+
+BUSY = (503, {"Retry-After": "1"})
+SEARCH = "https://lrclib.net/api/search?track_name=x"
+AT = datetime(2026, 10, 29, 15, 0, tzinfo=UTC)
+
+
+def in_turn(queue):
+    """A handler answering each ``(status, headers)`` of ``queue`` in turn, the last one for ever after."""
+    def handler(request: httpx.Request) -> httpx.Response:
+        status, headers = queue.pop(0) if len(queue) > 1 else queue[0]
+        return httpx.Response(status, headers=headers, content=b'{"name": "ServerOverloaded"}' if status == 503
+                              else b"[]")
+    return handler
+
+
+def busy_client(tmp_path, queue, *, provider="lrclib", budget=200, delay=(0.0, 0.0), events=None, **kw):
+    """A client whose site answers ``queue`` in turn (``in_turn``), and whose clock moves on by every pause it
+    sleeps, so its pace counts the time a Retry-After was waited. Returns it, its recorder and its sleeps."""
+    sleeps: list[float] = []
+    clock = [0.0]
+
+    def sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+        clock[0] += seconds
+
+    rec = Recorder(in_turn(list(queue)))
+    client = PoliteClient(
+        provider, ProviderPolicy(budget=budget, delay=delay), tmp_path / "cache", user_agent="caracole/test",
+        transport=httpx.MockTransport(rec), sleep=sleep, rng=random.Random(1),
+        on_event=(events.append if events is not None else None), clock=lambda: clock[0],
+        wall_clock=lambda: AT, **kw,
+    )
+    return client, rec, sleeps
+
+
+def http_date(when: datetime) -> str:
+    return when.strftime("%a, %d %b %Y %H:%M:%S GMT")
+
+
+def test_a_503_with_retry_after_is_asked_once_more_after_it(tmp_path):
+    events = []
+    client, rec, sleeps = busy_client(tmp_path, [BUSY, (200, {})], events=events)
+    resp = client.get(SEARCH)
+    assert (resp.status, resp.content, client.requests_made, len(rec.requests)) == (200, b"[]", 2, 2)
+    [waited] = sleeps
+    assert 1.0 <= waited <= 2.0  # its Retry-After, and a jitter under a second
+    # The busy answer is an error event, a request sent that wasn't answered (health.answered_any), and no more.
+    assert [(e.status, e.decision) for e in events] == [(503, "error"), (200, "ok")]
+    assert "Retry-After: 1" in events[0].message and "asked again" in events[0].message
+    assert client.get(SEARCH).from_cache  # the 200 is cached as ever; the 503 never is
+
+
+def test_a_503_with_an_http_date_retry_after_waits_until_then(tmp_path):
+    client, _, sleeps = busy_client(tmp_path, [(503, {"Retry-After": http_date(AT + timedelta(seconds=3))}),
+                                               (200, {})])
+    assert client.get(SEARCH).status == 200
+    [waited] = sleeps
+    assert 3.0 <= waited <= 4.0
+
+
+def test_an_http_date_already_past_is_asked_again_after_the_jitter_alone(tmp_path):
+    client, _, sleeps = busy_client(tmp_path, [(503, {"Retry-After": http_date(AT - timedelta(seconds=30))}),
+                                               (200, {})])
+    assert client.get(SEARCH).status == 200
+    [waited] = sleeps
+    assert 0.0 <= waited <= 1.0
+
+
+def test_the_retry_keeps_the_providers_pace_when_its_retry_after_is_shorter(tmp_path):
+    client, _, sleeps = busy_client(tmp_path, [(503, {"Retry-After": "0"}), (200, {})], delay=(5.0, 5.0))
+    assert client.get(SEARCH).status == 200
+    assert sum(sleeps) == pytest.approx(5.0)  # the jitter, then the rest of the pause between two requests
+
+
+@pytest.mark.parametrize("headers", [{}, {"Retry-After": "soon"}, {"Retry-After": "-1"}, {"Retry-After": "1.5"}],
+                         ids=["none", "unreadable", "negative", "not whole seconds"])
+def test_a_503_without_a_retry_after_it_can_read_is_an_error_at_once(tmp_path, headers):
+    client, rec, sleeps = busy_client(tmp_path, [(503, headers), (200, {})])
+    with pytest.raises(ProviderError) as raised:
+        client.get(SEARCH)
+    assert (raised.value.status, len(rec.requests), sleeps) == (503, 1, [])
+    assert not isinstance(raised.value, ProviderBlocked)
+
+
+def test_two_503s_in_a_row_are_an_error_never_an_endless_retry(tmp_path):
+    client, rec, sleeps = busy_client(tmp_path, [BUSY, BUSY, (200, {})])
+    with pytest.raises(ProviderError) as raised:
+        client.get(SEARCH)
+    assert (raised.value.status, len(rec.requests), len(sleeps)) == (503, 2, 1)
+    assert client.get(SEARCH).status == 200  # nothing was cached: asked again, and answered
+
+
+def test_a_retry_after_longer_than_caracole_waits_is_an_error_never_an_early_ask(tmp_path):
+    client, rec, sleeps = busy_client(tmp_path, [(503, {"Retry-After": "120"}), (200, {})])
+    with pytest.raises(ProviderError):
+        client.get(SEARCH)
+    assert (len(rec.requests), sleeps) == (1, [])
+
+
+def test_a_retry_the_budget_cant_pay_for_is_the_503s_error_with_no_wait(tmp_path):
+    client, rec, sleeps = busy_client(tmp_path, [BUSY, (200, {})], budget=1)
+    with pytest.raises(ProviderError) as raised:
+        client.get(SEARCH)
+    assert (raised.value.status, len(rec.requests), sleeps) == (503, 1, [])
+    with pytest.raises(BudgetExhausted):
+        client.get(SEARCH)
+
+
+def test_a_retried_503_counts_once_toward_the_breaker(tmp_path):
+    # Each request LRCLIB is too busy for, asked twice, is one error: three such end the run's asking.
+    client, rec, sleeps = busy_client(tmp_path, [BUSY], max_consecutive_errors=3)
+    for n in range(3):
+        with pytest.raises(ProviderError) as raised:
+            client.get(f"{SEARCH}{n}")
+        assert not isinstance(raised.value, ProviderUnavailable)
+    with pytest.raises(ProviderUnavailable):
+        client.get(f"{SEARCH}3")
+    assert (len(rec.requests), len(sleeps)) == (6, 3)
+
+
+def test_a_503_that_its_retry_answers_resets_the_breaker(tmp_path):
+    client, _, _ = busy_client(tmp_path, [(500, {}), (500, {}), BUSY, (200, {}), (500, {}), (500, {}), (200, {})],
+                               max_consecutive_errors=3)
+    for n in range(2):
+        with pytest.raises(ProviderError):
+            client.get(f"{SEARCH}{n}")
+    assert client.get(f"{SEARCH}2").status == 200
+    for n in range(3, 5):
+        with pytest.raises(ProviderError) as raised:
+            client.get(f"{SEARCH}{n}")
+        assert not isinstance(raised.value, ProviderUnavailable)
+
+
+def test_a_429_with_retry_after_is_still_a_block(tmp_path):
+    client, rec, sleeps = busy_client(tmp_path, [(429, {"Retry-After": "1"}), (200, {})])
+    with pytest.raises(ProviderBlocked):
+        client.get(SEARCH)
+    with pytest.raises(ProviderBlocked):
+        client.get(SEARCH)
+    assert (len(rec.requests), sleeps) == (1, [])
+
+
+def test_another_sites_503_is_never_retried(tmp_path):
+    # The rule is LRCLIB's documented 503 (``RETRY_AFTER_503``): Ultimate Guitar's 503 stays an error at once.
+    client, rec, sleeps = busy_client(tmp_path, [BUSY, (200, {})], provider="ug")
+    with pytest.raises(ProviderError):
+        client.get("https://tabs.ultimate-guitar.com/tab/x-1")
+    assert (len(rec.requests), sleeps) == (1, [])
+
+
+def test_the_retry_wait_is_spent_as_any_pause_is(tmp_path):
+    # Bulk work's client (commands/_common.py) spends a pause handing caracole's lock to a lookup that waits.
+    spent: list[float] = []
+
+    class Patient(PoliteClient):
+        def _wait(self, seconds: float) -> None:
+            spent.append(seconds)
+
+    rec = Recorder(in_turn([BUSY, (200, {})]))
+    client = Patient("lrclib", ProviderPolicy(budget=10, delay=(0.0, 0.0)), tmp_path / "c", user_agent="t",
+                     transport=httpx.MockTransport(rec), rng=random.Random(1))
+    assert client.get(SEARCH).status == 200
+    assert len(spent) == 1 and 1.0 <= spent[0] <= 2.0
 
 
 def test_events_reported(tmp_path):

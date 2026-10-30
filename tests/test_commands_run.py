@@ -31,7 +31,8 @@ LISTING = re.compile(r"/tabs/([a-z_]+)/index(\d+)\.html")
 
 
 class Sites:
-    """LRCLIB answers every request with ``lrclib`` (503: overloaded, as live); LaCuerda has three
+    """LRCLIB answers every request with ``lrclib`` (503: overloaded, with Retry-After: 1, as live, so caracole asks
+    each once more after a second); LaCuerda has three
     pages of artists for each initial, as its listings of every artist are paged; UG must not be
     asked at all, and gtptabs.com, harptabs.com, gametabs.net and MuseScore are turned off; ntfy takes every post."""
 
@@ -55,7 +56,7 @@ class Sites:
             if provider != "lrclib":
                 raise AssertionError(f"unexpected {provider} request: {request.url}")
             self.requests.append(str(request.url))
-            return httpx.Response(self.lrclib, json={"name": "ServerOverloaded"})
+            return httpx.Response(self.lrclib, headers={"Retry-After": "1"}, json={"name": "ServerOverloaded"})
 
         return httpx.MockTransport(handler)
 
@@ -131,7 +132,8 @@ def test_one_song_no_index_and_lrclib_down_reads_as_a_short_report(tmp_path, sit
     assert result.exit_code == 0, result.output
     assert result.stdout == the_users_night(tmp_path)
     assert result.stderr == ""  # nothing went wrong that the report doesn't say
-    assert len(sites.requests) == 2  # /api/get, then /api/search
+    # /api/get, then once more after its Retry-After; never /api/search, as a busy LRCLIB is no miss.
+    assert [url.split("?")[0] for url in sites.requests] == ["https://lrclib.net/api/get"] * 2
     # LaCuerda's listings of every artist, three pages an initial, as far as its budget goes: the next
     # night goes on from the eleventh initial.
     assert sites.lacuerda[:4] == [f"https://acordes.lacuerda.net/tabs/{p}" for p in (
@@ -147,7 +149,7 @@ def test_lrclib_down_for_many_songs_is_one_line(tmp_path, sites, clock):
     problems = [line for line in result.stdout.splitlines() if line.startswith("LRCLIB")]
     assert problems == ["LRCLIB didn't answer (HTTP 503) and caracole stopped asking it, so the lyrics of 5 songs "
                         "will be tried again on the next run."]
-    assert len(sites.requests) == 6  # /api/get and /api/search for each of the three
+    assert len(sites.requests) == 6  # /api/get, and once more after its Retry-After, for each of the three
 
 
 def test_quiet_keeps_what_needs_you_and_what_went_wrong(tmp_path, sites, clock):
@@ -173,7 +175,8 @@ def test_verbose_adds_a_line_per_request_and_per_step_on_stderr_only(tmp_path, s
     assert len(requests) == 2
     assert requests[0].startswith("LRCLIB GET https://lrclib.net/api/get?")
     assert "→ 503 Service Unavailable in " in requests[0] and requests[0].endswith(" s (1 of 200 requests)")
-    assert requests[1].startswith("LRCLIB GET https://lrclib.net/api/search?")
+    assert requests[1].startswith("LRCLIB GET https://lrclib.net/api/get?")  # once more, after its Retry-After
+    assert [line for line in log if "Retry-After: 1; asking once more in " in line]
     assert "lyrics: 0 found, 0 missing, 0 instrumental, 1 error" in log
     assert not [line for line in log if "httpx" in line or "HTTP Request" in line]  # the library stays quiet
 

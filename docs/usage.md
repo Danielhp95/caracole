@@ -1181,7 +1181,11 @@ and cache.
 - **`caracole lyrics`** asks LRCLIB for the lyrics of every song that has none
   yet, and again for misses older than 30 days. It writes `lyrics.txt`, plus
   `lyrics.lrc` when LRCLIB has timed lyrics. A song whose lookup failed stays
-  pending. A cooldown, a block or a spent budget exits 0.
+  pending. LRCLIB's 503 means it is busy, never that it has no lyrics: caracole
+  asks once more after the wait its `Retry-After` names (up to 30 seconds, and
+  within the budget and the pause between requests), and a second 503, or one
+  without a `Retry-After`, leaves the song pending. A cooldown, a block or a
+  spent budget exits 0.
 - **`caracole fetch [--song "ARTIST - TITLE"]`** first scores the sheets kept
   before their lyrics arrived, with no request, as the nightly run does. Then
   it fetches and ranks the UG versions of the songs that need it: new

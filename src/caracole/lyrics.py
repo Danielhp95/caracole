@@ -12,7 +12,10 @@ Errors are never misses: whatever the client raises, and any body that is not
 the JSON LRCLIB documents, propagates and leaves the song pending. A cached
 answer that is not (a maintenance notice served with HTTP 200, say) is asked
 for once more before it counts as an error, so one bad night isn't replayed
-from the cache every night after.
+from the cache every night after. A 503 from either endpoint is LRCLIB's
+ServerOverloaded, "temporarily busy" as its docs say: an error, never a miss.
+The client asks once more after its ``Retry-After`` (``http.RETRY_AFTER_503``),
+within the run's budget and pace, or a lookup's.
 """
 
 from __future__ import annotations
@@ -42,8 +45,9 @@ log = logging.getLogger(__name__)
 LRCLIB_API = "https://lrclib.net/api"
 PROVIDER = "lrclib"
 
-# /api/get answers a miss with 404, or lately with 503 ServerOverloaded (spike).
-_GET_ACCEPT = (200, 404, 503)
+# /api/get answers a miss with 404 TrackNotFound. Its 503 is ServerOverloaded, busy, which the client asks once more
+# after its Retry-After and is an error then: never a miss (the spike of 2026-10-18 took one for a miss, wrongly).
+_GET_ACCEPT = (200, 404)
 
 _TEXT_MATCH = 85  # rapidfuzz ratio, for titles and for artists
 _CLOSE_S = 2.0  # the tolerance LRCLIB itself applies on /api/get
@@ -267,7 +271,7 @@ def _json(resp: Response, shape: type[Mapping] | type[list]) -> Any:
 
 
 def _get_record(resp: Response) -> Mapping[str, Any] | None:
-    """The record ``/api/get`` answered; None for its miss, a 404 or a 503 (whatever its body)."""
+    """The record ``/api/get`` answered; None for its miss, a 404 (whatever its body)."""
     return _json(resp, Mapping) if resp.status == 200 else None
 
 
@@ -366,13 +370,14 @@ def fetch_lyrics(
     """Look a song up on LRCLIB: ``/api/get`` first, then ``/api/search``.
 
     ``/api/get`` takes the cleaned title, the artist as written and, when known,
-    the album and the duration in whole seconds. A 404 or 503 from it, or a
-    record without lyrics, falls back to ``/api/search`` and ``pick_candidate``;
-    only an empty or non-matching search result is "missing". Errors raised by
-    the client (``ProviderError``, ``BudgetExhausted``) and unreadable bodies
-    (``LrclibParseError``) propagate, so the song stays pending: an error is
-    never a miss. A cached answer that can't be read is asked for once more,
-    past the cache, before it is an error (``http.read_once_more``).
+    the album and the duration in whole seconds. A 404 from it, or a record
+    without lyrics, falls back to ``/api/search`` and ``pick_candidate``; only
+    an empty or non-matching search result is "missing". Errors raised by the
+    client (``ProviderError``, a 503 among them once its retry is spent;
+    ``BudgetExhausted``) and unreadable bodies (``LrclibParseError``) propagate,
+    so the song stays pending: an error is never a miss. A cached answer that
+    can't be read is asked for once more, past the cache, before it is an error
+    (``http.read_once_more``).
 
     ``cache`` goes to the first ``client.get`` of each endpoint; the one more ask
     (``read_once_more``) goes past the cache. By default a cached answer is used

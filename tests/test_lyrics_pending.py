@@ -41,19 +41,20 @@ class FakeLrclib:
     """LRCLIB's ``/api/get`` and ``/api/search``, answering from a list of records.
 
     ``/api/get`` finds a record by artist and track, and by album and duration
-    (±2 s) when they are sent; a miss answers ``get_miss``, which is LRCLIB's
-    503 today (spike) and its documented 404 otherwise. ``/api/search`` lists
-    the records with that track name. ``broken`` maps an artist, and
-    ``failing`` an endpoint ("get", "search"), to the status every request
-    about it gets. Every request that reaches it is recorded.
+    (±2 s) when they are sent; a miss answers ``get_miss``, its documented 404.
+    ``/api/search`` lists the records with that track name. ``broken`` maps an
+    artist, and ``failing`` an endpoint ("get", "search"), to the status every
+    request about it gets. Every request that reaches it is recorded, and every
+    pause its client sleeps (``sleeps``).
     """
 
-    def __init__(self, records=(), *, get_miss: int = 503, broken=None, failing=None):
+    def __init__(self, records=(), *, get_miss: int = 404, broken=None, failing=None):
         self.records = list(records)
         self.get_miss = get_miss
         self.broken = dict(broken or {})
         self.failing = dict(failing or {})
         self.requests: list[tuple[str, dict]] = []
+        self.sleeps: list[float] = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         endpoint = request.url.path.removeprefix("/api/")
@@ -91,7 +92,7 @@ class FakeLrclib:
             cache_dir,
             user_agent="caracole-test",
             transport=httpx.MockTransport(self.handler),
-            sleep=lambda seconds: None,
+            sleep=self.sleeps.append,
             wall_clock=lambda: now,
         )
 
@@ -273,14 +274,17 @@ def test_an_answer_still_not_json_when_asked_again_is_an_error_for_one_more_requ
     assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
 
 
-def test_a_503_that_isnt_json_when_asked_again_still_falls_back_to_the_search(conn, tmp_path):
-    # LRCLIB answers a miss with 503; a proxy's 503 page is no JSON, and is no error either.
+def test_a_503_when_a_cached_answer_is_asked_for_once_more_is_an_error_never_a_miss(conn, tmp_path):
+    # Once taken for /api/get's miss, which fell back to the search; LRCLIB's 503 is ServerOverloaded, busy. The
+    # song waits, and the next run, LRCLIB answering again, finds it.
     lrclib = Glitchy([record()], first={"get": [NOTICE, (503, "Service Unavailable")]})
     song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
     run(lrclib, conn, tmp_path)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, errors=1)
+    assert lrclib.endpoints() == ["get", "get"]
+    assert (get_song(conn, song.id).lyrics_status, get_song(conn, song.id).lyrics_at) == ("pending", None)
     assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, found=1)
-    assert lrclib.endpoints() == ["get", "get", "search"]
-    assert get_song(conn, song.id).lyrics_status == "found"
+    assert lrclib.endpoints() == ["get", "get", "get"]
 
 
 def test_a_cached_search_that_isnt_json_is_asked_for_once_more(conn, tmp_path):
@@ -288,7 +292,8 @@ def test_a_cached_search_that_isnt_json_is_asked_for_once_more(conn, tmp_path):
     song = add_song(conn, "Soda Stereo", "De Música Ligera", album="Otro Disco", duration_ms=213000)
     assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, errors=1)  # /api/get misses: another album
     assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, found=1)
-    assert lrclib.endpoints() == ["get", "search", "get", "search"]  # the second search: once more
+    # /api/get's 404 is cached, as every miss; the second search is the once more.
+    assert lrclib.endpoints() == ["get", "search", "search"]
     assert get_song(conn, song.id).lyrics_status == "found"
 
 
@@ -346,6 +351,121 @@ def test_the_songs_left_once_lrclib_is_given_up_on_are_named_too(conn, tmp_path)
         ("Cinco", "ProviderError"), ("Cuatro", "ProviderError"), ("Tres", "ProviderError"),
         ("Dos", "ProviderUnavailable"), ("Uno", "ProviderUnavailable"),
     ]
+
+
+# --- LRCLIB too busy: its 503 ------------------------------------------------------
+#
+# LRCLIB documents its 503 as ServerOverloaded: "temporarily busy; retry after the Retry-After header (usually 1
+# second)". caracole once took one from /api/get for a miss, and a search that found nothing then made the song
+# "missing" for 30 days. Now it is an error, asked once more after its Retry-After (http.RETRY_AFTER_503).
+
+RETRY_AFTER = {"Retry-After": "1"}  # as live, 2026-10-29
+
+
+class Busy(FakeLrclib):
+    """``FakeLrclib`` whose requests answer, in turn, as ``script`` says: a status (503, 429) with ``headers``, or
+    None, as LRCLIB would; past the script, as ``then`` says (None: as LRCLIB would)."""
+
+    def __init__(self, records=(), *, script=(), then=None, headers=RETRY_AFTER, **kw):
+        super().__init__(records, **kw)
+        self.script = list(script)
+        self.then = then
+        self.headers = headers
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        status = self.script.pop(0) if self.script else self.then
+        if status is None:
+            return super().handler(request)
+        self.requests.append((request.url.path.removeprefix("/api/"), dict(request.url.params)))
+        return httpx.Response(status, headers=self.headers, json={"name": "ServerOverloaded"})
+
+
+@pytest.mark.parametrize("script,headers", [([503], {}), ([503, 503], RETRY_AFTER)],
+                         ids=["no Retry-After", "busy when asked again"])
+def test_a_503_from_get_is_an_error_and_the_song_waits_never_missing(conn, tmp_path, script, headers):
+    # A search that finds nothing fit would have made it "missing" for 30 days: it isn't even asked.
+    lrclib = Busy([record(trackName="Otra Canción")], script=script, headers=headers)
+    song = add_song(conn, "Soda Stereo", "De Música Ligera", duration_ms=213000)
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, errors=1)
+    assert lrclib.endpoints() == ["get"] * len(script)
+    stored = get_song(conn, song.id)
+    assert (stored.lyrics_status, stored.lyrics_at) == ("pending", None)
+    # The next run asks again; LRCLIB, answering now, has no record of it: only that is a miss.
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, missing=1)
+    assert lrclib.endpoints()[len(script):] == ["get", "search"]
+
+
+@pytest.mark.parametrize("retry_after", ["1", "Sun, 18 Oct 2026 03:30:01 GMT"], ids=["seconds", "HTTP date"])
+def test_a_503_then_lyrics_finds_them_after_one_wait_within_the_budget(conn, tmp_path, retry_after):
+    lrclib = Busy([load("get_hit.json")], script=[503], headers={"Retry-After": retry_after})
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    assert run(lrclib, conn, tmp_path, budget=2) == LyricsStats(tried=1, found=1)
+    assert lrclib.endpoints() == ["get", "get"]
+    [waited] = lrclib.sleeps
+    assert 1.0 <= waited <= 2.0  # one second, and a jitter
+    assert get_song(conn, song.id).lyrics_status == "found"
+
+
+def test_a_503_without_retry_after_is_an_error_with_no_retry(conn, tmp_path):
+    lrclib = Busy([load("get_hit.json")], script=[503], headers={})
+    add_song(conn, "Soda Stereo", "De Música Ligera")
+    stats = run(lrclib, conn, tmp_path)
+    assert (stats, lrclib.endpoints(), lrclib.sleeps) == (LyricsStats(tried=1, errors=1), ["get"], [])
+    [(_, error)] = stats.failures
+    assert error.status == 503
+
+
+def test_two_503s_in_a_row_are_an_error_never_an_endless_retry(conn, tmp_path):
+    lrclib = Busy([load("get_hit.json")], script=[503, 503])
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    assert run(lrclib, conn, tmp_path) == LyricsStats(tried=1, errors=1)
+    assert (lrclib.endpoints(), len(lrclib.sleeps)) == (["get", "get"], 1)
+    assert get_song(conn, song.id).lyrics_status == "pending"
+
+
+def test_a_retry_the_budget_cant_pay_for_is_an_error_and_the_pass_ends_there(conn, tmp_path):
+    lrclib = Busy([load("get_hit.json")], script=[503])
+    add_song(conn, "Soda Stereo", "Persiana Americana", added_at="2026-10-01T00:00:00Z")
+    add_song(conn, "Soda Stereo", "De Música Ligera", added_at="2026-10-02T00:00:00Z")
+    stats = run(lrclib, conn, tmp_path, budget=1)
+    assert stats == LyricsStats(tried=1, errors=1, budget_exhausted=True)
+    assert (len(lrclib.requests), lrclib.sleeps) == (1, [])
+
+
+def test_a_429_with_retry_after_is_still_a_block(conn, tmp_path):
+    lrclib = Busy([load("get_hit.json")], script=[429])
+    song = add_song(conn, "Soda Stereo", "De Música Ligera")
+    with pytest.raises(ProviderBlocked):
+        run(lrclib, conn, tmp_path)
+    assert (len(lrclib.requests), lrclib.sleeps) == (1, [])
+    assert get_song(conn, song.id).lyrics_status == "pending"
+
+
+def test_lrclib_busy_all_afternoon_ends_the_pass_after_three_songs_each_asked_twice(conn, tmp_path):
+    # Every request answered 503 with Retry-After: each song is asked once more after it, then is an error; three
+    # such in a row, and the client gives LRCLIB up for the run, the songs left named, none of them missing.
+    names = ["Uno", "Dos", "Tres", "Cuatro", "Cinco"]
+    lrclib = Busy(then=503)
+    songs = [add_song(conn, name, "Canción", added_at=f"2026-10-0{i + 1}T00:00:00Z") for i, name in enumerate(names)]
+    stats = run(lrclib, conn, tmp_path)
+    assert stats == LyricsStats(tried=3, errors=3)
+    assert (len(lrclib.requests), len(lrclib.sleeps)) == (6, 3)
+    assert [(song.artist, type(error).__name__, error.status) for song, error in stats.failures] == [
+        ("Cinco", "ProviderError", 503), ("Cuatro", "ProviderError", 503), ("Tres", "ProviderError", 503),
+        ("Dos", "ProviderUnavailable", None), ("Uno", "ProviderUnavailable", None),
+    ]
+    assert {get_song(conn, s.id).lyrics_status for s in songs} == {"pending"}
+
+
+def test_lrclib_busy_now_and_then_costs_the_pass_one_song(conn, tmp_path):
+    # Each song's first ask is too busy; the second song's again too: it alone waits for the next run.
+    lrclib = Busy([record(artistName=name) for name in ("Uno", "Dos", "Tres")], script=[503, None, 503, 503, 503])
+    for i, name in enumerate(["Tres", "Dos", "Uno"]):
+        add_song(conn, name, "De Música Ligera", added_at=f"2026-10-0{i + 1}T00:00:00Z")
+    stats = run(lrclib, conn, tmp_path)
+    assert stats == LyricsStats(tried=3, found=2, errors=1)
+    assert [song.artist for song, _ in stats.failures] == ["Dos"]
+    assert len(lrclib.requests) == 6
 
 
 # --- which songs ----------------------------------------------------------------

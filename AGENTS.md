@@ -764,6 +764,10 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   isn't replayed every night after: `http.read_once_more` for LRCLIB, LaCuerda, harptabs.com,
   gametabs.net and gtptabs.com, ug/fetch.py's `_get_page` for UG
   (`test_lyrics_pending.py::test_a_cached_answer_that_isnt_json_is_asked_for_once_more`).
+  LRCLIB's 503 is its ServerOverloaded, busy, never a miss: `PoliteClient` asks once more after
+  its `Retry-After` (seconds or a date, 30 s at most, within the budget and the pace; a host of
+  `http.RETRY_AFTER_503` alone), and a second 503, or one without it, is an error
+  (`test_lyrics_pending.py::test_a_503_from_get_is_an_error_and_the_song_waits_never_missing`).
   On gtptabs.com only an artist page that answered without a candidate is a miss, asked
   about again after 30 days; on harptabs.com only candidates that all answered, none by the
   song's artist (or gone, 404), asked about again after 30 days (harptabs_fetch.py,

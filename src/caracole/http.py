@@ -13,11 +13,15 @@ Rules this module enforces (plan §6, "Politeness"):
   nor followed to: ``RobotsClosed``, a ``ProviderError`` that is no failure of the
   provider, so a caller may pass that URL over as one it may not read;
 - a 403, a 429 or a challenge page raises ``ProviderBlocked``. Errors are never
-  misses: callers must not turn any ``ProviderError`` into "not found".
+  misses: callers must not turn any ``ProviderError`` into "not found";
+- a 503 from a host that documents it as "busy, ask again after Retry-After"
+  (``RETRY_AFTER_503``: LRCLIB) is asked once more after that wait, within the
+  budget and the pace; a 503 is never cached.
 """
 
 from __future__ import annotations
 
+import email.utils
 import gzip
 import hashlib
 import json
@@ -33,7 +37,7 @@ from time import perf_counter
 from typing import TYPE_CHECKING, Any, Callable, Collection, Mapping, Protocol, runtime_checkable
 
 from caracole.config import ProviderPolicy
-from caracole.logs import request_line
+from caracole.logs import provider_name, request_line
 
 # httpx, with the rich and pygments it imports, is a third of a caracole's start: each function
 # that uses it imports it, so a command that sends no request never does.
@@ -270,6 +274,31 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
 }
 
 
+# The hosts whose 503 means "busy: ask again after Retry-After", as each documents it, with the longest Retry-After
+# caracole waits for. LRCLIB's docs define its 503 as ServerOverloaded, "temporarily busy; retry after the
+# Retry-After header (usually 1 second)", and its llms.txt asks clients to honour Retry-After on 429 and 503; asked
+# by hand on 2026-10-29, an /api/search answered 503 with Retry-After: 1, and the next request, 7 s later, 200. Its
+# 429 stays a block (the cooldown waits far longer than any Retry-After). Another site's 503 is an error at once.
+RETRY_AFTER_503: Mapping[str, float] = {"lrclib.net": 30.0}
+_RETRY_JITTER = 1.0  # seconds at most, added at random to a Retry-After's wait
+
+
+def retry_after(headers: Mapping[str, str], now: datetime) -> float | None:
+    """The seconds an answer's ``Retry-After`` asks to wait from ``now`` (an aware time): whole seconds, or an HTTP
+    date (one already past is 0); None for none, or one that is neither (RFC 9110 §10.2.3)."""
+    value = (_header(headers, "retry-after") or "").strip()
+    if value.isascii() and value.isdigit():
+        return float(value)
+    now = now if now.tzinfo is not None else now.replace(tzinfo=UTC)  # a naive time is UTC, as everywhere here
+    try:
+        when = email.utils.parsedate_to_datetime(value)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+    if when.tzinfo is None:  # an HTTP date is always GMT
+        when = when.replace(tzinfo=UTC)
+    return max(0.0, (when - now).total_seconds())
+
+
 def _robots_pattern(rule: str) -> re.Pattern[str]:
     """A Disallow rule as a pattern matched at the start of a path and query: ``*`` any run of characters, and a
     ``$`` at its end the end of the path (RFC 9309)."""
@@ -367,6 +396,14 @@ class PoliteClient:
       answered). The final answer is cached under the URL asked for.
     - 403, 429 or a challenge page raise ``ProviderBlocked``, and no further
       requests are made this run.
+    - A 503 the caller rejects, from a host of ``RETRY_AFTER_503`` (LRCLIB), with a
+      ``Retry-After`` it can read and no longer than the host's most, is asked once
+      more: after that wait and a jitter under a second (``_wait``, so bulk work
+      hands the lock over in it as in any pause), then the pause before any request,
+      when that is longer. It is an ``error`` event, a request sent and unanswered,
+      but not one of the breaker's: the retry's answer is what the request came to.
+      A second 503, a 503 without such a ``Retry-After``, or one the budget can't pay
+      the retry of is the 503's error, at once. A 503 is never cached.
     - After ``max_consecutive_errors`` other errors, ``ProviderUnavailable``. Only a
       healthy answer resets the count: an accepted 5xx is returned but doesn't.
     """
@@ -456,23 +493,16 @@ class PoliteClient:
             if modified:
                 headers["If-Modified-Since"] = modified
 
-        at = full  # the URL that answered: the one asked for, or the last redirect hop
-        resp = self._send(at, self._http.build_request("GET", full, headers=headers))
-        hops = 0
-        while resp.next_request is not None:  # a redirect; its hop is a request like any other
-            hops += 1
-            target = str(resp.next_request.url)
-            problem = _redirect_problem(full, target, hops)
-            if problem is not None:
-                self._fail(at, resp.status_code, problem)
-                raise AssertionError("unreachable")  # pragma: no cover
-            closed = robots_disallows(target)
-            if closed is not None:  # the site answered, so the breaker neither counts this nor resets
-                message = f"redirect to {target}, which robots.txt disallows ({closed})"
-                self._event(at, resp.status_code, "redirect", f"not followed: {message}")
-                raise RobotsClosed(self.provider, at, resp.status_code, message)
-            self._event(at, resp.status_code, "redirect", target)
-            at, resp = target, self._send(target, resp.next_request)
+        at, resp = self._answer(full, headers)
+        wait = self._retry_wait(at, resp, accept)
+        if wait is not None:  # the host is busy, and said when to ask again: once
+            said = _header(resp.headers, "retry-after")
+            log.info("%s answered %s, Retry-After: %s; asking once more in %.1f s", provider_name(self.provider),
+                     _status_line(resp.status_code), said, wait)
+            self._event(at, resp.status_code, "error",
+                        f"HTTP {resp.status_code}, asked again in {wait:.1f} s (Retry-After: {said})")
+            self._wait(wait)
+            at, resp = self._answer(full, headers)
 
         status, body = resp.status_code, resp.content
         if status == 304 and cached is not None:  # the copy is current: it is as old as this answer
@@ -488,7 +518,7 @@ class PoliteClient:
             kept = {h: resp.headers[h] for h in _KEPT_HEADERS if h in resp.headers}
             if status in _CACHED_STATUSES:  # only what the caller accepts: a rejected 404 is asked again
                 self._write_cache(key, full, status, kept, body)
-            if status < 500:  # an accepted 5xx (LRCLIB's 503 for a miss) is no sign of health
+            if status < 500:  # an accepted 5xx is no sign of health
                 self._errors_in_a_row = 0
             self._event(at, status, "ok", None)
             return Response(url=full, status=status, content=body, headers=kept, from_cache=False)
@@ -522,6 +552,42 @@ class PoliteClient:
         self.close()
 
     # -- internals ---------------------------------------------------------
+
+    def _answer(self, full: str, headers: Mapping[str, str]) -> tuple[str, httpx.Response]:
+        """GET ``full`` with ``headers``, its redirects followed one checked hop at a time; the URL that answered
+        (the one asked for, or the last hop) and its answer."""
+        at = full
+        resp = self._send(at, self._http.build_request("GET", full, headers=headers))
+        hops = 0
+        while resp.next_request is not None:  # a redirect; its hop is a request like any other
+            hops += 1
+            target = str(resp.next_request.url)
+            problem = _redirect_problem(full, target, hops)
+            if problem is not None:
+                self._fail(at, resp.status_code, problem)
+                raise AssertionError("unreachable")  # pragma: no cover
+            closed = robots_disallows(target)
+            if closed is not None:  # the site answered, so the breaker neither counts this nor resets
+                message = f"redirect to {target}, which robots.txt disallows ({closed})"
+                self._event(at, resp.status_code, "redirect", f"not followed: {message}")
+                raise RobotsClosed(self.provider, at, resp.status_code, message)
+            self._event(at, resp.status_code, "redirect", target)
+            at, resp = target, self._send(target, resp.next_request)
+        return at, resp
+
+    def _retry_wait(self, at: str, resp: httpx.Response, accept: Collection[int]) -> float | None:
+        """How long to wait before asking once more for what answered ``resp`` at ``at``: a 503 the caller rejects,
+        from a host of ``RETRY_AFTER_503``, whose ``Retry-After`` is no longer than the host's most, when the budget
+        can pay for the retry; its Retry-After and a jitter. None: no retry."""
+        import httpx
+
+        if resp.status_code != 503 or 503 in accept or self.requests_made >= self.policy.budget:
+            return None
+        most = RETRY_AFTER_503.get(httpx.URL(at).host)
+        said = retry_after(resp.headers, self._wall_clock()) if most is not None else None
+        if said is None or said > most:
+            return None
+        return said + self._rng.uniform(0.0, _RETRY_JITTER)
 
     def _send(self, url: str, request: httpx.Request) -> httpx.Response:
         """One network request, a redirect hop included: within the budget, after the pause."""

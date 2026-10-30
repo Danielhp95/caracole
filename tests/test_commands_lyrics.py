@@ -50,8 +50,9 @@ OUTSIDE_SETTINGS = (
 
 
 class FakeLrclib:
-    """``/api/get`` answers its records (by artist and track) and 503 otherwise, as live;
-    ``/api/search`` lists nothing. ``status`` answers every request with that status."""
+    """``/api/get`` answers its records (by artist and track) and its documented 404 otherwise (its 503 is
+    ServerOverloaded, busy: an error, never a miss); ``/api/search`` lists nothing. ``status`` answers every
+    request with that status."""
 
     def __init__(self, records=(), status: int | None = None):
         self.records = list(records)
@@ -68,7 +69,7 @@ class FakeLrclib:
             for r in self.records:
                 if (r["artistName"], r["trackName"]) == wanted:
                     return httpx.Response(200, json=r)
-            return httpx.Response(503, json={"name": "ServerOverloaded"})
+            return httpx.Response(404, json={"name": "TrackNotFound"})
         if request.url.path == "/api/search":
             return httpx.Response(200, json=[])
         raise AssertionError(f"unexpected request: {request.url}")
