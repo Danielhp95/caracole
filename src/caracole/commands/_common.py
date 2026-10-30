@@ -105,7 +105,13 @@ def load_cfg(ctx: typer.Context, *, builds_index: str | None = None) -> Config:
         if builds_index is not None:
             fail(service.refusal(cfg, found, builds_index), 2)
         _unwarned = service.warning(cfg, found, _command_words(ctx))
+        ctx.call_on_close(_forget_warning)  # a command that only read leaves nothing owed to the next one
     return cfg
+
+
+def _forget_warning() -> None:
+    global _unwarned
+    _unwarned = None
 
 
 def _command_words(ctx: typer.Context) -> str:

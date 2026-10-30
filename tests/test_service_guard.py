@@ -179,3 +179,8 @@ def test_serve_on_the_home_defaults_runs_its_commands_with_home():
 
     assert CaracoleRunner(None, home=True)._argv[-1] == "--home"
     assert "--home" not in CaracoleRunner(Path("/etc/caracole/caracole.toml"))._argv
+
+
+def test_a_command_that_only_reads_leaves_no_warning_owed_to_the_next(home):
+    invoke("index", "stats")
+    assert _common._unwarned is None  # the next command of this process, or a caller of exclusive, owes none
