@@ -610,6 +610,67 @@ def test_sheet_made_before_the_lyrics_arrived_is_made_again_once(conn, cfg, tmp_
     assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
 
 
+def auto_raw(conn, song) -> dict:
+    return get_version(conn, next(f.version_id for f in kept_files(conn, song.id) if f.name == AUTO_SHEET)).raw
+
+
+def test_a_sheet_over_plain_lyrics_is_made_again_once_timed_ones_arrive(conn, cfg, tmp_path):
+    # Timed lyrics put each chord over the word it is played on: the plain sheet is made again, once.
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
+                   lyrics_json=lyrics_json(plain="Walking down the river road\nSinging to the morning light"))
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics"] == "plain" and "[Lyrics]" in auto_sheet(cfg, conn, s).splitlines()
+
+    update_song(conn, s.id, lyrics_json=lyrics_json(synced=SYNCED, duration=10.0))
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).generated, rec.calls) == (1, [Path(s.audio_path)])
+    assert auto_raw(conn, s)["lyrics"] == "synced" and "[Lyrics]" not in auto_sheet(cfg, conn, s).splitlines()
+
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_timed_lyrics_that_dont_fit_the_audio_make_the_sheet_again_once_never_every_night(conn, cfg, tmp_path):
+    # They are for another cut of the song, and no shift fits them: the sheet is made again over the plain lyrics,
+    # once, and once more only when the timed lyrics change.
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
+                   lyrics_json=lyrics_json(plain="Walking down the river road\nSinging to the morning light"))
+    run(conn, cfg)
+    update_song(conn, s.id, lyrics_json=lyrics_json(synced=SYNCED, duration=12.5))
+    assert run(conn, cfg).generated == 1
+    assert auto_raw(conn, s)["lyrics"] == "plain"
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+    other = SYNCED.replace("river road", "river bend")
+    update_song(conn, s.id, lyrics_json=lyrics_json(synced=other, duration=12.5))
+    assert run(conn, cfg).generated == 1
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_a_plain_sheet_made_beside_timed_lyrics_that_didnt_fit_stays_as_it_is(conn, cfg, tmp_path):
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
+                   lyrics_json=lyrics_json(synced=SYNCED, duration=12.5))
+    run(conn, cfg)
+    assert auto_raw(conn, s)["lyrics"] == "plain"
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
+def test_an_older_plain_sheet_beside_timed_lyrics_is_made_again_once(conn, cfg, tmp_path):
+    # An older caracole kept no word of the timed lyrics a sheet was made beside: whether they came after it or
+    # didn't fit, it is made again once, and then knows.
+    s = with_audio(conn, tmp_path, add_song(conn, "Nobody", "River Road"), lyrics_status="found",
+                   lyrics_json=lyrics_json(synced=SYNCED, duration=12.5))
+    run(conn, cfg)
+    vid = next(f.version_id for f in kept_files(conn, s.id) if f.name == AUTO_SHEET)
+    conn.execute("UPDATE versions SET raw = json_remove(raw, '$.synced_lyrics') WHERE id = ?", (vid,))
+    assert run(conn, cfg).generated == 1
+    rec = FakeRecognizer()
+    assert (run(conn, cfg, rec).skipped, rec.calls) == (1, [])
+
+
 def test_a_sheet_laid_out_by_characters_over_lyrics_wider_than_them_is_made_again_once(conn, cfg, tmp_path):
     # An older caracole wrote a chord over a Chinese line at its character's index, half its display column, so
     # the converted sheet had it on an earlier character: such a sheet is made again, once. One over lines of

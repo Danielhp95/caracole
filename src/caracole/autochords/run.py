@@ -11,10 +11,15 @@ with linked audio is due when:
 - it has no human sheet (no kept ``sheet.txt``);
 - it is not ignored;
 - its audio changed since its last auto sheet, or that sheet was made before
-  the song's lyrics arrived, or by an older caracole over timed lyrics with a
-  character not one column wide (Chinese, say), whose chords it wrote at their
-  characters' indexes rather than their display columns (its version's ``raw``
-  has no ``columns``): once more;
+  the song's lyrics arrived, or over plain lyrics before its timed lyrics
+  arrived (or beside other timed lyrics: its version's ``raw["synced_lyrics"]``,
+  a hash of those it was made beside, isn't the song's now; an older caracole
+  kept none), which can put each chord over its word, or by an older caracole
+  over timed lyrics with a character not one column wide (Chinese, say), whose
+  chords it wrote at their characters' indexes rather than their display
+  columns (its version's ``raw`` has no ``columns``): once more, each, so timed
+  lyrics that don't fit the audio make a plain sheet again once, never every
+  night;
 - that file hasn't already failed;
 - no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,
@@ -54,6 +59,7 @@ where ``failed`` lists every purchase whose current file can't be read.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import sqlite3
@@ -372,9 +378,24 @@ def _skip_reason(conn: sqlite3.Connection, song: Song, overrides: Overrides) -> 
     raw = get_version(conn, auto.version_id).raw
     if raw.get("lyrics") == "none" and _sung_lyrics(song):
         return None  # made before LRCLIB answered: once more, now with the words
+    if raw.get("lyrics") == "plain" and _synced_key(song) not in (None, raw.get("synced_lyrics")):
+        return None  # timed lyrics came since: once more, with each chord over its word where they fit the audio
     if raw.get("lyrics") == "synced" and raw.get("columns") != COLUMNS and _wider_lines(song):
         return None  # its chords at their characters' indexes, before they went at display columns: once more
     return "up to date"
+
+
+def _synced_key(song: Song) -> str | None:
+    """A short hash of the song's timed lyrics, which its auto sheet's version keeps as ``synced_lyrics``: a sheet
+    over plain lyrics is made again only once other timed lyrics than those come. None when it has none, or its
+    lyrics can't be read."""
+    try:
+        lyrics = _sung_lyrics(song)
+    except (TypeError, ValueError):
+        return None
+    if lyrics is None or not lyrics.synced:
+        return None
+    return hashlib.sha256(lyrics.synced.encode("utf-8")).hexdigest()[:16]
 
 
 def _wider_lines(song: Song) -> bool:
@@ -625,8 +646,9 @@ def _keep(
     """Keep one song's auto sheet, under a version of provider ``auto``; the song becomes found.
 
     The key heard goes into the version's ``raw``, for ``keys.song_key``, and so does the shift
-    of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), and what its
-    chord lines' columns count (``columns``: ``COLUMNS``). Audio from
+    of timed lyrics LRCLIB timed for audio of another length (``lyrics_shift``), what its
+    chord lines' columns count (``columns``: ``COLUMNS``), and the timed lyrics the song had,
+    used or not (``synced_lyrics``, ``_synced_key``). Audio from
     YouTube (``video``) gives the version the video's address, so info.json names it, and its
     fields.
     """
@@ -636,6 +658,9 @@ def _keep(
         raw["key"] = key
     if shift is not None:
         raw["lyrics_shift"] = shift
+    synced = _synced_key(song)
+    if synced is not None:
+        raw["synced_lyrics"] = synced
     if video is not None:
         raw["youtube"] = video.as_json()
     version_id = upsert_version(
