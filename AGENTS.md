@@ -60,7 +60,7 @@ Shared by the steps and the commands:
 
 | Module | What for |
 |---|---|
-| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone) |
+| config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name) |
 | index_transfer.py | `caracole index export` and `merge` (commands/index.py): every site's index (`SITES`: its tables and the kv records of its progress) into a new SQLite file, in one read transaction, with its `caracole_export` table (format, schema, sites); and such a file into the database under the lock, refused whole (`TransferError`, status 2) for another schema or other columns, else per site what the file read more recently: a sitemap or LaCuerda listing page by its record's time (UG's rows upserted as a refresh stores them, its new tabs' songs marked), harptabs.com's artist and gametabs.net's game pages by `read_at`, UG's artist pages' tabs a row at a time, LaCuerda's artist pages and search rows only where the database has none; progress records move on, never back; backed up first (backup.py, `before-merge`) only when something changes, so a second merge writes nothing; each index's `ensure_current_keys` after, whole where the file's keys record differs |
 | service.py | whether this machine runs caracole as a service: its marker, `/etc/caracole/service` (`MARKER`, a few lines of TOML naming its `state_dir` and `library_dir`), which nix/module.nix and deploy.md's Ubuntu steps write, and `CARACOLE_SERVICE_FILE` another, which conftest.py points at no file for every test; `elsewhere`, the service when a caracole with no config named (no `--config`, no `CARACOLE_CONFIG`) would use another database than its: then `_common.load_cfg` refuses a command that builds an index (`builds_index=`, its words: run, index build and refresh, gtptabs, musescore, harptabs, gametabs and lacuerda `--index`) with status 2, and any other says `warning` once before it writes (`_common.warn_elsewhere`, as it first takes the lock, or as add and serve write first), unless the root `--home`; the standard library alone |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
@@ -72,6 +72,7 @@ Shared by the steps and the commands:
 | pdf_fonts.py | the fonts every PDF is set in (`pdf_fonts`, `CARACOLE_PDF_FONTS`): a folder of `regular`, `bold`, `italic` and `mono` (`in_folder`), and what `metrics` reads of each, the characters it has and their widths as ChordPro's PDF library counts them, which render.py's `pdf_font` (a letter the regular font lacks brings in the CJK font, for the words alone: `fonts_options`, `PDF_FONT_ELEMENTS`) and pdf_text.py's layout read; without the folder, ChordPro's built-in fonts, as before; the standard library alone |
 | page_log.py | the library page's line in the log, one a build (`PageBuild`: caracole serve's at `/`, library_routes.py, with the host; `todo.write_pages`'s `index.html`): its songs found, wanted, ignored and in review, its songbooks, the database's path, size and time, how long it took; a page with no songs, or a database that can't be opened or read, a warning that says what tells why (the database before and after the build opened it, its owner, WAL, schema version and `songs` rows read straight from it, read-only; the folders, the process's uid and gid), the page answered as ever. Information the journal keeps by default (logs.py `JOURNAL_INFO`): `journalctl -u caracole-web \| grep 'library page'` (test_page_log.py) |
 | page_icon.py | the mark in every page's tab, "¿" drawn in SVG (`LINK`, a `data:` URI for a page's head; `SVG`, caracole serve's `/favicon.ico`); the standard library alone |
+| library_name.py | which library a page shows (`LibraryName`): its name after caracole's in the header and the tab's title of index.html and every page caracole serve writes itself (top.py, pages.py, lookup_page.py, guitar_page.py: `WebApp.library_name`), and, on caracole serve's alone, a badge for a library that isn't the owner's usual one, with the "¿" in its colour (`scratch_badge`, once at start: `caracole serve --label`, else `SCRATCH` for a config file, library folder or state folder in a temporary folder; never the NixOS or Ubuntu service's /var/lib/caracole nor a library run by hand at home: test_library_name.py); never on the written index.html, a viewer or a songbook's page; the standard library alone |
 | overrides.py | overrides.toml (`[harmonica]`: a tab's reading pinned, `add_harmonica`, checked by viewer/harptab.py `check_spec`) |
 | library.py | song folders, safe file access in the synced library |
 | download_names.py | the name a kept file downloads under ("Eagles - Hotel California (2).gp5"): web/app.py's `Content-Disposition`, the `download` of index.html's and the viewer's links; the standard library alone (the viewer imports it) |
@@ -895,8 +896,8 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   song, as it is an `OverridesError` or a `SongbookFileError` in overrides.toml or
   songbooks.toml), and write one with `library.write_atomic`: a random temporary name opened
   exclusively, then a rename. Never `mkstemp`, whose mode 0600 hides files from Syncthing.
-  Nothing private or bulky goes there: the database, the lock, the HTTP
-  cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in
+  Nothing private or bulky goes there: the database, the lock, caracole serve's request history
+  (`requests.jsonl`, 0600), the HTTP cache and the audio taken from YouTube (`cache_dir/youtube/`, youtube_fetch.py) stay in
   `state_dir` and `cache_dir`, and chordpro works on a copy in a 0700 folder under the cache
   (render.py). tests/test_library_safety.py. A removal deletes only what caracole
   wrote in the song's folder (`removal._caracoles`: kept files, the outputs of a kept sheet (its Traditional PDF among them) or
@@ -964,6 +965,15 @@ Each names where it is enforced. Don't weaken one to make a test pass.
   (the library page's script; without it, a page of its own), having asked what goes
   (`removal.plan_removal`, which only reads, and `removal.brief`); its job's song key is
   `remove:<key>` (`jobs.REMOVING`), so it never joins the song's add or fetch.
+  Beyond wanted.txt, the one thing it writes is its own request history, `state_dir/requests.jsonl`
+  (web/history.py), no table of caracole.sqlite: a file no command reads or writes, whose one writer
+  is caracole serve's queue, under the queue's own lock (`JobQueue._save`), so it needs caracole's
+  lock no more than wanted.txt does, and the database keeps its rule that every change to it is a
+  caracole command's. A line a request appended in one write as it changes; written again whole
+  (a temporary file, synced, renamed over it) when it starts and when it grows past three lines a
+  request kept or `MAX_BYTES`; a line it can't read skipped; the last `jobs.KEEP` (100) requests of
+  `DAYS` (30) read back, the next ids after theirs, one that waited or ran then `INTERRUPTED`, as is
+  one the server ends as it stops (`JobQueue.stop`): over, Try again queues it (test_web_history.py).
 - **wanted.txt is the one source of songs.** `sources.sync_sources` syncs it alone, and a song's
   album, duration, ISRC and variant are what its line says now, kept in its record alone
   (`songs.upsert_song`; `test_songs.py::test_a_song_keeps_what_its_line_says_in_its_own_record_alone`).

@@ -925,6 +925,13 @@ is restored the same way.
   listen on" says why. A 421: add the name the browser used to
   `web.allowedHosts` (`--allow-host`). "caracole serve has restarted since this
   page was opened": reload it.
+- **Which server is this page from?** Every page names the library after
+  caracole's, in its header and its tab's title (`name` in caracole.toml, else
+  the library folder's: "caracole · library" here). A page badged **Scratch
+  library** (or what `--label` says) is another caracole serve's, of a library
+  in a temporary folder: caracole-web's pages carry no badge
+  ([usage.md](usage.md#caracole-serve)). What each request did is in the
+  Requests tab, kept across restarts in `/var/lib/caracole/state/requests.jsonl`.
 - **Syncthing says "permission denied":** `ls -ld /var/lib/caracole/library`
   shows `drwxrwsr-x caracole caracole`, and `id syncthing` lists `caracole`?
   Restart Syncthing after a group change, and tick Ignore Permissions.

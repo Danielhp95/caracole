@@ -72,12 +72,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from html import escape
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from caracole.inline import json_block, sha256_source
 from caracole.library_assets import BASE_STYLE, ROWS_SCRIPT, ROWS_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.web.top import LIBRARY, top
+
+if TYPE_CHECKING:
+    from caracole.library_name import LibraryName
 
 STYLE = BASE_STYLE + ROWS_STYLE + """
 .page { max-width: 980px; }
@@ -842,15 +845,19 @@ __TOP__<div class="search" role="search">
 """
 
 
-def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None) -> str:
-    """The whole page, with the form token every POST carries and each source's mark (``icons.page_icons``)."""
+def lookup_page(csrf: str, icons: Mapping[str, Any] | None = None, *, library_name: LibraryName | None = None) -> str:
+    """The whole page, with the form token every POST carries and each source's mark (``icons.page_icons``);
+    ``library_name``, the library the server shows (library_name.py), in its header and its tab's title."""
     token = escape(csrf, quote=True)
+    title = library_name.title("Look up") if library_name is not None else "Look up · caracole"
+    links = LIBRARY + '<a class="navlink" href="/#tab=requests">Requests</a>'
     return (
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n'
-        f"{PAGE_ICON}<title>Look up · caracole</title>\n<style>{STYLE}</style>\n</head>\n"
-        + _BODY.replace("__TOP__", top("Look up a song", LIBRARY + '<a class="navlink" href="/#tab=requests">Requests</a>'))
+        f"{library_name.icon() if library_name is not None else PAGE_ICON}<title>{escape(title)}</title>\n"
+        f"<style>{STYLE}</style>\n</head>\n"
+        + _BODY.replace("__TOP__", top("Look up a song", links, library_name=library_name))
         .replace("__CSRF__", token)
         + json_block("icons", dict(icons or {}))
         + f"<script>{ROWS_SCRIPT}</script>\n<script>{SCRIPT}</script>\n</body>\n</html>\n"

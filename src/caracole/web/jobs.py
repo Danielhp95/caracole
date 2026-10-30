@@ -41,18 +41,22 @@ jobs in order, so the server never runs two commands at once: it can be no
 more aggressive than someone typing them.
 
 A step that exits non-zero fails its job, and the job's other steps are
-skipped. The queue holds ``limit`` jobs waiting or running, one per song (a
+skipped; one the server ends as it stops (``stop``: Ctrl-C, systemd) interrupts
+it (``INTERRUPTED``), as a restart does a job its history left waiting or
+running. The queue holds ``limit`` jobs waiting or running, one per song (a
 lookup takes the place of the song's waiting add, since ``caracole get`` adds
 the song itself, or follows it once it runs; a version you pick meanwhile
 takes the place of the song's waiting lookup, or follows the running one, and a
 lookup joins the song's Keep it, which never looks it up, or follows it: its
 stages, which share names with Keep it's, start afresh when it does),
 and remembers the last ``keep``
-finished ones, in memory only (``cancel`` takes one that hasn't started out of the queue, never one
-that runs, and keeps it among those, cancelled): a request is in wanted.txt from the moment it's
-made, so a restart loses no song, only the lookup that would have come before
-the nightly run. ``Job.as_json`` is a job as data, for the page that shows a
-request's progress.
+finished ones (``cancel`` takes one that hasn't started out of the queue, never one
+that runs, and keeps it among those, cancelled), in memory and, given a
+``history`` (history.py: caracole serve's ``state_dir/requests.jsonl``), in a
+file it saves each job to as it changes, which the next server reads back: a
+request is in wanted.txt from the moment it's made, so a restart loses no song,
+and the history keeps what each request did. ``Job.as_json`` is a job as data,
+for the page that shows a request's progress.
 """
 
 from __future__ import annotations
@@ -66,14 +70,20 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from caracole.get import read_progress_line
 
+if TYPE_CHECKING:
+    from caracole.web.history import History
+
 Runner = Callable[[Sequence[str], Callable[[str], None]], int]
 LIMIT = 20  # jobs waiting or running
-KEEP = 30  # finished jobs remembered
+KEEP = 100  # finished jobs remembered, as the history keeps them (history.py)
 MAX_LINES = 400  # output kept per step: the last lines
+# A job the server stopped before it was over (``JobQueue.stop``, or a restart: history.py), and its step and stage
+# that ran then: over, never run to its end; Try again queues its steps again.
+INTERRUPTED = "interrupted"
 
 
 class QueueFull(Exception):
@@ -92,7 +102,7 @@ class JobStarted(Exception):
 class Step:
     label: str
     args: tuple[str, ...]
-    state: str = "waiting"  # waiting, running, done, failed, skipped
+    state: str = "waiting"  # waiting, running, done, failed, skipped, interrupted
     code: int | None = None
     output: list[str] = field(default_factory=list)  # its last lines
     dropped: int = 0  # the lines before them
@@ -106,7 +116,7 @@ class Stage:
 
     name: str
     label: str
-    state: str = "waiting"  # waiting, running, done, skipped, failed
+    state: str = "waiting"  # waiting, running, done, skipped, failed, interrupted
     detail: str = ""
     running_detail: str = ""
 
@@ -120,7 +130,8 @@ class Job:
     fetching: bool = False
     note: str = ""
     display: str = ""  # "Artist - Title"; its title when none was given
-    state: str = "queued"  # queued, running, done, failed, cancelled (before it ran: JobQueue.cancel)
+    # queued, running, done, failed, cancelled (before it ran: JobQueue.cancel), interrupted (the server stopped)
+    state: str = "queued"
     queued_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     started_at: datetime | None = None
     finished_at: datetime | None = None
@@ -439,9 +450,11 @@ def review_steps(display: str, *, pick: str | None = None,
 
 
 class JobQueue:
-    """Jobs in order, run by one worker thread (``start``), or by ``run_pending`` in tests."""
+    """Jobs in order, run by one worker thread (``start``), or by ``run_pending`` in tests; with ``history``, those
+    the last server left read back from it (history.py), and every job saved to it as it changes."""
 
-    def __init__(self, runner: Runner, *, limit: int = LIMIT, keep: int = KEEP, max_lines: int = MAX_LINES):
+    def __init__(self, runner: Runner, *, limit: int = LIMIT, keep: int = KEEP, max_lines: int = MAX_LINES,
+                 history: History | None = None):
         self._runner = runner
         self._limit = limit
         self._keep = keep
@@ -452,6 +465,9 @@ class JobQueue:
         self._next_id = 1
         self._stopping = False
         self._thread: threading.Thread | None = None
+        self.history = history
+        if history is not None:
+            self._jobs, self._next_id = history.load()
 
     # --- what the pages ask -------------------------------------------------------------------
 
@@ -480,8 +496,10 @@ class JobQueue:
         running.
         """
         with self._lock:
-            return self._submit_locked(title, song_key, steps, fetching=fetching, note=note, display=display,
+            done = self._submit_locked(title, song_key, steps, fetching=fetching, note=note, display=display,
                                        join=join, song_id=song_id)
+            self._save(done[0].id)
+            return done
 
     def submit_all(self, requests: Sequence[dict[str, Any]]) -> list[tuple[Job, bool]]:
         """``submit`` of each request (a dict of its arguments: ``title``, ``song_key``, ``steps`` and the options),
@@ -502,6 +520,8 @@ class JobQueue:
                     for job in self._jobs:
                         if job.id in made:
                             job.together = made
+                for job_id in dict.fromkeys(job.id for job, _ in done):  # saved once all are queued
+                    self._save(job_id)
             except QueueFull:
                 del self._jobs[count:]
                 self._next_id = next_id
@@ -571,6 +591,7 @@ class JobQueue:
                     j.state, j.finished_at = "cancelled", now
                     for part in (*j.steps, *j.stages):
                         part.state = "skipped"
+                    self._save(j.id)
             self._forget()
             return copy.deepcopy(job)
 
@@ -637,6 +658,7 @@ class JobQueue:
             if job is not None:
                 job.state = "running"
                 job.started_at = datetime.now(UTC)
+                self._save(job.id)
             return job
 
     def _run(self, job: Job) -> None:
@@ -668,17 +690,29 @@ class JobQueue:
                 code = None
             with self._lock:
                 step.code = code
-                step.state = "done" if code == 0 else "failed"
+                # A command ended as the server stops (``stop``) is interrupted, never failed
+                step.state = "done" if code == 0 else INTERRUPTED if self._stopping else "failed"
                 failed = failed or code != 0
         with self._lock:
-            job.state = "failed" if failed or any(s.state != "done" for s in job.steps) else "done"
+            interrupted = self._stopping and any(s.state != "done" for s in job.steps)
+            job.state = ("failed" if failed or any(s.state != "done" for s in job.steps) else "done"
+                         ) if not interrupted else INTERRUPTED
             job.finished_at = datetime.now(UTC)
             for stage in job.stages:  # a lookup that ended early: nothing is left running or waiting
                 if stage.state == "running":
-                    stage.state = "failed" if job.state == "failed" else "done"
+                    stage.state = INTERRUPTED if interrupted else "failed" if job.state == "failed" else "done"
                 elif stage.state == "waiting":
                     stage.state = "skipped"
+            self._save(job.id)
             self._forget()
+
+    def _save(self, job_id: int) -> None:
+        """Save the job as it is now to the history, if there is one; under the queue's lock, so saves are in
+        order."""
+        if self.history is not None:
+            job = next((j for j in self._jobs if j.id == job_id), None)
+            if job is not None:
+                self.history.save(job, self._jobs, self._next_id)
 
     def _forget(self) -> None:
         """Keep the last ``keep`` finished jobs."""

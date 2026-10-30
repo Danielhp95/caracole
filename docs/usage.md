@@ -46,6 +46,7 @@ folder.
 Here is every key with its default. The commented-out keys have none.
 
 ```toml
+# name = "..."                    # what the pages call the library; default: library_dir's folder name
 # data_dir = "..."                # one folder for the four below (see below)
 library_dir = "~/Tabs"            # sheets, lyrics, _todo.md, index.html, wanted.txt
 music_dir = "~/Music"             # tracks you bought; read only, used only for auto-chords
@@ -130,9 +131,10 @@ whole number.
 it, `state_dir` is `$STATE_DIRECTORY` when systemd sets it, else
 `$XDG_STATE_HOME/caracole`, else `~/.local/state/caracole`. `cache_dir` works the
 same way from `$CACHE_DIRECTORY`, `$XDG_CACHE_HOME/caracole` or
-`~/.cache/caracole`. The state folder holds `caracole.sqlite` and
-`caracole.lock`, and in `backups/` the last three copies of the database (see
-[Keeping the database](#keeping-the-database)): back it up, but don't sync it. The cache keeps every
+`~/.cache/caracole`. The state folder holds `caracole.sqlite`,
+`caracole.lock` and caracole serve's `requests.jsonl`, and in `backups/` the last
+three copies of the database (see [Keeping the database](#keeping-the-database)):
+back it up, but don't sync it. The cache keeps every
 response caracole has received, so it rarely asks for a page twice; deleting it
 costs only requests. PDFs are made in it too, each in a private folder that
 goes when the PDF is done, so caracole must be able to write there. Its
@@ -2243,8 +2245,11 @@ inverted question mark (¿) on its rust-red square, drawn inside the page itself
 as every page caracole writes or serves shows it (the sheet viewers and the
 songbooks from their next render); caracole serve answers a browser's own
 `/favicon.ico` with it too. Its top is one bar, so that the first song starts
-well within the first screen, on a phone too: caracole's "¿" mark and name (the
-mark alone on a phone), the tabs, **Library**, your songs, **Songbooks**
+well within the first screen, on a phone too: caracole's "¿" mark and name, then
+the library's (caracole.toml's `name`, one line of 80 characters at most, else
+the library folder's name: "Tabs"), which the browser tab's title says too
+("caracole · Tabs"; on a phone the mark alone, the library's name in the title),
+the tabs, **Library**, your songs, **Songbooks**
 (see [The Songbooks tab](#the-songbooks-tab)), **Sites** (see [The Sites
 tab](#the-sites-tab)) and, served, **Requests**, the last (see Requests, under
 [caracole serve](#caracole-serve)), Songbooks and Requests counting what they
@@ -3743,11 +3748,33 @@ is no progression exits with status 2.
 
 ### caracole serve
 
-`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]…`
+`caracole serve [--address ADDRESS] [--port PORT] [--allow-host NAME]… [--label TEXT]`
 serves the library page over HTTP, at `http://127.0.0.1:8737/` by default,
 with what the file on disk can't do. It has no sign-in: anyone who can reach it
 can read the library and request songs, so keep it on a network you trust (see
 Who can reach it, below).
+
+Every page it serves names the library it shows, after caracole's name in its
+header and in the browser tab's title ("caracole · Tabs", "Look up · caracole ·
+Tabs"), as `index.html` does. A server of a library that isn't your usual one
+says so on every page it writes itself, with a badge beside the name, first in
+each title ("Scratch library · caracole · test-lib") and on a line of its own
+under the header on a phone, and the tab's "¿" in the badge's amber, so that
+its pages are never taken for your library's. It prints the badge when it
+starts. How it knows:
+
+- `--label TEXT` names the badge (40 characters at most): `--label Demo`,
+  `--label Test`. `--label ""` shows none, wherever the library is.
+- Without it, a library whose config file, library folder or state folder is in
+  a temporary folder (`/tmp`, `/var/tmp`, `/dev/shm`, or `$TMPDIR`, `$TEMP`,
+  `$TMP`) is badged **Scratch library**: a test library made in nix develop's
+  temporary folder, say. Your libraries never are: the NixOS service's and
+  Ubuntu's in `/var/lib/caracole`, and a library you run by hand from your home
+  folder. A temporary folder that holds your home folder, or is `/`, counts for
+  nothing.
+
+The sheet viewers and the songbooks' pages are the files caracole wrote into
+the library, sent as they are: they carry no badge.
 
 - **Search as you type.** The library page's search box filters your songs as
   you type, here as on the file, and from the third letter (the second with a
@@ -4362,7 +4389,24 @@ Who can reach it, below).
       in a word and a sentence;
     - Make this my version's **Your version now** · **Open sheet** (Export
       PDF's Download and make it mine): never its song's request, whose line
-      on the library page stays its own.
+      on the library page stays its own;
+    - **Interrupted**: caracole serve stopped (a restart, a crash, Ctrl-C)
+      while the request ran, or before it ran: what it did by then, its
+      song's line says; **Try again** queues it again (a removal asks what
+      goes first). Its Output keeps what its command printed until then, the
+      step it was in marked Interrupted.
+
+  The tab keeps the last 100 requests of the last 30 days, and a restart
+  keeps them: caracole serve writes them to `requests.jsonl` in the state
+  folder as they go, a line each time one is queued, starts or ends, and
+  reads them back when it starts, its new requests numbered after them, so a
+  `job=N` link never names another. It is caracole serve's own file, which no
+  command reads or writes and which takes no lock: a JSON object a line, each
+  command's last 200 lines kept, each line of 1,000 characters at most. It is
+  written again whole when it grows (more than three lines a request kept, or
+  4 MB), through a temporary file renamed over it, so it never grows without
+  bound and a crash leaves it whole; a line it can't read (cut short by a
+  crash, say) is left out. Delete it to forget them all, the server stopped.
 
   Every request keeps its **Output**, folded away: when it was asked for (in
   the server's time zone, named), the commands it ran and
@@ -4527,7 +4571,7 @@ a nightly run holding the lock lets it go first at its next pause. The
 queue holds 20 requests and one per song: asking again for a song gives its
 request, and Fetch it now on a song whose request only adds it fetches it too.
 A request is in wanted.txt as soon as it's made, so a full queue or a restart
-loses no song. A songbook change waits in the queue like a request; the same
+loses no song, and the Requests tab keeps its history across a restart (above). A songbook change waits in the queue like a request; the same
 change sent twice is queued once. The server writes no songbook itself: the
 command does, under caracole's lock. The page links each
 song's files, which the server sends from the library: PDFs, text, info.json,

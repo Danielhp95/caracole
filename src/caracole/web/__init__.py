@@ -15,8 +15,12 @@ A small server from the standard library (``http.server``), in these parts:
   candidate is ``caracole review --song``. Each takes caracole's lock
   and keeps the pause after the last request any caracole sent, as it does
   from a terminal, so the server is never more aggressive than the CLI.
+- history.py: the requests kept across a restart, ``state_dir/requests.jsonl``,
+  the queue's own file: a line a request each time it changes, read back when
+  the server starts, what waited or ran then interrupted.
 - top.py: the header every page caracole serve writes itself opens with, one line: the "¿" and the name, the
-  page's title, its links.
+  library's name and the server's badge for a library that isn't the usual one (library_name.py), the page's
+  title, its links.
 - status.py: the one line a request shows on its song's card, read from its
   job's steps and, once it is over, from the song's state; outcome.py: the
   Requests tab's own view of it, the running one's steps and a finished
@@ -48,5 +52,6 @@ A small server from the standard library (``http.server``), in these parts:
 
 The server itself never takes caracole's lock. It reads the database, as
 ``caracole search`` does, and writes only wanted.txt, as ``caracole add`` does
-before it waits for the lock.
+before it waits for the lock, and its own request history (history.py), which
+no command reads or writes.
 """

@@ -67,7 +67,17 @@ from typing import Any
 
 from caracole.get import SHEET_FROM
 from caracole.logs import plural
-from caracole.web.jobs import EXPORTING, INDEX_READS, READING, REMOVING, YOUTUBE_SHEET, Job, Stage, Step
+from caracole.web.jobs import (
+    EXPORTING,
+    INDEX_READS,
+    INTERRUPTED,
+    READING,
+    REMOVING,
+    YOUTUBE_SHEET,
+    Job,
+    Stage,
+    Step,
+)
 from caracole.web.songbooks import DONE, OPENS, songbook_of
 
 TODO = "_todo.md"
@@ -160,7 +170,8 @@ class SongFacts:
 
 @dataclass(frozen=True)
 class Line:
-    """``tone``: queued, running, ready, added, removed, review, waiting, missing, failed or cancelled; ``link``: (label, href),
+    """``tone``: queued, running, ready, added, removed, review, waiting (an interrupted job's too), missing, failed or
+    cancelled; ``link``: (label, href),
     where to go next; ``details``: the job's output in the Requests tab, for a line that ends in a failure or a
     wait."""
 
@@ -194,6 +205,8 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
     if job.state == "cancelled":  # it never ran: nothing to read from its song
         return Line("cancelled", "Cancelled")
     details = details_href(job.id)
+    if job.state == INTERRUPTED:  # the server stopped before it was over: never read as done from its song
+        return Line("waiting", "Interrupted", details=details)
     if job.state == "failed":
         if job.fetching and song is not None and not song.sheet:
             if song.review:

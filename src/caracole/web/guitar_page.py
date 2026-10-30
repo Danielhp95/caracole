@@ -26,6 +26,7 @@ import base64
 from functools import lru_cache
 from html import escape
 from pathlib import Path
+from typing import TYPE_CHECKING
 from urllib.parse import quote
 
 from caracole.inline import sha256_source
@@ -33,6 +34,9 @@ from caracole.library_assets import BASE_STYLE
 from caracole.page_icon import LINK as PAGE_ICON
 from caracole.web.top import top
 from caracole.web.alphatab import AlphaTab
+
+if TYPE_CHECKING:
+    from caracole.library_name import LibraryName
 
 HERE = Path(__file__).resolve().parent
 # The stylesheet named alphaTabStyle, whose being there keeps alphaTab from adding its own shared rules (they are in
@@ -60,10 +64,10 @@ def policy(at: AlphaTab) -> str:
 
 
 def build_page(*, title: str, artist: str, song_id: int, path: str, label: str, data: bytes, at: AlphaTab,
-               sheet: str | None = None) -> str:
+               sheet: str | None = None, library_name: LibraryName | None = None) -> str:
     """The page for the Guitar Pro file at ``path`` (its library path, ``label`` naming it: "Guitar Pro 1"), of the
     song ``song_id`` (``title`` by ``artist``), its bytes ``data``; ``sheet``, the library path of the song's sheet
-    viewer, when it has one."""
+    viewer, when it has one; ``library_name``, the library the server shows (library_name.py)."""
     href = "/" + quote(path)
     links = [f'<a class="navlink" href="/#song={song_id}">‹ The song</a>']
     if sheet:
@@ -76,12 +80,13 @@ def build_page(*, title: str, artist: str, song_id: int, path: str, label: str, 
         '<!doctype html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n'
         '<meta name="viewport" content="width=device-width, initial-scale=1">\n'
         '<meta name="color-scheme" content="light dark">\n<meta name="referrer" content="same-origin">\n',
-        PAGE_ICON,
-        f"<title>{escape(title)} · {escape(label)} · caracole</title>\n",
+        library_name.icon() if library_name is not None else PAGE_ICON,
+        f"<title>{escape(library_name.title(f'{title} · {label}') if library_name else f'{title} · {label} · caracole')}"
+        "</title>\n",
         f"<style>{style()}</style>\n",
         f'<style id="alphaTabStyle">{SHARED_STUB}</style>\n',
         '</head>\n<body>\n<div class="page gp">\n',
-        top(title, "".join(links), label="This song", sub=sub_line),
+        top(title, "".join(links), label="This song", sub=sub_line, library_name=library_name),
         _BAR,
         '<p class="gp-status" id="gp-status" role="status">Loading alphaTab…</p>\n',
         '<div class="score" id="score"></div>\n',

@@ -211,7 +211,8 @@ def lookup_page(app: WebApp) -> Response:
     from caracole.icons import page_icons
     from caracole.web import lookup_page as page
 
-    return html_response(200, page.lookup_page(app.csrf, page_icons(app.cfg.cache_dir)), csp=page.LOOKUP_CSP)
+    html = page.lookup_page(app.csrf, page_icons(app.cfg.cache_dir), library_name=app.library_name)
+    return html_response(200, html, csp=page.LOOKUP_CSP)
 
 
 # --- a song looked up now --------------------------------------------------------------------------

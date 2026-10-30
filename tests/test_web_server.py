@@ -223,7 +223,7 @@ def test_a_served_viewer_keeps_its_settings_in_its_address(cfg, conn, tmp_path):
             tab.wait_for(afresh)
             assert tab.eval(chord) == "Am" and tab.eval(key) == "Key Am · +2"
             tab.eval("document.querySelector('a.back').click()")  # to the library, and Back
-            tab.wait_for("document.title === 'caracole library'")
+            tab.wait_for(f"document.title === 'caracole · {cfg.library_name}'")  # the library page
             tab.eval("history.back()")
             tab.wait_for(afresh)
             assert tab.eval(chord) == "Am" and tab.eval(key) == "Key Am · +2"
