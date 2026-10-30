@@ -1005,3 +1005,24 @@ def test_a_request_that_gets_no_answer_says_what_happened(tmp_path, caplog, monk
     assert request_lines(caplog) == [
         "Ultimate Guitar GET https://tabs.ultimate-guitar.com/tab/1 → ReadTimeout after 30.00 s (1 of 60 requests)",
     ]
+
+
+def test_azlyrics_rules_are_the_user_agent_star_group_of_its_robots_txt():
+    # tests/fixtures/azlyrics/robots.txt is the live file of 30 October 2026 (Last-Modified 2 March).
+    from caracole.http import ROBOTS_DISALLOW, robots_disallows
+
+    assert ROBOTS_DISALLOW["www.azlyrics.com"] == tuple(robots_groups("azlyrics")["*"])
+    assert ROBOTS_DISALLOW["azlyrics.com"] == ROBOTS_DISALLOW["www.azlyrics.com"]
+    assert robots_disallows("https://www.azlyrics.com/search/?q=mononoke")
+    assert robots_disallows("https://www.azlyrics.com/suggest/?q=mononoke")
+    assert not robots_disallows("https://www.azlyrics.com/p/pomme.html")
+    assert not robots_disallows("https://www.azlyrics.com/lyrics/pomme/mononoke.html")
+
+
+def test_azlyrics_block_page_is_a_challenge_though_it_answers_200():
+    from caracole.http import is_challenge
+    from helpers.azlyrics_site import artist_page, fixture, lyrics_page
+
+    assert is_challenge({}, fixture("block.html").encode("utf-8"))
+    assert not is_challenge({}, lyrics_page().encode("utf-8"))
+    assert not is_challenge({}, artist_page().encode("utf-8"))

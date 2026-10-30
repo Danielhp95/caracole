@@ -160,9 +160,9 @@ def test_unexpected_error_marks_the_run_failed_but_later_steps_still_run(conn, c
 def test_report_summary_mentions_requests(conn, cfg):
     out = Outbox()
     report = run_pipeline(cfg, conn=conn, services=services(out, ug=7, lrclib=3), steps=[step("todo")], now=NOW)
-    assert report.requests == {"ug": 7, "lrclib": 3, "megalobiz": 0, "lacuerda": 0, "gtptabs": 0, "musescore": 0,
+    assert report.requests == {"ug": 7, "lrclib": 3, "megalobiz": 0, "azlyrics": 0, "lacuerda": 0, "gtptabs": 0, "musescore": 0,
                                "harptabs": 0, "gametabs": 0}
-    assert ("Requests: Ultimate Guitar 7, LRCLIB 3, Megalobiz 0, LaCuerda 0, gtptabs.com 0, MuseScore 0, "
+    assert ("Requests: Ultimate Guitar 7, LRCLIB 3, Megalobiz 0, AZLyrics 0, LaCuerda 0, gtptabs.com 0, MuseScore 0, "
             "harptabs.com 0, gametabs.net 0."
             in report.summary().splitlines())
 
@@ -242,7 +242,7 @@ def test_default_steps_are_in_plan_order():
     from caracole.pipeline import default_steps
 
     assert [s.name for s in default_steps()] == [
-        "sync", "icons", "index", "match", "lyrics", "megalobiz", "fetch", "lacuerda", "scan", "gtptabs", "harptabs",
+        "sync", "icons", "index", "match", "lyrics", "megalobiz", "azlyrics", "fetch", "lacuerda", "scan", "gtptabs", "harptabs",
         "gametabs", "musescore", "youtube", "render", "todo", "backup",
     ]
     providers = {s.name: s.provider for s in default_steps()}
@@ -354,7 +354,7 @@ def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
     off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
     made = make_services(off, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "lacuerda", "musescore", "harptabs", "gametabs"}
+        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "musescore", "harptabs", "gametabs"}
     finally:
         made.close()
     steps = [s for s in default_steps() if s.name == "gtptabs"]
@@ -367,7 +367,7 @@ def test_the_run_makes_a_client_for_every_provider_turned_on(conn, cfg):
 
     made = make_services(cfg, conn, "2026-10-19T03:30:00Z")
     try:
-        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "lacuerda", "gtptabs", "musescore", "harptabs",
+        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "gtptabs", "musescore", "harptabs",
                                      "gametabs"}
     finally:
         made.close()
@@ -1135,7 +1135,7 @@ def test_todo_page_counts_this_runs_requests_as_the_last_success(conn, cfg):
     rows = [line for line in page.split("## Provider health", 1)[1].splitlines() if line.startswith("| ")]
     # Every provider this run asked; YouTube and its image host, which need auto-chords and its models, are off here,
     # never used.
-    assert [row.split(" |")[0] for row in rows if "never" in row] == ["| youtube", "| ytimg"]
+    assert [row.split(" |")[0] for row in rows if "never" in row] == ["| azlyrics", "| youtube", "| ytimg"]
     assert "| youtube | off: " in page and "| ytimg | off: " in page
 
 
@@ -1247,7 +1247,7 @@ def test_with_auto_chords_the_run_makes_a_yt_dlp_runner_that_holds_the_lock(conn
     made = make_services(ycfg, conn, "2026-10-19T03:30:00Z")
     lock = ycfg.state_dir / _common.LOCK_NAME
     try:
-        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "lacuerda", "gtptabs", "musescore", "harptabs",
+        assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "gtptabs", "musescore", "harptabs",
                                      "gametabs", "youtube"}
         assert made.clients["youtube"].policy.budget == 6
         assert lock in _common._held
@@ -1335,3 +1335,75 @@ def test_a_youtube_bot_check_cools_it_down_with_one_alert_and_marks_no_song(conn
     again = youtube_run(conn, ycfg, fake)
     assert again.steps["youtube"].startswith("skipped: youtube cooling down until")
     assert len(fake.argvs()) == 1
+
+
+def test_azlyrics_follows_megalobiz_and_gives_a_song_both_missed_plain_lyrics(conn, cfg):
+    from conftest import add_song
+    from helpers.azlyrics_site import ARTIST, SONG, FakeAzLyrics
+    from helpers.megalobiz_site import FakeMegalobiz
+    from test_lyrics_pending import FakeLrclib
+
+    from caracole.lyrics import lyrics_from_json
+    from caracole.pipeline import default_steps
+    from caracole.songs import get_song
+
+    names = [s.name for s in default_steps()]
+    assert names.index("azlyrics") == names.index("megalobiz") + 1
+    assert names.index("azlyrics") < names.index("fetch")  # sheets are scored against the lyrics it finds
+    song = add_song(conn, "pomme", "mononoke")
+    lrclib, megalobiz, site = FakeLrclib(), FakeMegalobiz(), FakeAzLyrics()
+    svc = Services(clients={"lrclib": lrclib.client(cfg.cache_dir), "megalobiz": megalobiz.client(cfg.cache_dir, now=NOW),
+                            "azlyrics": site.client(cfg.cache_dir, now=NOW)}, notifier=Outbox().notifier())
+    steps = [s for s in default_steps() if s.name in ("lyrics", "megalobiz", "azlyrics")]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.steps["azlyrics"] == "1 found, 0 missing, 0 errors"
+    assert site.requests == [ARTIST, SONG]
+    stored = lyrics_from_json(get_song(conn, song.id).lyrics_json)
+    assert (stored.provider, stored.synced) == ("azlyrics", None)
+
+
+def test_an_azlyrics_block_cools_it_down_and_marks_no_song(conn, cfg):
+    from conftest import add_song
+    from helpers.azlyrics_site import ARTIST, FakeAzLyrics
+
+    from caracole.pipeline import default_steps
+    from caracole.songs import get_song, update_song
+
+    song = add_song(conn, "pomme", "mononoke")
+    update_song(conn, song.id, lyrics_status="missing", lyrics_at="2026-10-01T00:00:00Z")
+    site = FakeAzLyrics(failing={ARTIST: "block"})
+    out = Outbox()
+    svc = Services(clients={"azlyrics": site.client(cfg.cache_dir, now=NOW)}, notifier=out.notifier())
+    steps = [s for s in default_steps() if s.name == "azlyrics"]
+    report = run_pipeline(cfg, conn=conn, services=svc, steps=steps, now=NOW)
+    assert report.ok and report.blocked == ["azlyrics"] and report.steps["azlyrics"].startswith("blocked")
+    assert is_cooling(conn, "azlyrics", NOW + timedelta(hours=25))
+    assert kv_get_json(conn, f"azlyrics:checked:{song.id}") is None
+    assert get_song(conn, song.id).lyrics_status == "missing"
+    assert len(site.requests) == 1  # nothing after the block
+    assert [title for title, _ in out.sent].count("caracole: AZLyrics blocked") == 1  # one alert, never one a song
+
+
+def test_azlyrics_turned_off_is_skipped(conn, cfg):
+    from dataclasses import replace
+
+    from caracole.config import ProviderPolicy
+    from caracole.pipeline import default_steps
+
+    off = replace(cfg, providers={**cfg.providers, "azlyrics": ProviderPolicy(budget=1, delay=(0.0, 0.0),
+                                                                           enabled=False)})
+    steps = [s for s in default_steps() if s.name == "azlyrics"]
+    report = run_pipeline(off, conn=conn, services=Services(clients={}, notifier=Outbox().notifier()), steps=steps,
+                          now=NOW)
+    assert report.steps["azlyrics"] == "skipped: azlyrics is off ([providers.azlyrics] enabled = false)"
+
+
+def test_a_site_with_no_budget_has_none_in_the_summary(conn, cfg):
+    from caracole.config import NO_BUDGET, ProviderPolicy
+    from caracole.http import PoliteClient
+
+    client = PoliteClient("azlyrics", ProviderPolicy(budget=NO_BUDGET, delay=(0.0, 0.0)), cfg.cache_dir,
+                          user_agent="caracole-test")
+    report = run_pipeline(cfg, conn=conn, services=Services(clients={"azlyrics": client}, notifier=Outbox().notifier()),
+                          steps=[step("todo")], now=NOW)
+    assert "AZLyrics 0." in report.summary() and "of 9" not in report.summary()

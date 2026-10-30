@@ -255,7 +255,7 @@ const caracoleCard = (icons, rows) => {
       if (chips.length === 1 && chips[0].fixed) {
         const c = chips[0];
         row.appendChild(el("span", "lead", "From"));
-        // A source that asks a link back to its page (``href``: Megalobiz's lyrics) is that link.
+        // A source that links back to its page (``href``: Megalobiz's or AZLyrics' lyrics) is that link.
         const one = c.href ? anchor(c.href, "vchip one", { external: true }) : el("span", "vchip one");
         if (c.href) one.setAttribute("aria-label", t.name + ": " + nameOf(c.source) + ", its page there");
         const mark = sourceMark(c.source);
@@ -391,7 +391,7 @@ const caracoleCard = (icons, rows) => {
       made.push(t);
     }
 
-    // Lyrics, plain and timed: LRCLIB's, or Megalobiz's, whose chip links to their page there (``lyricsFrom``).
+    // Lyrics, plain and timed: LRCLIB's, or Megalobiz's or AZLyrics', whose chip links to their page there (``lyricsFrom``).
     const lyrics = LYRICS.map(named).filter(Boolean);
     if (lyrics.length) {
       lyrics.forEach(claim);

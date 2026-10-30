@@ -96,7 +96,10 @@
   };
   const nightCell = (s, cls) => {
     const cell = el("span", cls);
-    if (s.night) {
+    if (s.night && s.night.budget === null) { // a site with no budget: what it was sent, of nothing
+      cell.append(el("b", "", number(s.night.used)));
+      cell.append(el("small", "", s.night.unit));
+    } else if (s.night) {
       cell.append(el("b", "", number(s.night.used) + " / " + number(s.night.budget)));
       cell.append(meter(s.night.used, s.night.budget, "",
         number(s.night.used) + " of " + number(s.night.budget) + " " + s.night.unit));

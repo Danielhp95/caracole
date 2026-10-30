@@ -17,7 +17,8 @@ serve reads into the job's stages):
 - ``lyrics``: LRCLIB, for a song with none yet, at the bulk pace, asked with the audio's length when the
   song's line gives none, so the timed lyrics LRCLIB picks fit the audio (``fetch_pending_lyrics``'s
   ``durations``). A song whose lyrics came earlier keeps them. Then Megalobiz, the same way, for the timed
-  lyrics LRCLIB left the song without (megalobiz_fetch.py): they put each chord over its word.
+  lyrics LRCLIB left the song without (megalobiz_fetch.py): they put each chord over its word. Then AZLyrics' plain
+  ones, for a song still without any (azlyrics_fetch.py).
 - ``chords``: auto-chords for this song alone (``autochords_pending``'s ``only``), once the audio is the
   video's; a waiting lookup goes first (``_common.hand_over``), as the models take minutes. The chords go
   over the timed lyrics when their length fits the audio, else above the lyrics as a chart (merge.py).
@@ -280,59 +281,90 @@ class _Sheet:
 
     def lyrics(self) -> tuple[str, str]:
         """LRCLIB's lyrics, then Megalobiz's timed ones where LRCLIB left the song without (megalobiz_fetch.py):
-        timed lyrics put each chord over its word."""
+        timed lyrics put each chord over its word. Then AZLyrics' plain ones where it still has none."""
         if self.song.lyrics_status == "instrumental":
             return "done", "already there"
         length = self._audio_length() if self.result.states.get("audio") == "done" else None
         lrclib = ("done", "already there") if self.song.lyrics_status == "found" else self._lrclib(length)
-        timed = self._megalobiz(length)
-        if timed is None:
-            return lrclib
+        return self._then(self._then(lrclib, self._megalobiz(length)), self._azlyrics())
+
+    def _then(self, before: tuple[str, str], then: tuple[str, str] | None) -> tuple[str, str]:
+        """What the stage says once one more site was asked after those before it (None: there was nothing to ask it)."""
+        if then is None:
+            return before
         self._song_again()
-        if self.song.lyrics_status == "pending":  # neither answered: the lyrics wait, as the last one to fail says
-            return lrclib if timed[0] == "done" else timed
-        if lrclib[0] != "done":  # LRCLIB failed, Megalobiz found them
-            return timed
-        return "done", f"{lrclib[1]}; {timed[1]}"
+        if self.song.lyrics_status == "pending":  # none answered: the lyrics wait, as the last one to fail says
+            return before if then[0] == "done" else then
+        if before[0] != "done":  # the ones before failed, this one found them
+            return then
+        return "done", f"{before[1]}; {then[1]}"
+
+    def _asked(self, provider: str, name: str, ask: Callable[[Any], Any], *, gap: str) -> Any:
+        """One lyrics site asked about the song, at the bulk pace as LRCLIB is here: its stats, or the stage's
+        (state, words) when it blocked, failed or its budget went; ``gap``, what the song still lacks then."""
+        from caracole.commands._common import alert_block, make_client
+        from caracole.health import answered_any, record_block, record_error, record_ok
+        from caracole.http import BudgetExhausted, ProviderBlocked
+
+        client = make_client(self.cfg, self.conn, provider, self.run_id)
+        try:
+            stats = ask(client)
+        except ProviderBlocked as e:
+            state = record_block(self.conn, provider, self.now, str(e))
+            until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
+            alert_block(self.cfg, provider, f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
+            return "skipped", f"{name} blocked caracole; paused until {until}"
+        except BudgetExhausted:
+            return "skipped", f"{name}'s budget spent; tonight's run asks it"
+        finally:
+            self.result.requests[provider] = client.requests_made
+            client.close()
+        if answered_any(self.conn, self.run_id, provider, client.requests_made):
+            record_ok(self.conn, provider, self.now)
+        if stats.failures:
+            record_error(self.conn, provider, self.now, str(stats.failures[0][1]))
+            return "failed", f"no {gap} yet ({name} unavailable); tonight's run tries again"
+        if stats.budget_exhausted:
+            return "skipped", f"{name}'s budget spent; tonight's run asks it"
+        return stats
 
     def _megalobiz(self, length: float | None) -> tuple[str, str] | None:
-        """Megalobiz asked about the song, at the bulk pace as LRCLIB is here; None when there is nothing to ask it
-        (lyrics timed already, Megalobiz turned off or cooling down)."""
-        from caracole.commands._common import alert_block, make_client
-        from caracole.health import answered_any, is_cooling, record_block, record_error, record_ok
-        from caracole.http import BudgetExhausted, ProviderBlocked
+        """Megalobiz asked about the song; None when there is nothing to ask it (lyrics timed already, Megalobiz turned
+        off or cooling down)."""
+        from caracole.health import is_cooling
         from caracole.megalobiz_fetch import megalobiz_lyrics, songs_to_ask
 
         self._song_again()
         if (not self.cfg.provider("megalobiz").enabled or is_cooling(self.conn, "megalobiz", self.now)
                 or not songs_to_ask(self.conn, self.now, only={self.song.id})):
             return None
-        client = make_client(self.cfg, self.conn, "megalobiz", self.run_id)
-        try:
-            stats = megalobiz_lyrics(self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
-                                     durations={self.song.id: length} if length else None)
-        except ProviderBlocked as e:
-            state = record_block(self.conn, "megalobiz", self.now, str(e))
-            until = state.cooldown_until.strftime("%Y-%m-%d %H:%M UTC") if state.cooldown_until else "later"
-            alert_block(self.cfg, "megalobiz", f"{e}\nNo more requests to it until {until} (block #{state.strikes}).")
-            return "skipped", f"Megalobiz blocked caracole; paused until {until}"
-        except BudgetExhausted:
-            return "skipped", "Megalobiz's budget spent; tonight's run asks it"
-        finally:
-            self.result.requests["megalobiz"] = client.requests_made
-            client.close()
-        if answered_any(self.conn, self.run_id, "megalobiz", client.requests_made):
-            record_ok(self.conn, "megalobiz", self.now)
-        if stats.failures:
-            record_error(self.conn, "megalobiz", self.now, str(stats.failures[0][1]))
-            return "failed", "no timed lyrics yet (Megalobiz unavailable); tonight's run tries again"
-        if stats.budget_exhausted:
-            return "skipped", "Megalobiz's budget spent; tonight's run asks it"
+        stats = self._asked("megalobiz", "Megalobiz", lambda client: megalobiz_lyrics(
+            self.conn, client, self.cfg.library_dir, self.now, only={self.song.id},
+            durations={self.song.id: length} if length else None), gap="timed lyrics")
+        if isinstance(stats, tuple):
+            return stats
         if stats.found:
             return "done", "found on Megalobiz, timed"
         if stats.timed:
             return "done", "timed from Megalobiz"
         return "done", "nor has Megalobiz" if self.song.lyrics_status == "missing" else "Megalobiz has no timed ones"
+
+    def _azlyrics(self) -> tuple[str, str] | None:
+        """AZLyrics asked about the song; None when there is nothing to ask it (lyrics there already, AZLyrics turned
+        off or cooling down)."""
+        from caracole.azlyrics_fetch import azlyrics_lyrics, songs_to_ask
+        from caracole.health import is_cooling
+
+        self._song_again()
+        picks = self.overrides.azlyrics
+        if (not self.cfg.provider("azlyrics").enabled or is_cooling(self.conn, "azlyrics", self.now)
+                or not songs_to_ask(self.conn, self.now, picks=picks, only={self.song.id})):
+            return None
+        stats = self._asked("azlyrics", "AZLyrics", lambda client: azlyrics_lyrics(
+            self.conn, client, self.cfg.library_dir, self.now, picks=picks, only={self.song.id}), gap="lyrics")
+        if isinstance(stats, tuple):
+            return stats
+        return "done", "found on AZLyrics" if stats.found else "nor has AZLyrics"
 
     def _lrclib(self, length: float | None) -> tuple[str, str]:
         from caracole.commands._common import alert_block, make_client

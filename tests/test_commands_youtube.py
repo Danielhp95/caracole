@@ -485,11 +485,16 @@ def sheet_sites(monkeypatch, ntfy, tmp_path):
     def megalobiz(request):  # asked after LRCLIB, for the timed lyrics it lacks: none either
         return httpx.Response(200, json={"query": {}, "count": 0, "results": []})
 
+    def azlyrics(request):  # and AZLyrics, which has no such artist
+        return httpx.Response(404, text="")
+
     def transport(provider):
         if provider == "lrclib":
             return httpx.MockTransport(lrclib)
         if provider == "megalobiz":
             return httpx.MockTransport(megalobiz)
+        if provider == "azlyrics":
+            return httpx.MockTransport(azlyrics)
         if provider == "ntfy":
             return httpx.MockTransport(ntfy.handler)
         pytest.fail(f"a client for {provider} was made")
@@ -532,7 +537,7 @@ def test_sheet_makes_the_songs_auto_sheet_now_and_says_each_stage(tmp_path, fake
     assert result.exit_code == 0, result.output
     lines = result.output.splitlines()
     assert f"Audio: downloaded Vikingos veganos (HyperFanes), https://www.youtube.com/watch?v={VIKINGOS}." in lines
-    assert "Lyrics: LRCLIB has none; nor has Megalobiz." in lines
+    assert "Lyrics: LRCLIB has none; nor has Megalobiz; nor has AZLyrics." in lines
     assert "Chords: chords only, no lyrics." in lines
     sheet = tmp_path / "lib" / "Nick Cani" / "Vikingos veganos" / "sheet (auto).txt"
     assert any(line.startswith(f"Sheet: {sheet}, readable after") for line in lines)

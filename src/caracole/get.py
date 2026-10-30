@@ -27,7 +27,8 @@ Its stages, in order, each reported as it starts and ends (``Progress``):
 - ``pdf``: ChordPro and the PDF (render.py), and the HTML viewer where render
   writes one, for this song alone (``render_all``'s ``song_ids``): another
   song's failure, or its wait for a CJK font, is not this one's.
-- ``lyrics``: LRCLIB, then Megalobiz for the timed lyrics LRCLIB left the song without (megalobiz_fetch.py).
+- ``lyrics``: LRCLIB, then Megalobiz for the timed lyrics LRCLIB left the song without (megalobiz_fetch.py), then
+  AZLyrics for a song still without any (azlyrics_fetch.py).
 - ``ug``: Ultimate Guitar again, as the nightly run would: the top sheets
   scored against the lyrics (a better one replaces the first, and the others
   are kept beside it, said as "kept beside it: tab B, tab C"), and the text
@@ -98,8 +99,8 @@ STAGES = (
     ("songbooks", "The songbooks it is in"),
 )
 STAGE_LABELS = dict(STAGES)
-NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "megalobiz": "Megalobiz", "lacuerda": "LaCuerda",
-         "gtptabs": "gtptabs.com", "musescore": "MuseScore", "harptabs": "harptabs.com", "gametabs": "gametabs.net"}
+NAMES = {"ug": "Ultimate Guitar", "lrclib": "LRCLIB", "megalobiz": "Megalobiz", "azlyrics": "AZLyrics",
+         "lacuerda": "LaCuerda", "gtptabs": "gtptabs.com", "musescore": "MuseScore", "harptabs": "harptabs.com", "gametabs": "gametabs.net"}
 PROGRESS_PREFIX = "caracole-progress: "  # a JSON line of `caracole get --progress`
 _FIRST_PAGES = 1  # versions pages read before the first sheet is kept: the first lists them all
 _FIRST_SCORED = 1  # sheets fetched for it: the best rated
@@ -628,6 +629,11 @@ class _Lookup:
         return "made" if stats.rendered else "up to date"
 
     def lyrics(self) -> tuple[str, str] | str:
+        out = self._lrclib()
+        out = self._then(out, self._megalobiz())
+        return self._then(out, self._azlyrics())
+
+    def _lrclib(self) -> tuple[str, str] | str:
         from caracole.lyrics import fetch_pending_lyrics
         from caracole.songs import get_song
 
@@ -643,21 +649,26 @@ class _Lookup:
 
         song = get_song(self.conn, self.song.id)
         if song.lyrics_status in ("found", "instrumental"):
-            out: tuple[str, str] | str = "already there"
-        else:
-            out = self.asking("lrclib", ask)
-            self.song = get_song(self.conn, self.song.id)
-        timed = self._megalobiz()
-        if timed is None:
+            return "already there"
+        out = self.asking("lrclib", ask)
+        self.song = get_song(self.conn, self.song.id)
+        return out
+
+    def _then(self, out: tuple[str, str] | str, then: tuple[str, str] | str | None) -> tuple[str, str] | str:
+        """What the lyrics stage says once one more site was asked after those before it (None: there was nothing
+        to ask it)."""
+        from caracole.songs import get_song
+
+        if then is None:
             return out
         self.song = get_song(self.conn, self.song.id)
         has_lyrics = self.song.lyrics_status == "found"
-        said = timed if isinstance(timed, str) else timed[1]
-        if isinstance(out, str) and (isinstance(timed, str) or has_lyrics):
-            return f"{out}; {said}"  # LRCLIB answered: what Megalobiz did after it, its error a note beside lyrics kept
+        said = then if isinstance(then, str) else then[1]
+        if isinstance(out, str) and (isinstance(then, str) or has_lyrics):
+            return f"{out}; {said}"  # the ones before answered: what this one did after, its error a note beside lyrics
         if isinstance(out, str):
-            return timed  # LRCLIB missed and Megalobiz failed: the lyrics wait, as Megalobiz's stage says
-        return said if isinstance(timed, str) and has_lyrics else out  # LRCLIB failed: Megalobiz's, else LRCLIB's why
+            return then  # they missed and this one failed: the lyrics wait, as its stage says
+        return said if isinstance(then, str) and has_lyrics else out  # they failed: its lyrics, else their why
 
     def _megalobiz(self) -> tuple[str, str] | str | None:
         """Megalobiz's timed lyrics for the song, when LRCLIB left it without (megalobiz_fetch.py); None when there
@@ -676,6 +687,26 @@ class _Lookup:
             return "timed lyrics from Megalobiz" if s.found or s.timed else "Megalobiz has no timed ones"
 
         return self.asking("megalobiz", ask)
+
+    def _azlyrics(self) -> tuple[str, str] | str | None:
+        """AZLyrics' plain lyrics for the song, when the sites before it left it without any (azlyrics_fetch.py); None
+        when there is nothing to ask it (lyrics there already, an instrumental, AZLyrics turned off)."""
+        from caracole.azlyrics_fetch import azlyrics_lyrics, songs_to_ask
+
+        picks = self.overrides.azlyrics
+        if (not self.cfg.provider("azlyrics").enabled
+                or not songs_to_ask(self.conn, self.now, picks=picks, only={self.song.id})):
+            return None
+
+        def ask(client) -> str:
+            s = azlyrics_lyrics(self.conn, client, self.cfg.library_dir, self.now, picks=picks, only={self.song.id})
+            if s.budget_exhausted:
+                raise BudgetExhausted("azlyrics")
+            if s.failures:
+                raise s.failures[0][1]
+            return "lyrics from AZLyrics" if s.found else "AZLyrics has none"
+
+        return self.asking("azlyrics", ask)
 
     def ug(self) -> tuple[str, str] | str:
         from caracole.songs import get_song

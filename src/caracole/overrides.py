@@ -36,6 +36,9 @@ Tables:
 - ``[harptabs]``: "Artist - Title" → the harptabs.com tab (its page) you picked
   (``HarpTabsPick``): harptabs_fetch.py keeps that tab for the song, as its next
   ``harmonica-N.txt`` beside any it has, whoever the page names as its artist.
+- ``[azlyrics]``: "Artist - Title" → the song's lyrics page on AZLyrics, for a song
+  its artist's name doesn't lead to (azlyrics_fetch.py): that page, for a song with no
+  lyrics, whoever it credits.
 - ``[gametabs]``: "Artist - Title" → the gametabs.net tab (its page) you picked
   (``GameTabsPick``): gametabs_fetch.py keeps that tab for the song, as its next
   ``gametab-N.txt`` beside any it has, whatever game or composer its page names.
@@ -87,7 +90,7 @@ _ARTIST_HOST = "https://www.ultimate-guitar.com"
 ARTIST_PAGE_SHAPE = f"{_ARTIST_HOST}/artist/…"
 TAB_PAGE_SHAPE = f"{_TAB_HOST}/tab/…"
 _TABLES = {"alias", "match", "artist_url", "pin", "transpose", "ignore", "block", "reject", "youtube", "lacuerda",
-           "harptabs", "gametabs", "version", "harmonica"}
+           "harptabs", "gametabs", "azlyrics", "version", "harmonica"}
 _HARMONICA_TAB = re.compile(r"harmonica-[1-9][0-9]{0,3}\.txt")  # a harmonica tab's name, as inbox.py keeps it
 # How messages and the to-do page write a YouTube video's address, and the value that says "no video".
 VIDEO_SHAPE = "https://www.youtube.com/watch?v=…"
@@ -102,6 +105,9 @@ _HARPTABS_HOST = re.compile(r"(?:www\.)?harptabs\.com")
 _HARPTABS_PATH = re.compile(r"/tab/([1-9][0-9]{0,8})/([a-z0-9-]{1,200})")
 HARPTABS_BASE = "https://www.harptabs.com"
 HARPTABS_PAGE_SHAPE = f"{HARPTABS_BASE}/tab/<id>/<slug>"
+_AZLYRICS_HOST = re.compile(r"(?:www\.)?azlyrics\.com")
+_AZLYRICS_PATH = re.compile(r"/lyrics/[a-z0-9-]+/[a-z0-9-]+\.html")
+AZLYRICS_BASE = "https://www.azlyrics.com"
 _GAMETABS_HOST = re.compile(r"(?:www\.)?gametabs\.net")
 _GAMETABS_PATH = re.compile(r"/tabs/([a-z0-9_-]{1,200})/([a-z0-9_-]{1,200})")
 GAMETABS_BASE = "https://gametabs.net"
@@ -139,6 +145,7 @@ class Overrides:
     lacuerda: Mapping[str, LaCuerdaPick] = field(default_factory=dict)
     harptabs: Mapping[str, HarpTabsPick] = field(default_factory=dict)
     gametabs: Mapping[str, GameTabsPick] = field(default_factory=dict)
+    azlyrics: Mapping[str, str] = field(default_factory=dict)  # the page's address, as caracole asks for it
     version: Mapping[str, str] = field(default_factory=dict)
     harmonica: Mapping[str, Mapping[str, str | Mapping[str, str]]] = field(default_factory=dict)
     tables: frozenset[str] = frozenset()
@@ -227,6 +234,22 @@ def gametabs_pick_from_url(url: Any) -> GameTabsPick:
     if found is None:
         raise OverridesError(f"expected a gametabs.net tab's page ({GAMETABS_PAGE_SHAPE}), got {url!r}")
     return GameTabsPick(found.group(1), found.group(2))
+
+
+def azlyrics_page_from_url(url: Any) -> str:
+    """The lyrics page a page's address names, as caracole asks for it, written as an address bar shows it: without
+    ``https://`` or ``www.``, with a query."""
+    text = url.strip() if isinstance(url, str) else ""
+    if text and not _SCHEME.match(text):
+        text = f"https://{text}"
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        parts = None
+    if (parts is None or parts.scheme not in ("http", "https") or not _AZLYRICS_HOST.fullmatch(parts.netloc.lower())
+            or not _AZLYRICS_PATH.fullmatch(parts.path)):
+        raise OverridesError(f"expected an AZLyrics lyrics page (azlyrics.com/lyrics/artist/song.html), got {url!r}")
+    return f"{AZLYRICS_BASE}{parts.path}"
 
 
 def harptabs_pick_from_url(url: Any) -> HarpTabsPick:
@@ -541,6 +564,14 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         except OverridesError as e:
             raise OverridesError(f"{where}: {e}") from e
 
+    azlyrics: dict[str, str] = {}
+    for k, v in table("azlyrics").items():
+        where = f"[azlyrics] {k!r}"
+        try:
+            azlyrics[_song_key(k, where)] = azlyrics_page_from_url(v)
+        except OverridesError as e:
+            raise OverridesError(f"{where}: {e}") from e
+
     version = {_song_key(k, f"[version] {k!r}"): _version(v, f"[version] {k!r}") for k, v in table("version").items()}
 
     harmonica: dict[str, dict[str, str | Mapping[str, str]]] = {}
@@ -557,6 +588,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
         alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
         ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
         artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, gametabs=gametabs,
+        azlyrics=azlyrics,
         version=version,
         harmonica=harmonica, tables=frozenset(data),
     )

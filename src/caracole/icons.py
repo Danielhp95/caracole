@@ -1,7 +1,7 @@
 """Where a sheet, a tab or a file came from, shown by its site's own icon (index.html, search).
 
 Each source (``SOURCES``) is a value of ``versions.provider`` ("ug", "lacuerda", "gtptabs",
-"harptabs", "gametabs", "inbox", "auto"), LRCLIB or Megalobiz for the lyrics, or YouTube for an auto sheet made from the audio
+"harptabs", "gametabs", "inbox", "auto"), LRCLIB, Megalobiz or AZLyrics for the lyrics, or YouTube for an auto sheet made from the audio
 caracole took from there. A site's icon is its favicon, fetched once
 (``fetch_icons``) and kept in ``cache_dir/icons/<source>.png``; the page inlines it as a
 ``data:`` URI, so index.html still loads nothing from the network. A source with no icon
@@ -102,6 +102,7 @@ SOURCES: Mapping[str, Source] = {
         _site("lacuerda", "LaCuerda", "LaCuerda", "LC", "https://acordes.lacuerda.net/"),
         _site("lrclib", "LRCLIB", "LRCLIB", "LR", "https://lrclib.net/"),
         _site("megalobiz", "Megalobiz", "Megalobiz", "MZ", "https://megalobiz.com/"),
+        _site("azlyrics", "AZLyrics", "AZLyrics", "AZ", "https://www.azlyrics.com/"),
         _site("gtptabs", "gtptabs.com", "gtptabs", "GT", "https://gtptabs.com/"),
         _site("musescore", "MuseScore", "MuseScore", "MS", "https://musescore.com/"),
         _site("harptabs", "harptabs.com", "harptabs", "HT", "https://www.harptabs.com/"),
@@ -123,7 +124,7 @@ def kept_sources(conn: sqlite3.Connection) -> dict[int, dict[str, str]]:
     """Where each kept file came from, by song and file name: its version's provider; YouTube for
     an auto sheet made from audio caracole took from there (autochords/run.py keeps the video in
     its version's ``raw``), a purchase's being the audio model's alone; and the lyrics files of a song
-    whose lyrics another site than LRCLIB gave (``Lyrics.provider``: Megalobiz's)."""
+    whose lyrics another site than LRCLIB gave (``Lyrics.provider``: Megalobiz's, AZLyrics')."""
     found: dict[int, dict[str, str]] = {}
     for song_id, name, provider, from_youtube in conn.execute(
         "SELECT f.song_id, f.name, v.provider, "

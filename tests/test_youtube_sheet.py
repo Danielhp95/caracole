@@ -17,6 +17,7 @@ import httpx
 import pytest
 from conftest import add_song
 from helpers.fake_ytdlp import FakeYtDlp, entry
+from helpers.azlyrics_site import FakeAzLyrics
 from helpers.megalobiz_site import FakeMegalobiz
 from helpers.megalobiz_site import record as megalobiz_record
 from helpers.rendered import fake_chordpro
@@ -124,11 +125,17 @@ def megalobiz():
 
 
 @pytest.fixture
-def sites(monkeypatch, megalobiz):
+def azlyrics():
+    return FakeAzLyrics({})  # with no page: it has no artist
+
+
+@pytest.fixture
+def sites(monkeypatch, megalobiz, azlyrics):
     lrclib, ntfy = Lrclib(record(200.0)), Ntfy()
 
     def transport(provider):
-        handlers = {"lrclib": lrclib.handler, "ntfy": ntfy.handler, "megalobiz": lambda r: megalobiz.handler(r)}
+        handlers = {"lrclib": lrclib.handler, "ntfy": ntfy.handler, "megalobiz": lambda r: megalobiz.handler(r),
+                    "azlyrics": lambda r: azlyrics.handler(r)}
         if provider not in handlers:
             pytest.fail(f"a client for {provider} was made")
         return httpx.MockTransport(handlers[provider])
@@ -231,7 +238,7 @@ def test_without_lyrics_on_lrclib_the_sheet_is_the_chords_alone(setup, conn, fak
     vikingos(fake, tmp_path)
     result, heard = make(setup)
     assert result.ok
-    assert heard.ends()["lyrics"] == ("done", "LRCLIB has none; nor has Megalobiz")
+    assert heard.ends()["lyrics"] == ("done", "LRCLIB has none; nor has Megalobiz; nor has AZLyrics")
     assert heard.ends()["chords"] == ("done", "chords only, no lyrics")
     text = auto_sheet(setup, conn, find_song(conn, result_key(conn)))
     assert "[Chords]" in text and "[Lyrics]" not in text
@@ -411,3 +418,24 @@ def test_every_event_is_plain_data(setup, conn, fake, sites, tmp_path):
     vikingos(fake, tmp_path)
     _, heard = make(setup)
     assert json.loads(json.dumps(heard.events))
+
+
+def test_without_lyrics_on_lrclib_or_megalobiz_azlyrics_plain_ones_go_on_the_sheet(setup, conn, fake, sites, azlyrics,
+                                                                                  tmp_path):
+    from helpers.azlyrics_site import SONG, artist_page, lyrics_page
+
+    lrclib, _ = sites
+    lrclib.records.clear()
+    azlyrics.pages.update({
+        "/n/nickcani.html": artist_page().replace("Pomme Lyrics", "Nick Cani Lyrics").replace(
+            "mononoke</a>", "Vikingos veganos</a>"),
+        SONG: lyrics_page(),
+    })
+    vikingos(fake, tmp_path)
+    result, heard = make(setup)
+    assert result.ok
+    assert heard.ends()["lyrics"] == ("done", "LRCLIB has none; nor has Megalobiz; found on AZLyrics")
+    assert result.requests["azlyrics"] == 2
+    song = find_song(conn, result_key(conn))
+    assert song.lyrics_status == "found"
+    assert "Des mots inventés" in auto_sheet(setup, conn, song)

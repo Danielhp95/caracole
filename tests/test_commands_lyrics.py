@@ -19,6 +19,7 @@ import httpx
 import pytest
 from conftest import add_song, subprocess_pythonpath
 from helpers.lacuerda_site import listing_page
+from helpers.azlyrics_site import FakeAzLyrics
 from helpers.megalobiz_site import FakeMegalobiz, record
 from typer.testing import CliRunner
 
@@ -113,11 +114,13 @@ class Sites:
     def __init__(self):
         self.lrclib = FakeLrclib()
         self.megalobiz = FakeMegalobiz()
+        self.azlyrics = FakeAzLyrics({})  # with no page: it has no artist
         self.lacuerda = FakeLaCuerda()
         self.ntfy = FakeNtfy()
 
     def transport(self, provider: str) -> httpx.BaseTransport:
-        fakes = {"lrclib": self.lrclib, "megalobiz": self.megalobiz, "lacuerda": self.lacuerda, "ntfy": self.ntfy}
+        fakes = {"lrclib": self.lrclib, "megalobiz": self.megalobiz, "azlyrics": self.azlyrics, "lacuerda": self.lacuerda,
+                 "ntfy": self.ntfy}
         if provider not in fakes:
             pytest.fail(f"a client for {provider} was made")
         return httpx.MockTransport(fakes[provider].handler)
@@ -140,7 +143,7 @@ def write_config(tmp_path: Path, *, budgets=None, ntfy=False, off=()) -> Path:
         f'state_dir = "{tmp_path / "state"}"',
         f'cache_dir = "{tmp_path / "cache"}"',
     ]
-    for provider in ("lrclib", "megalobiz", "lacuerda"):
+    for provider in ("lrclib", "megalobiz", "azlyrics", "lacuerda"):
         lines += [f"[providers.{provider}]", "delay = [0, 0]"]
         if provider in budgets:
             lines.append(f"budget = {budgets[provider]}")
@@ -1093,7 +1096,8 @@ def test_registering_the_commands_imports_neither_pass(tmp_path):
     src = Path(__file__).resolve().parents[1] / "src"
     passes = ("caracole.lyrics", "caracole.lacuerda", "caracole.lacuerda_fetch", "caracole.lacuerda_index",
               "caracole.lacuerda_search", "caracole.gtptabs", "caracole.gtptabs_fetch", "caracole.musescore",
-              "caracole.musescore_fetch", "caracole.megalobiz", "caracole.megalobiz_fetch")
+              "caracole.musescore_fetch", "caracole.megalobiz", "caracole.megalobiz_fetch", "caracole.azlyrics",
+              "caracole.azlyrics_fetch")
     code = (
         "import sys, typer\n"
         "from caracole.commands import lyrics\n"
@@ -1112,3 +1116,53 @@ def test_registering_the_commands_imports_neither_pass(tmp_path):
     from caracole.commands.lyrics import LACUERDA_SEARCHES_PER_HOUR
 
     assert LACUERDA_SEARCHES_PER_HOUR == lacuerda_search.SEARCHES_PER_HOUR
+
+
+def test_lyrics_asks_azlyrics_for_a_song_the_others_missed(tmp_path, sites):
+    from helpers.azlyrics_site import ARTIST, POMME, SONG
+
+    sites.azlyrics.pages.update(POMME)
+    (song_id,) = seed(tmp_path, ("pomme", "mononoke"))
+    result = run(tmp_path, "lyrics")
+    assert result.exit_code == 0, result.output
+    assert "AZLyrics: 1 found, 0 missing, 0 errors" in result.stdout
+    assert sites.azlyrics.requests == [ARTIST, SONG]
+    stored = song(tmp_path, song_id)
+    assert stored.lyrics_status == "found" and json.loads(stored.lyrics_json)["provider"] == "azlyrics"
+
+
+def test_lyrics_asks_the_page_overrides_toml_names(tmp_path, sites):
+    from helpers.azlyrics_site import POMME, SONG
+
+    sites.azlyrics.pages.update(POMME)
+    (song_id,) = seed(tmp_path, ("Misc Musicals", "Mononoke"))
+    (tmp_path / "lib").mkdir(exist_ok=True)
+    (tmp_path / "lib" / "overrides.toml").write_text(
+        '[azlyrics]\n"Misc Musicals - Mononoke" = "azlyrics.com/lyrics/pomme/mononoke.html"\n', encoding="utf-8")
+    result = run(tmp_path, "lyrics")
+    assert result.exit_code == 0, result.output
+    assert sites.azlyrics.requests == [SONG]
+    assert song(tmp_path, song_id).lyrics_status == "found"
+
+
+def test_lyrics_with_azlyrics_turned_off_asks_it_nothing(tmp_path, sites):
+    seed(tmp_path, ("pomme", "mononoke"))
+    result = run(tmp_path, "lyrics", off=("azlyrics",))
+    assert result.exit_code == 0, result.output
+    assert "AZLyrics" not in result.stdout and sites.azlyrics.requests == []
+
+
+def test_an_azlyrics_block_cools_it_down_and_leaves_the_song_as_it_was(tmp_path, sites):
+    from helpers.azlyrics_site import ARTIST
+
+    sites.azlyrics.failing[ARTIST] = "block"
+    (song_id,) = seed(tmp_path, ("pomme", "mononoke"))
+    result = run(tmp_path, "lyrics", ntfy=True)
+    assert result.exit_code == 0, result.output
+    assert "AZLyrics blocked caracole" in result.stdout
+    conn = open_db(tmp_path)
+    try:
+        assert is_cooling(conn, "azlyrics", _common.utcnow())
+    finally:
+        conn.close()
+    assert song(tmp_path, song_id).lyrics_status == "missing"

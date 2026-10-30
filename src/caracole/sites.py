@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from caracole.config import NO_BUDGET
 from caracole.db import kv_get_json, kv_set_json
 from caracole.http import ROBOTS_DISALLOW
 
@@ -58,6 +59,13 @@ SITES: tuple[Site, ...] = (
          "Its official API has no robots rules; its site closes only accounts and editors. caracole keeps the "
          "API's fair use: your songs alone, its limits, and each song's lyrics links back to its page.",
          asked="Asked song by song"),
+    Site("azlyrics", "Plain lyrics, where LRCLIB and Megalobiz have none", "azlyrics.com",
+         ("www.azlyrics.com", "azlyrics.com"),
+         "Closes its search, so a song is reached from its artist's page: two requests, never an index. Its pages "
+         "forbid other lyrics providers their lyrics: caracole keeps them for your songs alone, your choice, and "
+         "each song's lyrics links back to its page.",
+         (("/search/", "its search"), ("/suggest/", "its suggestions"), ("/song/", "its song pages"),
+          ("/lyricsdb/", "its lyrics database")), asked="Asked song by song"),
     Site("gtptabs", "Guitar Pro files", "gtptabs.com", ("gtptabs.com",),
          "Closes its Russian half, its search and its storage (an artist's “Download all”).",
          (("/ru/", "the Russian half of the site"), ("/search/", "its search"),
@@ -308,7 +316,7 @@ def _kept(key: str, cards: list[dict[str, Any]]) -> dict[str, Any]:
             beside = sum(max(len((c.get("versions") or {}).get("list") or []) - 1, 0) for c in mine)
             detail = f"+ {beside:,} other versions kept beside them" if beside else None
         return {"count": count, "unit": _unit(count, _SHEETS[key]), "songs": count, "detail": detail}
-    if key in ("lrclib", "megalobiz"):  # each song's lyrics are one site's (icons.kept_sources)
+    if key in ("lrclib", "megalobiz", "azlyrics"):  # each song's lyrics are one site's (icons.kept_sources)
         names = [{f.get("name") for f in c.get("files") or [] if f.get("source") == key} for c in cards]
         mine = [n for n in names if n & set(_LYRICS)]
         synced = sum(1 for n in mine if "lyrics.lrc" in n)
@@ -387,7 +395,7 @@ def sites_data(conn: sqlite3.Connection, cfg: Config, cards: list[dict[str, Any]
         night = None
         if run is not None and status.state != "off":
             budget = int(budgets.get(site.key, cfg.provider(site.key).budget))
-            night = {"used": int(requests.get(site.key, 0)), "budget": budget,
+            night = {"used": int(requests.get(site.key, 0)), "budget": None if budget == NO_BUDGET else budget,
                      "unit": _unit(budget, "yt-dlp runs" if site.key == "youtube" else "requests")}
         last = conn.execute("SELECT MAX(at) FROM events WHERE provider = ?", (site.key,)).fetchone()[0]
         lines.append({

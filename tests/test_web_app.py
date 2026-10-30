@@ -1305,6 +1305,8 @@ def test_a_request_that_ends_in_a_review_waits_for_a_pick_rather_than_failing(cf
             return httpx.Response(404, json={"name": "TrackNotFound"})
         if request.url.host == "api.megalobiz.com":  # and Megalobiz is asked for the song LRCLIB lacks: none either
             return httpx.Response(200, json={"query": {}, "count": 0, "results": []})
+        if request.url.host == "www.azlyrics.com":  # and AZLyrics, which has no such artist
+            return httpx.Response(404, text="")
         raise AssertionError(f"a request to {request.url}")
 
     monkeypatch.setattr("caracole.commands._common.transport_for", lambda provider: httpx.MockTransport(refuse))

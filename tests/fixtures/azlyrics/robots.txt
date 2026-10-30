@@ -1,0 +1,17 @@
+User-agent: Mediapartners-Google
+User-agent: Google-Display-Ads-Bot
+User-agent: AdsBot-Google
+Disallow: /lyricsdb/
+Disallow: /song/
+Disallow: /suggest/
+Allow: /
+
+User-agent: *
+Disallow: /lyricsdb/
+Disallow: /song/
+Disallow: /search/
+Disallow: /suggest/
+Allow: /
+
+User-agent: 008
+Disallow: /

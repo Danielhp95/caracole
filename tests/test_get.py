@@ -1144,3 +1144,41 @@ def test_a_second_identical_lookup_finds_the_songbook_up_to_date(cfg, conn, site
 
     assert ("songbooks", "done", "Campfire up to date") in progress.said
     assert (html.read_bytes(), html.stat().st_mtime_ns) == before
+
+
+def test_a_lookup_asks_azlyrics_for_a_song_the_others_lack(cfg, conn, sites):
+    from helpers.azlyrics_site import SONG, artist_page, lyrics_page
+
+    from caracole.lyrics import lyrics_from_json
+
+    serve_creep(sites, conn)
+    sites.lyrics.clear()
+    page = artist_page().replace("Pomme Lyrics", "Radiohead Lyrics").replace("mononoke</a>", "Creep</a>")
+    sites.pages["https://www.azlyrics.com/r/radiohead.html"] = (200, page)
+    sites.pages[f"https://www.azlyrics.com{SONG}"] = (200, lyrics_page())
+
+    result, progress = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+
+    assert progress.states()["lyrics"] == "done"
+    assert result.details["lyrics"].endswith("lyrics from AZLyrics")
+    lyrics = lyrics_from_json(get_song(conn, find_song(conn, "radiohead/creep").id).lyrics_json)
+    assert (lyrics.provider, lyrics.url) == ("azlyrics", f"https://www.azlyrics.com{SONG}")
+    assert len([u for u in sites.requests if "azlyrics.com" in u]) == 2
+
+
+def test_a_lookup_azlyrics_has_nothing_for_says_so(cfg, conn, sites):
+    serve_creep(sites, conn)
+    sites.lyrics.clear()
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    assert result.details["lyrics"].endswith("AZLyrics has none")
+    assert find_song(conn, "radiohead/creep").lyrics_status == "missing"
+
+
+def test_an_azlyrics_error_in_a_lookup_leaves_the_song_waiting_never_missing(cfg, conn, sites):
+    serve_creep(sites, conn)
+    sites.lyrics.clear()
+    sites.pages["https://www.azlyrics.com/r/radiohead.html"] = (502, "Bad Gateway")
+    result, _ = look_up(cfg, sites=sites, artist="Radiohead", title="Creep")
+    assert "502" in get_state(conn, "azlyrics").last_error
+    assert find_song(conn, "radiohead/creep").lyrics_status == "pending"
+    assert result.details["lyrics"]

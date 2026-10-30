@@ -14,12 +14,16 @@ from __future__ import annotations
 import json
 import math
 import os
+import sys
 import tomllib
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Mapping
 
 DEFAULT_USER_AGENT = "caracole/0.1 (personal tab library)"
+
+
+NO_BUDGET = sys.maxsize  # a site with no count of requests a run: the owner's choice for AZLyrics, the one such site
 
 
 class ConfigError(Exception):
@@ -58,6 +62,10 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
     # API allows 30 requests a minute and 1,000 a day from one address: 2-4 s apart (a lookup's 2-3 s), and 900 a
     # UTC day at most, every run's and lookup's together, which leaves its own count some slack.
     "megalobiz": ProviderPolicy(budget=60, delay=(2.0, 4.0), lookup_delay=(2.0, 3.0), per_day=900),
+    # Plain lyrics for the songs LRCLIB and Megalobiz left without (azlyrics.py): an artist's page and a song's, one
+    # right after the other. No pause and no budget, the owner's choice of 2026-10-30: it is asked only about songs
+    # with no lyrics, each at most once in 30 days, and a lookup keeps its own limits.
+    "azlyrics": ProviderPolicy(budget=NO_BUDGET, delay=(0.0, 0.0), lookup_delay=(0.0, 0.0)),
     "lacuerda": ProviderPolicy(budget=30, delay=(10.0, 20.0)),
     # Guitar Pro files, downloaded for you: its robots.txt allows /tabs/download/ (gtptabs.py).
     "gtptabs": ProviderPolicy(budget=20, delay=(10.0, 20.0)),
@@ -79,7 +87,7 @@ DEFAULT_PROVIDERS: dict[str, ProviderPolicy] = {
 }
 # The providers [providers.<name>] can turn off with `enabled = false`. The others are what
 # caracole is built on, so for them `enabled` is an unknown key like any other.
-SWITCHABLE = frozenset({"megalobiz", "gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg"})
+SWITCHABLE = frozenset({"megalobiz", "azlyrics", "gtptabs", "musescore", "harptabs", "gametabs", "youtube", "ytimg"})
 
 
 @dataclass(frozen=True)

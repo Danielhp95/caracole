@@ -374,3 +374,17 @@ def test_write_info_leaves_an_info_json_that_holds_the_same_bytes_alone(conn, tm
     path.write_text("{}")  # changed by hand, or by another device
     write_info(conn, lib, s)
     assert json.loads(path.read_text(encoding="utf-8"))["identity_key"] == s.key
+
+
+def test_write_info_links_lyrics_from_azlyrics_to_their_page(conn, tmp_path):
+    from caracole.lyrics import Lyrics
+    from caracole.songs import get_song, update_song
+
+    lib = tmp_path / "Library"
+    s = add_song(conn, "pomme", "mononoke")
+    url = "https://www.azlyrics.com/lyrics/pomme/mononoke.html"
+    update_song(conn, s.id, lyrics_status="found", lyrics_json=Lyrics(
+        plain="x", synced=None, instrumental=False, duration=None, lrclib_id=None, provider="azlyrics",
+        url=url).to_json())
+    info = json.loads(write_info(conn, lib, get_song(conn, s.id)).read_text(encoding="utf-8"))
+    assert info["lyrics_from"] == {"source": "azlyrics", "href": url}

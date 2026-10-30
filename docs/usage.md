@@ -77,6 +77,10 @@ enabled = true                    # false: caracole asks Megalobiz nothing
 budget = 60                       # and never more than 900 a day (UTC), every run's and lookup's together
 delay = [2, 4]
 lookup_delay = [2, 3]             # under its API's 30 requests a minute
+[providers.azlyrics]              # plain lyrics, for the songs LRCLIB and Megalobiz have none of
+enabled = true                    # false: caracole asks AZLyrics nothing
+delay = [0, 0]                    # two requests a song, one right after the other; no budget by default
+lookup_delay = [0, 0]
 [providers.lacuerda]              # Spanish chord sheets, and its listings of every artist
 budget = 30
 delay = [10, 20]
@@ -197,7 +201,7 @@ machine can read. And `caracole serve` has no sign-in (see [caracole serve](#car
 under `[ntfy]`, which an older caracole read, is now an unknown key like any
 other: delete it, and the token.
 
-**Providers** are exactly `ug`, `lrclib`, `megalobiz`, `lacuerda`, `gtptabs`, `musescore`,
+**Providers** are exactly `ug`, `lrclib`, `megalobiz`, `azlyrics`, `lacuerda`, `gtptabs`, `musescore`,
 `harptabs`, `gametabs`, `youtube` and `ytimg` (YouTube's image host, for the thumbnail of a video
 the library page suggests for a search). Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
@@ -205,7 +209,8 @@ unknown key. Each has the three `lookup_` keys too, with the defaults above
 2–3 seconds). Megalobiz's API allows one address 30 requests a minute and 1,000 a day: besides its
 `budget`, caracole sends it at most 900 requests a UTC day, counting every run's, command's and
 lookup's in its event log, and a client gets only what the day has left (none, once it is spent: the
-songs wait for the next day).
+songs wait for the next day). AZLyrics has no `budget` by default, your choice: it is asked only about
+songs with no lyrics, each at most once in 30 days (a `budget` set under `[providers.azlyrics]` is kept).
 
 **Two paces.** Bulk work, the nightly run, `caracole index build` and every
 command but `caracole get`, keeps `budget` and `delay`: 10–20 seconds between
@@ -225,9 +230,10 @@ pace sends one request at a time to a site, `delay` apart (gametabs.net's robots
 asks 5 seconds, which caracole does not keep: its pace is a second), and keeps everything else below:
 robots.txt's closed paths, the cache, the blocks and cooldowns. YouTube's image host has no `delay`
 by default, your choice: a suggested video's thumbnail comes right after its search, one image a
-video, its own cooldown after a block, apart from YouTube's. Only Megalobiz, gtptabs.com, MuseScore, harptabs.com,
+video, its own cooldown after a block, apart from YouTube's. AZLyrics has none either, your choice too: a song's
+two requests come one right after the other. Only Megalobiz, AZLyrics, gtptabs.com, MuseScore, harptabs.com,
 gametabs.net, YouTube and YouTube's image host can be turned
-off: with `enabled = false` under `[providers.megalobiz]`, `[providers.gtptabs]`, `[providers.musescore]`,
+off: with `enabled = false` under `[providers.megalobiz]`, `[providers.azlyrics]`, `[providers.gtptabs]`, `[providers.musescore]`,
 `[providers.harptabs]`, `[providers.gametabs]`, `[providers.youtube]` or `[providers.ytimg]`, caracole sends
 that site nothing, the nightly run skips
 its step, and the to-do page's Provider health says it is off. The other three
@@ -1074,7 +1080,8 @@ configuration it would take, and why it waits.
 4. **match**: match every song again, locally.
 5. **lyrics**: ask LRCLIB for the songs that have no lyrics yet. Then its own
    step, **megalobiz**: ask Megalobiz for timed lyrics where LRCLIB had none, or
-   none timed, or failed (see [Lyrics from LRCLIB and Megalobiz](#lyrics-from-lrclib-and-megalobiz)).
+   none timed, or failed. Then **azlyrics**: ask AZLyrics for the plain lyrics of the songs still without any
+   (see [Lyrics from LRCLIB, Megalobiz and AZLyrics](#lyrics-from-lrclib-megalobiz-and-azlyrics)).
 6. **fetch**: rank and keep Ultimate Guitar sheets and text tabs.
 7. **lacuerda**: look on LaCuerda for Spanish songs without a complete sheet,
    then read LaCuerda's listings of every artist into a local index, for
@@ -1275,8 +1282,9 @@ and cache.
   within the budget and the pause between requests), and a second 503, or one
   without a `Retry-After`, leaves the song pending. Then, as the nightly run's
   megalobiz step does, it asks Megalobiz for the songs LRCLIB left (see
-  [Lyrics from LRCLIB and Megalobiz](#lyrics-from-lrclib-and-megalobiz)) and
-  prints `Megalobiz: 1 found, 2 timed, 3 missing, 0 errors`, unless Megalobiz is
+  [Lyrics from LRCLIB, Megalobiz and AZLyrics](#lyrics-from-lrclib-megalobiz-and-azlyrics)) and
+  prints `Megalobiz: 1 found, 2 timed, 3 missing, 0 errors`, then asks AZLyrics for the songs still
+  without any and prints `AZLyrics: 1 found, 2 missing, 0 errors`, each unless it is
   turned off or has no song to ask about. A cooldown, a block or a spent budget
   exits 0.
 - **`caracole fetch [--song "ARTIST - TITLE"]`** first scores the sheets kept
@@ -1874,7 +1882,7 @@ the same: `caracole songbook make`, `add`, `remove`, `move`, `set`, `rename`,
 `caracole serve`) while the nightly run works is made in the run's next pause,
 in seconds, rather than after the whole run.
 
-## Lyrics from LRCLIB and Megalobiz
+## Lyrics from LRCLIB, Megalobiz and AZLyrics
 
 LRCLIB gives most songs their lyrics, many of them timed. For the songs it leaves without timed ones,
 caracole asks [Megalobiz](https://megalobiz.com/)'s public API, official and free, after LRCLIB (the
@@ -1897,6 +1905,29 @@ auto-chords laid over plain lyrics is made again over the timed ones, once.
   lyrics show: the Lyrics tile of the song's card says **From Megalobiz**, a link to it, and
   `info.json` has it as `lyrics_from`.
 - `[providers.megalobiz] enabled = false` turns it off.
+
+For the songs both leave with no lyrics at all, caracole asks [AZLyrics](https://www.azlyrics.com/) after
+Megalobiz (the nightly run's azlyrics step, `caracole lyrics`, a lookup, and a sheet made from a YouTube
+video): a song missing, or waiting because its last LRCLIB lookup failed. Its lyrics are plain, so a song
+with lyrics isn't asked, and chords laid over them stay a chart with the lyrics apart; Megalobiz is asked about
+them every 30 days, and its timed lyrics replace them.
+
+- **Two requests a song, one right after the other**: the artist's page, then the song's. Its robots.txt
+  closes its search and it has no sitemap, so caracole finds a song from its artist's name alone, written as
+  the site writes addresses (`The Police` is `/p/police.html`), and reads no list of artists and keeps no
+  index. That finds most artists (667 of the 696 under P), not those filed by surname (`Sean Paul`) or under
+  another name of the site's (`Plan B`), and no song under a name of yours (`Misc Musicals`). For those, name
+  the page: `[azlyrics]` in overrides.toml takes the one request of that page, whoever it credits.
+- A song is **missing** only once every site asked answered that it has none, and AZLyrics is asked again
+  after 30 days.
+- **An error is never a miss**, and a page that doesn't read as one of its pages is an error. Its block page,
+  a 200 saying it has "detected unusual activity from your IP address", is a block: AZLyrics cools down, one ntfy
+  alert goes out, and the page is never cached.
+- Each lyrics page says "Usage of azlyrics.com content by any third-party lyrics provider is prohibited by our
+  licensing agreement". caracole asks it by your choice, for your songs alone, keeps nothing but the lyrics of
+  those songs, privately in your library, and links back: the Lyrics tile of the song's card says **From AZLyrics**,
+  a link to its page, and `info.json` has it as `lyrics_from`.
+- `[providers.azlyrics] enabled = false` turns it off.
 
 ## Audio from YouTube
 
@@ -2195,10 +2226,10 @@ when it has something in it:
 - **Sources.** How many songs wanted.txt has, with the lines it couldn't
   read; for a wanted.txt it couldn't read at all, the error, as
   `wanted.txt: error at <time>: …`; before it exists, how to create it.
-- **Provider health.** For Ultimate Guitar, LRCLIB, Megalobiz, LaCuerda, gtptabs.com,
+- **Provider health.** For Ultimate Guitar, LRCLIB, Megalobiz, AZLyrics, LaCuerda, gtptabs.com,
   MuseScore, harptabs.com, gametabs.net and YouTube: OK, errors (nothing has worked since the last error),
   cooling down until when, or off (`[providers.gtptabs] enabled = false`, and
-  the same for `megalobiz`, `musescore`, `harptabs`, `gametabs` and `youtube`; for YouTube also `off:` and why, as in
+  the same for `megalobiz`, `azlyrics`, `musescore`, `harptabs`, `gametabs` and `youtube`; for YouTube also `off:` and why, as in
   a caracole without auto-chords); the last success; the last error; the
   requests of the last run (for YouTube, its yt-dlp runs).
 
@@ -2604,7 +2635,7 @@ screen each grip, chip, button, ×, title, guitar and menu is a thumb's target,
 #### The Sites tab
 
 The third tab says what caracole has from each website it reads, a line a
-site, in this order: Ultimate Guitar, LaCuerda, LRCLIB, Megalobiz, gtptabs.com,
+site, in this order: Ultimate Guitar, LaCuerda, LRCLIB, Megalobiz, AZLyrics, gtptabs.com,
 MuseScore, harptabs.com, gametabs.net and YouTube, each with its icon (its
 lettered badge while caracole has fetched none). Over them, the totals: the
 sites, the songs their indexes hold, the things your library keeps from them,
@@ -3334,7 +3365,7 @@ write nothing.
 ### Where each file came from
 
 Each source has a mark: the site's own icon for Ultimate Guitar, LaCuerda,
-LRCLIB and Megalobiz (lyrics: a song's are one's or the other's), gtptabs.com, MuseScore, harptabs.com and
+LRCLIB, Megalobiz and AZLyrics (lyrics: a song's are one's alone), gtptabs.com, MuseScore, harptabs.com and
 YouTube, a ♪ for a sheet the
 audio model wrote (auto-chords) from audio you bought, YouTube's for one it
 wrote from the audio caracole took from YouTube, and a ↓ for a file you filed
@@ -5014,6 +5045,9 @@ tab_ids = [1601668]
 [harptabs]     # the harptabs.com tab a song's harmonica tab comes from
 "Billy Joel - Piano Man" = "https://www.harptabs.com/tab/23862/piano-man-c-harmonica"
 
+[azlyrics]     # the AZLyrics page of a song its artist's name doesn't lead to
+"Misc Musicals - Hadestown Wait For Me" = "https://www.azlyrics.com/lyrics/hadestown/waitforme.html"
+
 [gametabs]     # the gametabs.net tab a song's tab of game music comes from
 "Hollow Knight - Resting Grounds" = "https://gametabs.net/tabs/hollow-knight/resting-grounds-2"
 
@@ -5175,6 +5209,8 @@ tab_ids = [1601668]
   tab you name is asked for at once; one gone from the site (404) is asked for
   again after 30 days. Get it on a harptabs.com row of caracole serve's search,
   and `caracole get --harptabs`, write it.
+- **`[azlyrics]`** names a song's lyrics page on AZLyrics, written by hand, for a song
+  its artist's name doesn't lead to: asked alone, whoever it credits, while the song has no lyrics.
 - **`[gametabs]`** names the gametabs.net tab you picked for the song: its page
   (`https://gametabs.net/tabs/hollow-knight/resting-grounds-2`, or as your
   browser shows it). The nightly gametabs pass reads that page alone, in place
@@ -5316,7 +5352,7 @@ Library/                    library_dir: ~/Tabs by default, /var/lib/caracole/li
       version-39144.txt     another Ultimate Guitar version caracole scored for the sheet,
       version-39144.json    kept beside it (by its tab id), the runners-up: its text, the
       version-39144.html    version as UG gave it, and its viewer (no PDF of its own)
-      lyrics.txt            the lyrics, from LRCLIB (or Megalobiz)
+      lyrics.txt            the lyrics, from LRCLIB (or Megalobiz, or AZLyrics)
       lyrics.lrc            the timed lyrics, when LRCLIB (or Megalobiz) has them
       guitar-1.gp5          Guitar Pro or Power Tab files: filed from _inbox/, or from gtptabs.com
       score-1.mscz          scores you downloaded (MuseScore, MusicXML, PDF, MIDI), filed

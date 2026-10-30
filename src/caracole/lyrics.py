@@ -124,9 +124,10 @@ class Lyrics:
     ``plain`` is "" when there are none (an instrumental, say), ``synced`` is
     LRC text or None, ``duration`` is the record's in seconds, and ``raw`` is the
     record as the provider sent it (Megalobiz's without its lyrics: they are in
-    ``synced``). ``provider`` is who answered, LRCLIB's or Megalobiz's
-    (megalobiz_fetch.py), and ``url`` the record's page, which caracole links to
-    wherever it credits them (Megalobiz's fair use asks it; LRCLIB's have none).
+    ``synced``). ``provider`` is who answered, LRCLIB's, Megalobiz's
+    (megalobiz_fetch.py) or AZLyrics' (azlyrics_fetch.py), and ``url`` the record's
+    page, which caracole links to wherever it credits them (Megalobiz's fair use
+    asks it, and AZLyrics' is credited the same way; LRCLIB's have none).
     """
 
     plain: str
@@ -315,10 +316,22 @@ def _artist_matches(want: str, got: str) -> bool:
     )
 
 
+# Words of a title that make it another kind of version than the song's (a fan's cover, a karaoke track, a vocal
+# version of an instrumental), unless the song's own title says them too.
+_OTHER_VERSION = re.compile(
+    r"\b(cover|karaoke|instrumental|acapella|a cappella|nightcore|sped up|slowed|8d|vocals?|remix)\b")
+
+
+def another_version(want: str, got: str) -> bool:
+    """Whether ``got``'s title names a kind of version (a cover, a karaoke track) the song's title ``want`` doesn't."""
+    named = set(_OTHER_VERSION.findall(fold(want).lower()))
+    return any(word not in named for word in _OTHER_VERSION.findall(fold(got).lower()))
+
+
 def fits(*, artist: str, title: str, duration_s: float | None, got_artist: str, got_title: str,
          got_duration: float | None) -> tuple[int, float] | None:
     """Whether a record (``got_*``) is the song, by ``pick_candidate``'s rules, which another provider's picker
-    keeps too (megalobiz.py): None when it isn't; else its band, 0 within ±2 s of the song's duration, 1 within
+    keeps too (megalobiz.py, azlyrics.py): None when it isn't; else its band, 0 within ±2 s of the song's duration, 1 within
     ±10 s, 2 beyond (only for a record whose title and artist keys equal the song's), and how far off it is (0, 0.0
     when the song's duration isn't known)."""
     want_title, want_artist = _key(clean_title(title)), _key(artist)
@@ -466,7 +479,8 @@ class LyricsStats(PassStats):
 
 RECHECK_MISSING_AFTER = timedelta(days=30)
 # + song id: when LRCLIB's last lookup of the song failed, an error or the pass given up before it, kept until LRCLIB
-# answers about it; Megalobiz asks about such a song (megalobiz_fetch.py), never one LRCLIB hasn't been asked about.
+# answers about it; Megalobiz and AZLyrics ask about such a song (megalobiz_fetch.py, azlyrics_fetch.py), never one
+# LRCLIB hasn't been asked about.
 FAILED = "lyrics:failed:"
 
 
@@ -514,7 +528,7 @@ def fetch_pending_lyrics(
     ``ProviderError`` counts in ``errors`` and leaves the song as it was, for the
     next run. Once the client gives up on the provider for this run
     (``ProviderUnavailable``), the pass ends. Every song an error left
-    (``failures``) is remembered for Megalobiz (kv ``lyrics:failed:``, ``FAILED``)
+    (``failures``) is remembered for the sites after it (kv ``lyrics:failed:``, ``FAILED``)
     until LRCLIB answers about it.
     """
     stats = LyricsStats()

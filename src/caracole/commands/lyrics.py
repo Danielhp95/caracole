@@ -78,7 +78,7 @@ if TYPE_CHECKING:
     from caracole.overrides import Overrides
 
 # Each provider's command, for the lock.
-_COMMANDS = {"lrclib": "lyrics", "megalobiz": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs",
+_COMMANDS = {"lrclib": "lyrics", "megalobiz": "lyrics", "azlyrics": "lyrics", "lacuerda": "lacuerda", "gtptabs": "gtptabs",
              "harptabs": "harptabs", "gametabs": "gametabs", "musescore": "musescore"}
 LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the help, which imports no pass
 
@@ -86,7 +86,7 @@ LACUERDA_SEARCHES_PER_HOUR = 20  # lacuerda_search.SEARCHES_PER_HOUR, for the he
 def register(app: typer.Typer) -> None:
     @app.command("lyrics")
     def lyrics_cmd(ctx: typer.Context) -> None:
-        """Fetch lyrics from LRCLIB for songs that have none yet, then timed ones from Megalobiz where it has none."""
+        """Fetch lyrics from LRCLIB for songs that have none yet, timed ones from Megalobiz, then AZLyrics' where none."""
         _lyrics(load_cfg(ctx))
 
     @app.command("lacuerda")
@@ -219,7 +219,10 @@ def _lyrics(cfg: Config) -> None:
                 typer.echo("Songs with an error stay pending; the next run asks LRCLIB again.")
             if s.budget_exhausted:
                 _budget_spent(cfg, "lrclib")
-    _megalobiz(cfg, _common.overrides_since(cfg, overrides, handed))
+    overrides = _common.overrides_since(cfg, overrides, handed)
+    handed = _common.handoffs()
+    _megalobiz(cfg, overrides)
+    _azlyrics(cfg, _common.overrides_since(cfg, overrides, handed))
 
 
 def _megalobiz(cfg: Config, overrides: Overrides) -> None:
@@ -247,6 +250,33 @@ def _megalobiz(cfg: Config, overrides: Overrides) -> None:
         typer.echo("Songs with an error wait; the next run asks LRCLIB, then Megalobiz, again.")
     if s.budget_exhausted:
         _budget_spent(cfg, "megalobiz")
+
+
+def _azlyrics(cfg: Config, overrides: Overrides) -> None:
+    """AZLyrics' pass after Megalobiz's, as the nightly run's step follows it: the songs still without lyrics. Nothing,
+    not a word, when it is turned off or has no song to ask about."""
+    from caracole.azlyrics_fetch import AzLyricsStats, azlyrics_lyrics, songs_to_ask
+
+    if not cfg.provider("azlyrics").enabled:
+        return
+    with closing(open_db(cfg)) as conn:
+        if not songs_to_ask(conn, utcnow(), picks=overrides.azlyrics):
+            return
+
+    def run(conn: sqlite3.Connection, client: Client, now: datetime) -> AzLyricsStats:
+        return azlyrics_lyrics(conn, client, cfg.library_dir, now, picks=overrides.azlyrics)
+
+    def ran(s: AzLyricsStats) -> bool:
+        return bool(s.tried or s.budget_exhausted)
+
+    s = _provider_pass(cfg, "azlyrics", run, overrides, ran)
+    if s is None or not ran(s):
+        return
+    typer.echo(f"AZLyrics: {s.found} found, {s.missing} missing, {plural(s.errors, 'error')}")
+    if s.errors:
+        typer.echo("Songs with an error wait; the next run asks the sites again.")
+    if s.budget_exhausted:
+        _budget_spent(cfg, "azlyrics")
 
 
 def _lacuerda(cfg: Config) -> None:

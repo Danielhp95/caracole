@@ -65,7 +65,8 @@ def test_the_rest_of_a_sites_closed_paths_are_counted():
 
 def test_only_the_sites_with_no_index_say_how_they_are_asked():
     assert {s.key: s.asked for s in SITES if s.asked} == {
-        "lrclib": "Asked song by song", "megalobiz": "Asked song by song", "youtube": "Searched song by song"}
+        "lrclib": "Asked song by song", "megalobiz": "Asked song by song", "azlyrics": "Asked song by song",
+        "youtube": "Searched song by song"}
 
 
 def test_megalobiz_is_an_api_whose_fair_use_caracole_keeps():
@@ -365,7 +366,7 @@ def test_each_line_says_its_pace_its_robots_and_its_terms(conn, cfg):
     assert line(data, "harptabs")["terms"] == site("harptabs").terms
     assert line(data, "ug")["name"] == "Ultimate Guitar"
     assert line(data, "lrclib")["indexed"] is None and line(data, "lrclib")["asked"] == "Asked song by song"
-    assert data["totals"] == {"sites": 9, "indexed": 0, "kept": 0}
+    assert data["totals"] == {"sites": 10, "indexed": 0, "kept": 0}
 
 
 def test_a_partial_index_reads_indexing(conn, cfg):
@@ -450,3 +451,20 @@ def test_counts_kept_by_another_version_of_the_counting_are_counted_again(conn, 
     assert index_figures(conn)["ug"][0].songs == 1  # kept
     monkeypatch.setattr(sites, "COUNTS_VERSION", sites.COUNTS_VERSION + 1)
     assert index_figures(conn)["ug"][0].songs == 2
+
+
+def test_azlyrics_says_how_it_is_asked_and_that_its_lyrics_link_back():
+    azlyrics = site("azlyrics")
+    assert azlyrics.role.startswith("Plain lyrics") and azlyrics.domain == "azlyrics.com"
+    assert "artist's page" in azlyrics.robots and "links back" in azlyrics.robots
+    assert [path for path, _ in azlyrics.paths] == sorted(ROBOTS_DISALLOW["www.azlyrics.com"], key=(
+        "/search/", "/suggest/", "/song/", "/lyricsdb/").index)
+
+
+def test_its_lyrics_count_as_lrclibs_do_and_a_site_with_no_budget_shows_what_it_was_sent(conn, cfg):
+    kv_set_json(conn, "run:last", {**RUN, "requests": {**RUN["requests"], "azlyrics": 4}})
+    cards = [card(files=[("lyrics.txt", "azlyrics")])]
+    data = sites_data(conn, cfg, cards, NOW)
+    assert line(data, "azlyrics")["kept"] == {"count": 1, "unit": "lyrics", "songs": 1, "detail": "0 of them synced"}
+    assert line(data, "azlyrics")["night"] == {"used": 4, "budget": None, "unit": "requests"}
+    assert line(data, "azlyrics")["pace"] == "0 s between requests"

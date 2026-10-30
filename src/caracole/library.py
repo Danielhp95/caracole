@@ -299,8 +299,8 @@ def drop_file(conn: sqlite3.Connection, library_dir: Path, *, song: Song, name: 
 
 
 # The sites whose lyrics link back to their record's page, and where those pages are (megalobiz.py: its fair use asks
-# it wherever its lyrics are shown). LRCLIB asks none.
-LYRICS_PAGES = {"megalobiz": "https://megalobiz.com/"}
+# it wherever its lyrics are shown; azlyrics.py, the owner's credit). LRCLIB asks none.
+LYRICS_PAGES = {"megalobiz": "https://megalobiz.com/", "azlyrics": "https://www.azlyrics.com/"}
 
 
 def lyrics_from(song: Song) -> dict[str, str] | None:
@@ -362,7 +362,7 @@ def write_info(conn: sqlite3.Connection, library_dir: Path, song: Song) -> Path:
         "status": song.status,
         "sources": song.source_ids,
         "lyrics": song.lyrics_status,
-        "lyrics_from": lyrics_from(song),  # Megalobiz's page of the song's lyrics, which its fair use asks to link
+        "lyrics_from": lyrics_from(song),  # the page of the song's lyrics on the site that gave them
         "match": {
             "decision": song.match_decision, "step": song.match_step, "score": song.match_score,
             "artist_key": song.match_artist_key, "song_key": song.match_song_key,

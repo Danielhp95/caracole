@@ -158,7 +158,7 @@ def test_a_sanitized_icon_is_small():
 
 
 def test_every_source_has_a_name_a_tag_and_a_badge():
-    for key in ("ug", "lacuerda", "lrclib", "megalobiz", "gtptabs", "musescore", "youtube", "auto", "inbox"):
+    for key in ("ug", "lacuerda", "lrclib", "megalobiz", "azlyrics", "gtptabs", "musescore", "youtube", "auto", "inbox"):
         source = icons.SOURCES[key]
         assert source.key == key and source.name and source.tag and source.letters
         assert source.label == f"from {source.name}"
@@ -267,7 +267,7 @@ def test_each_site_is_asked_with_its_own_client_and_no_glyph_is_fetched(conn, tm
     assert sorted(run.fetched) == ["lacuerda", "ug"]
     assert lacuerda.asked == ["acordes.lacuerda.net/favicon.ico"]
     # The rest have no client this time: they wait, unmarked, for one that has.
-    assert sorted(run.waiting) == ["gametabs", "gtptabs", "harptabs", "lrclib", "megalobiz", "musescore", "youtube"]
+    assert sorted(run.waiting) == ["azlyrics", "gametabs", "gtptabs", "harptabs", "lrclib", "megalobiz", "musescore", "youtube"]
 
 
 HOME = b"""<!doctype html><html><head><title>MuseScore</title>
@@ -511,6 +511,7 @@ def icon_sites():
         "lacuerda": Site("lacuerda", {"/favicon.ico": (200, ico((32, bmp_image(32))))}),
         "lrclib": Site("lrclib", {"/favicon.ico": (200, ico((16, bmp_image(16)), (32, bmp_image(32))))}),
         "megalobiz": Site("megalobiz", {"/favicon.ico": (200, png(32))}),
+        "azlyrics": Site("azlyrics", {"/favicon.ico": (200, png(32))}),
         "gtptabs": Site("gtptabs", {"/favicon.ico": (200, ico((16, bmp_image(16))))}),
         "musescore": Site("musescore", {"/favicon.ico": (403, b"Just a moment...")}),
         "youtube": Site("youtube", {"/favicon.ico": (200, ico((16, bmp_image(16))))}),
@@ -550,7 +551,7 @@ def test_caracole_icons_fetches_what_is_missing_and_rewrites_the_pages(tmp_path,
     assert "MuseScore blocked caracole" in out
     assert "index.html" in out and (tmp_path / "lib" / "index.html").is_file()
     assert sorted(p.name for p in (tmp_path / "cache" / "icons").iterdir()) == [
-        "gametabs.png", "gtptabs.png", "harptabs.png", "lacuerda.png", "lrclib.png", "megalobiz.png", "ug.png",
+        "azlyrics.png", "gametabs.png", "gtptabs.png", "harptabs.png", "lacuerda.png", "lrclib.png", "megalobiz.png", "ug.png",
         "youtube.png"]
     conn = db.connect(tmp_path / "state" / "caracole.sqlite")
     assert is_cooling(conn, "musescore", datetime.now(UTC))

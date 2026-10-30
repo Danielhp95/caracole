@@ -148,6 +148,24 @@ def test_lyrics_from_megalobiz_link_back_to_their_page_from_the_tile(conn, cfg, 
                     "said": "Lyrics: Megalobiz, its page there", "name": "Megalobiz"}
 
 
+def test_lyrics_from_azlyrics_link_back_to_their_page_from_the_tile(conn, cfg, tmp_path):
+    from caracole.lyrics import Lyrics
+    from caracole.songs import update_song
+
+    song = hotel(conn, cfg)
+    url = "https://www.azlyrics.com/lyrics/eagles/hotelcalifornia.html"
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=Lyrics(
+        plain="x", synced=None, instrumental=False, duration=None, lrclib_id=None, provider="azlyrics",
+        url=url).to_json())
+    script = """
+    openCard("Hotel California");
+    const chip = lineOf("Hotel California").querySelector(".tile-lyrics .tile-versions .vchip");
+    note("chip", { href: chip.getAttribute("href"), said: chip.getAttribute("aria-label") });
+    """
+    chip = attribute_of(run(conn, cfg, tmp_path, script), "data-chip")
+    assert chip == {"href": url, "said": "Lyrics: AZLyrics, its page there"}
+
+
 def test_a_tab_of_game_music_is_a_tile_of_its_own_opened_as_text(conn, cfg, tmp_path):
     song = add_song(conn, "Hollow Knight", "Resting Grounds")
     for number in (1, 2):

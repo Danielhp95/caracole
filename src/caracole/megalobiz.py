@@ -30,8 +30,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from caracole.http import ProviderError, Response
-from caracole.lyrics import fits
-from caracole.normalize import clean_title, fold
+from caracole.lyrics import another_version, fits
+from caracole.normalize import clean_title
 
 PROVIDER = "megalobiz"
 API = "https://api.megalobiz.com/api/public/v1"
@@ -39,10 +39,6 @@ SEARCH = f"{API}/search"
 SITE = "https://megalobiz.com/"  # where every record's page is, which caracole links back to
 LIMIT = 10  # results a search asks for
 
-# Words of a title that make it another kind of version than the song's (a fan's cover, a karaoke track, a vocal
-# version of an instrumental), unless the song's own title says them too.
-_OTHER_VERSION = re.compile(
-    r"\b(cover|karaoke|instrumental|acapella|a cappella|nightcore|sped up|slowed|8d|vocals?|remix)\b")
 _STAMPED = re.compile(r"^\s*\[\d+:\d{2}(?:\.\d+)?\]", re.MULTILINE)
 
 
@@ -153,22 +149,16 @@ def parse_lrc(resp: Response) -> Lrc:
     return Lrc(*_record(resp, data), lrc=lrc if _STAMPED.search(lrc) else "")
 
 
-def _another_version(want: str, got: str) -> bool:
-    """Whether ``got``'s title names a kind of version (a cover, a karaoke track) the song's title ``want`` doesn't."""
-    named = set(_OTHER_VERSION.findall(fold(want).lower()))
-    return any(word not in named for word in _OTHER_VERSION.findall(fold(got).lower()))
-
-
 def pick_result(results: Iterable[Result], *, artist: str, title: str, duration_s: float | None) -> Result | None:
     """The result that is the song, or None when none is: its title and artist fit as ``lyrics.pick_candidate``'s
     do (``lyrics.fits``: the keys' ratio at least 85, the closest length first within ±2 s, then ±10 s, beyond that
     only the same names), credited to someone, and no other kind of version than the song (a cover, a karaoke or an
-    instrumental track, a vocal version, a remix: ``_OTHER_VERSION``). Without the song's length, the first that
+    instrumental track, a vocal version, a remix: ``lyrics.another_version``). Without the song's length, the first that
     fits, in the search's order."""
     best: Result | None = None
     best_rank: tuple[float, ...] | None = None
     for order, result in enumerate(results):
-        if not result.artist.strip() or _another_version(title, result.title):
+        if not result.artist.strip() or another_version(title, result.title):
             continue
         fit = fits(artist=artist, title=title, duration_s=duration_s, got_artist=result.artist,
                    got_title=result.title, got_duration=result.duration)

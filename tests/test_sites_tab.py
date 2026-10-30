@@ -21,7 +21,7 @@ from conftest import add_song
 from test_library_page_songbooks import sha
 
 NOW = datetime(2026, 10, 29, 3, 41, tzinfo=UTC)
-ORDER = ["ug", "lacuerda", "lrclib", "megalobiz", "gtptabs", "musescore", "harptabs", "gametabs", "youtube"]
+ORDER = ["ug", "lacuerda", "lrclib", "megalobiz", "azlyrics", "gtptabs", "musescore", "harptabs", "gametabs", "youtube"]
 
 
 def figures(conn, cfg):
@@ -78,7 +78,19 @@ def test_the_written_file_draws_the_ledger(conn, cfg):
     assert out["sites"] == ORDER
     assert "2 songs" in out["ug"] and "1 sheet" in out["ug"] and "58 / 60" in out["ug"] and "OK" in out["ug"]
     assert out["icon"] is True
-    assert "9 sites" in out["head"] and "58 requests" in out["head"]
+    assert "10 sites" in out["head"] and "58 requests" in out["head"]
+
+
+@in_chromium
+def test_a_site_with_no_budget_says_what_it_was_sent_of_nothing(conn, cfg):
+    figures(conn, cfg)
+    kv_set_json(conn, "run:last", {"run_id": "2026-10-29T07:00:00Z", "started": "2026-10-29T07:00:00Z",
+                                   "finished": "2026-10-29T07:41:00Z", "requests": {"azlyrics": 4}, "budgets": {}})
+    out = run_in_page(build_library_page(conn, cfg, Overrides(), NOW), cfg, """
+      const night = q('.site-line[data-site="azlyrics"] .night');
+      out = {night: night.textContent, meter: !!night.querySelector('meter, [role="meter"], .meter')};
+    """)
+    assert out == {"night": "4requests", "meter": False}
 
 
 @in_chromium

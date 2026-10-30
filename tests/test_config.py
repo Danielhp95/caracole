@@ -205,6 +205,15 @@ def test_only_gtptabs_and_musescore_can_be_turned_off(tmp_path):
             load_config(p, env={"HOME": str(tmp_path)})
 
 
+def test_azlyrics_is_a_switchable_provider_with_no_pause_and_no_budget(tmp_path):
+    from caracole.config import NO_BUDGET
+
+    cfg = load_config(None, env={"HOME": str(tmp_path)})
+    assert cfg.provider("azlyrics") == ProviderPolicy(budget=NO_BUDGET, delay=(0.0, 0.0), lookup_delay=(0.0, 0.0))
+    p = write(tmp_path, "[providers.azlyrics]\nenabled = false\n")
+    assert load_config(p, env={"HOME": str(tmp_path)}).provider("azlyrics").enabled is False
+
+
 def test_megalobiz_is_a_switchable_provider_under_its_apis_rate_limits(tmp_path):
     # 30 requests a minute and 1,000 a day from one address: 2-4 s apart, 60 a run, and 900 a UTC day at most.
     cfg = load_config(None, env={"HOME": str(tmp_path)})

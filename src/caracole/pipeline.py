@@ -1,12 +1,12 @@
 """The nightly ``caracole run`` (plan §6).
 
-Steps, in order: sync → icons → index → match → lyrics → megalobiz → fetch → lacuerda →
+Steps, in order: sync → icons → index → match → lyrics → megalobiz → azlyrics → fetch → lacuerda →
 scan → gtptabs → harptabs → gametabs → musescore → youtube → render → todo → backup. Each step runs
 even if an earlier one failed, so the to-do page is always rewritten; the backup alone, a whole copy of the
 database (backup.py), waits for a run no step of which failed.
 
 - A step's provider is skipped while it is cooling down, and for the rest of
-  the run once it blocks. So are megalobiz, gtptabs, harptabs, gametabs, musescore and youtube when caracole.toml
+  the run once it blocks. So are megalobiz, azlyrics, gtptabs, harptabs, gametabs, musescore and youtube when caracole.toml
   turns one off: it gets no client then. A block records a cooldown (24 h, doubling)
   and sends one ntfy message; it is expected behaviour, not a failed run.
 - The youtube step runs yt-dlp (youtube.py, youtube_fetch.py) only in a caracole
@@ -40,7 +40,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from caracole.config import DEFAULT_PROVIDERS, Config
+from caracole.config import DEFAULT_PROVIDERS, NO_BUDGET, Config
 from caracole.db import kv_set_json
 from caracole.health import answered_any, get_state, is_cooling, record_block, record_error, record_ok
 from caracole.http import BudgetExhausted, Client, ProviderBlocked, ProviderError
@@ -293,6 +293,22 @@ def _megalobiz(ctx: StepContext) -> StepResult:
         failures=s.failures, title="Megalobiz",
         done=_counted((s.found, "found"), (s.timed, "now timed"), (s.missing, "missing")),
         retry="the lyrics of {songs} will be asked of Megalobiz again on the next run",
+    )
+
+
+def _azlyrics(ctx: StepContext) -> StepResult:
+    """AZLyrics' plain lyrics for the songs LRCLIB's and Megalobiz's steps left without any (azlyrics_fetch.py)."""
+    from caracole.azlyrics_fetch import azlyrics_lyrics
+
+    s = azlyrics_lyrics(ctx.conn, ctx.services.client("azlyrics"), ctx.cfg.library_dir, ctx.now,
+                        picks=ctx.overrides.azlyrics)
+    return _provider_result(
+        ctx, "azlyrics", errors=s.errors, error=f"{plural(s.errors, 'song')} failed this run",
+        spent=s.budget_exhausted,
+        status=f"{s.found} found, {s.missing} missing, {plural(s.errors, 'error')}",
+        failures=s.failures, title="AZLyrics",
+        done=_counted((s.found, "found"), (s.missing, "missing")),
+        retry="the lyrics of {songs} will be asked of AZLyrics again on the next run",
     )
 
 
@@ -616,6 +632,8 @@ def default_steps() -> list[Step]:
         Step("lyrics", _lyrics, provider="lrclib"),
         # Right after LRCLIB: timed lyrics for the songs it left without, before the fetch scores sheets by them.
         Step("megalobiz", _megalobiz, provider="megalobiz"),
+        # Then plain lyrics for the songs still without any.
+        Step("azlyrics", _azlyrics, provider="azlyrics"),
         Step("fetch", _fetch, provider="ug"),
         Step("lacuerda", _lacuerda, provider="lacuerda"),
         Step("scan", _scan),
@@ -667,11 +685,11 @@ def _requests(services: Services) -> dict[str, int]:
 
 
 def _budgets(services: Services) -> dict[str, int]:
-    """Each client's request budget for the run, when it has one (a ``PoliteClient``'s policy)."""
+    """Each client's request budget for the run, when it has one (a ``PoliteClient``'s policy, not ``NO_BUDGET``)."""
     budgets = {}
     for p, c in services.clients.items():
         budget = getattr(getattr(c, "policy", None), "budget", None)
-        if isinstance(budget, int):
+        if isinstance(budget, int) and budget != NO_BUDGET:
             budgets[p] = budget
     return budgets
 

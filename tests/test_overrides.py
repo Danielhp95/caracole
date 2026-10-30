@@ -951,3 +951,28 @@ def test_a_harmonica_entry_that_cant_be_read_says_what_it_takes(tmp_path, entry,
     with pytest.raises(OverridesError):
         add_harmonica(p, "A - B", "harmonica.txt", "letters")
     assert p.read_text(encoding="utf-8") == "# mine\n"
+
+
+def test_azlyrics_names_a_songs_lyrics_page(tmp_path):
+    p = tmp_path / "overrides.toml"
+    p.write_text("""
+[azlyrics]   # the page of a song its artist's name doesn't lead to
+"Misc Musicals - Hadestown Wait For Me" = "https://www.azlyrics.com/lyrics/hadestown/waitforme.html"
+"Sean Paul - Temperature" = "azlyrics.com/lyrics/seanpaul/temperature.html?x=1"
+""", encoding="utf-8")
+    o = load_overrides(p)
+    assert o.azlyrics == {
+        "misc-musicals/hadestown-wait-for-me": "https://www.azlyrics.com/lyrics/hadestown/waitforme.html",
+        "sean-paul/temperature": "https://www.azlyrics.com/lyrics/seanpaul/temperature.html",
+    }
+    assert Overrides().azlyrics == {}
+
+
+@pytest.mark.parametrize("value", [
+    '"https://www.azlyrics.com/p/pomme.html"', '"https://elsewhere.example/lyrics/a/b.html"', "3",
+])
+def test_azlyrics_takes_a_lyrics_page_alone(tmp_path, value):
+    p = tmp_path / "overrides.toml"
+    p.write_text(f'[azlyrics]\n"pomme - mononoke" = {value}\n', encoding="utf-8")
+    with pytest.raises(OverridesError, match="AZLyrics lyrics page"):
+        load_overrides(p)

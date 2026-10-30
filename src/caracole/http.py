@@ -195,6 +195,8 @@ _CHALLENGE_MARKERS = (
     b"<title>Just a moment...</title>",
     b"Attention Required! | Cloudflare",
     b"Enable JavaScript and cookies to continue",
+    # AZLyrics' own, a 200 with a box to tick, as those it stopped quote it: a page like any other to the status.
+    b"unusual activity from your IP address",
 )
 
 
@@ -224,6 +226,7 @@ _HARPTABS = (
     "/login", "/signup", "/recover", "/settings", "/submit", "/admin/", "/messages/", "/favorites", "/following",
     "/tab/*/edit", "/tab/*/upload", "/api/", "/search", "/*?*_rsc=",
 )
+_AZLYRICS = ("/lyricsdb/", "/song/", "/search/", "/suggest/")
 _GAMETABS = (
     "/api/", "/admin/", "/*.log$", "/*.php$", "/create-report", "/tab-submissions", "/reputation", "/reports",
     "/settings", "/change-username", "/notifications", "/my-tabs", "/preparing-tab-file-download", "/global-stats",
@@ -272,6 +275,10 @@ ROBOTS_DISALLOW: Mapping[str, tuple[str, ...]] = {
         "/genre/edit", "/lrc/details", "/lrc/new", "/lrc/edit", "/playlist/details", "/playlist/new",
         "/playlist/edit",
     ),
+    # AZLyrics' robots.txt (tests/fixtures/azlyrics/robots.txt, 2026-10-30): /search/ and /suggest/ are its search,
+    # which is why a song is reached from its artist's page (azlyrics.py).
+    "www.azlyrics.com": _AZLYRICS,
+    "azlyrics.com": _AZLYRICS,
     # YouTube's image host, of which caracole asks a suggested video's thumbnail alone (youtube_search.py); /sb/ is
     # a video's storyboard frames.
     "i.ytimg.com": ("/sb/",),
