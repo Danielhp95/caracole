@@ -408,7 +408,9 @@ Rules a change there keeps (the Invariants below are the others):
   music differs from the song's own (key, mode, capo, swaps, shapes: viewer.js `musicOf`; never a reading setting nor
   the instrument, the player's), a modal dialog asks first, Download and make it mine (`mine=1`), Just download or
   Cancel (test_viewer_panels.py, test_web_server.py's download in the real sandbox).
-- `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; btc.py
+- `autochords/`: merge.py is pure Python and the only module `__init__.py` imports; sheet_lyrics.py, no model either
+  (render.py imports it, in any package), puts lyrics that came after a sheet of none on it, `render_all` first thing,
+  so every path to a page gives it them (`merge.with_plain_lyrics`, a version's `raw["lyrics"]` then "plain"); btc.py
   (with the vendored btc_model.py and LICENSE-BTC) and beats.py need torch, librosa and
   beat_this; run.py runs them over the library. align.py, pure Python too, is run.py's: how far
   to shift timed lyrics LRCLIB timed for audio of another length, from the chords and beats alone

@@ -227,10 +227,19 @@ def build_sheet(
         chart = _chart(segs, bars, _bar_at(bars, segs[0].start), segs[-1].end) if segs else []
         if chart:
             out += ["[Chords]", *chart, ""]
-        lyrics = [line.rstrip() for line in (plain or "").strip("\n").splitlines()]
-        if any(lyrics):
-            out += ["[Lyrics]", *lyrics]
+        out += _lyrics_block(plain)
     return "\n".join(out).rstrip("\n") + "\n"
+
+
+def _lyrics_block(plain: str | None) -> list[str]:
+    """Plain lyrics as a sheet's last section, or no line for none."""
+    lyrics = [line.rstrip() for line in (plain or "").strip("\n").splitlines()]
+    return ["[Lyrics]", *lyrics] if any(lyrics) else []
+
+
+def with_plain_lyrics(sheet: str, plain: str) -> str:
+    """A sheet ``build_sheet`` made with no lyrics, as it would have made it with ``plain``: its chart, then them."""
+    return "\n".join([sheet.rstrip("\n"), "", *_lyrics_block(plain)]).rstrip("\n") + "\n"
 
 
 def _period(grid: Sequence[float]) -> float | None:

@@ -529,13 +529,15 @@ class RenderStats:
 
     ``rendered`` PDFs were written, ``skipped`` ones were already up to date and
     ``failed`` songs could not be rendered. ``font_error`` says, once for the
-    pass, which sheets have no PDF for want of a usable CJK font.
+    pass, which sheets have no PDF for want of a usable CJK font. ``given`` auto
+    sheets took lyrics that came after they were made (autochords/sheet_lyrics.py).
     """
 
     rendered: int = 0
     skipped: int = 0
     failed: int = 0
     font_error: str | None = None
+    given: int = 0
 
 
 def render_all(
@@ -559,6 +561,9 @@ def render_all(
     with ``now`` (by default the current time). ``force`` renders every PDF
     again, up to date or not; ``runner`` runs chordpro (tests pass a fake).
 
+    First, an auto sheet made before its song had lyrics takes them
+    (``sheet_lyrics.lyrics_onto_sheets``), so every path to a page gives it its lyrics.
+
     With ``song_ids``, only those songs (``caracole get`` and ``caracole render
     --song`` render their one song), and the stats are theirs alone. The record
     stays the last full pass's (``_status_after``): their names leave its
@@ -570,7 +575,9 @@ def render_all(
     that renders many PDFs takes minutes. When it says it did, overrides.toml
     and each song after are read again, since the lookup may have changed them.
     """
-    stats = RenderStats()
+    from caracole.autochords.sheet_lyrics import lyrics_onto_sheets
+
+    stats = RenderStats(given=len(lyrics_onto_sheets(conn, cfg, overrides, only=song_ids)))
     failed: list[str] = []
     no_font: dict[str, str] = {}
     font, font_problem = _cjk_font(cfg.cjk_font)

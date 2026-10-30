@@ -1182,3 +1182,25 @@ def test_an_azlyrics_error_in_a_lookup_leaves_the_song_waiting_never_missing(cfg
     assert "502" in get_state(conn, "azlyrics").last_error
     assert find_song(conn, "radiohead/creep").lyrics_status == "pending"
     assert result.details["lyrics"]
+
+
+def test_a_lookup_that_finds_lyrics_puts_them_on_the_auto_sheets_page(cfg, conn, sites):
+    from conftest import add_song
+    from helpers.azlyrics_site import POMME
+
+    from caracole.autochords import ChordSegment, build_sheet
+    from caracole.autochords.run import _keep
+    from caracole.library import song_dir
+
+    mark_built(conn, NOW)
+    song = add_song(conn, "pomme", "mononoke")
+    _keep(conn, cfg, song, build_sheet([ChordSegment(0.0, 4.0, "C")], title="mononoke", artist="pomme"), "none", None,
+          "2026-10-30T13:42:00Z")
+    sites.pages.update({f"https://www.azlyrics.com{path}": (200, page) for path, page in POMME.items()})
+
+    result, _ = look_up(cfg, sites=sites, artist="pomme", title="mononoke")
+
+    assert result.ok and result.details["lyrics"].endswith("lyrics from AZLyrics")
+    folder = song_dir(cfg.library_dir, song)
+    assert "Des mots inventés" in (folder / "sheet (auto).txt").read_text(encoding="utf-8")
+    assert "Des mots inventés" in (folder / "sheet (auto).html").read_text(encoding="utf-8")

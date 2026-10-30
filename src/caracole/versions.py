@@ -92,6 +92,11 @@ def upsert_version(
     return int(row[0])
 
 
+def set_raw(conn: sqlite3.Connection, version_id: int, raw: Mapping[str, Any]) -> None:
+    """What a version keeps of its provider's record, replaced; nothing else of it changes."""
+    conn.execute("UPDATE versions SET raw = ? WHERE id = ?", (json.dumps(raw, ensure_ascii=False), version_id))
+
+
 def get_version(conn: sqlite3.Connection, version_id: int) -> VersionRow:
     row = conn.execute("SELECT * FROM versions WHERE id = ?", (version_id,)).fetchone()
     if row is None:

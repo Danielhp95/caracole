@@ -19,7 +19,8 @@ with linked audio is due when:
   chords it wrote at their characters' indexes rather than their display
   columns (its version's ``raw`` has no ``columns``): once more, each, so timed
   lyrics that don't fit the audio make a plain sheet again once, never every
-  night;
+  night (plain lyrics that come after a sheet of none rarely get here: they need
+  no model, and the next render puts them on it, sheet_lyrics.py);
 - that file hasn't already failed;
 - no other song keeps a ``sheet (auto).txt`` where its own would go (two songs
   whose names make one folder, ``library.SharedFolder``): such a song is skipped,

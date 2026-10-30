@@ -1166,3 +1166,42 @@ def test_an_azlyrics_block_cools_it_down_and_leaves_the_song_as_it_was(tmp_path,
     finally:
         conn.close()
     assert song(tmp_path, song_id).lyrics_status == "missing"
+
+
+def test_lyrics_found_go_on_the_auto_sheet_and_its_page_at_once(tmp_path, sites, monkeypatch):
+    from helpers.azlyrics_site import POMME
+
+    from helpers.rendered import fake_chordpro
+
+    from caracole import render
+    from caracole.autochords import ChordSegment, build_sheet
+    from caracole.autochords.run import _keep
+    from caracole.config import load_config
+    from caracole.library import song_dir
+    from caracole.overrides import Overrides
+
+    sites.azlyrics.pages.update(POMME)
+    (song_id,) = seed(tmp_path, ("pomme", "mononoke"))
+    render_all = render.render_all
+    monkeypatch.setattr(render, "render_all", lambda *a, **kw: render_all(*a, runner=fake_chordpro, **kw))
+    cfg = load_config(write_config(tmp_path), env={"HOME": str(tmp_path)})
+    conn = open_db(tmp_path)
+    try:
+        stored = get_song(conn, song_id)
+        _keep(conn, cfg, stored, build_sheet([ChordSegment(0.0, 4.0, "C")], title="mononoke", artist="pomme"), "none",
+              None, "2026-10-30T13:42:00Z")
+        render.render_all(conn, cfg, Overrides())
+    finally:
+        conn.close()
+    result = run(tmp_path, "lyrics")
+    assert result.exit_code == 0, result.output
+    assert "Auto sheets: 1 given lyrics, 1 rendered" in result.stdout
+    page = song_dir(cfg.library_dir, stored) / "sheet (auto).html"
+    assert "Des mots inventés" in page.read_text(encoding="utf-8")
+
+
+def test_lyrics_with_no_auto_sheet_to_give_them_to_says_nothing_of_one(tmp_path, sites):
+    seed(tmp_path, ("pomme", "mononoke"))
+    result = run(tmp_path, "lyrics")
+    assert result.exit_code == 0, result.output
+    assert "Auto sheets" not in result.stdout

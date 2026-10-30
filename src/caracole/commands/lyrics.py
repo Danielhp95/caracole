@@ -222,7 +222,10 @@ def _lyrics(cfg: Config) -> None:
     overrides = _common.overrides_since(cfg, overrides, handed)
     handed = _common.handoffs()
     _megalobiz(cfg, overrides)
-    _azlyrics(cfg, _common.overrides_since(cfg, overrides, handed))
+    overrides = _common.overrides_since(cfg, overrides, handed)
+    handed = _common.handoffs()
+    _azlyrics(cfg, overrides)
+    _sheets_with_lyrics(cfg, _common.overrides_since(cfg, overrides, handed))
 
 
 def _megalobiz(cfg: Config, overrides: Overrides) -> None:
@@ -277,6 +280,23 @@ def _azlyrics(cfg: Config, overrides: Overrides) -> None:
         typer.echo("Songs with an error wait; the next run asks the sites again.")
     if s.budget_exhausted:
         _budget_spent(cfg, "azlyrics")
+
+
+def _sheets_with_lyrics(cfg: Config, overrides: Overrides) -> None:
+    """The auto sheets made before their song had lyrics take them now, and their pages and the songbooks that hold
+    them are made again, with no request: the nightly run's render step would do it. Nothing, not a word, for none."""
+    from caracole.autochords.sheet_lyrics import sheets_wanting_lyrics
+    from caracole.render import render_all
+    from caracole.songbook import render_songbooks
+
+    with exclusive(cfg, "lyrics"), closing(open_db(cfg)) as conn:
+        songs = sheets_wanting_lyrics(conn, overrides)
+        if not songs:
+            return
+        stats = render_all(conn, cfg, overrides, song_ids={song.id for song in songs})
+        render_songbooks(conn, cfg, overrides)
+        write_pages(conn, cfg, overrides, utcnow())
+    typer.echo(f"Auto sheets: {stats.given} given lyrics, {stats.rendered} rendered")
 
 
 def _lacuerda(cfg: Config) -> None:

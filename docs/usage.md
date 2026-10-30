@@ -1788,8 +1788,9 @@ and cache.
   file changes. It exits 1 when auto-chords can't work at all: the model files
   missing or unusable, or a sheet it can't write into the library. It also
   works out the chords of the audio the youtube step took, as of a purchase.
-  A song's sheet is made again when its audio changes, when its lyrics arrive after it, when timed lyrics
-  arrive after a sheet made over plain ones (so each chord can go over its word; timed lyrics that don't fit
+  A song's sheet is made again when its audio changes, when timed lyrics
+  arrive after a sheet made over plain ones or none (plain lyrics need no model: see
+  [Lyrics from LRCLIB, Megalobiz and AZLyrics](#lyrics-from-lrclib-megalobiz-and-azlyrics)) (so each chord can go over its word; timed lyrics that don't fit
   the audio make it again once, over the plain ones, and not every night), and once for a sheet
   an older caracole laid over timed lyrics in Chinese, Japanese or Korean (or with accents written apart from
   their letters), whose chords went to the left of where they belonged in its PDF and its viewer.
@@ -1893,6 +1894,11 @@ as LRCLIB's are matched, the closest length first, never one credited to no one,
 karaoke or instrumental track, a vocal version or a remix unless your title says so): two requests a
 song at most. Megalobiz's records are all timed by hand, so its lyrics replace plain ones, and a sheet
 auto-chords laid over plain lyrics is made again over the timed ones, once.
+
+A sheet auto-chords made before its song had lyrics takes them as soon as any site gives them, whichever: its
+chart stays, the lyrics go under it, and its page and PDF are made again, with no model and no audio. The nightly
+run does it in its render step, and `caracole lyrics` and a lookup at once, whatever else they did. Timed lyrics go on the same
+way, then the next auto-chords run puts each chord over its word.
 
 - A song is **missing** only once every site asked answered that it has none; a song LRCLIB missed
   stays missing when Megalobiz has none either, and Megalobiz is asked again after 30 days.

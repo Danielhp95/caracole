@@ -1407,3 +1407,30 @@ def test_a_site_with_no_budget_has_none_in_the_summary(conn, cfg):
     report = run_pipeline(cfg, conn=conn, services=Services(clients={"azlyrics": client}, notifier=Outbox().notifier()),
                           steps=[step("todo")], now=NOW)
     assert "AZLyrics 0." in report.summary() and "of 9" not in report.summary()
+
+
+def test_the_render_step_puts_lyrics_a_step_before_found_on_an_auto_sheet(conn, cfg, monkeypatch):
+    from conftest import add_song
+    from helpers.rendered import fake_chordpro
+
+    from caracole import render
+    from caracole.autochords import ChordSegment, build_sheet
+    from caracole.autochords.run import _keep
+    from caracole.library import song_dir
+    from caracole.lyrics import Lyrics
+    from caracole.pipeline import default_steps
+    from caracole.songs import update_song
+
+    render_all = render.render_all
+    monkeypatch.setattr(render, "render_all", lambda *a, **kw: render_all(*a, runner=fake_chordpro, **kw))
+    song = add_song(conn, "pomme", "mononoke")
+    _keep(conn, cfg, song, build_sheet([ChordSegment(0.0, 4.0, "C")], title="mononoke", artist="pomme"), "none", None,
+          "2026-10-30T13:42:00Z")
+    update_song(conn, song.id, lyrics_status="found", lyrics_json=Lyrics(
+        plain="Une ligne inventée", synced=None, instrumental=False, duration=None, lrclib_id=1).to_json())
+    steps = [s for s in default_steps() if s.name == "render"]
+    report = run_pipeline(cfg, conn=conn, services=Services(clients={}, notifier=Outbox().notifier()), steps=steps,
+                          now=NOW)
+    assert report.ok and "1 auto sheet given lyrics" in report.summary()
+    page = song_dir(cfg.library_dir, song) / "sheet (auto).html"
+    assert "Une ligne inventée" in page.read_text(encoding="utf-8")

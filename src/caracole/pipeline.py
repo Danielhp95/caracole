@@ -538,7 +538,7 @@ def _render(ctx: StepContext) -> StepResult:
     s = render_all(ctx.conn, ctx.cfg, ctx.overrides, now=ctx.now, between=lambda: hand_over(ctx.cfg, ctx.conn))
     ctx.read_overrides_again()  # and what such a lookup changed, for the songbooks
     tail = f"; {s.font_error}" if s.font_error else ""
-    result = StepResult(title="PDFs", done=_counted((s.rendered, "rendered")),
+    result = StepResult(title="PDFs", done=_counted((s.rendered, "rendered"), _n(s.given, "auto sheet", "given lyrics")),
                         status=f"{s.rendered} rendered, {s.failed} failed{tail}")
     if s.failed:
         them = "it" if s.failed == 1 else "them"
