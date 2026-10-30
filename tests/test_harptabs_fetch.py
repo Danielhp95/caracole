@@ -344,14 +344,16 @@ def test_at_most_a_handful_of_candidates_are_read_for_one_title(conn, tmp_path):
 
 
 def test_caracole_asks_with_its_own_user_agent(conn, tmp_path):
+    from caracole.config import DEFAULT_USER_AGENT  # the one place it is written; test_config.py pins it
+
     add_song(conn, "Ritchie Valens", "La Bamba")
     site = FakeHarpTabs()
-    client = site.client(tmp_path / "cache", user_agent="caracole/0.1 (personal tab library)")
+    client = site.client(tmp_path / "cache", user_agent=DEFAULT_USER_AGENT)
     try:
         harptabs_tabs(conn, client, tmp_path / "library", NOW)
     finally:
         client.close()
-    assert set(site.agents) == {"caracole/0.1 (personal tab library)"}
+    assert set(site.agents) == {DEFAULT_USER_AGENT}
 
 
 def test_the_sitemap_is_read_again_after_30_days_and_not_before(conn, tmp_path):

@@ -288,7 +288,7 @@ def test_at_most_a_handful_of_candidates_are_read_for_one_title(conn, tmp_path):
 
 
 def test_caracole_asks_with_its_own_user_agent(conn, tmp_path):
-    from caracole.config import DEFAULT_USER_AGENT
+    from caracole.config import DEFAULT_USER_AGENT  # the one place it is written; test_config.py pins it
 
     add_song(conn, "Hollow Knight", "Resting Grounds")
     site = FakeGameTabs()
@@ -297,7 +297,7 @@ def test_caracole_asks_with_its_own_user_agent(conn, tmp_path):
         gametabs_tabs(conn, client, tmp_path / "library", NOW)
     finally:
         client.close()
-    assert set(site.agents) == {"caracole/0.1 (personal tab library)"}
+    assert set(site.agents) == {DEFAULT_USER_AGENT}
 
 
 def test_the_sitemaps_are_read_again_after_30_days_and_not_before(conn, tmp_path):
