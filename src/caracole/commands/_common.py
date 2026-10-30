@@ -116,6 +116,28 @@ def open_db(cfg: Config) -> sqlite3.Connection:
     return conn
 
 
+def read_song_text(cfg: Config, text: str) -> tuple[str, str] | None:
+    """The artist and the title one text names, ``caracole add TEXT``'s or ``caracole get TEXT``'s: read as the pages
+    read a query (song_names.py ``read_names``), and said ("Read “…” as Artist - Title.") unless they are the text
+    as written; None for a text that doesn't say who its artist is. A database caracole can't open now knows no
+    artist, and the text is read all the same (``caracole add`` keeps its line without one)."""
+    from caracole.song_names import read_names
+
+    try:
+        conn: sqlite3.Connection | None = db.connect(cfg.db_path)
+    except (OSError, sqlite3.Error):
+        conn = None
+    try:
+        named = read_names(conn, text)
+    finally:
+        if conn is not None:
+            conn.close()
+    written = " ".join(text.split())
+    if named is not None and f"{named[0]} - {named[1]}" != written:
+        typer.echo(f"Read “{written}” as {named[0]} - {named[1]}.")
+    return named
+
+
 def load_ovr(cfg: Config) -> Overrides:
     try:
         return load_overrides(cfg.overrides_file)

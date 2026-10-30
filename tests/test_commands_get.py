@@ -192,6 +192,20 @@ def test_get_with_a_title_alone_offers_its_ug_songs_and_looks_nothing_up(config,
 
 
 
+@pytest.mark.slow
+def test_get_with_one_text_reads_its_names_as_the_pages_do(config, sites, conn):
+    # song_names.py: an en dash as wanted.txt reads one; a text that doesn't say who its artist is looks nothing up.
+    serve_creep(sites, conn)
+    result = get(config, "Radiohead – Creep")
+    assert result.exit_code == 0, result.output
+    assert "Read “Radiohead – Creep” as Radiohead - Creep." in result.output
+    assert find_song(conn, "radiohead/creep") is not None
+    asked = len(sites.requests)
+    unread = get(config, "silvana estrada que problema")
+    assert unread.exit_code == 2 and '"silvana estrada que problema" is one name' in unread.output
+    assert len(sites.requests) == asked
+
+
 def test_get_with_one_name_gives_no_line_to_run_for_a_weak_hit(config, sites, conn):
     from datetime import UTC, datetime
 

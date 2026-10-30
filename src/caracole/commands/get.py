@@ -3,6 +3,9 @@
     caracole get "Oasis - Wonderwall"
     caracole get --print Oasis Wonderwall      # and the sheet itself, the moment it is kept
 
+One text is read as the pages read a query (song_names.py, ``_common.read_song_text``); one that
+doesn't say who its artist is looks nothing up (commands/search.py ``offer_songs``).
+
 It says where the sheet is as soon as it is kept, then what each other stage
 did. ``--ug`` and ``--tab`` record the Ultimate Guitar song or tab you picked
 (``[match]``, ``[pin]``), ``--lacuerda`` the LaCuerda song or version
@@ -25,7 +28,7 @@ from typing import TYPE_CHECKING
 
 import typer
 
-from caracole.commands._common import fail, load_cfg
+from caracole.commands._common import fail, load_cfg, read_song_text
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -69,27 +72,27 @@ def register(app: typer.Typer) -> None:
                                             "--no-songbooks leaves them, for a job that makes them once."),
     ) -> None:
         """Look one song up now: its sheet first, in seconds, then its lyrics, PDF and the rest."""
-        if len(song) == 1 and " - " not in song[0] and any(c.isalnum() for c in song[0]):
-            from caracole.commands.search import offer_songs  # one name: no song, so nothing is looked up
-
-            offer_songs(load_cfg(ctx), " ".join(song[0].split()), "get")
-        artist, title = _artist_title(song)
         _check_pick(ug, tab, lacuerda, harptabs, gametabs)
         duration_ms = _duration(duration)
-        _get(load_cfg(ctx), artist, title, album, duration_ms, ug, tab, lacuerda, harptabs, gametabs, show=show,
+        cfg = load_cfg(ctx)
+        artist, title = _artist_title(cfg, song)
+        _get(cfg, artist, title, album, duration_ms, ug, tab, lacuerda, harptabs, gametabs, show=show,
              progress=progress, songbooks=songbooks)
 
 
-def _artist_title(words: list[str]) -> tuple[str, str]:
-    if len(words) == 1:
-        artist, sep, title = words[0].partition(" - ")
-    elif len(words) == 2:
-        (artist, title), sep = words, " - "
-    else:
-        fail(f"caracole get takes {_SONG_SHAPE}", 2)
-    if not sep or not artist.strip() or not title.strip():
+def _artist_title(cfg: Config, words: list[str]) -> tuple[str, str]:
+    """ARTIST TITLE as given; one text read as the pages read a query (``_common.read_song_text``), and one that
+    doesn't say who its artist is offers the songs of that name and looks nothing up (``offer_songs``)."""
+    if len(words) == 2 and all(w.strip() for w in words):
+        return words[0].strip(), words[1].strip()
+    if len(words) != 1 or not any(c.isalnum() for c in words[0]):
         fail(f"caracole get takes {_SONG_SHAPE}, not {' '.join(words)!r}", 2)
-    return artist.strip(), title.strip()
+    named = read_song_text(cfg, words[0])
+    if named is None:
+        from caracole.commands.search import offer_songs  # one name: no song, so nothing is looked up
+
+        offer_songs(cfg, " ".join(words[0].split()), "get")
+    return named
 
 
 def _check_pick(ug: str | None, tab: str | None, lacuerda: str | None = None, harptabs: str | None = None,

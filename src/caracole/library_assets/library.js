@@ -3611,10 +3611,10 @@
       });
     }
     // The request form, under the results: a line for the song at once, under the bar, which says how its
-    // request goes. It is filled in from what was searched: "Artist - Title"; else the artist and the title the
-    // search's answer reads in it (``names``: "Title by Artist", or the longest run of its first words that is a
-    // known artist's whole name, then the title: "Silvana Estrada Que problema"); else the artist alone when an
-    // artist leads, else the title, never the query cut at a space. Each field until you type into it yourself.
+    // request goes. It is filled in with the artist and the title the search's answer reads in what was searched
+    // (``names``: song_names.py's reading, the server's, with the YouTube video suggested for it; the page splits no
+    // text itself); else all of it the artist's name when an artist leads, else the title, never the query cut at a
+    // space. Each field until you type into it yourself.
     const requestForm = document.querySelector("form.request-form");
     const typedInto = new Set();
     if (requestForm) {
@@ -3624,10 +3624,8 @@
       }
       prefill = (lead, names) => {
         const q = normal(state.q);
-        const [first, ...rest] = q.split(" - ");
         const read = names && typeof names === "object" && names.artist && names.title ? names : null;
-        const values = rest.length ? { artist: first.trim(), title: rest.join(" - ").trim() }
-          : read ? { artist: String(read.artist), title: String(read.title) }
+        const values = read ? { artist: String(read.artist), title: String(read.title) }
           : lead === "artist" ? { artist: q, title: "" } : { artist: "", title: q };
         for (const name of ["artist", "title"]) {
           const field = requestForm.elements.namedItem(name);

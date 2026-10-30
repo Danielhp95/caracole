@@ -369,7 +369,11 @@ def test_a_known_video_comes_with_its_guessed_name_and_thumbnail(able, queue, co
         "title": "Somos vikingos veganos - Hyperfanes", "channel": "kintanedu", "duration": 222.0,
         "thumb": f"/youtube/thumb/{VIKINGOS}.jpg"}
     assert said["guess"] == {"artist": "Somos vikingos veganos", "title": "Hyperfanes"}
-    add_song(conn, "Hyperfanes", "Otra")  # a band the library knows: the title is read the other way round
+    # One song of a one-word band, with no sheet, is no proof of the band (song_names.py: a mistaken line would do);
+    # two are, and the title is read the other way round.
+    add_song(conn, "Hyperfanes", "Otra")
+    assert video_answer(app_for(able, queue))[1]["guess"] == {"artist": "Somos vikingos veganos", "title": "Hyperfanes"}
+    add_song(conn, "Hyperfanes", "Una más")
     assert video_answer(app_for(able, queue))[1]["guess"] == {"artist": "Hyperfanes", "title": "Somos vikingos veganos"}
 
 

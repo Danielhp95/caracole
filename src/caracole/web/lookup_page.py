@@ -313,6 +313,7 @@ function show(data, text) {
   root.classList.toggle("missed", !n);  // one Look up: the form by name waits for the row's
   shownFor = text;
   shownData = data;
+  fillByName(text);
   if (lcChanged === text) lcChanged = null;
   if (enterFor === text) { enterFor = null; pickBest(); }  // before LaCuerda's search: a song it looks up goes first
   // LaCuerda's own search, under the results: sent by itself once the query settles, or by an Enter that came first;
@@ -321,16 +322,34 @@ function show(data, text) {
   if (lcLine) results.append(lcLine);
 }
 
-// "Look “…” up by name": the form under the results, filled in from the query ("Artist - Title"; else the artist and
-// the title the search's answer reads in it, ``names``: a known artist's whole name first, or "Title by Artist"; else
-// the title, never the query cut at a space), open and in view, the focus on its first field still empty.
+// The form by name under the results, filled in as each answer is drawn, as the library page's request form is: with
+// the artist and the title the search's answer reads in the query (``names``: song_names.py's reading, the server's;
+// the page splits no text itself); else all of it the artist's name when an artist leads (or one LaCuerda alone
+// knows), else the title, never the query cut at a space. A field you typed into keeps what you typed, until a lookup
+// is sent.
+const typedByName = new Set();
+for (const name of ["artist", "title"]) {
+  document.getElementById("by-name")[name].addEventListener("input", () => typedByName.add(name));
+}
+function fillByName(text) {
+  const f = document.getElementById("by-name");
+  const data = shownFor === text && shownData ? shownData : {};
+  const objects = (value) => (Array.isArray(value) ? value : []).filter(x => x && typeof x === "object");
+  const names = data.names && typeof data.names === "object" && data.names.artist && data.names.title
+    ? data.names : null;
+  const artistLeads = data.lead === "artist" || (objects(data.lacuerda_artists).length > 0 &&
+                                                 !objects(data.lacuerda).length);
+  const values = names ? {artist: String(names.artist), title: String(names.title)}
+    : artistLeads ? {artist: text, title: ""} : {artist: "", title: text};
+  for (const name of ["artist", "title"]) {
+    if (!typedByName.has(name)) f[name].value = values[name];
+  }
+}
+
+// "Look “…” up by name": that form, filled in, open and in view, the focus on its first field still empty.
 function byNameFrom(text) {
   const f = document.getElementById("by-name");
-  const [first, ...rest] = text.split(" - ");
-  const names = shownFor === text && shownData && shownData.names && typeof shownData.names === "object"
-    && shownData.names.artist && shownData.names.title ? shownData.names : null;
-  f.artist.value = rest.length ? first.trim() : names ? String(names.artist) : "";
-  f.title.value = rest.length ? rest.join(" - ").trim() : names ? String(names.title) : text;
+  fillByName(text);
   byName.open = true;
   byName.scrollIntoView({block: "center"});
   (f.artist.value ? f.title : f.artist).focus({preventScroll: true});
@@ -757,7 +776,9 @@ document.getElementById("by-name").addEventListener("submit", e => {
   e.preventDefault();
   const f = e.target;
   const artist = f.artist.value.trim(), title = f.title.value.trim();
-  if (artist && title) lookUp({artist, title}, artist + " - " + title);
+  if (!artist || !title) return;
+  typedByName.clear();
+  lookUp({artist, title}, artist + " - " + title);
 });
 
 // Where a search found nothing, the form by name shows only once its row's Look up opens it: folded again, it goes, and
