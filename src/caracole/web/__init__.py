@@ -42,7 +42,9 @@ A small server from the standard library (``http.server``), in these parts:
   drawn and played in the browser: guitar_page.py, with alphaTab's bundle,
   alphatab.py), offline_routes.py (``/api/offline``, what caracole's Android
   app copies of the library to read it offline: every file the library page
-  caracole wrote links to, as the server sends each) and youtube_routes.py (a
+  caracole wrote links to, as the server sends each), peer_routes.py
+  (``/api/peer/state``, this library's units for another caracole to compare,
+  peer_sync.py) and youtube_routes.py (a
   song's auto sheet from a YouTube video pasted on the library page: ``caracole
   youtube --sheet`` queued).
   pages.py: the pages it writes itself (a song's picker, Remove's question, errors).
