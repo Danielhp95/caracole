@@ -1255,3 +1255,35 @@ def _write_songs(tmp: Path, texts: Sequence[str]) -> list[Path]:
         path.write_text(text, encoding="utf-8")
         files.append(path)
     return files
+
+
+def put_songbook(path: Path, name: str, songs: Sequence[SongbookSong] | None) -> None:
+    """Make the songbook ``name`` hold ``songs``, in this order, each with its setting, as a sync between two
+    caracoles takes it from the other (peer_sync.py): in its place in the file when it is there (found by its name in
+    any case, and written under ``name``), else after the others; with None take it out. The same songs again
+    write nothing."""
+    clean = check_name(name)
+
+    def change(doc, books: list[Songbook]) -> None:
+        header = next((k for k in doc if name_key(k) == name_key(clean)), None)
+        if songs is None:
+            if header is not None:
+                del doc[header]
+            return
+        book = find_songbook(books, header) if header is not None else None
+        if book is not None and book.name == clean and tuple(book.songs) == tuple(songs):
+            return
+        check_free(books, clean, but=book)
+        array = tomlkit.array()
+        array.extend(_item(s) for s in songs)
+        array.multiline(True)
+        if header is None:
+            table = tomlkit.table()
+            table["songs"] = array
+            doc[clean] = table
+            return
+        doc[header]["songs"] = array
+        if header != clean:
+            doc._replace(header, clean, doc[header])
+
+    _edit(path, change)

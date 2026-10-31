@@ -46,7 +46,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 
 _SCHEMA_V1 = """
 CREATE TABLE IF NOT EXISTS songs (
@@ -527,9 +527,15 @@ CREATE TRIGGER ug_keys_words AFTER INSERT ON ug_keys BEGIN
 END;
 """
 
+# Each database's id among the caracoles it syncs with (peer_sync.py): made once, here, so that caracole serve, which
+# writes no database, answers with one from the start. A database copied whole shares it: ``caracole peer new-id``.
+_SCHEMA_V15 = """
+INSERT OR IGNORE INTO kv (key, value) VALUES ('sync:id', lower(hex(randomblob(8))));
+"""
+
 _MIGRATIONS = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5, 6: _SCHEMA_V6,
                7: _SCHEMA_V7, 8: _SCHEMA_V8, 9: _SCHEMA_V9, 10: _SCHEMA_V10, 11: _SCHEMA_V11, 12: _SCHEMA_V12,
-               13: _SCHEMA_V13, 14: _SCHEMA_V14}
+               13: _SCHEMA_V13, 14: _SCHEMA_V14, 15: _SCHEMA_V15}
 
 
 class DatabaseTooNew(sqlite3.DatabaseError):

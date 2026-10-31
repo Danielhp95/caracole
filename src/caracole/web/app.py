@@ -13,7 +13,7 @@ sheet's PDF in the version its viewer was left in, downloaded at once, and Make 
 a harmonica tab is read: its readings, one pinned, back to caracole's guess), guitar_routes.py
 (a song's Guitar Pro file in the browser, and alphaTab's bundle), offline_routes.py (what caracole's Android
 app copies of the library, and the library page it starts from), peer_routes.py (this library's units, for another
-caracole to compare: peer_sync.py) and youtube_routes.py (a song's auto sheet from a
+caracole to compare and take, and its units taken: peer_sync.py) and youtube_routes.py (a song's auto sheet from a
 YouTube video pasted on the library page). A new route, or a new module of them, changes
 nothing here. This module answers the rest:
 

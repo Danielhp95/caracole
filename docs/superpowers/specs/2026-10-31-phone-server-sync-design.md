@@ -94,15 +94,24 @@ finished by the next one.
 Over HTTP, between two `caracole serve`s on a network the owner trusts (the LAN, a tailnet), as the Android app talks
 to it already:
 
-- `GET /api/peer/state`: this side's id, its caracole version, its library's name, and each unit's digest and label.
-  A read, as `/api/offline` is: no lock, no site asked.
-- `GET /api/peer/unit?id=…` and its files: what a pull reads (phase 2).
-- `GET /api/peer/index`: the site indexes as `caracole index export` writes them (phase 2).
-- `POST /peer/pull`: "take these units from that peer", with the form token, as every write is (phase 2).
+- `GET /api/peer/state?peer=<id>`: this side's id, its caracole version, its library's name, each unit's digest and
+  label, what it last agreed on with the asking side, and its form token. A read, as `/api/offline` is.
+- `GET /api/peer/unit?id=…` and `GET /api/peer/file?song=…&name=…`: a unit whole, and a song's kept file while it is
+  what caracole recorded: what a pull reads.
+- `POST /peer/pull`: "take these units from that caracole", with the form token, as every write is: `caracole peer
+  pull` queued.
 
-`caracole peer diff ADDRESS` (phase 1) shows the comparison with no change; `caracole peer sync ADDRESS` (phase 2) shows it,
-asks, and applies. caracole serve gets a Sync page in its Requests tab's spirit (phase 3): the peer's address, the
-list of differences, a side chosen for each, and Sync.
+**The base, kept by both.** Each side records what the two agree on at the end of every pull it makes, each unit's
+digest and when; the other's record comes with its state, and the later agreement counts. So a unit the phone pushed to
+the computer is known as synced on both, though only the computer pulled.
+
+**The form token** comes with the state, for the pull a sync posts: no wider than today, since any client that
+reaches caracole serve reads it from a page, and another site's page can read neither.
+
+`caracole peer diff ADDRESS` shows the comparison with no change; `caracole peer sync ADDRESS` shows it, has the
+owner settle each conflict, takes here what comes from there, and, with `--here`, asks there to take what goes
+there. caracole serve gets a Sync page in its Requests tab's spirit (phase 3): the peer's address, the list of
+differences, a side chosen for each, and Sync.
 
 ## Politeness
 
@@ -113,12 +122,22 @@ cooldowns merge, the later end kept (phase 2).
 
 ## Phases
 
-1. **The comparison** (this commit): peer_sync.py's units, digests and three-way diff; `GET /api/peer/state`;
-   `caracole peer diff ADDRESS`. Nothing written but the server's id.
-2. **Applying**: the unit reads, pulls, the base kept, `caracole peer sync ADDRESS`, index merge both ways, cooldowns.
+1. **The comparison**, done: peer_sync.py's units, digests and three-way diff; `GET /api/peer/state`;
+   `caracole peer diff ADDRESS`.
+2. **Applying**, done: schema 15's id; the unit reads; `caracole peer pull` and `sync`; the base kept by both;
+   overrides.py's and songbook.py's writers of a unit whole. Still to come here: the site indexes merged both ways
+   over HTTP (today `caracole index export` and `merge`, by hand), and cooldowns moved across.
 3. **The Sync page** in caracole serve, usable from the phone's browser and the app.
-4. **The phone**: nix-on-droid and Termux instructions and checks (android/README.md), the app opening the phone's
-   own server when it answers.
+4. **The phone.** The research (2026-10-31, from package recipes, PyPI and the pinned nixpkgs, nothing run on a
+   phone) found Termux the route: from F-Droid or GitHub, its Python 3.14, Perl, SQLite with FTS5, clang and cmake;
+   caracole by pip with deploy.md's constraints, rapidfuzz, selectolax and opencc built there from source (no
+   Android wheels); ChordPro by cpanm (Object::Pad and its XS parsers, the rest pure Perl); the site indexes by
+   `caracole index export` and `merge`, never built on the phone; `caracole serve --address 127.0.0.1` kept alive by
+   termux-services, Termux:Boot and a wake lock, with Android 12+'s phantom process killer turned off. nix-on-droid
+   is a fallback (old, slow under proot, and the flake builds for x86_64-linux alone today); Python embedded in the
+   app (Chaquopy) can't run caracole's jobs, which start `python -m caracole` as child processes. The app then opens
+   the phone's own server when it answers (`shouldInterceptRequest` passing `127.0.0.1:8737` through, its links
+   followed, its downloads), else its offline copy.
 
 ## Not done, and why
 

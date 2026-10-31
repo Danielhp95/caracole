@@ -4749,10 +4749,13 @@ for it, which the Nix packages carry (`CARACOLE_ALPHATAB_DIR`; without Nix, see
 says Guitar Pro files are downloads until it has alphaTab, and `/guitar` says
 why it can't show one.
 
-**Another caracole's comparison.** `GET /api/peer/state` answers what this
-library holds, unit by unit, for another caracole's `caracole peer diff` (see
-[Two caracoles](#two-caracoles-the-phones-and-the-computers)): a read, with no
-lock and no request to a site, that another site's page can't make.
+**Another caracole's sync.** `GET /api/peer/state` answers what this library
+holds, unit by unit, for another caracole's `caracole peer` (see
+[Two caracoles](#two-caracoles-the-phones-and-the-computers)); `GET
+/api/peer/unit` a unit whole and `GET /api/peer/file` a song's kept file, while
+it is as kept: reads, with no lock and no request to a site, that another
+site's page can't make. `POST /peer/pull` queues `caracole peer pull` of the
+units another caracole's sync asks this one to take from it.
 
 **The Android app's copy.** caracole's Android app copies the library from the
 server to read it offline: `GET /api/offline` lists what to copy, as JSON
@@ -5746,12 +5749,19 @@ your home database's indexes into a service's, see
 
 ## Two caracoles: the phone's and the computer's
 
-    caracole peer diff ADDRESS [--json]   # what this library and the one at ADDRESS hold differently
+    caracole peer diff ADDRESS [--json]                        # what differs, and which side each would come from
+    caracole peer sync ADDRESS [--here ADDRESS] [--prefer here|there] [--yes]
+    caracole peer pull ADDRESS --unit ID [--unit ID]...        # take these from there
+    caracole peer new-id                                       # for a database copied from another caracole's
 
-You can keep a caracole on the computer and another on the phone, each with its own library, and use either alone.
-**`caracole peer diff`** asks the `caracole serve` at ADDRESS (`http://192.168.1.20:8737`; without a scheme,
-`http://` is assumed) what its library holds, in one request, and lists every difference with the side it would
-come from:
+You can keep a caracole on the computer and another on the phone, each with its own library, and use either alone:
+search, add songs and change their chords on the phone with the computer off, then bring the two together again.
+Each command asks the `caracole serve` at ADDRESS (`http://192.168.1.20:8737`; without a scheme, `http://` is
+assumed), which must be reachable from here (`caracole serve --address 0.0.0.0`, see
+[caracole serve](#caracole-serve)).
+
+**`caracole peer diff`** asks what the other library holds, in one request, and lists every difference with the side
+it would come from:
 
     Here: 41 units. There, Tabs at http://192.168.1.20:8737 (caracole 0.1.0): 39 units.
     The two never synced: a unit on one side alone is that side's, and one both hold, differently, a conflict.
@@ -5761,6 +5771,8 @@ come from:
         CONFLICT      Oasis - Wonderwall  (on both sides, different, and never synced)
         keep here's   Radiohead - Creep  (only here)
 
+It changes nothing on either side, takes no lock and asks no site. `--json` prints the comparison as data.
+
 A library is compared in **units**, each one whole:
 
 - **a song**: its wanted.txt line, its match and lyrics, the versions caracole keeps and their files (the sheet's
@@ -5769,19 +5781,37 @@ A library is compared in **units**, each one whole:
 - **a removal** (`caracole remove`), **a songbook** (its songs in order, with their settings), and overrides.toml's
   `[alias]`, `[artist_url]` and `[block]` entries.
 
-What caracole makes from a song (PDFs, viewers, the pages) isn't compared: it would be made again. Nor are
-cooldowns, the HTTP cache or the site indexes (`caracole index export` and `merge` move those).
+What caracole makes from a song (PDFs, viewers, the pages) isn't compared: the side that takes the song makes it
+again. Nor are cooldowns, the HTTP cache or the site indexes (`caracole index export` and `merge` move those).
 
-Once two caracoles have synced, each remembers how every unit was then, so a difference says where it changed: a unit
+Once two caracoles have synced, each remembers what the two agreed on, so a difference says where it changed: a unit
 changed on one side alone comes from that side ("changed there since the last sync"), and a unit changed on both, to
 different things, is a conflict for you to settle. Before then, a unit on one side alone is that side's, and one on
-both that differs is a conflict.
+both that differs is a conflict. A song only one side has since the last sync is that side's to add or, if the other
+removed it, to remove.
 
-It changes nothing on either side, takes no lock and asks no site. `--json` prints the comparison as data. The other
-side must be reachable from this one (`caracole serve --address 0.0.0.0`, see [caracole serve](#caracole-serve)).
-Two caracoles whose databases are copies of each other are the same caracole, and it says so. Taking each side's
-changes, and a Sync page in caracole serve, come next
-([the design](superpowers/specs/2026-10-31-phone-server-sync-design.md)).
+**`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
+`--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what
+comes from there. With **`--here`**, this side's own `caracole serve` address as the other reaches it, it then asks
+the other to take what goes there: a request queued in its Requests tab ("Sync with …"). Without it, it prints the
+`caracole peer pull` line to run there.
+
+**`caracole peer pull`** takes the units named (as `diff --json` names them: `song/<key>`, `songbook/<name>`…)
+from there. It waits for the nightly run as a lookup does, backs the database up first (`…-before-sync.sqlite`
+in `state_dir/backups/`), and for each unit asks there for it whole; a unit no longer as it was compared, or a file
+that changed there since caracole kept it, is left as it is here, and it says why (exit 1). A song taken gets its
+wanted.txt line, its versions and kept files (each checked by its SHA-256), its lyrics and its overrides.toml entries
+(written as caracole writes them, your comments kept), then is rendered again; a song there removed is removed here
+as `caracole remove` would: a unit there hasn't got is taken as gone, so name only the units
+`diff` lists. Then the songbooks are made and the pages written, and the two keep what they now agree
+on.
+
+Two caracoles whose databases are copies of each other are the same caracole, and they say so: `caracole peer
+new-id` gives one of them an id of its own (and forgets what it agreed on with every other).
+
+The other caracole's `GET /api/peer/state` gives its form token with its units, for the request a sync posts there:
+anyone who can reach caracole serve can read it from a page already, and another site's page can read neither. A
+Sync page in caracole serve comes next ([the design](superpowers/specs/2026-10-31-phone-server-sync-design.md)).
 
 ## Running it on a server
 

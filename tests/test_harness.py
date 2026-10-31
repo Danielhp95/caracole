@@ -49,7 +49,7 @@ def test_what_a_test_writes_stays_in_its_own_copy(conn, tmp_path):
     other.write_bytes(conftest.migrated_database())
     c = sqlite3.connect(other)
     try:
-        assert c.execute("SELECT count(*) FROM kv").fetchone()[0] == 0
+        assert c.execute("SELECT count(*) FROM kv WHERE key != 'sync:id'").fetchone()[0] == 0
     finally:
         c.close()
 

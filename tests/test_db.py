@@ -336,8 +336,8 @@ def test_a_version_6_database_gains_the_artist_pages_tabs_and_keeps_every_row(tm
 
     c = db.connect(path)
     assert c.execute("PRAGMA user_version").fetchone()[0] == NOW
-    for table, rows in tables.items():
-        assert [tuple(r) for r in c.execute(f"SELECT * FROM {table} ORDER BY 1")] == rows, table
+    for table, rows in tables.items():  # every row kept, and the id schema 15 gives the database (peer_sync.py)
+        assert [tuple(r) for r in c.execute(f"SELECT * FROM {table} ORDER BY 1") if r[0] != "sync:id"] == rows, table
     assert c.execute("SELECT COUNT(*) FROM ug_artist_tabs").fetchone()[0] == 0
     c.close()
     cols, _ = columns(path, "ug_artist_tabs")
@@ -598,7 +598,7 @@ def test_a_version_8_database_loses_what_each_line_said_beside_its_song(tmp_path
     old.close()
 
     c = db.connect(path)
-    assert [r[0] for r in c.execute("SELECT key FROM kv ORDER BY key")] == [
+    assert [r[0] for r in c.execute("SELECT key FROM kv WHERE key != 'sync:id' ORDER BY key")] == [
         "songs:key_version", "wanted:first_seen:oasis/wonderwall"]
     c.close()
 
@@ -628,7 +628,7 @@ def test_a_version_8_database_loses_what_spotify_left(tmp_path):
     assert [tuple(r) for r in c.execute("SELECT id, source_ids FROM songs ORDER BY id")] == [
         (1, '{"wanted":["oasis/wonderwall"]}'), (2, "{}"), (3, '{"wanted": ["oasis/whatever"]}')]
     assert c.execute("SELECT source_ids FROM removed").fetchone()[0] == "{}"
-    assert [r[0] for r in c.execute("SELECT key FROM kv ORDER BY key")] == ["source:wanted"]
+    assert [r[0] for r in c.execute("SELECT key FROM kv WHERE key != 'sync:id' ORDER BY key")] == ["source:wanted"]
     c.close()
 
 
@@ -766,3 +766,19 @@ def test_a_version_13_database_stores_a_tab_renamed_to_a_new_key_of_words_it_kno
     assert key_words(c) == ["blur", "hello", "moon", "world"]
     c.close()
     assert columns(path.with_name("caracole.sqlite.v13.bak"), "ug_index")[1] == 13
+
+
+def test_a_database_gets_an_id_of_its_own_once_and_keeps_it(tmp_path):
+    # Schema 15: each database's id among the caracoles it syncs with (peer_sync.py), made once.
+    one, two = db.connect(tmp_path / "a" / "caracole.sqlite"), db.connect(tmp_path / "b" / "caracole.sqlite")
+    try:
+        made = db.kv_get(one, "sync:id")
+        assert made and len(made) == 16 and made != db.kv_get(two, "sync:id")
+    finally:
+        one.close()
+        two.close()
+    again = db.connect(tmp_path / "a" / "caracole.sqlite")
+    try:
+        assert db.kv_get(again, "sync:id") == made
+    finally:
+        again.close()

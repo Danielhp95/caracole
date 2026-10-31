@@ -980,3 +980,150 @@ def add_ignore(path: Path, display: str) -> None:
 
 def add_block(path: Path, tab_id: int) -> None:
     _edit(path, lambda doc: _append_unique(doc, "block", "tab_ids", int(tab_id), lambda a, b: int(a) == b))
+
+
+# --- a unit whole, as a sync between two caracoles takes it (peer_sync.py) ---------------------------------------
+
+# The tables an entry of which is about one song, keyed by its "Artist - Title"; ``[ignore] songs`` is the other.
+SONG_TABLES = ("match", "pin", "transpose", "reject", "youtube", "lacuerda", "harptabs", "gametabs", "azlyrics",
+               "version", "harmonica")
+
+
+def song_entries(overrides: Overrides, key: str) -> dict[str, Any]:
+    """Every entry of ``overrides`` about the song of identity ``key``, by table (``SONG_TABLES``, and ``ignore``:
+    True), as JSON: only the tables that have one, each value as ``put_song_entries`` writes it back."""
+    found: dict[str, Any] = {}
+    for table in SONG_TABLES:
+        entries: Mapping[str, Any] = getattr(overrides, table)
+        if key not in entries:
+            continue
+        value = entries[key]
+        if table == "match":
+            value = f"{value[0]}/{value[1]}"
+        elif table == "pin":
+            value = list(overrides.pin_urls.get(key, ()))
+        elif table == "reject":
+            value = sorted(f"{a}/{s}" for a, s in value)
+        elif table == "youtube":
+            value = NO_VIDEO if value is None else watch_url(value)
+        elif table in ("lacuerda", "harptabs", "gametabs"):
+            value = value.url
+        elif table == "harmonica":
+            value = {tab: dict(spec) if isinstance(spec, Mapping) else spec for tab, spec in value.items()}
+        found[table] = value
+    if key in overrides.ignore:
+        found["ignore"] = True
+    return found
+
+
+def put_song_entries(path: Path, display: str, entries: Mapping[str, Any]) -> None:
+    """Make the song's entries in every table about it (``song_entries``' shape) what ``entries`` says: each table
+    it names gets that entry, written under ``display``, in place of any the song had (written another way too),
+    and each it leaves out loses the song's. A table already as given is left alone, so the same entries again
+    write nothing. Entries the reader would refuse raise OverridesError, and nothing is written."""
+    wanted = override_key(display)
+    unknown = sorted(set(entries) - set(SONG_TABLES) - {"ignore"})
+    if unknown:
+        raise OverridesError(f"{display!r}: unknown table(s) {', '.join(unknown)}")
+    old = read_text(path, OverridesError)
+    current = song_entries(load_overrides(path), wanted) if old is not None else {}
+
+    def inline(value: Mapping[str, Any]) -> Any:
+        made = tomlkit.inline_table()
+        for k, v in value.items():
+            made[k] = inline(v) if isinstance(v, Mapping) else v
+        return made
+
+    def change(doc) -> None:
+        for table in SONG_TABLES:
+            if current.get(table) == entries.get(table):
+                continue
+            if table in doc:
+                t = doc[table]
+                for k in [k for k in t if _names_song(k, wanted)]:
+                    del t[k]
+            if table in entries:
+                value = entries[table]
+                _table_of(doc, table)[display] = inline(value) if isinstance(value, Mapping) else value
+        if bool(current.get("ignore")) != bool(entries.get("ignore")):
+            if entries.get("ignore"):
+                _append_unique(doc, "ignore", "songs", display, lambda s, _: _names_song(s, wanted))
+            elif "ignore" in doc and "songs" in doc["ignore"]:
+                songs = doc["ignore"]["songs"]
+                if isinstance(songs, str):
+                    del doc["ignore"]["songs"]
+                else:
+                    for i in reversed(range(len(songs))):
+                        if _names_song(songs[i], wanted):
+                            del songs[i]
+        try:  # as the reader will read it, or nothing written
+            written = song_entries(_parse(tomllib.loads(tomlkit.dumps(doc))), wanted)
+        except tomllib.TOMLDecodeError as e:
+            raise OverridesError(f"{display!r}: {e}") from e
+        if written != {k: v for k, v in entries.items() if k != "ignore" or v}:
+            raise OverridesError(f"{display!r}: its entries don't read back as given")
+
+    _edit(path, change)
+
+
+def put_alias(path: Path, artist: str, slugs: Sequence[str] | None) -> None:
+    """Make the artist's ``[alias]`` the UG artists ``slugs``, in place of what it was (written another way too), or
+    with None take it out."""
+    wanted = slug_key(artist)
+
+    def change(doc) -> None:
+        if slugs is None and "alias" not in doc:
+            return
+        t = _table_of(doc, "alias")
+        keys = [k for k in t if slug_key(k) == wanted]
+        if slugs is None:
+            for k in keys:
+                del t[k]
+            return
+        if keys and [ug_slug_key(s) for s in _strings(t[keys[-1]], "[alias]")] == [ug_slug_key(s) for s in slugs]:
+            return
+        for k in keys:
+            del t[k]
+        t[artist] = list(slugs)
+
+    _edit(path, change)
+
+
+def put_artist_url(path: Path, artist: str, name: str, page: str | None) -> None:
+    """Make the ``[artist_url]`` entry of the artist of key ``artist`` the UG page ``page``, written under ``name``,
+    or with None take it out."""
+    wanted = slug_key(artist)
+    value = None if page is None else _artist_url_value(page)
+    if page is not None and value is None:
+        raise OverridesError(f"[artist_url] {name!r}: not a UG artist page or tab page URL: {page!r}")
+
+    def change(doc) -> None:
+        if value is None and "artist_url" not in doc:
+            return
+        t = _table_of(doc, "artist_url")
+        keys = [k for k in t if slug_key(k) == wanted]
+        if value is not None and keys and _artist_url_value(t[keys[-1]]) == value:
+            return
+        for k in keys:
+            del t[k]
+        if value is not None:
+            t[name] = value
+
+    _edit(path, change)
+
+
+def put_block(path: Path, tab_id: int, blocked: bool) -> None:
+    """Block the tab ``tab_id`` (``[block] tab_ids``), or with False let it be used again."""
+    if blocked:
+        add_block(path, tab_id)
+        return
+
+    def change(doc) -> None:
+        if "block" not in doc or "tab_ids" not in doc["block"]:
+            return
+        ids = doc["block"]["tab_ids"]
+        for i in reversed(range(len(ids))):
+            if int(ids[i]) == int(tab_id):
+                del ids[i]
+
+    _edit(path, change)

@@ -114,19 +114,57 @@ def test_the_differences_come_songs_first_by_their_label():
     assert [d.id for d in sync.compare(mine, {}, None)] == ["song/a", "song/b", "songbook/x"]
 
 
-def test_the_id_is_made_once_and_only_when_asked(conn):
-    assert sync.own_id(conn) is None
-    made = sync.make_id(conn)
-    assert sync.own_id(conn) == made == sync.make_id(conn) == kv_get(conn, sync.ID_KEY)
-    assert sync.base_of(conn, "peer") is None
-    kv_set_json(conn, sync.BASE_KEY + "peer", {"song/a": "1"})
-    assert sync.base_of(conn, "peer") == {"song/a": "1"}
+def test_every_database_has_an_id_and_a_copy_can_be_given_another(conn):
+    made = sync.own_id(conn)
+    assert made and sync.make_id(conn) == made == kv_get(conn, sync.ID_KEY)  # schema 15 made it
+    kv_set_json(conn, sync.BASE_KEY + "peer", {"song/a": ["1", NOW]})
+    assert sync.base_of(conn, "peer") == {"song/a": ("1", NOW)}
+    other = sync.new_id(conn)
+    assert other != made and sync.own_id(conn) == other and sync.base_of(conn, "peer") is None
+
+
+def test_the_later_agreement_of_the_two_sides_is_the_base():
+    mine = {"song/a": ("1", "2026-10-30T00:00:00Z"), "song/b": ("1", "2026-10-31T00:00:00Z")}
+    theirs = {"song/a": ("2", "2026-10-31T00:00:00Z"), "song/b": ("3", "2026-10-29T00:00:00Z"),
+              "song/c": (None, "2026-10-29T00:00:00Z")}
+    assert sync.merged_base(mine, theirs) == {"song/a": "2", "song/b": "1", "song/c": None}
+    assert sync.merged_base(None, None) is None and sync.merged_base(None, {}) == {}
+
+
+def test_a_unit_one_side_pushed_to_the_other_is_synced_whichever_side_pulled():
+    # Here changed a song and there took it: there's agreement is the later. Then there changes it again.
+    base = sync.merged_base({"song/a": ("old", "2026-10-01T00:00:00Z")}, {"song/a": ("new", "2026-10-02T00:00:00Z")})
+    found = sync.compare({"song/a": u("song/a", "new")}, {"song/a": u("song/a", "newer")}, base)
+    assert by_id(found) == {"song/a": sync.THEIRS}
+
+
+def test_an_agreement_keeps_what_the_two_hold_the_same_and_what_both_lack(conn):
+    kv_set_json(conn, sync.BASE_KEY + "p", {"song/gone": ["x", "2026-10-01T00:00:00Z"],
+                                            "song/differs": ["y", "2026-10-01T00:00:00Z"]})
+    mine = {"song/same": u("song/same", "1"), "song/differs": u("song/differs", "2")}
+    theirs = {"song/same": u("song/same", "1"), "song/differs": u("song/differs", "3")}
+    assert sync.record_agreement(conn, "p", mine, theirs, NOW) == 1
+    assert sync.base_of(conn, "p") == {"song/same": ("1", NOW), "song/gone": (None, NOW),
+                                       "song/differs": ("y", "2026-10-01T00:00:00Z")}
+
+
+def test_a_conflict_is_settled_as_chosen_else_as_preferred_else_left():
+    found = [sync.Difference("song/a", "A", None, None, sync.MINE, ""),
+             sync.Difference("song/b", "B", None, None, sync.THEIRS, ""),
+             sync.Difference("song/c", "C", None, None, sync.CONFLICT, ""),
+             sync.Difference("song/d", "D", None, None, sync.CONFLICT, "")]
+    here, there = sync.decide(found)
+    assert [d.id for d in here] == ["song/b"] and [d.id for d in there] == ["song/a"]
+    here, there = sync.decide(found, sync.THEIRS, lambda d: sync.MINE if d.id == "song/c" else None)
+    assert [d.id for d in here] == ["song/b", "song/d"] and [d.id for d in there] == ["song/a", "song/c"]
 
 
 def test_the_state_document_reads_back_as_it_was_written():
     found = {"song/a": sync.Unit("song/a", "A - B", "d1")}
-    doc = sync.state_document(None, "0.1.0", "Tabs", found)
-    assert sync.read_state_document(doc) == (None, "0.1.0", "Tabs", found)
+    doc = sync.state_document(None, "0.1.0", "Tabs", found, {"song/a": ("d1", NOW)})
+    state = sync.read_state_document(doc)
+    assert (state.server, state.version, state.name, state.units, state.base) == (
+        None, "0.1.0", "Tabs", found, {"song/a": ("d1", NOW)})
     for broken in ({}, {"format": 2, "units": {}}, {"format": 1, "server": "", "units": {}},
                    {"format": 1, "units": {"no-slash": {"label": "x", "digest": "y"}}},
                    {"format": 1, "units": {"song/a": {"label": "x"}}}):
@@ -149,6 +187,11 @@ def test_an_address_that_isnt_a_caracole_serves_is_refused(typed):
         sync.peer_address(typed)
 
 
+def read(address, transport):
+    with sync.Peer(address, transport=transport) as peer:
+        return peer.state("me")
+
+
 def test_the_peer_is_asked_once_and_what_it_answers_otherwise_is_said():
     asked = []
 
@@ -159,16 +202,16 @@ def test_the_peer_is_asked_once_and_what_it_answers_otherwise_is_said():
         return httpx.MockTransport(handler)
 
     doc = sync.state_document("abc", "0.1.0", "Phone", {"song/a": sync.Unit("song/a", "A - B", "d")})
-    assert sync.read_peer("http://phone:8737", transport=answer(200, {"json": doc}))[0] == "abc"
-    assert asked == ["http://phone:8737/api/peer/state"]
+    assert read("http://phone:8737", answer(200, {"json": doc})).server == "abc"
+    assert asked == ["http://phone:8737/api/peer/state?peer=me"]
     with pytest.raises(sync.PeerError, match="not as a caracole that syncs"):
-        sync.read_peer("http://phone:8737", transport=answer(404, {"text": "nope"}))
+        read("http://phone:8737", answer(404, {"text": "nope"}))
     with pytest.raises(sync.PeerError, match="answered 503: overrides.toml can't be read"):
-        sync.read_peer("http://phone:8737", transport=answer(503, {"json": {"error": "overrides.toml can't be read"}}))
+        read("http://phone:8737", answer(503, {"json": {"error": "overrides.toml can't be read"}}))
     with pytest.raises(sync.PeerError, match="not a caracole sync state"):
-        sync.read_peer("http://phone:8737", transport=answer(200, {"json": {"format": 99}}))
+        read("http://phone:8737", answer(200, {"json": {"format": 99}}))
 
     def refused(request):
         raise httpx.ConnectError("refused")
     with pytest.raises(sync.PeerError, match="Nothing answered at http://phone:8737"):
-        sync.read_peer("http://phone:8737", transport=httpx.MockTransport(refused))
+        read("http://phone:8737", httpx.MockTransport(refused))
