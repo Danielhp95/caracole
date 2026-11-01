@@ -64,7 +64,7 @@ import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Collection, Iterable, Mapping, Sequence
+from typing import Any, Callable, Collection, Iterable, Mapping, Sequence
 from urllib.parse import parse_qsl, urlsplit
 
 import tomlkit
@@ -469,25 +469,81 @@ def load_overrides_or_none(path: Path) -> Overrides | None:
 
 
 def _parse(data: Mapping[str, Any]) -> Overrides:
+    """The file's tables, each by its reader, in this order: the first entry that can't be read is the error, and
+    names its table and its key."""
     unknown = sorted(set(data) - _TABLES)
     if unknown:
         raise OverridesError(f"unknown table(s): {', '.join(unknown)}")
+    alias = _read_alias(data)
+    match = _read_entries(data, "match", _ug_ref)
+    artist_url, artist_url_names = _read_artist_url(data)
+    pin, pin_urls = _read_pin(data)
+    transpose = _read_transpose(data)
+    ignore = _read_ignore(data)
+    block = _read_block(data)
+    reject = _read_reject(data)
+    youtube = _read_entries(data, "youtube", _video)
+    lacuerda = _read_picks(data, "lacuerda", lacuerda_pick_from_url, "a LaCuerda song's page")
+    harptabs = _read_picks(data, "harptabs", harptabs_pick_from_url, "a harptabs.com tab's page")
+    gametabs = _read_picks(data, "gametabs", gametabs_pick_from_url, "a gametabs.net tab's page")
+    azlyrics = _read_picks(data, "azlyrics", azlyrics_page_from_url)
+    version = _read_entries(data, "version", _version)
+    harmonica = _read_harmonica(data)
+    return Overrides(
+        alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
+        ignore=ignore, block=block, pin_urls=pin_urls, reject=reject,
+        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, gametabs=gametabs,
+        azlyrics=azlyrics, version=version, harmonica=harmonica, tables=frozenset(data),
+    )
 
-    def table(name: str) -> Mapping[str, Any]:
-        value = data.get(name, {})
-        if not isinstance(value, Mapping):
-            raise OverridesError(f"[{name}] must be a table")
-        return value
 
-    alias = {
+def _table(data: Mapping[str, Any], name: str) -> Mapping[str, Any]:
+    """The file's table ``name``, empty when it has none."""
+    value = data.get(name, {})
+    if not isinstance(value, Mapping):
+        raise OverridesError(f"[{name}] must be a table")
+    return value
+
+
+def _read_entries[T](data: Mapping[str, Any], name: str, value_of: Callable[[Any, str], T]) -> dict[str, T]:
+    """A table of entries about songs, "Artist - Title" → a value, by song: each key read as the song's identity
+    (``_song_key``), then its value by ``value_of``, given the table and the key for its errors. The song written
+    two ways: the last entry counts."""
+    entries = _table(data, name)
+    return {_song_key(k, f"[{name}] {k!r}"): value_of(v, f"[{name}] {k!r}") for k, v in entries.items()}
+
+
+def _read_picks[T](data: Mapping[str, Any], name: str, pick_from_url: Callable[[Any], T],
+                   page: str | None = None) -> dict[str, T]:
+    """A table of picks, "Artist - Title" → a page's address, by song: each address read by ``pick_from_url``,
+    then its key, and any error of the entry's said after the table and the key. ``page`` is what a value must
+    be the address of, said for one that isn't a string; with None, ``pick_from_url`` says it."""
+    picks: dict[str, T] = {}
+    for k, v in _table(data, name).items():
+        where = f"[{name}] {k!r}"
+        if page is not None and not isinstance(v, str):
+            raise OverridesError(f"{where}: expected a string, the address of {page}")
+        try:
+            picks[_song_key(k, where)] = pick_from_url(v)
+        except OverridesError as e:
+            raise OverridesError(f"{where}: {e}") from e
+    return picks
+
+
+def _read_alias(data: Mapping[str, Any]) -> dict[str, tuple[str, ...]]:
+    """``[alias]``: each artist's UG slugs, by the artist's key."""
+    return {
         slug_key(artist): tuple(ug_slug_key(s) for s in _strings(v, f"[alias] {artist!r}"))
-        for artist, v in table("alias").items()
+        for artist, v in _table(data, "alias").items()
     }
-    match = {_song_key(k, f"[match] {k!r}"): _ug_ref(v, f"[match] {k!r}") for k, v in table("match").items()}
 
+
+def _read_artist_url(data: Mapping[str, Any]) -> tuple[dict[str, str], dict[str, str]]:
+    """``[artist_url]``: each artist's page, or the tab page that links to it (``_artist_url_value``), and the
+    name each entry is written under, both by the artist's key."""
     artist_url: dict[str, str] = {}
     artist_url_names: dict[str, str] = {}
-    for artist, url in table("artist_url").items():
+    for artist, url in _table(data, "artist_url").items():
         page = _artist_url_value(url)
         if page is None:
             raise OverridesError(
@@ -496,10 +552,14 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
             )
         artist_url[slug_key(artist)] = page
         artist_url_names[slug_key(artist)] = artist
+    return artist_url, artist_url_names
 
+
+def _read_pin(data: Mapping[str, Any]) -> tuple[dict[str, tuple[int, ...]], dict[str, tuple[str, ...]]]:
+    """``[pin]``: each song's pinned tab ids, and their pages' addresses (``pin_url``), both by song."""
     pin: dict[str, tuple[int, ...]] = {}
     pin_urls: dict[str, tuple[str, ...]] = {}
-    for k, v in table("pin").items():
+    for k, v in _table(data, "pin").items():
         pasted = _strings(v, f"[pin] {k!r}")
         try:
             ident = override_key(k)
@@ -507,75 +567,53 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
             pin_urls[ident] = tuple(pin_url(u) for u in pasted)
         except OverridesError as e:
             raise OverridesError(f"[pin] {k!r}: {e}") from e
+    return pin, pin_urls
 
+
+def _read_transpose(data: Mapping[str, Any]) -> dict[str, int]:
+    """``[transpose]``: each song's semitones, between -11 and 11, the value read before its key."""
     transpose: dict[str, int] = {}
-    for k, v in table("transpose").items():
+    for k, v in _table(data, "transpose").items():
         if not isinstance(v, int) or isinstance(v, bool) or not -11 <= v <= 11:
             raise OverridesError(f"[transpose] {k!r}: expected semitones between -11 and 11")
         transpose[_song_key(k, f"[transpose] {k!r}")] = v
+    return transpose
 
-    ignore_t = table("ignore")
+
+def _read_ignore(data: Mapping[str, Any]) -> frozenset[str]:
+    """``[ignore] songs``: the songs to skip."""
+    ignore_t = _table(data, "ignore")
     _only_key(ignore_t, "ignore", "songs", '["Artist - Title", ...]')
     songs = _strings(ignore_t.get("songs", []), "[ignore] songs")
-    ignore = frozenset(_song_key(s, "[ignore] songs") for s in songs)
+    return frozenset(_song_key(s, "[ignore] songs") for s in songs)
 
-    block_t = table("block")
+
+def _read_block(data: Mapping[str, Any]) -> frozenset[int]:
+    """``[block] tab_ids``: the tabs never to use."""
+    block_t = _table(data, "block")
     _only_key(block_t, "block", "tab_ids", "[<tab id>, ...]")
     tab_ids = block_t.get("tab_ids", [])
     if not isinstance(tab_ids, list) or not all(isinstance(t, int) for t in tab_ids):
         raise OverridesError("[block] tab_ids must be a list of integers")
+    return frozenset(tab_ids)
 
+
+def _read_reject(data: Mapping[str, Any]) -> dict[str, frozenset[tuple[str, str]]]:
+    """``[reject]``: the UG songs that are not each song, as (artist key, song key) pairs, by song."""
     reject: dict[str, frozenset[tuple[str, str]]] = {}
-    for k, v in table("reject").items():
+    for k, v in _table(data, "reject").items():
         where = f"[reject] {k!r}"
         ident = _song_key(k, where)
         refs = frozenset(_ug_ref(r, where) for r in _strings(v, where))
         reject[ident] = reject.get(ident, frozenset()) | refs  # the song written two ways: both count
+    return reject
 
-    youtube = {_song_key(k, f"[youtube] {k!r}"): _video(v, f"[youtube] {k!r}") for k, v in table("youtube").items()}
 
-    lacuerda: dict[str, LaCuerdaPick] = {}
-    for k, v in table("lacuerda").items():
-        where = f"[lacuerda] {k!r}"
-        if not isinstance(v, str):
-            raise OverridesError(f"{where}: expected a string, the address of a LaCuerda song's page")
-        try:
-            lacuerda[_song_key(k, where)] = lacuerda_pick_from_url(v)
-        except OverridesError as e:
-            raise OverridesError(f"{where}: {e}") from e
-
-    harptabs: dict[str, HarpTabsPick] = {}
-    for k, v in table("harptabs").items():
-        where = f"[harptabs] {k!r}"
-        if not isinstance(v, str):
-            raise OverridesError(f"{where}: expected a string, the address of a harptabs.com tab's page")
-        try:
-            harptabs[_song_key(k, where)] = harptabs_pick_from_url(v)
-        except OverridesError as e:
-            raise OverridesError(f"{where}: {e}") from e
-
-    gametabs: dict[str, GameTabsPick] = {}
-    for k, v in table("gametabs").items():
-        where = f"[gametabs] {k!r}"
-        if not isinstance(v, str):
-            raise OverridesError(f"{where}: expected a string, the address of a gametabs.net tab's page")
-        try:
-            gametabs[_song_key(k, where)] = gametabs_pick_from_url(v)
-        except OverridesError as e:
-            raise OverridesError(f"{where}: {e}") from e
-
-    azlyrics: dict[str, str] = {}
-    for k, v in table("azlyrics").items():
-        where = f"[azlyrics] {k!r}"
-        try:
-            azlyrics[_song_key(k, where)] = azlyrics_page_from_url(v)
-        except OverridesError as e:
-            raise OverridesError(f"{where}: {e}") from e
-
-    version = {_song_key(k, f"[version] {k!r}"): _version(v, f"[version] {k!r}") for k, v in table("version").items()}
-
+def _read_harmonica(data: Mapping[str, Any]) -> dict[str, dict[str, str | Mapping[str, str]]]:
+    """``[harmonica]``: how each of a song's harmonica tabs is read (``_harmonica_reading``), by song and by tab;
+    the song written two ways, the tabs of both entries."""
     harmonica: dict[str, dict[str, str | Mapping[str, str]]] = {}
-    for k, v in table("harmonica").items():
+    for k, v in _table(data, "harmonica").items():
         where = f"[harmonica] {k!r}"
         key = _song_key(k, where)
         if not isinstance(v, Mapping):
@@ -583,15 +621,7 @@ def _parse(data: Mapping[str, Any]) -> Overrides:
                                  "it is read")
         harmonica.setdefault(key, {}).update((tab, _harmonica_reading(spec, f"{where} {tab!r}"))
                                              for tab, spec in v.items())
-
-    return Overrides(
-        alias=alias, match=match, artist_url=artist_url, pin=pin, transpose=transpose,
-        ignore=ignore, block=frozenset(tab_ids), pin_urls=pin_urls, reject=reject,
-        artist_url_names=artist_url_names, youtube=youtube, lacuerda=lacuerda, harptabs=harptabs, gametabs=gametabs,
-        azlyrics=azlyrics,
-        version=version,
-        harmonica=harmonica, tables=frozenset(data),
-    )
+    return harmonica
 
 
 def _harmonica_reading(spec: Any, where: str) -> str | dict[str, str]:
@@ -677,6 +707,31 @@ def _names_song(key: Any, wanted: str) -> bool:
         return False
 
 
+def _last_entry(t, wanted: str) -> str | None:
+    """The key of the table's last entry about the song whose key is ``wanted``, the one that counts; None when
+    it has none."""
+    return next((k for k in reversed(list(t)) if _names_song(k, wanted)), None)
+
+
+def _set_entry(path: Path, table: str, display: str, value: str,
+               same: Callable[[Any, str], bool] | None = None) -> None:
+    """Set the song's entry of ``table`` to ``value``. The song's entry is found by its key, as the table is read
+    (``_last_entry``), so the song written another way changes the entry it has; one that says ``value`` already
+    writes nothing. ``same`` tells whether an entry's value says it, given the table and the key for its errors;
+    without it, the entry's text must be ``value``."""
+    wanted = override_key(display)
+
+    def change(doc) -> None:
+        t = _table_of(doc, table)
+        key = _last_entry(t, wanted)
+        if key is None:
+            t[display] = value
+        elif not (t[key] == value if same is None else same(t[key], f"[{table}] {key!r}")):
+            t[key] = value
+
+    _edit(path, change)
+
+
 def add_alias(path: Path, source_artist: str, ug_artist: str) -> None:
     """Add ``ug_artist`` to the artist's aliases, keeping the ones already there.
 
@@ -719,7 +774,7 @@ def add_reject(path: Path, display: str, ug_refs: Sequence[str]) -> None:
 
     def change(doc) -> None:
         t = _table_of(doc, "reject")
-        key = next((k for k in reversed(list(t)) if _names_song(k, wanted)), None)  # the last one counts
+        key = _last_entry(t, wanted)
         if key is None:
             t[display] = list(refs.values())
             return
@@ -742,91 +797,34 @@ def add_youtube(path: Path, display: str, url: str) -> None:
     The song's entry is found by its key, as the table is read, so the song written another
     way changes the entry it has. The same video, or "none" again, writes nothing.
     """
-    wanted = override_key(display)
+    override_key(display)
     video = _video(url, f"[youtube] {display!r}")
-    value = NO_VIDEO if video is None else watch_url(video)
-
-    def change(doc) -> None:
-        t = _table_of(doc, "youtube")
-        key = next((k for k in reversed(list(t)) if _names_song(k, wanted)), None)  # the last one counts
-        if key is None:
-            t[display] = value
-        elif _video(t[key], f"[youtube] {key!r}") != video:
-            t[key] = value
-
-    _edit(path, change)
+    _set_entry(path, "youtube", display, NO_VIDEO if video is None else watch_url(video),
+               same=lambda current, where: _video(current, where) == video)
 
 
 def add_lacuerda(path: Path, display: str, url: str) -> None:
     """Set the song's ``[lacuerda]`` entry: the LaCuerda song or version at ``url``, written as caracole
     asks for it (``LaCuerdaPick.url``). The song's entry is found by its key, as the table is read, so
     the song written another way changes the entry it has; the same pick again writes nothing."""
-    wanted = override_key(display)
-    pick = lacuerda_pick_from_url(url)
-
-    def same_song(key: str) -> bool:
-        try:
-            return override_key(key) == wanted
-        except OverridesError:
-            return False
-
-    def change(doc) -> None:
-        t = _table_of(doc, "lacuerda")
-        key = next((k for k in reversed(list(t)) if same_song(k)), None)
-        if key is None:
-            t[display] = pick.url
-        elif t[key] != pick.url:
-            t[key] = pick.url
-
-    _edit(path, change)
+    override_key(display)
+    _set_entry(path, "lacuerda", display, lacuerda_pick_from_url(url).url)
 
 
 def add_harptabs(path: Path, display: str, url: str) -> None:
     """Set the song's ``[harptabs]`` entry: the harptabs.com tab at ``url``, written as caracole asks for it
     (``HarpTabsPick.url``). The song's entry is found by its key, as the table is read, so the song written
     another way changes the entry it has; the same pick again writes nothing."""
-    wanted = override_key(display)
-    pick = harptabs_pick_from_url(url)
-
-    def same_song(key: str) -> bool:
-        try:
-            return override_key(key) == wanted
-        except OverridesError:
-            return False
-
-    def change(doc) -> None:
-        t = _table_of(doc, "harptabs")
-        key = next((k for k in reversed(list(t)) if same_song(k)), None)
-        if key is None:
-            t[display] = pick.url
-        elif t[key] != pick.url:
-            t[key] = pick.url
-
-    _edit(path, change)
+    override_key(display)
+    _set_entry(path, "harptabs", display, harptabs_pick_from_url(url).url)
 
 
 def add_gametabs(path: Path, display: str, url: str) -> None:
     """Set the song's ``[gametabs]`` entry: the gametabs.net tab at ``url``, written as caracole asks for it
     (``GameTabsPick.url``). The song's entry is found by its key, as the table is read, so the song written
     another way changes the entry it has; the same pick again writes nothing."""
-    wanted = override_key(display)
-    pick = gametabs_pick_from_url(url)
-
-    def same_song(key: str) -> bool:
-        try:
-            return override_key(key) == wanted
-        except OverridesError:
-            return False
-
-    def change(doc) -> None:
-        t = _table_of(doc, "gametabs")
-        key = next((k for k in reversed(list(t)) if same_song(k)), None)
-        if key is None:
-            t[display] = pick.url
-        elif t[key] != pick.url:
-            t[key] = pick.url
-
-    _edit(path, change)
+    override_key(display)
+    _set_entry(path, "gametabs", display, gametabs_pick_from_url(url).url)
 
 
 def add_version(path: Path, display: str, query: str | None) -> None:
@@ -878,7 +876,7 @@ def add_harmonica(path: Path, display: str, tab: str, reading: str | Mapping[str
         if reading is None and "harmonica" not in doc:
             return
         t = _table_of(doc, "harmonica")
-        key = next((k for k in reversed(list(t)) if _names_song(k, wanted)), None)  # the last one counts
+        key = _last_entry(t, wanted)
         current = t[key] if key is not None else None
         if current is not None and not isinstance(current, Mapping):
             raise OverridesError(f"[harmonica] {key!r}: expected a table of its harmonica tabs")
