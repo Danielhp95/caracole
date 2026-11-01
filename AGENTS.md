@@ -482,8 +482,9 @@ noexec or has less than 1 GB free (a container's).
 its module's `pytestmark`, `helpers.browser.CHROMIUM_MARKS`): slow, and skipped without
 Chromium; one that opens a page unmarked fails (`helpers.browser.require_in_chromium`). It opens
 pages through helpers/browser.py, `dump_dom` (the DOM once the page's script ran, its timers on
-virtual time, in one Chromium per process and a fresh context per page) or `Browser` (a Chromium
-of its own, on real time, to type, press keys, click and touch), or through helpers/chromium.py,
+virtual time, in one Chromium per process and a fresh context per page) or `Browser` (a page on
+real time, to type, press keys, click and touch, in a browser context of its own of another Chromium
+the process's Browsers share, `_Driven`), or through helpers/chromium.py,
 for a page whose policy refuses a test's script. None of them resolves a host name
 (`helpers.browser.NO_LOOKUPS`), and the other browser helpers in tests/helpers/ build on them.
 

@@ -1,6 +1,6 @@
 """Headless Chromium driven over the DevTools protocol: one per test process for the tests that
-look at a page after its script ran (``dump_dom``), and ``Browser``, one of its own, for the
-tests that type, press keys and click.
+look at a page after its script ran (``dump_dom``), and another for the tests that type, press keys
+and click (``Browser``), each of their pages in a browser context of its own.
 
 ``chromium --dump-dom`` starts a browser for every page, about half a second each. Here one
 browser starts the first time a test asks, and each page gets a browser context of its own, as
@@ -11,7 +11,9 @@ read back. A window is the size asked for, even narrower than the 500 pixels ``-
 gives at the least.
 
 A page you type into needs more: keys pressed at a given moment, a click, the layout read back.
-``Browser`` is a Chromium of its own with one page for that, its timers on real time.
+``Browser`` is one page for that, its timers on real time, in a Chromium every Browser of the process
+shares (``_Driven``): a Chromium started for each, half a second, made the browser tests' run take a
+third longer.
 
 Chromium speaks the protocol over two pipes (``--remote-debugging-pipe``: it reads fd 3, writes
 fd 4), so the tests need no WebSocket library and open no port. Tests skip when no Chromium runs
@@ -270,19 +272,27 @@ def browser() -> SharedBrowser:
         return _browser
     if CHROMIUM is None:
         pytest.skip("chromium not found on PATH")
-    close()
+    _close_shared()
     _profile = Path(tempfile.mkdtemp(prefix="profile-", dir=profiles))
     try:
         _browser = SharedBrowser(CHROMIUM, _profile)
         _browser.call("Browser.getVersion")
     except (OSError, BrowserError) as e:
-        close()
+        _close_shared()
         pytest.skip(f"chromium couldn't run: {e}")
     return _browser
 
 
 def close() -> None:
-    """Quit this process's browser, if it started, and remove its profile."""
+    """Quit this process's browsers, if they started, and remove their profiles: the session's end."""
+    for driven in _driven.values():
+        driven.close()
+    _driven.clear()
+    _close_shared()
+
+
+def _close_shared() -> None:
+    """Quit the browser ``dump_dom`` loads pages in, if it started, and remove its profile."""
     global _browser, _profile
     if _browser is not None:
         _browser.close()
@@ -301,23 +311,22 @@ def dump_dom(url: str, size: tuple[int, int], *, hide_scrollbars: bool = False, 
         return browser().dump_dom(url, size, hide_scrollbars=hide_scrollbars, mobile=mobile, touch=touch,
                                   media=media, budget_ms=budget_ms)
     except BrowserError:
-        close()
+        _close_shared()
         raise
 
 
 # --- a page driven as you would: typing, Enter, clicks --------------------------------------------
 
 
-class Browser:
-    """One headless Chromium with one page, ``width`` × ``height`` CSS pixels (``mobile``: a phone's); ``args``, more
-    of Chromium's switches (``--blink-settings=minimumFontSize=40``: every text drawn at least that large)."""
+class _Driven:
+    """The headless Chromium this process's ``Browser`` pages share, each page in a browser context of its own, as
+    fresh as a new profile: a test that types and clicks starts no Chromium of its own, half a second each, and
+    the suite's hundreds of them run that much sooner. Started on first use (one a set of extra switches), again
+    after one stops; quit when the session ends (``close``). Each message from it goes to the page whose session it
+    names, one from the browser itself to every page open."""
 
-    def __init__(self, profile: Path, *, width: int = 1280, height: int = 900, mobile: bool = False,
-                 timeout: float = 30.0, args: Iterable[str] = ()):
-        require_in_chromium()
-        if CHROMIUM is None:
-            raise BrowserError("chromium not found on PATH")
-        self.timeout = timeout
+    def __init__(self, args: tuple[str, ...]):
+        self.profile = Path(tempfile.mkdtemp(prefix="driven-", dir=profiles))
         to_child, self._to_child = os.pipe()
         self._from_child, from_child = os.pipe()
         # Above 4, so the shell can put them on 3 and 4 without clobbering either.
@@ -325,10 +334,10 @@ class Browser:
         os.close(to_child)
         os.close(from_child)
         command = [CHROMIUM, "--headless=new", "--mute-audio", "--disable-gpu", "--no-first-run", "--no-default-browser-check",
-                   "--no-proxy-server", "--disable-extensions", f"--user-data-dir={profile}", NO_LOOKUPS,
-                   f"--window-size={width},{height}", *args, "--remote-debugging-pipe", "about:blank"]
+                   "--no-proxy-server", "--disable-extensions", f"--user-data-dir={self.profile}", NO_LOOKUPS, *args,
+                   "--remote-debugging-pipe", "about:blank"]
         try:
-            self._process = subprocess.Popen(
+            self.process = subprocess.Popen(
                 ["sh", "-c", f'exec "$@" 3<&{high_in} 4>&{high_out} {high_in}<&- {high_out}>&-', "sh", *command],
                 pass_fds=(high_in, high_out), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 env=headless_env())
@@ -337,10 +346,96 @@ class Browser:
             os.close(high_out)
         self._buffer = b""
         self._id = 0
-        self.events: list[dict[str, Any]] = []
+        self.pages: list[Browser] = []
+
+    def alive(self) -> bool:
+        return self.process.poll() is None
+
+    def send(self, method: str, params: dict[str, Any], *, session: str | None, timeout: float) -> dict[str, Any]:
+        self._id += 1
+        message: dict[str, Any] = {"id": self._id, "method": method, "params": params}
+        if session:
+            message["sessionId"] = session
         try:
-            target = self._send("Target.createTarget", url="about:blank")["targetId"]
+            os.write(self._to_child, json.dumps(message).encode() + b"\0")
+        except OSError as e:
+            raise BrowserError(f"chromium stopped: {e}") from e
+        while True:
+            answer = self._next(timeout)
+            if answer.get("id") == self._id:
+                if "error" in answer:
+                    raise BrowserError(f"{method}: {answer['error']}")
+                return answer.get("result", {})
+            if "method" in answer:
+                for page in self.pages:
+                    if answer.get("sessionId") in (None, page._session):
+                        page.events.append(answer)
+
+    def _next(self, timeout: float) -> dict[str, Any]:
+        deadline = time.monotonic() + timeout
+        while b"\0" not in self._buffer:
+            left = deadline - time.monotonic()
+            if left <= 0 or not select.select([self._from_child], [], [], left)[0]:
+                raise BrowserError("chromium didn't answer in time")
+            chunk = os.read(self._from_child, 1 << 20)
+            if not chunk:
+                raise BrowserError("chromium stopped")
+            self._buffer += chunk
+        raw, self._buffer = self._buffer.split(b"\0", 1)
+        return json.loads(raw)
+
+    def close(self) -> None:
+        """Close the pipes, which the browser takes as the end, and remove its profile."""
+        for fd in (self._to_child, self._from_child):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+        try:
+            self.process.wait(10)
+        except subprocess.TimeoutExpired:
+            self.process.kill()
+            self.process.wait(5)
+        shutil.rmtree(self.profile, ignore_errors=True)
+
+
+_driven: dict[tuple[str, ...], _Driven] = {}
+
+
+def _driven_chromium(args: tuple[str, ...]) -> _Driven:
+    found = _driven.get(args)
+    if found is not None and found.alive():
+        return found
+    if found is not None:
+        found.close()
+    _driven[args] = made = _Driven(args)
+    return made
+
+
+class Browser:
+    """A page of its own, ``width`` × ``height`` CSS pixels (``mobile``: a phone's), in a headless Chromium on real time,
+    to type, press keys, click and touch; ``args``, more of Chromium's switches (``--blink-settings=minimumFontSize=40``:
+    every text drawn at least that large). Its Chromium is shared by every Browser of the process with the same
+    ``args`` (``_Driven``), the page in a browser context of its own: nothing another page kept (localStorage, cookies,
+    the cache) is there. ``profile`` is the folder a Chromium of its own would keep its profile in: the context keeps
+    none on disk, so it is left as it is."""
+
+    def __init__(self, profile: Path, *, width: int = 1280, height: int = 900, mobile: bool = False,
+                 timeout: float = 30.0, args: Iterable[str] = ()):
+        require_in_chromium()
+        if CHROMIUM is None:
+            raise BrowserError("chromium not found on PATH")
+        self.timeout = timeout
+        self.events: list[dict[str, Any]] = []
+        self._session: str | None = None
+        self._context: str | None = None
+        self._chromium = _driven_chromium(tuple(args))
+        try:
+            self._context = self._send("Target.createBrowserContext")["browserContextId"]
+            target = self._send("Target.createTarget", url="about:blank", width=width, height=height,
+                                newWindow=True)["targetId"]
             self._session = self._send("Target.attachToTarget", targetId=target, flatten=True)["sessionId"]
+            self._chromium.pages.append(self)
             self.send("Page.enable")
             self.send("Runtime.enable")
             self.send("Emulation.setDeviceMetricsOverride", width=width, height=height, deviceScaleFactor=1,
@@ -358,34 +453,11 @@ class Browser:
         return self._send(method, session=self._session, **params)
 
     def _send(self, method: str, *, session: str | None = None, **params: Any) -> dict[str, Any]:
-        self._id += 1
-        message: dict[str, Any] = {"id": self._id, "method": method, "params": params}
-        if session:
-            message["sessionId"] = session
-        try:
-            os.write(self._to_child, json.dumps(message).encode() + b"\0")
-        except OSError as e:
-            raise BrowserError(f"chromium stopped: {e}") from e
-        while True:
-            answer = self._next()
-            if answer.get("id") == self._id:
-                if "error" in answer:
-                    raise BrowserError(f"{method}: {answer['error']}")
-                return answer.get("result", {})
-            self.events.append(answer)
-
-    def _next(self) -> dict[str, Any]:
-        deadline = time.monotonic() + self.timeout
-        while b"\0" not in self._buffer:
-            left = deadline - time.monotonic()
-            if left <= 0 or not select.select([self._from_child], [], [], left)[0]:
-                raise BrowserError("chromium didn't answer in time")
-            chunk = os.read(self._from_child, 1 << 20)
-            if not chunk:
-                raise BrowserError("chromium stopped")
-            self._buffer += chunk
-        raw, self._buffer = self._buffer.split(b"\0", 1)
-        return json.loads(raw)
+        """A command to the browser (or with ``session``, a page): a new tab, a download's folder, kept to this page's
+        browser context, as a Chromium of its own would keep them to itself."""
+        if method in ("Target.createTarget", "Browser.setDownloadBehavior") and self._context is not None:
+            params.setdefault("browserContextId", self._context)
+        return self._chromium.send(method, params, session=session, timeout=self.timeout)
 
     # --- what a test does ------------------------------------------------------------------------------
 
@@ -475,20 +547,15 @@ class Browser:
             time.sleep(0.03)
 
     def close(self) -> None:
-        try:
-            self._send("Browser.close")
-        except (BrowserError, OSError, ValueError):
-            pass
-        try:
-            self._process.wait(10)
-        except subprocess.TimeoutExpired:
-            self._process.kill()
-            self._process.wait(5)
-        for fd in (self._to_child, self._from_child):
+        """The page's browser context closed, its pages with it; the Chromium stays for the next Browser."""
+        if self in self._chromium.pages:
+            self._chromium.pages.remove(self)
+        if self._context is not None and self._chromium.alive():
             try:
-                os.close(fd)
-            except OSError:
-                pass
+                self._send("Target.disposeBrowserContext", browserContextId=self._context)
+            except (BrowserError, OSError, ValueError):
+                self._chromium.close()  # one that won't close a context is no use to the next page
+        self._context = None
 
     def __enter__(self) -> Browser:
         return self
