@@ -590,178 +590,296 @@ def expand(line: str) -> str:
 
 def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     """The holes ``line`` holds as ``notation`` reads them, where, how much of it they explain, and what it couldn't
-    read, kept in place."""
+    read, kept in place: its passes, in order, each reading only what those before it left."""
     text = expand(line)
     tokens = _tokens(notation)
-    label = None
+    label, text = _lead_label(text, tokens)
+    work = _Line(text, notation, tokens, label, _prose_mask(text, tokens))
+    _holes_in_brackets(work)
+    _holes_together(work)
+    _single_holes(work)
+    work.groups.sort(key=lambda g: g.col)
+    _effects_apart(work)
+    _joins(work)
+    _shared_marks(work)
+    _leftovers(work)
+    work.groups.sort(key=lambda g: g.col)
+    _words_together(work)
+    _joined(work)
+    return _scanned(work)
+
+
+@dataclass
+class _Line:
+    """A line as ``scan`` reads it, pass by pass: its text (tabs expanded, its leading label blanked), its notation
+    compiled, its label, where it writes the tabber's prose (``prose``: never holes), and what the passes have read
+    so far: its columns (``covered``), its groups, the symbols they were read by (``used``, ``Scan.used``'s), and
+    where notes run together (``joins``: each column and what its symbol means)."""
+
+    text: str
+    notation: Notation
+    tokens: _Tokens
+    label: str | None
+    prose: list[bool]
+    covered: list[bool] = field(init=False)
+    groups: list[Group] = field(default_factory=list)
+    used: Counter = field(default_factory=Counter)
+    joins: list[tuple[int, str]] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.covered = [False] * len(self.text)
+
+    def taken(self, a: int, b: int) -> bool:
+        """Whether a pass read any of the columns ``a`` to ``b`` already, or any is prose."""
+        return any(self.covered[a:b]) or any(self.prose[a:b])
+
+    def mark(self, a: int, b: int) -> None:
+        """The columns ``a`` to ``b`` read."""
+        self.covered[a:b] = [True] * (b - a)
+
+    def add(self, group: Group) -> None:
+        """A group found, its columns read."""
+        self.groups.append(group)
+        self.mark(group.col, group.end)
+
+    def note(self, read: _Read, bare: str | None = None) -> None:
+        """The symbols ``read`` was read by, and ``bare``, its breath the notation's for a hole written alone."""
+        for written, sym in read.used:
+            self.used[(written, sym.means, sym.at, sym.count)] += 1
+        if bare is not None:
+            self.used[("", bare, "bare", 1)] += 1
+
+
+def _lead_label(text: str, tokens: _Tokens) -> tuple[str | None, str]:
+    """The label a line leads with ("Intro:", "FILL 1 :"), and the line with it blanked, its columns kept; none where
+    no hole comes after it, it is a number, or a time starts in it."""
     lead = _LEAD_LABEL.match(text)
     if (lead and tokens.start.search(text[lead.end():]) and not lead.group("label").strip().isdigit()
             and not any(m.start() < lead.end() for m in _TIME.finditer(text))):  # "SOLO 4:24": a time, no label
-        label = lead.group("label").strip("() ")
-        text = " " * lead.end() + text[lead.end():]
-    covered = [False] * len(text)
-    used: Counter = Counter()
-    groups: list[Group] = []
-    prose = [False] * len(text)  # a time or the tabber's words in brackets: never holes, kept as words
+        return lead.group("label").strip("() "), " " * lead.end() + text[lead.end():]
+    return None, text
+
+
+def _prose_mask(text: str, tokens: _Tokens) -> list[bool]:
+    """Where a line writes a time or the tabber's words in brackets: never holes, kept as words."""
+    prose = [False] * len(text)
     for m in _TIME.finditer(text):
         prose[m.start():m.end()] = [True] * (m.end() - m.start())
     for m in _ASIDE.finditer(text):
         if (any(_is_word(w, alone=True) for w in m.group("body").split()) and not _DECOR.fullmatch(m.group(0))
                 and not (tokens.apart and tokens.apart.fullmatch(m.group(0)))):  # never "(hold)", nor a "(wah)"
             prose[m.start():m.end()] = [True] * (m.end() - m.start())
+    return prose
 
-    def taken(a: int, b: int) -> bool:
-        return any(covered[a:b]) or any(prose[a:b])
 
-    def mark(a: int, b: int) -> None:
-        covered[a:b] = [True] * (b - a)
+def _holes_in_brackets(line: _Line) -> None:
+    """Holes in brackets: a chord, a shake, a split, or a hole alone, its breath the brackets' where they give one."""
+    for m in _BRACKET.finditer(line.text):
+        if line.taken(m.start(), m.end()):
+            continue
+        reads = _reads_inside(line, m)
+        if reads:
+            _bracketed(line, m, reads)
 
-    def note(read: _Read, bare: str | None = None) -> None:
-        for written, sym in read.used:
-            used[(written, sym.means, sym.at, sym.count)] += 1
-        if bare is not None:  # its breath the notation's for a hole written alone
-            used[("", bare, "bare", 1)] += 1
 
-    # Holes in brackets: a chord, a shake, a split, or a hole alone, its breath the brackets' where they give one.
-    for m in _BRACKET.finditer(text):
-        if taken(m.start(), m.end()):
+def _reads_inside(line: _Line, m: re.Match) -> list[_Read]:
+    """The holes the brackets ``m`` hold, each right after the one before (spaces or commas between), or none where
+    they hold anything else."""
+    text, tokens = line.text, line.tokens
+    reads, end = [], m.end("body")
+    pos = _SEPARATOR.match(text, m.start("body"), end).end()
+    while pos < end:
+        found = tokens.start.match(text, pos, end)
+        read = found and _read_hole(text, found, line.notation, tokens, end)
+        if not read or read.start != pos:
+            break
+        reads.append(read)
+        pos = _SEPARATOR.match(text, read.end, end).end()
+    return reads if pos >= end else []
+
+
+def _after_brackets(line: _Line, m: re.Match, reads: list[_Read]) -> tuple[_Read, int]:
+    """The marks written right after the brackets ``m`` of one hole, theirs ("(3)b"), and where they stop; none where
+    a letter comes after them."""
+    text, tokens = line.text, line.tokens
+    stop = m.end()
+    outer = _Read(m.start(), m.end(), 0)
+    while tokens.after is not None and len(reads) == 1:  # (3)b: a mark after the brackets is their hole's
+        s = tokens.after.match(text, stop)
+        if not s or not _marks([(s.start(), s.end(), s.group(), line.notation.meaning(s.group(), "after"))], outer):
+            break
+        stop = s.end()
+    if stop < len(text) and text[stop].isalpha():
+        return _Read(m.start(), m.end(), 0), m.end()
+    return outer, stop
+
+
+def _bracketed(line: _Line, m: re.Match, reads: list[_Read]) -> None:
+    """The holes ``reads`` in the brackets ``m`` as one group, each hole's breath its own, else the marks' after the
+    brackets, the brackets', or the notation's bare one; nothing where a hole has none."""
+    text, notation = line.text, line.notation
+    outer, stop = _after_brackets(line, m, reads)
+    around = notation.meaning(_CLOSE[m.group("open")], "around")
+    given = around.means if around is not None and around.means in BREATHS else None
+    breaths = [r.breath or outer.breath or given or notation.bare for r in reads]
+    if None in breaths:
+        return
+    _note_bracketed(line, m, reads, outer, given, breaths)
+    kind = "note" if len(reads) == 1 and m.group("open") == "(" else _KINDS[m.group("open")]
+    if kind == "note" and given is None and reads[0].breath is None and outer.breath is None:
+        # A hole alone in brackets that its notation gives no meaning to (harptabs.com's "(5)"): the hole is
+        # read, the brackets are not.
+        line.add(_hole_alone(text, reads[0], breaths[0]))
+        return
+    holes = tuple(Hole(r.num, b, min(r.bend + outer.bend, 3), r.over or outer.over, r.slide or outer.slide)
+                  for r, b in zip(reads, breaths))
+    effects = tuple(outer.effects + [e for r in reads for e in r.effects])
+    line.add(Group(holes, kind, m.start(), reads[0].digit, text[m.start():stop], "hold" in effects,
+                   _others(effects)))
+
+
+def _note_bracketed(line: _Line, m: re.Match, reads: list[_Read], outer: _Read, given: str | None,
+                    breaths: list[str]) -> None:
+    """The symbols the holes in the brackets ``m`` were read by: each hole's, with the notation's bare breath where
+    nothing gave it one; the marks' after the brackets (``outer``); the brackets' where they gave one (``given``)."""
+    for r, b in zip(reads, breaths):
+        line.note(r, b if not (r.breath or outer.breath or given) else None)
+    line.note(outer)
+    if given and any(r.breath is None and outer.breath is None for r in reads):
+        line.used[(_CLOSE[m.group("open")], given, "around", 1)] += 1
+
+
+def _hole_alone(text: str, read: _Read, breath: str) -> Group:
+    """The hole ``read`` as a group of its own, blown or drawn as ``breath`` says."""
+    effects = tuple(read.effects)
+    return Group((Hole(read.num, breath, read.bend, read.over, read.slide),), "note", read.start, read.digit,
+                 text[read.start:read.end], "hold" in effects, _others(effects))
+
+
+def _holes_together(line: _Line) -> None:
+    """Holes together, one mark for all: 7,8B."""
+    text, notation, tokens = line.text, line.notation, line.tokens
+    if tokens.together is None:
+        return
+    for m in tokens.together.finditer(text):
+        if line.taken(m.start(), m.end()) or (m.start() and text[m.start() - 1].isalnum()):
             continue
-        reads, pos, end = [], m.start("body"), m.end("body")
-        pos = _SEPARATOR.match(text, pos, end).end()
-        while pos < end:
-            found = tokens.start.match(text, pos, end)
-            read = found and _read_hole(text, found, notation, tokens, end)
-            if not read or read.start != pos:
-                break
-            reads.append(read)
-            pos = _SEPARATOR.match(text, read.end, end).end()
-        if not reads or pos < end:
+        last = tokens.start.match(text, m.end() - len(re.search(_NUM + "$", m.group("body")).group(0)))
+        read = last and _read_hole(text, last, notation, tokens, len(text))
+        breath = read and (read.breath or notation.bare)
+        if not read or not breath:
             continue
-        stop = m.end()
-        outer = _Read(m.start(), m.end(), 0)
-        while tokens.after is not None and len(reads) == 1:  # (3)b: a mark after the brackets is their hole's
-            s = tokens.after.match(text, stop)
-            if not s or not _marks([(s.start(), s.end(), s.group(), notation.meaning(s.group(), "after"))], outer):
-                break
-            stop = s.end()
-        if stop < len(text) and text[stop].isalpha():
-            stop = m.end()
-            outer = _Read(m.start(), m.end(), 0)
-        around = notation.meaning(_CLOSE[m.group("open")], "around")
-        given = around.means if around is not None and around.means in BREATHS else None
-        breaths = [r.breath or outer.breath or given or notation.bare for r in reads]
-        if None in breaths:
-            continue
-        kind = "note" if len(reads) == 1 and m.group("open") == "(" else _KINDS[m.group("open")]
-        holes = tuple(Hole(r.num, b, min(r.bend + outer.bend, 3), r.over or outer.over, r.slide or outer.slide)
-                      for r, b in zip(reads, breaths))
-        for r, b in zip(reads, breaths):
-            note(r, b if not (r.breath or outer.breath or given) else None)
-        note(outer)
-        if given and any(r.breath is None and outer.breath is None for r in reads):
-            used[(_CLOSE[m.group("open")], given, "around", 1)] += 1
-        effects = tuple(outer.effects + [e for r in reads for e in r.effects])
-        if kind == "note" and given is None and reads[0].breath is None and outer.breath is None:
-            # A hole alone in brackets that its notation gives no meaning to (harptabs.com's "(5)"): the hole is
-            # read, the brackets are not.
-            r = reads[0]
-            groups.append(Group((Hole(r.num, breaths[0], r.bend, r.over, r.slide),), "note", r.start, r.digit,
-                                text[r.start:r.end], "hold" in r.effects, _others(tuple(r.effects))))
-            mark(r.start, r.end)
-            continue
-        groups.append(Group(holes, kind, m.start(), reads[0].digit, text[m.start():stop], "hold" in effects,
-                            _others(effects)))
-        mark(m.start(), stop)
-    # Holes together, one mark for all: 7,8B.
-    if tokens.together is not None:
-        for m in tokens.together.finditer(text):
-            if taken(m.start(), m.end()) or (m.start() and text[m.start() - 1].isalnum()):
-                continue
-            last = tokens.start.match(text, m.end() - len(re.search(_NUM + "$", m.group("body")).group(0)))
-            read = last and _read_hole(text, last, notation, tokens, len(text))
-            breath = read and (read.breath or notation.bare)
-            if not read or not breath:
-                continue
-            nums = [int(n) for n in re.findall(_NUM, m.group("body"))]
-            note(read, breath if read.breath is None else None)
-            sep = re.search(r"\D+", m.group("body")).group(0)
-            sym = notation.meaning(sep, "between")
-            used[(sep, sym.means, "between", 1)] += len(nums) - 1
-            groups.append(Group(tuple(Hole(n, breath, read.bend, read.over, read.slide) for n in nums), "chord",
-                                m.start(), m.start(), text[m.start():read.end], "hold" in read.effects,
-                                _others(tuple(read.effects))))
-            mark(m.start(), read.end)
-    # Single holes.
+        nums = [int(n) for n in re.findall(_NUM, m.group("body"))]
+        line.note(read, breath if read.breath is None else None)
+        sep = re.search(r"\D+", m.group("body")).group(0)
+        sym = notation.meaning(sep, "between")
+        line.used[(sep, sym.means, "between", 1)] += len(nums) - 1
+        line.add(Group(tuple(Hole(n, breath, read.bend, read.over, read.slide) for n in nums), "chord",
+                       m.start(), m.start(), text[m.start():read.end], "hold" in read.effects,
+                       _others(tuple(read.effects))))
+
+
+def _single_holes(line: _Line) -> None:
+    """Single holes, each with its marks up to what a pass read already; one with no breath where its notation needs
+    one is unread, kept as written."""
+    text, notation, tokens = line.text, line.notation, line.tokens
     pos = 0
     while (found := tokens.start.search(text, pos)) is not None:
-        if taken(found.start(), found.end()):
-            pos = found.start() + 1 if covered[found.start()] or prose[found.start()] else found.end()
+        if line.taken(found.start(), found.end()):
+            pos = found.start() + 1 if line.covered[found.start()] or line.prose[found.start()] else found.end()
             continue
-        read = _read_hole(text, found, notation, tokens, _free_until(covered, prose, found.end()))
+        read = _read_hole(text, found, notation, tokens, _free_until(line.covered, line.prose, found.end()))
         if read is None:
             pos = found.end()
             continue
         breath = read.breath or notation.bare
         pos = read.end
-        if breath is None:  # a hole with no breath where the notation needs one: unread, kept as written
+        if breath is None:
             continue
-        note(read, breath if read.breath is None else None)
-        effects = tuple(read.effects)
-        groups.append(Group((Hole(read.num, breath, read.bend, read.over, read.slide),), "note", read.start,
-                            read.digit, text[read.start:read.end], "hold" in effects, _others(effects)))
-        mark(read.start, read.end)
-    groups.sort(key=lambda g: g.col)
-    # Effects written apart (a legend's "(w)" after a space), and the marks every notation shares: each effect and
-    # hold is the group's before it.
-    if tokens.apart is not None:
-        for m in tokens.apart.finditer(text):
-            if taken(m.start(), m.end()):
-                continue
-            sym = notation.meaning(m.group(0), "after")
-            mark(m.start(), m.end())
-            used[(m.group(0), sym.means, "after", sym.count)] += 1
-            if sym.means in EFFECTS:
-                _effect_before(groups, m.start(), sym.means)
-    joins = []  # notes run together, written between two with nothing apart: 3*d-3d (never a hold's ----)
-    if tokens.join is not None:
-        for m in tokens.join.finditer(text):
-            a, b = m.start(), m.end()
-            if taken(a, b) or a == 0 or b >= len(text) or text[a - 1].isspace() or text[b].isspace() \
-                    or text[a - 1] == m.group(0)[0] or text[b] == m.group(0)[-1]:
-                continue
-            sym = notation.meaning(m.group(0), "between")
-            mark(a, b)
-            used[(m.group(0), sym.means, "between", 1)] += 1
-            joins.append((a, sym.means))
-    for m in _DECOR.finditer(text):
-        if taken(m.start(), m.end()):
+        line.note(read, breath if read.breath is None else None)
+        line.add(_hole_alone(text, read, breath))
+
+
+def _effects_apart(line: _Line) -> None:
+    """Effects written apart (a legend's "(w)" after a space): each the group's before it."""
+    if line.tokens.apart is None:
+        return
+    for m in line.tokens.apart.finditer(line.text):
+        if line.taken(m.start(), m.end()):
             continue
-        mark(m.start(), m.end())
+        sym = line.notation.meaning(m.group(0), "after")
+        line.mark(m.start(), m.end())
+        line.used[(m.group(0), sym.means, "after", sym.count)] += 1
+        if sym.means in EFFECTS:
+            _effect_before(line.groups, m.start(), sym.means)
+
+
+def _joins(line: _Line) -> None:
+    """Notes run together, written between two with nothing apart: 3*d-3d (never a hold's ----)."""
+    text = line.text
+    if line.tokens.join is None:
+        return
+    for m in line.tokens.join.finditer(text):
+        a, b = m.start(), m.end()
+        if line.taken(a, b) or a == 0 or b >= len(text) or text[a - 1].isspace() or text[b].isspace() \
+                or text[a - 1] == m.group(0)[0] or text[b] == m.group(0)[-1]:
+            continue
+        sym = line.notation.meaning(m.group(0), "between")
+        line.mark(a, b)
+        line.used[(m.group(0), sym.means, "between", 1)] += 1
+        line.joins.append((a, sym.means))
+
+
+def _shared_marks(line: _Line) -> None:
+    """The marks every notation shares (bars, repeats, ~, holds): each hold the group's before it."""
+    for m in _DECOR.finditer(line.text):
+        if line.taken(m.start(), m.end()):
+            continue
+        line.mark(m.start(), m.end())
         if _HOLD.fullmatch(m.group(0)):
-            _effect_before(groups, m.start(), "hold")
-    # What it couldn't read, in place: the tabber's words ("BOM", "(Chorus)", "tue" against its hole, an aside in
-    # brackets) as words, together where only spaces part them; anything else unread.
+            _effect_before(line.groups, m.start(), "hold")
+
+
+def _leftovers(line: _Line) -> None:
+    """What it couldn't read, in place: the tabber's words ("BOM", "(Chorus)", "tue" against its hole, an aside in
+    brackets) as words; anything else unread."""
+    text, covered = line.text, line.covered
     for m in _WORD.finditer(text):
         a = m.start()
         for i in range(m.start(), m.end() + 1):
             if i == m.end() or covered[i]:
                 if i > a:
                     alone = a == m.start() and i == m.end()
-                    words = any(prose[a:i]) or _is_word(text[a:i], alone=alone)
-                    groups.append(Group((), "words" if words else "unread", a, a, text[a:i]))
+                    words = any(line.prose[a:i]) or _is_word(text[a:i], alone=alone)
+                    line.groups.append(Group((), "words" if words else "unread", a, a, text[a:i]))
                 a = i + 1
-    groups.sort(key=lambda g: g.col)
+
+
+def _words_together(line: _Line) -> None:
+    """The tabber's words as one group where only spaces part them."""
+    groups, text = line.groups, line.text
     for n in range(len(groups) - 1, 0, -1):
         one, two = groups[n - 1], groups[n]
         if one.kind == two.kind == "words" and not text[one.end:two.col].strip():
             groups[n - 1:n + 1] = [Group((), "words", one.col, one.col, text[one.col:two.end])]
-    for at, means in joins:
+
+
+def _joined(line: _Line) -> None:
+    """Each join's group before it runs into the next."""
+    groups = line.groups
+    for at, means in line.joins:
         before = [n for n, g in enumerate(groups) if g.col < at]
         if before:
             n = before[-1]
             groups[n] = replace(groups[n], join=True)
             if means in EFFECTS and groups[n].holes:  # x-x: a glissando from the one to the other
                 _effect_before(groups, at, means)
+
+
+def _scanned(line: _Line) -> Scan:
+    """What the passes found, as a ``Scan``: the share of the line they explain, what is left unread as before, its
+    words standing free, the share of it that is words, and its run of holes."""
+    text, covered, groups = line.text, line.covered, line.groups
     unknown = []
     for m in _WORD.finditer(text):
         rest = "".join(ch for i, ch in enumerate(m.group(0), m.start()) if not covered[i])
@@ -771,7 +889,7 @@ def scan(line: str, *, notation: Notation = SIGNS) -> Scan:
     good = sum(1 for i, ch in enumerate(text) if covered[i] and not ch.isspace())
     free = sum(1 for w in _WORD.findall(text) if not re.search(r"\d", w) and sum(c.isalpha() for c in w) >= 3)
     said = sum(not ch.isspace() for g in groups if g.kind == "words" for ch in g.text)
-    return Scan(tuple(groups), good / letters if letters else 0.0, tuple(unknown), label, used, free,
+    return Scan(tuple(groups), good / letters if letters else 0.0, tuple(unknown), line.label, line.used, free,
                 said / letters if letters else 0.0, *_run(text, groups, covered))
 
 
@@ -1257,87 +1375,165 @@ def parse(body: str, *, harp: str | None = None, notation: Notation | None = Non
     chip, lines, legends, in_legend = _prepared(body, harp)
     reading, scans = read(["" if n in in_legend else line for n, line in enumerate(lines)], harp_chip=chip,
                           notation=notation, legends=legends)
-    kinds = ["legend" if n in in_legend else "blank" if not line.strip() else "holes" if s.is_row
-             else "missed" if s.missed else "text" for n, (line, s) in enumerate(zip(lines, scans))]
+    kinds = _line_kinds(lines, scans, in_legend)
+    notes, sections = _laid_out(lines, kinds, scans, legends, chip)
+    prose = notes + [item.text for s in sections for item in s.items if isinstance(item, Prose)]
+    rows = [item for s in sections for item in s.items if isinstance(item, Row)]
+    chromatic = chip == "Chromatic" or any(h.button for r in rows if r.trusted for g in r.groups for h in g.holes)
+    return Tab(notes, sections, reading, named_key(prose), _missed(lines, kinds, rows), chromatic,
+               _one_legend(legends), chip)
 
-    above = _above(lines, kinds, scans)
-    notes: list[str] = []
-    sections = [Section(None)]
-    seen_row = False
-    block: list[str] = []
-    last_text = -1  # the line block's last is
 
-    def flush() -> None:
-        if not block:
-            return
-        if not seen_row:
-            notes.extend(line.strip() for line in block)
-        elif _is_prose(block):
-            sections[-1].items.extend(Prose(line.strip()) for line in block)
-        else:
-            sections[-1].items.append(Words(tuple(line.rstrip() for line in block)))
-        block.clear()
+def _line_kinds(lines: list[str], scans: list[Scan], in_legend: set[int]) -> list[str]:
+    """What each line of a tab is: "legend", "blank", "holes" (a row), "missed" (holes it couldn't read enough of)
+    or "text"."""
+    return ["legend" if n in in_legend else "blank" if not line.strip() else "holes" if s.is_row
+            else "missed" if s.missed else "text" for n, (line, s) in enumerate(zip(lines, scans))]
 
+
+def _laid_out(lines: list[str], kinds: list[str], scans: list[Scan], legends: list[Legend],
+              chip: str | None) -> tuple[list[str], list[Section]]:
+    """The tabber's notes before the first row, and the sections: the lines laid out one after another
+    (``_Layout``), without the gaps at a section's ends nor the sections left with nothing and no name."""
+    layout = _Layout(lines, kinds, scans, legends, chip, _above(lines, kinds, scans))
     i = 0
     while i < len(lines):
-        kind, line = kinds[i], lines[i]
-        if kind == "blank":
-            flush()
-            if seen_row and sections[-1].items and not isinstance(sections[-1].items[-1], Gap):
-                sections[-1].items.append(Gap())
-            i += 1
-            continue
-        if kind == "legend":
-            flush()
-            here = next(b for b in legends if i in b.at)
-            sections[-1].items.append(here)
-            i = here.at[-1] + 1
-            continue
-        if kind == "holes" or (kind == "missed" and seen_row):  # before the first row, a line of the notes
-            found = scans[i]
-            lyric = None
-            if above:  # the line just above it, unless it is a section's name, a row's or the tabber's notes' end
-                if last_text == i - 1 and block and _sung(lines[i - 1], scans[i - 1]):
-                    block.pop()
-                    lyric = lines[i - 1]
-            elif i + 1 < len(lines) and kinds[i + 1] == "text" and _sung(lines[i + 1], scans[i + 1]):
-                lyric = lines[i + 1]
-            flush()
-            label = found.label
-            if label and _is_label(label + ":"):
-                sections.append(Section(label))
-                label = None
-            confidence = _row_confidence(found, chip)
-            row = Row(list(found.groups), lyric, label, list(found.unknown), text=line, line=i, confidence=confidence,
-                      trusted=kind == "holes" and confidence >= ROW_TRUST, above=above and lyric is not None)
-            align(row)
-            sections[-1].items.append(row)
-            seen_row = True
-            i += 2 if lyric is not None and not above else 1
-            continue
-        beside = any(0 <= j < len(kinds) and kinds[j] in ("holes", "missed") for j in (i - 1, i + 1))
-        if _is_label(line, beside_row=beside) and (seen_row or _LABEL_WORDS.search(line)):
-            flush()
-            sections.append(Section(_label_text(line)))
+        i = _lay_out(layout, i)
+    layout.flush()
+    return layout.notes, _trimmed(layout.sections)
+
+
+@dataclass
+class _Layout:
+    """A tab's lines laid out into sections as ``parse`` goes down them: each line, what it is (``kinds``) and its
+    scan, the tab's legends, the page's chip, whether it writes each row's words above it (``above``); and what is
+    laid out so far: the tabber's notes before the first row, the sections, whether a row came yet (``seen_row``),
+    the lines of text not laid out yet (``block``) and the place of the last put in it (``last_text``)."""
+
+    lines: list[str]
+    kinds: list[str]
+    scans: list[Scan]
+    legends: list[Legend]
+    chip: str | None
+    above: bool
+    notes: list[str] = field(default_factory=list)
+    sections: list[Section] = field(default_factory=lambda: [Section(None)])
+    seen_row: bool = False
+    block: list[str] = field(default_factory=list)
+    last_text: int = -1
+
+    def flush(self) -> None:
+        """The block of text laid out: before the first row, the tabber's notes; after it, their prose or words sung
+        to the same tune (``_is_prose``)."""
+        if not self.block:
+            return
+        if not self.seen_row:
+            self.notes.extend(line.strip() for line in self.block)
+        elif _is_prose(self.block):
+            self.sections[-1].items.extend(Prose(line.strip()) for line in self.block)
         else:
-            block.append(line if seen_row else line.strip())
-            last_text = i
-        i += 1
-    flush()
+            self.sections[-1].items.append(Words(tuple(line.rstrip() for line in self.block)))
+        self.block.clear()
+
+
+def _lay_out(layout: _Layout, i: int) -> int:
+    """The line ``i`` laid out, by what it is, and the place of the next line to lay out."""
+    kind = layout.kinds[i]
+    if kind == "blank":
+        return _blank_line(layout, i)
+    if kind == "legend":
+        return _legend_lines(layout, i)
+    if kind == "holes" or (kind == "missed" and layout.seen_row):  # before the first row, a line of the notes
+        return _row_line(layout, i)
+    return _text_line(layout, i)
+
+
+def _blank_line(layout: _Layout, i: int) -> int:
+    """A blank line: the block before it laid out, and a gap in a section that has a row."""
+    layout.flush()
+    items = layout.sections[-1].items
+    if layout.seen_row and items and not isinstance(items[-1], Gap):
+        items.append(Gap())
+    return i + 1
+
+
+def _legend_lines(layout: _Layout, i: int) -> int:
+    """The legend the line ``i`` starts, its lines together."""
+    layout.flush()
+    here = next(b for b in layout.legends if i in b.at)
+    layout.sections[-1].items.append(here)
+    return here.at[-1] + 1
+
+
+def _row_line(layout: _Layout, i: int) -> int:
+    """The line ``i`` as a row, with its words and its holes over them (``align``); a label it leads with that names
+    a section starts one."""
+    found = layout.scans[i]
+    lyric = _lyric(layout, i)
+    layout.flush()
+    label = found.label
+    if label and _is_label(label + ":"):
+        layout.sections.append(Section(label))
+        label = None
+    confidence = _row_confidence(found, layout.chip)
+    row = Row(list(found.groups), lyric, label, list(found.unknown), text=layout.lines[i], line=i,
+              confidence=confidence, trusted=layout.kinds[i] == "holes" and confidence >= ROW_TRUST,
+              above=layout.above and lyric is not None)
+    align(row)
+    layout.sections[-1].items.append(row)
+    layout.seen_row = True
+    return i + (2 if lyric is not None and not layout.above else 1)
+
+
+def _lyric(layout: _Layout, i: int) -> str | None:
+    """The words of the row at ``i``: the line of text just under it, or, in a tab that writes them above, the line
+    just above, taken from the block (unless it is a section's name, a row's or the tabber's notes' end); None for
+    a row played alone."""
+    lines, scans = layout.lines, layout.scans
+    if layout.above:
+        if layout.last_text == i - 1 and layout.block and _sung(lines[i - 1], scans[i - 1]):
+            layout.block.pop()
+            return lines[i - 1]
+        return None
+    if i + 1 < len(lines) and layout.kinds[i + 1] == "text" and _sung(lines[i + 1], scans[i + 1]):
+        return lines[i + 1]
+    return None
+
+
+def _text_line(layout: _Layout, i: int) -> int:
+    """A line of text: a section's name starts a section; else it joins the block (after the first row, as
+    written)."""
+    kinds, line = layout.kinds, layout.lines[i]
+    beside = any(0 <= j < len(kinds) and kinds[j] in ("holes", "missed") for j in (i - 1, i + 1))
+    if _is_label(line, beside_row=beside) and (layout.seen_row or _LABEL_WORDS.search(line)):
+        layout.flush()
+        layout.sections.append(Section(_label_text(line)))
+    else:
+        layout.block.append(line if layout.seen_row else line.strip())
+        layout.last_text = i
+    return i + 1
+
+
+def _trimmed(sections: list[Section]) -> list[Section]:
+    """The sections without the gaps at their ends, and without those left with nothing and no name."""
     for s in sections:
         while s.items and isinstance(s.items[-1], Gap):
             s.items.pop()
         while s.items and isinstance(s.items[0], Gap):
             s.items.pop(0)
-    sections = [s for s in sections if s.items or s.label]
-    prose = notes + [item.text for s in sections for item in s.items if isinstance(item, Prose)]
-    rows = [item for s in sections for item in s.items if isinstance(item, Row)]
-    missed = [lines[n].strip() for n, kind in enumerate(kinds)
-              if kind == "missed" or (kind == "holes" and not any(r.line == n and r.trusted for r in rows))]
-    chromatic = chip == "Chromatic" or any(h.button for r in rows if r.trusted for g in r.groups for h in g.holes)
-    together = Legend(tuple(line for b in legends for line in b.lines), tuple(s for b in legends for s in b.symbols),
-                      tuple(n for b in legends for n in b.at)) if legends else None
-    return Tab(notes, sections, reading, named_key(prose), missed, chromatic, together, chip)
+    return [s for s in sections if s.items or s.label]
+
+
+def _missed(lines: list[str], kinds: list[str], rows: list[Row]) -> list[str]:
+    """The lines that hold holes but are shown as written: those it couldn't read enough of, and rows not drawn."""
+    return [lines[n].strip() for n, kind in enumerate(kinds)
+            if kind == "missed" or (kind == "holes" and not any(r.line == n and r.trusted for r in rows))]
+
+
+def _one_legend(legends: list[Legend]) -> Legend | None:
+    """The tab's legends as one, their lines, symbols and places together; None for a tab with none."""
+    return Legend(tuple(line for b in legends for line in b.lines), tuple(s for b in legends for s in b.symbols),
+                  tuple(n for b in legends for n in b.at)) if legends else None
 
 
 def _is_prose(block: list[str]) -> bool:
@@ -1433,9 +1629,20 @@ def align(row: Row, reach: int = REACH) -> None:
         row.parts = [(list(row.groups), "")] if row.groups else []
         return
     lyric = row.lyric.rstrip()
-    starts = syllable_starts(lyric)
     words = [(w.start(), w.end()) for w in _WORD.finditer(lyric)]
     groups = [g for g in row.groups if g.holes]  # what it couldn't read goes with them, after
+    at_of = _snapped(groups, syllable_starts(lyric), reach)
+    placement = Counter(snap=len(at_of))
+    _split_words(lyric, words, groups, at_of, placement)
+    _held(groups, words, at_of, placement)
+    row.parts = _parts(lyric, _places(row.groups, groups, at_of))
+    row.placement = placement
+
+
+def _snapped(groups: list[Group], starts: list[int], reach: int) -> dict[int, int]:
+    """Each group of holes (by its place in ``groups``) on the syllable start written nearest it, within ``reach``
+    columns of where it is written or its number, one a start, the nearest pairs first; one placed before a group
+    written before it loses its place."""
     pairs = sorted(  # the nearest first; of two as near, the one written at or after the start
         (min(abs(s - g.col), abs(s - g.digit)), g.digit < s, s, n)
         for n, g in enumerate(groups) for s in starts if min(abs(s - g.col), abs(s - g.digit)) <= reach)
@@ -1448,17 +1655,25 @@ def align(row: Row, reach: int = REACH) -> None:
     for n in sorted(at_of):  # in their order: one placed before a group written before it loses its place
         if any(m < n and m in at_of and at_of[m] > at_of[n] for m in at_of):
             taken.discard(at_of.pop(n))
-    placement = Counter(snap=len(at_of))
+    return at_of
+
+
+def _split_words(lyric: str, words: list[tuple[int, int]], groups: list[Group], at_of: dict[int, int],
+                 placement: Counter) -> None:
+    """The holes left over inside a word with no hyphen there placed where they cut it best (``_cuts``)."""
     for a, b in words:
         inside = [n for n, g in enumerate(groups) if n not in at_of and a < g.digit < b and lyric[g.digit].isalpha()]
         if not inside:
             continue
-        fixed = sorted({a, b} | {t for t in taken if a < t < b})
+        fixed = sorted({a, b} | {t for t in at_of.values() if a < t < b})
         for n, cut in zip(inside, _cuts(lyric, (a, b), [groups[n].digit for n in inside], fixed)):
             if cut is not None:
                 at_of[n] = cut
-                taken.add(cut)
                 placement["split"] += 1
+
+
+def _held(groups: list[Group], words: list[tuple[int, int]], at_of: dict[int, int], placement: Counter) -> None:
+    """Each hole still left on the place before it (a melisma: "air--"), or, before every place, the next word."""
     for n, g in enumerate(groups):
         if n in at_of:
             continue
@@ -1470,15 +1685,25 @@ def align(row: Row, reach: int = REACH) -> None:
             later = [a for a, _ in words if a >= g.digit] or [words[0][0] if words else 0]
             at_of[n] = later[0]
             placement["gap"] += 1
+
+
+def _places(row_groups: list[Group], groups: list[Group], at_of: dict[int, int]) -> dict[int, list[Group]]:
+    """Each column a place starts at, and the groups of a row there: those of holes where ``at_of`` puts them, what it
+    couldn't read with the hole it touches after it, else the one before it."""
     place = {id(g): at_of[n] for n, g in enumerate(groups)}
-    for g in row.groups:  # what it couldn't read: with the hole it touches after it, else the one before it
+    for g in row_groups:
         if not g.holes:
             after = next((h for h in groups if h.col == g.end), None)
             before = [h for h in groups if h.col < g.col]
             place[id(g)] = place[id(after or (before[-1] if before else groups[0]))]
     places: dict[int, list[Group]] = {}
-    for g in row.groups:
+    for g in row_groups:
         places.setdefault(place[id(g)], []).append(g)
+    return places
+
+
+def _parts(lyric: str, places: dict[int, list[Group]]) -> list[tuple[list[Group], str]]:
+    """The row's words cut at each place, with its groups: the words before the first place a part with none."""
     cuts = sorted(places)
     parts: list[tuple[list[Group], str]] = []
     if cuts and cuts[0] > 0 and lyric[:cuts[0]].strip():
@@ -1486,8 +1711,7 @@ def align(row: Row, reach: int = REACH) -> None:
     for n, at in enumerate(cuts):
         end = cuts[n + 1] if n + 1 < len(cuts) else len(lyric)
         parts.append((places[at], lyric[at:end]))
-    row.parts = parts
-    row.placement = placement
+    return parts
 
 
 _VOWELS = frozenset("aeiouyáéíóúàèìòùäëïöüAEIOUYÁÉÍÓÚÀÈÌÒÙÄËÏÖÜ")
