@@ -156,9 +156,9 @@ import struct
 import subprocess
 import tempfile
 import unicodedata
-from collections.abc import Callable, Collection, Iterator, Mapping
+from collections.abc import Callable, Collection, Iterable, Iterator, Mapping
 from contextlib import contextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from functools import lru_cache
 from itertools import pairwise
@@ -578,26 +578,12 @@ def render_all(
     from caracole.autochords.sheet_lyrics import lyrics_onto_sheets
 
     stats = RenderStats(given=len(lyrics_onto_sheets(conn, cfg, overrides, only=song_ids)))
-    failed: list[str] = []
-    no_font: dict[str, str] = {}
+    tally = _Tally(stats)
     font, font_problem = _cjk_font(cfg.cjk_font)
     fonts = _usable_pdf_fonts(cfg)
-    handed = False
     overrides = own_versions_upgraded(conn, cfg, overrides)
     songs = list_songs(conn) if song_ids is None else _songs_of(conn, song_ids)
-    for n, listed in enumerate(songs):
-        if n and between is not None and between():
-            handed = True
-            try:
-                overrides = load_overrides(cfg.overrides_file)
-            except OverridesError as e:
-                log.info("overrides.toml couldn't be read again (%s); the render goes on with what it read.", e)
-        song = listed
-        if handed:
-            try:
-                song = get_song(conn, listed.id)
-            except KeyError:  # merged into another song meanwhile
-                continue
+    for song, overrides in _songs_in_turn(conn, cfg, songs, overrides, between):
         if song.status == "ignored" or song.key in overrides.ignore:
             continue
         try:
@@ -606,26 +592,77 @@ def render_all(
             )
         except (RenderError, OSError) as e:
             log.warning("no PDF for %s: %s", song.display, e)
-            failed.append(song.display)
+            tally.failed.append(song.display)
             continue
-        stats.rendered += sum(1 for d in done if d.outcome == "rendered")
-        stats.skipped += sum(1 for d in done if d.outcome == "skipped")
-        if any(d.viewer_failed for d in done):
-            failed.append(song.display)
-        if missing := next((d.missing for d in done if d.outcome == "no font"), None):
-            no_font[song.display] = missing
-    stats.failed = len(failed)
-    if no_font:
-        stats.font_error = _font_error(no_font, font_problem)
-        log.warning("%s", stats.font_error)
-    at = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    status = {"at": at, "rendered": stats.rendered, "failed": failed, "font_error": stats.font_error,
-              "no_font": no_font}
-    if song_ids is not None:
-        status = _status_after(kv_get_json(conn, STATUS_KEY, default=None), status, {s.display for s in songs},
-                               font_problem)
-    kv_set_json(conn, STATUS_KEY, status)
+        tally.count(song, done)
+    tally.record(conn, font_problem, now=now, names=None if song_ids is None else {s.display for s in songs})
     return stats
+
+
+def _songs_in_turn(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
+                   between: Callable[[], bool] | None) -> Iterator[tuple[Song, Overrides]]:
+    """Each of ``songs`` in its turn, with overrides.toml as the pass knows it then. ``between`` is called before
+    each turn but the first, once the one before is over, in no transaction; once it says it handed caracole's lock
+    to a lookup, overrides.toml is read again, and so is each song after, as the lookup may have changed them: one
+    merged into another meanwhile is passed over."""
+    handed = False
+    for n, listed in enumerate(songs):
+        if n and between is not None and between():
+            handed = True
+            overrides = _overrides_again(cfg, overrides)
+        song = listed
+        if handed:
+            try:
+                song = get_song(conn, listed.id)
+            except KeyError:  # merged into another song meanwhile
+                continue
+        yield song, overrides
+
+
+def _overrides_again(cfg: Config, overrides: Overrides) -> Overrides:
+    """overrides.toml read again after a lookup had the lock; the one read before, if it can't be."""
+    try:
+        return load_overrides(cfg.overrides_file)
+    except OverridesError as e:
+        log.info("overrides.toml couldn't be read again (%s); the render goes on with what it read.", e)
+        return overrides
+
+
+@dataclass
+class _Tally:
+    """What a pass finds, song by song: its ``stats``, the songs that ``failed`` (their display names, in the
+    pass's order) and those whose sheet waits for a font (``no_font``: the first letter it needs one for)."""
+
+    stats: RenderStats
+    failed: list[str] = field(default_factory=list)
+    no_font: dict[str, str] = field(default_factory=dict)
+
+    def count(self, song: Song, done: list[_Done]) -> None:
+        """A song's sheets: the PDFs rendered and those up to date, a viewer that failed (the song's a failure,
+        its PDFs counted all the same), and the first letter a sheet waits for a font for."""
+        self.stats.rendered += sum(1 for d in done if d.outcome == "rendered")
+        self.stats.skipped += sum(1 for d in done if d.outcome == "skipped")
+        if any(d.viewer_failed for d in done):
+            self.failed.append(song.display)
+        if missing := next((d.missing for d in done if d.outcome == "no font"), None):
+            self.no_font[song.display] = missing
+
+    def record(self, conn: sqlite3.Connection, font_problem: str | None, *, now: datetime | None,
+               names: set[str] | None) -> None:
+        """The pass over: its failures counted, its one font error said, and kv ``render:status`` written, stamped
+        with ``now``: this pass's record, or after a pass over some songs (``names``: theirs), the last full pass's
+        brought up to date for them (``_status_after``)."""
+        stats = self.stats
+        stats.failed = len(self.failed)
+        if self.no_font:
+            stats.font_error = _font_error(self.no_font, font_problem)
+            log.warning("%s", stats.font_error)
+        at = (now or datetime.now(UTC)).astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        status = {"at": at, "rendered": stats.rendered, "failed": self.failed, "font_error": stats.font_error,
+                  "no_font": self.no_font}
+        if names is not None:
+            status = _status_after(kv_get_json(conn, STATUS_KEY, default=None), status, names, font_problem)
+        kv_set_json(conn, STATUS_KEY, status)
 
 
 def _songs_of(conn: sqlite3.Connection, song_ids: Collection[int]) -> list[Song]:

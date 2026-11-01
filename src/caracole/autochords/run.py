@@ -68,7 +68,7 @@ import sys
 import tempfile
 import wave
 from array import array
-from collections.abc import Callable, Collection, Sequence
+from collections.abc import Callable, Collection, Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -199,10 +199,29 @@ def autochords_pending(
     if overrides is None:
         overrides = load_overrides(cfg.overrides_file)
     stats = AutoStats()
-    models: tuple[Recognizer, BeatsFn] | None = None
-    unavailable = False
+    models = _Models(cfg, recognizer, beats_fn)
+    songs = (s for s in list_songs(conn) if only is None or s.id in only)
+    for song, overrides in _songs_in_turn(conn, cfg, songs, overrides, between):
+        failure = _known_failure(conn, song)  # first, so a failure goes when its file does
+        if not song.audio_path or not _due(conn, cfg, song, overrides, failure, stats):
+            continue
+        loaded = models.load(stats)
+        if loaded is None:  # the models can't run: the song stays due
+            stats.failed += 1
+            continue
+        _generate(conn, cfg, song, loaded, stamp, stats)
+    _record_run(conn, stats, stamp, only)
+    return stats
+
+
+def _songs_in_turn(conn: sqlite3.Connection, cfg: Config, songs: Iterable[Song], overrides: Overrides,
+                   between: Callable[[], bool] | None) -> Iterator[tuple[Song, Overrides]]:
+    """Each of ``songs`` in its turn, with overrides.toml as the run knows it then. ``between`` is called before
+    each turn but the first, once the one before is over, in no transaction; once it says it handed caracole's lock
+    to a lookup, overrides.toml is read again, and so is each song after, as the lookup may have changed them: one
+    merged into another meanwhile is passed over."""
     handed = False
-    for n, listed in enumerate(s for s in list_songs(conn) if only is None or s.id in only):
+    for n, listed in enumerate(songs):
         if n and between is not None and between():
             handed = True
             overrides = _overrides_again(cfg, overrides)
@@ -212,63 +231,95 @@ def autochords_pending(
                 song = get_song(conn, listed.id)
             except KeyError:  # merged into another song meanwhile
                 continue
-        failure = _known_failure(conn, song)  # first, so a failure goes when its file does
-        if not song.audio_path:
-            continue
-        try:
-            reason = _skip_reason(conn, song, overrides)
-        except Exception as e:  # noqa: BLE001 - a song's bad data must not stop the others
-            _error(stats, song, e)
-            continue
-        if reason is not None:
-            log.debug("%s: skipped (%s)", song.display, reason)
-            stats.skipped += 1
-            continue
-        if failure is not None:
-            log.info(
-                "%s: not tried again until %s changes (%s)",
-                song.display,
-                song.audio_path,
-                failure.error,
-            )
-            stats.failed += 1
-            stats.failures.append(failure)
-            continue
-        other = keeper_of(conn, cfg.library_dir, song, AUTO_SHEET)
-        if other is not None:  # its sheet would go where another song keeps one: no model is run for it
-            log.warning("%s", SharedFolder(song, other, AUTO_SHEET))
-            stats.skipped += 1
-            continue
-        if models is None and not unavailable:
+        yield song, overrides
+
+
+def _due(conn: sqlite3.Connection, cfg: Config, song: Song, overrides: Overrides, failure: Failure | None,
+         stats: AutoStats) -> bool:
+    """Whether a song with linked audio is due for an auto sheet now. One that isn't is counted in ``stats`` here:
+    skipped (by ``_skip_reason``, or as another song keeps a sheet where its own would go), failed (its file failed
+    before and hasn't changed: ``failure``), or an error (its data couldn't be read)."""
+    try:
+        reason = _skip_reason(conn, song, overrides)
+    except Exception as e:  # noqa: BLE001 - a song's bad data must not stop the others
+        _error(stats, song, e)
+        return False
+    if reason is not None:
+        log.debug("%s: skipped (%s)", song.display, reason)
+        stats.skipped += 1
+        return False
+    if failure is not None:
+        log.info(
+            "%s: not tried again until %s changes (%s)",
+            song.display,
+            song.audio_path,
+            failure.error,
+        )
+        stats.failed += 1
+        stats.failures.append(failure)
+        return False
+    other = keeper_of(conn, cfg.library_dir, song, AUTO_SHEET)
+    if other is not None:  # its sheet would go where another song keeps one: no model is run for it
+        log.warning("%s", SharedFolder(song, other, AUTO_SHEET))
+        stats.skipped += 1
+        return False
+    return True
+
+
+@dataclass
+class _Models:
+    """The run's recognizer and beat tracker (``_models``), set up when the first song turns out to be due, so a
+    night with no new audio loads no model; once they can't be, they aren't tried again that run."""
+
+    cfg: Config
+    recognizer: Recognizer | None
+    beats_fn: BeatsFn | None
+    loaded: tuple[Recognizer, BeatsFn] | None = None
+    unavailable: bool = False
+
+    def load(self, stats: AutoStats) -> tuple[Recognizer, BeatsFn] | None:
+        """The models, set up now for the first song due; None when they can't run, each reason one of the run's
+        errors in ``stats``, logged once."""
+        if self.loaded is None and not self.unavailable:
             try:
-                models = _models(cfg, recognizer, beats_fn)
+                self.loaded = _models(self.cfg, self.recognizer, self.beats_fn)
             except ModelsUnavailable as e:
-                unavailable = True
+                self.unavailable = True
                 for message in e.args:
                     stats.errors.append(message)
                     log.error("auto-chords cannot run: %s", message)
-        if models is None:
-            stats.failed += 1
-            continue
-        video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
-        try:
-            heard = _hear(song, *models)
-        except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
-            stats.failed += 1
-            stats.failures.append(_unreadable(conn, song, e, stamp))
-            continue
-        try:
-            text, used, key, shift = _make_sheet(song, heard, source=_from_youtube(video))
-        except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
-            _error(stats, song, e)
-            continue
-        try:
-            _keep(conn, cfg, song, text, used, key, stamp, video=video, shift=shift)
-        except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
-            _error(stats, song, e)
-            continue
-        stats.generated += 1
-        log.info("%s: auto sheet written (%s lyrics)", song.display, used)
+        return self.loaded
+
+
+def _generate(conn: sqlite3.Connection, cfg: Config, song: Song, models: tuple[Recognizer, BeatsFn], stamp: str,
+              stats: AutoStats) -> None:
+    """The song's auto sheet, made from its audio and kept in the library, counted in ``stats``: generated, or
+    failed, by its file (``_unreadable``: tried again once the file changes) or by caracole (``_error``: the song
+    stays due, and the run fails)."""
+    video = youtube_audio(conn, song)  # audio youtube_fetch.py took, rather than a purchase
+    try:
+        heard = _hear(song, *models)
+    except Exception as e:  # noqa: BLE001 - one file's problem must not stop the others
+        stats.failed += 1
+        stats.failures.append(_unreadable(conn, song, e, stamp))
+        return
+    try:
+        text, used, key, shift = _make_sheet(song, heard, source=_from_youtube(video))
+    except Exception as e:  # noqa: BLE001 - a bug laying it out is caracole's, never the file's: the song stays due
+        _error(stats, song, e)
+        return
+    try:
+        _keep(conn, cfg, song, text, used, key, stamp, video=video, shift=shift)
+    except Exception as e:  # noqa: BLE001 - the library's problem, not the purchase's
+        _error(stats, song, e)
+        return
+    stats.generated += 1
+    log.info("%s: auto sheet written (%s lyrics)", song.display, used)
+
+
+def _record_run(conn: sqlite3.Connection, stats: AutoStats, stamp: str, only: Collection[int] | None) -> None:
+    """kv ``autochords:status``, the run's record for the to-do page, stamped ``stamp``. After a run over some songs
+    (``only``), the other songs' failures stay listed, as the last whole run found them."""
     failed = [asdict(f) for f in stats.failures]
     record = {"at": stamp, "generated": stats.generated, "skipped": stats.skipped, "failed": failed}
     if only is not None:  # the other songs' failures stay listed, as the last whole run found them
@@ -278,7 +329,6 @@ def autochords_pending(
         kept = [f for f in before.get("failed") or [] if isinstance(f, dict) and f.get("song") not in mine]
         record = {**before, "failed": kept + failed} if before else record
     kv_set_json(conn, STATUS_KEY, record)
-    return stats
 
 
 def _failed_display(conn: sqlite3.Connection, song_id: int) -> str | None:
