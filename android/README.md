@@ -88,6 +88,53 @@ The sheet viewer keeps each chord over its syllable at any text size. Pages writ
 chords over the lyrics when the text is much larger. Once caracole is upgraded, its next render writes the pages
 again, and the next sync brings them to the phone.
 
+## caracole itself on the phone (experimental)
+
+The app above copies a computer's library. To search, add songs and fetch them with the computer off, the phone
+runs caracole itself, in [Termux](https://termux.dev): the same caracole, its ChordPro and its fonts, with every
+feature but auto-chords and YouTube (no torch on a phone) and the nightly run (the computer keeps that). Nobody has
+run it on a phone yet: the steps below were worked out from the packages, and `android/termux/setup.sh` stops at the
+first one that fails and says what to send.
+
+1. **Install Termux and Termux:Boot**, both from F-Droid or both from their GitHub releases, never one of them from
+   Google Play: the Play builds can't run each other's scripts. Open Termux once. In Android's settings, give it
+   unrestricted battery use.
+2. **Let it build.** pip compiles rapidfuzz, selectolax and opencc on the phone, and Android 12 and later kills a
+   process tree of more than 32. On Android 14 and later: Developer options → **Disable child process
+   restrictions**. On 12 and 13, from a computer with USB debugging:
+   `adb shell device_config put activity_manager max_phantom_processes 2147483647`.
+3. **Get the script and caracole.** Either from GitHub:
+
+       pkg install -y curl
+       curl -fsSLO https://raw.githubusercontent.com/Danielhp95/caracole/main/android/termux/setup.sh
+
+   or copy `setup.sh` and a tarball of the repository (`git archive --prefix=caracole/ -o caracole.tar.gz HEAD`)
+   to the phone's Downloads, then `termux-setup-storage` and `cp ~/storage/downloads/setup.sh
+   ~/storage/downloads/caracole.tar.gz ~`.
+4. **Run it**, with the phone charging, on Wi-Fi, with 2 GB free. It takes a while (the builds are the long part):
+
+       termux-wake-lock
+       sh setup.sh ~/caracole.tar.gz      # or no argument: caracole from GitHub's main
+
+   Its steps: `tools` (Termux's packages), `python` (caracole and its dependencies, the versions of
+   [deploy.md](../docs/deploy.md)'s constraints), `chordpro` (ChordPro 6.050.7 from CPAN), `fonts` (the PDFs'
+   fonts and alphaTab), `wrapper` (`~/.caracole/bin/caracole`), `check` (a PDF, and `caracole serve` answering),
+   `service`. Everything goes in `~/.caracole`, the log in `~/caracole-setup.log`. One that fails stops it: send
+   the log, and once it is fixed, `sh setup.sh --step NAME ~/caracole.tar.gz` goes on from there.
+5. **Start it.** Close Termux, open it again, then `sv-enable caracole`: `caracole serve` runs on
+   `http://127.0.0.1:8737`, and again after every boot (Termux:Boot). Open that address in the phone's browser.
+   `sv down caracole` stops it, `sv up caracole` starts it again.
+6. **Bring the site indexes from the computer**, never `caracole index build` on the phone (days of requests): on
+   the computer `caracole index export indexes.sqlite`, copy the file over, then on the phone `caracole index
+   merge indexes.sqlite`.
+7. **Sync with the computer**: `caracole peer sync http://COMPUTER:8737` on the phone (docs/usage.md, "Two
+   caracoles"). For the computer to take the phone's changes too, the phone's server must listen where the computer
+   reaches it: `echo 0.0.0.0 > ~/.caracole/address && sv restart caracole` (or the phone's tailnet address in
+   place of 0.0.0.0) for the sync, and `rm ~/.caracole/address && sv restart caracole` after.
+
+The library is at `~/Tabs`, in Termux's own storage: not in shared storage, which keeps no file modes. caracole
+serve has no sign-in, so any app on the phone can use it on 127.0.0.1.
+
 ## Try it on an emulator
 
 `nix develop ./android#emulator` adds the emulator, `adb`, `avdmanager` and an Android 36 x86_64 image:
