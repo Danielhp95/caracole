@@ -500,28 +500,13 @@ def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_RO
     """The offline index's artists and songs for ``query`` (``IndexFound``); with ``reading`` "title",
     songs of that title alone, by any artist, and no artist rows."""
     scored, named, parts = _scored_rows(conn, query, reading)
-    if any(n.score >= 100 for n in named.values()):
-        # A name only near the query's ("Beagles" for "eagles") is noise beside the one that is it: its row goes,
-        # and the songs only its name matched.
-        near = {k for k, n in named.items() if n.score < 100}
-        named = {k: n for k, n in named.items() if k not in near}
-        scored = [s for s in scored if not (s.via == "artist" and s.artist_key in near)]
-    rows: list[ArtistHit] = []
-    if artists > 0:
-        # Weighed first by what the rows hold of each (every row of an artist whose key a pattern
-        # matched), then counted exactly for the few that may be shown.
-        order = sorted(named, key=lambda k: (-named[k].score, -named[k].top, -named[k].tabs, k))
-        yours = _Yours(conn)
-        rows = [a for a in (_artist_hit(conn, k, named[k].score, yours) for k in order[:artists + 2]) if a is not None]
-        rows = sorted(rows, key=lambda a: (-a.score, -a.top_tabs, -a.tabs, a.artist_key))[:artists]
-        rows = _with_parts(rows, _part_rows(conn, {k: c for k, c in parts.items() if k not in named}, artists, yours),
-                           artists)
+    scored, named = _without_near_names(scored, named)
+    rows = _artist_rows(conn, named, parts, artists)
     shown = {a.artist_key for a in rows}
     hits = _hits(conn, [s for s in scored if not (s.via == "artist" and s.artist_key in shown)][:songs])
     if not rows and not hits:
         return IndexFound()
-    if rows and (_part_leads(rows[0], scored, hits) if rows[0].part else
-                 not hits or (rows[0].score, rows[0].top_tabs) > (hits[0].score, hits[0].tabs)):
+    if rows and _artist_leads(rows[0], scored, hits):
         return IndexFound(tuple(rows), tuple(hits), "artist", None)
     if not hits:  # only artists a word names, none of whom leads
         return IndexFound(tuple(rows), (), "song", None)
@@ -529,6 +514,40 @@ def find_index(conn: sqlite3.Connection, query: str, *, artists: int = ARTIST_RO
     # Never one only an artist's name matched, nor one of a catch-all's: its artist is no one's name.
     best = first if first.score >= STRONG and first.via != "artist" and not first.catch_all else None
     return IndexFound(tuple(rows), tuple(hits), "song", best)
+
+
+def _without_near_names(scored: list[_Row], named: dict[str, _Named]) -> tuple[list[_Row], dict[str, _Named]]:
+    """The rows and the artists the query names, less, beside an artist whose whole name the query is, those whose
+    name is only near it ("Beagles" for "eagles"): noise beside the one that is it, their rows go, and the songs only
+    their name matched."""
+    if not any(n.score >= 100 for n in named.values()):
+        return scored, named
+    near = {k for k, n in named.items() if n.score < 100}
+    return ([s for s in scored if not (s.via == "artist" and s.artist_key in near)],
+            {k: n for k, n in named.items() if k not in near})
+
+
+def _artist_rows(conn: sqlite3.Connection, named: Mapping[str, _Named], parts: Mapping[str, float],
+                 n: int) -> list[ArtistHit]:
+    """Up to ``n`` artist rows: the artists the query names (``named``), with those it names in part (``parts``, less
+    those it names), in one order (``_with_parts``)."""
+    if n <= 0:
+        return []
+    # Weighed first by what the rows hold of each (every row of an artist whose key a pattern
+    # matched), then counted exactly for the few that may be shown.
+    order = sorted(named, key=lambda k: (-named[k].score, -named[k].top, -named[k].tabs, k))
+    yours = _Yours(conn)
+    rows = [a for a in (_artist_hit(conn, k, named[k].score, yours) for k in order[:n + 2]) if a is not None]
+    rows = sorted(rows, key=lambda a: (-a.score, -a.top_tabs, -a.tabs, a.artist_key))[:n]
+    return _with_parts(rows, _part_rows(conn, {k: c for k, c in parts.items() if k not in named}, n, yours), n)
+
+
+def _artist_leads(artist: ArtistHit, scored: Sequence[_Row], hits: Sequence[IndexHit]) -> bool:
+    """Whether the first artist row comes before the songs: a better score than the first song's, or the same and a
+    more tabbed song of its own; one the query names in part, by ``_part_leads``."""
+    if artist.part:
+        return _part_leads(artist, scored, hits)
+    return not hits or (artist.score, artist.top_tabs) > (hits[0].score, hits[0].tabs)
 
 
 def _part_rows(conn: sqlite3.Connection, parts: Mapping[str, float], n: int, yours: _Yours) -> list[ArtistHit]:
@@ -701,33 +720,51 @@ def suggestions(conn: sqlite3.Connection, query: str, index: IndexFound, sites: 
     room for a title, nor is a song suggested whose every hit the results show; one another site's index found, a
     harmonica tab of harptabs.com, may still be suggested with the Ultimate Guitar song the search missed ("sweet chld
     o mine")."""
-    for a in index.artists:
-        if not a.part:
-            return []
-    if any(h.score >= 100 and h.via != "artist" for h in index.songs):
+    if _no_room(index, sites):
         return []
-    titled = any(h.score >= STRONG and h.via != "artist" for h in index.songs)
-    shown: list[tuple[str, int]] = [(compact(name_words_key(a.artist)), a.songs) for a in index.artists]
-    for h in sites:
-        if isinstance(h, SiteArtist):
-            if h.score > PART and not h.part:  # another site's whole name, or a name near it: a part tops out at PART
-                return []
-            shown.append((compact(name_words_key(h.artist)), h.songs))
-        elif h.source == "musescore" or (h.score >= 100 and h.via != "artist"):
-            return []
     words = _suggestible(query)
     if words is None:
         return []
+    # The artists shown: one suggested has more songs than any of them, and is none of them.
+    shown = [(compact(name_words_key(a.artist)), a.songs)
+             for a in [*index.artists, *(h for h in sites if isinstance(h, SiteArtist))]]
     most = max((n for _, n in shown), default=0)
     names = {name for name, _ in shown}
     artists = [(w, s) for w, s in _cut(_artist_suggestions(conn, words, lacuerda=lacuerda, harptabs=harptabs))
                if s.songs > most and compact(name_words_key(s.artist)) not in names]
+    titled = any(h.score >= STRONG and h.via != "artist" for h in index.songs)
+    titles = [] if titled else _unshown_titles(conn, words, index, sites, lacuerda=lacuerda, harptabs=harptabs,
+                                               gtptabs=gtptabs)
+    return [s for _, s in _cut(artists + titles)]
+
+
+def _no_room(index: IndexFound, sites: Sequence[SiteHit | SiteArtist]) -> bool:
+    """Whether the results leave no room for a suggestion (``suggestions``): an artist whose whole name the query is,
+    or a name near it, on the Ultimate Guitar index or another site's; a song whose title (or title and artist) the
+    query is whole; any page of MuseScore's."""
+    if any(not a.part for a in index.artists):
+        return True
+    if any(h.score >= 100 and h.via != "artist" for h in index.songs):
+        return True
+    for h in sites:
+        if isinstance(h, SiteArtist):
+            if h.score > PART and not h.part:  # another site's whole name, or a name near it: a part tops out at PART
+                return True
+        elif h.source == "musescore" or (h.score >= 100 and h.via != "artist"):
+            return True
+    return False
+
+
+def _unshown_titles(conn: sqlite3.Connection, words: Sequence[str], index: IndexFound,
+                    sites: Sequence[SiteHit | SiteArtist], *, lacuerda: bool, harptabs: bool,
+                    gtptabs: bool) -> list[tuple[float, Suggestion]]:
+    """The songs spelled close to the query worth suggesting beside the results (``_title_suggestions``, cut as
+    ``_cut`` cuts them): none whose every hit the results show."""
     hits = {("ug", h.artist_key, h.song_key) for h in index.songs} | {
         (h.source, h.url) for h in sites if isinstance(h, SiteHit)}
-    titles = [] if titled else [
-        (w, s) for w, s in _cut(_title_suggestions(conn, words, lacuerda=lacuerda, harptabs=harptabs, gtptabs=gtptabs))
-        if not all(_shown(h) in hits for h in s.hits)]
-    return [s for _, s in _cut(artists + titles)]
+    return [(w, s) for w, s in _cut(_title_suggestions(conn, words, lacuerda=lacuerda, harptabs=harptabs,
+                                                       gtptabs=gtptabs))
+            if not all(_shown(h) in hits for h in s.hits)]
 
 
 def _shown(hit: IndexHit | SiteHit) -> tuple[str, ...]:
@@ -885,12 +922,11 @@ def _harptabs_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> lis
     longest = max(words, key=len)
     needles = _needles(words, [_near(conn, w) if w == longest else [w] for w in words])
     rows = [_HarpArtist(*r) for r in conn.execute(
-        "SELECT i.path, i.page_id, i.key, a.name, a.tabs, a.read_at FROM harptabs_index i LEFT JOIN harptabs_artists a "
-        f"ON a.path = i.path WHERE i.kind = 'artist' AND {_holds('i.key', needles)}", needles)]
+        f"{_HARP_ARTISTS} WHERE i.kind = 'artist' AND {_holds('i.key', needles)}", needles)]
     letters = sum(len(w) for w in words)
     close = []
     for row in rows:
-        if row.read_at is not None and not row.name:  # a page gone names no one
+        if row.gone:
             continue
         name = row.key.split("-")
         if not all(any(n[:1] == w[:1] for n in name) for w in words if len(w) >= CLOSE_LETTERS):
@@ -1136,12 +1172,7 @@ def _gtptabs_titled(conn: sqlite3.Connection, hit: IndexHit | SiteHit, score: fl
     the name's forms, each also last word first, as the site files people, and the title's key; none for none."""
     from caracole.gtptabs import page_url
 
-    keys: list[str] = []
-    for form in name_forms(hit.artist):
-        if form and not no_ones(form) and not placeholder_artist(form):
-            words = form.split("-")
-            keys += [form, "-".join([words[-1], *words[:-1]])]
-    keys = list(dict.fromkeys(keys))
+    keys = _gtptabs_keys(hit.artist)
     base = split_variant(hit.song_key)[0] if isinstance(hit, IndexHit) else slug_key(hit.title)
     if not keys or not base:
         return []
@@ -1260,16 +1291,22 @@ def gtptabs_songs(conn: sqlite3.Connection, artist: str) -> int:
     (``normalize.name_forms``), each also with its last word first, as the site files people ("Elton John" is
     ``john-elton``, as ``gtptabs.artist_keys`` has it); a title's uploads ("-2", "-3") one song, an artist's page
     none. By the table's artist index alone: no scan, so ``ac-dc`` there never meets an ``acdc`` here."""
+    keys = _gtptabs_keys(artist)
+    if not keys:
+        return 0
+    return conn.execute(f"SELECT COUNT(DISTINCT base_key) FROM gtptabs_index WHERE artist_key IN "
+                        f"({', '.join('?' * len(keys))}) AND title_key != ''", keys).fetchone()[0]
+
+
+def _gtptabs_keys(artist: str) -> list[str]:
+    """The artist keys gtptabs.com may file a name under: the keys of its forms (``normalize.name_forms``), each also
+    with its last word first ("Elton John" is ``john-elton``); none of no one's, nor a placeholder's."""
     keys: list[str] = []
     for form in name_forms(artist):
         if form and not no_ones(form) and not placeholder_artist(form):
             words = form.split("-")
             keys += [form, "-".join([words[-1], *words[:-1]])]
-    keys = list(dict.fromkeys(keys))
-    if not keys:
-        return 0
-    return conn.execute(f"SELECT COUNT(DISTINCT base_key) FROM gtptabs_index WHERE artist_key IN "
-                        f"({', '.join('?' * len(keys))}) AND title_key != ''", keys).fetchone()[0]
+    return list(dict.fromkeys(keys))
 
 
 def search_musescore(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS) -> list[SiteHit]:
@@ -1297,21 +1334,70 @@ def search_gametabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS
     Ties go to the most viewed. The game is named as its page heads it once caracole read it, else from its slug, and
     the track as a card writes it, else from its slug (less the number a repeated title takes). It reads the tables
     alone."""
-    from caracole.gametabs import TAB, page_url, title_key
-    from caracole.normalize import identity_key
-
     patterns = _patterns(name_words(query))
     queries = _queries(query)
     if not patterns or not queries:
         return []
+    paths = _gametabs_paths(conn, patterns)
+    if not paths:
+        return []
+    tracks, names = _gametabs_tracks(conn, paths)
+    scored = []
+    for (game, key), tabs in tracks.items():
+        name = names.get(game) or _title_words(game.replace("_", "-"))
+        score, via = _gametabs_reading(queries, name, game, key, tabs)
+        if score >= MIN_SCORE:
+            views = max((t.views for t in tabs if t.listed), default=0)
+            scored.append((round(score, 1), views, name, key, game, tabs, via))
+    scored.sort(key=lambda s: (-s[0], -s[1], s[2], s[3]))
+    return [_gametabs_hit(score, name, key, game, tabs, via)
+            for score, _, name, key, game, tabs, via in scored[:max(limit, 0)]]
+
+
+class _GameTab(NamedTuple):
+    """A tab of a track of gametabs.net, as ``search_gametabs`` reads it: its page's path, its title as its game's page
+    lists it (None before caracole read that page), and that page's row of it (``listed``: the title, the views, the
+    rating, the instruments and the composers; () before)."""
+
+    path: str
+    title: str | None
+    listed: tuple
+
+    @property
+    def views(self) -> int:
+        return self.listed[1] if self.listed else 0
+
+    def hit(self, title: str) -> GameTabHit:
+        """The tab as a track's hit lists it, under the track's ``title`` when its game's page lists it under none."""
+        from caracole.gametabs import page_url
+
+        if not self.listed:
+            return GameTabHit(self.title or title, page_url(self.path))
+        _, views, rating, instruments, composers = self.listed
+        return GameTabHit(self.title or title, page_url(self.path), views, rating, tuple(_listed_names(instruments)),
+                          tuple(_listed_names(composers)))
+
+
+def _gametabs_paths(conn: sqlite3.Connection, patterns: Sequence[str]) -> set[str]:
+    """The tab pages a query's patterns find: by their paths (the game's slug and the track's), and by the composers
+    the game pages caracole read name."""
+    from caracole.gametabs import TAB
+
     paths = {r[0] for r in conn.execute(
         f"SELECT path FROM gametabs_index WHERE kind = ? AND ({' OR '.join('path LIKE ?' for _ in patterns)}) LIMIT ?",
         (TAB, *patterns, SITE_ROWS_READ))}
     paths.update(r[0] for r in conn.execute(
         f"SELECT path FROM gametabs_game_tabs WHERE {' OR '.join('composers LIKE ?' for _ in patterns)} LIMIT ?",
         (*patterns, SITE_ROWS_READ)))
-    if not paths:
-        return []
+    return paths
+
+
+def _gametabs_tracks(conn: sqlite3.Connection,
+                     paths: set[str]) -> tuple[dict[tuple[str, str], list[_GameTab]], dict[str, str]]:
+    """The tabs of ``paths`` by track, a game's slug and a title's key (the title its game's page lists, else the
+    sitemap's key; a tab with neither is none), and the names of their games as their pages head them."""
+    from caracole.gametabs import TAB, title_key
+
     marks = ", ".join("?" for _ in paths)
     listed = {r[0]: tuple(r)[1:] for r in conn.execute(
         f"SELECT path, title, views, rating, instruments, composers FROM gametabs_game_tabs WHERE path IN ({marks})",
@@ -1322,36 +1408,37 @@ def search_gametabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS
     marks = ", ".join("?" for _ in games)
     names = {r[0]: r[1] for r in conn.execute(f"SELECT game, name FROM gametabs_games WHERE name != '' AND game IN "
                                               f"({marks}) ORDER BY path", list(games))} if games else {}
-    tracks: dict[tuple[str, str], list[tuple[str, str | None, tuple]]] = {}
+    tracks: dict[tuple[str, str], list[_GameTab]] = {}
     for path in paths:
         game = path.split("/")[1]
         row = listed.get(path)
         title = row[0] if row is not None else None
         key = title_key(title) if title else (keyed[path][1] if path in keyed else "")
         if key:
-            tracks.setdefault((game, key), []).append((path, title, row or ()))
-    scored = []
-    for (game, key), tabs in tracks.items():
-        name = names.get(game) or _title_words(game.replace("_", "-"))
-        composers = list(dict.fromkeys(c for _, _, row in tabs for c in _listed_names(row[4] if row else None)))
-        artists = [" ".join(name_words(name)), re.sub(r"[-_]", " ", game), *(" ".join(name_words(c)) for c in composers)]
-        score, via = _reading(q.readings(a, key.replace("-", " ")) for q in queries for a in dict.fromkeys(artists) if a)
-        if score >= MIN_SCORE:
-            views = max((row[1] for _, _, row in tabs if row), default=0)
-            scored.append((round(score, 1), views, name, key, game, tabs, via))
-    scored.sort(key=lambda s: (-s[0], -s[1], s[2], s[3]))
-    hits = []
-    for score, _, name, key, game, tabs, via in scored[:max(limit, 0)]:
-        tabs.sort(key=lambda t: (-(t[2][1] if t[2] else 0), t[0]))
-        title = next((t for _, t, _ in tabs if t), None) or _title_words(key)
-        hits.append(SiteHit(
-            "gametabs", title, page_url(tabs[0][0]), score, artist=name,
-            artist_key=identity_key(name, "").partition("/")[0], title_key=key, uploads=len(tabs), via=via,
-            tabs=tuple(GameTabHit(t or title, page_url(path), *((row[1], row[2], tuple(_listed_names(row[3])),
-                                                                  tuple(_listed_names(row[4]))) if row else ()))
-                       for path, t, row in tabs),
-            page=game))
-    return hits
+            tracks.setdefault((game, key), []).append(_GameTab(path, title, row or ()))
+    return tracks, names
+
+
+def _gametabs_reading(queries: list[_Query], name: str, game: str, key: str,
+                      tabs: Sequence[_GameTab]) -> tuple[float, str]:
+    """A track's best reading of the query: its title, under its game's name, its game's slug or a composer of its
+    tabs as its artist's."""
+    composers = list(dict.fromkeys(c for t in tabs for c in _listed_names(t.listed[4] if t.listed else None)))
+    artists = [" ".join(name_words(name)), re.sub(r"[-_]", " ", game), *(" ".join(name_words(c)) for c in composers)]
+    return _reading(q.readings(a, key.replace("-", " ")) for q in queries for a in dict.fromkeys(artists) if a)
+
+
+def _gametabs_hit(score: float, name: str, key: str, game: str, tabs: list[_GameTab], via: str) -> SiteHit:
+    """A track as ``search_gametabs`` gives it: its tabs the most viewed first, its title the first a game's page
+    lists, else from its key, the game's ``name`` as its artist."""
+    from caracole.gametabs import page_url
+    from caracole.normalize import identity_key
+
+    tabs.sort(key=lambda t: (-t.views, t.path))
+    title = next((t.title for t in tabs if t.title), None) or _title_words(key)
+    return SiteHit("gametabs", title, page_url(tabs[0].path), score, artist=name,
+                   artist_key=identity_key(name, "").partition("/")[0], title_key=key, uploads=len(tabs), via=via,
+                   tabs=tuple(t.hit(title) for t in tabs), page=game)
 
 
 def _listed_names(text: str | None) -> list[str]:
@@ -1398,24 +1485,34 @@ def search_harptabs(conn: sqlite3.Connection, query: str, *, songs: int = SITE_R
 def harptabs_artist(conn: sqlite3.Connection, path: str) -> SiteArtist | None:
     """One artist of harptabs.com's index, by their page's path, as ``search_harptabs`` gives them (score 100); None
     for one its sitemap doesn't list, or whose page is gone."""
-    row = conn.execute(
-        "SELECT i.path, i.page_id, i.key, a.name, a.tabs, a.read_at FROM harptabs_index i LEFT JOIN harptabs_artists a "
-        "ON a.path = i.path WHERE i.path = ? AND i.kind = 'artist'", (path,)).fetchone()
-    return _harp_artist(conn, _HarpArtist(*row), 100.0) if row is not None and (row[5] is None or row[3]) else None
+    row = conn.execute(f"{_HARP_ARTISTS} WHERE i.path = ? AND i.kind = 'artist'", (path,)).fetchone()
+    artist = _HarpArtist(*row) if row is not None else None
+    return _harp_artist(conn, artist, 100.0) if artist is not None and not artist.gone else None
 
 
 def harptabs_songs(conn: sqlite3.Connection, path: str, *, title: str | None = None) -> list[SiteHit]:
     """The songs harptabs.com's index holds of an artist (their page's path), most viewed first: none until caracole
     has read their page. With ``title``, only those whose title it matches, best first."""
+    return _titled_only(_harp_grouped(conn, "t.artist = ?", [path]), title)
+
+
+def _titled_only(hits: list[SiteHit], title: str | None) -> list[SiteHit]:
+    """An artist's songs on another site, with ``title`` only those whose title it matches, best first, each scored
+    by its title; all of them, as they come, without."""
     from dataclasses import replace
 
-    hits = _harp_grouped(conn, "t.artist = ?", [path])
     queries = _queries(title or "")
     if not queries:
         return hits
     scored = [(max(q.score("", h.title_key.replace("-", " ")) for q in queries), n, h) for n, h in enumerate(hits)]
     return [replace(h, score=round(score, 1), via="title")
             for score, _, h in sorted((s for s in scored if s[0] >= MIN_SCORE), key=lambda s: (-s[0], s[1]))]
+
+
+# harptabs.com's artist rows (``i``), with what their page said once read (``a``): a ``_HarpArtist`` a row, each
+# query adding its WHERE.
+_HARP_ARTISTS = ("SELECT i.path, i.page_id, i.key, a.name, a.tabs, a.read_at FROM harptabs_index i "
+                 "LEFT JOIN harptabs_artists a ON a.path = i.path")
 
 
 class _HarpArtist(NamedTuple):
@@ -1433,6 +1530,11 @@ class _HarpArtist(NamedTuple):
     def shown(self) -> str:
         return self.name or _title_words(self.key)
 
+    @property
+    def gone(self) -> bool:
+        """Whether caracole read their page and it was gone: a page gone names no one."""
+        return self.read_at is not None and not self.name
+
     def forms(self) -> list[str]:
         """The name's words to score: the slug's key, and the page's name once read."""
         forms = [self.key.replace("-", " ")]
@@ -1447,9 +1549,21 @@ def _harp_artists(conn: sqlite3.Connection, query: str, queries: list[_Query], p
     unless more than ``WORD_ARTISTS`` names hold them; beside one named whole, only those named whole or in part."""
     where = " OR ".join("i.key LIKE ?" for _ in patterns)
     rows = [_HarpArtist(*r) for r in conn.execute(
-        "SELECT i.path, i.page_id, i.key, a.name, a.tabs, a.read_at FROM harptabs_index i LEFT JOIN harptabs_artists a "
-        f"ON a.path = i.path WHERE i.kind = 'artist' AND ({where}) LIMIT ?", (*patterns, SITE_ROWS_READ))]
-    rows = [r for r in rows if r.read_at is None or r.name]  # a page gone names no one
+        f"{_HARP_ARTISTS} WHERE i.kind = 'artist' AND ({where}) LIMIT ?", (*patterns, SITE_ROWS_READ))]
+    whole, parts = _harp_named([r for r in rows if not r.gone], query, queries)
+    found = [(score, False, row) for score, row in whole] + [(PART, True, row) for row in parts]
+    if any(score >= 100 for score, _, _ in found):
+        found = [f for f in found if f[0] >= 100 or f[1]]
+    known = _harp_known(conn, [row.path for _, _, row in found])
+    found.sort(key=lambda f: (-f[0], -known.get(f[2].path, 0), -(f[2].tabs or 0), f[2].page_id))
+    return [_harp_artist(conn, row, score, part=part, known=known.get(row.path, 0)) for score, part, row in
+            found[:max(limit, 0)]]
+
+
+def _harp_named(rows: Sequence[_HarpArtist], query: str,
+                queries: list[_Query]) -> tuple[list[tuple[float, _HarpArtist]], list[_HarpArtist]]:
+    """Of ``rows``, the artists the query names as their whole name (``STRONG`` or more), each with its score, and
+    those whose names hold its words among others, none when more than ``WORD_ARTISTS`` do."""
     words = set(name_words(query))
     whole: list[tuple[float, _HarpArtist]] = []
     parts: list[_HarpArtist] = []
@@ -1461,13 +1575,7 @@ def _harp_artists(conn: sqlite3.Connection, query: str, queries: list[_Query], p
             parts.append(row)
     if len(parts) > WORD_ARTISTS:  # a common word ("band", "john") names no one in part
         parts = []
-    found = [(score, False, row) for score, row in whole] + [(PART, True, row) for row in parts]
-    if any(score >= 100 for score, _, _ in found):
-        found = [f for f in found if f[0] >= 100 or f[1]]
-    known = _harp_known(conn, [row.path for _, _, row in found])
-    found.sort(key=lambda f: (-f[0], -known.get(f[2].path, 0), -(f[2].tabs or 0), f[2].page_id))
-    return [_harp_artist(conn, row, score, part=part, known=known.get(row.path, 0)) for score, part, row in
-            found[:max(limit, 0)]]
+    return whole, parts
 
 
 def _harp_known(conn: sqlite3.Connection, paths: Sequence[str]) -> dict[str, int]:
@@ -1614,17 +1722,9 @@ def lacuerda_artist_named(conn: sqlite3.Connection, name: str) -> SiteArtist | N
 def lacuerda_songs(conn: sqlite3.Connection, slug: str, *, title: str | None = None) -> list[SiteHit]:
     """The songs LaCuerda's index holds of an artist, most popular first, as LaCuerda orders them; none
     until caracole has read their page. With ``title``, only those whose title it matches, best first."""
-    from dataclasses import replace
-
     from caracole.lacuerda_index import artist_songs
 
-    hits = [_lacuerda_song(h) for h in artist_songs(conn, slug)]
-    queries = _queries(title or "")
-    if not queries:
-        return hits
-    scored = [(max(q.score("", h.title_key.replace("-", " ")) for q in queries), n, h) for n, h in enumerate(hits)]
-    return [replace(h, score=round(score, 1), via="title")
-            for score, _, h in sorted((s for s in scored if s[0] >= MIN_SCORE), key=lambda s: (-s[0], s[1]))]
+    return _titled_only([_lacuerda_song(h) for h in artist_songs(conn, slug)], title)
 
 
 def lacuerda_left_out(conn: sqlite3.Connection) -> tuple[str, str] | None:
@@ -1667,29 +1767,37 @@ def lacuerda_unlisted(conn: sqlite3.Connection, query: str, artists: Sequence[Ar
     With ``artist`` (``--artist NAME``) the query is the name. A name LaCuerda's listings give, under any of its
     spellings, is no page to read (``lacuerda_index.artist_slugs``: Ultimate Guitar's Los Enanitos Verdes are its
     Enanitos Verdes)."""
-    from caracole.lacuerda_index import NAMED, artist_slugs, letters_text, unread_letter
+    from caracole.lacuerda_index import artist_slugs, letters_text, unread_letter
 
     if any(h.score >= STRONG for h in lacuerda):
         return None
-    name = query
-    if not artist:
-        strong = [h for h in songs if h.score >= STRONG]
-        first = strong[0] if strong else None
-        named = [a for a in artists if not a.part or _named_in_a_run(query, a.artist_key)]
-        if named and (lead == "artist" or first is None or first.via != "title"):
-            name = named[0].artist
-        elif first is not None and first.via != "title" and first.artist and not no_ones(first.artist_key):
-            name = first.artist
-        elif first is not None and first.via == "title":
-            return None
-        elif any(isinstance(a, SiteArtist) and a.via == "both" and a.score >= NAMED for a in lacuerda):
-            return None
-        else:
-            name = _named_at_an_end(query, songs) or _less_a_title(conn, query) or query
+    name = query if artist else _unlisted_name(conn, query, artists, songs, lead, lacuerda)
+    if name is None:
+        return None
     if artist_slugs(conn, name):  # LaCuerda lists them: their row says it, under the name it writes
         return None
     letter = unread_letter(conn, name)
     return (name, letters_text([letter])) if letter is not None else None
+
+
+def _unlisted_name(conn: sqlite3.Connection, query: str, artists: Sequence[ArtistHit], songs: Sequence[IndexHit],
+                   lead: str | None, lacuerda: Sequence[SiteHit | SiteArtist]) -> str | None:
+    """The name a query that is no ``--artist`` names, for ``lacuerda_unlisted``, by the Ultimate Guitar index's
+    answer, then LaCuerda's, then the query's words; None when they say it names none."""
+    from caracole.lacuerda_index import NAMED
+
+    first = next((h for h in songs if h.score >= STRONG), None)
+    by_title = first is not None and first.via == "title"  # a strong song by its title alone: a title, no name
+    named = [a for a in artists if not a.part or _named_in_a_run(query, a.artist_key)]
+    if named and (lead == "artist" or not by_title):
+        return named[0].artist
+    if by_title:
+        return None
+    if first is not None and first.artist and not no_ones(first.artist_key):
+        return first.artist
+    if any(isinstance(a, SiteArtist) and a.via == "both" and a.score >= NAMED for a in lacuerda):
+        return None
+    return _named_at_an_end(query, songs) or _less_a_title(conn, query) or query
 
 
 def _named_in_a_run(query: str, artist_key: str) -> bool:
@@ -1960,8 +2068,12 @@ def _queries(text: str) -> list[_Query]:
     forms = _forms(text)
     if len(forms) < 2:
         return [_Query(f) for f in forms]
-    runs = tuple("".join(fold(s) for s in romanize(t).split()) for t in name_words(text) if has_han(t))
-    return [_Query(forms[0]), _Query(forms[1], runs)]
+    return [_Query(forms[0]), _Query(forms[1], tuple(_pinyin_runs(name_words(text))))]
+
+
+def _pinyin_runs(words: Sequence[str]) -> list[str]:
+    """Each Chinese word's pinyin, its syllables written together ("宋冬野" is ``songdongye``)."""
+    return ["".join(fold(s) for s in romanize(t).split()) for t in words if has_han(t)]
 
 
 class _Query:
@@ -2147,18 +2259,12 @@ def _parts(conn: sqlite3.Connection, query: str, read: Iterable[str],
     names no one in part, while "young" (238 names), "horse" (44) or "skynyrd" (1) do."""
     words = name_words(query)
     latin = [w for w in words if not has_han(w)]
-    runs = ["".join(fold(s) for s in romanize(t).split()) for t in words if has_han(t)]
+    runs = _pinyin_runs(words)
     if not any(len(w) >= WORD_LETTERS for w in latin) and not any(len(r) >= 4 for r in runs):
         return {}
-    if runs:
-        keys = list(dict.fromkeys(read))
-    else:
-        keys = _artists_with_words(conn, latin)
-        if keys is None:
-            return {}
-    names: dict[str, list[list[str]]] = {k: [k.split("-")] for k in keys}
-    for k, forms in listed.items():
-        names.setdefault(k, []).extend(f.split("-") for f in forms if f.isascii())
+    names = _part_names(conn, latin, runs, read, listed)
+    if names is None:
+        return {}
     letters = sum(len(w) for w in latin) + sum(len(r) for r in runs)
     found: dict[str, float] = {}
     for key, forms in names.items():
@@ -2169,6 +2275,24 @@ def _parts(conn: sqlite3.Connection, query: str, read: Iterable[str],
         if shares:  # every word of the name, in another order, too: a name the query isn't as it is written
             found[key] = max(shares)
     return found if len(found) <= WORD_ARTISTS else {}
+
+
+def _part_names(conn: sqlite3.Connection, latin: Sequence[str], runs: Sequence[str], read: Iterable[str],
+                listed: Mapping[str, Iterable[str]]) -> dict[str, list[list[str]]] | None:
+    """The artists ``_parts`` looks among, each with its names' words: for a query with Chinese words (``runs``, their
+    pinyin) those the prefilter read (``read``), else those whose keys hold its words (``latin``), by the index of
+    their words; and either way those of the artist pages caracole read (``listed``), by their forms in Latin
+    letters. None when more than ``WORD_ARTISTS`` keys hold the words."""
+    if runs:
+        keys = list(dict.fromkeys(read))
+    else:
+        keys = _artists_with_words(conn, latin)
+        if keys is None:
+            return None
+    names: dict[str, list[list[str]]] = {k: [k.split("-")] for k in keys}
+    for k, forms in listed.items():
+        names.setdefault(k, []).extend(f.split("-") for f in forms if f.isascii())
+    return names
 
 
 def _artists_with_words(conn: sqlite3.Connection, words: Sequence[str]) -> list[str] | None:

@@ -127,6 +127,7 @@ import sqlite3
 import time
 from collections.abc import Sequence
 from contextlib import closing
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from caracole.web.app import (
@@ -365,21 +366,7 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     Ultimate Guitar song by its keys; None for none). A song of your library comes as its card
     has it (``_rows``). ``names``: the artist and the title the query names (song_names.py ``read_names``, with the
     YouTube video suggested for it), which the pages fill their form by name in with, and Make the sheet."""
-    from caracole.search import (
-        STRONG,
-        LibraryHit,
-        found,
-        lacuerda_leads,
-        search_gametabs,
-        search_gtptabs,
-        search_harptabs,
-        search_lacuerda,
-        search_library,
-        search_musescore,
-        search_removed,
-        suggestions,
-    )
-    from caracole.song_names import read_names
+    from caracole.search import STRONG, found, lacuerda_leads, search_library, search_removed
     from caracole.songs import list_songs
 
     mine = search_library(conn, q, LIBRARY_HITS)
@@ -389,77 +376,142 @@ def _found_for(app: WebApp, conn: sqlite3.Connection, q: str) -> dict[str, Any]:
     skipped, partial = _skipped(app, conn)
     left_out = {s["source"] for s in skipped}
     _after_reads(app)
-    cached = app._found.get(q)
-    if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
-        (index_found, index, artists, hint, unseen, gtptabs, musescore, harp_artists, harptabs, lc_artists, lacuerda,
-         gametabs, close) = cached[1:]
-    else:
-        index_found, index, artists, hint, unseen = _index_hits(conn, q)
-        gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
-        musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
-        harp_artists, harptabs = (search_harptabs(conn, q, songs=SITE_HITS) if "harptabs" not in left_out
-                                  else ([], []))
-        lc_artists, lacuerda = (search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out
-                                else ([], []))
-        gametabs = search_gametabs(conn, q, SITE_HITS) if app.cfg.provider("gametabs").enabled else []
-        close = None  # looked for below, once a song of yours doesn't make it moot
-        app._found[q] = (time.monotonic(), index_found, index, artists, hint, unseen, gtptabs, musescore,
-                         harp_artists, harptabs, lc_artists, lacuerda, gametabs, close)
-        while len(app._found) > CACHE_SIZE:
-            app._found.popitem(last=False)
-    if close is None and not yours:
-        close = suggestions(conn, q, index_found, [*lc_artists, *lacuerda, *gtptabs, *musescore, *harp_artists,
-                                                   *harptabs], lacuerda="lacuerda" not in left_out,
-                            harptabs="harptabs" not in left_out, gtptabs="gtptabs" not in left_out)
-        if q in app._found:
-            app._found[q] = (*app._found[q][:-1], close)
-    answer = found(mine, index_found)
-    leads = lacuerda_leads(index_found, lc_artists)
+    kept = _index_answers(app, conn, q, left_out)
+    close = [] if yours else _suggested(conn, q, kept, left_out)
+    answer = found(mine, kept.index_found)
+    leads = lacuerda_leads(kept.index_found, kept.lc_artists)
     songs = list_songs(conn)
     progression, playing = _progression(conn, q, {h.song.id for h in mine})
-    # The artists' most tabbed songs are the index's songs too, drawn as they are: each with its song of yours.
-    tops = [t for a in artists for t in a["top"]]
-    library, hits = _rows(app, conn, [*mine, *playing], [*index, *tops], songs)
-    hits, owned = hits[:len(index)], iter(hits[len(index):])
-    artists = [{**a, "top": [next(owned) for _ in a["top"]], "gtptabs": _gtptabs_songs(app, conn, a["artist"])}
-               for a in artists]
-    best = answer.best
+    library, hits, artists = _library_and_index_rows(app, conn, [*mine, *playing], kept, songs)
     # LaCuerda's group leads: Ultimate Guitar's artist a word names (Javier Calamaro, beside LaCuerda's Andrés
     # Calamaro) is no lead, and Enter opens LaCuerda's artist.
     lead = "song" if leads and answer.lead == "artist" else answer.lead
-    pick = None if best is None else (
-        {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"})
-    youtube = _youtube_suggestion(app, conn, q, mine, index_found, lc_artists, lacuerda)
-    # The video suggested: its channel may name the artist, and its title the song.
-    video = (youtube or {}).get("video") or {}
-    named = read_names(conn, q, songs=songs,
-                       video=(str(video.get("title") or ""), str(video.get("channel") or "")) if video else None)
+    youtube = _youtube_suggestion(app, conn, q, mine, kept.index_found, kept.lc_artists, kept.lacuerda)
     return {"query": q, "library": library, "index": hits, "artists": artists, "lead": lead,
-            "best": pick, "hint": hint, "progression": progression, "unseen": unseen,
+            "best": _best_json(answer.best), "hint": kept.hint, "progression": progression, "unseen": kept.unseen,
             # the artist and the title the query names, which the request form is filled in with; None for none
-            "names": None if named is None else {"artist": named[0], "title": named[1]},
+            "names": _names_json(conn, q, songs, youtube),
             "removed": [{"artist": h.artist, "title": h.title, "key": h.key, "removed_at": h.removed_at,
                          **_key_parts(h.key)} for h in removed],
-            "gtptabs": _gtptabs_rows(app, conn, gtptabs if "gtptabs" not in left_out else [], songs),
+            "gtptabs": _gtptabs_rows(app, conn, kept.gtptabs if "gtptabs" not in left_out else [], songs),
             "musescore": [{"source": h.source, "title": h.title, "url": h.url, "score": h.score}
-                          for h in (musescore if "musescore" not in left_out else [])],
+                          for h in (kept.musescore if "musescore" not in left_out else [])],
             # harptabs.com's songs, a song's harmonica tabs by an artist whose page caracole read, else a tab by its
             # title alone, a possible match, as MuseScore's pages are; and its artists, as LaCuerda's
-            "harptabs": _harptabs_rows(app, conn, harptabs, songs),
-            "harptabs_artists": [_harptabs_artist_json(app, conn, a, songs) for a in harp_artists],
+            "harptabs": _harptabs_rows(app, conn, kept.harptabs, songs),
+            "harptabs_artists": [_harptabs_artist_json(app, conn, a, songs) for a in kept.harp_artists],
             # gametabs.net's tracks of games, the game as the artist, each with its tabs
-            "gametabs": _gametabs_rows(app, conn, gametabs, songs),
-            "lacuerda": _lacuerda_rows(app, conn, lacuerda, songs),
+            "gametabs": _gametabs_rows(app, conn, kept.gametabs, songs),
+            "lacuerda": _lacuerda_rows(app, conn, kept.lacuerda, songs),
             "lacuerda_artists": [{**_lacuerda_artist_json(app, conn, a, songs),
-                                  "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in lc_artists],
-            "lacuerda_unlisted": _lacuerda_unlisted(conn, q, index_found, lc_artists, lacuerda),
+                                  "gtptabs": _gtptabs_songs(app, conn, a.artist)} for a in kept.lc_artists],
+            "lacuerda_unlisted": _lacuerda_unlisted(conn, q, kept.index_found, kept.lc_artists, kept.lacuerda),
             "lacuerda_leads": leads,
-            "lacuerda_search": (_lacuerda_search_gate(app, conn, q, lc_artists, lacuerda, mine)
+            "lacuerda_search": (_lacuerda_search_gate(app, conn, q, kept.lc_artists, kept.lacuerda, mine)
                                 if app.searches_lacuerda else None),
             # YouTube's first video for a query with no sheet on the sites, suggested (youtube_routes.py)
             "youtube": youtube,
-            "suggest": [_suggestion_json(app, conn, s, songs) for s in (() if yours else close or ())],
+            "suggest": [_suggestion_json(app, conn, s, songs) for s in close],
             "skipped": skipped, "partial": partial, "looked": _looked(app, conn, skipped, partial)}
+
+
+@dataclass
+class IndexAnswers:
+    """What the offline indexes answer a query, kept a while (``WebApp._found``, with when it was made): Ultimate
+    Guitar's (``find_index``'s, its songs and artists as JSON, the hint and what the pages say of an artist it may not
+    see), gtptabs.com's and MuseScore's pages, harptabs.com's and LaCuerda's artists and songs, gametabs.net's tracks,
+    and the artists and songs spelled close to the query (``close``: None until looked for, once a song of yours
+    doesn't make it moot)."""
+
+    index_found: IndexFound
+    index: list[dict[str, Any]]
+    artists: list[dict[str, Any]]
+    hint: str | None
+    unseen: dict[str, Any] | None
+    gtptabs: list[SiteHit]
+    musescore: list[SiteHit]
+    harp_artists: list[SiteArtist]
+    harptabs: list[SiteHit]
+    lc_artists: list[SiteArtist]
+    lacuerda: list[SiteHit]
+    gametabs: list[SiteHit]
+    close: list[Suggestion] | None = None
+
+
+def _index_answers(app: WebApp, conn: sqlite3.Connection, q: str, left_out: set[str]) -> IndexAnswers:
+    """The offline indexes' answers for ``q``: those kept, ``CACHE_SECONDS`` old at most, else made now and kept,
+    none of a site ``left_out`` (nor of gametabs.net while it is turned off)."""
+    from caracole.search import (
+        search_gametabs,
+        search_gtptabs,
+        search_harptabs,
+        search_lacuerda,
+        search_musescore,
+    )
+
+    cached = app._found.get(q)
+    if cached is not None and time.monotonic() - cached[0] < CACHE_SECONDS:
+        return cached[1]
+    index_found, index, artists, hint, unseen = _index_hits(conn, q)
+    gtptabs = search_gtptabs(conn, q, SITE_HITS) if "gtptabs" not in left_out else []
+    musescore = search_musescore(conn, q, SITE_HITS) if "musescore" not in left_out else []
+    harp_artists, harptabs = search_harptabs(conn, q, songs=SITE_HITS) if "harptabs" not in left_out else ([], [])
+    lc_artists, lacuerda = search_lacuerda(conn, q, songs=SITE_HITS) if "lacuerda" not in left_out else ([], [])
+    gametabs = search_gametabs(conn, q, SITE_HITS) if app.cfg.provider("gametabs").enabled else []
+    kept = IndexAnswers(index_found, index, artists, hint, unseen, gtptabs, musescore, harp_artists, harptabs,
+                        lc_artists, lacuerda, gametabs)
+    app._found[q] = (time.monotonic(), kept)
+    while len(app._found) > CACHE_SIZE:
+        app._found.popitem(last=False)
+    return kept
+
+
+def _suggested(conn: sqlite3.Connection, q: str, kept: IndexAnswers, left_out: set[str]) -> list[Suggestion]:
+    """The artists and songs spelled close to ``q`` (``search.suggestions``) beside the indexes' answers (``kept``),
+    looked for once and kept with them."""
+    from caracole.search import suggestions
+
+    if kept.close is None:
+        sites = [*kept.lc_artists, *kept.lacuerda, *kept.gtptabs, *kept.musescore, *kept.harp_artists, *kept.harptabs]
+        kept.close = suggestions(conn, q, kept.index_found, sites, lacuerda="lacuerda" not in left_out,
+                                 harptabs="harptabs" not in left_out, gtptabs="gtptabs" not in left_out)
+    return kept.close
+
+
+def _library_and_index_rows(app: WebApp, conn: sqlite3.Connection, mine: Sequence[LibraryHit], kept: IndexAnswers,
+                            songs: list[Song]) -> tuple[list[dict[str, Any]], list[dict[str, Any]],
+                                                        list[dict[str, Any]]]:
+    """Your songs' rows, the index's songs' and its artists' (``_rows``): the artists' most tabbed songs are the
+    index's songs too, drawn as they are, each with its song of yours, and an artist's songs on gtptabs.com
+    counted (``gtptabs``)."""
+    tops = [t for a in kept.artists for t in a["top"]]
+    library, hits = _rows(app, conn, mine, [*kept.index, *tops], songs)
+    hits, owned = hits[:len(kept.index)], iter(hits[len(kept.index):])
+    artists = [{**a, "top": [next(owned) for _ in a["top"]], "gtptabs": _gtptabs_songs(app, conn, a["artist"])}
+               for a in kept.artists]
+    return library, hits, artists
+
+
+def _best_json(best: LibraryHit | IndexHit | None) -> dict[str, Any] | None:
+    """The row Enter may act on, as the answer's ``best`` says it: a song of yours by its id, an Ultimate Guitar song
+    by its keys; None for none."""
+    from caracole.search import LibraryHit
+
+    if best is None:
+        return None
+    return {"library": best.song.id} if isinstance(best, LibraryHit) else {"ug": f"{best.artist_key}/{best.song_key}"}
+
+
+def _names_json(conn: sqlite3.Connection, q: str, songs: list[Song],
+                youtube: dict[str, Any] | None) -> dict[str, str] | None:
+    """The artist and the title the query names (song_names.py ``read_names``), the video suggested for it read too
+    (``youtube``): its channel may name the artist, and its title the song; None for none."""
+    from caracole.song_names import read_names
+
+    video = (youtube or {}).get("video") or {}
+    named = read_names(conn, q, songs=songs,
+                       video=(str(video.get("title") or ""), str(video.get("channel") or "")) if video else None)
+    return None if named is None else {"artist": named[0], "title": named[1]}
 
 
 SUGGESTED_KEY = {"ug": "artist_key", "lacuerda": "slug", "harptabs": "path"}  # what /api/artist takes of each site
