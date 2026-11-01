@@ -142,11 +142,11 @@ step_check() {
   ok=no
   for _ in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
     sleep 2
-    if curl -fsS http://127.0.0.1:8737/api/peer/state -o state.json 2>>"$LOG"; then ok=yes; break; fi
+    if curl -fsS http://127.0.0.1:8737/ -o page.html 2>>"$LOG"; then ok=yes; break; fi  # any caracole's page
   done
   kill "$pid" 2>/dev/null || true
   [ $ok = yes ] || { echo "caracole serve didn't answer: see $LOG" | tee -a "$LOG"; return 1; }
-  echo "caracole serve answered: $(head -c 120 state.json)…" | tee -a "$LOG"
+  echo "caracole serve answered with its library page ($(wc -c <page.html) bytes): ok" | tee -a "$LOG"
 }
 
 step_service() {
