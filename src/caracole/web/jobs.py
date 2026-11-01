@@ -428,6 +428,43 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
     return [Stage(name, label) for name, label in names.items()]
 
 
+def _as_much(mine: Sequence[Job], waiting: Job | None, new: Sequence[Step], *, fetching: bool,
+             join: bool) -> Job | None:
+    """Which of a song's jobs waiting or running (``mine``; ``waiting``, the first that waits) does as much as a
+    request of ``new`` steps, and so is its answer (``JobQueue.submit``): for your pick joining them, only the song's
+    last job, with the same pick; else one that looks the song up or fetches it, or, for a request that fetches
+    nothing or mustn't join, any. None for none."""
+    picked = _pick(new)
+    if picked and join:  # your pick: only the song's last job, looking it up already, does as much
+        last = waiting or next((job for job in mine if job.state == "running"), None)
+        return last if last is not None and _pick(last.steps) == picked else None
+    enough = next((job for job in mine if _fetches(job.steps)), None)  # a lookup or a fetch does the most
+    if enough is None and (not fetching or not join) and mine:
+        enough = mine[0]
+    return enough
+
+
+def _join(waiting: Job, new: Sequence[Step], title: str, note: str) -> None:
+    """A request of ``new`` steps joins the song's job that still waits (``JobQueue.submit``): its ``caracole get``
+    (or ``caracole versions --choose``) takes the place of the job's add and lookup, and the job gets each of its
+    commands it doesn't run, with their stages; it fetches now, under the request's title, and keeps its note, else
+    takes the request's."""
+    # One `caracole get` does it all, as `caracole versions --choose` runs one
+    if any(step.args[:1] == (LOOKUP,) or (_looks_up(step.args) and "--clear" not in step.args)
+           for step in new):
+        waiting.steps = [s for s in waiting.steps if s.args[:1] not in (("add",), (LOOKUP,))]
+        waiting.stages = []
+    runs = {step.args[0] for step in waiting.steps}
+    commands = {step.args for step in waiting.steps}
+    # Two versions kept, or a pin taken out after a version kept, are two commands
+    waiting.steps += [step for step in new if step.args[0] not in runs
+                      or (step.args[0] == VERSIONS and step.args not in commands)]
+    had = {stage.name for stage in waiting.stages}  # a job waiting has heard nothing yet
+    waiting.stages += [stage for stage in _stages(waiting.steps) if stage.name not in had]
+    waiting.title, waiting.fetching = title, True
+    waiting.note = waiting.note or note
+
+
 REMOVING = "remove:"  # a removal's song_key: the song's key after it, so it never joins the song's add or fetch
 EXPORTING = "export:"  # Make this my version's song_key (export_routes.py): the song's key and the version, then MINE,
 MINE = ":mine"  # never the song's own key, so it joins no request of the song's
@@ -534,31 +571,16 @@ class JobQueue:
     def _submit_locked(self, title: str, song_key: str, steps: Sequence[tuple[str, Sequence[str]]], *,
                        fetching: bool = False, note: str = "", display: str = "",
                        join: bool = True, song_id: int | None = None) -> tuple[Job, bool]:
+        """``submit`` under the queue's lock, held by its caller (``submit``, ``submit_all``), by ``submit``'s rules:
+        the song's job that does as much, else its job that still waits, joined, else a job of its own."""
         new = [Step(label, tuple(args)) for label, args in steps]
         mine = [job for job in self._jobs if job.active and job.song_key == song_key]
-        enough = next((job for job in mine if _fetches(job.steps)), None)  # a lookup or a fetch does the most
-        if enough is None and (not fetching or not join) and mine:
-            enough = mine[0]
         waiting = next((job for job in mine if job.state == "queued"), None)
-        picked = _pick(new)
-        if picked and join:  # your pick: only the song's last job, looking it up already, does as much
-            last = waiting or next((job for job in mine if job.state == "running"), None)
-            enough = last if last is not None and _pick(last.steps) == picked else None
+        enough = _as_much(mine, waiting, new, fetching=fetching, join=join)
         if enough is not None:
             return copy.deepcopy(enough), False
         if waiting is not None:
-            # One `caracole get` does it all, as `caracole versions --choose` runs one
-            if any(step.args[:1] == (LOOKUP,) or (_looks_up(step.args) and "--clear" not in step.args) for step in new):
-                waiting.steps = [s for s in waiting.steps if s.args[:1] not in (("add",), (LOOKUP,))]
-                waiting.stages = []
-            runs = {step.args[0] for step in waiting.steps}
-            # Two versions kept, or a pin taken out after a version kept, are two commands
-            waiting.steps += [step for step in new if step.args[0] not in runs
-                              or (step.args[0] == VERSIONS and step.args not in {s.args for s in waiting.steps})]
-            had = {stage.name for stage in waiting.stages}  # a job waiting has heard nothing yet
-            waiting.stages += [stage for stage in _stages(waiting.steps) if stage.name not in had]
-            waiting.title, waiting.fetching = title, True
-            waiting.note = waiting.note or note
+            _join(waiting, new, title, note)
             return copy.deepcopy(waiting), False
         if sum(job.active for job in self._jobs) >= self._limit:
             raise QueueFull(f"{self._limit} requests are waiting already")

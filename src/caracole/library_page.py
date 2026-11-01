@@ -856,18 +856,13 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
     """
     title = clean_title(song.title)
     status = "ignored" if song.key in overrides.ignore else song.status
+    ignored = status == "ignored"
     names = _file_names(song_dir(library_dir, song))
-    has_sheet = any(n in names for n in _HUMAN_SHEETS + _AUTO_SHEETS)
-    links: list[dict[str, str]] = []
-    buy: list[dict[str, str]] = []
-    if not has_sheet and status != "ignored":
-        found = search_links(song.artist, song.title)
-        links = [{"label": "Chordify", "href": found["chordify"]},
-                 {"label": "YouTube", "href": found["youtube"], "source": "youtube"}]
-        if for_buying:  # not while caracole may still find a sheet, nor once you have the audio
-            buy = [{"label": label, "href": found[name]}
-                   for label, name in (("Bandcamp", "bandcamp"), ("Qobuz", "qobuz"), ("iTunes", "itunes"))]
+    human = any(n in names for n in _HUMAN_SHEETS)
+    auto = any(n in names for n in _AUTO_SHEETS)
+    links, buy = _elsewhere(song, for_buying) if not (human or auto or ignored) else ([], [])
     files = _files(library_dir, song, names, sources, origins or {}, exports or {}, guitar, ukulele=ukulele)
+    sort_artist, sort_title = _sort_key(song.artist), _sort_key(title)
     return {
         "id": song.id,
         "artist": song.artist,
@@ -875,14 +870,14 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "title": title,
         "display": song.display,
         "status": status,
-        "review": bool(song.review) and status != "ignored",
+        "review": bool(song.review) and not ignored,
         "added": song.added_at,
         "key": key.key if key else None,
         "key_source": key.source if key else None,
         "transpose": transpose,  # what its PDF is moved by (render.pdf_transpose): [version] wins over [transpose]
         "lyrics": song.lyrics_status,
         "lyricsFrom": lyrics_from(song),  # the page its lyrics' site asks a link to: its card's Lyrics tile has it
-        "auto": not any(n in names for n in _HUMAN_SHEETS) and any(n in names for n in _AUTO_SHEETS),
+        "auto": not human and auto,
         "files": files,
         "instruments": instruments_of(names, ukulele=ukulele),  # what it holds for one instrument, its line's marks
         "versions": _versions_data(versions, names, _folder_href(library_dir, song)),  # UG's: kept, and counted
@@ -891,8 +886,8 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         "museScore": musescore,
         "links": links,
         "buy": buy,
-        "youtube": youtube if status != "ignored" else None,
-        "youtubeSheet": status != "ignored" and not purchase and not any(n in names for n in _HUMAN_SHEETS),
+        "youtube": None if ignored else youtube,
+        "youtubeSheet": not ignored and not purchase and not human,
         "lacuerda": _lacuerda_pick(song, overrides, status),
         "lacuerdaVersions": lacuerda or [],
         "lacuerdaSheet": _lacuerda_sheet(song, overrides, status, origins or {},
@@ -900,16 +895,29 @@ def _song(library_dir: Path, song: Song, overrides: Overrides, key: SongKey | No
         # Its identity key (normalize.identity_key): the served search puts it, and the sites' rows of its artist and
         # of it, under one header by the artist's part, as /api/search keys its rows.
         "identity": song.key,
-        "sortArtist": _sort_key(song.artist),
-        "sortTitle": _sort_key(title),
-        "artistLetter": _letter(_sort_key(song.artist)),
-        "titleLetter": _letter(_sort_key(title)),
+        "sortArtist": sort_artist,
+        "sortTitle": sort_title,
+        "artistLetter": _letter(sort_artist),
+        "titleLetter": _letter(sort_title),
         # Only the key's mode, so that "minor" finds every minor song: the script finds a typed key
         # ("a minor", "f#m") by its pitch class instead, which a substring of "a minor" can't do.
         "search": _haystack([song.artist, *song.artists, title, song.display,
                              *([key_name(key.key).rpartition(" ")[2]] if key else [])]),
         **({"initials": initials} if (initials := _initials(title)) else {}),
     }
+
+
+def _elsewhere(song: Song, for_buying: bool) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
+    """A song's ``links`` and ``buy`` while it has no sheet and isn't ignored: where to look for one (Chordify,
+    YouTube), and, when the to-do page's buy list holds it (``for_buying``), where to buy its audio."""
+    found = search_links(song.artist, song.title)
+    links = [{"label": "Chordify", "href": found["chordify"]},
+             {"label": "YouTube", "href": found["youtube"], "source": "youtube"}]
+    buy: list[dict[str, str]] = []
+    if for_buying:  # not while caracole may still find a sheet, nor once you have the audio
+        buy = [{"label": label, "href": found[name]}
+               for label, name in (("Bandcamp", "bandcamp"), ("Qobuz", "qobuz"), ("iTunes", "itunes"))]
+    return links, buy
 
 
 # An auto sheet's files beside a human sheet, as its chip's drawer offers them, by the labels it shows.
@@ -960,27 +968,17 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
     address, its ``harmonicaPage`` (``{"href"}``, a link the offline copy takes: ``linked_files``), which its line
     lists as a group of its own, Open and Download (the text); the page is no file of the list."""
     pages = guitar or {}
-    guitar_names = sorted((int(m.group(1)), n) for n in names if (m := _GUITAR.fullmatch(n)))
-    scores = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
-                    for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
-    harmonica = sorted((int(m.group(1)), n) for n in names if (m := _HARMONICA.fullmatch(n)))
-    gametabs = sorted((int(m.group(1)), n) for n in names if (m := _GAMETAB.fullmatch(n)))
-    made = sorted((label, n) for n, label in (exports or {}).items() if n in names)
-    labels = {n: f"Sheet PDF, {label}" for label, n in made}
-    ordered = ([n for n in _SHEET_PAGES if n in names] + [n for _, n in made]
-               + [n for n in _FIRST if n in names and n not in _SHEET_PAGES]
-               + [n for _, n in guitar_names] + [n for _, _, n in scores] + [n for _, n in harmonica]
-               + [n for _, n in gametabs] + [n for n in _LAST if n in names])
+    made = sorted((label, n) for n, label in (exports or {}).items() if n in names)  # the exports, by their labels
+    ordered = _in_line_order(names, [n for _, n in made])
+    primary = _primary(ordered)
     base = _folder_href(library_dir, song)
-    primary = next((n for n in ordered if n in ("sheet.html", "sheet (auto).html", "sheet.pdf", "sheet (auto).pdf")),
-                   None) or next(
-        (n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None)
+    labels = {n: f"Sheet PDF, {label}" for label, n in made}
+    if ukulele:
+        labels.update({n: f"{_LABELS[n]} · {UKULELE_SHEET}" for n in _UKULELE_LABELLED if n in names})
     versions = {n: label for label, n in made}
     downloads = {n: download_name(song.artist, clean_title(song.title), n) for n in ordered
                  if _GUITAR.fullmatch(n) or (_SCORE.fullmatch(n) and not n.endswith(".pdf"))}
-    if ukulele:
-        labels.update({n: f"{_LABELS[n]} · {UKULELE_SHEET}" for n in _UKULELE_LABELLED if n in names})
-    harp_pages = {n: page for _, n in harmonica if (page := harmonica_page(n)) in names}
+    harp_pages = {n: page for n in ordered if (page := harmonica_page(n)) in names}  # a harmonica tab's, if written
     return [
         {"name": n, "label": labels.get(n) or _label(n, sources.get(n)), "href": f"{base}/{quote(n, safe='')}",
          "primary": n == primary, "source": source_of(n, origins or {}),
@@ -990,6 +988,38 @@ def _files(library_dir: Path, song: Song, names: set[str], sources: dict[str, st
          **({"download": downloads[n]} if n in downloads else {})}
         for n in ordered
     ]
+
+
+def _in_line_order(names: set[str], exports: list[str]) -> list[str]:
+    """The kept files of ``names`` in the order a song's line lists them: the sheets' viewers and PDFs, then
+    ``exports`` as given, the rest of the first group (``_FIRST``), the Guitar Pro and Power Tab files, the scores,
+    the harmonica tabs and the game music tabs, each by its number, then the last group (``_LAST``)."""
+    return ([n for n in _SHEET_PAGES if n in names] + exports
+            + [n for n in _FIRST if n in names and n not in _SHEET_PAGES]
+            + _numbered(_GUITAR, names) + _scores(names) + _numbered(_HARMONICA, names)
+            + _numbered(_GAMETAB, names) + [n for n in _LAST if n in names])
+
+
+def _numbered(pattern: re.Pattern[str], names: set[str]) -> list[str]:
+    """The names ``pattern`` matches, by the number it reads first in each ("guitar-2.gp5" before "guitar-10.gp5")."""
+    found = sorted((int(m.group(1)), n) for n in names if (m := pattern.fullmatch(n)))
+    return [n for _, n in found]
+
+
+def _scores(names: set[str]) -> list[str]:
+    """The scores filed from _inbox/ among ``names``, by their number, then in SCORE_EXTENSIONS' order; a file of
+    another format is none."""
+    found = sorted((int(m.group(1)), SCORE_EXTENSIONS.index(m.group(2)), n)
+                   for n in names if (m := _SCORE.fullmatch(n)) and m.group(2) in SCORE_EXTENSIONS)
+    return [n for _, _, n in found]
+
+
+def _primary(ordered: list[str]) -> str | None:
+    """The file a song's line opens, its primary one: the first of ``ordered`` that is a sheet's viewer or PDF, else
+    the first that is a sheet's text; None for neither."""
+    viewers = ("sheet.html", "sheet (auto).html", "sheet.pdf", "sheet (auto).pdf")
+    return (next((n for n in ordered if n in viewers), None)
+            or next((n for n in ordered if n in ("sheet.txt", "sheet (auto).txt")), None))
 
 
 def _folder_href(library_dir: Path, song: Song) -> str:
