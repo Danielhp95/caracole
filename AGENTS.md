@@ -1047,6 +1047,8 @@ It is rows.js's, shared by both pages:
   nix/module.nix's do, so a change to a unit there changes them too.
 - install.md, and the design files above.
 - web-search.md designs a search-API fallback for matching, not built.
+- android_port.md plans caracole in Kotlin on the phone, to share, not built (its research:
+  superpowers/specs/2026-11-02-android-native-port-feasibility.md).
 - screenshots/: the README's pictures, of a demo library of public-domain songs, and make.py, which builds that
   library with no request and takes them again (its docstring says how): retake them when the pages they show change.
 

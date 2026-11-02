@@ -4,6 +4,10 @@ The question (2026-11-02): rather than run the Python caracole on the phone, por
 mostly so: looking up songs from an index, indexing, syncing with other caracoles, songbooks, and sheets with what
 they do (scrolling, music theory, the harmonica and guitar overlays). Then: what else could come along.
 
+The plan made of it, to share: [docs/android_port.md](../../android_port.md). Read again on 2026-11-02 against the
+code: the figures below are lines of code (radon's SLOC: no docstrings, comments or blank lines), and the corrections
+of that pass are in place (UG's index, FTS5's tables, the routes, rapidfuzz, digests, rendered pages).
+
 ## Verdict
 
 Feasible, and the most useful split is not by feature but by layer:
@@ -15,8 +19,8 @@ Feasible, and the most useful split is not by feature but by layer:
   copy.
 - **What has to be written in Kotlin is what feeds them**: the data a viewer page carries (music theory tables,
   chord shapes, harps, pinyin, readings of harmonica tabs), the answers caracole serve gives the pages (search,
-  lookups, songbooks, jobs), the site clients, and sync. That is roughly 25–30k lines of Python today; Kotlin of the
-  same logic is about as long.
+  lookups, songbooks, jobs), the site clients, and sync. That is about 28,000 lines of Python code of caracole's
+  41,000; Kotlin of the same logic is about as long.
 - **What can't come along natively**: ChordPro's PDFs (a Perl program), auto-chords (torch models) and anything
   YouTube (yt-dlp). Each has a fallback below.
 
@@ -28,14 +32,16 @@ Chinese readings, which must agree with the Python caracole to the byte (below, 
 - **One Kotlin core** (no Android dependency, testable on the JVM as android/mirror is): the database, identity keys,
   search, the site clients, indexing, sync, songbooks, the page builder.
 - **The same SQLite schema as caracole's** (db.py, schema 15), in a bundled SQLite: stock Android's has no FTS5 (none
-  documented, and community reports agree), and search needs FTS5 with its trigram tokenizer (`ug_keys_fts`,
-  `ug_artists_fts`, `ug_index_fts`). Bundle SQLite built with `-DSQLITE_ENABLE_FTS5` (sqlite.org's Android bindings
-  document the switch); whether androidx's `sqlite-bundled` enables it is unverified (`pragma compile_options` on a
-  device answers it). The same schema means an `index export` file, an SQLite file, merges with plain SQL.
+  documented, and community reports agree), and search needs FTS5: `ug_keys_fts` with the trigram tokenizer (SQLite
+  3.34 or later), `ug_artists_fts` and `ug_index_fts` with `unicode61`, and `fts5vocab` tables. Bundle SQLite built
+  with `-DSQLITE_ENABLE_FTS5` (sqlite.org's Android bindings document the switch); whether androidx's
+  `sqlite-bundled` enables it is unverified: its docs and release notes, to 2.7.1 (2026-09-09), name neither its
+  SQLite version nor FTS5, and its build file was out of reach (`pragma compile_options` on a device answers it). The same schema means an `index export` file, an SQLite file, merges with plain SQL.
 - **caracole serve's routes in Kotlin, on 127.0.0.1** (a small embedded server, e.g. Ktor CIO or NanoHTTPD), which
   the existing pages talk to as they talk to caracole serve today. Not `shouldInterceptRequest` alone: a WebView
-  gives an intercepted request no body, and the pages post forms (lookups, songbooks, sync). caracole serve has ~40
-  routes; the five features need about 25 of them. Its security rules come along: the form token, the host check,
+  gives an intercepted request no body, and the pages post forms (lookups, songbooks, sync). caracole serve has 52
+  routes; the five features need about 40 of them (not YouTube's five, Export PDF, the offline copy's two, and at
+  first the Guitar Pro page's two). Its security rules come along: the form token, the host check,
   `own_page_read`.
 - **Jobs**: caracole serve runs each change as a `caracole` command in a child process and the pages poll
   `/jobs.json`. In the app a job is a coroutine on one queue; one process holds the database, so caracole's flock
@@ -47,21 +53,24 @@ Chinese readings, which must agree with the Python caracole to the byte (below, 
 
 Two halves, which the pages already keep apart.
 
-**Searching the indexes** (search.py, ug/key_search.py, normalize.py, song_names.py: ~3,100 lines). Reads SQLite
+**Searching the indexes** (search.py, ug/key_search.py, normalize.py, song_names.py: ~2,200 lines). Reads SQLite
 alone. Needs:
 - FTS5 with trigrams (above).
-- rapidfuzz: caracole uses `fuzz.ratio` (36 calls), `fuzz.token_sort_ratio`, `fuzz.partial_ratio_alignment` and
-  `process.extract`. Port these few exactly (an Indel-distance ratio, ~200 lines) rather than take a fuzzywuzzy port
-  whose scores differ: the thresholds were tuned on rapidfuzz's.
+- rapidfuzz: caracole uses `fuzz.ratio` (36 calls), `fuzz.partial_ratio` (coverage.py),
+  `fuzz.partial_ratio_alignment`, `fuzz.token_sort_ratio`, `process.extract` and `distance.OSA` (match.py), and
+  `fuzz.token_set_ratio` in music.py alone (Music/, not ported). Port these few exactly (Indel and OSA distances and
+  partial_ratio's window rules: a few hundred lines) rather than take a fuzzywuzzy port whose scores differ: the
+  thresholds were tuned on rapidfuzz's.
 - `normalize.romanize` (Chinese compared as pinyin) uses pypinyin's `lazy_pinyin`. There is no Kotlin pypinyin; the
-  closest Java libraries (pinyin4j, TinyPinyin) read characters alone, not words, so polyphones differ. Port its
-  phrase matching and ship its dictionaries as an asset (a few MB), or accept looser matches for Chinese.
+  closest Java libraries (pinyin4j, TinyPinyin) read characters alone, not words, so polyphones differ. pypinyin
+  (MIT) is forward maximum matching (its `mmseg`) over `phrases_dict.json` (2.5 MB) and `pinyin_dict.json` (0.8 MB):
+  port the matching and ship the dictionaries as assets, and its readings are exact.
 
 Verdict: feasible, medium.
 
 **Looking a song up now** (`caracole get`: get.py, match.py, ug/*, rank.py, coverage.py, versions.py,
-sheet_versions.py, the lyrics sites, LaCuerda, gtptabs.com, harptabs.com, gametabs.net, MuseScore: ~8,700 lines),
-plus the politeness it runs under (http.py, health.py, config.py, the lookup pace of commands/_common.py: ~1,800).
+sheet_versions.py, the lyrics sites, LaCuerda, gtptabs.com, harptabs.com, gametabs.net, MuseScore: ~6,400 lines),
+plus the politeness it runs under (http.py, health.py, config.py, the lookup pace of commands/_common.py: ~1,400).
 - httpx → OkHttp; selectolax → jsoup; JSON → kotlinx.serialization. Every site is HTML or JSON over HTTP: nothing
   needs a browser or a native library.
 - The invariants come along whole: robots.txt, budgets per run and per hour, the pace, one request at a time, a block
@@ -74,10 +83,13 @@ Verdict: feasible, large. UG and lyrics first; the others one at a time.
 ### 2. Indexing
 
 ug/sitemap.py, ug/index.py, site_index.py, lacuerda_index.py, harptabs_index.py, gametabs_index.py,
-index_transfer.py: ~2,600 lines. Streaming XML and HTML, and SQL: feasible in Kotlin, medium.
+index_transfer.py: ~2,000 lines. Streaming XML and HTML, and SQL: feasible in Kotlin, medium.
 
-But building UG's index on a phone is the wrong job for it: days of polite requests, 1.6 million rows, a database of
-about 430 MB. Better:
+But building the indexes on a phone is the wrong job for it. UG's sitemaps are about 40 requests (some ten minutes
+at the bulk pace, 70 MB down, about 1 GB of XML parsed: docs/spike-2026-10-18.md) into 1.4 million rows and a
+database of about 400 MB (usage.md's 303 MB built, plus its search indexes); the other sites take far longer
+(harptabs.com's 10,428 artist pages, 10–20 s apart, are a day and a half of requests alone); and two caracoles
+building would double what the sites see. Better:
 - **Import the computer's** `caracole index export` file and merge it (index_transfer.py's rules are SQL over
   ATTACHed tables: a small port).
 - **Carry it in sync**, which doesn't do it yet: a `GET /api/peer/index` that streams the export, merged at each sync.
@@ -85,16 +97,19 @@ about 430 MB. Better:
 
 ### 3. Syncing with other caracoles
 
-peer_sync.py, web/peer_routes.py, commands/peer.py: ~1,000 lines, and the protocol is already HTTP and JSON. Feasible,
-medium. Three things to settle first:
+peer_sync.py, web/peer_routes.py, commands/peer.py: ~840 lines, and the protocol is already HTTP and JSON. Feasible,
+medium. Five things to settle first, and a page to build:
 
 - **Digests must come out the same in both languages.** Today a unit's digest is the SHA-256 of Python's
   `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)`. Kotlin must reproduce it byte for byte:
-  key order, escapes, and floats (Python writes `0.8333333333333334` and `1e+16`; Java and Kotlin print doubles
-  their own way). Write the canonical form down as a spec, with test vectors.
-- **A version's `raw` is hashed as stored text**, so the same tab fetched by each side, serialized by each
-  language, would differ. Hash it canonicalized (parsed, then written canonically): a small change on the Python side
-  first.
+  keys sorted by code point (Kotlin's `String.compareTo` compares UTF-16 units, which differ past U+FFFF) and
+  Python's escapes. No unit holds a float (a version's rating and votes and the match's score are left out of it):
+  keep it so, as Java and Kotlin print doubles their own way. Write the canonical form down as a spec, with test
+  vectors.
+- **A version's `raw` and a song's `lyrics_json` are hashed as stored text**, so the same tab fetched by each side,
+  serialized by each language, would differ: a conflict with no real difference. Hash them canonicalized (parsed,
+  then written canonically), with a bump of `peer_sync.FORMAT` so two sides never compare across it: a small change
+  on the Python side first.
 - **Identity keys must agree to the character**: sync names every song `song/<identity key>`. They don't depend on
   pypinyin (`identity_key` uses caracole's own folding and its own Traditional-to-Simplified table, which are data
   to copy), but they do use Unicode normalization, whose tables differ between Python's Unicode version and the
@@ -103,10 +118,16 @@ medium. Three things to settle first:
   phone it is simpler to start every sync from the phone: it pulls, then pushes its own units to a new
   `POST /peer/push` on the computer (with the form token, as every write). The phone then serves nothing to the
   network, only to its own WebView.
+- **The phone's own server needs a secret.** Any app on the phone can connect to 127.0.0.1, where the computer's
+  rule (whoever reaches caracole serve may use it: no cookie, no secret) would let it. A random secret a launch,
+  set as a cookie in the WebView's `CookieManager` and required on every request, keeps the rest out: the owner's
+  decision, as a departure from that rule.
+- **The Sync page** (the design's phase 3, not built): the peer's address, the differences, a side for each, Sync.
+  Made a tab of the library page in JavaScript, it serves the computer and the phone alike.
 
 ### 4. Songbooks
 
-songbook.py, songbook_section.py, viewer/book.py: ~1,400 lines, and book.js and songbooks.js reused.
+songbook.py, songbook_section.py, viewer/book.py: ~1,100 lines, and book.js and songbooks.js reused.
 - The set lists, their order and each song's setting (key, mode, capo, instrument): feasible, small to medium.
   `with_capo` and `on_instrument` need version.py's theory (feature 5).
 - songbooks.toml written with its comments kept (tomlkit) matters only for a file you edit by hand. The phone can
@@ -117,22 +138,24 @@ songbook.py, songbook_section.py, viewer/book.py: ~1,400 lines, and book.js and 
 
 The viewer's JavaScript is reused unchanged: scrolling, transposition, capo, modes, the guitar and harmonica
 overlays, the Harmony panel, strumming, instruments, pinyin over the words, Simplified and Traditional. What Kotlin
-must make is each page's data, today viewer/*.py with chordpro.py, keys.py and progressions.py (~8,900 lines):
+must make is each page's data, today viewer/*.py with chordpro.py, keys.py and progressions.py (~6,100 lines):
 
 | Part | Python | Kotlin |
 |---|---|---|
-| A UG or LaCuerda sheet read (chordpro.py, viewer/sheet.py) | ~1,000 | parsing, mechanical |
-| Theory, keys, versions (theory.py, keys.py, version.py) | ~1,500 | pure logic, mechanical |
-| Harmony and its tables (harmony.py, harmony_tables.py, progressions.py) | ~1,400 | pure logic; the catalogue of progressions is data |
-| Chord shapes (voicings.py, instruments.py; voicings.json and voicings-ukulele.json, 84k lines of data) | ~500 | the JSON files as assets; the piano computed |
-| The harmonica (harp.py, harpfit.py) and the winds (winds.py) | ~870 | pure logic |
-| Harmonica tabs read (harptab.py, harptab_page.py) | ~1,900 | the hardest: notations as data, readings weighed |
-| Pinyin (pinyin.py: pypinyin in context) | 61, plus pypinyin | pypinyin's dictionaries and phrase matching ported |
-| Simplified and Traditional (hanzi.py: OpenCC) | 108 | opencc4j: pure Java, Apache-2.0 (its output against OpenCC's to check) |
-| The page itself (page.py: the data assembled, the scripts inlined by their hashes) | ~900 | mechanical |
+| A UG or LaCuerda sheet read (chordpro.py, viewer/sheet.py) | ~440 | parsing, mechanical |
+| Theory, keys, versions (theory.py, keys.py, version.py) | ~1,210 | pure logic, mechanical |
+| Harmony and its tables (harmony.py, harmony_tables.py, progressions.py) | ~1,140 | pure logic; the catalogue of progressions is data |
+| Chord shapes (voicings.py, instruments.py; voicings.json and voicings-ukulele.json, 84k lines of data) | ~360 | the JSON files as assets; the piano computed |
+| The harmonica (harp.py, harpfit.py) and the winds (winds.py) | ~590 | pure logic |
+| Harmonica tabs read (harptab.py, harptab_page.py) | ~1,530 | the hardest: notations as data, readings weighed |
+| Pinyin (pinyin.py: pypinyin in context) | 34, plus pypinyin | pypinyin's dictionaries and phrase matching ported |
+| Simplified and Traditional (hanzi.py: OpenCC) | 65 | opencc4j: pure Java, Apache-2.0 (its output against OpenCC's to check); or OpenCC's own matching with its text dictionaries, for exact output |
+| The page itself (page.py: the data assembled, the scripts inlined by their hashes) | ~620 | mechanical |
 
-Verdict: feasible, the largest piece (extra large). The phone can start without it: pages synced from the computer
-already arrive rendered, and only songs looked up on the phone need the builder.
+Verdict: feasible, the largest piece (extra large). The phone can start without it, though a sync of units carries
+no rendered page (each side renders what it takes): the app's mirror (`GET /api/offline`) brings the computer's pages
+for the computer's songs, once it keeps the phone's own songs beside them rather than swapping the whole library in,
+and a song looked up on the phone shows its sheet as text until the builder comes.
 
 ## Keeping two caracoles in step
 
@@ -162,7 +185,7 @@ Without it, a song can read in one key on the phone and another on the computer,
 | Alerts | yes, small | Android notifications in place of ntfy |
 | Backups | yes, small | `VACUUM INTO`, as backup.py |
 | Auto-chords from audio | no, in practice | the models would need converting (ONNX Runtime or ExecuTorch) and librosa's features rewriting in Kotlin: a research project |
-| YouTube: a search's first video, a pasted video, a sheet from a video | not natively | no yt-dlp in Kotlin; NewPipeExtractor (Java, GPL-3.0) can read YouTube, but a sheet from a video needs auto-chords, and the owner's YouTube exception would have to cover it |
+| YouTube: a search's first video, a pasted video, a sheet from a video | not natively | no yt-dlp in Kotlin; NewPipeExtractor (Java) can read YouTube, but it is GPL-3.0, which an app including it would be too (caracole is MIT); a sheet from a video needs auto-chords; and the owner's YouTube exception would have to cover it |
 | Music/ purchases scanned | possible, little use | MediaStore in place of mutagen; it only feeds auto-chords |
 | The to-do page, `_todo.md` | possible, little use | the library page says the same |
 
@@ -170,8 +193,8 @@ Without it, a song can read in one key on the phone and another on the computer,
 
 1. **The core, identity keys and the schema**, with the conformance corpus; the computer's index imported; search
    answered by the reused library page. The phone searches with the computer off.
-2. **Sync started from the phone**: pull, and push to `POST /peer/push`. The 20 songs you change on the computer
-   reach the phone rendered, and come back.
+2. **Sync started from the phone**: pull, and push to `POST /peer/push`; the Sync page; the mirror for the
+   computer's pages. The 20 songs you change on the computer reach the phone rendered, and come back.
 3. **Lookups**: UG first, then lyrics, LaCuerda and the rest, each with its politeness and its tests. Songs looked up
    on the phone show their sheet as text until step 4.
 4. **The page builder**: theory, harmony, shapes, harps and winds first; harmonica tabs, pinyin and Traditional
@@ -184,6 +207,8 @@ Without it, a song can read in one key on the phone and another on the computer,
 - opencc4j's output against OpenCC 1.4.1's on caracole's sheets (the corpus would show it).
 - How long a page build takes on a phone: harmony tables are computed for every transposition and mode.
 - Ktor's or NanoHTTPD's footprint and start-up time in an app.
+- Chaquopy (Python in the app) with caracole's jobs run in-process rather than as child processes: far less code than
+  a port, never tried; worth a short spike before the port begins.
 
 Sources consulted: [androidx sqlite-bundled build file](https://android.googlesource.com/platform/frameworks/support/+/f66fa79d19e5874f0afaa6868363c69ecf851cf2/sqlite/sqlite-bundled/build.gradle),
 [SQLite Android bindings](https://sqlite.org/android/info/985ad0e6f280e048),
