@@ -35,7 +35,8 @@ import kotlin.concurrent.withLock
  * connection, one thread at a time), so a connection is never used by two threads at once. A read sees the last
  * commit (WAL): never a write's open transaction, its own thread's included. Every connection sets [BUSY_TIMEOUT_MS]
  * first, then db.py's foreign_keys, WAL and synchronous=NORMAL. [write] is not reentrant: a write asked for inside a
- * write's block, on its thread, is refused rather than waiting for itself.
+ * write's block, on its thread, is refused rather than waiting for itself. A connection goes back in no transaction:
+ * one a block began with a bare BEGIN and left open is rolled back (and refused, for a write that returned).
  *
  * Opening migrates once per path (every [Database] of this process on one file waits for the one opening it), from
  * caracole/schema/migrations.json, as db.py's `_migrate_locked`: the version read under the lock; a database at
@@ -178,13 +179,19 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
         }
     }
 
-    /** A pooled connection for [block] alone, which never writes and never suspends; it waits for one to be free. */
+    /** A pooled connection for [block] alone, which never writes and never suspends; it waits for one to be free. A
+     * transaction the block began and left open is rolled back before the connection goes back, so it pins no old
+     * snapshot for the next block. */
     fun <T> read(block: (Db) -> T): T {
         val connection = pool.take()
         try {
             return block(Db(connection))
         } finally {
-            pool.put(connection)
+            try {
+                if (connection.inTransaction()) connection.execSQL("ROLLBACK")
+            } finally {
+                pool.put(connection)
+            }
         }
     }
 
@@ -200,10 +207,29 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
         return runBlocking { writes.withLock { writing(block) } }
     }
 
+    /** [block] on the writer, which it leaves in no transaction: one it began and left open (a bare BEGIN, never
+     * a [Db.savepoint], which ends its own) is rolled back, and a block that returned with one open is an
+     * IllegalStateException, since every later write's savepoint would nest in it and never commit. */
     private fun <T> writing(block: (Db) -> T): T {
         writing.set(true)
         try {
-            return block(Db(writer))
+            val result = try {
+                block(Db(writer))
+            } catch (e: Throwable) {
+                if (writer.inTransaction()) {
+                    try {
+                        writer.execSQL("ROLLBACK")
+                    } catch (undoing: Throwable) {
+                        e.addSuppressed(undoing)
+                    }
+                }
+                throw e
+            }
+            if (writer.inTransaction()) {
+                writer.execSQL("ROLLBACK")
+                throw IllegalStateException("a write's block left a transaction open: its writes are undone")
+            }
+            return result
         } finally {
             writing.set(false)
         }
@@ -222,7 +248,12 @@ class Database(val path: File, driver: SQLiteDriver = BundledSQLiteDriver(), rea
     }
 }
 
-/** One connection, lent for a block: queries, kv, savepoints. */
+/** One connection, lent for a block: queries, kv, savepoints.
+ *
+ * [query], [one] and [execute] take one statement a call, as Python's sqlite3 `execute` does: a text holding a second
+ * statement after the first's `;` is an IllegalArgumentException before anything runs ([Statements], SQLite's own
+ * `sqlite3_complete` reading, so a trigger's body is one), where the bundled driver would run the first and drop the
+ * rest. Several statements are a list, run one at a time, as migrations.json holds them. */
 class Db internal constructor(val raw: SQLiteConnection) {
     companion object {
         /** The bundled SQLite's SQLITE_MAX_VARIABLE_NUMBER: a statement binds no more values than this. */
@@ -312,6 +343,7 @@ class Db internal constructor(val raw: SQLiteConnection) {
 
     private fun prepare(sql: String, args: Array<out Any?>): SQLiteStatement {
         require(args.size <= MAX_VARIABLES) { "${args.size} values for one statement: SQLite binds $MAX_VARIABLES at most (Db.chunks)" }
+        Statements.one(sql)
         return raw.prepare(sql)
     }
 

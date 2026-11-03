@@ -183,6 +183,20 @@ class DatabaseTest {
         assertEquals(listOf("caracole.sqlite.v13.bak"), backups())
     }
 
+    @Test fun aMigrationThatFailsPartWayIsUndoneWhole() {
+        migratedTo(11)
+        // Migration 12 makes ug_index_fts first (an external-content table needs no ug_index yet), then fails on its
+        // triggers on ug_index: the table it made goes with them.
+        raw().use { it.execSQL("DROP TABLE ug_index") }
+        assertFailsWith<Exception> { Database(file) }
+        raw().use { c ->
+            assertEquals(11L, c.long("PRAGMA user_version"))
+            assertEquals(0L, c.long("SELECT count(*) FROM sqlite_master WHERE name LIKE 'ug_index_fts%'"))
+            assertEquals(0L, c.long("SELECT count(*) FROM sqlite_master WHERE name = 'ug_key_words'"))
+        }
+        assertEquals(listOf("caracole.sqlite.v11.bak"), backups())
+    }
+
     @Test fun databasesOpenedAtOnceOnOnePathMigrateItOnce() {
         val pool = Executors.newFixedThreadPool(6)
         val start = CountDownLatch(1)
@@ -383,4 +397,82 @@ class DatabaseTest {
         }
     }
 
+    @Test fun aTextOfTwoStatementsIsRefusedNeverRunHalf() {
+        TestDb.fresh(tmp.root).use { database ->
+            database.writeBlocking { db ->
+                // The bundled driver would run the first and drop the second: neither runs.
+                val two = assertFailsWith<IllegalArgumentException> {
+                    db.execute("INSERT INTO kv (key, value) VALUES ('a', '1'); INSERT INTO kv (key, value) VALUES ('b', '2')")
+                }
+                assertTrue("one statement" in two.message!!, two.message)
+                assertNull(db.kvGet("a"))
+                assertFailsWith<IllegalArgumentException> { db.query("SELECT 1;SELECT 2") { it.long(0) } }
+                assertFailsWith<IllegalArgumentException> { db.one("SELECT 1; /* then */ SELECT 2") { it.long(0) } }
+                // One statement, with its semicolons, comments, quoted words and blanks after it, is one.
+                assertEquals(1L, db.one("SELECT 1; -- a note\n ;  /* and ; another */ ;\n") { it.long(0) })
+                assertEquals("a;b", db.one("SELECT 'a;b' AS \"x;y\" -- ;\n") { it.text("x;y") })
+                assertEquals("c", db.one("SELECT [a;b] FROM (SELECT 'c' AS `a;b`)") { it.text(0) })
+                // A trigger's body holds statements of its own, CASE … END among them; its END ends it.
+                db.execute("CREATE TEMP TABLE t (x INTEGER)")
+                db.execute("CREATE TEMPORARY TRIGGER t_added AFTER INSERT ON t BEGIN\n" +
+                    "  INSERT INTO kv (key, value) VALUES ('t', CASE WHEN new.x > 1 THEN 'big' ELSE 'small' END);\n" +
+                    "  SELECT 1;\nEND;")
+                db.execute("INSERT INTO t VALUES (2)")
+                assertEquals("big", db.kvGet("t"))
+                assertFailsWith<IllegalArgumentException> {
+                    db.execute("CREATE TEMP TRIGGER t_gone AFTER DELETE ON t BEGIN SELECT 1; END; DROP TABLE t")
+                }
+                assertEquals(0L, db.one("SELECT count(*) FROM sqlite_temp_master WHERE name = 't_gone'") { it.long(0) })
+            }
+        }
+        // Each of db.py's statements, its triggers among them, reads as one.
+        for (statement in Database.migrations.values.flatten()) assertEquals(1, Statements.count(statement), statement)
+    }
+
+    @Test fun aWriteThatLeavesATransactionOpenIsUndoneAndTheNextOneCommits() {
+        Database(file, readers = 1).use { database ->
+            // A bare BEGIN, then a throw: undone, and the writer is no longer in a transaction.
+            assertFailsWith<IllegalStateException> {
+                database.writeBlocking { db ->
+                    db.execute("BEGIN")
+                    db.kvSet("thrown", "1")
+                    error("undone")
+                }
+            }
+            // A bare BEGIN left open by a block that returns: undone too, and refused.
+            val open = assertFailsWith<IllegalStateException> {
+                database.writeBlocking { db ->
+                    db.execute("BEGIN")
+                    db.kvSet("left", "1")
+                }
+            }
+            assertTrue("transaction" in open.message!!, open.message)
+            database.writeBlocking { db ->
+                assertFalse(db.raw.inTransaction())
+                db.kvSet("next", "1")
+            }
+            // The next write committed: a reader sees it, and neither of the others.
+            assertEquals(listOf(null, null, "1"), database.read { db -> listOf("thrown", "left", "next").map { db.kvGet(it) } })
+        }
+    }
+
+    @Test fun aReadThatLeavesATransactionOpenPinsNoSnapshot() {
+        Database(file, readers = 1).use { database ->
+            database.read { db ->
+                db.execute("BEGIN")
+                assertNull(db.kvGet("later"))
+            }
+            database.writeBlocking { it.kvSet("later", "1") }
+            // The one reader, lent again, sees the commit made since.
+            assertEquals("1", database.read { db -> assertFalse(db.raw.inTransaction()); db.kvGet("later") })
+            assertFailsWith<IllegalStateException> {
+                database.read { db ->
+                    db.execute("BEGIN")
+                    db.kvGet("later")
+                    error("thrown")
+                }
+            }
+            assertFalse(database.read { it.raw.inTransaction() })
+        }
+    }
 }
