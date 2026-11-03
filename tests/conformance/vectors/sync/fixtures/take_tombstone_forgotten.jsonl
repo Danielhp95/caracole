@@ -1,0 +1,4 @@
+{"corpus":"sync/fixtures/take_tombstone_forgotten","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"row":{"artist":"Radiohead","key":"radiohead/creep","removed_at":"2026-10-31T00:00:00Z","source_ids":"{\"wanted\": [\"radiohead/creep\"]}","title":"Creep"},"table":"removed"}
+{"kv":"phone:schema","value":"1"}
+{"kv":"songs:key_version","value":"2"}

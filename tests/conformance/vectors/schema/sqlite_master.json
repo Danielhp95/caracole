@@ -1,0 +1,575 @@
+{
+ "header": {
+  "corpus": "schema/sqlite_master",
+  "header": true,
+  "made_by": "tests/test_conformance_schema.py",
+  "versions": {
+   "caracole": "0.1.0",
+   "pypinyin": "0.55.0",
+   "python": "3.14.7",
+   "rapidfuzz": "3.14.5",
+   "sqlite": "3.53.3",
+   "unicodedata": "16.0.0"
+  }
+ },
+ "objects": [
+  {
+   "name": "events_provider_at",
+   "sql": "CREATE INDEX events_provider_at ON events(provider, at)",
+   "tbl_name": "events",
+   "type": "index"
+  },
+  {
+   "name": "events_run",
+   "sql": "CREATE INDEX events_run ON events(run)",
+   "tbl_name": "events",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_game_tabs_game",
+   "sql": "CREATE INDEX gametabs_game_tabs_game ON gametabs_game_tabs(game)",
+   "tbl_name": "gametabs_game_tabs",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_game_tabs_path",
+   "sql": "CREATE INDEX gametabs_game_tabs_path ON gametabs_game_tabs(path)",
+   "tbl_name": "gametabs_game_tabs",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_game_tabs_title",
+   "sql": "CREATE INDEX gametabs_game_tabs_title ON gametabs_game_tabs(title_key)",
+   "tbl_name": "gametabs_game_tabs",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_games_game",
+   "sql": "CREATE INDEX gametabs_games_game ON gametabs_games(game)",
+   "tbl_name": "gametabs_games",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_index_game",
+   "sql": "CREATE INDEX gametabs_index_game ON gametabs_index(game, kind)",
+   "tbl_name": "gametabs_index",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_index_key",
+   "sql": "CREATE INDEX gametabs_index_key ON gametabs_index(kind, key)",
+   "tbl_name": "gametabs_index",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_index_sitemap",
+   "sql": "CREATE INDEX gametabs_index_sitemap ON gametabs_index(sitemap)",
+   "tbl_name": "gametabs_index",
+   "type": "index"
+  },
+  {
+   "name": "gametabs_index_slug_key",
+   "sql": "CREATE INDEX gametabs_index_slug_key ON gametabs_index(kind, slug_key)",
+   "tbl_name": "gametabs_index",
+   "type": "index"
+  },
+  {
+   "name": "gtptabs_index_artist",
+   "sql": "CREATE INDEX gtptabs_index_artist ON gtptabs_index(artist_key)",
+   "tbl_name": "gtptabs_index",
+   "type": "index"
+  },
+  {
+   "name": "gtptabs_index_sitemap",
+   "sql": "CREATE INDEX gtptabs_index_sitemap ON gtptabs_index(sitemap)",
+   "tbl_name": "gtptabs_index",
+   "type": "index"
+  },
+  {
+   "name": "harptabs_artist_tabs_song",
+   "sql": "CREATE INDEX harptabs_artist_tabs_song ON harptabs_artist_tabs(song_key)",
+   "tbl_name": "harptabs_artist_tabs",
+   "type": "index"
+  },
+  {
+   "name": "harptabs_artist_tabs_tab",
+   "sql": "CREATE INDEX harptabs_artist_tabs_tab ON harptabs_artist_tabs(tab_id)",
+   "tbl_name": "harptabs_artist_tabs",
+   "type": "index"
+  },
+  {
+   "name": "harptabs_artists_key",
+   "sql": "CREATE INDEX harptabs_artists_key ON harptabs_artists(key)",
+   "tbl_name": "harptabs_artists",
+   "type": "index"
+  },
+  {
+   "name": "harptabs_index_key",
+   "sql": "CREATE INDEX harptabs_index_key ON harptabs_index(kind, key)",
+   "tbl_name": "harptabs_index",
+   "type": "index"
+  },
+  {
+   "name": "harptabs_index_sitemap",
+   "sql": "CREATE INDEX harptabs_index_sitemap ON harptabs_index(sitemap)",
+   "tbl_name": "harptabs_index",
+   "type": "index"
+  },
+  {
+   "name": "lacuerda_index_artist",
+   "sql": "CREATE INDEX lacuerda_index_artist ON lacuerda_index(artist_key)",
+   "tbl_name": "lacuerda_index",
+   "type": "index"
+  },
+  {
+   "name": "lacuerda_index_page",
+   "sql": "CREATE INDEX lacuerda_index_page ON lacuerda_index(page)",
+   "tbl_name": "lacuerda_index",
+   "type": "index"
+  },
+  {
+   "name": "lacuerda_index_slug",
+   "sql": "CREATE INDEX lacuerda_index_slug ON lacuerda_index(artist_slug)",
+   "tbl_name": "lacuerda_index",
+   "type": "index"
+  },
+  {
+   "name": "musescore_index_sitemap",
+   "sql": "CREATE INDEX musescore_index_sitemap ON musescore_index(sitemap)",
+   "tbl_name": "musescore_index",
+   "type": "index"
+  },
+  {
+   "name": "musescore_index_title",
+   "sql": "CREATE INDEX musescore_index_title ON musescore_index(title_key)",
+   "tbl_name": "musescore_index",
+   "type": "index"
+  },
+  {
+   "name": "songs_added",
+   "sql": "CREATE INDEX songs_added ON songs(added_at)",
+   "tbl_name": "songs",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_files_1",
+   "sql": null,
+   "tbl_name": "files",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_files_2",
+   "sql": null,
+   "tbl_name": "files",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_gametabs_game_tabs_1",
+   "sql": null,
+   "tbl_name": "gametabs_game_tabs",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_gametabs_games_1",
+   "sql": null,
+   "tbl_name": "gametabs_games",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_gametabs_index_1",
+   "sql": null,
+   "tbl_name": "gametabs_index",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_gtptabs_index_1",
+   "sql": null,
+   "tbl_name": "gtptabs_index",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_harptabs_artist_tabs_1",
+   "sql": null,
+   "tbl_name": "harptabs_artist_tabs",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_harptabs_artists_1",
+   "sql": null,
+   "tbl_name": "harptabs_artists",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_harptabs_index_1",
+   "sql": null,
+   "tbl_name": "harptabs_index",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_kv_1",
+   "sql": null,
+   "tbl_name": "kv",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_lacuerda_index_1",
+   "sql": null,
+   "tbl_name": "lacuerda_index",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_removed_1",
+   "sql": null,
+   "tbl_name": "removed",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_songs_1",
+   "sql": null,
+   "tbl_name": "songs",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_ug_artist_tabs_1",
+   "sql": null,
+   "tbl_name": "ug_artist_tabs",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_ug_artists_1",
+   "sql": null,
+   "tbl_name": "ug_artists",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_ug_key_words_1",
+   "sql": null,
+   "tbl_name": "ug_key_words",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_ug_keys_1",
+   "sql": null,
+   "tbl_name": "ug_keys",
+   "type": "index"
+  },
+  {
+   "name": "sqlite_autoindex_versions_1",
+   "sql": null,
+   "tbl_name": "versions",
+   "type": "index"
+  },
+  {
+   "name": "ug_artist_tabs_song",
+   "sql": "CREATE INDEX ug_artist_tabs_song ON ug_artist_tabs(artist_key, song_key)",
+   "tbl_name": "ug_artist_tabs",
+   "type": "index"
+  },
+  {
+   "name": "ug_artist_tabs_tab",
+   "sql": "CREATE INDEX ug_artist_tabs_tab ON ug_artist_tabs(tab_id)",
+   "tbl_name": "ug_artist_tabs",
+   "type": "index"
+  },
+  {
+   "name": "ug_index_artist",
+   "sql": "CREATE INDEX ug_index_artist ON ug_index(artist_key, song_key)",
+   "tbl_name": "ug_index",
+   "type": "index"
+  },
+  {
+   "name": "ug_index_song",
+   "sql": "CREATE INDEX ug_index_song ON ug_index(song_key)",
+   "tbl_name": "ug_index",
+   "type": "index"
+  },
+  {
+   "name": "versions_song",
+   "sql": "CREATE INDEX versions_song ON versions(song_id, slot)",
+   "tbl_name": "versions",
+   "type": "index"
+  },
+  {
+   "name": "events",
+   "sql": "CREATE TABLE events (\n  id INTEGER PRIMARY KEY,\n  run TEXT NOT NULL,\n  at TEXT NOT NULL,\n  provider TEXT NOT NULL,\n  url TEXT,\n  status INTEGER,\n  decision TEXT NOT NULL,\n  message TEXT\n)",
+   "tbl_name": "events",
+   "type": "table"
+  },
+  {
+   "name": "files",
+   "sql": "CREATE TABLE files (\n  id INTEGER PRIMARY KEY,\n  version_id INTEGER NOT NULL REFERENCES versions(id) ON DELETE CASCADE,\n  song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,\n  name TEXT NOT NULL,\n  path TEXT NOT NULL UNIQUE,\n  sha256 TEXT NOT NULL,\n  kept_rank INTEGER NOT NULL,\n  created_at TEXT NOT NULL,\n  UNIQUE (song_id, name)\n)",
+   "tbl_name": "files",
+   "type": "table"
+  },
+  {
+   "name": "gametabs_game_tabs",
+   "sql": "CREATE TABLE gametabs_game_tabs (\n  page TEXT NOT NULL,\n  path TEXT NOT NULL,\n  game TEXT NOT NULL,\n  title TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  instruments TEXT NOT NULL DEFAULT '[]',\n  composers TEXT NOT NULL DEFAULT '[]',\n  views INTEGER NOT NULL DEFAULT 0,\n  rating REAL,\n  place INTEGER NOT NULL,\n  PRIMARY KEY (page, path)\n)",
+   "tbl_name": "gametabs_game_tabs",
+   "type": "table"
+  },
+  {
+   "name": "gametabs_games",
+   "sql": "CREATE TABLE gametabs_games (\n  path TEXT PRIMARY KEY,\n  game TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n)",
+   "tbl_name": "gametabs_games",
+   "type": "table"
+  },
+  {
+   "name": "gametabs_index",
+   "sql": "CREATE TABLE gametabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  game TEXT NOT NULL,\n  slug TEXT NOT NULL,\n  page INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  slug_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)",
+   "tbl_name": "gametabs_index",
+   "type": "table"
+  },
+  {
+   "name": "gtptabs_index",
+   "sql": "CREATE TABLE gtptabs_index (\n  path TEXT PRIMARY KEY,\n  artist_path TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  base_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)",
+   "tbl_name": "gtptabs_index",
+   "type": "table"
+  },
+  {
+   "name": "harptabs_artist_tabs",
+   "sql": "CREATE TABLE harptabs_artist_tabs (\n  artist TEXT NOT NULL,\n  tab_id INTEGER NOT NULL,\n  path TEXT NOT NULL,\n  title TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  harp_key TEXT,\n  difficulty TEXT,\n  views INTEGER NOT NULL DEFAULT 0,\n  rating REAL,\n  place INTEGER NOT NULL,\n  PRIMARY KEY (artist, tab_id)\n)",
+   "tbl_name": "harptabs_artist_tabs",
+   "type": "table"
+  },
+  {
+   "name": "harptabs_artists",
+   "sql": "CREATE TABLE harptabs_artists (\n  path TEXT PRIMARY KEY,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n)",
+   "tbl_name": "harptabs_artists",
+   "type": "table"
+  },
+  {
+   "name": "harptabs_index",
+   "sql": "CREATE TABLE harptabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)",
+   "tbl_name": "harptabs_index",
+   "type": "table"
+  },
+  {
+   "name": "kv",
+   "sql": "CREATE TABLE kv (\n  key TEXT PRIMARY KEY,\n  value TEXT NOT NULL\n)",
+   "tbl_name": "kv",
+   "type": "table"
+  },
+  {
+   "name": "lacuerda_index",
+   "sql": "CREATE TABLE lacuerda_index (\n  path TEXT PRIMARY KEY,\n  artist_slug TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  title TEXT NOT NULL DEFAULT '',\n  title_key TEXT NOT NULL DEFAULT '',\n  songs INTEGER NOT NULL DEFAULT 0,\n  versions TEXT NOT NULL DEFAULT '',\n  acordes INTEGER NOT NULL DEFAULT 0,\n  popular INTEGER,\n  page TEXT NOT NULL\n)",
+   "tbl_name": "lacuerda_index",
+   "type": "table"
+  },
+  {
+   "name": "musescore_index",
+   "sql": "CREATE TABLE musescore_index (\n  page_id INTEGER PRIMARY KEY,\n  path TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)",
+   "tbl_name": "musescore_index",
+   "type": "table"
+  },
+  {
+   "name": "removed",
+   "sql": "CREATE TABLE removed (\n  key TEXT PRIMARY KEY,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  source_ids TEXT NOT NULL DEFAULT '{}',\n  removed_at TEXT NOT NULL\n)",
+   "tbl_name": "removed",
+   "type": "table"
+  },
+  {
+   "name": "songs",
+   "sql": "CREATE TABLE songs (\n  id INTEGER PRIMARY KEY,\n  key TEXT NOT NULL UNIQUE,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  artists TEXT NOT NULL,\n  album TEXT,\n  duration_ms INTEGER,\n  isrc TEXT,\n  source_ids TEXT NOT NULL DEFAULT '{}',\n  added_at TEXT NOT NULL,\n  variant TEXT,\n  status TEXT NOT NULL DEFAULT 'wanted' CHECK (status IN ('wanted', 'found', 'ignored')),\n  review INTEGER NOT NULL DEFAULT 0,\n  match_decision TEXT,\n  match_step TEXT,\n  match_score REAL,\n  match_artist_key TEXT,\n  match_song_key TEXT,\n  match_candidates TEXT NOT NULL DEFAULT '[]',\n  matched_at TEXT,\n  ug_dirty INTEGER NOT NULL DEFAULT 1,\n  ug_checked_at TEXT,\n  lyrics_status TEXT NOT NULL DEFAULT 'pending'\n    CHECK (lyrics_status IN ('pending', 'found', 'missing', 'instrumental')),\n  lyrics_json TEXT,\n  lyrics_at TEXT,\n  lacuerda_checked_at TEXT,\n  audio_path TEXT,\n  audio_mtime REAL,\n  autochords_mtime REAL,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL\n)",
+   "tbl_name": "songs",
+   "type": "table"
+  },
+  {
+   "name": "ug_artist_tabs",
+   "sql": "CREATE TABLE ug_artist_tabs (\n  page TEXT NOT NULL,\n  tab_id INTEGER NOT NULL,\n  type TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  label TEXT,\n  rating REAL NOT NULL DEFAULT 0,\n  votes INTEGER NOT NULL DEFAULT 0,\n  url TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  artist_forms TEXT NOT NULL,\n  title_forms TEXT NOT NULL,\n  forms TEXT NOT NULL,\n  read_at TEXT NOT NULL,\n  PRIMARY KEY (page, tab_id)\n)",
+   "tbl_name": "ug_artist_tabs",
+   "type": "table"
+  },
+  {
+   "name": "ug_artist_words",
+   "sql": "CREATE VIRTUAL TABLE ug_artist_words USING fts5vocab(ug_artists_fts, row)",
+   "tbl_name": "ug_artist_words",
+   "type": "table"
+  },
+  {
+   "name": "ug_artists",
+   "sql": "CREATE TABLE ug_artists (\n  id INTEGER PRIMARY KEY,\n  artist_key TEXT NOT NULL UNIQUE\n)",
+   "tbl_name": "ug_artists",
+   "type": "table"
+  },
+  {
+   "name": "ug_artists_fts",
+   "sql": "CREATE VIRTUAL TABLE ug_artists_fts USING fts5(\n  artist_key, content='ug_artists', content_rowid='id', tokenize='unicode61', detail='none'\n)",
+   "tbl_name": "ug_artists_fts",
+   "type": "table"
+  },
+  {
+   "name": "ug_artists_fts_config",
+   "sql": "CREATE TABLE 'ug_artists_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID",
+   "tbl_name": "ug_artists_fts_config",
+   "type": "table"
+  },
+  {
+   "name": "ug_artists_fts_data",
+   "sql": "CREATE TABLE 'ug_artists_fts_data'(id INTEGER PRIMARY KEY, block BLOB)",
+   "tbl_name": "ug_artists_fts_data",
+   "type": "table"
+  },
+  {
+   "name": "ug_artists_fts_docsize",
+   "sql": "CREATE TABLE 'ug_artists_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB)",
+   "tbl_name": "ug_artists_fts_docsize",
+   "type": "table"
+  },
+  {
+   "name": "ug_artists_fts_idx",
+   "sql": "CREATE TABLE 'ug_artists_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID",
+   "tbl_name": "ug_artists_fts_idx",
+   "type": "table"
+  },
+  {
+   "name": "ug_index",
+   "sql": "CREATE TABLE ug_index (\n  tab_id INTEGER PRIMARY KEY,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  type TEXT NOT NULL,\n  sitemap TEXT NOT NULL,\n  first_seen TEXT NOT NULL,\n  path TEXT NOT NULL DEFAULT ''\n)",
+   "tbl_name": "ug_index",
+   "type": "table"
+  },
+  {
+   "name": "ug_index_fts",
+   "sql": "CREATE VIRTUAL TABLE ug_index_fts USING fts5(\n  artist_key, song_key, content='ug_index', content_rowid='tab_id', tokenize='unicode61', detail='none', columnsize=0\n)",
+   "tbl_name": "ug_index_fts",
+   "type": "table"
+  },
+  {
+   "name": "ug_index_fts_config",
+   "sql": "CREATE TABLE 'ug_index_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID",
+   "tbl_name": "ug_index_fts_config",
+   "type": "table"
+  },
+  {
+   "name": "ug_index_fts_data",
+   "sql": "CREATE TABLE 'ug_index_fts_data'(id INTEGER PRIMARY KEY, block BLOB)",
+   "tbl_name": "ug_index_fts_data",
+   "type": "table"
+  },
+  {
+   "name": "ug_index_fts_idx",
+   "sql": "CREATE TABLE 'ug_index_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID",
+   "tbl_name": "ug_index_fts_idx",
+   "type": "table"
+  },
+  {
+   "name": "ug_key_words",
+   "sql": "CREATE TABLE ug_key_words (\n  id INTEGER PRIMARY KEY,\n  term TEXT NOT NULL UNIQUE\n)",
+   "tbl_name": "ug_key_words",
+   "type": "table"
+  },
+  {
+   "name": "ug_keys",
+   "sql": "CREATE TABLE ug_keys (\n  id INTEGER PRIMARY KEY,\n  key TEXT NOT NULL UNIQUE\n)",
+   "tbl_name": "ug_keys",
+   "type": "table"
+  },
+  {
+   "name": "ug_keys_fts",
+   "sql": "CREATE VIRTUAL TABLE ug_keys_fts USING fts5(\n  key, content='ug_keys', content_rowid='id', tokenize='trigram', detail='none'\n)",
+   "tbl_name": "ug_keys_fts",
+   "type": "table"
+  },
+  {
+   "name": "ug_keys_fts_config",
+   "sql": "CREATE TABLE 'ug_keys_fts_config'(k PRIMARY KEY, v) WITHOUT ROWID",
+   "tbl_name": "ug_keys_fts_config",
+   "type": "table"
+  },
+  {
+   "name": "ug_keys_fts_data",
+   "sql": "CREATE TABLE 'ug_keys_fts_data'(id INTEGER PRIMARY KEY, block BLOB)",
+   "tbl_name": "ug_keys_fts_data",
+   "type": "table"
+  },
+  {
+   "name": "ug_keys_fts_docsize",
+   "sql": "CREATE TABLE 'ug_keys_fts_docsize'(id INTEGER PRIMARY KEY, sz BLOB)",
+   "tbl_name": "ug_keys_fts_docsize",
+   "type": "table"
+  },
+  {
+   "name": "ug_keys_fts_idx",
+   "sql": "CREATE TABLE 'ug_keys_fts_idx'(segid, term, pgno, PRIMARY KEY(segid, term)) WITHOUT ROWID",
+   "tbl_name": "ug_keys_fts_idx",
+   "type": "table"
+  },
+  {
+   "name": "versions",
+   "sql": "CREATE TABLE versions (\n  id INTEGER PRIMARY KEY,\n  provider TEXT NOT NULL,\n  tab_id TEXT NOT NULL,\n  song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,\n  slot TEXT NOT NULL CHECK (slot IN ('sheet', 'guitar')),\n  kind TEXT NOT NULL,\n  rating REAL NOT NULL DEFAULT 0,\n  votes INTEGER NOT NULL DEFAULT 0,\n  version INTEGER NOT NULL DEFAULT 1,\n  label TEXT,\n  coverage REAL,\n  url TEXT NOT NULL,\n  raw TEXT NOT NULL DEFAULT '{}',\n  fetched_at TEXT NOT NULL,\n  pick_rank INTEGER,\n  gone INTEGER NOT NULL DEFAULT 0,\n  UNIQUE (provider, tab_id, song_id)\n)",
+   "tbl_name": "versions",
+   "type": "table"
+  },
+  {
+   "name": "ug_artists_indexed",
+   "sql": "CREATE TRIGGER ug_artists_indexed AFTER INSERT ON ug_artists BEGIN\n  INSERT INTO ug_artists_fts(rowid, artist_key) VALUES (new.id, new.artist_key);\nEND",
+   "tbl_name": "ug_artists",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_artists_unindexed",
+   "sql": "CREATE TRIGGER ug_artists_unindexed AFTER DELETE ON ug_artists BEGIN\n  INSERT INTO ug_artists_fts(ug_artists_fts, rowid, artist_key) VALUES ('delete', old.id, old.artist_key);\nEND",
+   "tbl_name": "ug_artists",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_artist_added",
+   "sql": "CREATE TRIGGER ug_index_artist_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_artist_changed",
+   "sql": "CREATE TRIGGER ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key);\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_artist_gone",
+   "sql": "CREATE TRIGGER ug_index_artist_gone AFTER DELETE ON ug_index\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_fts_added",
+   "sql": "CREATE TRIGGER ug_index_fts_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_index_fts(rowid, artist_key, song_key) VALUES (new.tab_id, new.artist_key, new.song_key);\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_fts_changed",
+   "sql": "CREATE TRIGGER ug_index_fts_changed AFTER UPDATE OF artist_key, song_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key OR new.song_key IS NOT old.song_key BEGIN\n  INSERT INTO ug_index_fts(ug_index_fts, rowid, artist_key, song_key)\n  VALUES ('delete', old.tab_id, old.artist_key, old.song_key);\n  INSERT INTO ug_index_fts(rowid, artist_key, song_key) VALUES (new.tab_id, new.artist_key, new.song_key);\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_fts_gone",
+   "sql": "CREATE TRIGGER ug_index_fts_gone AFTER DELETE ON ug_index BEGIN\n  INSERT INTO ug_index_fts(ug_index_fts, rowid, artist_key, song_key)\n  VALUES ('delete', old.tab_id, old.artist_key, old.song_key);\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_keys_added",
+   "sql": "CREATE TRIGGER ug_index_keys_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_keys(key) SELECT new.artist_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.artist_key);\n  INSERT INTO ug_keys(key) SELECT new.song_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.song_key);\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_index_keys_changed",
+   "sql": "CREATE TRIGGER ug_index_keys_changed AFTER UPDATE OF artist_key, song_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key OR new.song_key IS NOT old.song_key BEGIN\n  INSERT INTO ug_keys(key) SELECT new.artist_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.artist_key);\n  INSERT INTO ug_keys(key) SELECT new.song_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.song_key);\nEND",
+   "tbl_name": "ug_index",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_keys_indexed",
+   "sql": "CREATE TRIGGER ug_keys_indexed AFTER INSERT ON ug_keys BEGIN\n  INSERT INTO ug_keys_fts(rowid, key) VALUES (new.id, new.key);\nEND",
+   "tbl_name": "ug_keys",
+   "type": "trigger"
+  },
+  {
+   "name": "ug_keys_words",
+   "sql": "CREATE TRIGGER ug_keys_words AFTER INSERT ON ug_keys BEGIN\n  INSERT INTO ug_key_words(term) SELECT DISTINCT value FROM json_each(CASE WHEN json_valid('[\"' || replace(new.key, '-', '\",\"') || '\"]')\n  THEN '[\"' || replace(new.key, '-', '\",\"') || '\"]' ELSE '[]' END)\n  WHERE value != '' AND NOT EXISTS (SELECT 1 FROM ug_key_words WHERE term = value);\nEND",
+   "tbl_name": "ug_keys",
+   "type": "trigger"
+  }
+ ]
+}
