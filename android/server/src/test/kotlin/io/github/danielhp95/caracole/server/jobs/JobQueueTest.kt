@@ -208,7 +208,7 @@ class JobQueueTest {
             it.stage("give", "running")
             kotlinx.coroutines.withTimeout(10_000) { CompletableDeferred<Unit>().await() }  // the push never taken
         }).first
-        val todo = queue.submit(spec("b") { TODO("lane sync-take") }).first
+        val todo = queue.submit(spec("b") { TODO("not built yet") }).first  // as a skeleton's neutral stub throws
         val overflow = queue.submit(spec("c") { deep(0) }).first
         val next = queue.submit(spec("d")).first
         runCurrent()
@@ -216,7 +216,7 @@ class JobQueueTest {
         runCurrent()
         assertEquals(Job.FAILED, queue.job(timedOut.id)!!.state)
         assertTrue(queue.job(timedOut.id)!!.output.last().startsWith("error: Timed out "))  // the test clock's words
-        assertEquals("error: An operation is not implemented: lane sync-take", queue.job(todo.id)!!.output.last())
+        assertEquals("error: An operation is not implemented: not built yet", queue.job(todo.id)!!.output.last())
         assertEquals("error: StackOverflowError", queue.job(overflow.id)!!.output.last())
         assertEquals(Job.FAILED, queue.await(overflow.id).state)  // await never hangs on one
         assertEquals(Job.DONE, queue.job(next.id)!!.state)  // the worker went on
