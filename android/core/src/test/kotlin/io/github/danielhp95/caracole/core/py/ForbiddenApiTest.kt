@@ -93,10 +93,6 @@ class ForbiddenApiTest {
         assertEquals(emptyList(), found("val k = PyUnicode.category(cp); val ok = map.put(k, true)"))
         assertEquals(emptyList(), found("s.contains(\"a, true\")")) // a string's comma and true are no arguments
         assertEquals(emptyList(), found("xs.map(Py::strip).sortedWith(Py.CODE_POINT_ORDER)"))
-        // A finding a file keeps: core-db's Database.kt's trim of phone.sql's statements, on that line alone.
-        val db = "io/github/danielhp95/caracole/core/db/Database.kt"
-        assertEquals(emptyList(), found("for (st in sql.split(';').map { it.trim() }.filter { it.isNotEmpty() }) {}", db))
-        assertEquals(listOf(".trim()"), found("val name = row.trim()", db))
         // core/py writes the regexes the rest of :core compiles.
         assertEquals(emptyList(), found("val r = Regex(\"\\\\w\")", "io/github/danielhp95/caracole/core/py/X.kt"))
         assertEquals(listOf(".lowercase("), found("s.lowercase()", "io/github/danielhp95/caracole/core/py/X.kt"))
@@ -146,14 +142,6 @@ internal object ForbiddenApis {
     )
     private val CHARACTER = Regex("""\bCharacter\s*(?:\.|::)\s*([A-Za-z_][A-Za-z0-9_]*)""")
 
-    /**
-     * Findings a file may keep, by its path and the text of its line: each with why.
-     * - core-db's branch names the characters Database.kt trims (`trim(' ', '\t', '\n', '\r')`); until it merges,
-     *   the skeleton's trims phone.sql's statements, caracole's own ASCII, with Kotlin's whitespace.
-     */
-    private val KEPT = listOf(
-        Triple("io/github/danielhp95/caracole/core/db/Database.kt", "sql.split(';').map { it.trim() }", ".trim()"),
-    )
     private val REGEX_CALL = Regex("""(?<![A-Za-z0-9_])(?:Regex|Pattern\s*\.\s*compile|Pattern\s*\.\s*matches)\s*\(""")
     private val REGEX_RECEIVER = Regex("""\.\s*(?:toRegex|toPattern)\s*\(""")
     private const val PY = "io/github/danielhp95/caracole/core/py/"
@@ -170,10 +158,7 @@ internal object ForbiddenApis {
             for (m in rule.pattern.findAll(code)) {
                 // As written, too: `trimStart('0')` is no `trimStart()`, its char blanked in the code.
                 if (rule.pattern.matchAt(source, m.range.first)?.value != m.value) continue
-                val what = m.value.trim(' ', '\t', '\n', '\r')
-                if (KEPT.none { (p, text, w) -> p == path && w == what && text in lineAt(source, m.range.first) }) {
-                    at(m.range.first, what, rule.why)
-                }
+                at(m.range.first, m.value.trim(' ', '\t', '\n', '\r'), rule.why)
             }
         }
         for (m in IGNORE_CASE_MEMBERS.findAll(code)) {
@@ -266,11 +251,6 @@ internal object ForbiddenApis {
 
     private fun line(source: String, offset: Int): Int = 1 + (0 until offset).count { source[it] == '\n' }
 
-    private fun lineAt(source: String, offset: Int): String {
-        val start = source.lastIndexOf('\n', offset - 1) + 1
-        val end = source.indexOf('\n', offset).let { if (it < 0) source.length else it }
-        return source.substring(start, end)
-    }
 }
 
 /** A Kotlin source with its comments and string literals' text blanked ([code], offsets kept), and each literal's
