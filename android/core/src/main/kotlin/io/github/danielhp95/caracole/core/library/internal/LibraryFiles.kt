@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.core.library.internal
 
+import io.github.danielhp95.caracole.core.json.Canonical
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -57,7 +58,7 @@ internal object LibraryFiles {
     fun entries(folder: Path): List<Pair<String, String>> =
         Files.newDirectoryStream(folder).use { names ->
             names.mapNotNull { p -> entry(p)?.let { p.fileName.toString() to kind(it) } }
-        }.sortedWith { a, b -> io.github.danielhp95.caracole.core.json.Canonical.KEY_ORDER.compare(a.first, b.first) }
+        }.sortedWith { a, b -> Canonical.KEY_ORDER.compare(a.first, b.first) }
 
     /** The bytes of the regular file [file], never through a link in its place; null for anything else. */
     fun regularBytes(file: Path): ByteArray? {

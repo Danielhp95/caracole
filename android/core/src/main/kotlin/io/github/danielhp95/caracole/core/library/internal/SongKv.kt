@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.library.internal
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.json.PyJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -61,9 +62,9 @@ internal object SongKv {
 
     /** source ids as songs.py writes them, json.dumps(ids, ensure_ascii=False). */
     fun idsText(ids: Map<String, List<JsonElement>>): String =
-        io.github.danielhp95.caracole.core.json.PyJson.dumps(JsonObject(ids.mapValues { JsonArray(it.value) }))
+        PyJson.dumps(JsonObject(ids.mapValues { JsonArray(it.value) }))
 
     /** A list of names as songs.py writes `artists`. */
     fun namesText(names: List<String>): String =
-        io.github.danielhp95.caracole.core.json.PyJson.dumps(JsonArray(names.map { JsonPrimitive(it) }))
+        PyJson.dumps(JsonArray(names.map { JsonPrimitive(it) }))
 }

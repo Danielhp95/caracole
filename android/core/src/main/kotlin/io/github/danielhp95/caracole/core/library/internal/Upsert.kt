@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.library.internal
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.db.Row
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
@@ -105,7 +106,7 @@ internal object Upsert {
     fun removedSong(db: Db, key: String): RemovedRow? =
         db.one("SELECT key, artist, title, source_ids, removed_at FROM removed WHERE key = ?", key) { removed(it) }
 
-    private fun removed(r: io.github.danielhp95.caracole.core.db.Row) =
+    private fun removed(r: Row) =
         RemovedRow(r.text(0)!!, r.text(1)!!, r.text(2)!!, r.text(3)!!, r.text(4)!!)
 
     /** songs.forget_removed: whether [key] had a tombstone, now gone. */

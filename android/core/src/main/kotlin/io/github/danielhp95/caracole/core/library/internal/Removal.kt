@@ -1,10 +1,13 @@
 package io.github.danielhp95.caracole.core.library.internal
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.RemovedRow
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.py.PyUnicode
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
@@ -54,7 +57,7 @@ internal object Removal {
         val other = songsInFolder(db, folder).firstOrNull { it.first != song.id }
         if (other != null) {
             ours = keptHere
-            why["file"] = "the folder is ${io.github.danielhp95.caracole.core.keys.Normalize.displayKey(other.second, other.third)}'s too"
+            why["file"] = "the folder is ${Normalize.displayKey(other.second, other.third)}'s too"
         }
         val delete = mutableListOf<String>()
         val keep = mutableListOf<Pair<String, String>>()
@@ -68,7 +71,7 @@ internal object Removal {
         } catch (e: LibraryFiles.NotFollowed) {
             problem = e.message
         }
-        val order = io.github.danielhp95.caracole.core.json.Canonical.KEY_ORDER
+        val order = Canonical.KEY_ORDER
         return Plan(song, folder, delete.sortedWith(order), keep.sortedWith { a, b ->
             order.compare(a.first, b.first).let { if (it != 0) it else order.compare(a.second, b.second) }
         }, problem, elsewhere)
