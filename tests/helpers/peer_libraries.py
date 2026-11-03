@@ -12,7 +12,8 @@ steps leave them, and a ``Source`` that reads another library's units and kept f
 
 ``Library.song`` keeps a sheet (``sheet.txt``, of a UG version), lyrics and, given them, overrides.toml's entries
 about the song (``entries``, as ``overrides.song_entries`` gives them); ``rich(library)`` fills one with a unit of
-every kind and an entry of every table. Each library gets a database id of its own (``sync:id``).
+every kind and an entry of every table, ``dense(library)`` with every field of a song and a songbook a value or a
+document holds set. Each library gets a database id of its own (``sync:id``).
 """
 
 from __future__ import annotations
@@ -209,3 +210,35 @@ def rich(library: Library) -> None:
     add_alias(library.cfg.overrides_file, "Soda", "soda-stereo")
     add_artist_url(library.cfg.overrides_file, "宋冬野", "https://www.ultimate-guitar.com/artist/song_dongye_12345")
     add_block(library.cfg.overrides_file, 4242)
+
+
+def dense(library: Library) -> None:
+    """Every field of a song's value and document that ``rich`` leaves at its default, set: an album, a duration, a
+    variant ("(En Vivo)") and two artists; a match decided (its decision, step, REAL score, keys, candidates and
+    time), a song in review, checked times; lyrics missing and instrumental; a version gone, with a pick, a REAL
+    coverage and a label, and an integral REAL; carried kv of all three prefixes; a songbook whose settings have a
+    mode and an instrument."""
+    creep = library.song("Radiohead", "Creep", album="Pablo Honey", duration_ms=238000, files={"tab.txt": b"e|-0-|"})
+    update_song(library.conn, creep.id, artists=["Radiohead", "Thom Yorke"], review=True, match_decision="review",
+                match_step="fuzzy_title", match_score=11 / 12, match_artist_key="radiohead", match_song_key="creep",
+                match_candidates=[{"artist_key": "radiohead", "song_key": "creep", "score": 11 / 12,
+                                   "step": "fuzzy_title"}],
+                matched_at=NOW, ug_dirty=False, ug_checked_at=NOW, lyrics_at=NOW, lacuerda_checked_at=NOW)
+    gone = upsert_version(library.conn, provider="ug", tab_id="202", song_id=creep.id, slot="sheet", kind="chords",
+                          rating=3.75, votes=12, version=3, label="Ver 3", url="https://u/202", raw={"rating": 3.75},
+                          now=NOW)
+    library.conn.execute("UPDATE versions SET gone = 1, pick_rank = 2, coverage = 0.625 WHERE id = ?", (gone,))
+    library.conn.execute("UPDATE versions SET pick_rank = 1, coverage = 1.0 WHERE song_id = ? AND tab_id = '101'",
+                         (creep.id,))
+    db.kv_set(library.conn, f"sheet_versions:yours:{creep.id}", "[101]")
+    db.kv_set(library.conn, f"sheet_versions:unkeepable:{creep.id}", "[202]")
+    db.kv_set(library.conn, f"sheet_versions:same:{creep.id}:101", "202")
+    live = library.song("Soda Stereo", "De Música Ligera (En Vivo)", album="Gira Me Verás Volver", lyrics=None)
+    update_song(library.conn, live.id, lyrics_status="missing", lyrics_at=NOW)
+    hand = library.song("Explosions in the Sky", "Your Hand in Mine", sheet=None, lyrics=None, duration_ms=497000)
+    update_song(library.conn, hand.id, lyrics_status="instrumental", lyrics_json=Lyrics(
+        plain="", synced=None, instrumental=True, duration=497.0, lrclib_id=9).to_json(), lyrics_at=NOW)
+    library.songbook("Practice", ["Radiohead - Creep", "Soda Stereo - De Música Ligera (En Vivo)",
+                                  "Explosions in the Sky - Your Hand in Mine"],
+                     {"Radiohead - Creep": Setting(key="A", mode="dorian", capo=0, instrument="ukulele"),
+                      "Soda Stereo - De Música Ligera (En Vivo)": Setting(instrument="piano")})

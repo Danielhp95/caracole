@@ -6,6 +6,11 @@
 {"row":{"created_at":"2026-10-31T00:00:00Z","id":1,"kept_rank":1,"name":"sheet.txt","path":"radiohead/Karma Police/sheet.txt","sha256":"270e148e6f7a6073698b8529d9264ed546c7c3f79fbe6078d0e89965d5fedba4","song_id":1,"version_id":1},"table":"files"}
 {"row":{"created_at":"2026-10-31T00:00:00Z","id":2,"kept_rank":1,"name":"sheet.txt","path":"radiohead/No Surprises/sheet.txt","sha256":"fee71248d8840d1a9ae1dae331ca803d1b1b07039b2960d191fe5172b6d4de97","song_id":2,"version_id":2},"table":"files"}
 {"kv":"phone:schema","value":"1"}
+{"kv":"render:1","value":"{\"made\": true}"}
+{"kv":"render:1:trad","value":"{\"made\": true}"}
+{"kv":"render:export:1","value":"{\"made\": true}"}
+{"kv":"render:files:1","value":"{\"made\": true}"}
+{"kv":"render:progressions:1","value":"{\"made\": true}"}
 {"kv":"songs:key_version","value":"2"}
 {"kv":"wanted:first_seen:radiohead/karma-police","value":"2026-10-31T00:00:00Z"}
 {"kv":"wanted:first_seen:radiohead/no-surprises","value":"2026-10-31T00:00:00Z"}

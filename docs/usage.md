@@ -5808,16 +5808,16 @@ the other to take what goes there: a request queued in its Requests tab ("Sync w
 
 **`caracole peer pull`** takes the units named (as `diff --json` names them: `song/<key>`, `songbook/<name>`…)
 from there. It waits for the nightly run as a lookup does, backs the database up first (`…-before-sync.sqlite`
-in `state_dir/backups/`), and for each unit asks there for it whole; a unit no longer as it was compared, or a file
-that changed there since caracole kept it, is left as it is here, and it says why (exit 1). A song taken gets its
-wanted.txt line, its versions and kept files (each checked by its SHA-256), its lyrics and its overrides.toml entries
-(written as caracole writes them, your comments kept), all of it or none, then is rendered again. It is written as
-there writes it ("Radiohead - Creep" for a "radiohead - creep" here), its files moving to its folder of that name;
-and when there writes its artist in another case alone, every song of that artist here takes that spelling, their
-folder renamed once, so the artist keeps one folder. A song there removed is removed here
-as `caracole remove` would: a unit there hasn't got is taken as gone, so name only the units
-`diff` lists. Then the songbooks are made and the pages written, and the two keep what they now agree
-on.
+in `state_dir/backups/`), and for each unit asks there for it whole; a unit no longer as it was compared, one whose
+answer lacks what caracole reads, or a file that changed there since caracole kept it, is left as it is here, and it
+says why (exit 1). A song taken gets its wanted.txt line, its versions and kept files (each checked by its SHA-256),
+its lyrics and its overrides.toml entries (written as caracole writes them, your comments kept), all of it or none,
+then is rendered again. It is written as there writes it ("Radiohead - Creep" for a "radiohead - creep" here), its
+files moving to its folder of that name; and when there writes its artist in another case alone, every song of that
+artist here takes that spelling (a line of theirs you added since the last sync too), their folder renamed once, so
+the artist keeps one folder. A song there removed is removed here as `caracole remove` would: a unit there hasn't got
+is taken as gone, so name only the units `diff` lists. Then the songbooks are made and the pages written, and the two
+keep what they now agree on.
 
 Two caracoles whose databases are copies of each other are the same caracole, and they say so: `caracole peer
 new-id` gives one of them an id of its own (and forgets what it agreed on with every other).

@@ -4,6 +4,11 @@
 {"row":{"created_at":"2026-10-31T00:00:00Z","id":1,"kept_rank":1,"name":"sheet.txt","path":"Soda Stereo/De Musica Ligera/sheet.txt","sha256":"2dafa4711a130165a2407cb1a3dc8b69299c1b153f837eac08ba584e1443df7e","song_id":1,"version_id":1},"table":"files"}
 {"row":{"created_at":"2026-10-31T00:00:00Z","id":2,"kept_rank":1,"name":"tab.txt","path":"Soda Stereo/De Musica Ligera/tab.txt","sha256":"34eea96bf9ad61114fcf788fc54e558cdd4f2e89bf7329fa7b96c56cad9fcd38","song_id":1,"version_id":1},"table":"files"}
 {"kv":"phone:schema","value":"1"}
+{"kv":"render:1","value":"{\"made\": true}"}
+{"kv":"render:1:trad","value":"{\"made\": true}"}
+{"kv":"render:export:1","value":"{\"made\": true}"}
+{"kv":"render:files:1","value":"{\"made\": true}"}
+{"kv":"render:progressions:1","value":"{\"made\": true}"}
 {"kv":"songs:key_version","value":"2"}
 {"kv":"wanted:first_seen:soda-stereo/de-musica-ligera","value":"2026-10-31T00:00:00Z"}
 {"base64":"W0FtXUNyZWVw","file":"Soda Stereo/De Musica Ligera/sheet.txt"}

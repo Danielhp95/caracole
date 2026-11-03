@@ -9,7 +9,7 @@ from pathlib import PurePosixPath
 import httpx
 import pytest
 from conftest import add_song
-from helpers.peer_libraries import Library, rich
+from helpers.peer_libraries import WHEN, Library, dense, rich
 
 from caracole import index_transfer
 from caracole import peer_sync as sync
@@ -20,6 +20,7 @@ from caracole.songbook import Songbook, SongbookSong
 from caracole.songs import find_song, mark_removed, removed_song
 from caracole.versions import upsert_version
 from caracole.viewer.version import Setting
+from caracole.wanted import append_wanted, sync_wanted
 
 NOW = "2026-10-31T00:00:00Z"
 
@@ -286,12 +287,13 @@ def libraries(tmp_path):
 
 
 def test_a_units_value_read_from_its_document_alone_is_the_value_its_digest_is_of(libraries):
-    full, plain = libraries("full"), libraries("plain")
+    full, filled, plain = libraries("full"), libraries("filled"), libraries("plain")
     rich(full)
+    dense(filled)
     plain.song("Soda Stereo", "De Música Ligera", sheet=None, lyrics=None)
     plain.removed("Oasis", "Wonderwall")
     kinds = set()
-    for lib in (full, plain):
+    for lib in (full, filled, plain):
         units = lib.units()
         for unit_id, unit in units.items():
             kinds.add(unit.kind)
@@ -463,7 +465,7 @@ def test_a_song_taken_forgets_the_tombstone_this_side_had_of_it(libraries):
 def test_a_kept_file_whose_name_no_folder_holds_is_refused(libraries):
     here, there = libraries("here"), libraries("there")
     creep = there.song("Radiohead", "Creep")
-    for name in ("../x", "a/b", "a\\b", ".hidden", "", ".."):
+    for name in ("../x", "a/b", "a\\b", ".hidden", "", "..", "x\0y"):
         doc = there.source().unit(f"song/{creep.key}")
         doc["versions"][0]["files"][0]["name"] = name
 
@@ -482,9 +484,109 @@ def test_a_kept_file_whose_name_no_folder_holds_is_refused(libraries):
     assert sync.checked_name("sheet (auto).txt") == "sheet (auto).txt"
 
 
-def test_every_unit_of_a_full_library_taken_into_an_empty_one_gives_the_same_units(libraries):
+class Altered:
+    """A source whose documents ``change`` alters on their way (``{unit id: fn(doc) -> doc}``)."""
+
+    def __init__(self, source, change):
+        self.source, self.change = source, change
+
+    def unit(self, unit_id):
+        doc = self.source.unit(unit_id)
+        return self.change[unit_id](doc) if unit_id in self.change and doc is not None else doc
+
+    def file(self, *args):
+        return self.source.file(*args)
+
+
+def test_a_document_missing_what_the_take_reads_is_left_and_the_rest_taken(libraries):
     here, there = libraries("here"), libraries("there")
-    rich(there)
+    creep, karma = there.song("Radiohead", "Creep"), there.song("Radiohead", "Karma Police")
+    there.removed("Oasis", "Wonderwall")
+    there.songbook("Campfire", ["Radiohead - Creep"], {"Radiohead - Creep": Setting(key="G", capo=2)})
+
+    def no_rank(doc):
+        del doc["versions"][0]["files"][0]["kept_rank"]
+        return doc
+
+    def no_when(doc):
+        del doc["removed_at"]
+        return doc
+
+    def odd_part(doc):
+        doc["songs"][0][1] = {"tempo": 120}
+        return doc
+
+    def no_kv(doc):
+        doc["kv"] = ["not", "an", "object"]
+        return doc
+
+    change = {f"song/{creep.key}": no_rank, "removed/oasis/wonderwall": no_when, "songbook/campfire": odd_part,
+              f"song/{karma.key}": no_kv}
+    source = Altered(there.source(), change)
+    ids = [*change, "block/1"]
+    wanted = [(u, None if (doc := source.unit(u)) is None else sync.digest_of(sync.value_of_document(u, doc)))
+              for u in ids]
+    add_block(there.cfg.overrides_file, 1)
+    wanted[-1] = ("block/1", there.digests()["block/1"])
+    before, wanted_txt = here.digests(), here.cfg.wanted_file.read_bytes() if here.cfg.wanted_file.exists() else None
+    done = sync.apply_units(here.conn, here.cfg, source, wanted, NOW)
+    assert done.taken == ["block/1"]
+    assert sorted(u for u, _ in done.left) == sorted(change)
+    assert all(why.startswith("its document can't be read") for _, why in done.left), done.left
+    assert {u: d for u, d in here.digests().items() if u != "block/1"} == before
+    assert find_song(here.conn, creep.key) is None and find_song(here.conn, karma.key) is None
+    assert (here.cfg.wanted_file.read_bytes() if here.cfg.wanted_file.exists() else None) == wanted_txt
+    assert not here.cfg.library_dir.exists() or not [p for p in here.cfg.library_dir.rglob("*") if p.is_dir()]
+
+
+def test_a_take_respells_a_song_whose_line_was_waiting_to_be_synced_too(libraries):
+    here, there = libraries("here"), libraries("there")
+    karma = here.song("radiohead", "Karma Police", sheet=b"[Em]Karma")
+    append_wanted(here.cfg.wanted_file, "radiohead", "Airbag")  # written since the last sync, by serve or add
+    creep = there.song("Radiohead", "Creep")
+    done = here.take(there, [f"song/{creep.key}"])
+    assert done.left == []
+    airbag = find_song(here.conn, "radiohead/airbag")
+    assert airbag is not None and airbag.artist == "Radiohead"
+    assert done.respelled == [f"song/{karma.key}", f"song/{airbag.key}"]
+    assert {s.artist for s in (find_song(here.conn, k) for k in (karma.key, airbag.key, creep.key))} == {"Radiohead"}
+    assert [p.name for p in here.cfg.library_dir.iterdir() if p.is_dir()] == ["Radiohead"]
+
+
+def test_a_take_that_fails_puts_wanted_txt_back_byte_for_byte(libraries):
+    here, there = libraries("here"), libraries("there")
+    text = ("# mine\r\nradiohead - creep | Pablo Honey\r\nOasis - Wonderwall\r\nRadiohead - Creep | 3:58\r\n"
+            "Blur - Song 2\r\n").encode()
+    here.cfg.wanted_file.parent.mkdir(parents=True, exist_ok=True)
+    here.cfg.wanted_file.write_bytes(text)
+    sync_wanted(here.conn, here.cfg.wanted_file, WHEN)
+    before = here.digests()
+    creep = there.song("Radiohead", "Creep", entries={"version": "key=Gm&capo=0"})
+    here.cfg.overrides_file.write_text("[version\n", encoding="utf-8")  # a device's edit that broke it
+    done = here.take(there, [f"song/{creep.key}"])
+    assert done.taken == [] and [u for u, _ in done.left] == [f"song/{creep.key}"]
+    assert here.cfg.wanted_file.read_bytes() == text
+    here.cfg.overrides_file.unlink()
+    assert here.digests() == before
+
+
+@pytest.mark.parametrize("tab", ["٣", "007", "+7", " 7", "7 ", "-7", "0x7", ""])
+def test_a_blocked_tab_is_named_by_its_ascii_digits_alone(libraries, tab):
+    here, there = libraries("here"), libraries("there")
+    add_block(there.cfg.overrides_file, 7)
+    add_block(there.cfg.overrides_file, 3)
+    assert there.document(f"block/{tab}") is None
+    assert sync.unit_value(there.conn, there.overrides(), there.books(), f"block/{tab}") is None
+    done = sync.apply_units(here.conn, here.cfg, Altered(there.source(), {}), [(f"block/{tab}", None)], NOW)
+    assert done.taken == [] and [u for u, _ in done.left] == [f"block/{tab}"]
+    assert not here.cfg.overrides_file.exists() or not load_overrides(here.cfg.overrides_file).block
+    assert there.document("block/7")["unit"] == {"tab": 7}
+
+
+@pytest.mark.parametrize("fill", [rich, dense])
+def test_every_unit_of_a_full_library_taken_into_an_empty_one_gives_the_same_units(libraries, fill):
+    here, there = libraries("here"), libraries("there")
+    fill(there)
     done = here.take(there, list(there.units()))
     assert done.left == []
     assert here.units() == there.units()

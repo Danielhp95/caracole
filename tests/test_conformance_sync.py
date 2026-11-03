@@ -12,7 +12,9 @@ value}`` (a song's table and its identity key, or ``alias`` and ``artist_url`` w
 with the tab id; ``written`` the name overrides.toml writes it under; ``value`` the canonical JSON of the value as
 ``overrides.song_entries`` gives it, the alias's slugs, the artist's page, ``true`` for a blocked tab or an
 ``[ignore]``d song), and a ``phone_songbooks`` row for each songbook, ``{key: songbook.name_key(name), name, songs:
-the canonical JSON of songbook_value's "songs", position: its place in songbooks.toml, from 0}``. Every answer below is
+the canonical JSON of songbook_value's "songs", position: its place in songbooks.toml, from 0}``. An artist's page is
+its unit's value ``{name, page}`` split in two: ``written`` its name, ``value`` C(page) (OverridesStore.artistUrl puts
+them together, putArtistUrl writes ``written`` from ``name``). Every answer below is
 computed over the fixture replayed into a fresh database (``replay_fixture``), with the built library's
 overrides.toml, songbooks.toml and wanted.txt beside it, never over the database it was built in:
 
@@ -20,6 +22,10 @@ overrides.toml, songbooks.toml and wanted.txt beside it, never over the database
   ``rich``): two songs of one artist, a Chinese name and names beyond the BMP, tab ``101`` beside ``99``, kept files,
   lyrics, carried kv (``sheet_versions:yours:``, ``sheet_versions:same:``), a tombstone, a songbook with a setting, an
   alias, an artist's UG page, a blocked tab;
+- ``sync/fixtures/dense``: every field of a song's value and document, and of a songbook's setting, that ``rich``
+  leaves at its default, set (helpers/peer_libraries.py's ``dense``): an album, a duration, a variant, two artists, a
+  match decided with a REAL score, a song in review, lyrics missing and instrumental, a version gone with a pick, a
+  REAL coverage and a label, carried kv of every prefix, settings with a mode and an instrument;
 - ``sync/fixtures/plain``: a song with nothing kept and a song removed; ``sync/fixtures/empty``: nothing;
 - ``sync/fixtures/take_<case>``: this side's library before each case of take.jsonl;
 - ``library/fixtures/remove`` and ``library/fixtures/rekey``: the libraries remove.jsonl and ensure_current_keys.jsonl
@@ -30,8 +36,10 @@ overrides.toml, songbooks.toml and wanted.txt beside it, never over the database
 
 - sync/values.jsonl: ``caracole.peer_sync.unit_value`` of each unit ``library_state`` lists, ``out`` ``{id, label,
   value, digest}``;
-- sync/documents.jsonl: ``caracole.peer_sync.unit_document`` of each unit (and of one the library hasn't got), and
-  ``caracole.peer_sync.value_of_document`` of each document's ``unit`` (and of documents it refuses);
+- sync/documents.jsonl: ``caracole.peer_sync.unit_document`` of each unit (and of ids no unit has: a song or a
+  tombstone the library hasn't got, a blocked tab's id written otherwise than ASCII digits with no leading zero,
+  ``peer_sync.tab_of``), and ``caracole.peer_sync.value_of_document`` of each document's ``unit`` (and of documents
+  it refuses);
 - sync/compare.jsonl: ``caracole.peer_sync.compare``, ``args`` ``[mine, theirs, base]`` (``{id: {id, label, digest}}``,
   and ``{id: digest or null}`` or null), ``out`` each difference ``{id, label, mine, theirs, proposal, why}`` in order;
   ``case`` names each row of the design's three-way table, first syncs, a unit appearing and going, the order;
@@ -44,14 +52,19 @@ overrides.toml, songbooks.toml and wanted.txt beside it, never over the database
 - sync/name_key.jsonl: ``caracole.songbook.name_key``;
 - sync/compared_hash.jsonl: ``caracole.peer_sync.compared_hash`` of a list of differences (``args[0]``, as
   compare.jsonl writes them);
-- sync/take.jsonl: ``caracole.peer_sync.apply_units`` for each rule of the take (``case``), over ``fixture`` (this
-  side before), ``args`` ``[wanted]`` (``[[id, the digest compared there or null]]``), ``kw`` ``{expected_here, now}``,
-  ``source`` what the other side gives (``units``: each unit's document or null; ``files``: ``[{song, name, sha256,
-  base64}]``), ``out`` ``{taken, left: [[id, why]], respelled, songbooks, songs, after, paths, files}``: ``after``
-  this side's units then (``{id: {label, digest, value}}``), ``paths`` its ``files.path`` rows, ``files`` every file of
-  its song folders ``[[path, sha256]]``. A why is Python's words: those of the compare-and-swap
-  (``peer_sync.CHANGED_HERE``, ``CHANGED_THERE``) are the phone's too, the others (SQLite's own message among them)
-  say what a unit was left for;
+- sync/take.jsonl: ``caracole.peer_sync.apply_units`` for each case of the take (``case``), each showing one of
+  §5.6's rules (``rule``, one of ``TAKE_RULES``), over ``fixture`` (this side before), ``args`` ``[wanted]`` (``[[id,
+  the digest compared there or null]]``), ``kw`` ``{expected_here, now}``, ``source`` what the other side gives
+  (``units``: each unit's document or null; ``files``: ``[{song, name, sha256, base64}]``, which a source answers by
+  all three: one it lacks it can't give, and one whose bytes aren't its SHA-256's is refused by the take), ``out``
+  ``{taken, left: [[id, why]], respelled, songbooks, songs, after, documents, ids, kv, paths, files}``: ``after`` this
+  side's units then (``{id: {label, digest, value}}``), ``documents`` each song's ``unit_document`` then (the record's
+  columns and the versions' beyond the value, the kept files' ranks, the carried kv), ``ids`` each song's id by its
+  key, ``kv`` the ``render:`` and ``sheet_versions:`` rows (by those ids), ``paths`` its ``files.path`` rows,
+  ``files`` every file of its song folders ``[[path, sha256]]``. A why is Python's words: those of the
+  compare-and-swap (``peer_sync.CHANGED_HERE``, ``CHANGED_THERE``) are the phone's too, the others (SQLite's own
+  message among them) say what a unit was left for;
+- sync/checked_name.jsonl: ``caracole.peer_sync.checked_name``, a name kept or ``err`` ``UnitError``;
 - library/add.jsonl: ``caracole.songs.upsert_song`` as wanted.txt's sync calls it (``kw``), over a library ``before``
   (``songs``: ``[artist, title]`` added in order; ``removed``: tombstones), ``out`` ``{created, song, songs, removed}``;
 - library/remove.jsonl: ``caracole.removal.remove_song`` of the song of ``args[0]``'s key over ``fixture``, ``out``
@@ -76,14 +89,14 @@ import shutil
 import subprocess
 import sys
 import tomllib
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import pytest
 
 from helpers.corpus import VECTORS, check, dump_fixture, jsonl, phone_schema, plain, read_fixture, replay_fixture
-from helpers.peer_libraries import EVERY_ENTRY, NOW, Library, rich
+from helpers.peer_libraries import EVERY_ENTRY, NOW, Library, dense, rich
 
 TESTS = Path(__file__).resolve().parent
 SRC = TESTS.parent / "src"
@@ -92,7 +105,7 @@ SYNC = VECTORS / "sync"
 LIBRARY = VECTORS / "library"
 TOP_FILES = ("wanted.txt", "overrides.toml", "songbooks.toml")  # the computer's: the phone holds them as rows
 SYNC_FILES = ("values", "documents", "compare", "merged_base", "record_agreement", "decide", "name_key",
-              "compared_hash", "take")
+              "compared_hash", "take", "checked_name")
 LIBRARY_FILES = ("add", "remove", "lyrics_files", "stamps", "ensure_current_keys")
 
 
@@ -195,6 +208,10 @@ def build_rich(lib: Library) -> None:
         plain="斑马，斑马", synced=None, instrumental=False, duration=238.0, lrclib_id=7).to_json(),))
 
 
+def build_dense(lib: Library) -> None:
+    dense(lib)
+
+
 def build_plain(lib: Library) -> None:
     lib.song("Soda Stereo", "De Música Ligera", sheet=None, lyrics=None)
     lib.removed("Oasis", "Wonderwall")
@@ -208,6 +225,8 @@ def build_empty(lib: Library) -> None:
 
 
 CREEP, KARMA = "song/radiohead/creep", "song/radiohead/karma-police"
+SURPRISES = "song/radiohead/no-surprises"
+WONDERWALL = "removed/oasis/wonderwall"
 
 
 def _no_sheet_name(doc: dict) -> dict:
@@ -220,67 +239,184 @@ def _bad_slot(doc: dict) -> dict:
     return doc
 
 
-# case: (what it shows, here's builder, there's builder, the units taken, a document changed in transit, the units
-# whose expected digest here is stale, the units whose compared digest there is stale)
-TakeCase = tuple[str, Callable[[Library], None], Callable[[Library], None], Sequence[str],
-                 dict[str, Callable[[dict], dict]], Sequence[str], Sequence[str]]
-TAKES: dict[str, TakeCase] = {
-    "names_as_written": (
-        "the peer's names written as it writes them, its folder with them",
-        lambda h: h.song("radiohead", "creep"), lambda t: t.song("Radiohead", "Creep"), [CREEP], {}, (), ()),
-    "respelling": (
-        "an artist written in another case alone: every song of theirs respelled, one folder renamed once",
-        lambda h: (h.song("radiohead", "Karma Police", sheet=b"[Em]Karma"),
+def _no_kept_rank(doc: dict) -> dict:
+    del doc["versions"][0]["files"][0]["kept_rank"]  # beyond the value: its digest checks out
+    return doc
+
+
+def _no_removed_at(doc: dict) -> dict:
+    del doc["removed_at"]
+    return doc
+
+
+def _unknown_table(doc: dict) -> dict:
+    doc["overrides"]["nonsense"] = 1  # no table overrides.toml has: put_song_entries refuses it
+    return doc
+
+
+def _without(name: str) -> Callable[[list[dict]], list[dict]]:
+    """The source's files, ``name`` not among them: the other side can't give it."""
+    return lambda files: [f for f in files if f["name"] != name]
+
+
+def _other_bytes(name: str) -> Callable[[list[dict]], list[dict]]:
+    """The source's files, ``name`` given with other bytes than its SHA-256 says."""
+    return lambda files: [{**f, "base64": base64.b64encode(b"changed in transit").decode("ascii")}
+                          if f["name"] == name else f for f in files]
+
+
+def _rendered(lib: Library, artist: str, title: str, **kw) -> None:
+    """A song, with what render.py records of it: its sheet's record, its Traditional PDF's and its pages' (which a
+    take that moves its folder drops), its export's and its progressions' (which stay)."""
+    from caracole.db import kv_set
+
+    song = lib.song(artist, title, **kw)
+    for key in (f"render:{song.id}", f"render:{song.id}:trad", f"render:files:{song.id}",
+                f"render:export:{song.id}", f"render:progressions:{song.id}"):
+        kv_set(lib.conn, key, '{"made": true}')
+
+
+def _new_there(lib: Library) -> None:
+    """A song with an entry of every table, a file beyond its sheet and carried kv of every prefix, after another
+    song, so that its id there is not the one it gets here: its kv taken under its id here."""
+    from caracole.db import kv_set
+
+    lib.song("Oasis", "Wonderwall")
+    creep = lib.song("Radiohead", "Creep", entries=EVERY_ENTRY, files={"tab.txt": b"e|--0--|"})
+    kv_set(lib.conn, f"sheet_versions:yours:{creep.id}", "[101]")
+    kv_set(lib.conn, f"sheet_versions:unkeepable:{creep.id}", "[7]")
+    kv_set(lib.conn, f"sheet_versions:same:{creep.id}:101", "99")
+
+
+def _co_artists(lib: Library) -> None:
+    """Two songs of one artist, each with a second artist: first, and second."""
+    from caracole.songs import update_song
+
+    karma = lib.song("radiohead", "Karma Police", sheet=b"[Em]Karma")
+    update_song(lib.conn, karma.id, artists=["radiohead", "Thom Yorke"])
+    surprises = lib.song("radiohead", "No Surprises", sheet=b"[F]No alarms")
+    update_song(lib.conn, surprises.id, artists=["Thom Yorke", "radiohead"])
+
+
+class Take(NamedTuple):
+    """A take's case: the §5.6 rule it shows (``TAKE_RULES``) and how; this side's library before and the other's;
+    the units taken; the documents changed on their way; the units whose digest here, or there, the comparison had
+    otherwise (a compare-and-swap); what the other side gives of its files."""
+
+    rule: str
+    shows: str
+    here: Callable[[Library], Any]
+    there: Callable[[Library], Any]
+    ids: Sequence[str]
+    changed: Mapping[str, Callable[[dict], dict]] = {}
+    stale_here: Sequence[str] = ()
+    stale_there: Sequence[str] = ()
+    files: Callable[[list[dict]], list[dict]] | None = None
+
+
+# §5.6's rules, each shown by one take or more (``test_every_rule_of_the_take_is_in_the_vectors``).
+TAKE_RULES = (
+    "names: the peer's written verbatim",
+    "respelling: artist, and artists[0] where it was the artist, one folder renamed once",
+    "folders: files and files.path move, the old folder's render records dropped",
+    "file names: one no song's folder holds refused",
+    "tombstones: a song taken forgets this side's",
+    "a song new here: through the one way songs are added, then the peer's",
+    "a song absent there: removed by remove_song's rules",
+    "a removed unit: a tombstone made only where neither the song nor one is",
+    "an absent removed unit: the tombstone forgotten",
+    "whole or nothing: files fetched and checked before any change",
+    "whole or nothing: the rows, the carried kv and the overrides entries together",
+    "whole or nothing: IntegrityError per unit",
+    "whole or nothing: a document the take can't read left",
+    "files no longer kept: deleted",
+    "compare and swap: changed here",
+    "compare and swap: changed there",
+    "songbooks, aliases, artists' pages and blocked tabs: put and dropped",
+)
+R = dict(enumerate(TAKE_RULES))
+
+TAKES: dict[str, Take] = {
+    "names_as_written": Take(
+        R[0], "the peer's names written as it writes them, its folder with them",
+        lambda h: h.song("radiohead", "creep"), lambda t: t.song("Radiohead", "Creep"), [CREEP]),
+    "respelling": Take(
+        R[1], "an artist written in another case alone: every song of theirs respelled, one folder renamed once",
+        lambda h: (_rendered(h, "radiohead", "Karma Police", sheet=b"[Em]Karma"),
                    h.song("radiohead", "No Surprises", sheet=b"[F]No alarms")),
-        lambda t: t.song("Radiohead", "Creep"), [CREEP], {}, (), ()),
-    "new_here": (
-        "a song new here, made through the one way songs are added, then the peer's",
-        lambda h: None,
-        lambda t: t.song("Radiohead", "Creep", entries=EVERY_ENTRY, files={"tab.txt": b"e|--0--|"}), [CREEP], {}, (),
-        ()),
-    "tombstone_forgotten": (
-        "removed here, changed there, resolved there: the song taken forgets this side's tombstone",
-        lambda h: h.removed("Radiohead", "Creep"), lambda t: t.song("Radiohead", "Creep", sheet=b"[G]changed"),
-        [CREEP], {}, (), ()),
-    "absent_there": (
-        "a song the peer has no longer: removed here, its tombstone left",
-        lambda h: h.song("Radiohead", "Creep"), lambda t: None, [CREEP], {}, (), ()),
-    "tombstone_made": (
-        "a removed unit taken where neither the song nor a tombstone is: a tombstone made",
-        lambda h: None, lambda t: t.removed("Oasis", "Wonderwall"), ["removed/oasis/wonderwall"], {}, (), ()),
-    "tombstone_beside_a_song": (
-        "a removed unit taken where the song is: no tombstone made",
-        lambda h: h.song("Oasis", "Wonderwall"), lambda t: t.removed("Oasis", "Wonderwall"),
-        ["removed/oasis/wonderwall"], {}, (), ()),
-    "tombstone_dropped": (
-        "a removed unit the peer has no longer: the tombstone forgotten",
-        lambda h: h.tombstone("Oasis", "Wonderwall"), lambda t: None, ["removed/oasis/wonderwall"], {}, (), ()),
-    "folder_moved": (
-        "a song whose folder changes: its files moved, files.path with them",
-        lambda h: h.song("Soda Stereo", "De Musica Ligera", files={"tab.txt": b"e|--3--|"}),
+        lambda t: t.song("Radiohead", "Creep"), [CREEP]),
+    "co_artists": Take(
+        R[1], "a respelled song's artists: the first takes the spelling where it was the artist, never another",
+        _co_artists, lambda t: t.song("Radiohead", "Creep"), [CREEP]),
+    "folder_moved": Take(
+        R[2], "a song whose folder changes: its files moved, files.path with them, its render records dropped",
+        lambda h: _rendered(h, "Soda Stereo", "De Musica Ligera", files={"tab.txt": b"e|--3--|"}),
         lambda t: t.song("Soda Stereo", "De Música Ligera", files={"tab.txt": b"e|--3--|"}),
-        ["song/soda-stereo/de-musica-ligera"], {}, (), ()),
-    "refused_name": (
-        "a kept file named what no song's folder holds: the song left",
-        lambda h: None, lambda t: t.song("Radiohead", "Creep"), [CREEP], {CREEP: _no_sheet_name}, (), ()),
-    "whole_or_nothing": (
-        "a song the database refuses (IntegrityError) left whole, the other taken",
+        ["song/soda-stereo/de-musica-ligera"]),
+    "refused_name": Take(
+        R[3], "a kept file named what no song's folder holds: the song left",
+        lambda h: None, lambda t: t.song("Radiohead", "Creep"), [CREEP], {CREEP: _no_sheet_name}),
+    "tombstone_forgotten": Take(
+        R[4], "removed here, changed there, resolved there: the song taken forgets this side's tombstone",
+        lambda h: h.removed("Radiohead", "Creep"), lambda t: t.song("Radiohead", "Creep", sheet=b"[G]changed"),
+        [CREEP]),
+    "new_here": Take(
+        R[5], "a song new here, made through the one way songs are added, then the peer's",
+        lambda h: None, _new_there, [CREEP]),
+    "absent_there": Take(
+        R[6], "a song the peer has no longer: removed here, its tombstone left",
+        lambda h: h.song("Radiohead", "Creep"), lambda t: None, [CREEP]),
+    "tombstone_made": Take(
+        R[7], "a removed unit taken where neither the song nor a tombstone is: a tombstone made",
+        lambda h: None, lambda t: t.removed("Oasis", "Wonderwall"), [WONDERWALL]),
+    "tombstone_beside_a_song": Take(
+        R[7], "a removed unit taken where the song is: no tombstone made",
+        lambda h: h.song("Oasis", "Wonderwall"), lambda t: t.removed("Oasis", "Wonderwall"), [WONDERWALL]),
+    "tombstone_dropped": Take(
+        R[8], "a removed unit the peer has no longer: the tombstone forgotten",
+        lambda h: h.tombstone("Oasis", "Wonderwall"), lambda t: None, [WONDERWALL]),
+    "file_not_given": Take(
+        R[9], "a kept file the other side can't give: the song left as it was here, the sheet it gave unwritten",
+        lambda h: h.song("Radiohead", "Creep", sheet=b"[Am]mine"),
+        lambda t: t.song("Radiohead", "Creep", sheet=b"[G]theirs", files={"tab.txt": b"e|--0--|"}), [CREEP],
+        files=_without("tab.txt")),
+    "file_other_sha": Take(
+        R[9], "a kept file given other than its SHA-256 says: the song left as it was here",
+        lambda h: h.song("Radiohead", "Creep", sheet=b"[Am]mine"),
+        lambda t: t.song("Radiohead", "Creep", sheet=b"[G]theirs", files={"tab.txt": b"e|--0--|"}), [CREEP],
+        files=_other_bytes("tab.txt")),
+    "overrides_refused": Take(
+        R[10], "overrides entries the library refuses: the song's rows, kv and files as they were here",
+        lambda h: h.song("Radiohead", "Creep", sheet=b"[Am]mine"),
+        lambda t: t.song("Radiohead", "Creep", sheet=b"[G]theirs"), [CREEP], {CREEP: _unknown_table}),
+    "whole_or_nothing": Take(
+        R[11], "a song the database refuses (IntegrityError) left whole, the other taken",
         lambda h: None, lambda t: (t.song("Radiohead", "Creep"), t.song("Radiohead", "Karma Police")),
-        [CREEP, KARMA], {CREEP: _bad_slot}, (), ()),
-    "changed_here": (
-        "the compare-and-swap: a unit changed here since the comparison left",
+        [CREEP, KARMA], {CREEP: _bad_slot}),
+    "document_unreadable": Take(
+        R[12], "a document that lacks what the take reads beyond its value (a file's kept_rank, a tombstone's "
+        "removed_at): left, the others taken",
+        lambda h: None,
+        lambda t: (t.song("Radiohead", "Creep"), t.song("Radiohead", "Karma Police"), t.removed("Oasis", "Wonderwall")),
+        [CREEP, KARMA, WONDERWALL], {CREEP: _no_kept_rank, WONDERWALL: _no_removed_at}),
+    "file_dropped": Take(
+        R[13], "a file kept here that the peer's song keeps no longer: deleted, its row with it",
+        lambda h: h.song("Radiohead", "Creep", files={"guitar-1.gp5": b"FICHIER GUITAR PRO v5.00"}),
+        lambda t: t.song("Radiohead", "Creep"), [CREEP]),
+    "changed_here": Take(
+        R[14], "the compare-and-swap: a unit changed here since the comparison left",
         lambda h: h.song("Radiohead", "Creep", sheet=b"[Am]mine"), lambda t: t.song("Radiohead", "Creep"), [CREEP],
-        {}, (CREEP,), ()),
-    "changed_there": (
-        "the compare-and-swap: a unit changed there since the comparison left",
+        stale_here=(CREEP,)),
+    "changed_there": Take(
+        R[15], "the compare-and-swap: a unit changed there since the comparison left",
         lambda h: h.song("Radiohead", "Creep", sheet=b"[Am]mine"), lambda t: t.song("Radiohead", "Creep"), [CREEP],
-        {}, (), (CREEP,)),
-    "entries": (
-        "a songbook, an alias, an artist's page and a blocked tab put, and those the peer hasn't got dropped",
+        stale_there=(CREEP,)),
+    "entries": Take(
+        R[16], "a songbook, an alias, an artist's page and a blocked tab put, and those the peer hasn't got dropped",
         lambda h: (h.songbook("Old", ["A - B"]), _entries(h, "Oasis", 77)),
         lambda t: (t.songbook("Campfire", ["Radiohead - Creep"]), _entries(t, "Soda", 4242)),
         ["songbook/campfire", "songbook/old", "alias/soda", "alias/oasis", "artist_url/soda", "artist_url/oasis",
-         "block/4242", "block/77"], {}, (), ()),
+         "block/4242", "block/77"]),
 }
 
 
@@ -293,8 +429,8 @@ def _entries(lib: Library, artist: str, tab: int) -> None:
 
 
 FIXTURES: dict[str, Callable[[Library], None]] = {
-    "rich": build_rich, "plain": build_plain, "empty": build_empty,
-    **{f"take_{name}": case[1] for name, case in TAKES.items()},
+    "rich": build_rich, "dense": build_dense, "plain": build_plain, "empty": build_empty,
+    **{f"take_{name}": case.here for name, case in TAKES.items()},
 }
 
 
@@ -414,7 +550,7 @@ def record(fn: str, fixture: str | None, args: Sequence[Any], kw: dict[str, Any]
         return {"fn": fn, "fixture": fixture, "args": list(args), "kw": kw, "err": type(e).__name__, **extra}
 
 
-SYNC_FIXTURES = ("rich", "plain", "empty")
+SYNC_FIXTURES = ("rich", "dense", "plain", "empty")
 
 
 def value_records(corpus: Corpus) -> list[dict]:
@@ -437,7 +573,9 @@ def document_records(corpus: Corpus) -> list[dict]:
     out = []
     for name in SYNC_FIXTURES:
         lib = corpus.replayed("sync", name)
-        for unit_id in [*sorted(lib.units()), "song/nobody/here", "removed/nobody/here", "block/1", "nonsense/x"]:
+        # and ids no unit has: a block's tab written otherwise than library_state writes it (4242 is rich's)
+        for unit_id in [*sorted(lib.units()), "song/nobody/here", "removed/nobody/here", "block/1", "block/04242",
+                        "block/٤٢٤٢", "block/+4242", "block/4242 ", "block/", "nonsense/x"]:
             doc = lib.document(unit_id)
             out.append(record("caracole.peer_sync.unit_document", name, [unit_id], {}, lambda: doc))
             if doc is not None:
@@ -644,17 +782,17 @@ def take_records(corpus: Corpus) -> list[dict]:
     from caracole import peer_sync as sync
 
     out = []
-    for name, (shows, _, there_of, ids, changed, stale_here, stale_there) in TAKES.items():
+    for name, case in TAKES.items():
         there = corpus.library(f"there/{name}")
-        there_of(there)
+        case.there(there)
         here = corpus.replayed("sync", f"take_{name}")
         units = {}
         files = []
-        for unit_id in ids:
+        for unit_id in case.ids:
             doc = there.document(unit_id)
             unit = None if doc is None else doc["unit"]
-            if unit is not None and unit_id in changed:
-                unit = changed[unit_id](unit)
+            if unit is not None and unit_id in case.changed:
+                unit = case.changed[unit_id](unit)
             units[unit_id] = unit
             if unit is not None and unit_id.startswith("song/"):
                 for version in unit["versions"]:
@@ -664,25 +802,46 @@ def take_records(corpus: Corpus) -> list[dict]:
                         if data is not None:
                             files.append({"song": unit["key"], "name": f["name"], "sha256": f["sha256"],
                                           "base64": base64.b64encode(data).decode("ascii")})
+        if case.files is not None:
+            files = case.files(files)
         before = here.digests()
-        wanted = [[u, None if units[u] is None else sync.digest_of(sync.value_of_document(u, units[u]))] for u in ids]
-        wanted = [[u, "stale" if u in stale_there else d] for u, d in wanted]
-        expected = {u: "stale" if u in stale_here else before.get(u) for u in ids}
+        wanted = [[u, None if units[u] is None else sync.digest_of(sync.value_of_document(u, units[u]))]
+                  for u in case.ids]
+        wanted = [[u, "stale" if u in case.stale_there else d] for u, d in wanted]
+        expected = {u: "stale" if u in case.stale_here else before.get(u) for u in case.ids}
         done = sync.apply_units(here.conn, here.cfg, InlineSource(units, files), [tuple(w) for w in wanted], NOW,
                                 expected_here=expected)
         overrides, books = here.overrides(), here.books()
         after = {u: {"label": unit.label, "digest": unit.digest,
                      "value": sync.unit_value(here.conn, overrides, books, u)}
                  for u, unit in sorted(here.units().items())}
-        out.append({"fn": "caracole.peer_sync.apply_units", "fixture": f"take_{name}", "case": name, "note": shows,
+        out.append({"fn": "caracole.peer_sync.apply_units", "fixture": f"take_{name}", "case": name,
+                    "rule": case.rule, "note": case.shows,
                     "args": [wanted], "kw": {"expected_here": expected, "now": NOW},
                     "source": {"units": units, "files": files},
                     "out": plain({"taken": done.taken, "left": [list(x) for x in done.left],
                                   "respelled": done.respelled, "songbooks": done.songbooks,
                                   "songs": sorted(done.songs), "after": after,
+                                  "documents": {u: here.document(u)["unit"] for u in after if u.startswith("song/")},
+                                  "ids": {key: song_id for song_id, key in here.conn.execute(
+                                      "SELECT id, key FROM songs ORDER BY id")},
+                                  "kv": [list(r) for r in here.conn.execute(
+                                      "SELECT key, value FROM kv WHERE substr(key, 1, 7) = 'render:' "
+                                      "OR substr(key, 1, 15) = 'sheet_versions:' ORDER BY key")],
                                   "paths": [p for (p,) in here.conn.execute("SELECT path FROM files ORDER BY path")],
                                   "files": _song_files(here)})})
     return out
+
+
+CHECKED_NAMES = ["sheet.txt", "sheet (auto).txt", "guitar-1.gp5", "斑马.txt", "𝄞.txt", "trailing.", " spaced ",
+                 "a..b", "...x", "../x", "a/b", "a\\b", ".hidden", ".", "..", "", "x\0y", "CON", 5, None, ["a"]]
+
+
+def checked_name_records(corpus: Corpus) -> list[dict]:
+    from caracole import peer_sync as sync
+
+    return [record("caracole.peer_sync.checked_name", None, [name], {}, lambda name=name: sync.checked_name(name))
+            for name in CHECKED_NAMES]
 
 
 # --- the library's vectors ------------------------------------------------------------------------------------------
@@ -854,6 +1013,7 @@ MAKERS: dict[str, Callable[[Corpus], list[dict]]] = {
     "values": value_records, "documents": document_records, "compare": compare_records,
     "merged_base": merged_base_records, "record_agreement": record_agreement_records, "decide": decide_records,
     "name_key": name_key_records, "compared_hash": compared_hash_records, "take": take_records,
+    "checked_name": checked_name_records,
     "add": add_records, "remove": remove_records, "lyrics_files": lyrics_records, "stamps": stamp_records,
     "ensure_current_keys": rekey_records,
 }
@@ -937,9 +1097,26 @@ def test_every_unit_kind_compare_case_and_take_rule_is_in_the_vectors(corpus):
     assert proposals == {"mine", "theirs", "conflict"}
     whys = {d["why"].split(" since")[0].split(" ")[0] for r in corpus.records("compare") for d in r["out"]}
     assert {"only", "on", "changed", "new", "gone"} <= whys
-    assert set(TAKES) >= {"names_as_written", "respelling", "new_here", "tombstone_forgotten", "absent_there",
-                          "tombstone_made", "tombstone_dropped", "refused_name", "changed_here", "changed_there",
-                          "folder_moved", "whole_or_nothing"}
+    # the design's three-way table, row by row (docs/superpowers/specs/2026-10-31-phone-server-sync-design.md)
+    rows = {(r["case"], tuple((d["proposal"], d["why"]) for d in r["out"])) for r in corpus.records("compare")}
+    for row in [("changed here alone: mine", (("mine", "changed here since the last sync"),)),
+                ("changed there alone: theirs", (("theirs", "changed there since the last sync"),)),
+                ("both changed, differently: a conflict", (("conflict", "changed on both sides since the last sync"),)),
+                ("new here since", (("mine", "new here since the last sync"),)),
+                ("new there since", (("theirs", "new there since the last sync"),)),
+                ("gone here since", (("mine", "gone here since the last sync"),)),
+                ("gone there since", (("theirs", "gone there since the last sync"),)),
+                ("gone here, changed there: a conflict", (("conflict", "changed on both sides since the last sync"),)),
+                ("same on both, as agreed: nothing", ()), ("both changed, the same way: nothing", ()),
+                ("gone on both: nothing", ())]:
+        assert row in rows, row
+
+
+def test_every_rule_of_the_take_is_in_the_vectors(corpus):
+    """Each of §5.6's rules (``TAKE_RULES``) is shown by a take of take.jsonl, and every take shows one of them."""
+    shown = [r["rule"] for r in corpus.records("take")]
+    assert set(shown) == set(TAKE_RULES) and len(TAKE_RULES) == len(set(TAKE_RULES))
+    assert len({r["case"] for r in corpus.records("take")}) == len(shown)
 
 
 @pytest.mark.parametrize("name", list(MAKERS))
@@ -951,11 +1128,25 @@ def test_each_take_does_what_its_rule_says(corpus):
     from caracole import peer_sync as sync
 
     takes = {r["case"]: r for r in corpus.records("take")}
-    for case in ("names_as_written", "respelling", "new_here", "tombstone_forgotten", "folder_moved"):
+    for case in ("names_as_written", "respelling", "co_artists", "new_here", "tombstone_forgotten", "folder_moved",
+                 "file_dropped", "entries"):
         assert takes[case]["out"]["left"] == [], case
+    for case in ("refused_name", "file_not_given", "file_other_sha", "overrides_refused", "changed_here",
+                 "changed_there"):  # left, and this side as it was
+        record, before = takes[case], corpus.replayed("sync", f"take_{case}", tag="-before")
+        assert [u for u, _ in record["out"]["left"]] == [CREEP] and record["out"]["taken"] == [], case
+        assert {u: a["digest"] for u, a in record["out"]["after"].items()} == before.digests(), case
+        assert record["out"]["files"] == _song_files(before), case
     assert takes["names_as_written"]["out"]["after"][CREEP]["value"]["names"]["artist"] == "Radiohead"
     assert {p.split("/")[0] for p, _ in takes["respelling"]["out"]["files"]} == {"Radiohead"}
-    assert takes["respelling"]["out"]["respelled"] == [KARMA, "song/radiohead/no-surprises"]
+    assert takes["respelling"]["out"]["respelled"] == [KARMA, SURPRISES]
+    karma_id = takes["respelling"]["out"]["ids"]["radiohead/karma-police"]
+    assert [k for k, _ in takes["respelling"]["out"]["kv"]] == [f"render:export:{karma_id}",
+                                                                 f"render:progressions:{karma_id}"]
+    artists = {u: takes["co_artists"]["out"]["after"][u]["value"]["names"]["artists"] for u in (KARMA, SURPRISES)}
+    assert artists == {KARMA: ["Radiohead", "Thom Yorke"], SURPRISES: ["Thom Yorke", "radiohead"]}
+    assert {takes["co_artists"]["out"]["after"][u]["value"]["names"]["artist"] for u in (KARMA, SURPRISES)} \
+        == {"Radiohead"}
     assert "removed/radiohead/creep" not in takes["tombstone_forgotten"]["out"]["after"]
     assert list(takes["absent_there"]["out"]["after"]) == ["removed/radiohead/creep"]
     assert list(takes["tombstone_made"]["out"]["after"]) == ["removed/oasis/wonderwall"]
@@ -963,6 +1154,19 @@ def test_each_take_does_what_its_rule_says(corpus):
     assert takes["tombstone_dropped"]["out"]["after"] == {}
     assert takes["folder_moved"]["out"]["paths"] == ["Soda Stereo/De Música Ligera/sheet.txt",
                                                      "Soda Stereo/De Música Ligera/tab.txt"]
+    assert [k.split(":")[1] for k, _ in takes["folder_moved"]["out"]["kv"]] == ["export", "progressions"]
+    assert "Radiohead/Creep/guitar-1.gp5" not in [p for p, _ in takes["file_dropped"]["out"]["files"]]
+    assert takes["file_dropped"]["out"]["paths"] == ["Radiohead/Creep/sheet.txt"]
+    assert "unknown table" in takes["overrides_refused"]["out"]["left"][0][1]
+    assert takes["document_unreadable"]["out"]["taken"] == [KARMA]
+    assert [u for u, _ in takes["document_unreadable"]["out"]["left"]] == [CREEP, WONDERWALL]
+    assert list(takes["document_unreadable"]["out"]["after"]) == [KARMA]
+    new = takes["new_here"]["out"]["documents"][CREEP]
+    assert new["song"]["status"] == "found" and new["versions"][0]["rating"] == 4.5
+    assert takes["new_here"]["out"]["ids"] == {"radiohead/creep": 1}
+    assert takes["new_here"]["source"]["units"][CREEP]["kv"] == new["kv"] != {}
+    assert takes["new_here"]["out"]["kv"] == [["sheet_versions:same:1:101", "99"],
+                                              ["sheet_versions:unkeepable:1", "[7]"], ["sheet_versions:yours:1", "[101]"]]
     assert [u for u, _ in takes["refused_name"]["out"]["left"]] == [CREEP]
     assert takes["whole_or_nothing"]["out"]["taken"] == [KARMA]
     assert takes["changed_here"]["out"]["left"] == [[CREEP, sync.CHANGED_HERE]]

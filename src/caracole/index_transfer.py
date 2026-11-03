@@ -582,7 +582,12 @@ def newest(conn: sqlite3.Connection) -> dict[str, str]:
     """Each site's newest read, by ``SITES``' order: the latest of the times a merge compares (its sitemaps' or
     listing pages' records, the read of each page of its that has one, and its progress records), as stored
     (``stamps.stamp``); a site with none is left out. A sync's state document says it (``peer_sync.state_document``'s
-    ``indexes``), so that the other side asks only for the indexes read more recently than its own."""
+    ``indexes``), so that the other side asks only for the indexes read more recently than its own.
+
+    What has no time of its own moves no site's stamp, as a merge compares none of it: LaCuerda's artist pages and its
+    search's rows (a night that reads only those, its popular pages or a search, leaves ``lacuerda`` where it was,
+    and the other side has them at the next listing page read), and UG's sitemap rows apart from their sitemap's
+    record."""
     from caracole import gametabs_fetch, gtptabs_fetch, harptabs_fetch, lacuerda_index, musescore_fetch
     from caracole.ug import index as ug
 

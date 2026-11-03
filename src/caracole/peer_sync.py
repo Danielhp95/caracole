@@ -51,10 +51,12 @@ digests), then makes it this side's (``_take_song``): a song through its wanted.
 as the peer writes them, its record's decisions, its versions and their kept files (each file asked for by name and
 checked by its SHA-256 before anything changes), its lyrics' files and its overrides.toml entries
 (``overrides.put_song_entries``), whole or not at all: the rows in one savepoint that overrides.toml failing rolls
-back, the folders' changes undone with it. When the peer writes the song's artist in another case alone than this
-library writes them, every song of theirs here takes the peer's spelling, and their folder is renamed once, through a
-temporary name, so that an artist has one folder (``_artist_as_written``'s reason); a song whose folder changes takes
-its files along, through descriptors opened from the library down with no link followed. A song the peer has no
+back, the folders' changes and wanted.txt undone with it. When the peer writes the song's artist in another case
+alone than this library writes them, every song of theirs here takes the peer's spelling, and their folder is renamed
+once, through a temporary name, so that an artist has one folder (``_artist_as_written``'s reason); a song whose
+folder changes takes its files along, through descriptors opened from the library down with no link followed. A unit
+that can't be taken (its document lacking what the take reads, the database or overrides.toml refusing it, a file
+that won't come) is left, saying why, and the others are taken all the same. A song the peer has no
 longer is removed here as ``caracole remove`` removes one; a tombstone, a songbook (``songbook.put_songbook``), an
 alias, an artist's page or a blocked tab is written or taken out. The caller holds caracole's lock, then renders the
 songs taken and writes the pages (commands/peer.py).
@@ -428,12 +430,21 @@ def _unit(conn: sqlite3.Connection, overrides, books: Iterable, unit_id: str, *,
             return None
         value = doc = artist_url_value(overrides.artist_url_names.get(rest, rest), overrides.artist_url[rest])
     elif kind == "block":
-        if not rest.isdigit() or int(rest) not in overrides.block:
+        tab = tab_of(rest)
+        if tab is None or tab not in overrides.block:
             return None
-        value, doc = True, {"tab": int(rest)}
+        value, doc = True, {"tab": tab}
     else:
         return None
     return value, doc
+
+
+def tab_of(text: str) -> int | None:
+    """The tab a ``block/<tab>`` unit names: its id as ``library_state`` writes it, ASCII digits with no leading
+    zero (``block/4242``); None for anything else (``block/007``, ``block/٣``, ``block/+7``), which no unit is."""
+    if not (text.isascii() and text.isdigit()) or str(int(text)) != text:
+        return None
+    return int(text)
 
 
 def value_of_document(unit_id: str, doc: Mapping[str, Any] | None) -> Any:
@@ -811,7 +822,12 @@ def apply_units(conn: sqlite3.Connection, cfg, source: UnitSource, wanted: Seque
             doc = source.unit(unit_id)
             if (None if doc is None else digest_of(value_of_document(unit_id, doc))) != digest:
                 raise UnitError(CHANGED_THERE)
-            _apply(conn, cfg, source, unit_id, doc, now, done)
+            try:
+                _apply(conn, cfg, source, unit_id, doc, now, done)
+            except (KeyError, TypeError, AttributeError) as e:
+                # A document whose digest checks out may still lack what the take reads beyond its value (a file's
+                # kept_rank, a tombstone's removed_at, a setting's parts): left, whole, as any unit that can't be.
+                raise UnitError(f"its document can't be read ({type(e).__name__}: {e})") from e
         except (UnitError, PeerError, OverridesError, SongbookError, OSError, ValueError, sqlite3.IntegrityError) as e:
             done.left.append((unit_id, str(e)))
             if on_unit is not None:
@@ -869,7 +885,10 @@ def _apply(conn, cfg, source: UnitSource, unit_id: str, doc: Mapping[str, Any] |
         ov.put_artist_url(cfg.overrides_file, rest, str(doc["name"]) if doc else rest,
                           None if doc is None else str(doc["page"]))
     elif kind == "block":
-        ov.put_block(cfg.overrides_file, int(rest), doc is not None)
+        tab = tab_of(rest)
+        if tab is None:
+            raise UnitError(f"{rest!r} isn't a tab's id")
+        ov.put_block(cfg.overrides_file, tab, doc is not None)
     else:
         raise UnitError(f"this caracole doesn't know units of kind {kind!r}")
 
@@ -904,9 +923,10 @@ def _when(now: str) -> datetime:
 
 
 def checked_name(name: Any) -> str:
-    """A kept file's name as a song's document gives it, when a song's folder can hold it: no ``/`` or ``\\``,
+    """A kept file's name as a song's document gives it, when a song's folder can hold it: no ``/``, ``\\`` or NUL,
     nothing that starts with ``.``, not empty; else UnitError."""
-    if not isinstance(name, str) or "/" in name or "\\" in name or name.startswith(".") or name in ("", ".."):
+    if (not isinstance(name, str) or "/" in name or "\\" in name or "\0" in name or name.startswith(".")
+            or name in ("", "..")):
         raise UnitError(f"a kept file named {name!r}, which no song's folder holds")
     return name
 
@@ -966,12 +986,11 @@ def _take_song(conn, cfg, source: UnitSource, key: str, doc: Mapping[str, Any], 
     lyrics = lyrics_files(doc["song"].get("lyrics_json"))
     before = set() if here is None else {
         name for (name,) in conn.execute("SELECT name FROM files WHERE song_id = ?", (here.id,))}
-    respell = _to_respell(conn, names["artist"], key)
+    respelled_here = here is not None and _respells(_to_respell(conn, names["artist"], key), here)
     new_parts = song_folder(names["artist"], names["title"])
     # Where the song's files are once its artist's folder is respelled, and those that go to its new folder if that
     # differs: caracole's, as they are now.
-    current = None if here is None else song_folder(
-        names["artist"] if any(s.id == here.id for s in respell) else here.artist, here.title)
+    current = None if here is None else song_folder(names["artist"] if respelled_here else here.artist, here.title)
     moving = _caracoles_files(conn, cfg, here) if here is not None and current != new_parts else ()
     for name, (data, f) in list(files.items()):
         if data is None and current != new_parts and name not in moving:  # the same bytes here, but staying behind
@@ -986,6 +1005,10 @@ def _take_song(conn, cfg, source: UnitSource, key: str, doc: Mapping[str, Any], 
             song = find_song(conn, key)
             if song is None:
                 raise UnitError("wanted.txt's line for it brought no song (an [ignore]d line?)")
+            # Read once wanted.txt is synced, so that a song of the artist whose line was waiting is respelled too.
+            respell = _to_respell(conn, names["artist"], key)
+            if here is not None and _respells(respell, here) != respelled_here:
+                raise UnitError("its artist's songs here changed while it was taken: compare again")
             respelled = _respell(conn, folders, respell, names["artist"], now)
             if current is not None and current != new_parts:
                 folders.move_files(current, new_parts, moving)
@@ -1078,6 +1101,10 @@ def _to_respell(conn, artist: str, key: str) -> list:
     return [get_song(conn, song_id) for song_id, name in theirs if name.casefold() == folder.casefold()]
 
 
+def _respells(songs: Sequence, song) -> bool:
+    return any(s.id == song.id for s in songs)
+
+
 def _respell(conn, folders: _Folders, songs: Sequence, artist: str, now: str) -> list:
     """``songs`` (``_to_respell``'s) written as ``artist``: their artist, and the first of their artists where it was
     the same; their artist's folder renamed to ``artist``'s once, their kept files' paths with it, and what caracole
@@ -1113,23 +1140,38 @@ def _drop_render_records(conn, song_id: int) -> None:
 
 
 def _wanted_line(cfg, names: Mapping[str, Any], key: str) -> Callable[[], None] | None:
-    """The song's line in wanted.txt as the peer's names say it; what puts the line back as it was, or None when it
-    said so already."""
+    """The song's line in wanted.txt as the peer's names say it (its lines taken out, one appended); what puts the
+    file back as it was, or None when its line said so already. The file goes back byte for byte (none, if the take
+    made it) while it reads as the take wrote it; else, written to since (``caracole serve`` appends without the
+    lock), what was written since stays and the song's first line comes back at the end."""
+    from caracole.library import read_regular, write_atomic
     from caracole.wanted import append_wanted, find_wanted, remove_wanted
 
+    path = cfg.wanted_file
     artist, title, album, duration = names["artist"], names["title"], names["album"], names["duration_ms"]
-    line = find_wanted(cfg.wanted_file, artist, title)
+    line = find_wanted(path, artist, title)
     if line is not None and (line.artist, line.title, line.album, line.duration_ms) == (artist, title, album, duration):
         return None
+    try:
+        before: bytes | None = read_regular(path)
+    except FileNotFoundError:
+        before = None
     if line is not None:
-        remove_wanted(cfg.wanted_file, key)
-    append_wanted(cfg.wanted_file, artist, title, album, duration)
+        remove_wanted(path, key)
+    append_wanted(path, artist, title, album, duration)
+    written = read_regular(path)
 
     def undo() -> None:
         try:
-            remove_wanted(cfg.wanted_file, key)
+            if read_regular(path) == written:
+                if before is None:
+                    os.unlink(path)
+                else:
+                    write_atomic(path, before)
+                return
+            remove_wanted(path, key)
             if line is not None:
-                append_wanted(cfg.wanted_file, line.artist, line.title, line.album, line.duration_ms)
+                append_wanted(path, line.artist, line.title, line.album, line.duration_ms)
         except (OSError, ValueError):
             pass
 

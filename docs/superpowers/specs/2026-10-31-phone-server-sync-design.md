@@ -46,10 +46,9 @@ A unit's **digest** is the SHA-256 of its canonical JSON (canonical.py, and the 
 in code-point order, no spaces, every character as it is, a non-integral number as its exact decimal), and a stored
 JSON text in it (a version's raw record, a song's lyrics) is hashed by the JSON it holds, else by its bytes
 (`canonical.stored_hash`), so two caracoles that wrote one record in two texts agree. What caracole makes from a unit
-(PDFs, viewers, `.cho`,
-info.json, the library page, songbooks' files) is not in it: a side that takes a song renders it again, so two
-caracoles of different versions still agree on what a song *is*. Nor is anything a lookup would find again (a
-cooldown, a miss's date, the HTTP cache): those are each side's own.
+(PDFs, viewers, `.cho`, info.json, the library page, songbooks' files) is not in it: a side that takes a song renders
+it again, so two caracoles of different versions still agree on what a song *is*. Nor is anything a lookup would
+find again (a cooldown, a miss's date, the HTTP cache): those are each side's own.
 
 The site indexes (UG's sitemap index, LaCuerda's listings, …) are not units: they merge as `caracole index merge`
 already merges them (index_transfer.py: what was read more recently wins, nothing is lost), both ways, at every sync.
@@ -100,21 +99,24 @@ what it was chosen to take):
   versions and kept files replaced by the peer's (files fetched by name and checked by their SHA-256, every one
   before anything changes), its overrides.toml entries set through overrides.py's writers (comments and layout kept),
   then the song rendered again and the songbooks it is in made again. The rows change in one savepoint, which
-  overrides.toml failing rolls back, the folders' changes undone with it: all of a song or none. When the peer's
-  spelling of the artist makes a folder that differs from this side's in case alone ("Radiohead", "radiohead"), every
-  song of that artist here takes the peer's spelling and their folder is renamed once, through a temporary name, so
-  that a file system blind to case keeps one folder; a song whose folder changes moves its files with it, through
-  descriptors opened from the library down, never through a link, and a move that fails leaves the song whole where it
-  was;
+  overrides.toml failing rolls back, the folders' changes and wanted.txt (byte for byte, while no one wrote to it
+  since) undone with it: all of a song or none. When the peer's spelling of the artist makes a folder that differs
+  from this side's in case alone ("Radiohead", "radiohead"), every song of that artist here (one whose line was
+  waiting in wanted.txt among them) takes the peer's spelling, its first artist too where that was the artist, and
+  their folder is renamed once, through a temporary name, so that a file system blind to case keeps one folder; a
+  song whose folder changes moves its files with it, through descriptors opened from the library down, never through
+  a link, and a move that fails leaves the song whole where it was;
 - **a removal**: `caracole remove --yes` of the song, as the owner would;
 - **a songbook**: its table in songbooks.toml written through songbook.py's writers, then made again;
 - **an alias, an artist page, a blocked tab**: the entry written, or taken out.
 
 Each unit applies under caracole's lock, as a lookup does (`exclusive(..., interactive=True)`), in a savepoint for
 its database rows. A unit is taken only while both sides hold it as compared (a compare-and-swap): one changed there
-since is left, "changed there since the comparison", and one changed here since, "changed here since the comparison". Then the library page is written again. The database is backed up first (backup.py,
-`before-sync`), as `index merge` is. The base moves on only for the units that applied, so a sync cut short is
-finished by the next one.
+since is left, "changed there since the comparison", and one changed here since, "changed here since the
+comparison". So is one whose document lacks what the take reads beyond its value (a file's rank, a tombstone's
+time), "its document can't be read"; the others are taken all the same. Then the library page is written again. The
+database is backed up first (backup.py, `before-sync`), as `index merge` is. The base moves on only for the units
+that applied, so a sync cut short is finished by the next one.
 
 ## How the two talk
 
