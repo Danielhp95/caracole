@@ -1,0 +1,8 @@
+{"corpus":"sync/merged_base","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":[null,null],"case":"neither side has one","fixture":null,"fn":"caracole.peer_sync.merged_base","kw":{},"out":null}
+{"args":[null,{"song/a":["1","2026-10-01T00:00:00Z"]}],"case":"only theirs","fixture":null,"fn":"caracole.peer_sync.merged_base","kw":{},"out":{"song/a":"1"}}
+{"args":[{"song/a":["1","2026-10-01T00:00:00Z"]},null],"case":"only mine","fixture":null,"fn":"caracole.peer_sync.merged_base","kw":{},"out":{"song/a":"1"}}
+{"args":[null,{}],"case":"an empty one","fixture":null,"fn":"caracole.peer_sync.merged_base","kw":{},"out":{}}
+{"args":[{"song/a":["1","2026-10-01T00:00:00Z"],"song/b":["1","2026-10-02T00:00:00Z"]},{"song/a":["2","2026-10-02T00:00:00Z"],"song/b":["3","2026-10-01T00:00:00Z"],"song/c":[null,"2026-10-01T00:00:00Z"]}],"case":"the later agreement wins","fixture":null,"fn":"caracole.peer_sync.merged_base","kw":{},"out":{"song/a":"2","song/b":"1","song/c":null}}
+{"args":[{"song/a":["1","2026-10-01T00:00:00Z"]},{"song/a":["2","2026-10-01T00:00:00Z"]}],"case":"a tie is mine","fixture":null,"fn":"caracole.peer_sync.merged_base","kw":{},"out":{"song/a":"1"}}
+{"args":[{"song/a":["1","2026-10-01T00:00:00+00:00"]},{"song/a":["2","2026-10-01T00:00:00Z"]}],"case":"stamps compared as text","fixture":null,"fn":"caracole.peer_sync.merged_base","kw":{},"out":{"song/a":"2"}}

@@ -1,0 +1,22 @@
+{"corpus":"sync/checked_name","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["sheet.txt"],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"sheet.txt"}
+{"args":["sheet (auto).txt"],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"sheet (auto).txt"}
+{"args":["guitar-1.gp5"],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"guitar-1.gp5"}
+{"args":["斑马.txt"],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"斑马.txt"}
+{"args":["𝄞.txt"],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"𝄞.txt"}
+{"args":["trailing."],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"trailing."}
+{"args":[" spaced "],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":" spaced "}
+{"args":["a..b"],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"a..b"}
+{"args":["...x"],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":["../x"],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":["a/b"],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":["a\\b"],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":[".hidden"],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":["."],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":[".."],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":[""],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":["x\u0000y"],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":["CON"],"fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{},"out":"CON"}
+{"args":[5],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":[null],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
+{"args":[["a"]],"err":"UnitError","fixture":null,"fn":"caracole.peer_sync.checked_name","kw":{}}
