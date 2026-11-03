@@ -1,0 +1,92 @@
+package spike
+
+import fi.iki.elonen.NanoHTTPD
+import io.ktor.http.ContentType
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.ApplicationCallPipeline
+import io.ktor.server.application.call
+import io.ktor.server.cio.CIO
+import io.ktor.server.engine.embeddedServer
+import io.ktor.server.request.httpMethod
+import io.ktor.server.request.receiveChannel
+import io.ktor.server.request.uri
+import io.ktor.server.response.header
+import io.ktor.server.response.respondBytes
+import io.ktor.utils.io.toByteArray
+import kotlinx.coroutines.runBlocking
+import java.io.ByteArrayOutputStream
+import java.net.InetAddress
+import java.net.Socket
+
+/** The engine-neutral shape a ported caracole serve would take: one handler of a request whole. */
+data class Asked(val method: String, val target: String, val headers: List<Pair<String, String>>, val body: ByteArray)
+data class Answer(val status: Int, val headers: List<Pair<String, String>>, val body: ByteArray)
+
+const val SECRET = "s3cr3t"
+
+fun handle(asked: Asked): Answer {
+    val cookie = asked.headers.filter { it.first.equals("Cookie", true) }.joinToString("; ") { it.second }
+    if ("caracole=$SECRET" !in cookie.split(';').map { it.trim() }) return Answer(403, listOf("Content-Type" to "text/plain; charset=utf-8"), "no secret".toByteArray())
+    val host = asked.headers.firstOrNull { it.first.equals("Host", true) }?.second
+    val body = "method=${asked.method} target=${asked.target} host=$host body=${String(asked.body)}"
+    return Answer(200, listOf("Content-Type" to "text/plain; charset=utf-8",
+        "Content-Security-Policy" to "default-src 'none'; sandbox allow-scripts", "Referrer-Policy" to "same-origin",
+        "X-Content-Type-Options" to "nosniff"), body.toByteArray())
+}
+
+fun raw(port: Int, request: String): String = Socket(InetAddress.getLoopbackAddress(), port).use { s ->
+    s.getOutputStream().write(request.toByteArray()); s.getOutputStream().flush()
+    s.shutdownOutput()
+    val out = ByteArrayOutputStream(); s.getInputStream().copyTo(out); out.toString(Charsets.UTF_8)
+}
+
+fun probe(name: String, port: Int) {
+    val get = "GET /Estopa/Tu%20calorro/a%2Fb%3F.html?q=caf%C3%A9&a=1 HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: other=1; caracole=$SECRET\r\nConnection: close\r\n\r\n"
+    val form = "a=1&b=caf%C3%A9&units=song%2Fx%0Asong%2Fy"
+    val post = "POST /peer/pull HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: caracole=$SECRET\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: ${form.length}\r\nOrigin: http://127.0.0.1:$port\r\nConnection: close\r\n\r\n$form"
+    val nosecret = "GET / HTTP/1.1\r\nHost: evil.example\r\nConnection: close\r\n\r\n"
+    for ((what, r) in listOf("GET" to get, "POST" to post, "no secret" to nosecret)) {
+        println("--- $name $what\n" + raw(port, r).replace("\r\n", "\n").trim())
+    }
+}
+
+fun main() {
+    // Ktor CIO, one intercept that hands each request whole to handle().
+    var t0 = System.nanoTime()
+    val ktor = embeddedServer(CIO, host = "127.0.0.1", port = 0) {
+        intercept(ApplicationCallPipeline.Call) {
+            val headers = call.request.headers.entries().flatMap { (k, vs) -> vs.map { k to it } }
+            val body = call.receiveChannel().toByteArray()
+            val answer = handle(Asked(call.request.httpMethod.value, call.request.uri, headers, body))
+            var type: ContentType? = null
+            for ((k, v) in answer.headers) if (k.equals("Content-Type", true)) type = ContentType.parse(v) else call.response.header(k, v)
+            call.respondBytes(answer.body, type, HttpStatusCode.fromValue(answer.status))
+            finish()
+        }
+    }.start(wait = false)
+    val kport = runBlocking { ktor.engine.resolvedConnectors().first().port }
+    println("ktor CIO started in ${(System.nanoTime() - t0) / 1_000_000} ms on $kport")
+    t0 = System.nanoTime(); raw(kport, "GET /x HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+    println("ktor first answer in ${(System.nanoTime() - t0) / 1_000_000} ms")
+    probe("ktor", kport)
+    ktor.stop(100, 500)
+
+    // NanoHTTPD 2.3.1.
+    t0 = System.nanoTime()
+    val nano = object : NanoHTTPD("127.0.0.1", 0) {
+        override fun serve(session: IHTTPSession): Response {
+            val length = session.headers["content-length"]?.toIntOrNull() ?: 0
+            val body = ByteArray(length).also { var n = 0; while (n < length) { val r = session.inputStream.read(it, n, length - n); if (r < 0) break; n += r } }
+            val target = session.uri + (session.queryParameterString?.let { "?$it" } ?: "")
+            val answer = handle(Asked(session.method.name, target, session.headers.map { it.key to it.value }, body))
+            val type = answer.headers.first { it.first == "Content-Type" }.second
+            val r = newFixedLengthResponse(Response.Status.lookup(answer.status), type, answer.body.inputStream(), answer.body.size.toLong())
+            for ((k, v) in answer.headers) if (k != "Content-Type") r.addHeader(k, v)
+            return r
+        }
+    }
+    nano.start(NanoHTTPD.SOCKET_READ_TIMEOUT, false)
+    println("nanohttpd started in ${(System.nanoTime() - t0) / 1_000_000} ms on ${nano.listeningPort}")
+    probe("nano", nano.listeningPort)
+    nano.stop()
+}

@@ -5813,6 +5813,22 @@ The other caracole's `GET /api/peer/state` gives its form token with its units, 
 anyone who can reach caracole serve can read it from a page already, and another site's page can read neither. A
 Sync page in caracole serve comes next ([the design](superpowers/specs/2026-10-31-phone-server-sync-design.md)).
 
+### The phone pushes its changes (POST /peer/push)
+
+Not built yet.
+
+### Syncing by hand: peer sync --push, --choose, --compared
+
+Not built yet.
+
+### The Sync tab
+
+Not built yet.
+
+### What the offline copy lists
+
+Not built yet.
+
 ## Running it on a server
 
 [deploy.md](deploy.md) sets caracole up as a nightly service, on NixOS with

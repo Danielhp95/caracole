@@ -1,0 +1,32 @@
+package spike
+
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
+import java.io.File
+
+/** ug_index rows inserted through caracole's triggers (ug_keys, its trigram index, ug_artists, ug_index_fts, ug_key_words). */
+fun main(args: Array<String>) {
+    val dir = File(args[0]); val n = args[1].toLong()
+    val f = File(dir, "bench.sqlite"); listOf("", "-wal", "-shm").forEach { File(f.path + it).delete() }
+    val c = BundledSQLiteDriver().open(f.path)
+    println("sqlite " + c.prepare("SELECT sqlite_version()").use { it.step(); it.getText(0) })
+    c.execSQL("PRAGMA journal_mode = WAL"); c.execSQL("PRAGMA synchronous = NORMAL")
+    for ((v, stmts) in migrations(File(dir, "migrations.json"))) { c.execSQL("BEGIN"); stmts.forEach { s -> c.prepare(s).use { while (it.step()) {} } }; c.execSQL("PRAGMA user_version = $v"); c.execSQL("COMMIT") }
+    val t0 = System.nanoTime()
+    c.execSQL("BEGIN")
+    // Artists: n/20 of them, two words each; songs: three words, from a small vocabulary, as UG's keys are.
+    c.prepare("""
+        WITH RECURSIVE r(i) AS (SELECT 1 UNION ALL SELECT i + 1 FROM r WHERE i < ?)
+        INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path)
+        SELECT i, 'artist' || (i / 20) || '-band' || (i % 7), 'song' || (i % 5003) || '-word' || (i % 97) || '-x' || (i % 11),
+               'Chords', 'sitemap1.xml', '2026-01-01T00:00:00Z', 'tab/a/s-chords-' || i FROM r
+    """.trimIndent()).use { it.bindLong(1, n); it.step() }
+    c.execSQL("COMMIT")
+    val ms = (System.nanoTime() - t0) / 1_000_000
+    fun count(t: String) = c.prepare("SELECT COUNT(*) FROM $t").use { it.step(); it.getLong(0) }
+    println("$n rows through the triggers in $ms ms: ug_keys ${count("ug_keys")}, ug_artists ${count("ug_artists")}, ug_key_words ${count("ug_key_words")}")
+    val t1 = System.nanoTime()
+    val hits = c.prepare("SELECT COUNT(*) FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE ?)").use { it.bindText(1, "%ng4999%"); it.step(); it.getLong(0) }
+    println("a trigram LIKE: $hits keys in ${(System.nanoTime() - t1) / 1000} us; file ${f.length() / 1024 / 1024} MB")
+    c.close()
+}

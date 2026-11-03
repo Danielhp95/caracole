@@ -1,0 +1,195 @@
+package spike
+
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
+import java.io.File
+
+fun SQLiteConnection.rows(sql: String, vararg args: Any?): List<List<String?>> = prepare(sql).use { st ->
+    args.forEachIndexed { i, a ->
+        when (a) {
+            null -> st.bindNull(i + 1)
+            is Long -> st.bindLong(i + 1, a)
+            is Int -> st.bindLong(i + 1, a.toLong())
+            else -> st.bindText(i + 1, a.toString())
+        }
+    }
+    val out = ArrayList<List<String?>>()
+    while (st.step()) out += (0 until st.getColumnCount()).map { if (st.isNull(it)) null else st.getText(it) }
+    out
+}
+
+fun attempt(what: String, block: () -> Any?) {
+    try {
+        println("OK   $what: ${block()}")
+    } catch (e: Throwable) {
+        println("FAIL $what: ${e.javaClass.simpleName}: ${e.message}")
+    }
+}
+
+/** The migrations' statements, from migrations.json: {"1": ["stmt", ...], ...}. A tiny reader: strings only. */
+fun migrations(file: File): Map<Int, List<String>> {
+    val text = file.readText()
+    val out = LinkedHashMap<Int, MutableList<String>>()
+    var i = 0
+    var current: MutableList<String>? = null
+    fun str(): String {
+        val sb = StringBuilder(); i++
+        while (text[i] != '"') {
+            if (text[i] == '\\') {
+                i++
+                when (val e = text[i]) {
+                    'n' -> sb.append('\n'); 't' -> sb.append('\t'); 'r' -> sb.append('\r'); 'b' -> sb.append('\b')
+                    'f' -> sb.append('\u000C'); 'u' -> { sb.append(text.substring(i + 1, i + 5).toInt(16).toChar()); i += 4 }
+                    else -> sb.append(e)
+                }
+            } else sb.append(text[i])
+            i++
+        }
+        i++
+        return sb.toString()
+    }
+    var depth = 0
+    while (i < text.length) {
+        when (text[i]) {
+            '{' -> { depth++; i++ }
+            '[' -> { depth++; i++ }
+            ']', '}' -> { depth--; i++ }
+            '"' -> {
+                val s = str()
+                if (depth == 1) { current = ArrayList(); out[s.toInt()] = current } else current!!.add(s)
+            }
+            else -> i++
+        }
+    }
+    return out
+}
+
+fun main(args: Array<String>) {
+    val dataDir = File(args.getOrElse(0) { "data" })
+    val dbFile = File(dataDir, "kotlin.sqlite").also { it.delete(); File(it.path + "-wal").delete(); File(it.path + "-shm").delete() }
+    val driver = BundledSQLiteDriver()
+    val conn = driver.open(dbFile.path)
+    File("/proc/self/maps").readLines().filter { "sqlite" in it }.map { it.substringAfterLast(' ') }.distinct().forEach { println("mapped: $it") }
+    println("LD_LIBRARY_PATH=" + System.getenv("LD_LIBRARY_PATH") + " LD_PRELOAD=" + System.getenv("LD_PRELOAD"))
+    println("sqlite_version=" + conn.rows("SELECT sqlite_version()")[0][0])
+    println("sqlite_source_id=" + conn.rows("SELECT sqlite_source_id()")[0][0])
+    println("compile_options=" + conn.rows("PRAGMA compile_options").joinToString(" ") { it[0]!! })
+
+    attempt("journal_mode WAL") { conn.rows("PRAGMA journal_mode = WAL") }
+    attempt("foreign_keys") { conn.execSQL("PRAGMA foreign_keys = ON"); conn.rows("PRAGMA foreign_keys") }
+    attempt("two statements in one prepare") { conn.rows("SELECT 1; SELECT 2") }
+    attempt("execSQL of two statements") { conn.execSQL("CREATE TABLE two_a(x); CREATE TABLE two_b(x)"); conn.rows("SELECT name FROM sqlite_master WHERE name LIKE 'two_%'") }
+
+    // caracole's migrations, statement by statement, each version in one transaction, as db.py runs them.
+    val scripts = migrations(File(dataDir, "migrations.json"))
+    var failed = 0
+    for ((version, statements) in scripts) {
+        conn.execSQL("BEGIN IMMEDIATE")
+        try {
+            for (s in statements) {
+                try {
+                    conn.prepare(s).use { st -> while (st.step()) {} }
+                } catch (e: Throwable) {
+                    failed++
+                    println("FAIL migration $version: ${e.message}\n   ${s.take(160).replace('\n', ' ')}")
+                    throw e
+                }
+            }
+            conn.execSQL("PRAGMA user_version = $version")
+            conn.execSQL("COMMIT")
+        } catch (e: Throwable) {
+            conn.execSQL("ROLLBACK")
+            break
+        }
+    }
+    println("migrations: ${scripts.size} versions, ${scripts.values.sumOf { it.size }} statements, failed=$failed, user_version=" +
+        conn.rows("PRAGMA user_version")[0][0])
+
+    // Rows, as an index's are: the triggers fill ug_keys, ug_keys_fts, ug_artists(_fts), ug_index_fts, ug_key_words.
+    val cols = conn.rows("PRAGMA table_info(ug_index)").map { it[1] to it[2] + (if (it[3] == "1") " NOT NULL" else "") }
+    println("ug_index columns: $cols")
+    attempt("insert ug_index rows") {
+        val rows = listOf(
+            listOf(1L, "lynyrd-skynyrd", "sweet-home-alabama"), listOf(2L, "lynyrd-skynyrd", "free-bird"),
+            listOf(3L, "eagles", "hotel-california"), listOf(4L, "song-dongye", "an-he-qiao"), listOf(5L, "radiohead", "creep"),
+        )
+        // Fill every NOT NULL column with a plain value.
+        val notNull = conn.rows("PRAGMA table_info(ug_index)").filter { it[3] == "1" && it[4] == null }.map { it[1]!! to it[2]!! }
+        for (r in rows) {
+            val names = notNull.map { it.first }
+            val values = notNull.map { (n, t) ->
+                when (n) {
+                    "tab_id" -> r[0]; "artist_key" -> r[1]; "song_key" -> r[2]
+                    else -> if (t.uppercase().contains("INT")) 1L else "x-${r[0]}"
+                }
+            }
+            conn.prepare("INSERT INTO ug_index (${names.joinToString()}) VALUES (${names.joinToString { "?" }})").use { st ->
+                values.forEachIndexed { i, v -> if (v is Long) st.bindLong(i + 1, v) else st.bindText(i + 1, v.toString()) }
+                st.step()
+            }
+        }
+        conn.rows("SELECT COUNT(*) FROM ug_index")[0][0] + " rows; ug_keys " + conn.rows("SELECT COUNT(*) FROM ug_keys")[0][0] +
+            "; ug_artists " + conn.rows("SELECT COUNT(*) FROM ug_artists")[0][0] + "; ug_key_words " + conn.rows("SELECT COUNT(*) FROM ug_key_words")[0][0]
+    }
+    attempt("trigram LIKE through ug_keys_fts") {
+        conn.rows("SELECT key FROM ug_keys WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE key LIKE ?) ORDER BY key", "%alif%")
+    }
+    attempt("trigram LIKE query plan") {
+        conn.rows("EXPLAIN QUERY PLAN SELECT rowid FROM ug_keys_fts WHERE key LIKE ?", "%skyn%").map { it.last() }
+    }
+    attempt("trigram GLOB") { conn.rows("SELECT rowid FROM ug_keys_fts WHERE key GLOB ?", "*bird*") }
+    attempt("trigram MATCH") { conn.rows("SELECT rowid FROM ug_keys_fts WHERE ug_keys_fts MATCH ?", "\"cree\"") }
+    attempt("unicode61 MATCH ug_artists_fts") {
+        conn.rows("SELECT artist_key FROM ug_artists WHERE id IN (SELECT rowid FROM ug_artists_fts WHERE ug_artists_fts MATCH ?)", "skynyrd")
+    }
+    attempt("fts5vocab ug_artist_words") { conn.rows("SELECT term, doc FROM ug_artist_words ORDER BY term") }
+    attempt("unicode61 ug_index_fts MATCH") {
+        conn.rows("SELECT tab_id FROM ug_index WHERE tab_id IN (SELECT rowid FROM ug_index_fts WHERE ug_index_fts MATCH ? LIMIT 10)", "hotel AND california")
+    }
+    attempt("ug_index_fts delete trigger") {
+        conn.execSQL("DELETE FROM ug_index WHERE tab_id = 5")
+        conn.rows("SELECT rowid FROM ug_index_fts WHERE ug_index_fts MATCH 'creep'")
+    }
+    attempt("fts5 integrity-check") { conn.execSQL("INSERT INTO ug_index_fts(ug_index_fts) VALUES ('integrity-check')"); "fine" }
+    attempt("unicode61 folds diacritics and case") {
+        conn.execSQL("CREATE VIRTUAL TABLE t61 USING fts5(x, tokenize='unicode61')")
+        conn.execSQL("INSERT INTO t61 VALUES ('Café ÉLAN Straße')")
+        listOf("cafe", "elan", "strasse", "straße").map { it to conn.rows("SELECT COUNT(*) FROM t61 WHERE t61 MATCH ?", it)[0][0] }
+    }
+    attempt("trigram remove_diacritics option (3.45+)") {
+        conn.execSQL("CREATE VIRTUAL TABLE ttri USING fts5(x, tokenize='trigram remove_diacritics 1')"); "accepted"
+    }
+    attempt("json1") { conn.rows("SELECT value FROM json_each('[\"a\",\"b\"]')") + conn.rows("SELECT json_remove('{\"a\":1,\"b\":2}', '$.a')") }
+    attempt("->> operator (3.38)") { conn.rows("SELECT '{\"a\":7}' ->> '$.a'") }
+    attempt("RETURNING (3.35)") { conn.execSQL("CREATE TABLE r(x INTEGER PRIMARY KEY, y)"); conn.rows("INSERT INTO r(y) VALUES ('z') RETURNING x") }
+    attempt("upsert DO UPDATE") { conn.rows("INSERT INTO kv(key, value) VALUES ('a','1') ON CONFLICT(key) DO UPDATE SET value=excluded.value RETURNING value") }
+    attempt("window function") { conn.rows("SELECT key, row_number() OVER (ORDER BY key) FROM ug_keys LIMIT 2") }
+    attempt("math functions") { conn.rows("SELECT ln(2.718281828)") }
+    attempt("40000 bound parameters") {
+        val n = 40000
+        conn.prepare("SELECT COUNT(*) FROM ug_keys WHERE key IN (${(1..n).joinToString(",") { "?" }})").use { st ->
+            for (i in 1..n) st.bindText(i, "k$i"); st.step(); st.getLong(0)
+        }
+    }
+    attempt("savepoint nesting") {
+        conn.execSQL("SAVEPOINT a"); conn.execSQL("SAVEPOINT b"); conn.execSQL("ROLLBACK TO b"); conn.execSQL("RELEASE b"); conn.execSQL("RELEASE a"); "fine"
+    }
+    // An export Python wrote, attached: opened by the bundled SQLite.
+    val py = File(dataDir, "caracole.sqlite")
+    attempt("ATTACH the Python-made database") {
+        conn.prepare("ATTACH DATABASE ? AS theirs").use { it.bindText(1, py.path); it.step() }
+        conn.rows("SELECT COUNT(*) FROM theirs.sqlite_master")[0][0] + " objects; user_version " + conn.rows("PRAGMA theirs.user_version")[0][0]
+    }
+    attempt("DETACH") { conn.execSQL("DETACH DATABASE theirs"); "fine" }
+    attempt("VACUUM INTO") {
+        val out = File(dataDir, "kotlin-backup.sqlite").also { it.delete() }
+        conn.prepare("VACUUM INTO ?").use { it.bindText(1, out.path); it.step() }; "${out.length()} bytes"
+    }
+    attempt("quick_check") { conn.rows("PRAGMA quick_check") }
+    attempt("NFKD-free lower() on non-ASCII (no ICU)") { conn.rows("SELECT lower('ÉLAN'), upper('straße')") }
+    conn.close()
+
+    // Python reading what Kotlin wrote: left to the shell (python -c) after this program.
+    println("done: ${dbFile.length()} bytes")
+}
