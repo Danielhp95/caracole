@@ -1,0 +1,20 @@
+{"corpus":"index/fixtures/partial-export","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"sql":"CREATE TABLE gtptabs_index (\n  path TEXT PRIMARY KEY,\n  artist_path TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  base_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)"}
+{"sql":"CREATE TABLE musescore_index (\n  page_id INTEGER PRIMARY KEY,\n  path TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)"}
+{"sql":"CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"sql":"CREATE TABLE caracole_export (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"row":{"artist_key":"blur","artist_path":"tabs/2/blur.html","base_key":"","path":"tabs/2/blur.html","sitemap":"sitemap-tabs-1.xml","title_key":""},"table":"gtptabs_index"}
+{"row":{"artist_key":"blur","artist_path":"tabs/2/blur.html","base_key":"song-2","path":"tabs/2/blur/song-2-2.html","sitemap":"sitemap-tabs-1.xml","title_key":"song-2-2"},"table":"gtptabs_index"}
+{"row":{"artist_key":"radiohead","artist_path":"tabs/18/radiohead.html","base_key":"","path":"tabs/18/radiohead.html","sitemap":"sitemap-tabs-2.xml","title_key":""},"table":"gtptabs_index"}
+{"row":{"artist_key":"radiohead","artist_path":"tabs/18/radiohead.html","base_key":"creep","path":"tabs/18/radiohead/creep.html","sitemap":"sitemap-tabs-2.xml","title_key":"creep"},"table":"gtptabs_index"}
+{"row":{"page_id":1524,"path":"song/wonderwall-1524","sitemap":"song-1","title_key":"wonderwall"},"table":"musescore_index"}
+{"row":{"key":"gtptabs:index:complete_at","value":"2026-10-19T03:30:00Z"},"table":"kv"}
+{"row":{"key":"gtptabs:sitemaps","value":"{\"sitemap-tabs-1.xml\": {\"etag\": \"\\\"sitemap-tabs-1.xml-28\\\"\", \"last_modified\": null, \"checked_at\": \"2026-10-28T03:30:00Z\", \"rows\": 2, \"keys\": 2}, \"sitemap-tabs-2.xml\": {\"etag\": \"\\\"sitemap-tabs-2.xml-19\\\"\", \"last_modified\": null, \"checked_at\": \"2026-10-19T03:30:00Z\", \"rows\": 2, \"keys\": 2}, \"sitemap-tabs-9.xml\": {\"checked_at\": \"not a time\", \"rows\": 1.50, \"etag\": \"\\u00e9\", \"keys\": 2}}"},"table":"kv"}
+{"row":{"key":"musescore:sitemaps","value":"{\"song-1\": {\"etag\": \"\\\"song-1-28\\\"\", \"last_modified\": null, \"checked_at\": \"2026-10-28T03:30:00Z\", \"rows\": 1, \"keys\": 2}}"},"table":"kv"}
+{"row":{"key":"format","value":"1"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"15"},"table":"caracole_export"}
+{"row":{"key":"keys","value":"2"},"table":"caracole_export"}
+{"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
+{"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}
+{"row":{"key":"sites","value":"[\"gtptabs\", \"musescore\"]"},"table":"caracole_export"}
+{"row":{"key":"source","value":"/var/lib/caracole/state/caracole.sqlite"},"table":"caracole_export"}

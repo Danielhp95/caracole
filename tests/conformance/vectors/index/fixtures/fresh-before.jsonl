@@ -1,0 +1,6 @@
+{"corpus":"index/fixtures/fresh-before","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"kv":"gametabs:games:keys","value":"2"}
+{"kv":"harptabs:artists:keys","value":"2"}
+{"kv":"harptabs:index:keys","value":"1"}
+{"kv":"lacuerda:index:keys","value":"2"}
+{"kv":"ug:artist_tabs:keys","value":"2"}
