@@ -31,4 +31,10 @@ tasks.test {
     outputs.upToDateWhen { false }
     e2e.forEach { (name, value) -> systemProperty(name, value) }
     systemProperty("caracole.conformance", conformance.absolutePath)
+    // What a phase found wrong, whole, in the output tests/test_android_e2e.py shows.
+    testLogging {
+        events("passed", "skipped", "failed")
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showStandardStreams = true
+    }
 }

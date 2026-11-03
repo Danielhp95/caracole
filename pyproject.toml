@@ -47,6 +47,7 @@ markers = [
   "chordpro: needs the chordpro binary on PATH (and is slow)",
   "autochords: needs torch, beat-this and librosa",
   "slow: a real browser, chordpro or another process; the quick loop is -m 'not slow'",
+  "android_e2e: the phone and the computer synced end to end (CARACOLE_ANDROID_E2E=1, with -n 0)",
 ]
 
 [tool.ruff]
