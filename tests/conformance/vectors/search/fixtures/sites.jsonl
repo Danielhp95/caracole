@@ -1,0 +1,95 @@
+{"corpus":"search/fixtures/sites","header":true,"made_by":"tests/test_conformance_search.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"row":{"added_at":"2026-10-01T00:59:00Z","album":null,"artist":"Forever","artists":"[\"Forever\"]","audio_mtime":null,"audio_path":null,"autochords_mtime":null,"created_at":"2026-11-03T10:00:00Z","duration_ms":213000,"id":1,"isrc":null,"key":"forever/live","lacuerda_checked_at":null,"lyrics_at":null,"lyrics_json":null,"lyrics_status":"pending","match_artist_key":null,"match_candidates":"[]","match_decision":null,"match_score":null,"match_song_key":null,"match_step":null,"matched_at":null,"review":0,"source_ids":"{\"wanted\": [\"Forever/Live\"]}","status":"wanted","title":"Live","ug_checked_at":null,"ug_dirty":1,"updated_at":"2026-11-03T10:00:00Z","variant":null},"table":"songs"}
+{"row":{"added_at":"2026-10-01T00:58:00Z","album":null,"artist":"Radiohead","artists":"[\"Radiohead\"]","audio_mtime":null,"audio_path":null,"autochords_mtime":null,"created_at":"2026-11-03T10:00:00Z","duration_ms":213000,"id":2,"isrc":null,"key":"radiohead/creep","lacuerda_checked_at":null,"lyrics_at":null,"lyrics_json":null,"lyrics_status":"pending","match_artist_key":null,"match_candidates":"[]","match_decision":null,"match_score":null,"match_song_key":null,"match_step":null,"matched_at":null,"review":0,"source_ids":"{\"wanted\": [\"Radiohead/Creep\"]}","status":"wanted","title":"Creep","ug_checked_at":null,"ug_dirty":1,"updated_at":"2026-11-03T10:00:00Z","variant":null},"table":"songs"}
+{"row":{"artist_key":"elton-john","first_seen":"x","path":"elton-john/your-song-chords-1","sitemap":"1","song_key":"your-song","tab_id":1,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"oasis","first_seen":"x","path":"oasis/wonderwall-chords-2","sitemap":"1","song_key":"wonderwall","tab_id":2,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"oasis","first_seen":"x","path":"oasis/live-forever-chords-3","sitemap":"1","song_key":"live-forever","tab_id":3,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"eagles","first_seen":"x","path":"eagles/hotel-california-chords-4","sitemap":"1","song_key":"hotel-california","tab_id":4,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"hotel","first_seen":"x","path":"hotel/lobby-chords-5","sitemap":"1","song_key":"lobby","tab_id":5,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"forever","first_seen":"x","path":"forever/young-chords-6","sitemap":"1","song_key":"young","tab_id":6,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"billy-joel","first_seen":"x","path":"billy-joel/piano-man-chords-7","sitemap":"1","song_key":"piano-man","tab_id":7,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"radiohead","first_seen":"x","path":"radiohead/creep-chords-8","sitemap":"1","song_key":"creep","tab_id":8,"type":"chords"},"table":"ug_index"}
+{"row":{"artist_key":"radiohead","artist_path":"tabs/18/radiohead.html","base_key":"creep","path":"tabs/18/radiohead/creep.html","sitemap":"1","title_key":"creep"},"table":"gtptabs_index"}
+{"row":{"artist_key":"radiohead","artist_path":"tabs/18/radiohead.html","base_key":"creep","path":"tabs/18/radiohead/creep-2.html","sitemap":"1","title_key":"creep-2"},"table":"gtptabs_index"}
+{"row":{"artist_key":"radiohead","artist_path":"tabs/18/radiohead.html","base_key":"karma-police","path":"tabs/18/radiohead/karma-police.html","sitemap":"1","title_key":"karma-police"},"table":"gtptabs_index"}
+{"row":{"artist_key":"stone-temple-pilots","artist_path":"tabs/20/stone-temple-pilots.html","base_key":"creep","path":"tabs/20/stone-temple-pilots/creep.html","sitemap":"1","title_key":"creep"},"table":"gtptabs_index"}
+{"row":{"artist_key":"metallica","artist_path":"tabs/13/metallica.html","base_key":"creeping-death","path":"tabs/13/metallica/creeping-death.html","sitemap":"1","title_key":"creeping-death"},"table":"gtptabs_index"}
+{"row":{"artist_key":"radiohead","artist_path":"tabs/18/radiohead.html","base_key":"","path":"tabs/18/radiohead.html","sitemap":"1","title_key":""},"table":"gtptabs_index"}
+{"row":{"artist_key":"john-elton","artist_path":"tabs/10/john-elton.html","base_key":"your-song","path":"tabs/10/john-elton/your-song.html","sitemap":"1","title_key":"your-song"},"table":"gtptabs_index"}
+{"row":{"artist_key":"john-elton","artist_path":"tabs/10/john-elton.html","base_key":"rocket-man","path":"tabs/10/john-elton/rocket-man.html","sitemap":"1","title_key":"rocket-man"},"table":"gtptabs_index"}
+{"row":{"artist_key":"beatles","artist_path":"tabs/2/beatles-the.html","base_key":"yesterday","path":"tabs/2/beatles-the/yesterday.html","sitemap":"1","title_key":"yesterday"},"table":"gtptabs_index"}
+{"row":{"page_id":5,"path":"song/ban_ma_ban_ma-5","sitemap":"1","title_key":"ban-ma-ban-ma"},"table":"musescore_index"}
+{"row":{"page_id":7,"path":"song/creep-7","sitemap":"1","title_key":"creep"},"table":"musescore_index"}
+{"row":{"page_id":8,"path":"song/live_forever-8","sitemap":"1","title_key":"live-forever"},"table":"musescore_index"}
+{"row":{"page_id":9,"path":"song/your_song-9","sitemap":"1","title_key":"your-song"},"table":"musescore_index"}
+{"row":{"page_id":11,"path":"song/oasis-11","sitemap":"1","title_key":"oasis"},"table":"musescore_index"}
+{"row":{"page_id":12,"path":"song/hotel_california-12","sitemap":"1","title_key":"hotel-california"},"table":"musescore_index"}
+{"row":{"page_id":13,"path":"song/eagles-13","sitemap":"1","title_key":"eagles"},"table":"musescore_index"}
+{"row":{"page_id":14,"path":"song/the-14","sitemap":"1","title_key":"the"},"table":"musescore_index"}
+{"row":{"page_id":15,"path":"song/california-15","sitemap":"1","title_key":"california"},"table":"musescore_index"}
+{"row":{"page_id":16,"path":"song/live-16","sitemap":"1","title_key":"live"},"table":"musescore_index"}
+{"row":{"page_id":17,"path":"song/forever-17","sitemap":"1","title_key":"forever"},"table":"musescore_index"}
+{"row":{"page_id":99,"path":"song/wonderwall-99","sitemap":"1","title_key":"wonderwall"},"table":"musescore_index"}
+{"row":{"page_id":1524,"path":"song/wonderwall-1524","sitemap":"1","title_key":"wonderwall"},"table":"musescore_index"}
+{"row":{"key":"beatles","kind":"artist","page_id":50,"path":"artist/50/the-beatles","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"billy-joel","kind":"artist","page_id":1178,"path":"artist/1178/billy-joel","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"ritchie-valens","kind":"artist","page_id":7829,"path":"artist/7829/ritchie-valens","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"silent-night","kind":"tab","page_id":6,"path":"tab/6/silent-night","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"piano-man","kind":"tab","page_id":25,"path":"tab/25/piano-man","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"la-bamba","kind":"tab","page_id":89,"path":"tab/89/la-bamba","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"yesterday","kind":"tab","page_id":172,"path":"tab/172/yesterday","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"cielito-lindo","kind":"tab","page_id":302,"path":"tab/302/cielito-lindo","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"yesterday","kind":"tab","page_id":926,"path":"tab/926/yesterday","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"yesterday","kind":"tab","page_id":1999,"path":"tab/1999/yesterday","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"piano-man","kind":"tab","page_id":29525,"path":"tab/29525/piano-man","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"cant-help-falling-in-love","kind":"tab","page_id":30906,"path":"tab/30906/can-t-help-falling-in-love","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"knockin-on-heavens-door","kind":"tab","page_id":1247,"path":"tab/1247/knockin-on-heavens-door","sitemap":"sitemap"},"table":"harptabs_index"}
+{"row":{"key":"billy-joel","name":"billy joel","page_id":1178,"path":"artist/1178/billy-joel","read_at":"2026-10-27T00:00:00Z","tabs":98},"table":"harptabs_artists"}
+{"row":{"key":"beatles","name":"the beatles","page_id":50,"path":"artist/50/the-beatles","read_at":"2026-10-27T00:00:00Z","tabs":40},"table":"harptabs_artists"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":"Beginner","harp_key":"C","path":"tab/25/piano-man","place":0,"rating":4.0,"song_key":"piano-man","tab_id":25,"title":"piano man","views":1100000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":null,"harp_key":"C","path":"tab/23862/piano-man-c-harmonica","place":1,"rating":null,"song_key":"piano-man","tab_id":23862,"title":"Piano Man (C Harmonica)","views":574000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":null,"harp_key":null,"path":"tab/9925/piano-man-harmonica-intro","place":2,"rating":2.9,"song_key":"piano-man","tab_id":9925,"title":"((((Piano Man (Harmonica Intro)","views":177000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":"Beginner","harp_key":"C","path":"tab/1256/piano-man-harp-intro","place":3,"rating":2.2,"song_key":"piano-man","tab_id":1256,"title":"Piano Man (Harp Intro)","views":75000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":null,"harp_key":"Bb","path":"tab/8767/vienna","place":4,"rating":null,"song_key":"vienna","tab_id":8767,"title":"Vienna!","views":59000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":"Beginner","harp_key":null,"path":"tab/2008/she-s-always-a-woman","place":5,"rating":null,"song_key":"shes-always-a-woman","tab_id":2008,"title":"She's Always a Woman","views":32000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":null,"harp_key":"C","path":"tab/5751/new-york-state-of-mind","place":6,"rating":null,"song_key":"new-york-state-of-mind","tab_id":5751,"title":"New York State Of Mind","views":15000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/50/the-beatles","difficulty":null,"harp_key":"C","path":"tab/926/yesterday","place":0,"rating":null,"song_key":"yesterday","tab_id":926,"title":"Yesterday (intro)","views":9000},"table":"harptabs_artist_tabs"}
+{"row":{"artist":"artist/50/the-beatles","difficulty":null,"harp_key":"G","path":"tab/172/yesterday","place":1,"rating":4.5,"song_key":"yesterday","tab_id":172,"title":"yesterday","views":20000},"table":"harptabs_artist_tabs"}
+{"row":{"game":"actraiser","key":"actraiser","kind":"game","page":1,"path":"tabs/actraiser","sitemap":"sitemap_1.xml","slug":"","slug_key":"actraiser"},"table":"gametabs_index"}
+{"row":{"game":"age-of-empires-ii","key":"age-of-empires-ii","kind":"game","page":1,"path":"tabs/age-of-empires-ii","sitemap":"sitemap_1.xml","slug":"","slug_key":"age-of-empires-ii"},"table":"gametabs_index"}
+{"row":{"game":"army-men-sarge039s-heroes","key":"army-men-sarge039s-heroes","kind":"game","page":1,"path":"tabs/army-men-sarge039s-heroes","sitemap":"sitemap_1.xml","slug":"","slug_key":"army-men-sarge039s-heroes"},"table":"gametabs_index"}
+{"row":{"game":"final-fantasy-vii","key":"final-fantasy-vii","kind":"game","page":1,"path":"tabs/final-fantasy-vii","sitemap":"sitemap_1.xml","slug":"","slug_key":"final-fantasy-vii"},"table":"gametabs_index"}
+{"row":{"game":"final-fantasy-vii","key":"final-fantasy-vii","kind":"game","page":2,"path":"tabs/final-fantasy-vii?page=2","sitemap":"sitemap_1.xml","slug":"","slug_key":"final-fantasy-vii"},"table":"gametabs_index"}
+{"row":{"game":"game-of-thrones","key":"game-of-thrones","kind":"game","page":1,"path":"tabs/game-of-thrones","sitemap":"sitemap_1.xml","slug":"","slug_key":"game-of-thrones"},"table":"gametabs_index"}
+{"row":{"game":"hollow-knight","key":"hollow-knight","kind":"game","page":1,"path":"tabs/hollow-knight","sitemap":"sitemap_1.xml","slug":"","slug_key":"hollow-knight"},"table":"gametabs_index"}
+{"row":{"game":"actraiser","key":"all-over-the-world","kind":"tab","page":0,"path":"tabs/actraiser/all-over-the-world","sitemap":"sitemap_1.xml","slug":"all-over-the-world","slug_key":"all-over-the-world"},"table":"gametabs_index"}
+{"row":{"game":"actraiser","key":"birth-of-people","kind":"tab","page":0,"path":"tabs/actraiser/birth-of-people","sitemap":"sitemap_1.xml","slug":"birth-of-people","slug_key":"birth-of-people"},"table":"gametabs_index"}
+{"row":{"game":"actraiser","key":"birth-of-the-people","kind":"tab","page":0,"path":"tabs/actraiser/birth-of-the-people","sitemap":"sitemap_1.xml","slug":"birth-of-the-people","slug_key":"birth-of-the-people"},"table":"gametabs_index"}
+{"row":{"game":"actraiser","key":"fillmore","kind":"tab","page":0,"path":"tabs/actraiser/fillmore","sitemap":"sitemap_1.xml","slug":"fillmore","slug_key":"fillmore"},"table":"gametabs_index"}
+{"row":{"game":"actraiser","key":"sacrifices","kind":"tab","page":0,"path":"tabs/actraiser/sacrifices","sitemap":"sitemap_1.xml","slug":"sacrifices","slug_key":"sacrifices"},"table":"gametabs_index"}
+{"row":{"game":"age-of-empires-ii","key":"main-theme","kind":"tab","page":0,"path":"tabs/age-of-empires-ii/main-theme-55","sitemap":"sitemap_1.xml","slug":"main-theme-55","slug_key":"main-theme-55"},"table":"gametabs_index"}
+{"row":{"game":"army-men-sarge039s-heroes","key":"main-theme","kind":"tab","page":0,"path":"tabs/army-men-sarge039s-heroes/main-theme-60","sitemap":"sitemap_1.xml","slug":"main-theme-60","slug_key":"main-theme-60"},"table":"gametabs_index"}
+{"row":{"game":"final-fantasy-vii","key":"aeris-theme","kind":"tab","page":0,"path":"tabs/final-fantasy-vii/aeris-theme","sitemap":"sitemap_1.xml","slug":"aeris-theme","slug_key":"aeris-theme"},"table":"gametabs_index"}
+{"row":{"game":"game-of-thrones","key":"main-theme","kind":"tab","page":0,"path":"tabs/game-of-thrones/main-theme-108","sitemap":"sitemap_1.xml","slug":"main-theme-108","slug_key":"main-theme-108"},"table":"gametabs_index"}
+{"row":{"game":"hollow-knight","key":"hollow-knight-main-menu","kind":"tab","page":0,"path":"tabs/hollow-knight/hollow-knight-main-menu","sitemap":"sitemap_2.xml","slug":"hollow-knight-main-menu","slug_key":"hollow-knight-main-menu"},"table":"gametabs_index"}
+{"row":{"game":"hollow-knight","key":"menu-theme","kind":"tab","page":0,"path":"tabs/hollow-knight/menu-theme","sitemap":"sitemap_2.xml","slug":"menu-theme","slug_key":"menu-theme"},"table":"gametabs_index"}
+{"row":{"game":"hollow-knight","key":"resting-grounds","kind":"tab","page":0,"path":"tabs/hollow-knight/resting-grounds","sitemap":"sitemap_2.xml","slug":"resting-grounds","slug_key":"resting-grounds"},"table":"gametabs_index"}
+{"row":{"game":"hollow-knight","key":"resting-grounds","kind":"tab","page":0,"path":"tabs/hollow-knight/resting-grounds-2","sitemap":"sitemap_2.xml","slug":"resting-grounds-2","slug_key":"resting-grounds-2"},"table":"gametabs_index"}
+{"row":{"game":"hollow-knight","key":"white-lady","kind":"tab","page":0,"path":"tabs/hollow-knight/the-white-lady","sitemap":"sitemap_2.xml","slug":"the-white-lady","slug_key":"white-lady"},"table":"gametabs_index"}
+{"row":{"game":"hollow-knight","key":"title-theme","kind":"tab","page":0,"path":"tabs/hollow-knight/title-theme-8","sitemap":"sitemap_2.xml","slug":"title-theme-8","slug_key":"title-theme-8"},"table":"gametabs_index"}
+{"row":{"game":"actraiser","name":"Actraiser","path":"tabs/actraiser","read_at":"2026-10-28T00:00:00Z","tabs":5},"table":"gametabs_games"}
+{"row":{"game":"hollow-knight","name":"Hollow Knight","path":"tabs/hollow-knight","read_at":"2026-10-28T00:00:00Z","tabs":6},"table":"gametabs_games"}
+{"row":{"composers":"[\"Yuzo Koshiro\"]","game":"actraiser","instruments":"[\"Guitar\"]","page":"tabs/actraiser","path":"tabs/actraiser/all-over-the-world","place":0,"rating":5.0,"title":"All Over the World","title_key":"all-over-the-world","views":4400},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Yuzo Koshiro\"]","game":"actraiser","instruments":"[\"Guitar\"]","page":"tabs/actraiser","path":"tabs/actraiser/birth-of-people","place":1,"rating":5.0,"title":"Birth of People","title_key":"birth-of-people","views":15200},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Yuzo Koshiro\"]","game":"actraiser","instruments":"[\"Guitar\"]","page":"tabs/actraiser","path":"tabs/actraiser/birth-of-the-people","place":2,"rating":null,"title":"Birth of the People","title_key":"birth-of-the-people","views":11200},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Yuzo Koshiro\"]","game":"actraiser","instruments":"[\"Guitar\"]","page":"tabs/actraiser","path":"tabs/actraiser/fillmore","place":3,"rating":5.0,"title":"Fillmore","title_key":"fillmore","views":16400},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Yuzo Koshiro\"]","game":"actraiser","instruments":"[\"Guitar\"]","page":"tabs/actraiser","path":"tabs/actraiser/sacrifices","place":4,"rating":5.0,"title":"Sacrifices","title_key":"sacrifices","views":10000},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Christopher Larkin\"]","game":"hollow-knight","instruments":"[\"Guitar\"]","page":"tabs/hollow-knight","path":"tabs/hollow-knight/hollow-knight-main-menu","place":0,"rating":5.0,"title":"Hollow Knight (Main Menu)","title_key":"hollow-knight-main-menu","views":5600},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Christopher Larkin\"]","game":"hollow-knight","instruments":"[\"Guitar\"]","page":"tabs/hollow-knight","path":"tabs/hollow-knight/menu-theme","place":1,"rating":5.0,"title":"Menu Theme","title_key":"menu-theme","views":15000},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Christopher Larkin\"]","game":"hollow-knight","instruments":"[\"Guitar\"]","page":"tabs/hollow-knight","path":"tabs/hollow-knight/resting-grounds","place":2,"rating":5.0,"title":"Resting Grounds","title_key":"resting-grounds","views":692},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Christopher Larkin\"]","game":"hollow-knight","instruments":"[\"Guitar\"]","page":"tabs/hollow-knight","path":"tabs/hollow-knight/resting-grounds-2","place":3,"rating":5.0,"title":"Resting Grounds","title_key":"resting-grounds","views":430},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[\"Christopher Larkin\"]","game":"hollow-knight","instruments":"[\"Guitar\"]","page":"tabs/hollow-knight","path":"tabs/hollow-knight/the-white-lady","place":4,"rating":5.0,"title":"The White Lady","title_key":"white-lady","views":13000},"table":"gametabs_game_tabs"}
+{"row":{"composers":"[]","game":"hollow-knight","instruments":"[\"Guitar\"]","page":"tabs/hollow-knight","path":"tabs/hollow-knight/title-theme-8","place":5,"rating":5.0,"title":"Title Theme","title_key":"title-theme","views":10400},"table":"gametabs_game_tabs"}
+{"kv":"gametabs:games:keys","value":"2"}
+{"kv":"harptabs:artists:keys","value":"2"}
+{"kv":"songs:key_version","value":"2"}
