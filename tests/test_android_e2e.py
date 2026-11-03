@@ -15,10 +15,13 @@ and what the next step needs of it). The steps, as the plan numbers them:
 1. Computer: the library built with no request, its index exported, ``caracole serve`` on 127.0.0.1:P.
 2. Phone, phase 1: the index imported (``GET /api/peer/index``), the mirror synced, the Sync tab's compare and apply:
    the computer's 20 songs on the phone, with their digests, the goal's changes in ``phone_overrides``, each mirrored
-   sheet served, and an indexed song found that the library hasn't got.
+   sheet served, and an indexed song found that the library hasn't got; here, every table of the index export holding
+   on the phone what it holds in the file, and every file the computer keeps (each sheet's ``sheet.txt`` and
+   ``sheet.json``, the Guitar Pro file) and its lyrics on the phone byte for byte.
 3. Computer off: serve stopped.
 4. Phone, phase 2: songs searched, added (Get it, Request with Fetch now and without) and removed (R and C1), and not
-   one request sent: the computer's port refuses.
+   one request sent: the computer's port refuses. The song Get it added is the one search.py finds for the query,
+   under the identity key caracole gives its names.
 5. Computer: serve again; ``caracole add`` adds three songs, and C1's and C2's ``[transpose]`` change.
 6. Phone, phase 3: the comparison lists each side's adds, C2 theirs, C1 a conflict and R's units the phone's; applied
    with C1 kept as the phone has it (removed), nothing left.
@@ -28,11 +31,13 @@ and what the next step needs of it). The steps, as the plan numbers them:
 The module also checks ``python -m tests.helpers.e2e_library serve DIR PORT``, which the device tests run.
 
 Slow (a library rendered by the real chordpro, Gradle runs) and skipped unless ``CARACOLE_ANDROID_E2E=1``; run it in
-nix develop, in one process: ``CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py``.
+nix develop, in one process: ``CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py``. On a
+pytest-xdist worker it skips itself, so that its library and its Gradle runs are never made once a worker.
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -49,6 +54,7 @@ from helpers.e2e_library import (
     CHANGED,
     CHOSEN,
     LABEL,
+    LYRICS,
     REMOVED,
     REPO,
     SONGS,
@@ -64,6 +70,8 @@ pytestmark = [
     pytest.mark.android_e2e,
     pytest.mark.skipif(os.environ.get("CARACOLE_ANDROID_E2E") != "1",
                        reason="the phone end to end: CARACOLE_ANDROID_E2E=1, in nix develop, with -n 0"),
+    pytest.mark.skipif("PYTEST_XDIST_WORKER" in os.environ,
+                       reason="the phone end to end runs in one process: pytest -n 0 tests/test_android_e2e.py"),
 ]
 
 PHASE_TIMEOUT = 1800  # s: a Gradle run, its first one compiling the phone
@@ -81,6 +89,24 @@ def read(url: str) -> dict:
     with opener.open(url, timeout=60) as answer:
         assert answer.status == 200
         return json.load(answer)
+
+
+def kept(database: Path) -> dict[str, str]:
+    """The files a caracole database records as kept, the computer's or the phone's: each one's SHA-256 by its path
+    in the library."""
+    conn = sqlite3.connect(database)
+    try:
+        return dict(conn.execute("SELECT path, sha256 FROM files"))
+    finally:
+        conn.close()
+
+
+def counts(database: Path, tables: list[str]) -> dict[str, int]:
+    conn = sqlite3.connect(database)
+    try:
+        return {table: conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0] for table in tables}
+    finally:
+        conn.close()
 
 
 def refused(port: int, host: str = "127.0.0.1") -> bool:
@@ -166,8 +192,16 @@ def test_the_library_holds_the_goals_changes_and_asked_no_site(served):
         for artist, title, _, _ in SONGS:  # each song's sheet kept, and its pages rendered by chordpro
             folder = cfg.library_dir / artist / title
             assert {"sheet.txt", "sheet.json", "sheet.html", "sheet.pdf"} <= {p.name for p in folder.iterdir()}
+        # sheet.txt and sheet.json kept, each a file of the sheet's version, as a UG fetch keeps them.
+        pairs = conn.execute("SELECT COUNT(DISTINCT version_id), COUNT(*) FROM files "
+                             "WHERE name IN ('sheet.txt', 'sheet.json')").fetchone()
+        assert tuple(pairs) == (20, 40)
+        for artist, title in LYRICS:
+            assert (cfg.library_dir / artist / title / "lyrics.txt").read_text(encoding="utf-8").startswith("Made-up")
         for table in ("ug_index", "gtptabs_index", "lacuerda_index"):
             assert conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0] > 0, table
+        for record in ("ug:sitemaps", "gtptabs:sitemaps", "lacuerda:index:pages"):  # what an index merge compares
+            assert db.kv_get(conn, record), record
         assert conn.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0  # no request counted
         assert conn.execute("SELECT COUNT(*) FROM kv WHERE key LIKE 'http:last_request:%'").fetchone()[0] == 0
     finally:
@@ -213,6 +247,20 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
         # 2. The phone takes the computer's library and index.
         first = phone(1, url, dir)
     assert first["songs"] == 20 and first["requests"] > 0  # what it counted is the requests it sent
+    scenario = computer.scenario()
+    tables = scenario["index_tables"]
+    with sqlite3.connect(computer.index) as index:
+        exported = {name for (name,) in index.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    assert set(tables) == exported - {"caracole_export", "kv"}
+    assert first["indexes"] == counts(computer.index, tables)  # each site's rows, imported whole
+    computers, phones = kept(computer.cfg().db_path), kept(dir / "phone" / "caracole.sqlite")
+    assert phones == computers  # every kept file, at its path, with its bytes' hash
+    assert {Path(path).name for path in computers} == {"sheet.txt", "sheet.json", "guitar-1.gp"}
+    for path, sha in phones.items():
+        assert hashlib.sha256((dir / "phone" / "library" / path).read_bytes()).hexdigest() == sha, path
+    for artist, title in LYRICS:
+        words = Path(artist, title, "lyrics.txt")
+        assert (dir / "phone" / "library" / words).read_bytes() == (computer.cfg().library_dir / words).read_bytes()
 
     # 3. The computer off; 4. the phone on its own.
     assert refused(port)
@@ -220,6 +268,9 @@ def test_the_phone_and_the_computer_sync_end_to_end(tmp_path):
     assert away["requests"] == 0
     added = {song["key"]: song for song in away["added"]}
     assert len(added) == 3
+    # Get it's song, under the key caracole gives search.py's names of it; and the two asked for by name.
+    assert scenario["index"]["key"] in added
+    assert {identity_key(s["artist"], s["title"]) for s in scenario["requests"]} < set(added)
 
     # 5. The computer changes things meanwhile; 6. the phone syncs with it.
     with computer.serving(port):

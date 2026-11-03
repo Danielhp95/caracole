@@ -1,10 +1,15 @@
 package io.github.danielhp95.caracole.e2e
 
+import io.github.danielhp95.caracole.core.sync.PeerClient
+import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.mirror.Gate
+import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.server.files.PhoneGate
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.routes.LibraryRoutes
+import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.text
 import kotlinx.serialization.json.Json
@@ -16,6 +21,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.Assume
 import org.junit.Test
@@ -41,15 +47,19 @@ import kotlin.test.fail
  * sent, counted by [Requests], and what the Python side checks next).
  *
  * 1. The computer's index (`GET /api/peer/index`, Phone.importIndex), its pages (the mirror's sync) and its library
- *    (the Sync tab's compare, then apply with no choice) come to a new phone: the 20 songs with the computer's
- *    digests, the goal's changes in `phone_overrides`, each mirrored sheet served (its gate SERVE), and an indexed
- *    song the library hasn't got found.
+ *    (the Sync tab's compare, then apply with no choice: compare, take, mirror and agree done, nothing to give, every
+ *    unit taken) come to a new phone: the 20 songs with the computer's digests, the goal's changes in
+ *    `phone_overrides`, each mirrored sheet served (its gate SERVE), and an indexed song the library hasn't got found
+ *    under search.py's names of it. Both clients' requests were counted, PeerClient's and the mirror's; the phone's
+ *    songs and each index table's rows are written for the Python side to check.
  * 2. With the computer off: an indexed song found and added by its row's Get it, two asked for by name (Request with
- *    Fetch now, and without), R and C1 removed (C1's card gone from the page, its sheet "removed on the phone"); not
- *    one request sent, and the computer's port refusing.
+ *    Fetch now, and without), each line in caracole's words, R and C1 removed (C1's card gone from the page, its sheet
+ *    "removed on the phone"); not one request sent, and the computer's port refusing.
  * 3. The comparison lists the phone's three adds and R's units as the phone's, the computer's three adds and C2 as
- *    the computer's, and C1 a conflict (its tombstone the phone's); applied with C1 kept as the phone has it, every
- *    stage done and nothing left; then the phone's units written to DIR/phone/phone-state.json.
+ *    the computer's, and C1 a conflict (its tombstone the phone's); applied with C1 kept as the phone has it: every
+ *    stage done (the index's, done or skipped), the computer's adds and C2 taken, the phone's adds, C1's and R's units
+ *    given, nothing left, and C2's sheet served again as the computer renders it now; then the phone's units written
+ *    to DIR/phone/phone-state.json.
  * 4. A comparison once more finds no difference.
  */
 class PhoneScenarioTest {
@@ -62,7 +72,13 @@ class PhoneScenarioTest {
         val compared = compare(phone)
         assertTrue(compared.proposals.values.all { it == "theirs" }, "a new phone takes everything: $compared")
         assertTrue(compared.proposals.keys.containsAll(scenario.songs.map { it.unit }), "$compared")
-        apply(phone, compared, "")
+        val synced = apply(phone, compared, "")
+        assertStages(phone, synced, SyncEngine.COMPARE to DONE, SyncEngine.TAKE to DONE, SyncEngine.GIVE to SKIPPED,
+                     SyncEngine.MIRROR to DONE, SyncEngine.AGREE to DONE)
+        val outcome = outcome(phone, synced)
+        assertEquals(compared.proposals.keys, units(outcome, "taken"), "every unit of the computer's taken: $outcome")
+        assertEquals(emptySet(), units(outcome, "given"), "nothing given: $outcome")
+        assertEquals(JsonArray(emptyList()), outcome["left"], "nothing left: $outcome")
 
         val mine = phone.units()
         assertEquals(phone.peer().state(phone.ownId()).units, mine, "the phone's units are the computer's")
@@ -92,8 +108,22 @@ class PhoneScenarioTest {
                 it.long(0)
             }
         }, "the indexed song is no song of the library's")
+        assertEquals(scenario.indexSong.artist to scenario.indexSong.title, hit.text("artist") to hit.text("title"),
+                     "the indexed song named as search.py names it")
 
-        buildJsonObject { put("songs", scenario.songs.size) }
+        // Both of the phone's clients were seen, so that phase 2's count of none means neither sent anything.
+        val asked = Requests.paths.toSet()
+        for (path in listOf(PeerClient.STATE_PATH, PeerClient.UNIT_PATH, PeerClient.FILE_PATH, PeerClient.INDEX_PATH,
+                            ServerAddress.MANIFEST_PATH)) {
+            assertTrue(path in asked, "no request to $path counted: $asked")
+        }
+
+        buildJsonObject {
+            put("songs", phone.database.read { db -> db.one("SELECT COUNT(*) FROM songs") { it.long(0) } })
+            put("indexes", JsonObject(scenario.indexTables.associateWith { table ->
+                JsonPrimitive(phone.database.read { db -> db.one("SELECT COUNT(*) FROM \"$table\"") { it.long(0) } })
+            }))
+        }
     }
 
     @Test fun phase2_thePhoneOnItsOwnSearchesAddsAndRemovesAndAsksNoOne() = phase(2) { phone, scenario ->
@@ -107,16 +137,19 @@ class PhoneScenarioTest {
         val lookup = phone.post("/lookup", "artist" to hit.text("artist"), "title" to hit.text("title"),
                                 "ug" to hit.text("ug"))
         assertEquals(202, lookup.status, lookup.text.take(1000))
-        done(phone.await(phone.jobOf(lookup)))
+        assertEquals(LibraryRoutes.FETCH_LATER, JobViews.line(done(phone.await(phone.jobOf(lookup)))).text)
         for ((song, fetch) in scenario.requests) {
             val asked = phone.post("/request", "artist" to song.artist, "title" to song.title, "fetch" to fetch)
-            done(phone.await(phone.jobOf(asked)))
+            // Fetch now's words, as the phone says them; without it, status.py's for an add.
+            val said = if (fetch == "1") LibraryRoutes.FETCH_LATER else "Added: the nightly run looks for it"
+            assertEquals(said, JobViews.line(done(phone.await(phone.jobOf(asked)))).text, "${song.key}, fetch=$fetch")
         }
         val added = phone.database.read { db ->
             db.query("SELECT key, artist, title FROM songs ORDER BY id") { Song(it.text(1)!!, it.text(2)!!, it.text(0)!!) }
         }.filter { it.key !in known }
         assertEquals(3, added.size, "$added")
         assertTrue(added.map { it.key }.containsAll(scenario.requests.map { it.first.key }), "$added")
+        assertTrue(added.any { it == scenario.indexSong }, "Get it adds the indexed song as search.py names it: $added")
 
         for (song in listOf(scenario.r, scenario.c1)) {
             val id = phone.database.read { db -> db.one("SELECT id FROM songs WHERE key = ?", song.key) { it.long(0)!! } }
@@ -156,12 +189,26 @@ class PhoneScenarioTest {
         assertEquals(expected, compared.proposals)
 
         val job = apply(phone, compared, "here\t${scenario.c1.unit}")
-        val view = JobViews.view(job, phone.phone.queue)
-        for (step in view["steps"]!!.jsonArray.map { it.jsonObject }) {
-            assertTrue(step.text("state") in setOf("done", "skipped"), "the sync's stages: ${view["steps"]}")
-        }
-        val outcome = view["outcome"]!!.jsonObject
+        assertStages(phone, job, SyncEngine.COMPARE to DONE, SyncEngine.TAKE to DONE, SyncEngine.GIVE to DONE,
+                     SyncEngine.MIRROR to DONE, SyncEngine.AGREE to DONE)
+        val outcome = outcome(phone, job)
+        assertEquals(scenario.adds.map { it.unit }.toSet() + scenario.c2.unit, units(outcome, "taken"), "$outcome")
+        assertEquals(adds.map { "song/$it" }.toSet() + listOf(scenario.c1.unit, scenario.c1.tombstone, scenario.r.unit,
+                                                             scenario.r.tombstone),
+                     units(outcome, "given"), "$outcome")
         assertEquals(JsonArray(emptyList()), outcome["left"], "nothing left: $outcome")
+
+        // The mirror brought up to date after the take: C2's sheet as the computer renders it now, its gate SERVE
+        // for the digest the phone took, and so every page of a unit.
+        val gate = PhoneGate(phone.database)
+        val pages = phone.mirror.manifest()!!.entries.filter { it.unit != null }
+        for (page in pages) assertEquals(Gate.SERVE, gate.check(page.unit!!, page.digest), page.path)
+        val c2 = pages.single { it.unit == scenario.c2.unit && it.path.endsWith("/sheet.html") }
+        val sheet = phone.get("/" + quotePath(c2.path))
+        assertEquals(200, sheet.status, sheet.text.take(1000))
+        val now = File(phone.home.parentFile, "computer/library/${c2.path}")  // the computer's, rendered again
+        assertTrue(sheet.bytes.contentEquals(now.readBytes()),
+                   "C2's sheet as the computer has it now: ${sheet.text.take(500)}")
 
         write(File(phone.home, "phone-state.json"), buildJsonObject {
             put("units", JsonObject(phone.units().toSortedMap().mapValues { (_, unit) -> stateOf(unit) }))
@@ -218,9 +265,27 @@ class PhoneScenarioTest {
     }
 
     private fun done(job: Job): Job {
-        assertEquals("done", job.state, "${job.spec.title}: ${job.asJson()}")
+        assertEquals(DONE, job.state, "${job.spec.title}: ${job.asJson()}")
         return job
     }
+
+    /** A sync job's stages as its view shows them: each of [expected] in its state, and the index's, the last,
+     * done or skipped (skipped when no index of the computer's is newer than the one the phone merged). */
+    private fun assertStages(phone: ScenarioPhone, job: Job, vararg expected: Pair<String, String>) {
+        val steps = JobViews.view(job, phone.phone.queue)["steps"]!!.jsonArray.map { it.jsonObject }
+        val states = steps.associate { it.text("name") to it.text("state") }
+        assertEquals(SyncEngine.STAGES.map { it.first }, steps.map { it.text("name") }, "the sync's stages: $steps")
+        assertEquals(expected.toMap(), states - SyncEngine.INDEX, "the sync's stages: $steps")
+        assertTrue(states[SyncEngine.INDEX] in setOf(DONE, SKIPPED), "the sync's stages: $steps")
+    }
+
+    /** A sync job's outcome, as its view gives it: what was taken, given and left. */
+    private fun outcome(phone: ScenarioPhone, job: Job): JsonObject =
+        JobViews.view(job, phone.phone.queue)["outcome"] as? JsonObject ?: fail("no outcome: ${job.asJson()}")
+
+    /** The units an outcome's list (taken, given) names. */
+    private fun units(outcome: JsonObject, list: String): Set<String> =
+        outcome[list]!!.jsonArray.map { it.jsonPrimitive.content }.toSet()
 
     /** The scenario's indexed song, as /api/search's `index` rows give it. */
     private fun indexHit(phone: ScenarioPhone, scenario: Scenario): JsonObject {
@@ -246,4 +311,9 @@ class PhoneScenarioTest {
 
     private fun write(file: File, json: JsonElement) =
         file.writeText(Json { prettyPrint = true }.encodeToString(JsonElement.serializer(), json) + "\n")
+
+    private companion object {
+        const val DONE = "done"
+        const val SKIPPED = "skipped"
+    }
 }

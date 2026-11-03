@@ -11,11 +11,13 @@ device tests of the integration step): a library of 20 songs, built with no requ
 
 It is built as docs/screenshots/make.py builds its demo, with caracole's own functions and the suite's helpers, the
 way the nightly run leaves a library: wanted.txt synced (an album and a length on some lines), each song's chart kept
-as a fetched UG sheet is (``sheet.txt``, ``sheet.json``, its version) and the song matched, Ultimate Guitar's index read
-from a sitemap written here (as ``caracole index build --from`` reads one: the library's songs and ``INDEX``'s), a
-letter of LaCuerda's listing and an artist page's songs (``lacuerda_index.store_*``), gtptabs.com's rows as its
-sitemaps give them, a Guitar Pro file kept as gtptabs.com's download is (tests/fixtures/guitar/synthetic.gp), lyrics
-as LRCLIB gives them, a songbook with a setting, every sheet and the songbook rendered by the real chordpro, and the
+as ug/fetch.py's ``_keep_text`` keeps a fetched UG sheet (``sheet.txt`` and ``sheet.json``, two kept files of its
+version) and the song matched, Ultimate Guitar's index read from a sitemap written here (as ``caracole index build
+--from`` reads one: the library's songs and ``INDEX``'s), a letter of LaCuerda's listing and an artist page's songs
+(``lacuerda_index.store_*``, with the listing's record), gtptabs.com's rows stored as site_index.py stores a sitemap
+it read (its record, and the index read whole), a Guitar Pro file kept as gtptabs.com's download is
+(tests/fixtures/guitar/synthetic.gp), lyrics recorded as the lyrics step records LRCLIB's (``lyrics.txt`` written, the
+song's ``lyrics_json``), a songbook with a setting, every sheet and the songbook rendered by the real chordpro, and the
 pages written. With it the goal's changes (docs/android_port.md): ``[version]`` and ``[transpose]`` on five songs
 (``CHANGED``), and two songs whose sheet the owner chose among their two UG versions, ``[pin]`` (``CHOSEN``).
 
@@ -25,9 +27,11 @@ made up here, chords over words that are no song's.
 ``scenario.json`` tells the Kotlin phases (android/e2e's PhoneScenarioTest) which songs the scenario does what with:
 ``songs`` (the 20: artist, title, identity key), ``changed`` (the keys of each overrides.toml table the goal's changes
 fill: what the phone's ``phone_overrides`` holds once it took them), ``index`` (a song of UG's index the library hasn't
-got, the query that finds it), ``requests`` (the songs the phone asks for by name, ``fetch`` 1 and 0), ``removed`` (R
-and C1, which the phone removes), ``transposed`` (C1 and C2, whose ``[transpose]`` the computer changes while the phone
-is away) and ``adds`` (the songs the computer adds meanwhile, ``after_the_phone_left``).
+got, the query that finds it, and its names and identity key as search.py's ``search_index`` gives them),
+``index_tables`` (the tables ``caracole index export`` writes, index_transfer.py's ``SITES``), ``requests`` (the songs
+the phone asks for by name, ``fetch`` 1 and 0), ``removed`` (R and C1, which the phone removes), ``transposed`` (C1
+and C2, whose ``[transpose]`` the computer changes while the phone is away) and ``adds`` (the songs the computer adds
+meanwhile, ``after_the_phone_left``).
 
 ``python -m tests.helpers.e2e_library serve DIR PORT`` (in nix develop, from the repository's root) builds the library
 in DIR when DIR holds none, exports its index to DIR/index.sqlite (what ``GET /api/peer/index`` gives the phone, and
@@ -338,12 +342,12 @@ def build(dir: Path) -> Computer:
     ``dir/scenario.json``; no request is sent, and chordpro (on PATH, as in the dev shell) renders every sheet."""
     if str(TESTS) not in sys.path:  # the suite's helpers, when run as python -m tests.helpers.e2e_library
         sys.path.insert(0, str(TESTS))
-    from caracole import db
+    from caracole import db, gtptabs_fetch, site_index
     from caracole import lacuerda_index as li
     from caracole.gtptabs import parse_page_url
     from caracole.lacuerda import LCArtist, LCSong
-    from caracole.library import keep_file, song_dir, write_atomic, write_info
-    from caracole.lyrics import Lyrics
+    from caracole.library import keep_file, song_dir, write_info
+    from caracole.lyrics import Lyrics, write_lyrics
     from caracole.normalize import identity_key, ug_slug_key
     from caracole.overrides import add_pin, load_overrides, put_song_entries
     from caracole.render import render_all
@@ -384,10 +388,12 @@ def build(dir: Path) -> Computer:
                                        url=raw["tab_url"], raw=raw, now=FETCHED), raw, version)
             vid, raw, version = kept  # the chosen song's second version: the sheet it keeps
             content = chart(title, chords, version)
+            # As ug/fetch.py's _keep_text keeps a page's sheet: its text, and its version's JSON, both kept files.
             keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.txt",
                       data=strip_markup(content).encode("utf-8"), rank=1)
-            doc = {"version": raw, "content": content, "url": raw["tab_url"], "meta": []}
-            write_atomic(song_dir(cfg.library_dir, song) / "sheet.json", json.dumps(doc, ensure_ascii=False).encode())
+            doc = {"version": raw, "content": content, "url": raw["tab_url"], "meta": {}}
+            keep_file(conn, cfg.library_dir, song=song, version_id=vid, name="sheet.json",
+                      data=(json.dumps(doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8"), rank=1)
             if title.isascii():  # as the match and fetch steps leave a song they found
                 sitemap += [(slug(artist), slug(title), tab) for tab in tabs]
                 update_song(conn, song.id, match_decision="accept", match_step="exact", match_score=100.0,
@@ -396,7 +402,8 @@ def build(dir: Path) -> Computer:
             if (artist, title) in LYRICS:
                 words = Lyrics(plain=f"Made-up words of {title}\nfor caracole's tests\n", synced=None,
                                instrumental=False, duration=None, lrclib_id=900 + n)
-                update_song(conn, song.id, lyrics_status="found", lyrics_json=words.to_json())
+                write_lyrics(song_dir(cfg.library_dir, song), words)  # as the lyrics step's _record stores them
+                update_song(conn, song.id, lyrics_status="found", lyrics_json=words.to_json(), lyrics_at=FETCHED)
             refresh_status(conn, song.id, ignored=False)
             write_info(conn, cfg.library_dir, get_song(conn, song.id))
         sitemap += [(a, s, INDEX_TAB + n) for n, (a, s) in enumerate(INDEX)]
@@ -409,8 +416,11 @@ def build(dir: Path) -> Computer:
             f'<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
             f"{urls}</urlset>\n", encoding="utf-8")
         build_index(conn, None, NOW, from_dir=sitemaps)
-        conn.executemany("INSERT INTO gtptabs_index (path, artist_path, artist_key, title_key, base_key, sitemap) "
-                         "VALUES (?, ?, ?, ?, ?, '1')", [tuple(parse_page_url(u)) for u in GTPTABS])
+        # gtptabs.com's sitemapGoogle1.xml of these pages, stored as site_index.refresh stores a sitemap it read (its
+        # rows and its record, which index_transfer's merge compares), and its index read whole.
+        site_index._store(conn, gtptabs_fetch.SITE, "1", [parse_page_url(u) for u in GTPTABS],
+                          {"etag": None, "last_modified": None}, NOW)
+        db.kv_set(conn, gtptabs_fetch.SITE.complete_key, FETCHED)
         li.store_artists(conn, LACUERDA_PAGE, [LCArtist(s, name, n) for s, name, n in LACUERDA_ARTISTS])
         slug_of, name = LACUERDA_ARTISTS[0][:2]
         li.store_songs(conn, slug_of, name, [LCSong(s, t, types, tuple(range(1, len(types) + 1)))
@@ -442,15 +452,30 @@ def build(dir: Path) -> Computer:
             raise RuntimeError(f"the songbook failed: {books}")
         write_pages(conn, cfg, overrides, NOW)
         conn.commit()
+        found = index_song(conn)
     finally:
         conn.close()
-    write_scenario(computer)
+    write_scenario(computer, found)
     return computer
 
 
-def write_scenario(computer: Computer) -> None:
-    """scenario.json: what the Kotlin phases need to know of the scenario's songs (this module's docstring). Written
-    last, so a folder that has it holds a library built whole."""
+def index_song(conn) -> dict:
+    """``INDEX_SONG`` as search.py's ``search_index`` finds it by its query: its keys, its names, the identity key
+    a song added under them has, and the query."""
+    from caracole.normalize import identity_key
+    from caracole.search import search_index
+
+    artist_key, song_key, query = INDEX_SONG
+    hit = next((h for h in search_index(conn, query) if (h.artist_key, h.song_key) == (artist_key, song_key)), None)
+    assert hit is not None, f"search_index({query!r}) doesn't find {artist_key}/{song_key}"
+    return {"artist_key": artist_key, "song_key": song_key, "query": query, "artist": hit.artist, "title": hit.title,
+            "key": identity_key(hit.artist, hit.title)}
+
+
+def write_scenario(computer: Computer, index: dict) -> None:
+    """scenario.json: what the Kotlin phases need to know of the scenario's songs (this module's docstring), with
+    ``index``, ``index_song``'s. Written last, so a folder that has it holds a library built whole."""
+    from caracole.index_transfer import SITES
     from caracole.normalize import identity_key
 
     def named(artist: str, title: str, **more) -> dict:
@@ -466,7 +491,8 @@ def write_scenario(computer: Computer) -> None:
             "pin": sorted(identity_key(*s) for s in CHOSEN),
         },
         "songbook": SONGBOOK,
-        "index": {"artist_key": INDEX_SONG[0], "song_key": INDEX_SONG[1], "query": INDEX_SONG[2]},
+        "index": index,
+        "index_tables": [table for site in SITES.values() for table in site.tables],
         "requests": [named(a, t, fetch=fetch) for a, t, fetch in REQUESTS],
         "removed": {name: named(*song) for name, song in REMOVED.items()},
         "transposed": {name: named(*song, transpose=n) for name, (song, n) in TRANSPOSED.items()},

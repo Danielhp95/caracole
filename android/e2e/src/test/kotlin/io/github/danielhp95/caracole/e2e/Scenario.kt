@@ -16,9 +16,9 @@ data class Song(val artist: String, val title: String, val key: String) {
 /**
  * What tests/helpers/e2e_library.py says of the scenario's songs, in DIR/scenario.json (its docstring): the
  * computer's 20 songs, the keys of each overrides.toml table the goal's changes fill, an indexed song the library
- * hasn't got and the query that finds it, the songs the phone asks for by name (with Fetch now or without), R and C1
- * (which the phone removes), C1 and C2 (whose [transpose] the computer changes while the phone is away) and the
- * computer's adds meanwhile.
+ * hasn't got (the query that finds it, and its names and identity key as search.py gives them), the tables of the
+ * index export, the songs the phone asks for by name (with Fetch now or without), R and C1 (which the phone removes),
+ * C1 and C2 (whose [transpose] the computer changes while the phone is away) and the computer's adds meanwhile.
  */
 class Scenario private constructor(json: JsonObject) {
     val name: String = json.text("name")
@@ -26,6 +26,8 @@ class Scenario private constructor(json: JsonObject) {
     val changed: Map<String, List<String>> =
         json["changed"]!!.jsonObject.mapValues { (_, keys) -> keys.jsonArray.map { it.jsonPrimitive.content } }
     val index: JsonObject = json["index"]!!.jsonObject
+    val indexSong: Song = song(index)
+    val indexTables: List<String> = json["index_tables"]!!.jsonArray.map { it.jsonPrimitive.content }
     val requests: List<Pair<Song, String>> =
         json["requests"]!!.jsonArray.map { it.jsonObject.let { r -> song(r) to r.text("fetch") } }
     val removed: Map<String, Song> = json["removed"]!!.jsonObject.mapValues { song(it.value.jsonObject) }
