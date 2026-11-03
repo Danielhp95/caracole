@@ -1,0 +1,279 @@
+{"corpus":"web/cards","header":true,"made_by":"tests/test_conformance_library_page.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["The Beatles"],"fn":"caracole.library_page._sort_key","kw":{},"out":"beatles"}
+{"args":["beatles"],"fn":"caracole.library_page._letter","kw":{},"out":"B"}
+{"args":["The Beatles"],"fn":"caracole.library_page._initials","kw":{},"out":"tb"}
+{"args":[["The Beatles"]],"fn":"caracole.library_page._haystack","kw":{},"out":"the beatles | thebeatles"}
+{"args":["Wish You Were Here"],"fn":"caracole.library_page._sort_key","kw":{},"out":"wish-you-were-here"}
+{"args":["wish-you-were-here"],"fn":"caracole.library_page._letter","kw":{},"out":"W"}
+{"args":["Wish You Were Here"],"fn":"caracole.library_page._initials","kw":{},"out":"wywh"}
+{"args":[["Wish You Were Here"]],"fn":"caracole.library_page._haystack","kw":{},"out":"wish you were here | wishyouwerehere"}
+{"args":["Guns N' Roses"],"fn":"caracole.library_page._sort_key","kw":{},"out":"guns-n-roses"}
+{"args":["guns-n-roses"],"fn":"caracole.library_page._letter","kw":{},"out":"G"}
+{"args":["Guns N' Roses"],"fn":"caracole.library_page._initials","kw":{},"out":"gnr"}
+{"args":[["Guns N' Roses"]],"fn":"caracole.library_page._haystack","kw":{},"out":"guns n' roses | gunsnroses"}
+{"args":["Don’t Stop Me Now"],"fn":"caracole.library_page._sort_key","kw":{},"out":"dont-stop-me-now"}
+{"args":["dont-stop-me-now"],"fn":"caracole.library_page._letter","kw":{},"out":"D"}
+{"args":["Don’t Stop Me Now"],"fn":"caracole.library_page._initials","kw":{},"out":"dsmn"}
+{"args":[["Don’t Stop Me Now"]],"fn":"caracole.library_page._haystack","kw":{},"out":"don’t stop me now | dontstopmenow"}
+{"args":["Rock ’n’ Roll"],"fn":"caracole.library_page._sort_key","kw":{},"out":"rock-n-roll"}
+{"args":["rock-n-roll"],"fn":"caracole.library_page._letter","kw":{},"out":"R"}
+{"args":["Rock ’n’ Roll"],"fn":"caracole.library_page._initials","kw":{},"out":"rnr"}
+{"args":[["Rock ’n’ Roll"]],"fn":"caracole.library_page._haystack","kw":{},"out":"rock ’n’ roll | rocknroll"}
+{"args":["'Til Tuesday"],"fn":"caracole.library_page._sort_key","kw":{},"out":"til-tuesday"}
+{"args":["til-tuesday"],"fn":"caracole.library_page._letter","kw":{},"out":"T"}
+{"args":["'Til Tuesday"],"fn":"caracole.library_page._initials","kw":{},"out":"tt"}
+{"args":[["'Til Tuesday"]],"fn":"caracole.library_page._haystack","kw":{},"out":"'til tuesday | tiltuesday"}
+{"args":["100% #1 Hit"],"fn":"caracole.library_page._sort_key","kw":{},"out":"100-1-hit"}
+{"args":["100-1-hit"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["100% #1 Hit"],"fn":"caracole.library_page._initials","kw":{},"out":"11h"}
+{"args":[["100% #1 Hit"]],"fn":"caracole.library_page._haystack","kw":{},"out":"100% #1 hit | 1001hit"}
+{"args":["9 to 5"],"fn":"caracole.library_page._sort_key","kw":{},"out":"9-to-5"}
+{"args":["9-to-5"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["9 to 5"],"fn":"caracole.library_page._initials","kw":{},"out":"9t5"}
+{"args":[["9 to 5"]],"fn":"caracole.library_page._haystack","kw":{},"out":"9 to 5 | 9to5"}
+{"args":["#1"],"fn":"caracole.library_page._sort_key","kw":{},"out":"1"}
+{"args":["1"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["#1"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["#1"]],"fn":"caracole.library_page._haystack","kw":{},"out":"#1 | 1"}
+{"args":["1999"],"fn":"caracole.library_page._sort_key","kw":{},"out":"1999"}
+{"args":["1999"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["1999"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["1999"]],"fn":"caracole.library_page._haystack","kw":{},"out":"1999"}
+{"args":["AC/DC"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ac-dc"}
+{"args":["ac-dc"],"fn":"caracole.library_page._letter","kw":{},"out":"A"}
+{"args":["AC/DC"],"fn":"caracole.library_page._initials","kw":{},"out":"ad"}
+{"args":[["AC/DC"]],"fn":"caracole.library_page._haystack","kw":{},"out":"ac/dc | acdc"}
+{"args":["a-b-c"],"fn":"caracole.library_page._sort_key","kw":{},"out":"a-b-c"}
+{"args":["a-b-c"],"fn":"caracole.library_page._letter","kw":{},"out":"A"}
+{"args":["a-b-c"],"fn":"caracole.library_page._initials","kw":{},"out":"abc"}
+{"args":[["a-b-c"]],"fn":"caracole.library_page._haystack","kw":{},"out":"a-b-c | abc"}
+{"args":["under_score"],"fn":"caracole.library_page._sort_key","kw":{},"out":"under-score"}
+{"args":["under-score"],"fn":"caracole.library_page._letter","kw":{},"out":"U"}
+{"args":["under_score"],"fn":"caracole.library_page._initials","kw":{},"out":"us"}
+{"args":[["under_score"]],"fn":"caracole.library_page._haystack","kw":{},"out":"under_score | underscore"}
+{"args":["Mr. Brightside"],"fn":"caracole.library_page._sort_key","kw":{},"out":"mr-brightside"}
+{"args":["mr-brightside"],"fn":"caracole.library_page._letter","kw":{},"out":"M"}
+{"args":["Mr. Brightside"],"fn":"caracole.library_page._initials","kw":{},"out":"mb"}
+{"args":[["Mr. Brightside"]],"fn":"caracole.library_page._haystack","kw":{},"out":"mr. brightside | mrbrightside"}
+{"args":["!!!"],"fn":"caracole.library_page._sort_key","kw":{},"out":"!!!"}
+{"args":["!!!"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["!!!"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["!!!"]],"fn":"caracole.library_page._haystack","kw":{},"out":"!!!"}
+{"args":["¿Quién será?"],"fn":"caracole.library_page._sort_key","kw":{},"out":"quien-sera"}
+{"args":["quien-sera"],"fn":"caracole.library_page._letter","kw":{},"out":"Q"}
+{"args":["¿Quién será?"],"fn":"caracole.library_page._initials","kw":{},"out":"qs"}
+{"args":[["¿Quién será?"]],"fn":"caracole.library_page._haystack","kw":{},"out":"¿quien sera? | quiensera"}
+{"args":["¡Ay!"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ay"}
+{"args":["ay"],"fn":"caracole.library_page._letter","kw":{},"out":"A"}
+{"args":["¡Ay!"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["¡Ay!"]],"fn":"caracole.library_page._haystack","kw":{},"out":"¡ay! | ay"}
+{"args":["Sigur Rós"],"fn":"caracole.library_page._sort_key","kw":{},"out":"sigur-ros"}
+{"args":["sigur-ros"],"fn":"caracole.library_page._letter","kw":{},"out":"S"}
+{"args":["Sigur Rós"],"fn":"caracole.library_page._initials","kw":{},"out":"sr"}
+{"args":[["Sigur Rós"]],"fn":"caracole.library_page._haystack","kw":{},"out":"sigur ros | sigurros"}
+{"args":["Mötley Crüe"],"fn":"caracole.library_page._sort_key","kw":{},"out":"motley-crue"}
+{"args":["motley-crue"],"fn":"caracole.library_page._letter","kw":{},"out":"M"}
+{"args":["Mötley Crüe"],"fn":"caracole.library_page._initials","kw":{},"out":"mc"}
+{"args":[["Mötley Crüe"]],"fn":"caracole.library_page._haystack","kw":{},"out":"motley crue | motleycrue"}
+{"args":["Ñandú"],"fn":"caracole.library_page._sort_key","kw":{},"out":"nandu"}
+{"args":["nandu"],"fn":"caracole.library_page._letter","kw":{},"out":"N"}
+{"args":["Ñandú"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Ñandú"]],"fn":"caracole.library_page._haystack","kw":{},"out":"nandu"}
+{"args":["Él"],"fn":"caracole.library_page._sort_key","kw":{},"out":"el"}
+{"args":["el"],"fn":"caracole.library_page._letter","kw":{},"out":"E"}
+{"args":["Él"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Él"]],"fn":"caracole.library_page._haystack","kw":{},"out":"el"}
+{"args":["Señor"],"fn":"caracole.library_page._sort_key","kw":{},"out":"senor"}
+{"args":["senor"],"fn":"caracole.library_page._letter","kw":{},"out":"S"}
+{"args":["Señor"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Señor"]],"fn":"caracole.library_page._haystack","kw":{},"out":"senor"}
+{"args":["Ça plane pour moi"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ca-plane-pour-moi"}
+{"args":["ca-plane-pour-moi"],"fn":"caracole.library_page._letter","kw":{},"out":"C"}
+{"args":["Ça plane pour moi"],"fn":"caracole.library_page._initials","kw":{},"out":"cppm"}
+{"args":[["Ça plane pour moi"]],"fn":"caracole.library_page._haystack","kw":{},"out":"ca plane pour moi | caplanepourmoi"}
+{"args":["Café Tacvba"],"fn":"caracole.library_page._sort_key","kw":{},"out":"cafe-tacvba"}
+{"args":["cafe-tacvba"],"fn":"caracole.library_page._letter","kw":{},"out":"C"}
+{"args":["Café Tacvba"],"fn":"caracole.library_page._initials","kw":{},"out":"ct"}
+{"args":[["Café Tacvba"]],"fn":"caracole.library_page._haystack","kw":{},"out":"cafe tacvba | cafetacvba"}
+{"args":["Björk"],"fn":"caracole.library_page._sort_key","kw":{},"out":"bjork"}
+{"args":["bjork"],"fn":"caracole.library_page._letter","kw":{},"out":"B"}
+{"args":["Björk"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Björk"]],"fn":"caracole.library_page._haystack","kw":{},"out":"bjork"}
+{"args":["Los Enanitos Verdes"],"fn":"caracole.library_page._sort_key","kw":{},"out":"los-enanitos-verdes"}
+{"args":["los-enanitos-verdes"],"fn":"caracole.library_page._letter","kw":{},"out":"L"}
+{"args":["Los Enanitos Verdes"],"fn":"caracole.library_page._initials","kw":{},"out":"lev"}
+{"args":[["Los Enanitos Verdes"]],"fn":"caracole.library_page._haystack","kw":{},"out":"los enanitos verdes | losenanitosverdes"}
+{"args":["Ægir"],"fn":"caracole.library_page._sort_key","kw":{},"out":"aegir"}
+{"args":["aegir"],"fn":"caracole.library_page._letter","kw":{},"out":"A"}
+{"args":["Ægir"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Ægir"]],"fn":"caracole.library_page._haystack","kw":{},"out":"aegir"}
+{"args":["Œuvre"],"fn":"caracole.library_page._sort_key","kw":{},"out":"oeuvre"}
+{"args":["oeuvre"],"fn":"caracole.library_page._letter","kw":{},"out":"O"}
+{"args":["Œuvre"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Œuvre"]],"fn":"caracole.library_page._haystack","kw":{},"out":"oeuvre"}
+{"args":["Øystein"],"fn":"caracole.library_page._sort_key","kw":{},"out":"oystein"}
+{"args":["oystein"],"fn":"caracole.library_page._letter","kw":{},"out":"O"}
+{"args":["Øystein"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Øystein"]],"fn":"caracole.library_page._haystack","kw":{},"out":"oystein"}
+{"args":["Straße"],"fn":"caracole.library_page._sort_key","kw":{},"out":"strasse"}
+{"args":["strasse"],"fn":"caracole.library_page._letter","kw":{},"out":"S"}
+{"args":["Straße"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Straße"]],"fn":"caracole.library_page._haystack","kw":{},"out":"strasse"}
+{"args":["ẞ"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ss"}
+{"args":["ss"],"fn":"caracole.library_page._letter","kw":{},"out":"S"}
+{"args":["ẞ"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["ẞ"]],"fn":"caracole.library_page._haystack","kw":{},"out":"ss"}
+{"args":["Łódź"],"fn":"caracole.library_page._sort_key","kw":{},"out":"lodz"}
+{"args":["lodz"],"fn":"caracole.library_page._letter","kw":{},"out":"L"}
+{"args":["Łódź"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Łódź"]],"fn":"caracole.library_page._haystack","kw":{},"out":"lodz"}
+{"args":["Đorđe"],"fn":"caracole.library_page._sort_key","kw":{},"out":"dorde"}
+{"args":["dorde"],"fn":"caracole.library_page._letter","kw":{},"out":"D"}
+{"args":["Đorđe"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Đorđe"]],"fn":"caracole.library_page._haystack","kw":{},"out":"dorde"}
+{"args":["ÞÓR"],"fn":"caracole.library_page._sort_key","kw":{},"out":"thor"}
+{"args":["thor"],"fn":"caracole.library_page._letter","kw":{},"out":"T"}
+{"args":["ÞÓR"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["ÞÓR"]],"fn":"caracole.library_page._haystack","kw":{},"out":"thor"}
+{"args":["Ðóra"],"fn":"caracole.library_page._sort_key","kw":{},"out":"dora"}
+{"args":["dora"],"fn":"caracole.library_page._letter","kw":{},"out":"D"}
+{"args":["Ðóra"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Ðóra"]],"fn":"caracole.library_page._haystack","kw":{},"out":"dora"}
+{"args":["İstanbul"],"fn":"caracole.library_page._sort_key","kw":{},"out":"istanbul"}
+{"args":["istanbul"],"fn":"caracole.library_page._letter","kw":{},"out":"I"}
+{"args":["İstanbul"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["İstanbul"]],"fn":"caracole.library_page._haystack","kw":{},"out":"istanbul"}
+{"args":["ıi"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ii"}
+{"args":["ii"],"fn":"caracole.library_page._letter","kw":{},"out":"I"}
+{"args":["ıi"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["ıi"]],"fn":"caracole.library_page._haystack","kw":{},"out":"ii"}
+{"args":["Ħamrun"],"fn":"caracole.library_page._sort_key","kw":{},"out":"hamrun"}
+{"args":["hamrun"],"fn":"caracole.library_page._letter","kw":{},"out":"H"}
+{"args":["Ħamrun"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Ħamrun"]],"fn":"caracole.library_page._haystack","kw":{},"out":"hamrun"}
+{"args":["Ｆｕｌｌｗｉｄｔｈ"],"fn":"caracole.library_page._sort_key","kw":{},"out":"fullwidth"}
+{"args":["fullwidth"],"fn":"caracole.library_page._letter","kw":{},"out":"F"}
+{"args":["Ｆｕｌｌｗｉｄｔｈ"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Ｆｕｌｌｗｉｄｔｈ"]],"fn":"caracole.library_page._haystack","kw":{},"out":"fullwidth"}
+{"args":["ﬁne"],"fn":"caracole.library_page._sort_key","kw":{},"out":"fine"}
+{"args":["fine"],"fn":"caracole.library_page._letter","kw":{},"out":"F"}
+{"args":["ﬁne"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["ﬁne"]],"fn":"caracole.library_page._haystack","kw":{},"out":"fine"}
+{"args":["Ⅻ"],"fn":"caracole.library_page._sort_key","kw":{},"out":"xii"}
+{"args":["xii"],"fn":"caracole.library_page._letter","kw":{},"out":"X"}
+{"args":["Ⅻ"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Ⅻ"]],"fn":"caracole.library_page._haystack","kw":{},"out":"xii"}
+{"args":["Café"],"fn":"caracole.library_page._sort_key","kw":{},"out":"cafe"}
+{"args":["cafe"],"fn":"caracole.library_page._letter","kw":{},"out":"C"}
+{"args":["Café"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Café"]],"fn":"caracole.library_page._haystack","kw":{},"out":"cafe"}
+{"args":["Москва"],"fn":"caracole.library_page._sort_key","kw":{},"out":"москва"}
+{"args":["москва"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["Москва"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Москва"]],"fn":"caracole.library_page._haystack","kw":{},"out":"москва"}
+{"args":["Ελλάδα"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ελλαδα"}
+{"args":["ελλαδα"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["Ελλάδα"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Ελλάδα"]],"fn":"caracole.library_page._haystack","kw":{},"out":"ελλαδα"}
+{"args":["日本語の歌"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ri-ben-yu-の-ge"}
+{"args":["ri-ben-yu-の-ge"],"fn":"caracole.library_page._letter","kw":{},"out":"R"}
+{"args":["日本語の歌"],"fn":"caracole.library_page._initials","kw":{},"out":"rbyのg"}
+{"args":[["日本語の歌"]],"fn":"caracole.library_page._haystack","kw":{},"out":"日本語の歌 | ri ben yu の ge | ribenyuのge"}
+{"args":["한국어 노래"],"fn":"caracole.library_page._sort_key","kw":{},"out":"한국어노래"}
+{"args":["한국어노래"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["한국어 노래"],"fn":"caracole.library_page._initials","kw":{},"out":"ᄒᄂ"}
+{"args":[["한국어 노래"]],"fn":"caracole.library_page._haystack","kw":{},"out":"한국어 노래 | 한국어노래"}
+{"args":["ไทย"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ไทย"}
+{"args":["ไทย"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["ไทย"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["ไทย"]],"fn":"caracole.library_page._haystack","kw":{},"out":"ไทย"}
+{"args":["עברית"],"fn":"caracole.library_page._sort_key","kw":{},"out":"עברית"}
+{"args":["עברית"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["עברית"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["עברית"]],"fn":"caracole.library_page._haystack","kw":{},"out":"עברית"}
+{"args":["عربي"],"fn":"caracole.library_page._sort_key","kw":{},"out":"عربي"}
+{"args":["عربي"],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":["عربي"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["عربي"]],"fn":"caracole.library_page._haystack","kw":{},"out":"عربي"}
+{"args":["宋冬野"],"fn":"caracole.library_page._sort_key","kw":{},"out":"song-dong-ye"}
+{"args":["song-dong-ye"],"fn":"caracole.library_page._letter","kw":{},"out":"S"}
+{"args":["宋冬野"],"fn":"caracole.library_page._initials","kw":{},"out":"sdy"}
+{"args":[["宋冬野"]],"fn":"caracole.library_page._haystack","kw":{},"out":"宋冬野 | song dong ye | songdongye"}
+{"args":["斑马斑马"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ban-ma-ban-ma"}
+{"args":["ban-ma-ban-ma"],"fn":"caracole.library_page._letter","kw":{},"out":"B"}
+{"args":["斑马斑马"],"fn":"caracole.library_page._initials","kw":{},"out":"bmbm"}
+{"args":[["斑马斑马"]],"fn":"caracole.library_page._haystack","kw":{},"out":"斑马斑马 | ban ma ban ma | banmabanma"}
+{"args":["斑馬斑馬"],"fn":"caracole.library_page._sort_key","kw":{},"out":"ban-ma-ban-ma"}
+{"args":["ban-ma-ban-ma"],"fn":"caracole.library_page._letter","kw":{},"out":"B"}
+{"args":["斑馬斑馬"],"fn":"caracole.library_page._initials","kw":{},"out":"bmbm"}
+{"args":[["斑馬斑馬"]],"fn":"caracole.library_page._haystack","kw":{},"out":"斑馬斑馬 | ban ma ban ma | banmabanma"}
+{"args":["周杰伦"],"fn":"caracole.library_page._sort_key","kw":{},"out":"zhou-jie-lun"}
+{"args":["zhou-jie-lun"],"fn":"caracole.library_page._letter","kw":{},"out":"Z"}
+{"args":["周杰伦"],"fn":"caracole.library_page._initials","kw":{},"out":"zjl"}
+{"args":[["周杰伦"]],"fn":"caracole.library_page._haystack","kw":{},"out":"周杰伦 | zhou jie lun | zhoujielun"}
+{"args":["稻香"],"fn":"caracole.library_page._sort_key","kw":{},"out":"dao-xiang"}
+{"args":["dao-xiang"],"fn":"caracole.library_page._letter","kw":{},"out":"D"}
+{"args":["稻香"],"fn":"caracole.library_page._initials","kw":{},"out":"dx"}
+{"args":[["稻香"]],"fn":"caracole.library_page._haystack","kw":{},"out":"稻香 | dao xiang | daoxiang"}
+{"args":["Hello 世界"],"fn":"caracole.library_page._sort_key","kw":{},"out":"hello-shi-jie"}
+{"args":["hello-shi-jie"],"fn":"caracole.library_page._letter","kw":{},"out":"H"}
+{"args":["Hello 世界"],"fn":"caracole.library_page._initials","kw":{},"out":"hsj"}
+{"args":[["Hello 世界"]],"fn":"caracole.library_page._haystack","kw":{},"out":"hello 世界 | hello世界 | hello shi jie | helloshijie"}
+{"args":["G.E.M. 邓紫棋"],"fn":"caracole.library_page._sort_key","kw":{},"out":"g-e-m-deng-zi-qi"}
+{"args":["g-e-m-deng-zi-qi"],"fn":"caracole.library_page._letter","kw":{},"out":"G"}
+{"args":["G.E.M. 邓紫棋"],"fn":"caracole.library_page._initials","kw":{},"out":"gemdzq"}
+{"args":[["G.E.M. 邓紫棋"]],"fn":"caracole.library_page._haystack","kw":{},"out":"g.e.m. 邓紫棋 | gem邓紫棋 | g.e.m. deng zi qi | gemdengziqi"}
+{"args":["邓紫棋 - 光年之外"],"fn":"caracole.library_page._sort_key","kw":{},"out":"deng-zi-qi-guang-nian-zhi-wai"}
+{"args":["deng-zi-qi-guang-nian-zhi-wai"],"fn":"caracole.library_page._letter","kw":{},"out":"D"}
+{"args":["邓紫棋 - 光年之外"],"fn":"caracole.library_page._initials","kw":{},"out":"dzqgnzw"}
+{"args":[["邓紫棋 - 光年之外"]],"fn":"caracole.library_page._haystack","kw":{},"out":"邓紫棋 - 光年之外 | 邓紫棋光年之外 | deng zi qi guang nian zhi wai | dengziqiguangnianzhiwai"}
+{"args":["Tab\there"],"fn":"caracole.library_page._sort_key","kw":{},"out":"tab-here"}
+{"args":["tab-here"],"fn":"caracole.library_page._letter","kw":{},"out":"T"}
+{"args":["Tab\there"],"fn":"caracole.library_page._initials","kw":{},"out":"th"}
+{"args":[["Tab\there"]],"fn":"caracole.library_page._haystack","kw":{},"out":"tab\there | tabhere"}
+{"args":["line\nbreak"],"fn":"caracole.library_page._sort_key","kw":{},"out":"line-break"}
+{"args":["line-break"],"fn":"caracole.library_page._letter","kw":{},"out":"L"}
+{"args":["line\nbreak"],"fn":"caracole.library_page._initials","kw":{},"out":"lb"}
+{"args":[["line\nbreak"]],"fn":"caracole.library_page._haystack","kw":{},"out":"line\nbreak | linebreak"}
+{"args":["😀 emoji"],"fn":"caracole.library_page._sort_key","kw":{},"out":"emoji"}
+{"args":["emoji"],"fn":"caracole.library_page._letter","kw":{},"out":"E"}
+{"args":["😀 emoji"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["😀 emoji"]],"fn":"caracole.library_page._haystack","kw":{},"out":"😀 emoji | emoji"}
+{"args":["Zebra"],"fn":"caracole.library_page._sort_key","kw":{},"out":"zebra"}
+{"args":["zebra"],"fn":"caracole.library_page._letter","kw":{},"out":"Z"}
+{"args":["Zebra"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Zebra"]],"fn":"caracole.library_page._haystack","kw":{},"out":"zebra"}
+{"args":["zz"],"fn":"caracole.library_page._sort_key","kw":{},"out":"zz"}
+{"args":["zz"],"fn":"caracole.library_page._letter","kw":{},"out":"Z"}
+{"args":["zz"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["zz"]],"fn":"caracole.library_page._haystack","kw":{},"out":"zz"}
+{"args":["ABC"],"fn":"caracole.library_page._sort_key","kw":{},"out":"abc"}
+{"args":["abc"],"fn":"caracole.library_page._letter","kw":{},"out":"A"}
+{"args":["ABC"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["ABC"]],"fn":"caracole.library_page._haystack","kw":{},"out":"abc"}
+{"args":["a"],"fn":"caracole.library_page._sort_key","kw":{},"out":"a"}
+{"args":["a"],"fn":"caracole.library_page._letter","kw":{},"out":"A"}
+{"args":["a"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["a"]],"fn":"caracole.library_page._haystack","kw":{},"out":"a"}
+{"args":["Z"],"fn":"caracole.library_page._sort_key","kw":{},"out":"z"}
+{"args":["z"],"fn":"caracole.library_page._letter","kw":{},"out":"Z"}
+{"args":["Z"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["Z"]],"fn":"caracole.library_page._haystack","kw":{},"out":"z"}
+{"args":["é"],"fn":"caracole.library_page._sort_key","kw":{},"out":"e"}
+{"args":["e"],"fn":"caracole.library_page._letter","kw":{},"out":"E"}
+{"args":["é"],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[["é"]],"fn":"caracole.library_page._haystack","kw":{},"out":"e"}
+{"args":[""],"fn":"caracole.library_page._sort_key","kw":{},"out":""}
+{"args":[""],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":[""],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[[""]],"fn":"caracole.library_page._haystack","kw":{},"out":""}
+{"args":[" "],"fn":"caracole.library_page._sort_key","kw":{},"out":" "}
+{"args":[" "],"fn":"caracole.library_page._letter","kw":{},"out":"#"}
+{"args":[" "],"fn":"caracole.library_page._initials","kw":{},"out":""}
+{"args":[[" "]],"fn":"caracole.library_page._haystack","kw":{},"out":" "}
+{"args":[["宋冬野","宋冬野","斑马斑马","宋冬野 - 斑马斑马","minor"]],"fn":"caracole.library_page._haystack","kw":{},"out":"宋冬野 | song dong ye | songdongye | 斑马斑马 | ban ma ban ma | banmabanma | 宋冬野 - 斑马斑马 | 宋冬野斑马斑马 | song dong ye ban ma ban ma | songdongyebanmabanma | minor"}
+{"args":[["Sigur Rós","Jónsi","Hoppípolla"]],"fn":"caracole.library_page._haystack","kw":{},"out":"sigur ros | sigurros | jonsi | hoppipolla"}
+{"args":[["AC/DC","AC/DC","T.N.T.","AC/DC - T.N.T."]],"fn":"caracole.library_page._haystack","kw":{},"out":"ac/dc | acdc | t.n.t. | tnt | ac/dc - t.n.t. | acdctnt"}
+{"args":[["a","a","A"]],"fn":"caracole.library_page._haystack","kw":{},"out":"a"}
+{"args":[[]],"fn":"caracole.library_page._haystack","kw":{},"out":""}
+{"args":[[""," "]],"fn":"caracole.library_page._haystack","kw":{},"out":" "}
