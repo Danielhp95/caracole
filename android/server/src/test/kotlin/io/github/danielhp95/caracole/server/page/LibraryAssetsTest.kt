@@ -51,7 +51,6 @@ class LibraryAssetsTest {
 
     @Test
     fun `the hashes the page's policy allows its script and its style by are Python's`() {
-        waitingOnServerShell()
         val vector = Corpus.json("web/library_page.json")
         assertEquals(vector.getValue("script_hash").jsonPrimitive.content, assets.scriptHash)
         assertEquals(vector.getValue("style_hash").jsonPrimitive.content, assets.styleHash)

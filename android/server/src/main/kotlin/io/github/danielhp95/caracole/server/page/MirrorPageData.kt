@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.mirror.Mirror
+import io.github.danielhp95.caracole.server.files.DownloadNames
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -28,8 +29,10 @@ import java.nio.charset.CodingErrorAction
  * - a card of a song the phone hasn't got keeps the computer's, under a negative id of its own (-1, -2, … in the
  *   cards' order), which the served page makes no request of (`fetchable` false: [LibraryPage.withServer]);
  * - a card of a song the phone removed (a tombstone and no song, Songs.isRemoved) is left out, until a sync settles it;
- * - a song only the phone has gets a minimal card: its names, status, the folds the page sorts and filters it by
- *   ([CardText]), and its kept files (the phone's `files`), no key and no site;
+ * - a song only the phone has gets a minimal card: library_page._song's of a song with no key, no file's origin
+ *   and no site (vectors/web/library_page.json's `minimal_cards`): its names, status, the folds the page sorts and
+ *   filters it by ([CardText]), and its kept files (the phone's `files`), each with the one its line opens
+ *   (`primary`) and the name a Guitar Pro file or a score downloads under;
  * - each songbook's set names its songs by the same ids (by each entry's `key`), none for a song left out.
  *
  * The parsed block is kept until the mirror's page changes (its entry's SHA-256). Reads only: every query is the
@@ -112,7 +115,9 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
 
     private fun withId(card: JsonObject, id: Long) = JsonObject(LinkedHashMap(card).apply { put("id", JsonPrimitive(id)) })
 
-    /** The card of a song only the phone has: library_page._song's fields the phone knows, as it writes them. */
+    /** The card of a song only the phone has: library_page._song's fields the phone knows, as it writes them of a
+     * song with no key, no file's origin and no site, its files its `files` rows (vectors/web/library_page.json's
+     * `minimal_cards`). */
     private fun minimalCard(db: Db, phone: Phone, song: SongRow): JsonObject {
         val ignored = song.key in phone.ignored
         val title = Normalize.cleanTitle(song.title)
@@ -120,9 +125,17 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         val sortTitle = CardText.sortKey(title)
         val artists = song.artists.ifEmpty { listOf(song.artist) }
         val kept = db.query("SELECT name, path FROM files WHERE song_id = ?", song.id) { it.text(0)!! to it.text(1)!! }.toMap()
-        val files = CardText.inLineOrder(kept.keys).map { name ->
-            JsonObject(linkedMapOf("name" to JsonPrimitive(name), "label" to JsonPrimitive(CardText.label(name)),
-                                   "href" to JsonPrimitive(CardText.href(kept.getValue(name)))))
+        val ordered = CardText.inLineOrder(kept.keys)
+        val primary = CardText.primary(ordered)
+        val files = ordered.map { name ->
+            JsonObject(buildMap {
+                put("name", JsonPrimitive(name))
+                put("label", JsonPrimitive(CardText.label(name)))
+                put("href", JsonPrimitive(CardText.href(kept.getValue(name))))
+                put("primary", JsonPrimitive(name == primary))
+                put("source", JsonPrimitive(CardText.sourceOf(name)))
+                if (CardText.downloads(name)) put("download", JsonPrimitive(DownloadNames.downloadName(song.artist, title, name)))
+            })
         }
         val initials = CardText.initials(title)
         return JsonObject(buildMap {
@@ -136,12 +149,13 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
             put("added", JsonPrimitive(song.addedAt))
             put("key", JsonNull)
             put("files", JsonArray(files))
+            put("source", JsonPrimitive(primary?.let { CardText.sourceOf(it) }))
             put("identity", JsonPrimitive(song.key))
             put("sortArtist", JsonPrimitive(sortArtist))
             put("sortTitle", JsonPrimitive(sortTitle))
             put("artistLetter", JsonPrimitive(CardText.letter(sortArtist)))
             put("titleLetter", JsonPrimitive(CardText.letter(sortTitle)))
-            put("search", JsonPrimitive(CardText.haystack(listOf(song.artist) + artists + listOf(title, song.display))))
+            put("search", JsonPrimitive(CardText.haystack(listOf(song.artist) + song.artists + listOf(title, song.display))))
             if (initials.isNotEmpty()) put("initials", JsonPrimitive(initials))
             put("sites", JsonArray(emptyList()))
         })
@@ -184,14 +198,17 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         return data
     }
 
-    /** A library with no song, for a phone with no mirror: the page's data as library_page.py's build makes it. */
+    /** A library with no song, for a phone with no mirror: the page's data as library_page.py's build makes it of a
+     * library with no song ([EMPTY]: its fold table, its sources' names and badges with no icon kept, the named
+     * progressions, the Songbooks tab's menus with no songbook), in its order, and no site's (the Sites tab's data
+     * is the computer's, which the phone has none of yet). */
     private fun emptyLibrary(now: String): JsonObject = JsonObject(linkedMapOf(
         "generated" to JsonPrimitive(now),
-        "fold" to JsonObject(TRANSLITERATED.map { it.toString() }.associateWith { JsonPrimitive(Normalize.fold(it)) }),
+        "fold" to empty.getValue("fold"),
         "songs" to JsonArray(emptyList()),
-        "icons" to JsonObject(emptyMap()),
-        "catalogue" to JsonObject(emptyMap()),
-        "songbooks" to JsonObject(linkedMapOf("books" to JsonArray(emptyList()), "error" to JsonNull)),
+        "icons" to empty.getValue("icons"),
+        "catalogue" to empty.getValue("catalogue"),
+        "songbooks" to empty.getValue("songbooks"),
         "sites" to JsonArray(emptyList()),
     ))
 
@@ -199,7 +216,19 @@ class MirrorPageData(val mirror: Mirror?) : PageData, SongCards {
         /** library_page._TRANSLITERATED: the letters fold transliterates, which the page folds typed queries with. */
         const val TRANSLITERATED = "øØæÆœŒßẞđĐłŁþÞðÐıħĦ"
 
-        /** The songs the phone's overrides ignore (`[ignore]`: phone_overrides' table "ignore"), by key. */
+        /** What a library with no song holds that is no song's, on the classpath (:core's runtime data, written by
+         * tests/test_conformance_library_page.py). */
+        const val EMPTY = "caracole/page/empty_library.json"
+
+        private val empty: JsonObject by lazy {
+            val stream = MirrorPageData::class.java.classLoader?.getResourceAsStream(EMPTY)
+                ?: throw IllegalStateException("$EMPTY isn't on the classpath")
+            Json.parseToJsonElement(stream.use { it.readBytes().toString(Charsets.UTF_8) }) as JsonObject
+        }
+
+        /** The songs the phone's overrides ignore (`[ignore]`), by key: a row of phone_overrides' table "ignore", as
+         * OverridesStore.songEntries reads one (`ignore: true`; putSongEntries writes no other value, and deletes
+         * the row of a song no longer ignored). One query for the page, not one a song. */
         private fun ignoredKeys(db: Db): Set<String> =
             db.query("SELECT key FROM phone_overrides WHERE tbl = 'ignore'") { it.text(0)!! }.toSet()
 

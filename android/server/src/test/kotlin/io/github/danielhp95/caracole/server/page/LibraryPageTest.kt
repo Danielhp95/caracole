@@ -4,9 +4,11 @@ import io.github.danielhp95.caracole.core.testing.Corpus
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.long
 import org.junit.Test
 import java.security.MessageDigest
 import kotlin.test.assertEquals
@@ -37,9 +39,18 @@ class LibraryPageTest {
     }
 
     @Test
-    fun `html is escaped as html_escape escapes it, quotes included`() {
-        assertEquals("tok-&amp;&quot;&lt;&#x27;&gt;-é", LibraryPage.escape("tok-&\"<'>-é"))
-        assertEquals("", LibraryPage.escape(""))
+    fun `the server's member is build_library_page's for the same controls`() {
+        val server = vector.getValue("server").jsonObject
+        val of = server.getValue("controls").jsonObject
+        fun ids(name: String) = of.getValue(name).jsonArray.map { it.jsonPrimitive.long }.toSet()
+        val controls = ServerControls(
+            csrf = of.getValue("csrf").jsonPrimitive.content, busy = ids("busy"), active = of.getValue("active").jsonPrimitive.int,
+            held = ids("held"), removing = ids("removing"), jobs = of.getValue("jobs").jsonArray.map { it.jsonObject },
+        )
+        val member = page.withServer(mirroredData(emptyList()), controls).getValue("server").jsonObject
+        assertEquals(server.getValue("member"), member)
+        assertEquals(listOf("csrf", "busy", "active", "removing", "jobs", "guitar", "youtube"), member.keys.toList())
+        assertEquals(listOf("ok", "why", "off"), member.getValue("youtube").jsonObject.keys.toList())
     }
 
     @Test
@@ -80,13 +91,11 @@ class LibraryPageTest {
 
     @Test
     fun `the page's policy is caracole serve's served page's`() {
-        waitingOnServerShell()
         assertEquals(vector.getValue("csp").jsonPrimitive.content, page.csp)
     }
 
     @Test
     fun `the smallest case's page is Python's, byte for byte`() {
-        waitingOnServerShell()
         val case = cases.first()
         val made = page.served(case.getValue("data").jsonObject, controls(case.getValue("controls").jsonObject), name)
         val expected = case.getValue("page").jsonPrimitive.content
@@ -99,7 +108,6 @@ class LibraryPageTest {
 
     @Test
     fun `every case's page has Python's SHA-256`() {
-        waitingOnServerShell()
         assertTrue(cases.size >= 4)
         for (case in cases) {
             val made = page.served(case.getValue("data").jsonObject, controls(case.getValue("controls").jsonObject), name)
@@ -109,7 +117,6 @@ class LibraryPageTest {
 
     @Test
     fun `the Sync tab is the templates as they are, where the controls have it, and there is no Requests tab`() {
-        waitingOnServerShell()
         val assets = page.assets
         val data = cases.first().getValue("data").jsonObject
         val on = page.served(data, ServerControls("tok", sync = true), name)

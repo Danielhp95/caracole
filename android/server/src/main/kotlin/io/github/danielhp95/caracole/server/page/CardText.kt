@@ -1,14 +1,20 @@
 package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyRe
+import io.github.danielhp95.caracole.core.py.PyRegex
 import io.github.danielhp95.caracole.core.py.PyUnicode
+import io.github.danielhp95.caracole.server.http.PyUrl
+import java.math.BigInteger
 
 /**
  * What library_page.py writes of a song's card for the page to sort, letter, filter and list it by, as the phone's
  * cards of its own songs carry it: `_sort_key`, `_letter`, `_initials` and `_haystack` exactly
  * (tests/conformance/vectors/web/cards.jsonl), on normalize.py's folds (core.keys.Normalize) and Python's notion of a
- * letter or a digit (core.py.PyUnicode.isAlnum, which `[^\W_]` and `[\W_]` rest on); and a kept file's label, its
- * place in the song's line and its link (`_label`, `_in_line_order`, `_files`' href).
+ * letter or a digit (core.py.PyUnicode.isAlnum, which `[^\W_]` and `[\W_]` rest on); and of a kept file, its label,
+ * its place in the song's line, the one the line opens, where it came from with no record of its site, and its link
+ * (`_label`, `_in_line_order`, `_primary`, icons.source_of, `_files`' href), cards.jsonl's too.
  */
 internal object CardText {
     /** _sort_key: "The Beatles" under B, 宋冬野 under S (by pinyin). */
@@ -69,14 +75,17 @@ internal object CardText {
                                      "sheet (auto).pdf", "sheet (auto, Traditional).pdf")
     private val FIRST = SHEET_PAGES + listOf("sheet.txt", "sheet.cho", "lyrics.txt", "lyrics.lrc")
     private val LAST = listOf("tab.txt", "sheet (auto).txt", "sheet (auto).cho", "info.json")
-    private val GUITAR = Regex("guitar-([0-9]+)(\\.[A-Za-z0-9]+)")
-    private val SCORE = Regex("score-([0-9]+)(\\.[a-z]+)")
-    private val HARMONICA = Regex("harmonica-([0-9]+)\\.txt")
-    private val GAMETAB = Regex("gametab-([0-9]+)\\.txt")
 
-    /** inbox.SCORE_EXTENSIONS, in its order, and the format each names. */
+    // library_page.py's patterns, read as Python reads them: \d is any decimal digit, as int() reads it.
+    private val GUITAR = PyRegex.compile("guitar-(\\d+)(\\.[A-Za-z0-9]+)")
+    private val SCORE = PyRegex.compile("score-(\\d+)(\\.[a-z]+)")
+    private val HARMONICA = PyRegex.compile("harmonica-(\\d+)\\.txt")
+    private val GAMETAB = PyRegex.compile("gametab-(\\d+)\\.txt")
+
+    /** inbox.SCORE_EXTENSIONS, in its order, and the format each names (library_page._SCORE_FORMATS). */
     private val SCORE_FORMATS = linkedMapOf(".mscz" to "MuseScore", ".mxl" to "MusicXML", ".musicxml" to "MusicXML",
                                             ".pdf" to "PDF", ".mid" to "MIDI", ".midi" to "MIDI")
+    private val SCORE_EXTENSIONS = SCORE_FORMATS.keys.toList()
     private val LABELS = mapOf(
         "sheet.html" to "Sheet viewer", "sheet (auto).html" to "Auto sheet viewer", "sheet.pdf" to "Sheet PDF",
         "sheet (auto).pdf" to "Auto sheet PDF", "sheet (Traditional).pdf" to "Sheet PDF, Traditional",
@@ -85,6 +94,18 @@ internal object CardText {
         "sheet (auto).txt" to "Auto sheet text", "sheet (auto).cho" to "Auto ChordPro", "info.json" to "Info",
     )
 
+    /** What a line opens (library_page._primary): a sheet's viewer or PDF, else a sheet's text. */
+    private val VIEWERS = listOf("sheet.html", "sheet (auto).html", "sheet.pdf", "sheet (auto).pdf")
+    private val SHEET_TEXTS = listOf("sheet.txt", "sheet (auto).txt")
+
+    /** icons.py: lyrics.txt and lyrics.lrc are LRCLIB's (LYRICS), the auto sheet and what is made of it the audio
+     * model's (AUTO: songs.SHEET_OUTPUTS' and TRADITIONAL_PDFS' of "sheet (auto).txt"). */
+    private val LYRICS_FILES = listOf("lyrics.txt", "lyrics.lrc")
+    private val AUTO_FILES = listOf("sheet (auto).txt", "sheet (auto).cho", "sheet (auto).pdf", "sheet (auto).html",
+                                    "sheet (auto, Traditional).pdf")
+    const val LYRICS = "lrclib"
+    const val AUTO = "auto"
+
     /** _in_line_order with no exports: the kept files of [names] a song's line lists, in its order; a name of none of
      * its groups is left out, as the computer's page leaves it. */
     fun inLineOrder(names: Set<String>): List<String> =
@@ -92,42 +113,64 @@ internal object CardText {
             numbered(GUITAR, names) + scores(names) + numbered(HARMONICA, names) + numbered(GAMETAB, names) +
             LAST.filter { it in names }
 
-    private fun numbered(pattern: Regex, names: Set<String>): List<String> =
-        names.mapNotNull { n -> pattern.matchEntire(n)?.let { it.groupValues[1].toBigInteger() to n } }
-            .sortedWith(compareBy<Pair<java.math.BigInteger, String>> { it.first }.thenBy { it.second })
-            .map { it.second }
+    /** _primary: the file a song's line opens, the first of [ordered] that is a sheet's viewer or PDF, else the
+     * first that is a sheet's text; null for neither. */
+    fun primary(ordered: List<String>): String? =
+        ordered.firstOrNull { it in VIEWERS } ?: ordered.firstOrNull { it in SHEET_TEXTS }
 
-    private fun scores(names: Set<String>): List<String> {
-        val order = SCORE_FORMATS.keys.toList()
-        return names.mapNotNull { n ->
-            SCORE.matchEntire(n)?.takeIf { it.groupValues[2] in order }?.let { Triple(it.groupValues[1].toBigInteger(), order.indexOf(it.groupValues[2]), n) }
-        }.sortedWith(compareBy<Triple<java.math.BigInteger, Int, String>> { it.first }.thenBy { it.second }.thenBy { it.third })
+    /** icons.source_of(name, {}): where a kept file came from, with no record of its version's site (the phone's
+     * cards of its own songs): the lyrics LRCLIB's, an auto sheet's files the audio model's, null for the rest. */
+    fun sourceOf(name: String): String? = when (name) {
+        in LYRICS_FILES -> LYRICS
+        in AUTO_FILES -> AUTO
+        else -> null
+    }
+
+    /** Whether the file has a name it downloads under (library_page._files' `download`): a Guitar Pro or Power Tab
+     * file, a score but its PDF. */
+    fun downloads(name: String): Boolean =
+        PyRe.fullmatch(GUITAR, name) != null || (PyRe.fullmatch(SCORE, name) != null && !name.endsWith(".pdf"))
+
+    private val BY_NUMBER = compareBy<Pair<BigInteger, String>> { it.first }.thenComparator { a, b ->
+        Py.CODE_POINT_ORDER.compare(a.second, b.second)
+    }
+
+    private fun numbered(pattern: Regex, names: Set<String>): List<String> =
+        names.mapNotNull { n -> PyRe.fullmatch(pattern, n)?.let { int(it.groupValues[1]) to n } }
+            .sortedWith(BY_NUMBER).map { it.second }
+
+    private fun scores(names: Set<String>): List<String> =
+        names.mapNotNull { n ->
+            PyRe.fullmatch(SCORE, n)?.takeIf { it.groupValues[2] in SCORE_EXTENSIONS }
+                ?.let { Triple(int(it.groupValues[1]), SCORE_EXTENSIONS.indexOf(it.groupValues[2]), n) }
+        }.sortedWith(compareBy<Triple<BigInteger, Int, String>> { it.first }.thenBy { it.second }
+                         .thenComparator { a, b -> Py.CODE_POINT_ORDER.compare(a.third, b.third) })
             .map { it.third }
+
+    /** int() of a run of decimal digits, in any script: each its place in its run of ten (Unicode's Nd come as
+     * runs of 0 to 9). */
+    private fun int(digits: String): BigInteger {
+        val ascii = StringBuilder()
+        digits.codePoints().forEach { cp ->
+            var start = cp
+            while (PyUnicode.isDecimal(start - 1)) start--
+            ascii.append('0' + (cp - start) % 10)
+        }
+        return BigInteger(ascii.toString())
     }
 
     /** _label of a file caracole kept, with no source: "Sheet text", "Guitar Pro 2", "Score 1 (MusicXML)". */
     fun label(name: String): String {
-        GUITAR.matchEntire(name)?.let { m ->
-            return (if (m.groupValues[2].lowercase() == ".ptb") "Power Tab" else "Guitar Pro") + " " + m.groupValues[1]
+        PyRe.fullmatch(GUITAR, name)?.let { m ->
+            return (if (PyUnicode.lower(m.groupValues[2]) == ".ptb") "Power Tab" else "Guitar Pro") + " " + m.groupValues[1]
         }
-        SCORE.matchEntire(name)?.let { m -> SCORE_FORMATS[m.groupValues[2]]?.let { return "Score ${m.groupValues[1]} ($it)" } }
-        HARMONICA.matchEntire(name)?.let { return "Harmonica tab ${it.groupValues[1]}" }
-        GAMETAB.matchEntire(name)?.let { return "Game music tab ${it.groupValues[1]}" }
+        PyRe.fullmatch(SCORE, name)?.let { m -> SCORE_FORMATS[m.groupValues[2]]?.let { return "Score ${m.groupValues[1]} ($it)" } }
+        PyRe.fullmatch(HARMONICA, name)?.let { return "Harmonica tab ${it.groupValues[1]}" }
+        PyRe.fullmatch(GAMETAB, name)?.let { return "Game music tab ${it.groupValues[1]}" }
         return LABELS[name] ?: name
     }
 
     /** A path in the library as the page links it, relative to `/`: each part percent-encoded as urllib's
      * quote(part, safe="") encodes it. */
-    fun href(path: String): String = path.split('/').joinToString("/") { quote(it) }
-
-    private fun quote(part: String): String = buildString {
-        for (byte in part.toByteArray(Charsets.UTF_8)) {
-            val c = byte.toInt() and 0xff
-            if (c in 'A'.code..'Z'.code || c in 'a'.code..'z'.code || c in '0'.code..'9'.code || c.toChar() in "_.-~") {
-                append(c.toChar())
-            } else {
-                append('%').append("0123456789ABCDEF"[c shr 4]).append("0123456789ABCDEF"[c and 15])
-            }
-        }
-    }
+    fun href(path: String): String = path.split('/').joinToString("/") { PyUrl.quote(it, safe = "") }
 }

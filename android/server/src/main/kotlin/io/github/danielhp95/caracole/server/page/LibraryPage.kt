@@ -1,20 +1,22 @@
 package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.server.http.Inline
-import kotlinx.serialization.json.Json
+import io.github.danielhp95.caracole.server.http.LibraryName
+import io.github.danielhp95.caracole.server.http.MessagePage
+import io.github.danielhp95.caracole.server.http.PageIcon
+import io.github.danielhp95.caracole.server.http.PyText
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
-/** library_page.WebControls on the phone: what its server adds to the page. */
+/** library_page.WebControls on the phone: what its server adds to the page; its badge the one every page the phone
+ * writes itself shows (MessagePage.PHONE_BADGE). */
 data class ServerControls(
     val csrf: String, val busy: Set<Long> = emptySet(), val active: Int = 0, val held: Set<Long> = emptySet(),
     val removing: Set<Long> = emptySet(), val jobs: List<JsonObject> = emptyList(),
-    val timers: Map<String, Int>? = null, val badge: String? = "Phone", val sync: Boolean = false,
+    val timers: Map<String, Int>? = null, val badge: String? = MessagePage.PHONE_BADGE, val sync: Boolean = false,
 )
 
 /**
@@ -36,13 +38,14 @@ class LibraryPage(val assets: LibraryAssets) {
     }
 
     /** The page for [data] (the page's data, which its script reads: [PageData]'s, with the server's part), served
-     * with [controls], for the library [libraryName] ("Phone"). */
+     * with [controls], for the library [libraryName] (AppConfig's: "Phone"), named as every page the phone writes
+     * names it (library_name.py's LibraryName, server.http's). */
     fun served(data: JsonObject, controls: ServerControls, libraryName: String): String {
-        val shown = Shown(libraryName, controls.badge)
+        val shown = LibraryName(libraryName, controls.badge)
         val sync = controls.sync
         return assets.template("head.html").replace("__CSP__", csp).replace("__ICON__", shown.icon())
-            .replace("__STYLE__", assets.styles).replace("__TITLE__", escape(shown.title())) +
-            assets.template("body.html").replace("__MARK__", PageIcons.mark).replace("__LIBRARY__", shown.markup("p"))
+            .replace("__STYLE__", assets.styles).replace("__TITLE__", PyText.escape(shown.title())) +
+            assets.template("body.html").replace("__MARK__", PageIcon.mark).replace("__LIBRARY__", shown.markup("p"))
                 .replace("__TABSYNC__", if (sync) assets.template("sync-tab.html") else "").replace("__TABREQUESTS__", "")
                 .replace("__SYNC__", if (sync) assets.template("sync-panel.html") else "").replace("__REQUESTS__", "")
                 .replace("__REQUEST__", requestForm(controls)).replace("__REQUESTED__", assets.template("requested.html")) +
@@ -90,58 +93,12 @@ class LibraryPage(val assets: LibraryAssets) {
 
     /** request.html, with the form's token, and no YouTube video field: the line that says why there is none. */
     private fun requestForm(controls: ServerControls): String =
-        assets.template("request.html").replace("__CSRF__", escape(controls.csrf)).replace("__YOUTUBE__", "")
-            .replace("__YOUTUBEHINT__", "<p class=\"hint\">No sheets from YouTube here: ${escape(YOUTUBE_PROBLEM)}.</p>")
-
-    /** library_name.py's LibraryName: the library a page shows, after caracole's name, and the server's badge. */
-    private class Shown(val name: String, val badge: String?) {
-        fun title(): String = listOf(badge.orEmpty(), "caracole", name).filter { it.isNotEmpty() }.joinToString(" · ")
-
-        fun markup(tag: String): String {
-            val shown = if (badge.isNullOrEmpty()) "" else " <span class=\"scratch\" title=\"$BADGE_TITLE\">${escape(badge)}</span>"
-            return "<$tag class=\"libname\"><span class=\"name\">${escape(name)}</span>$shown</$tag>"
-        }
-
-        fun icon(): String = if (badge.isNullOrEmpty()) PageIcons.link else PageIcons.scratchLink
-    }
+        assets.template("request.html").replace("__CSRF__", PyText.escape(controls.csrf)).replace("__YOUTUBE__", "")
+            .replace("__YOUTUBEHINT__", "<p class=\"hint\">No sheets from YouTube here: ${PyText.escape(YOUTUBE_PROBLEM)}.</p>")
 
     companion object {
         /** Why the phone makes no sheet from a YouTube video, as youtube_fetch.route_reason says why a caracole makes
-         * none: the request form's line. */
+         * none: the request form's line, and the server member's `youtube.why`. */
         const val YOUTUBE_PROBLEM = "YouTube isn't on the phone"
-
-        /** library_name.BADGE_TITLE. */
-        const val BADGE_TITLE = "Not your usual library"
-
-        /** html.escape(text, quote=True). */
-        internal fun escape(text: String): String = buildString(text.length) {
-            for (c in text) when (c) {
-                '&' -> append("&amp;")
-                '<' -> append("&lt;")
-                '>' -> append("&gt;")
-                '"' -> append("&quot;")
-                '\'' -> append("&#x27;")
-                else -> append(c)
-            }
-        }
     }
-}
-
-/** page_icon.py's marks, from caracole/page/icon.json (tests/test_conformance_web.py writes it): the tab's icon
- * ([link]; [scratchLink], in the badge's colour for a library with a badge), the bar's "¿" ([mark]), and the
- * browser's /favicon.ico ([svg]). */
-internal object PageIcons {
-    /** Where the build puts it on the classpath (:core's runtime data). */
-    const val RESOURCE = "caracole/page/icon.json"
-
-    private val icons: JsonObject by lazy {
-        val stream = PageIcons::class.java.classLoader?.getResourceAsStream(RESOURCE)
-            ?: throw IllegalStateException("$RESOURCE isn't on the classpath")
-        Json.parseToJsonElement(stream.use { it.readBytes().toString(Charsets.UTF_8) }).jsonObject
-    }
-
-    val link: String get() = icons.getValue("link").jsonPrimitive.content
-    val scratchLink: String get() = icons.getValue("scratch_link").jsonPrimitive.content
-    val mark: String get() = icons.getValue("mark").jsonPrimitive.content
-    val svg: String get() = icons.getValue("svg").jsonPrimitive.content
 }

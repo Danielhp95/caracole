@@ -1,39 +1,16 @@
 package io.github.danielhp95.caracole.server.page
 
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.keys.Normalize
-import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.mirror.Mirror
-import io.github.danielhp95.caracole.server.http.Inline
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.junit.Assume
 import java.io.File
 import java.security.MessageDigest
 
-// What the page package's tests share: the producers they wait on (lane library-page's Phase A), a mirror holding a
-// library page, and songs in the phone's database.
-
-/**
- * Phase A: the page is built with server-shell's Inline (the hashes, the JSON block) and caracole/page/icon.json (the
- * tab's icon, the bar's mark), which are the skeleton's until that lane merges. Until then a test that builds a page
- * is skipped, saying so; once they are in, it runs.
- */
-internal fun waitingOnServerShell() {
-    val inline = runCatching { Inline.sha256Source(""); Inline.jsonBlock("x", JsonObject(emptyMap())) }.isSuccess
-    val icons = PageIcons::class.java.classLoader?.getResource(PageIcons.RESOURCE) != null
-    Assume.assumeTrue("waiting on lane server-shell (Inline, ${PageIcons.RESOURCE})", inline && icons)
-}
-
-/** Phase A: a phone-only song's card, and an empty library's fold table, are normalize.py's (lane keys, on
- * py-unicode's tables): skipped until they are in. */
-internal fun waitingOnKeys() {
-    val keys = runCatching { Normalize.fold("a"); Normalize.slugKey("a"); PyUnicode.isAlnum('a'.code) }.isSuccess
-    Assume.assumeTrue("waiting on lanes keys and py-unicode (Normalize, PyUnicode)", keys)
-}
+// What the page package's tests share: a mirror holding a library page, and songs in the phone's database.
 
 internal fun sha256(bytes: ByteArray): String = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
