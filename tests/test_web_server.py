@@ -107,6 +107,9 @@ def test_a_body_is_refused_unread_beyond_its_routes_limit_before_any_route_is_as
     server = running(app)
     try:
         assert claimed(server, "/peer/pull", 20_000_000, "application/json") == 413
+        assert claimed(server, "/peer/push/new", 20_000_000, "application/json") == 413
+        assert claimed(server, "/peer/push/file?push=0123456789abcdef", 64 * 1024 * 1024 + 1,
+                       "application/octet-stream") == 413
         assert claimed(server, "/peer/pull", 1024 * 1024 + 1, "application/x-www-form-urlencoded") == 413
         assert claimed(server, "/request", 16 * 1024 + 1, "application/x-www-form-urlencoded") == 413
         assert claimed(server, "/nowhere", 16 * 1024 + 1, "application/json") == 413

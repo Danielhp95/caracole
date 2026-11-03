@@ -5815,7 +5815,22 @@ Sync page in caracole serve comes next ([the design](superpowers/specs/2026-10-3
 
 ### The phone pushes its changes (POST /peer/push)
 
-Not built yet.
+The phone starts every sync and serves nothing to the network, so the computer can't be asked to pull from it. Once
+the phone has taken what it takes, it pushes what the computer takes, in three requests to the computer's
+`caracole serve`, each with the form token (`GET /api/peer/state` gives it) in an `X-Caracole-Form-Token` header:
+
+1. **`POST /peer/push/new`**, JSON `{"format", "from", "files"}`: the sync's format, the phone's id, and the SHA-256
+   of each file its units keep. caracole serve answers `{"push": "<16 hex>", "need": […]}`: the files it has no
+   readable copy of. It keeps the push in `state_dir/peer/push-<id>/`, a folder only its owner reads, never in the
+   library.
+2. **`POST /peer/push/file?push=<id>&sha256=<sha256>`**, the bytes of each file needed
+   (`application/octet-stream`, 64 MiB at most), kept once their SHA-256 is the one named.
+3. **`POST /peer/push?push=<id>`**: the units themselves, which `caracole peer take` takes as a pull takes another
+   caracole's. Not built yet.
+
+At most two pushes are open at once, and a push's files come to 2 GiB at most. A push left for an hour is deleted.
+A request from another site's page is refused, and so is one whose token is older than the server, with
+`"reload": true`: the phone reads the state again for a fresh token.
 
 ### Syncing by hand: peer sync --push, --choose, --compared
 

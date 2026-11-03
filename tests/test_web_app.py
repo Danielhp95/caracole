@@ -3034,7 +3034,9 @@ def test_the_body_limit_is_the_routes_else_16_kib(app):
     assert app.body_limit("POST", "/request") == 16 * 1024
     assert app.body_limit("POST", "/peer/pull") == 1024 * 1024
     assert app.body_limit("POST", "/peer/%70ull?x=1") == 1024 * 1024  # the address as the router reads it
-    for target in ("/nowhere", "/%ff", "/api/peer/state", "/peer/pull/x"):
+    assert app.body_limit("POST", "/peer/push/new") == 1024 * 1024
+    assert app.body_limit("POST", "/peer/push/file?push=0123456789abcdef&sha256=00") == 64 * 1024 * 1024
+    for target in ("/nowhere", "/%ff", "/api/peer/state", "/peer/pull/x", "/peer/push/new/x"):
         assert app.body_limit("POST", target) == 16 * 1024, target
 
 

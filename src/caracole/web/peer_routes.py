@@ -1,5 +1,5 @@
 """caracole serve's side of a sync between two caracoles (peer_sync.py): what this library holds, unit by unit, each
-unit whole, its kept files, and a pull of another caracole's units queued.
+unit whole, its kept files, a pull of another caracole's units queued, another caracole's push staged (peer_push.py).
 
     GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, each unit of its library (a song,
                                  a removal, a songbook, an artist's alias or UG page, a blocked tab) with its label and
@@ -10,17 +10,27 @@ unit whole, its kept files, and a pull of another caracole's units queued.
     GET  /api/peer/file?song=&name=   a song's kept file (``files``), while it is what caracole recorded (404 else)
     POST /peer/pull              Take these units from the caracole at ``from``: ``caracole peer pull FROM --unit=…``
                                  queued (``units``, one id a line), then to its line in the Requests tab
+    POST /peer/push/new          A push opened (JSON ``{"format", "from", "files"}``): its id and the files of
+                                 ``files`` this side needs sent, ``{"push", "need"}`` (``peer_push.new_push``)
+    POST /peer/push/file?push=&sha256=   A file the push needs, its bytes (``peer_push.stage_file``): ``{"ok": true}``
 
 Another caracole reads the first three to compare the two and to take what the owner chose (``caracole peer``). They
 are reads, as a search is: no lock, no site asked, nothing written. Under ``/api/``, another site's page can't read
 them (``security.own_page_read``); a caracole, which is no browser, can. The pull is a write, as any: the form token
 and the cross-origin check, then a command under caracole's lock, which asks the other caracole for each unit.
+
+A push is the phone's, which can't be asked to pull: it sends this side the units it takes (peer_push.py), each
+request a write with the form token in its header (a ``json`` or ``bytes`` route, web/app.py). Its files are staged
+in ``state_dir/peer/``, never in the library, and checked by their SHA-256: caracole serve writes nothing else
+for a push (AGENTS.md).
 """
 
 from __future__ import annotations
 
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from caracole import peer_push
 from caracole.web.app import Response, Route, WebApp, json_response
 from caracole.web.pages import Refused
 
@@ -32,6 +42,10 @@ ROUTES = (
     Route("GET", "/api/peer/unit", lambda app, asked: unit(app, _params(asked.target))),
     Route("GET", "/api/peer/file", lambda app, asked: song_file(app, _params(asked.target))),
     Route("POST", "/peer/pull", lambda app, asked, form: pull(app, form), limit=1024 * 1024),
+    Route("POST", "/peer/push/new", lambda app, asked, doc: push_new(app, doc), body="json",
+          limit=peer_push.NEW_MAX),
+    Route("POST", "/peer/push/file", lambda app, asked, data: push_file(app, _params(asked.target), data),
+          body="bytes", limit=peer_push.FILE_MAX),
 )
 
 
@@ -118,3 +132,33 @@ def pull(app: WebApp, form: dict[str, str]) -> Response:
               ("peer", "pull", *(f"--unit={u}" for u in units), "--", address))]
     job, _ = app.submit(f"Sync with {address}", PEER_PULL + address, steps, display=address, join=False)
     return app.queued(job)
+
+
+def _refused(e: peer_push.PushError) -> Refused:
+    return Refused(e.status, "Not taken", str(e))
+
+
+def push_new(app: WebApp, doc: Any) -> Response:
+    """``POST /peer/push/new``: a push opened, with the files this side needs sent."""
+    from caracole import peer_sync as sync
+
+    try:
+        sender, files = peer_push.read_new(doc)
+        with app.db() as conn:
+            opened = peer_push.new_push(app.cfg.state_dir, conn, app.cfg.library_dir, sender=sender, files=files,
+                                        own=sync.own_id(conn))
+    except peer_push.PushError as e:
+        raise _refused(e) from None
+    return json_response(200, {"push": opened.push, "need": opened.need})
+
+
+def push_file(app: WebApp, params: dict[str, str], data: bytes) -> Response:
+    """``POST /peer/push/file``: a file the push needs, staged once its bytes are what its SHA-256 says."""
+    try:
+        peer_push.stage_file(app.cfg.state_dir, params.get("push", ""), params.get("sha256", ""), data)
+    except peer_push.PushError as e:
+        raise _refused(e) from None
+    except OSError as e:
+        raise Refused(503, "Not kept", f"The file couldn't be kept: {e}.") from e
+    return json_response(200, {"ok": True})
+
