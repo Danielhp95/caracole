@@ -92,7 +92,9 @@ class UnitsTest {
     @Test fun everyRecordIsOfAFunctionThePhonePorts() {
         assertEquals(setOf(UNIT_VALUE), values.map { it.fn }.toSet())
         assertEquals(setOf(UNIT_DOCUMENT, VALUE_OF_DOCUMENT), documents.map { it.fn }.toSet())
-        assertTrue("empty" in fixtures && "rich" in fixtures, "the fixtures: $fixtures")
+        // dense fills every column a value reads (match, review, album, variant, gone, pick, coverage, a REAL score),
+        // which the others leave at their defaults: a corpus without it couldn't tell those columns apart.
+        assertTrue(listOf("empty", "plain", "rich", "dense").all { it in fixtures }, "the fixtures: $fixtures")
     }
 
     @Test fun aLibrarysUnitsAreTheOnesPythonLists() {
@@ -126,7 +128,8 @@ class UnitsTest {
         for (name in fixtures) {
             reading(name) { db, _ ->
                 for (id in listOf("song/nobody/here", "removed/nobody/here", "songbook/nobody", "alias/nobody",
-                                  "artist_url/nobody", "block/1", "block/x", "block/", "nonsense/x", "song")) {
+                                  "artist_url/nobody", "block/1", "block/x", "block/", "block/04242", "block/+1",
+                                  "block/-1", "block/1 ", "nonsense/x", "song")) {
                     assertNull(Units.value(db, id), "$name: $id")
                     assertNull(Units.digestOf(db, id), "$name: $id")
                 }
@@ -258,16 +261,69 @@ class UnitsTest {
         assertEquals(listOf("a.txt", "z.txt"), value.getValue("files").jsonObject.keys.toList())
     }
 
-    @Test fun aBlockedTabIsFoundByItsNumberHoweverItIsWritten() {
+    @Test fun aBlockedTabIsFoundOnlyByItsIdAsTheStateWritesIt() {
         TestDb.fresh(tmp.newFolder("blocks")).use { database ->
-            database.writeBlocking { OverridesStore.putBlock(it, 77, true) }
+            database.writeBlocking { OverridesStore.putBlock(it, 77, true); OverridesStore.putBlock(it, 0, true) }
             database.read { db ->
-                assertEquals(mapOf("block/77" to "the blocked tab 77"), Units.libraryState(db).mapValues { it.value.label })
-                assertEquals(JsonPrimitive(true), Units.value(db, "block/077"))
-                assertEquals(buildJsonObject { put("tab", 77) }, Units.document(db, tmp.root, "block/077"))
-                assertNull(Units.value(db, "block/-77"))
-                assertNull(Units.value(db, "block/ 77"))
-                assertNull(Units.value(db, "block/99999999999999999999999"))
+                assertEquals(mapOf("block/0" to "the blocked tab 0", "block/77" to "the blocked tab 77"),
+                             Units.libraryState(db).mapValues { it.value.label })
+                assertEquals(JsonPrimitive(true), Units.value(db, "block/77"))
+                assertEquals(buildJsonObject { put("tab", 77) }, Units.document(db, tmp.root, "block/77"))
+                assertEquals(buildJsonObject { put("tab", 0) }, Units.document(db, tmp.root, "block/0"))
+                // peer_sync.tab_of: ASCII digits with no leading zero, else no unit at all.
+                for (id in listOf("block/077", "block/00", "block/+77", "block/-77", "block/ 77", "block/77 ", "block/٧٧",
+                                  "block/７７", "block/99999999999999999999999")) {
+                    assertNull(Units.value(db, id), id)
+                    assertNull(Units.document(db, tmp.root, id), id)
+                }
+            }
+        }
+        assertEquals(listOf(0L, 7L, 4242L, null, null, null, null, null, null),
+                     listOf("0", "7", "4242", "", "07", "+7", "٧", "7 ", "99999999999999999999999").map(Documents::tabOf))
+    }
+
+    @Test fun aSongsVersionsComeByProviderThenTabInSqlitesOrder() {
+        val dir = tmp.newFolder("providers")
+        TestDb.fresh(dir).use { database ->
+            database.writeBlocking { db ->
+                Fixtures.load(db, "sync/fixtures/rich.jsonl", File(dir, "library").apply { mkdirs() })
+                // rich's 宋冬野 - 斑马斑马 has UG's tabs 99 and 101; another site's tabs beside them.
+                for ((provider, tab) in listOf("lacuerda" to "zz", "gtptabs" to "5", "lacuerda" to "Z")) {
+                    db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                                   "VALUES (?, ?, 3, 'sheet', 'chords', ?, '2026-10-31T00:00:00Z')", provider, tab, "https://u/$tab")
+                }
+            }
+            database.read { db ->
+                val id = "song/宋冬野/斑马斑马"
+                val versions = Units.value(db, id)!!.jsonObject.getValue("versions") as JsonArray
+                assertEquals(listOf("gtptabs/5", "lacuerda/Z", "lacuerda/zz", "ug/101", "ug/99"),
+                             versions.map { v -> v.jsonObject.let { "${text(it.getValue("provider"))}/${text(it.getValue("tab"))}" } })
+                val document = Units.document(db, tmp.root, id)!!
+                assertEquals(listOf("gtptabs/5", "lacuerda/Z", "lacuerda/zz", "ug/101", "ug/99"),
+                             (document.getValue("versions") as JsonArray).map { v ->
+                                 v.jsonObject.let { "${text(it.getValue("provider"))}/${text(it.getValue("tab_id"))}" }
+                             })
+                assertEquals(Units.digestOf(db, id), Units.valueOfDocument(id, document)?.let(Canonical::digest))
+            }
+        }
+    }
+
+    @Test fun aSongbooksUnitIsOfItsNamesKeyNowWhateverKeyIsStoredBesideIt() {
+        TestDb.fresh(tmp.newFolder("songbooks")).use { database ->
+            val songs = buildJsonArray { add(buildJsonArray { add(JsonPrimitive("A - B")); add(JsonObject(emptyMap())) }) }
+            database.writeBlocking { db ->
+                db.execute("INSERT INTO phone_songbooks (key, name, songs, position) VALUES ('stale', ?, ?, 0)",
+                           "Camp  FIRE", Canonical.write(songs))
+            }
+            database.read { db ->
+                assertEquals(listOf("songbook/camp fire"), Units.libraryState(db).keys.toList())
+                assertEquals("""{"name":"Camp  FIRE","songs":[["A - B",{}]]}""", canonical(Units.value(db, "songbook/camp fire")))
+                assertNull(Units.value(db, "songbook/stale"))
+            }
+            database.writeBlocking { db -> SongbookStore.put(db, "Camp Fire", songs) }
+            database.read { db ->
+                assertEquals(listOf(Triple("camp fire", "Camp Fire", 0L)),
+                             db.query("SELECT key, name, position FROM phone_songbooks") { Triple(it.text(0), it.text(1), it.long(2)) })
             }
         }
     }

@@ -24,12 +24,15 @@ object OverridesStore {
         "harmonica",
     )
     private const val IGNORE = "ignore"
+    private val SONG_TABLES_IN = (SONG_TABLES + IGNORE).joinToString(", ") { "'$it'" }
 
     /** overrides.song_entries: every entry about the song of identity [key], by table, in [SONG_TABLES]' order then
      * `ignore` (true), only the tables that have one. */
     fun songEntries(db: Db, key: String): JsonObject {
-        val found = db.query("SELECT tbl, value FROM phone_overrides WHERE key = ?", key) { it.text(0)!! to it.text(1)!! }
-            .toMap()
+        // By the primary key, (tbl, key), each of the song's tables in one IN: no scan of every entry.
+        val found = db.query("SELECT tbl, value FROM phone_overrides WHERE tbl IN ($SONG_TABLES_IN) AND key = ?", key) {
+            it.text(0)!! to it.text(1)!!
+        }.toMap()
         val out = LinkedHashMap<String, JsonElement>()
         for (table in SONG_TABLES) found[table]?.let { out[table] = Canonical.parse(it) }
         if (IGNORE in found) out[IGNORE] = JsonPrimitive(true)

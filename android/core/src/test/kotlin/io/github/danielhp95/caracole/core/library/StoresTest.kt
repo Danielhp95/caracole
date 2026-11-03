@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.TestDb
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
@@ -182,6 +183,32 @@ class StoresTest {
         assertEquals(one, all[0].songs)
         assertEquals(Canonical.write(campfire), Canonical.write(all[2].songs))
         assertTrue(all.all { it.key == SongbookStore.nameKey(it.name) })
+    }
+
+    @Test fun aSongbooksSongsKeepTheirSettingsPartsThatSaySomethingAndNothingElse() {
+        val given = buildJsonArray {
+            add(buildJsonArray {
+                add(JsonPrimitive("A - B"))
+                add(buildJsonObject { put("mode", "dorian"); put("key", JsonNull); put("capo", 0); put("instrument", JsonNull) })
+            })
+            add(buildJsonArray { add(JsonPrimitive("C - D")); add(buildJsonObject { put("key", JsonNull) }) })
+        }
+        write { db -> SongbookStore.put(db, "Campfire", given) }
+        val stored = read { db -> db.one("SELECT songs FROM phone_songbooks") { it.text(0) } }
+        assertEquals("""[["A - B",{"capo":0,"mode":"dorian"}],["C - D",{}]]""", stored)
+        val refused = listOf(
+            buildJsonArray { add(JsonPrimitive("A - B")); add(buildJsonObject { put("tempo", 90) }) },
+            buildJsonArray { add(JsonPrimitive("A - B")) },
+            buildJsonArray { add(JsonPrimitive("A - B")); add(JsonNull) },
+            buildJsonArray { add(JsonPrimitive(1)); add(JsonObject(emptyMap())) },
+            JsonPrimitive("A - B"),
+        )
+        for (song in refused) {
+            assertFailsWith<IllegalArgumentException>("$song") {
+                write { db -> SongbookStore.put(db, "Campfire", JsonArray(listOf(song))) }
+            }
+        }
+        assertEquals(stored, read { db -> db.one("SELECT songs FROM phone_songbooks") { it.text(0) } })
     }
 
     @Test fun aStoredValueReadsBackAsItsOwnLiterals() {

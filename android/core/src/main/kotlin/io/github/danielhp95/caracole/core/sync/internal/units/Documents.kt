@@ -53,14 +53,21 @@ internal object Documents {
                 value to value
             }
             "block" -> {
-                // rest.isdigit() and int(rest) in the blocks: ASCII digits alone here, as every tab id is written.
-                if (rest.isEmpty() || !rest.all { it in '0'..'9' }) return null
-                val tab = rest.toLongOrNull() ?: return null
+                val tab = tabOf(rest) ?: return null
                 if (tab !in OverridesStore.blocks(db)) return null
                 JsonPrimitive(true) to JsonObject(mapOf("tab" to JsonPrimitive(tab)))
             }
             else -> null
         }
+    }
+
+    /** peer_sync.tab_of: the tab a `block/<tab>` unit names, its id as library_state writes it, ASCII digits with no
+     * leading zero (`block/4242`); null for anything else (`block/007`, `block/٣`, `block/+7`, `block/`), which no
+     * unit is. A number past a Long is none either: no tab blocked here is one. */
+    fun tabOf(text: String): Long? {
+        if (text.isEmpty() || !text.all { it in '0'..'9' }) return null
+        val tab = text.toLongOrNull() ?: return null
+        return tab.takeIf { it.toString() == text }
     }
 
     fun removedValue(artist: String, title: String): JsonObject =

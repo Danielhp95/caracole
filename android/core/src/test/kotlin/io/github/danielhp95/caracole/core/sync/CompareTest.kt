@@ -121,6 +121,14 @@ class CompareTest {
         assertEquals(Compare.comparedHash(found), Compare.comparedHash(found.reversed()))
     }
 
+    @Test fun aLabelInAnyCaseIsItsCasefoldNeverItsLowercase() {
+        fun d(id: String, label: String) = Difference(id, label, null, SyncUnit(id, label, "1"), "theirs", "only there")
+        val found = listOf(d("song/c", "Straße"), d("song/a", "STRASSE x"), d("song/b", "strasse"), d("song/z1", "ﬁ"),
+                           d("song/z0", "fj"))
+        // Python: sorted(ids, key=lambda i: (label[i].casefold(), i)); by .lower() it would be z0, b, a, c, z1.
+        assertEquals(listOf("song/z1", "song/z0", "song/b", "song/c", "song/a"), Compare.order(found).map { it.id })
+    }
+
     @Test fun decideLeavesAConflictNobodyChoseAndTakesAnEmptyChoiceAsNone() {
         val conflict = Difference("song/a", "a", SyncUnit("song/a", "a", "1"), SyncUnit("song/a", "a", "2"),
                                   "conflict", "changed on both sides since the last sync")

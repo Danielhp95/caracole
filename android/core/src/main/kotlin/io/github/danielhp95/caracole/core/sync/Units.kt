@@ -42,14 +42,20 @@ class UnitError(message: String) : Exception(message)
  *
  * A unit's document (GET /api/peer/unit's "unit") is everything another side needs to take it, and
  * [valueOfDocument] reads the value back from it alone, so what a side receives is checked against the digest it
- * compared. Every function reads; none writes.
+ * compared. Every function reads; none writes, and each reads in one transaction of its own (a savepoint), so a
+ * value or a whole state is of one state of the library.
+ *
+ * Python's library_state lists the songs only once their keys are current (list_songs runs ensure_current_keys);
+ * these read the songs as stored. After a KEY_VERSION change, a caller runs LibraryStore.ensureCurrentKeys inside
+ * Database.write first (a sync's compare and take do), else every song re-keyed on the other side compares as on one
+ * side alone.
  */
 object Units {
     const val FORMAT = 2
 
     /** Every unit of this library, by id: its songs (newest added first), its tombstones, its songbooks in their
      * order, its aliases, artists' pages and blocked tabs. */
-    fun libraryState(db: Db): Map<String, SyncUnit> {
+    fun libraryState(db: Db): Map<String, SyncUnit> = db.savepoint(SNAPSHOT) {
         val units = LinkedHashMap<String, SyncUnit>()
         fun add(id: String, label: String, value: JsonElement) {
             units[id] = SyncUnit(id, label, Canonical.digest(value))
@@ -60,28 +66,35 @@ object Units {
             add("removed/$key", "$artist - $title (removed)", Documents.removedValue(artist, title))
         }
         for (book in SongbookStore.all(db)) {
-            add("songbook/${book.key}", "the songbook ${book.name}", Documents.songbookValue(book.name, book.songs))
+            add("songbook/${SongbookStore.nameKey(book.name)}", "the songbook ${book.name}",
+                Documents.songbookValue(book.name, book.songs))
         }
         for ((artist, slugs) in OverridesStore.aliases(db)) add("alias/$artist", "the alias of $artist", slugs)
         for ((artist, value) in OverridesStore.artistUrls(db)) {
             add("artist_url/$artist", "the UG page of ${(value.getValue("name") as JsonPrimitive).content}", value)
         }
         for (tab in OverridesStore.blocks(db)) add("block/$tab", "the blocked tab $tab", JsonPrimitive(true))
-        return units
+        units
     }
 
     /** One unit's digest now, for the mirror's gate; null for a unit this side hasn't got. */
     fun digestOf(db: Db, unitId: String): String? = value(db, unitId)?.let(Canonical::digest)
 
     /** One unit's value (peer_sync.unit_value), what its digest is of; null for a unit this side hasn't got. */
-    fun value(db: Db, unitId: String): JsonElement? = Documents.unit(db, unitId, document = false)?.first
+    fun value(db: Db, unitId: String): JsonElement? =
+        db.savepoint(SNAPSHOT) { Documents.unit(db, unitId, document = false)?.first }
 
     /** As /api/peer/unit's "unit" (peer_sync.unit_document's): null for a unit this side hasn't got. A song's kept
      * files are named with their hashes; their bytes stay in [libraryDir]. */
     @Suppress("UNUSED_PARAMETER")
-    fun document(db: Db, libraryDir: File, unitId: String): JsonObject? = Documents.unit(db, unitId, document = true)?.second
+    fun document(db: Db, libraryDir: File, unitId: String): JsonObject? =
+        db.savepoint(SNAPSHOT) { Documents.unit(db, unitId, document = true)?.second }
 
     /** peer_sync.value_of_document: the unit's value from its document alone; null for no document; a [UnitError]
      * for one that isn't a document of its kind, or of a kind this caracole doesn't know. */
     fun valueOfDocument(unitId: String, doc: JsonObject?): JsonElement? = Documents.valueOf(unitId, doc)
+
+    /** The savepoint each reading runs in: one read transaction, so a unit's many statements see one state of the
+     * library even on a pooled reader while a take commits on the writer; inside a write's own, it nests. */
+    private const val SNAPSHOT = "units"
 }
