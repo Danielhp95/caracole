@@ -41,6 +41,20 @@ class SettingsTest {
         assertEquals(80, Settings(prefs).textZoom)
     }
 
+    @Test
+    fun `the last index import's outcome is kept apart from the last sync's`() {
+        val prefs = Preferences()
+        val settings = Settings(prefs)
+        assertEquals(null, settings.lastImport)
+        settings.lastOutcome = Outcome(1L, true, "nothing changed")
+        settings.lastImport = Outcome(2L, false, "The import failed: interrupted")
+        assertEquals(Outcome(2L, false, "The import failed: interrupted"), Settings(prefs).lastImport)
+        assertEquals(Outcome(1L, true, "nothing changed"), Settings(prefs).lastOutcome)
+        settings.lastImport = null
+        assertEquals(null, settings.lastImport)
+        assertEquals(Outcome(1L, true, "nothing changed"), settings.lastOutcome)
+    }
+
     /** SharedPreferences in memory: what a test needs of Android's, with no device. */
     private class Preferences : SharedPreferences {
         private val values = mutableMapOf<String, Any?>()

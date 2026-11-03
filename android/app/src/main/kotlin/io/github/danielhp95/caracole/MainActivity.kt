@@ -10,6 +10,7 @@ import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewGroup
+import android.webkit.CookieManager
 import android.webkit.RenderProcessGoneDetail
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
@@ -25,35 +26,48 @@ import android.window.OnBackInvokedDispatcher
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.webkit.WebViewAssetLoader
 import io.github.danielhp95.caracole.mirror.Links
 import io.github.danielhp95.caracole.mirror.Route
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.IOException
+import java.net.URI
+import kotlin.coroutines.resume
 
 /**
- * The library screen: a WebView showing the mirror's pages, caracole's own, unchanged, at
- * `https://appassets.androidplatform.net/<path>` (the root, as on caracole serve: [Links]), with a small bar
- * (the page's title; Sync now, Library, Settings) and the sync's line under it. A pinch sizes the pages' text
- * ([pinchToSize]), and shows the size it is at over the page while it lasts ([sizeLabel]).
+ * The library screen: a WebView showing the phone's own caracole, its server on `http://127.0.0.1:8738` (the library
+ * page, and the mirror's pages, caracole's own, unchanged, at their paths on caracole serve: [Links]), with a small
+ * bar (the page's title; Sync now, Library, Settings) and the sync's line under it. The WebView carries the launch's
+ * cookie and loads that exact origin alone. A pinch sizes the pages' text ([pinchToSize]), and shows the size it is
+ * at over the page while it lasts ([sizeLabel]).
  */
 class MainActivity : Activity() {
     private lateinit var web: WebView
     private lateinit var status: TextView
     private lateinit var title: TextView
-    private lateinit var empty: View
-    private lateinit var links: Links
-    private lateinit var loader: WebViewAssetLoader
+    /** Where links go, once the server has started (the WebView's client reads it on its own threads). */
+    @Volatile private var links: Links? = null
+    private var files: LocalFiles? = null
+    /** The server's origin, once it has started. */
+    private var origin: String? = null
     private lateinit var settings: Settings
     private lateinit var pinch: TextPinch
     private lateinit var label: SizeLabel
     /** The WebView's own text zoom, as Android's font size has it: what [TextZoom.DEFAULT] stands for. */
     private var ownTextZoom = TextZoom.DEFAULT
     private var scope: CoroutineScope = MainScope()
+    /** The screen's own work, from its creation to its end: the server's start, a file handed off. */
+    private val screen: CoroutineScope = MainScope()
     private var hiding: Job? = null
     private var shown = false
 
@@ -66,16 +80,8 @@ class MainActivity : Activity() {
         web = findViewById(R.id.web)
         status = findViewById(R.id.status)
         title = findViewById(R.id.title)
-        empty = findViewById(R.id.empty)
         settings = Settings(this)
         fitInsets()
-
-        val mirror = Caracole.mirror(this)
-        links = Links(mirror)
-        loader = WebViewAssetLoader.Builder()
-            .setDomain(Links.HOST)
-            .addPathHandler(Links.PREFIX, MirrorPathHandler(mirror))
-            .build()
 
         ownTextZoom = web.settings.textZoom
         web.settings.apply {
@@ -107,24 +113,59 @@ class MainActivity : Activity() {
                 title.text = text?.takeIf { it.isNotBlank() } ?: getString(R.string.app_name)
             }
         }
-        // A link with `download` (a Guitar Pro file on the library page) comes here, not as a navigation.
-        web.setDownloadListener { url, _, _, _, _ -> follow(url) }
+        // A link with `download` (a Guitar Pro file on the library page), or a file the WebView can't show, comes
+        // here, not as a navigation.
+        web.setDownloadListener { url, _, _, _, _ -> follow(url, download = true) }
 
         findViewById<ImageButton>(R.id.more).setOnClickListener { menu(it) }
-        findViewById<View>(R.id.open_settings).setOnClickListener { openSettings() }
-
-        if (savedInstanceState != null && web.restoreState(savedInstanceState) != null) {
-            shown = true
-        } else if (!showLibrary()) {
-            openSettings() // a first start, with no copy yet
-        }
         backCallback()
+        screen.launch { start(savedInstanceState) }
+    }
+
+    /**
+     * The phone's caracole started (in this process, once), then the launch's cookie set for its origin, then its
+     * library page, or the history Android saved when it is today's origin's. A first start, with nothing set up
+     * (no copy, no address), opens Settings too.
+     */
+    private suspend fun start(saved: Bundle?) {
+        val phone = try {
+            withContext(Dispatchers.IO) { Caracole.phone(this@MainActivity) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            say(getString(R.string.no_server, e.message ?: e.javaClass.simpleName))
+            return
+        }
+        val origin = phone.server.origin
+        files = LocalFiles(phone.app::handle, URI(origin), Caracole.secret)
+        links = Links(URI(origin)) { Caracole.isFile(this, it) }
+        this.origin = origin
+        if (!withCookie(origin)) {
+            say(getString(R.string.no_cookie))
+            return
+        }
+        if (saved != null && SavedScreen.restores(saved.getString(SavedScreen.ORIGIN), origin) && web.restoreState(saved) != null) {
+            shown = true
+        } else {
+            showLibrary()
+        }
+        if (saved == null && settings.server.isBlank() && Caracole.mirror(this).manifest() == null) openSettings()
+    }
+
+    /** The launch's cookie, set for [origin] before the WebView asks it for anything; false when it can't be. */
+    private suspend fun withCookie(origin: String): Boolean = suspendCancellableCoroutine { done ->
+        val cookies = CookieManager.getInstance()
+        cookies.setAcceptCookie(true)
+        cookies.setCookie(origin, Caracole.cookie()) { set ->
+            cookies.flush()
+            if (done.isActive) done.resume(set)
+        }
     }
 
     override fun onResume() {
         super.onResume()
         pinch.set(settings.textZoom) // as Settings' Reset may have left it
-        if (!shown) showLibrary()
+        if (!shown && origin != null) showLibrary()
     }
 
     override fun onStart() {
@@ -140,22 +181,23 @@ class MainActivity : Activity() {
 
     override fun onSaveInstanceState(outState: Bundle) {
         super.onSaveInstanceState(outState)
-        if (shown) web.saveState(outState)
+        if (shown) {
+            web.saveState(outState)
+            outState.putString(SavedScreen.ORIGIN, origin)
+        }
     }
 
     override fun onDestroy() {
+        screen.cancel()
         web.destroy()
         super.onDestroy()
     }
 
-    /** Opens the library page if the mirror has one; false when it has none yet. */
-    private fun showLibrary(): Boolean {
-        val start = Caracole.mirror(this).manifest()?.start
-        empty.visibility = if (start == null) View.VISIBLE else View.GONE
-        if (start == null) return false
-        web.loadUrl(Links.address(start))
+    /** Opens the library page, the server's own, once it has started. */
+    private fun showLibrary() {
+        val links = links ?: return
+        web.loadUrl(links.address(""))
         shown = true
-        return true
     }
 
     private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
@@ -206,20 +248,60 @@ class MainActivity : Activity() {
         }
     }
 
-    /** Where a link the page follows goes ([Links.route]); true when the WebView doesn't load it. */
-    private fun follow(url: String): Boolean = when (val route = links.route(url)) {
-        Route.Page -> false
-        is Route.File -> { Handoff.openFile(this, route.served); true }
-        is Route.Browser -> { Handoff.openBrowser(this, route.url); true }
-        Route.ServerOnly -> { Handoff.toast(this, getString(R.string.server_only)); true }
-        Route.Missing -> { Handoff.toast(this, getString(R.string.missing)); true }
-        Route.Ignored -> true
+    /** A line in the status bar, kept until the next sync's. */
+    private fun say(text: String) {
+        hiding?.cancel()
+        status.text = text
+        status.visibility = View.VISIBLE
+    }
+
+    /**
+     * Where a link the page follows goes ([Links.route]; with [download], one the WebView's download listener heard);
+     * true when the WebView doesn't load it.
+     */
+    private fun follow(url: String, download: Boolean = false): Boolean {
+        val links = links ?: return true
+        return when (val route = links.route(url, download)) {
+            Route.Page -> false
+            is Route.File -> { handOff(route.path); true }
+            is Route.Browser -> { Handoff.openBrowser(this, route.url); true }
+            Route.Ignored -> true
+        }
+    }
+
+    /**
+     * The library's file at [path] to another app: read from the phone's server in this process ([LocalFiles], the
+     * launch's cookie and all), copied into the cache's handoff/ and handed over ([Handoff]); or why it can't be.
+     */
+    private fun handOff(path: String) {
+        val files = files ?: return
+        screen.launch {
+            val refused: String? = try {
+                withContext(Dispatchers.IO) {
+                    when (val got = files.get(path)) {
+                        is Fetched.File -> {
+                            val copy = Handoff.copyInto(File(cacheDir, Handoff.FOLDER), path, got)
+                            withContext(Dispatchers.Main) { Handoff.openFile(this@MainActivity, copy, got.type) }
+                            null
+                        }
+                        is Fetched.Refused ->
+                            if (got.status == 404) getString(R.string.missing)
+                            else got.message ?: getString(R.string.not_served, got.status)
+                    }
+                }
+            } catch (e: IOException) {
+                getString(R.string.handoff_failed, e.message ?: e.javaClass.simpleName)
+            }
+            if (refused != null) Handoff.toast(this@MainActivity, refused)
+        }
     }
 
     private inner class Client : WebViewClient() {
-        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse =
-            // The copy is all the WebView shows: no request of a page leaves the phone.
-            loader.shouldInterceptRequest(request.url) ?: MirrorPathHandler.notFound()
+        override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
+            // The phone's server, at its exact origin, is all the WebView loads: anything else (another port of
+            // 127.0.0.1 among them, which the launch's cookie would reach, cookies ignoring the port) is a 404 here
+            // and reaches no socket.
+            if (links?.loads(request.url.toString()) == true) null else notFound()
 
         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean =
             if (request.isForMainFrame) follow(request.url.toString()) else false
@@ -357,6 +439,9 @@ class MainActivity : Activity() {
             WindowInsetsCompat.CONSUMED
         }
     }
+
+    private fun notFound() =
+        WebResourceResponse("text/plain", "utf-8", 404, "Not Found", emptyMap(), ByteArrayInputStream(ByteArray(0)))
 
     private companion object {
         const val SHOW_ENDED_MS = 5_000L

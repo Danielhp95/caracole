@@ -6,55 +6,82 @@ import java.net.URLDecoder
 
 /** Where a link the WebView is asked to follow goes. */
 sealed interface Route {
-    /** A page of the mirror: the WebView loads it. */
+    /** At the phone's server: the WebView loads it, and the server answers (a page, its message, or a 404). */
     data object Page : Route
 
-    /** A file of the mirror that isn't a page (a PDF, a Guitar Pro file, a .cho): another app opens it. */
-    data class File(val served: Served) : Route
+    /**
+     * A file of the library that isn't a page (a PDF, a Guitar Pro file, a .cho), by its [path] there
+     * ("Estopa/Tu calorro/sheet.pdf"): the app reads it from its server and another app opens it.
+     */
+    data class File(val path: String) : Route
 
-    /** An address on the web (Ultimate Guitar, MuseScore…): the phone's browser opens it. */
+    /** Any other address on the web (Ultimate Guitar, caracole serve on the computer…): the phone's browser opens it. */
     data class Browser(val url: String) : Route
 
-    /** One of caracole serve's own pages (Export, the versions' forms): the server's alone, not in the copy. */
-    data object ServerOnly : Route
-
-    /** A path of the mirror that it doesn't hold (a sync since changed the list). */
-    data object Missing : Route
-
-    /** Anything else (another scheme): nothing opens it. */
+    /** Anything else (another scheme, no address): nothing opens it. */
     data object Ignored : Route
 }
 
 /**
- * The mirror's addresses in the WebView, `https://appassets.androidplatform.net/<path>`: at the root of the
- * origin, so a page's path there is its path on caracole serve, and where every other link goes ([route]).
+ * The phone's server's addresses in the WebView, at [origin] (`http://127.0.0.1:8738`): a page's path there is its path
+ * on caracole serve, and every other link goes elsewhere ([route]).
  *
- * A page that takes itself for served links caracole serve's own pages by their absolute paths:
- * `/guitar?file=<its path>` for a Guitar Pro file, which is in the mirror and opens as any other file;
- * `/export`, `/versions` and the like, which need the server ([Route.ServerOnly]).
+ * The launch's cookie is the server's alone, and a cookie ignores the port: so the WebView loads that exact origin
+ * (scheme, host and port) and nothing else ([loads]), and a link to any other origin, another port of 127.0.0.1
+ * (a Termux caracole serve's 8737) included, opens in the browser, which has no such cookie.
+ *
+ * [isFile] says whether a path of the library ("Estopa/Tu calorro/sheet.pdf") is a file another app opens rather than a
+ * page: a link to one is [Route.File]. A page that takes itself for served links caracole serve's Guitar Pro page,
+ * `/guitar?file=<its path>`, for each Guitar Pro file: the file opens as any other.
  */
-class Links(private val mirror: Mirror) {
+class Links(origin: URI, private val isFile: (String) -> Boolean) {
+    private val scheme = origin.scheme.lowercase()
+    private val host = origin.host.lowercase()
+    private val port = portOf(origin)
+    private val base = "$scheme://${origin.rawAuthority}"
 
-    fun route(url: String): Route {
-        val uri = try {
-            URI(url)
-        } catch (e: URISyntaxException) {
-            return Route.Ignored
-        }
+    /** Where [url] goes; with [download] (the WebView's download listener), a file of the server's whatever its path. */
+    fun route(url: String, download: Boolean = false): Route {
+        val uri = parse(url) ?: return Route.Ignored
         val scheme = uri.scheme?.lowercase()
         if (scheme != "http" && scheme != "https") return Route.Ignored
-        if (scheme != "https" || !HOST.equals(uri.host, ignoreCase = true)) return Route.Browser(url)
-        val path = uri.path ?: return Route.Missing
+        if (!own(uri)) return Route.Browser(url)
+        val path = (uri.path ?: "").removePrefix("/")
         if (path == GUITAR_PAGE) {
-            val file = query(uri.rawQuery)["file"] ?: return Route.Missing
-            return mirror.lookup(file)?.let { Route.File(it) } ?: Route.Missing
+            val file = query(uri.rawQuery)["file"]
+            if (file != null && (download || isFile(file))) return Route.File(file)
         }
-        val served = mirror.lookup(path.removePrefix(PREFIX))
         return when {
-            served == null -> if ('.' in path.substringAfterLast('/')) Route.Missing else Route.ServerOnly
-            served.entry.isPage -> Route.Page
-            else -> Route.File(served)
+            download -> if (path.isEmpty()) Route.Ignored else Route.File(path)
+            path.isNotEmpty() && isFile(path) -> Route.File(path)
+            else -> Route.Page
         }
+    }
+
+    /**
+     * Whether the WebView may fetch [url] itself: an address of the server's exact origin, or a `data:` URL, the page's
+     * own bytes; anything else is answered 404 in the app and reaches no socket.
+     */
+    fun loads(url: String): Boolean {
+        // A data: URL may hold what no URI parses (an SVG's own <, a space): its scheme alone says what it is.
+        if (url.regionMatches(0, "data:", 0, 5, ignoreCase = true)) return true
+        val uri = parse(url) ?: return false
+        val scheme = uri.scheme?.lowercase()
+        return (scheme == "http" || scheme == "https") && own(uri)
+    }
+
+    /** The address of [path] on the server, for the WebView: each part percent-encoded. */
+    fun address(path: String): String = base + target(path)
+
+    private fun own(uri: URI): Boolean =
+        uri.scheme.lowercase() == scheme && uri.rawUserInfo == null && uri.host?.lowercase() == host && portOf(uri) == port
+
+    private fun portOf(uri: URI): Int = if (uri.port != -1) uri.port else if (uri.scheme.lowercase() == "https") 443 else 80
+
+    private fun parse(url: String): URI? = try {
+        URI(url)
+    } catch (e: URISyntaxException) {
+        null
     }
 
     private fun query(raw: String?): Map<String, String> = raw.orEmpty().split('&')
@@ -71,18 +98,11 @@ class Links(private val mirror: Mirror) {
     }
 
     companion object {
-        /** The WebView's origin for the mirror: androidx.webkit's WebViewAssetLoader's own domain. */
-        const val HOST = "appassets.androidplatform.net"
-
-        /** The path the mirror is under: the root, as on caracole serve. */
-        const val PREFIX = "/"
-
         /** caracole serve's Guitar Pro page, which a served viewer links each Guitar Pro file to. */
-        private const val GUITAR_PAGE = "/guitar"
+        private const val GUITAR_PAGE = "guitar"
 
-        /** The address of [path] in the mirror, for the WebView: each part percent-encoded. */
-        fun address(path: String): String =
-            "https://$HOST$PREFIX" + path.split('/').joinToString("/") { encodePart(it) }
+        /** [path] of the library as a target on the server ("/Estopa/Tu%20calorro/sheet.pdf"): each part percent-encoded. */
+        fun target(path: String): String = "/" + path.split('/').joinToString("/") { encodePart(it) }
 
         private fun encodePart(part: String): String {
             val out = StringBuilder()

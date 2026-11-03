@@ -3,12 +3,14 @@
 A small app that keeps a copy of your caracole library on the phone and shows it with no network: the library
 page, every sheet in caracole's own viewer (key, capo, chord diagrams, harmony, pinyin, strum), the songbooks,
 and the PDFs. It shows the pages caracole writes into the library as they are. When caracole is upgraded, the
-pages change with it, and the app doesn't need an update.
+pages change with it, and the app doesn't need an update. With the computer's indexes imported, its search finds
+songs on the sites with the computer off ([below](#search-with-the-computer-off)).
 
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
 changed. It checks each file's size and hash, and it swaps the new list in whole, so a sync cut short leaves the
-copy you had. The app is read-only: it never writes to the library.
+copy you had. The app never writes to the computer's library. It shows the copy through a caracole of its own on
+the phone, a small server on 127.0.0.1 that only the app can use.
 
 ## Build
 
@@ -23,7 +25,7 @@ plugin at the SDK's aapt2, because NixOS can't run the copy the plugin fetches f
 downloads the plugin and the libraries from Google's Maven and Maven Central.
 
 The sync engine's tests run on the JVM, against a fake caracole serve, and so do the app's own (the text size, the
-settings):
+settings, a file read from the phone's server for another app, an index fetched or picked):
 
     nix develop ./android -c gradle -p android test
 
@@ -61,12 +63,13 @@ What works with no network:
 
 A PDF, a ChordPro file or a Guitar Pro file opens in another app on the phone. Android asks which app when more
 than one can open it, and the app says so when none can. Links to Ultimate Guitar, MuseScore and other sites
-open in the browser.
+open in the browser, and so does a link to caracole serve.
 
-What doesn't work offline: anything that needs caracole serve. That means searching the sites, adding or fetching
-songs, Export PDF, and choosing versions. Use caracole serve in a browser for those.
+What doesn't work offline: fetching sheets from the sites, Export PDF, choosing versions, and the other pages that
+need caracole serve. They say they aren't on the phone yet. Use caracole serve in a browser for those.
 
-The viewers run sandboxed, with the same Content-Security-Policy and sandbox headers caracole serve sends.
+The pages come from the app's own server, with the same Content-Security-Policy and sandbox headers caracole serve
+sends, so the viewers run sandboxed as they do there.
 
 ## Text size
 
@@ -90,7 +93,33 @@ again, and the next sync brings them to the phone.
 
 ## Search with the computer off
 
-Not built yet.
+The app runs caracole's own rules (android/core and android/server) on the phone. Its server listens on
+`http://127.0.0.1:8738`, or another free port when that one is taken. The WebView loads the library page from it:
+caracole's own page, built from the same files caracole serve builds it from, with your songs' cards taken from the
+copy. Sheets, PDFs and songbooks are the copy's files.
+
+**Only the app can use that server.** At each launch the app makes a random secret and sets it as a cookie
+(`caracole-launch`) in its WebView. The server refuses any request without it ("Not this app's caracole."), so
+another app on the phone can't reach it. A cookie ignores the port, so the WebView loads that exact address and
+nothing else: a link to another one, another port of 127.0.0.1 included (a Termux caracole serve on 8737), opens
+in the browser, and nothing a page asks for elsewhere leaves the phone. A file another app opens (a PDF, a Guitar
+Pro file) is read from the server inside the app, never downloaded by Android.
+
+**Import the computer's indexes** to search the sites. The computer builds them (the nightly run, `caracole index
+build`); the phone never asks the sites for them. In Settings, under Import indexes:
+
+- **From the computer** fetches them from caracole serve at the address above (`GET /api/peer/index`, which a
+  recent caracole gives).
+- **From a file** takes a file made on the computer with `caracole index export indexes.sqlite` and copied to the
+  phone.
+
+The import runs in the background, with a notification while it lasts. The phone merges the file as `caracole index
+merge` does: each site's newer reads win, and nothing it holds goes back. Settings shows how the last import ended.
+Import again now and then to bring the sites' new songs.
+
+Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
+LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
+artist's songs. LaCuerda's own search and YouTube's suggestions need the computer.
 
 ## Sync from the phone
 
@@ -154,7 +183,9 @@ Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the la
 emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
 the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running caracole serve. EndToEndTest opens
 the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
-page and a sheet, larger and smaller, and checks the size label and that the chords stay over their syllables:
+page and a sheet, larger and smaller, and checks the size label and that the chords stay over their syllables.
+LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, and the WebView
+never loads another loopback port:
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
