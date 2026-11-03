@@ -131,10 +131,9 @@ class LibraryRoutesTest {
         val answer = app.postScript("/request", listOf("artist" to " Soda Stereo ", "title" to "De Música Ligera",
                                                        "album" to "Canción Animal", "duration" to "3:31"))
         assertEquals(200, answer.status, answer.json.toString())
-        val view = answer.json.jsonObject.getValue("job").jsonObject
-        assertEquals(JsonPrimitive("add"), view["kind"])
-        val job = waitFor(view)
+        val job = waitFor(answer.json.jsonObject.getValue("job").jsonObject)
         assertEquals("done", job.state)
+        assertEquals("add", job.spec.kind)
         assertEquals(Normalize.identityKey("Soda Stereo", "De Música Ligera"), job.spec.key)
         val added = assertNotNull(song("Soda Stereo", "De Música Ligera"))
         assertEquals("Soda Stereo", added.artist)
@@ -202,10 +201,10 @@ class LibraryRoutesTest {
         val confirmed = app.postScript("/remove", listOf("song" to wonderwall.id.toString(), "confirm" to "1",
                                                          "key" to wonderwall.key, "back" to "#tab=library"))
         assertEquals(200, confirmed.status)
-        val view = confirmed.json.jsonObject.getValue("job").jsonObject
-        assertEquals(JsonPrimitive("remove"), view["kind"])
-        val job = waitFor(view)
+        val job = waitFor(confirmed.json.jsonObject.getValue("job").jsonObject)
         assertEquals("done", job.state)
+        assertEquals("remove", job.spec.kind)
+        assertEquals(wonderwall.id, job.spec.songId)
         assertEquals("remove:${wonderwall.key}", job.spec.key)
         assertNull(song("Oasis", "Wonderwall"))
         assertTrue(app.database.read { Songs.isRemoved(it, wonderwall.key) })
