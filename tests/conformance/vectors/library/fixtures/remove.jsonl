@@ -1,0 +1,87 @@
+{"corpus":"library/fixtures/remove","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"row":{"added_at":"2026-10-31T00:00:00Z","album":null,"artist":"Radiohead","artists":"[\"Radiohead\"]","audio_mtime":null,"audio_path":null,"autochords_mtime":null,"created_at":"2026-10-31T00:00:00Z","duration_ms":null,"id":1,"isrc":null,"key":"radiohead/creep","lacuerda_checked_at":null,"lyrics_at":null,"lyrics_json":"{\"plain\": \"I'm a creep\", \"synced\": null, \"instrumental\": false, \"duration\": null, \"lrclib_id\": 1, \"raw\": {}, \"provider\": \"lrclib\", \"url\": null}","lyrics_status":"found","match_artist_key":null,"match_candidates":"[]","match_decision":null,"match_score":null,"match_song_key":null,"match_step":null,"matched_at":null,"review":0,"source_ids":"{\"wanted\": [\"radiohead/creep\"]}","status":"found","title":"Creep","ug_checked_at":null,"ug_dirty":1,"updated_at":"2026-10-31T00:00:00Z","variant":null},"table":"songs"}
+{"row":{"added_at":"2026-10-31T00:00:00Z","album":null,"artist":"Radiohead","artists":"[\"Radiohead\"]","audio_mtime":null,"audio_path":null,"autochords_mtime":null,"created_at":"2026-10-31T00:00:00Z","duration_ms":null,"id":2,"isrc":null,"key":"radiohead/karma-police","lacuerda_checked_at":null,"lyrics_at":null,"lyrics_json":"{\"plain\": \"I'm a creep\", \"synced\": null, \"instrumental\": false, \"duration\": null, \"lrclib_id\": 1, \"raw\": {}, \"provider\": \"lrclib\", \"url\": null}","lyrics_status":"found","match_artist_key":null,"match_candidates":"[]","match_decision":null,"match_score":null,"match_song_key":null,"match_step":null,"matched_at":null,"review":0,"source_ids":"{\"wanted\": [\"radiohead/karma-police\"]}","status":"found","title":"Karma Police","ug_checked_at":null,"ug_dirty":1,"updated_at":"2026-10-31T00:00:00Z","variant":null},"table":"songs"}
+{"row":{"added_at":"2026-10-31T00:00:00Z","album":null,"artist":"Oasis","artists":"[\"Oasis\"]","audio_mtime":null,"audio_path":null,"autochords_mtime":null,"created_at":"2026-10-31T00:00:00Z","duration_ms":null,"id":3,"isrc":null,"key":"oasis/wonderwall","lacuerda_checked_at":null,"lyrics_at":null,"lyrics_json":null,"lyrics_status":"pending","match_artist_key":null,"match_candidates":"[]","match_decision":null,"match_score":null,"match_song_key":null,"match_step":null,"matched_at":null,"review":0,"source_ids":"{\"wanted\": [\"oasis/wonderwall\"]}","status":"wanted","title":"Wonderwall","ug_checked_at":null,"ug_dirty":1,"updated_at":"2026-10-31T00:00:00Z","variant":null},"table":"songs"}
+{"row":{"coverage":null,"fetched_at":"2026-10-31T00:00:00Z","gone":0,"id":1,"kind":"chords","label":null,"pick_rank":null,"provider":"ug","rating":4.5,"raw":"{\"x\": 1}","slot":"sheet","song_id":1,"tab_id":"101","url":"https://u/101","version":1,"votes":10},"table":"versions"}
+{"row":{"coverage":null,"fetched_at":"2026-10-31T00:00:00Z","gone":0,"id":2,"kind":"chords","label":null,"pick_rank":null,"provider":"ug","rating":4.5,"raw":"{\"x\": 1}","slot":"sheet","song_id":2,"tab_id":"101","url":"https://u/101","version":1,"votes":10},"table":"versions"}
+{"row":{"created_at":"2026-10-31T00:00:00Z","id":1,"kept_rank":1,"name":"sheet.txt","path":"Radiohead/Creep/sheet.txt","sha256":"2dafa4711a130165a2407cb1a3dc8b69299c1b153f837eac08ba584e1443df7e","song_id":1,"version_id":1},"table":"files"}
+{"row":{"created_at":"2026-10-31T00:00:00Z","id":2,"kept_rank":1,"name":"tab.txt","path":"Radiohead/Creep/tab.txt","sha256":"77fdc6b7985eb31c45f3e39c2c060fbb194ae9ba695ee9bcde04b71ac4f15c62","song_id":1,"version_id":1},"table":"files"}
+{"row":{"created_at":"2026-10-31T00:00:00Z","id":3,"kept_rank":1,"name":"sheet.txt","path":"Radiohead/Karma Police/sheet.txt","sha256":"2dafa4711a130165a2407cb1a3dc8b69299c1b153f837eac08ba584e1443df7e","song_id":2,"version_id":2},"table":"files"}
+{"row":{"artist":"Radiohead","key":"radiohead/creep","removed_at":"2026-10-01T00:00:00Z","source_ids":"{\"wanted\": [\"radiohead/creep-old\"]}","title":"Creep"},"table":"removed"}
+{"kv":"autochords:failed:1","value":"{}"}
+{"kv":"autochords:failed:1:more","value":"{}"}
+{"kv":"autochords:failed:2","value":"{}"}
+{"kv":"autochords:failed:2:more","value":"{}"}
+{"kv":"azlyrics:checked:1","value":"{}"}
+{"kv":"azlyrics:checked:1:more","value":"{}"}
+{"kv":"azlyrics:checked:2","value":"{}"}
+{"kv":"azlyrics:checked:2:more","value":"{}"}
+{"kv":"gametabs:checked:1","value":"{}"}
+{"kv":"gametabs:checked:1:more","value":"{}"}
+{"kv":"gametabs:checked:2","value":"{}"}
+{"kv":"gametabs:checked:2:more","value":"{}"}
+{"kv":"gtptabs:checked:1","value":"{}"}
+{"kv":"gtptabs:checked:1:more","value":"{}"}
+{"kv":"gtptabs:checked:2","value":"{}"}
+{"kv":"gtptabs:checked:2:more","value":"{}"}
+{"kv":"harptabs:checked:1","value":"{}"}
+{"kv":"harptabs:checked:1:more","value":"{}"}
+{"kv":"harptabs:checked:2","value":"{}"}
+{"kv":"harptabs:checked:2:more","value":"{}"}
+{"kv":"lyrics:failed:1","value":"{}"}
+{"kv":"lyrics:failed:1:more","value":"{}"}
+{"kv":"lyrics:failed:2","value":"{}"}
+{"kv":"lyrics:failed:2:more","value":"{}"}
+{"kv":"megalobiz:checked:1","value":"{}"}
+{"kv":"megalobiz:checked:1:more","value":"{}"}
+{"kv":"megalobiz:checked:2","value":"{}"}
+{"kv":"megalobiz:checked:2:more","value":"{}"}
+{"kv":"phone:schema","value":"1"}
+{"kv":"render:1","value":"{}"}
+{"kv":"render:10","value":"{}"}
+{"kv":"render:1:more","value":"{}"}
+{"kv":"render:2","value":"{}"}
+{"kv":"render:2:more","value":"{}"}
+{"kv":"render:export:1","value":"{}"}
+{"kv":"render:export:1:more","value":"{}"}
+{"kv":"render:export:2","value":"{}"}
+{"kv":"render:export:2:more","value":"{}"}
+{"kv":"render:files:1","value":"{}"}
+{"kv":"render:files:1:more","value":"{}"}
+{"kv":"render:files:2","value":"{}"}
+{"kv":"render:files:2:more","value":"{}"}
+{"kv":"render:progressions:1","value":"{}"}
+{"kv":"render:progressions:1:more","value":"{}"}
+{"kv":"render:progressions:2","value":"{}"}
+{"kv":"render:progressions:2:more","value":"{}"}
+{"kv":"sheet_versions:same:1","value":"{}"}
+{"kv":"sheet_versions:same:1:more","value":"{}"}
+{"kv":"sheet_versions:same:2","value":"{}"}
+{"kv":"sheet_versions:same:2:more","value":"{}"}
+{"kv":"sheet_versions:unkeepable:1","value":"{}"}
+{"kv":"sheet_versions:unkeepable:1:more","value":"{}"}
+{"kv":"sheet_versions:unkeepable:2","value":"{}"}
+{"kv":"sheet_versions:unkeepable:2:more","value":"{}"}
+{"kv":"sheet_versions:yours:1","value":"{}"}
+{"kv":"sheet_versions:yours:1:more","value":"{}"}
+{"kv":"sheet_versions:yours:2","value":"{}"}
+{"kv":"sheet_versions:yours:2:more","value":"{}"}
+{"kv":"songs:key_version","value":"2"}
+{"kv":"ug:artist_page_checked:1","value":"{}"}
+{"kv":"ug:artist_page_checked:1:more","value":"{}"}
+{"kv":"ug:artist_page_checked:2","value":"{}"}
+{"kv":"ug:artist_page_checked:2:more","value":"{}"}
+{"kv":"ug:blocked:1","value":"{}"}
+{"kv":"ug:blocked:1:more","value":"{}"}
+{"kv":"ug:blocked:2","value":"{}"}
+{"kv":"ug:blocked:2:more","value":"{}"}
+{"kv":"wanted:first_seen:oasis/wonderwall","value":"2026-10-31T00:00:00Z"}
+{"kv":"wanted:first_seen:radiohead/creep","value":"2026-10-31T00:00:00Z"}
+{"kv":"wanted:first_seen:radiohead/karma-police","value":"2026-10-31T00:00:00Z"}
+{"kv":"youtube:1","value":"{}"}
+{"kv":"youtube:1:more","value":"{}"}
+{"kv":"youtube:2","value":"{}"}
+{"kv":"youtube:2:more","value":"{}"}
+{"base64":"W0FtXUNyZWVw","file":"Radiohead/Creep/sheet.txt"}
+{"base64":"ZXwtLTAtLXw=","file":"Radiohead/Creep/tab.txt"}
+{"base64":"W0FtXUNyZWVw","file":"Radiohead/Karma Police/sheet.txt"}

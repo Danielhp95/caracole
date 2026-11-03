@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.files
 
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.mirror.Entry
 import io.github.danielhp95.caracole.mirror.Gate
 import io.github.danielhp95.caracole.mirror.Manifest
@@ -31,6 +32,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -164,17 +166,23 @@ class LibraryFilesTest {
         }
     }
 
-    @Test fun thePhoneGateServesAllButWhatThePhoneRemovedUntilItsUnitsHaveDigests() {
+    @Test fun thePhoneGateServesWhatThePhoneHoldsAsTheComputerListedIt() {
         TestApp(tmp.root).use { test ->
             val gate = PhoneGate(test.database)
-            assertEquals(Gate.SERVE, gate.check("song/$key", "anything"))
+            assertEquals(Gate.SERVE, gate.check("song/$key", "anything"), "a song the phone hasn't got has no digest")
             tombstone(test.database, key)
             assertEquals(Gate.REMOVED, gate.check("song/$key", "anything"))
             assertEquals(Gate.REMOVED, gate.check("song/$key", null))
             song(test.database, "Soda Stereo", "De Música Ligera", key)
-            assertEquals(Gate.SERVE, gate.check("song/$key", "anything"), "a song taken again stands")
-            assertEquals(Gate.SERVE, gate.check("songbook/campfire", "anything"))
-            assertEquals(Gate.SERVE, gate.check("removed/$key", null))
+            val digest = test.database.read { Units.digestOf(it, "song/$key") }
+            assertNotNull(digest)
+            assertEquals(Gate.SERVE, gate.check("song/$key", digest), "a song taken again stands as the computer listed it")
+            assertEquals(Gate.CHANGED, gate.check("song/$key", "anything"), "a song the phone holds otherwise changed")
+            assertEquals(Gate.CHANGED, gate.check("song/$key", null))
+            assertEquals(Gate.SERVE, gate.check("songbook/campfire", "anything"), "a unit the phone hasn't got")
+            val stone = test.database.read { Units.digestOf(it, "removed/$key") }
+            assertEquals(Gate.SERVE, gate.check("removed/$key", stone))
+            assertEquals(Gate.CHANGED, gate.check("removed/$key", null))
         }
     }
 

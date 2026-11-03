@@ -525,7 +525,7 @@ object Search {
     fun noOnes(artistKey: String): Boolean
 }
 // core/ug/ArtistTabs.kt (search-ug): ug/artist_tabs.py's keys, refile, ensure_current_keys
-object ArtistTabs { fun ensureCurrentKeys(db: Db): Int; fun refile(db: Db, artistKeys: Collection<String>? = null): Int }
+object ArtistTabs { fun ensureCurrentKeys(db: Db): Int; fun refile(db: Db, pages: Collection<String>? = null): Int }  // pages: artist pages, as artist_tabs.refile; null: every one
 // core/search/Suggest.kt (search-suggest; neutral: emptyList())
 object Suggest {
     fun suggestArtists(db: Db, q: String, limit: Int = 3, lacuerda: Boolean = true, harptabs: Boolean = true): List<Suggestion>
