@@ -1,5 +1,6 @@
 """caracole serve's side of a sync between two caracoles (peer_sync.py): what this library holds, unit by unit, each
-unit whole, its kept files, and a pull of another caracole's units queued.
+unit whole, its kept files, a pull of another caracole's units queued, another caracole's push staged (peer_push.py),
+and this library's site indexes.
 
     GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, each unit of its library (a song,
                                  a removal, a songbook, an artist's alias or UG page, a blocked tab) with its label and
@@ -10,29 +11,65 @@ unit whole, its kept files, and a pull of another caracole's units queued.
     GET  /api/peer/file?song=&name=   a song's kept file (``files``), while it is what caracole recorded (404 else)
     POST /peer/pull              Take these units from the caracole at ``from``: ``caracole peer pull FROM --unit=…``
                                  queued (``units``, one id a line), then to its line in the Requests tab
+    POST /peer/push/new          A push opened (JSON ``{"format", "from", "files"}``): its id and the files of
+                                 ``files`` this side needs sent, ``{"push", "need"}`` (``peer_push.new_push``)
+    POST /peer/push/file?push=&sha256=   A file the push needs, its bytes (``peer_push.stage_file``): ``{"ok": true}``
+    POST /peer/push?push=        The push sent (JSON: its document, ``peer_push.read_push_document``), checked and
+                                 kept (``peer_push.send``), then ``caracole peer take --progress DIR`` queued, as
+                                 Changes from <its library>: ``{"job": view}``
+    GET  /api/peer/index[?sites=]   this library's site indexes (``sites``: those named, by commas; every one with
+                                 none), as ``caracole index export`` writes them, a SQLite file streamed, one at a
+                                 time
 
 Another caracole reads the first three to compare the two and to take what the owner chose (``caracole peer``). They
 are reads, as a search is: no lock, no site asked, nothing written. Under ``/api/``, another site's page can't read
 them (``security.own_page_read``); a caracole, which is no browser, can. The pull is a write, as any: the form token
 and the cross-origin check, then a command under caracole's lock, which asks the other caracole for each unit.
+
+A push is the phone's, which can't be asked to pull: it sends this side the units it takes (peer_push.py), each
+request a write with the form token in its header (a ``json`` or ``bytes`` route, web/app.py). Its files are staged
+in ``state_dir/peer/``, never in the library, and checked by their SHA-256; its take is a command, queued under
+``peer-push:<its id>`` as a job of its own, and one from the same caracole while another is waiting or running is
+refused (409), that push left open. The index is read in one transaction into a file of ``cache_dir/peer/``, taking
+no lock, and that file is gone once it is open to be sent: caracole serve writes nothing else for a sync
+(AGENTS.md).
 """
 
 from __future__ import annotations
 
+import io
+import os
+import secrets
+import threading
+from datetime import UTC, datetime
+from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
+from caracole import peer_push
 from caracole.web.app import Response, Route, WebApp, json_response
 from caracole.web.pages import Refused
 
 PEER_PULL = "peer-pull:"  # a pull's job key: the address it takes from after it, so a second one joins it
+PEER_PUSH = "peer-push:"  # a push's take's job key: the id of the caracole that pushed after it
 MAX_UNITS = 5000  # a pull's units at most: a library's every unit, many times over
+SQLITE = "application/vnd.sqlite3"
+LEFTOVER = 3600.0  # seconds after which a copy of the indexes left in cache_dir/peer (its process killed) is deleted
 
 ROUTES = (
     Route("GET", "/api/peer/state", lambda app, asked: state(app, _params(asked.target))),
     Route("GET", "/api/peer/unit", lambda app, asked: unit(app, _params(asked.target))),
     Route("GET", "/api/peer/file", lambda app, asked: song_file(app, _params(asked.target))),
-    Route("POST", "/peer/pull", lambda app, asked, form: pull(app, form)),
+    Route("POST", "/peer/pull", lambda app, asked, form: pull(app, form), limit=1024 * 1024),
+    Route("POST", "/peer/push/new", lambda app, asked, doc: push_new(app, doc), body="json",
+          limit=peer_push.NEW_MAX),
+    Route("POST", "/peer/push/file", lambda app, asked, data: push_file(app, _params(asked.target), data),
+          body="bytes", limit=peer_push.FILE_MAX),
+    Route("POST", "/peer/push", lambda app, asked, doc: push(app, _params(asked.target), doc), body="json",
+          limit=peer_push.DOCUMENT_MAX),
+    Route("GET", "/api/peer/index", lambda app, asked: index(app, asked, _params(asked.target))),
 )
+# One copy of the indexes out at a time, from its making until it is sent (or dropped): each is as large as they are
+_streaming = threading.Lock()
 
 
 def _params(target: str) -> dict[str, str]:
@@ -59,18 +96,21 @@ def state(app: WebApp, params: dict[str, str]) -> Response:
     from caracole import __version__
     from caracole import peer_sync as sync
 
+    from caracole import index_transfer
+
     try:
         overrides, books = _library(app)
         with app.db() as conn:
             units = sync.library_state(conn, overrides, books)
             server = sync.own_id(conn)
             base = sync.base_of(conn, params["peer"]) if params.get("peer") else None
+            indexes = index_transfer.newest(conn)
     except Refused as e:
         return json_response(e.status, {"error": e.message})
-    # The form token, for the pull the other caracole may post (POST /peer/pull): no wider than a page's, which any
-    # client that reaches the server reads, and another site's page can read neither.
-    return json_response(200, sync.state_document(server, __version__, app.cfg.library_name, units, base)
-                         | {"token": app.csrf})
+    # The form token, for the pull the other caracole may post (POST /peer/pull) and a push's requests: no wider
+    # than a page's, which any client that reaches the server reads, and another site's page can read neither.
+    return json_response(200, sync.state_document(server, __version__, app.cfg.library_name, units, base,
+                                                  indexes=indexes) | {"token": app.csrf})
 
 
 def unit(app: WebApp, params: dict[str, str]) -> Response:
@@ -118,3 +158,142 @@ def pull(app: WebApp, form: dict[str, str]) -> Response:
               ("peer", "pull", *(f"--unit={u}" for u in units), "--", address))]
     job, _ = app.submit(f"Sync with {address}", PEER_PULL + address, steps, display=address, join=False)
     return app.queued(job)
+
+
+def _refused(e: peer_push.PushError) -> Refused:
+    return Refused(e.status, "Not taken", str(e))
+
+
+def push_new(app: WebApp, doc: Any) -> Response:
+    """``POST /peer/push/new``: a push opened, with the files this side needs sent."""
+    from caracole import peer_sync as sync
+
+    try:
+        sender, files = peer_push.read_new(doc)
+        with app.db() as conn:
+            own = sync.own_id(conn)
+            need = peer_push.needed(conn, app.cfg.library_dir, files)
+        opened = peer_push.new_push(app.cfg.state_dir, sender=sender, files=files, need=need, own=own)
+    except peer_push.PushError as e:
+        raise _refused(e) from None
+    except OSError as e:  # the staging folder's, not the database's (read above)
+        raise Refused(503, "Not kept", f"The push couldn't be opened: {e}.") from e
+    return json_response(200, {"push": opened.push, "need": opened.need})
+
+
+def push_file(app: WebApp, params: dict[str, str], data: bytes) -> Response:
+    """``POST /peer/push/file``: a file the push needs, staged once its bytes are what its SHA-256 says."""
+    try:
+        peer_push.stage_file(app.cfg.state_dir, params.get("push", ""), params.get("sha256", ""), data)
+    except peer_push.PushError as e:
+        raise _refused(e) from None
+    except OSError as e:
+        raise Refused(503, "Not kept", f"The file couldn't be kept: {e}.") from e
+    return json_response(200, {"ok": True})
+
+
+def push(app: WebApp, params: dict[str, str], doc: Any) -> Response:
+    """``POST /peer/push``: the push sent, checked, kept, and its take queued (``caracole peer take``)."""
+    from caracole import peer_sync as sync
+
+    state_dir = app.cfg.state_dir
+    push_id = params.get("push", "")
+    try:
+        peer_push.check_id(push_id)
+        sent = peer_push.read_push_document(doc)
+        peer_push.sweep(state_dir)
+        pending = peer_push.unstaged(state_dir, push_id, sent.files())
+        with app.db() as conn:
+            own = sync.own_id(conn)
+            kept = {f for f in pending if peer_push.kept_copy(conn, app.cfg.library_dir, f) is not None}
+        folder = peer_push.send(state_dir, push_id, sent, doc, own=own, kept=kept)
+    except peer_push.PushError as e:
+        raise _refused(e) from None
+    except OSError as e:  # the staging folder's, not the database's (read above)
+        raise Refused(503, "Not kept", f"The push couldn't be kept: {e}.") from e
+    shown = f"Changes from {(sent.name.strip() or 'another caracole')[:120]}"
+    count = len(sent.take)
+    steps = [(f"Taking {count} {'change' if count == 1 else 'changes'}",
+              ("peer", "take", "--progress", "--", str(folder)))]
+    try:
+        job, new = app.submit(shown, PEER_PUSH + sent.sender, steps, display=shown, join=False)
+    except Refused:
+        peer_push.unsend(state_dir, push_id)
+        raise
+    if not new:  # a take of this caracole's waits or runs: this push stays open, to send again once it is over
+        peer_push.unsend(state_dir, push_id)
+        raise Refused(409, "Taking already", f"{shown} are being taken already (request {job.id}): send them "
+                                             "again once that is over.")
+    return app.queued(job)
+
+
+class _Streamed(io.BufferedReader):
+    """A copy of the indexes, open to be sent: closed (server.py, once it is sent; or dropped), it lets the next
+    copy be made."""
+
+    def __init__(self, path, release):
+        super().__init__(io.FileIO(path, "rb"))
+        self._release = release
+
+    def close(self) -> None:
+        try:
+            super().close()
+        finally:
+            release, self._release = self._release, None
+            if release is not None:
+                release()
+
+
+def _leftovers(folder) -> None:
+    """Delete the copies of the indexes a process killed while it made one left in ``folder``, an hour after."""
+    import time
+
+    try:
+        entries = list(os.scandir(folder))
+    except FileNotFoundError:
+        return
+    for entry in entries:
+        try:
+            if (entry.name.startswith("index-") and entry.is_file(follow_symlinks=False)
+                    and time.time() - entry.stat(follow_symlinks=False).st_mtime > LEFTOVER):
+                os.unlink(entry.path)
+        except OSError:
+            continue
+
+
+def index(app: WebApp, asked, params: dict[str, str]) -> Response:
+    """``GET /api/peer/index``: this library's site indexes, as ``index_transfer.export`` writes them, from a file of
+    ``cache_dir/peer/`` deleted once it is open, streamed (``Response.stream``): one copy at a time (503 while
+    another is out), and none for a HEAD, which would make a whole copy only to say its length (405)."""
+    from caracole import index_transfer
+
+    if asked.method == "HEAD":
+        return Response(405, b"", [("Allow", "GET")])
+    try:
+        sites = index_transfer.chosen([s.strip() for s in params.get("sites", "").split(",") if s.strip()])
+    except index_transfer.TransferError as e:
+        return json_response(400, {"error": str(e)})
+    if not _streaming.acquire(blocking=False):
+        return json_response(503, {"error": "Another copy of the indexes is being sent: try again once it is."})
+    folder = app.cfg.cache_dir / "peer"
+    path = folder / f"index-{secrets.token_hex(8)}.sqlite"
+    stream = None
+    try:
+        app.cfg.cache_dir.mkdir(parents=True, exist_ok=True)
+        folder.mkdir(mode=0o700, exist_ok=True)
+        os.chmod(folder, 0o700)
+        _leftovers(folder)
+        with app.db() as conn:
+            index_transfer.export(conn, path, sites, now=datetime.now(UTC))
+        stream = _Streamed(path, _streaming.release)  # server.py closes it once it is sent
+    except Refused as e:
+        return json_response(e.status, {"error": e.message})
+    except (index_transfer.TransferError, OSError) as e:
+        return json_response(503, {"error": f"The indexes couldn't be copied: {e}"})
+    finally:
+        path.unlink(missing_ok=True)
+        if stream is None:
+            _streaming.release()
+    return Response(200, headers=[("Content-Type", SQLITE),
+                                  ("Content-Disposition", 'attachment; filename="caracole-index.sqlite"')],
+                    stream=stream)

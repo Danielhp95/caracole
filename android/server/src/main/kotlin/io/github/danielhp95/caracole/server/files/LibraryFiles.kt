@@ -26,8 +26,8 @@ import java.nio.file.attribute.BasicFileAttributes
 
 /** Whether the mirror may serve a page of a unit as the computer made it: the phone's own state decides. A song
  * the phone removed (a tombstone of its key, no song) is REMOVED; a unit whose digest on the phone now differs from
- * the one the computer listed with the page is CHANGED (until lane sync-units, the phone knows no digest, so
- * nothing is); anything else is served. */
+ * the one the computer listed with the page is CHANGED (Units.digestOf: the unit's digest as peer_sync gives it,
+ * none for a unit the phone hasn't got); anything else is served. */
 class PhoneGate(val database: Database) : UnitGate {
     override fun check(unit: String, digest: String?): Gate = database.read { db ->
         if (unit.startsWith(SONG) && Songs.isRemoved(db, unit.removePrefix(SONG))) {

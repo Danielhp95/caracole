@@ -42,21 +42,24 @@ class FakeCaracole : AutoCloseable {
     val address: ServerAddress get() = ServerAddress.parse("127.0.0.1:${server.address.port}")
 
     /**
-     * Serves [files] (path to bytes) and lists them, [start] first; [extra] adds raw entries' JSON to the list.
-     * Returns the list's entries as the app should read them.
+     * Serves [files] (path to bytes) and lists them, [start] first, each with the sync unit [units] gives it (its id
+     * and digest, as caracole serve names a song's or a songbook's file; none for a path it doesn't name); [extra]
+     * adds raw entries' JSON to the list. Returns the list's entries as the app should read them.
      */
     fun publish(
         files: Map<String, ByteArray>,
         start: String = files.keys.first(),
         headers: Map<String, Map<String, String>> = emptyMap(),
         extra: List<String> = emptyList(),
+        units: Map<String, Pair<String, String?>> = emptyMap(),
     ): List<Entry> {
         bodies.clear()
         val entries = (listOf(start) + files.keys.filter { it != start }.sorted()).map { path ->
             val bytes = files.getValue(path)
             val url = urlOf(path)
             bodies[url] = bytes
-            Entry(path, url, bytes.size.toLong(), sha256(bytes), typeOf(path), headers[path] ?: emptyMap())
+            Entry(path, url, bytes.size.toLong(), sha256(bytes), typeOf(path), headers[path] ?: emptyMap(),
+                  units[path]?.first, units[path]?.second)
         }
         manifest = manifestJson(start, entries.map { entryJson(it) } + extra).toByteArray()
         return entries
@@ -86,10 +89,12 @@ class FakeCaracole : AutoCloseable {
         fun manifestJson(start: String, entries: List<String>, format: String = "1"): String =
             """{"format": $format, "start": ${quote(start)}, "files": [${entries.joinToString(",\n")}]}"""
 
+        /** An entry as caracole serve lists it: a unit and its digest only where it names them. */
         fun entryJson(e: Entry): String {
             val headers = e.headers.entries.joinToString(", ") { (k, v) -> "${quote(k)}: ${quote(v)}" }
+            val unit = (e.unit?.let { """, "unit": ${quote(it)}""" } ?: "") + (e.digest?.let { """, "digest": ${quote(it)}""" } ?: "")
             return """{"path": ${quote(e.path)}, "url": ${quote(e.url)}, "size": ${e.size}, """ +
-                """"sha256": ${quote(e.sha256)}, "type": ${quote(e.type)}, "headers": {$headers}}"""
+                """"sha256": ${quote(e.sha256)}, "type": ${quote(e.type)}, "headers": {$headers}$unit}"""
         }
 
         fun quote(text: String): String = buildString {

@@ -1,14 +1,24 @@
 """``WebApp`` on a socket: ``http.server``'s threading server, a thread per connection.
 
 A connection serves one request (HTTP/1.0) and times out after 30 seconds. A
-POST must say how long it is, and is refused unread beyond ``MAX_BODY``. The
-queue's worker starts with the server and stops with it, ending the command it
-was running: on Ctrl-C, and on SIGTERM, which is how systemd stops the unit.
+POST must say how long it is, and is refused unread beyond its route's limit
+(``WebApp.body_limit``: 16 KiB, unless the route says more); one longer than
+16 KiB is read only once its address and headers pass the checks it would
+fail else (``WebApp.refused_unread``: the host name, another site's write, the
+form token, the content type), so that no other site's page has the server read
+megabytes it then refuses. An answer too long
+to hold, a file (``Response.stream``), is written in chunks as it is read, then
+closed. The queue's worker starts with the server and stops with it, ending the
+command it was running: on Ctrl-C, and on SIGTERM, which is how systemd stops
+the unit. As it starts, the pushes another caracole left an hour ago are deleted
+(``peer_push.sweep``).
 """
 
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import signal
 import socket
 import threading
@@ -20,6 +30,7 @@ from caracole.web.app import MAX_BODY, Request, Response, WebApp
 from caracole.web.security import WILDCARDS
 
 log = logging.getLogger(__name__)
+CHUNK = 1024 * 1024  # a streamed answer's bytes written at a time
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -36,10 +47,11 @@ class _Handler(BaseHTTPRequestHandler):
     def _answer(self) -> None:
         app = self.server.app
         body = b""
+        headers = {name.lower(): value for name, value in self.headers.items()}
         if self.command == "POST":
             length = self.headers.get("Content-Length")
             if length is None:
-                self._send(app.finish(Response(411, b"A form must say how long it is.\n")))
+                self._send(app.finish(Response(411, b"A POST must say how long it is.\n")))
                 return
             try:
                 size = int(length)
@@ -48,12 +60,17 @@ class _Handler(BaseHTTPRequestHandler):
             except ValueError:
                 self._send(app.finish(Response(400, b"That Content-Length isn't a length.\n")))
                 return
-            if size > MAX_BODY:
+            if size > app.body_limit(self.command, self.path):
                 self.close_connection = True
-                self._send(app.finish(Response(413, b"That form is too long.\n")))
+                self._send(app.finish(Response(413, b"That is too long to send here.\n")))
                 return
+            if size > MAX_BODY:
+                refused = app.refused_unread(self.command, self.path, headers)
+                if refused is not None:
+                    self.close_connection = True
+                    self._send(refused)
+                    return
             body = self.rfile.read(size)
-        headers = {name.lower(): value for name, value in self.headers.items()}
         try:
             response = app.handle(Request(self.command, self.path, headers, body))
         except Exception:  # noqa: BLE001 (a bug: say so, keep serving)
@@ -62,13 +79,22 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(response)
 
     def _send(self, response: Response) -> None:
-        self.send_response(response.status)
-        for name, value in response.headers:
-            self.send_header(name, value)
-        self.send_header("Content-Length", str(len(response.body)))
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(response.body)
+        stream = response.stream
+        try:
+            self.send_response(response.status)
+            for name, value in response.headers:
+                self.send_header(name, value)
+            length = len(response.body) if stream is None else os.fstat(stream.fileno()).st_size - stream.tell()
+            self.send_header("Content-Length", str(length))
+            self.end_headers()
+            if self.command != "HEAD":
+                if stream is None:
+                    self.wfile.write(response.body)
+                else:
+                    shutil.copyfileobj(stream, self.wfile, CHUNK)
+        finally:
+            if stream is not None:
+                stream.close()
 
     def log_message(self, format: str, *args: object) -> None:
         log.info("%s %s", self.address_string(), format % args)
@@ -98,7 +124,10 @@ def url_for(address: str, port: int) -> str:
 
 def serve(app: WebApp, address: str, port: int, *, announce: Callable[[str], None] = print) -> None:
     """Serve until Ctrl-C or SIGTERM, then stop the queue; OSError when it can't listen."""
+    from caracole import peer_push
+
     server = make_server(app, address, port)
+    peer_push.sweep(app.cfg.state_dir)
     if threading.current_thread() is threading.main_thread():
         signal.signal(signal.SIGTERM, _interrupt)
     app.queue.start()

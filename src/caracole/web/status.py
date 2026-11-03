@@ -51,6 +51,11 @@ ran. So a job of other commands reads the same way:
   chords stage made the sheet (an auto sheet of an earlier video is none of
   its doing), else "Not made yet" (a block, a cooldown, a spent budget or a
   site's error, which exit 0), the Requests tab saying which stage stopped it.
+  A sync with another caracole (``caracole peer sync``, the Sync tab's: sync_routes.py) says "Synced", and a push
+  another caracole sent taken (``caracole peer take``, peer_routes.py) or a pull of its units "Taken"; with a unit
+  left as it was (the owner skipped it, or it changed on a side since the comparison), "Synced: 2 changes left as
+  they were", a wait; and a stage that failed though the command ended (a take with no backup first), in that stage's
+  words, a wait too. While one runs, its running stage's line (``STAGE_LINES``: "Taking what changed there…").
 
 A line that ends in a failure or a wait also links to the job's output in
 the library page's Requests tab (``Line.details``, ``#tab=requests&job=N``). Every link is relative to the
@@ -71,6 +76,7 @@ from caracole.web.jobs import (
     EXPORTING,
     INDEX_READS,
     INTERRUPTED,
+    PEER,
     READING,
     REMOVING,
     YOUTUBE_SHEET,
@@ -106,7 +112,19 @@ STAGE_LINES = {
     "chords": "Working out the chords",
     "video": "Searching YouTube",  # caracole youtube --search's (jobs.YOUTUBE_SEARCH_STAGES)
     "thumbnail": "Getting the thumbnail",
+    "compare": "Comparing",  # caracole peer sync --progress's (jobs.PEER_SYNC_STAGES), and the phone's sync's
+    "take": "Taking what changed there",
+    "give": "Giving what changed here",
+    "mirror": "Copying the computer's pages",  # the phone's alone
+    "agree": "Recording what the two agree on",
+    "index": "Bringing the indexes up to date",  # the phone's alone
+    "check": "Checking what changed since the comparison",  # caracole peer take --progress's (jobs.PEER_TAKE_STAGES)
+    "render": "Rendering what was taken",
 }
+# What a sync's or a take's command is (its first step's ``caracole peer`` subcommand), as the page names its kind.
+PEER_KINDS = {"sync": "sync", "take": "peer-push", "pull": "peer-pull"}
+# How each says it is done.
+_PEER_DONE = {"sync": "Synced", "peer-push": "Taken", "peer-pull": "Taken"}
 _WAITING = "waiting for another caracole"  # how get.py's song stage begins while the lock is held
 _SHEET_LINES = {said: f"Fetching {said}" for said in SHEET_FROM.values()}  # a running sheet stage's, by its site
 # How ``caracole lacuerda --artist`` and ``--search`` end, by what LaCuerda answered, and the tone of the line.
@@ -185,6 +203,14 @@ class Line:
         return {"tone": self.tone, "text": self.text, "link": link, "details": self.details}
 
 
+def peer_kind(job: Job) -> str | None:
+    """What a job of ``caracole peer`` is, as the page names it: "sync" (``peer sync``, the Sync tab's), "peer-push"
+    (``peer take``, a push another caracole sent) or "peer-pull" (``peer pull``, units another caracole asked this one
+    to take); None for any other job."""
+    args = job.steps[0].args if job.steps else ()
+    return PEER_KINDS.get(args[1]) if len(args) > 1 and args[0] == PEER else None
+
+
 def details_href(job_id: int) -> str:
     """The job's output in the library page's Requests tab, open (relative to the library page, as every link here
     is: ``/`` before it from any other page)."""
@@ -214,6 +240,9 @@ def job_line(job: Job, song: SongFacts | None, *, ahead: int = 0, songbook_page:
             if song.not_found:
                 return Line("missing", "Not found", ("see the to-do page", TODO), details)
         return Line("failed", _stage_failure(job.stages) or _failure(job.steps), details=details)
+    kind = peer_kind(job)
+    if kind is not None:  # no song's: what it took, gave and left
+        return _peer_done(job, kind, details)
     if job.song_key.startswith(REMOVING):  # no song to read once it is done: that is what it did
         return Line("removed", "Removed")
     if job.song_key.startswith(EXPORTING):  # Make this my version, none of the song's own requests: what it made
@@ -274,6 +303,19 @@ def _artist_read(steps: list[Step], details: str) -> Line:
     return Line(tone, _short(text), details=None if tone == "added" else details)
 
 
+def _peer_done(job: Job, kind: str, details: str) -> Line:
+    """A sync, a take or a pull that is done: "Synced" or "Taken"; with a unit left as it was (``Job.units``), how many,
+    a wait; a stage that failed though its command ended (``caracole peer take`` with no backup first), its words."""
+    failed = _stage_failure(job.stages)
+    if failed is not None:
+        return Line("waiting", failed, details=details)
+    left = sum(1 for _, outcome, _ in job.units if outcome == "left")
+    if left:
+        return Line("waiting", f"{_PEER_DONE[kind]}: {plural(left, 'change')} left as "
+                               f"{'it was' if left == 1 else 'they were'}", details=details)
+    return Line("ready", _PEER_DONE[kind])
+
+
 def _review_link(song: SongFacts) -> tuple[str, str]:
     """Where a song in review goes next: its picker, or, with no candidates to pick, the to-do page."""
     return ("Pick the match", song.picker) if song.picker else ("see the to-do page", TODO)
@@ -298,8 +340,10 @@ def _stage_line(stages: list[Stage], *, new: bool = False) -> str:
 
 
 def _stage_failure(stages: list[Stage]) -> str | None:
-    """A lookup's failure, in its failed stage's words (a refusal, a bug); None without one."""
-    failed = next((s for s in stages if s.state == "failed" and s.detail), None)
+    """A lookup's failure, in its failed stage's words (a refusal, a bug); None without one. A stage the queue ended
+    failed, its command gone before it said why (a crash, a refusal said only as an ``error:`` line), still says what
+    it said while it ran ("2 changes"), which is no failure's words: none then, and the line is the error's."""
+    failed = next((s for s in stages if s.state == "failed" and s.detail and s.detail != s.running_detail), None)
     if failed is None:
         return None
     said = _short(_SENTENCE_END.split(failed.detail.strip(), maxsplit=1)[0])
