@@ -34,7 +34,10 @@ version's (``EXPORTING``). A sheet made from a YouTube video is one ``caracole y
 time a song. A video suggested for a search is ``caracole youtube --search --progress`` (``youtube_search_steps``),
 a job of no song's (``YOUTUBE_SEARCH`` and the query's key, among ``INDEX_READS``), whose stages are
 ``YOUTUBE_SEARCH_STAGES``, as are a pasted video's (``youtube_video_steps``: ``caracole youtube --video``, under
-``YOUTUBE_SEARCH`` and ``video:<id>``). Each command takes caracole's lock (a
+``YOUTUBE_SEARCH`` and ``video:<id>``). A push another caracole sent is taken by ``caracole peer take --progress``
+(peer_routes.py), and a sync with another caracole is ``caracole peer sync --progress``: their JSON lines are their
+stages (``PEER_TAKE_STAGES``, ``PEER_SYNC_STAGES``) and each unit taken, given or left (``Job.units``). Each command
+takes caracole's lock (a
 lookup lets a nightly run hand it over at its next pause), keeps its pace,
 budgets and cooldowns, exactly as from a terminal. One worker thread runs the
 jobs in order, so the server never runs two commands at once: it can be no
@@ -141,6 +144,9 @@ class Job:
     files: dict[str, str] = field(default_factory=dict)  # name -> path in the library, once readable
     seconds_to_sheet: float | None = None
     together: tuple[int, ...] = ()  # the jobs queued with it by one ``submit_all``, itself among them
+    # A sync's units (``caracole peer take`` and ``peer sync --progress``), each (its id, "taken", "given" or
+    # "left", why), as it said them
+    units: list[tuple[str, str, str]] = field(default_factory=list)
 
     @property
     def active(self) -> bool:
@@ -178,10 +184,16 @@ class Job:
                          for s in self.steps],
             "song": {"id": self.song_id, "display": self.song_display} if self.song_id is not None else None,
             "files": dict(self.files), "seconds_to_sheet": self.seconds_to_sheet,
+            "units": [list(unit) for unit in self.units],
         }
 
     def heard(self, event: Mapping[str, Any]) -> None:
-        """Take in one event of ``caracole get --progress`` (get.py)."""
+        """Take in one event of ``caracole get --progress`` (get.py), or of a sync's (``{"event": "unit", "id",
+        "outcome", "why"}``, commands/peer.py)."""
+        if event.get("event") == "unit":
+            if isinstance(event.get("id"), str) and event.get("outcome") in ("taken", "given", "left"):
+                self.units.append((event["id"], event["outcome"], str(event.get("why") or "")))
+            return
         if isinstance(event.get("stage"), str):
             stage = next((s for s in self.stages if s.name == event["stage"]), None)
             if stage is None:
@@ -306,9 +318,33 @@ def _fetches(steps: Sequence[Step]) -> bool:
 
 def _reports(args: Sequence[str]) -> bool:
     """Whether a step's command writes ``caracole get --progress`` lines: a lookup, ``caracole versions
-    --progress``, ``caracole lacuerda --search --progress``, or ``caracole youtube --sheet --progress``."""
-    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",))
+    --progress``, ``caracole lacuerda --search --progress``, ``caracole youtube --sheet --progress``, or ``caracole
+    peer take --progress`` and ``peer sync --progress``."""
+    return args[:1] == (LOOKUP,) or (args[:1] in ((VERSIONS,), ("lacuerda",), ("youtube",), (PEER,))
                                      and "--progress" in _options(args))
+
+
+PEER = "peer"  # the command of a sync with another caracole: ``caracole peer take`` a push, ``peer sync``
+# ``caracole peer take --progress``'s stages (commands/peer.py), a push another caracole sent taken here
+PEER_TAKE_STAGES = (
+    ("check", "What changed since the comparison"),
+    ("take", "Taking what changed there"),
+    ("render", "Rendering what was taken"),
+    ("agree", "What the two agree on"),
+)
+# ``caracole peer sync --progress``'s
+PEER_SYNC_STAGES = (
+    ("compare", "Comparing"),
+    ("take", "Taking what changed there"),
+    ("give", "Giving what changed here"),
+    ("agree", "What the two agree on"),
+)
+
+
+def _peer_stages(args: Sequence[str]) -> tuple[tuple[str, str], ...]:
+    if args[:1] != (PEER,) or "--progress" not in _options(args):
+        return ()
+    return {"take": PEER_TAKE_STAGES, "sync": PEER_SYNC_STAGES}.get(args[1] if len(args) > 1 else "", ())
 
 
 LACUERDA_ARTIST = "lacuerda-artist:"  # a LaCuerda artist page's read: its job's key, the page's slug after it
@@ -407,8 +443,9 @@ def _afresh(stages: Sequence[Stage]) -> None:
 
 def _stages(steps: Sequence[Step]) -> list[Stage]:
     """A job's stages, all waiting: a lookup's (``caracole versions --choose`` and ``--clear`` run one), then Keep
-    it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), and a sheet from a YouTube video's
-    (youtube_sheet.py's ``STAGES``); none for other commands."""
+    it's it hasn't, a search of LaCuerda's (``SEARCH_STAGES``), a sheet from a YouTube video's
+    (youtube_sheet.py's ``STAGES``), and a sync's with another caracole (``PEER_TAKE_STAGES``,
+    ``PEER_SYNC_STAGES``); none for other commands."""
     from caracole.get import STAGES
 
     names: dict[str, str] = {}
@@ -425,6 +462,8 @@ def _stages(steps: Sequence[Step]) -> list[Stage]:
         from caracole.youtube_sheet import STAGES as SHEET_STAGES
 
         names.update((name, label) for name, label in SHEET_STAGES if name not in names)
+    for step in steps:
+        names.update((name, label) for name, label in _peer_stages(step.args) if name not in names)
     return [Stage(name, label) for name, label in names.items()]
 
 
