@@ -285,7 +285,7 @@ object Take {
         return (code and 0xFF) != SQLITE_CONSTRAINT && (code and 0xFF) != SQLITE_MISMATCH
     }
 
-    private val RESULT_CODE = Regex("^Error code: (\\d+)")
+    private val RESULT_CODE = Regex("^Error code: ([0-9]+)")
     private const val SQLITE_CONSTRAINT = 19
     private const val SQLITE_MISMATCH = 20
 }
