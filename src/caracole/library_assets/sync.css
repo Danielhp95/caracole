@@ -1,2 +1,105 @@
-/* The Sync tab (sync.js): the two libraries' differences, each with the side it takes; not built yet, so nothing
-   here but its panel's place. */
+/* The Sync tab (sync.js): the other caracole's address and Compare, the caracoles synced with before, then the two
+   libraries' differences grouped by kind, a line each in one box a group, as the Sites tab's are: its label, what the
+   sync proposes (a word in a colour, never a colour alone), why, and its choice of three, a segmented control; a
+   conflict not chosen yet marked at its edge. Then the sync itself: its line, its stages as a lookup's chips, and once
+   over what it took, gave and left, and Reload. From 640px a difference's choice sits beside its words. */
+.sync { max-width: 920px; padding-top: 10px; }
+.sync-head h2 { margin: 6px 0 4px; font-size: 1.25rem; letter-spacing: -0.01em; }
+.sync-intro { margin: 0 0 14px; color: var(--muted); font-size: .92rem; }
+.sync-with { display: grid; gap: 4px; margin: 0 0 12px; }
+.sync-field { color: var(--muted); font-size: .85rem; font-weight: 600; }
+.sync-field em { font-style: normal; font-weight: 500; }
+.sync-row { display: flex; gap: 8px; min-width: 0; }
+.sync-row input { flex: 1 1 auto; min-width: 0; height: 44px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--control-edge); background: var(--bg); color: var(--text); font: inherit; font-size: 1rem; }
+.sync-row input:focus { border-color: var(--focus); outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 30%, transparent); }
+.sync-row .btn { flex: none; }
+/* Compare and Sync, while they can't be pressed (a comparison or a sync on its way, a conflict to choose): no fill. */
+.sync .btn.primary:disabled { border-color: var(--control-edge); background: var(--raised); color: var(--muted); }
+.sync-sub, .sync-group-head { margin: 16px 0 6px; color: var(--muted); font-size: .78rem; font-weight: 700;
+  letter-spacing: .08em; text-transform: uppercase; }
+.sync-peer-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.sync-peer { display: grid; justify-items: start; gap: 1px; min-height: 44px; padding: 6px 12px; border-radius: 11px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; text-align: left;
+  cursor: pointer; }
+.sync-peer:hover { border-color: var(--border-strong); }
+.sync-peer:disabled { color: var(--muted); border-style: dashed; cursor: default; }
+.sync-peer-name { font-weight: 650; font-size: .92rem; overflow-wrap: anywhere; }
+.sync-peer-where { color: var(--muted); font-size: .8rem; overflow-wrap: anywhere; }
+.sync-status { margin: 10px 0; font-weight: 600; overflow-wrap: anywhere; }
+.sync-status:empty { display: none; }
+.sync-status[data-tone="failed"] { color: var(--failed); }
+.sync-status[data-tone="running"] { color: var(--auto); }
+.sync-status[data-tone="done"] { color: var(--found); }
+.sync-sides { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 8px; color: var(--muted); font-size: .9rem; }
+.sync-sides b { color: var(--text); font-weight: 650; }
+.sync-side-name { overflow-wrap: anywhere; }
+.sync-bulk { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 4px; }
+.sync-group-head { display: flex; align-items: center; gap: 8px; }
+.sync-group-head .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised);
+  color: var(--muted); font-size: .75rem; line-height: 20px; letter-spacing: normal; text-align: center;
+  font-variant-numeric: tabular-nums; }
+.sync-group-conflicts { color: var(--failed); letter-spacing: normal; text-transform: none; font-weight: 650; }
+.sync-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: 14px;
+  background: var(--surface); overflow: hidden; }
+.sync-diff { display: grid; gap: 6px 14px; padding: 9px 14px; border-left: 4px solid transparent; }
+.sync-diff + .sync-diff { border-top: 1px solid var(--border); }
+.sync-diff.unchosen { border-left-color: var(--failed);
+  background: color-mix(in srgb, var(--failed-bg) 45%, var(--surface)); }
+.sync-what { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 10px; min-width: 0; }
+.sync-label { font-weight: 650; overflow-wrap: anywhere; }
+.sync-proposal { padding: 1px 9px; border-radius: 999px; font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.sync-proposal[data-proposal="mine"] { color: var(--auto); background: var(--auto-bg); }
+.sync-proposal[data-proposal="theirs"] { color: var(--found); background: var(--found-bg); }
+.sync-proposal[data-proposal="conflict"] { color: var(--failed); background: var(--failed-bg); letter-spacing: .04em; }
+.sync-why { flex-basis: 100%; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+/* Here, There, Skip: one segmented control, the side chosen filled; a choice that isn't the proposal's in the review
+   colour. */
+.sync-choice { display: inline-flex; justify-self: start; border: 1px solid var(--control-edge); border-radius: 10px;
+  background: var(--bg); overflow: hidden; }
+.sync-side { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 64px;
+  min-height: 36px; padding: 0 12px; color: var(--muted); font-size: .88rem; font-weight: 650; cursor: pointer; }
+.sync-side + .sync-side { border-left: 1px solid var(--control-edge); }
+.sync-side input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.sync-side:has(input:checked) { background: var(--accent); color: var(--on-accent); }
+.sync-diff.flipped .sync-side:has(input:checked) { background: var(--review); color: var(--surface); }
+.sync-side:has(input:focus-visible) { outline: 3px solid var(--focus); outline-offset: -3px; }
+.sync-go { position: sticky; bottom: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end;
+  gap: 8px 14px; margin: 14px 0 0; padding: 10px 0; background: var(--bg); }
+.sync-plan { flex: 1 1 14rem; margin: 0; color: var(--muted); font-size: .9rem; }
+/* The sync, once sent: a card as the Requests tab's running one. */
+.sync-job { display: grid; gap: 8px; margin: 12px 0 0; padding: 14px 16px; border: 1px solid var(--border);
+  border-radius: 14px; background: var(--surface); box-shadow: var(--shadow); }
+.sync-job-name { margin: 0; font-size: 1.1rem; font-weight: 650; overflow-wrap: anywhere; }
+.sync-job-line { margin: 0; font-weight: 650; overflow-wrap: anywhere; }
+.sync-job-line:focus { outline: none; }
+.sync-job-line[data-tone="ready"], .sync-job-line[data-tone="done"] { color: var(--found); }
+.sync-job-line[data-tone="running"], .sync-job-line[data-tone="queued"] { color: var(--auto); }
+.sync-job-line:is([data-tone="waiting"], [data-tone="missing"]) { color: var(--wanted); }
+.sync-job-line:is([data-tone="failed"], [data-tone="cancelled"]) { color: var(--failed); }
+.sync-job-line .dot { color: var(--muted); }
+.sync-job .step-chip { padding: 4px 9px; font-size: .8rem; }
+.sync-job-detail { margin: 0; color: var(--muted); font-size: .85rem; overflow-wrap: anywhere; }
+.sync-job-detail:empty { display: none; }
+.sync-outcome { display: grid; gap: 10px; }
+.sync-done h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0; color: var(--muted); font-size: .78rem;
+  font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.sync-done h3 .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--raised);
+  font-size: .75rem; line-height: 20px; letter-spacing: normal; text-align: center; }
+.sync-done ul { margin: 0; padding-left: 1.2em; font-size: .92rem; }
+.sync-done li { overflow-wrap: anywhere; }
+.sync-done .sync-why { display: inline; }
+.sync-none, .sync-note { margin: 0; color: var(--muted); font-size: .9rem; }
+#sync-reload { justify-self: start; }
+@media (min-width: 640px) {
+  .sync-diff { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+  .sync-choice { justify-self: end; }
+}
+@media (pointer: coarse) {
+  .sync-side { min-height: 44px; }
+}
+/* Five tabs on a phone (Library, Songbooks, Sites, Sync, Requests): a little closer than four. */
+@media (max-width: 719px) {
+  .masthead.lib .tabs:has(#tab-sync) .tab { padding: 0 3px; font-size: .84rem; }
+}
