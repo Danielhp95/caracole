@@ -48,6 +48,15 @@ object Take {
      * a unit it doesn't name isn't checked), or when it can't be taken: an error in one unit never stops the rest.
      * [now] (a stored time) stamps what the take writes. [onUnit] is told of each unit as it is done: its id, and
      * "taken" or "left" (the why is in [Applied.left]).
+     *
+     * What leaves a unit is any Exception its take raises, said in its own words, where Python leaves a unit for a
+     * listed set (UnitError, PeerError, OSError, ValueError, a file's that won't parse, IntegrityError, and the
+     * KeyError or TypeError of a document that lacks what the take reads) and lets anything else stop the take. The
+     * one failure that stops this take too is the database's own ([databaseFailed]: a disk full, an I/O error, a
+     * database corrupt, a statement SQLite refuses), as sqlite3's errors but IntegrityError stop Python's: each unit
+     * taken before it stays taken (each is a savepoint of its own), and those after it are never tried. When the
+     * phone's own units can't be read for [expectedHere]'s check, every unit it names is left saying why ("this
+     * library can't be read: …"), as _digests_here says it.
      */
     fun applyUnits(db: Db, store: LibraryStore, source: UnitSource, wanted: List<Pair<String, String?>>,
                    expectedHere: Map<String, String?>, now: String, onUnit: ((String, String) -> Unit)? = null): Applied {
@@ -57,8 +66,15 @@ object Take {
         val respelled = mutableListOf<String>()
         var songbooks = false
         Rekey.ensure(db, Stamps.parse(now)?.stamp ?: Stamps.now())
-        // Each unit's digest here now, before the take changes any.
-        val here = if (expectedHere.isEmpty()) emptyMap() else Units.libraryState(db).mapValues { it.value.digest }
+        // Each unit's digest here now, before the take changes any; or why this library can't be read.
+        var unreadable: String? = null
+        val here = if (expectedHere.isEmpty()) emptyMap() else try {
+            Units.libraryState(db).mapValues { it.value.digest }
+        } catch (e: Exception) {
+            if (databaseFailed(e)) throw e
+            unreadable = "this library can't be read: ${why(e)}"
+            emptyMap()
+        }
         val ordered = wanted.sortedWith { a, b ->
             val ka = kindOrder(a.first)
             val kb = kindOrder(b.first)
@@ -66,7 +82,10 @@ object Take {
         }
         for ((id, digest) in ordered) {
             try {
-                if (id in expectedHere && here[id] != expectedHere[id]) throw UnitError(CHANGED_HERE)
+                if (id in expectedHere) {
+                    unreadable?.let { throw UnitError(it) }
+                    if (here[id] != expectedHere[id]) throw UnitError(CHANGED_HERE)
+                }
                 val doc = source.unit(id)
                 val there = doc?.let { Canonical.digest(Units.valueOfDocument(id, it) ?: JsonNull) }
                 if (there != digest) throw UnitError(CHANGED_THERE)
@@ -92,6 +111,7 @@ object Take {
                     else -> throw UnitError("this caracole doesn't know units of kind ${PyRepr.str(kind)}")
                 }
             } catch (e: Exception) {
+                if (databaseFailed(e)) throw e
                 val why = why(e)
                 left += id to why
                 onUnit?.invoke(id, "left")
@@ -108,7 +128,17 @@ object Take {
      * what it needs. */
     fun backupBeforeSync(db: Db, stateDir: File, now: String): File? = Backups.make(db, stateDir, now)
 
-    /** A backup's library tables back, in one savepoint. */
+    /**
+     * A backup's library tables (songs, versions, files, removed, kv and the phone's) back, exactly, in one savepoint:
+     * database rows alone. What a take did on disk stays: the files it wrote, those it deleted, and the folders it
+     * renamed or moved (a respelled artist's, a song's whose names changed), so after a take that changed any, the
+     * rows put back may name a folder that is no longer there (the phone's storage tells case apart) or a file whose
+     * bytes are no longer its SHA-256's. kv comes back whole too: an index merge's progress records written since go
+     * back with it, while the index tables keep their rows. So a caller restores right after a take, before anything
+     * else writes, and only when that take changed nothing on disk, or once it has undone the take's folder changes
+     * itself. A file that is no backup of this caracole's is refused and nothing changes (IllegalArgumentException
+     * for none there, or one of another schema or without those tables; SQLite's error for one that is no database).
+     */
     fun restore(db: Db, backup: File): Unit = Backups.restore(db, backup)
 
     /** peer_sync.checked_name: a kept file's name as a song's document gives it, when a song's folder can hold it (no
@@ -142,7 +172,8 @@ object Take {
     /** A songbook the peer has put in its place, one it has no longer dropped; whether one changed. */
     private fun takeSongbook(db: Db, key: String, doc: JsonObject?): Boolean {
         if (doc == null) {
-            val name = SongbookStore.all(db).firstOrNull { it.key == key }?.name ?: return false
+            // peer_sync._songbook_name: the songbook whose name's key is the unit's now.
+            val name = SongbookStore.byKey(db, key)?.name ?: return false
             SongbookStore.put(db, name, null)
             return true
         }
@@ -150,9 +181,12 @@ object Take {
         val entries = songs.map { entry ->
             val pair = entry as? JsonArray
             val parts = pair?.getOrNull(1) as? JsonObject
-            if (pair == null || pair.size != 2 || parts == null || parts.keys.any { it !in SETTING_PARTS }) {
-                throw UnitError("a songbook's song that can't be read")
+            if (pair == null || pair.size != 2 || parts == null) throw UnitError("a songbook's song that can't be read")
+            parts.keys.firstOrNull { it !in SETTING_PARTS }?.let {
+                throw UnitError("its document can't be read (TypeError: check_setting() got an unexpected keyword " +
+                                "argument ${PyRepr.str(it)})")
             }
+            settingProblem(parts)?.let { throw UnitError("a setting: $it") }
             // A part that says nothing is no part of the setting (songbook_value writes those it gives).
             JsonArray(listOf(JsonPrimitive(SongTake.text(pair[0])), JsonObject(parts.filterValues { it !is JsonNull })))
         }
@@ -162,6 +196,55 @@ object Take {
 
     /** The parts of a song's setting in a songbook (songbook.check_setting's). */
     private val SETTING_PARTS = setOf("key", "mode", "capo", "instrument")
+
+    /** viewer/version.py's `_TONIC`, theory.MODES, CAPO_MAX and instruments.INSTRUMENTS' ids, in their order: what a
+     * setting's parts may be. */
+    private val TONIC = Regex("[A-G][#b]?")
+    private val MODES = listOf("ionian", "dorian", "phrygian", "lydian", "mixolydian", "aeolian", "locrian")
+    private const val CAPO_MAX = 11
+    private val INSTRUMENTS = listOf("guitar", "ukulele", "ukulele-low-g", "baritone", "piano", "harmonica", "flute",
+                                     "recorder")
+
+    /** version.setting_problem: why a setting's parts (each null where it says nothing) make no setting, in Python's
+     * words, or null when they make one; the songbook unit is then left, as check_setting's SongbookError leaves it. */
+    internal fun settingProblem(parts: JsonObject): String? {
+        fun given(name: String) = parts[name]?.takeUnless { it is JsonNull }
+        fun text(e: JsonElement) = (e as? JsonPrimitive)?.takeIf { it.isString }?.content
+        given("key")?.let { key ->
+            if (text(key)?.let(TONIC::matches) != true) return "key must be a tonic such as \"G\", \"F#\" or \"Bb\", got ${repr(key)}"
+        }
+        given("mode")?.let { mode ->
+            if (text(mode) !in MODES) return "mode must be one of ${MODES.joinToString(", ")}, got ${repr(mode)}"
+        }
+        given("capo")?.let { capo ->
+            val fret = (capo as? JsonPrimitive)?.takeIf { !it.isString && isInteger(it.content) }?.content?.toBigInteger()
+            if (fret == null || fret < java.math.BigInteger.ZERO || fret > CAPO_MAX.toBigInteger()) {
+                return "capo must be a fret from 0 to $CAPO_MAX, got ${repr(capo)}"
+            }
+        }
+        given("instrument")?.let { instrument ->
+            if (text(instrument) !in INSTRUMENTS) {
+                return "instrument must be one of ${INSTRUMENTS.joinToString(", ")}, got ${repr(instrument)}"
+            }
+        }
+        return null
+    }
+
+    /** A literal json.loads reads as an int (never a boolean, a fraction or an exponent). */
+    private fun isInteger(literal: String): Boolean = literal.removePrefix("-").let { d -> d.isNotEmpty() && d.all { it in '0'..'9' } }
+
+    /** Python's repr of the value json.loads makes of [e] (a float's as Kotlin writes it where the two agree, else its
+     * literal). */
+    private fun repr(e: JsonElement): String = when {
+        e is JsonNull -> "None"
+        e is JsonArray -> e.joinToString(", ", "[", "]") { repr(it) }
+        e is JsonObject -> e.entries.joinToString(", ", "{", "}") { "${PyRepr.str(it.key)}: ${repr(it.value)}" }
+        e is JsonPrimitive && e.isString -> PyRepr.str(e.content)
+        e is JsonPrimitive && e.content == "true" -> "True"
+        e is JsonPrimitive && e.content == "false" -> "False"
+        e is JsonPrimitive && isInteger(e.content) -> e.content.toBigInteger().toString()
+        else -> e.toString().toDoubleOrNull()?.takeIf { it.isFinite() }?.toString()?.takeUnless { 'E' in it } ?: e.toString()
+    }
 
     private fun slugs(doc: JsonObject): JsonArray {
         val slugs = SongTake.need(doc, "slugs") as? JsonArray ?: throw UnitError("its slugs can't be read")
@@ -188,4 +271,21 @@ object Take {
         if (e is SQLiteException) return message.substringAfter("message: ", message)
         return message
     }
+
+    /**
+     * Whether [e] is the database's own failure, which stops the take (sqlite3's errors but IntegrityError, which
+     * stop Python's): any SQLite error but a constraint's or a datatype mismatch's (SQLITE_CONSTRAINT and
+     * SQLITE_MISMATCH, sqlite3's IntegrityError), which is the unit's own refusal and leaves it alone. The bundled
+     * driver says its result code first ("Error code: 275, message: CHECK constraint failed: …", an extended code
+     * whose low byte is the primary one); one that says none is taken for a failure.
+     */
+    internal fun databaseFailed(e: Exception): Boolean {
+        if (e !is SQLiteException) return false
+        val code = RESULT_CODE.find(e.message ?: "")?.groupValues?.get(1)?.toIntOrNull() ?: return true
+        return (code and 0xFF) != SQLITE_CONSTRAINT && (code and 0xFF) != SQLITE_MISMATCH
+    }
+
+    private val RESULT_CODE = Regex("^Error code: (\\d+)")
+    private const val SQLITE_CONSTRAINT = 19
+    private const val SQLITE_MISMATCH = 20
 }

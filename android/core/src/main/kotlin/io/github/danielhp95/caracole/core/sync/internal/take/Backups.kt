@@ -17,7 +17,8 @@ import java.security.SecureRandom
  * database (caracole's migrations and the phone's tables run on a new file), holding the library's tables alone
  * ([TABLES]: the index tables stay empty, since a take never changes them and a whole copy is about 430 MB), as
  * `state/backups/before-sync-<UTC time>.sqlite`, the newest [KEEP] kept. None is made without free space of twice
- * what the copy needs. [restore] puts those tables back.
+ * what the copy needs. [restore] puts those tables' rows back, and nothing on disk (Take.restore says what that
+ * leaves).
  */
 internal object Backups {
     const val KEEP = 3
