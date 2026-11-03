@@ -298,8 +298,7 @@ def test_a_staged_source_gives_each_unit_and_each_file_staged_or_kept_here(serve
     doc = a_push_document(units, [{"id": "song/a/b", "expected": None, "digest": "d" * 64, "unit": {"key": "a/b"}},
                                   {"id": "song/c/d", "expected": "e" * 64, "digest": None, "unit": None}])
     source = peer_push.StagedSource(folder, peer_push.read_push_document(doc), conn, cfg.library_dir)
-    assert source.unit("song/a/b") == {"format": sync.FORMAT, "id": "song/a/b", "digest": "d" * 64,
-                                       "unit": {"key": "a/b"}}
+    assert source.unit("song/a/b") == {"key": "a/b"}  # as /api/peer/unit's "unit"
     assert source.unit("song/c/d") is None and source.unit("song/nowhere") is None
     assert source.file("a/b", "sheet.txt", sha(sent)) == sent
     assert source.file("a/b", "sheet.txt", sha(b"[Am]Creep")) == b"[Am]Creep"  # kept here already

@@ -383,9 +383,9 @@ def _taken(entry: Any, units: Mapping[str, sync.Unit]) -> Taken:
 
 
 class StagedSource:
-    """A push's units as ``peer_sync.apply_units`` takes them, as it takes a peer's (``peer_sync.Peer``'s ``unit`` and
-    ``file``): each unit's document from the push (``push``, its folder's ``push.json`` read), each file as staged in
-    ``folder``, else a copy kept here (``kept_copy``), checked by its SHA-256."""
+    """A push's units as ``peer_sync.apply_units`` takes them, as it takes a peer's (its ``UnitSource``, as
+    ``peer_sync.Peer`` is one): each unit's document from the push (``push``, its folder's ``push.json`` read), each
+    file as staged in ``folder``, else a copy kept here (``kept_copy``), checked by its SHA-256."""
 
     def __init__(self, folder: Path, push: Push, conn: sqlite3.Connection | None, library_dir: Path):
         self.folder = folder
@@ -395,11 +395,10 @@ class StagedSource:
         self._take = {t.id: t for t in push.take}
 
     def unit(self, unit_id: str) -> dict[str, Any] | None:
-        """The unit's document, as ``GET /api/peer/unit`` answers one, or None for a unit the push hasn't got."""
+        """The unit's document as the push gives it (``GET /api/peer/unit``'s ``"unit"``), or None for a unit it
+        hasn't got."""
         taken = self._take.get(unit_id)
-        if taken is None or taken.unit is None:
-            return None
-        return {"format": sync.FORMAT, "id": unit_id, "digest": taken.digest, "unit": dict(taken.unit)}
+        return None if taken is None or taken.unit is None else dict(taken.unit)
 
     def file(self, key: str, name: str, sha256: str) -> bytes:
         """A kept file of the song of ``key``, by its SHA-256: sent with the push, or kept here; PeerError else."""
