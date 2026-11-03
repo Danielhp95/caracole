@@ -19,6 +19,8 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        // The bundled SQLite's native library, for phones and for the emulator.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     buildTypes {
@@ -45,9 +47,24 @@ android {
     }
 
     packaging {
-        resources.excludes += setOf("META-INF/*.version", "META-INF/*.kotlin_module", "DebugProbesKt.bin")
+        resources.excludes += setOf(
+            "META-INF/*.version", "META-INF/*.kotlin_module", "DebugProbesKt.bin",
+            "META-INF/INDEX.LIST", "META-INF/io.netty.versions.properties",
+            // jansi's desktop libraries, which Ktor brings and Android never loads.
+            "org/fusesource/jansi/internal/native/**",
+        )
     }
+
+    // The conformance vectors, as the device tests' assets (conformance/…): CorpusOnDeviceTest reads them through
+    // the instrumentation's AssetManager.
+    sourceSets.getByName("androidTest").assets.srcDir(layout.buildDirectory.dir("generated/conformanceAssets"))
 }
+
+val copyConformanceVectors by tasks.registering(Copy::class) {
+    from("../../tests/conformance/vectors")
+    into(layout.buildDirectory.dir("generated/conformanceAssets/conformance"))
+}
+tasks.matching { it.name.endsWith("AndroidTestAssets") }.configureEach { dependsOn(copyConformanceVectors) }
 
 kotlin {
     compilerOptions { jvmTarget.set(JvmTarget.JVM_17) }
@@ -55,6 +72,7 @@ kotlin {
 
 dependencies {
     implementation(project(":mirror"))
+    implementation(project(":server"))
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
@@ -64,6 +82,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test-junit"))
 
+    androidTestImplementation(testFixtures(project(":core")))
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("androidx.test:core-ktx:1.7.0")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")

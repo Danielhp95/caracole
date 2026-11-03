@@ -34,7 +34,9 @@
         abiVersions = [ "x86_64" ];
       });
 
-      jdk = pkgs.jdk17;
+      # Headless: the full jdk17 links gtk3, which brings nixpkgs' libsqlite3, whose sqlite3_* symbols then
+      # silently take the place of the bundled SQLite's (core's DatabaseTest asserts sqlite_source_id()).
+      jdk = pkgs.jdk17_headless;
       # Gradle from nixpkgs, not a wrapper's download: pinned with the rest, run on the JDK above.
       gradle = pkgs.gradle_8.override { java = jdk; };
 
