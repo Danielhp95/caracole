@@ -43,6 +43,11 @@ data class SyncReport(
  * every entry has its blob, writes the list whole over `manifest.json` (a temporary file renamed), so a sync
  * cut short leaves the mirror before it whole and readable; then deletes the blobs no entry names and every
  * temporary file. A failed download fails the sync and keeps the mirror as it was.
+ *
+ * Each entry's sync unit and digest come with the list and are swapped in with it, whole: a list whose digests alone
+ * changed (a song changed on the computer, its pages not made again yet) downloads nothing and counts nothing
+ * changed, and [Mirror.pageFor] gates by its new digests from then on. Only the computer's files live in `blobs/`:
+ * the phone's own are in its library folder.
  */
 class SyncEngine(private val mirror: Mirror, private val http: Http = Http()) {
 
