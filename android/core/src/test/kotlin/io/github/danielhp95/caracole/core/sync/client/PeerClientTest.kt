@@ -221,10 +221,13 @@ class PeerClientTest {
         assertEquals(JsonPrimitive("running"), client.job(7)["state"])
         assertEquals(listOf("GET /api/jobs/7"), computer.requests)
         computer.answers.clear()
-        assertTrue("no request 8" in assertFailsWith<PeerError> { client.job(8) }.message!!)
+        assertTrue("answered 404" in assertFailsWith<PeerError> { client.job(8) }.message!!)
+        answer("GET /api/jobs/9", 200, """{"id":9,"state":null}""")
+        assertEquals("The caracole at ${computer.address} answered its job 9 with something it can't read.",
+                     assertFailsWith<PeerError> { client.job(9) }.message)
     }
 
-    @Test fun `the index streams into a file, the sites asked, with no read timeout`() {
+    @Test fun `the index streams into a file, the sites asked, with a read timeout of its own`() {
         val impatient = PeerClient(computer.address, Http(readTimeoutMs = 150))
         val bytes = ByteArray(3_000_000) { (it % 253).toByte() }
         computer.index = { bytes }

@@ -37,8 +37,9 @@ class PeerError(message: String, val status: Int? = null, cause: Throwable? = nu
  *   403 whose JSON says `reload` (a token older than the server: it restarted since the state was read) reads the
  *   state again, once, for its fresh token, and sends the call again with it; the calls after it that give the old
  *   token send the fresh one.
- * - **The index**: [index] streams `GET /api/peer/index` to a file, with no read timeout (it is as large as the
- *   computer's indexes).
+ * - **The index**: [index] streams `GET /api/peer/index` to a file, with a read timeout of [INDEX_TIMEOUT_MS]
+ *   between two reads (the file is as large as the computer's indexes, and made before its first byte comes: a
+ *   connection that goes quiet for longer is a lost one, so a sync job never waits on it for ever).
  *
  * Every answer that says no is a [PeerError] in the words peer_sync.Peer says it; a document that can't be read, too.
  */
@@ -101,19 +102,27 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
                                      answer.status)
     }
 
-    /** GET /api/jobs/<id>: the computer's request, as its Job.as_json gives it. */
+    /** GET /api/jobs/<id>: the computer's request, as its Job.as_json gives it, its `state` a text
+     * (peer_push.Pusher.job). */
     fun job(id: Int): JsonObject {
         val answer = get("$JOBS_PATH$id")
-        if (answer.status == 404) throw PeerError("The caracole at $address has no request $id any more.", 404)
         if (answer.status != 200) throw refused(answer)
-        return answer.json() as? JsonObject
-            ?: throw PeerError("The caracole at $address answered request $id with something the phone can't read.", 200)
+        val job = try {
+            answer.json()
+        } catch (e: PeerError) {
+            null
+        } as? JsonObject
+        if (job == null || Documents.text(job["state"]) == null) {
+            throw PeerError("The caracole at $address answered its job $id with something it can't read.", 200)
+        }
+        return job
     }
 
-    /** GET /api/peer/index ([sites]: those alone, every one when null), streamed into [to], with no read timeout. */
+    /** GET /api/peer/index ([sites]: those alone, every one when null), streamed into [to], [INDEX_TIMEOUT_MS] at
+     * most between two reads. */
     fun index(to: File, sites: List<String>? = null) {
         val path = INDEX_PATH + (sites?.let { "?sites=" + Documents.quote(it.joinToString(",")) } ?: "")
-        http.get(address, address.resolve(path), emptyMap(), readTimeoutMs = 0) { answer ->
+        http.get(address, address.resolve(path), emptyMap(), readTimeoutMs = INDEX_TIMEOUT_MS) { answer ->
             if (answer.status != 200) throw refused(Answered(answer.status, readAtMost(answer.body, MAX_JSON)))
             // The answer's bytes as they come; a write that fails is the phone's storage, never the connection.
             val out = try {
@@ -242,6 +251,9 @@ class PeerClient(val address: ServerAddress, http: Http = Http()) : UnitSource {
 
         /** peer_sync.PEER_TIMEOUT: a caracole reads every song of its library to answer its state. */
         const val STATE_TIMEOUT_MS = 60_000
+
+        /** The index's export, at most between two reads: the computer makes it whole before it sends a byte. */
+        const val INDEX_TIMEOUT_MS = 10 * 60_000
 
         /** A JSON answer read at most (a state of every unit is a few megabytes). */
         const val MAX_JSON = 64 * 1024 * 1024

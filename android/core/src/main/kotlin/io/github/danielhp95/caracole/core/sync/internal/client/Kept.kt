@@ -19,6 +19,12 @@ internal class Kept<T>(private val seconds: Long) {
         values[id]?.first
     }
 
+    /** [id]'s value forgotten. */
+    fun remove(id: String) = synchronized(lock) {
+        values.remove(id)
+        Unit
+    }
+
     private fun forget(now: Instant) {
         values.entries.removeIf { (_, kept) -> !now.isBefore(kept.second.plusSeconds(seconds)) }
     }

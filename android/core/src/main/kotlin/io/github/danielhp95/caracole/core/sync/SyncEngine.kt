@@ -2,7 +2,10 @@ package io.github.danielhp95.caracole.core.sync
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.Sites
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.sync.internal.client.Address
 import io.github.danielhp95.caracole.core.sync.internal.client.Give
 import io.github.danielhp95.caracole.core.sync.internal.client.Kept
 import io.github.danielhp95.caracole.core.sync.internal.client.Stamps
@@ -18,8 +21,9 @@ import java.time.Instant
 
 enum class Side { HERE, THERE, SKIP }
 
-/** A comparison with the computer, kept by [id] for 10 minutes. */
-data class Comparison(val id: String, val address: String, val peer: PeerState, val syncedBefore: Boolean,
+/** A comparison with the computer, kept by [id] for 10 minutes: [syncedBefore], when the two last agreed (the latest
+ * time either side's base records; null: never), as sync_routes.py's `synced_before`. */
+data class Comparison(val id: String, val address: String, val peer: PeerState, val syncedBefore: String?,
                       val differences: List<Difference>, val hash: String)
 
 data class SyncOutcome(val taken: List<String>, val given: List<String>, val left: List<Pair<String, String>>,
@@ -29,38 +33,48 @@ data class SyncOutcome(val taken: List<String>, val given: List<String>, val lef
  * by then ([outcome]; null when it changed nothing yet). */
 class SyncFailed(message: String, val outcome: SyncOutcome? = null, cause: Throwable? = null) : Exception(message, cause)
 
+/** The caracole at the address is this phone's own (the same id): its database is a copy of the phone's. */
+class SameCaracole(message: String) : Exception(message)
+
 /**
  * The phone's sync with the computer, which the phone starts (the plan's §5.3): it takes what it takes from the
  * computer's peer routes ([client]), then pushes what the computer takes, so the phone serves nothing to the network.
+ * Its words are `caracole peer sync --push`'s (commands/peer.py), which does the same from a computer.
  *
  * [compare] reads the computer's state (with what it agreed with this phone, the phone's id asking), the phone's own
  * units and base, and compares them three ways (Compare): the differences, and their hash. The comparison is kept by
- * its id for 10 minutes ([comparison]), for the Sync tab's choices to be applied to.
+ * its id for 10 minutes ([comparison]), for the Sync tab's choices to be applied to; [stillAsCompared] compares
+ * again, as the tab's Sync does before it queues anything.
  *
  * [apply] runs six stages, each told to [stage] as it starts and ends (running, then done, skipped, or failed):
  * 1. **compare**: the computer's state read again and compared again; a hash other than the comparison's refuses
- *    the sync before any change (the two changed since the owner chose).
+ *    the sync before any change ([STALE]: the two changed since the owner chose).
  * 2. **take**: each difference decided (a choice, else its proposal, else, for a conflict, [prefer]; a conflict with
- *    neither is refused before any change; skip leaves it, "skipped"); then, inside Database.write, a backup of the
+ *    neither is refused before any change; skip leaves it, [SKIPPED]); then, inside Database.write, a backup of the
  *    phone's database (Take.backupBeforeSync: none, nothing taken) and Take.applyUnits from the computer, each unit
  *    left that changed on either side since the comparison.
- * 3. **give**: the units the computer takes, as documents of the phone's state after its take (`POST /peer/push/new`,
- *    each file it needs, `POST /peer/push`), then the computer's request followed every second, 10 minutes at most,
- *    with no lock held. A unit the phone changed since the comparison is left. A request that fails leaves every
- *    unit given, and the sync stops there: no agreement is recorded on either side.
+ * 3. **give**: the units the computer takes, as documents of the phone's state after its take, as peer_push.push_units
+ *    gives them (`POST /peer/push/new`, each file it needs, `POST /peer/push`): a unit the phone changed since the
+ *    comparison is left out ([CHANGED_HERE]), and so is a song whose file the phone can no longer read as kept
+ *    ([FILE_CHANGED]). Then the computer's request is followed every second, 10 minutes at most, with no lock held,
+ *    and each unit is given or left as its request says it (its `units`). A request that can't be sent or followed
+ *    stops the sync there: no agreement is recorded on either side.
  * 4. **mirror**: the mirror of the computer's pages brought up to date ([mirrorRefresh]; skipped without one); its
  *    failure stops nothing.
  * 5. **agree**: the computer's state read again; what the two hold alike now recorded as agreed at its clock, inside
  *    Database.write (Compare.recordAgreement), with kv `sync:peer:<computer id>` = {address, name, synced_at}, which
- *    GET /api/sync lists. A unit given that the computer doesn't hold as the phone does is left.
- * 6. **index**: the computer's site indexes whose stamp is newer than kv `sync:index:<computer id>` records, fetched
- *    into `stateDir/cache/` and merged (IndexTransfer.merge) inside Database.write, the kv brought up to date; skipped
- *    when none is newer. A failure there leaves the agreement as it is.
+ *    GET /api/sync lists.
+ * 6. **index**: the computer's site indexes the phone knows (IndexTransfer's sites) whose stamp is newer than kv
+ *    `sync:index:<computer id>` records, fetched into `stateDir/cache/` and merged (IndexTransfer.merge) inside
+ *    Database.write, the kv brought up to date; skipped when none is newer. A failure there leaves the agreement as
+ *    it is.
  *
  * Any stage that stops the sync is a [SyncFailed], with the outcome so far; a refusal before any change has none.
+ * The push names the phone's library [name] and its caracole's [version] (the app's own, which it may pass).
  */
 class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: File,
-                 val client: (String) -> PeerClient, val mirrorRefresh: (suspend (String) -> Unit)?) {
+                 val client: (String) -> PeerClient, val mirrorRefresh: (suspend (String) -> Unit)?,
+                 val name: String = PHONE_NAME, val version: String = CARACOLE) {
     /** The clock comparisons are kept by and the phone's own stamps are made of; a test's own. */
     internal var clock: () -> Instant = { Instant.now() }
 
@@ -70,7 +84,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
     private val kept = Kept<Comparison>(KEPT_SECONDS)
 
-    /** The phone and the computer at [address], compared; kept by its id for 10 minutes. */
+    /** The phone and the computer at [address] (a [peerAddress]), compared; kept by its id for 10 minutes. A
+     * [PeerError] (or mirror's SyncError) when the computer can't be asked; [SameCaracole] when it is this phone. */
     fun compare(address: String): Comparison {
         val compared = compared(client(address), address)
         val comparison = Comparison(Kept.newId(), address, compared.peer, compared.syncedBefore, compared.differences,
@@ -82,24 +97,28 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** The comparison of [id] made within 10 minutes; null for one older, or never made. */
     fun comparison(id: String): Comparison? = kept.get(id, clock())
 
+    /** The comparison of [id] forgotten (its Sync queued, or refused for the two changed since). */
+    fun forget(id: String) = kept.remove(id)
+
+    /** Whether the two compare now as they did in [c] (the same hash), the computer's state read again; what
+     * [compare] throws else. */
+    fun stillAsCompared(c: Comparison): Boolean = compared(client(c.address), c.address).hash == c.hash
+
     suspend fun apply(c: Comparison, choices: Map<String, Side>, prefer: Side?,
                       stage: (name: String, state: String, detail: String) -> Unit): SyncOutcome {
         val unsettled = c.differences.count { it.proposal == CONFLICT && choices[it.id] == null && prefer == null }
-        if (unsettled > 0) {
-            throw SyncFailed("Choose a side for every conflict first: ${plural(unsettled, "conflict")} " +
-                             "${if (unsettled == 1) "has" else "have"} none.")
-        }
+        if (unsettled > 0) throw SyncFailed(unsettled(unsettled))
         val client = client(c.address)
         val done = Done()
 
         // 1. compare
-        stage(COMPARE, RUNNING, "Comparing again with ${c.peer.name.ifEmpty { c.address }}…")
+        stage(COMPARE, RUNNING, "")
         val fresh = step(stage, COMPARE, null) { io { compared(client, c.address) } }
         if (fresh.hash != c.hash) {
-            stage(COMPARE, FAILED, CHANGED_SINCE)
-            throw SyncFailed(CHANGED_SINCE)
+            stage(COMPARE, FAILED, STALE)
+            throw SyncFailed(STALE)
         }
-        stage(COMPARE, DONE, if (fresh.differences.isEmpty()) "Nothing differs." else plural(fresh.differences.size, "difference"))
+        stage(COMPARE, DONE, plural(fresh.differences.size, "difference"))
         val me = database.read { Compare.ownId(it) }
         val computer = fresh.peer.server!!
 
@@ -109,15 +128,16 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             when (choices[d.id] ?: when (d.proposal) { MINE -> Side.HERE; THEIRS -> Side.THERE; else -> prefer }) {
                 Side.THERE -> toTake.add(d)
                 Side.HERE -> toGive.add(d)
-                Side.SKIP, null -> done.left.add(d.id to SKIPPED)
+                Side.SKIP -> done.left.add(d.id to SKIPPED)
+                null -> done.left.add(d.id to UNSETTLED)
             }
         }
 
         // 2. take
         if (toTake.isEmpty()) {
-            stage(TAKE, SKIPPED_STATE, "Nothing to take here.")
+            stage(TAKE, SKIPPED_STATE, "")
         } else {
-            stage(TAKE, RUNNING, "Taking ${plural(toTake.size, "change")}…")
+            stage(TAKE, RUNNING, plural(toTake.size, "change"))
             val now = Stamps.of(clock())
             val wanted = toTake.map { it.id to it.theirs?.digest }
             val expectedHere = toTake.associate { it.id to it.mine?.digest }
@@ -126,35 +146,28 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 io {
                     database.write { db ->
                         Take.backupBeforeSync(db, stateDir, now)
-                            ?: throw SyncFailed("Nothing taken: there's no room for a copy of the phone's database " +
-                                                "first.", done.outcome())
+                            ?: throw SyncFailed(NO_BACKUP, done.outcome())
                         Take.applyUnits(db, store, client, wanted, expectedHere, now) { _, _ ->
                             seen++
-                            stage(TAKE, RUNNING, "Taken $seen of ${toTake.size}…")
+                            stage(TAKE, RUNNING, "$seen of ${plural(toTake.size, "change")}")
                         }
                     }
                 }
             }
             done.taken.addAll(applied.taken)
             done.left.addAll(applied.left)
-            stage(TAKE, DONE, "Took ${applied.taken.size} of ${toTake.size}" +
-                              if (applied.left.isEmpty()) "." else "; left ${applied.left.size}.")
+            stage(TAKE, DONE, "took ${applied.taken.size}" + if (applied.left.isEmpty()) "" else ", left ${applied.left.size}")
         }
 
         // 3. give
-        val given = if (toGive.isEmpty()) {
-            stage(GIVE, SKIPPED_STATE, "Nothing to give there.")
-            emptyList()
-        } else {
-            give(client, stage, done, me, fresh, toGive)
-        }
+        if (toGive.isEmpty()) stage(GIVE, SKIPPED_STATE, "") else give(client, stage, done, me, fresh, toGive)
 
         // 4. mirror
         val refresh = mirrorRefresh
         if (refresh == null) {
-            stage(MIRROR, SKIPPED_STATE, "No copy of the computer's pages on this phone.")
+            stage(MIRROR, SKIPPED_STATE, "no copy of the computer's pages on this phone")
         } else {
-            stage(MIRROR, RUNNING, "Copying the computer's pages…")
+            stage(MIRROR, RUNNING, "")
             try {
                 refresh(c.address)
                 stage(MIRROR, DONE, "")
@@ -165,28 +178,23 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         }
 
         // 5. agree
-        stage(AGREE, RUNNING, "Reading the computer's state again…")
+        stage(AGREE, RUNNING, "")
         val after = step(stage, AGREE, done) {
             val after = io { client.state(me) }
             val at = after.now ?: Stamps.of(clock())
-            val (mine, agreed) = io {
+            done.agreed = io {
                 database.write { db ->
-                    val mine = Units.libraryState(db)
-                    val agreed = Compare.recordAgreement(db, computer, mine, after.units, at)
+                    val agreed = Compare.recordAgreement(db, computer, Units.libraryState(db), after.units, at)
                     db.kvSetJson(PEER_KEY + computer, JsonObject(linkedMapOf(
                         "address" to JsonPrimitive(c.address), "name" to JsonPrimitive(after.name),
                         "synced_at" to JsonPrimitive(at),
                     )))
-                    mine to agreed
+                    agreed
                 }
-            }
-            done.agreed = agreed
-            for (id in given) {
-                if (mine[id]?.digest == after.units[id]?.digest) done.given.add(id) else done.left.add(id to LEFT_THERE)
             }
             after
         }
-        stage(AGREE, DONE, "The two agree on ${plural(done.agreed, "unit")}.")
+        stage(AGREE, DONE, "${plural(done.agreed, "unit")} the two agree on")
 
         // 6. index
         index(client, stage, done, computer, after.indexes)
@@ -206,32 +214,34 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         fun outcome() = SyncOutcome(taken.toList(), given.toList(), left.toList(), agreed, indexed.toList())
     }
 
-    private class Compared(val peer: PeerState, val differences: List<Difference>, val syncedBefore: Boolean,
+    private class Compared(val peer: PeerState, val differences: List<Difference>, val syncedBefore: String?,
                            val hash: String)
 
-    /** The computer's state, the phone's units and base, and what the two hold differently. */
+    /** The computer's state, the phone's units and base, and what the two hold differently (sync_routes._compared). */
     private fun compared(client: PeerClient, address: String): Compared {
         val me = database.read { Compare.ownId(it) }
         val peer = client.state(me)
         val server = peer.server
             ?: throw PeerError("The caracole at $address has no id to sync by: it may be older than the app.")
         if (server == me) {
-            throw PeerError("The caracole at $address is this phone's own (the same id, $me): its database is a copy " +
-                            "of the phone's. Give it another: caracole peer new-id.")
+            throw SameCaracole("The caracole at $address is this one (the same id, $me): its database is a copy of " +
+                               "this one's. Give one of them another: caracole peer new-id.")
         }
-        val (mine, base) = database.read { db -> Units.libraryState(db) to Compare.baseOf(db, server) }
-        val merged = Compare.mergedBase(base, peer.base)
-        val found = Compare.order(Compare.compare(mine, peer.units, merged))
-        return Compared(peer, found, merged != null, Compare.comparedHash(found))
+        val (mine, ours) = database.read { db -> Units.libraryState(db) to Compare.baseOf(db, server) }
+        val found = Compare.order(Compare.compare(mine, peer.units, Compare.mergedBase(ours, peer.base)))
+        val agreed = listOfNotNull(ours, peer.base).flatMap { base -> base.values.map { it.second } }
+        return Compared(peer, found, agreed.maxWithOrNull(Py.CODE_POINT_ORDER), Compare.comparedHash(found))
     }
 
-    /** The units the computer takes pushed, and its request followed to its end: the ids it was given. */
+    /** The units the computer takes pushed (peer_push.push_units), and its request followed to its end: each unit
+     * given, or left with why. */
     private suspend fun give(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, me: String,
-                             fresh: Compared, toGive: List<Difference>): List<String> {
-        stage(GIVE, RUNNING, "Giving ${plural(toGive.size, "change")}…")
+                             fresh: Compared, toGive: List<Difference>) {
+        stage(GIVE, RUNNING, plural(toGive.size, "change"))
         val (state, documents) = database.read { db ->
             Units.libraryState(db) to toGive.associate { d -> d.id to Units.document(db, store.libraryDir, d.id) }
         }
+        val before = done.left.size
         val entries = ArrayList<Give.Entry>()
         for (d in toGive) {
             val now = state[d.id]?.digest
@@ -239,59 +249,75 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
             else entries.add(Give.Entry(d.id, expected = d.theirs?.digest, digest = now, unit = documents[d.id]))
         }
         if (entries.isEmpty()) {
-            stage(GIVE, DONE, "Nothing left to give there.")
-            return emptyList()
+            stage(GIVE, DONE, "gave 0, left ${toGive.size}")
+            return
         }
         val at = fresh.peer.now ?: Stamps.of(clock())
+        val token = fresh.peer.token
+        val sent: List<Give.Entry>
+        val ended: JsonObject
+        val job: Int
         try {
-            val files = Give.files(entries)
-            val token = fresh.peer.token
-            val job = io {
-                val (push, need) = client.pushNew(token, me, files)
-                need.forEachIndexed { i, sha ->
-                    stage(GIVE, RUNNING, "Sending file ${i + 1} of ${need.size}…")
-                    client.pushFile(token, push, sha, Give.read(database, store.libraryDir, sha))
-                }
-                client.push(token, push, Give.document(me, PHONE_NAME, CARACOLE, at, state, entries))
+            val (push, need) = io { client.pushNew(token, me, Give.files(entries)) }
+            val unreadable = HashSet<String>()
+            need.forEachIndexed { i, sha ->
+                stage(GIVE, RUNNING, "file ${i + 1} of ${need.size}")
+                val bytes = io { Give.read(database, store.libraryDir, sha) }
+                if (bytes == null) unreadable.add(sha) else io { client.pushFile(token, push, sha, bytes) }
             }
-            stage(GIVE, RUNNING, "The computer takes ${plural(entries.size, "change")}…")
-            awaitJob(client, job)
+            sent = entries.filter { entry -> Give.files(listOf(entry)).none { it in unreadable } }
+            for (entry in entries) if (entry !in sent) done.left.add(entry.id to FILE_CHANGED)
+            job = io { client.push(token, push, Give.document(me, name, version, at, state, sent)) }
+            stage(GIVE, RUNNING, "the computer's request $job takes ${plural(sent.size, "change")}")
+            ended = awaitJob(client, job)
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             val why = said(e)
-            for (entry in entries) done.left.add(entry.id to "not given: $why")
             stage(GIVE, FAILED, why)
-            throw SyncFailed(why, done.outcome(), e)
+            throw SyncFailed("There couldn't be given its ${entries.size}: $why", done.outcome(), e)
         }
-        stage(GIVE, DONE, "The computer took what it could of ${plural(entries.size, "change")}.")
-        return entries.map { it.id }
-    }
-
-    /** The computer's request [id] followed, every [pollEveryMs], until it is over: done, or why it isn't. */
-    private suspend fun awaitJob(client: PeerClient, id: Int) {
-        repeat(polls) {
-            val job = io { client.job(id) }
-            when (val state = (job["state"] as? JsonPrimitive)?.takeIf { it.isString }?.content) {
-                "queued", "running" -> delay(pollEveryMs)
-                "done" -> return
-                else -> throw PeerError("The computer's request $id that takes the changes is ${state ?: "unknown"}" +
-                                        (Give.failedDetail(job)?.let { ": $it" } ?: "."))
+        val units = Give.units(ended)
+        val jobState = Give.text(ended["state"])
+        for (entry in sent) {
+            val (outcome, why) = units[entry.id] ?: (null to "")
+            if (outcome == "taken") {
+                done.given.add(entry.id)
+            } else {
+                done.left.add(entry.id to why.ifEmpty {
+                    if (jobState != "done") "its request $job there $jobState" else "not taken there"
+                })
             }
         }
-        throw PeerError("The computer didn't finish taking the changes within ${polls * pollEveryMs / 60_000} " +
-                        "minutes: sync again once its request is over.")
+        val left = done.left.size - before
+        stage(GIVE, DONE, "gave ${done.given.size}" + if (left == 0) "" else ", left $left")
+    }
+
+    /** The computer's request [id] followed, every [pollEveryMs], until it is over (peer_push.wait_for): how it ended.
+     * A PeerError when it isn't over within [polls] asks (it goes on there all the same). */
+    private suspend fun awaitJob(client: PeerClient, id: Int): JsonObject {
+        repeat(polls) { asked ->
+            val job = io { client.job(id) }
+            when (Give.text(job["state"])) {
+                "queued", "running" -> if (asked < polls - 1) delay(pollEveryMs)
+                else -> return job
+            }
+        }
+        throw PeerError("The caracole at ${client.address} hasn't taken the push yet: its request $id, in its " +
+                        "Requests tab, goes on.")
     }
 
     /** The computer's newer indexes, merged; a failure is said on the stage and leaves the rest as it is. */
     private suspend fun index(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, computer: String,
                               indexes: Map<String, String>) {
         val had = database.read { db -> Stamps.sites(db.kvGetJson(INDEX_KEY + computer)) }
-        val newer = indexes.filter { (site, stamp) -> had[site]?.let { Stamps.newer(stamp, it) } ?: true }.keys.sorted()
+        val newer = indexes.filter { (site, stamp) ->
+            Sites.named(site) != null && (had[site]?.let { Stamps.newer(stamp, it) } ?: true)
+        }.keys.sortedBy { site -> Sites.ALL.indexOfFirst { it.name == site } }
         if (newer.isEmpty()) {
-            stage(INDEX, SKIPPED_STATE, "No index is newer there.")
+            stage(INDEX, SKIPPED_STATE, "no index is newer there")
             return
         }
-        stage(INDEX, RUNNING, "Fetching the computer's newer indexes: ${newer.joinToString(", ")}…")
+        stage(INDEX, RUNNING, newer.joinToString(", "))
         val cache = File(stateDir, "cache")
         val file = File(cache, "index-${Kept.newId()}.sqlite")
         try {
@@ -299,7 +325,6 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 if (!cache.isDirectory && !cache.mkdirs()) throw PeerError("The phone's storage failed: $cache can't be made.")
                 client.index(file, newer)
             }
-            stage(INDEX, RUNNING, "Merging ${newer.joinToString(", ")}…")
             io {
                 database.write { db ->
                     IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
@@ -307,13 +332,10 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                 }
             }
             done.indexed.addAll(newer)
-            stage(INDEX, DONE, "Merged ${newer.joinToString(", ")}.")
+            stage(INDEX, DONE, "merged ${newer.joinToString(", ")}")
         } catch (e: Exception) {
             if (e is CancellationException) throw e
             stage(INDEX, FAILED, said(e))
-        } catch (e: NotImplementedError) {
-            // A merge this build can't do yet (the skeleton's stub of a lane still to land) leaves the sync as done.
-            stage(INDEX, FAILED, "The phone can't merge an index yet.")
         } finally {
             file.delete()
         }
@@ -336,11 +358,9 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     private suspend fun <T> io(block: suspend () -> T): T = withContext(Dispatchers.IO) { block() }
 
     private fun said(e: Throwable): String = when (e) {
-        is SyncError, is PeerError, is SyncFailed -> e.message ?: e.javaClass.simpleName
+        is SyncError, is PeerError, is SyncFailed, is SameCaracole -> e.message ?: e.javaClass.simpleName
         else -> "${e.javaClass.simpleName}${e.message?.let { ": $it" } ?: ""}"
     }
-
-    private fun plural(n: Int, word: String) = "$n ${if (n == 1) word else word + "s"}"
 
     companion object {
         const val COMPARE = "compare"
@@ -350,9 +370,13 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val AGREE = "agree"
         const val INDEX = "index"
 
-        /** The stages a sync job shows, in order, as (name, label). */
-        val STAGES = listOf(COMPARE to "Compare", TAKE to "Take", GIVE to "Give", MIRROR to "Mirror", AGREE to "Agree",
-                            INDEX to "Index")
+        /** The stages a sync job shows, in order, as (name, label): `caracole peer sync --progress`'s
+         * (jobs.PEER_SYNC_STAGES), and the phone's mirror and index between and after them. */
+        val STAGES = listOf(
+            COMPARE to "Comparing", TAKE to "Taking what changed there", GIVE to "Giving what changed here",
+            MIRROR to "Copying the computer's pages", AGREE to "What the two agree on",
+            INDEX to "Bringing the indexes up to date",
+        )
 
         /** kv: a computer synced with, by its id: {address, name, synced_at}. */
         const val PEER_KEY = "sync:peer:"
@@ -360,7 +384,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         /** kv: the stamps of the computer's indexes the phone merged last, by its id: {site: stamp}. */
         const val INDEX_KEY = "sync:index:"
 
-        /** The phone's library's name, and its caracole's version, as its push names them. */
+        /** The phone's library's name, and its caracole's version, as its push names them unless it is given others. */
         const val PHONE_NAME = "Phone"
         const val CARACOLE = "0.1.0"
 
@@ -368,10 +392,23 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         const val POLL_EVERY_MS = 1_000L
         const val POLLS = 600
 
-        const val SKIPPED = "skipped"
+        /** Why a unit is left, in commands/peer.py's and peer_sync.py's words. */
+        const val SKIPPED = "skipped, as chosen"
+        const val UNSETTLED = "a conflict: choose a side for it"
         const val CHANGED_HERE = "changed here since the comparison"
-        const val LEFT_THERE = "the computer left it as it was"
-        const val CHANGED_SINCE = "The two libraries changed since the comparison: compare again."
+        const val FILE_CHANGED = "a file it keeps changed here since caracole kept it"
+
+        /** commands/peer.py's STALE: the two changed since the comparison. */
+        const val STALE = "The two changed since that comparison: compare them again, and choose again."
+        const val NO_BACKUP = "Nothing taken: no backup of the database first, not enough room."
+
+        /** sync_routes.apply's refusal of a conflict settled neither way. */
+        fun unsettled(n: Int) = "Choose a side for every conflict first: $n ${if (n == 1) "has" else "have"} none."
+
+        /** peer_sync.peer_address: the address of another caracole serve as typed ("192.168.1.20:8737",
+         * "http://phone.lan:8737/"), as caracole asks it: `http://` when no scheme is given, no trailing `/`. A
+         * [PeerError] in its words for one that isn't. */
+        fun peerAddress(text: String): String = Address.peerAddress(text)
 
         private const val MINE = "mine"
         private const val THEIRS = "theirs"
@@ -380,5 +417,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         private const val DONE = "done"
         private const val FAILED = "failed"
         private const val SKIPPED_STATE = "skipped"
+
+        private fun plural(n: Int, word: String) = "$n ${if (n == 1) word else word + "s"}"
     }
 }

@@ -2,8 +2,6 @@ package io.github.danielhp95.caracole.core.sync.internal.client
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.json.Canonical
-import io.github.danielhp95.caracole.core.py.Py
-import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Units
 import kotlinx.serialization.json.JsonArray
@@ -36,8 +34,8 @@ internal object Give {
     }
 
     /** The bytes of a file the phone keeps whose SHA-256 is [sha256], read from its library folder (a regular file
-     * under it, never through a link); a PeerError when none is as recorded any more. */
-    fun read(database: Database, libraryDir: File, sha256: String): ByteArray {
+     * under it, never through a link), as peer_push.kept_copy reads one; null when none is as recorded any more. */
+    fun read(database: Database, libraryDir: File, sha256: String): ByteArray? {
         val paths = database.read { db -> db.query("SELECT path FROM files WHERE sha256 = ? ORDER BY id", sha256) { it.text(0) } }
         val root = libraryDir.canonicalFile
         for (path in paths.filterNotNull()) {
@@ -52,7 +50,7 @@ internal object Give {
             }
             if (Canonical.sha256Hex(bytes) == sha256) return bytes
         }
-        throw PeerError("A file the phone keeps changed during the sync, so nothing was given: sync again.")
+        return null
     }
 
     /** The push document: who pushes, its state after its own take ([state]), and the units the computer takes. */
@@ -76,13 +74,21 @@ internal object Give {
         }),
     ))
 
-    /** Why the computer's request failed, as its steps say: the detail of the step that failed, else its note. */
-    fun failedDetail(job: JsonObject): String? {
-        val steps = job["steps"] as? JsonArray
-        val failed = steps?.mapNotNull { it as? JsonObject }?.lastOrNull { Documents.text(it["state"]) == "failed" }
-        return Documents.text(failed?.get("detail"))?.takeIf { Py.strip(it).isNotEmpty() }
-            ?: Documents.text(job["note"])?.takeIf { Py.strip(it).isNotEmpty() }
+    /** What the computer's request said of each unit as it took the push (Job.as_json's `units`: [id, outcome, why]
+     * each, outcome "taken", "given" or "left"), by its id; its odd entries left out. */
+    fun units(job: JsonObject): Map<String, Pair<String, String>> {
+        val found = LinkedHashMap<String, Pair<String, String>>()
+        for (entry in job["units"] as? JsonArray ?: return found) {
+            val parts = entry as? JsonArray ?: continue
+            val id = Documents.text(parts.getOrNull(0)) ?: continue
+            val outcome = Documents.text(parts.getOrNull(1)) ?: continue
+            found[id] = outcome to (Documents.text(parts.getOrNull(2)) ?: "")
+        }
+        return found
     }
+
+    /** A text value, or null for anything else. */
+    fun text(e: JsonElement?): String? = Documents.text(e)
 
     private fun text(value: String?): JsonElement = value?.let(::JsonPrimitive) ?: JsonNull
 }
