@@ -26,16 +26,16 @@ The data, a main resource of the phone's ``:core`` (caracole/keys/ on its classp
   - ``patterns``: ``{name: {"pattern": text, "ignorecase": bool}}``, every compiled pattern of normalize.py
     (``_DASH_SUFFIX``, ``_PAREN_FEAT``, ``_PAREN_SUFFIX``, ``_ACOUSTIC_WORD``, ``_LIVE_WORD``, ``_PART_BREAK``,
     ``_FEATURING``, ``_BRACKETED``, ``_MORA``) and library.py's ``_RESERVED``, as Python writes it (``.pattern``),
-    with no flag but IGNORECASE. core.keys rewrites each into java.util.regex's syntax as Python reads it:
-    ``.`` and ``$`` as Python means them, ``\\v`` as U+000B, ``\\s \\w \\d \\b`` through core.py.PyRegex, and
-    IGNORECASE as sre's classes (core.py.PyUnicode.ignoreCaseKey).
+    with no flag but IGNORECASE. core.keys compiles each with core.py.PyRegex, which reads Python's syntax as
+    Python does, IGNORECASE as a leading ``(?i)``.
 
 The vectors (``helpers.corpus.jsonl``), each record ``{"fn": "caracole.<module>.<name>", "args": […], "out": …}``,
 or ``"err": "<exception class>"`` where Python raises:
 
 - ``vectors/keys/fold.jsonl``: ``fold`` of every code point whose fold differs from itself (no surrogate), then
-  ``FOLD_STRINGS`` seeded random strings mixing scripts, combining marks, Hangul, Greek sigma and supplementary
-  planes.
+  ``fold_digest``, the SHA-256 of every code point's fold, so a fold that changes a code point Python leaves alone
+  is caught too, then ``FOLD_STRINGS`` seeded random strings mixing scripts, combining marks, Hangul, Greek sigma
+  and supplementary planes.
 - ``vectors/keys/slug.jsonl``: ``slug_key``, ``ug_slug_key`` (of the inputs and of slugs made from them),
   ``compact`` and ``split_variant`` (of the inputs' keys and variant-suffixed ones).
 - ``vectors/keys/identity.jsonl``: ``KEY_VERSION`` first (``args`` empty), then ``identity_key``, ``clean_title``,
@@ -48,14 +48,20 @@ or ``"err": "<exception class>"`` where Python raises:
 The inputs are every string literal of ``LITERALS_FROM`` (their syntax trees' str constants, sorted, lone
 surrogates left out), ``EDGES`` and ``NAMES`` seeded random names built to reach the rules: version suffixes in
 English, Spanish and Portuguese, featurings in any bracket's width, names in two scripts with their romanizations
-and translations, IGNORECASE's odd letters (ı, ſ, K), exotic spaces and digits. A two-argument function pairs each
-input with another, a seeded permutation's.
+and translations, IGNORECASE's odd letters (ı, ſ, and K, the Kelvin sign), exotic spaces and digits. A
+two-argument function pairs each input with another, a seeded permutation's. ``EDGES`` also holds, for each rule
+of ``_readings``, a name whose romanization a translation follows, so ``_romanized`` reads it.
+
+So an edit to a string literal of one of ``LITERALS_FROM``, a test of normalize or search, changes these inputs:
+regenerate the corpus (``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_keys.py``) in
+the same commit, and run ``nix develop ./android -c gradle -p android :core:test``.
 """
 
 from __future__ import annotations
 
 import ast
 import functools
+import hashlib
 import json
 import random
 import re
@@ -214,6 +220,20 @@ EDGES = (
     "song-live-live", "AC/DC", "AC\\DC", "Title: Subtitle", "a : b", "a\t\tb", "a\r\nb", "a\x0bb\x0cc",
     "a*b?c\"d<e>f|g", "\x00\x1f\x7f", "...", " . ", ". a .", "é", "Café del Mar", "宋" * 50,
     "a" * 119 + "宋", "a" * 118 + "é", "é" * 70, "a" * 119 + ". x", "a" * 121, "𠮷" * 40, "a" * 117 + "😀",
+    # A romanization with a translation after it, so _romanized reads it (_reads_as): one name a rule of _readings.
+    "しゃしん Shashin Photo", "ちゃ Cha Tea", "じゃ Ja Well",  # a small ya after shi, chi, ji: sha, cha, ja
+    "ファイト Faito Fight", "ティー Tii Tea",  # a small vowel after the kana's consonant, ー's vowel drawn out
+    "ファン Fuan Fan",  # a small vowel after the whole kana
+    "ウィー Wii We", "きゃりー Kyarii Pamyu",  # ウィ wi; a small ya after ki
+    "がっこう Gakkou School", "ありがとう Arigato Thanks",  # っ doubling; う after o, a long vowel
+    "ラーメン Raamen Noodles", "一致する Itchisuru Match",  # ー as a; kanji as morae, t(?=ch)
+    "時々ある Tokidokiaru Sometimes",  # 々 in a Japanese name
+    "봄날 Pomnal Spring Day", "사랑 Salang Love", "사랑 Sarang Love",  # Hangul's other spellings: initials,
+    "너 No You", "밥 Bab Rice",  # medials and finals
+    "重来 Chong Lai Again", "绿色 Lu Se Green", "绿色 Lv Se Green",  # a heteronym; ü as u or v
+    "乐亭 Lao Ting County",  # pypinyin's reading in context, none of 乐's alone
+    # The Kelvin sign, which IGNORECASE reads as k; a title of code points beyond the BMP before its suffix.
+    "Song - Bonus Trac\u212a", "\u212aelvin", "\U00020bb7" * 4 + " (Live)", "\U00020bb7" * 2 + " - Acoustic",
 )
 
 _LATIN_WORDS = ("the", "and", "y", "los", "las", "el", "la", "rolling", "stones", "uno", "dos", "tres", "one",
@@ -221,7 +241,7 @@ _LATIN_WORDS = ("the", "and", "y", "los", "las", "el", "la", "rolling", "stones"
                 "Banma", "Zebra", "Song", "Dongye", "Chong", "Lai", "Sui", "Yoru", "ni", "Kakeru", "Arigatou", "Ai",
                 "Kino", "Ty", "Bomnal", "Spring", "Day", "with", "feat.", "ft.", "featuring", "ost", "part", "2",
                 "17", "Part 1", "AC", "DC", "x", "a", "K", "I'll", "Don’t", "rock'n'roll", "MTV", "BBC")
-_ACCENTED = ("Café", "Niño", "Ærøskøbing", "Straße", "Łódź", "Þór", "İstanbul", "lıve", "ſtereo", "Kelvin",
+_ACCENTED = ("Café", "Niño", "Ærøskøbing", "Straße", "Łódź", "Þór", "İstanbul", "lıve", "ſtereo", "\u212aelvin",
              "ΤΡΥΠΕΣ", "Σίσυφος", "ＡＢＣ", "２０１１", "ﬁ", "①", "½", "²", "Ŋ", "ə", "Đặng", "Œuvre", "Ħal",
              "ACÚSTICO", "Acústica", "Versión", "Días", "Último", "Mötley", "Crüe", "Sigur Rós", "Björk", "ĲSSEL")
 _CJK_WORDS = ("宋冬野", "斑马", "斑馬", "南山南", "重来", "绿色", "周杰倫", "对不起", "我的", "歌之王", "与我交谈", "岁",
@@ -344,6 +364,12 @@ def fold_each(text: str) -> list[str]:
     return [normalize.fold(c) for c in text]
 
 
+def fold_digest(folds: list[str]) -> str:
+    """The SHA-256, in hex, of ``folds`` (``fold`` of each code point alone, the surrogates left out, in code point
+    order) joined by NUL, in UTF-8."""
+    return hashlib.sha256("\x00".join(folds).encode("utf-8")).hexdigest()
+
+
 def slugs_of(s: str) -> dict:
     """``slug_key`` and ``ug_slug_key`` of ``s``, and ``compact`` and ``split_variant`` of its key."""
     key = normalize.slug_key(s)
@@ -403,10 +429,12 @@ def fold_strings() -> list[str]:
 
 
 def test_fold_vectors():
-    changed = "".join(chr(cp) for cp in range(0x110000)
-                      if not 0xD800 <= cp <= 0xDFFF and normalize.fold(chr(cp)) != chr(cp))
+    every = [chr(cp) for cp in range(0x110000) if not 0xD800 <= cp <= 0xDFFF]
+    folds = [normalize.fold(c) for c in every]
+    changed = "".join(c for c, f in zip(every, folds) if f != c)
     records = [call("test_conformance_keys.fold_each", fold_each, changed[i:i + CHARS_A_RECORD])
                for i in range(0, len(changed), CHARS_A_RECORD)]
+    records.append({"fn": "test_conformance_keys.fold_digest", "args": [], "out": fold_digest(folds)})
     records += [call(N + "fold", normalize.fold, s) for s in fold_strings()]
     _vector("fold", records)
 

@@ -1826,6 +1826,32 @@
 {"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","slug_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","split_variant":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",null],"ug_slug_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}}
 {"args":["𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷","slug_key":"𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷","split_variant":["𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷",null],"ug_slug_key":"𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷𠮷"}}
 {"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","slug_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","split_variant":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",null],"ug_slug_key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa😀"}}
+{"args":["しゃしん Shashin Photo"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"しゃしんshashinphoto","slug_key":"しゃしん-shashin-photo","split_variant":["しゃしん-shashin-photo",null],"ug_slug_key":"しゃしん shashin photo"}}
+{"args":["ちゃ Cha Tea"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ちゃchatea","slug_key":"ちゃ-cha-tea","split_variant":["ちゃ-cha-tea",null],"ug_slug_key":"ちゃ cha tea"}}
+{"args":["じゃ Ja Well"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"しゃjawell","slug_key":"しゃ-ja-well","split_variant":["しゃ-ja-well",null],"ug_slug_key":"しゃ ja well"}}
+{"args":["ファイト Faito Fight"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ファイトfaitofight","slug_key":"ファイト-faito-fight","split_variant":["ファイト-faito-fight",null],"ug_slug_key":"ファイト faito fight"}}
+{"args":["ティー Tii Tea"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ティーtiitea","slug_key":"ティー-tii-tea","split_variant":["ティー-tii-tea",null],"ug_slug_key":"ティー tii tea"}}
+{"args":["ファン Fuan Fan"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ファンfuanfan","slug_key":"ファン-fuan-fan","split_variant":["ファン-fuan-fan",null],"ug_slug_key":"ファン fuan fan"}}
+{"args":["ウィー Wii We"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ウィーwiiwe","slug_key":"ウィー-wii-we","split_variant":["ウィー-wii-we",null],"ug_slug_key":"ウィー wii we"}}
+{"args":["きゃりー Kyarii Pamyu"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"きゃりーkyariipamyu","slug_key":"きゃりー-kyarii-pamyu","split_variant":["きゃりー-kyarii-pamyu",null],"ug_slug_key":"きゃりー kyarii pamyu"}}
+{"args":["がっこう Gakkou School"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"かっこうgakkouschool","slug_key":"かっこう-gakkou-school","split_variant":["かっこう-gakkou-school",null],"ug_slug_key":"かっこう gakkou school"}}
+{"args":["ありがとう Arigato Thanks"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ありかとうarigatothanks","slug_key":"ありかとう-arigato-thanks","split_variant":["ありかとう-arigato-thanks",null],"ug_slug_key":"ありかとう arigato thanks"}}
+{"args":["ラーメン Raamen Noodles"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ラーメンraamennoodles","slug_key":"ラーメン-raamen-noodles","split_variant":["ラーメン-raamen-noodles",null],"ug_slug_key":"ラーメン raamen noodles"}}
+{"args":["一致する Itchisuru Match"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"一致するitchisurumatch","slug_key":"一致する-itchisuru-match","split_variant":["一致する-itchisuru-match",null],"ug_slug_key":"一致する itchisuru match"}}
+{"args":["時々ある Tokidokiaru Sometimes"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"時々あるtokidokiarusometimes","slug_key":"時々ある-tokidokiaru-sometimes","split_variant":["時々ある-tokidokiaru-sometimes",null],"ug_slug_key":"時々ある tokidokiaru sometimes"}}
+{"args":["봄날 Pomnal Spring Day"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"봄날pomnalspringday","slug_key":"봄날-pomnal-spring-day","split_variant":["봄날-pomnal-spring-day",null],"ug_slug_key":"봄날 pomnal spring day"}}
+{"args":["사랑 Salang Love"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"사랑salanglove","slug_key":"사랑-salang-love","split_variant":["사랑-salang-love",null],"ug_slug_key":"사랑 salang love"}}
+{"args":["사랑 Sarang Love"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"사랑saranglove","slug_key":"사랑-sarang-love","split_variant":["사랑-sarang-love",null],"ug_slug_key":"사랑 sarang love"}}
+{"args":["너 No You"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"너noyou","slug_key":"너-no-you","split_variant":["너-no-you",null],"ug_slug_key":"너 no you"}}
+{"args":["밥 Bab Rice"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"밥babrice","slug_key":"밥-bab-rice","split_variant":["밥-bab-rice",null],"ug_slug_key":"밥 bab rice"}}
+{"args":["重来 Chong Lai Again"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"重来chonglaiagain","slug_key":"重来-chong-lai-again","split_variant":["重来-chong-lai-again",null],"ug_slug_key":"重来 chong lai again"}}
+{"args":["绿色 Lu Se Green"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"绿色lusegreen","slug_key":"绿色-lu-se-green","split_variant":["绿色-lu-se-green",null],"ug_slug_key":"绿色 lu se green"}}
+{"args":["绿色 Lv Se Green"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"绿色lvsegreen","slug_key":"绿色-lv-se-green","split_variant":["绿色-lv-se-green",null],"ug_slug_key":"绿色 lv se green"}}
+{"args":["乐亭 Lao Ting County"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"乐亭laotingcounty","slug_key":"乐亭-lao-ting-county","split_variant":["乐亭-lao-ting-county",null],"ug_slug_key":"乐亭 lao ting county"}}
+{"args":["Song - Bonus TracK"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"songbonustrack","slug_key":"song-bonus-track","split_variant":["song-bonus-track",null],"ug_slug_key":"song - bonus track"}}
+{"args":["Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"kelvin","slug_key":"kelvin","split_variant":["kelvin",null],"ug_slug_key":"kelvin"}}
+{"args":["𠮷𠮷𠮷𠮷 (Live)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"𠮷𠮷𠮷𠮷live","slug_key":"𠮷𠮷𠮷𠮷-live","split_variant":["𠮷𠮷𠮷𠮷","live"],"ug_slug_key":"𠮷𠮷𠮷𠮷 (live)"}}
+{"args":["𠮷𠮷 - Acoustic"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"𠮷𠮷acoustic","slug_key":"𠮷𠮷-acoustic","split_variant":["𠮷𠮷","acoustic"],"ug_slug_key":"𠮷𠮷 - acoustic"}}
 {"args":["【重来】Zebra Zebra"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"重来zebrazebra","slug_key":"重来-zebra-zebra","split_variant":["重来-zebra-zebra",null],"ug_slug_key":"【重来】zebra zebra"}}
 {"args":["南山南 / nan shan nan Zebra Zebra"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"南山南nanshannanzebrazebra","slug_key":"南山南-nan-shan-nan-zebra-zebra","split_variant":["南山南-nan-shan-nan-zebra-zebra",null],"ug_slug_key":"南山南 / nan shan nan zebra zebra"}}
 {"args":["Sui　獵獵獵 & Yoru - lıve"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"sui獵獵獵yorulive","slug_key":"sui-獵獵獵-yoru-live","split_variant":["sui-獵獵獵-yoru","live"],"ug_slug_key":"sui 獵獵獵 & yoru - live"}}
@@ -1912,7 +1938,7 @@
 {"args":["Lai_鷉）Niño"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"lai鷉nino","slug_key":"lai-鷉-nino","split_variant":["lai-鷉-nino",null],"ug_slug_key":"lai_鷉)nino"}}
 {"args":["the)々]ɿ)Ты, K"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"々ɿтыk","slug_key":"々-ɿ-ты-k","split_variant":["々-ɿ-ты-k",null],"ug_slug_key":"the)々]ɿ)ты, k"}}
 {"args":["Œuvre"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"oeuvre","slug_key":"oeuvre","split_variant":["oeuvre",null],"ug_slug_key":"oeuvre"}}
-{"args":["鉛 I'll【凫鳧凫-Straße（Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"鉛ill凫鳧凫strassekelvin","slug_key":"鉛-ill-凫鳧凫-strasse-kelvin","split_variant":["鉛-ill-凫鳧凫-strasse-kelvin",null],"ug_slug_key":"鉛 i'll【凫鳧凫-strasse(kelvin"}}
+{"args":["鉛 I'll【凫鳧凫-Straße（Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"鉛ill凫鳧凫strassekelvin","slug_key":"鉛-ill-凫鳧凫-strasse-kelvin","split_variant":["鉛-ill-凫鳧凫-strasse-kelvin",null],"ug_slug_key":"鉛 i'll【凫鳧凫-strasse(kelvin"}}
 {"args":["ありがとう Arigatou Zebra Zebra - Acústico"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ありかとうarigatouzebrazebraacustico","slug_key":"ありかとう-arigatou-zebra-zebra-acustico","split_variant":["ありかとう-arigatou-zebra-zebra-acustico",null],"ug_slug_key":"ありかとう arigatou zebra zebra - acustico"}}
 {"args":["Crüe & unplugged"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"crueunplugged","slug_key":"crue-unplugged","split_variant":["crue","unplugged"],"ug_slug_key":"crue & unplugged"}}
 {"args":["17岁 17 SUI Racing into the Night"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"17岁17suiracingintothenight","slug_key":"17岁-17-sui-racing-into-the-night","split_variant":["17岁-17-sui-racing-into-the-night",null],"ug_slug_key":"17岁 17 sui racing into the night"}}
@@ -1968,7 +1994,7 @@
 {"args":["Versión「Þ'斑马 - Remaster ２０１１"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"versionth斑马remaster2011","slug_key":"version-th斑马-remaster-2011","split_variant":["version-th斑马-remaster-2011",null],"ug_slug_key":"version「th'斑马 - remaster 2011"}}
 {"args":["Yoru ni Kakeru (夜に駆ける) (MTV Unplugged)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"yorunikakeru夜に駆けるmtvunplugged","slug_key":"yoru-ni-kakeru-夜に駆ける-mtv-unplugged","split_variant":["yoru-ni-kakeru-夜に駆ける-mtv","unplugged"],"ug_slug_key":"yoru ni kakeru (夜に駆ける) (mtv unplugged)"}}
 {"args":["Don’t, Ty"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"dontty","slug_key":"dont-ty","split_variant":["dont-ty",null],"ug_slug_key":"don’t, ty"}}
-{"args":["हिंदी - rock'n'roll \"Ǔ Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"हदrocknrollukelvin","slug_key":"ह-द-rocknroll-u-kelvin","split_variant":["ह-द-rocknroll-u-kelvin",null],"ug_slug_key":"हिंदी - rock'n'roll \"u kelvin"}}
+{"args":["हिंदी - rock'n'roll \"Ǔ Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"हदrocknrollukelvin","slug_key":"ह-द-rocknroll-u-kelvin","split_variant":["ह-द-rocknroll-u-kelvin",null],"ug_slug_key":"हिंदी - rock'n'roll \"u kelvin"}}
 {"args":["Bomnal (봄날)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"bomnal봄날","slug_key":"bomnal-봄날","split_variant":["bomnal-봄날",null],"ug_slug_key":"bomnal (봄날)"}}
 {"args":["rock'n'roll_宋冬野"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"rocknroll宋冬野","slug_key":"rocknroll-宋冬野","split_variant":["rocknroll-宋冬野",null],"ug_slug_key":"rock'n'roll_宋冬野"}}
 {"args":["【ありがとう】Arigatou"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ありかとうarigatou","slug_key":"ありかとう-arigatou","split_variant":["ありかとう-arigatou",null],"ug_slug_key":"【ありかとう】arigatou"}}
@@ -2104,7 +2130,7 @@
 {"args":["南山南 Nan Shan Nan Live (Live at the BBC)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"南山南nanshannanliveliveatthebbc","slug_key":"南山南-nan-shan-nan-live-live-at-the-bbc","split_variant":["南山南-nan-shan-nan-live-live-at-the-bbc",null],"ug_slug_key":"南山南 nan shan nan live (live at the bbc)"}}
 {"args":["Niño（feat. 宋冬野）"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ninofeat宋冬野","slug_key":"nino-feat-宋冬野","split_variant":["nino-feat-宋冬野",null],"ug_slug_key":"nino(feat. 宋冬野)"}}
 {"args":["las　tres & Último (feat. 宋冬野)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"lastresultimofeat宋冬野","slug_key":"las-tres-ultimo-feat-宋冬野","split_variant":["las-tres-ultimo-feat-宋冬野",null],"ug_slug_key":"las tres & ultimo (feat. 宋冬野)"}}
-{"args":["ft. & Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ftkelvin","slug_key":"ft-kelvin","split_variant":["ft-kelvin",null],"ug_slug_key":"ft. & kelvin"}}
+{"args":["ft. & Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ftkelvin","slug_key":"ft-kelvin","split_variant":["ft-kelvin",null],"ug_slug_key":"ft. & kelvin"}}
 {"args":["【斑馬】Zebra Zebra"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"斑馬zebrazebra","slug_key":"斑馬-zebra-zebra","split_variant":["斑馬-zebra-zebra",null],"ug_slug_key":"【斑馬】zebra zebra"}}
 {"args":["İstanbul)rock'n'roll – Zebra[Ærøskøbing Đặng - Recorded Live at X"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"istanbulrocknrollzebraaeroskobingdangrecordedliveatx","slug_key":"istanbul-rocknroll-zebra-aeroskobing-dang-recorded-live-at-x","split_variant":["istanbul-rocknroll-zebra-aeroskobing-dang-recorded-live-at-x",null],"ug_slug_key":"istanbul)rock'n'roll – zebra[aeroskobing dang - recorded live at x"}}
 {"args":["17 Sui (17岁) (with Y)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"17sui17岁withy","slug_key":"17-sui-17岁-with-y","split_variant":["17-sui-17岁-with-y",null],"ug_slug_key":"17 sui (17岁) (with y)"}}
@@ -2174,7 +2200,7 @@
 {"args":["dos`ACÚSTICO"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"dosacustico","slug_key":"dosacustico","split_variant":["dosacustico",null],"ug_slug_key":"dos`acustico"}}
 {"args":["南山南 / nan shan nan"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"南山南nanshannan","slug_key":"南山南-nan-shan-nan","split_variant":["南山南-nan-shan-nan",null],"ug_slug_key":"南山南 / nan shan nan"}}
 {"args":["x\tCrüe`lıve Días"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"xcruelivedias","slug_key":"x-cruelive-dias","split_variant":["x-cruelive-dias",null],"ug_slug_key":"x\tcrue`live dias"}}
-{"args":["Mötley | Kelvin 伧傖傖 - Remastered 2011"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"motleykelvin伧傖傖remastered2011","slug_key":"motley-kelvin-伧傖傖-remastered-2011","split_variant":["motley-kelvin-伧傖傖-remastered-2011",null],"ug_slug_key":"motley | kelvin 伧傖傖 - remastered 2011"}}
+{"args":["Mötley | Kelvin 伧傖傖 - Remastered 2011"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"motleykelvin伧傖傖remastered2011","slug_key":"motley-kelvin-伧傖傖-remastered-2011","split_variant":["motley-kelvin-伧傖傖-remastered-2011",null],"ug_slug_key":"motley | kelvin 伧傖傖 - remastered 2011"}}
 {"args":["歌之王 / ĲSSEL las - Demo Version"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"歌之王ijssellasdemoversion","slug_key":"歌之王-ijssel-las-demo-version","split_variant":["歌之王-ijssel-las-demo-version",null],"ug_slug_key":"歌之王 / ijssel las - demo version"}}
 {"args":["Œuvre, Zebra[訓训訓 ft. Y"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"oeuvrezebra訓训訓fty","slug_key":"oeuvre-zebra-訓训訓-ft-y","split_variant":["oeuvre-zebra-訓训訓-ft-y",null],"ug_slug_key":"oeuvre, zebra[訓训訓 ft. y"}}
 {"args":["feat., Ai\t甲 - Bomnal Yoru - Versión Acústica"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"featai甲bomnalyoruversionacustica","slug_key":"feat-ai-甲-bomnal-yoru-version-acustica","split_variant":["feat-ai-甲-bomnal-yoru-version-acustica",null],"ug_slug_key":"feat., ai\t甲 - bomnal yoru - version acustica"}}
@@ -2193,7 +2219,6 @@
 {"args":["17-feat."],"fn":"test_conformance_keys.slugs_of","out":{"compact":"17feat","slug_key":"17-feat","split_variant":["17-feat",null],"ug_slug_key":"17-feat."}}
 {"args":["\nǉ 纟糹`Zebra「Crüe"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"lj纟糹zebracrue","slug_key":"lj-纟糹zebra-crue","split_variant":["lj-纟糹zebra-crue",null],"ug_slug_key":"\nlj 纟糹`zebra「crue"}}
 {"args":["Kino - part"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"kinopart","slug_key":"kino-part","split_variant":["kino-part",null],"ug_slug_key":"kino - part"}}
-{"args":["Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"kelvin","slug_key":"kelvin","split_variant":["kelvin",null],"ug_slug_key":"kelvin"}}
 {"args":["\nZebra, Ai】岁 - ːËʖŨ"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"zebraai岁ːeʖu","slug_key":"zebra-ai-岁-ːeʖu","split_variant":["zebra-ai-岁-ːeʖu",null],"ug_slug_key":"\nzebra, ai】岁 - ːeʖu"}}
 {"args":["봄날 BOMNAL Spring Day"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"봄날bomnalspringday","slug_key":"봄날-bomnal-spring-day","split_variant":["봄날-bomnal-spring-day",null],"ug_slug_key":"봄날 bomnal spring day"}}
 {"args":["+úrʣ]one Dongye - Mono"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"urʣonedongyemono","slug_key":"urʣ-one-dongye-mono","split_variant":["urʣ-one-dongye-mono",null],"ug_slug_key":"+urʣ]one dongye - mono"}}
@@ -2245,7 +2270,7 @@
 {"args":["Ŋ）doce`重来`las - Radio Edit"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ŋdoce重来lasradioedit","slug_key":"ŋ-doce重来las-radio-edit","split_variant":["ŋ-doce重来las-radio-edit",null],"ug_slug_key":"ŋ)doce`重来`las - radio edit"}}
 {"args":["17岁 17sui Racing into the Night"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"17岁17suiracingintothenight","slug_key":"17岁-17sui-racing-into-the-night","split_variant":["17岁-17sui-racing-into-the-night",null],"ug_slug_key":"17岁 17sui racing into the night"}}
 {"args":["周杰倫「Don’t-ΤΡΥΠΕΣ[las lıve"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"周杰倫dontτρυπεςlaslive","slug_key":"周杰倫-dont-τρυπες-las-live","split_variant":["周杰倫-dont-τρυπες-las","live"],"ug_slug_key":"周杰倫「don’t-τρυπες[las live"}}
-{"args":["南山南」Kelvin’周杰倫\t2 zero"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"南山南kelvin周杰倫2zero","slug_key":"南山南-kelvin周杰倫-2-zero","split_variant":["南山南-kelvin周杰倫-2-zero",null],"ug_slug_key":"南山南」kelvin’周杰倫\t2 zero"}}
+{"args":["南山南」Kelvin’周杰倫\t2 zero"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"南山南kelvin周杰倫2zero","slug_key":"南山南-kelvin周杰倫-2-zero","split_variant":["南山南-kelvin周杰倫-2-zero",null],"ug_slug_key":"南山南」kelvin’周杰倫\t2 zero"}}
 {"args":["lıve【sɮ ft. Y"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"livesɮfty","slug_key":"live-sɮ-ft-y","split_variant":["live-sɮ-ft-y",null],"ug_slug_key":"live【sɮ ft. y"}}
 {"args":["莊莊 (En Vivo)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"莊莊envivo","slug_key":"莊莊-en-vivo","split_variant":["莊莊-en-vivo",null],"ug_slug_key":"莊莊 (en vivo)"}}
 {"args":["˸o枧_AC - lıve"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"o枧aclive","slug_key":"o-枧-ac-live","split_variant":["o-枧-ac","live"],"ug_slug_key":"˸o枧_ac - live"}}
@@ -2261,13 +2286,13 @@
 {"args":["  ʝʋǍğ: Ɵŝ Último\n"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ʝʋagɵsultimo","slug_key":"ʝʋag-ɵs-ultimo","split_variant":["ʝʋag-ɵs-ultimo",null],"ug_slug_key":"  ʝʋag: ɵs ultimo\n"}}
 {"args":["绿色[Bomnal（Đặng)s÷I˅ — ȼx"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"绿色bomnaldangsiȼx","slug_key":"绿色-bomnal-dang-s-i-ȼx","split_variant":["绿色-bomnal-dang-s-i-ȼx",null],"ug_slug_key":"绿色[bomnal(dang)s÷i˅ — ȼx"}}
 {"args":["Banma / हिंदी]jìŶǅ Chong\tカタカナ"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"banmaहदjiydzchongカタカナ","slug_key":"banma-ह-द-jiydz-chong-カタカナ","split_variant":["banma-ह-द-jiydz-chong-カタカナ",null],"ug_slug_key":"banma / हिंदी]jiydz chong\tカタカナ"}}
-{"args":["² Kelvin(feat. — part"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"2kelvinfeatpart","slug_key":"2-kelvin-feat-part","split_variant":["2-kelvin-feat-part",null],"ug_slug_key":"2 kelvin(feat. — part"}}
+{"args":["² Kelvin(feat. — part"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"2kelvinfeatpart","slug_key":"2-kelvin-feat-part","split_variant":["2-kelvin-feat-part",null],"ug_slug_key":"2 kelvin(feat. — part"}}
 {"args":["dos[stones 項項（宋冬野]阈閾 - BBC Sessions"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"dosstones項項宋冬野阈閾bbcsessions","slug_key":"dos-stones-項項宋冬野阈閾-bbc-sessions","split_variant":["dos-stones-項項宋冬野阈閾-bbc-sessions",null],"ug_slug_key":"dos[stones 項項(宋冬野]阈閾 - bbc sessions"}}
 {"args":["lv se (绿色)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"lvse绿色","slug_key":"lv-se-绿色","split_variant":["lv-se-绿色",null],"ug_slug_key":"lv se (绿色)"}}
 {"args":["K.Dongye_x – 봄날Kino - Single Edit"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"kdongyex봄날kinosingleedit","slug_key":"k-dongye-x-봄날-kino-single-edit","split_variant":["k-dongye-x-봄날-kino-single-edit",null],"ug_slug_key":"k.dongye_x – 봄날kino - single edit"}}
 {"args":["Jai (ใจ) - 1999 Stereo Mix"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"jaiใจ1999stereomix","slug_key":"jai-ใจ-1999-stereo-mix","split_variant":["jai-ใจ-1999-stereo-mix",null],"ug_slug_key":"jai (ใจ) - 1999 stereo mix"}}
 {"args":["甲-ใจ, Ħal — 鿁䜤䜤"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"甲ใจhal鿁䜤䜤","slug_key":"甲-ใจ-hal-鿁䜤䜤","split_variant":["甲-ใจ-hal-鿁䜤䜤",null],"ug_slug_key":"甲-ใจ, hal — 鿁䜤䜤"}}
-{"args":["Ty Kelvin「K夹夾夾 - ACÚSTICO"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"tykelvink夹夾夾acustico","slug_key":"ty-kelvin-k-夹夾夾-acustico","split_variant":["ty-kelvin-k-夹夾夾-acustico",null],"ug_slug_key":"ty kelvin「k夹夾夾 - acustico"}}
+{"args":["Ty Kelvin「K夹夾夾 - ACÚSTICO"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"tykelvink夹夾夾acustico","slug_key":"ty-kelvin-k-夹夾夾-acustico","split_variant":["ty-kelvin-k-夹夾夾-acustico",null],"ug_slug_key":"ty kelvin「k夹夾夾 - acustico"}}
 {"args":["lıve - ſingle Edit"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"livesingleedit","slug_key":"live-single-edit","split_variant":["live-single-edit",null],"ug_slug_key":"live - single edit"}}
 {"args":["the & rock'n'roll\t我的)Кино"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"rocknroll我的кино","slug_key":"rocknroll-我的-кино","split_variant":["rocknroll-我的-кино",null],"ug_slug_key":"the & rock'n'roll\t我的)кино"}}
 {"args":["【斑马 斑马】Live"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"斑马斑马live","slug_key":"斑马斑马-live","split_variant":["斑马斑马","live"],"ug_slug_key":"【斑马 斑马】live"}}
@@ -2297,7 +2322,7 @@
 {"args":["nanshannan (南山南)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"nanshannan南山南","slug_key":"nanshannan-南山南","split_variant":["nanshannan-南山南",null],"ug_slug_key":"nanshannan (南山南)"}}
 {"args":["Jai (ใจ)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"jaiใจ","slug_key":"jai-ใจ","split_variant":["jai-ใจ",null],"ug_slug_key":"jai (ใจ)"}}
 {"args":["Chong’ＡＢＣ 伛伛-17 删删刪"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"chongabc伛伛17删删刪","slug_key":"chongabc-伛伛-17-删删刪","split_variant":["chongabc-伛伛-17-删删刪",null],"ug_slug_key":"chong’abc 伛伛-17 删删刪"}}
-{"args":["镰’Kelvin - 1999 Stereo Mix"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"镰kelvin1999stereomix","slug_key":"镰kelvin-1999-stereo-mix","split_variant":["镰kelvin-1999-stereo-mix",null],"ug_slug_key":"镰’kelvin - 1999 stereo mix"}}
+{"args":["镰’Kelvin - 1999 Stereo Mix"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"镰kelvin1999stereomix","slug_key":"镰kelvin-1999-stereo-mix","split_variant":["镰kelvin-1999-stereo-mix",null],"ug_slug_key":"镰’kelvin - 1999 stereo mix"}}
 {"args":["斑馬 (BAN MA)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"斑馬banma","slug_key":"斑馬-ban-ma","split_variant":["斑馬-ban-ma",null],"ug_slug_key":"斑馬 (ban ma)"}}
 {"args":["featuring ＡＢＣ甲）tres - Radio Edit"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"featuringabc甲tresradioedit","slug_key":"featuring-abc-甲-tres-radio-edit","split_variant":["featuring-abc-甲-tres-radio-edit",null],"ug_slug_key":"featuring abc甲)tres - radio edit"}}
 {"args":["ə ２０１１ ティ"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"ə2011ティ","slug_key":"ə-2011-ティ","split_variant":["ə-2011-ティ",null],"ug_slug_key":"ə 2011 ティ"}}
@@ -2361,7 +2386,7 @@
 {"args":["BAN MA BAN MA (斑马 斑马)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"banmabanma斑马斑马","slug_key":"ban-ma-ban-ma-斑马斑马","split_variant":["ban-ma-ban-ma-斑马斑马",null],"ug_slug_key":"ban ma ban ma (斑马 斑马)"}}
 {"args":["重来 zhong lai Racing into the Night - ACÚSTICO"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"重来zhonglairacingintothenightacustico","slug_key":"重来-zhong-lai-racing-into-the-night-acustico","split_variant":["重来-zhong-lai-racing-into-the-night-acustico",null],"ug_slug_key":"重来 zhong lai racing into the night - acustico"}}
 {"args":["stones / ȔC¥'弑"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"stonesuc弑","slug_key":"stones-uc-弑","split_variant":["stones-uc-弑",null],"ug_slug_key":"stones / uc¥'弑"}}
-{"args":["x – a.ใจ（°v˽+ | Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"xaใจvkelvin","slug_key":"x-a-ใจ-v-kelvin","split_variant":["x-a-ใจ-v-kelvin",null],"ug_slug_key":"x – a.ใจ(°v˽+ | kelvin"}}
+{"args":["x – a.ใจ（°v˽+ | Kelvin"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"xaใจvkelvin","slug_key":"x-a-ใจ-v-kelvin","split_variant":["x-a-ใจ-v-kelvin",null],"ug_slug_key":"x – a.ใจ(°v˽+ | kelvin"}}
 {"args":["˘Ĺ【Part 1 重来[Đặng - ſingle Edit"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"lpart1重来dangsingleedit","slug_key":"l-part-1-重来-dang-single-edit","split_variant":["l-part-1-重来-dang-single-edit",null],"ug_slug_key":" l【part 1 重来[dang - single edit"}}
 {"args":["17岁 (17 SUI)"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"17岁17sui","slug_key":"17岁-17-sui","split_variant":["17岁-17-sui",null],"ug_slug_key":"17岁 (17 sui)"}}
 {"args":["\" - Ao Vivo"],"fn":"test_conformance_keys.slugs_of","out":{"compact":"aovivo","slug_key":"ao-vivo","split_variant":["ao-vivo",null],"ug_slug_key":"\" - ao vivo"}}
@@ -2737,113 +2762,119 @@
 {"args":["-CAFE--DEL--MAR-the"],"fn":"caracole.normalize.ug_slug_key","out":"cafe-del-mar-the"}
 {"args":["-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA宋-the"],"fn":"caracole.normalize.ug_slug_key","out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa宋-the"}
 {"args":["-EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE"],"fn":"caracole.normalize.ug_slug_key","out":"eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"}
-{"args":["-SUI_獵獵獵_YORU_LIVE-"],"fn":"caracole.normalize.ug_slug_key","out":"sui_獵獵獵_yoru_live"}
-{"args":["-重来_ZHONG_LAI"],"fn":"caracole.normalize.ug_slug_key","out":"重来_zhong_lai"}
-{"args":["-棧棧棧周杰倫Oʾ嚌-"],"fn":"caracole.normalize.ug_slug_key","out":"棧棧棧周杰倫oʾ嚌"}
-{"args":["-运_SIGUR_ROS_餞餞饯_K_2-the"],"fn":"caracole.normalize.ug_slug_key","out":"运_sigur_ros_餞餞饯_k_2-the"}
-{"args":["-FT"],"fn":"caracole.normalize.ug_slug_key","out":"ft"}
-{"args":["-SOLO--STRASSE--ƩJ--岁봄날-"],"fn":"caracole.normalize.ug_slug_key","out":"solo-strasse-ʃj-岁봄날"}
-{"args":["-ありかとう_ARIGATOU_LOVE_FT_Z"],"fn":"caracole.normalize.ug_slug_key","out":"ありかとう_arigatou_love_ft_z"}
-{"args":["-斑马ティカタカナカタカナ_FEAT_宋冬野"],"fn":"caracole.normalize.ug_slug_key","out":"斑马ティカタカナカタカナ_feat_宋冬野"}
-{"args":["-嬙嫱嬙-"],"fn":"caracole.normalize.ug_slug_key","out":"嬙嫱嬙"}
-{"args":["-REMIX_ROLLING_HAL_ACUSTICO-the"],"fn":"caracole.normalize.ug_slug_key","out":"remix_rolling_hal_acustico-the"}
-{"args":["-ɾUꞰ--TRES--ILL-the"],"fn":"caracole.normalize.ug_slug_key","out":"ɾuʞ-tres-ill-the"}
-{"args":["-𠀀--LAUDV-the"],"fn":"caracole.normalize.ug_slug_key","out":"𠀀-laudv-the"}
-{"args":["-乙_Ƙɕ_甲_VERSION_ACUSTICA-"],"fn":"caracole.normalize.ug_slug_key","out":"乙_ƙɕ_甲_version_acustica"}
-{"args":["-与我交谈--REMIX-the"],"fn":"caracole.normalize.ug_slug_key","out":"与我交谈-remix-the"}
-{"args":["-봄날--EL"],"fn":"caracole.normalize.ug_slug_key","out":"봄날-el"}
-{"args":["-斑马斑马_BAN_MA_BAN_MA_LIVE_SINGLE_EDIT-"],"fn":"caracole.normalize.ug_slug_key","out":"斑马斑马_ban_ma_ban_ma_live_single_edit"}
-{"args":["-鉛_ILL_凫鳧凫_STRASSE_KELVIN-"],"fn":"caracole.normalize.ug_slug_key","out":"鉛_ill_凫鳧凫_strasse_kelvin"}
-{"args":["-CRUE-UNPLUGGED-the"],"fn":"caracole.normalize.ug_slug_key","out":"crue-unplugged-the"}
-{"args":["-LAS--夜に駆ける--REMASTERED--2011-"],"fn":"caracole.normalize.ug_slug_key","out":"las-夜に駆ける-remastered-2011"}
-{"args":["-17岁-17SUI-the"],"fn":"caracole.normalize.ug_slug_key","out":"17岁-17sui-the"}
-{"args":["-BJORKX--WITH--Y-"],"fn":"caracole.normalize.ug_slug_key","out":"bjorkx-with-y"}
-{"args":["-아이유_THOR_潤-the"],"fn":"caracole.normalize.ug_slug_key","out":"아이유_thor_潤-the"}
-{"args":["-ARIGATOU_ありかとう_ACUSTICO-"],"fn":"caracole.normalize.ug_slug_key","out":"arigatou_ありかとう_acustico"}
-{"args":["-乙-the"],"fn":"caracole.normalize.ug_slug_key","out":"乙-the"}
-{"args":["-滤--MTV--AEROSKOBING--カタカナ-the"],"fn":"caracole.normalize.ug_slug_key","out":"滤-mtv-aeroskobing-カタカナ-the"}
-{"args":["-JAI--ใจ-"],"fn":"caracole.normalize.ug_slug_key","out":"jai-ใจ"}
-{"args":["-钼-NINO-ACUSTICO-LIVE-"],"fn":"caracole.normalize.ug_slug_key","out":"钼-nino-acustico-live"}
-{"args":["-ɞSʔʗ-爱-LIVE-ファ"],"fn":"caracole.normalize.ug_slug_key","out":"ɞsʔʗ-爱-live-ファ"}
-{"args":["-癮𪚥𠮷_STRASSE_DZA_LIVE_AT_THE_BBC"],"fn":"caracole.normalize.ug_slug_key","out":"癮𪚥𠮷_strasse_dza_live_at_the_bbc"}
-{"args":["-BOMNAL--봄날-"],"fn":"caracole.normalize.ug_slug_key","out":"bomnal-봄날"}
-{"args":["-DONT-PART-REMASTERED-2011-"],"fn":"caracole.normalize.ug_slug_key","out":"dont-part-remastered-2011"}
-{"args":["-SIGUR_ROS_봄날擁拥"],"fn":"caracole.normalize.ug_slug_key","out":"sigur_ros_봄날擁拥"}
-{"args":["-王菲-WANG-FEI-SPRING-DAY"],"fn":"caracole.normalize.ug_slug_key","out":"王菲-wang-fei-spring-day"}
-{"args":["-鳡鳡-VERSION-ACUSTICA"],"fn":"caracole.normalize.ug_slug_key","out":"鳡鳡-version-acustica"}
-{"args":["-王菲--WANGFEI"],"fn":"caracole.normalize.ug_slug_key","out":"王菲-wangfei"}
-{"args":["-SONG-DONG-YE-宋冬野-LIVE-2013-REMASTER-the"],"fn":"caracole.normalize.ug_slug_key","out":"song-dong-ye-宋冬野-live-2013-remaster-the"}
-{"args":["-LODZPART_1_ACUSTICA_LIVE_AT_WEMBLEY-"],"fn":"caracole.normalize.ug_slug_key","out":"lodzpart_1_acustica_live_at_wembley"}
-{"args":["-夜に駆ける--YORU--NI--KAKERU--ZEBRA--ZEBRA--ACUSTICO-the"],"fn":"caracole.normalize.ug_slug_key","out":"夜に駆ける-yoru-ni-kakeru-zebra-zebra-acustico-the"}
-{"args":["-王菲--WANGFEI--LOVE--RECORDED--LIVE--AT--X"],"fn":"caracole.normalize.ug_slug_key","out":"王菲-wangfei-love-recorded-live-at-x"}
-{"args":["-1-宋冬野弯彎弯ー-Ŋ-1999-STEREO-MIX"],"fn":"caracole.normalize.ug_slug_key","out":"1-宋冬野弯彎弯ー-ŋ-1999-stereo-mix"}
-{"args":["-LAI--時々-"],"fn":"caracole.normalize.ug_slug_key","out":"lai-時々"}
-{"args":["-轨軌軌与我交谈ー-the"],"fn":"caracole.normalize.ug_slug_key","out":"轨軌軌与我交谈ー-the"}
-{"args":["-ありかとう_ARIGATOU-the"],"fn":"caracole.normalize.ug_slug_key","out":"ありかとう_arigatou-the"}
-{"args":["-MTV"],"fn":"caracole.normalize.ug_slug_key","out":"mtv"}
-{"args":["-IJSSEL-the"],"fn":"caracole.normalize.ug_slug_key","out":"ijssel-the"}
-{"args":["-钴"],"fn":"caracole.normalize.ug_slug_key","out":"钴"}
-{"args":["-ウィ--々--Ə--ACUSTICO-the"],"fn":"caracole.normalize.ug_slug_key","out":"ウィ-々-ə-acustico-the"}
-{"args":["-LOS_FY_绿色_MTV_Ʊ"],"fn":"caracole.normalize.ug_slug_key","out":"los_fy_绿色_mtv_ʊ"}
-{"args":["-王菲-WANG-FEI-LOVE"],"fn":"caracole.normalize.ug_slug_key","out":"王菲-wang-fei-love"}
-{"args":["-ARIGATOU_ह_द_아이유ʁꞲA_BBC_SESSIONS"],"fn":"caracole.normalize.ug_slug_key","out":"arigatou_ह_द_아이유ʁʝa_bbc_sessions"}
-{"args":["-南山南--NAN--SHAN--NAN--ZEBRA--ZEBRA"],"fn":"caracole.normalize.ug_slug_key","out":"南山南-nan-shan-nan-zebra-zebra"}
-{"args":["-MOTLEY豐豐-BANMAWITH-DEMO-VERSION-"],"fn":"caracole.normalize.ug_slug_key","out":"motley豐豐-banmawith-demo-version"}
-{"args":["-ACUSTICO--EL-the"],"fn":"caracole.normalize.ug_slug_key","out":"acustico-el-the"}
-{"args":["-ファ熒熒_2_17-the"],"fn":"caracole.normalize.ug_slug_key","out":"ファ熒熒_2_17-the"}
-{"args":["-ファ_LIVE_AT_WEMBLEY-the"],"fn":"caracole.normalize.ug_slug_key","out":"ファ_live_at_wembley-the"}
-{"args":["-斑馬--BAN--MA-the"],"fn":"caracole.normalize.ug_slug_key","out":"斑馬-ban-ma-the"}
-{"args":["-X--乙--ACOUSTIC"],"fn":"caracole.normalize.ug_slug_key","out":"x-乙-acoustic"}
-{"args":["-ˍ"],"fn":"caracole.normalize.ug_slug_key","out":"ˍ"}
+{"args":["-しゃ_JA_WELL-"],"fn":"caracole.normalize.ug_slug_key","out":"しゃ_ja_well"}
+{"args":["-ファイト_FAITO_FIGHT"],"fn":"caracole.normalize.ug_slug_key","out":"ファイト_faito_fight"}
+{"args":["-ファン-FUAN-FAN-"],"fn":"caracole.normalize.ug_slug_key","out":"ファン-fuan-fan"}
+{"args":["-ラーメン_RAAMEN_NOODLES-the"],"fn":"caracole.normalize.ug_slug_key","out":"ラーメン_raamen_noodles-the"}
+{"args":["-一致する--ITCHISURU--MATCH"],"fn":"caracole.normalize.ug_slug_key","out":"一致する-itchisuru-match"}
+{"args":["-밥--BAB--RICE-"],"fn":"caracole.normalize.ug_slug_key","out":"밥-bab-rice"}
+{"args":["-重来_CHONG_LAI_AGAIN"],"fn":"caracole.normalize.ug_slug_key","out":"重来_chong_lai_again"}
+{"args":["-KELVIN"],"fn":"caracole.normalize.ug_slug_key","out":"kelvin"}
+{"args":["-重来--ZEBRA--ZEBRA-"],"fn":"caracole.normalize.ug_slug_key","out":"重来-zebra-zebra"}
+{"args":["-重来_ZHONG_LAI-the"],"fn":"caracole.normalize.ug_slug_key","out":"重来_zhong_lai-the"}
+{"args":["-斑馬--BAN--MA--LOVE-the"],"fn":"caracole.normalize.ug_slug_key","out":"斑馬-ban-ma-love-the"}
+{"args":["-ありかとう--ARIGATOU--LOVE--FT--Z-the"],"fn":"caracole.normalize.ug_slug_key","out":"ありかとう-arigatou-love-ft-z-the"}
+{"args":["-사랑_SARANG_SPRING_DAY-"],"fn":"caracole.normalize.ug_slug_key","out":"사랑_sarang_spring_day"}
+{"args":["-斑马斑马--BANMABANMA-the"],"fn":"caracole.normalize.ug_slug_key","out":"斑马斑马-banmabanma-the"}
+{"args":["-きゃːUǷ--2--OST--诘"],"fn":"caracole.normalize.ug_slug_key","out":"きゃːuƿ-2-ost-诘"}
+{"args":["-𠮷IJSSEL_TRES_WITH-"],"fn":"caracole.normalize.ug_slug_key","out":"𠮷ijssel_tres_with"}
+{"args":["-WY_塆_RADIO_EDIT-"],"fn":"caracole.normalize.ug_slug_key","out":"wy_塆_radio_edit"}
+{"args":["-ใจ-Ɛ-LIVE-AT-WEMBLEY-the"],"fn":"caracole.normalize.ug_slug_key","out":"ใจ-ɛ-live-at-wembley-the"}
 {"args":["-夜に駆ける--YORU--NI--KAKERU-"],"fn":"caracole.normalize.ug_slug_key","out":"夜に駆ける-yoru-ni-kakeru"}
-{"args":["-ȺEC1--4--LOS--KINO-the"],"fn":"caracole.normalize.ug_slug_key","out":"ⱥec1-4-los-kino-the"}
-{"args":["-BJORK_Y_南山南_FT_Z-"],"fn":"caracole.normalize.ug_slug_key","out":"bjork_y_南山南_ft_z"}
-{"args":["-2-"],"fn":"caracole.normalize.ug_slug_key","out":"2"}
-{"args":["-STRASSE_与我交谈-the"],"fn":"caracole.normalize.ug_slug_key","out":"strasse_与我交谈-the"}
-{"args":["-AZERO_ファカタカナ"],"fn":"caracole.normalize.ug_slug_key","out":"azero_ファカタカナ"}
-{"args":["-DOS--DAY--南山南-the"],"fn":"caracole.normalize.ug_slug_key","out":"dos-day-南山南-the"}
-{"args":["-ROLLINGKAKERU-LIVE"],"fn":"caracole.normalize.ug_slug_key","out":"rollingkakeru-live"}
-{"args":["-DOSACUSTICO"],"fn":"caracole.normalize.ug_slug_key","out":"dosacustico"}
-{"args":["-SUI-the"],"fn":"caracole.normalize.ug_slug_key","out":"sui-the"}
-{"args":["-绿色勞劳劳--HAL--A--BBC--SESSIONS-the"],"fn":"caracole.normalize.ug_slug_key","out":"绿色勞劳劳-hal-a-bbc-sessions-the"}
-{"args":["-ΕΛΛΑΔΑ-DOCE-EL-与我交谈-REMASTERED-2011-the"],"fn":"caracole.normalize.ug_slug_key","out":"ελλαδα-doce-el-与我交谈-remastered-2011-the"}
-{"args":["-봄날-BOMNAL-SPRING-DAY"],"fn":"caracole.normalize.ug_slug_key","out":"봄날-bomnal-spring-day"}
-{"args":["-誑诳誑缏_1_2_ΕΛΛΑΔΑ"],"fn":"caracole.normalize.ug_slug_key","out":"誑诳誑缏_1_2_ελλαδα"}
-{"args":["-봄날--LIVE--1999--STEREO--MIX-the"],"fn":"caracole.normalize.ug_slug_key","out":"봄날-live-1999-stereo-mix-the"}
-{"args":["-々--FEATURING--ΣΙΣΥΦΟΣ"],"fn":"caracole.normalize.ug_slug_key","out":"々-featuring-σισυφος"}
-{"args":["-LIVE_2013_REMASTER-"],"fn":"caracole.normalize.ug_slug_key","out":"live_2013_remaster"}
-{"args":["-NINO-"],"fn":"caracole.normalize.ug_slug_key","out":"nino"}
-{"args":["-NINO--2--SOLO"],"fn":"caracole.normalize.ug_slug_key","out":"nino-2-solo"}
-{"args":["-与我交谈_VAȻO_SPRING_봄날-the"],"fn":"caracole.normalize.ug_slug_key","out":"与我交谈_vaȼo_spring_봄날-the"}
-{"args":["-봄날YORU"],"fn":"caracole.normalize.ug_slug_key","out":"봄날yoru"}
-{"args":["-周杰倫--DONT--ΤΡΥΠΕΣ--LAS--LIVE-"],"fn":"caracole.normalize.ug_slug_key","out":"周杰倫-dont-τρυπες-las-live"}
-{"args":["-南山南-KELVIN周杰倫-2-ZERO-"],"fn":"caracole.normalize.ug_slug_key","out":"南山南-kelvin周杰倫-2-zero"}
-{"args":["-VERSION--BANMA--1999--STEREO--MIX-"],"fn":"caracole.normalize.ug_slug_key","out":"version-banma-1999-stereo-mix"}
-{"args":["-VERSION--鮦鮦鲖-the"],"fn":"caracole.normalize.ug_slug_key","out":"version-鮦鮦鲖-the"}
+{"args":["-REMIX-FT-颉-REMIX-the"],"fn":"caracole.normalize.ug_slug_key","out":"remix-ft-颉-remix-the"}
+{"args":["-南山南--SPRING--DAY-"],"fn":"caracole.normalize.ug_slug_key","out":"南山南-spring-day"}
+{"args":["-与我交谈_REMIX-the"],"fn":"caracole.normalize.ug_slug_key","out":"与我交谈_remix-the"}
+{"args":["-重来_LIVE_MTV_UNPLUGGED-"],"fn":"caracole.normalize.ug_slug_key","out":"重来_live_mtv_unplugged"}
+{"args":["-ह_द_ACOUSTIC_VERSION-the"],"fn":"caracole.normalize.ug_slug_key","out":"ह_द_acoustic_version-the"}
+{"args":["-D-the"],"fn":"caracole.normalize.ug_slug_key","out":"d-the"}
+{"args":["-17岁--17--SUI--RACING--INTO--THE--NIGHT-"],"fn":"caracole.normalize.ug_slug_key","out":"17岁-17-sui-racing-into-the-night"}
+{"args":["-LAウィ-IJSSEL-"],"fn":"caracole.normalize.ug_slug_key","out":"laウィ-ijssel"}
+{"args":["-滤-MTV-AEROSKOBING-カタカナ"],"fn":"caracole.normalize.ug_slug_key","out":"滤-mtv-aeroskobing-カタカナ"}
+{"args":["-南山南_ACOUSTIC_DIAS_아이유_2011_REMASTER"],"fn":"caracole.normalize.ug_slug_key","out":"南山南_acoustic_dias_아이유_2011_remaster"}
+{"args":["-钼--NINO--ACUSTICO--LIVE-"],"fn":"caracole.normalize.ug_slug_key","out":"钼-nino-acustico-live"}
+{"args":["-乙-ΕΛΛΑΔΑ-STRASSE斑馬-"],"fn":"caracole.normalize.ug_slug_key","out":"乙-ελλαδα-strasse斑馬"}
+{"args":["-NI"],"fn":"caracole.normalize.ug_slug_key","out":"ni"}
+{"args":["-ROCKNROLL-宋冬野"],"fn":"caracole.normalize.ug_slug_key","out":"rocknroll-宋冬野"}
+{"args":["-봄날-BOMNAL-SPRING-DAY-FEAT-X"],"fn":"caracole.normalize.ug_slug_key","out":"봄날-bomnal-spring-day-feat-x"}
+{"args":["-AE--BANMA--LIVE"],"fn":"caracole.normalize.ug_slug_key","out":"ae-banma-live"}
+{"args":["-2-EN-VIVO-the"],"fn":"caracole.normalize.ug_slug_key","out":"2-en-vivo-the"}
+{"args":["-王菲_BJORK_斑马_SƤ_ʐO-"],"fn":"caracole.normalize.ug_slug_key","out":"王菲_bjork_斑马_sƥ_ʐo"}
+{"args":["-ありかとう--ARIGATOU--FEAT--宋冬野-the"],"fn":"caracole.normalize.ug_slug_key","out":"ありかとう-arigatou-feat-宋冬野-the"}
+{"args":["-DANG--王菲尷--ZEBRA--乙"],"fn":"caracole.normalize.ug_slug_key","out":"dang-王菲尷-zebra-乙"}
+{"args":["-LODZPART-1-ACUSTICA-LIVE-AT-WEMBLEY"],"fn":"caracole.normalize.ug_slug_key","out":"lodzpart-1-acustica-live-at-wembley"}
+{"args":["-BAN--MA--BAN--MA--斑马斑马-"],"fn":"caracole.normalize.ug_slug_key","out":"ban-ma-ban-ma-斑马斑马"}
+{"args":["-绿色_LV_SE_ACUSTICO-the"],"fn":"caracole.normalize.ug_slug_key","out":"绿色_lv_se_acustico-the"}
+{"args":["-ใจ_ZEBRAOST_宋冬野鮃鮃-the"],"fn":"caracole.normalize.ug_slug_key","out":"ใจ_zebraost_宋冬野鮃鮃-the"}
+{"args":["-鲟鱘鲟_MONO"],"fn":"caracole.normalize.ug_slug_key","out":"鲟鱘鲟_mono"}
+{"args":["-ARIGATOU-the"],"fn":"caracole.normalize.ug_slug_key","out":"arigatou-the"}
+{"args":["-南山南_NAN_SHAN_NAN_LIVE"],"fn":"caracole.normalize.ug_slug_key","out":"南山南_nan_shan_nan_live"}
+{"args":["-王菲--WANGFEI--LOVE--RECORDED--LIVE--AT--X-the"],"fn":"caracole.normalize.ug_slug_key","out":"王菲-wangfei-love-recorded-live-at-x-the"}
+{"args":["-CRUE_EN_VIVO"],"fn":"caracole.normalize.ug_slug_key","out":"crue_en_vivo"}
+{"args":["-斑马斑马-BANMABANMA-ZEBRA-ZEBRA-FT-Y"],"fn":"caracole.normalize.ug_slug_key","out":"斑马斑马-banmabanma-zebra-zebra-ft-y"}
+{"args":["-ありかとう_ARIGATOU_REMASTER_2011"],"fn":"caracole.normalize.ug_slug_key","out":"ありかとう_arigatou_remaster_2011"}
+{"args":["-轨軌軌与我交谈ー"],"fn":"caracole.normalize.ug_slug_key","out":"轨軌軌与我交谈ー"}
+{"args":["-ARIGATOU-ह-द-아이유ʁꞲA-BBC-SESSIONS-"],"fn":"caracole.normalize.ug_slug_key","out":"arigatou-ह-द-아이유ʁʝa-bbc-sessions"}
+{"args":["-LAS--宋冬野しゃ-the"],"fn":"caracole.normalize.ug_slug_key","out":"las-宋冬野しゃ-the"}
+{"args":["-17岁_17_SUI_LIVE-the"],"fn":"caracole.normalize.ug_slug_key","out":"17岁_17_sui_live-the"}
+{"args":["-UNPLUGGED-the"],"fn":"caracole.normalize.ug_slug_key","out":"unplugged-the"}
+{"args":["-ISTANBUL--K--DIAS-the"],"fn":"caracole.normalize.ug_slug_key","out":"istanbul-k-dias-the"}
+{"args":["-MOTLEY豐豐--BANMAWITH--DEMO--VERSION"],"fn":"caracole.normalize.ug_slug_key","out":"motley豐豐-banmawith-demo-version"}
+{"args":["-南山南--NAN--SHAN--NAN--LIVE--LIVE--AT--THE--BBC"],"fn":"caracole.normalize.ug_slug_key","out":"南山南-nan-shan-nan-live-live-at-the-bbc"}
+{"args":["-FT--KELVIN-"],"fn":"caracole.normalize.ug_slug_key","out":"ft-kelvin"}
+{"args":["-봄날--LIVE-the"],"fn":"caracole.normalize.ug_slug_key","out":"봄날-live-the"}
+{"args":["-ファ熒熒_2_17-"],"fn":"caracole.normalize.ug_slug_key","out":"ファ熒熒_2_17"}
+{"args":["-BANMA--驥骥驥--FROM--FILM--SOUNDTRACK-"],"fn":"caracole.normalize.ug_slug_key","out":"banma-驥骥驥-from-film-soundtrack"}
+{"args":["-ˍ-the"],"fn":"caracole.normalize.ug_slug_key","out":"ˍ-the"}
+{"args":["-MTV_ISTANBUL"],"fn":"caracole.normalize.ug_slug_key","out":"mtv_istanbul"}
+{"args":["-歌之王TY--FEATURING-the"],"fn":"caracole.normalize.ug_slug_key","out":"歌之王ty-featuring-the"}
+{"args":["-N"],"fn":"caracole.normalize.ug_slug_key","out":"n"}
+{"args":["-Y-MTV-UNPLUGGED-the"],"fn":"caracole.normalize.ug_slug_key","out":"y-mtv-unplugged-the"}
+{"args":["-我的--ˏQ--Ʉ--しゃROLLING-the"],"fn":"caracole.normalize.ug_slug_key","out":"我的-ˏq-ʉ-しゃrolling-the"}
+{"args":["-DOS-DAY-南山南-the"],"fn":"caracole.normalize.ug_slug_key","out":"dos-day-南山南-the"}
+{"args":["-LOS-DOS-ABC-DONGYE-ACUSTICA"],"fn":"caracole.normalize.ug_slug_key","out":"los-dos-abc-dongye-acustica"}
+{"args":["-南山南_NAN_SHAN_NAN"],"fn":"caracole.normalize.ug_slug_key","out":"南山南_nan_shan_nan"}
+{"args":["-사랑--SARANG--BBC--SESSIONS-the"],"fn":"caracole.normalize.ug_slug_key","out":"사랑-sarang-bbc-sessions-the"}
+{"args":["-BJORK--症潯浔潯瘍瘍疡--DOCE"],"fn":"caracole.normalize.ug_slug_key","out":"bjork-症潯浔潯瘍瘍疡-doce"}
+{"args":["-ARIGATOU-REMIX-O-DOS-MONO"],"fn":"caracole.normalize.ug_slug_key","out":"arigatou-remix-o-dos-mono"}
+{"args":["-ZEBRA_AI_岁_ːEʖU-"],"fn":"caracole.normalize.ug_slug_key","out":"zebra_ai_岁_ːeʖu"}
+{"args":["-PART-時々斑马-MOTLEY-SINGLE-EDIT-"],"fn":"caracole.normalize.ug_slug_key","out":"part-時々斑马-motley-single-edit"}
+{"args":["-LA--我的"],"fn":"caracole.normalize.ug_slug_key","out":"la-我的"}
+{"args":["-봄날_LIVE_1999_STEREO_MIX-the"],"fn":"caracole.normalize.ug_slug_key","out":"봄날_live_1999_stereo_mix-the"}
+{"args":["-LODZ-辄-ROLLING"],"fn":"caracole.normalize.ug_slug_key","out":"lodz-辄-rolling"}
+{"args":["-LIVE--2013--REMASTER-"],"fn":"caracole.normalize.ug_slug_key","out":"live-2013-remaster"}
+{"args":["-ZEROIJ-H-"],"fn":"caracole.normalize.ug_slug_key","out":"zeroij-h"}
+{"args":["-DOCE--VERSION-"],"fn":"caracole.normalize.ug_slug_key","out":"doce-version"}
+{"args":["-赞贊赞--2011--MTV--UNPLUGGED-the"],"fn":"caracole.normalize.ug_slug_key","out":"赞贊赞-2011-mtv-unplugged-the"}
+{"args":["-ใจ--JAI--ZEBRA--ZEBRA--DEMO--VERSION"],"fn":"caracole.normalize.ug_slug_key","out":"ใจ-jai-zebra-zebra-demo-version"}
+{"args":["-DANG_ACUSTICO_ファ_LIVE"],"fn":"caracole.normalize.ug_slug_key","out":"dang_acustico_ファ_live"}
+{"args":["-绿色-LV-SE-ZEBRA-ZEBRA-the"],"fn":"caracole.normalize.ug_slug_key","out":"绿色-lv-se-zebra-zebra-the"}
+{"args":["-周杰倫-DONT-ΤΡΥΠΕΣ-LAS-LIVE"],"fn":"caracole.normalize.ug_slug_key","out":"周杰倫-dont-τρυπες-las-live"}
+{"args":["-莊莊_EN_VIVO"],"fn":"caracole.normalize.ug_slug_key","out":"莊莊_en_vivo"}
+{"args":["-VERSION-鮦鮦鲖-the"],"fn":"caracole.normalize.ug_slug_key","out":"version-鮦鮦鲖-the"}
+{"args":["-颤顫_IJSSEL_宋冬野1_AEROSKOBING-"],"fn":"caracole.normalize.ug_slug_key","out":"颤顫_ijssel_宋冬野1_aeroskobing"}
 {"args":["-MTV--DANG--Ƽ--周杰倫--LIVE"],"fn":"caracole.normalize.ug_slug_key","out":"mtv-dang-ƽ-周杰倫-live"}
-{"args":["-K_DONGYE_X_봄날_KINO_SINGLE_EDIT"],"fn":"caracole.normalize.ug_slug_key","out":"k_dongye_x_봄날_kino_single_edit"}
-{"args":["-JAI-ใจ-1999-STEREO-MIX-the"],"fn":"caracole.normalize.ug_slug_key","out":"jai-ใจ-1999-stereo-mix-the"}
-{"args":["-ROCKNROLL-我的-КИНО"],"fn":"caracole.normalize.ug_slug_key","out":"rocknroll-我的-кино"}
-{"args":["-NINO_对不起襉襉ファ"],"fn":"caracole.normalize.ug_slug_key","out":"nino_对不起襉襉ファ"}
-{"args":["-HU-UNPLUGGED-DEMO-VERSION-the"],"fn":"caracole.normalize.ug_slug_key","out":"hu-unplugged-demo-version-the"}
-{"args":["-ありかとう_ARIGATOU_RACING_INTO_THE_NIGHT-"],"fn":"caracole.normalize.ug_slug_key","out":"ありかとう_arigatou_racing_into_the_night"}
-{"args":["-ТЫ--AC--KINO--REMASTER--2011"],"fn":"caracole.normalize.ug_slug_key","out":"ты-ac-kino-remaster-2011"}
-{"args":["-夜に駆ける_YORU_NI_KAKERU_SPRING_DAY_RADIO_EDIT-"],"fn":"caracole.normalize.ug_slug_key","out":"夜に駆ける_yoru_ni_kakeru_spring_day_radio_edit"}
-{"args":["-SARANG_사랑-the"],"fn":"caracole.normalize.ug_slug_key","out":"sarang_사랑-the"}
-{"args":["-TRES_Ə_IM-"],"fn":"caracole.normalize.ug_slug_key","out":"tres_ə_im"}
-{"args":["-斑马斑马_BANMABANMA_ZEBRA_ZEBRA_FT_Z-"],"fn":"caracole.normalize.ug_slug_key","out":"斑马斑马_banmabanma_zebra_zebra_ft_z"}
-{"args":["-ใจ_JAI_LIVE_RECORDED_LIVE_AT_X-"],"fn":"caracole.normalize.ug_slug_key","out":"ใจ_jai_live_recorded_live_at_x"}
-{"args":["-KINO-重来-STEREO-R-CHONG-DEMO-VERSION"],"fn":"caracole.normalize.ug_slug_key","out":"kino-重来-stereo-r-chong-demo-version"}
-{"args":["-SARANG-사랑-VERSION-ACUSTICA"],"fn":"caracole.normalize.ug_slug_key","out":"sarang-사랑-version-acustica"}
-{"args":["-KAKERU-the"],"fn":"caracole.normalize.ug_slug_key","out":"kakeru-the"}
-{"args":["-STONES_VERSION_BJORK-the"],"fn":"caracole.normalize.ug_slug_key","out":"stones_version_bjork-the"}
-{"args":["-ARIGATOU-ありかとう-"],"fn":"caracole.normalize.ug_slug_key","out":"arigatou-ありかとう"}
-{"args":["-カタカナ_CRUE_LIVE-"],"fn":"caracole.normalize.ug_slug_key","out":"カタカナ_crue_live"}
-{"args":["-重来--ZHONG--LAI--RACING--INTO--THE--NIGHT--ACUSTICO-"],"fn":"caracole.normalize.ug_slug_key","out":"重来-zhong-lai-racing-into-the-night-acustico"}
-{"args":["-X-A-ใจ-V-KELVIN"],"fn":"caracole.normalize.ug_slug_key","out":"x-a-ใจ-v-kelvin"}
-{"args":["-SONG--DONG--YE--宋冬野-the"],"fn":"caracole.normalize.ug_slug_key","out":"song-dong-ye-宋冬野-the"}
-{"args":["-STEREO-DIAS-カタカナ璉璉琏-MONO-the"],"fn":"caracole.normalize.ug_slug_key","out":"stereo-dias-カタカナ璉璉琏-mono-the"}
-{"args":["-ƋI7Ʈ_TƳA_绵_Ʒʩ_LAS-the"],"fn":"caracole.normalize.ug_slug_key","out":"ƌi7ʈ_tƴa_绵_ʒʩ_las-the"}
+{"args":["-2_KELVIN_FEAT_PART-"],"fn":"caracole.normalize.ug_slug_key","out":"2_kelvin_feat_part"}
+{"args":["-K_DONGYE_X_봄날_KINO_SINGLE_EDIT-the"],"fn":"caracole.normalize.ug_slug_key","out":"k_dongye_x_봄날_kino_single_edit-the"}
+{"args":["-TY_KELVIN_K_夹夾夾_ACUSTICO-"],"fn":"caracole.normalize.ug_slug_key","out":"ty_kelvin_k_夹夾夾_acustico"}
+{"args":["-斑馬_BAN_MA-"],"fn":"caracole.normalize.ug_slug_key","out":"斑馬_ban_ma"}
+{"args":["-ТЫ_AC_KINO_REMASTER_2011-"],"fn":"caracole.normalize.ug_slug_key","out":"ты_ac_kino_remaster_2011"}
+{"args":["-PART-DONGYE-INAǂ-周杰倫Ɏ"],"fn":"caracole.normalize.ug_slug_key","out":"part-dongye-inaǂ-周杰倫ɏ"}
+{"args":["-斑馬-BAN-MA"],"fn":"caracole.normalize.ug_slug_key","out":"斑馬-ban-ma"}
+{"args":["-BJORK--ZEBRA--𠮷𠀀-the"],"fn":"caracole.normalize.ug_slug_key","out":"bjork-zebra-𠮷𠀀-the"}
+{"args":["-斑马斑马_BAN_MA_BAN_MA-the"],"fn":"caracole.normalize.ug_slug_key","out":"斑马斑马_ban_ma_ban_ma-the"}
+{"args":["-LODZ-VERSION-TY-"],"fn":"caracole.normalize.ug_slug_key","out":"lodz-version-ty"}
+{"args":["-绿色_LV_SE_LOVE-"],"fn":"caracole.normalize.ug_slug_key","out":"绿色_lv_se_love"}
+{"args":["-ȷR--壼壸壸-"],"fn":"caracole.normalize.ug_slug_key","out":"ȷr-壼壸壸"}
+{"args":["-STONES-VERSION-BJORK"],"fn":"caracole.normalize.ug_slug_key","out":"stones-version-bjork"}
+{"args":["-夜に駆ける--RACING--INTO--THE--NIGHT-the"],"fn":"caracole.normalize.ug_slug_key","out":"夜に駆ける-racing-into-the-night-the"}
+{"args":["-矓眬乙-NJO-DAY-the"],"fn":"caracole.normalize.ug_slug_key","out":"矓眬乙-njo-day-the"}
+{"args":["-UUO_采采_UNO-the"],"fn":"caracole.normalize.ug_slug_key","out":"uuo_采采_uno-the"}
+{"args":["-X-A-ใจ-V-KELVIN-the"],"fn":"caracole.normalize.ug_slug_key","out":"x-a-ใจ-v-kelvin-the"}
+{"args":["-17岁_17_SUI-the"],"fn":"caracole.normalize.ug_slug_key","out":"17岁_17_sui-the"}
+{"args":["-THOR--YORU--1--IJSSEL--DIAS-the"],"fn":"caracole.normalize.ug_slug_key","out":"thor-yoru-1-ijssel-dias-the"}
+{"args":["-UˏHȹ-"],"fn":"caracole.normalize.ug_slug_key","out":"uˏhȹ"}
+{"args":["-重来-SPRING-DAY-SINGLE-EDIT"],"fn":"caracole.normalize.ug_slug_key","out":"重来-spring-day-single-edit"}
+{"args":["-ILLKINO-17-燻燻燻"],"fn":"caracole.normalize.ug_slug_key","out":"illkino-17-燻燻燻"}
 {"args":["intro"],"fn":"caracole.normalize.split_variant","out":["intro",null]}
 {"args":["-intro"],"fn":"caracole.normalize.split_variant","out":["-intro",null]}
 {"args":["x-"],"fn":"caracole.normalize.split_variant","out":["x-",null]}
@@ -3203,110 +3234,117 @@
 {"args":["cafe-del-mar-acoustic"],"fn":"caracole.normalize.split_variant","out":["cafe-del-mar","acoustic"]}
 {"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa宋-unplugged"],"fn":"caracole.normalize.split_variant","out":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa宋","unplugged"]}
 {"args":["eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-remix"],"fn":"caracole.normalize.split_variant","out":["eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee-remix",null]}
-{"args":["sui-獵獵獵-yoru-live-solo"],"fn":"caracole.normalize.split_variant","out":["sui-獵獵獵-yoru-live","solo"]}
-{"args":["重来-zhong-lai-riff"],"fn":"caracole.normalize.split_variant","out":["重来-zhong-lai","riff"]}
-{"args":["棧棧棧周杰倫oʾ嚌-unplugged"],"fn":"caracole.normalize.split_variant","out":["棧棧棧周杰倫oʾ嚌","unplugged"]}
-{"args":["运-sigur-ros-餞餞饯-k-2-intro"],"fn":"caracole.normalize.split_variant","out":["运-sigur-ros-餞餞饯-k-2","intro"]}
-{"args":["ft-outro"],"fn":"caracole.normalize.split_variant","out":["ft","outro"]}
-{"args":["solo-strasse-ʃj-岁봄날-live"],"fn":"caracole.normalize.split_variant","out":["solo-strasse-ʃj-岁봄날","live"]}
-{"args":["ありかとう-arigatou-love-ft-z-acoustic"],"fn":"caracole.normalize.split_variant","out":["ありかとう-arigatou-love-ft-z","acoustic"]}
-{"args":["斑马ティカタカナカタカナ-feat-宋冬野-acoustic"],"fn":"caracole.normalize.split_variant","out":["斑马ティカタカナカタカナ-feat-宋冬野","acoustic"]}
-{"args":["嬙嫱嬙-unplugged"],"fn":"caracole.normalize.split_variant","out":["嬙嫱嬙","unplugged"]}
-{"args":["remix-rolling-hal-acustico-intro"],"fn":"caracole.normalize.split_variant","out":["remix-rolling-hal-acustico","intro"]}
-{"args":["ɾuʞ-tres-ill-remix"],"fn":"caracole.normalize.split_variant","out":["ɾuʞ-tres-ill-remix",null]}
-{"args":["𠀀-laudv-lesson"],"fn":"caracole.normalize.split_variant","out":["𠀀-laudv","lesson"]}
-{"args":["乙-ƙɕ-甲-version-acustica-solo"],"fn":"caracole.normalize.split_variant","out":["乙-ƙɕ-甲-version-acustica","solo"]}
-{"args":["与我交谈-remix-riff"],"fn":"caracole.normalize.split_variant","out":["与我交谈-remix","riff"]}
-{"args":["봄날-el-remix"],"fn":"caracole.normalize.split_variant","out":["봄날-el-remix",null]}
-{"args":["斑马斑马-ban-ma-ban-ma-live-single-edit-unplugged"],"fn":"caracole.normalize.split_variant","out":["斑马斑马-ban-ma-ban-ma-live-single-edit","unplugged"]}
-{"args":["鉛-ill-凫鳧凫-strasse-kelvin-unplugged"],"fn":"caracole.normalize.split_variant","out":["鉛-ill-凫鳧凫-strasse-kelvin","unplugged"]}
-{"args":["crue-unplugged-riff"],"fn":"caracole.normalize.split_variant","out":["crue-unplugged","riff"]}
-{"args":["las-夜に駆ける-remastered-2011-remix"],"fn":"caracole.normalize.split_variant","out":["las-夜に駆ける-remastered-2011-remix",null]}
-{"args":["17岁-17sui-lesson"],"fn":"caracole.normalize.split_variant","out":["17岁-17sui","lesson"]}
-{"args":["bjorkx-with-y-acoustic"],"fn":"caracole.normalize.split_variant","out":["bjorkx-with-y","acoustic"]}
-{"args":["아이유-thor-潤-unplugged"],"fn":"caracole.normalize.split_variant","out":["아이유-thor-潤","unplugged"]}
-{"args":["arigatou-ありかとう-acustico-lesson"],"fn":"caracole.normalize.split_variant","out":["arigatou-ありかとう-acustico","lesson"]}
-{"args":["乙-intro"],"fn":"caracole.normalize.split_variant","out":["乙","intro"]}
+{"args":["しゃ-ja-well-solo"],"fn":"caracole.normalize.split_variant","out":["しゃ-ja-well","solo"]}
+{"args":["ファイト-faito-fight-riff"],"fn":"caracole.normalize.split_variant","out":["ファイト-faito-fight","riff"]}
+{"args":["ファン-fuan-fan-unplugged"],"fn":"caracole.normalize.split_variant","out":["ファン-fuan-fan","unplugged"]}
+{"args":["ラーメン-raamen-noodles-intro"],"fn":"caracole.normalize.split_variant","out":["ラーメン-raamen-noodles","intro"]}
+{"args":["一致する-itchisuru-match-outro"],"fn":"caracole.normalize.split_variant","out":["一致する-itchisuru-match","outro"]}
+{"args":["밥-bab-rice-live"],"fn":"caracole.normalize.split_variant","out":["밥-bab-rice","live"]}
+{"args":["重来-chong-lai-again-acoustic"],"fn":"caracole.normalize.split_variant","out":["重来-chong-lai-again","acoustic"]}
+{"args":["kelvin-acoustic"],"fn":"caracole.normalize.split_variant","out":["kelvin","acoustic"]}
+{"args":["重来-zebra-zebra-unplugged"],"fn":"caracole.normalize.split_variant","out":["重来-zebra-zebra","unplugged"]}
+{"args":["重来-zhong-lai-intro"],"fn":"caracole.normalize.split_variant","out":["重来-zhong-lai","intro"]}
+{"args":["斑馬-ban-ma-love-remix"],"fn":"caracole.normalize.split_variant","out":["斑馬-ban-ma-love-remix",null]}
+{"args":["ありかとう-arigatou-love-ft-z-lesson"],"fn":"caracole.normalize.split_variant","out":["ありかとう-arigatou-love-ft-z","lesson"]}
+{"args":["사랑-sarang-spring-day-solo"],"fn":"caracole.normalize.split_variant","out":["사랑-sarang-spring-day","solo"]}
+{"args":["斑马斑马-banmabanma-riff"],"fn":"caracole.normalize.split_variant","out":["斑马斑马-banmabanma","riff"]}
+{"args":["きゃːuƿ-2-ost-诘-remix"],"fn":"caracole.normalize.split_variant","out":["きゃːuƿ-2-ost-诘-remix",null]}
+{"args":["𠮷ijssel-tres-with-unplugged"],"fn":"caracole.normalize.split_variant","out":["𠮷ijssel-tres-with","unplugged"]}
+{"args":["wy-塆-radio-edit-unplugged"],"fn":"caracole.normalize.split_variant","out":["wy-塆-radio-edit","unplugged"]}
+{"args":["ใจ-ɛ-live-at-wembley-riff"],"fn":"caracole.normalize.split_variant","out":["ใจ-ɛ-live-at-wembley","riff"]}
+{"args":["夜に駆ける-yoru-ni-kakeru-remix"],"fn":"caracole.normalize.split_variant","out":["夜に駆ける-yoru-ni-kakeru-remix",null]}
+{"args":["remix-ft-颉-remix-lesson"],"fn":"caracole.normalize.split_variant","out":["remix-ft-颉-remix","lesson"]}
+{"args":["南山南-spring-day-acoustic"],"fn":"caracole.normalize.split_variant","out":["南山南-spring-day","acoustic"]}
+{"args":["与我交谈-remix-unplugged"],"fn":"caracole.normalize.split_variant","out":["与我交谈-remix","unplugged"]}
+{"args":["重来-live-mtv-unplugged-lesson"],"fn":"caracole.normalize.split_variant","out":["重来-live-mtv-unplugged","lesson"]}
+{"args":["ह-द-acoustic-version-intro"],"fn":"caracole.normalize.split_variant","out":["ह-द-acoustic-version","intro"]}
+{"args":["d-remix"],"fn":"caracole.normalize.split_variant","out":["d-remix",null]}
+{"args":["17岁-17-sui-racing-into-the-night-solo"],"fn":"caracole.normalize.split_variant","out":["17岁-17-sui-racing-into-the-night","solo"]}
+{"args":["laウィ-ijssel-unplugged"],"fn":"caracole.normalize.split_variant","out":["laウィ-ijssel","unplugged"]}
 {"args":["滤-mtv-aeroskobing-カタカナ-remix"],"fn":"caracole.normalize.split_variant","out":["滤-mtv-aeroskobing-カタカナ-remix",null]}
-{"args":["jai-ใจ-solo"],"fn":"caracole.normalize.split_variant","out":["jai-ใจ","solo"]}
-{"args":["钼-nino-acustico-live-unplugged"],"fn":"caracole.normalize.split_variant","out":["钼-nino-acustico-live","unplugged"]}
-{"args":["ɞsʔʗ-爱-live-ファ-remix"],"fn":"caracole.normalize.split_variant","out":["ɞsʔʗ-爱-live-ファ-remix",null]}
-{"args":["癮𪚥𠮷-strasse-dza-live-at-the-bbc-remix"],"fn":"caracole.normalize.split_variant","out":["癮𪚥𠮷-strasse-dza-live-at-the-bbc-remix",null]}
-{"args":["bomnal-봄날-live"],"fn":"caracole.normalize.split_variant","out":["bomnal-봄날","live"]}
-{"args":["dont-part-remastered-2011-intro"],"fn":"caracole.normalize.split_variant","out":["dont-part-remastered-2011","intro"]}
-{"args":["sigur-ros-봄날擁拥-lesson"],"fn":"caracole.normalize.split_variant","out":["sigur-ros-봄날擁拥","lesson"]}
-{"args":["王菲-wang-fei-spring-day-acoustic"],"fn":"caracole.normalize.split_variant","out":["王菲-wang-fei-spring-day","acoustic"]}
-{"args":["鳡鳡-version-acustica-acoustic"],"fn":"caracole.normalize.split_variant","out":["鳡鳡-version-acustica","acoustic"]}
-{"args":["王菲-wangfei-live"],"fn":"caracole.normalize.split_variant","out":["王菲-wangfei","live"]}
-{"args":["song-dong-ye-宋冬野-live-2013-remaster-lesson"],"fn":"caracole.normalize.split_variant","out":["song-dong-ye-宋冬野-live-2013-remaster","lesson"]}
+{"args":["南山南-acoustic-dias-아이유-2011-remaster-remix"],"fn":"caracole.normalize.split_variant","out":["南山南-acoustic-dias-아이유-2011-remaster-remix",null]}
+{"args":["钼-nino-acustico-live-live"],"fn":"caracole.normalize.split_variant","out":["钼-nino-acustico-live","live"]}
+{"args":["乙-ελλαδα-strasse斑馬-intro"],"fn":"caracole.normalize.split_variant","out":["乙-ελλαδα-strasse斑馬","intro"]}
+{"args":["ni-lesson"],"fn":"caracole.normalize.split_variant","out":["ni","lesson"]}
+{"args":["rocknroll-宋冬野-acoustic"],"fn":"caracole.normalize.split_variant","out":["rocknroll-宋冬野","acoustic"]}
+{"args":["봄날-bomnal-spring-day-feat-x-acoustic"],"fn":"caracole.normalize.split_variant","out":["봄날-bomnal-spring-day-feat-x","acoustic"]}
+{"args":["ae-banma-live-live"],"fn":"caracole.normalize.split_variant","out":["ae-banma-live","live"]}
+{"args":["2-en-vivo-lesson"],"fn":"caracole.normalize.split_variant","out":["2-en-vivo","lesson"]}
+{"args":["王菲-bjork-斑马-sƥ-ʐo-remix"],"fn":"caracole.normalize.split_variant","out":["王菲-bjork-斑马-sƥ-ʐo-remix",null]}
+{"args":["ありかとう-arigatou-feat-宋冬野-acoustic"],"fn":"caracole.normalize.split_variant","out":["ありかとう-arigatou-feat-宋冬野","acoustic"]}
+{"args":["dang-王菲尷-zebra-乙-intro"],"fn":"caracole.normalize.split_variant","out":["dang-王菲尷-zebra-乙","intro"]}
 {"args":["lodzpart-1-acustica-live-at-wembley-remix"],"fn":"caracole.normalize.split_variant","out":["lodzpart-1-acustica-live-at-wembley-remix",null]}
-{"args":["夜に駆ける-yoru-ni-kakeru-zebra-zebra-acustico-acoustic"],"fn":"caracole.normalize.split_variant","out":["夜に駆ける-yoru-ni-kakeru-zebra-zebra-acustico","acoustic"]}
-{"args":["王菲-wangfei-love-recorded-live-at-x-intro"],"fn":"caracole.normalize.split_variant","out":["王菲-wangfei-love-recorded-live-at-x","intro"]}
-{"args":["1-宋冬野弯彎弯ー-ŋ-1999-stereo-mix-remix"],"fn":"caracole.normalize.split_variant","out":["1-宋冬野弯彎弯ー-ŋ-1999-stereo-mix-remix",null]}
-{"args":["lai-時々-unplugged"],"fn":"caracole.normalize.split_variant","out":["lai-時々","unplugged"]}
-{"args":["轨軌軌与我交谈ー-outro"],"fn":"caracole.normalize.split_variant","out":["轨軌軌与我交谈ー","outro"]}
-{"args":["ありかとう-arigatou-lesson"],"fn":"caracole.normalize.split_variant","out":["ありかとう-arigatou","lesson"]}
-{"args":["mtv-unplugged"],"fn":"caracole.normalize.split_variant","out":["mtv","unplugged"]}
-{"args":["ijssel-solo"],"fn":"caracole.normalize.split_variant","out":["ijssel","solo"]}
-{"args":["钴-unplugged"],"fn":"caracole.normalize.split_variant","out":["钴","unplugged"]}
-{"args":["ウィ-々-ə-acustico-live"],"fn":"caracole.normalize.split_variant","out":["ウィ-々-ə-acustico","live"]}
-{"args":["los-fy-绿色-mtv-ʊ-remix"],"fn":"caracole.normalize.split_variant","out":["los-fy-绿色-mtv-ʊ-remix",null]}
-{"args":["王菲-wang-fei-love-unplugged"],"fn":"caracole.normalize.split_variant","out":["王菲-wang-fei-love","unplugged"]}
-{"args":["arigatou-ह-द-아이유ʁʝa-bbc-sessions-lesson"],"fn":"caracole.normalize.split_variant","out":["arigatou-ह-द-아이유ʁʝa-bbc-sessions","lesson"]}
-{"args":["南山南-nan-shan-nan-zebra-zebra-acoustic"],"fn":"caracole.normalize.split_variant","out":["南山南-nan-shan-nan-zebra-zebra","acoustic"]}
+{"args":["ban-ma-ban-ma-斑马斑马-unplugged"],"fn":"caracole.normalize.split_variant","out":["ban-ma-ban-ma-斑马斑马","unplugged"]}
+{"args":["绿色-lv-se-acustico-outro"],"fn":"caracole.normalize.split_variant","out":["绿色-lv-se-acustico","outro"]}
+{"args":["ใจ-zebraost-宋冬野鮃鮃-lesson"],"fn":"caracole.normalize.split_variant","out":["ใจ-zebraost-宋冬野鮃鮃","lesson"]}
+{"args":["鲟鱘鲟-mono-unplugged"],"fn":"caracole.normalize.split_variant","out":["鲟鱘鲟-mono","unplugged"]}
+{"args":["arigatou-solo"],"fn":"caracole.normalize.split_variant","out":["arigatou","solo"]}
+{"args":["南山南-nan-shan-nan-live-unplugged"],"fn":"caracole.normalize.split_variant","out":["南山南-nan-shan-nan-live","unplugged"]}
+{"args":["王菲-wangfei-love-recorded-live-at-x-live"],"fn":"caracole.normalize.split_variant","out":["王菲-wangfei-love-recorded-live-at-x","live"]}
+{"args":["crue-en-vivo-remix"],"fn":"caracole.normalize.split_variant","out":["crue-en-vivo-remix",null]}
+{"args":["斑马斑马-banmabanma-zebra-zebra-ft-y-unplugged"],"fn":"caracole.normalize.split_variant","out":["斑马斑马-banmabanma-zebra-zebra-ft-y","unplugged"]}
+{"args":["ありかとう-arigatou-remaster-2011-lesson"],"fn":"caracole.normalize.split_variant","out":["ありかとう-arigatou-remaster-2011","lesson"]}
+{"args":["轨軌軌与我交谈ー-acoustic"],"fn":"caracole.normalize.split_variant","out":["轨軌軌与我交谈ー","acoustic"]}
+{"args":["arigatou-ह-द-아이유ʁʝa-bbc-sessions-remix"],"fn":"caracole.normalize.split_variant","out":["arigatou-ह-द-아이유ʁʝa-bbc-sessions-remix",null]}
+{"args":["las-宋冬野しゃ-unplugged"],"fn":"caracole.normalize.split_variant","out":["las-宋冬野しゃ","unplugged"]}
+{"args":["17岁-17-sui-live-intro"],"fn":"caracole.normalize.split_variant","out":["17岁-17-sui-live","intro"]}
+{"args":["unplugged-outro"],"fn":"caracole.normalize.split_variant","out":["unplugged","outro"]}
+{"args":["istanbul-k-dias-remix"],"fn":"caracole.normalize.split_variant","out":["istanbul-k-dias-remix",null]}
 {"args":["motley豐豐-banmawith-demo-version-remix"],"fn":"caracole.normalize.split_variant","out":["motley豐豐-banmawith-demo-version-remix",null]}
-{"args":["acustico-el-unplugged"],"fn":"caracole.normalize.split_variant","out":["acustico-el","unplugged"]}
-{"args":["ファ熒熒-2-17-intro"],"fn":"caracole.normalize.split_variant","out":["ファ熒熒-2-17","intro"]}
-{"args":["ファ-live-at-wembley-outro"],"fn":"caracole.normalize.split_variant","out":["ファ-live-at-wembley","outro"]}
-{"args":["斑馬-ban-ma-remix"],"fn":"caracole.normalize.split_variant","out":["斑馬-ban-ma-remix",null]}
-{"args":["x-乙-acoustic-remix"],"fn":"caracole.normalize.split_variant","out":["x-乙-acoustic-remix",null]}
-{"args":["ˍ-acoustic"],"fn":"caracole.normalize.split_variant","out":["ˍ","acoustic"]}
-{"args":["夜に駆ける-yoru-ni-kakeru-outro"],"fn":"caracole.normalize.split_variant","out":["夜に駆ける-yoru-ni-kakeru","outro"]}
-{"args":["ⱥec1-4-los-kino-live"],"fn":"caracole.normalize.split_variant","out":["ⱥec1-4-los-kino","live"]}
-{"args":["bjork-y-南山南-ft-z-solo"],"fn":"caracole.normalize.split_variant","out":["bjork-y-南山南-ft-z","solo"]}
-{"args":["2-lesson"],"fn":"caracole.normalize.split_variant","out":["2","lesson"]}
-{"args":["strasse-与我交谈-unplugged"],"fn":"caracole.normalize.split_variant","out":["strasse-与我交谈","unplugged"]}
-{"args":["azero-ファカタカナ-solo"],"fn":"caracole.normalize.split_variant","out":["azero-ファカタカナ","solo"]}
-{"args":["dos-day-南山南-riff"],"fn":"caracole.normalize.split_variant","out":["dos-day-南山南","riff"]}
-{"args":["rollingkakeru-live-live"],"fn":"caracole.normalize.split_variant","out":["rollingkakeru-live","live"]}
-{"args":["dosacustico-unplugged"],"fn":"caracole.normalize.split_variant","out":["dosacustico","unplugged"]}
-{"args":["sui-remix"],"fn":"caracole.normalize.split_variant","out":["sui-remix",null]}
-{"args":["绿色勞劳劳-hal-a-bbc-sessions-solo"],"fn":"caracole.normalize.split_variant","out":["绿色勞劳劳-hal-a-bbc-sessions","solo"]}
-{"args":["ελλαδα-doce-el-与我交谈-remastered-2011-solo"],"fn":"caracole.normalize.split_variant","out":["ελλαδα-doce-el-与我交谈-remastered-2011","solo"]}
-{"args":["봄날-bomnal-spring-day-outro"],"fn":"caracole.normalize.split_variant","out":["봄날-bomnal-spring-day","outro"]}
-{"args":["誑诳誑缏-1-2-ελλαδα-acoustic"],"fn":"caracole.normalize.split_variant","out":["誑诳誑缏-1-2-ελλαδα","acoustic"]}
-{"args":["봄날-live-1999-stereo-mix-unplugged"],"fn":"caracole.normalize.split_variant","out":["봄날-live-1999-stereo-mix","unplugged"]}
-{"args":["々-featuring-σισυφος-acoustic"],"fn":"caracole.normalize.split_variant","out":["々-featuring-σισυφος","acoustic"]}
-{"args":["live-2013-remaster-solo"],"fn":"caracole.normalize.split_variant","out":["live-2013-remaster","solo"]}
-{"args":["nino-unplugged"],"fn":"caracole.normalize.split_variant","out":["nino","unplugged"]}
-{"args":["nino-2-solo-live"],"fn":"caracole.normalize.split_variant","out":["nino-2-solo","live"]}
-{"args":["与我交谈-vaȼo-spring-봄날-remix"],"fn":"caracole.normalize.split_variant","out":["与我交谈-vaȼo-spring-봄날-remix",null]}
-{"args":["봄날yoru-unplugged"],"fn":"caracole.normalize.split_variant","out":["봄날yoru","unplugged"]}
+{"args":["南山南-nan-shan-nan-live-live-at-the-bbc-acoustic"],"fn":"caracole.normalize.split_variant","out":["南山南-nan-shan-nan-live-live-at-the-bbc","acoustic"]}
+{"args":["ft-kelvin-outro"],"fn":"caracole.normalize.split_variant","out":["ft-kelvin","outro"]}
+{"args":["봄날-live-live"],"fn":"caracole.normalize.split_variant","out":["봄날-live","live"]}
+{"args":["ファ熒熒-2-17-solo"],"fn":"caracole.normalize.split_variant","out":["ファ熒熒-2-17","solo"]}
+{"args":["banma-驥骥驥-from-film-soundtrack-lesson"],"fn":"caracole.normalize.split_variant","out":["banma-驥骥驥-from-film-soundtrack","lesson"]}
+{"args":["ˍ-unplugged"],"fn":"caracole.normalize.split_variant","out":["ˍ","unplugged"]}
+{"args":["mtv-istanbul-solo"],"fn":"caracole.normalize.split_variant","out":["mtv-istanbul","solo"]}
+{"args":["歌之王ty-featuring-riff"],"fn":"caracole.normalize.split_variant","out":["歌之王ty-featuring","riff"]}
+{"args":["n-live"],"fn":"caracole.normalize.split_variant","out":["n","live"]}
+{"args":["2-unplugged"],"fn":"caracole.normalize.split_variant","out":["2","unplugged"]}
+{"args":["y-mtv-unplugged-remix"],"fn":"caracole.normalize.split_variant","out":["y-mtv-unplugged-remix",null]}
+{"args":["我的-ˏq-ʉ-しゃrolling-solo"],"fn":"caracole.normalize.split_variant","out":["我的-ˏq-ʉ-しゃrolling","solo"]}
+{"args":["dos-day-南山南-solo"],"fn":"caracole.normalize.split_variant","out":["dos-day-南山南","solo"]}
+{"args":["los-dos-abc-dongye-acustica-outro"],"fn":"caracole.normalize.split_variant","out":["los-dos-abc-dongye-acustica","outro"]}
+{"args":["南山南-nan-shan-nan-acoustic"],"fn":"caracole.normalize.split_variant","out":["南山南-nan-shan-nan","acoustic"]}
+{"args":["사랑-sarang-bbc-sessions-unplugged"],"fn":"caracole.normalize.split_variant","out":["사랑-sarang-bbc-sessions","unplugged"]}
+{"args":["bjork-症潯浔潯瘍瘍疡-doce-acoustic"],"fn":"caracole.normalize.split_variant","out":["bjork-症潯浔潯瘍瘍疡-doce","acoustic"]}
+{"args":["arigatou-remix-o-dos-mono-live"],"fn":"caracole.normalize.split_variant","out":["arigatou-remix-o-dos-mono","live"]}
+{"args":["zebra-ai-岁-ːeʖu-solo"],"fn":"caracole.normalize.split_variant","out":["zebra-ai-岁-ːeʖu","solo"]}
+{"args":["part-時々斑马-motley-single-edit-unplugged"],"fn":"caracole.normalize.split_variant","out":["part-時々斑马-motley-single-edit","unplugged"]}
+{"args":["la-我的-live"],"fn":"caracole.normalize.split_variant","out":["la-我的","live"]}
+{"args":["봄날-live-1999-stereo-mix-remix"],"fn":"caracole.normalize.split_variant","out":["봄날-live-1999-stereo-mix-remix",null]}
+{"args":["lodz-辄-rolling-unplugged"],"fn":"caracole.normalize.split_variant","out":["lodz-辄-rolling","unplugged"]}
+{"args":["live-2013-remaster-intro"],"fn":"caracole.normalize.split_variant","out":["live-2013-remaster","intro"]}
+{"args":["zeroij-h-live"],"fn":"caracole.normalize.split_variant","out":["zeroij-h","live"]}
+{"args":["doce-version-riff"],"fn":"caracole.normalize.split_variant","out":["doce-version","riff"]}
+{"args":["赞贊赞-2011-mtv-unplugged-acoustic"],"fn":"caracole.normalize.split_variant","out":["赞贊赞-2011-mtv-unplugged","acoustic"]}
+{"args":["ใจ-jai-zebra-zebra-demo-version-solo"],"fn":"caracole.normalize.split_variant","out":["ใจ-jai-zebra-zebra-demo-version","solo"]}
+{"args":["dang-acustico-ファ-live-live"],"fn":"caracole.normalize.split_variant","out":["dang-acustico-ファ-live","live"]}
+{"args":["绿色-lv-se-zebra-zebra-acoustic"],"fn":"caracole.normalize.split_variant","out":["绿色-lv-se-zebra-zebra","acoustic"]}
 {"args":["周杰倫-dont-τρυπες-las-live-intro"],"fn":"caracole.normalize.split_variant","out":["周杰倫-dont-τρυπες-las-live","intro"]}
-{"args":["南山南-kelvin周杰倫-2-zero-live"],"fn":"caracole.normalize.split_variant","out":["南山南-kelvin周杰倫-2-zero","live"]}
-{"args":["version-banma-1999-stereo-mix-riff"],"fn":"caracole.normalize.split_variant","out":["version-banma-1999-stereo-mix","riff"]}
-{"args":["version-鮦鮦鲖-acoustic"],"fn":"caracole.normalize.split_variant","out":["version-鮦鮦鲖","acoustic"]}
-{"args":["mtv-dang-ƽ-周杰倫-live-solo"],"fn":"caracole.normalize.split_variant","out":["mtv-dang-ƽ-周杰倫-live","solo"]}
-{"args":["k-dongye-x-봄날-kino-single-edit-live"],"fn":"caracole.normalize.split_variant","out":["k-dongye-x-봄날-kino-single-edit","live"]}
-{"args":["jai-ใจ-1999-stereo-mix-acoustic"],"fn":"caracole.normalize.split_variant","out":["jai-ใจ-1999-stereo-mix","acoustic"]}
-{"args":["rocknroll-我的-кино-intro"],"fn":"caracole.normalize.split_variant","out":["rocknroll-我的-кино","intro"]}
-{"args":["nino-对不起襉襉ファ-intro"],"fn":"caracole.normalize.split_variant","out":["nino-对不起襉襉ファ","intro"]}
-{"args":["hu-unplugged-demo-version-unplugged"],"fn":"caracole.normalize.split_variant","out":["hu-unplugged-demo-version","unplugged"]}
-{"args":["ありかとう-arigatou-racing-into-the-night-riff"],"fn":"caracole.normalize.split_variant","out":["ありかとう-arigatou-racing-into-the-night","riff"]}
-{"args":["ты-ac-kino-remaster-2011-intro"],"fn":"caracole.normalize.split_variant","out":["ты-ac-kino-remaster-2011","intro"]}
-{"args":["夜に駆ける-yoru-ni-kakeru-spring-day-radio-edit-unplugged"],"fn":"caracole.normalize.split_variant","out":["夜に駆ける-yoru-ni-kakeru-spring-day-radio-edit","unplugged"]}
-{"args":["sarang-사랑-intro"],"fn":"caracole.normalize.split_variant","out":["sarang-사랑","intro"]}
-{"args":["tres-ə-im-intro"],"fn":"caracole.normalize.split_variant","out":["tres-ə-im","intro"]}
-{"args":["斑马斑马-banmabanma-zebra-zebra-ft-z-acoustic"],"fn":"caracole.normalize.split_variant","out":["斑马斑马-banmabanma-zebra-zebra-ft-z","acoustic"]}
-{"args":["ใจ-jai-live-recorded-live-at-x-remix"],"fn":"caracole.normalize.split_variant","out":["ใจ-jai-live-recorded-live-at-x-remix",null]}
-{"args":["kino-重来-stereo-r-chong-demo-version-unplugged"],"fn":"caracole.normalize.split_variant","out":["kino-重来-stereo-r-chong-demo-version","unplugged"]}
-{"args":["sarang-사랑-version-acustica-remix"],"fn":"caracole.normalize.split_variant","out":["sarang-사랑-version-acustica-remix",null]}
-{"args":["kakeru-riff"],"fn":"caracole.normalize.split_variant","out":["kakeru","riff"]}
-{"args":["stones-version-bjork-acoustic"],"fn":"caracole.normalize.split_variant","out":["stones-version-bjork","acoustic"]}
-{"args":["arigatou-ありかとう-live"],"fn":"caracole.normalize.split_variant","out":["arigatou-ありかとう","live"]}
-{"args":["カタカナ-crue-live-lesson"],"fn":"caracole.normalize.split_variant","out":["カタカナ-crue-live","lesson"]}
-{"args":["重来-zhong-lai-racing-into-the-night-acustico-acoustic"],"fn":"caracole.normalize.split_variant","out":["重来-zhong-lai-racing-into-the-night-acustico","acoustic"]}
-{"args":["x-a-ใจ-v-kelvin-unplugged"],"fn":"caracole.normalize.split_variant","out":["x-a-ใจ-v-kelvin","unplugged"]}
-{"args":["song-dong-ye-宋冬野-remix"],"fn":"caracole.normalize.split_variant","out":["song-dong-ye-宋冬野-remix",null]}
-{"args":["stereo-dias-カタカナ璉璉琏-mono-acoustic"],"fn":"caracole.normalize.split_variant","out":["stereo-dias-カタカナ璉璉琏-mono","acoustic"]}
-{"args":["ƌi7ʈ-tƴa-绵-ʒʩ-las-outro"],"fn":"caracole.normalize.split_variant","out":["ƌi7ʈ-tƴa-绵-ʒʩ-las","outro"]}
+{"args":["莊莊-en-vivo-intro"],"fn":"caracole.normalize.split_variant","out":["莊莊-en-vivo","intro"]}
+{"args":["version-鮦鮦鲖-unplugged"],"fn":"caracole.normalize.split_variant","out":["version-鮦鮦鲖","unplugged"]}
+{"args":["颤顫-ijssel-宋冬野1-aeroskobing-riff"],"fn":"caracole.normalize.split_variant","out":["颤顫-ijssel-宋冬野1-aeroskobing","riff"]}
+{"args":["mtv-dang-ƽ-周杰倫-live-intro"],"fn":"caracole.normalize.split_variant","out":["mtv-dang-ƽ-周杰倫-live","intro"]}
+{"args":["2-kelvin-feat-part-unplugged"],"fn":"caracole.normalize.split_variant","out":["2-kelvin-feat-part","unplugged"]}
+{"args":["k-dongye-x-봄날-kino-single-edit-intro"],"fn":"caracole.normalize.split_variant","out":["k-dongye-x-봄날-kino-single-edit","intro"]}
+{"args":["ty-kelvin-k-夹夾夾-acustico-intro"],"fn":"caracole.normalize.split_variant","out":["ty-kelvin-k-夹夾夾-acustico","intro"]}
+{"args":["斑馬-ban-ma-acoustic"],"fn":"caracole.normalize.split_variant","out":["斑馬-ban-ma","acoustic"]}
+{"args":["ты-ac-kino-remaster-2011-remix"],"fn":"caracole.normalize.split_variant","out":["ты-ac-kino-remaster-2011-remix",null]}
+{"args":["part-dongye-inaǂ-周杰倫ɏ-unplugged"],"fn":"caracole.normalize.split_variant","out":["part-dongye-inaǂ-周杰倫ɏ","unplugged"]}
+{"args":["斑馬-ban-ma-remix"],"fn":"caracole.normalize.split_variant","out":["斑馬-ban-ma-remix",null]}
+{"args":["bjork-zebra-𠮷𠀀-riff"],"fn":"caracole.normalize.split_variant","out":["bjork-zebra-𠮷𠀀","riff"]}
+{"args":["斑马斑马-ban-ma-ban-ma-acoustic"],"fn":"caracole.normalize.split_variant","out":["斑马斑马-ban-ma-ban-ma","acoustic"]}
+{"args":["lodz-version-ty-live"],"fn":"caracole.normalize.split_variant","out":["lodz-version-ty","live"]}
+{"args":["绿色-lv-se-love-lesson"],"fn":"caracole.normalize.split_variant","out":["绿色-lv-se-love","lesson"]}
+{"args":["ȷr-壼壸壸-acoustic"],"fn":"caracole.normalize.split_variant","out":["ȷr-壼壸壸","acoustic"]}
+{"args":["stones-version-bjork-unplugged"],"fn":"caracole.normalize.split_variant","out":["stones-version-bjork","unplugged"]}
+{"args":["夜に駆ける-racing-into-the-night-remix"],"fn":"caracole.normalize.split_variant","out":["夜に駆ける-racing-into-the-night-remix",null]}
+{"args":["矓眬乙-njo-day-acoustic"],"fn":"caracole.normalize.split_variant","out":["矓眬乙-njo-day","acoustic"]}
+{"args":["uuo-采采-uno-outro"],"fn":"caracole.normalize.split_variant","out":["uuo-采采-uno","outro"]}
+{"args":["x-a-ใจ-v-kelvin-live"],"fn":"caracole.normalize.split_variant","out":["x-a-ใจ-v-kelvin","live"]}
+{"args":["17岁-17-sui-outro"],"fn":"caracole.normalize.split_variant","out":["17岁-17-sui","outro"]}
+{"args":["thor-yoru-1-ijssel-dias-unplugged"],"fn":"caracole.normalize.split_variant","out":["thor-yoru-1-ijssel-dias","unplugged"]}
+{"args":["uˏhȹ-acoustic"],"fn":"caracole.normalize.split_variant","out":["uˏhȹ","acoustic"]}
+{"args":["重来-spring-day-single-edit-outro"],"fn":"caracole.normalize.split_variant","out":["重来-spring-day-single-edit","outro"]}
+{"args":["illkino-17-燻燻燻-acoustic"],"fn":"caracole.normalize.split_variant","out":["illkino-17-燻燻燻","acoustic"]}

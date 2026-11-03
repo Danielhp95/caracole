@@ -75,7 +75,6 @@ class IdentityTest {
             assertEquals(run, pair.jsonArray[0].str())
             vectors.expect("holds_run", listOf(s, run), pair.jsonArray[1]) { Normalize.holdsRun(words, run) }
         }
-        val unknown = want.keys - one.keys - setOf("identity_key", "display_key", "holds_run")
-        if (unknown.isNotEmpty()) fail("identity_of answers what the test doesn't compare: $unknown")
+        assertEquals(one.keys + setOf("identity_key", "display_key", "holds_run"), want.keys, "identity_of's answers")
     }
 }
