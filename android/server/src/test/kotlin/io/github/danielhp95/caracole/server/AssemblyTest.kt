@@ -4,7 +4,6 @@ import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.Request
 import io.github.danielhp95.caracole.server.routes.SyncSettings
-import io.github.danielhp95.caracole.server.routes.search.Producers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -33,9 +32,7 @@ class AssemblyTest {
             assertEquals(emptyList(), phone.queue.snapshot())
             // The search route is search-routes' own (no longer neutral): a query too short to search answers so.
             val search = phone.search.routes.single { it.path == "/api/search" }
-            val answer = Producers.needs {
-                search.get!!.answer(Request("GET", "/api/search?q=+c%C3%A9+", emptyMap(), ByteArray(0)))
-            }
+            val answer = search.get!!.answer(Request("GET", "/api/search?q=+c%C3%A9+", emptyMap(), ByteArray(0)))
             assertEquals(200, answer.status)
             assertEquals("""{"query":"cé","library":[],"index":[],"short":true}""",
                          String((answer.body as Body.Bytes).bytes))

@@ -12,17 +12,6 @@ import kotlin.test.assertTrue
 /** The search routes' own small rules, each against what Python answers (the values below are its). */
 class HelpersTest {
     @Test
-    fun letters_are_named_as_lacuerdas_menu_names_them() {
-        val cases = listOf(
-            listOf("_num", "a", "b", "c") to "#, A–C", listOf("a", "b", "e") to "A, B, E",
-            listOf("m", "n", "nn", "o") to "M–O", listOf("_num", "a") to "#, A", emptyList<String>() to "",
-            listOf("z", "y", "x", "a") to "A, X–Z", listOf("a", "a", "b") to "A, B", listOf("n", "nn") to "N, Ñ",
-            Looked.LETTERS to "#, A–Z",
-        )
-        for ((letters, said) in cases) assertEquals(said, Looked.lettersText(letters), letters.toString())
-    }
-
-    @Test
     fun counts_are_grouped_by_thousands() {
         assertEquals(listOf("10,428", "0", "999", "1,000", "1,234,567"),
                      listOf(10428L, 0L, 999L, 1000L, 1234567L).map { Looked.grouped(it) })

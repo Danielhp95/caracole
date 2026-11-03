@@ -74,7 +74,7 @@ class CacheTest {
     @Test
     fun a_search_reads_the_index_kept_until_the_routes_are_invalidated() {
         SearchApp(tmp.newFolder("ug"), "ug").use { search ->
-            val before = Producers.needs { ugSongs(search) }
+            val before = ugSongs(search)
             assertTrue(before.isNotEmpty())
             search.app.database.writeBlocking { it.execute("DELETE FROM ug_index") }
             assertEquals(before, ugSongs(search), "the answer kept")
@@ -90,7 +90,7 @@ class CacheTest {
         SearchApp(tmp.newFolder("ug"), "ug").use { search ->
             val clock = Clock()
             search.routes.answers.now = { clock.seconds }
-            val before = Producers.needs { ugSongs(search) }
+            val before = ugSongs(search)
             search.app.database.writeBlocking { it.execute("DELETE FROM ug_index") }
             clock.seconds += 299.0
             assertEquals(before, ugSongs(search))

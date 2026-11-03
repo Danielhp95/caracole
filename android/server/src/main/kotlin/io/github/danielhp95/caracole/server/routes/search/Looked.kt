@@ -3,11 +3,9 @@ package io.github.danielhp95.caracole.server.routes.search
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
 import io.github.danielhp95.caracole.core.sites.SiteKeys
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.intOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
 
 /** A site a search left out (`skipped`) or searched in part (`partial`), and why, worded to follow its name. */
@@ -82,12 +80,13 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
                 why.startsWith("turned off") -> mark(source, name, "off", "$name: off", "$name is turned off in caracole.toml.")
                 "blocking" in why -> mark(source, name, "blocked", "$name blocked", upperFirst(why) + ".")
                 s in inPart -> {
-                    val read = letters()
+                    val read = LaCuerda.letters(db)
+                    val letters = LaCuerda.LETTERS
                     var run = 0
-                    while (run < read.size && run < LETTERS.size && read[run] == LETTERS[run]) run++
+                    while (run < read.size && run < letters.size && read[run] == letters[run]) run++
                     val label = when {
-                        run == read.size && run > 0 -> "$name: up to ${lettersText(read.subList(run - 1, run))}"
-                        read.isNotEmpty() -> "$name: ${lettersText(read)} only"
+                        run == read.size && run > 0 -> "$name: up to ${LaCuerda.lettersText(read.subList(run - 1, run))}"
+                        read.isNotEmpty() -> "$name: ${LaCuerda.lettersText(read)} only"
                         else -> "$name: in part"
                     }
                     mark(source, name, "partial", label, "$name's ${why.removePrefix("its ")}.")
@@ -135,41 +134,11 @@ internal class Looked(private val db: Db, private val enabled: Set<String>) {
     private fun harptabsState(): Pair<Long, Long> =
         SiteKeys.harptabsIndexState(db).let { it.number("read") to it.number("artists") }
 
-    /** lacuerda_index.letters_read: the letters whose every listing page the index holds, in [LETTERS]' order. */
-    private fun letters(): List<String> =
-        (LaCuerda.lettersRead(db)["letters"] as? JsonArray).orEmpty().map { it.jsonPrimitive.content }
-
     private fun JsonObject.number(name: String): Long =
         (this[name] as? JsonPrimitive)?.let { it.longOrNull ?: it.intOrNull?.toLong() } ?: 0L
 
     companion object {
         const val UG_EMPTY = "The offline Ultimate Guitar index is empty: run caracole index build once (about 10 minutes)."
-
-        /** lacuerda.LETTERS: LaCuerda's initials as its menu links them ("_num" for "#", "nn" for "Ñ"). */
-        val LETTERS: List<String> = listOf("_num") + "abcdefghijklmn".map { it.toString() } + "nn" +
-            "opqrstuvwxyz".map { it.toString() }
-
-        private val LETTER_NAMES = mapOf("_num" to "#", "nn" to "Ñ")
-
-        /** lacuerda_index.letters_text: letters as LaCuerda's menu names them, three in a row or more as a range:
-         * "#, A–C", "A, B, E". */
-        fun lettersText(letters: List<String>): String {
-            val order = LETTERS.withIndex().associate { (n, letter) -> letter to n }
-            val runs = ArrayList<MutableList<String>>()
-            for (letter in LinkedHashSet(letters).sortedBy { order[it] ?: order.size }) {
-                val last = runs.lastOrNull()?.last()
-                val at = order[letter]
-                if (last != null && letter != "_num" && last != "_num" && at != null && at == (order[last] ?: -2) + 1) {
-                    runs.last().add(letter)
-                } else {
-                    runs.add(mutableListOf(letter))
-                }
-            }
-            fun name(x: String) = LETTER_NAMES[x] ?: x.uppercase()
-            return runs.joinToString(", ") { r ->
-                if (r.size > 2) "${name(r.first())}–${name(r.last())}" else r.joinToString(", ") { name(it) }
-            }
-        }
 
         /** `f"{n:,}"`: thousands by commas. */
         fun grouped(n: Long): String {

@@ -73,7 +73,7 @@ class SearchRoutes(val database: Database, val cards: SongCards,
             } catch (e: Exception) {
                 if (e is Superseded || !unreadable(e)) throw e
                 if (ticket.over) throw Superseded()  // stopped by a newer one: it reads now
-                jsonResponse(503, obj("query" to q, "error" to "The database can't be read: ${e.message ?: e}"))
+                jsonResponse(503, obj("query" to q, "error" to "The database can't be read: ${said(e)}"))
             }
         } ?: jsonResponse(200, superseded)
     }
@@ -115,13 +115,20 @@ class SearchRoutes(val database: Database, val cards: SongCards,
             jsonResponse(answered.status, answered.json)
         } catch (e: Exception) {
             if (!unreadable(e)) throw e
-            jsonResponse(503, obj("error" to "The database can't be read: ${e.message ?: e}"))
+            jsonResponse(503, obj("error" to "The database can't be read: ${said(e)}"))
         }
     }
 
     private companion object {
         /** search_routes._BOX: a search box's id, as its page makes it. */
         val BOX = Regex("[A-Za-z0-9_-]{1,64}")
+
+        /** The bundled driver's words before SQLite's own: "Error code: 1, message: no such table: songs". */
+        val DRIVER_PREFIX = Regex("^Error code: -?\\d+, message: ")
+
+        /** An error as Python's `str(e)` says it: SQLite's own message ("no such table: songs"), the driver's prefix
+         * left out. */
+        fun said(e: Throwable): String = (e.message ?: e.toString()).replaceFirst(DRIVER_PREFIX, "")
 
         /** Python's `(sqlite3.Error, OSError)`: an error of the database (the bundled SQLite's SQLiteException, which
          * on Android is android.database.SQLException, so it is told by its class's name), a database too new, or a

@@ -137,7 +137,7 @@ class SupersedeTest {
 
     private fun search(q: String, box: String) = "/api/search?q=${URLEncoder.encode(q, Charsets.UTF_8)}&box=$box"
 
-    /** [first] started on a thread of its own, and seen to be halfway (or, waiting on a lane, the test skipped). */
+    /** [first] started on a thread of its own, and seen to be halfway. */
     private fun started(search: SearchApp, cards: HoldingCards, first: String): Future<JsonObject> {
         val answer = pool.submit<JsonObject> { search.app.get(first).json.jsonObject }
         while (!cards.begun.await(5, TimeUnit.MILLISECONDS)) {
@@ -145,7 +145,7 @@ class SupersedeTest {
                 try {
                     answer.get()
                 } catch (e: ExecutionException) {
-                    Producers.needs { throw e.cause!! }
+                    throw e.cause!!
                 }
                 error("the first search ended without asking for its cards")
             }

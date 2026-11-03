@@ -30,7 +30,6 @@ class ApiSearchTest {
     fun every_record_is_what_caracole_serve_answers_over_its_fixture() {
         assertTrue(records.size > 800, "the vectors hold ${records.size} records")
         val failures = ArrayList<String>()
-        val waiting = sortedSetOf<String>()
         var answered = 0
         for ((fixture, asked) in records.groupBy { it.extra.getValue("fixture").jsonPrimitive.content }) {
             SearchApp(tmp.newFolder(fixture), fixture).use { search ->
@@ -38,12 +37,7 @@ class ApiSearchTest {
                     assertEquals("caracole.web.app.WebApp.handle", record.fn)
                     val target = record.args[1].jsonPrimitive.content
                     val out = record.out!!.jsonObject
-                    val response = try {
-                        search.app.get(target)
-                    } catch (e: NotImplementedError) {
-                        waiting += Producers.laneOf(e) ?: throw e
-                        continue
-                    }
+                    val response = search.app.get(target)
                     answered++
                     val status = out.getValue("status").jsonPrimitive.int
                     if (response.status != status) {
@@ -58,7 +52,6 @@ class ApiSearchTest {
         if (failures.isNotEmpty()) {
             fail("${failures.size} of $answered answers differ from caracole serve's:\n" + failures.take(40).joinToString("\n"))
         }
-        Producers.waitOn(waiting)
         assertEquals(records.size, answered)
     }
 
@@ -79,7 +72,7 @@ class ApiSearchTest {
     fun an_answer_has_its_members_in_caracole_serves_order() {
         // The vectors are written with sorted keys; the phone's answer is in the order _found_for makes it.
         SearchApp(tmp.newFolder("ug"), "ug").use { search ->
-            val answer = Producers.needs { search.app.get("/api/search?q=creep&box=b") }.json.jsonObject
+            val answer = search.app.get("/api/search?q=creep&box=b").json.jsonObject
             assertEquals(KEYS, answer.keys.toList())
             val row = answer.getValue("library").jsonArray.first().jsonObject
             assertEquals(LIBRARY_ROW, row.keys.toList())
