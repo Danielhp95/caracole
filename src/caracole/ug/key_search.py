@@ -36,7 +36,8 @@ _ROWS = (
     "GROUP BY artist_key, song_key "
     "UNION ALL "
     f"SELECT artist_key, song_key, COUNT(*) FROM ug_index WHERE song_key IN (SELECT key FROM {_KEYS}) "
-    f"AND artist_key NOT IN (SELECT key FROM {_KEYS}) GROUP BY artist_key, song_key"
+    f"AND artist_key NOT IN (SELECT key FROM {_KEYS}) GROUP BY artist_key, song_key "
+    "ORDER BY artist_key, song_key"
 )
 
 
@@ -57,7 +58,7 @@ def rows_like(conn: sqlite3.Connection, patterns: Sequence[str]) -> list[tuple[s
     any of ``patterns`` (``LIKE``, without ``_`` or an escape): what ``SELECT artist_key, song_key,
     COUNT(*) FROM ug_index WHERE artist_key LIKE ? OR song_key LIKE ? … GROUP BY artist_key, song_key``
     gives, a pattern of more than ``KEYS_PER_PATTERN`` keys reading its shortest ones and the keys
-    every pattern is in (see the module's docstring)."""
+    every pattern is in (see the module's docstring). In the keys' order: artist key, then song key."""
     if not patterns:
         return []
     conn.execute(_CREATE)

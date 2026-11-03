@@ -124,10 +124,19 @@ Where a name isn't quite UG's, a library song in review shows its first
 candidates (``did_you_mean``), and a hit under one of UG's catch-all artists,
 such as ``misc-musicals``, says so (``IndexHit.catch_all``): its title holds
 the show's name, and its artist is no one's.
+
+**One answer.** A search answers alike whatever the hash seed and whatever order
+the rows went into the tables, as the phone, which runs these queries on the
+same SQLite, must agree with it (tests/conformance/, tests/test_search_determinism.py):
+a query whose rows' order reaches an answer, or whose ``LIMIT`` cuts them, orders
+them by stable keys; a tie a sort would leave in the rows' order is broken by
+them; and the names a song is read by are tried in the order they first appear,
+never a set's.
 """
 
 from __future__ import annotations
 
+import bisect
 import json
 import re
 import sqlite3
@@ -878,7 +887,7 @@ def _ug_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> list[tupl
     match = " OR ".join(f'"{t}"' for t in close)
     keys = [r[0] for r in conn.execute(
         "SELECT artist_key FROM ug_artists WHERE id IN (SELECT rowid FROM ug_artists_fts WHERE ug_artists_fts MATCH ?) "
-        "LIMIT ?", (match, CLOSE_ARTISTS))]
+        "ORDER BY artist_key LIMIT ?", (match, CLOSE_ARTISTS))]  # by key, whatever ids the trigger gave them
     scored = {k: c for k in keys if not no_ones(k) and (c := _closeness(words, k.split("-"))) is not None}
     if not scored:
         return []
@@ -905,7 +914,7 @@ def _lacuerda_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> lis
         return []
     where = " OR ".join("artist_key LIKE ? OR artist_key LIKE ?" for _ in firsts)
     rows = conn.execute(f"SELECT artist, artist_slug, artist_key, songs FROM lacuerda_index WHERE title = '' "
-                        f"AND ({where})", [p for c in firsts for p in (f"{c}%", f"%-{c}%")])
+                        f"AND ({where}) ORDER BY path", [p for c in firsts for p in (f"{c}%", f"%-{c}%")])
     letters = sum(len(w) for w in words)
     close = []
     for artist, slug, key, songs in rows:
@@ -922,7 +931,7 @@ def _harptabs_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> lis
     longest = max(words, key=len)
     needles = _needles(words, [_near(conn, w) if w == longest else [w] for w in words])
     rows = [_HarpArtist(*r) for r in conn.execute(
-        f"{_HARP_ARTISTS} WHERE i.kind = 'artist' AND {_holds('i.key', needles)}", needles)]
+        f"{_HARP_ARTISTS} WHERE i.kind = 'artist' AND {_holds('i.key', needles)} ORDER BY i.path", needles)]
     letters = sum(len(w) for w in words)
     close = []
     for row in rows:
@@ -1150,7 +1159,8 @@ def _harptabs_titled(conn: sqlite3.Connection, words: Sequence[str], near: Seque
     needles = _needles(words, near)
     rows = conn.execute(  # the song keys read from their index alone
         "SELECT artist, song_key, COUNT(*) FROM harptabs_artist_tabs WHERE song_key IN (SELECT DISTINCT song_key FROM "
-        "harptabs_artist_tabs WHERE " + _holds("song_key", needles) + ") GROUP BY artist, song_key LIMIT ?",
+        "harptabs_artist_tabs WHERE " + _holds("song_key", needles) + ") GROUP BY artist, song_key "
+        "ORDER BY artist, song_key LIMIT ?",
         (*needles, SITE_TITLES_READ)).fetchall()
     paths = sorted({r[0] for r in rows})
     names = {path: (key, name) for path, key, name in conn.execute(
@@ -1187,7 +1197,8 @@ def _gtptabs_titled(conn: sqlite3.Connection, hit: IndexHit | SiteHit, score: fl
 class _Vocabulary:
     """The words of the Ultimate Guitar index's keys (``ug_key_words``, db.py), by first letter and length, as a process
     keeps them: a letter's words are read the first time a word of a query begins with it, and then only the words the
-    table gained since (it only grows), so that a search reads no word twice. ``last``: the newest word's id read."""
+    table gained since (it only grows), so that a search reads no word twice. ``last``: the newest word's id read. A
+    length's words are kept in their own order, whenever they came: a close spelling's ties are in that order."""
 
     def __init__(self) -> None:
         self.last = 0
@@ -1205,13 +1216,13 @@ class _Vocabulary:
                                    (self.last, top)).fetchall() if self.letters else []
                 for (term,) in new:
                     if term[:1] in self.letters:
-                        self.letters[term[:1]].setdefault(len(term), []).append(term)
+                        bisect.insort(self.letters[term[:1]].setdefault(len(term), []), term)
                 self.last = top
             start = word[0]
             if start not in self.letters:
                 by_length: dict[int, list[str]] = {}
-                for (term,) in conn.execute("SELECT term FROM ug_key_words WHERE term >= ? AND term < ? AND id <= ?",
-                                            (start, chr(ord(start) + 1), top)):
+                for (term,) in conn.execute("SELECT term FROM ug_key_words WHERE term >= ? AND term < ? AND id <= ? "
+                                            "ORDER BY term", (start, chr(ord(start) + 1), top)):
                     by_length.setdefault(len(term), []).append(term)
                 self.letters[start] = by_length
             letter = self.letters[start]
@@ -1252,7 +1263,7 @@ def search_gtptabs(conn: sqlite3.Connection, query: str, limit: int = SITE_ROWS)
     where = " OR ".join("path LIKE ?" for _ in patterns)
     rows = conn.execute(
         f"SELECT path, artist_key, title_key, base_key FROM gtptabs_index WHERE title_key != '' AND ({where}) "
-        "LIMIT ?", (*patterns, SITE_ROWS_READ))
+        "ORDER BY path LIMIT ?", (*patterns, SITE_ROWS_READ))
     groups: dict[tuple[str, str], list[tuple[bool, str]]] = {}
     for path, artist_key, title_key, base in rows:
         groups.setdefault((artist_key, base), []).append((title_key != base, path))
@@ -1278,7 +1289,8 @@ def _gtptabs_artist(conn: sqlite3.Connection, artist_key: str) -> str:
     from the key as it is."""
     words = artist_key.split("-")
     for key in dict.fromkeys([artist_key, "-".join(words[1:] + words[:1])]):
-        row = conn.execute("SELECT path FROM ug_index WHERE artist_key = ? AND path != '' LIMIT 1", (key,)).fetchone()
+        row = conn.execute("SELECT path FROM ug_index WHERE artist_key = ? AND path != '' ORDER BY song_key, tab_id "
+                           "LIMIT 1", (key,)).fetchone()
         if row is not None:
             slug = row[0].partition("/")[0]
             if slug:
@@ -1378,30 +1390,31 @@ class _GameTab(NamedTuple):
                           tuple(_listed_names(composers)))
 
 
-def _gametabs_paths(conn: sqlite3.Connection, patterns: Sequence[str]) -> set[str]:
-    """The tab pages a query's patterns find: by their paths (the game's slug and the track's), and by the composers
-    the game pages caracole read name."""
+def _gametabs_paths(conn: sqlite3.Connection, patterns: Sequence[str]) -> list[str]:
+    """The tab pages a query's patterns find, in their paths' order: by their paths (the game's slug and the
+    track's), and by the composers the game pages caracole read name."""
     from caracole.gametabs import TAB
 
     paths = {r[0] for r in conn.execute(
-        f"SELECT path FROM gametabs_index WHERE kind = ? AND ({' OR '.join('path LIKE ?' for _ in patterns)}) LIMIT ?",
-        (TAB, *patterns, SITE_ROWS_READ))}
+        f"SELECT path FROM gametabs_index WHERE kind = ? AND ({' OR '.join('path LIKE ?' for _ in patterns)}) "
+        "ORDER BY path LIMIT ?", (TAB, *patterns, SITE_ROWS_READ))}
     paths.update(r[0] for r in conn.execute(
-        f"SELECT path FROM gametabs_game_tabs WHERE {' OR '.join('composers LIKE ?' for _ in patterns)} LIMIT ?",
-        (*patterns, SITE_ROWS_READ)))
-    return paths
+        f"SELECT path FROM gametabs_game_tabs WHERE {' OR '.join('composers LIKE ?' for _ in patterns)} "
+        "ORDER BY path LIMIT ?", (*patterns, SITE_ROWS_READ)))
+    return sorted(paths)
 
 
 def _gametabs_tracks(conn: sqlite3.Connection,
-                     paths: set[str]) -> tuple[dict[tuple[str, str], list[_GameTab]], dict[str, str]]:
+                     paths: Sequence[str]) -> tuple[dict[tuple[str, str], list[_GameTab]], dict[str, str]]:
     """The tabs of ``paths`` by track, a game's slug and a title's key (the title its game's page lists, else the
-    sitemap's key; a tab with neither is none), and the names of their games as their pages head them."""
+    sitemap's key; a tab with neither is none), in the order of ``paths``, and the names of their games as their
+    pages head them. A tab two of a game's pages list is the last page's."""
     from caracole.gametabs import TAB, title_key
 
     marks = ", ".join("?" for _ in paths)
     listed = {r[0]: tuple(r)[1:] for r in conn.execute(
-        f"SELECT path, title, views, rating, instruments, composers FROM gametabs_game_tabs WHERE path IN ({marks})",
-        list(paths))}
+        f"SELECT path, title, views, rating, instruments, composers FROM gametabs_game_tabs WHERE path IN ({marks}) "
+        "ORDER BY path, page", list(paths))}
     keyed = {r[0]: tuple(r)[1:] for r in conn.execute(
         f"SELECT path, game, key FROM gametabs_index WHERE kind = ? AND path IN ({marks})", (TAB, *paths))}
     games = {game for game, _ in keyed.values()} | {path.split("/")[1] for path in listed}
@@ -1549,7 +1562,8 @@ def _harp_artists(conn: sqlite3.Connection, query: str, queries: list[_Query], p
     unless more than ``WORD_ARTISTS`` names hold them; beside one named whole, only those named whole or in part."""
     where = " OR ".join("i.key LIKE ?" for _ in patterns)
     rows = [_HarpArtist(*r) for r in conn.execute(
-        f"{_HARP_ARTISTS} WHERE i.kind = 'artist' AND ({where}) LIMIT ?", (*patterns, SITE_ROWS_READ))]
+        f"{_HARP_ARTISTS} WHERE i.kind = 'artist' AND ({where}) ORDER BY i.key, i.path LIMIT ?",
+        (*patterns, SITE_ROWS_READ))]
     whole, parts = _harp_named([r for r in rows if not r.gone], query, queries)
     found = [(score, False, row) for score, row in whole] + [(PART, True, row) for row in parts]
     if any(score >= 100 for score, _, _ in found):
@@ -1610,8 +1624,8 @@ def _harp_songs(conn: sqlite3.Connection, queries: list[_Query], patterns: list[
                               pages).fetchall()) if pages else {}
     scored = []
     for n, hit in enumerate(hits):
-        names = {(slugs.get(hit.page, "").replace("-", " "), hit.title_key.replace("-", " ")),
-                 (" ".join(name_words(hit.artist)), hit.title_key.replace("-", " "))}
+        names = dict.fromkeys([(slugs.get(hit.page, "").replace("-", " "), hit.title_key.replace("-", " ")),
+                               (" ".join(name_words(hit.artist)), hit.title_key.replace("-", " "))])
         score, via = _reading(q.readings(a, t) for q in queries for a, t in names)
         if score >= MIN_SCORE:
             scored.append((round(score, 1), n, replace(hit, score=round(score, 1), via=via)))
@@ -1628,7 +1642,7 @@ def _harp_grouped(conn: sqlite3.Connection, where: str, args: Sequence[Any], lim
     rows = conn.execute(
         "SELECT t.artist, t.path, t.title, t.song_key, t.views, t.rating, t.harp_key, t.difficulty, a.name "
         "FROM harptabs_artist_tabs t JOIN harptabs_artists a ON a.path = t.artist "
-        f"WHERE {where} ORDER BY t.views DESC, t.place" + (" LIMIT ?" if limit is not None else ""),
+        f"WHERE {where} ORDER BY t.views DESC, t.place, t.artist, t.tab_id" + (" LIMIT ?" if limit is not None else ""),
         (*args, *(() if limit is None else (limit,)))).fetchall()
     songs: dict[tuple[str, str], list] = {}
     for row in rows:
@@ -1696,7 +1710,7 @@ def lacuerda_artist(conn: sqlite3.Connection, slug: str) -> SiteArtist | None:
     from caracole.lacuerda import artist_url
 
     row = conn.execute("SELECT artist, artist_key, songs FROM lacuerda_index WHERE artist_slug = ? "
-                       "ORDER BY title != '' LIMIT 1", (slug,)).fetchone()
+                       "ORDER BY title != '', path LIMIT 1", (slug,)).fetchone()
     if row is None:
         return None
     hit = LaCuerdaHit(row[0], slug, row[1], artist_url(slug), 100.0, songs=row[2],
@@ -2164,7 +2178,7 @@ def _names_reading(queries: list[_Query], artists_: Sequence[str], title: str,
     for artist in dict.fromkeys(artists_):
         artists = _forms(artist) or [""]
         # Plain words with plain words, pinyin with pinyin (a form missing on one side is its plain one).
-        for a, t in {(artists[0], titles[0]), (artists[-1], titles[-1])}:
+        for a, t in dict.fromkeys([(artists[0], titles[0]), (artists[-1], titles[-1])]):
             scores += [q.readings(a, t) for q in queries]
     return _reading(scores, reading)
 
@@ -2322,7 +2336,7 @@ def _listed_rows(conn: sqlite3.Connection, queries: list[_Query], patterns: list
         top[artist_key] = max(top[artist_key], len(group))
     scored = []
     for (artist_key, base), group in songs.items():
-        names = {(t.artist_forms, t.title_forms) for t in group.values()}
+        names = dict.fromkeys((t.artist_forms, t.title_forms) for t in group.values())
         score, via = _reading((r for a, t in names for r in _forms_readings(queries, a, t)), reading)
         if score >= MIN_SCORE:
             scored.append(_Row(score, len(group), tabs[artist_key], artist_key, base, via))
@@ -2488,7 +2502,7 @@ class _Yours:
             names: list[str] = []
             for artist, artists in self.conn.execute("SELECT artist, artists FROM songs ORDER BY id"):
                 names += [artist, *_json_names(artists)]
-            names += [r[0] for r in self.conn.execute("SELECT artist FROM removed ORDER BY removed_at DESC")]
+            names += [r[0] for r in self.conn.execute("SELECT artist FROM removed ORDER BY removed_at DESC, key")]
             self._names = [(n, {compact(f) for f in name_forms(n)}) for n in dict.fromkeys(names) if n]
         wanted = {compact(f) for f in name_forms(name)}
         return next((n for n, forms in self._names if forms & wanted), None) or original_part(name)
