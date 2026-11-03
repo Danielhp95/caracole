@@ -50,11 +50,13 @@ class PinyinTest {
         }
     }
 
+    /** A heteronyms record is no single call: its out is each code point's answer, as its note says. */
     @Test fun everyCharacterOfTheHeteronymRecordsReadsAsPypinyinReadsIt() {
         val records = Corpus.records("pinyin/heteronyms.jsonl")
         var chars = 0
         agree("pinyin/heteronyms.jsonl", records) { record ->
             assertEquals("test_conformance_pinyin.heteronyms", record.fn)
+            assertTrue("a code point at a time" in record.extra.getValue("note").jsonPrimitive.content, "its note")
             val text = text(record)
             val want = record.out!!.jsonArray.map { strings(it) }
             val got = ArrayList<List<String>>()

@@ -41,9 +41,12 @@ The vectors (``helpers.corpus.jsonl``):
   edges (empty, each of RE_HANS's ranges' ends and their neighbours, newlines).
 - ``vectors/pinyin/heteronyms.jsonl``: ``heteronyms(text)`` below, each character's
   ``pinyin(c, style=Style.NORMAL, heteronym=True)[0]``, over every code point of PINYIN_DICT, ``CHARS_A_RECORD`` a
-  record in order, then characters with no reading.
+  record in order, then characters with no reading. A record is read one code point at a time, never as one call:
+  its ``out`` is a list of each code point's answer, which its ``note`` says (``HETERONYMS_NOTE``), for a replay that
+  goes by ``fn``.
 
-``test_the_data_alone_reads_every_vector_as_pypinyin`` reads the vectors back from the data alone, as the phone does.
+Each vector's test also reads it back from the data alone, as the phone does (``_Data``). pypinyin is imported where
+it is used: its dictionaries take a quarter of a second to load, which collecting any other test module never pays.
 """
 
 from __future__ import annotations
@@ -54,10 +57,7 @@ import functools
 import random
 from pathlib import Path
 
-from pypinyin import Style, lazy_pinyin, pinyin
-from pypinyin.constants import PHRASES_DICT, PINYIN_DICT, RE_HANS
-from pypinyin.style._utils import replace_symbol_to_no_symbol
-
+import pytest
 from helpers.corpus import DATA, VECTORS, check, jsonl
 
 MADE_BY = "tests/test_conformance_pinyin.py"
@@ -72,22 +72,30 @@ CHARS_A_RECORD = 100
 SEPARATORS = (" ", "，", "\n", "a", "、", " · ")
 LAZY = "pypinyin.lazy_pinyin"
 HETERONYMS = "test_conformance_pinyin.heteronyms"
+HETERONYMS_NOTE = ("out[i] is pinyin(c, style=Style.NORMAL, heteronym=True)[0] of the i-th code point c of args[0]: "
+                   "Pinyin.heteronyms(c), a code point at a time")
 ERRORS = ("default", "ignore")
 
 
 def normal(reading: str) -> str:
     """A reading in Style.NORMAL, by pypinyin's own converter."""
+    from pypinyin.style._utils import replace_symbol_to_no_symbol
+
     return replace_symbol_to_no_symbol(reading)
 
 
 def heteronyms(text: str) -> list[list[str]]:
     """Each character's readings as normalize._pinyin_readings asks for them, a character at a time."""
+    from pypinyin import Style, pinyin
+
     return [pinyin(c, style=Style.NORMAL, heteronym=True)[0] for c in text]
 
 
 @functools.cache
 def han_ranges() -> tuple[tuple[int, int], ...]:
     """The code points RE_HANS matches alone, as ranges: read from the pattern itself, every code point tried."""
+    from pypinyin.constants import RE_HANS
+
     ranges: list[list[int]] = []
     for cp in range(0x110000):
         if RE_HANS.match(chr(cp)):
@@ -111,11 +119,15 @@ def hans_txt() -> str:
 
 @functools.cache
 def chars_txt() -> str:
+    from pypinyin.constants import PINYIN_DICT
+
     return "".join(f"{cp:x} {','.join(normal(r) for r in PINYIN_DICT[cp].split(','))}\n" for cp in sorted(PINYIN_DICT))
 
 
 @functools.cache
 def phrases_txt() -> str:
+    from pypinyin.constants import PHRASES_DICT
+
     return "".join(f"{p} {' '.join(normal(syllable[0]) for syllable in PHRASES_DICT[p])}\n"
                    for p in sorted(PHRASES_DICT, key=_utf16))
 
@@ -134,6 +146,8 @@ def test_phrases_txt_is_phrases_dict_in_normal_style():
 
 def test_what_the_phone_takes_for_granted_of_the_dictionaries():
     """The data's format, and the phone's port, rest on these: a bump of pypinyin that breaks one says so here."""
+    from pypinyin.constants import PHRASES_DICT, PINYIN_DICT, RE_HANS
+
     syllable = set("abcdefghijklmnopqrstuvwxyzê")
     for cp, readings in PINYIN_DICT.items():
         assert RE_HANS.match(chr(cp)), f"U+{cp:04X} has readings but RE_HANS doesn't match it"
@@ -156,6 +170,8 @@ def test_what_the_phone_takes_for_granted_of_the_dictionaries():
 
 
 def _polyphone_phrases() -> list[str]:
+    from pypinyin.constants import PHRASES_DICT, PINYIN_DICT
+
     poly = {cp for cp, readings in PINYIN_DICT.items() if "," in readings}
     return [p for p in sorted(PHRASES_DICT) if any(ord(c) in poly for c in p)]
 
@@ -169,10 +185,14 @@ def _phrase_texts() -> list[str]:
 
 
 def _unread_han() -> list[int]:
+    from pypinyin.constants import PINYIN_DICT
+
     return [cp for a, b in han_ranges() for cp in range(a, b + 1) if cp not in PINYIN_DICT]
 
 
 def _mixes() -> list[str]:
+    from pypinyin.constants import PHRASES_DICT, PINYIN_DICT
+
     rng = random.Random(SEED)
     phrases = sorted(PHRASES_DICT)
     read = sorted(PINYIN_DICT)
@@ -227,6 +247,9 @@ def _mixes() -> list[str]:
 def _mmseg_stops() -> list[str]:
     """Texts that end mmseg's cut early: each begins a phrase whole and none of its prefixes is one, so each of its
     characters is a word alone, though cut again from its second character on it would read a phrase."""
+    from pypinyin import lazy_pinyin
+    from pypinyin.constants import PHRASES_DICT
+
     found = set()
     for phrase in PHRASES_DICT:
         for k in range(2, len(phrase)):
@@ -258,35 +281,36 @@ def _edges() -> list[str]:
     return texts
 
 
-@functools.cache
 def lazy_records() -> tuple[dict, ...]:
+    from pypinyin import lazy_pinyin
+
     texts = _phrase_texts() + _mmseg_stops() + _mixes() + _literals() + _edges()
     return tuple({"fn": LAZY, "args": [text], "kw": {"errors": errors}, "out": lazy_pinyin(text, errors=errors)}
                  for text in texts for errors in ERRORS)
 
 
-@functools.cache
 def heteronym_records() -> tuple[dict, ...]:
+    from pypinyin.constants import PINYIN_DICT
+
     read = sorted(PINYIN_DICT)
     texts = ["".join(chr(cp) for cp in read[at:at + CHARS_A_RECORD]) for at in range(0, len(read), CHARS_A_RECORD)]
     unread = _unread_han()
     texts.append("".join(chr(cp) for cp in unread[::500]))
     texts.append("".join(chr(a) + chr(b) for a, b in han_ranges()))
     texts.append("a Z0 \n\t\x00ü·ー가😀\U000E0041（")
-    return tuple({"fn": HETERONYMS, "args": [text], "kw": {}, "out": heteronyms(text)} for text in texts)
+    return tuple({"fn": HETERONYMS, "args": [text], "kw": {}, "note": HETERONYMS_NOTE, "out": heteronyms(text)}
+                 for text in texts)
 
 
-def test_lazy_vectors_are_pypinyins_answers():
-    check(VECTORS / "pinyin" / "lazy.jsonl", jsonl(lazy_records(), corpus="pinyin/lazy", made_by=MADE_BY))
+# Its records are built once, pypinyin reading 45,502 phrases in both modes: about 3 s, over plan §3's budget.
+@pytest.mark.slow
+def test_lazy_vectors_are_pypinyins_answers_and_the_data_reads_each():
+    from pypinyin import lazy_pinyin
+    from pypinyin.constants import PINYIN_DICT
 
-
-def test_heteronym_vectors_are_pypinyins_answers():
-    check(VECTORS / "pinyin" / "heteronyms.jsonl",
-          jsonl(heteronym_records(), corpus="pinyin/heteronyms", made_by=MADE_BY))
-
-
-def test_the_vectors_hold_what_they_mean_to():
     lazy = lazy_records()
+    check(VECTORS / "pinyin" / "lazy.jsonl", jsonl(lazy, corpus="pinyin/lazy", made_by=MADE_BY))
+    # They hold what they mean to.
     texts = {r["args"][0] for r in lazy}
     phrase_texts = _phrase_texts()
     batched = [p for n, t in enumerate(phrase_texts) for p in t.split(SEPARATORS[n % len(SEPARATORS)])]
@@ -296,8 +320,23 @@ def test_the_vectors_hold_what_they_mean_to():
     # The two modes differ, and mmseg reads a run as more than its characters alone.
     assert any(a["out"] != b["out"] for a, b in zip(lazy[::2], lazy[1::2]))
     assert lazy_pinyin("朝阳") == ["zhao", "yang"] and lazy_pinyin("绿色") == ["lv", "se"]
-    read = {cp for r in heteronym_records() for cp in map(ord, r["args"][0]) if cp in PINYIN_DICT}
+    # The data alone reads each, as the phone does.
+    data = _Data(hans_txt(), chars_txt(), phrases_txt())
+    for record in lazy:
+        text, errors = record["args"][0], record["kw"]["errors"]
+        assert data.lazy(text, errors) == record["out"], (text, errors)
+
+
+def test_heteronym_vectors_are_pypinyins_answers_and_the_data_reads_each():
+    from pypinyin.constants import PINYIN_DICT
+
+    records = heteronym_records()
+    check(VECTORS / "pinyin" / "heteronyms.jsonl", jsonl(records, corpus="pinyin/heteronyms", made_by=MADE_BY))
+    read = {cp for r in records for cp in map(ord, r["args"][0]) if cp in PINYIN_DICT}
     assert read == set(PINYIN_DICT)
+    data = _Data(hans_txt(), chars_txt(), "")
+    for record in records:
+        assert [data.heteronyms(ord(c)) for c in record["args"][0]] == record["out"], record["args"][0]
 
 
 # --- the phone's reading, from the data alone ----------------------------------------------------------------------
@@ -383,12 +422,3 @@ class _Data:
             return [chr(cp)]
         kept = list(dict.fromkeys(r for r in self.chars[cp] if r))
         return kept or [""]
-
-
-def test_the_data_alone_reads_every_vector_as_pypinyin():
-    data = _Data(hans_txt(), chars_txt(), phrases_txt())
-    for record in lazy_records():
-        text, errors = record["args"][0], record["kw"]["errors"]
-        assert data.lazy(text, errors) == record["out"], (text, errors)
-    for record in heteronym_records():
-        assert [data.heteronyms(ord(c)) for c in record["args"][0]] == record["out"], record["args"][0]
