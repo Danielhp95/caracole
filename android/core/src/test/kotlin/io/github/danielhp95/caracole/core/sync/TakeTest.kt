@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.sync
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.sync.internal.take.Backups
@@ -150,6 +151,31 @@ class TakeTest {
             assertEquals(out.getValue("files").jsonArray.map { f -> f.jsonArray.map { it.jsonPrimitive.content } },
                          filesOf(phone.library), case)
         }
+    }
+
+    @Test fun unitsAreTakenSongsFirstEachLeftAloneWhenItCantBe() {
+        val phone = phone()
+        phone.write { db ->
+            db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString()) // as fresh_kv.json seeds a new database
+            db.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES " +
+                       "('oasis/wonderwall', 'Oasis', 'Wonderwall', '{}', '2026-10-01T00:00:00Z')")
+        }
+        val source = object : UnitSource {
+            override fun unit(id: String): JsonObject? =
+                if (id == "removed/broken/one") throw java.io.IOException("the computer went away") else null
+            override fun file(songKey: String, name: String, sha256: String): ByteArray = error("no file is asked for")
+        }
+        val told = mutableListOf<Pair<String, String>>()
+        val wanted = listOf("nonsense/x" to null, "removed/oasis/wonderwall" to null, "removed/broken/one" to null,
+                            "removed/b/c" to "a digest the source had", "song/nobody/here" to null)
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) { id, what -> told += id to what } }
+        assertEquals(listOf("song/nobody/here", "removed/oasis/wonderwall"), done.taken)
+        assertEquals(listOf("removed/b/c" to Take.CHANGED_THERE, "removed/broken/one" to "the computer went away",
+                            "nonsense/x" to "this caracole doesn't know units of kind 'nonsense'"), done.left)
+        assertEquals(listOf("song/nobody/here" to "taken", "removed/b/c" to "left", "removed/broken/one" to "left",
+                            "removed/oasis/wonderwall" to "taken", "nonsense/x" to "left"), told)
+        assertEquals(Applied(done.taken, done.left, emptyList(), emptyList(), false), done)
+        phone.write { db -> assertEquals(emptyList(), Songs.removed(db), "the tombstone the peer has no longer goes") }
     }
 
     /** This side's units, as take.jsonl's `after` writes them: `{id: {label, digest, value}}`. */

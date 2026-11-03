@@ -270,11 +270,14 @@ class LibraryStoreTest {
         }
     }
 
-    @Test fun aStoreAddsNoSongWithoutAnArtistOrATime() {
+    @Test fun aStoreAddsNoSongWithoutAnArtistOrATimeAndRemovesNoneItHasnt() {
         phone { db, store ->
             assertFailsWith<IllegalArgumentException> { store.add(db, "  ", "Creep", now = NOW) }
             assertFailsWith<IllegalArgumentException> { store.add(db, "Radiohead", "Creep", now = "later") }
             assertEquals(0L, db.one("SELECT COUNT(*) FROM songs") { it.long(0) })
+            assertNull(store.remove(db, "nobody/here", NOW))
+            assertNull(store.remove(db, "nobody/here", "later"), "a time is read only for a song to remove")
+            assertEquals(emptyList(), Songs.removed(db))
             assertNotNull(db.kvGet("sync:id"))
             assertNotEquals("", db.kvGet("phone:schema"))
         }

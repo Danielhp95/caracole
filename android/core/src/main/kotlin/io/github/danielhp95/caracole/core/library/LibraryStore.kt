@@ -47,9 +47,9 @@ class LibraryStore(val libraryDir: File) {
      * folder, and its artist's, once empty. The tombstone, or null when the library has no song of [key].
      */
     fun remove(db: Db, key: String, now: String): RemovedRow? {
-        val stamp = Stamps.stampOf(now)
-        Rekey.ensure(db, stamp)
+        Rekey.ensure(db, Stamps.now())
         val song = Songs.byKey(db, key) ?: return null
+        val stamp = Stamps.stampOf(now) // as peer_sync._remove_song reads its time: only for a song to remove
         return Removal.remove(db, libraryDir, Removal.plan(db, libraryDir, song), stamp).tombstone
     }
 
