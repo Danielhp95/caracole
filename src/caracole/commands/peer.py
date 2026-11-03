@@ -9,9 +9,15 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
   waiting for the nightly run as a lookup does, after a backup of the database; then renders the songs it took,
   makes the songbooks and writes the pages, and keeps what the two now agree on. caracole serve's ``POST /peer/pull``
   queues it.
-- ``caracole peer sync ADDRESS`` compares, asks you to settle each conflict (``--prefer here`` or ``there`` settles
-  them all), takes here what comes from there, and, with ``--here`` (this side's address, as the other reaches it),
-  asks the other to take what goes there; without it, says what to run there.
+- ``caracole peer sync ADDRESS`` compares, settles each conflict (``--choose=<here|there|skip>:<unit id>`` for one,
+  ``--prefer here`` or ``there`` for the rest, else asked), takes here what comes from there, and gives there what
+  goes there: pushed (``--push``, peer_push.py, as the phone pushes), or asked of the other to pull (``--here``, this
+  side's address as the other reaches it), or, with neither, the line to run there. ``--compared HASH`` refuses,
+  before any change, a comparison that isn't the one the choices were made on (``peer_sync.compared_hash``: the
+  Sync tab's). Then it keeps what the two agree on, and the peer's address and name (kv ``sync:peer:<id>``,
+  ``peer_push.PEER_KEY``), which caracole serve's Sync tab lists. ``--progress``: get.py's JSON lines, its stages
+  compare, take, give and agree (web/jobs.py ``PEER_SYNC_STAGES``), and ``{"event": "unit", "id", "outcome",
+  "why"}`` for each unit taken, given or left.
 - ``caracole peer take DIR`` takes a push another caracole sent (peer_push.py), staged by caracole serve in DIR
   (``state_dir/peer/push-<id>``, ``POST /peer/push`` queues it): its stages check (the push read, each document what
   its digest says), take (a backup first, then each unit as a pull takes one, left when it changed on this side
@@ -26,6 +32,7 @@ from __future__ import annotations
 
 import json
 from contextlib import closing
+from dataclasses import replace
 
 import typer
 
@@ -36,7 +43,11 @@ WORDS = {"mine": "keep here's", "theirs": "take there's", "conflict": "CONFLICT"
 KINDS = {"song": "Songs", "removed": "Removals", "songbook": "Songbooks", "alias": "Artists' aliases",
          "artist_url": "Artists' UG pages", "block": "Blocked tabs"}
 PREFER = {"here": "mine", "there": "theirs"}
+SIDES = ("here", "there", "skip")  # what --choose says of a unit
 DONE = {"taken": "Took", "given": "Gave", "left": "Left"}
+STALE = "The two changed since that comparison: compare them again, and choose again."
+UNSETTLED = "a conflict: choose a side for it"
+SKIPPED = "skipped, as chosen"
 
 
 def register(app: typer.Typer) -> None:
@@ -52,12 +63,15 @@ def register(app: typer.Typer) -> None:
     ) -> None:
         """List what this library and the one at ADDRESS hold differently, and which side each would come from.
         Changes nothing."""
+        from caracole import peer_sync as sync
+
         cfg = load_cfg(ctx)
         address, found, state, synced, here_count = _compare(cfg, address)
         if as_json:
             typer.echo(json.dumps({
                 "peer": {"address": address, "server": state.server, "caracole": state.version, "name": state.name},
                 "synced_before": synced,
+                "compared": sync.compared_hash(found),
                 "differences": [{"id": d.id, "label": d.label, "proposal": d.proposal, "why": d.why,
                                  "here": d.mine.digest if d.mine else None,
                                  "there": d.theirs.digest if d.theirs else None} for d in found],
@@ -91,61 +105,106 @@ def register(app: typer.Typer) -> None:
         address: str = typer.Argument(..., help="The other caracole serve's address."),
         here: str | None = typer.Option(None, "--here", help="This caracole serve's address, as the other reaches "
                                                             "it: it then takes what goes there itself."),
+        push: bool = typer.Option(False, "--push", help="Give there what goes there by pushing it, as the phone "
+                                                       "does: only this side needs to reach the other."),
         prefer: str | None = typer.Option(None, "--prefer", help="Settle every conflict so: here or there."),
+        choose: list[str] = typer.Option([], "--choose", metavar="SIDE:UNIT",
+                                         help="here, there or skip, then a unit's id (song/<key>, …): that unit "
+                                              "so, whatever is proposed for it; again for more."),
+        compared: str | None = typer.Option(None, "--compared", metavar="HASH",
+                                            help="The comparison the choices were made on (diff --json's "
+                                                 "\"compared\"): refused, before any change, when the two differ "
+                                                 "from it now."),
+        progress: bool = typer.Option(False, "--progress", help="Report each stage and unit as a JSON line, for "
+                                                               "caracole serve."),
         yes: bool = typer.Option(False, "--yes", help="Don't ask before taking the changes."),
     ) -> None:
-        """Compare, settle each conflict, take here what comes from there, and have there take what goes there."""
+        """Compare, settle each conflict, take here what comes from there, and give there what goes there."""
         from caracole import peer_sync as sync
 
         if prefer is not None and prefer not in PREFER:
             fail("--prefer is here or there", 2)
+        if push and here is not None:
+            fail("--push or --here: one way to give there what goes there", 2)
+        choices = _choices(choose)
         cfg = load_cfg(ctx)
         if here is not None:
             try:
                 here = sync.peer_address(here)
             except sync.PeerError as e:
                 fail(str(e), 2)
+        said = _Said(progress)
+        said.stage("compare", "running")
         address, found, state, synced, here_count = _compare(cfg, address)
+        if compared is not None and sync.compared_hash(found) != compared.strip().lower():
+            said.stage("compare", "failed", STALE)
+            fail(STALE)
+        unknown = sorted(set(choices) - {d.id for d in found})
+        if unknown:
+            said.stage("compare", "failed", f"--choose names {unknown[0]}, which isn't a difference now")
+            fail(f"--choose names {', '.join(unknown[:3])}, which the two don't hold differently now: compare "
+                 "them again.", 2)
+        said.stage("compare", "done", f"{len(found)} {'difference' if len(found) == 1 else 'differences'}")
         typer.echo(_report(address, state, synced, here_count, found))
-        if not found:
-            return
 
-        def choose(d) -> str | None:
+        def asked(d) -> str | None:
             if prefer is not None or not _interactive():
                 return None
             answer = typer.prompt(f"{d.label}: keep here's or take there's? (here/there/skip)", default="skip")
             return PREFER.get(answer.strip().lower())
 
-        take, give = sync.decide(found, PREFER.get(prefer or ""), choose)
-        left = len(found) - len(take) - len(give)
-        typer.echo(f"Here takes {len(take)}, there takes {len(give)}" + (f", {left} left as they are." if left
-                                                                         else "."))
-        if not take and not give:
-            return
-        if not yes and _interactive() and not typer.confirm("Go on?", default=True):
+        take, give = sync.decide(_as_chosen(found, choices), PREFER.get(prefer or ""), asked)
+        settled = {d.id for d in (*take, *give)}
+        left = [(d.id, SKIPPED if choices.get(d.id) == "skip" else UNSETTLED) for d in found if d.id not in settled]
+        if found:
+            typer.echo(f"Here takes {len(take)}, there takes {len(give)}"
+                       + (f", {len(left)} left as they are." if left else "."))
+        if (take or give) and not yes and _interactive() and not typer.confirm("Go on?", default=True):
             raise typer.Exit(1)
-        failed = False
+        for unit_id, why in left:
+            said.unit(unit_id, "left", why)
         if take:
+            said.stage("take", "running", _count(len(take)))
             done = _pull(cfg, address, [d.id for d in take],
-                         {d.id: d.theirs.digest if d.theirs else None for d in take})
-            typer.echo(_pulled(done))
-            failed = bool(done.left)
-        if give:
+                         {d.id: d.theirs.digest if d.theirs else None for d in take},
+                         expected_here={d.id: d.mine.digest if d.mine else None for d in take},
+                         on_unit=said.unit, agree=False)
+            said.stage("take", "done", _taken_detail(done))
+            typer.echo(_pulled(done, units=False))
+        else:
+            said.stage("take", "skipped")
+        if not give:
+            said.stage("give", "skipped")
+        elif push:
+            said.stage("give", "running", _count(len(give)))
+            given, left_there = _push(cfg, address, state, give)
+            for unit_id in given:
+                said.unit(unit_id, "given")
+            for unit_id, why in left_there:
+                said.unit(unit_id, "left", why)
+            said.stage("give", "done", f"gave {len(given)}" + (f", left {len(left_there)}" if left_there else ""))
+            typer.echo(f"Gave {_count(len(given))} to {address}.")
+        else:
             ids = [d.id for d in give]
             if here is None:
+                said.stage("give", "skipped", "this side's address unknown there")
                 typer.echo(f"There takes {len(ids)}: give --here (this caracole serve's address, as the other reaches "
-                           f"it), or run there: caracole peer pull ADDRESS-OF-THIS-ONE "
+                           f"it) or --push, or run there: caracole peer pull ADDRESS-OF-THIS-ONE "
                            + " ".join(f"--unit={i}" for i in ids))
             else:
+                said.stage("give", "running", _count(len(ids)))
                 with sync.Peer(address, transport=transport_for_peer()) as peer:
                     try:
                         job = peer.ask_to_pull(here, ids, peer.state().token or "")
                     except sync.PeerError as e:
+                        said.stage("give", "failed", str(e))
                         fail(f"There couldn't be asked to take its {len(ids)}: {e}")
+                said.stage("give", "done", f"asked there to take {len(ids)}")
                 typer.echo(f"Asked {address} to take {len(ids)} from {here}"
                            + (f": its request {job}, in its Requests tab." if job else "."))
-        if failed:
-            raise typer.Exit(1)
+        said.stage("agree", "running")
+        agreed = _agree(cfg, address)
+        said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the two agree on")
 
     @peer_app.command("take")
     def take_cmd(
@@ -225,6 +284,32 @@ def _count(n: int) -> str:
     return f"{n} {'change' if n == 1 else 'changes'}"
 
 
+def _choices(given: list[str]) -> dict[str, str]:
+    """``--choose``'s, ``<here|there|skip>:<unit id>`` each (the side first: an id holds ``/`` and ``:``): each
+    unit's side."""
+    found: dict[str, str] = {}
+    for text in given:
+        side, _, unit_id = text.partition(":")
+        if side not in SIDES or "/" not in unit_id:
+            fail(f"--choose {text!r}: here, there or skip, a colon, then a unit's id (song/<key>, …)", 2)
+        if found.get(unit_id, side) != side:
+            fail(f"--choose names {unit_id} twice, two ways", 2)
+        found[unit_id] = side
+    return found
+
+
+def _as_chosen(found: list, choices: dict[str, str]) -> list:
+    """The differences, each chosen one as chosen: here's (kept here, so there takes it), there's (taken here), or
+    left out (skip), whatever was proposed for it."""
+    chosen = []
+    for d in found:
+        side = choices.get(d.id)
+        if side == "skip":
+            continue
+        chosen.append(d if side is None else replace(d, proposal=PREFER[side]))
+    return chosen
+
+
 def _compare(cfg, address: str):
     """The other caracole's state and the comparison: (address, differences, its state, whether the two synced
     before, how many units here)."""
@@ -256,10 +341,12 @@ def _compare(cfg, address: str):
     return address, sync.compare(mine, state.units, base), state, base is not None, len(mine)
 
 
-def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None] | None = None):
+def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None] | None = None, *,
+          expected_here: dict[str, str | None] | None = None, on_unit=None, agree: bool = True):
     """``caracole peer pull``'s work: see the module's docstring. ``compared``: each unit's digest there as compared
-    (None: it had none), so that one changed there since is left; else as it is there now. Returns peer_sync's
-    ``Applied``."""
+    (None: it had none), so that one changed there since is left; else as it is there now. ``expected_here``: each
+    one's digest here as compared, so that one changed here since is left too. ``agree``: keep what the two agree on
+    after (a sync does once it gave there what goes there). Returns peer_sync's ``Applied``."""
     from caracole import backup
     from caracole import peer_sync as sync
     from caracole.render import render_all
@@ -279,13 +366,14 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
                 made = backup.make(conn, cfg.state_dir, now, label=BACKUP_LABEL)
                 if isinstance(made, backup.Skipped):
                     fail(f"Nothing taken: no backup of the database first, {made.reason}.")
-                done = sync.apply_units(conn, cfg, peer, wanted, now.strftime("%Y-%m-%dT%H:%M:%SZ"))
+                done = sync.apply_units(conn, cfg, peer, wanted, now.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                                        expected_here=expected_here, on_unit=on_unit)
                 overrides = load_ovr(cfg)
                 if done.songs:
                     render_all(conn, cfg, overrides, song_ids=done.songs)
                 render_songbooks(conn, cfg, overrides)
                 write_pages(conn, cfg, overrides, utcnow())
-                if state.server is not None:
+                if agree and state.server is not None:
                     try:
                         books = load_songbooks(songbooks_file(cfg.library_dir))
                     except SongbookError:
@@ -299,6 +387,83 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
         except backup.BackupError as e:
             fail(f"Nothing taken: the database couldn't be backed up first: {e}")
     return done
+
+
+def _push(cfg, address: str, state, give: list) -> tuple[list[str], list[tuple[str, str]]]:
+    """Give the caracole at ``address`` the differences of ``give`` by pushing them (``peer_push.push_units``: what
+    it compared there, ``state``, and here), under caracole's lock, then wait for it to take them, the lock let go:
+    (the units it took, those left with why)."""
+    from caracole import __version__, peer_push
+    from caracole import peer_sync as sync
+    from caracole.songbook import SongbookError, load_songbooks, songbooks_file
+
+    try:
+        with peer_push.Pusher(address, transport=transport_for_peer()) as pusher:
+            with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
+                me = sync.make_id(conn)
+                pusher.state(me)  # its form token, as it is now
+                overrides = load_ovr(cfg)
+                try:
+                    books = load_songbooks(songbooks_file(cfg.library_dir))
+                except SongbookError as e:
+                    fail(f"Nothing given: this library's songbooks.toml can't be read: {e}")
+                pushed = peer_push.push_units(
+                    pusher, conn, cfg, overrides, books, {d.id: d.theirs.digest if d.theirs else None for d in give},
+                    own=me, at=state.now or utcnow().strftime("%Y-%m-%dT%H:%M:%SZ"), name=cfg.library_name,
+                    version=__version__, compared_here={d.id: d.mine.digest if d.mine else None for d in give})
+            left = list(pushed.left)
+            if not pushed.job:
+                return [], left
+            job = peer_push.wait_for(pusher, pushed.job, sleep=_sleep)
+    except sync.PeerError as e:
+        fail(f"There couldn't be given its {len(give)}: {e}")
+    said = {unit_id: (outcome, why) for unit_id, outcome, why in job.get("units") or ()}
+    given = []
+    for unit_id in pushed.given:
+        outcome, why = said.get(unit_id, (None, ""))
+        if outcome == "taken":
+            given.append(unit_id)
+        else:
+            left.append((unit_id, why or (f"its request {pushed.job} there {job['state']}" if job["state"] != "done"
+                                          else "not taken there")))
+    return given, left
+
+
+def _sleep(seconds: float) -> None:
+    """The pause between two asks of how a push's take goes there. Tests replace it."""
+    import time
+
+    time.sleep(seconds)
+
+
+def _agree(cfg, address: str) -> int:
+    """Keep what this side and the caracole at ``address`` agree on now, stamped by its clock, and its address and
+    name (kv ``sync:peer:<id>``, which caracole serve's Sync tab lists); how many units were agreed."""
+    from caracole import peer_push
+    from caracole import peer_sync as sync
+    from caracole.db import kv_set_json
+    from caracole.songbook import SongbookError, load_songbooks, songbooks_file
+
+    with exclusive(cfg, "peer sync", interactive=True), closing(open_db(cfg)) as conn:
+        me = sync.make_id(conn)
+        try:
+            with sync.Peer(address, transport=transport_for_peer()) as peer:
+                after = peer.state(me)
+        except sync.PeerError as e:
+            fail(str(e))
+        if after.server is None or after.server == me:
+            return 0
+        overrides = load_ovr(cfg)
+        try:
+            books = load_songbooks(songbooks_file(cfg.library_dir))
+        except SongbookError as e:
+            fail(f"This library's songbooks.toml can't be read: {e}")
+        at = after.now or utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        agreed = sync.record_agreement(conn, after.server, sync.library_state(conn, overrides, books), after.units,
+                                       at)
+        kv_set_json(conn, peer_push.PEER_KEY + after.server, {"address": address, "name": after.name,
+                                                              "synced_at": at})
+    return agreed
 
 
 def _take(cfg, folder, said: _Said) -> None:

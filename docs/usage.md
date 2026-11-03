@@ -5750,7 +5750,8 @@ your home database's indexes into a service's, see
 ## Two caracoles: the phone's and the computer's
 
     caracole peer diff ADDRESS [--json]                        # what differs, and which side each would come from
-    caracole peer sync ADDRESS [--here ADDRESS] [--prefer here|there] [--yes]
+    caracole peer sync ADDRESS [--here ADDRESS | --push] [--prefer here|there] [--choose SIDE:ID]...
+                               [--compared HASH] [--progress] [--yes]
     caracole peer pull ADDRESS --unit ID [--unit ID]...        # take these from there
     caracole peer take [--progress] DIR                        # a push caracole serve staged (it queues this)
     caracole peer new-id                                       # for a database copied from another caracole's
@@ -5873,7 +5874,25 @@ deleted an hour later.
 
 ### Syncing by hand: peer sync --push, --choose, --compared
 
-Not built yet.
+`caracole peer sync` can give the other side what goes there in three ways: **`--push`** pushes it, as the phone
+does (above), so only this side needs to reach the other; it waits, ten minutes at most, for the other to take the
+push, and says each unit it gave or left. **`--here ADDRESS`** asks the other to pull it from this side's own
+caracole serve. With neither, it prints the `caracole peer pull` line to run there.
+
+**`--choose SIDE:ID`** settles one unit, whatever is proposed for it: `here` (here's is kept, and the other side
+takes it), `there` (taken here) or `skip` (left on both sides), then the unit's id as `diff --json` names it
+(`--choose=there:song/radiohead/creep`), again for each unit. A conflict neither chosen nor settled by `--prefer` is
+left, and said. A choice naming a unit the two don't hold differently now is refused (exit 2).
+
+**`--compared HASH`**: the comparison the choices were made on, `diff --json`'s `"compared"` (the SHA-256 of what
+it found). The sync compares again first, and refuses, before it changes anything (exit 1), when the two differ from
+it now: compare again, and choose again.
+
+Each unit taken here is checked against both sides' digests as compared, so one that changed on either side since is
+left as it is. Then the sync keeps what the two agree on, stamped by the other side's clock, and the other side's
+address and name, which caracole serve's Sync tab lists. A unit left doesn't fail the sync (exit 0): it says why.
+**`--progress`** prints its stages, compare, take, give and agree, and each unit taken, given or left, as JSON lines
+for caracole serve.
 
 ### The Sync tab
 

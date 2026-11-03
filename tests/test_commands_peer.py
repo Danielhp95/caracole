@@ -1,5 +1,6 @@
 """``caracole peer``, run through the CLI against another library's caracole serve (a WebApp, in this process): the
-comparison, a pull of the other's units, and a two-way sync."""
+comparison, a pull of the other's units, and a two-way sync: there asked to pull, or given its units by a push
+(``--push``), which its caracole serve takes as a job of its queue, run in this process through the CLI too."""
 
 import json
 from pathlib import Path
@@ -276,3 +277,116 @@ def test_without_its_address_a_sync_says_what_to_run_there(two):
     assert result.exit_code == 0, result.output
     assert f"caracole peer pull ADDRESS-OF-THIS-ONE --unit=song/{mine.key}" in " ".join(lines_of(result.output))
     assert ("POST", "/peer/pull") not in asked
+
+
+# --- a sync by push, with your choices and the comparison they were made on --------------------------------------
+
+
+def two_conflicts(here, there):
+    """Two libraries that never synced: Creep and Wonderwall on both, chorded differently (two conflicts), Creep's
+    sheet too; Muse's Hysteria here alone, Estopa's Tu Calorro there alone."""
+    here.song("Radiohead", "Creep", version="key=Am&capo=0", sheet=b"[Am]Creep, as played here")
+    there.song("Radiohead", "Creep", version="key=Gm&capo=0")
+    here.song("Oasis", "Wonderwall", version="key=Em&capo=2")
+    there.song("Oasis", "Wonderwall", version="key=Em&capo=0")
+    here.song("Muse", "Hysteria", version=None)
+    there.song("Estopa", "Tu Calorro", version=None)
+    return {find_song(here.conn, k).display: f"song/{k}" for (k,) in here.conn.execute("SELECT key FROM songs")} | {
+        find_song(there.conn, k).display: f"song/{k}" for (k,) in there.conn.execute("SELECT key FROM songs")}
+
+
+def compared_now(here):
+    result = run(here, "peer", "diff", HOST, "--json")
+    assert result.exit_code == 0, result.output
+    return json.loads(result.output)["compared"]
+
+
+def test_a_sync_by_push_with_choices_takes_and_gives_and_the_two_end_with_no_differences(two):
+    here, there, asked, _ = two
+    unit = two_conflicts(here, there)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes", f"--compared={compared_now(here)}",
+                 f"--choose=here:{unit['Radiohead - Creep']}", f"--choose=there:{unit['Oasis - Wonderwall']}")
+    assert result.exit_code == 0, result.output
+    assert "Here takes 2, there takes 2." in result.output and "Gave 2 changes to http://localhost:8737." in result.output
+
+    assert ("POST", "/peer/pull") not in asked  # given by a push: there needn't reach here
+    assert [p for m, p in asked if m == "POST"] == ["/peer/push/new", "/peer/push/file", "/peer/push"]
+    (job,) = there.app.queue.snapshot()
+    assert job.state == "done" and job.display == f"Changes from {here.cfg.library_name}"
+    assert sorted(job.units) == sorted([(unit["Radiohead - Creep"], "taken", ""), (unit["Muse - Hysteria"], "taken", "")])
+    assert not (there.cfg.state_dir / "peer").exists() or list((there.cfg.state_dir / "peer").iterdir()) == []
+
+    assert here.units() == there.units()
+    creep = find_song(there.conn, unit["Radiohead - Creep"].partition("/")[2])
+    assert (song_dir(there.cfg.library_dir, creep) / "sheet.txt").read_bytes() == b"[Am]Creep, as played here"
+    assert load_overrides(here.cfg.overrides_file).version == {
+        override_key(CREEP): "key=Am&capo=0", override_key("Oasis - Wonderwall"): "key=Em&capo=0"}
+    assert load_overrides(there.cfg.overrides_file).version == load_overrides(here.cfg.overrides_file).version
+    assert "Nothing differs." in run(here, "peer", "diff", HOST).output
+    there_id = sync.own_id(there.conn)
+    stored = db.kv_get_json(here.conn, "sync:peer:" + there_id)
+    assert stored == {"address": "http://localhost:8737", "name": there.cfg.library_name,
+                      "synced_at": stored["synced_at"]}
+    assert stored["synced_at"] == sync.base_of(here.conn, there_id)[unit["Muse - Hysteria"]][1]
+    assert sync.base_of(there.conn, sync.own_id(here.conn))[unit["Muse - Hysteria"]][0] == \
+        here.units()[unit["Muse - Hysteria"]].digest  # there agreed as it took the push
+
+
+def test_a_stale_comparison_is_refused_before_any_change(two):
+    here, there, asked, _ = two
+    unit = two_conflicts(here, there)
+    compared = compared_now(here)
+    there.song("Muse", "Uprising", version=None)  # there moved on since
+    before = here.units()
+    asked.clear()
+    result = run(here, "peer", "sync", HOST, "--push", "--yes", f"--compared={compared}",
+                 f"--choose=here:{unit['Radiohead - Creep']}", "--progress")
+    assert result.exit_code == 1 and "changed since that comparison" in result.output
+    assert asked == [("GET", "/api/peer/state")] and here.units() == before
+    assert there.app.queue.snapshot() == [] and not (here.cfg.state_dir / "backups").exists()
+    assert db.kv_get(here.conn, "sync:peer:" + sync.own_id(there.conn)) is None
+    assert '"stage":"compare","state":"failed"' in result.output
+
+
+def test_a_syncs_progress_is_its_stages_and_a_line_a_unit(two):
+    from caracole.get import read_progress_line
+
+    here, there, _, _ = two
+    unit = two_conflicts(here, there)
+    result = run(here, "peer", "sync", HOST, "--push", "--progress", f"--choose=skip:{unit['Radiohead - Creep']}",
+                 f"--choose=there:{unit['Oasis - Wonderwall']}")
+    assert result.exit_code == 0, result.output
+    events = [e for e in map(read_progress_line, result.output.splitlines()) if e is not None]
+    assert [(e["stage"], e["state"]) for e in events if "stage" in e] == [
+        ("compare", "running"), ("compare", "done"), ("take", "running"), ("take", "done"), ("give", "running"),
+        ("give", "done"), ("agree", "running"), ("agree", "done")]
+    assert sorted((e["id"], e["outcome"], e["why"]) for e in events if e.get("event") == "unit") == sorted([
+        (unit["Radiohead - Creep"], "left", "skipped, as chosen"), (unit["Oasis - Wonderwall"], "taken", ""),
+        (unit["Estopa - Tu Calorro"], "taken", ""), (unit["Muse - Hysteria"], "given", "")])
+    found = json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]
+    assert [(d["id"], d["proposal"]) for d in found] == [(unit["Radiohead - Creep"], "conflict")]
+
+
+def test_a_conflict_neither_chosen_nor_preferred_is_left_and_named(two):
+    here, there, _, _ = two
+    unit = two_conflicts(here, there)
+    result = run(here, "peer", "sync", HOST, "--push", "--yes")
+    assert result.exit_code == 0, result.output
+    assert f"Left {unit['Radiohead - Creep']}: a conflict: choose a side for it" in result.output
+    assert f"Left {unit['Oasis - Wonderwall']}: a conflict: choose a side for it" in result.output
+    found = json.loads(run(here, "peer", "diff", HOST, "--json").output)["differences"]
+    assert sorted(d["id"] for d in found) == sorted([unit["Radiohead - Creep"], unit["Oasis - Wonderwall"]])
+
+
+def test_choices_that_cant_be_read_or_name_no_difference_are_refused_before_anything(two):
+    here, there, asked, _ = two
+    unit = two_conflicts(here, there)
+    for args in (["--choose=maybe:" + unit["Radiohead - Creep"]], ["--choose=here"], ["--choose=here:nonsense"],
+                 ["--choose=here:" + unit["Radiohead - Creep"], "--choose=there:" + unit["Radiohead - Creep"]],
+                 ["--push", "--here", "192.168.1.10:8737"]):
+        result = run(here, "peer", "sync", HOST, "--yes", *args)
+        assert result.exit_code == 2, (args, result.output)
+    assert asked == []
+    result = run(here, "peer", "sync", HOST, "--yes", "--choose=here:song/nobody/nothing")
+    assert result.exit_code == 2 and "don't hold differently" in result.output
+    assert there.app.queue.snapshot() == [] and not (here.cfg.state_dir / "backups").exists()
