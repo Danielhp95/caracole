@@ -21,7 +21,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -100,49 +99,68 @@ class LibraryStoreTest {
 
     // --- songs.upsert_song ----------------------------------------------------------------------------------------
 
-    @Ignore("Phase B: needs lane keys (Normalize, SafeName) on main")
     @Test fun aSongIsAddedAsUpsertSongAddsIt() {
         val records = Corpus.records("library/add.jsonl")
         assertTrue(records.size >= 15)
-        for (r in records) phone { db, _ ->
-            val before = r.extra.getValue("before").jsonObject
-            for (pair in before.getValue("songs").jsonArray) {
-                val (artist, title) = pair.jsonArray.map { it.jsonPrimitive.content }
-                Upsert.upsertSong(db, listOf(artist), title, null, null, null, "wanted",
-                                  Normalize.identityKey(artist, title), "2026-10-01T00:00:00Z", NOW)
-            }
-            for (stone in before.getValue("removed").jsonArray.map { it.jsonObject }) {
-                db.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES (?, ?, ?, ?, ?)",
-                           text(stone["key"]), text(stone["artist"]), text(stone["title"]),
-                           io.github.danielhp95.caracole.core.json.PyJson.dumps(stone.getValue("source_ids")),
-                           text(stone["removed_at"]))
-            }
+        var throughTheStore = 0
+        for (r in records) {
             val kw = r.kw
-            val call = {
-                Upsert.upsertSong(db, kw.getValue("artists").jsonArray.map { it.jsonPrimitive.content },
-                                  text(kw["title"])!!, text(kw["album"]), long(kw["duration_ms"]), text(kw["isrc"]),
-                                  text(kw["source"])!!, text(kw["source_id"])!!, text(kw["added_at"])!!, NOW)
+            val artists = kw.getValue("artists").jsonArray.map { it.jsonPrimitive.content }
+            // Every case through the port of upsert_song itself, as wanted.txt's sync calls it.
+            addCase(r) { db, _ ->
+                Upsert.upsertSong(db, artists, text(kw["title"])!!, text(kw["album"]), long(kw["duration_ms"]),
+                                  text(kw["isrc"]), text(kw["source"])!!, text(kw["source_id"])!!,
+                                  text(kw["added_at"])!!, NOW).let { it.id to it.created }
             }
-            if (r.err != null) {
-                assertEquals("ValueError", r.err, r.case())
-                assertFailsWith<IllegalArgumentException>(r.case()) { call() }
-                return@phone
+            // And a song of one artist through LibraryStore.add, the phone's one way to add one: its own strip, key,
+            // source id and variant, which must come to the same.
+            if (artists.size == 1 && text(kw["isrc"]) == null && text(kw["source"]) == "wanted") {
+                throughTheStore++
+                addCase(r) { db, store ->
+                    val existed = db.one("SELECT COUNT(*) FROM songs") { it.long(0) }
+                    val song = store.add(db, artists[0], text(kw["title"])!!, text(kw["album"]), long(kw["duration_ms"]),
+                                         now = text(kw["added_at"])!!)
+                    song.id to (db.one("SELECT COUNT(*) FROM songs") { it.long(0) } != existed)
+                }
             }
-            val added = call()
-            val out = r.out!!.jsonObject
-            assertEquals(out["created"]?.jsonPrimitive?.content?.toBoolean(), added.created, r.case())
-            val song = Songs.byId(db, added.id)!!
-            assertEquals(canonical(out.getValue("song")), canonical(songJson(song)), r.case())
-            assertEquals(out.getValue("songs").jsonArray.map { row -> row.jsonArray.map { it.jsonPrimitive.content } },
-                         db.query("SELECT key, artist, title FROM songs ORDER BY id") {
-                             listOf(it.text(0)!!, it.text(1)!!, it.text(2)!!)
-                         }, r.case())
-            assertEquals(out.getValue("removed").jsonArray.map { it.jsonPrimitive.content },
-                         Songs.removed(db).map { it.key }, r.case())
         }
+        assertTrue(throughTheStore >= 15, "most cases through the store too: $throughTheStore")
     }
 
-    @Ignore("Phase B: needs lane keys (Normalize, SafeName) on main")
+    /** One add.jsonl case: its library [before] made, then [add]'s song (its id, and whether it was made) checked
+     * against the record's `out`, or its ValueError. */
+    private fun addCase(r: Record, add: (Db, LibraryStore) -> Pair<Long, Boolean>) = phone { db, store ->
+        val before = r.extra.getValue("before").jsonObject
+        for (pair in before.getValue("songs").jsonArray) {
+            val (artist, title) = pair.jsonArray.map { it.jsonPrimitive.content }
+            Upsert.upsertSong(db, listOf(artist), title, null, null, null, "wanted",
+                              Normalize.identityKey(artist, title), "2026-10-01T00:00:00Z", NOW)
+        }
+        for (stone in before.getValue("removed").jsonArray.map { it.jsonObject }) {
+            db.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES (?, ?, ?, ?, ?)",
+                       text(stone["key"]), text(stone["artist"]), text(stone["title"]),
+                       io.github.danielhp95.caracole.core.json.PyJson.dumps(stone.getValue("source_ids")),
+                       text(stone["removed_at"]))
+        }
+        if (r.err != null) {
+            assertEquals("ValueError", r.err, r.case())
+            assertFailsWith<IllegalArgumentException>(r.case()) { add(db, store) }
+            assertEquals(before.getValue("songs").jsonArray.size.toLong(), db.one("SELECT COUNT(*) FROM songs") { it.long(0) })
+            return@phone
+        }
+        val (id, created) = add(db, store)
+        val out = r.out!!.jsonObject
+        assertEquals(out["created"]?.jsonPrimitive?.content?.toBoolean(), created, r.case())
+        val song = Songs.byId(db, id)!!
+        assertEquals(canonical(out.getValue("song")), canonical(songJson(song)), r.case())
+        assertEquals(out.getValue("songs").jsonArray.map { row -> row.jsonArray.map { it.jsonPrimitive.content } },
+                     db.query("SELECT key, artist, title FROM songs ORDER BY id") {
+                         listOf(it.text(0)!!, it.text(1)!!, it.text(2)!!)
+                     }, r.case())
+        assertEquals(out.getValue("removed").jsonArray.map { it.jsonPrimitive.content },
+                     Songs.removed(db).map { it.key }, r.case())
+    }
+
     @Test fun addIsUpsertSongForOneSongOfThePhone() {
         val record = Corpus.records("library/add.jsonl").first { it.case() == "a new song" }
         phone { db, store ->
@@ -170,7 +188,6 @@ class LibraryStoreTest {
 
     // --- removal.remove_song --------------------------------------------------------------------------------------
 
-    @Ignore("Phase B: needs lane keys (Normalize, SafeName) on main")
     @Test fun aSongIsRemovedAsRemoveSongRemovesIt() {
         val records = Corpus.records("library/remove.jsonl")
         assertTrue(records.size >= 3)
@@ -199,7 +216,6 @@ class LibraryStoreTest {
         }
     }
 
-    @Ignore("Phase B: needs lane keys (Normalize, SafeName) on main")
     @Test fun aRemovedSongStaysRemovedUntilItIsAskedForAgainThenComesBackNew() {
         phone("library/fixtures/remove.jsonl") { db, store ->
             val before = Songs.byKey(db, "radiohead/karma-police")!!
@@ -221,7 +237,6 @@ class LibraryStoreTest {
         }
     }
 
-    @Ignore("Phase B: needs lane keys (Normalize, SafeName) on main")
     @Test fun aFileTheRemovalDidntWriteStays() {
         phone("library/fixtures/remove.jsonl") { db, store ->
             val song = Songs.byKey(db, "radiohead/karma-police")!!
@@ -234,7 +249,6 @@ class LibraryStoreTest {
 
     // --- songs.ensure_current_keys --------------------------------------------------------------------------------
 
-    @Ignore("Phase B: needs lane keys (Normalize, SafeName) on main")
     @Test fun songsAndTombstonesAreRekeyedAsEnsureCurrentKeysRekeysThem() {
         val r = Corpus.records("library/ensure_current_keys.jsonl").single()
         phone("library/fixtures/${text(r.extra["fixture"])}.jsonl") { db, store ->
@@ -255,7 +269,6 @@ class LibraryStoreTest {
 
     // --- the song's folder ----------------------------------------------------------------------------------------
 
-    @Ignore("Phase B: needs lane keys (Normalize, SafeName) on main")
     @Test fun aSongsFileIsAFileOfItsFolderNeverThroughALink() {
         phone { db, store ->
             val song = store.add(db, "Radiohead", "Creep", now = NOW)

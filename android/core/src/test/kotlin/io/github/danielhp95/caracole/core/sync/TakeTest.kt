@@ -20,7 +20,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
-import org.junit.Ignore
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -112,7 +111,6 @@ class TakeTest {
 
     // --- apply_units ----------------------------------------------------------------------------------------------
 
-    @Ignore("Phase B: needs lanes keys and sync-units on main")
     @Test fun eachTakeDoesWhatPythonsDoes() {
         val records = Corpus.records("sync/take.jsonl")
         assertTrue(records.size >= 15)
@@ -146,6 +144,22 @@ class TakeTest {
             assertEquals(out.getValue("songs").jsonArray.map { it.jsonPrimitive.content.toLong() }, done.songs, case)
             phone.write { db ->
                 assertEquals(Canonical.write(out.getValue("after")), Canonical.write(after(db)), case)
+                // What a song's value leaves out: its record's other columns, its versions' (rating, votes, coverage,
+                // fetched_at), its files' kept_rank, the carried kv under the phone's own id.
+                val documents = out.getValue("documents").jsonObject
+                assertEquals(documents.keys, after(db).keys.filter { it.startsWith("song/") }.toSet(), case)
+                for ((id, want) in documents) {
+                    assertEquals(Canonical.write(want), Canonical.write(Units.document(db, phone.library, id) ?: JsonNull),
+                                 "$case: $id's document")
+                }
+                assertEquals(out.getValue("ids").jsonObject.mapValues { it.value.jsonPrimitive.content.toLong() },
+                             db.query("SELECT id, key FROM songs ORDER BY id") { it.text(1)!! to it.long(0) }.toMap(), case)
+                // The render records of a folder moved go; the carried kv is the phone's id's.
+                assertEquals(out.getValue("kv").jsonArray.map { kv -> kv.jsonArray.map { it.jsonPrimitive.content } },
+                             db.query("SELECT key, value FROM kv WHERE substr(key, 1, 7) = 'render:' " +
+                                      "OR substr(key, 1, 15) = 'sheet_versions:' ORDER BY key") {
+                                 listOf(it.text(0)!!, it.text(1)!!)
+                             }, case)
                 assertEquals(strings("paths"), db.query("SELECT path FROM files ORDER BY path") { it.text(0)!! }, case)
             }
             assertEquals(out.getValue("files").jsonArray.map { f -> f.jsonArray.map { it.jsonPrimitive.content } },
@@ -178,6 +192,90 @@ class TakeTest {
         phone.write { db -> assertEquals(emptyList(), Songs.removed(db), "the tombstone the peer has no longer goes") }
     }
 
+    /** A source of [units]' documents alone, each wanted with the digest of its value. */
+    private fun documents(vararg units: Pair<String, JsonObject?>): Pair<InlineSource, List<Pair<String, String?>>> =
+        InlineSource(units.toMap(), emptyList()) to units.map { (id, doc) ->
+            id to doc?.let { Canonical.digest(Units.valueOfDocument(id, it)!!) }
+        }
+
+    private fun json(text: String): JsonObject = Canonical.parse(text) as JsonObject
+
+    @Test fun aLibraryThatCantBeReadLeavesEveryUnitTheComparisonNamedSayingWhy() {
+        val phone = phone()
+        phone.write { db ->
+            db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString())
+            db.execute("INSERT INTO phone_songbooks (key, name, songs, position) VALUES ('bad', 'Bad', '{}', 0)")
+        }
+        val (source, wanted) = documents("alias/soda" to json("""{"slugs": ["soda-stereo"]}"""),
+                                         "block/4242" to json("""{"tab": 4242}"""))
+        // As _digests_here: the units the comparison named are left, the others are taken all the same.
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, mapOf("alias/soda" to null), NOW) }
+        assertEquals(listOf("alias/soda" to "this library can't be read: the songbook Bad's songs aren't a list"), done.left)
+        assertEquals(listOf("block/4242"), done.taken)
+    }
+
+    @Test fun theDatabasesOwnFailureStopsTheTakeWhereAUnitsRefusalLeavesThatUnit() {
+        val phone = phone()
+        phone.write { db ->
+            db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString())
+            db.execute("INSERT INTO removed (key, artist, title, source_ids, removed_at) VALUES " +
+                       "('oasis/wonderwall', 'Oasis', 'Wonderwall', '{}', '2026-10-01T00:00:00Z')")
+            db.execute("DROP TABLE phone_overrides") // every overrides entry's write now fails as SQLite's own error
+        }
+        val (source, wanted) = documents("alias/soda" to json("""{"slugs": ["soda-stereo"]}"""),
+                                         "block/4242" to json("""{"tab": 4242}"""), "removed/oasis/wonderwall" to null)
+        val told = mutableListOf<String>()
+        val failed = assertFailsWith<androidx.sqlite.SQLiteException> {
+            phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) { id, _ -> told += id } }
+        }
+        assertTrue("no such table: phone_overrides" in failed.message!!, failed.message)
+        assertTrue(Take.databaseFailed(failed))
+        assertEquals(listOf("removed/oasis/wonderwall"), told, "the units before it taken, none tried after it")
+        phone.write { db -> assertEquals(emptyList(), Songs.removed(db), "and the unit taken stays taken") }
+        // A constraint's refusal (sqlite3's IntegrityError) is the unit's own: take.jsonl's whole_or_nothing leaves it.
+        val check = assertFailsWith<androidx.sqlite.SQLiteException> {
+            phone.write { db -> db.execute("INSERT INTO versions (song_id, provider, tab_id, slot) VALUES (1, 'ug', '1', 'x')") }
+        }
+        assertTrue(!Take.databaseFailed(check), check.message)
+    }
+
+    @Test fun aSongbooksSettingIsCheckedAsCheckSettingChecksIt() {
+        // Python's answers: songbook.check_setting(**parts), its SongbookError's words after "a setting: ".
+        val problems = listOf(
+            """{"key": "H"}""" to """key must be a tonic such as "G", "F#" or "Bb", got 'H'""",
+            """{"key": "g"}""" to """key must be a tonic such as "G", "F#" or "Bb", got 'g'""",
+            """{"key": 1}""" to """key must be a tonic such as "G", "F#" or "Bb", got 1""",
+            """{"key": ["G"]}""" to """key must be a tonic such as "G", "F#" or "Bb", got ['G']""",
+            """{"key": {"a": 1}}""" to """key must be a tonic such as "G", "F#" or "Bb", got {'a': 1}""",
+            """{"mode": "major"}""" to "mode must be one of ionian, dorian, phrygian, lydian, mixolydian, aeolian, locrian, got 'major'",
+            """{"capo": 12}""" to "capo must be a fret from 0 to 11, got 12",
+            """{"capo": -1}""" to "capo must be a fret from 0 to 11, got -1",
+            """{"capo": true}""" to "capo must be a fret from 0 to 11, got True",
+            """{"capo": 2.0}""" to "capo must be a fret from 0 to 11, got 2.0",
+            """{"capo": "2"}""" to "capo must be a fret from 0 to 11, got '2'",
+            """{"key": "Bb", "capo": 12}""" to "capo must be a fret from 0 to 11, got 12",
+            """{"instrument": "banjo"}""" to "instrument must be one of guitar, ukulele, ukulele-low-g, baritone, piano, harmonica, flute, recorder, got 'banjo'",
+        )
+        for ((parts, problem) in problems) assertEquals(problem, Take.settingProblem(json(parts)), parts)
+        for (parts in listOf("""{"key": "G#"}""", """{"mode": "dorian"}""", """{"instrument": "ukulele-low-g"}""",
+                             """{"capo": -0}""", """{"capo": 11, "key": null}""", "{}")) {
+            assertNull(Take.settingProblem(json(parts)), parts)
+        }
+        val phone = phone()
+        phone.write { db -> db.kvSet("songs:key_version", Normalize.KEY_VERSION.toString()) }
+        val (source, wanted) = documents(
+            "songbook/campfire" to json("""{"name": "Campfire", "songs": [["Radiohead - Creep", {"capo": 12}]]}"""),
+            "songbook/road" to json("""{"name": "Road", "songs": [["Radiohead - Creep", {"tempo": 90}]]}"""),
+            "songbook/home" to json("""{"name": "Home", "songs": [["Radiohead - Creep", {"capo": 2, "key": "G", "mode": null}]]}"""),
+        )
+        val done = phone.write { db -> Take.applyUnits(db, phone.store, source, wanted, emptyMap(), NOW) }
+        assertEquals(listOf("songbook/home"), done.taken)
+        assertEquals(listOf("songbook/campfire" to "a setting: capo must be a fret from 0 to 11, got 12",
+                            "songbook/road" to "its document can't be read (TypeError: check_setting() got an unexpected " +
+                                "keyword argument 'tempo')"), done.left)
+        phone.write { db -> assertEquals(listOf("Home"), io.github.danielhp95.caracole.core.library.SongbookStore.all(db).map { it.name }) }
+    }
+
     /** This side's units, as take.jsonl's `after` writes them: `{id: {label, digest, value}}`. */
     private fun after(db: Db): JsonObject = JsonObject(Units.libraryState(db).values.associate { unit ->
         unit.id to JsonObject(mapOf("label" to JsonPrimitive(unit.label), "digest" to JsonPrimitive(unit.digest),
@@ -203,7 +301,6 @@ class TakeTest {
         return a.size - b.size
     }
 
-    @Ignore("Phase B: needs lanes keys and sync-units on main")
     @Test fun everyFixtureTakenIntoAnEmptyPhoneIsItsValuesAndDigests() {
         val values = Corpus.records("sync/values.jsonl")
         val documents = Corpus.records("sync/documents.jsonl").filter { it.fn.endsWith(".unit_document") }
@@ -227,6 +324,9 @@ class TakeTest {
                     assertEquals(text(unit["label"]), state.getValue(id).label, "$fixture $id")
                     assertEquals(text(unit["digest"]), state.getValue(id).digest, "$fixture $id")
                     assertEquals(Canonical.write(unit.getValue("value")), Canonical.write(Units.value(db, id)!!), "$fixture $id")
+                    // And all a document holds beyond the value: the phone's document is the computer's.
+                    assertEquals(Canonical.write(units.getValue(id)), Canonical.write(Units.document(db, phone.library, id)!!),
+                                 "$fixture $id's document")
                 }
             }
         }
@@ -243,7 +343,6 @@ class TakeTest {
         }
     }
 
-    @Ignore("Phase B: needs lanes keys and sync-units on main")
     @Test fun aUnitChangedOnEitherSideSinceTheComparisonIsLeftAsItIs() {
         val record = Corpus.records("sync/take.jsonl").first { text(it.extra["case"]) == "names_as_written" }
         val source = InlineSource.of(record.extra.getValue("source").jsonObject)
@@ -262,7 +361,6 @@ class TakeTest {
         }
     }
 
-    @Ignore("Phase B: needs lanes keys and sync-units on main")
     @Test fun aFileTheSourceCantGiveChangesNothingOfThatSong() {
         val record = Corpus.records("sync/take.jsonl").first { text(it.extra["case"]) == "new_here" }
         val full = InlineSource.of(record.extra.getValue("source").jsonObject)
@@ -315,7 +413,6 @@ class TakeTest {
         }
     }
 
-    @Ignore("Phase B: needs lanes keys and sync-units on main")
     @Test fun aBackupMadeBeforeATakeRestoresTheLibraryTablesExactly() {
         val record = Corpus.records("sync/take.jsonl").first { text(it.extra["case"]) == "respelling" }
         val phone = phone("sync/fixtures/take_respelling.jsonl")
