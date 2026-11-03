@@ -1,34 +1,139 @@
 package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.db.Database
-import io.github.danielhp95.caracole.core.stub
-import io.github.danielhp95.caracole.server.http.Body
+import io.github.danielhp95.caracole.core.db.DatabaseTooNew
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.server.http.GetAnswer
+import io.github.danielhp95.caracole.server.http.PyUrl
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.page.SongCards
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import java.net.URLDecoder
+import io.github.danielhp95.caracole.server.routes.search.AnswerCache
+import io.github.danielhp95.caracole.server.routes.search.Answered
+import io.github.danielhp95.caracole.server.routes.search.Artists
+import io.github.danielhp95.caracole.server.routes.search.Found
+import io.github.danielhp95.caracole.server.routes.search.IndexAnswers
+import io.github.danielhp95.caracole.server.routes.search.SearchQuery
+import io.github.danielhp95.caracole.server.routes.search.Searches
+import io.github.danielhp95.caracole.server.routes.search.SongForms
+import io.github.danielhp95.caracole.server.routes.search.Superseded
+import io.github.danielhp95.caracole.server.routes.search.jsonResponse
+import io.github.danielhp95.caracole.server.routes.search.obj
+import java.io.IOException
 
-/** /api/search and /api/artist on the phone (lane search-routes; until then, a search that finds nothing). */
+/**
+ * caracole serve's search on the phone (web/search_routes.py's `/api/search` and `/api/artist`), over the phone's
+ * own database, so that the library page's search box works with the computer off.
+ *
+ *     GET /api/search?q=&box=  your library and the offline indexes, as JSON, for a search box (`box`, the id its
+ *                              page made): search_routes.py's answer, key for key, with `progression`,
+ *                              `lacuerda_unlisted`, `lacuerda_search` and `youtube` null (not on the phone in this
+ *                              round: the page then sends nothing by itself)
+ *     GET /api/artist?key=     an artist of the offline index: their songs, most tabbed first, 50 from `offset`, and
+ *                              yours by them; `?lacuerda=SLUG` (`?lacuerda_name=NAME`), a LaCuerda artist's songs the
+ *                              index holds; `?harptabs=PATH`, a harptabs.com artist's
+ *
+ * A query is its words joined by one space, cut at 200 code points; one of fewer than three letters or digits (two
+ * with Chinese) looks nowhere (`short`). One search runs at a time, in the order they were asked, and a search typed
+ * on in the same box wins over that box's older ones, waiting or running: those answer `{query, superseded: true}`
+ * ([Searches]); another box's never stops one. The offline indexes' answers are kept 300 s, the 128 made last
+ * ([AnswerCache]), until [invalidate]. A song of your library comes as its card has it ([cards]): its files, where its
+ * sheet came from, its key. [enabled] names the sites that are on (caracole.toml's switchable providers). Reads go
+ * through [Database.read]; a database that can't be read is 503, `{query, error}` (an artist's, `{error}`).
+ */
 class SearchRoutes(val database: Database, val cards: SongCards,
                    val enabled: Set<String> = setOf("gtptabs", "musescore", "harptabs", "gametabs")) : RouteModule {
+    internal val searches = Searches()
+    internal val answers = AnswerCache<IndexAnswers>()
+    private val forms = SongForms()
+
     override val routes: List<Route> = listOf(
-        Route("GET", "/api/search", "a search of your songs and the indexes", get = GetAnswer { request ->
-            stub("lane search-routes") {
-                val query = request.target.substringAfter('?', "").split('&')
-                    .firstOrNull { it.startsWith("q=") }?.let { URLDecoder.decode(it.substring(2), "UTF-8") } ?: ""
-                val found = JsonObject(mapOf("query" to JsonPrimitive(query), "library" to JsonArray(emptyList()),
-                                             "index" to JsonArray(emptyList()), "short" to JsonPrimitive(true)))
-                Response(200, Body.Bytes(found.toString().toByteArray()),
-                         mutableListOf("Content-Type" to "application/json; charset=utf-8"))
-            }
-        }),
+        Route("GET", "/api/search", "your library and the offline indexes, as JSON, for a search box (box)",
+              get = GetAnswer { search(PyUrl.query(it.target)) }),
+        Route("GET", "/api/artist", "an artist of an offline index (key, lacuerda, lacuerda_name, harptabs): their " +
+                  "songs, and yours by them", get = GetAnswer { artist(PyUrl.query(it.target)) }),
     )
 
-    /** After an index import or a sync: what the routes keep of the indexes is read again. */
-    fun invalidate() = stub("lane search-routes") { }
+    /** After an index import or a sync: the answers kept are dropped, so a search finds what the indexes hold now. */
+    fun invalidate() = answers.clear()
+
+    /** search_routes.api_search. */
+    private fun search(asked: Map<String, String>): Response {
+        val q = SearchQuery.of(asked["q"] ?: "")
+        if (SearchQuery.short(q)) {
+            return jsonResponse(200, obj("query" to q, "library" to emptyList<Any>(), "index" to emptyList<Any>(),
+                                         "short" to true))
+        }
+        val box = asked["box"]?.takeIf { BOX.matches(it) } ?: ""
+        val superseded = obj("query" to q, "superseded" to true)
+        return searches.search(box) { ticket ->
+            try {
+                database.read { db -> jsonResponse(200, Found(db, enabled, cards, forms, answers, ticket::check).answer(q)) }
+            } catch (e: Exception) {
+                if (e is Superseded || !unreadable(e)) throw e
+                if (ticket.over) throw Superseded()  // stopped by a newer one: it reads now
+                jsonResponse(503, obj("query" to q, "error" to "The database can't be read: ${e.message ?: e}"))
+            }
+        } ?: jsonResponse(200, superseded)
+    }
+
+    /** search_routes._artist: harptabs.com's before LaCuerda's, LaCuerda's before UG's; each field stripped. */
+    private fun artist(asked: Map<String, String>): Response {
+        if ("harptabs" in asked) return harptabsArtist(Py.strip(asked.getValue("harptabs")))
+        if ("lacuerda" in asked || "lacuerda_name" in asked) {
+            return lacuerdaArtist(Py.strip(asked["lacuerda"] ?: ""), Py.split(asked["lacuerda_name"] ?: "").joinToString(" "))
+        }
+        return ugArtist(Py.strip(asked["key"] ?: ""), Py.strip(asked["offset"] ?: "0"))
+    }
+
+    /** search_routes.api_artist. */
+    private fun ugArtist(key: String, offset: String): Response {
+        if (key.isEmpty()) return jsonResponse(400, obj("error" to "Which artist? The address names none."))
+        if (offset.isEmpty() || !offset.all { it in '0'..'9' }) {
+            return jsonResponse(400, obj("error" to "That offset isn't a number."))
+        }
+        return artistAlone { it.ug(key, offset) }
+    }
+
+    /** search_routes.api_lacuerda_artist. */
+    private fun lacuerdaArtist(slug: String, name: String): Response {
+        if (slug.isEmpty() && name.isEmpty()) return jsonResponse(400, obj("error" to "Which artist? The address names none."))
+        return artistAlone { it.lacuerda(slug, name) }
+    }
+
+    /** search_routes.api_harptabs_artist. */
+    private fun harptabsArtist(path: String): Response {
+        if (path.isEmpty()) return jsonResponse(400, obj("error" to "Which artist? The address names none."))
+        return artistAlone { it.harptabs(path) }
+    }
+
+    /** An artist's answer, read one at a time with the searches. */
+    private fun artistAlone(answer: (Artists) -> Answered): Response = searches.alone {
+        try {
+            val answered = database.read { db -> answer(Artists(db, enabled, cards, forms)) }
+            jsonResponse(answered.status, answered.json)
+        } catch (e: Exception) {
+            if (!unreadable(e)) throw e
+            jsonResponse(503, obj("error" to "The database can't be read: ${e.message ?: e}"))
+        }
+    }
+
+    private companion object {
+        /** search_routes._BOX: a search box's id, as its page makes it. */
+        val BOX = Regex("[A-Za-z0-9_-]{1,64}")
+
+        /** Python's `(sqlite3.Error, OSError)`: an error of the database (the bundled SQLite's SQLiteException, which
+         * on Android is android.database.SQLException, so it is told by its class's name), a database too new, or a
+         * file that can't be read. */
+        fun unreadable(e: Throwable): Boolean {
+            if (e is IOException || e is DatabaseTooNew) return true
+            var c: Class<*>? = e.javaClass
+            while (c != null) {
+                if (c.name == "androidx.sqlite.SQLiteException" || c.name == "android.database.SQLException") return true
+                c = c.superclass
+            }
+            return false
+        }
+    }
 }
