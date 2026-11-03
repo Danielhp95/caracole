@@ -1,0 +1,1647 @@
+{
+ "header": {
+  "corpus": "schema/pragmas",
+  "header": true,
+  "made_by": "tests/test_conformance_schema.py",
+  "versions": {
+   "caracole": "0.1.0",
+   "pypinyin": "0.55.0",
+   "python": "3.14.7",
+   "rapidfuzz": "3.14.5",
+   "sqlite": "3.53.3",
+   "unicodedata": "16.0.0"
+  }
+ },
+ "tables": {
+  "events": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "run",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "provider",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "url",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "status",
+    "notnull": 0,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 6,
+    "dflt_value": null,
+    "name": "decision",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 7,
+    "dflt_value": null,
+    "name": "message",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "files": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "version_id",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "song_id",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "name",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "sha256",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": null,
+    "name": "kept_rank",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 7,
+    "dflt_value": null,
+    "name": "created_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "gametabs_game_tabs": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "page",
+    "notnull": 1,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 1,
+    "pk": 2,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "game",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "title",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "title_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": "'[]'",
+    "name": "instruments",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": "'[]'",
+    "name": "composers",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 7,
+    "dflt_value": "0",
+    "name": "views",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 8,
+    "dflt_value": null,
+    "name": "rating",
+    "notnull": 0,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 9,
+    "dflt_value": null,
+    "name": "place",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "gametabs_games": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "game",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "name",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": "0",
+    "name": "tabs",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "read_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "gametabs_index": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "kind",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "game",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "slug",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "page",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": null,
+    "name": "slug_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 7,
+    "dflt_value": null,
+    "name": "sitemap",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "gtptabs_index": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "artist_path",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "artist_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "title_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "base_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "sitemap",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "harptabs_artist_tabs": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "artist",
+    "notnull": 1,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "tab_id",
+    "notnull": 1,
+    "pk": 2,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "title",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "song_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "harp_key",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": null,
+    "name": "difficulty",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 7,
+    "dflt_value": "0",
+    "name": "views",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 8,
+    "dflt_value": null,
+    "name": "rating",
+    "notnull": 0,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 9,
+    "dflt_value": null,
+    "name": "place",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   }
+  ],
+  "harptabs_artists": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "page_id",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "name",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": "0",
+    "name": "tabs",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "read_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "harptabs_index": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "kind",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "page_id",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "sitemap",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "kv": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "value",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "lacuerda_index": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "artist_slug",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "artist",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "artist_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": "''",
+    "name": "title",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": "''",
+    "name": "title_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": "0",
+    "name": "songs",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 7,
+    "dflt_value": "''",
+    "name": "versions",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 8,
+    "dflt_value": "0",
+    "name": "acordes",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 9,
+    "dflt_value": null,
+    "name": "popular",
+    "notnull": 0,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 10,
+    "dflt_value": null,
+    "name": "page",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "musescore_index": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "page_id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "path",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "title_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "sitemap",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "removed": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 0,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "artist",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "title",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": "'{}'",
+    "name": "source_ids",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "removed_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "songs": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "artist",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "title",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "artists",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "album",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": null,
+    "name": "duration_ms",
+    "notnull": 0,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 7,
+    "dflt_value": null,
+    "name": "isrc",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 8,
+    "dflt_value": "'{}'",
+    "name": "source_ids",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 9,
+    "dflt_value": null,
+    "name": "added_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 10,
+    "dflt_value": null,
+    "name": "variant",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 11,
+    "dflt_value": "'wanted'",
+    "name": "status",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 12,
+    "dflt_value": "0",
+    "name": "review",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 13,
+    "dflt_value": null,
+    "name": "match_decision",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 14,
+    "dflt_value": null,
+    "name": "match_step",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 15,
+    "dflt_value": null,
+    "name": "match_score",
+    "notnull": 0,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 16,
+    "dflt_value": null,
+    "name": "match_artist_key",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 17,
+    "dflt_value": null,
+    "name": "match_song_key",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 18,
+    "dflt_value": "'[]'",
+    "name": "match_candidates",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 19,
+    "dflt_value": null,
+    "name": "matched_at",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 20,
+    "dflt_value": "1",
+    "name": "ug_dirty",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 21,
+    "dflt_value": null,
+    "name": "ug_checked_at",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 22,
+    "dflt_value": "'pending'",
+    "name": "lyrics_status",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 23,
+    "dflt_value": null,
+    "name": "lyrics_json",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 24,
+    "dflt_value": null,
+    "name": "lyrics_at",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 25,
+    "dflt_value": null,
+    "name": "lacuerda_checked_at",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 26,
+    "dflt_value": null,
+    "name": "audio_path",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 27,
+    "dflt_value": null,
+    "name": "audio_mtime",
+    "notnull": 0,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 28,
+    "dflt_value": null,
+    "name": "autochords_mtime",
+    "notnull": 0,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 29,
+    "dflt_value": null,
+    "name": "created_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 30,
+    "dflt_value": null,
+    "name": "updated_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "ug_artist_tabs": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "page",
+    "notnull": 1,
+    "pk": 1,
+    "type": "TEXT"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "tab_id",
+    "notnull": 1,
+    "pk": 2,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "type",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "artist",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "title",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "label",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": "0",
+    "name": "rating",
+    "notnull": 1,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 7,
+    "dflt_value": "0",
+    "name": "votes",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 8,
+    "dflt_value": null,
+    "name": "url",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 9,
+    "dflt_value": null,
+    "name": "artist_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 10,
+    "dflt_value": null,
+    "name": "song_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 11,
+    "dflt_value": null,
+    "name": "artist_forms",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 12,
+    "dflt_value": null,
+    "name": "title_forms",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 13,
+    "dflt_value": null,
+    "name": "forms",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 14,
+    "dflt_value": null,
+    "name": "read_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "ug_artist_words": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "term",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "doc",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "cnt",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_artists": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "artist_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "ug_artists_fts": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "artist_key",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_artists_fts_config": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "k",
+    "notnull": 1,
+    "pk": 1,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "v",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_artists_fts_data": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "block",
+    "notnull": 0,
+    "pk": 0,
+    "type": "BLOB"
+   }
+  ],
+  "ug_artists_fts_docsize": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "sz",
+    "notnull": 0,
+    "pk": 0,
+    "type": "BLOB"
+   }
+  ],
+  "ug_artists_fts_idx": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "segid",
+    "notnull": 1,
+    "pk": 1,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "term",
+    "notnull": 1,
+    "pk": 2,
+    "type": ""
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "pgno",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_index": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "tab_id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "artist_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "song_key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "type",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "sitemap",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "first_seen",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": "''",
+    "name": "path",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "ug_index_fts": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "artist_key",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "song_key",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_index_fts_config": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "k",
+    "notnull": 1,
+    "pk": 1,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "v",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_index_fts_data": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "block",
+    "notnull": 0,
+    "pk": 0,
+    "type": "BLOB"
+   }
+  ],
+  "ug_index_fts_idx": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "segid",
+    "notnull": 1,
+    "pk": 1,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "term",
+    "notnull": 1,
+    "pk": 2,
+    "type": ""
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "pgno",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_key_words": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "term",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "ug_keys": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   }
+  ],
+  "ug_keys_fts": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "key",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_keys_fts_config": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "k",
+    "notnull": 1,
+    "pk": 1,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "v",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "ug_keys_fts_data": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "block",
+    "notnull": 0,
+    "pk": 0,
+    "type": "BLOB"
+   }
+  ],
+  "ug_keys_fts_docsize": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "sz",
+    "notnull": 0,
+    "pk": 0,
+    "type": "BLOB"
+   }
+  ],
+  "ug_keys_fts_idx": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "segid",
+    "notnull": 1,
+    "pk": 1,
+    "type": ""
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "term",
+    "notnull": 1,
+    "pk": 2,
+    "type": ""
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "pgno",
+    "notnull": 0,
+    "pk": 0,
+    "type": ""
+   }
+  ],
+  "versions": [
+   {
+    "cid": 0,
+    "dflt_value": null,
+    "name": "id",
+    "notnull": 0,
+    "pk": 1,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 1,
+    "dflt_value": null,
+    "name": "provider",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 2,
+    "dflt_value": null,
+    "name": "tab_id",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 3,
+    "dflt_value": null,
+    "name": "song_id",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 4,
+    "dflt_value": null,
+    "name": "slot",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 5,
+    "dflt_value": null,
+    "name": "kind",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 6,
+    "dflt_value": "0",
+    "name": "rating",
+    "notnull": 1,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 7,
+    "dflt_value": "0",
+    "name": "votes",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 8,
+    "dflt_value": "1",
+    "name": "version",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 9,
+    "dflt_value": null,
+    "name": "label",
+    "notnull": 0,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 10,
+    "dflt_value": null,
+    "name": "coverage",
+    "notnull": 0,
+    "pk": 0,
+    "type": "REAL"
+   },
+   {
+    "cid": 11,
+    "dflt_value": null,
+    "name": "url",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 12,
+    "dflt_value": "'{}'",
+    "name": "raw",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 13,
+    "dflt_value": null,
+    "name": "fetched_at",
+    "notnull": 1,
+    "pk": 0,
+    "type": "TEXT"
+   },
+   {
+    "cid": 14,
+    "dflt_value": null,
+    "name": "pick_rank",
+    "notnull": 0,
+    "pk": 0,
+    "type": "INTEGER"
+   },
+   {
+    "cid": 15,
+    "dflt_value": "0",
+    "name": "gone",
+    "notnull": 1,
+    "pk": 0,
+    "type": "INTEGER"
+   }
+  ]
+ }
+}

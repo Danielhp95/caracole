@@ -575,6 +575,49 @@ def _plan_ug(conn: sqlite3.Connection, plan: _Plan) -> None:
         plan.records.append("the index built whole")
 
 
+# --- the newest read -----------------------------------------------------------------------------------------------
+
+
+def newest(conn: sqlite3.Connection) -> dict[str, str]:
+    """Each site's newest read, by ``SITES``' order: the latest of the times a merge compares (its sitemaps' or
+    listing pages' records, the read of each page of its that has one, and its progress records), as stored
+    (``stamps.stamp``); a site with none is left out. A sync's state document says it (``peer_sync.state_document``'s
+    ``indexes``), so that the other side asks only for the indexes read more recently than its own.
+
+    What has no time of its own moves no site's stamp, as a merge compares none of it: LaCuerda's artist pages and its
+    search's rows (a night that reads only those, its popular pages or a search, leaves ``lacuerda`` where it was,
+    and the other side has them at the next listing page read), and UG's sitemap rows apart from their sitemap's
+    record."""
+    from caracole import gametabs_fetch, gtptabs_fetch, harptabs_fetch, lacuerda_index, musescore_fetch
+    from caracole.ug import index as ug
+
+    def recorded(key: str, stamp: str) -> list[Any]:
+        return [entry.get(stamp) for entry in _records(conn, "main", key).values() if isinstance(entry, dict)]
+
+    def read_at(table: str) -> list[Any]:
+        return [r[0] for r in conn.execute(f"SELECT DISTINCT read_at FROM main.{table}")]
+
+    def site_index(site: Any) -> list[Any]:
+        return [*recorded(site.sitemaps_key, "checked_at"), _kv(conn, "main", site.complete_key)]
+
+    times = {
+        "ug": [*recorded(ug.SITEMAPS_KEY, "indexed_at"), *read_at("ug_artist_tabs"),
+               _kv(conn, "main", ug.REFRESHED_KEY), _kv(conn, "main", ug.BUILT_KEY)],
+        "lacuerda": [*recorded(lacuerda_index.PAGES_KEY, "checked_at"), _kv(conn, "main", lacuerda_index.COMPLETE_KEY)],
+        "gtptabs": site_index(gtptabs_fetch.SITE),
+        "musescore": site_index(musescore_fetch.SITE),
+        "harptabs": [*site_index(harptabs_fetch.SITE), *read_at("harptabs_artists")],
+        "gametabs": [*site_index(gametabs_fetch.SITE), *read_at("gametabs_games")],
+    }
+    found = {}
+    for name in SITES:
+        latest = max(filter(None, (stamps.parse(t) if isinstance(t, str) else None for t in times[name])),
+                     default=None)
+        if latest is not None:
+            found[name] = stamps.stamp(latest)
+    return found
+
+
 # --- applying ------------------------------------------------------------------------------------------------------
 
 

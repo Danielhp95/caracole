@@ -1,0 +1,14 @@
+{"corpus":"canonical/stored_hash_utf16","header":true,"made_by":"tests/test_conformance_canonical.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"c77a9d1f6879e92e777acc2948867d6e2c8dccb65b1163585b3c3acaedfb3fe8","reads":true,"utf16":[34,97,55296,98,34]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"9a3fe0507d803dda46889ff177554011b2d6985bf07c894d81c97b2950de637d","reads":true,"utf16":[34,57343,34]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"91a681b998555fb475479817b126c94e57e52011fa1842c5d188795a4a05226b","reads":false,"utf16":[55296]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"825773dec0c6593e11de48cbc2d2db674e94594e805864113560c18aaa02c1e6","reads":false,"utf16":[120,56320]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"4fe635d66d93f5a23aaaa51857e7007b49be8d83e104cb5f284532265b4fb4a6","reads":true,"utf16":[123,34,107,34,58,32,34,57343,34,125]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"b38b619f212693a710965ac7461e8c7090b200729b87293a689b983115023448","reads":true,"utf16":[123,34,55356,34,58,32,49,125]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"4cc5ecb5e98b4c09e9613366000b5442553eea8bcdd15d2a544a38b53318e172","reads":true,"utf16":[34,55356,92,117,100,102,98,56,34]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"24bf23c25196c98d2a690b9b5cd3fef3c84892c42f85bd098ec196f817ca0855","reads":true,"utf16":[34,92,117,100,56,51,99,57272,34]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"7288ce889a819563586d0c5fc72b31c57a236b96594a966411ec23a1849dcb91","reads":true,"utf16":[34,92,117,100,56,51,99,57272,92,117,100,56,51,99,92,117,100,102,98,56,34]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"3457108aa69d2fc2be702963ee4f4848417c26eb8995f142269816062c2b2990","reads":true,"utf16":[34,57272,55356,34]}
+{"args":[],"canonical":"\"🎸\"","fn":"caracole.canonical.stored_hash","kw":{},"out":"a9aa6b507f6596044f6802fa633af74d4998b8950c1938bb54e6d63ec053d416","reads":true,"utf16":[34,55356,57272,34]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"eb1c7b7fe2576cb24c3b825d8de35d2318fd7f41ce98261684eab614c05f5dd4","reads":true,"utf16":[91,34,55296,34,44,32,49,101,49,48,48,49,93]}
+{"args":[],"canonical":null,"fn":"caracole.canonical.stored_hash","kw":{},"out":"821851b345013a53f29b6aece2d7da6393c7275050032ab3df7c10317464833a","reads":false,"utf16":[34,55296]}
