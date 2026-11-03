@@ -8,7 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- WorkManager brings WAKE_LOCK and RECEIVE_BOOT_COMPLETED, which the sync on Wi-Fi needs (to run, and to
          be scheduled again after a restart). An index import runs in the foreground, a data sync, its notification
-         saying how far it is (IndexImports). -->
+         saying how far it is (IndexImports); so does the phone's job queue while it works, a sync from the Sync tab
+         among its jobs (SyncService). -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -50,6 +51,13 @@
             android:exported="false"
             android:label="@string/settings"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- The phone's job queue at work (a sync from the Sync tab, an add, a removal), in the foreground: a data
+             sync, its notification naming the job. -->
+        <service
+            android:name=".SyncService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
 
         <!-- WorkManager's foreground service, which an index import runs in: a data sync. -->
         <service

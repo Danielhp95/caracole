@@ -10,7 +10,6 @@ import io.github.danielhp95.caracole.server.Phone
 import io.github.danielhp95.caracole.server.PhoneDeps
 import io.github.danielhp95.caracole.server.files.FileTypes
 import io.github.danielhp95.caracole.server.http.Security
-import io.github.danielhp95.caracole.server.routes.SyncSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -21,7 +20,8 @@ import java.util.Locale
 
 /**
  * What the app's parts share in its process: the one [Mirror], the phone's caracole ([phone]: its database, its job
- * queue and its server on 127.0.0.1), the launch's secret, and where the sync stands ([status]).
+ * queue and its server on 127.0.0.1), what keeps its queue's work going ([working]), the launch's secret, and where
+ * the mirror's sync stands ([status]).
  *
  * The app's files (the plan's §5.4): `caracole.sqlite` (caracole's schema and the phone's tables: the indexes
  * imported, the songs taken or added), `library/` (the phone's kept files), `state/` (`backups/`, and `cache/`, the
@@ -48,6 +48,7 @@ object Caracole {
 
     @Volatile private var mirror: Mirror? = null
     @Volatile private var phone: Phone? = null
+    @Volatile private var working: Working? = null
 
     /** The copy of the library, in the app's files folder: `blobs/` and `manifest.json`. */
     fun mirror(context: Context): Mirror = mirror ?: synchronized(this) {
@@ -65,6 +66,9 @@ object Caracole {
     /** The phone's caracole once it has started, else null. */
     fun started(): Phone? = phone
 
+    /** What keeps the phone's caracole working while its queue works ([SyncService]), once it has started. */
+    internal fun working(): Working? = working
+
     private fun start(context: Context): Phone {
         val files = context.filesDir
         val database = openDatabase(File(files, DATABASE))
@@ -76,7 +80,12 @@ object Caracole {
                 database = database, libraryDir = library, stateDir = state, mirror = mirror(context), scope = background,
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
             ))
+            // A job the queue gets (a sync from the Sync tab, an add, a removal) keeps the process going in the
+            // foreground until none waits or runs: the queue tells, the service follows.
+            val working = Working(phone.queue::snapshot, background, start = { SyncService.start(context) })
+            phone.queue.onBusy = working::busy
             phone.server.start(PORT)
+            this.working = working
             return phone
         } catch (e: Throwable) {
             database.close()
@@ -124,14 +133,6 @@ object Caracole {
     }
 
     private const val HEX = "0123456789abcdef"
-}
-
-/** The computer's address the Sync tab offers: the one Settings keeps for the mirror's sync. */
-private class SavedAddress(private val settings: Settings) : SyncSettings {
-    override val address: String? get() = settings.server.ifBlank { null }
-    override fun remember(address: String) {
-        settings.server = address
-    }
 }
 
 /** Where a sync stands. */

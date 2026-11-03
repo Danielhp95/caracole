@@ -3,6 +3,7 @@
     <string name="app_name">caracole</string>
     <string name="settings">Settings</string>
     <string name="sync_now">Sync now</string>
+    <string name="sync_with_computer">Sync with the computer</string>
     <string name="library">Library</string>
     <string name="more">More</string>
 
@@ -41,6 +42,7 @@
     <string name="import_under_way">An import is under way already: wait for it to end.</string>
     <string name="import_not_started">The import couldn\'t start: %1$s</string>
     <string name="jobs_channel">Work in the background</string>
+    <string name="working">Working…</string>
 
     <string name="syncing_asking">Syncing: asking caracole…</string>
     <string name="syncing">Syncing: %1$d of %2$d files</string>

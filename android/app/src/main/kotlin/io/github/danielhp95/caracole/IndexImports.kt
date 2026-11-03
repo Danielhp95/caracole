@@ -340,7 +340,8 @@ class IndexImportWorker(context: Context, params: WorkerParameters) : CoroutineW
     }
 }
 
-/** The app's notifications: one channel, for the work it does in the foreground (an index import). */
+/** The app's notifications: one channel, for the work it does in the foreground (an index import, the job queue's
+ * work: SyncService). */
 object Notifications {
     const val JOBS = "jobs"
 

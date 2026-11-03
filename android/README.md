@@ -9,7 +9,8 @@ songs on the sites with the computer off ([below](#search-with-the-computer-off)
 It connects to `caracole serve` at the address you type, downloads what serve lists at `GET /api/offline`, and
 keeps it in the app's own storage. Each file is stored once, under its SHA-256. A sync downloads only what
 changed. It checks each file's size and hash, and it swaps the new list in whole, so a sync cut short leaves the
-copy you had. The app never writes to the computer's library. It shows the copy through a caracole of its own on
+copy you had. The copy writes nothing to the computer's library; the Sync tab's two-way sync does, as the computer's
+own request ([Sync from the phone](#sync-from-the-phone)). The app shows the copy through a caracole of its own on
 the phone, a small server on 127.0.0.1 that only the app can use.
 
 ## Build
@@ -51,7 +52,10 @@ with the same key.
 **Sync on Wi-Fi by itself** syncs every 6 hours on an unmetered network. First it checks that caracole answers
 at the address. When nothing answers there, or something else does (another network's device, a Wi-Fi login
 page), it does nothing and keeps the last sync's outcome; **Sync now** says what answered. The library screen's
-menu (⋮) has Sync now, Library and Settings.
+menu (⋮) has Sync now, Sync with the computer ([below](#sync-from-the-phone)), Library and Settings.
+
+Sync now copies the computer's pages, one way. Sync with the computer, the library page's Sync tab, is the two-way
+sync: what you add, remove or change on the phone goes to the computer too.
 
 ## Offline
 
@@ -117,7 +121,8 @@ The import runs in the background, with a notification while it lasts, one impor
 runs, Settings says so. The phone merges the file as `caracole index merge` does: each site's newer reads win, and
 nothing it holds goes back. It waits for a sync that runs, and a sync waits for it. Settings shows how the last
 import ended, or why it failed, in the computer's words or the merge's ("the file was exported at schema version
-14…": export it again with the computer's caracole). Import again now and then to bring the sites' new songs.
+14…": export it again with the computer's caracole). Import again now and then to bring the sites' new songs; a
+sync from the phone brings the newer ones too ([below](#sync-from-the-phone)).
 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
@@ -125,7 +130,49 @@ artist's songs. LaCuerda's own search and YouTube's suggestions need the compute
 
 ## Sync from the phone
 
-Not built yet.
+The library page's **Sync** tab syncs the phone and the computer both ways, as `caracole peer sync` syncs two
+computers. Open it from the menu (⋮ › Sync with the computer) or from the library page's tabs. The field offers the
+address in Settings; the address you compare with becomes the one Settings keeps, for Sync now too.
+
+**Compare** asks the computer for its state and lists what differs, a line per unit: a song (its names, versions,
+choices and kept files), a removal, a songbook, an artist's alias or UG page, a blocked tab. Each line says what the
+sync proposes:
+
+- **keep here's**: changed on the phone since the two last agreed;
+- **take there's**: changed on the computer;
+- **CONFLICT**: changed on both, differently.
+
+Each has Here, There and Skip, the proposal chosen at first. A conflict has none until you choose, one at a time or
+all at once (Keep here's for every conflict, Take there's for every conflict), and **Sync** waits until each has
+one. Skip leaves a unit as it is on both sides, until the next comparison.
+
+**Sync** runs it in the background, with a notification ("Syncing with <the computer's name>…") that keeps the app
+working while you leave it, gone once it ends. Its stages show on the tab:
+
+1. compared again, refused if either side changed since you compared (compare again then);
+2. a backup of the phone's library (`state/backups/`, the last three kept), then what the computer changed taken,
+   each file checked by its SHA-256;
+3. what the phone changed given to the computer (`POST /peer/push`), which takes it as its own request and renders
+   its pages;
+4. the computer's pages copied, as Sync now copies them;
+5. what the two agree on recorded, so the next comparison lists only what changes after;
+6. the computer's newer indexes merged, skipped when none is newer.
+
+At the end the tab lists what was taken here, given there and left as it was, with why ("changed here since the
+comparison"), and Reload shows the library page with the songs as they are now.
+
+The computer needs a caracole that syncs with the phone (sync format 2: `GET /api/peer/state` answers
+`"format": 2`, with `POST /peer/push` and `GET /api/peer/index`). An older one is refused at Compare, with the
+reason; upgrade caracole there.
+
+**Your changes on the phone.** A song you add on the phone (a search row's Get it, or the request form) is in your
+library at once, and the computer's next run fetches it after a sync gives it there: the phone asks no site. Its
+line says "Added: the computer's next run fetches it." A song you remove on the phone leaves the library page at
+once, and its pages answer "This song was removed on the phone." until a sync settles it: given to the computer,
+which removes it too, or taken back from it. A song the phone holds otherwise than the computer did when it made its
+pages answers "This song changed on the phone since the computer made its page.", with a link to the phone's own
+sheet when it has one. A sync settles that too: the computer renders the song again as it takes the change, and the
+same sync then copies its new pages.
 
 ## caracole itself on the phone (experimental)
 
@@ -187,7 +234,10 @@ the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running
 the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
 page and a sheet, larger and smaller, and checks the size label and that the chords stay over their syllables.
 LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, the WebView
-never loads another loopback port, and a first start's database is made whole:
+never loads another loopback port, and a first start's database is made whole. SyncTabTest opens the Sync tab from
+the menu, compares with the computer and syncs, then compares again and finds nothing that differs (it changes the
+phone's library, so give it a computer of its own, such as `nix develop -c python -m tests.helpers.e2e_library serve
+DIR PORT`):
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk

@@ -1,9 +1,11 @@
 package io.github.danielhp95.caracole
 
+import android.Manifest
 import android.animation.ValueAnimator
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.MotionEvent
@@ -202,6 +204,26 @@ class MainActivity : Activity() {
         shown = true
     }
 
+    /**
+     * The library page's Sync tab (`#tab=sync`): where the phone and the computer compare their libraries, and each
+     * takes what the other changed, the computer's address the one Settings keeps. From the library page itself a
+     * change of its address alone (tabs.js hears it); from any other page, the library page at that tab.
+     */
+    private fun showSyncTab() {
+        val links = links ?: return
+        askToNotify()
+        web.loadUrl(links.address("") + SYNC_TAB)
+        shown = true
+    }
+
+    /** Android 13 and later show the notification of a sync that runs (SyncService) only once asked; it runs either
+     * way. */
+    private fun askToNotify() {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFY)
+    }
+
     private fun openSettings() = startActivity(Intent(this, SettingsActivity::class.java))
 
     private fun menu(anchor: View) {
@@ -210,6 +232,7 @@ class MainActivity : Activity() {
         popup.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.sync_now -> Syncs.now(this)
+                R.id.sync_tab -> showSyncTab()
                 R.id.library -> showLibrary()
                 R.id.settings -> openSettings()
             }
@@ -447,6 +470,8 @@ class MainActivity : Activity() {
 
     private companion object {
         const val SHOW_ENDED_MS = 5_000L
+        const val SYNC_TAB = "#tab=sync"
+        const val NOTIFY = 1
         const val RELAYOUT = "window.dispatchEvent(new Event('resize'))"
         const val FADE_MS = 250L
     }
