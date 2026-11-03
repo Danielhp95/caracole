@@ -5796,7 +5796,9 @@ format remembered it in its own, which this one doesn't read: the first sync aft
 sync, a unit on one side alone that side's and one both hold differently a conflict, with no history to say which
 side changed it. A song one side removed since the two last synced then shows as the other side's to take: choose
 here's for it. Each answer also says the time on its side's clock, which both sides stamp what they agree on with,
-and when each of its site indexes was last read.
+and when each of its site indexes was last read. A version's record and a song's lyrics are compared by the JSON
+they hold, not by how it is written, so two caracoles that wrote one record differently (its keys in another order,
+other spaces, `4.50` for `4.5`) agree on it.
 
 **`caracole peer sync`** compares, asks you to settle each conflict (here, there, or skip; `--prefer here` or
 `--prefer there` settles them all), says how many each side takes, asks once (`--yes` doesn't), then takes here what

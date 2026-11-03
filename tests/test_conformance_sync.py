@@ -37,8 +37,8 @@ overrides.toml, songbooks.toml and wanted.txt beside it, never over the database
   ``case`` names each row of the design's three-way table, first syncs, a unit appearing and going, the order;
 - sync/merged_base.jsonl: ``caracole.peer_sync.merged_base`` (``{id: [digest or null, at]}`` or null, both sides);
 - sync/record_agreement.jsonl: ``caracole.peer_sync.record_agreement`` with ``args`` ``[peer, mine, theirs, at]``
-  over a database whose kv ``sync:base:<peer>`` holds ``before`` (a text, or null for none), ``out`` ``{agreed, after}``,
-  ``after`` that kv's text byte for byte;
+  over a database whose kv ``sync:base:<peer>`` holds ``before`` (a text, or null for none), ``out``
+  ``{agreed, after}``, ``after`` that kv's text byte for byte;
 - sync/decide.jsonl: ``caracole.peer_sync.decide``, ``args`` ``[found, prefer]``, ``kw.choose`` the side each conflict
   is chosen (``{id: side}``; a conflict it doesn't name: None), ``out`` ``{here: [id], there: [id]}``;
 - sync/name_key.jsonl: ``caracole.songbook.name_key``;
@@ -98,9 +98,9 @@ LIBRARY_FILES = ("add", "remove", "lyrics_files", "stamps", "ensure_current_keys
 
 def canonical(value: Any) -> str:
     """C(v), as peer_sync hashes a unit's value."""
-    from caracole import peer_sync
+    from caracole import canonical
 
-    return peer_sync._canonical(value)
+    return canonical.dumps(value)
 
 
 # --- the fixtures ---------------------------------------------------------------------------------------------------
@@ -183,7 +183,16 @@ def fixture_records(lib: Library) -> list[dict[str, Any]]:
 
 
 def build_rich(lib: Library) -> None:
+    from caracole.lyrics import Lyrics
+
     rich(lib)
+    # Stored JSON as other writers write it, which the stored-JSON hash reads by its value: a non-integral number
+    # (4.50, 1E2, -0.0), spaces and key order of its own; lyrics with a duration of 238.0.
+    raw = '{ "votes":1E2, "rating" : 4.50, "b":[-0.0, 1e-7], "é":"\\u00e9"}'
+    lib.conn.execute("UPDATE versions SET raw = ? WHERE tab_id = '99' AND song_id = (SELECT id FROM songs WHERE "
+                     "key = 'radiohead/karma-police')", (raw,))
+    lib.conn.execute("UPDATE songs SET lyrics_json = ? WHERE key = '宋冬野/斑马斑马'", (Lyrics(
+        plain="斑马，斑马", synced=None, instrumental=False, duration=238.0, lrclib_id=7).to_json(),))
 
 
 def build_plain(lib: Library) -> None:
@@ -691,7 +700,8 @@ ADDS: list[tuple[str, list, list[dict], dict]] = [
      {"artists": ["Radiohead"], "title": "Creep"}),
     ("an artist the library writes as given: as given", [["Radiohead", "Karma Police"]], [],
      {"artists": ["Radiohead"], "title": "Creep"}),
-    ("another artist's songs: as given", [["radiohead fans", "Creep"]], [], {"artists": ["Radiohead"], "title": "Creep"}),
+    ("another artist's songs: as given", [["radiohead fans", "Creep"]], [],
+     {"artists": ["Radiohead"], "title": "Creep"}),
     ("the oldest song's spelling of the artist", [["RADIOHEAD", "Karma Police"], ["radiohead", "No Surprises"]], [],
      {"artists": ["Radiohead"], "title": "Creep"}),
     ("a song of that key found, its names kept", [["Radiohead", "Creep"]], [],

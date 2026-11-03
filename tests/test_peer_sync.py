@@ -254,7 +254,8 @@ def test_a_stored_base_is_tagged_with_its_format_and_an_untagged_one_reads_as_no
 
 
 def test_a_versions_raw_and_the_lyrics_are_hashed_as_canonical_json(tmp_path):
-    canonical = pytest.importorskip("caracole.canonical")  # lane canonical's; this lane's Phase B switches to it
+    from caracole import canonical
+
     one, two = Library(tmp_path / "one"), Library(tmp_path / "two")
     for lib, raw, lyrics in ((one, '{"rating": 4.50, "b": [1, 2]}', '{"plain": "la", "synced": null}'),
                              (two, '{"b":[1,2],"rating":4.5}', '{\n "synced": null,\n "plain": "la"\n}')):

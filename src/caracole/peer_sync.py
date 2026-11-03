@@ -10,8 +10,8 @@ chosen to take: a pull, the side that takes a unit asking the other for it, or a
 
 - ``song/<identity key>``: a song, by ``songs.key``: its names as its wanted.txt line gives them (artist, title,
   album, duration, variant), its record's decisions (status, review, the match, its lyrics: their status and a
-  hash of their text), its versions (provider, tab, slot, kind, label, pick, gone, the URL, a hash of the raw
-  record), its kept files (each name with its SHA-256: ``files``), and every overrides.toml entry about it
+  hash of their JSON), its versions (provider, tab, slot, kind, label, pick, gone, the URL, a hash of the raw
+  record's JSON), its kept files (each name with its SHA-256: ``files``), and every overrides.toml entry about it
   (``overrides.SONG_TABLES``, ``[ignore]`` among them: ``overrides.song_entries``);
 - ``removed/<identity key>``: a tombstone of ``caracole remove``;
 - ``songbook/<name key>``: a songbook, its name and its songs in order, each with its setting;
@@ -21,7 +21,9 @@ chosen to take: a pull, the side that takes a unit asking the other for it, or a
 What caracole makes of a unit (PDFs, viewers, ``.cho``, info.json, the pages) is no part of it, nor what a lookup
 would find again (cooldowns, a miss's date, the HTTP cache, the site indexes, which ``caracole index merge``
 merges): a side that takes a song renders it again, so two caracoles of different versions agree on what a song is.
-A unit's ``digest`` is the SHA-256 of its canonical JSON (``digest_of``); its ``label`` what the owner reads
+A unit's ``digest`` is the SHA-256 of its canonical JSON (``digest_of``: canonical.py, which the phone's caracole
+writes byte for byte alike), and a stored JSON text in it is hashed by the JSON it holds (``canonical.stored_hash``),
+so that two caracoles that wrote one record in two texts agree; its ``label`` what the owner reads
 ("Eagles - Hotel California", "the songbook Campfire"). A unit's document (``unit_document``, what ``GET
 /api/peer/unit`` answers) holds everything another side needs to take it, and its value, the digest's, is read back
 from it alone (``value_of_document``), so a side checks what it is given before it takes it.
@@ -75,6 +77,7 @@ from pathlib import Path
 from pathlib import PurePosixPath
 from typing import Any, Callable, Iterable, Mapping, Protocol, Sequence
 
+from caracole import canonical
 from caracole.db import kv_get, kv_get_json, kv_set, kv_set_json, savepoint
 
 FORMAT = 2  # of every document a side answers, and of the base it keeps: changes only with their shapes
@@ -129,19 +132,16 @@ class Difference:
     why: str
 
 
-def _canonical(value: Any) -> str:
-    """``value``'s canonical JSON: keys sorted, no spaces, every character as it is."""
-    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
-
-
 def digest_of(value: Any) -> str:
-    """The SHA-256 of ``value``'s canonical JSON."""
-    return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+    """The SHA-256 of ``value``'s canonical JSON (``canonical.digest``)."""
+    return canonical.digest(value)
 
 
 def _stored_hash(text: str | None) -> str | None:
-    """The hash of a stored text (a version's raw record, a song's lyrics), as a unit's value holds it."""
-    return None if text is None else hashlib.sha256(text.encode("utf-8", "surrogatepass")).hexdigest()
+    """The hash of a stored JSON text (a version's raw record, a song's lyrics) as a unit's value holds it: of the
+    JSON it holds, so that two texts of one record (its keys in another order, other spaces, ``4.50`` for ``4.5``)
+    hash alike, else of its bytes (``canonical.stored_hash``)."""
+    return canonical.stored_hash(text)
 
 
 # --- who this side is, and when it last agreed with a peer -------------------------------------------------------
@@ -369,10 +369,10 @@ def read_state_document(data: Any) -> PeerState:
             raise StateError(f"a unit that can't be read: {str(unit_id)[:80]!r}")
         read[unit_id] = Unit(unit_id, unit["label"], unit["digest"])
     token, now, indexes = data.get("token"), data.get("now"), data.get("indexes")
+    stamps = {site: stamp for site, stamp in (indexes.items() if isinstance(indexes, Mapping) else ())
+              if isinstance(site, str) and isinstance(stamp, str)}
     return PeerState(server, str(version or "?"), str(name or ""), read, _read_units(data.get("base")),
-                     token if isinstance(token, str) and token else None, now if isinstance(now, str) else None,
-                     {site: stamp for site, stamp in indexes.items() if isinstance(site, str) and isinstance(stamp, str)}
-                     if isinstance(indexes, Mapping) else {})
+                     token if isinstance(token, str) and token else None, now if isinstance(now, str) else None, stamps)
 
 
 def unit_document(conn: sqlite3.Connection, cfg, overrides, books: Iterable, unit_id: str) -> dict[str, Any] | None:
@@ -622,7 +622,7 @@ def compared_hash(found: Iterable[Difference]) -> str:
     comparison, are refused once a fresh one differs."""
     rows = [[d.id, d.proposal, d.mine.digest if d.mine else None, d.theirs.digest if d.theirs else None]
             for d in sorted(found, key=_order)]
-    return hashlib.sha256(_canonical(rows).encode("utf-8")).hexdigest()
+    return hashlib.sha256(canonical.dumps(rows).encode("utf-8")).hexdigest()
 
 
 # --- the peer ----------------------------------------------------------------------------------------------------

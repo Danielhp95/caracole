@@ -42,8 +42,11 @@ A library's state is cut into **units**, each compared on its own and taken whol
 | an artist's page | `artist_url/<artist key>` | an `[artist_url]` entry |
 | a blocked tab | `block/<tab id>` | a `[block]` tab id |
 
-A unit's **digest** is the SHA-256 of its canonical JSON (keys sorted, no spaces, every character as it is). What
-caracole makes from a unit (PDFs, viewers, `.cho`,
+A unit's **digest** is the SHA-256 of its canonical JSON (canonical.py, and the phone's `core.json.Canonical`: keys
+in code-point order, no spaces, every character as it is, a non-integral number as its exact decimal), and a stored
+JSON text in it (a version's raw record, a song's lyrics) is hashed by the JSON it holds, else by its bytes
+(`canonical.stored_hash`), so two caracoles that wrote one record in two texts agree. What caracole makes from a unit
+(PDFs, viewers, `.cho`,
 info.json, the library page, songbooks' files) is not in it: a side that takes a song renders it again, so two
 caracoles of different versions still agree on what a song *is*. Nor is anything a lookup would find again (a
 cooldown, a miss's date, the HTTP cache): those are each side's own.
@@ -150,10 +153,10 @@ cooldowns merge, the later end kept (phase 2).
    `caracole peer diff ADDRESS`.
 2. **Applying**, done: schema 15's id; the unit reads; `caracole peer pull` and `sync`; the base kept by both;
    overrides.py's and songbook.py's writers of a unit whole. Format 2, done: the tagged base, the state's `now` and
-   `indexes`, a unit's value read from its document, the compare-and-swap of both sides' digests, and a song taken
-   with the peer's names, its artist respelled and its folder moved, whole or not at all. Still to come here: the site
-   indexes merged both ways over HTTP (today `caracole index export` and `merge`, by hand), and cooldowns moved
-   across.
+   `indexes`, the canonical hashing of a version's raw record and a song's lyrics, a unit's value read from its
+   document, the compare-and-swap of both sides' digests, and a song taken with the peer's names, its artist
+   respelled and its folder moved, whole or not at all. Still to come here: the site indexes merged both ways over
+   HTTP (today `caracole index export` and `merge`, by hand), and cooldowns moved across.
 3. **The Sync page** in caracole serve, usable from the phone's browser and the app.
 4. **The phone.** The research (2026-10-31, from package recipes, PyPI and the pinned nixpkgs, nothing run on a
    phone) found Termux the route: from F-Droid or GitHub, its Python 3.14, Perl, SQLite with FTS5, clang and cmake;
