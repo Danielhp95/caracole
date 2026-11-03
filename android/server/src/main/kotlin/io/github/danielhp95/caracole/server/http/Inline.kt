@@ -1,9 +1,21 @@
 package io.github.danielhp95.caracole.server.http
 
 import kotlinx.serialization.json.JsonElement
+import java.security.MessageDigest
+import java.util.Base64
 
-/** inline.py: a script or a style by its hash, a JSON data block with every '<' escaped (lane server-shell). */
+/** inline.py: what a page holds inline, a script or a style its Content-Security-Policy allows by its hash, and a
+ * block of data for its script. */
 object Inline {
-    fun sha256Source(text: String): String = TODO("lane server-shell")
-    fun jsonBlock(id: String, data: JsonElement): String = TODO("lane server-shell")
+    /** A CSP source allowing exactly this inline script or stylesheet: `'sha256-<base64>'` of its UTF-8. */
+    fun sha256Source(text: String): String =
+        "'sha256-" + Base64.getEncoder().encodeToString(MessageDigest.getInstance("SHA-256").digest(text.toByteArray())) + "'"
+
+    /**
+     * [data] as a `<script type="application/json">` block with this id, and a line break. Every `<` in the JSON is
+     * written `\u003c`, which JSON reads back as `<`: no text in it can end the block or open another element. The
+     * JSON is compact, strings as `json.dumps(ensure_ascii=False)` writes them (numbers as kotlinx writes them).
+     */
+    fun jsonBlock(id: String, data: JsonElement): String =
+        "<script type=\"application/json\" id=\"${PyText.escape(id)}\">${data.toString().replace("<", "\\u003c")}</script>\n"
 }
