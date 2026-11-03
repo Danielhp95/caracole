@@ -42,7 +42,8 @@ A library's state is cut into **units**, each compared on its own and taken whol
 | an artist's page | `artist_url/<artist key>` | an `[artist_url]` entry |
 | a blocked tab | `block/<tab id>` | a `[block]` tab id |
 
-A unit's **digest** is the SHA-256 of its canonical JSON. What caracole makes from a unit (PDFs, viewers, `.cho`,
+A unit's **digest** is the SHA-256 of its canonical JSON (keys sorted, no spaces, every character as it is). What
+caracole makes from a unit (PDFs, viewers, `.cho`,
 info.json, the library page, songbooks' files) is not in it: a side that takes a song renders it again, so two
 caracoles of different versions still agree on what a song *is*. Nor is anything a lookup would find again (a
 cooldown, a miss's date, the HTTP cache): those are each side's own.
@@ -53,7 +54,8 @@ already merges them (index_transfer.py: what was read more recently wins, nothin
 ## Comparing: three ways
 
 Each caracole has an id of its own (kv `sync:id`, made at first use). After a sync with a peer, each side keeps the
-digest every unit had then (kv `sync:base:<peer id>`): the **base**. Then, for each unit:
+digest every unit had then (kv `sync:base:<peer id>`, `{"format": 2, "units": {"<unit id>": [digest or null,
+"<when>"]}}`): the **base**. Then, for each unit:
 
 | mine vs base | theirs vs base | what the sync proposes |
 |---|---|---|
@@ -71,21 +73,43 @@ The owner sees every difference, not only conflicts, and may turn any proposal a
 this one after all"). A conflict has no default: the sync applies nothing until each one is chosen, or the owner
 chooses a side for all at once ("keep the phone's for every conflict").
 
+## The format
+
+Every document a side answers (its state, a unit, a push) says its **format**, 2, and a side refuses another; the
+base is kept tagged with it. A base an earlier format kept is no base, and is never translated (the owner's rule
+against compatibility shims): the first sync after an upgrade compares as a first sync, so a song one side removed
+since shows as the other side's to take, and the owner turns that one around. Format 2's state document also says
+`now`, its side's clock, which both sides stamp their agreement with, and `indexes`, the newest read of each of its
+site indexes (`index_transfer.newest`), so the other side asks only for those it holds older; a reader ignores keys it
+doesn't know.
+
+A unit's document holds everything another side needs to take it, and its value, the one its digest is of, is read
+back from the document alone (`peer_sync.value_of_document`), so the side taking it checks what it is given against
+the digest it compared.
+
 ## Applying
 
 A side takes a unit from its peer (a pull; both directions are pulls, the one the owner is on asking the other to pull
 what it was chosen to take):
 
 - **a song**: its wanted.txt line written (`songs.upsert_song`, the one way a song is added, so a tombstone of it goes),
-  its record's decisions, versions and kept files replaced by the peer's (files fetched by name and checked by their
-  SHA-256), its overrides.toml entries set through overrides.py's writers (comments and layout kept), then the song
-  rendered again and the songbooks it is in made again;
+  then its names as the peer writes them (artist, title, artists, album, duration, variant), its record's decisions,
+  versions and kept files replaced by the peer's (files fetched by name and checked by their SHA-256, every one
+  before anything changes), its overrides.toml entries set through overrides.py's writers (comments and layout kept),
+  then the song rendered again and the songbooks it is in made again. The rows change in one savepoint, which
+  overrides.toml failing rolls back, the folders' changes undone with it: all of a song or none. When the peer's
+  spelling of the artist makes a folder that differs from this side's in case alone ("Radiohead", "radiohead"), every
+  song of that artist here takes the peer's spelling and their folder is renamed once, through a temporary name, so
+  that a file system blind to case keeps one folder; a song whose folder changes moves its files with it, through
+  descriptors opened from the library down, never through a link, and a move that fails leaves the song whole where it
+  was;
 - **a removal**: `caracole remove --yes` of the song, as the owner would;
 - **a songbook**: its table in songbooks.toml written through songbook.py's writers, then made again;
 - **an alias, an artist page, a blocked tab**: the entry written, or taken out.
 
 Each unit applies under caracole's lock, as a lookup does (`exclusive(..., interactive=True)`), in a savepoint for
-its database rows. Then the library page is written again. The database is backed up first (backup.py,
+its database rows. A unit is taken only while both sides hold it as compared (a compare-and-swap): one changed there
+since is left, "changed there since the comparison", and one changed here since, "changed here since the comparison". Then the library page is written again. The database is backed up first (backup.py,
 `before-sync`), as `index merge` is. The base moves on only for the units that applied, so a sync cut short is
 finished by the next one.
 
@@ -125,8 +149,11 @@ cooldowns merge, the later end kept (phase 2).
 1. **The comparison**, done: peer_sync.py's units, digests and three-way diff; `GET /api/peer/state`;
    `caracole peer diff ADDRESS`.
 2. **Applying**, done: schema 15's id; the unit reads; `caracole peer pull` and `sync`; the base kept by both;
-   overrides.py's and songbook.py's writers of a unit whole. Still to come here: the site indexes merged both ways
-   over HTTP (today `caracole index export` and `merge`, by hand), and cooldowns moved across.
+   overrides.py's and songbook.py's writers of a unit whole. Format 2, done: the tagged base, the state's `now` and
+   `indexes`, a unit's value read from its document, the compare-and-swap of both sides' digests, and a song taken
+   with the peer's names, its artist respelled and its folder moved, whole or not at all. Still to come here: the site
+   indexes merged both ways over HTTP (today `caracole index export` and `merge`, by hand), and cooldowns moved
+   across.
 3. **The Sync page** in caracole serve, usable from the phone's browser and the app.
 4. **The phone.** The research (2026-10-31, from package recipes, PyPI and the pinned nixpkgs, nothing run on a
    phone) found Termux the route: from F-Droid or GitHub, its Python 3.14, Perl, SQLite with FTS5, clang and cmake;
