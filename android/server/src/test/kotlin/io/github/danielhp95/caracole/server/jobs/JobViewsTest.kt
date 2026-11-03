@@ -10,19 +10,61 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import io.github.danielhp95.caracole.core.testing.Corpus
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /** jobs_routes.view on the phone: a job's view as the library page's script reads it, its line as status.py words
- * it, a sync's with its stages and outcome (§5.3). */
+ * it, a sync's with its stages and outcome (§5.3); every record of vectors/web/job_views.jsonl, Python's view of the
+ * same job, answered alike. */
 // The worker runs in the test's backgroundScope, whose tasks runCurrent runs (advanceUntilIdle leaves them be).
 @OptIn(ExperimentalCoroutinesApi::class)
 class JobViewsTest {
-    private val sync = listOf("compare" to "Compare", "take" to "Take", "give" to "Give", "mirror" to "Mirror",
-                              "agree" to "Agree", "index" to "Index")
+    private val sync = listOf("compare" to "Comparing", "take" to "Taking what changed there",
+                              "give" to "Giving what changed here", "mirror" to "Copying the computer's pages",
+                              "agree" to "What the two agree on", "index" to "Bringing the indexes up to date")
 
     private fun TestScope.queue() = JobQueue(backgroundScope)
+
+    /** A record's job as the phone holds it (test_conformance_sync_routes.py's docstring says what each field is). */
+    private fun jobOf(held: JsonObject): Job {
+        fun text(name: String) = held.getValue(name).jsonPrimitive.content
+        val stages = held.getValue("stages").jsonArray.map { it.jsonObject }
+        val spec = JobSpec(text("title"), text("key"), text("kind"), stages.map {
+            it.getValue("name").jsonPrimitive.content to it.getValue("label").jsonPrimitive.content
+        }, display = text("display")) {}
+        return Job(held.getValue("id").jsonPrimitive.int, spec).also { job ->
+            job.state = text("state")
+            job.stages.zip(stages).forEach { (stage, said) ->
+                stage.state = said.getValue("state").jsonPrimitive.content
+                stage.detail = said.getValue("detail").jsonPrimitive.content
+                stage.runningDetail = said.getValue("running_detail").jsonPrimitive.content
+            }
+            job.output = held.getValue("output").jsonArray.map { it.jsonPrimitive.content }
+            job.songId = held.getValue("song_id").jsonPrimitive.longOrNull
+            job.outcome = held["outcome"] as? JsonObject
+        }
+    }
+
+    @Test fun everyRecordOfTheVectorsIsThisViewOfTheSameJob() {
+        val records = Corpus.records("web/job_views.jsonl")
+        val kinds = records.map { it.extra.getValue("job").jsonObject.getValue("kind").jsonPrimitive.content }.toSet()
+        assertEquals(setOf("sync", "peer-push", "add", "remove"), kinds)
+        for (record in records) {
+            val held = record.extra.getValue("job").jsonObject
+            val job = jobOf(held)
+            val seen = JobViews.view(job, held.getValue("ahead").jsonPrimitive.int,
+                                     held.getValue("song_id").jsonPrimitive.longOrNull)
+            assertEquals(record.out, seen, "${held["kind"]}, ${record.extra["note"]}")
+        }
+        assertTrue(records.size >= 40)
+    }
 
     private fun line(view: JsonObject) = view["line"]!!.jsonObject.let {
         listOf(it["tone"], it["text"], it["details"]).map { e -> if (e is JsonNull) null else (e as JsonPrimitive).content }
@@ -92,7 +134,8 @@ class JobViewsTest {
         }
         assertEquals(Line("waiting", "Synced: 1 change left as it was", details = "#tab=requests&job=${left.id}"),
                      JobViews.line(left))
-        // A failure: its failed stage's first sentence, else its error line's, else its title's.
+        // A failure: its failed stage's first sentence, else its error line's, else its command's (an add's stage's
+        // label, a staged job's title).
         val stage = run("sync") {
             it.stage("one", "failed", "The computer answered 503 Service Unavailable. It may be restarting")
             throw IllegalStateException("stopped")
@@ -108,14 +151,22 @@ class JobViewsTest {
             it.say("error: An earlier error.")
             throw IllegalStateException("It stopped. This is the rest")
         }).text)  // the last error line, as status.py reads a command's output
-        assertEquals("add it failed.", JobViews.line(fakeFailed(add)).text)
+        assertEquals("One failed.", JobViews.line(fakeFailed(add)).text)
+        assertEquals("sync it failed.", JobViews.line(fakeFailed(run("sync"))).text)
+        assertEquals("It stopped before it was done.", JobViews.line(fakeFailed(add).also {
+            it.stages.forEach { stage -> stage.state = Job.DONE }
+        }).text)
         val long = "word ".repeat(60).trim()
         val cut = JobViews.line(run("add") { throw IllegalStateException(long) }).text
         assertEquals(("word ".repeat(31).trim()) + "…", cut)  // 159 characters at most, cut at a word
     }
 
-    /** A job over as failed, with nothing said. */
-    private fun fakeFailed(job: Job): Job = job.copy().also { it.state = Job.FAILED; it.output = emptyList() }
+    /** A job over as failed, with nothing said, its stage failed with no words. */
+    private fun fakeFailed(job: Job): Job = job.copy().also {
+        it.state = Job.FAILED
+        it.output = emptyList()
+        it.stages.forEach { stage -> stage.state = Job.FAILED; stage.detail = "" }
+    }
 
     @Test fun aCancelledJobAndAnInterruptedOneSaySo() = runTest {
         val queue = queue()
@@ -144,16 +195,22 @@ class JobViewsTest {
             "state":"done","fetching":false,"line":{"tone":"ready","text":"Synced","link":null,"details":null},
             "details":"#tab=sync","steps":[{"name":"compare","label":"Compare","state":"done","detail":""},
             {"name":"take","label":"Take","state":"done","detail":""},{"name":"give","label":"Give","state":"done","detail":""},
-            {"name":"mirror","label":"Mirror","state":"done","detail":""},{"name":"agree","label":"Agree","state":"done","detail":""},
-            {"name":"index","label":"Index","state":"skipped","detail":"no index newer"}],"count":null,
+            {"name":"mirror","label":"Pages","state":"done","detail":""},{"name":"agree","label":"Agree","state":"done","detail":""},
+            {"name":"index","label":"Indexes","state":"skipped","detail":"no index newer"}],"count":null,
             "outcome":{"taken":["song/a/b"],"given":[],"left":[],"agreed":12,"indexed":[]}}"""), view)
         // queued, its stages waiting and no outcome yet
-        val next = queue.submit(JobSpec("Sync with Laptop", "sync:http://laptop:8737", "sync", sync) {}).first
+        val next = queue.submit(JobSpec("Sync with Laptop", "sync:http://laptop:8737", "sync", sync) {
+            throw IllegalStateException("The computer stopped answering.")
+        }).first
         val waiting = JobViews.view(next, queue)
         assertEquals(JsonNull, waiting["outcome"])
         assertEquals(List(6) { "waiting" }, (waiting["steps"] as JsonArray).map {
             (it.jsonObject["state"] as JsonPrimitive).content
         })
+        // over, failed before it set an outcome: nothing taken, given or left, as caracole serve's says it
+        runCurrent()
+        assertEquals(Json.parseToJsonElement("""{"taken":[],"given":[],"left":[],"agreed":null,"indexed":[]}"""),
+                     JobViews.view(queue.job(next.id)!!, queue)["outcome"])
     }
 
     @Test fun aSongsViewAndARemovalsNameTheSongByItsIdentityItsCardOnceOver() = runTest {
@@ -172,6 +229,7 @@ class JobViewsTest {
         assertEquals(JsonPrimitive("radiohead/creep"), over["identity"])
         assertEquals(card, over["card"])
         assertEquals(songbooks, over["songbooks"])
+        assertEquals(listOf("songbooks", "card"), over.keys.toList().takeLast(2))  // jobs_routes.views' order
         val removal = queue.submit(JobSpec("Remove Radiohead - Creep", "remove:radiohead/creep", "remove", emptyList(),
                                            display = "Radiohead - Creep", songId = 9, join = false) {}).first
         val removing = JobViews.view(removal, queue)

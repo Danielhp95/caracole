@@ -39,9 +39,11 @@ class JobsRoutesTest {
             songs.associate { it.id to JsonObject(mapOf("id" to JsonPrimitive(it.id), "title" to JsonPrimitive(it.title))) }
     }
 
+    private val books = JsonObject(mapOf("books" to JsonPrimitive("as the Songbooks tab has them now")))
+
     private fun TestScope.app(): Pair<TestApp, JobQueue> {
         val queue = JobQueue(backgroundScope)
-        return TestApp(tmp.root, { database -> listOf(JobsRoutes(queue, Cards, database)) }) to queue
+        return TestApp(tmp.root, { database -> listOf(JobsRoutes(queue, Cards, database) { books }) }) to queue
     }
 
     private fun insert(db: Db, artist: String, title: String, key: String): Long {
@@ -99,7 +101,9 @@ class JobsRoutesTest {
             assertEquals(listOf(held.id, first.id), asked.map { it.jsonObject["id"]!!.jsonPrimitive.content.toInt() })
             val over = asked.last().jsonObject
             val id = test.database.read { db -> db.one("SELECT id FROM songs WHERE key = 'radiohead/creep'") { it.long(0) } }
-            assertEquals(Json.parseToJsonElement("""{"id":$id,"title":"Creep"}"""), over["card"])
+            assertEquals(Json.parseToJsonElement("""{"id":$id,"title":"Creep","fetchable":true}"""), over["card"])
+            assertEquals(books, over["songbooks"])
+            assertEquals(listOf("songbooks", "card"), over.keys.toList().takeLast(2))  // jobs_routes.views' order
             assertEquals(JsonPrimitive(id), over["songId"])
             assertEquals(JsonPrimitive("radiohead/creep"), over["identity"])
             assertEquals("Added: the nightly run looks for it", over["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
@@ -108,6 +112,31 @@ class JobsRoutesTest {
             gate.complete(Unit)
             runCurrent()
             assertEquals(JsonPrimitive(0), test.script("/jobs.json?jobs=").json.jsonObject["active"])
+        }
+    }
+
+    @Test fun anAddOfASongTheLibraryHasNamesItAtOnceWhileItWaits() = runTest {
+        val (test, queue) = app()
+        test.use {
+            val id = song(test.database, "Radiohead", "Creep", "radiohead/creep")
+            val gate = CompletableDeferred<Unit>()
+            queue.submit(JobSpec("Hold", "hold", "add", emptyList()) { gate.await() })
+            val again = queue.submit(add(test.database, "Radiohead", "Creep", "radiohead/creep")).first
+            val fresh = queue.submit(add(test.database, "Muse", "Hysteria", "muse/hysteria")).first
+            runCurrent()
+            val views = test.script("/jobs.json?jobs=${again.id},${fresh.id}").json.jsonObject["jobs"]!!.jsonArray
+                .associateBy { it.jsonObject["id"]!!.jsonPrimitive.content.toInt() }
+            val waiting = views.getValue(again.id).jsonObject
+            assertEquals(JsonPrimitive(id), waiting["songId"])  // jobs_routes.song_of: by its key, queued or not
+            assertEquals(JsonPrimitive("radiohead/creep"), waiting["identity"])
+            assertEquals("Queued behind 1 request…", waiting["line"]!!.jsonObject["text"]!!.jsonPrimitive.content)
+            assertNull(waiting["card"])  // not over: no card, no songbooks
+            assertNull(waiting["songbooks"])
+            val new = views.getValue(fresh.id).jsonObject
+            assertEquals(kotlinx.serialization.json.JsonNull, new["songId"])  // not in the library yet
+            assertNull(new["identity"])
+            gate.complete(Unit)
+            runCurrent()
         }
     }
 

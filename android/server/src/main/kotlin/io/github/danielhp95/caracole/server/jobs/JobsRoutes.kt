@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.server.jobs
 
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
@@ -28,10 +29,13 @@ import kotlinx.serialization.json.JsonPrimitive
  *     POST /jobs/cancel    a request that hasn't started (`job`), taken out of the queue: never one that runs, nor
  *                          one that is over
  *
- * A job over that the page asks about by its id gets its song's card as the page draws it now ([cards]): an add's
- * song, by its key, and a removal's while the song is there still (once removed, the page draws its line gone).
+ * Each job names its song as the library has it now (jobs_routes.song_of): an add's and a removal's by its key, a
+ * removal done by the song it removed. A job over that the page asks about by its id gets the Songbooks tab's data as
+ * it is now ([songbooks], when one is given) and its song's card as the page draws it now ([cards]), with
+ * `fetchable` (false for a song a review must come first for), while the song is there.
  */
-class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Database) : RouteModule {
+class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Database,
+                 val songbooks: ((Db) -> JsonObject?)? = null) : RouteModule {
     override val routes: List<Route> = listOf(
         Route("GET", "/jobs.json", "the requests, for the page's script", scriptOnly = true,
               get = GetAnswer { request -> jobsJson(PyUrl.query(request.target)["jobs"]) }),
@@ -47,11 +51,17 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
         val ids = jobIds(asked)
         val jobs = queue.snapshot()
         val only = if (ids == null) jobs else jobs.filter { it.id in ids }
-        val songs = if (ids == null) emptyMap() else songsOf(only.filter { it.id in ids && !it.active })
-        val shown = only.map { job ->
-            val song = songs[job.id]
-            val card = song?.let { cardOf(it) }
-            JobViews.view(job, queue, card = card)
+        val shown = database.read { db ->
+            var section: JsonObject? = null  // read once, for every job that asks
+            only.map { job ->
+                val song = songOf(db, job)
+                val over = ids != null && job.id in ids && !job.active
+                if (over) section = section ?: songbooks?.invoke(db)
+                val card = if (over && song != null && song.id > 0) cardOf(db, song) else null
+                val ahead = if (job.state == Job.QUEUED) jobs.count { it.active && it.id < job.id } else 0
+                JobViews.view(job, ahead, song?.id ?: job.songId.takeIf { job.spec.kind == "remove" },
+                              card = card, songbooks = if (over) section else null)
+            }
         }
         return json(200, JsonObject(linkedMapOf(
             "active" to JsonPrimitive(jobs.count { it.active }),
@@ -59,22 +69,16 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
         )))
     }
 
-    /** The song of each job over, as the library has it now: an add's by its key, a removal's by its id. */
-    private fun songsOf(over: List<Job>): Map<Int, SongRow> {
-        val asked = over.filter { it.spec.kind == "add" || it.spec.kind == "remove" }
-        if (asked.isEmpty()) return emptyMap()
-        return database.read { db ->
-            asked.mapNotNull { job ->
-                val song = when (job.spec.kind) {
-                    "add" -> job.songId?.let { Songs.byId(db, it) } ?: Songs.byKey(db, job.spec.key)
-                    else -> job.songId?.let { Songs.byId(db, it) }
-                }
-                song?.let { job.id to it }
-            }.toMap()
-        }
+    /** The song a job is about as the library has it now: an add's and a removal's by its key; null for none. */
+    private fun songOf(db: Db, job: Job): SongRow? = when (job.spec.kind) {
+        "add", "remove" -> Songs.byKey(db, job.spec.key.removePrefix(JobViews.REMOVING))
+        else -> null
     }
 
-    private fun cardOf(song: SongRow): JsonObject? = database.read { db -> cards.cards(db, listOf(song))[song.id] }
+    /** The song's card as the page draws it now, with `fetchable` as the page's own cards have it. */
+    private fun cardOf(db: Db, song: SongRow): JsonObject? = cards.cards(db, listOf(song))[song.id]?.let { card ->
+        JsonObject(LinkedHashMap(card).apply { put("fetchable", JsonPrimitive(!song.review)) })
+    }
 
     private fun apiJob(number: String): Response {
         val job = if (digits(number)) idOf(number)?.let(queue::job) else null

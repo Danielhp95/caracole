@@ -6,6 +6,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -18,10 +19,14 @@ import java.time.format.DateTimeFormatter
 
 /**
  * A job to queue: what it is ([title], and [display], what the page names it by: its title when empty), the key it is
- * queued under ([key]: a waiting job of the same key is the answer to another, when [join]), what it is about ([kind]:
- * add, remove, sync, index), its stages (name, label) as the page shows them, the song it is about when that is known
- * before it runs ([songId]: a removal's), and what it runs, on the queue's one worker. [doneLine]: what its line says
- * once it is done, in place of its kind's words ("Added: the computer's next run fetches it.").
+ * queued under ([key]: a job of the same key that waits or runs is the answer to another, when [join]; with [join]
+ * false, a job of its own all the same), what it is about ([kind]: add, remove, sync, index), its stages (name,
+ * label) as the page shows them, the song it is about when that is known before it runs ([songId]: a removal's), and
+ * what it runs, on the queue's one worker. [doneLine]: what its line says once it is done, in place of its kind's
+ * words ("Added: the computer's next run fetches it.").
+ *
+ * An add's and a removal's stages are the one command caracole serve's job runs, as `/api/jobs/N` lists it: ("add",
+ * "Adding to the library") and ("remove", "Removing from caracole"), which its line says while it runs.
  */
 data class JobSpec(val title: String, val key: String, val kind: String, val stages: List<Pair<String, String>>,
                    val display: String = "", val songId: Long? = null, val join: Boolean = true,
@@ -38,14 +43,18 @@ interface JobContext {
     fun song(id: Long, display: String) {}
 }
 
-/** A stage of a job: its state (waiting, running, done, skipped, failed, interrupted) and what it says now. */
+/** A stage of a job: its state (waiting, running, done, skipped, failed, interrupted), what it says now, and what it
+ * said last while it ran ([runningDetail], web/jobs.py's `running_detail`: a stage the queue ended failed says that
+ * still, which is no failure's words). */
 class Stage internal constructor(val name: String, val label: String) {
     var state: String = Job.WAITING
         internal set
     var detail: String = ""
         internal set
+    var runningDetail: String = ""
+        internal set
 
-    internal fun copy() = Stage(name, label).also { it.state = state; it.detail = detail }
+    internal fun copy() = Stage(name, label).also { it.state = state; it.detail = detail; it.runningDetail = runningDetail }
 }
 
 /**
@@ -146,12 +155,16 @@ class JobStarted(val id: Int, val state: String) : Exception("request $id is $st
  * web/jobs.py's JobQueue on the phone: jobs in order, run by one worker coroutine in [scope], so they never write
  * beside each other (an index import, a sync, an add: §5.5).
  *
- * - [submit]: one job per key: a job of the same key that still waits is the answer to another that may join it
- *   (JobSpec.join); else a job of its own, unless [limit] jobs wait or run already ([QueueFull]).
+ * - [submit]: one job per key: a job of the same key that waits or runs is the answer to another that may join it
+ *   (JobSpec.join), as caracole serve's queue answers a request that fetches nothing (every one of the phone's);
+ *   else a job of its own, unless [limit] jobs wait or run already ([QueueFull]).
  * - [cancel]: a job that hasn't started taken out of the queue, over as "cancelled", its stages skipped; one that runs
  *   or is over is never stopped ([JobStarted]).
- * - A job's run that throws fails it, what it threw said as its last line (`error: …`); one the scope's end stops is
- *   interrupted. Either way its stages left running end so too, and those waiting are skipped, as caracole serve's.
+ * - A job's run that throws fails it (anything it throws, an Error or a timeout of its own among them: the worker
+ *   goes on to the next job), the first line of what it threw said as its last line (`error: …`) and as the words
+ *   of its stage that ran (else the first that waited), failed, as get.py reports a stage's failure; one the scope's
+ *   end stops is interrupted, its stage that ran so too. Either way its stages waiting are skipped, as caracole
+ *   serve's.
  * - The last [keep] jobs over are remembered, in memory alone (the phone keeps no history).
  * - [onBusy]: told true as the queue gets a job to run, and false once none waits or runs (the app's foreground
  *   service listens); told under the queue's lock, so in order: it must not block.
@@ -172,8 +185,8 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
     fun submit(spec: JobSpec): Pair<Job, Boolean> {
         var start = false
         val job = synchronized(lock) {
-            val waiting = jobs.firstOrNull { spec.join && it.state == Job.QUEUED && it.spec.key == spec.key }
-            if (waiting != null) return waiting.copy() to false
+            val same = jobs.firstOrNull { spec.join && it.active && it.spec.key == spec.key }
+            if (same != null) return same.copy() to false
             if (jobs.count { it.active } >= limit) throw QueueFull(limit)
             val job = Job(nextId++, spec, clock())
             jobs.add(job)
@@ -257,18 +270,27 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         try {
             job.spec.run(context)
             end(job, Job.DONE)
-        } catch (e: CancellationException) {
-            end(job, Job.INTERRUPTED)
-            throw e
-        } catch (e: Exception) {
-            context.say("error: ${e.message?.takeIf { it.isNotBlank() } ?: e::class.simpleName}")
-            end(job, Job.FAILED)
+        } catch (e: Throwable) {
+            // The worker's own end (its scope's): the job is interrupted, and the worker stops. Any other throw, a
+            // timeout of the run's own among them, fails the job alone, and the worker goes on.
+            if (e is CancellationException && !currentCoroutineContext().isActive) {
+                end(job, Job.INTERRUPTED)
+                throw e
+            }
+            val said = firstLine(e.message) ?: e::class.simpleName ?: "it stopped"
+            context.say("error: $said")
+            end(job, Job.FAILED, said)
         }
     }
 
-    private fun end(job: Job, state: String) = synchronized(lock) {
+    private fun end(job: Job, state: String, failure: String? = null) = synchronized(lock) {
         job.state = state
         job.finishedAt = clock()
+        if (failure != null) {  // its stage that ran, else the first that waited, says why
+            val stage = job.stages.firstOrNull { it.state == Job.RUNNING } ?: job.stages.firstOrNull { it.state == Job.WAITING }
+            stage?.state = Job.FAILED
+            stage?.detail = failure
+        }
         for (stage in job.stages) {
             if (stage.state == Job.RUNNING) stage.state = if (state == Job.DONE) Job.DONE else state
             else if (stage.state == Job.WAITING) stage.state = Job.SKIPPED
@@ -277,6 +299,10 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
         forget()
         idle()
     }
+
+    /** A message's first line with something on it, trimmed; null for none. */
+    private fun firstLine(message: String?): String? =
+        message?.lineSequence()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() }
 
     /** Keep the last [keep] jobs over. */
     private fun forget() {
@@ -301,10 +327,12 @@ class JobQueue(private val scope: CoroutineScope, val limit: Int = LIMIT, val ke
                 ?: Stage(name, name).also { job.stages = job.stages + it }
             stage.state = state
             stage.detail = detail
+            if (state == Job.RUNNING) stage.runningDetail = detail
         }
 
+        /** A line of its output; one with line breaks in it is said a line at a time, as a command prints them. */
         override fun say(line: String) = synchronized(lock) {
-            job.output = (job.output + line).takeLast(MAX_LINES)
+            job.output = (job.output + line.lines()).takeLast(MAX_LINES)
         }
 
         override fun outcome(value: JsonObject) = synchronized(lock) { job.outcome = value }

@@ -87,23 +87,24 @@ class JobQueueTest {
         assertEquals(Job.DONE, queue.await(first.id).state)  // over already: at once
     }
 
-    @Test fun aWaitingJobOfTheSameKeyIsTheAnswerToAnotherThatMayJoinIt() = runTest {
+    @Test fun aJobOfTheSameKeyThatWaitsOrRunsIsTheAnswerToAnotherThatMayJoinIt() = runTest {
         val queue = queue()
         val gate = CompletableDeferred<Unit>()
         val running = queue.submit(spec("oasis/wonderwall") { gate.await() }).first
         runCurrent()
-        val (waiting, new) = queue.submit(spec("oasis/wonderwall"))
-        assertTrue(new)  // the running one never takes it in: it comes after
-        assertTrue(waiting.id != running.id)
+        val (same, new) = queue.submit(spec("oasis/wonderwall"))  // a second Remove from another device, say
+        assertFalse(new)  // as caracole serve's queue answers a request that fetches nothing: the one that runs
+        assertEquals(running.id, same.id)
+        val (own, apart) = queue.submit(spec("oasis/wonderwall", join = false))  // one that must come after
+        assertTrue(apart && own.id != running.id)
         val (joined, again) = queue.submit(spec("oasis/wonderwall"))
         assertFalse(again)
-        assertEquals(waiting.id, joined.id)
-        val (own, apart) = queue.submit(spec("oasis/wonderwall", join = false))
-        assertTrue(apart && own.id != waiting.id)
+        assertEquals(running.id, joined.id)  // the oldest of the key's
         assertTrue(queue.submit(spec("blur/song 2")).second)  // another key: a job of its own
         gate.complete(Unit)
         runCurrent()
-        assertEquals(4, queue.snapshot().size)
+        assertEquals(3, queue.snapshot().size)
+        assertTrue(queue.submit(spec("oasis/wonderwall")).second)  // over: the next is a job of its own
     }
 
     @Test fun aFullQueueTakesNoNewJobButAJobThatJoinsNeedsNoRoom() = runTest {
@@ -116,6 +117,7 @@ class JobQueueTest {
         val refused = assertFailsWith<Refused> { queue.submitOrRefuse(spec("c")) }
         assertEquals(503 to "The queue is full: try again once it empties.", refused.status to refused.message)
         assertEquals(waiting.id, queue.submit(spec("b")).first.id)
+        assertEquals(1, queue.submit(spec("a")).first.id)  // so does one that joins the job that runs
         gate.complete(Unit)
         runCurrent()
         assertTrue(queue.submit(spec("c")).second)
@@ -170,6 +172,59 @@ class JobQueueTest {
         assertEquals(listOf("asking the computer", "error: The computer can't be reached. Is caracole serve running?"),
                      over.output)
         assertEquals(Job.DONE, queue.job(next.id)!!.state)
+    }
+
+    @Test fun aFailureIsSaidByTheStageThatRanNeverWhatItSaidWhileItRanAndInItsFirstLine() = runTest {
+        val queue = queue()
+        val failing = queue.submit(spec("a", kind = "sync", stages = listOf("compare" to "Compare", "take" to "Take")) {
+            it.stage("compare", "done", "4 differences")
+            it.stage("take", "running", "song/radiohead/creep")
+            throw IllegalStateException("\nSQLITE_BUSY: the database is locked\n  at Take.applyUnits(Take.kt:88)")
+        }).first
+        val between = queue.submit(spec("b", kind = "sync", stages = listOf("compare" to "Compare", "take" to "Take")) {
+            it.stage("compare", "done")
+            throw IllegalStateException("The computer stopped answering.")
+        }).first
+        runCurrent()
+        val over = queue.job(failing.id)!!
+        assertEquals(listOf("done" to "4 differences", "failed" to "SQLITE_BUSY: the database is locked"),
+                     over.stages.map { it.state to it.detail })
+        assertEquals("song/radiohead/creep", over.stages[1].runningDetail)
+        assertEquals("error: SQLITE_BUSY: the database is locked", over.output.last())
+        assertEquals("SQLITE_BUSY: the database is locked.", JobViews.line(over).text)
+        val next = queue.job(between.id)!!  // between two stages: the next one says why
+        assertEquals(listOf("done" to "", "failed" to "The computer stopped answering."),
+                     next.stages.map { it.state to it.detail })
+        assertEquals("The computer stopped answering.", JobViews.line(next).text)
+    }
+
+    private fun deep(n: Int): Int = deep(n + 1) + 1  // a StackOverflowError, as a bug's
+
+    @Test fun aRunsOwnTimeoutAndAnErrorItThrowsFailItsJobAloneAndTheWorkerGoesOn() = runTest {
+        val queue = queue()
+        val told = mutableListOf<Boolean>()
+        queue.onBusy = { told += it }
+        val timedOut = queue.submit(spec("a", kind = "sync", stages = listOf("give" to "Give")) {
+            it.stage("give", "running")
+            kotlinx.coroutines.withTimeout(10_000) { CompletableDeferred<Unit>().await() }  // the push never taken
+        }).first
+        val todo = queue.submit(spec("b") { TODO("lane sync-take") }).first
+        val overflow = queue.submit(spec("c") { deep(0) }).first
+        val next = queue.submit(spec("d")).first
+        runCurrent()
+        testScheduler.advanceTimeBy(10_001)
+        runCurrent()
+        assertEquals(Job.FAILED, queue.job(timedOut.id)!!.state)
+        assertTrue(queue.job(timedOut.id)!!.output.last().startsWith("error: Timed out "))  // the test clock's words
+        assertEquals("error: An operation is not implemented: lane sync-take", queue.job(todo.id)!!.output.last())
+        assertEquals("error: StackOverflowError", queue.job(overflow.id)!!.output.last())
+        assertEquals(Job.FAILED, queue.await(overflow.id).state)  // await never hangs on one
+        assertEquals(Job.DONE, queue.job(next.id)!!.state)  // the worker went on
+        assertEquals(0, queue.activeCount())
+        assertEquals(listOf(true, false), told)  // and the queue went idle
+        assertTrue(queue.submit(spec("e")).second)
+        runCurrent()
+        assertEquals(Job.DONE, queue.snapshot().first().state)
     }
 
     @Test fun aJobTheScopesEndStopsIsInterruptedAndToldSo() = runTest {
