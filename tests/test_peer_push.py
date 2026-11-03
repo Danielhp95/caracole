@@ -259,6 +259,11 @@ def test_a_bad_push_id_or_sha256_is_refused_before_any_path_is_built(served, cfg
     assert built == []
     status, _, body = served.ask("POST", "/peer/push/file?sha256=" + sha(b"x"), b"x", kind=BYTES)
     assert status == 400 and built == []
+    sent = json.dumps(a_push_document({}, [])).encode()  # the push itself, sent to a push of no id
+    for push_id in ("../../../etc", push.upper(), push[:-1], "", push + "%0A"):
+        status, _, body = served.ask("POST", "/peer/push?push=" + push_id, sent, kind=JSON)
+        assert status == 400 and "16 hex" in json.loads(body)["error"], push_id
+    assert built == []
     # a push of 16 hex that isn't open
     assert served.file("f" * 16, sha(b"x"), b"x")[0] == 400
 
