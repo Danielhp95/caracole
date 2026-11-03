@@ -8,6 +8,8 @@ import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.JobsRoutes
+import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.server.page.SongCards
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
 import io.github.danielhp95.caracole.server.testing.TestApp
@@ -127,7 +129,6 @@ class LibraryRoutesTest {
     // --- with the lanes it stands on -------------------------------------------------------------------------------
 
     @Test fun `a request adds the song as an add job under its identity key`() {
-        Landed.assume()
         val answer = app.postScript("/request", listOf("artist" to " Soda Stereo ", "title" to "De Música Ligera",
                                                        "album" to "Canción Animal", "duration" to "3:31"))
         assertEquals(200, answer.status, answer.json.toString())
@@ -146,7 +147,6 @@ class LibraryRoutesTest {
     }
 
     @Test fun `Fetch now adds the song too, its line saying the computer's next run fetches it`() {
-        Landed.assume()
         val answer = app.postScript("/request", listOf("artist" to "Radiohead", "title" to "Creep", "fetch" to "1"))
         val job = waitFor(answer.json.jsonObject.getValue("job").jsonObject)
         assertEquals("done", job.state)
@@ -156,7 +156,6 @@ class LibraryRoutesTest {
     }
 
     @Test fun `one text is read as song_names reads it, and one that names no artist is refused`() {
-        Landed.assume()
         val answer = app.postScript("/request", listOf("q" to "Soda Stereo - De Música Ligera"))
         assertEquals("done", waitFor(answer.json.jsonObject.getValue("job").jsonObject).state)
         assertNotNull(song("Soda Stereo", "De Música Ligera"))
@@ -166,7 +165,6 @@ class LibraryRoutesTest {
     }
 
     @Test fun `Get it adds the song and answers a lookup's shape, which the page follows`() {
-        Landed.assume()
         val answer = app.postScript("/lookup", listOf("artist" to "Radiohead", "title" to "Karma Police",
                                                       "ug" to "radiohead/karma-police"))
         assertEquals(202, answer.status)
@@ -183,7 +181,6 @@ class LibraryRoutesTest {
     }
 
     @Test fun `add then remove leaves a tombstone, and the song stays removed until asked for again`() {
-        Landed.assume()
         waitFor(app.postScript("/request", listOf("artist" to "Oasis", "title" to "Wonderwall")).json.jsonObject.getValue("job").jsonObject)
         val wonderwall = assertNotNull(song("Oasis", "Wonderwall"))
 
@@ -216,7 +213,6 @@ class LibraryRoutesTest {
     }
 
     @Test fun `a removal confirmed goes back to the library page as it was left, at the song's card`() {
-        Landed.assume()
         waitFor(app.postScript("/request", listOf("artist" to "Blur", "title" to "Song 2")).json.jsonObject.getValue("job").jsonObject)
         val song2 = assertNotNull(song("Blur", "Song 2"))
         val page = app.post("/remove", listOf("song" to song2.id.toString(), "confirm" to "1", "key" to song2.key,
@@ -225,8 +221,94 @@ class LibraryRoutesTest {
         assertEquals("/#tab=library&q=blur&song=${song2.id}", page.header("Location"))
     }
 
+    private fun added(fields: List<Pair<String, String>>, path: String = "/request"): Job {
+        val data = app.postScript(path, fields).json.jsonObject
+        return waitFor((data["job"] as? JsonObject) ?: data.getValue("view").jsonObject)
+    }
+
+    private fun unitOf(song: SongRow) = app.database.read { Units.libraryState(it) }.getValue("song/${song.key}")
+
+    @Test fun `a song the library has is never written to, whichever form asks for it again`() {
+        added(listOf("artist" to "Radiohead", "title" to "Creep", "album" to "Pablo Honey", "duration" to "3:58"))
+        val creep = assertNotNull(song("Radiohead", "Creep"))
+        val before = unitOf(creep)
+        val asked = listOf(
+            "/lookup" to listOf("song" to creep.id.toString()),
+            "/lookup" to listOf("artist" to "Radiohead", "title" to "Creep"),
+            "/lookup" to listOf("q" to "Radiohead - Creep"),
+            "/request" to listOf("artist" to "radiohead", "title" to "CREEP"),
+            "/request" to listOf("artist" to "Radiohead", "title" to "Creep", "album" to "Other", "duration" to "1:00",
+                                 "fetch" to "1"),
+        )
+        for ((path, fields) in asked) {
+            val job = added(fields, path)
+            assertEquals("done", job.state, "$path $fields")
+            assertEquals(creep.key, job.spec.key)
+            assertEquals(creep.id, job.songId)
+            assertEquals(before, unitOf(creep), "$path $fields: its unit as it was")
+        }
+        val after = assertNotNull(song("Radiohead", "Creep"))
+        assertEquals("Pablo Honey", after.album)
+        assertEquals(238_000L, after.durationMs)
+        assertEquals(creep.sourceIds, after.sourceIds)
+        assertEquals(1, app.database.read { Songs.list(it) }.size)
+        // Its line names it as the library does, and says it is there already.
+        val again = added(listOf("artist" to "radiohead", "title" to "creep"))
+        assertEquals("Add Radiohead - Creep", again.spec.title)
+        assertEquals("In your library as Radiohead - Creep.", again.stages.single().detail)
+    }
+
+    @Test fun `a new song's names are those wanted dot txt's line would hold`() {
+        val job = added(listOf("artist" to "Soda  Stereo\u200b", "title" to "De Mu\u0301sica   Ligera",
+                               "album" to " Canción\u00a0 Animal "))
+        val song = assertNotNull(song("Soda Stereo", "De Música Ligera"))
+        assertEquals("Soda Stereo", song.artist)
+        assertEquals("De Música Ligera", song.title)
+        assertEquals("Canción Animal", song.album)
+        assertEquals("Soda Stereo - De Música Ligera", job.display)
+        assertEquals(Normalize.identityKey("Soda Stereo", "De Música Ligera"), job.spec.key)
+        val refused = app.postScript("/request", listOf("artist" to "\u200b", "title" to "T"))
+        assertEquals(400, refused.status)
+        assertEquals("caracole can't add this song: a song needs an artist and a title", error(refused))
+    }
+
+    @Test fun `a full queue is refused, 503, and nothing is added`() {
+        val full = JobQueue(scope, limit = 0)
+        val dir = tmp.newFolder("full")
+        TestApp(dir, modules = { database ->
+            listOf(LibraryRoutes(LibraryStore(java.io.File(dir, "library")), full, NoCards, database))
+        }).use { small ->
+            for (path in listOf("/request", "/lookup")) {
+                val answer = small.postScript(path, listOf("artist" to "Oasis", "title" to "Wonderwall"))
+                assertEquals(503, answer.status, path)
+                assertEquals(LibraryRoutes.FULL, error(answer))
+            }
+            assertEquals(emptyList(), small.database.read { Songs.list(it) })
+        }
+    }
+
+    @Test fun `once its add is done, the job names its song, whose card the page's requests carry`() {
+        val dir = tmp.newFolder("cards")
+        val cards = object : SongCards {
+            override fun cards(db: Db, songs: List<SongRow>): Map<Long, JsonObject> =
+                songs.associate { it.id to JsonObject(mapOf("id" to JsonPrimitive(it.id), "display" to JsonPrimitive(it.display))) }
+        }
+        TestApp(dir, modules = { database ->
+            listOf(JobsRoutes(queue, cards, database), LibraryRoutes(LibraryStore(java.io.File(dir, "library")), queue, cards, database))
+        }).use { paged ->
+            val view = paged.postScript("/lookup", listOf("artist" to "Blur", "title" to "Song 2")).json.jsonObject
+                .getValue("view").jsonObject
+            val job = waitFor(view)
+            val song = assertNotNull(paged.database.read { Songs.byKey(it, Normalize.identityKey("Blur", "Song 2")) })
+            assertEquals(song.id, job.songId)
+            val shown = paged.script("/jobs.json?jobs=${job.id}").json.jsonObject.getValue("jobs").jsonArray.single().jsonObject
+            assertEquals(JsonPrimitive(song.id), shown["songId"])
+            assertEquals(JsonPrimitive("Blur - Song 2"), shown.getValue("card").jsonObject["display"])
+            assertEquals(LibraryRoutes.FETCH_LATER, shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
+        }
+    }
+
     @Test fun `the question names the files the phone keeps for the song`() {
-        Landed.assume()
         waitFor(app.postScript("/request", listOf("artist" to "Estopa", "title" to "Tu Calorro")).json.jsonObject.getValue("job").jsonObject)
         val calorro = assertNotNull(song("Estopa", "Tu Calorro"))
         app.database.writeBlocking { db ->

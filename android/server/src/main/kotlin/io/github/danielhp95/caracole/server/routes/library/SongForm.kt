@@ -10,7 +10,8 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.server.http.Refused
 
 /** A song a form names, as library_routes.py reads one (`named_form`, `wanted_line`) and the phone adds it: its
- * names as written (stripped), its album, its length in milliseconds, and its identity key, the job's key. */
+ * names as wanted.txt's line writes them (wanted._clean: NFC, single spaces, no stray zero-width characters at the
+ * ends), its album so too, its length in milliseconds, and its identity key, the job's key. */
 internal data class NamedSong(val artist: String, val title: String, val album: String?, val durationMs: Long?) {
     val display: String get() = "$artist - $title"
     val key: String get() = Normalize.identityKey(artist, title)
@@ -49,7 +50,8 @@ internal object SongForm {
     }
 
     /** wanted_line's checks, short of wanted.txt: each field within its limit, an artist and a title, a length that
-     * reads as one, and names the computer's wanted.txt can hold (an artist with " - " in it it can't). */
+     * reads as one, and names the computer's wanted.txt can hold (an artist with " - " in it it can't, nor one or a
+     * title that is nothing once cleaned); the names cleaned as its line writes them (format_line). */
     fun song(form: Map<String, String>): NamedSong {
         val values = LIMITS.keys.associateWith { Py.strip(form[it].orEmpty()) }
         for ((name, value) in values) {
@@ -71,14 +73,25 @@ internal object SongForm {
         }
         if (SEPARATOR.containsMatchIn(clean(artist))) {
             throw Refused(400, "Not added", "caracole can't add this song: wanted.txt can't hold an artist name with " +
-                                            "' - ' in it: '$artist'")
+                                            "' - ' in it: ${PyStr.repr(artist)}")
         }
+        val written = clean(artist) to clean(title)
+        if (written.first.isEmpty() || written.second.isEmpty()) {
+            throw Refused(400, "Not added", "caracole can't add this song: a song needs an artist and a title")
+        }
+        checkPicks(form)
+        val album = values.getValue("album").takeIf { it.isNotEmpty() }?.let(::clean)?.ifEmpty { null }
+        return NamedSong(written.first, written.second, album, durationMs)
+    }
+
+    /** search_routes._pick's limits: each site's pick a form carries within its length (what the phone takes no
+     * further), else refused. */
+    fun checkPicks(form: Map<String, String>) {
         for ((name, limit) in PICK_LIMITS) {
             if (Py.len(Py.strip(form[name].orEmpty())) > limit) {
                 throw Refused(400, "Too long", "The $name is too long: $limit characters at most.")
             }
         }
-        return NamedSong(artist, title, values.getValue("album").ifEmpty { null }, durationMs)
     }
 
     /** wanted.parse_duration: milliseconds for m:ss, h:mm:ss or whole seconds; null for a text that isn't one;
@@ -109,5 +122,5 @@ internal object SongForm {
     }
 
     /** wanted._clean: NFC, single spaces, no stray zero-width characters at the ends. */
-    private fun clean(s: String): String = Py.strip(Py.split(PyUnicode.nfc(s)).joinToString(" ").trim { it in INVISIBLE })
+    fun clean(s: String): String = Py.strip(Py.split(PyUnicode.nfc(s)).joinToString(" ").trim { it in INVISIBLE })
 }

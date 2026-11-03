@@ -17,15 +17,15 @@ import kotlinx.serialization.json.contentOrNull
 internal object SyncJson {
     private fun text(value: String?): JsonElement = value?.let(::JsonPrimitive) ?: JsonNull
 
-    /** POST /sync/compare's answer: the comparison's id, the other side, whether the two synced before, and each
-     * difference with its kind, its proposal, why, and each side's digest. */
+    /** POST /sync/compare's answer: the comparison's id, the other side, when the two last agreed (null: never), and
+     * each difference with its kind, its proposal, why, and each side's digest. */
     fun comparison(c: Comparison): JsonObject = JsonObject(linkedMapOf(
         "comparison" to JsonPrimitive(c.id),
         "peer" to JsonObject(linkedMapOf(
             "address" to JsonPrimitive(c.address), "server" to text(c.peer.server),
             "caracole" to JsonPrimitive(c.peer.caracole), "name" to JsonPrimitive(c.peer.name),
         )),
-        "synced_before" to JsonPrimitive(c.syncedBefore),
+        "synced_before" to text(c.syncedBefore),
         "differences" to JsonArray(c.differences.map { d ->
             JsonObject(linkedMapOf(
                 "id" to JsonPrimitive(d.id), "label" to JsonPrimitive(d.label),

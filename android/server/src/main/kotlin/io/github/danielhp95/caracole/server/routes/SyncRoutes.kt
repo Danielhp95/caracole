@@ -1,13 +1,14 @@
 package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.Compare
 import io.github.danielhp95.caracole.core.sync.Comparison
 import io.github.danielhp95.caracole.core.sync.PeerError
+import io.github.danielhp95.caracole.core.sync.SameCaracole
 import io.github.danielhp95.caracole.core.sync.Side
 import io.github.danielhp95.caracole.core.sync.SyncEngine
 import io.github.danielhp95.caracole.core.sync.SyncFailed
-import io.github.danielhp95.caracole.mirror.ServerAddress
 import io.github.danielhp95.caracole.mirror.SyncError
 import io.github.danielhp95.caracole.server.http.AppConfig
 import io.github.danielhp95.caracole.server.http.GetAnswer
@@ -20,7 +21,9 @@ import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.routes.library.Answers
+import io.github.danielhp95.caracole.server.routes.library.PyStr
 import io.github.danielhp95.caracole.server.routes.library.SyncJson
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -31,25 +34,31 @@ interface SyncSettings {
 }
 
 /**
- * The Sync tab's routes on the phone, answering the shapes caracole serve's sync_routes.py answers (the plan's §5.3;
- * library_assets/sync.js reads them on both sides):
+ * The Sync tab's routes on the phone, answering as caracole serve's sync_routes.py answers, in its words and with its
+ * shapes (library_assets/sync.js reads them on both sides; tests/conformance/vectors/web/sync_routes.jsonl):
  *
- *     GET  /api/sync       this phone's id, its library's name, the address it synced with last ([settings]), and the
- *                          computers it synced with before (kv sync:peer:<id>), the last first
- *     POST /sync/compare   the phone and the computer at `address` compared (SyncEngine.compare), the address
- *                          remembered: the comparison's id, the other side, whether the two synced before, and each
- *                          difference, its kind, proposal, why and each side's digest; the comparison kept 10 minutes
- *     POST /sync/apply     a comparison kept applied as a job (kind `sync`, key `sync:<address>`; its stages compare,
- *                          take, give, mirror, agree, index): `prefer` ("", here or there) and `choices`, a line each,
- *                          `<here|there|skip>\t<unit id>`, for the conflicts and the proposals flipped
+ *     GET  /api/sync       this phone's id, its library's name ([name]), the address it compared with last
+ *                          ([settings], else the computer it synced with last), and the computers it synced with
+ *                          before (kv sync:peer:<id>), the last first
+ *     POST /sync/compare   the phone and the caracole at `address` (peer_sync.peer_address's reading) compared
+ *                          (SyncEngine.compare), the address remembered: the comparison's id, the other side, when the
+ *                          two last agreed (`synced_before`, null: never), and each difference, its kind, proposal, why
+ *                          and each side's digest; the comparison kept 10 minutes
+ *     POST /sync/apply     a comparison kept, synced as the owner chose (`choices`, a line each,
+ *                          `<here|there|skip>\t<unit id>`; `prefer`: here, there, or "" for none): a job (kind `sync`,
+ *                          key `sync:<address>`; its stages compare, take, give, mirror, agree, index), its view the
+ *                          answer
  *
- * Refused, 409, for a comparison over (older than 10 minutes, or never made here), a conflict with neither a choice
- * nor `prefer`, and a computer that can't be compared with; 400 for an address or a choice that can't be read. The
- * job runs SyncEngine.apply, sets its view's outcome (what was taken, given and left, what the two agree on, the
- * indexes merged; on a failure, what it did until then), then [afterSync] (the search cache, the page's data).
+ * Refused as sync_routes.py refuses: an address that isn't one, 400; a computer that can't be asked, 502; this very
+ * phone's database copied, 409; a comparison more than 10 minutes old or never made here, 409; a `prefer` or a choice
+ * that can't be read, 400; a conflict with neither a choice nor `prefer`, 409; the two changed since the comparison,
+ * which Sync compares afresh to tell before anything is queued, 409; a sync with that computer that waits or runs
+ * already, 409. The job runs SyncEngine.apply, sets its view's outcome (what was taken, given and left, what the two
+ * agree on, the indexes merged; on a failure, what it did until then), then [afterSync] (the search cache, the page's
+ * data).
  */
 class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: SyncSettings, val database: Database,
-                 val afterSync: () -> Unit) : RouteModule {
+                 val afterSync: () -> Unit, val name: String = AppConfig.PHONE) : RouteModule {
     override val routes: List<Route> = listOf(
         Route("GET", "/api/sync", "this phone's sync and the computers it synced with", get = GetAnswer { state() }),
         Route("POST", "/sync/compare", "compare with the computer", post = PostAnswer { _, form -> compare(form) }),
@@ -59,88 +68,118 @@ class SyncRoutes(val engine: SyncEngine, val queue: JobQueue, val settings: Sync
 
     private fun state(): Response {
         val (server, peers) = database.read { db -> Compare.ownId(db) to SyncJson.peers(db) }
+        val last = (peers.firstOrNull() as? JsonObject)?.get("address")
         return Answers.json(JsonObject(linkedMapOf(
-            "server" to JsonPrimitive(server), "name" to JsonPrimitive(AppConfig.PHONE),
-            "address" to (settings.address?.let(::JsonPrimitive) ?: kotlinx.serialization.json.JsonNull),
+            "server" to JsonPrimitive(server), "name" to JsonPrimitive(name),
+            "address" to (settings.address?.let(::JsonPrimitive) ?: last ?: JsonNull),
             "peers" to peers,
         )))
     }
 
     private fun compare(form: Map<String, String>): Response {
         val address = try {
-            ServerAddress.parse(form["address"].orEmpty()).toString()
-        } catch (e: SyncError) {
-            throw Refused(400, "Not an address", e.message ?: "That isn't an address the phone can ask.")
+            SyncEngine.peerAddress(form["address"].orEmpty())
+        } catch (e: PeerError) {
+            throw Refused(400, "Not an address", e.message ?: "That isn't an address.")
         }
         settings.remember(address)
-        val comparison = try {
-            engine.compare(address)
-        } catch (e: PeerError) {
-            throw Refused(409, "Not compared", e.message ?: "The computer couldn't be compared with.")
-        } catch (e: SyncError) {
-            throw Refused(409, "Not compared", e.message ?: "The computer couldn't be compared with.")
-        }
-        return Answers.json(SyncJson.comparison(comparison))
+        return Answers.json(SyncJson.comparison(asking { engine.compare(address) }))
     }
 
     private fun apply(form: Map<String, String>): Response {
-        val comparison = engine.comparison(form["comparison"].orEmpty())
-            ?: throw Refused(409, "Compare again", "That comparison is over (one lasts 10 minutes): compare again.")
-        val prefer = when (form["prefer"].orEmpty()) {
+        val made = Py.strip(form["comparison"].orEmpty())
+        val kept = (if (made.isNotEmpty()) engine.comparison(made) else null) ?: throw Refused(409, "Compare again", GONE)
+        val prefer = when (Py.strip(form["prefer"].orEmpty())) {
             "" -> null
             "here" -> Side.HERE
             "there" -> Side.THERE
-            else -> throw Refused(400, "Not a side", "Which side? prefer is here, there, or nothing.")
+            else -> throw Refused(400, "Not a side", "prefer is here, there, or nothing.")
         }
-        val choices = choices(form["choices"].orEmpty(), comparison)
-        val unsettled = comparison.differences.count { it.proposal == CONFLICT && choices[it.id] == null && prefer == null }
-        if (unsettled > 0) {
-            throw Refused(409, "Choose first", "Choose a side for every conflict first: " +
-                                               "$unsettled ${if (unsettled == 1) "conflict has" else "conflicts have"} none.")
+        val choices = choicesOf(form["choices"].orEmpty(), kept)
+        val open = kept.differences.count { it.proposal == CONFLICT && it.id !in choices }
+        if (open > 0 && prefer == null) throw Refused(409, "Choose first", SyncEngine.unsettled(open))
+        // Afresh: refused now, before anything is queued, once the two are past the comparison.
+        if (!asking { engine.stillAsCompared(kept) }) {
+            engine.forget(made)
+            throw Refused(409, "Compare again", SyncEngine.STALE)
         }
-        val name = comparison.peer.name.ifEmpty { comparison.address }
-        val (job, _) = queue.submit(JobSpec(
-            title = "Sync with $name", key = SYNC_KEY + comparison.address, kind = "sync", stages = SyncEngine.STAGES,
-            display = "Sync with $name",
+        val shown = "Sync with ${Py.slice(Py.strip(kept.peer.name).ifEmpty { kept.address }, null, 120)}"
+        val (job, new) = queue.submitOrRefuse(JobSpec(
+            title = shown, key = SYNCING + kept.address, kind = "sync", stages = SyncEngine.STAGES, display = shown,
             run = { context ->
+                val told = HashSet<String>()
                 try {
-                    val outcome = engine.apply(comparison, choices, prefer) { stage, state, detail ->
+                    val outcome = engine.apply(kept, choices, prefer) { stage, state, detail ->
+                        told.add(stage)
                         context.stage(stage, state, detail)
                     }
                     context.outcome(SyncJson.outcome(outcome))
                 } catch (e: SyncFailed) {
                     e.outcome?.let { context.outcome(SyncJson.outcome(it)) }
+                    // The stages after the one that failed never ran: skipped, as the computer's queue ends them.
+                    for ((stage, _) in SyncEngine.STAGES) if (stage !in told) context.stage(stage, "skipped")
                     throw e
                 } finally {
                     afterSync()
                 }
             },
         ))
-        return Answers.queued(JobViews.view(job, queue))
+        if (!new) {
+            throw Refused(409, "Syncing already", "A sync with ${kept.address} is on its way already (request " +
+                                                  "${job.id}): compare again once it is over.")
+        }
+        engine.forget(made)
+        return Answers.queued(JobViews.view(job, queue), "/#tab=sync")
     }
 
-    /** The choices posted, a line each, `<here|there|skip>\t<unit id>`, each of a difference of [c]. */
-    private fun choices(text: String, c: Comparison): Map<String, Side> {
+    /** [ask], the computer asked: refused as sync_routes._compared refuses (502 when it can't be asked, 409 when it is
+     * this very phone). */
+    private fun <T> asking(ask: () -> T): T = try {
+        ask()
+    } catch (e: SameCaracole) {
+        throw Refused(409, "The same caracole", e.message ?: "")
+    } catch (e: SyncError.BadAddress) {
+        throw Refused(400, "Not an address", e.message ?: "")
+    } catch (e: PeerError) {
+        throw Refused(502, "Not reached", e.message ?: "")
+    } catch (e: SyncError) {
+        throw Refused(502, "Not reached", e.message ?: "")
+    }
+
+    /** sync_routes.choices_of: the owner's choices, a line each (`<here|there|skip>\t<unit id>`, a blank line left
+     * out), each unit's side; refused (400) for a line that isn't one, a unit the comparison didn't find, or one
+     * chosen two ways. */
+    private fun choicesOf(text: String, c: Comparison): Map<String, Side> {
         val ids = c.differences.map { it.id }.toSet()
-        val chosen = LinkedHashMap<String, Side>()
-        for (line in text.split('\n').map { it.removeSuffix("\r") }.filter { it.isNotEmpty() }) {
-            val side = SIDES[line.substringBefore('\t', "")]
-            val id = line.substringAfter('\t', "")
-            if (side == null || id !in ids) {
-                throw Refused(400, "Not a choice", "A choice is here, there or skip, then a tab and a unit the " +
-                                                   "comparison found: '${line.take(200)}' isn't one.")
+        val found = LinkedHashMap<String, Side>()
+        for (line in PyStr.splitlines(text)) {
+            if (Py.strip(line).isEmpty()) continue
+            val tab = line.indexOf('\t')
+            val side = if (tab < 0) null else SIDES[line.substring(0, tab)]
+            val unit = if (tab < 0) "" else line.substring(tab + 1)
+            if (side == null || unit !in ids) {
+                throw Refused(400, "Not a choice", "${PyStr.repr(Py.slice(line, null, 200))} isn't a choice of this " +
+                                                   "comparison's: here, there or skip, a tab, then one of its units.")
             }
-            chosen[id] = side
+            if ((found[unit] ?: side) != side) {
+                throw Refused(400, "Not a choice", "${Py.slice(unit, null, 200)} is chosen two ways.")
+            }
+            found[unit] = side
         }
-        return chosen
+        return found
     }
 
     companion object {
         /** POST /sync/apply's form at most: a line a difference, for a library's every unit. */
         const val APPLY_LIMIT = 1_048_576
 
-        /** A sync's job key: the address after it, so a second sync with the computer joins one that waits. */
-        const val SYNC_KEY = "sync:"
+        /** A sync's job key: the address after it, so a second sync with the computer is refused while one waits or
+         * runs (sync_routes.SYNCING). */
+        const val SYNCING = "sync:"
+
+        /** sync_routes.GONE: a comparison no longer kept. */
+        const val GONE = "That comparison is more than 10 minutes old, or caracole serve has restarted since: " +
+            "compare the two again."
 
         private const val CONFLICT = "conflict"
         private val SIDES = mapOf("here" to Side.HERE, "there" to Side.THERE, "skip" to Side.SKIP)
