@@ -1,0 +1,15 @@
+{"corpus":"sync/fixtures/take_folder_moved","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"row":{"added_at":"2026-10-31T00:00:00Z","album":null,"artist":"Soda Stereo","artists":"[\"Soda Stereo\"]","audio_mtime":null,"audio_path":null,"autochords_mtime":null,"created_at":"2026-10-31T00:00:00Z","duration_ms":null,"id":1,"isrc":null,"key":"soda-stereo/de-musica-ligera","lacuerda_checked_at":null,"lyrics_at":null,"lyrics_json":"{\"plain\": \"I'm a creep\", \"synced\": null, \"instrumental\": false, \"duration\": null, \"lrclib_id\": 1, \"raw\": {}, \"provider\": \"lrclib\", \"url\": null}","lyrics_status":"found","match_artist_key":null,"match_candidates":"[]","match_decision":null,"match_score":null,"match_song_key":null,"match_step":null,"matched_at":null,"review":0,"source_ids":"{\"wanted\": [\"soda-stereo/de-musica-ligera\"]}","status":"found","title":"De Musica Ligera","ug_checked_at":null,"ug_dirty":1,"updated_at":"2026-10-31T00:00:00Z","variant":null},"table":"songs"}
+{"row":{"coverage":null,"fetched_at":"2026-10-31T00:00:00Z","gone":0,"id":1,"kind":"chords","label":null,"pick_rank":null,"provider":"ug","rating":4.5,"raw":"{\"x\": 1}","slot":"sheet","song_id":1,"tab_id":"101","url":"https://u/101","version":1,"votes":10},"table":"versions"}
+{"row":{"created_at":"2026-10-31T00:00:00Z","id":1,"kept_rank":1,"name":"sheet.txt","path":"Soda Stereo/De Musica Ligera/sheet.txt","sha256":"2dafa4711a130165a2407cb1a3dc8b69299c1b153f837eac08ba584e1443df7e","song_id":1,"version_id":1},"table":"files"}
+{"row":{"created_at":"2026-10-31T00:00:00Z","id":2,"kept_rank":1,"name":"tab.txt","path":"Soda Stereo/De Musica Ligera/tab.txt","sha256":"34eea96bf9ad61114fcf788fc54e558cdd4f2e89bf7329fa7b96c56cad9fcd38","song_id":1,"version_id":1},"table":"files"}
+{"kv":"phone:schema","value":"1"}
+{"kv":"render:1","value":"{\"made\": true}"}
+{"kv":"render:1:trad","value":"{\"made\": true}"}
+{"kv":"render:export:1","value":"{\"made\": true}"}
+{"kv":"render:files:1","value":"{\"made\": true}"}
+{"kv":"render:progressions:1","value":"{\"made\": true}"}
+{"kv":"songs:key_version","value":"2"}
+{"kv":"wanted:first_seen:soda-stereo/de-musica-ligera","value":"2026-10-31T00:00:00Z"}
+{"base64":"W0FtXUNyZWVw","file":"Soda Stereo/De Musica Ligera/sheet.txt"}
+{"base64":"ZXwtLTMtLXw=","file":"Soda Stereo/De Musica Ligera/tab.txt"}
