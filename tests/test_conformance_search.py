@@ -18,6 +18,12 @@ against the fixture replayed into a fresh database (``replay_fixture``), never t
 - ``lacuerda``: LaCuerda's index (test_lacuerda_index.py's listings, artist pages and search answers), its listings
   read in part (kv ``lacuerda:index:pages``);
 - ``names``: what song_names.py knows an artist by (test_song_names.py's);
+- ``common``: words too common for what a search reads, each past the cap that bounds it: "love" in more than
+  ``key_search.KEYS_PER_PATTERN`` keys and more than ``search.CLOSE_TABS`` rows of Ultimate Guitar's index,
+  "crooner" in as many artists' keys (more than ``search.CLOSE_ARTISTS``), a key of both that only the keys every
+  pattern is in bring in (``key_search._every``), more than ``search.SITE_ROWS_READ`` of gtptabs.com's pages and more
+  than ``lacuerda_index.ROWS_READ`` (and ``search.SITE_TITLES_READ``) of LaCuerda's songs a pattern finds; a row each
+  cap cuts the one that would answer (``test_the_common_fixture_is_past_each_cap_its_queries_meet``);
 - ``empty``: a database with nothing in it.
 
 **Vectors** (``vectors/search/<name>.jsonl``): a header, then a record a line, ``{fn, fixture, args, kw, out}``: the
@@ -31,11 +37,13 @@ so ``LibraryHit.song`` is the song's key). A record whose ``fn`` is a compositio
   artist, a title) and its ``{readings, score, name, holds}`` (``readings(artist, title)``, ``score(artist, title)``,
   ``name(artist)``, ``holds(artist, title)``); ``_reading`` (``args[0]`` the triples, ``kw.reading``);
   ``_names_reading`` (``args``: the query, the artists, the title; its queries ``_queries(query)``);
-  ``caracole.ug.key_search.rows_like`` over a fixture (``args[0]`` the patterns, the query's ``_patterns``).
+  ``caracole.ug.key_search.rows_like`` over a fixture (``args[0]`` the patterns, the query's ``_patterns``; one
+  record a set of them, in any order the same keys).
 - library.jsonl: ``search_library``, ``search_removed``; ``library_by_artist`` of the fixture's songs
   (``songs.list_songs``).
 - index.jsonl: ``find_index``; ``found``: ``found(search_library(conn, q, 5), find_index(conn, q))``, as
-  /api/search puts them together; ``artist_songs``, ``index_artist``; ``bare_id_hint`` and ``bare_id_unseen`` of
+  /api/search puts them together; ``artist_songs``, ``index_artist`` (of the fixture's artist keys, ``sampled``: of
+  keys alike but for a number, the first three and the last); ``bare_id_hint`` and ``bare_id_unseen`` of
   ``find_index(conn, q)``'s songs then its artists (no overrides.toml); ``no_ones``.
 - suggest.jsonl: ``suggest_artists``, ``suggest_titles``; ``suggestions`` of ``find_index(conn, q)``, and, with
   ``kw.sites`` ``"api"``, the other sites' answers /api/search hands it: ``search_lacuerda(conn, q, songs=5)``'s
@@ -52,12 +60,14 @@ so ``LibraryHit.song`` is the song's key). A record whose ``fn`` is a compositio
 **/api/search and /api/artist** (``vectors/web/api_search.jsonl``): records ``{fn: "caracole.web.app.WebApp.handle",
 fixture, args: ["GET", path], kw: {}, out: {status, json}}``, each answered by a real ``WebApp`` over the fixture
 replayed into its state folder, with an empty library folder, ``searches_lacuerda=False`` and
-``searches_youtube=False``. The phone answers ``progression``, ``lacuerda_search``, ``lacuerda_unlisted`` and
-``youtube`` as null, and a progression can add rows to ``library``, so the generator patches, for its ``WebApp``
-alone, ``progressions.read_progression`` to answer None and ``search.lacuerda_unlisted`` to answer None: the answers
-recorded are those the phone computes. The rest of an answer is caracole serve's own. What a song's card says of
-the files of its folder is masked: in every object with a ``links`` member (a ``library`` row, a site row's song of
-yours), ``links``, ``files``, ``source``, ``key`` and ``instruments`` are ``"*"``.
+``searches_youtube=False``: each fixture's queries and artists, over ug the texts and addresses of ``API_TEXTS`` and
+``API_RAW`` (how the route reads a query), and on every fixture ``API_ARTIST``'s. The phone answers ``progression``,
+``lacuerda_search``, ``lacuerda_unlisted`` and ``youtube`` as null, and a progression can add rows to ``library``, so
+the generator patches, for its ``WebApp`` alone, ``progressions.read_progression`` to answer None and
+``search.lacuerda_unlisted`` to answer None: the answers recorded are those the phone computes. The rest of an answer
+is caracole serve's own. What a song's card says of the files of its folder is masked: in every object with a
+``links`` member (a ``library`` row, a site row's song of yours), ``links``, ``files``, ``source``, ``key`` and
+``instruments`` are ``"*"``.
 
 The generator's answers are the same under any hash seed (``test_the_corpus_is_the_same_whatever_the_hash_seed``,
 which runs it twice, in subprocesses with ``PYTHONHASHSEED`` 1 and 2). Regenerate with ``CARACOLE_CORPUS=write``
@@ -71,6 +81,7 @@ import os
 import subprocess
 import sys
 from collections.abc import Callable, Iterator, Sequence
+import re
 from contextlib import closing, contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -85,7 +96,6 @@ TESTS = Path(__file__).resolve().parent
 SRC = TESTS.parent / "src"
 MADE_BY = "tests/test_conformance_search.py"
 STAMP = "2026-11-03T10:00:00Z"
-NOW = datetime(2026, 10, 27, tzinfo=UTC)
 SEARCH = VECTORS / "search"
 API = VECTORS / "web" / "api_search.jsonl"
 FILES = ("query", "library", "index", "suggest", "sites", "lacuerda", "names")
@@ -333,13 +343,62 @@ def build_names(conn, library: Path) -> None:
     ts.keep_sheet(conn, library, made["Lumbre - Fuego"], "[Am]la", tab_id=1)
 
 
+def _letters(n: int) -> str:
+    """``n`` in three letters: a word gtptabs.com's slugs keep whole (a number after a hyphen is an upload's)."""
+    return "".join("abcdefghijklmnopqrstuvwxyz"[n // 26 ** k % 26] for k in (2, 1, 0))
+
+
+def build_common(conn, library: Path) -> None:
+    import test_search as ts
+
+    from caracole import lacuerda_index as li
+    from caracole import search
+    from caracole.lacuerda import LCArtist, LCSong
+    from caracole.ug import key_search
+
+    # Ultimate Guitar's index: "crooner-0" ... "crooner-1099", one song each, "love-0" ... "love-1099", of 1 to 9 tabs:
+    # more keys of a word than one pattern brings in (its shortest), as many artists of one, more than a suggestion
+    # reads, and more rows of a word than a title is suggested from; "crooner-999", whose key sorts last, the one with
+    # the most songs.
+    songs = key_search.KEYS_PER_PATTERN + 100
+    rows, tab = [], 200_000
+    for n in range(songs):
+        for k in range(1 + n % 9):
+            rows.append((tab, f"crooner-{n}", f"love-{n}", "tabs" if k % 2 else "chords"))
+            tab += 1
+    assert len(rows) > search.CLOSE_TABS
+    rows += [(tab + n, "crooner-999", f"serenade-{_letters(n)}", "chords") for n in range(6)]
+    tab += 6
+    # The shortest key of the word; a key of both words longer than the shortest of either ("love crooner"); more
+    # songs of love, a baby's among them.
+    rows += [(tab, "nat-king-cole", "love", "chords"), (tab + 1, "the-love-crooners", "love-me-tender", "chords"),
+             (tab + 2, "the-supremes", "baby-love", "chords"), (tab + 3, "the-supremes", "baby-love", "tabs"),
+             (tab + 4, "frankie-valli", "i-love-you-baby", "chords")]
+    _ug(conn, rows)
+    # gtptabs.com: more of the crooners' pages than a search reads, the last by its path the one "love cyy" names.
+    ts.gtptabs_pages(conn, *(f"{ts.GTP}3/crooners/love-{_letters(n)}.html" for n in range(search.SITE_ROWS_READ + 1)))
+    # LaCuerda: more songs holding "love" than it reads, under fifty crooners; those it cuts last, by their keys'
+    # length then their paths (Love Baby) or by their paths alone (a Love whose slug sorts last), the ones that answer.
+    crooners = 50
+    li.store_artists(conn, "tabs/c/index0.html", [LCArtist(f"crooner_{j:02d}", f"Crooner {j:02d}", 0)
+                                                  for j in range(crooners)])
+    by_artist: dict[int, list] = {}
+    for n in range(li.ROWS_READ + 1):
+        by_artist.setdefault(n % crooners, []).append(LCSong(f"love_{n}", f"Love {n}", "R", (1,)))
+    by_artist[crooners - 1] += [LCSong("love_baby", "Love Baby", "RT", (1, 2)),
+                                LCSong("zz_love", "Love", "RRRT", (1, 2, 3, 4))]
+    for j, lc_songs in sorted(by_artist.items()):
+        li.store_songs(conn, f"crooner_{j:02d}", f"Crooner {j:02d}", lc_songs)
+    _songs(conn, ("Nat King Cole", "L-O-V-E"), ("Crooner 999", "Serenade"))
+
+
 def build_empty(conn, library: Path) -> None:
     pass
 
 
 FIXTURES: dict[str, Callable[[Any, Path], None]] = {
     "ug": build_ug, "by_word": build_by_word, "titles": build_titles, "sites": build_sites,
-    "lacuerda": build_lacuerda, "names": build_names, "empty": build_empty,
+    "lacuerda": build_lacuerda, "names": build_names, "common": build_common, "empty": build_empty,
 }
 
 
@@ -441,6 +500,9 @@ QUERIES: dict[str, list[str]] = {
     "names": ["silvana estrada que problema", "Silvana Estrada Que problema", "que problema", "Stand by Me",
               "Ben E King Stand by Me", "Love Me Tender", "Love Alone Again Or", "bjork army of me", "hyperfanes",
               "natalia lafourcade nunca es suficiente", "Estopa La raja de tu falda", "billy joel uptown girl"],
+    # Each cap's query (test_the_common_fixture_is_past_each_cap_its_queries_meet), and the words beside them.
+    "common": ["love", "love crooner", "love baby", "i love you baby", "baby love", "love 999", "love cyy", "lovee",
+               "babby", "love babby", "croonr", "crooner", "serenade", "nat king cole love", "the supremes baby love"],
     "empty": [],
 }
 
@@ -453,10 +515,19 @@ def queries(name: str) -> list[str]:
 
 
 def record(fn: str, fixture: str | None, args: Sequence[Any], kw: dict[str, Any], call: Callable[[], Any]) -> dict:
-    try:
-        return {"fn": fn, "fixture": fixture, "args": list(args), "kw": kw, "out": plain(call())}
-    except Exception as e:  # noqa: BLE001 (an exception is an answer too)
-        return {"fn": fn, "fixture": fixture, "args": list(args), "kw": kw, "err": type(e).__name__}
+    """A record of what ``call`` answers. None of these functions raises for any query, so an exception is the
+    generator's bug, never an answer to keep: it fails the test."""
+    return {"fn": fn, "fixture": fixture, "args": list(args), "kw": kw, "out": plain(call())}
+
+
+def sampled(names: Sequence[str]) -> list[str]:
+    """``names`` less the middle of each run of names alike but for their numbers ("number-0-the-band" ...
+    "number-300-the-band", "crooner_00" ... "crooner_49"): the first three of each and its last, in their order."""
+    runs: dict[str, list[str]] = {}
+    for name in names:
+        runs.setdefault(re.sub(r"[0-9]+", "#", name), []).append(name)
+    kept = {n for run in runs.values() for n in (*run[:3], run[-1])}
+    return [n for n in names if n in kept]
 
 
 def query_records(corpus: Corpus) -> list[dict]:
@@ -502,8 +573,11 @@ def query_records(corpus: Corpus) -> list[dict]:
                                   lambda: search._names_reading(search._queries(text), artists, title, reading)))
     for name in FIXTURES:
         with corpus.conn(name) as conn:
-            patterns = list(dict.fromkeys(tuple(search._patterns(name_words(q))) for q in queries(name)))
-            for p in [list(p) for p in patterns if p]:
+            # One a set of patterns, as a query first gives it: in any order they bring in the same keys.
+            sets: dict[frozenset[str], list[str]] = {}
+            for q in queries(name):
+                sets.setdefault(frozenset(p := search._patterns(name_words(q))), p)
+            for p in [p for p in sets.values() if p]:
                 out.append(record("caracole.ug.key_search.rows_like", name, [p], {}, lambda: rows_like(conn, p)))
     return out
 
@@ -536,9 +610,14 @@ def library_records(corpus: Corpus) -> list[dict]:
 
 
 def _artist_keys(conn) -> list[str]:
-    return [r[0] for r in conn.execute("SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key")] + \
+    return sampled([r[0] for r in conn.execute("SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key")]) + \
         [r[0] for r in conn.execute("SELECT DISTINCT artist_key FROM ug_artist_tabs ORDER BY artist_key")] + \
         ["nobody-at-all", ""]
+
+
+def _column(conn, sql: str, limit: int) -> list[str]:
+    """The values ``sql`` selects, ``sampled``, the first ``limit``."""
+    return sampled([r[0] for r in conn.execute(sql)])[:limit]
 
 
 def index_records(corpus: Corpus) -> list[dict]:
@@ -646,8 +725,7 @@ def site_records(corpus: Corpus) -> list[dict]:
                            "宋冬野", "misc", "", " — "):
                 out.append(record("caracole.search.gtptabs_songs", name, [artist], {},
                                   lambda: search.gtptabs_songs(conn, artist)))
-            paths = [r[0] for r in conn.execute("SELECT path FROM harptabs_index WHERE kind = 'artist' "
-                                                "ORDER BY path LIMIT 40")]
+            paths = _column(conn, "SELECT path FROM harptabs_index WHERE kind = 'artist' ORDER BY path", 40)
             for path in [*paths, "artist/9/nobody"]:
                 out.append(record("caracole.search.harptabs_artist", name, [path], {},
                                   lambda: search.harptabs_artist(conn, path)))
@@ -678,8 +756,7 @@ def lacuerda_records(corpus: Corpus) -> list[dict]:
                     out.append(record("caracole.lacuerda_index.find", name, [q], kw, lambda: li.find(conn, q, **kw)))
                     out.append(record("caracole.search.search_lacuerda", name, [q], kw,
                                       lambda: search.search_lacuerda(conn, q, **kw)))
-            slugs = [r[0] for r in conn.execute("SELECT DISTINCT artist_slug FROM lacuerda_index ORDER BY artist_slug "
-                                                "LIMIT 60")]
+            slugs = _column(conn, "SELECT DISTINCT artist_slug FROM lacuerda_index ORDER BY artist_slug", 60)
             for slug in [*slugs, "nobody"]:
                 out.append(record("caracole.search.lacuerda_artist", name, [slug], {},
                                   lambda: search.lacuerda_artist(conn, slug)))
@@ -689,7 +766,7 @@ def lacuerda_records(corpus: Corpus) -> list[dict]:
                                 ("song_dongye", "斑马")):
                 out.append(record("caracole.search.lacuerda_songs", name, [slug], {"title": title},
                                   lambda: search.lacuerda_songs(conn, slug, title=title)))
-            names = [r[0] for r in conn.execute("SELECT DISTINCT artist FROM lacuerda_index ORDER BY artist LIMIT 60")]
+            names = _column(conn, "SELECT DISTINCT artist FROM lacuerda_index ORDER BY artist", 60)
             for artist in [*names, "Los Enanitos Verdes", "Song Dongye", "Enanitos", "Nobody", ""]:
                 out.append(record("caracole.search.lacuerda_artist_named", name, [artist], {},
                                   lambda: search.lacuerda_artist_named(conn, artist)))
@@ -793,6 +870,26 @@ def _as_the_phone() -> Iterator[None]:
         yield
 
 
+# What /api/search folds before it searches, over the ug fixture: the query's words joined by one space (Python's
+# whitespace: Unicode's spaces, NEL, U+001C-U+001F, U+2028; never a zero-width space), cut at 200 code points (an
+# emoji is one), and too short to search by fewer than three letters or digits (two for Chinese) as str.isalnum
+# counts them (Ⅻ and ² are). Then the address itself, as parse_qs reads it: a bad escape kept, bad UTF-8 replaced,
+# the first of two fields, none at all.
+API_TEXTS = ["宋冬野\u3000斑马", "creep\u00a0radiohead", "\tcreep\n", "creep\x85radiohead", "\u200bcreep",
+             "\x1ccreep\x1f", "creep\u2028radiohead", "creep\u2003\u2003radiohead", "creep+radiohead", "宋", "宋冬",
+             "a1", "ab1", "😀😀😀", "a😀b", "Ⅻ", "Ⅻ²³", "²³¹", "x" * 250, "creep " + "😀" * 300, "😀" * 199 + " creep",
+             "radiohead " * 30]
+API_RAW = ["/api/search?q=%ZZcreep&box=corpus", "/api/search?q=caf%C3&box=corpus",
+           "/api/search?q=creep&q=oasis&box=corpus", "/api/search?box=corpus", "/api/search?q=creep",
+           "/api/search?q=creep&box=not%20a%20box", "/api/search?q=+creep+&box=corpus"]
+# /api/artist's fields as the route reads them, on every fixture: harptabs before LaCuerda's, a slug before a name,
+# each stripped of Python's whitespace (NBSP, NEL, U+3000).
+API_ARTIST = ["/api/artist?lacuerda=estopa&lacuerda_name=Nobody", "/api/artist?lacuerda=&lacuerda_name=Estopa",
+              "/api/artist?lacuerda_name=%E3%80%80Estopa%E3%80%80", "/api/artist?lacuerda=%C2%85estopa",
+              "/api/artist?key=%C2%A0radiohead%C2%A0&offset=0", "/api/artist?key=radiohead&offset=%201%20",
+              "/api/artist?harptabs=artist/1178/billy-joel&lacuerda=estopa"]
+
+
 def api_records(corpus: Corpus) -> list[dict]:
     from caracole.web.app import Request
 
@@ -801,12 +898,12 @@ def api_records(corpus: Corpus) -> list[dict]:
         for name in FIXTURES:
             app = _app(corpus.state(name))
             paths = [f"/api/search?{urlencode({'q': q, 'box': 'corpus'})}" for q in queries(name)]
+            if name == "ug":
+                paths += [f"/api/search?{urlencode({'q': q, 'box': 'corpus'})}" for q in API_TEXTS] + API_RAW
             with corpus.conn(name) as conn:
                 keys = _artist_keys(conn)[:30]
-                slugs = [r[0] for r in conn.execute("SELECT DISTINCT artist_slug FROM lacuerda_index "
-                                                    "ORDER BY artist_slug LIMIT 20")]
-                harps = [r[0] for r in conn.execute("SELECT path FROM harptabs_index WHERE kind = 'artist' "
-                                                    "ORDER BY path LIMIT 20")]
+                slugs = _column(conn, "SELECT DISTINCT artist_slug FROM lacuerda_index ORDER BY artist_slug", 20)
+                harps = _column(conn, "SELECT path FROM harptabs_index WHERE kind = 'artist' ORDER BY path", 20)
             paths += [f"/api/artist?key={quote(k)}&offset=0" for k in keys]
             paths += [f"/api/artist?key={quote(k)}&offset=1" for k in keys[:3]]
             paths += ["/api/artist?key=bob-dylan&offset=50", "/api/artist?key=", "/api/artist?key=radiohead&offset=x",
@@ -816,7 +913,7 @@ def api_records(corpus: Corpus) -> list[dict]:
                                                                          "Nobody", "")]
             paths += ["/api/artist?lacuerda=nobody", "/api/artist?lacuerda=NOT%20A%20SLUG"]
             paths += [f"/api/artist?harptabs={quote(p)}" for p in harps]
-            paths += ["/api/artist?harptabs=artist/9/nobody", "/api/artist?harptabs=not-a-path"]
+            paths += ["/api/artist?harptabs=artist/9/nobody", "/api/artist?harptabs=not-a-path", *API_ARTIST]
             for path in paths:
                 response = app.handle(Request("GET", path, {"host": "localhost"}))
                 out.append({"fn": "caracole.web.app.WebApp.handle", "fixture": name, "args": ["GET", path], "kw": {},
@@ -866,6 +963,50 @@ def test_a_fixture_replayed_dumps_as_it_was_built(corpus):
         with closing(db.connect(corpus.state(name) / "state" / "caracole.sqlite")) as conn:
             again = [r for r in dump_fixture(conn) if r.get("kv") != "phone:schema"]
         assert again == read_fixture(corpus.fixture_text(name)), name
+
+
+# Each cap the common fixture passes: the module and its constant, the query its vectors hold for it
+# (QUERIES["common"]), and a call over the fixture that meets it.
+CAPS = [
+    ("caracole.ug.key_search", "KEYS_PER_PATTERN", "love",
+     lambda conn: _of("ug.key_search").rows_like(conn, ["%love%"])),
+    ("caracole.search", "CLOSE_TABS", "lovee",
+     lambda conn: _of("search").suggest_titles(conn, "lovee", lacuerda=False)),
+    ("caracole.search", "CLOSE_ARTISTS", "croonr", lambda conn: _of("search").suggest_artists(conn, "croonr")),
+    ("caracole.search", "SITE_ROWS_READ", "love cyy", lambda conn: _of("search").search_gtptabs(conn, "love cyy")),
+    ("caracole.lacuerda_index", "ROWS_READ", "love babby", lambda conn: _of("lacuerda_index").find(conn, "love babby")),
+    ("caracole.search", "SITE_TITLES_READ", "lovee", lambda conn: _of("search").suggest_titles(conn, "lovee")),
+]
+
+
+def _of(module: str):
+    import importlib
+
+    return importlib.import_module(f"caracole.{module}")
+
+
+@pytest.mark.parametrize("module, cap, query, call", CAPS, ids=[c[1] for c in CAPS])
+def test_the_common_fixture_is_past_each_cap_its_queries_meet(corpus, monkeypatch, module, cap, query, call):
+    # The answer with the cap lifted is another: a port that drops the cap, or cuts other rows, fails its vectors.
+    assert query in QUERIES["common"]
+    with corpus.conn("common") as conn:
+        capped = plain(call(conn))
+        monkeypatch.setattr(_of(module.removeprefix("caracole.")), cap, 10 ** 6)
+        assert plain(call(conn)) != capped
+
+
+def test_the_common_fixtures_key_of_two_words_comes_from_the_keys_every_pattern_is_in(corpus):
+    # "love crooner": a key of both words longer than the shortest of either, which neither pattern alone brings in.
+    from caracole.normalize import name_words
+    from caracole.search import _patterns
+    from caracole.ug.key_search import rows_like
+
+    patterns = _patterns(name_words("love crooner"))
+    with corpus.conn("common") as conn:
+        alone = {(a, s) for p in patterns for a, s, _ in rows_like(conn, [p])}
+        both = {(a, s) for a, s, _ in rows_like(conn, patterns)}
+    assert both - alone == {("the-love-crooners", "love-me-tender")}
+    assert "love crooner" in QUERIES["common"]
 
 
 @pytest.mark.slow  # every fixture searched: a second or two each

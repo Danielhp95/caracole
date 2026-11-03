@@ -1933,6 +1933,252 @@
 {"args":["artist/1178/billy-joel"],"fixture":"names","fn":"caracole.search.harptabs_songs","kw":{"title":"piano"},"out":[{"artist":"billy joel","artist_key":"billy-joel","page":"artist/1178/billy-joel","score":90.0,"sheet":null,"source":"harptabs","tabs":[{"difficulty":"Beginner","key":"C","rating":4.0,"title":"piano man","url":"https://www.harptabs.com/tab/25/piano-man","views":1100000},{"difficulty":null,"key":"C","rating":null,"title":"Piano Man (C Harmonica)","url":"https://www.harptabs.com/tab/23862/piano-man-c-harmonica","views":574000},{"difficulty":null,"key":null,"rating":2.9,"title":"((((Piano Man (Harmonica Intro)","url":"https://www.harptabs.com/tab/9925/piano-man-harmonica-intro","views":177000},{"difficulty":"Beginner","key":"C","rating":2.2,"title":"Piano Man (Harp Intro)","url":"https://www.harptabs.com/tab/1256/piano-man-harp-intro","views":75000}],"title":"piano man","title_key":"piano-man","uploads":4,"url":"https://www.harptabs.com/tab/25/piano-man","via":"title"}]}
 {"args":["artist/50/the-beatles"],"fixture":"names","fn":"caracole.search.harptabs_songs","kw":{"title":"yesterday"},"out":[{"artist":"the beatles","artist_key":"beatles","page":"artist/50/the-beatles","score":100.0,"sheet":null,"source":"harptabs","tabs":[{"difficulty":null,"key":"G","rating":4.5,"title":"yesterday","url":"https://www.harptabs.com/tab/172/yesterday","views":20000},{"difficulty":null,"key":"C","rating":null,"title":"Yesterday (intro)","url":"https://www.harptabs.com/tab/926/yesterday","views":9000}],"title":"yesterday","title_key":"yesterday","uploads":2,"url":"https://www.harptabs.com/tab/172/yesterday","via":"title"}]}
 {"args":["artist/7829/ritchie-valens"],"fixture":"names","fn":"caracole.search.harptabs_songs","kw":{"title":"donna"},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":[""],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aab","title_key":"love-aab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aab.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aba","title_key":"love-aba","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aba.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Abb","title_key":"love-abb","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-abb.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Abc","title_key":"love-abc","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-abc.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Abd","title_key":"love-abd","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-abd.html","via":"title"}]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Azz","title_key":"love-azz","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-azz.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bzz","title_key":"love-bzz","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bzz.html","via":"title"}]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Anu","title_key":"love-anu","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-anu.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bnu","title_key":"love-bnu","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bnu.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Cnu","title_key":"love-cnu","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-cnu.html","via":"title"}]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":100.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love","title_key":"love","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-and.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aaa","title_key":"love-aaa","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aaa.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aab","title_key":"love-aab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aab.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aac","title_key":"love-aac","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aac.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":90.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aad","title_key":"love-aad","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aad.html","via":"title"}]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":96.0,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love","title_key":"love","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-and.html","via":"both"},{"artist":"Crooners","artist_key":"crooners","page":"","score":82.8,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aaa","title_key":"love-aaa","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aaa.html","via":"both"},{"artist":"Crooners","artist_key":"crooners","page":"","score":82.8,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aab","title_key":"love-aab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aab.html","via":"both"},{"artist":"Crooners","artist_key":"crooners","page":"","score":82.8,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aac","title_key":"love-aac","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aac.html","via":"both"},{"artist":"Crooners","artist_key":"crooners","page":"","score":82.8,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aad","title_key":"love-aad","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aad.html","via":"both"}]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":94.1,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aby","title_key":"love-aby","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aby.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":94.1,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bab","title_key":"love-bab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bab.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":94.1,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bay","title_key":"love-bay","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bay.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":94.1,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bby","title_key":"love-bby","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bby.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":82.4,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aab","title_key":"love-aab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aab.html","via":"title"}]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":73.7,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aby","title_key":"love-aby","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aby.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":73.7,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bab","title_key":"love-bab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bab.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":73.7,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bay","title_key":"love-bay","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bay.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":73.7,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bby","title_key":"love-bby","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bby.html","via":"title"}]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":72.7,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love","title_key":"love","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-and.html","via":"title"}]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":87.5,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Acy","title_key":"love-acy","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-acy.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":87.5,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Ayy","title_key":"love-ayy","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-ayy.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":87.5,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bcy","title_key":"love-bcy","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bcy.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":87.5,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Byy","title_key":"love-byy","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-byy.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":87.5,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Cay","title_key":"love-cay","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-cay.html","via":"title"}]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":88.9,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Abb","title_key":"love-abb","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-abb.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":88.9,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aby","title_key":"love-aby","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aby.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":88.9,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bab","title_key":"love-bab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bab.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":88.9,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bay","title_key":"love-bay","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bay.html","via":"title"},{"artist":"Crooners","artist_key":"crooners","page":"","score":88.9,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Bbb","title_key":"love-bbb","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-bbb.html","via":"title"}]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[{"artist":"Crooners","artist_key":"crooners","page":"","score":93.3,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love","title_key":"love","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-and.html","via":"artist"},{"artist":"Crooners","artist_key":"crooners","page":"","score":93.3,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aaa","title_key":"love-aaa","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aaa.html","via":"artist"},{"artist":"Crooners","artist_key":"crooners","page":"","score":93.3,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aab","title_key":"love-aab","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aab.html","via":"artist"},{"artist":"Crooners","artist_key":"crooners","page":"","score":93.3,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aac","title_key":"love-aac","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aac.html","via":"artist"},{"artist":"Crooners","artist_key":"crooners","page":"","score":93.3,"sheet":null,"source":"gtptabs","tabs":[],"title":"Love Aad","title_key":"love-aad","uploads":1,"url":"https://gtptabs.com/tabs/3/crooners/love-aad.html","via":"artist"}]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":1},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":1},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":1},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":10},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":10},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":10},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"songs":1},"out":[[],[]]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":1},"out":[[],[]]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":0,"songs":0},"out":[[],[]]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":1},"out":[]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":1},"out":[]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":1},"out":[]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":10},"out":[]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":10},"out":[]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":10},"out":[]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"songs":1},"out":[[],[]]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":1},"out":[[],[]]}
+{"args":["wonderwall"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":0,"songs":0},"out":[[],[]]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":1},"out":[]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":1},"out":[]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":1},"out":[]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":10},"out":[]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":10},"out":[]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":10},"out":[]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"songs":1},"out":[[],[]]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":1},"out":[[],[]]}
+{"args":["main theme"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":0,"songs":0},"out":[[],[]]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":1},"out":[]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":1},"out":[]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":1},"out":[]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":10},"out":[]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":10},"out":[]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":10},"out":[]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"songs":1},"out":[[],[]]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":1},"out":[[],[]]}
+{"args":["piano man"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":0,"songs":0},"out":[[],[]]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":1},"out":[]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":1},"out":[]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":1},"out":[]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":10},"out":[]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":10},"out":[]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":10},"out":[]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"songs":1},"out":[[],[]]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":1},"out":[[],[]]}
+{"args":["billy joel"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":0,"songs":0},"out":[[],[]]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":1},"out":[]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":1},"out":[]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":1},"out":[]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_gtptabs","kw":{"limit":10},"out":[]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_musescore","kw":{"limit":10},"out":[]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_gametabs","kw":{"limit":10},"out":[]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"songs":1},"out":[[],[]]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":1},"out":[[],[]]}
+{"args":["yuzo koshiro"],"fixture":"common","fn":"caracole.search.search_harptabs","kw":{"artists":0,"songs":0},"out":[[],[]]}
+{"args":["Radiohead"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["Elton John"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["The Beatles"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["Stone Temple Pilots"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["Muse"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["Silvana Estrada"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["misc"],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":[""],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.gtptabs_songs","kw":{},"out":0}
+{"args":["artist/9/nobody"],"fixture":"common","fn":"caracole.search.harptabs_artist","kw":{},"out":null}
+{"args":["artist/9/nobody"],"fixture":"common","fn":"caracole.search.harptabs_songs","kw":{},"out":[]}
+{"args":["artist/1178/billy-joel"],"fixture":"common","fn":"caracole.search.harptabs_songs","kw":{"title":"vienna"},"out":[]}
+{"args":["artist/1178/billy-joel"],"fixture":"common","fn":"caracole.search.harptabs_songs","kw":{"title":"piano"},"out":[]}
+{"args":["artist/50/the-beatles"],"fixture":"common","fn":"caracole.search.harptabs_songs","kw":{"title":"yesterday"},"out":[]}
+{"args":["artist/7829/ritchie-valens"],"fixture":"common","fn":"caracole.search.harptabs_songs","kw":{"title":"donna"},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.search_gtptabs","kw":{},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.search_musescore","kw":{},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.search_harptabs","kw":{},"out":[[],[]]}

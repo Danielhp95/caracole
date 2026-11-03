@@ -971,6 +971,132 @@
 {"args":["Wonderwall - Oasis"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
 {"args":["Silvana Estrada Que problema"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Silvana Estrada","Que problema"]}
 {"args":["Love Me Tender"],"fixture":"names","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
+{"args":["Silvana Estrada - Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
+{"args":["Silvana Estrada – Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
+{"args":["Silvana Estrada — Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
+{"args":["Silvana Estrada | Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
+{"args":["Muse - Hysteria - Live"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Muse","Hysteria - Live"]}
+{"args":["Nick Cani – Vikingos veganos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Nick Cani","Vikingos veganos"]}
+{"args":["宋冬野 - 斑马斑马"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["宋冬野","斑马斑马"]}
+{"args":["Sílvana Éstrada - Qué problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Sílvana Éstrada","Qué problema"]}
+{"args":[" - Creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Radiohead - "],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["!! - Creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["-"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":[""],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Estopa - Como Camarón [Videoclip Oficial] HD"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Estopa","Como Camarón"]}
+{"args":["“Bohemian Rhapsody” (Official Lyric Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Somos vikingos veganos","Hyperfanes"]}
+{"args":["Hyperfanes - Vikingos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Hyperfanes","Vikingos"]}
+{"args":["Que problema by Silvana Estrada"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Stand by Me by Ben E King"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Que problema BY silvana estrada"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Que problema by Nick Cani"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Stand by Me"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Ben E King Stand by Me"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana Estrada Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["silvana estrada que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana Estrada Qué problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["silvana  estrada   qué problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Sílvana Estrada Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana Estrada Tregua"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana Estrada Y"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Estrada de tierra"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Nick Cani Vikingos veganos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana Estrada"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana Estrada !!"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["   "],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvanas Adio Maria"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Love Me Tender"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Love Alone Again Or"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["natalia lafourcade Nunca es suficiente"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["bjork army of me"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Joaquín Sabina 19 días y 500 noches"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["joaquin sabina y nos dieron las diez"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Estopa La raja de tu falda"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Hasta la Raíz"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Billy Joel Uptown girl"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Silvana Tregua"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["silvana tregua"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Hyperfanes Somos vikingos veganos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["hyperfanes Somos vikingos veganos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["nick cani vikingos veganos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["onda una mas"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Onda Una más"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["lumbre agua"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":[" — "],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["a"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["x"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["ab"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["zz"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["斑马"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["さくら"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["zoé"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["ñu"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["love"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["love baby"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["baby love"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["love 999"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["lovee"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["babby"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["love babby"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["croonr"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["crooner"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["serenade"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":["Nat King Cole","love"]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{},"out":null}
+{"args":["Radiohead - Creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead"},"out":["Radiohead","Creep"]}
+{"args":["Oasis - Wonderwall (Official Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
+{"args":["Queen – Bohemian Rhapsody (Official Video Remastered)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
+{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
+{"args":["Estopa - Como Camarón [Videoclip Oficial] HD"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"EstopaVEVO"},"out":["Estopa","Como Camarón"]}
+{"args":["Manu Chao | Clandestino (Letra)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao Official"},"out":["Manu Chao","Clandestino"]}
+{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
+{"args":["宋冬野 - 斑马斑马"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
+{"args":["Los Prisioneros - El Baile de los que Sobran (En Vivo)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Los Prisioneros"},"out":["Los Prisioneros","El Baile de los que Sobran (En Vivo)"]}
+{"args":["Daft Punk - Get Lucky (feat. Pharrell Williams) [Official Audio]"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Daft Punk"},"out":["Daft Punk","Get Lucky (feat. Pharrell Williams)"]}
+{"args":["Queen - “Bohemian Rhapsody”"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Queen Official"},"out":["Queen","Bohemian Rhapsody"]}
+{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
+{"args":["Creep"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Radiohead - Topic"},"out":["Radiohead","Creep"]}
+{"args":["Hello"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"AdeleVEVO"},"out":["Adele","Hello"]}
+{"args":["Me Gustas Tú (Con Letra)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Manu Chao"},"out":["Manu Chao","Me Gustas Tú"]}
+{"args":["Vegan Vikings"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Nick Cani"},"out":["Nick Cani","Vegan Vikings"]}
+{"args":["宋冬野 - 斑马斑马"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"宋冬野"},"out":["宋冬野","斑马斑马"]}
+{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
+{"args":["Rosalía - DESPECHÁ (Official Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"RosaliaVEVO"},"out":["Rosalía","DESPECHÁ"]}
+{"args":["Soda Stereo - De Música Ligera (Video Oficial)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Soda Stereo"},"out":["Soda Stereo","De Música Ligera"]}
+{"args":["Stand by Me"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Ben E. King - Topic"},"out":["Ben E. King","Stand by Me"]}
+{"args":[""],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":""},"out":["",""]}
+{"args":["(Official Video)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis",""]}
+{"args":["Somos vikingos veganos - Hyperfanes"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["Somos vikingos veganos","Hyperfanes"]}
+{"args":["Silvana Estrada — Qué Problema (Visualizer)"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Silvana Estrada"},"out":["Silvana Estrada","Qué Problema"]}
+{"args":["Wonderwall - Oasis"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Oasis"},"out":["Oasis","Wonderwall"]}
+{"args":["Silvana Estrada Que problema"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"kintanedu"},"out":["kintanedu","Silvana Estrada Que problema"]}
+{"args":["Love Me Tender"],"fixture":"common","fn":"caracole.song_names.read_names","kw":{"channel":"Elvis Presley - Topic"},"out":["Elvis Presley","Love Me Tender"]}
 {"args":["Silvana Estrada - Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada – Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}
 {"args":["Silvana Estrada — Que problema"],"fixture":"empty","fn":"caracole.song_names.read_names","kw":{},"out":["Silvana Estrada","Que problema"]}

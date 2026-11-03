@@ -1047,6 +1047,134 @@
 {"args":[""],"fixture":"names","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":[]}
 {"args":[""],"fixture":"names","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":[]}
 {"args":[""],"fixture":"names","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":90.0,"song":"crooner-999/serenade","via":"title"},{"score":90.0,"song":"nat-king-cole/l-o-v-e","via":"artist"}]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":72.0,"song":"nat-king-cole/l-o-v-e","via":"both"}]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":100.0,"song":"nat-king-cole/l-o-v-e","via":"title"}]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":70.0,"song":"crooner-999/serenade","via":"artist"}]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":72.7,"song":"nat-king-cole/l-o-v-e","via":"title"}]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":72.7,"song":"nat-king-cole/l-o-v-e","via":"title"}]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":88.9,"song":"nat-king-cole/l-o-v-e","via":"title"}]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":81.8,"song":"crooner-999/serenade","via":"artist"}]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":90.0,"song":"crooner-999/serenade","via":"artist"}]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":100.0,"song":"crooner-999/serenade","via":"title"}]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[{"score":100.0,"song":"nat-king-cole/l-o-v-e","via":"both"}]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.search_library","kw":{},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.search_removed","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_library","kw":{"limit":1},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_library","kw":{"limit":5,"reading":"title"},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_library","kw":{"reading":"artist"},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.search_removed","kw":{"limit":1},"out":[]}
+{"args":["radiohead"],"fixture":"common","fn":"caracole.search.search_library","kw":{"limit":1},"out":[]}
+{"args":["radiohead"],"fixture":"common","fn":"caracole.search.search_library","kw":{"limit":5,"reading":"title"},"out":[]}
+{"args":["radiohead"],"fixture":"common","fn":"caracole.search.search_library","kw":{"reading":"artist"},"out":[]}
+{"args":["radiohead"],"fixture":"common","fn":"caracole.search.search_removed","kw":{"limit":1},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_library","kw":{"limit":1},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_library","kw":{"limit":5,"reading":"title"},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_library","kw":{"reading":"artist"},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.search_removed","kw":{"limit":1},"out":[]}
+{"args":["Nat King Cole"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":null},"out":["nat-king-cole/l-o-v-e"]}
+{"args":["Nat King Cole"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":["nat-king-cole/l-o-v-e"]}
+{"args":["Nat King Cole"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":["nat-king-cole/l-o-v-e"]}
+{"args":["Nat King Cole"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":["nat-king-cole/l-o-v-e"]}
+{"args":["Crooner 999"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":null},"out":["crooner-999/serenade"]}
+{"args":["Crooner 999"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":["crooner-999/serenade"]}
+{"args":["Crooner 999"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":["crooner-999/serenade"]}
+{"args":["Crooner 999"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":["crooner-999/serenade"]}
+{"args":["Song Dongye"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":null},"out":[]}
+{"args":["Song Dongye"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":[]}
+{"args":["Song Dongye"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":[]}
+{"args":["Song Dongye"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":[]}
+{"args":["Acdc"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":null},"out":[]}
+{"args":["Acdc"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":[]}
+{"args":["Acdc"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":[]}
+{"args":["Acdc"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":[]}
+{"args":["R E M"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":null},"out":[]}
+{"args":["R E M"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":[]}
+{"args":["R E M"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":[]}
+{"args":["R E M"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":[]}
+{"args":["Nobody"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":null},"out":[]}
+{"args":["Nobody"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":[]}
+{"args":["Nobody"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":[]}
+{"args":["Nobody"],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":null},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"radiohead"},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"oasis"},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.library_by_artist","kw":{"artist_key":"song-dongye"},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.search_library","kw":{},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.search_removed","kw":{},"out":[]}
 {"args":[" — "],"fixture":"empty","fn":"caracole.search.search_library","kw":{},"out":[]}

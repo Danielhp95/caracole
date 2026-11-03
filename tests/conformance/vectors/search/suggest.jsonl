@@ -1915,6 +1915,252 @@
 {"args":["lynrd"],"fixture":"names","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
 {"args":["lynrd"],"fixture":"names","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
 {"args":["lynrd"],"fixture":"names","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":[""],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":[" — "],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["a"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["x"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["ab"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["zz"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["zzzz qqqq"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["I V vi IV"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["vi IV I V"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["ii V I"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["宋冬野"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["斑马"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["斑马，斑马"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["斑馬"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["宋冬野 斑马"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["방탄소년단"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["아이유 좋은 날"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["宇多田ヒカル First Love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["さくら"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["AC/DC"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["R.E.M."],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["E.G.O."],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["radiohed crep"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["creep"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["Joaquín Sabina"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["zoé"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["ñu"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["2 minutos"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["Ünd"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[{"artist":"The Love Crooners","hits":[],"key":"the-love-crooners","score":100.0,"songs":1,"source":"ug","title":""}]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 00","hits":[{"artist":"Crooner 00","artist_key":"crooner-00","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_00/love_0.shtml","source":"lacuerda","tabs":[],"title":"Love 0","title_key":"love-0","uploads":1,"url":"https://acordes.lacuerda.net/crooner_00/love_0","via":"title"}],"key":"crooner_00","score":100.0,"songs":41,"source":"lacuerda","title":"Love 0"},{"artist":"Crooner 01","hits":[{"artist":"Crooner 01","artist_key":"crooner-01","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_01/love_51.shtml","source":"lacuerda","tabs":[],"title":"Love 51","title_key":"love-51","uploads":1,"url":"https://acordes.lacuerda.net/crooner_01/love_51","via":"title"}],"key":"crooner_01","score":100.0,"songs":40,"source":"lacuerda","title":"Love 51"},{"artist":"Crooner 12","hits":[{"artist":"Crooner 12","artist_key":"crooner-12","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_12/love_62.shtml","source":"lacuerda","tabs":[],"title":"Love 62","title_key":"love-62","uploads":1,"url":"https://acordes.lacuerda.net/crooner_12/love_62","via":"title"}],"key":"crooner_12","score":100.0,"songs":40,"source":"lacuerda","title":"Love 62"}]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 00","hits":[{"artist":"Crooner 00","artist_key":"crooner-00","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_00/love_0.shtml","source":"lacuerda","tabs":[],"title":"Love 0","title_key":"love-0","uploads":1,"url":"https://acordes.lacuerda.net/crooner_00/love_0","via":"title"}],"key":"crooner_00","score":100.0,"songs":41,"source":"lacuerda","title":"Love 0"},{"artist":"Crooner 01","hits":[{"artist":"Crooner 01","artist_key":"crooner-01","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_01/love_51.shtml","source":"lacuerda","tabs":[],"title":"Love 51","title_key":"love-51","uploads":1,"url":"https://acordes.lacuerda.net/crooner_01/love_51","via":"title"}],"key":"crooner_01","score":100.0,"songs":40,"source":"lacuerda","title":"Love 51"},{"artist":"Crooner 12","hits":[{"artist":"Crooner 12","artist_key":"crooner-12","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_12/love_62.shtml","source":"lacuerda","tabs":[],"title":"Love 62","title_key":"love-62","uploads":1,"url":"https://acordes.lacuerda.net/crooner_12/love_62","via":"title"}],"key":"crooner_12","score":100.0,"songs":40,"source":"lacuerda","title":"Love 62"}]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[{"artist":"Crooner 00","hits":[{"artist":"Crooner 00","artist_key":"crooner-00","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_00/love_0.shtml","source":"lacuerda","tabs":[],"title":"Love 0","title_key":"love-0","uploads":1,"url":"https://acordes.lacuerda.net/crooner_00/love_0","via":"title"}],"key":"crooner_00","score":100.0,"songs":41,"source":"lacuerda","title":"Love 0"},{"artist":"Crooner 01","hits":[{"artist":"Crooner 01","artist_key":"crooner-01","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_01/love_51.shtml","source":"lacuerda","tabs":[],"title":"Love 51","title_key":"love-51","uploads":1,"url":"https://acordes.lacuerda.net/crooner_01/love_51","via":"title"}],"key":"crooner_01","score":100.0,"songs":40,"source":"lacuerda","title":"Love 51"},{"artist":"Crooner 12","hits":[{"artist":"Crooner 12","artist_key":"crooner-12","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_12/love_62.shtml","source":"lacuerda","tabs":[],"title":"Love 62","title_key":"love-62","uploads":1,"url":"https://acordes.lacuerda.net/crooner_12/love_62","via":"title"}],"key":"crooner_12","score":100.0,"songs":40,"source":"lacuerda","title":"Love 62"}]}
+{"args":["love crooner"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[{"artist":"Crooner 01","hits":[{"artist":"Crooner 01","artist_key":"crooner-01","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_01/love_51.shtml","source":"lacuerda","tabs":[],"title":"Love 51","title_key":"love-51","uploads":1,"url":"https://acordes.lacuerda.net/crooner_01/love_51","via":"title"}],"key":"crooner_01","score":100.0,"songs":40,"source":"lacuerda","title":"Love 51"},{"artist":"Crooner 12","hits":[{"artist":"Crooner 12","artist_key":"crooner-12","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_12/love_62.shtml","source":"lacuerda","tabs":[],"title":"Love 62","title_key":"love-62","uploads":1,"url":"https://acordes.lacuerda.net/crooner_12/love_62","via":"title"}],"key":"crooner_12","score":100.0,"songs":40,"source":"lacuerda","title":"Love 62"}]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":100.0,"songs":1,"source":"ug","title":"Baby Love"},{"artist":"Frankie Valli","hits":[{"artist":"Frankie Valli","artist_key":"frankie-valli","counts":{"chords":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"i-love-you-baby","title":"I Love You Baby","url":"https://tabs.ultimate-guitar.com/tab/frankie-valli/i-love-you-baby-chords-205503","via":"title","votes":0}],"key":"frankie-valli","score":100.0,"songs":1,"source":"ug","title":"I Love You Baby"}]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":100.0,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["love baby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Frankie Valli","hits":[{"artist":"Frankie Valli","artist_key":"frankie-valli","counts":{"chords":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"i-love-you-baby","title":"I Love You Baby","url":"https://tabs.ultimate-guitar.com/tab/frankie-valli/i-love-you-baby-chords-205503","via":"title","votes":0}],"key":"frankie-valli","score":100.0,"songs":1,"source":"ug","title":"I Love You Baby"}]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["i love you baby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 49","hits":[{"artist":"Crooner 49","artist_key":"crooner-49","page":"","score":100.0,"sheet":"https://acordes.lacuerda.net/crooner_49/love_baby.shtml","source":"lacuerda","tabs":[],"title":"Love Baby","title_key":"love-baby","uploads":2,"url":"https://acordes.lacuerda.net/crooner_49/love_baby","via":"title"}],"key":"crooner_49","score":100.0,"songs":42,"source":"lacuerda","title":"Love Baby"},{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":100.0,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["baby love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 999","hits":[{"artist":"Crooner 999","artist_key":"crooner-999","counts":{"chords":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"love-999","title":"Love 999","url":"https://tabs.ultimate-guitar.com/tab/crooner-999/love-999-chords-204995","via":"title","votes":0}],"key":"crooner-999","score":100.0,"songs":7,"source":"ug","title":"Love 999"}]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["love 999"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["love cyy"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[{"artist":"The Love Crooners","hits":[],"key":"the-love-crooners","score":88.9,"songs":1,"source":"ug","title":""}]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 00","hits":[{"artist":"Crooner 00","artist_key":"crooner-00","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_00/love_0.shtml","source":"lacuerda","tabs":[],"title":"Love 0","title_key":"love-0","uploads":1,"url":"https://acordes.lacuerda.net/crooner_00/love_0","via":"title"}],"key":"crooner_00","score":88.9,"songs":41,"source":"lacuerda","title":"Love 0"},{"artist":"Crooner 01","hits":[{"artist":"Crooner 01","artist_key":"crooner-01","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_01/love_51.shtml","source":"lacuerda","tabs":[],"title":"Love 51","title_key":"love-51","uploads":1,"url":"https://acordes.lacuerda.net/crooner_01/love_51","via":"title"}],"key":"crooner_01","score":88.9,"songs":40,"source":"lacuerda","title":"Love 51"},{"artist":"Crooner 12","hits":[{"artist":"Crooner 12","artist_key":"crooner-12","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_12/love_62.shtml","source":"lacuerda","tabs":[],"title":"Love 62","title_key":"love-62","uploads":1,"url":"https://acordes.lacuerda.net/crooner_12/love_62","via":"title"}],"key":"crooner_12","score":88.9,"songs":40,"source":"lacuerda","title":"Love 62"}]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[{"artist":"Crooner 00","hits":[{"artist":"Crooner 00","artist_key":"crooner-00","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_00/love_0.shtml","source":"lacuerda","tabs":[],"title":"Love 0","title_key":"love-0","uploads":1,"url":"https://acordes.lacuerda.net/crooner_00/love_0","via":"title"}],"key":"crooner_00","score":88.9,"songs":41,"source":"lacuerda","title":"Love 0"},{"artist":"Crooner 01","hits":[{"artist":"Crooner 01","artist_key":"crooner-01","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_01/love_51.shtml","source":"lacuerda","tabs":[],"title":"Love 51","title_key":"love-51","uploads":1,"url":"https://acordes.lacuerda.net/crooner_01/love_51","via":"title"}],"key":"crooner_01","score":88.9,"songs":40,"source":"lacuerda","title":"Love 51"},{"artist":"Crooner 12","hits":[{"artist":"Crooner 12","artist_key":"crooner-12","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_12/love_62.shtml","source":"lacuerda","tabs":[],"title":"Love 62","title_key":"love-62","uploads":1,"url":"https://acordes.lacuerda.net/crooner_12/love_62","via":"title"}],"key":"crooner_12","score":88.9,"songs":40,"source":"lacuerda","title":"Love 62"}]}
+{"args":["lovee"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[{"artist":"Crooner 00","hits":[{"artist":"Crooner 00","artist_key":"crooner-00","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_00/love_0.shtml","source":"lacuerda","tabs":[],"title":"Love 0","title_key":"love-0","uploads":1,"url":"https://acordes.lacuerda.net/crooner_00/love_0","via":"title"}],"key":"crooner_00","score":88.9,"songs":41,"source":"lacuerda","title":"Love 0"},{"artist":"Crooner 01","hits":[{"artist":"Crooner 01","artist_key":"crooner-01","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_01/love_51.shtml","source":"lacuerda","tabs":[],"title":"Love 51","title_key":"love-51","uploads":1,"url":"https://acordes.lacuerda.net/crooner_01/love_51","via":"title"}],"key":"crooner_01","score":88.9,"songs":40,"source":"lacuerda","title":"Love 51"},{"artist":"Crooner 12","hits":[{"artist":"Crooner 12","artist_key":"crooner-12","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_12/love_62.shtml","source":"lacuerda","tabs":[],"title":"Love 62","title_key":"love-62","uploads":1,"url":"https://acordes.lacuerda.net/crooner_12/love_62","via":"title"}],"key":"crooner_12","score":88.9,"songs":40,"source":"lacuerda","title":"Love 62"}]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 49","hits":[{"artist":"Crooner 49","artist_key":"crooner-49","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_49/love_baby.shtml","source":"lacuerda","tabs":[],"title":"Love Baby","title_key":"love-baby","uploads":2,"url":"https://acordes.lacuerda.net/crooner_49/love_baby","via":"title"}],"key":"crooner_49","score":88.9,"songs":42,"source":"lacuerda","title":"Love Baby"},{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":88.9,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":88.9,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[{"artist":"Crooner 49","hits":[{"artist":"Crooner 49","artist_key":"crooner-49","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_49/love_baby.shtml","source":"lacuerda","tabs":[],"title":"Love Baby","title_key":"love-baby","uploads":2,"url":"https://acordes.lacuerda.net/crooner_49/love_baby","via":"title"}],"key":"crooner_49","score":88.9,"songs":42,"source":"lacuerda","title":"Love Baby"},{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":88.9,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":88.9,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["babby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[{"artist":"Crooner 49","hits":[{"artist":"Crooner 49","artist_key":"crooner-49","page":"","score":88.9,"sheet":"https://acordes.lacuerda.net/crooner_49/love_baby.shtml","source":"lacuerda","tabs":[],"title":"Love Baby","title_key":"love-baby","uploads":2,"url":"https://acordes.lacuerda.net/crooner_49/love_baby","via":"title"}],"key":"crooner_49","score":88.9,"songs":42,"source":"lacuerda","title":"Love Baby"},{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":88.9,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":88.9,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 49","hits":[{"artist":"Crooner 49","artist_key":"crooner-49","page":"","score":94.4,"sheet":"https://acordes.lacuerda.net/crooner_49/love_baby.shtml","source":"lacuerda","tabs":[],"title":"Love Baby","title_key":"love-baby","uploads":2,"url":"https://acordes.lacuerda.net/crooner_49/love_baby","via":"title"}],"key":"crooner_49","score":94.4,"songs":42,"source":"lacuerda","title":"Love Baby"},{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":94.4,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":94.4,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[{"artist":"Crooner 49","hits":[{"artist":"Crooner 49","artist_key":"crooner-49","page":"","score":94.4,"sheet":"https://acordes.lacuerda.net/crooner_49/love_baby.shtml","source":"lacuerda","tabs":[],"title":"Love Baby","title_key":"love-baby","uploads":2,"url":"https://acordes.lacuerda.net/crooner_49/love_baby","via":"title"}],"key":"crooner_49","score":94.4,"songs":42,"source":"lacuerda","title":"Love Baby"},{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":94.4,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":94.4,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["love babby"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[{"artist":"Crooner 49","hits":[{"artist":"Crooner 49","artist_key":"crooner-49","page":"","score":94.4,"sheet":"https://acordes.lacuerda.net/crooner_49/love_baby.shtml","source":"lacuerda","tabs":[],"title":"Love Baby","title_key":"love-baby","uploads":2,"url":"https://acordes.lacuerda.net/crooner_49/love_baby","via":"title"}],"key":"crooner_49","score":94.4,"songs":42,"source":"lacuerda","title":"Love Baby"},{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":94.4,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":94.4,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[{"artist":"Crooner 0","hits":[],"key":"crooner-0","score":92.3,"songs":1,"source":"ug","title":""},{"artist":"Crooner 1","hits":[],"key":"crooner-1","score":92.3,"songs":1,"source":"ug","title":""},{"artist":"Crooner 2","hits":[],"key":"crooner-2","score":92.3,"songs":1,"source":"ug","title":""}]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[{"artist":"Crooner 0","hits":[],"key":"crooner-0","score":92.3,"songs":1,"source":"ug","title":""},{"artist":"Crooner 1","hits":[],"key":"crooner-1","score":92.3,"songs":1,"source":"ug","title":""},{"artist":"Crooner 2","hits":[],"key":"crooner-2","score":92.3,"songs":1,"source":"ug","title":""}]}
+{"args":["croonr"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[{"artist":"Crooner 0","hits":[],"key":"crooner-0","score":92.3,"songs":1,"source":"ug","title":""},{"artist":"Crooner 1","hits":[],"key":"crooner-1","score":92.3,"songs":1,"source":"ug","title":""},{"artist":"Crooner 2","hits":[],"key":"crooner-2","score":92.3,"songs":1,"source":"ug","title":""}]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[{"artist":"Crooner 0","hits":[],"key":"crooner-0","score":100.0,"songs":1,"source":"ug","title":""},{"artist":"Crooner 1","hits":[],"key":"crooner-1","score":100.0,"songs":1,"source":"ug","title":""},{"artist":"Crooner 2","hits":[],"key":"crooner-2","score":100.0,"songs":1,"source":"ug","title":""}]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["crooner"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Crooner 999","hits":[{"artist":"Crooner 999","artist_key":"crooner-999","counts":{"chords":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"serenade-aaa","title":"Serenade Aaa","url":"https://tabs.ultimate-guitar.com/tab/crooner-999/serenade-aaa-chords-205493","via":"title","votes":0}],"key":"crooner-999","score":100.0,"songs":7,"source":"ug","title":"Serenade Aaa"}]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["serenade"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"Nat King Cole","hits":[{"artist":"Nat King Cole","artist_key":"nat-king-cole","counts":{"chords":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"love","title":"Love","url":"https://tabs.ultimate-guitar.com/tab/nat-king-cole/love-chords-205499","via":"title","votes":0}],"key":"nat-king-cole","score":100.0,"songs":1,"source":"ug","title":"Love"}]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["nat king cole love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{},"out":[{"artist":"The Supremes","hits":[{"artist":"The Supremes","artist_key":"the-supremes","counts":{"chords":1,"tabs":1},"labels":[],"page":"","rating":null,"score":100.0,"song_key":"baby-love","title":"Baby Love","url":"https://tabs.ultimate-guitar.com/tab/the-supremes/baby-love-chords-205501","via":"title","votes":0}],"key":"the-supremes","score":100.0,"songs":1,"source":"ug","title":"Baby Love"}]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{},"out":[]}
+{"args":["the supremes baby love"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"sites":"api"},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"limit":1},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"lacuerda":false},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"harptabs":false},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"limit":1},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"lacuerda":false},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"harptabs":false},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"gtptabs":false},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
+{"args":["sabinna"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"limit":1},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"lacuerda":false},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"harptabs":false},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"limit":1},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"lacuerda":false},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"harptabs":false},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"gtptabs":false},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
+{"args":["bily joel"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"limit":1},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"lacuerda":false},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"harptabs":false},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"limit":1},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"lacuerda":false},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"harptabs":false},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"gtptabs":false},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
+{"args":["beyonse"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"limit":1},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"lacuerda":false},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"harptabs":false},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"limit":1},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"lacuerda":false},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"harptabs":false},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"gtptabs":false},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
+{"args":["piano mann"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"limit":1},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"lacuerda":false},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"harptabs":false},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"limit":1},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"lacuerda":false},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"harptabs":false},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"gtptabs":false},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
+{"args":["vino tintoo"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"limit":1},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"lacuerda":false},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"harptabs":false},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"limit":1},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"lacuerda":false},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"harptabs":false},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"gtptabs":false},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
+{"args":["como camaon"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"limit":1},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"lacuerda":false},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggest_artists","kw":{"harptabs":false},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"limit":1},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"lacuerda":false},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"harptabs":false},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggest_titles","kw":{"gtptabs":false},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"lacuerda":false,"sites":"api"},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"harptabs":false,"sites":"api"},"out":[]}
+{"args":["lynrd"],"fixture":"common","fn":"caracole.search.suggestions","kw":{"gtptabs":false,"sites":"api"},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.suggest_artists","kw":{},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.suggest_titles","kw":{},"out":[]}
 {"args":[""],"fixture":"empty","fn":"caracole.search.suggestions","kw":{},"out":[]}
