@@ -239,7 +239,8 @@ def test_a_files_digest_is_its_units_now_whatever_its_bytes(app, conn, library):
 
 def test_a_folder_two_songs_share_is_the_units_of_the_song_that_keeps_files_there(app, conn, cfg):
     # Two titles alike in their first 120 bytes, a folder's name at most (library.safe_name), are two songs in one
-    # folder (library.song_folder), where only one of them keeps files (library.SharedFolder): they are its.
+    # folder (library.song_folder), where only one of them keeps files: they are its. Its info.json could be either
+    # song's (a lyrics site's link back writes one for a song that keeps nothing), so it is neither's.
     from caracole.library import MAX_NAME_BYTES
 
     long = "La " + "canción más larga " * 8
@@ -252,7 +253,37 @@ def test_a_folder_two_songs_share_is_the_units_of_the_song_that_keeps_files_ther
     shared = song_dir(cfg.library_dir, keeper).relative_to(cfg.library_dir).as_posix() + "/"
     listed = {entry["path"]: entry for entry in manifest(app)["files"]}
     assert f"{shared}sheet.html" in listed
-    assert {entry["unit"] for path, entry in listed.items() if path.startswith(shared)} == {f"song/{keeper.key}"}
+    assert {entry.get("unit") for path, entry in listed.items()
+            if path.startswith(shared) and path != f"{shared}info.json"} == {f"song/{keeper.key}"}
+    assert "unit" not in listed[f"{shared}info.json"]
+
+
+def test_in_a_folder_two_songs_keep_files_in_each_file_is_the_song_that_wrote_it(app, conn, cfg):
+    # Only a file of the same name is refused the second song (library.SharedFolder): one may keep a sheet there and
+    # the other a Guitar Pro file. Each file is then of the unit of the song caracole wrote it for (its kept files, and
+    # what caracole made of them: removal's reading), so the phone's gate checks it; only a file both could be (their
+    # info.json) is no one song's, and carries no unit.
+    from caracole.library import MAX_NAME_BYTES
+
+    long = "La " + "canción más larga " * 8
+    assert len(long.encode("utf-8")) > MAX_NAME_BYTES
+    rendered_song(conn, cfg, "Placeholder Band", "Synthetic Song", auto=True)
+    sheet = rendered_song(conn, cfg, "Soda Stereo", long + "uno")
+    guitar = add_song(conn, "Soda Stereo", long + "dos", added_at="2026-10-02T00:00:00Z")
+    assert song_dir(cfg.library_dir, guitar) == song_dir(cfg.library_dir, sheet)
+    keep_guitar(conn, cfg, guitar, GP5, name="guitar-1.gp5")
+    write_pages(conn, cfg)
+    shared = song_dir(cfg.library_dir, sheet).relative_to(cfg.library_dir).as_posix() + "/"
+    listed = {entry["path"].removeprefix(shared): entry for entry in manifest(app)["files"]
+              if entry["path"].startswith(shared)}
+    units = units_now(app)
+    assert {"sheet.html", "sheet.pdf", "guitar-1.gp5", "info.json"} <= set(listed)
+    for name, entry in listed.items():
+        if name == "info.json":
+            assert "unit" not in entry and "digest" not in entry
+            continue
+        unit = f"song/{guitar.key}" if name == "guitar-1.gp5" else f"song/{sheet.key}"
+        assert (entry["unit"], entry["digest"]) == (unit, units[unit]), name
 
 
 def test_a_songbook_no_longer_in_songbooks_toml_leaves_its_files_of_no_unit(app, library):
