@@ -1,7 +1,8 @@
 """A push from another caracole (the phone's), staged by caracole serve (peer_push.py, web/peer_routes.py): a push
 opened with the files it names (POST /peer/push/new), each file this side lacks sent and checked by its SHA-256
 (POST /peer/push/file), its ids checked before any path is built of them, at most two open at once, one left an
-hour deleted; and its document read back as ``caracole peer take`` reads it (``StagedSource``).
+hour deleted; its document read back as ``caracole peer take`` reads it (``StagedSource``); and this side's site
+indexes streamed to another caracole (GET /api/peer/index).
 
 The pushes go through a real WebApp on a socket in a thread, as the phone sends them."""
 
@@ -11,6 +12,7 @@ import hashlib
 import http.client
 import json
 import os
+import sqlite3
 import stat
 import time
 from urllib.parse import urlencode
@@ -18,7 +20,7 @@ from urllib.parse import urlencode
 import pytest
 from conftest import add_song
 
-from caracole import peer_push
+from caracole import db, peer_push
 from caracole import peer_sync as sync
 from caracole.library import keep_file
 from caracole.versions import upsert_version
@@ -307,3 +309,67 @@ def test_a_staged_source_gives_each_unit_and_each_file_staged_or_kept_here(serve
     with pytest.raises(sync.PeerError):
         source.file("a/b", "sheet.txt", sha(sent))
 
+
+# --- the site indexes, streamed ----------------------------------------------------------------------------------
+
+
+def test_the_indexes_are_streamed_from_a_temporary_export_merged_into_another_database(served, cfg, conn, tmp_path):
+    from datetime import UTC, datetime
+
+    from caracole import index_transfer
+    from conftest import migrated_database
+
+    from test_index_transfer import ug_listed, ug_sitemap
+
+    at = datetime(2026, 10, 28, 3, 30, tzinfo=UTC)
+    ug_sitemap(conn, "tabs-1.xml", ["radiohead/creep-chords-4169", "eagles/hotel-california-chords-46190"], at)
+    ug_listed(conn, ["tabs-1.xml"], at)
+    status, headers, body = served.ask("GET", "/api/peer/index", token=None)
+    assert status == 200 and headers["Content-Type"] == "application/vnd.sqlite3"
+    assert int(headers["Content-Length"]) == len(body) and body.startswith(b"SQLite format 3\x00")
+    assert list((cfg.cache_dir / "peer").iterdir()) == []  # the export gone once sent
+    assert stat.S_IMODE((cfg.cache_dir / "peer").stat().st_mode) == 0o700
+
+    (tmp_path / "phone").mkdir()
+    fetched = tmp_path / "phone" / "index.sqlite"
+    fetched.write_bytes(body)
+    phone_db = tmp_path / "phone" / "caracole.sqlite"
+    phone_db.write_bytes(migrated_database())
+    phone = db.connect(phone_db)
+    try:
+        merged = index_transfer.merge(phone, fetched, state_dir=tmp_path / "phone" / "state",
+                                      now=datetime(2026, 11, 3, tzinfo=UTC))
+        assert merged.changed
+        assert phone.execute("SELECT COUNT(*) FROM ug_index").fetchone()[0] == 2
+    finally:
+        phone.close()
+
+    # some sites alone
+    status, _, body = served.ask("GET", "/api/peer/index?sites=harptabs,gametabs", token=None)
+    assert status == 200
+    fetched = tmp_path / "some.sqlite"
+    fetched.write_bytes(body)
+    with sqlite3.connect(fetched) as file:
+        sites = json.loads(file.execute("SELECT value FROM caracole_export WHERE key = 'sites'").fetchone()[0])
+        tables = {name for (name,) in file.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
+    assert sites == ["harptabs", "gametabs"] and "ug_index" not in tables
+    status, _, body = served.ask("GET", "/api/peer/index?sites=ug,nowhere", token=None)
+    assert status == 400 and "nowhere" in json.loads(body)["error"]
+
+
+def test_another_sites_page_reads_no_index(served):
+    status, _, _ = served.ask("GET", "/api/peer/index", token=None, **{"Sec-Fetch-Site": "cross-site"})
+    assert status == 403
+
+
+def test_an_index_that_cant_be_made_leaves_nothing_behind(served, cfg, monkeypatch):
+    from caracole import index_transfer
+
+    def failing(conn, path, sites=None, *, now):
+        path.write_bytes(b"half")
+        raise index_transfer.TransferError(f"can't write {path}: disk full")
+
+    monkeypatch.setattr(index_transfer, "export", failing)
+    status, _, body = served.ask("GET", "/api/peer/index", token=None)
+    assert status == 503 and "disk full" in json.loads(body)["error"]
+    assert list((cfg.cache_dir / "peer").iterdir()) == []

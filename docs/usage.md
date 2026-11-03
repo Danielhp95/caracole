@@ -5832,6 +5832,10 @@ At most two pushes are open at once, and a push's files come to 2 GiB at most. A
 A request from another site's page is refused, and so is one whose token is older than the server, with
 `"reload": true`: the phone reads the state again for a fresh token.
 
+**`GET /api/peer/index`** gives this library's site indexes as `caracole index export` writes them, a SQLite file
+(`?sites=ug,lacuerda` for those alone), which the phone merges as `caracole index merge` does. caracole serve
+copies them in one read, taking no lock, into a file of `cache_dir/peer/` that is gone once it is sent.
+
 ### Syncing by hand: peer sync --push, --choose, --compared
 
 Not built yet.

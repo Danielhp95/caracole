@@ -1,5 +1,6 @@
 """caracole serve's side of a sync between two caracoles (peer_sync.py): what this library holds, unit by unit, each
-unit whole, its kept files, a pull of another caracole's units queued, another caracole's push staged (peer_push.py).
+unit whole, its kept files, a pull of another caracole's units queued, another caracole's push staged (peer_push.py),
+and this library's site indexes.
 
     GET  /api/peer/state?peer=   this caracole's id, its version, its library's name, each unit of its library (a song,
                                  a removal, a songbook, an artist's alias or UG page, a blocked tab) with its label and
@@ -13,6 +14,8 @@ unit whole, its kept files, a pull of another caracole's units queued, another c
     POST /peer/push/new          A push opened (JSON ``{"format", "from", "files"}``): its id and the files of
                                  ``files`` this side needs sent, ``{"push", "need"}`` (``peer_push.new_push``)
     POST /peer/push/file?push=&sha256=   A file the push needs, its bytes (``peer_push.stage_file``): ``{"ok": true}``
+    GET  /api/peer/index[?sites=]   this library's site indexes (``sites``: those named, by commas; every one with
+                                 none), as ``caracole index export`` writes them, a SQLite file streamed
 
 Another caracole reads the first three to compare the two and to take what the owner chose (``caracole peer``). They
 are reads, as a search is: no lock, no site asked, nothing written. Under ``/api/``, another site's page can't read
@@ -21,12 +24,17 @@ and the cross-origin check, then a command under caracole's lock, which asks the
 
 A push is the phone's, which can't be asked to pull: it sends this side the units it takes (peer_push.py), each
 request a write with the form token in its header (a ``json`` or ``bytes`` route, web/app.py). Its files are staged
-in ``state_dir/peer/``, never in the library, and checked by their SHA-256: caracole serve writes nothing else
-for a push (AGENTS.md).
+in ``state_dir/peer/``, never in the library, and checked by their SHA-256. The index is read in one transaction
+into a file of ``cache_dir/peer/``, taking no lock, and that file is gone once it is open to be sent: caracole serve
+writes nothing else for a sync (AGENTS.md).
 """
 
 from __future__ import annotations
 
+import os
+import secrets
+import threading
+from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import parse_qs, urlsplit
 
@@ -36,6 +44,7 @@ from caracole.web.pages import Refused
 
 PEER_PULL = "peer-pull:"  # a pull's job key: the address it takes from after it, so a second one joins it
 MAX_UNITS = 5000  # a pull's units at most: a library's every unit, many times over
+SQLITE = "application/vnd.sqlite3"
 
 ROUTES = (
     Route("GET", "/api/peer/state", lambda app, asked: state(app, _params(asked.target))),
@@ -46,7 +55,9 @@ ROUTES = (
           limit=peer_push.NEW_MAX),
     Route("POST", "/peer/push/file", lambda app, asked, data: push_file(app, _params(asked.target), data),
           body="bytes", limit=peer_push.FILE_MAX),
+    Route("GET", "/api/peer/index", lambda app, asked: index(app, _params(asked.target))),
 )
+_exporting = threading.Lock()  # one copy of the indexes made at a time: each is as large as they are
 
 
 def _params(target: str) -> dict[str, str]:
@@ -162,3 +173,32 @@ def push_file(app: WebApp, params: dict[str, str], data: bytes) -> Response:
         raise Refused(503, "Not kept", f"The file couldn't be kept: {e}.") from e
     return json_response(200, {"ok": True})
 
+
+def index(app: WebApp, params: dict[str, str]) -> Response:
+    """``GET /api/peer/index``: this library's site indexes, as ``index_transfer.export`` writes them, from a file of
+    ``cache_dir/peer/`` deleted once it is open, streamed (``Response.stream``)."""
+    from caracole import index_transfer
+
+    try:
+        sites = index_transfer.chosen([s.strip() for s in params.get("sites", "").split(",") if s.strip()])
+    except index_transfer.TransferError as e:
+        return json_response(400, {"error": str(e)})
+    folder = app.cfg.cache_dir / "peer"
+    path = folder / f"index-{secrets.token_hex(8)}.sqlite"
+    with _exporting:
+        try:
+            app.cfg.cache_dir.mkdir(parents=True, exist_ok=True)
+            folder.mkdir(mode=0o700, exist_ok=True)
+            os.chmod(folder, 0o700)
+            with app.db() as conn:
+                index_transfer.export(conn, path, sites, now=datetime.now(UTC))
+            stream = open(path, "rb")  # noqa: SIM115 - server.py closes it once it is sent
+        except Refused as e:
+            return json_response(e.status, {"error": e.message})
+        except (index_transfer.TransferError, OSError) as e:
+            return json_response(503, {"error": f"The indexes couldn't be copied: {e}"})
+        finally:
+            path.unlink(missing_ok=True)
+    return Response(200, headers=[("Content-Type", SQLITE),
+                                  ("Content-Disposition", 'attachment; filename="caracole-index.sqlite"')],
+                    stream=stream)
