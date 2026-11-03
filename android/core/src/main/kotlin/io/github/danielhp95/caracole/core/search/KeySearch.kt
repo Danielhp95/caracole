@@ -31,7 +31,8 @@ object KeySearch {
             "AND artist_key NOT IN (SELECT key FROM $KEYS) GROUP BY artist_key, song_key " +
             "ORDER BY artist_key, song_key"
 
-    /** The keys every pattern is in, from the trigram index: the shortest [KEYS_PER_PATTERN] too. */
+    /** The keys every pattern is in, from the trigram index: the shortest [KEYS_PER_PATTERN] (a call's `perPattern`)
+     * too. */
     private fun every(patterns: List<String>): String =
         "INSERT OR IGNORE INTO $KEYS SELECT key FROM ug_keys " +
             "WHERE id IN (SELECT rowid FROM ug_keys_fts WHERE ${patterns.joinToString(" AND ") { "key LIKE ?" }}) $SHORTEST"
@@ -42,16 +43,20 @@ object KeySearch {
      * shortest ones and the keys every pattern is in; in the keys' order. It writes only its own TEMP table, so it runs
      * on a reader's connection.
      */
-    fun rowsLike(db: Db, patterns: List<String>): List<Triple<String, String, Int>> {
+    fun rowsLike(db: Db, patterns: List<String>): List<Triple<String, String, Int>> = rowsLike(db, patterns, KEYS_PER_PATTERN)
+
+    /** [rowsLike] with [perPattern] keys a pattern at most, for a test to reach the cut with a few rows (Python's
+     * monkeypatches `KEYS_PER_PATTERN`). */
+    internal fun rowsLike(db: Db, patterns: List<String>, perPattern: Int): List<Triple<String, String, Int>> {
         if (patterns.isEmpty()) return emptyList()
         db.execute(CREATE)
         db.execute("DELETE FROM $KEYS")
         try {
             if (patterns.size > 1 && patterns.all { QueryRules.indexed(it) }) {
-                db.execute(every(patterns), *patterns.toTypedArray(), KEYS_PER_PATTERN)
+                db.execute(every(patterns), *patterns.toTypedArray(), perPattern)
             }
             for (pattern in patterns) {
-                db.execute(if (QueryRules.indexed(pattern)) BY_TRIGRAMS else BY_SCAN, pattern, KEYS_PER_PATTERN)
+                db.execute(if (QueryRules.indexed(pattern)) BY_TRIGRAMS else BY_SCAN, pattern, perPattern)
             }
             return db.query(ROWS) { Triple(it.text(0)!!, it.text(1)!!, it.long(2)!!.toInt()) }
         } finally {

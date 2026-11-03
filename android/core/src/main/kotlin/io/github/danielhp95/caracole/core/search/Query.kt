@@ -41,7 +41,8 @@ class Query(val text: String, val runs: List<String> = emptyList()) {
     }
 
     /** How well this query matches a song, 0–100 (artist and title are space-separated words): the best of its
-     * [readings]. */
+     * [readings]. Unrounded, as search.py's: a hit's score is rounded where search.py rounds it (`Py.round(x, 1)`),
+     * never here. */
     fun score(artist: String, title: String): Double {
         val r = readings(artist, title)
         return maxOf(maxOf(r.title, r.both), r.artist)
@@ -50,7 +51,7 @@ class Query(val text: String, val runs: List<String> = emptyList()) {
     /**
      * The score split by the reading that gives it: the query as the song's title, as both its names (their words
      * in any order), as its artist. A part of the names counts for the title or the artist when it lies within that
-     * name, else for both.
+     * name, else for both. Unrounded, as [score].
      */
     fun readings(artist: String, title: String): Readings {
         if (runs.isNotEmpty() && !holds(artist, title)) return Readings(0.0, 0.0, 0.0)
@@ -147,7 +148,8 @@ object Queries {
         words.filter { Normalize.hasHan(it) }.map { word -> Py.split(Normalize.romanize(word)).joinToString("") { Normalize.fold(it) } }
 
     /** The best of several (title, both, artist) readings, and which reading it is; a tie goes to the title, then
-     * both. With [reading], that reading's alone (search.py `_reading`). */
+     * both. With [reading], that reading's alone (search.py `_reading`). Unrounded, as search.py's: a hit's score is
+     * rounded where search.py rounds it (`Py.round(x, 1)`), never here. */
     fun reading(scores: Iterable<Readings>, reading: String? = null): Reading {
         var best = 0.0
         var via = SearchLimits.READINGS[0]

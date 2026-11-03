@@ -13,7 +13,8 @@ import io.github.danielhp95.caracole.core.search.SearchLimits
  *
  * The few lines of search.py it reads (`library_by_artist`, `_song_counts`, `gtptabs_songs`, `no_ones`) are ported
  * here beside it, so that song names stand on the keys alone, as the plan orders the lanes: core.search.Search's and
- * core.sites.SiteSearch's own are the same rules.
+ * core.sites.SiteSearch's own are the same rules, and KnownTest replays search.py's own vectors of them (sites.jsonl,
+ * library.jsonl, index.jsonl) against these copies, so neither drifts unseen.
  */
 internal class Known(private val db: Db?, private val songs: List<SongRow>, private val hints: List<String>) {
     private val artists = HashMap<String, String?>()

@@ -10,8 +10,8 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
 /**
  * song_names.py: the artist and the title a free text names, the one parser of it, for /api/search's `names` and the
  * phone's request form (lane song-names). Its rules and their order are song_names.py's module docstring; this file
- * keeps them in the same order, each regex Python's through [PyRegex] (an IGNORECASE one matched on
- * [PyRegex.ignoreCase]'s representatives, the text cut where they matched), each word and key [Normalize]'s.
+ * keeps them in the same order, each regex Python's through [PyRegex] (an IGNORECASE one with sre's `(?i)`), each
+ * word and key [Normalize]'s.
  *
  * The phone suggests no YouTube video for a query, so `read_names`' `video` (its rule 4) has no counterpart here.
  */
@@ -44,9 +44,8 @@ object SongNames {
     /** A channel's name as an artist's: no " - Topic", no VEVO, Official or Oficial at its end. */
     fun cleanChannel(channel: String): String {
         val name = Py.split(channel).joinToString(" ")
-        val folded = Folded(name)
-        TOPIC.find(folded.mapped)?.let { topic -> return Py.strip(folded.original(topic.groups[1]!!.range)) }
-        val bare = Py.strip(folded.without(LABEL.findAll(folded.mapped)))
+        TOPIC.find(name)?.let { topic -> return Py.strip(topic.groupValues[1]) }
+        val bare = Py.strip(LABEL.replace(name, ""))
         return bare.ifEmpty { name }
     }
 
@@ -90,14 +89,11 @@ object SongNames {
     private val QUOTES = Py.codePoints("\"'\u201c\u201d\u2018\u2019\u00ab\u00bb\u300c\u300d\u300e\u300f").toSet()
     private val WORDS_SPLIT = PyRegex.compile("[\\s,.:!\u00a1\u00bf?\\-\u2013\u2014]+")
 
-    // IGNORECASE patterns: their letters written as the representatives PyRegex.ignoreCase maps a text to.
+    // re.IGNORECASE, as sre's (?i): its "i" is İ and ı too.
     /** "Title by Artist". */
-    private val BY = PyRegex.compile("\\s+${PyRegex.ignoreCase("by")}\\s+")
-    private val TOPIC = PyRegex.compile("^(.*\\S)\\s+-\\s+${PyRegex.ignoreCase("topic")}$")
-    private val LABEL = PyRegex.compile(
-        "\\s*(?:" + listOf("vevo", "official", "oficial", "officiel").joinToString("|") { PyRegex.ignoreCase(it) } +
-            ")(?:\\s+${PyRegex.ignoreCase("channel")})?$",
-    )
+    private val BY = PyRegex.compile("(?i)\\s+by\\s+")
+    private val TOPIC = PyRegex.compile("(?i)^(.*\\S)\\s+-\\s+topic$")
+    private val LABEL = PyRegex.compile("(?i)\\s*(?:vevo|official|oficial|officiel)(?:\\s+channel)?$")
 
     /** song_names._words: NFKC, casefolded, split at spaces and punctuation. */
     private fun wordsOf(text: String): List<String> =
@@ -122,34 +118,6 @@ object SongNames {
             t = Py.strip(Py.slice(t, 1, -1))
         }
         return t
-    }
-
-    /**
-     * A text and its IGNORECASE representatives (PyRegex.ignoreCase: one code point for each), so that what a
-     * pattern finds in [mapped] cuts [original] at the same code points.
-     */
-    private class Folded(val original: String) {
-        val mapped = PyRegex.ignoreCase(original)
-
-        /** The index in [original] of [index], one in [mapped]. */
-        fun at(index: Int): Int = Py.slice(original, 0, Py.len(mapped.substring(0, index))).length
-
-        /** The part of [original] a range of [mapped] covers. */
-        fun original(range: IntRange): String = original.substring(at(range.first), at(range.last + 1))
-
-        /** [original] with the parts [matches] of [mapped] cover taken out: re.sub's "". */
-        fun without(matches: Sequence<MatchResult>): String {
-            val out = StringBuilder()
-            var from = 0
-            for (m in matches) {
-                out.append(original, from, at(m.range.first))
-                from = at(m.range.last + 1)
-            }
-            return out.append(original, from, original.length).toString()
-        }
-
-        /** Each match of [regex] in [mapped], as (start, end) indexes of [original]. */
-        fun findAll(regex: Regex): List<Pair<Int, Int>> = regex.findAll(mapped).map { at(it.range.first) to at(it.range.last + 1) }.toList()
     }
 
     // --- the rules -----------------------------------------------------------------------------------------------
@@ -177,9 +145,9 @@ object SongNames {
     }
 
     private fun afterBy(text: String, known: Known): Pair<String, String>? {
-        for ((start, end) in Folded(text).findAll(BY).asReversed()) {
-            val title = text.substring(0, start)
-            val artist = text.substring(end)
+        for (by in BY.findAll(text).toList().asReversed()) {
+            val title = text.substring(0, by.range.first)
+            val artist = text.substring(by.range.last + 1)
             val name = if (Normalize.nameWords(title).isNotEmpty()) known.artist(artist) else null
             if (name != null) return name to title
         }

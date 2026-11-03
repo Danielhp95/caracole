@@ -100,6 +100,22 @@ class SongNamesTest {
         assertEquals("Radiohead" to "Creep", SongNames.readNames(null, "Creep", emptyList(), channel = "Radiohead - Topic"))
     }
 
+    /** IGNORECASE as sre reads it, beyond ASCII: its "i" is İ and ı too. What song_names.py answered, on Python
+     * 3.14.7 (names.jsonl's words are ASCII alone). */
+    @Test fun aChannelsLabelWordsGoInAnyCaseSreFolds() {
+        val python = listOf(
+            "Radiohead - TOPİC" to "Radiohead",
+            "Radiohead - topıc" to "Radiohead",
+            "Shakira OFFİCİAL" to "Shakira",
+            "Shakira offıcıal" to "Shakira",
+            "Juanes Oficıal CHANNEL" to "Juanes",
+            "KKR - Topic" to "KKR",
+        )
+        for ((channel, name) in python) assertEquals(name, SongNames.cleanChannel(channel), channel)
+        assertEquals("Silvana Estrada" to "Que problema",
+                     SongNames.readNames(null, "Que problema bY Silvana Estrada", emptyList(), channel = "Silvana Estrada"))
+    }
+
     companion object {
         const val VECTOR = "search/names.jsonl"
         const val CLEAN = "caracole.song_names.clean"
