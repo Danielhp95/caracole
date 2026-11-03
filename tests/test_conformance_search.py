@@ -956,13 +956,16 @@ def test_a_fixture_is_its_library_dumped(corpus, name):
     check(SEARCH / "fixtures" / f"{name}.jsonl", corpus.fixture_text(name))
 
 
-def test_a_fixture_replayed_dumps_as_it_was_built(corpus):
-    from caracole import db
-
+def test_a_fixture_replayed_dumps_as_it_was_built(corpus, tmp_path):
+    # Replayed as Corpus.state replays it, into a database of its own: the shared one is read by the other tests,
+    # and a read may write (songs.ensure_current_keys stamps songs:key_version in the empty fixture's), whatever
+    # order the workers run them in.
     for name in FIXTURES:
-        with closing(db.connect(corpus.state(name) / "state" / "caracole.sqlite")) as conn:
+        records = read_fixture(corpus.fixture_text(name))
+        with closing(_fresh(tmp_path / name / "caracole.sqlite")) as conn:
+            replay_fixture(conn, records)
             again = [r for r in dump_fixture(conn) if r.get("kv") != "phone:schema"]
-        assert again == read_fixture(corpus.fixture_text(name)), name
+        assert again == records, name
 
 
 # Each cap the common fixture passes: the module and its constant, the query its vectors hold for it
