@@ -130,3 +130,42 @@ data class Response(
         val NOT_FOUND = Response(404, "Not Found", "text/plain", "utf-8", emptyMap(), null)
     }
 }
+
+/** Whether the mirror may serve a file of a unit as the computer made it: the phone's own state decides. */
+fun interface UnitGate {
+    /** [unit] as the file's entry names it, and its digest when the computer made the list. */
+    fun check(unit: String, digest: String?): Gate
+}
+
+enum class Gate {
+    /** The phone holds the unit as the computer did (or holds none of it): the file is served. */
+    SERVE,
+
+    /** The phone changed the unit since: the computer's page is no longer the song's. */
+    CHANGED,
+
+    /** The phone removed the song. */
+    REMOVED,
+}
+
+/** What the mirror has at a path, once its unit is checked. */
+sealed interface Looked {
+    /** The file, to serve as its entry says. */
+    data class Page(val entry: Entry, val file: File) : Looked
+
+    /** A file the [gate] keeps back. */
+    data class Gated(val entry: Entry, val gate: Gate) : Looked
+
+    /** No file at that path. */
+    data object Missing : Looked
+}
+
+/** The mirror's file at [path], checked by [gate] when its entry names a unit. */
+fun Mirror.pageFor(path: String, gate: UnitGate): Looked {
+    val served = lookup(path) ?: return Looked.Missing
+    val unit = served.entry.unit ?: return Looked.Page(served.entry, served.file)
+    return when (val checked = gate.check(unit, served.entry.digest)) {
+        Gate.SERVE -> Looked.Page(served.entry, served.file)
+        else -> Looked.Gated(served.entry, checked)
+    }
+}

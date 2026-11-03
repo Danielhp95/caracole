@@ -10,7 +10,9 @@ import java.nio.charset.CodingErrorAction
  * One file the phone mirrors, as `GET /api/offline` lists it: its [path] in the library (`/`-separated,
  * unescaped, as the written pages link to each other), the [url] on the server that answers its bytes, their
  * [size] and [sha256], the Content-Type the WebView gets for it ([type]), and the [headers] serve sends with
- * it that change how a page behaves (its Content-Security-Policy, with the sandbox).
+ * it that change how a page behaves (its Content-Security-Policy, with the sandbox). [unit] names the sync unit the
+ * file is of ("song/<key>", "songbook/<key>") and [digest] that unit's digest when the list was made; a file of no
+ * unit has neither.
  */
 data class Entry(
     val path: String,
@@ -19,6 +21,8 @@ data class Entry(
     val sha256: String,
     val type: String,
     val headers: Map<String, String>,
+    val unit: String? = null,
+    val digest: String? = null,
 ) {
     val mimeType: String get() = ContentType.mimeType(type)
     val charset: String? get() = ContentType.charset(type)

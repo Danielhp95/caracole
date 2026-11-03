@@ -1,0 +1,125 @@
+{
+ "schema": 15,
+ "statements": {
+  "1": [
+   "CREATE TABLE IF NOT EXISTS songs (\n  id INTEGER PRIMARY KEY,\n  key TEXT NOT NULL UNIQUE,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  artists TEXT NOT NULL,\n  album TEXT,\n  duration_ms INTEGER,\n  isrc TEXT,\n  source_ids TEXT NOT NULL DEFAULT '{}',\n  added_at TEXT NOT NULL,\n  variant TEXT,\n  status TEXT NOT NULL DEFAULT 'wanted' CHECK (status IN ('wanted', 'found', 'ignored')),\n  review INTEGER NOT NULL DEFAULT 0,\n  match_decision TEXT,\n  match_step TEXT,\n  match_score REAL,\n  match_artist_key TEXT,\n  match_song_key TEXT,\n  match_candidates TEXT NOT NULL DEFAULT '[]',\n  matched_at TEXT,\n  ug_dirty INTEGER NOT NULL DEFAULT 1,\n  ug_checked_at TEXT,\n  lyrics_status TEXT NOT NULL DEFAULT 'pending'\n    CHECK (lyrics_status IN ('pending', 'found', 'missing', 'instrumental')),\n  lyrics_json TEXT,\n  lyrics_at TEXT,\n  lacuerda_checked_at TEXT,\n  audio_path TEXT,\n  audio_mtime REAL,\n  autochords_mtime REAL,\n  created_at TEXT NOT NULL,\n  updated_at TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS songs_added ON songs(added_at);",
+   "CREATE TABLE IF NOT EXISTS ug_index (\n  tab_id INTEGER PRIMARY KEY,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  type TEXT NOT NULL,\n  sitemap TEXT NOT NULL,\n  first_seen TEXT NOT NULL,\n  path TEXT NOT NULL DEFAULT ''\n);",
+   "CREATE INDEX IF NOT EXISTS ug_index_artist ON ug_index(artist_key, song_key);",
+   "CREATE INDEX IF NOT EXISTS ug_index_song ON ug_index(song_key);",
+   "CREATE TABLE IF NOT EXISTS versions (\n  id INTEGER PRIMARY KEY,\n  provider TEXT NOT NULL,\n  tab_id TEXT NOT NULL,\n  song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,\n  slot TEXT NOT NULL CHECK (slot IN ('sheet', 'guitar')),\n  kind TEXT NOT NULL,\n  rating REAL NOT NULL DEFAULT 0,\n  votes INTEGER NOT NULL DEFAULT 0,\n  version INTEGER NOT NULL DEFAULT 1,\n  label TEXT,\n  coverage REAL,\n  url TEXT NOT NULL,\n  raw TEXT NOT NULL DEFAULT '{}',\n  fetched_at TEXT NOT NULL,\n  pick_rank INTEGER,\n  gone INTEGER NOT NULL DEFAULT 0,\n  UNIQUE (provider, tab_id, song_id)\n);",
+   "CREATE INDEX IF NOT EXISTS versions_song ON versions(song_id, slot);",
+   "CREATE TABLE IF NOT EXISTS files (\n  id INTEGER PRIMARY KEY,\n  version_id INTEGER NOT NULL REFERENCES versions(id) ON DELETE CASCADE,\n  song_id INTEGER NOT NULL REFERENCES songs(id) ON DELETE CASCADE,\n  name TEXT NOT NULL,\n  path TEXT NOT NULL UNIQUE,\n  sha256 TEXT NOT NULL,\n  kept_rank INTEGER NOT NULL,\n  created_at TEXT NOT NULL,\n  UNIQUE (song_id, name)\n);",
+   "CREATE TABLE IF NOT EXISTS events (\n  id INTEGER PRIMARY KEY,\n  run TEXT NOT NULL,\n  at TEXT NOT NULL,\n  provider TEXT NOT NULL,\n  url TEXT,\n  status INTEGER,\n  decision TEXT NOT NULL,\n  message TEXT\n);",
+   "CREATE INDEX IF NOT EXISTS events_run ON events(run);",
+   "CREATE TABLE IF NOT EXISTS kv (\n  key TEXT PRIMARY KEY,\n  value TEXT NOT NULL\n);"
+  ],
+  "2": [
+   "CREATE TABLE IF NOT EXISTS gtptabs_index (\n  path TEXT PRIMARY KEY,\n  artist_path TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  base_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS gtptabs_index_artist ON gtptabs_index(artist_key);",
+   "CREATE INDEX IF NOT EXISTS gtptabs_index_sitemap ON gtptabs_index(sitemap);"
+  ],
+  "3": [
+   "CREATE TABLE IF NOT EXISTS musescore_index (\n  page_id INTEGER PRIMARY KEY,\n  path TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS musescore_index_title ON musescore_index(title_key);",
+   "CREATE INDEX IF NOT EXISTS musescore_index_sitemap ON musescore_index(sitemap);"
+  ],
+  "4": [
+   "CREATE TABLE IF NOT EXISTS removed (\n  key TEXT PRIMARY KEY,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  source_ids TEXT NOT NULL DEFAULT '{}',\n  removed_at TEXT NOT NULL\n);"
+  ],
+  "5": [
+   "CREATE TABLE IF NOT EXISTS ug_keys (\n  id INTEGER PRIMARY KEY,\n  key TEXT NOT NULL UNIQUE\n);",
+   "CREATE VIRTUAL TABLE IF NOT EXISTS ug_keys_fts USING fts5(\n  key, content='ug_keys', content_rowid='id', tokenize='trigram', detail='none'\n);",
+   "CREATE TRIGGER IF NOT EXISTS ug_keys_indexed AFTER INSERT ON ug_keys BEGIN\n  INSERT INTO ug_keys_fts(rowid, key) VALUES (new.id, new.key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_keys_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_keys(key) SELECT new.artist_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.artist_key);\n  INSERT INTO ug_keys(key) SELECT new.song_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.song_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_keys_changed AFTER UPDATE OF artist_key, song_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key OR new.song_key IS NOT old.song_key BEGIN\n  INSERT INTO ug_keys(key) SELECT new.artist_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.artist_key);\n  INSERT INTO ug_keys(key) SELECT new.song_key WHERE NOT EXISTS (SELECT 1 FROM ug_keys WHERE key = new.song_key);\nEND;",
+   "INSERT OR IGNORE INTO ug_keys(key) SELECT artist_key FROM ug_index UNION SELECT song_key FROM ug_index;",
+   "CREATE INDEX IF NOT EXISTS events_provider_at ON events(provider, at);"
+  ],
+  "6": [
+   "CREATE TABLE IF NOT EXISTS lacuerda_index (\n  path TEXT PRIMARY KEY,\n  artist_slug TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  title TEXT NOT NULL DEFAULT '',\n  title_key TEXT NOT NULL DEFAULT '',\n  songs INTEGER NOT NULL DEFAULT 0,\n  versions TEXT NOT NULL DEFAULT '',\n  acordes INTEGER NOT NULL DEFAULT 0,\n  popular INTEGER,\n  page TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS lacuerda_index_artist ON lacuerda_index(artist_key);",
+   "CREATE INDEX IF NOT EXISTS lacuerda_index_slug ON lacuerda_index(artist_slug);",
+   "CREATE INDEX IF NOT EXISTS lacuerda_index_page ON lacuerda_index(page);"
+  ],
+  "7": [
+   "CREATE TABLE IF NOT EXISTS ug_artist_tabs (\n  page TEXT NOT NULL,\n  tab_id INTEGER NOT NULL,\n  type TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  label TEXT,\n  rating REAL NOT NULL DEFAULT 0,\n  votes INTEGER NOT NULL DEFAULT 0,\n  url TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  artist_forms TEXT NOT NULL,\n  title_forms TEXT NOT NULL,\n  forms TEXT NOT NULL,\n  read_at TEXT NOT NULL,\n  PRIMARY KEY (page, tab_id)\n);",
+   "CREATE INDEX IF NOT EXISTS ug_artist_tabs_song ON ug_artist_tabs(artist_key, song_key);",
+   "CREATE INDEX IF NOT EXISTS ug_artist_tabs_tab ON ug_artist_tabs(tab_id);"
+  ],
+  "8": [
+   "CREATE TABLE IF NOT EXISTS ug_artists (\n  id INTEGER PRIMARY KEY,\n  artist_key TEXT NOT NULL UNIQUE\n);",
+   "CREATE VIRTUAL TABLE IF NOT EXISTS ug_artists_fts USING fts5(\n  artist_key, content='ug_artists', content_rowid='id', tokenize='unicode61', detail='none'\n);",
+   "CREATE VIRTUAL TABLE IF NOT EXISTS ug_artist_words USING fts5vocab(ug_artists_fts, row);",
+   "CREATE TRIGGER IF NOT EXISTS ug_artists_indexed AFTER INSERT ON ug_artists BEGIN\n  INSERT INTO ug_artists_fts(rowid, artist_key) VALUES (new.id, new.artist_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_artists_unindexed AFTER DELETE ON ug_artists BEGIN\n  INSERT INTO ug_artists_fts(ug_artists_fts, rowid, artist_key) VALUES ('delete', old.id, old.artist_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_artist_gone AFTER DELETE ON ug_index\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_artist_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key);\nEND;",
+   "INSERT OR IGNORE INTO ug_artists(artist_key) SELECT DISTINCT artist_key FROM ug_index ORDER BY artist_key;"
+  ],
+  "9": [
+   "DROP TRIGGER IF EXISTS ug_index_artist_changed;",
+   "CREATE TRIGGER IF NOT EXISTS ug_artists_indexed AFTER INSERT ON ug_artists BEGIN\n  INSERT INTO ug_artists_fts(rowid, artist_key) VALUES (new.id, new.artist_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_artists_unindexed AFTER DELETE ON ug_artists BEGIN\n  INSERT INTO ug_artists_fts(ug_artists_fts, rowid, artist_key) VALUES ('delete', old.id, old.artist_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_artist_gone AFTER DELETE ON ug_index\nWHEN NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key) BEGIN\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key;\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_artist_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_artist_changed AFTER UPDATE OF artist_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key BEGIN\n  INSERT INTO ug_artists(artist_key) SELECT new.artist_key\n  WHERE NOT EXISTS (SELECT 1 FROM ug_artists WHERE artist_key = new.artist_key);\n  DELETE FROM ug_artists WHERE artist_key = old.artist_key\n  AND NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = old.artist_key);\nEND;",
+   "INSERT OR IGNORE INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at)\nSELECT DISTINCT 'inbox', kind, song_id, 'guitar', kind, '', strftime('%Y-%m-%dT%H:%M:%SZ', 'now') FROM (\n  SELECT f.song_id, CASE WHEN f.name LIKE '%.ptb' THEN 'power' ELSE 'guitar-pro' END AS kind\n  FROM files f JOIN versions v ON v.id = f.version_id\n  WHERE v.provider = 'ug' AND v.kind IN ('guitar-pro', 'power')\n);",
+   "UPDATE files SET version_id = (\n  SELECT id FROM versions WHERE provider = 'inbox' AND song_id = files.song_id\n  AND tab_id = CASE WHEN files.name LIKE '%.ptb' THEN 'power' ELSE 'guitar-pro' END\n) WHERE version_id IN (SELECT id FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power'));",
+   "DELETE FROM versions WHERE provider = 'ug' AND kind IN ('guitar-pro', 'power');",
+   "DELETE FROM ug_artist_tabs WHERE type IN ('guitar-pro', 'power');",
+   "DELETE FROM ug_index WHERE type IN ('guitar-pro', 'power');",
+   "DELETE FROM ug_artists WHERE NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = ug_artists.artist_key);",
+   "INSERT INTO ug_keys_fts(ug_keys_fts, rowid, key) SELECT 'delete', id, key FROM ug_keys\nWHERE NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = ug_keys.key)\nAND NOT EXISTS (SELECT 1 FROM ug_index WHERE song_key = ug_keys.key);",
+   "DELETE FROM ug_keys WHERE NOT EXISTS (SELECT 1 FROM ug_index WHERE artist_key = ug_keys.key)\nAND NOT EXISTS (SELECT 1 FROM ug_index WHERE song_key = ug_keys.key);",
+   "DELETE FROM kv WHERE substr(key, 1, 13) = 'songs:fields:';",
+   "UPDATE songs SET source_ids = json_remove(source_ids, '$.spotify')\nWHERE CASE WHEN json_valid(source_ids) THEN json_type(source_ids, '$.spotify') END IS NOT NULL;",
+   "UPDATE removed SET source_ids = json_remove(source_ids, '$.spotify')\nWHERE CASE WHEN json_valid(source_ids) THEN json_type(source_ids, '$.spotify') END IS NOT NULL;",
+   "DELETE FROM kv WHERE key IN ('source:spotify', 'spotify:top_tracks', 'spotify:retry_after_until');",
+   "DELETE FROM kv WHERE key = 'keys:info_version';"
+  ],
+  "10": [
+   "CREATE TABLE IF NOT EXISTS harptabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS harptabs_index_key ON harptabs_index(kind, key);",
+   "CREATE INDEX IF NOT EXISTS harptabs_index_sitemap ON harptabs_index(sitemap);"
+  ],
+  "11": [
+   "CREATE TABLE IF NOT EXISTS harptabs_artists (\n  path TEXT PRIMARY KEY,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS harptabs_artists_key ON harptabs_artists(key);",
+   "CREATE TABLE IF NOT EXISTS harptabs_artist_tabs (\n  artist TEXT NOT NULL,\n  tab_id INTEGER NOT NULL,\n  path TEXT NOT NULL,\n  title TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  harp_key TEXT,\n  difficulty TEXT,\n  views INTEGER NOT NULL DEFAULT 0,\n  rating REAL,\n  place INTEGER NOT NULL,\n  PRIMARY KEY (artist, tab_id)\n);",
+   "CREATE INDEX IF NOT EXISTS harptabs_artist_tabs_song ON harptabs_artist_tabs(song_key);",
+   "CREATE INDEX IF NOT EXISTS harptabs_artist_tabs_tab ON harptabs_artist_tabs(tab_id);"
+  ],
+  "12": [
+   "CREATE VIRTUAL TABLE IF NOT EXISTS ug_index_fts USING fts5(\n  artist_key, song_key, content='ug_index', content_rowid='tab_id', tokenize='unicode61', detail='none', columnsize=0\n);",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_fts_added AFTER INSERT ON ug_index BEGIN\n  INSERT INTO ug_index_fts(rowid, artist_key, song_key) VALUES (new.tab_id, new.artist_key, new.song_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_fts_gone AFTER DELETE ON ug_index BEGIN\n  INSERT INTO ug_index_fts(ug_index_fts, rowid, artist_key, song_key)\n  VALUES ('delete', old.tab_id, old.artist_key, old.song_key);\nEND;",
+   "CREATE TRIGGER IF NOT EXISTS ug_index_fts_changed AFTER UPDATE OF artist_key, song_key ON ug_index\nWHEN new.artist_key IS NOT old.artist_key OR new.song_key IS NOT old.song_key BEGIN\n  INSERT INTO ug_index_fts(ug_index_fts, rowid, artist_key, song_key)\n  VALUES ('delete', old.tab_id, old.artist_key, old.song_key);\n  INSERT INTO ug_index_fts(rowid, artist_key, song_key) VALUES (new.tab_id, new.artist_key, new.song_key);\nEND;",
+   "INSERT INTO ug_index_fts(ug_index_fts) VALUES ('rebuild');",
+   "CREATE TABLE IF NOT EXISTS ug_key_words (\n  id INTEGER PRIMARY KEY,\n  term TEXT NOT NULL UNIQUE\n);",
+   "CREATE TRIGGER IF NOT EXISTS ug_keys_words AFTER INSERT ON ug_keys BEGIN\n  INSERT OR IGNORE INTO ug_key_words(term) SELECT value FROM json_each(CASE WHEN json_valid('[\"' || replace(new.key, '-', '\",\"') || '\"]')\n  THEN '[\"' || replace(new.key, '-', '\",\"') || '\"]' ELSE '[]' END)\n  WHERE value != '';\nEND;",
+   "INSERT OR IGNORE INTO ug_key_words(term) SELECT DISTINCT value FROM ug_keys, json_each(CASE WHEN json_valid('[\"' || replace(ug_keys.key, '-', '\",\"') || '\"]')\n  THEN '[\"' || replace(ug_keys.key, '-', '\",\"') || '\"]' ELSE '[]' END)\nWHERE value != '' ORDER BY value;"
+  ],
+  "13": [
+   "CREATE TABLE IF NOT EXISTS gametabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  game TEXT NOT NULL,\n  slug TEXT NOT NULL,\n  page INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  slug_key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS gametabs_index_key ON gametabs_index(kind, key);",
+   "CREATE INDEX IF NOT EXISTS gametabs_index_slug_key ON gametabs_index(kind, slug_key);",
+   "CREATE INDEX IF NOT EXISTS gametabs_index_game ON gametabs_index(game, kind);",
+   "CREATE INDEX IF NOT EXISTS gametabs_index_sitemap ON gametabs_index(sitemap);",
+   "CREATE TABLE IF NOT EXISTS gametabs_games (\n  path TEXT PRIMARY KEY,\n  game TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n);",
+   "CREATE INDEX IF NOT EXISTS gametabs_games_game ON gametabs_games(game);",
+   "CREATE TABLE IF NOT EXISTS gametabs_game_tabs (\n  page TEXT NOT NULL,\n  path TEXT NOT NULL,\n  game TEXT NOT NULL,\n  title TEXT NOT NULL,\n  title_key TEXT NOT NULL,\n  instruments TEXT NOT NULL DEFAULT '[]',\n  composers TEXT NOT NULL DEFAULT '[]',\n  views INTEGER NOT NULL DEFAULT 0,\n  rating REAL,\n  place INTEGER NOT NULL,\n  PRIMARY KEY (page, path)\n);",
+   "CREATE INDEX IF NOT EXISTS gametabs_game_tabs_title ON gametabs_game_tabs(title_key);",
+   "CREATE INDEX IF NOT EXISTS gametabs_game_tabs_path ON gametabs_game_tabs(path);",
+   "CREATE INDEX IF NOT EXISTS gametabs_game_tabs_game ON gametabs_game_tabs(game);"
+  ],
+  "14": [
+   "DROP TRIGGER ug_keys_words;",
+   "CREATE TRIGGER ug_keys_words AFTER INSERT ON ug_keys BEGIN\n  INSERT INTO ug_key_words(term) SELECT DISTINCT value FROM json_each(CASE WHEN json_valid('[\"' || replace(new.key, '-', '\",\"') || '\"]')\n  THEN '[\"' || replace(new.key, '-', '\",\"') || '\"]' ELSE '[]' END)\n  WHERE value != '' AND NOT EXISTS (SELECT 1 FROM ug_key_words WHERE term = value);\nEND;"
+  ],
+  "15": [
+   "INSERT OR IGNORE INTO kv (key, value) VALUES ('sync:id', lower(hex(randomblob(8))));"
+  ]
+ }
+}

@@ -65,13 +65,19 @@ file, and none of it loads anything from the network.
   when it changed, its Output as you left it); its Cancel, Try again and Get it from there post with fetch(), the
   request they queue followed on its song's line (``caracoleLibrary.track``).
 
+- sync.css, sync.js, sync-tab.html and sync-panel.html: the Sync tab (``#tab=sync``), before Requests, on a page
+  whose server syncs (``WebControls.sync``; the phone's server always): the tab and its panel are these templates,
+  put in as they are, so the page is the same pure function of these files on the computer and on the phone (the
+  phone's server builds it from a copy of this folder). Not built yet: its panel says so.
+
 - drawn.js: the last script, once every other has drawn what it draws: the page shows. Until then
   library.css keeps it unseen (its body is ``drawing``), so a slow machine that paints it before its
   scripts have run shows nothing that moves once they have (the list empty, the request form open,
   the library shown though you left the Songbooks tab open); two seconds on, it shows all the same.
 
 - head.html, body.html, request.html and requested.html: index.html's skeleton, whose
-  ``__BLANKS__`` library_page.py fills in: the policy, the style and, served, the Requests tab and its panel,
+  ``__BLANKS__`` library_page.py fills in (``assemble_page``): the policy, the style and, served, the Sync tab and its
+  panel where the server syncs, the Requests tab and its panel,
   the request form and the songs just requested. body.html also holds the guitar a set list marks a
   song with a Guitar Pro file by (``#guitar-glyph``, an inline SVG in a template songbooks.js clones:
   the HTML parser gives it its namespace).

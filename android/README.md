@@ -88,6 +88,14 @@ The sheet viewer keeps each chord over its syllable at any text size. Pages writ
 chords over the lyrics when the text is much larger. Once caracole is upgraded, its next render writes the pages
 again, and the next sync brings them to the phone.
 
+## Search with the computer off
+
+Not built yet.
+
+## Sync from the phone
+
+Not built yet.
+
 ## caracole itself on the phone (experimental)
 
 The app above copies a computer's library. To search, add songs and fetch them with the computer off, the phone

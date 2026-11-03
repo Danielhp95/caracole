@@ -935,6 +935,9 @@ It is rows.js's, shared by both pages:
 - A route lives in its area's `*_routes.py`, as a `Route` in its `ROUTES`, which the router gathers from every such
   module, and a line of its docstring (test_web_app.py checks both): neither a new route nor a new module of them
   changes app.py.
+- A route declares its body's kind and limit (`Route(..., body="form"|"json"|"bytes", limit=bytes)`): server.py asks
+  `app.body_limit` before it reads a body (16 KiB for an unknown path); a `json` or `bytes` route needs the
+  cross-origin check and the `X-Caracole-Form-Token` header, a form route its `csrf` field.
 - A route refuses with `pages.Refused`, which `WebApp.handle` answers as the message page, or to the page's script as
   JSON: every refusal as data.
 
@@ -1051,6 +1054,55 @@ It is rows.js's, shared by both pages:
   superpowers/specs/2026-11-02-android-native-port-feasibility.md).
 - screenshots/: the README's pictures, of a demo library of public-domain songs, and make.py, which builds that
   library with no request and takes them again (its docstring says how): retake them when the pages they show change.
+- superpowers/plans/2026-11-03-android-port-m1-m3.md: the Kotlin port's plan for milestones 1–3, its lanes and their
+  interfaces; specs/2026-11-03-conformance-corpus.md and specs/2026-11-03-canonical-json.md, the contracts it rests
+  on; spikes/2026-11-03-android/, the spikes' Kotlin, kept as `.kt.txt`.
+
+#### android/
+
+The Android app and caracole's rules in Kotlin (android/README.md; the plan above). A Gradle build of its own
+(`android/flake.nix`: JDK 17 headless, Gradle, the SDK), packages under `io.github.danielhp95.caracole`:
+
+- `:mirror`: the computer's pages on the phone, as `GET /api/offline` lists them (manifest, blobs, the sync), each
+  page gated by its unit (`UnitGate`, `Mirror.pageFor`).
+- `:core` (plain JVM): caracole's rules, each package the port of a Python module:
+  - `db/`: db.py, its migrations from `caracole/schema/migrations.json` in the bundled SQLite (sqlite-bundled 3.50.1,
+    FTS5), and the phone's own tables (`phone.sql`: `phone_overrides`, `phone_songbooks`);
+  - `py/`: Python's Unicode and string semantics (unicodedata 16.0.0's tables, `re`'s classes); `keys/`:
+    normalize.py and library.safe_name; `pinyin/`: pypinyin; `fuzz/`: rapidfuzz-cpp;
+  - `json/`: canonical.py (canonical JSON, digests) and `json.dumps`'s kv text;
+  - `search/`, `ug/`, `sites/`, `lacuerda/`: search.py, ug/key_search.py, ug/artist_tabs.py, lacuerda_index.py and
+    the other sites' search; `names/`: song_names.py; `index/`: index_transfer.py's merge;
+  - `library/`: songs.py, removal.py's rules, overrides.toml and songbooks.toml as tables; `sync/`: peer_sync.py,
+    and the phone's sync engine and peer client.
+  - testFixtures: `Corpus`, `Fixtures`, `TestDb`: how every Kotlin test reads the corpus and makes a database.
+- `:server` (plain JVM): web/ on the phone, on Ktor CIO at 127.0.0.1 behind a launch secret: `http/` (app.py,
+  security.py, inline.py, the message page), `files/`, `page/` (library_page.py's page, from library_assets/ copied
+  byte for byte at build time), `jobs/` (jobs.py, jobs_routes.py), `routes/`, and `Assembly.kt`, the phone whole.
+- `:app`: the Android app on its own server; `:e2e`: the end-to-end phases against a real caracole serve.
+- Until a lane lands, a function the running app reaches answers neutrally through `core.stub`, and the others are
+  `TODO` naming their lane.
+
+tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
+root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through
+helpers/corpus.py.
+
+#### The phone agrees with the computer to the byte
+
+- What the Kotlin side ports, Python states as data in the conformance corpus
+  (docs/superpowers/specs/2026-11-03-conformance-corpus.md): each `tests/test_conformance_<area>.py` builds its file
+  and `helpers.corpus.check`s it against the committed one. Never edit one by hand; regenerate:
+  `CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_*.py`.
+- A change to normalize, search, peer_sync, the schema, library_assets, status.py or outcome.py regenerates the corpus
+  in the same commit, and `nix develop ./android -c gradle -p android test` passes before it merges. When a Kotlin
+  test breaks on it, the change doesn't merge: it is conformance drift, the Kotlin side's to follow first (the drift
+  protocol, in the spec).
+- A `SCHEMA_VERSION` or `KEY_VERSION` bump moves the phone in lockstep: migrations.json regenerated,
+  `Database.SCHEMA_VERSION` and `Normalize.KEY_VERSION` bumped, `LibraryStore.ensureCurrentKeys` re-keying as
+  `songs.ensure_current_keys` does.
+- `:core` never calls a JDK or ICU text API (case, normalization, `Character` classes, `java.util.regex`'s own `\w`
+  or `\s`, `Collator`): their Unicode is not Python's, and on Android it varies by device. It uses `core.py` and its
+  tables (`ForbiddenApiTest`).
 
 ## Development
 
@@ -1069,6 +1121,7 @@ pytest -q -m "not slow"           # the quick loop, a few seconds
 pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first failure
 pytest -q tests/test_fetch.py     # given paths, pytest runs them in one process
 nix develop .#autochords -c pytest -m autochords   # the model tests
+nix develop ./android -c gradle -p android test    # the Android side: :mirror, :core, :server, :app, :e2e on the JVM
 ```
 
 - Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, `--dist worksteal`).
@@ -1126,6 +1179,7 @@ nix develop .#autochords -c pytest -m autochords   # the model tests
 ```
 nix develop -c pytest -q
 nix develop .#autochords -c pytest -m autochords   # when auto-chords is touched
+nix develop ./android -c gradle -p android test    # when android/ or the corpus is touched
 nix flake check
 ```
 
@@ -1726,6 +1780,10 @@ picks one).
   - the last `jobs.KEEP` (100) requests of `DAYS` (30) read back, the next ids after theirs, one that waited or ran
     then `INTERRUPTED`, as is one the server ends as it stops (`JobQueue.stop`): over, Try again queues it
     (test_web_history.py).
+- It also writes, for the phone's sync alone, and nothing else: a push's staging folder (`state_dir/peer/push-<id>/`,
+  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after), and a
+  temporary index export for `GET /api/peer/index` (`cache_dir/peer/`, one read transaction, no lock, deleted once
+  sent). Everything else stays a queued command's.
 
 ### wanted.txt is the one source of songs
 
