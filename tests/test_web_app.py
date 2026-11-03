@@ -3036,6 +3036,7 @@ def test_the_body_limit_is_the_routes_else_16_kib(app):
     assert app.body_limit("POST", "/peer/%70ull?x=1") == 1024 * 1024  # the address as the router reads it
     assert app.body_limit("POST", "/peer/push/new") == 1024 * 1024
     assert app.body_limit("POST", "/peer/push/file?push=0123456789abcdef&sha256=00") == 64 * 1024 * 1024
+    assert app.body_limit("POST", "/peer/push?push=0123456789abcdef") == 16 * 1024 * 1024
     for target in ("/nowhere", "/%ff", "/api/peer/state", "/peer/pull/x", "/peer/push/new/x"):
         assert app.body_limit("POST", target) == 16 * 1024, target
 
@@ -3080,6 +3081,32 @@ def test_a_json_or_bytes_route_reads_its_kind_with_the_form_token_in_a_header(ap
     with_test_routes(monkeypatch, Route("POST", "/t/json", lambda app, asked, data: json_response(200, {}),
                                         body="json", limit=10 ** 6))
     assert refused(sent(app, "/t/json", b"[" * 100_000 + b"]" * 100_000, JSON), 400)
+
+
+def test_what_its_headers_alone_refuse_is_answered_unread_as_it_would_be_read(app, monkeypatch):
+    # server.py asks it before it reads a body longer than 16 KiB: the same answer, the same order of checks
+    from caracole.web.app import Route, json_response
+
+    with_test_routes(monkeypatch,
+                     Route("POST", "/t/json", lambda app, asked, data: json_response(200, {}), body="json",
+                           limit=10 ** 6),
+                     Route("POST", "/t/form", lambda app, asked, form: json_response(200, {}), limit=10 ** 6))
+    cases = [("/t/json", {"host": "evil.example"}), ("/t/json", {"sec-fetch-site": "cross-site"}),
+             ("/t/json", {"origin": "http://evil.example"}), ("/t/json", {"x-caracole-form-token": "old"}),
+             ("/t/json", {"content-type": "text/plain"}), ("/t/form", {"content-type": "text/plain"}),
+             ("/t/form", {"sec-fetch-site": "same-site", "content-type": "application/x-www-form-urlencoded"}),
+             ("/t/json", {"accept": JSON, "x-caracole-form-token": ""})]
+    for path, change in cases:
+        headers = {"host": HOST, "content-type": JSON, "x-caracole-form-token": "tok"} | change
+        early = app.refused_unread("POST", path, headers)
+        late = app.handle(Request("POST", path, headers, b"{}"))
+        assert early is not None and (early.status, early.body, early.headers) == (
+            late.status, late.body, late.headers), (path, change)
+    passing = {"host": HOST, "content-type": JSON, "x-caracole-form-token": "tok"}
+    assert app.refused_unread("POST", "/t/json", passing) is None
+    assert app.refused_unread("POST", "/t/form", passing | {"content-type": "application/x-www-form-urlencoded"}
+                              ) is None  # its csrf field, in the body, is read with it
+    assert app.refused_unread("POST", "/nowhere", passing) is None  # 16 KiB at most: read, then refused
 
 
 def test_a_form_route_reads_a_form_alone_up_to_its_own_limit(app, monkeypatch):

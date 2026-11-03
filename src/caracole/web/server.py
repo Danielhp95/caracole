@@ -2,11 +2,16 @@
 
 A connection serves one request (HTTP/1.0) and times out after 30 seconds. A
 POST must say how long it is, and is refused unread beyond its route's limit
-(``WebApp.body_limit``: 16 KiB, unless the route says more). An answer too long
+(``WebApp.body_limit``: 16 KiB, unless the route says more); one longer than
+16 KiB is read only once its address and headers pass the checks it would
+fail else (``WebApp.refused_unread``: the host name, another site's write, the
+form token, the content type), so that no other site's page has the server read
+megabytes it then refuses. An answer too long
 to hold, a file (``Response.stream``), is written in chunks as it is read, then
 closed. The queue's worker starts with the server and stops with it, ending the
 command it was running: on Ctrl-C, and on SIGTERM, which is how systemd stops
-the unit.
+the unit. As it starts, the pushes another caracole left an hour ago are deleted
+(``peer_push.sweep``).
 """
 
 from __future__ import annotations
@@ -21,7 +26,7 @@ import traceback
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from caracole.web.app import Request, Response, WebApp
+from caracole.web.app import MAX_BODY, Request, Response, WebApp
 from caracole.web.security import WILDCARDS
 
 log = logging.getLogger(__name__)
@@ -42,6 +47,7 @@ class _Handler(BaseHTTPRequestHandler):
     def _answer(self) -> None:
         app = self.server.app
         body = b""
+        headers = {name.lower(): value for name, value in self.headers.items()}
         if self.command == "POST":
             length = self.headers.get("Content-Length")
             if length is None:
@@ -58,8 +64,13 @@ class _Handler(BaseHTTPRequestHandler):
                 self.close_connection = True
                 self._send(app.finish(Response(413, b"That is too long to send here.\n")))
                 return
+            if size > MAX_BODY:
+                refused = app.refused_unread(self.command, self.path, headers)
+                if refused is not None:
+                    self.close_connection = True
+                    self._send(refused)
+                    return
             body = self.rfile.read(size)
-        headers = {name.lower(): value for name, value in self.headers.items()}
         try:
             response = app.handle(Request(self.command, self.path, headers, body))
         except Exception:  # noqa: BLE001 (a bug: say so, keep serving)
@@ -113,7 +124,10 @@ def url_for(address: str, port: int) -> str:
 
 def serve(app: WebApp, address: str, port: int, *, announce: Callable[[str], None] = print) -> None:
     """Serve until Ctrl-C or SIGTERM, then stop the queue; OSError when it can't listen."""
+    from caracole import peer_push
+
     server = make_server(app, address, port)
+    peer_push.sweep(app.cfg.state_dir)
     if threading.current_thread() is threading.main_thread():
         signal.signal(signal.SIGTERM, _interrupt)
     app.queue.start()

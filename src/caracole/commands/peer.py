@@ -12,6 +12,11 @@ unit (peer_sync.py; the design: docs/superpowers/specs/2026-10-31-phone-server-s
 - ``caracole peer sync ADDRESS`` compares, asks you to settle each conflict (``--prefer here`` or ``there`` settles
   them all), takes here what comes from there, and, with ``--here`` (this side's address, as the other reaches it),
   asks the other to take what goes there; without it, says what to run there.
+- ``caracole peer take DIR`` takes a push another caracole sent (peer_push.py), staged by caracole serve in DIR
+  (``state_dir/peer/push-<id>``, ``POST /peer/push`` queues it): its stages check (the push read, each document what
+  its digest says), take (a backup first, then each unit as a pull takes one, left when it changed on this side
+  since the pusher compared: ``peer_sync.apply_units`` with ``expected_here``), render and agree, a line (with
+  ``--progress``, get.py's JSON lines and a unit's event) for each; then DIR is deleted. It exits 0 unless a bug.
 - ``caracole peer new-id`` gives this caracole another id, for a database copied from another's.
 
 ``caracole sync`` is another command: wanted.txt read into the library.
@@ -31,6 +36,7 @@ WORDS = {"mine": "keep here's", "theirs": "take there's", "conflict": "CONFLICT"
 KINDS = {"song": "Songs", "removed": "Removals", "songbook": "Songbooks", "alias": "Artists' aliases",
          "artist_url": "Artists' UG pages", "block": "Blocked tabs"}
 PREFER = {"here": "mine", "there": "theirs"}
+DONE = {"taken": "Took", "given": "Gave", "left": "Left"}
 
 
 def register(app: typer.Typer) -> None:
@@ -141,6 +147,36 @@ def register(app: typer.Typer) -> None:
         if failed:
             raise typer.Exit(1)
 
+    @peer_app.command("take")
+    def take_cmd(
+        ctx: typer.Context,
+        folder: str = typer.Argument(..., help="The push's folder, state_dir/peer/push-<id>, as caracole serve "
+                                               "staged it (POST /peer/push queues this command)."),
+        progress: bool = typer.Option(False, "--progress", help="Report each stage and unit as a JSON line, for "
+                                                               "caracole serve."),
+    ) -> None:
+        """Take the units another caracole pushed here, then render what changed, write the pages, and keep what
+        the two now agree on; the push's folder is deleted after."""
+        from caracole import peer_push
+
+        cfg = load_cfg(ctx)
+        try:
+            where = peer_push.sent_folder(cfg.state_dir, folder)
+        except peer_push.PushError as e:
+            fail(str(e), 2)
+        said = _Said(progress)
+        try:
+            with peer_push.held(where):
+                try:
+                    _take(cfg, where, said)
+                finally:
+                    peer_push.remove(where)
+        except peer_push.PushError as e:
+            said.stage("check", "failed", str(e))
+            fail(str(e))
+        finally:
+            peer_push.sweep(cfg.state_dir)
+
     @peer_app.command("new-id")
     def new_id_cmd(ctx: typer.Context) -> None:
         """Give this caracole another id, for a database copied whole from another caracole's."""
@@ -161,6 +197,32 @@ def _interactive() -> bool:
     import sys
 
     return sys.stdin.isatty()
+
+
+class _Said:
+    """What a sync or a take says as it goes: with ``progress``, get.py's JSON lines (a stage's, a unit's event),
+    which caracole serve reads (web/jobs.py); else a plain line a unit."""
+
+    def __init__(self, progress: bool):
+        self.progress = progress
+
+    def stage(self, name: str, state: str, detail: str = "") -> None:
+        if self.progress:
+            from caracole.get import progress_line
+
+            typer.echo(progress_line({"stage": name, "state": state, "detail": detail}))
+
+    def unit(self, unit_id: str, outcome: str, why: str = "") -> None:
+        if self.progress:
+            from caracole.get import progress_line
+
+            typer.echo(progress_line({"event": "unit", "id": unit_id, "outcome": outcome, "why": why}))
+        else:
+            typer.echo(f"  {DONE[outcome]} {unit_id}" + (f": {why}" if why else ""))
+
+
+def _count(n: int) -> str:
+    return f"{n} {'change' if n == 1 else 'changes'}"
 
 
 def _compare(cfg, address: str):
@@ -239,14 +301,75 @@ def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None
     return done
 
 
-BACKUP_LABEL = "before-sync"  # the database's copy a pull makes first (backup.py)
+def _take(cfg, folder, said: _Said) -> None:
+    """``caracole peer take``'s work, the push in ``folder`` held: see the module's docstring."""
+    from caracole import backup, peer_push, stamps
+    from caracole import peer_sync as sync
+    from caracole.render import render_all
+    from caracole.songbook import SongbookError, load_songbooks, render_songbooks, songbooks_file
+
+    said.stage("check", "running")
+    push = peer_push.read_sent(folder)
+    shown = push.name.strip() or "another caracole"
+    with exclusive(cfg, "peer take", interactive=True), closing(open_db(cfg)) as conn:
+        if push.sender == sync.make_id(conn):
+            raise peer_push.PushError("That push comes from this caracole itself (the same id): its database is a "
+                                      "copy of this one's. Give one of them another: caracole peer new-id.")
+        said.stage("check", "done", f"{_count(len(push.take))} from {shown}")
+        now = utcnow()
+        try:
+            made = backup.make(conn, cfg.state_dir, now, label=BACKUP_LABEL)
+            nothing = (f"Nothing taken: no backup of the database first, {made.reason}."
+                       if isinstance(made, backup.Skipped) else None)
+        except backup.BackupError as e:
+            nothing = f"Nothing taken: the database couldn't be backed up first: {e}"
+        if nothing is not None:
+            said.stage("take", "failed", nothing)
+            for taken in push.take:
+                said.unit(taken.id, "left", nothing)
+            for stage in ("render", "agree"):
+                said.stage(stage, "skipped")
+            typer.echo(nothing)
+            return
+        said.stage("take", "running", _count(len(push.take)))
+        done = sync.apply_units(conn, cfg, peer_push.StagedSource(folder, push, conn, cfg.library_dir),
+                                [(t.id, t.digest) for t in push.take], stamps.stamp(now),
+                                expected_here={t.id: t.expected for t in push.take}, on_unit=said.unit)
+        said.stage("take", "done", _taken_detail(done))
+        said.stage("render", "running")
+        overrides = load_ovr(cfg)
+        if done.songs:
+            render_all(conn, cfg, overrides, song_ids=done.songs)
+        render_songbooks(conn, cfg, overrides)
+        write_pages(conn, cfg, overrides, utcnow())
+        said.stage("render", "done")
+        said.stage("agree", "running")
+        try:
+            books = load_songbooks(songbooks_file(cfg.library_dir))
+        except SongbookError as e:
+            said.stage("agree", "failed", f"songbooks.toml can't be read: {e}")
+        else:
+            agreed = sync.record_agreement(conn, push.sender, sync.library_state(conn, overrides, books),
+                                           push.units, push.at)
+            said.stage("agree", "done", f"{agreed} {'unit' if agreed == 1 else 'units'} the two agree on")
+    typer.echo(f"From {shown}: " + _pulled(done, units=False))
+    if done.respelled:
+        typer.echo("Respelled as it writes their artist: " + ", ".join(done.respelled))
 
 
-def _pulled(done) -> str:
+BACKUP_LABEL = "before-sync"  # the database's copy a pull or a take makes first (backup.py)
+
+
+def _taken_detail(done) -> str:
+    return f"took {len(done.taken)}" + (f", left {len(done.left)}" if done.left else "")
+
+
+def _pulled(done, *, units: bool = True) -> str:
+    """What a take did: how many units it took and songs it rendered, then (``units``) each unit it left."""
     lines = [f"Took {len(done.taken)} {'change' if len(done.taken) == 1 else 'changes'}"
              + (f"; {len(done.songs)} {'song' if len(done.songs) == 1 else 'songs'} rendered again." if done.songs
                 else ".")]
-    lines += [f"  Left {unit_id}: {why}" for unit_id, why in done.left]
+    lines += [f"  Left {unit_id}: {why}" for unit_id, why in done.left] if units else []
     return "\n".join(lines)
 
 

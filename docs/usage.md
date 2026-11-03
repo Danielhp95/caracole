@@ -5752,6 +5752,7 @@ your home database's indexes into a service's, see
     caracole peer diff ADDRESS [--json]                        # what differs, and which side each would come from
     caracole peer sync ADDRESS [--here ADDRESS] [--prefer here|there] [--yes]
     caracole peer pull ADDRESS --unit ID [--unit ID]...        # take these from there
+    caracole peer take [--progress] DIR                        # a push caracole serve staged (it queues this)
     caracole peer new-id                                       # for a database copied from another caracole's
 
 You can keep a caracole on the computer and another on the phone, each with its own library, and use either alone:
@@ -5838,16 +5839,37 @@ the phone has taken what it takes, it pushes what the computer takes, in three r
    library.
 2. **`POST /peer/push/file?push=<id>&sha256=<sha256>`**, the bytes of each file needed
    (`application/octet-stream`, 64 MiB at most), kept once their SHA-256 is the one named.
-3. **`POST /peer/push?push=<id>`**: the units themselves, which `caracole peer take` takes as a pull takes another
-   caracole's. Not built yet.
+3. **`POST /peer/push?push=<id>`**, JSON (16 MiB at most): the push itself, `{"format", "from", "name",
+   "caracole", "at", "units", "take"}`: the phone's library's name and caracole's version, the computer's time in
+   the state it compared, its whole state after its own take (each unit's label and digest), and the units the
+   computer takes, each with the computer's digest of it as compared (`expected`), the phone's digest now, and its
+   document as `GET /api/peer/unit` gives one (null for a unit the phone hasn't got: a song it removed). caracole
+   serve checks that each document is what its digest says and that every file its songs keep was sent or is kept
+   here already, then queues `caracole peer take --progress` of the push, "Changes from <its library>" in the
+   Requests tab, and answers `{"job": …}`, the request as `/jobs.json` gives it, which the phone follows at
+   `GET /api/jobs/<id>`. A second push from the same caracole while its first waits or runs is refused (409) and
+   stays open, to send again once the first is taken.
 
-At most two pushes are open at once, and a push's files come to 2 GiB at most. A push left for an hour is deleted.
-A request from another site's page is refused, and so is one whose token is older than the server, with
-`"reload": true`: the phone reads the state again for a fresh token.
+**`caracole peer take`** takes the push as a pull takes the other side's units, under caracole's lock, waiting for
+the nightly run as a lookup does: it reads the push again (**check**), backs the database up
+(`…-before-sync.sqlite`), takes each unit (**take**), leaving one that changed here since the phone compared ("changed
+here since the comparison"), one whose document isn't what was compared, or a song whose file isn't as sent, then
+renders the songs taken, makes the songbooks and writes the pages (**render**), and keeps what the two now agree on,
+stamped with the time the phone compared at (**agree**). It says each unit it took or left (`--progress`: as JSON
+lines, which the Requests tab reads), exits 0 unless caracole hits a bug, and deletes the push's folder.
+
+At most two pushes are here at once, open or sent and not taken yet, and a push's files come to 2 GiB at most. A
+push left for an hour is deleted, when caracole serve starts, as a push is opened, sent or sent a file, and as a take
+ends; never one a take is taking. A request from another site's page is refused, and so is one whose token is
+older than the server, with `"reload": true`: the phone reads the state again for a fresh token. A body longer than
+16 KiB is read only once its host name, origin, token and content type pass, so another site's page can't have the
+server read megabytes it then refuses; the answer to one longer than its route allows (411, 413) is plain text.
 
 **`GET /api/peer/index`** gives this library's site indexes as `caracole index export` writes them, a SQLite file
 (`?sites=ug,lacuerda` for those alone), which the phone merges as `caracole index merge` does. caracole serve
-copies them in one read, taking no lock, into a file of `cache_dir/peer/` that is gone once it is sent.
+copies them in one read, taking no lock, into a file of `cache_dir/peer/` that is gone once it is sent. One copy is
+out at a time (503 while another is being sent), a HEAD makes none (405), and a copy a killed server left behind is
+deleted an hour later.
 
 ### Syncing by hand: peer sync --push, --choose, --compared
 

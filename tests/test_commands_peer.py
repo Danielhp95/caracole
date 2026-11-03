@@ -37,19 +37,39 @@ def write_config(root: Path) -> Path:
     return path
 
 
-class Side:
-    """A library of its own: its config, its database, and its caracole serve."""
+class InProcess:
+    """A side's caracole serve's runner, in this process: each command queued run through the CLI, on its config,
+    as caracole serve's child would run it."""
 
-    def __init__(self, root: Path):
+    def __init__(self):
+        self.side = None
+        self.calls = []
+
+    def __call__(self, args, emit):
+        self.calls.append(list(args))
+        result = run(self.side, *args)
+        for line in result.output.splitlines():
+            emit(line)
+        return result.exit_code
+
+
+class Side:
+    """A library of its own: its config, its database, and its caracole serve, whose queue records the commands
+    it is asked to run (``runner``: or runs them)."""
+
+    def __init__(self, root: Path, runner=None):
         self.root = root
         self.cfg = load_config(write_config(root), env={"HOME": str(root / "home")})
         self.conn = db.connect(self.cfg.db_path)
-        self.app = WebApp(self.cfg, JobQueue(Recorder(), limit=3), allowed=ALLOWED, csrf="tok")
+        if isinstance(runner, InProcess):
+            runner.side = self
+        self.app = WebApp(self.cfg, JobQueue(runner or Recorder(), limit=3), allowed=ALLOWED, csrf="tok")
 
     def song(self, artist="Radiohead", title="Creep", *, sheet=b"[Am]Creep", version="key=Gm&capo=0"):
         """A song of wanted.txt with a sheet kept, its own version, and lyrics."""
         append_wanted(self.cfg.wanted_file, artist, title)
-        song = add_song(self.conn, artist, title, source_id=f"{artist} - {title}")
+        # as its line says it (no duration), so that reading wanted.txt again changes nothing of it
+        song = add_song(self.conn, artist, title, source_id=f"{artist} - {title}", duration_ms=None)
         vid = upsert_version(self.conn, provider="ug", tab_id="101", song_id=song.id, slot="sheet", kind="chords",
                              rating=4.5, votes=10, version=1, label=None, url="https://u/101", raw={"x": 1}, now=NOW)
         keep_file(self.conn, self.cfg.library_dir, song=song, version_id=vid, name="sheet.txt", data=sheet, rank=1)
@@ -66,13 +86,15 @@ class Side:
 
 @pytest.fixture
 def two(tmp_path, monkeypatch):
-    """This library (here) and the phone's (there), whose caracole serve answers at http://localhost:8737; the
-    songs taken are rendered by a recorder, not chordpro."""
-    here, there = Side(tmp_path / "here"), Side(tmp_path / "there")
+    """This library (here) and the phone's (there), whose caracole serve answers at http://localhost:8737 and runs
+    what it queued as it is asked how a job goes; the songs taken are rendered by a recorder, not chordpro."""
+    here, there = Side(tmp_path / "here"), Side(tmp_path / "there", InProcess())
     asked = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         asked.append((request.method, request.url.path))
+        if request.url.path.startswith("/api/jobs/"):
+            there.app.queue.run_pending()
         answer = there.app.handle(Request(request.method, request.url.raw_path.decode(), dict(request.headers),
                                           request.content))
         answer = WebApp.finish(answer)

@@ -5,20 +5,26 @@ The phone starts every sync and serves nothing to the network, so it can't be as
 from this side (peer_sync.py's reads), then pushes what this side takes, in three requests, each with the form token
 in its header (web/app.py's ``json`` and ``bytes`` routes):
 
-1. ``POST /peer/push/new`` names the files its units keep, by their SHA-256 (``new_push``). This side opens a folder
-   for the push, ``state_dir/peer/push-<id>/`` (0700), and answers its id and the files it has no readable copy of,
-   ``need`` (``kept_copy``: a kept file here whose bytes have that SHA-256).
+1. ``POST /peer/push/new`` names the files its units keep, by their SHA-256 (``read_new``, ``needed``,
+   ``new_push``). This side opens a folder for the push, ``state_dir/peer/push-<id>/`` (0700), and answers its id
+   and the files it has no readable copy of, ``need`` (``kept_copy``: a kept file here whose bytes have that
+   SHA-256).
 2. ``POST /peer/push/file?push=&sha256=``, once a file needed: its bytes, checked by their SHA-256 and kept as
    ``files/<sha256>`` (``stage_file``).
-3. ``POST /peer/push?push=``: the push document (``read_push_document``), kept as ``push.json``; then ``caracole peer
-   take DIR`` is queued, which takes its units from a ``StagedSource``, as a pull takes a peer's, and deletes the
-   folder once it is over.
+3. ``POST /peer/push?push=``: the push document (``read_push_document``), each unit's document checked against its
+   digest (``check_digests``) and each file its songs keep staged or kept here, then kept as ``push.json``
+   (``send``); ``caracole peer take DIR`` is queued, which takes its units from a ``StagedSource``, as a pull takes
+   a peer's, and deletes the folder once it is over.
 
 Nothing of it goes into the library, and caracole serve writes nothing else for a push (AGENTS.md). A push's id is
 16 hex and a file's SHA-256 64 hex, both checked before any path is built of them (``_folder`` builds the one path
-an id names). At most ``OPEN`` (2) pushes are open, not sent yet, at once; a file is at most ``FILE_MAX`` (64 MiB)
-and a push's files ``PUSH_MAX`` (2 GiB). A push untouched for ``EXPIRES`` (an hour) is deleted the next time a push
-is opened (``sweep``), unless a take holds it (``held``).
+an id names, and ``sent_folder`` checks the one a take is given). At most ``OPEN`` (2) pushes are here at once, open
+or sent and not taken yet; a file is at most ``FILE_MAX`` (64 MiB) and a push's files ``PUSH_MAX`` (2 GiB). A push
+untouched for ``EXPIRES`` (an hour), sent or not, is deleted (``sweep``: when caracole serve starts, at each of the
+three requests, and as a take ends), unless a take holds it (``held``).
+
+A caracole pushes to another as the phone does (``Pusher``, ``push_units``), so ``caracole peer sync --push`` gives
+the other side its units with no need for it to reach this one.
 """
 
 from __future__ import annotations
@@ -31,15 +37,17 @@ import re
 import secrets
 import shutil
 import sqlite3
+import stat
 import threading
 import time
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from caracole import peer_sync as sync
+from caracole import stamps
 
 ID = re.compile(r"[0-9a-f]{16}")  # a push's id, and a caracole's (kv sync:id: db.py's schema 15, peer_sync.new_id)
 SHA256 = re.compile(r"[0-9a-f]{64}")
@@ -150,20 +158,31 @@ def kept_copy(conn: sqlite3.Connection | None, library_dir: Path, digest: str) -
     return None
 
 
-def new_push(state_dir: Path, conn: sqlite3.Connection | None, library_dir: Path, *, sender: str,
-             files: Sequence[str], own: str | None, now: float | None = None) -> Opened:
-    """A push opened for ``sender`` (``read_new``'s), which names ``files``: its folder made, with what it needs;
-    PushError when ``sender`` is this caracole (``own``, its id), or with ``OPEN`` pushes open already (409). Pushes
-    left untouched for an hour go first (``sweep``)."""
+def needed(conn: sqlite3.Connection | None, library_dir: Path, files: Sequence[str]) -> list[str]:
+    """Those of ``files`` (each a SHA-256) this side has no readable copy of (``kept_copy``), in order."""
+    return [f for f in files if kept_copy(conn, library_dir, f) is None]
+
+
+def _not_from_here(sender: str, own: str | None) -> None:
     if own is not None and sender == own:
         raise PushError("That push comes from this caracole itself (the same id): its database is a copy of this "
                         "one's. Give one of them another: caracole peer new-id.")
-    need = [f for f in files if kept_copy(conn, library_dir, f) is None]
+
+
+def new_push(state_dir: Path, *, sender: str, files: Sequence[str], need: Sequence[str], own: str | None,
+             now: float | None = None) -> Opened:
+    """A push opened for ``sender`` (``read_new``'s), which names ``files``, of which this side needs ``need``
+    (``needed``): its folder made; PushError when ``sender`` is this caracole (``own``, its id), or with ``OPEN``
+    pushes here already, open or sent and not taken yet (409); OSError when its folder can't be made. Pushes left
+    untouched for an hour go first (``sweep``)."""
+    _not_from_here(sender, own)
+    need = list(need)
     sweep(state_dir, now)
     with _lock:
         root = state_dir / FOLDER
-        if sum(1 for p in _pushes(root) if not (p / DOCUMENT).exists()) >= OPEN:
-            raise PushError("Two pushes are open already: try again once one is sent, or in an hour.", 409)
+        if len(_pushes(root)) >= OPEN:
+            raise PushError("Two pushes are here already, waiting to be taken: try again once one is, or in an "
+                            "hour.", 409)
         state_dir.mkdir(parents=True, exist_ok=True)
         _private_dir(root)
         while True:
@@ -188,6 +207,7 @@ def stage_file(state_dir: Path, push_id: str, digest: str, data: bytes) -> None:
     check_sha256(digest)
     if hashlib.sha256(data).hexdigest() != digest:
         raise PushError("Those bytes aren't the file of that SHA-256.")
+    sweep(state_dir)
     with _lock:
         folder = _folder(state_dir, push_id)
         opened = _read_json(folder / NEW)
@@ -212,6 +232,20 @@ def _staged_bytes(folder: Path) -> int:
         return 0
 
 
+def _staged(folder: Path) -> set[str]:
+    """The files staged in a push's folder, by their SHA-256 (their names)."""
+    try:
+        return {e.name for e in os.scandir(folder / FILES) if SHA256.fullmatch(e.name)
+                and e.is_file(follow_symlinks=False)}
+    except FileNotFoundError:
+        return set()
+
+
+def unstaged(state_dir: Path, push_id: str, files: set[str]) -> set[str]:
+    """Those of ``files`` the push ``push_id`` hasn't had sent: what a send must find kept here instead."""
+    return files - _staged(_folder(state_dir, push_id))
+
+
 # --- pushes left, and a take's hold on one -----------------------------------------------------------------------
 
 
@@ -219,7 +253,7 @@ def _pushes(root: Path) -> list[Path]:
     """The pushes' folders under ``root`` (state_dir/peer), by their names alone: nothing else there is one."""
     try:
         entries = list(os.scandir(root))
-    except FileNotFoundError:
+    except OSError:  # none yet, or no folder to read
         return []
     return [Path(e.path) for e in entries if e.name.startswith(PREFIX) and ID.fullmatch(e.name[len(PREFIX):])
             and e.is_dir(follow_symlinks=False)]
@@ -290,6 +324,31 @@ def held(folder: Path) -> Iterator[None]:
         os.close(fd)
 
 
+def sent_folder(state_dir: Path, given: str | os.PathLike[str]) -> Path:
+    """The folder of a push here that ``given`` names (``caracole peer take DIR``): ``state_dir/peer/push-<id>``
+    itself, a folder and no link, reached through no link but those of ``state_dir``'s own path; PushError for any
+    other, so that a take, which deletes its folder once it is over, deletes no other."""
+    path = Path(given)
+    name = path.name
+    if not name.startswith(PREFIX) or not ID.fullmatch(name[len(PREFIX):]):
+        raise PushError(f"{str(given)[:200]!r} isn't a push's folder: push-<16 hex>.")
+    folder = _folder(state_dir, name[len(PREFIX):])
+    try:
+        same = os.path.realpath(path.parent) == os.path.realpath(folder.parent)
+        entry = os.lstat(folder)
+    except OSError:
+        same, entry = False, None
+    if not same or entry is None or not stat.S_ISDIR(entry.st_mode):
+        raise PushError(f"{str(given)[:200]!r} isn't a push here: a take is given its folder in "
+                        f"{state_dir / FOLDER}.")
+    return folder
+
+
+def remove(folder: Path) -> None:
+    """A push's folder deleted, all of it (once its take is over)."""
+    shutil.rmtree(folder, ignore_errors=True)
+
+
 # --- the push document ------------------------------------------------------------------------------------------
 
 
@@ -346,6 +405,8 @@ def read_push_document(data: Any) -> Push:
         raise PushError("Who pushes? Its caracole's id is 16 hex.")
     if not (isinstance(name, str) and isinstance(version, str) and isinstance(at, str) and at):
         raise PushError("A push says its library's name, its caracole's version and when it compared.")
+    if stamps.parse(at) is None:
+        raise PushError(f"{at[:80]!r} isn't a time: a push says when it compared as this side's state said it.")
     try:
         state = sync.read_state_document({"format": sync.FORMAT, "server": sender, "caracole": version, "name": name,
                                           "units": data.get("units")})
@@ -379,6 +440,68 @@ def _taken(entry: Any, units: Mapping[str, sync.Unit]) -> Taken:
     return Taken(unit_id, expected, digest, unit)
 
 
+def check_digests(push: Push) -> None:
+    """Each document the push gives is what its digest says: the digest of its value read from it alone
+    (``peer_sync.value_of_document``), as a take reads it; PushError for the first that isn't."""
+    for taken in push.take:
+        if taken.unit is None:
+            continue
+        try:
+            found = sync.digest_of(sync.value_of_document(taken.id, taken.unit))
+        except (sync.UnitError, TypeError, ValueError) as e:
+            raise PushError(f"{taken.id[:200]}: {e}.") from None
+        if found != taken.digest:
+            raise PushError(f"{taken.id[:200]}: its document isn't what its digest says.")
+
+
+def send(state_dir: Path, push_id: str, push: Push, document: Mapping[str, Any], *, own: str | None,
+         kept: set[str]) -> Path:
+    """The push ``push_id`` sent: ``push`` (``document`` read, ``read_push_document``) kept as its ``push.json``
+    once it is open, from whoever opened it and not from this caracole (``own``), each of its documents what its
+    digest says (``check_digests``) and each file its songs keep staged, else kept here (``kept``: those of
+    ``unstaged`` this side has a readable copy of); its folder, for the take. PushError else; OSError when it can't
+    be written."""
+    check_id(push_id)
+    _not_from_here(push.sender, own)
+    check_digests(push)
+    files = push.files()
+    with _lock:
+        folder = _folder(state_dir, push_id)
+        opened = _read_json(folder / NEW)
+        if not isinstance(opened, Mapping):
+            raise PushError("No such push is open here: open another (POST /peer/push/new).")
+        if (folder / DOCUMENT).exists():
+            raise PushError("That push is sent already.")
+        if opened.get("from") != push.sender:
+            raise PushError("That push was opened by another caracole.")
+        missing = sorted(files - _staged(folder) - kept)
+        if missing:
+            raise PushError(f"{len(missing)} {'file' if len(missing) == 1 else 'files'} the push keeps "
+                            f"{'was' if len(missing) == 1 else 'were'} never sent, nor kept here: "
+                            + ", ".join(missing[:3]) + ("…" if len(missing) > 3 else "") + ".")
+        _write_private(folder / DOCUMENT, json.dumps(document, ensure_ascii=False).encode("utf-8"))
+    return folder
+
+
+def unsend(state_dir: Path, push_id: str) -> None:
+    """The push ``push_id`` open again, its ``push.json`` gone: no take was queued for it."""
+    with _lock:
+        folder = _folder(state_dir, push_id)
+        with _unless_held(folder) as free:
+            if free:
+                (folder / DOCUMENT).unlink(missing_ok=True)
+
+
+def read_sent(folder: Path) -> Push:
+    """The push sent in ``folder`` (``sent_folder``), as ``send`` kept it; PushError when it can't be read."""
+    data = _read_json(folder / DOCUMENT)
+    if data is None:
+        raise PushError("That push can't be read: sync again.")
+    push = read_push_document(data)
+    check_digests(push)
+    return push
+
+
 # --- a push taken -------------------------------------------------------------------------------------------------
 
 
@@ -396,9 +519,12 @@ class StagedSource:
 
     def unit(self, unit_id: str) -> dict[str, Any] | None:
         """The unit's document as the push gives it (``GET /api/peer/unit``'s ``"unit"``), or None for a unit it
-        hasn't got."""
+        gives as one it hasn't got (a song removed there); PeerError for a unit it doesn't give at all, which a
+        take must leave as it is, never take as gone."""
         taken = self._take.get(unit_id)
-        return None if taken is None or taken.unit is None else dict(taken.unit)
+        if taken is None:
+            raise sync.PeerError("the push doesn't give it")
+        return None if taken.unit is None else dict(taken.unit)
 
     def file(self, key: str, name: str, sha256: str) -> bytes:
         """A kept file of the song of ``key``, by its SHA-256: sent with the push, or kept here; PeerError else."""
@@ -415,3 +541,176 @@ class StagedSource:
             raise sync.PeerError(f"{name} wasn't sent with the push, nor is it kept here as it was: the song is "
                                  "left as it was here.")
         return data
+
+
+# --- a push to another caracole -----------------------------------------------------------------------------------
+
+NEW_PATH = "/peer/push/new"
+FILE_PATH = "/peer/push/file"
+PUSH_PATH = "/peer/push"
+JOBS_PATH = "/api/jobs/"
+WAIT = 600.0  # seconds a push's take is waited for, at most
+POLL = 1.0  # seconds between two asks of how it goes
+
+
+class Pusher(sync.Peer):
+    """Another ``caracole serve`` asked to take a push, as the phone asks it: its state (and with it its form token,
+    which each request of a push carries in its header), the three requests of a push, and how its take goes
+    (``GET /api/jobs/<id>``). A request refused for a token older than the server (403, ``reload``) is sent once
+    more, with the token its state gives now."""
+
+    def __init__(self, address: str, *, transport=None):
+        super().__init__(address, transport=transport)
+        self.token: str | None = None
+        self._asking: str | None = None
+
+    def state(self, asking: str | None = None) -> sync.PeerState:
+        state = super().state(asking)
+        self.token, self._asking = state.token, asking
+        return state
+
+    def _post(self, path: str, content: bytes, kind: str, params: Mapping[str, str] | None = None) -> Any:
+        import httpx
+
+        for again in (False, True):
+            if self.token is None:
+                self.state(self._asking)
+            try:
+                response = self._client.post(self.address + path, params=params, content=content, headers={
+                    "Content-Type": kind, "Accept": "application/json", "X-Caracole-Form-Token": self.token or ""})
+            except httpx.HTTPError as e:
+                raise sync.PeerError(f"The caracole at {self.address} stopped answering: {e}") from None
+            if response.status_code == 403 and not again and _says_reload(response):
+                self.token = None  # older than the server: its state gives the token again
+                continue
+            if response.status_code != 200:
+                raise self._refused(response)
+            try:
+                return response.json()
+            except ValueError:
+                raise sync.PeerError(f"The caracole at {self.address} answered {path} with something it can't "
+                                     "read.") from None
+        raise AssertionError("unreachable")
+
+    def push_new(self, sender: str, files: Sequence[str]) -> tuple[str, list[str]]:
+        """``POST /peer/push/new``: the push's id and the files the other side needs sent."""
+        answer = self._post(NEW_PATH, _json({"format": sync.FORMAT, "from": sender, "files": list(files)}),
+                            "application/json")
+        answer = answer if isinstance(answer, dict) else {}
+        push, need = answer.get("push"), answer.get("need")
+        if not (isinstance(push, str) and ID.fullmatch(push) and isinstance(need, list)
+                and all(isinstance(f, str) and SHA256.fullmatch(f) for f in need)):
+            raise sync.PeerError(f"The caracole at {self.address} opened a push it can't name.")
+        return push, list(need)
+
+    def push_file(self, push: str, sha256: str, data: bytes) -> None:
+        """``POST /peer/push/file``: a file the push needs, its bytes."""
+        self._post(FILE_PATH, data, "application/octet-stream", {"push": push, "sha256": sha256})
+
+    def push(self, push: str, document: Mapping[str, Any]) -> int:
+        """``POST /peer/push``: the push document; the number of the job that takes it there."""
+        answer = self._post(PUSH_PATH, _json(document), "application/json", {"push": push})
+        job = answer.get("job") if isinstance(answer, dict) else None
+        if not (isinstance(job, dict) and type(job.get("id")) is int):
+            raise sync.PeerError(f"The caracole at {self.address} took the push, but named no job for it.")
+        return job["id"]
+
+    def job(self, job_id: int) -> dict[str, Any]:
+        """``GET /api/jobs/<id>``: how a job there goes."""
+        response = self._get(f"{JOBS_PATH}{job_id}")
+        if response.status_code != 200:
+            raise self._refused(response)
+        try:
+            data = response.json()
+        except ValueError:
+            data = None
+        if not (isinstance(data, dict) and isinstance(data.get("state"), str)):
+            raise sync.PeerError(f"The caracole at {self.address} answered its job {job_id} with something it "
+                                 "can't read.")
+        return data
+
+
+def _json(value: Any) -> bytes:
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+
+
+def _says_reload(response) -> bool:
+    try:
+        data = response.json()
+    except ValueError:
+        return False
+    return isinstance(data, dict) and data.get("reload") is True
+
+
+@dataclass(frozen=True)
+class Pushed:
+    """A push sent (``push_units``): the job that takes it there (0: nothing was sent), the units it gives, and
+    those left out, each with why."""
+
+    job: int
+    given: tuple[str, ...]
+    left: tuple[tuple[str, str], ...]
+
+
+def push_units(pusher: Pusher, conn: sqlite3.Connection, cfg, overrides, books: Sequence, give: Mapping[str, str | None],
+               *, own: str, at: str, name: str, version: str,
+               compared_here: Mapping[str, str | None] | None = None) -> Pushed:
+    """Give the other side the units of ``give`` (each unit's id, and the other side's digest of it as compared,
+    None for one it hadn't), as the phone gives them: their files, then the push document, this side's whole state
+    with it, ``at`` the other side's time in the state compared. A unit whose digest here differs from
+    ``compared_here``'s is left out (``CHANGED_HERE``), and so is a song with a kept file this side can no longer
+    read as kept. The caller holds caracole's lock; the other side takes the push as a job of its own
+    (``wait_for``)."""
+    units = sync.library_state(conn, overrides, books)
+    take: list[dict[str, Any]] = []
+    left: list[tuple[str, str]] = []
+    files_of: dict[str, set[str]] = {}
+    for unit_id, expected in give.items():
+        mine = units.get(unit_id)
+        digest = mine.digest if mine is not None else None
+        if compared_here is not None and unit_id in compared_here and compared_here[unit_id] != digest:
+            left.append((unit_id, sync.CHANGED_HERE))
+            continue
+        doc = sync.unit_document(conn, cfg, overrides, books, unit_id) if mine is not None else None
+        unit = doc["unit"] if doc is not None else None
+        if unit is not None and unit_id.partition("/")[0] == "song":
+            files_of[unit_id] = {f["sha256"] for v in unit["versions"] for f in v["files"]}
+        take.append({"id": unit_id, "expected": expected, "digest": digest, "unit": unit})
+    if not take:
+        return Pushed(0, (), tuple(left))
+    push_id, need = pusher.push_new(own, sorted(set().union(*files_of.values())))
+    unreadable = set()
+    for sha256 in need:
+        data = kept_copy(conn, cfg.library_dir, sha256)
+        if data is None:
+            unreadable.add(sha256)
+            continue
+        pusher.push_file(push_id, sha256, data)
+    if unreadable:
+        for entry in [e for e in take if files_of.get(e["id"], set()) & unreadable]:
+            take.remove(entry)
+            left.append((entry["id"], "a file it keeps changed here since caracole kept it"))
+    document = {"format": sync.FORMAT, "from": own, "name": name, "caracole": version, "at": at,
+                "units": {u.id: {"label": u.label, "digest": u.digest} for u in units.values()}, "take": take}
+    return Pushed(pusher.push(push_id, document), tuple(e["id"] for e in take), tuple(left))
+
+
+def wait_for(pusher: Pusher, job_id: int, *, timeout: float = WAIT, every: float = POLL,
+             sleep: Callable[[float], None] = time.sleep, clock: Callable[[], float] = time.monotonic
+             ) -> dict[str, Any]:
+    """The job ``job_id`` there, as ``GET /api/jobs/<id>`` gives it once it is over; PeerError when it isn't
+    within ``timeout`` seconds (it goes on there all the same)."""
+    end = clock() + timeout
+    while True:
+        job = pusher.job(job_id)
+        if job["state"] not in ("queued", "running"):
+            return job
+        if clock() >= end:
+            raise sync.PeerError(f"The caracole at {pusher.address} hasn't taken the push yet: its request "
+                                 f"{job_id}, in its Requests tab, goes on.")
+        sleep(every)
+
+
+# kv, then a peer's id: {"address", "name", "synced_at"} of the last ``caracole peer sync`` with it, which caracole
+# serve's Sync tab lists (GET /api/sync); written by that command alone, never by caracole serve
+PEER_KEY = "sync:peer:"

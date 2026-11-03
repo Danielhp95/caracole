@@ -27,7 +27,9 @@ Every request must name the server by a name it answers to (421 otherwise).
 Every POST must pass the cross-origin check (403), be of its route's kind
 (``Route.body``, 415) and no longer than its route's limit (``Route.limit``,
 16 KiB unless the route says more, 413: server.py reads no more of it,
-``WebApp.body_limit``), and carry the form token (403). A ``form`` (what the
+``WebApp.body_limit``, and reads one longer than 16 KiB only once its headers
+pass the checks they can fail, ``WebApp.refused_unread``), and carry the form
+token (403). A ``form`` (what the
 pages post) carries it as its ``csrf`` field; a ``json`` document or ``bytes``
 (what another caracole sends: a push, peer_routes.py) in an
 ``X-Caracole-Form-Token`` header, as /jobs.json and /requests.json, which no
@@ -298,9 +300,26 @@ class WebApp:
             response = self._route(request)
         except Refused as e:  # a route's refusal: its page, or, to the page's script, data
             response = self.message(e.status, e.title, e.message)
+        return self._answered(request, response)
+
+    def _answered(self, request: Request, response: Response) -> Response:
         if response.data is not None and wants_json(request):  # the page's script: no redirect, no page
             response = json_response(200 if response.status == 303 else response.status, response.data)
         return self.finish(response)
+
+    def refused_unread(self, method: str, target: str, headers: Mapping[str, str]) -> Response | None:
+        """Why a request is refused on its address and headers alone, as ``handle`` would answer it, so that server.py
+        reads no body it would refuse (one longer than ``MAX_BODY``, which a route's limit allows): another host
+        name, another site's write, no form token in its header, another content type; None when they pass."""
+        request = Request(method, target, headers)
+        refused = self._host_refused(request)
+        if refused is None and method == "POST":
+            try:
+                route = route_for("POST", unquote(urlsplit(target).path, errors="strict"))
+            except (UnicodeDecodeError, ValueError):
+                route = None
+            refused = self._headers_refused(request, route) if route is not None else None
+        return None if refused is None else self._answered(request, refused)
 
     @staticmethod
     def finish(response: Response) -> Response:
@@ -315,11 +334,17 @@ class WebApp:
 
     # --- routing -----------------------------------------------------------------------------------
 
+    def _host_refused(self, request: Request) -> Response | None:
+        if answers_to(host_name(request.headers.get("host")), self.allowed):
+            return None
+        return Response(421, b"caracole serve doesn't answer to this host name; "
+                             b"start it with --allow-host NAME to add one.\n",
+                        [("Content-Type", "text/plain; charset=utf-8")])
+
     def _route(self, request: Request) -> Response:
-        if not answers_to(host_name(request.headers.get("host")), self.allowed):
-            return Response(421, b"caracole serve doesn't answer to this host name; "
-                                 b"start it with --allow-host NAME to add one.\n",
-                            [("Content-Type", "text/plain; charset=utf-8")])
+        refused = self._host_refused(request)
+        if refused is not None:
+            return refused
         try:
             path = unquote(urlsplit(request.target).path, errors="strict")
         except (UnicodeDecodeError, ValueError):
@@ -337,7 +362,7 @@ class WebApp:
             if route is None:
                 return self.message(404, "Not here", "There's nothing to send to at this address.")
             if route.body == "form":
-                body = self._form(request, page=route.page, limit=route.limit)
+                body = self._form(request, route)
             else:
                 body = self._document(request, route)
             return body if isinstance(body, Response) else route.answer(self, request, body)
@@ -363,14 +388,35 @@ class WebApp:
                                                 "reload it.")
         return None
 
-    def _form(self, request: Request, *, page: str = "the library", limit: int = MAX_BODY) -> dict[str, str] | Response:
-        """The fields of a POSTed form, or why it is refused; a form token older than the server says to
-        reload ``page``, and tells a page's script so (``reload``)."""
+    def _headers_refused(self, request: Request, route: Route) -> Response | None:
+        """Why a POST to ``route`` is refused on its headers alone, in the order ``_form`` and ``_document`` check
+        them: another site's (403); for a ``json`` or ``bytes`` route, without the form token in its header (403,
+        ``reload``: a token older than the server, which its state gives again); of another content type (415).
+        None when they pass."""
         headers = request.headers
         if not cross_origin_ok("POST", headers, headers.get("host")):
             return self.message(403, "Refused", "This came from another site, so caracole refused it.")
-        if _content_type(headers) != BODY_TYPES["form"]:
-            return self.message(415, "Not a form", "caracole reads only forms sent from its own pages.")
+        if route.body == "form":
+            if _content_type(headers) != BODY_TYPES["form"]:
+                return self.message(415, "Not a form", "caracole reads only forms sent from its own pages.")
+            return None
+        if not same_token(headers.get(TOKEN_HEADER), self.csrf):
+            refused = self.message(403, "Refused", "This is older than the server, or not from it: read its form "
+                                                   "token again and try again.")
+            refused.data = {**(refused.data or {}), "reload": True}
+            return refused
+        if _content_type(headers) != BODY_TYPES[route.body]:
+            return self.message(415, "Not what it reads", f"caracole reads only {BODY_TYPES[route.body]} here.")
+        return None
+
+    def _form(self, request: Request, route: Route) -> dict[str, str] | Response:
+        """The fields of a POSTed form, or why it is refused (``_headers_refused``, then too long, 413, or no
+        form, 400); a form token older than the server says to reload the route's ``page``, and tells a page's
+        script so (``reload``)."""
+        refused = self._headers_refused(request, route)
+        if refused is not None:
+            return refused
+        page, limit = route.page, route.limit
         if len(request.body) > limit:
             return self.message(413, "Too long", "That form is too long.")
         try:
@@ -387,19 +433,10 @@ class WebApp:
 
     def _document(self, request: Request, route: Route) -> Any:
         """The body of a POST that isn't a form, read as its route's kind (``json`` or ``bytes``), or why it is
-        refused: another site's (403), without the form token in its header (403, ``reload``: a token older than the
-        server, which its state gives again), of another content type (415), too long (413), JSON that can't be
-        read (400)."""
-        headers = request.headers
-        if not cross_origin_ok("POST", headers, headers.get("host")):
-            return self.message(403, "Refused", "This came from another site, so caracole refused it.")
-        if not same_token(headers.get(TOKEN_HEADER), self.csrf):
-            refused = self.message(403, "Refused", "This is older than the server, or not from it: read its form "
-                                                   "token again and try again.")
-            refused.data = {**(refused.data or {}), "reload": True}
+        refused: ``_headers_refused``, then too long (413), JSON that can't be read (400)."""
+        refused = self._headers_refused(request, route)
+        if refused is not None:
             return refused
-        if _content_type(headers) != BODY_TYPES[route.body]:
-            return self.message(415, "Not what it reads", f"caracole reads only {BODY_TYPES[route.body]} here.")
         if len(request.body) > route.limit:
             return self.message(413, "Too long", "That is too long.")
         if route.body == "bytes":
