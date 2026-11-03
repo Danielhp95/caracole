@@ -1,0 +1,12 @@
+{"corpus":"index/newest","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"fixture":"fresh-before","fn":"caracole.index_transfer.newest","out":{}}
+{"fixture":"unseeded-before","fn":"caracole.index_transfer.newest","out":{}}
+{"fixture":"phone-before","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-28T03:30:00Z","gtptabs":"2026-10-28T03:30:00Z","harptabs":"2026-10-28T03:30:00Z","lacuerda":"2026-10-28T03:30:00Z","ug":"2026-10-28T03:30:00Z"}}
+{"fixture":"phone-after","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-28T03:30:00Z","gtptabs":"2026-10-28T03:30:00Z","harptabs":"2026-10-28T03:30:00Z","lacuerda":"2026-10-28T03:30:00Z","musescore":"2026-10-28T03:30:00Z","ug":"2026-10-28T03:30:00Z"}}
+{"fixture":"fresh-after","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-28T03:30:00Z","gtptabs":"2026-10-28T03:30:00Z","harptabs":"2026-10-28T03:30:00Z","lacuerda":"2026-10-28T03:30:00Z","musescore":"2026-10-28T03:30:00Z","ug":"2026-10-28T03:30:00Z"}}
+{"fixture":"unseeded-after","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-28T03:30:00Z","gtptabs":"2026-10-28T03:30:00Z","harptabs":"2026-10-28T03:30:00Z","lacuerda":"2026-10-28T03:30:00Z","musescore":"2026-10-28T03:30:00Z","ug":"2026-10-28T03:30:00Z"}}
+{"fixture":"rekey-after","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-28T03:30:00Z","gtptabs":"2026-10-28T03:30:00Z","harptabs":"2026-10-28T03:30:00Z","lacuerda":"2026-10-28T03:30:00Z","musescore":"2026-10-28T03:30:00Z","ug":"2026-10-28T03:30:00Z"}}
+{"fixture":"partial-after","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-28T03:30:00Z","gtptabs":"2026-10-28T03:30:00Z","harptabs":"2026-10-28T03:30:00Z","lacuerda":"2026-10-28T03:30:00Z","musescore":"2026-10-28T03:30:00Z","ug":"2026-10-28T03:30:00Z"}}
+{"fixture":"phone-sites-after","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-28T03:30:00Z","gtptabs":"2026-10-28T03:30:00Z","harptabs":"2026-10-28T03:30:00Z","lacuerda":"2026-10-28T03:30:00Z","musescore":"2026-10-28T03:30:00Z","ug":"2026-10-28T03:30:00Z"}}
+{"fixture":"stamps-before","fn":"caracole.index_transfer.newest","out":{"gametabs":"2026-10-23T00:00:00Z","gtptabs":"2026-10-19T04:00:00Z","lacuerda":"2026-10-20T00:00:00Z","ug":"2026-10-20T04:00:00Z"}}
+{"err":"OverflowError","fixture":"overflow-before","fn":"caracole.index_transfer.newest"}
