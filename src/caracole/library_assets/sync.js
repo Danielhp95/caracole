@@ -12,7 +12,9 @@
 // buttons settle every conflict at once. Sync waits until every conflict has a choice, then posts the comparison's id
 // and the choices that aren't the proposal's (every conflict's, and each one flipped or skipped), one line each in one
 // field (POST /sync/apply): the differences and the choices travel, never a unit's document, which the two caracoles
-// send each other themselves. A comparison done again keeps the choices of each difference that is as it was.
+// send each other themselves. With nothing to take or give (nothing differs, or every difference skipped) Sync is
+// offered all the same: it keeps what the two agree on, and the phone's brings the computer's newer pages and
+// indexes. A comparison done again keeps the choices of each difference that is as it was.
 //
 // The sync is a request of caracole serve's, as any (the phone's queue answers the same): its view, followed as the
 // page follows every request (library.js's ``track``, quietly: this tab says how it goes, not the list of requests),
@@ -77,6 +79,9 @@
   const CHOICES = [["here", "Here", "keep here's"], ["there", "There", "take there's"], ["skip", "Skip",
                                                                                          "leave it as it is"]];
   const UNREACHABLE = "caracole serve can't be reached: is it running?";
+  // What a sync that takes and gives nothing still does: the agreement kept, and on the phone the computer's newer
+  // pages and indexes brought (§5.3's mirror and index stages).
+  const AGREES = "Sync still records that the two agree, and brings newer pages and indexes where there are any.";
 
   let me = null;  // GET /api/sync's answer: this library, the address remembered, the peers synced before
   let loaded = false;
@@ -170,9 +175,11 @@
   const differences = () => listOf(compared && compared.differences)
     .filter((d) => d && typeof d === "object" && typeof d.id === "string");
   const proposalOf = (d) => (own.call(PROPOSED, d.proposal) ? d.proposal : "conflict");
-  const kindOf = (d) => {
-    const kind = typeof d.kind === "string" && d.kind ? d.kind : d.id.split("/")[0];
-    return KINDS.some(([k]) => k === kind) ? kind : "other";
+  const known = (kind) => KINDS.some(([k]) => k === kind);
+  const kindOf = (d) => {  // its kind, else its id's: a kind this page doesn't know never hides a known id's
+    if (typeof d.kind === "string" && known(d.kind)) return d.kind;
+    const kind = d.id.split("/")[0];
+    return known(kind) ? kind : "other";
   };
   // What Sync sends: each difference whose choice isn't its proposal's, a conflict's always.
   const sent = () => differences()
@@ -202,14 +209,15 @@
     if (n.open) {
       plan.textContent = "Choose a side for " + plural(n.open, "conflict") + " first.";
     } else if (!n.here && !n.there) {
-      plan.textContent = "Nothing to take or give: every difference is skipped.";
+      plan.textContent = (n.skip ? "Nothing to take or give: every difference is skipped. "
+        : "Nothing to take or give. ") + AGREES;
     } else {
       const parts = [];
       if (n.there) parts.push("takes " + n.there + " here");
       if (n.here) parts.push("gives " + n.here + " there");
       plan.textContent = "Sync " + parts.join(" and ") + (n.skip ? "; " + n.skip + " skipped." : ".");
     }
-    go.disabled = quiet() || n.open > 0 || (!n.here && !n.there);
+    go.disabled = quiet() || n.open > 0;
   };
   const choose = (id, side) => {
     choices.set(id, side);
@@ -295,7 +303,8 @@
       boxes.push(box);
     }
     groups.replaceChildren(...boxes);
-    found.hidden = !all.length;
+    groups.hidden = !all.length;
+    found.hidden = false;  // nothing differing, Sync still keeps the agreement and brings what is newer
     say(all.length ? plural(all.length, "difference") + " with " + there + "."
       : "Nothing differs: " + here + " and " + there + " agree.", all.length ? "" : "done");
     refresh();
@@ -483,7 +492,7 @@
   if (reload) reload.addEventListener("click", () => location.reload());
   // A sync that waits or runs as the page loads: library.js follows it already (the server's ``jobs``).
   const going = listOf(server.jobs).find((v) => v && typeof v === "object" && v.kind === "sync" && isActive(v));
-  if (going) showJob(going);
+  if (going) follow(going);  // quietly too: this tab says how it goes, not the list of requests
 
   ready();
   document.addEventListener("caracole:tab", (e) => {

@@ -6,8 +6,10 @@ time, as the page follows any request.
 
 The tab draws what it synced with before and the address it remembers; Compare draws the differences grouped by kind,
 each with its proposal in words and its choice; Sync waits for every conflict's choice, then posts the comparison and
-the choices that aren't the proposals' in one field, never a unit's document; the sync's stages show as it goes, and
-at its end what it took, gave and left, and Reload. It fits a phone, five tabs and all, in light and dark."""
+the choices that aren't the proposals' in one field, never a unit's document, and is offered with nothing to take or
+give too; the sync's stages show as it goes, and at its end what it took, gave and left, and Reload. It fits a phone,
+five tabs and all, in light and dark. The sync's views are jobs_routes.view's own, of jobs as caracole serve's queue
+holds them, and test_web_sync.py checks the fake's other answers are shaped as the real routes answer."""
 
 from __future__ import annotations
 
@@ -63,27 +65,28 @@ COMPARISON = {"comparison": "5a1c0ffee0ddba11", "peer": {"address": ADDRESS, "se
                                                         "caracole": "0.1.0", "name": "Desk"},
               "synced_before": "2026-11-02T21:04:00Z", "differences": DIFFERENCES}
 
-STAGES = [("compare", "Compare"), ("take", "Take"), ("give", "Give"), ("agree", "Agree")]
+def sync_view(state: str, stages: dict[str, tuple[str, str]], units=()) -> dict:
+    """The sync's job as /jobs.json gives it, jobs_routes.view's (§5.3's view) of a job of caracole serve's queue in
+    ``state``, its stages as ``stages`` says (waiting else), its units as its command said them."""
+    from caracole.web.jobs_routes import view
+
+    from test_web_sync import peer_job
+
+    job = peer_job("sync", state, stages, units=units, job_id=JOB, name="Desk", address=ADDRESS)
+    return view(job, [job], None, None)
 
 
-def sync_view(state: str, stages: dict[str, str], tone: str, text: str, outcome=None, *, details=None) -> dict:
-    """The sync's job as /jobs.json gives it (§5.3's view): its stages' states in ``stages`` (waiting else)."""
-    return {"id": JOB, "display": "Sync with Desk", "songId": None, "kind": "sync", "state": state, "fetching": False,
-            "line": {"tone": tone, "text": text, "link": None, "details": details}, "details": "#tab=sync",
-            "steps": [{"name": name, "label": label, "state": stages.get(name, "waiting"), "detail": ""}
-                      for name, label in STAGES],
-            "count": None, "outcome": outcome}
-
-
-OUTCOME = {"taken": ["song/oasis/wonderwall", "removed/blur/song 2", "artist_url/banma"],
-           "given": ["song/muse/hysteria", "songbook/campfire", "alias/soda-stereo", "block/1234567"],
-           "left": [["song/radiohead/creep", "skipped"]], "agreed": 312, "indexed": []}
+UNITS = [("song/oasis/wonderwall", "taken", ""), ("removed/blur/song 2", "taken", ""), ("artist_url/banma", "taken", ""),
+         ("song/muse/hysteria", "given", ""), ("songbook/campfire", "given", ""), ("alias/soda-stereo", "given", ""),
+         ("block/1234567", "given", ""), ("song/radiohead/creep", "left", "skipped, as chosen")]
+DONE = "Synced: 1 change left as it was"  # its line once it is over
 VIEWS = [
-    sync_view("queued", {}, "queued", "Queued…"),
-    sync_view("running", {"compare": "done", "take": "running"}, "running", "Taking what changed there…"),
-    sync_view("running", {"compare": "done", "take": "done", "give": "running"}, "running",
-              "Giving what changed here…"),
-    sync_view("done", {name: "done" for name, _ in STAGES}, "ready", "Synced", OUTCOME),
+    sync_view("queued", {}),
+    sync_view("running", {"compare": ("done", "8 differences"), "take": ("running", "3 changes")}),
+    sync_view("running", {"compare": ("done", "8 differences"), "take": ("done", "took 3"),
+                          "give": ("running", "4 changes")}),
+    sync_view("done", {"compare": ("done", "8 differences"), "take": ("done", "took 3"), "give": ("done", "gave 4"),
+                       "agree": ("done", "312 units the two agree on")}, UNITS),
 ]
 
 
@@ -270,6 +273,7 @@ def test_the_tab_compares_draws_by_kind_waits_for_every_conflict_and_syncs_with_
         assert page.wait("document.getElementById('sync-job-line').textContent === 'Taking what changed there…'")
         assert page.js("Array.from(document.querySelectorAll('#sync-steps .step-chip')).map((c) => c.textContent)") == [
             "✓ Compare: done", "Take: running", "Give: waiting", "Agree: waiting"]
+        assert page.js("document.getElementById('sync-job-detail').textContent") == "3 changes"
         assert page.js("document.querySelector('#sync-steps [aria-current=step]').textContent") == "Take: running"
         assert page.js("document.getElementById('sync-reload').hidden") is True
         assert page.js("document.querySelector('#tray-list li')") is None  # the tab says how it goes, not the list
@@ -278,13 +282,16 @@ def test_the_tab_compares_draws_by_kind_waits_for_every_conflict_and_syncs_with_
         fake.at = 3
         assert page.wait("!document.getElementById('sync-reload').hidden"), page.js("document.getElementById('sync')"
                                                                                     ".innerText")
-        assert page.js("document.getElementById('sync-job-line').textContent") == "Synced"
+        assert page.js("document.getElementById('sync-job-line').textContent").startswith(DONE)
+        assert page.js("document.getElementById('sync-job-line').dataset.tone") == "waiting"
+        # Its output, in the Requests tab: the line's Details.
+        assert page.js("document.querySelector('#sync-job-line a').getAttribute('href')") == f"#tab=requests&job={JOB}"
         assert page.js("""Array.from(document.querySelectorAll('#sync-outcome .sync-done')).map((s) => [
           s.querySelector('h3').textContent, Array.from(s.querySelectorAll('li')).map((li) => li.textContent)])""") == [
             ["Taken here 3", ["Oasis - Wonderwall", "Blur - Song 2 (removed)", "the UG page of Banma"]],
             ["Given there 4", ["Muse - Hysteria", "the songbook Campfire", "the alias of soda-stereo",
                                "the blocked tab 1234567"]],
-            ["Left as they were 1", ["Radiohead - Creep — skipped"]]]
+            ["Left as they were 1", ["Radiohead - Creep — skipped, as chosen"]]]
         assert page.js("document.querySelector('#sync-outcome .sync-note').textContent") == (
             "The two agree on 312 units now.")
         # Reload: the page again, on the Sync tab.
@@ -327,8 +334,9 @@ def test_a_refusal_says_the_servers_words_and_a_comparison_again_keeps_the_choic
         assert page.js("document.getElementById('sync-job').hidden") is True
         # Compared again: a difference as it was keeps its choice, one that changed since is proposed afresh.
         changed = dict(DIFFERENCES[2], there="0e" * 32)  # Oasis - Wonderwall, changed there again
+        newer = dict(DIFFERENCES[7], kind="blocked-tab")  # a kind this page doesn't know: its id's then
         fake.comparison = dict(COMPARISON, comparison="0ddba11c0ffee5a1",
-                               differences=DIFFERENCES[:2] + [changed] + DIFFERENCES[3:])
+                               differences=DIFFERENCES[:2] + [changed] + DIFFERENCES[3:7] + [newer])
         fake.refuse_apply = None
         page.click("#sync-compare")
         assert page.wait("document.getElementById('sync-status').textContent === '8 differences with Desk.'")
@@ -336,10 +344,11 @@ def test_a_refusal_says_the_servers_words_and_a_comparison_again_keeps_the_choic
         assert drawn["Muse - Hysteria"] == "skip" and drawn["the songbook Campfire"] == "there"
         assert drawn["Oasis - Wonderwall"] is None
         assert page.js(PLAN) == "Choose a side for 1 conflict first."
+        assert page.js(HEADS)[-1] == ["Blocked tabs", "1", ""]
 
 
 @in_chromium
-def test_nothing_to_sync_says_the_two_agree(served, tmp_path):
+def test_nothing_differing_says_the_two_agree_and_still_offers_sync(served, tmp_path):
     fake = FakeSync(comparison=dict(COMPARISON, differences=[]))
     url = served(fake)
     with Browser(tmp_path / "chrome", width=1280, height=900) as page:
@@ -349,8 +358,37 @@ def test_nothing_to_sync_says_the_two_agree(served, tmp_path):
         page.press("Enter")  # in the field, Enter compares
         assert page.wait("document.getElementById('sync-status').textContent === 'Nothing differs: Laptop and Desk "
                          "agree.'")
-        assert page.js("document.getElementById('sync-found').hidden") is True
         assert len(fake.posted("/sync/compare")) == 1
+        # Sync still keeps what the two agree on, and on the phone brings the computer's newer pages and indexes.
+        assert page.js("document.getElementById('sync-found').hidden") is False
+        assert page.js("document.getElementById('sync-groups').hidden") is True
+        assert page.js("document.getElementById('sync-bulk').hidden") is True
+        assert page.js(PLAN) == ("Nothing to take or give. Sync still records that the two agree, and brings newer "
+                                 "pages and indexes where there are any.")
+        assert page.js(GO + ".disabled") is False
+        page.click("#sync-go")
+        assert page.wait("!document.getElementById('sync-job').hidden")
+        [form] = fake.posted("/sync/apply")
+        assert form["choices"] == [""] and form["prefer"] == [""]
+
+
+@in_chromium
+def test_every_difference_skipped_still_offers_sync(served, tmp_path):
+    fake = FakeSync(comparison=dict(COMPARISON, differences=DIFFERENCES[:2]))
+    url = served(fake)
+    with Browser(tmp_path / "chrome", width=1280, height=900) as page:
+        page.open(url + "#tab=sync")
+        assert page.wait("document.getElementById('sync-address').value !== ''")
+        page.click("#sync-compare")
+        assert page.wait(f"{ROWS} === 2")
+        pick(page, "Radiohead - Creep", "skip")
+        pick(page, "Muse - Hysteria", "skip")
+        assert page.js(PLAN).startswith("Nothing to take or give: every difference is skipped. Sync still")
+        assert page.js(GO + ".disabled") is False
+        page.click("#sync-go")
+        assert page.wait("!document.getElementById('sync-job').hidden")
+        [form] = fake.posted("/sync/apply")
+        assert form["choices"][0].split("\n") == ["skip\tsong/radiohead/creep", "skip\tsong/muse/hysteria"]
 
 
 @in_chromium
@@ -367,6 +405,7 @@ def test_a_sync_on_its_way_as_the_page_loads_shows_at_once_and_is_followed_to_it
         assert page.wait("!document.getElementById('sync-reload').hidden")
         assert page.js("document.getElementById('sync-compare').disabled") is False  # over: compare again, or Reload
         assert "job" in fake.asked
+        assert page.js("document.getElementById('tray').hidden") is True  # followed quietly: the tab says how
 
 
 # What the page shows at a width: the tab with every difference drawn, then the sync over; where its five tabs are,
@@ -395,11 +434,14 @@ MEASURED = """
 """
 
 
-@pytest.mark.parametrize("width", [390, 1280])
+@pytest.mark.parametrize("width", [320, 390, 1280])
 @in_chromium
 def test_the_tab_fits_a_phone_with_five_tabs_in_light_and_dark(served, width):
     measure = (noting("data-tabs", "tabs()") + noting("data-edge", "Math.round(document.querySelector('.masthead')"
                                                                      ".getBoundingClientRect().right)")
+               + noting("data-row", "(() => { const t = document.querySelector('.masthead .tabs'); "
+                                    "return [t.scrollWidth, t.clientWidth, Math.round(t.getBoundingClientRect().left)]; "
+                                    "})()")
                + noting("data-diffs-short", small_targets()) + noting("data-diffs-weak", weak_edges())
                + noting("data-diffs-wide", "document.documentElement.scrollWidth"))
     done = (noting("data-done-short", small_targets())
@@ -414,15 +456,22 @@ def test_the_tab_fits_a_phone_with_five_tabs_in_light_and_dark(served, width):
                                media={"prefers-color-scheme": scheme}, budget_ms=20000)
         tabs = noted(dom, "data-tabs")
         assert [t[0] for t in tabs] == ["tab-library", "tab-songbooks", "tab-sites", "tab-sync", "tab-requests"]
-        # The five tabs on one line, inside the page, with counts of two digits and one.
-        assert len({top for *_, top in tabs}) == 1 and tabs[-1][2] <= noted(dom, "data-edge"), (scheme, tabs)
+        # The five tabs on one line, inside the page, with counts of two digits and one; on a small phone (320 px)
+        # a row of their own under the mark, which scrolls by itself the little they need, never the page.
+        assert len({top for *_, top in tabs}) == 1, (scheme, tabs)
         assert all(a[2] <= b[1] for a, b in zip(tabs, tabs[1:])), tabs
+        row = noted(dom, "data-row")
+        if width < 380:
+            assert row[2] == 16 and row[1] == width - 32, row  # the whole row's width, from the gutter
+            assert row[0] - row[1] <= 48, row
+        else:
+            assert tabs[-1][2] <= noted(dom, "data-edge") and row[0] <= row[1], (scheme, tabs, row)
         assert noted(dom, "data-diffs-wide") <= width and noted(dom, "data-done-wide") <= width, scheme
         assert noted(dom, "data-diffs-weak") == [], scheme
         if width < 500:  # on a touch screen every control is a thumb's size
             assert noted(dom, "data-diffs-short") == [], scheme
             assert noted(dom, "data-done-short") == [], scheme
-        assert noted(dom, "data-done") == "Synced", scheme
+        assert noted(dom, "data-done").startswith(DONE), scheme
 
 
 def test_the_tab_never_puts_markup_in_from_a_text_and_asks_nothing_of_another_site():

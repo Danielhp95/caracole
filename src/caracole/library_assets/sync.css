@@ -99,7 +99,17 @@
 @media (pointer: coarse) {
   .sync-side { min-height: 44px; }
 }
-/* Five tabs on a phone (Library, Songbooks, Sites, Sync, Requests): a little closer than four. */
+/* Five tabs on a phone (Library, Songbooks, Sites, Sync, Requests): a little closer than four, and never wider than
+   the page: past its width, the row of tabs scrolls by itself, the page never does. Below 380px (a small phone) they
+   take a row of their own under the mark, whose summary goes beside it. */
 @media (max-width: 719px) {
+  .masthead.lib .tabs:has(#tab-sync) { overflow: auto hidden; overscroll-behavior-x: contain; scrollbar-width: none;
+    padding-bottom: 1px; }  /* room for the chosen tab's line, which hangs 1px below the row */
+  .masthead.lib .tabs:has(#tab-sync)::-webkit-scrollbar { display: none; }
   .masthead.lib .tabs:has(#tab-sync) .tab { padding: 0 3px; font-size: .84rem; }
+}
+@media (max-width: 379px) {
+  .masthead.lib:has(#tab-sync) { grid-template-areas: "app sum" "tabs tabs"; }
+  .masthead.lib:has(#tab-sync):has(.scratch) { grid-template-areas: "app name" "tabs tabs" "sum sum"; }
+  .masthead.lib:has(#tab-sync) .tabs { justify-content: space-between; }
 }

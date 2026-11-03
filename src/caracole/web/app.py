@@ -14,7 +14,8 @@ a harmonica tab is read: its readings, one pinned, back to caracole's guess), gu
 (a song's Guitar Pro file in the browser, and alphaTab's bundle), offline_routes.py (what caracole's Android
 app copies of the library, and the library page it starts from), peer_routes.py (this library's units, for another
 caracole to compare and take, its units taken, another caracole's units pushed to it, and its site indexes:
-peer_sync.py, peer_push.py) and youtube_routes.py (a song's auto sheet from a YouTube video pasted on the library
+peer_sync.py, peer_push.py), sync_routes.py (the Sync tab: this library and another caracole's compared, and
+synced as the owner chose) and youtube_routes.py (a song's auto sheet from a YouTube video pasted on the library
 page). A new route, or a new module of them, changes
 nothing here. This module answers the rest:
 
