@@ -3,10 +3,9 @@
     <string name="app_name">caracole</string>
     <string name="settings">Settings</string>
     <string name="sync_now">Sync now</string>
+    <string name="sync_with_computer">Sync with the computer</string>
     <string name="library">Library</string>
     <string name="more">More</string>
-    <string name="empty">No library on this phone yet.\n\nType caracole serve\'s address in Settings, then sync: the phone keeps a copy of your library and reads it with no network.</string>
-    <string name="open_settings">Open Settings</string>
 
     <string name="address_label">caracole serve\'s address</string>
     <string name="address_hint">http://192.168.1.20:8737</string>
@@ -26,15 +25,34 @@
     <string name="reset_text_size">Reset the text size to 100%</string>
     <string name="text_size_hint">Pinch a page to change it: fingers apart for larger text, together for smaller, from 50% to 250% of the size Android\'s font size gives the pages. A sheet\'s own Aa sizes its text on top of this.</string>
     <string name="open_library">Open the library</string>
-    <string name="offline_note">Offline, the app shows the pages caracole writes into your library: the library page, each sheet with its viewer (key, capo, diagrams, harmony), songbooks, and the PDFs and Guitar Pro files, which open in another app. Searching the sites, adding songs, Export and choosing versions need caracole serve, in the browser.</string>
+    <string name="offline_note">Offline, the app shows the pages caracole writes into your library: the library page, each sheet with its viewer (key, capo, diagrams, harmony), songbooks, and the PDFs and Guitar Pro files, which open in another app. With the computer\'s indexes imported, the library page\'s search finds songs on the sites too. Fetching sheets, Export and choosing versions need caracole serve, in the browser.</string>
+
+    <string name="import_label">Import indexes</string>
+    <string name="import_computer">From the computer</string>
+    <string name="import_file">From a file</string>
+    <string name="import_hint">The sites\' indexes the computer built (caracole index export), merged into the phone\'s, so its search finds songs on Ultimate Guitar, LaCuerda and the other sites with the computer off. From the computer: from caracole serve at the address above. From a file: an export you copied to the phone.</string>
+    <string name="never_imported">No index imported yet.</string>
+    <string name="import_title">Importing the computer\'s indexes</string>
+    <string name="import_starting">Getting the index…</string>
+    <string name="import_downloading">Downloading the index: %1$s</string>
+    <string name="import_downloading_of">Downloading the index: %1$s of %2$s</string>
+    <string name="import_copying">Copying the file…</string>
+    <string name="import_merging">Merging the index…</string>
+    <string name="import_no_picker">No app on this phone picks a file.</string>
+    <string name="import_under_way">An import is under way already: wait for it to end.</string>
+    <string name="import_not_started">The import couldn\'t start: %1$s</string>
+    <string name="jobs_channel">Work in the background</string>
+    <string name="working">Working…</string>
 
     <string name="syncing_asking">Syncing: asking caracole…</string>
     <string name="syncing">Syncing: %1$d of %2$d files</string>
     <string name="up_to_date">Up to date</string>
     <string name="up_to_date_changes">Up to date: %1$s</string>
 
-    <string name="server_only">That needs caracole serve: it isn\'t in the copy on the phone. Open caracole serve in the browser for it.</string>
-    <string name="missing">That isn\'t in the copy on the phone: sync again.</string>
+    <string name="missing">That file isn\'t on the phone: sync again.</string>
+    <string name="not_served">The phone\'s caracole didn\'t give that file (HTTP %1$d).</string>
+    <string name="no_server">caracole couldn\'t start on the phone: %1$s</string>
+    <string name="no_cookie">The page\'s cookie couldn\'t be set: the library can\'t open.</string>
     <string name="open_with">Open %1$s with</string>
     <string name="no_app">No app on this phone opens %1$s (%2$s).</string>
     <string name="no_browser">No browser on this phone opens %1$s.</string>

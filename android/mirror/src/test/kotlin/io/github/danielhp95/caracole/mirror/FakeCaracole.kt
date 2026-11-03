@@ -77,7 +77,7 @@ class FakeCaracole : AutoCloseable {
         fun sha256(bytes: ByteArray): String =
             MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-        fun urlOf(path: String): String = Links.address(path).removePrefix("https://${Links.HOST}")
+        fun urlOf(path: String): String = Links.target(path)
 
         fun typeOf(path: String): String = when (path.substringAfterLast('.')) {
             "html" -> "text/html; charset=utf-8"

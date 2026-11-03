@@ -9,14 +9,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
-/** What the app's PathHandler answers the WebView ([Mirror.respond]), what the phone's server finds of a path once
- * the phone's own state gates it ([Mirror.pageFor]), and where a link goes ([Links.route]). */
+/** What the mirror answers for a path ([Mirror.respond]) and what the phone's server finds of a path once the
+ * phone's own state gates it ([Mirror.pageFor]); where a link goes is LinksTest's. */
 class MirrorLookupTest {
     @get:Rule val folder = TemporaryFolder()
 
     private val server = FakeCaracole()
     private val mirror by lazy { Mirror(folder.newFolder("files")) }
-    private val links by lazy { Links(mirror) }
 
     @After fun stop() = server.close()
 
@@ -157,39 +156,5 @@ class MirrorLookupTest {
         val gate = Asked(Gate.SERVE)
         assertIs<Looked.Page>(mirror.pageFor("Estopa/Tu calorro/sheet.html", gate))
         assertEquals(listOf<Pair<String, String?>>(song to "f".repeat(64)), gate.asked)
-    }
-
-    @Test
-    fun `a link goes to the WebView, another app, the browser, or nowhere`() {
-        synced()
-        val base = "https://appassets.androidplatform.net"
-        assertEquals(Route.Page, links.route("$base/Estopa/Tu%20calorro/sheet.html#t=2&necks=0"))
-        assertEquals(Route.Page, links.route("$base/index.html?x=1#prog=I-V-vi-IV"))
-        val pdfRoute = assertIs<Route.File>(links.route("$base/Estopa/Tu%20calorro/sheet.pdf"))
-        assertEquals("application/pdf", pdfRoute.served.entry.mimeType)
-        assertEquals(Route.Missing, links.route("$base/Estopa/Tu%20calorro/sheet%20(auto).html"))
-
-        // A page that takes itself for served links serve's own pages: its Guitar Pro file is in the mirror;
-        // Export, the versions' forms and the requests page aren't.
-        val guitar = assertIs<Route.File>(links.route("$base/guitar?file=Estopa%2FTu%20calorro%2Fguitar-1.gp5"))
-        assertEquals("Estopa/Tu calorro/guitar-1.gp5", guitar.served.entry.path)
-        assertEquals(Route.Missing, links.route("$base/guitar?file=Estopa%2FTu%20calorro%2Fguitar-2.gp5"))
-        assertEquals(Route.ServerOnly, links.route("$base/export?sheet=Estopa%2FTu+calorro%2Fsheet.html&t=2"))
-        assertEquals(Route.ServerOnly, links.route("$base/versions?sheet=x&do=keep"))
-        assertEquals(Route.ServerOnly, links.route("$base/jobs?job=3#job-3"))
-
-        assertEquals(Route.Browser("https://tabs.ultimate-guitar.com/tab/x"), links.route("https://tabs.ultimate-guitar.com/tab/x"))
-        assertEquals(Route.Browser("http://192.168.1.20:8737/"), links.route("http://192.168.1.20:8737/"))
-        assertEquals(Route.Browser("http://appassets.androidplatform.net/index.html"),
-            links.route("http://appassets.androidplatform.net/index.html"), "the mirror is https alone")
-        assertEquals(Route.Ignored, links.route("javascript:alert(1)"))
-        assertEquals(Route.Ignored, links.route("intent://x#Intent;end"))
-    }
-
-    @Test
-    fun `a path's address in the mirror is each part percent-encoded`() {
-        assertEquals("https://appassets.androidplatform.net/Estopa/Tu%20calorro/sheet.html", Links.address("Estopa/Tu calorro/sheet.html"))
-        assertEquals("https://appassets.androidplatform.net/%C3%91and%C3%BA/Canci%C3%B3n%20%231%3F/sheet%20%28auto%29.html",
-            Links.address("Ñandú/Canción #1?/sheet (auto).html"))
     }
 }
