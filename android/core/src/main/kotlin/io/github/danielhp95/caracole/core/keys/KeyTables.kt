@@ -49,9 +49,9 @@ internal object KeyTables {
     val long: Set<String> by lazy { strings("_LONG").toSet() }
 
     /** A pattern of normalize.py (or library.py's _RESERVED) by its name, compiled as Python reads it. */
-    fun pattern(name: String): PyPattern {
+    fun pattern(name: String): KeyPattern {
         val spec = json.getValue("patterns").jsonObject.getValue(name).jsonObject
-        return PyPattern(spec.getValue("pattern").jsonPrimitive.content, spec.getValue("ignorecase").jsonPrimitive.boolean)
+        return KeyPattern(spec.getValue("pattern").jsonPrimitive.content, spec.getValue("ignorecase").jsonPrimitive.boolean)
     }
 
     /** _t2s_table(): a Traditional character's code point and its Simplified one's. */

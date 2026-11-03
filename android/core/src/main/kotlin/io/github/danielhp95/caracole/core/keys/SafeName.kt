@@ -23,8 +23,8 @@ object SafeName {
     fun songFolder(artist: String, title: String): Pair<String, String> =
         safeName(artist) to safeName(Normalize.cleanTitle(title))
 
-    private val colon by lazy { PyPattern("""\s*:\s*""", ignoreCase = false) }
-    private val controls by lazy { PyPattern("""[\t\r\n\v\f]+""", ignoreCase = false) }
+    private val colon by lazy { KeyPattern("""\s*:\s*""", ignoreCase = false) }
+    private val controls by lazy { KeyPattern("""[\t\r\n\v\f]+""", ignoreCase = false) }
     private val reserved by lazy { KeyTables.pattern("_RESERVED") }
 
     /** `str.strip(" .")`, or its rstrip. */

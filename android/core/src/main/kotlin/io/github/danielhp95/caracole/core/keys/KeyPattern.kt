@@ -22,7 +22,7 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
  * What the rewrite doesn't carry is refused (IllegalArgumentException), so a new pattern in normalize.py that needs
  * more fails loudly: inline flags and named groups, `\N`, `\u`, a backreference or a range under IGNORECASE.
  */
-internal class PyPattern(val source: String, val ignoreCase: Boolean) {
+internal class KeyPattern(val source: String, val ignoreCase: Boolean) {
     private val translation = translate(source, ignoreCase) { PyUnicode.ignoreCaseKey(it) }
     val regex: Regex = PyRegex.compile(translation.pattern)
 

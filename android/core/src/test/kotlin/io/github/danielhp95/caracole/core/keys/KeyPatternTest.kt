@@ -9,9 +9,9 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
-/** How normalize.py's patterns are rewritten for java.util.regex ([PyPattern.translate]), with a stand-in for
+/** How normalize.py's patterns are rewritten for java.util.regex ([KeyPattern.translate]), with a stand-in for
  * sre's case classes (ASCII letters by their capital, ı and ſ with i and s) so it needs no Unicode table. */
-class PyPatternTest {
+class KeyPatternTest {
     private val key: (Int) -> Int = { cp ->
         when (cp) {
             in 'a'.code..'z'.code -> cp - 32
@@ -22,7 +22,7 @@ class PyPatternTest {
         }
     }
 
-    private fun java(pattern: String, ignoreCase: Boolean = false) = PyPattern.translate(pattern, ignoreCase, key).pattern
+    private fun java(pattern: String, ignoreCase: Boolean = false) = KeyPattern.translate(pattern, ignoreCase, key).pattern
 
     @Test fun dotAndDollarMeanWhatTheyMeanInPython() {
         assertEquals("a[^\\n]b(?=\\n?\\z)", java("a.b$"))
@@ -47,7 +47,7 @@ class PyPatternTest {
     }
 
     @Test fun ignoreCaseWritesEachLiteralAsItsClassesRepresentative() {
-        val t = PyPattern.translate("(?:ac[uú]stic[oa])\\s+(?=x)", true, key)
+        val t = KeyPattern.translate("(?:ac[uú]stic[oa])\\s+(?=x)", true, key)
         assertEquals("(?:AC[UÚ]STIC[OA])\\s+(?=X)", t.pattern)
         assertTrue(setOf('A'.code, 'C'.code, 'U'.code, 0xDA, 'X'.code).all { it in t.keys })
     }
@@ -56,8 +56,8 @@ class PyPatternTest {
         for (pattern in listOf("(?i)a", "(?P<x>a)", "\\N{DASH}", "\\u00e9", "(?#c)", "[a", "a\\")) {
             assertFailsWith<IllegalArgumentException>(pattern) { java(pattern) }
         }
-        assertFailsWith<IllegalArgumentException> { PyPattern.translate("[a-z]", true, key) }
-        assertFailsWith<IllegalArgumentException> { PyPattern.translate("(a)\\1", true, key) }
+        assertFailsWith<IllegalArgumentException> { KeyPattern.translate("[a-z]", true, key) }
+        assertFailsWith<IllegalArgumentException> { KeyPattern.translate("(a)\\1", true, key) }
     }
 
     @Test fun everyPatternOfNormalizeRewritesAndCompilesAsJava() {
@@ -66,7 +66,7 @@ class PyPatternTest {
             "_FEATURING", "_BRACKETED", "_MORA", "_RESERVED"), patterns.keys)
         for ((name, spec) in patterns) {
             val o = spec.jsonObject
-            val t = PyPattern.translate(o.getValue("pattern").jsonPrimitive.content, o.getValue("ignorecase").jsonPrimitive.boolean, key)
+            val t = KeyPattern.translate(o.getValue("pattern").jsonPrimitive.content, o.getValue("ignorecase").jsonPrimitive.boolean, key)
             // With \s \d \w \b as the JDK's, only for the syntax: PyRegex gives them Python's meaning.
             java.util.regex.Pattern.compile(t.pattern)
             assertTrue(t.pattern.isNotEmpty(), name)

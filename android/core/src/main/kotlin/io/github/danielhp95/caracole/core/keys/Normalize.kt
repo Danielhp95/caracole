@@ -10,7 +10,7 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
  *
  * The logic is here; what normalize.py states as data (its tables, its sets, its patterns, Traditional to
  * Simplified) comes from caracole/keys/ ([KeyTables]), written from the module by tests/test_conformance_keys.py.
- * Every Unicode decision goes through core.py (PyUnicode, Py, PyRegex by [PyPattern]) and every pinyin through
+ * Every Unicode decision goes through core.py (PyUnicode, Py, PyRegex by [KeyPattern]) and every pinyin through
  * core.pinyin: no JDK or ICU text API, whose Unicode isn't Python's. The vectors of tests/conformance/vectors/keys/
  * hold it to Python's answers.
  *
