@@ -13,8 +13,9 @@ sheet's PDF in the version its viewer was left in, downloaded at once, and Make 
 a harmonica tab is read: its readings, one pinned, back to caracole's guess), guitar_routes.py
 (a song's Guitar Pro file in the browser, and alphaTab's bundle), offline_routes.py (what caracole's Android
 app copies of the library, and the library page it starts from), peer_routes.py (this library's units, for another
-caracole to compare and take, and its units taken: peer_sync.py) and youtube_routes.py (a song's auto sheet from a
-YouTube video pasted on the library page). A new route, or a new module of them, changes
+caracole to compare and take, its units taken, another caracole's units pushed to it, and its site indexes:
+peer_sync.py, peer_push.py) and youtube_routes.py (a song's auto sheet from a YouTube video pasted on the library
+page). A new route, or a new module of them, changes
 nothing here. This module answers the rest:
 
     GET  /<file>          a file of the library (files.py), or a page caracole wrote there, such as
@@ -23,13 +24,17 @@ nothing here. This module answers the rest:
 
 There is no sign-in: whoever can reach the server may use it (security.py).
 Every request must name the server by a name it answers to (421 otherwise).
-Every POST must pass the cross-origin check and carry the form token (403),
-be a form (415) and be small (413). /jobs.json and /requests.json, which no form asks for, must
-pass the same cross-origin check and carry the form token in an
-``X-Caracole-Form-Token`` header (403). One GET changes something, with
-neither, by the owner's choice (security.py): ``/export.pdf?…&mine=1``
-(export_routes.py), a plain link from the sandboxed viewer, which queues Make
-this my version.
+Every POST must pass the cross-origin check (403), be of its route's kind
+(``Route.body``, 415) and no longer than its route's limit (``Route.limit``,
+16 KiB unless the route says more, 413: server.py reads no more of it,
+``WebApp.body_limit``), and carry the form token (403). A ``form`` (what the
+pages post) carries it as its ``csrf`` field; a ``json`` document or ``bytes``
+(what another caracole sends: a push, peer_routes.py) in an
+``X-Caracole-Form-Token`` header, as /jobs.json and /requests.json, which no
+form asks for, carry it beside the same cross-origin check (403). One GET
+changes something, with neither, by the owner's choice (security.py):
+``/export.pdf?…&mine=1`` (export_routes.py), a plain link from the sandboxed
+viewer, which queues Make this my version.
 
 A route that turns a request down raises ``Refused`` (pages.py: a status, a
 title and one sentence), which ``WebApp.handle`` answers with the message page.
@@ -59,7 +64,7 @@ from contextlib import closing, contextmanager
 from dataclasses import dataclass, field
 from functools import cache
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, BinaryIO
 from urllib.parse import parse_qs, unquote, urlsplit
 
 from caracole import db
@@ -77,8 +82,11 @@ if TYPE_CHECKING:
     from caracole.songs import Song
     from caracole.web.search_routes import IndexAnswers
 
-MAX_BODY = 16 * 1024
-TOKEN_HEADER = "x-caracole-form-token"  # /jobs.json's form token
+MAX_BODY = 16 * 1024  # a body's limit, unless its route says more (``Route.limit``)
+BODIES = ("form", "json", "bytes")  # a POST's kinds of body (``Route.body``), each its content type below
+BODY_TYPES = {"form": "application/x-www-form-urlencoded", "json": "application/json",
+              "bytes": "application/octet-stream"}
+TOKEN_HEADER = "x-caracole-form-token"  # the form token of a request that isn't a form: /jobs.json's, a push's
 _COMMON_HEADERS = [
     ("X-Content-Type-Options", "nosniff"),
     ("X-Frame-Options", "DENY"),
@@ -106,21 +114,27 @@ class Request:
 
 @dataclass
 class Response:
-    """``data``: the answer as JSON, for the page's script (``Accept: application/json``), if it has one."""
+    """``data``: the answer as JSON, for the page's script (``Accept: application/json``), if it has one.
+    ``stream``: a GET's body too long to hold, read from an open file (from where it stands to its end) in chunks and
+    then closed by whoever sends it (server.py): the file may be gone from its folder already, as a temporary
+    copy is once it is open (peer_routes.py's index)."""
 
     status: int
     body: bytes = b""
     headers: list[tuple[str, str]] = field(default_factory=list)
     data: dict[str, Any] | None = None
+    stream: BinaryIO | None = None
 
 
 @dataclass(frozen=True)
 class Route:
     """An address one of the route modules answers (its ``ROUTES``), and what answers it: ``answer(app,
-    request)`` a GET or HEAD; ``answer(app, request, form)`` a POST, once the form passed every check
-    (``page``: what a refusal of the form calls the page it came from). ``under``: every address that
-    starts with ``path`` too. ``script_only``: a read the page's own script alone makes, checked as a write
-    is (/jobs.json, /requests.json)."""
+    request)`` a GET or HEAD; ``answer(app, request, body)`` a POST, once its body passed every check, read as
+    its ``body`` says: a ``form``'s fields (each name's first value, a dict), a ``json`` document as
+    ``json.loads`` reads it, or ``bytes`` as sent (``page``: what a refusal of a form calls the page it came
+    from). ``limit``: how many bytes of a body the server reads, at most. ``under``: every address that starts
+    with ``path`` too. ``script_only``: a read the page's own script alone makes, checked as a write is
+    (/jobs.json, /requests.json)."""
 
     method: str  # "GET" (which answers HEAD too) or "POST"
     path: str
@@ -128,6 +142,12 @@ class Route:
     page: str = "the library"
     under: bool = False
     script_only: bool = False
+    body: str = "form"  # one of BODIES
+    limit: int = MAX_BODY
+
+    def __post_init__(self) -> None:
+        if self.body not in BODIES or self.limit < 1:
+            raise ValueError(f"{self.method} {self.path}: a body of kind {self.body!r} up to {self.limit} bytes")
 
 
 @cache
@@ -179,6 +199,11 @@ def redirect(location: str) -> Response:
 def json_response(status: int, data: Any) -> Response:
     body = json.dumps(data, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     return Response(status, body, [("Content-Type", "application/json; charset=utf-8")])
+
+
+def _content_type(headers: Mapping[str, str]) -> str:
+    """A request's content type, without its parameters (a charset), in lower case."""
+    return headers.get("content-type", "").split(";")[0].strip().lower()
 
 
 def wants_json(request: Request) -> bool:
@@ -311,9 +336,22 @@ class WebApp:
             route = route_for("POST", path)
             if route is None:
                 return self.message(404, "Not here", "There's nothing to send to at this address.")
-            form = self._form(request, page=route.page)
-            return form if isinstance(form, Response) else route.answer(self, request, form)
+            if route.body == "form":
+                body = self._form(request, page=route.page, limit=route.limit)
+            else:
+                body = self._document(request, route)
+            return body if isinstance(body, Response) else route.answer(self, request, body)
         return Response(405, b"", [("Allow", "GET, HEAD, POST")])
+
+    def body_limit(self, method: str, target: str) -> int:
+        """How many bytes of a request's body the server reads (server.py), the request's target as sent: its
+        route's limit, else ``MAX_BODY`` (no such route, or an address that can't be read)."""
+        try:
+            path = unquote(urlsplit(target).path, errors="strict")
+        except (UnicodeDecodeError, ValueError):
+            return MAX_BODY
+        route = route_for(method, path)
+        return route.limit if route is not None else MAX_BODY
 
     def _script_read_refused(self, request: Request) -> Response | None:
         """Why a read only the page's script makes (/jobs.json, /requests.json) is refused to anything else, as a write would be;
@@ -325,16 +363,15 @@ class WebApp:
                                                 "reload it.")
         return None
 
-    def _form(self, request: Request, *, page: str = "the library") -> dict[str, str] | Response:
+    def _form(self, request: Request, *, page: str = "the library", limit: int = MAX_BODY) -> dict[str, str] | Response:
         """The fields of a POSTed form, or why it is refused; a form token older than the server says to
         reload ``page``, and tells a page's script so (``reload``)."""
         headers = request.headers
         if not cross_origin_ok("POST", headers, headers.get("host")):
             return self.message(403, "Refused", "This came from another site, so caracole refused it.")
-        kind = headers.get("content-type", "").split(";")[0].strip().lower()
-        if kind != "application/x-www-form-urlencoded":
+        if _content_type(headers) != BODY_TYPES["form"]:
             return self.message(415, "Not a form", "caracole reads only forms sent from its own pages.")
-        if len(request.body) > MAX_BODY:
+        if len(request.body) > limit:
             return self.message(413, "Too long", "That form is too long.")
         try:
             fields = parse_qs(request.body.decode("utf-8"), keep_blank_values=True, max_num_fields=20)
@@ -347,6 +384,30 @@ class WebApp:
             refused.data = {**(refused.data or {}), "reload": True}
             return refused
         return form
+
+    def _document(self, request: Request, route: Route) -> Any:
+        """The body of a POST that isn't a form, read as its route's kind (``json`` or ``bytes``), or why it is
+        refused: another site's (403), without the form token in its header (403, ``reload``: a token older than the
+        server, which its state gives again), of another content type (415), too long (413), JSON that can't be
+        read (400)."""
+        headers = request.headers
+        if not cross_origin_ok("POST", headers, headers.get("host")):
+            return self.message(403, "Refused", "This came from another site, so caracole refused it.")
+        if not same_token(headers.get(TOKEN_HEADER), self.csrf):
+            refused = self.message(403, "Refused", "This is older than the server, or not from it: read its form "
+                                                   "token again and try again.")
+            refused.data = {**(refused.data or {}), "reload": True}
+            return refused
+        if _content_type(headers) != BODY_TYPES[route.body]:
+            return self.message(415, "Not what it reads", f"caracole reads only {BODY_TYPES[route.body]} here.")
+        if len(request.body) > route.limit:
+            return self.message(413, "Too long", "That is too long.")
+        if route.body == "bytes":
+            return request.body
+        try:
+            return json.loads(request.body.decode("utf-8"))
+        except (UnicodeDecodeError, ValueError, RecursionError):
+            return self.message(400, "Not JSON", "That can't be read as JSON.")
 
     # --- what the routes share ---------------------------------------------------------------------
 

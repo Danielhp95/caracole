@@ -12,7 +12,7 @@ import pytest
 
 from caracole import db
 from caracole.config import load_config
-from caracole.web.app import WebApp
+from caracole.web.app import Response, WebApp
 from caracole.web.jobs import CaracoleRunner, JobQueue
 from caracole.web.security import allowed_hosts
 from caracole.web.server import make_server
@@ -84,6 +84,80 @@ def test_a_long_or_unsized_form_is_refused_unread(served):
         assert conn.getresponse().status == 411
     finally:
         conn.close()
+
+
+def claimed(server, path, length, kind):
+    """The status a POST to ``path`` gets that says it is ``length`` bytes long and sends none of them: answered
+    at once, unread, or the server would wait for the bytes until the client gives up."""
+    conn = http.client.HTTPConnection("127.0.0.1", server.server_address[1], timeout=10)
+    try:
+        conn.putrequest("POST", path)
+        conn.putheader("Content-Type", kind)
+        conn.putheader("Content-Length", str(length))
+        conn.endheaders()
+        return conn.getresponse().status
+    finally:
+        conn.close()
+
+
+def test_a_body_is_refused_unread_beyond_its_routes_limit_before_any_route_is_asked(cfg, monkeypatch):
+    app = WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok")
+    handled = []
+    monkeypatch.setattr(app, "handle", lambda request: handled.append(request) or WebApp.finish(Response(204)))
+    server = running(app)
+    try:
+        assert claimed(server, "/peer/pull", 20_000_000, "application/json") == 413
+        assert claimed(server, "/peer/pull", 1024 * 1024 + 1, "application/x-www-form-urlencoded") == 413
+        assert claimed(server, "/request", 16 * 1024 + 1, "application/x-www-form-urlencoded") == 413
+        assert claimed(server, "/nowhere", 16 * 1024 + 1, "application/json") == 413
+        assert claimed(server, "/%ff", 16 * 1024 + 1, "application/json") == 413
+        assert handled == []
+    finally:
+        server.shutdown()
+        server.server_close()
+
+
+def test_a_pull_of_a_mebibyte_of_units_is_read_whole_and_queued(served):
+    units = "\n".join(f"song/{n:05d}-" + "x" * 190 for n in range(5000))
+    body = urlencode({"csrf": "tok", "from": "192.168.1.20:8737", "units": units}).encode()
+    assert 1000 * 1000 < len(body) <= 1024 * 1024
+    status, headers, _ = ask(served, "POST", "/peer/pull", body=body, headers={
+        "Content-Type": "application/x-www-form-urlencoded", "Sec-Fetch-Site": "same-origin"})
+    assert status == 303 and headers["Location"].startswith("/#tab=requests&job=")
+    (job,) = served.app.queue.snapshot()
+    assert len(job.steps[0].args) == 2 + 5000 + 2
+
+
+def test_an_answer_streamed_from_a_file_is_sent_whole_in_chunks_and_the_file_closed(cfg, monkeypatch, tmp_path):
+    from caracole.web import app as app_module
+    from caracole.web.app import Route, routes
+
+    data = bytes(range(256)) * (3 * 4096 + 7)  # three MiB and more: more than one chunk
+    (tmp_path / "big.bin").write_bytes(b"skipped" + data)
+    opened = []
+
+    def streamed(app, asked):
+        f = open(tmp_path / "big.bin", "rb")
+        f.seek(len(b"skipped"))  # from where it stands
+        opened.append(f)
+        return Response(200, headers=[("Content-Type", "application/octet-stream")], stream=f)
+
+    table = dict(routes()) | {("GET", "/t/stream"): Route("GET", "/t/stream", streamed)}
+    monkeypatch.setattr(app_module, "routes", lambda: table)
+    server = running(WebApp(cfg, JobQueue(Recorder()), allowed=allowed_hosts("127.0.0.1"), csrf="tok"))
+    try:
+        status, headers, body = ask(server, "GET", "/t/stream")
+        assert status == 200 and body == data and int(headers["Content-Length"]) == len(data)
+        assert headers["X-Content-Type-Options"] == "nosniff"
+        status, headers, body = ask(server, "HEAD", "/t/stream")
+        assert status == 200 and body == b"" and int(headers["Content-Length"]) == len(data)
+        deadline = time.monotonic() + 10  # the server's thread closes it once the answer is out: wait for it
+        while not all(f.closed for f in opened) and time.monotonic() < deadline:
+            time.sleep(0.01)
+        assert len(opened) == 2 and all(f.closed for f in opened)
+    finally:
+        server.shutdown()
+        server.server_close()
 
 
 @pytest.mark.slow

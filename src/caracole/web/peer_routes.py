@@ -31,7 +31,7 @@ ROUTES = (
     Route("GET", "/api/peer/state", lambda app, asked: state(app, _params(asked.target))),
     Route("GET", "/api/peer/unit", lambda app, asked: unit(app, _params(asked.target))),
     Route("GET", "/api/peer/file", lambda app, asked: song_file(app, _params(asked.target))),
-    Route("POST", "/peer/pull", lambda app, asked, form: pull(app, form)),
+    Route("POST", "/peer/pull", lambda app, asked, form: pull(app, form), limit=1024 * 1024),
 )
 
 

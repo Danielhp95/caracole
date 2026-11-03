@@ -1,14 +1,19 @@
 """``WebApp`` on a socket: ``http.server``'s threading server, a thread per connection.
 
 A connection serves one request (HTTP/1.0) and times out after 30 seconds. A
-POST must say how long it is, and is refused unread beyond ``MAX_BODY``. The
-queue's worker starts with the server and stops with it, ending the command it
-was running: on Ctrl-C, and on SIGTERM, which is how systemd stops the unit.
+POST must say how long it is, and is refused unread beyond its route's limit
+(``WebApp.body_limit``: 16 KiB, unless the route says more). An answer too long
+to hold, a file (``Response.stream``), is written in chunks as it is read, then
+closed. The queue's worker starts with the server and stops with it, ending the
+command it was running: on Ctrl-C, and on SIGTERM, which is how systemd stops
+the unit.
 """
 
 from __future__ import annotations
 
 import logging
+import os
+import shutil
 import signal
 import socket
 import threading
@@ -16,10 +21,11 @@ import traceback
 from collections.abc import Callable
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from caracole.web.app import MAX_BODY, Request, Response, WebApp
+from caracole.web.app import Request, Response, WebApp
 from caracole.web.security import WILDCARDS
 
 log = logging.getLogger(__name__)
+CHUNK = 1024 * 1024  # a streamed answer's bytes written at a time
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -39,7 +45,7 @@ class _Handler(BaseHTTPRequestHandler):
         if self.command == "POST":
             length = self.headers.get("Content-Length")
             if length is None:
-                self._send(app.finish(Response(411, b"A form must say how long it is.\n")))
+                self._send(app.finish(Response(411, b"A POST must say how long it is.\n")))
                 return
             try:
                 size = int(length)
@@ -48,9 +54,9 @@ class _Handler(BaseHTTPRequestHandler):
             except ValueError:
                 self._send(app.finish(Response(400, b"That Content-Length isn't a length.\n")))
                 return
-            if size > MAX_BODY:
+            if size > app.body_limit(self.command, self.path):
                 self.close_connection = True
-                self._send(app.finish(Response(413, b"That form is too long.\n")))
+                self._send(app.finish(Response(413, b"That is too long to send here.\n")))
                 return
             body = self.rfile.read(size)
         headers = {name.lower(): value for name, value in self.headers.items()}
@@ -62,13 +68,22 @@ class _Handler(BaseHTTPRequestHandler):
         self._send(response)
 
     def _send(self, response: Response) -> None:
-        self.send_response(response.status)
-        for name, value in response.headers:
-            self.send_header(name, value)
-        self.send_header("Content-Length", str(len(response.body)))
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(response.body)
+        stream = response.stream
+        try:
+            self.send_response(response.status)
+            for name, value in response.headers:
+                self.send_header(name, value)
+            length = len(response.body) if stream is None else os.fstat(stream.fileno()).st_size - stream.tell()
+            self.send_header("Content-Length", str(length))
+            self.end_headers()
+            if self.command != "HEAD":
+                if stream is None:
+                    self.wfile.write(response.body)
+                else:
+                    shutil.copyfileobj(stream, self.wfile, CHUNK)
+        finally:
+            if stream is not None:
+                stream.close()
 
     def log_message(self, format: str, *args: object) -> None:
         log.info("%s %s", self.address_string(), format % args)
