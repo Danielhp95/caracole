@@ -49,7 +49,6 @@ internal object Merge {
 
         val actions = ArrayList<Action>()
         val kv = LinkedHashMap<String, String?>()
-        val records = ArrayList<String>()
 
         val changes: Boolean get() = actions.isNotEmpty() || kv.isNotEmpty()
 
@@ -128,12 +127,9 @@ internal object Merge {
     }
 
     /** _later: a time that moves on, never back: the file's, when later. */
-    private fun later(db: Db, plan: Plan, key: String, what: String) {
+    private fun later(db: Db, plan: Plan, key: String) {
         val theirs = kv(db, THEIRS, key)
-        if (newer(theirs, kv(db, "main", key))) {
-            plan.kv[key] = theirs
-            plan.records.add(what)
-        }
+        if (newer(theirs, kv(db, "main", key))) plan.kv[key] = theirs
     }
 
     /** _keys_again: rows of the file's keyed by another normalizer than the database's: made again whole after. */
@@ -142,15 +138,15 @@ internal object Merge {
     }
 
     /** _sitemaps: a site_index.py site's sitemaps the file read later, and its `complete_at`. */
-    private fun sitemaps(db: Db, plan: Plan, provider: String, table: String, noun: String = "sitemap") {
+    private fun sitemaps(db: Db, plan: Plan, provider: String, table: String) {
         val key = sitemapsKey(provider)
         val names = newerRecords(db, key, "checked_at")
-        plan.take(noun, names.size) { c ->
+        plan.take("sitemap", names.size) { c ->
             taken(c, names)
             replace(c, table, "sitemap")
             takeRecords(c, key, names)
         }
-        later(db, plan, completeKey(provider), "${noun}s read whole")
+        later(db, plan, completeKey(provider))
     }
 
     /** _pages: the pages (path, read_at) the file read later, with their tabs (by [column]). */
@@ -206,7 +202,7 @@ internal object Merge {
             c.execute("INSERT OR IGNORE INTO main.lacuerda_index SELECT $cols $search", LC_SEARCH_PAGE)
         }
         keysAgain(db, plan, LC_KEYS)
-        later(db, plan, LC_COMPLETE, "listings read whole")
+        later(db, plan, LC_COMPLETE)
     }
 
     private fun planUg(db: Db, plan: Plan, now: String) {
@@ -232,11 +228,11 @@ internal object Merge {
             takeRecords(c, UG_SITEMAPS, names)
             NewTabs.markDirty(c, new, now)
         }
-        val newer = "FROM $THEIRS.ug_artist_tabs t LEFT JOIN main.ug_artist_tabs m ON m.page = t.page AND " +
+        val newerTabs = "FROM $THEIRS.ug_artist_tabs t LEFT JOIN main.ug_artist_tabs m ON m.page = t.page AND " +
             "m.tab_id = t.tab_id WHERE m.page IS NULL OR t.read_at > m.read_at"
-        val tabs = db.one("SELECT COUNT(*) $newer") { it.long(0)!! }!!.toInt()
+        val tabs = db.one("SELECT COUNT(*) $newerTabs") { it.long(0)!! }!!.toInt()
         plan.take("tab of its artist pages", tabs) { c ->
-            val pages = c.query("SELECT DISTINCT t.page $newer") { it.text(0)!! }
+            val pages = c.query("SELECT DISTINCT t.page $newerTabs") { it.text(0)!! }
             val cols = columns(c, "main", "ug_artist_tabs")
             c.execute(
                 "INSERT INTO main.ug_artist_tabs (${cols.joinToString(", ")}) SELECT ${cols.joinToString(", ")} FROM " +
@@ -257,13 +253,11 @@ internal object Merge {
             listed != kv(db, "main", UG_LISTED)
         ) {
             plan.kv[UG_LISTED] = listed
-            plan.records.add("the sitemaps UG lists")
         }
-        later(db, plan, UG_REFRESHED, "its last refresh")
+        later(db, plan, UG_REFRESHED)
         val built = kv(db, THEIRS, UG_BUILT)
         if (built != null && kv(db, "main", UG_BUILT) == null) {
             plan.kv[UG_BUILT] = built
-            plan.records.add("the index built whole")
         }
     }
 
