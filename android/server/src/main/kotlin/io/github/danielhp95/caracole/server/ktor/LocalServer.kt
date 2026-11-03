@@ -26,6 +26,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.net.BindException
 import java.util.logging.Level
 import java.util.logging.Logger
@@ -34,9 +35,11 @@ import java.util.logging.Logger
  * The phone's server: Ktor CIO listening on 127.0.0.1 alone, every request handed whole to [app] (server.py's part
  * of caracole serve): its method, its target exactly as sent (`%2F` and all), its headers by lowercase name (a
  * header sent twice, its last value, as http.server keeps one; cookies all, joined), and its body read up to its
- * route's limit and one byte more, which App refuses as too long. The answer is written as App made it, a file
- * streamed; a HEAD gets its GET's headers and length, and no body. A bug in a route is a 500 that says so; the log
- * has it.
+ * route's limit and one byte more, which App refuses as too long (413); a body the client cut short is a 400. The
+ * rest of a body too long is Ktor's to drop: CIO reads a request's whole Content-Length before the next request on
+ * the connection, so nothing in it is read as one (where server.py closes the connection instead, which CIO, reading
+ * requests ahead, can't be told to from an answer). The answer is written as App made it, a file streamed; a HEAD
+ * gets its GET's headers and length, and no body. A bug in a route is a 500 that says so; the log has it.
  */
 class LocalServer(val app: App) : AutoCloseable {
     private var server: EmbeddedServer<CIOApplicationEngine, CIOApplicationEngine.Configuration>? = null
@@ -80,15 +83,22 @@ class LocalServer(val app: App) : AutoCloseable {
                     val key = name.lowercase()
                     headers[key] = if (key == "cookie") values.joinToString("; ") else values.last()
                 }
-                val body = read(call.receiveChannel(), app.bodyLimit(method, target) + 1)
                 val response = try {
-                    withContext(Dispatchers.IO) { app.handle(Request(method, target, headers, body)) }
+                    val body = try {
+                        read(call.receiveChannel(), app.bodyLimit(method, target) + 1)
+                    } catch (e: IOException) {
+                        null // the client went, or sent less than it said
+                    }
+                    if (body == null) {
+                        app.finish(Response(400, Body.Bytes(UNREAD.toByteArray()), mutableListOf("Content-Type" to TEXT)))
+                    } else {
+                        withContext(Dispatchers.IO) { app.handle(Request(method, target, headers, body)) }
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Throwable) {
                     log.log(Level.SEVERE, "caracole: $method $target failed", e)
-                    app.finish(Response(500, Body.Bytes("caracole hit a bug; its log says where.\n".toByteArray()),
-                                        mutableListOf("Content-Type" to "text/plain; charset=utf-8")))
+                    app.finish(Response(500, Body.Bytes(BUG.toByteArray()), mutableListOf("Content-Type" to TEXT)))
                 }
                 call.respond(outgoing(response, head = method == "HEAD", call.response.headers))
                 finish()
@@ -153,6 +163,9 @@ class LocalServer(val app: App) : AutoCloseable {
 
     private companion object {
         const val HOST = "127.0.0.1"
+        const val TEXT = "text/plain; charset=utf-8"
+        const val BUG = "caracole hit a bug; its log says where.\n"
+        const val UNREAD = "That request's body can't be read.\n"
         val log: Logger = Logger.getLogger("caracole.server")
     }
 }

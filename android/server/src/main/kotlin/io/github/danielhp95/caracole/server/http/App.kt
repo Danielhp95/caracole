@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.http
 
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.server.files.LibraryFiles
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -105,9 +106,11 @@ class App(val config: AppConfig, modules: List<RouteModule>, stubs: RouteModule,
         return response
     }
 
-    /** JSON, compact, in UTF-8. */
+    /** JSON as caracole serve writes it (app.py's json_response: `json.dumps(ensure_ascii=False)`, compact), in UTF-8.
+     * A float in [data] is Python's only when it came of a text Python wrote or of PyJson.float, never of
+     * JsonPrimitive(Double). */
     fun json(data: JsonElement, status: Int = 200): Response =
-        Response(status, Body.Bytes(data.toString().toByteArray()), mutableListOf("Content-Type" to JSON))
+        Response(status, Body.Bytes(PyJson.dumps(data, compact = true).toByteArray()), mutableListOf("Content-Type" to JSON))
 
     /** A job queued: 303 to its line ([view]'s `details`, else the Requests tab's), data {job: view}; JSON 200 to
      * Accept: application/json. */

@@ -70,6 +70,11 @@ object MessagePage {
         }
     }
 
+    /**
+     * The message page of [status]. A route answers one through App.message (or by throwing Refused), which names the
+     * library as the App is configured to; [name]'s default, AppConfig's default name and the phone's badge, is the
+     * plan's signature's (§5.2) and names no other library.
+     */
     fun page(status: Int, title: String, message: String, link: Pair<String, String>? = null,
              name: LibraryName = LibraryName(AppConfig.PHONE, PHONE_BADGE)): Response {
         val back = "<a class=\"btn\" href=\"/\">Back to the library</a>"

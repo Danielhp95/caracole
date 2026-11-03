@@ -19,6 +19,7 @@ import io.github.danielhp95.caracole.server.http.Response
 import java.io.File
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.InvalidPathException
 import java.nio.file.LinkOption
 import java.nio.file.Path
 import java.nio.file.attribute.BasicFileAttributes
@@ -87,7 +88,8 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
     }
 
     /** The file at [parts] under [libraryDir]: each folder on the way a folder and no link, the file a regular file
-     * and no link, within the library once resolved, at most [FileTypes.MAX_BYTES]; null otherwise. */
+     * and no link, within the library once resolved, at most [FileTypes.MAX_BYTES]; null otherwise (a name the file
+     * system can't hold among them). */
     private fun regularFile(parts: List<String>): File? {
         try {
             val root = libraryDir.toPath().toRealPath()
@@ -101,6 +103,8 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
             if (!info.isRegularFile || info.size() > FileTypes.MAX_BYTES) return null
             return if (file.toRealPath(LinkOption.NOFOLLOW_LINKS).startsWith(root)) file.toFile() else null
         } catch (e: IOException) {
+            return null
+        } catch (e: InvalidPathException) {
             return null
         }
     }
@@ -120,14 +124,18 @@ class LibraryFiles(val libraryDir: File, val mirror: Mirror?, val gate: UnitGate
         }
     }
 
-    /** The address of the sheet.txt the phone keeps for the song of [unit], or null. */
+    /** The address of the sheet.txt the phone keeps for the song of [unit], or null: one its `files` records that
+     * [serve] answers (on disk, a regular file under the library), never a link that would 404. */
     private fun sheetOf(unit: String?): String? {
         val key = unit?.takeIf { it.startsWith("song/") }?.removePrefix("song/") ?: return null
         val path = database.read { db ->
             db.one("SELECT f.path FROM files f JOIN songs s ON s.id = f.song_id WHERE s.key = ? AND f.name = ?",
                    key, SHEET) { it.text(0) }
         } ?: return null
-        return "/" + path.split('/').joinToString("/") { PyUrl.quote(it, safe = "") }
+        val parts = path.split('/')
+        if (parts.any { it.isEmpty() || it == "." || it == ".." || it.startsWith(".") || '\u0000' in it }) return null
+        if (regularFile(parts) == null) return null
+        return "/" + parts.joinToString("/") { PyUrl.quote(it, safe = "") }
     }
 
     private companion object {

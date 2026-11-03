@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.http
 
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.testing.TestApp
@@ -7,7 +8,9 @@ import io.github.danielhp95.caracole.server.testing.bytes
 import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.json
 import io.github.danielhp95.caracole.server.testing.text
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -72,8 +75,10 @@ class RoutingTest {
                 libraryName = setup["library_name"]!!.jsonPrimitive.content).use { test ->
             built = test.app
             assertEquals(MessagePage.PHONE_BADGE, setup["badge"]!!.jsonPrimitive.content)
-            val requests = routing.drop(1)
+            val requests = routing.filter { it.fn == "caracole.web.app.WebApp.handle" }
             assertTrue(requests.size > 100)
+            val mark = "<style>${setup["style_mark"]!!.jsonPrimitive.content}</style>"
+            val style = "<style>${MessagePage.style}</style>"
             val wrong = requests.mapNotNull { record ->
                 val asked = record.args[0].jsonObject
                 val headers = asked["headers"]!!.jsonObject.mapValues { it.value.jsonPrimitive.content } +
@@ -83,7 +88,7 @@ class RoutingTest {
                 val out = record.out!!.jsonObject
                 val expected = Triple(out["status"]!!.jsonPrimitive.content.toInt(),
                                       out["headers"]!!.jsonArray.map { h -> h.jsonArray.map { it.jsonPrimitive.content } },
-                                      body(out).toString(Charsets.UTF_8))
+                                      body(out).toString(Charsets.UTF_8).replace(mark, style))
                 val got = Triple(response.status, response.headers.map { listOf(it.first, it.second) }, response.text)
                 if (got == expected) null else "${record.extra["note"]}: $got\n   Python: $expected"
             }
@@ -254,6 +259,50 @@ class RoutingTest {
                 assertEquals(400, refused.status, bad)
                 assertEquals("""{"error":"Not a YouTube video link."}""", refused.text)
             }
+        }
+    }
+
+    /** A number written with a point or an exponent (never true, false or null). */
+    private fun isFloat(value: JsonPrimitive) = !value.isString && value !is JsonNull &&
+        (value.content.first() == '-' || value.content.first().isDigit()) && value.content.any { it in ".eE" }
+
+    /** [value] as Kotlin would build it: every float a Double, through PyJson.float (never JsonPrimitive(Double)). */
+    private fun builtInKotlin(value: JsonElement): JsonElement = when (value) {
+        is JsonObject -> JsonObject(value.mapValues { builtInKotlin(it.value) })
+        is JsonArray -> JsonArray(value.map(::builtInKotlin))
+        is JsonPrimitive -> if (isFloat(value)) PyJson.float(value.content.toDouble()) else value
+    }
+
+    private fun floats(value: JsonElement): Int = when (value) {
+        is JsonObject -> value.values.sumOf(::floats)
+        is JsonArray -> value.sumOf(::floats)
+        is JsonPrimitive -> if (isFloat(value)) 1 else 0
+    }
+
+    @Test fun everyJsonAnswerAndDataBlockIsWrittenAsPythonWritesIt() {
+        val records = routing.filter { it.fn.startsWith("caracole.inline.") || it.fn == "caracole.web.app.json_response" }
+        assertTrue(records.count { it.fn == "caracole.inline.json_block" } > 20)
+        TestApp(tmp.root).use { test ->
+            var floats = 0
+            for (record in records) {
+                val args = record.args.map { it.jsonPrimitive.content }
+                val expected = record.out!!.jsonPrimitive.content
+                when (record.fn) {
+                    "caracole.inline.sha256_source" -> assertEquals(expected, Inline.sha256Source(args[0]), args[0])
+                    "caracole.inline.json_block" -> {
+                        val data = Json.parseToJsonElement(args[1])
+                        assertEquals(expected, Inline.jsonBlock(args[0], data), args[1])
+                        assertEquals(expected, Inline.jsonBlock(args[0], builtInKotlin(data)), "built in Kotlin: ${args[1]}")
+                    }
+                    else -> {
+                        val data = Json.parseToJsonElement(args[0])
+                        assertEquals(expected, test.app.json(data).text, args[0])
+                        assertEquals(expected, test.app.json(builtInKotlin(data)).text, "built in Kotlin: ${args[0]}")
+                        floats += floats(data)
+                    }
+                }
+            }
+            assertTrue(floats > 20, "the vectors hold floats: $floats")
         }
     }
 

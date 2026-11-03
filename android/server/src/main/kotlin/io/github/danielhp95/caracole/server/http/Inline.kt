@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.http
 
+import io.github.danielhp95.caracole.core.json.PyJson
 import kotlinx.serialization.json.JsonElement
 import java.security.MessageDigest
 import java.util.Base64
@@ -14,8 +15,10 @@ object Inline {
     /**
      * [data] as a `<script type="application/json">` block with this id, and a line break. Every `<` in the JSON is
      * written `\u003c`, which JSON reads back as `<`: no text in it can end the block or open another element. The
-     * JSON is compact, strings as `json.dumps(ensure_ascii=False)` writes them (numbers as kotlinx writes them).
+     * JSON is `json.dumps(ensure_ascii=False)`'s, compact (PyJson): a float in [data] is Python's only when it came of
+     * a text Python wrote or of PyJson.float, never of JsonPrimitive(Double).
      */
     fun jsonBlock(id: String, data: JsonElement): String =
-        "<script type=\"application/json\" id=\"${PyText.escape(id)}\">${data.toString().replace("<", "\\u003c")}</script>\n"
+        "<script type=\"application/json\" id=\"${PyText.escape(id)}\">" +
+            PyJson.dumps(data, compact = true).replace("<", "\\u003c") + "</script>\n"
 }

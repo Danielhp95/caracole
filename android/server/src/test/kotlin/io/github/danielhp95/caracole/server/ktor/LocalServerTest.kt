@@ -158,6 +158,65 @@ class LocalServerTest {
         }
     }
 
+    /** Everything the server sends on one connection kept alive, until it closes it or goes quiet for [quiet] ms. */
+    private fun conversation(port: Int, vararg sent: ByteArray, quiet: Int = 3_000): Pair<String, Boolean> =
+        Socket(InetAddress.getByName("127.0.0.1"), port).use { socket ->
+            socket.soTimeout = quiet
+            val output = socket.getOutputStream()
+            try {
+                for (part in sent) output.write(part)
+                output.flush()
+            } catch (e: SocketException) {
+                // the server may close before taking it all: what it answered is still there to read
+            }
+            val out = ByteArrayOutputStream()
+            val buffer = ByteArray(8192)
+            val closed = try {
+                while (true) {
+                    val n = socket.getInputStream().read(buffer)
+                    if (n < 0) break
+                    out.write(buffer, 0, n)
+                }
+                true
+            } catch (e: java.net.SocketTimeoutException) {
+                false
+            } catch (e: SocketException) {
+                true // reset: the server closed with the rest of the body unread
+            }
+            out.toByteArray().toString(Charsets.ISO_8859_1) to closed
+        }
+
+    @Test fun nothingInTheRestOfAFormTooLongIsReadAsARequest() {
+        TestApp(tmp.root, { listOf(echo) }).use { test ->
+            val (server, port) = server(test)
+            server.use {
+                val cookie = "caracole-launch=${test.secret}"
+                val smuggled = "GET /echo/smuggled HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\n\r\n"
+                val body = ("csrf=${test.csrf}&pad=" + "x".repeat(40_000) + "\r\n\r\n" + smuggled).toByteArray()
+                val head = "POST /echo/form HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\n" +
+                    "Content-Type: application/x-www-form-urlencoded\r\nOrigin: http://127.0.0.1:$port\r\n" +
+                    "Content-Length: ${body.size}\r\n\r\n"
+                val next = "GET /echo/next HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\nConnection: close\r\n\r\n"
+                val (said, _) = conversation(port, head.toByteArray(), body, next.toByteArray())
+                assertTrue(said.startsWith("HTTP/1.1 413 "), said.take(200))
+                assertTrue("smuggled" !in said, "the rest of the body is dropped, never read as a request")
+                // the request after the body is the next one answered, on the same connection
+                assertEquals(2, Regex("^HTTP/1\\.1 ", RegexOption.MULTILINE).findAll(said).count(), said.takeLast(400))
+                assertTrue("\r\n\r\ntarget=/echo/next\n" in said, said.takeLast(400))
+                // a form within its limit keeps the connection for the next request too
+                val small = "csrf=${test.csrf}&a=1".toByteArray()
+                val first = "POST /echo/form HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\n" +
+                    "Content-Type: application/x-www-form-urlencoded\r\nOrigin: http://127.0.0.1:$port\r\n" +
+                    "Content-Length: ${small.size}\r\n\r\n"
+                val last = "GET /echo/next HTTP/1.1\r\nHost: 127.0.0.1:$port\r\nCookie: $cookie\r\nConnection: close\r\n\r\n"
+                val (both, _) = conversation(port, first.toByteArray() + small, last.toByteArray())
+                assertTrue(both.startsWith("HTTP/1.1 200 "), both.take(200))
+                assertTrue("target=/echo/next" in both, both)
+                assertTrue("Connection: close" !in both.substringBefore("\r\n\r\n"), both.substringBefore("\r\n\r\n"))
+            }
+        }
+    }
+
     @Test fun aFileIsStreamedAndAHeadHasNoBody() {
         val big = ByteArray(3_000_000) { (it % 251).toByte() }
         File(tmp.root, "big.bin").writeBytes(big)

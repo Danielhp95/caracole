@@ -11,8 +11,15 @@
   ``args`` ``[{"method", "target", "headers", "body" | "body_b64"}]``, ``out`` ``{"status", "headers": [[name,
   value], …], "body" | "body_b64"}``, and a ``note``. Each refusal's status, page and data, and the headers
   ``WebApp.finish`` sets, in order. The body is what ``handle`` answers, a HEAD's too: the socket drops it
-  (server.py, the phone's LocalServer). No request names a page caracole writes into the library (sheet.html,
-  index.html…): the computer serves those as written (``WebApp._written_page``), the phone the mirror's copies.
+  (server.py, the phone's LocalServer). A message page's style, ``pages.PAGE_STYLE`` (13 KB), is written once, in
+  message.json: a body holds the first record's ``style_mark`` in its place, which the Kotlin test puts it back for
+  (its policy's hash, in the headers, is compared as it is). No request names a page caracole writes into the
+  library (sheet.html, index.html…): the computer serves those as written (``WebApp._written_page``), the phone the
+  mirror's copies.
+  After the requests, what every page's data and every JSON answer are written by: ``json_response``'s body and
+  inline.py's ``json_block`` and ``sha256_source``, each record's data given as the JSON text Python reads it from
+  (``args`` ``[text]`` or ``[id, text]``), so its members keep their order (a corpus line sorts its own), floats
+  among them.
 - ``vectors/web/downloads.jsonl``: web/files.py's ``TYPES`` (its pairs, in order), ``DOWNLOADS`` and ``MAX_BYTES``, and
   download_names.py's ``download_name`` and ``content_disposition``.
 - ``data/caracole/page/message.json``: ``{"style": pages.PAGE_STYLE, "csp": pages.PAGE_CSP}``, the message page's
@@ -31,7 +38,7 @@ from urllib.parse import urlencode
 
 import pytest
 
-from caracole import download_names, page_icon
+from caracole import download_names, inline, page_icon
 from caracole.library_name import SCRATCH_LINK, LibraryName
 from caracole.web import app as app_module
 from caracole.web import files, pages, security
@@ -130,6 +137,7 @@ HOST = "localhost:8737"
 CSRF = "tok"
 ALLOWED = ["127.0.0.1", "::1", "localhost"]
 NAME = BADGE = "Phone"
+STYLE_MARK = "\x00message.json's style\x00"
 
 # The routes both sides build: each answers as its ``answer`` says (``ANSWERS``).
 ROUTES = [
@@ -323,24 +331,28 @@ REQUESTS: list[tuple[str, str, str, dict, bytes]] = [
 ]
 
 
-def _body(data: bytes, into: dict) -> dict:
+def _body(data: bytes, into: dict, style: bool = False) -> dict:
     try:
-        into["body"] = data.decode("utf-8")
+        text = data.decode("utf-8")
     except UnicodeDecodeError:
         into["body_b64"] = base64.b64encode(data).decode("ascii")
+    else:
+        into["body"] = text.replace(f"<style>{pages.PAGE_STYLE}</style>", f"<style>{STYLE_MARK}</style>") if style \
+            else text
     return into
 
 
 def routing_records(app: WebApp) -> list[dict]:
+    assert STYLE_MARK not in pages.PAGE_STYLE
     out: list[dict] = [{"fn": "routes", "out": {
-        "allowed": ALLOWED, "csrf": CSRF, "library_name": NAME, "badge": BADGE,
+        "allowed": ALLOWED, "csrf": CSRF, "library_name": NAME, "badge": BADGE, "style_mark": STYLE_MARK,
         "routes": [{"under": False, "script_only": False, "page": "the library", **spec} for spec in ROUTES]}}]
     for note, method, target, headers, body in REQUESTS:
         response = app.handle(Request(method, target, headers, body))
         out.append({"fn": "caracole.web.app.WebApp.handle", "note": note,
                     "args": [_body(body, {"method": method, "target": target, "headers": headers})],
                     "out": _body(response.body, {"status": response.status,
-                                                 "headers": [list(h) for h in response.headers]})})
+                                                 "headers": [list(h) for h in response.headers]}, style=True)})
     return out
 
 
@@ -353,9 +365,43 @@ def routing_app(cfg, monkeypatch):
     return app
 
 
+# What a page's data block and a JSON answer hold: its text as json.loads reads it, members in the text's order.
+JSON_DATA = [
+    {"t": "</script><!--é", "z": 1, "a": [None, True, False]},
+    {"songs": [{"id": 3, "title": "斑马，斑马", "artist": "宋冬野"}], "fold": {"á": "a", "ß": "ss"}},
+    ["\x00\x01\x08\t\n\x0b\x0c\r\x1b\x1f", "\x7f\x80\x85\xa0\xad", "\u2028\u2029\ufeff\uffff", "\U0001f3b8\U0010ffff",
+     '"quoted" \\ back/slash', "<<>>&", ""],
+    [0, -1, 2**53 + 1, 2**70, -(2**64)],
+    [0.0, -0.0, 0.1, 1.5, 238.0, 1e-4, 1e-5, 2.5e-10, 1e7, 1e15, 9999999999999998.0, 1e16, 1.7976931348623157e308,
+     5e-324, 2.2250738585072014e-308, 1 / 3, 2e23, 123456789.123],
+    {"score": 87.5, "ratio": 0.6666666666666666, "when": "2026-11-03T12:00:00Z", "nested": {"x": [1.0, {"y": 1e-7}]}},
+    {"z": 1, "a": 2, "m": {"b": 1, "a": 2}},
+    {}, [], "plain", 7, None,
+]
+BLOCK_IDS = ["songs", 'a"b&<c>\'', "data-é"]
+HASHED = ["", "body{}", "é", "\U0001f3b8", "a\nb\r\n", "x" * 1000]
+
+
+def _text(value) -> str:
+    return json.dumps(value, ensure_ascii=False)
+
+
+def json_records() -> list[dict]:
+    out: list[dict] = [{"fn": "caracole.web.app.json_response", "args": [_text(value)],
+                        "out": json_response(200, json.loads(_text(value))).body.decode("utf-8")}
+                       for value in JSON_DATA]
+    out += [{"fn": "caracole.inline.json_block", "args": [element_id, _text(value)],
+             "out": inline.json_block(element_id, json.loads(_text(value)))}
+            for element_id in BLOCK_IDS for value in JSON_DATA]
+    out += [{"fn": "caracole.inline.sha256_source", "args": [text], "out": inline.sha256_source(text)}
+            for text in HASHED]
+    return out
+
+
 def test_routing_vectors_are_webapp_handles_answers(routing_app):
     assert all(spec["answer"] in ANSWERS for spec in ROUTES)
-    check(WEB / "routing.jsonl", jsonl(routing_records(routing_app), corpus="web/routing", made_by=MADE_BY))
+    check(WEB / "routing.jsonl",
+          jsonl(routing_records(routing_app) + json_records(), corpus="web/routing", made_by=MADE_BY))
 
 
 def test_the_routing_vectors_hold_every_refusal(routing_app):

@@ -157,6 +157,10 @@ class LibraryFilesTest {
             val other = test.get("/Eagles/Hotel California/sheet.html")
             assertEquals(409, other.status)
             assertFalse("sheet.txt" in other.text, "no sheet on the phone, no link")
+            File(test.libraryDir, "Soda Stereo/De Música Ligera/sheet.txt").delete()
+            val gone = test.get("/Soda Stereo/De Música Ligera/sheet.html")
+            assertEquals(409, gone.status)
+            assertFalse("sheet.txt" in gone.text, "a sheet recorded but not on disk: no link to a 404")
         }
     }
 
