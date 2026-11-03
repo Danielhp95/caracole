@@ -122,13 +122,13 @@ class Library:
         remove_song(self.conn, self.cfg, plan_removal(self.conn, self.cfg, song), now=WHEN)
         return song
 
-    def tombstone(self, artist: str, title: str, at: str = NOW):
-        """A tombstone alone, for a song this library never held."""
+    def tombstone(self, artist: str, title: str, at: str = NOW, *, source_ids: dict | None = None):
+        """A tombstone alone, for a song this library never held (its source ids: its line's, else ``source_ids``)."""
         from caracole.songs import Song
 
         key = identity_key(artist, title)
         stone = Song(id=0, key=key, artist=artist, title=title, artists=[artist], album=None, duration_ms=None,
-                     isrc=None, source_ids={"wanted": [key]}, added_at=at, variant=None, status="wanted",
+                     isrc=None, source_ids=source_ids or {"wanted": [key]}, added_at=at, variant=None, status="wanted",
                      review=False, match_decision=None, match_step=None, match_score=None, match_artist_key=None,
                      match_song_key=None)
         return mark_removed(self.conn, stone, at)

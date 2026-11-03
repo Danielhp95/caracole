@@ -1,0 +1,6 @@
+{"corpus":"sync/fixtures/plain","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"row":{"added_at":"2026-10-31T00:00:00Z","album":null,"artist":"Soda Stereo","artists":"[\"Soda Stereo\"]","audio_mtime":null,"audio_path":null,"autochords_mtime":null,"created_at":"2026-10-31T00:00:00Z","duration_ms":null,"id":1,"isrc":null,"key":"soda-stereo/de-musica-ligera","lacuerda_checked_at":null,"lyrics_at":null,"lyrics_json":null,"lyrics_status":"pending","match_artist_key":null,"match_candidates":"[]","match_decision":null,"match_score":null,"match_song_key":null,"match_step":null,"matched_at":null,"review":0,"source_ids":"{\"wanted\": [\"soda-stereo/de-musica-ligera\"]}","status":"wanted","title":"De Música Ligera","ug_checked_at":null,"ug_dirty":1,"updated_at":"2026-10-31T00:00:00Z","variant":null},"table":"songs"}
+{"row":{"artist":"Oasis","key":"oasis/wonderwall","removed_at":"2026-10-31T00:00:00Z","source_ids":"{\"wanted\": [\"oasis/wonderwall\"]}","title":"Wonderwall"},"table":"removed"}
+{"kv":"phone:schema","value":"1"}
+{"kv":"songs:key_version","value":"2"}
+{"kv":"wanted:first_seen:soda-stereo/de-musica-ligera","value":"2026-10-31T00:00:00Z"}
