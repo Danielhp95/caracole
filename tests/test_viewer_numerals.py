@@ -255,8 +255,9 @@ def test_the_setting_shows_the_numerals_keeps_them_in_the_address_and_colours_th
         b.js("[...document.querySelectorAll('#names > button')][1].click()")
         both = b.js(SHEET)
         address = b.js("location.hash")
-        b.js("location.reload()")
-        assert b.wait("document.documentElement.dataset.ready === '1' && document.querySelector('#sheet .nm') !== null")
+        b.js("window.before = true; location.reload()")  # the page loaded again, not the one before it
+        assert b.wait("window.before === undefined && document.documentElement.dataset.ready === '1' "
+                      "&& document.querySelector('#sheet .nm') !== null")
         again = b.js(SHEET)
         b.click("#more")
         b.click("#roles")

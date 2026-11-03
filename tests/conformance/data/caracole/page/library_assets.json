@@ -1,0 +1,36 @@
+{
+ "SCRIPTS": [
+  "rows.js",
+  "card.js",
+  "library.js",
+  "select.js",
+  "tabs.js",
+  "songbooks.js",
+  "sites.js",
+  "sync.js",
+  "requests.js",
+  "drawn.js"
+ ],
+ "STYLESHEETS": [
+  "base.css",
+  "picker.css",
+  "library.css",
+  "filter.css",
+  "rows.css",
+  "card.css",
+  "steps.css",
+  "library-screens.css",
+  "songbooks.css",
+  "sites.css",
+  "sync.css",
+  "requests.css"
+ ],
+ "TEMPLATES": [
+  "head.html",
+  "body.html",
+  "request.html",
+  "requested.html",
+  "sync-tab.html",
+  "sync-panel.html"
+ ]
+}
