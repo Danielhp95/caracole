@@ -577,3 +577,42 @@ def test_the_merge_command_refuses_a_mismatch_with_status_2(tmp_path, monkeypatc
 def test_an_export_into_no_folder_is_refused(home, tmp_path):
     with pytest.raises(transfer.TransferError, match="is no folder"):
         transfer.export(home, tmp_path / "nowhere" / "indexes.sqlite", now=NOW)
+
+
+# --- the newest read of each index (a sync's state document: peer_sync.state_document's "indexes") ----------------
+
+
+def test_newest_is_each_sites_latest_read_of_its_rows_and_progress_records(home):
+    assert transfer.newest(home) == {}
+    full(home)
+    early = "2026-10-19T03:30:00Z"
+    assert transfer.newest(home) == {site: early for site in SITES}
+    # Each kind of read moves its site's stamp on, and no other site's.
+    late = "2026-10-28T03:30:00Z"
+    artist_tab(home, "https://www.ultimate-guitar.com/artist/634073", 2002, "董小姐", LATE)  # an artist page's tabs
+    harp_page(home, "artist/1178/billy-joel", ["Piano Man"], LATE)  # an artist page read again
+    listing(home, "tabs/e/index1.html", [("el_canto_del_loco", "El Canto del Loco")], LATE)  # a listing page
+    db.kv_set(home, gtptabs_fetch.SITE.complete_key, late)  # a site's sitemaps read whole
+    assert transfer.newest(home) == {"ug": late, "lacuerda": late, "gtptabs": late, "musescore": early,
+                                     "harptabs": late, "gametabs": early}
+    sitemap(home, musescore_fetch.SITE, "song-2", ["https://musescore.com/song/creep-1"], LATE)  # a sitemap read
+    game_page(home, "tabs/actraiser", ["Fillmore"], LATE)  # a game page
+    db.kv_set(home, ug_index.REFRESHED_KEY, "2026-10-29T03:30:00+00:00")  # any time stamps.parse reads
+    assert transfer.newest(home) == {"ug": "2026-10-29T03:30:00Z", "lacuerda": late, "gtptabs": late,
+                                     "musescore": late, "harptabs": late, "gametabs": late}
+    assert list(transfer.newest(home)) == list(SITES)
+
+
+def test_newest_reads_no_time_it_cant_and_names_no_site_with_none(home):
+    db.kv_set(home, ug_index.BUILT_KEY, "not a time")
+    db.kv_set(home, lacuerda_index.COMPLETE_KEY, "2026-10-19T03:30:00Z")
+    db.kv_set_json(home, ug_index.SITEMAPS_KEY, {"1": {"indexed_at": None}, "2": "odd", "3": {"rows": 1}})
+    assert transfer.newest(home) == {"lacuerda": "2026-10-19T03:30:00Z"}
+
+
+def test_newest_agrees_with_what_a_merge_takes(home, conn, tmp_path):
+    full(home)
+    path = export(home, tmp_path)
+    assert transfer.newest(conn) == {}
+    merge(conn, path, state=tmp_path / "state")
+    assert transfer.newest(conn) == transfer.newest(home)

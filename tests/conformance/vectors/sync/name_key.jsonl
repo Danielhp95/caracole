@@ -1,0 +1,32 @@
+{"corpus":"sync/name_key","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["Campfire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"campfire"}
+{"args":["campfire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"campfire"}
+{"args":["  Camp   fire  "],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp\tfire\n"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp fire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp fire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp　fire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp\u001cfire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Campfire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp​fire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"camp​fire"}
+{"args":["Straße"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"strasse"}
+{"args":["STRASSE"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"strasse"}
+{"args":["İstanbul"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"i̇stanbul"}
+{"args":["istanbul"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"istanbul"}
+{"args":["ı"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"ı"}
+{"args":["Café"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"café"}
+{"args":["Café"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"café"}
+{"args":["é"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"é"}
+{"args":["é"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"é"}
+{"args":["ﬁre"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"fire"}
+{"args":["Ǆ"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"ǆ"}
+{"args":["ǅ"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"ǆ"}
+{"args":["Σίσυφος"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"σίσυφοσ"}
+{"args":["ΣΊΣΥΦΟΣ"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"σίσυφοσ"}
+{"args":["篝火"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"篝火"}
+{"args":["𝔉ire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"𝔉ire"}
+{"args":["🔥 Fire"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"🔥 fire"}
+{"args":[""],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":""}
+{"args":["   "],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":""}
+{"args":["KK"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"kk"}
+{"args":["Ⅻ"],"fixture":null,"fn":"caracole.songbook.name_key","kw":{},"out":"ⅻ"}
