@@ -12,7 +12,6 @@ import io.github.danielhp95.caracole.Pages.evaluate
 import io.github.danielhp95.caracole.Pages.pinch
 import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
-import io.github.danielhp95.caracole.mirror.Links
 import io.github.danielhp95.caracole.mirror.Manifest
 import org.json.JSONObject
 import org.junit.After
@@ -73,7 +72,7 @@ class PinchTest {
         val settings = Settings(context)
         settings.textZoom = TextZoom.DEFAULT
         ActivityScenario.launch(MainActivity::class.java).use { main ->
-            val library = Links.address(manifest.start)
+            val library = Pages.address("")
             waitFor(main, library)
             record("Android's font size", own)
             assertEquals(TextZoom.DEFAULT, zoom(main))
@@ -158,7 +157,7 @@ class PinchTest {
             val chinese = manifest.entries.map { it.path }
                 .firstOrNull { path -> path.endsWith("/sheet.html") && path.any { it.code in 0x4E00..0x9FFF } }
             if (chinese != null) {
-                open(main, Links.address(chinese) + "#py=1")
+                open(main, Pages.address(chinese) + "#py=1")
                 waitUntil("the readings") { evaluate(main, "document.querySelector('#sheet ruby.py') !== null") == true }
                 sheet(main, "pinyin-$small")
                 pinch(main, 0.3f, 0.8f)

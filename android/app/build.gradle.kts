@@ -74,11 +74,11 @@ dependencies {
     implementation(project(":mirror"))
     implementation(project(":server"))
     implementation("androidx.core:core-ktx:1.17.0")
-    implementation("androidx.webkit:webkit:1.14.0")
     implementation("androidx.work:work-runtime-ktx:2.10.5")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
-    // The app's own logic that needs no device (the text size, Settings over its preferences): `gradle :app:test`.
+    // The app's own logic that needs no device (the text size, Settings over its preferences, a file read from the
+    // phone's server and copied for another app, an index fetched): `gradle :app:test`.
     testImplementation("junit:junit:4.13.2")
     testImplementation(kotlin("test-junit"))
 

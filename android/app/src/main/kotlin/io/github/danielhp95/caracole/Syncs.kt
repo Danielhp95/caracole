@@ -62,6 +62,8 @@ object Syncs {
             // The list is asked for inside the sync, once it holds the lock: never one fetched before another
             // sync (on Wi-Fi, or Sync now) ended.
             val report = engine.sync(address, progress = { status.value = SyncState.Running(it) }, cancelled = stopped)
+            // The library page's search answers your songs with the copy's cards: none of a list gone.
+            Caracole.started()?.search?.invalidate()
             Outcome(System.currentTimeMillis(), true, report.summary())
         } catch (e: Exception) {
             // Anything, the unexpected too (SyncError.Unexpected): a failed outcome, never "Syncing…" left up.
@@ -84,7 +86,8 @@ object Syncs {
         return if (outcome.ok) "Synced $ago: ${outcome.text}" else "Sync failed $ago: ${outcome.text}"
     }
 
-    private fun ago(ms: Long): String {
+    /** "just now", "3 min ago", "2 h ago", "4 days ago". */
+    internal fun ago(ms: Long): String {
         val minutes = ms / 60_000
         return when {
             minutes < 1 -> "just now"

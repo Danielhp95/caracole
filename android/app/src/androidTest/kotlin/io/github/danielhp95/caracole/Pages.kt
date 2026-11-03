@@ -7,6 +7,7 @@ import android.view.MotionEvent
 import android.webkit.WebView
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
+import io.github.danielhp95.caracole.mirror.Links
 import org.json.JSONArray
 import org.json.JSONObject
 import org.json.JSONTokener
@@ -14,12 +15,19 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * What the instrumented tests do to the library screen's pages: a script's value in the page, the address shown,
- * a wait for a condition, two fingers pinched, and the cue for a screenshot taken from the host.
+ * What the instrumented tests do to the library screen's pages: where they are (the phone's own server's origin, and
+ * a path's address there), a script's value in the page, the address shown, a wait for a condition, two fingers
+ * pinched, and the cue for a screenshot taken from the host.
  */
 internal object Pages {
     private const val TAG = "CaracolePages"
     private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
+
+    /** The phone's caracole's origin ("http://127.0.0.1:8738"), its server started: where every page of the app is. */
+    fun origin(): String = Caracole.phone(instrumentation.targetContext).server.origin
+
+    /** [path] of the library ("Estopa/Tu calorro/sheet.html") on the phone's server; "" is the library page. */
+    fun address(path: String): String = origin() + Links.target(path)
 
     /** [script]'s value in the page: a string, a number, a boolean, or null. */
     fun evaluate(scenario: ActivityScenario<MainActivity>, script: String): Any? {

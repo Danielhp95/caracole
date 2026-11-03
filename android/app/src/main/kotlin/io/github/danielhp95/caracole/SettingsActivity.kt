@@ -1,6 +1,12 @@
 package io.github.danielhp95.caracole
 
+import android.Manifest
 import android.app.Activity
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -10,6 +16,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -26,7 +33,8 @@ import kotlinx.coroutines.withContext
 
 /**
  * The settings: caracole serve's address, Test (the list fetched and counted, nothing downloaded), Sync now,
- * the last sync's time and outcome, the storage the copy takes, the sync on Wi-Fi by itself, and the text size a
+ * the last sync's time and outcome, the storage the copy takes, the sync on Wi-Fi by itself, the computer's indexes
+ * imported (from caracole serve, or from a file: [IndexImports]) with the last import's outcome, and the text size a
  * pinch left, with Reset.
  */
 class SettingsActivity : Activity() {
@@ -35,6 +43,7 @@ class SettingsActivity : Activity() {
     private lateinit var testResult: TextView
     private lateinit var lastSync: TextView
     private lateinit var storage: TextView
+    private lateinit var lastImport: TextView
     private lateinit var textSize: TextView
     private lateinit var resetTextSize: Button
     private var scope: CoroutineScope = MainScope()
@@ -51,6 +60,7 @@ class SettingsActivity : Activity() {
         testResult = findViewById(R.id.test_result)
         lastSync = findViewById(R.id.last_sync)
         storage = findViewById(R.id.storage)
+        lastImport = findViewById(R.id.last_import)
         textSize = findViewById(R.id.text_size)
         resetTextSize = findViewById(R.id.reset_text_size)
 
@@ -78,6 +88,13 @@ class SettingsActivity : Activity() {
             Syncs.onWifi(this, on)
         }
 
+        findViewById<Button>(R.id.import_computer).setOnClickListener {
+            settings.server = address.text.toString().trim()
+            askToNotify()
+            importing { IndexImports.fromComputer(it) }
+        }
+        findViewById<Button>(R.id.import_file).setOnClickListener { pickIndex() }
+
         resetTextSize.setOnClickListener {
             settings.textZoom = TextZoom.DEFAULT
             showTextSize()
@@ -93,6 +110,72 @@ class SettingsActivity : Activity() {
         super.onStart()
         scope = MainScope()
         scope.launch { Caracole.status.collect { show(it) } }
+        scope.launch { IndexImports.running.collect { showImport(it) } }
+    }
+
+    /** The file to import: any document (an export has no type Android knows); the app keeps the right to read it
+     * until the import has copied it. */
+    private fun pickIndex() {
+        val pick = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+        try {
+            startActivityForResult(pick, PICK_INDEX)
+        } catch (e: ActivityNotFoundException) {
+            Handoff.toast(this, getString(R.string.import_no_picker))
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode != PICK_INDEX || resultCode != RESULT_OK) return
+        val uri = data?.data ?: return
+        try {
+            contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        } catch (e: SecurityException) {
+            // A document that can't be kept: the import reads it while the grant lasts.
+        }
+        askToNotify()
+        importing(refused = {
+            // Another import is under way: the right to read this one is given back now, never kept for nothing
+            // (Android keeps only so many).
+            try {
+                it.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: SecurityException) {
+                // It wasn't kept: nothing to give back.
+            }
+        }) { IndexImports.fromFile(it, uri) }
+    }
+
+    /**
+     * An import asked for ([start]: false while another is under way), in the app's own scope, so leaving the screen
+     * at once still starts it; one refused gives back what it holds ([refused]) and says so.
+     */
+    private fun importing(refused: (Context) -> Unit = {}, start: suspend (Context) -> Boolean) {
+        val app = applicationContext
+        Caracole.background.launch {
+            val said = try {
+                if (start(app)) return@launch
+                app.getString(R.string.import_under_way)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // WorkManager couldn't take it: said, never a crash.
+                app.getString(R.string.import_not_started, e.message ?: e.javaClass.simpleName)
+            }
+            refused(app)
+            withContext(Dispatchers.Main) { Toast.makeText(app, said, Toast.LENGTH_LONG).show() }
+        }
+    }
+
+    /** Android 13 and later show the import's notification only once asked; it runs either way. */
+    private fun askToNotify() {
+        if (Build.VERSION.SDK_INT < 33) return
+        if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), NOTIFY)
+    }
+
+    /** The import's line: what one under way does, else how the last ended. */
+    private fun showImport(running: String?) {
+        lastImport.text = running ?: IndexImports.line(this, settings.lastImport)
     }
 
     override fun onStop() {
@@ -160,4 +243,9 @@ class SettingsActivity : Activity() {
     }
 
     private fun dp(value: Int) = (value * resources.displayMetrics.density).toInt()
+
+    private companion object {
+        const val PICK_INDEX = 1
+        const val NOTIFY = 2
+    }
 }
