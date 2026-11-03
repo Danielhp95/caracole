@@ -29,7 +29,7 @@ import struct
 from pathlib import Path
 
 from helpers.corpus import VECTORS, check, jsonl
-from test_canonical import ROWS, nested
+from test_canonical import ROWS, needs_the_spec, nested
 
 from caracole import canonical
 from caracole.lyrics import Lyrics
@@ -174,6 +174,7 @@ def stored(text: str | None) -> dict:
     return {"reads": reads, "canonical": c, "out": canonical.stored_hash(text)}
 
 
+@needs_the_spec  # its texts begin with the spec's rows
 def test_stored_hash_vectors():
     write("stored_hash", [{"fn": "caracole.canonical.stored_hash", "args": [text], "kw": {}, **stored(text)}
                           for text in stored_texts()])

@@ -10,6 +10,11 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "android" / "termux" / "setup.sh"
+
+# The package's own build runs the suite on a source tree of pyproject.toml, README.md, LICENSE, src/ and tests/.
+if not (SCRIPT.is_file() and (ROOT / "docs" / "deploy.md").is_file()):
+    pytest.skip("android/ and docs/ are not in this tree", allow_module_level=True)
+
 DEPLOY = (ROOT / "docs" / "deploy.md").read_text(encoding="utf-8")
 
 
