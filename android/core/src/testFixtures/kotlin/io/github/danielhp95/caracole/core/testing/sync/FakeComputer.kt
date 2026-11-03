@@ -193,7 +193,7 @@ class FakeComputer(dir: File, val name: String = "Desk") : AutoCloseable {
     }
 
     private fun index(exchange: HttpExchange, sites: String?) {
-        val asked = sites?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }
+        val asked = sites?.split(',')?.map { Py.strip(it) }?.filter { it.isNotEmpty() }
         indexAsked.add(asked)
         send(exchange, 200, index(asked), "application/vnd.sqlite3")
     }

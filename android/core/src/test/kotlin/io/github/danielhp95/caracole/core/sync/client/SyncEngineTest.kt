@@ -134,6 +134,33 @@ class SyncEngineTest {
         assertEquals(emptyList(), again.differences)
     }
 
+    @Test fun `an empty phone takes the computer's whole library from the sync fixture, files and all`() {
+        computer.load(RICH)
+        val c = engine.compare(computer.address.toString())
+        assertTrue(c.differences.all { it.proposal == "theirs" }, c.differences.toString())
+        val outcome = apply(c)
+        assertEquals(c.differences.map { it.id }.toSet(), outcome.taken.toSet())
+        assertEquals(emptyList(), outcome.left)
+        assertEquals(computer.state(), phoneState())
+        val files = phone.read { db -> db.query("SELECT path, sha256 FROM files ORDER BY path") { it.text(0)!! to it.text(1)!! } }
+        assertTrue(files.isNotEmpty())
+        for ((path, sha) in files) assertEquals(sha, Canonical.sha256Hex(File(phoneLibrary, path).readBytes()), path)
+        assertEquals(files.size, computer.asked("GET", "/api/peer/file").size)
+    }
+
+    @Test fun `an empty computer takes the phone's whole library from the sync fixture, each file sent once`() {
+        phone.writeBlocking { io.github.danielhp95.caracole.core.testing.Fixtures.load(it, RICH, phoneLibrary) }
+        val c = engine.compare(computer.address.toString())
+        assertTrue(c.differences.all { it.proposal == "mine" }, c.differences.toString())
+        val outcome = apply(c)
+        assertEquals(c.differences.map { it.id }.toSet(), outcome.given.toSet())
+        assertEquals(computer.state(), phoneState())
+        val shas = phone.read { db -> db.query("SELECT DISTINCT sha256 FROM files") { it.text(0)!! } }
+        assertEquals(shas.size, computer.asked("POST", "/peer/push/file").size)
+        val base = assertNotNull(computer.database.read { Compare.baseOf(it, phoneId) })
+        assertEquals(phoneState().mapValues { it.value.digest }, base.filterValues { it.first != null }.mapValues { it.value.first })
+    }
+
     @Test fun `the push carries the phone's state after its take, and a file only once the computer needs it`() {
         val song = onPhone("Estopa", "Tu Calorro")
         val bytes = "a Guitar Pro file".toByteArray()
@@ -200,11 +227,15 @@ class SyncEngineTest {
 
     @Test fun `a form token the computer changed mid-sync is read again, and the push goes through`() {
         onPhone("Muse", "Hysteria")
+        onComputer("Radiohead", "Creep")
         val c = engine.compare(computer.address.toString())
-        computer.token = "computer-token-2"  // caracole serve restarted since the comparison
+        // caracole serve restarts as the phone takes, after the state the sync's compare read.
+        computer.onUnit = { computer.token = "computer-token-2" }
         val outcome = apply(c)
+        assertEquals(1, outcome.taken.size)
         assertEquals(1, outcome.given.size)
         assertEquals(2, computer.asked("POST", "/peer/push/new").size)
+        assertEquals(1, computer.asked("POST", "/peer/push").size)
         assertEquals(computer.state(), phoneState())
     }
 
@@ -331,5 +362,6 @@ class SyncEngineTest {
 
     private companion object {
         const val NOW = "2026-11-03T10:00:00Z"
+        const val RICH = "sync/fixtures/rich.jsonl"
     }
 }

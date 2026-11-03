@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.sync.internal.client
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.PeerError
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Units
@@ -79,8 +80,8 @@ internal object Give {
     fun failedDetail(job: JsonObject): String? {
         val steps = job["steps"] as? JsonArray
         val failed = steps?.mapNotNull { it as? JsonObject }?.lastOrNull { Documents.text(it["state"]) == "failed" }
-        return Documents.text(failed?.get("detail"))?.takeIf { it.isNotBlank() }
-            ?: Documents.text(job["note"])?.takeIf { it.isNotBlank() }
+        return Documents.text(failed?.get("detail"))?.takeIf { Py.strip(it).isNotEmpty() }
+            ?: Documents.text(job["note"])?.takeIf { Py.strip(it).isNotEmpty() }
     }
 
     private fun text(value: String?): JsonElement = value?.let(::JsonPrimitive) ?: JsonNull
