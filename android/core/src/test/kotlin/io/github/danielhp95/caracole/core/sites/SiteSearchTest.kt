@@ -56,6 +56,20 @@ class SiteSearchTest {
         hits(SiteSearch.searchGametabs(db, text(r, 0), int(r, "limit", 5)))
     }
 
+    @Test fun aGameTabsListIsTheNamesOfTheArrayJsonLoadsReads() {
+        // search._listed_names' answers, asked of Python 3.14: a text json.loads refuses names nobody.
+        val cases = listOf(
+            """["Guitar", "Piano"]""" to listOf("Guitar", "Piano"), """ ["a" ,"b"]""" + "\n" to listOf("a", "b"),
+            """["a", 1, null, true, 2.5e3]""" to listOf("a"), """["a", NaN, -Infinity]""" to listOf("a"),
+            """[1e999, "x"]""" to listOf("x"), """["a", {"k": "v"}, ["b"]]""" to listOf("a"),
+            """["é", "\n"]""" to listOf("é", "\n"), """{"a": "b"}""" to listOf(), "null" to listOf(),
+            "" to listOf(), null to listOf(), """["a", abc]""" to listOf(), """["a"] x""" to listOf(),
+            """["a", ]""" to listOf(), "['a']" to listOf(), """[01, "a"]""" to listOf(), """["a", .5]""" to listOf(),
+            """["a", +1]""" to listOf(), "[\"a\" ]" to listOf(),
+        )
+        for ((text, names) in cases) assertEquals(names, SiteText.listedNames(text), "$text")
+    }
+
     private fun hits(hits: List<SiteHit>): JsonElement = JsonArray(hits.map { it.toJson() })
 
     private fun artists(artists: List<SiteArtist>): JsonElement = JsonArray(artists.map { it.toJson() })

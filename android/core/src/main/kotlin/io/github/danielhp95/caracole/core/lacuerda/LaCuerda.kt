@@ -14,8 +14,6 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonObject
-import java.time.LocalDate
-import java.time.format.DateTimeFormatter
 
 /**
  * lacuerda_index.py's read side and search.py's LaCuerda glue on the phone: LaCuerda's artists and songs in the local
@@ -174,8 +172,9 @@ object LaCuerda {
         return IndexState(artists, songs, completeAt(db) != null, letters(db))
     }
 
-    /** [indexState] as helpers.corpus.plain writes it: `artists`, `songs`, `complete` and `letters`, the letters
-     * whose every listing page the index holds ([letters]). */
+    /** lacuerda_index.index_state as helpers.corpus.plain writes it: `artists`, `songs`, `complete` and `letters`,
+     * the letters whose every listing page the index holds. Not lacuerda_index.letters_read, a list, which is
+     * [letters]; search_routes' `_looked` reads this one's `letters`. */
     fun lettersRead(db: Db): JsonObject {
         val state = indexState(db)
         return JsonObject(linkedMapOf(
@@ -262,19 +261,6 @@ object LaCuerda {
         }
     }
 
-    /** lacuerda_index.complete_at, as stamps.parse reads it: null when it is missing or unreadable. */
-    private fun completeAt(db: Db): String? = db.kvGet(COMPLETE_KEY)?.takeIf { it.isNotEmpty() && isoTime(it) }
-
-    /** Whether Python's datetime.fromisoformat reads [text], for the forms ISO 8601 writes and caracole's stamps
-     * are (stamps.stamp: "2026-10-20T03:30:00Z"): a date, alone or with a time after any one character, to the second
-     * or a fraction of it, with an offset, "Z" or none. */
-    private fun isoTime(text: String): Boolean {
-        if (runCatching { LocalDate.parse(text, DateTimeFormatter.BASIC_ISO_DATE) }.isSuccess) return true
-        if (text.length < 10 || runCatching { LocalDate.parse(text.substring(0, 10)) }.isFailure) return false
-        if (text.length == 10) return true
-        val time = text.substring(10 + Character.charCount(text.codePointAt(10)))
-        return listOf(DateTimeFormatter.ISO_LOCAL_TIME, DateTimeFormatter.ISO_OFFSET_TIME).any { format ->
-            runCatching { format.parse(time) }.isSuccess
-        }
-    }
+    /** lacuerda_index.complete_at, as stamps.parse reads it: null when it is missing or unreadable ([IsoTime]). */
+    private fun completeAt(db: Db): String? = db.kvGet(COMPLETE_KEY)?.takeIf { it.isNotEmpty() && IsoTime.reads(it) }
 }

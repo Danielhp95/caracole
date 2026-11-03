@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.core.lacuerda
 
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.search.ArtistHit
 import io.github.danielhp95.caracole.core.search.IndexFound
 import io.github.danielhp95.caracole.core.search.IndexHit
@@ -82,6 +83,7 @@ class LaCuerdaTest {
     }
 
     @Test fun theIndexStateSaysWhatItHolds() = loaded("lacuerda") { database ->
+        // lacuerda_index.index_state's answers over the same fixture, asked of Python (no corpus record holds them yet).
         assertEquals(state(43, 31, false, "a", "b"), database.read { LaCuerda.lettersRead(it) })
         database.writeBlocking { it.kvSet(LaCuerda.COMPLETE_KEY, "2026-10-21T03:30:00Z") }
         assertEquals(state(43, 31, true, "a", "b"), database.read { LaCuerda.lettersRead(it) })
@@ -95,6 +97,7 @@ class LaCuerdaTest {
     }
 
     @Test fun lettersAreNamedAsLaCuerdasMenuNamesThem() {
+        // lacuerda_index.letters_text's answers, asked of Python.
         val cases = listOf(
             listOf<String>() to "", listOf("a") to "A", listOf("a", "b") to "A, B", listOf("a", "b", "c") to "A–C",
             listOf("_num", "a", "b", "c", "e") to "#, A–C, E", listOf("n", "nn", "o") to "N–O",
@@ -122,6 +125,7 @@ class LaCuerdaTest {
     }
 
     @Test fun anUnreadLetterIsWhereANameWouldBe() = loaded("lacuerda") { database ->
+        // lacuerda_index.unread_letter's answers over the same fixture, asked of Python.
         database.read { db ->
             assertEquals("e", LaCuerda.unreadLetter(db, "Estopa"))
             assertEquals(null, LaCuerda.unreadLetter(db, "Andrés Calamaro")) // under A, read whole
@@ -134,6 +138,7 @@ class LaCuerdaTest {
     }
 
     @Test fun anArtistsSlugsAreTheListingsOfTheirName() = loaded("lacuerda") { database ->
+        // lacuerda_index.artist_slugs' answers over the same fixture, asked of Python.
         database.read { db ->
             assertEquals(listOf("estopa"), LaCuerda.artistSlugs(db, "Estopa"))
             assertEquals(listOf(), LaCuerda.artistSlugs(db, "Nobody At All"))
@@ -156,7 +161,7 @@ class LaCuerdaTest {
             assertNotEquals(python, rows())
             assertEquals(python.size, database.writeBlocking { LaCuerda.ensureCurrentKeys(it) }, fixture)
             assertEquals(python, rows(), fixture)
-            assertEquals("2", database.read { it.kvGet(LaCuerda.KEYS_KEY) })
+            assertEquals(Normalize.KEY_VERSION.toString(), database.read { it.kvGet(LaCuerda.KEYS_KEY) })
             assertEquals(0, database.writeBlocking { LaCuerda.ensureCurrentKeys(it) }, "once only")
         }
     }

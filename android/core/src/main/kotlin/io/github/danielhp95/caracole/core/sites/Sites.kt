@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.core.sites
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.json.CanonicalError
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.Py
@@ -9,7 +11,6 @@ import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.core.search.Queries
 import io.github.danielhp95.caracole.core.search.SearchLimits
 import io.github.danielhp95.caracole.core.search.SiteHit
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -113,11 +114,12 @@ internal object SiteText {
     /** search.no_ones: an artist key that is no one's name, every `misc-…` of UG's. */
     fun noOnes(artistKey: String): Boolean = artistKey.startsWith(SearchLimits.CATCH_ALL_PREFIX)
 
-    /** search.py `_listed_names`: the names of a JSON array gametabs_game_tabs keeps; none of anything else. */
+    /** search.py `_listed_names`: the names of a JSON array gametabs_game_tabs keeps; none of anything else, nor of
+     * a text json.loads refuses (Canonical.parse reads what it reads, and nothing more). */
     fun listedNames(text: String?): List<String> {
         val names = try {
-            Json.parseToJsonElement(text?.ifEmpty { null } ?: "[]")
-        } catch (e: Exception) {
+            Canonical.parse(text?.ifEmpty { null } ?: "[]")
+        } catch (e: CanonicalError) {
             return emptyList()
         }
         if (names !is JsonArray) return emptyList()

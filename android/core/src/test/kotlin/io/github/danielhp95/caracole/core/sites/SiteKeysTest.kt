@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.sites
 
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.TestDb
 import kotlinx.serialization.json.JsonObject
@@ -56,8 +57,8 @@ class SiteKeysTest {
             assertNotEquals(python, database.read { harpRows(it) })
             assertEquals(rows, database.writeBlocking { SiteKeys.harptabsEnsureCurrentKeys(it) }, fixture)
             assertEquals(python, database.read { harpRows(it) }, fixture)
-            assertEquals("1", database.read { it.kvGet(SiteKeys.HARPTABS_ROW_KEYS) })
-            assertEquals("2", database.read { it.kvGet(SiteKeys.HARPTABS_SONG_KEYS) })
+            assertEquals(SiteKeys.HARPTABS_ROWS, database.read { it.kvGet(SiteKeys.HARPTABS_ROW_KEYS) })
+            assertEquals(Normalize.KEY_VERSION.toString(), database.read { it.kvGet(SiteKeys.HARPTABS_SONG_KEYS) })
             assertEquals(0, database.writeBlocking { SiteKeys.harptabsEnsureCurrentKeys(it) }, "once only")
         }
     }
@@ -99,12 +100,14 @@ class SiteKeysTest {
         }
         assertEquals(rows, database.writeBlocking { SiteKeys.gametabsEnsureCurrentKeys(it) })
         assertEquals(python, database.read { gameRows(it) })
-        assertEquals("2", database.read { it.kvGet(SiteKeys.GAMETABS_TITLE_KEYS) })
+        assertEquals(Normalize.KEY_VERSION.toString(), database.read { it.kvGet(SiteKeys.GAMETABS_TITLE_KEYS) })
         assertEquals(0, database.writeBlocking { SiteKeys.gametabsEnsureCurrentKeys(it) })
     }
 
     @Test fun eachIndexSaysHowFarItHasGot() = loaded("sites") { database ->
         // The fixture's sitemap lists 3 artists and 7 game pages; caracole read 2 of each, which listed 9 and 11 tabs.
+        // Python's harptabs_index.index_state and gametabs_index.index_state of the same fixture, asked of it, before
+        // and after the deletes (no corpus record holds them yet).
         assertEquals(state("artists" to 3, "read" to 2, "tabs" to 9), database.read { SiteKeys.harptabsIndexState(it) })
         assertEquals(state("pages" to 7, "read" to 2, "tabs" to 11), database.read { SiteKeys.gametabsIndexState(it) })
         database.writeBlocking { db ->
