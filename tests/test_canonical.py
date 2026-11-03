@@ -218,6 +218,14 @@ def test_dumps_takes_what_json_dumps_takes():
         canonical.dumps(object())
 
 
+def floats_in(value) -> bool:
+    if isinstance(value, float):
+        return True
+    if isinstance(value, dict):
+        return any(floats_in(v) for v in value.values())
+    return isinstance(value, (list, tuple)) and any(floats_in(v) for v in value)
+
+
 # test_peer_sync.py's tests that build a library: each run again here, with every value peer_sync digests checked.
 LIBRARIES = sorted(
     name for name, fn in vars(test_peer_sync).items()
@@ -243,6 +251,10 @@ def test_digest_is_peer_syncs_digest_of_for_every_unit_value_of_test_peer_syncs_
     def checked(value):
         seen.append(value)
         assert canonical.digest(value) == digest_of(value), value
+        # FORMAT 1's text itself, so the check keeps its meaning once digest_of is canonical.digest (peer-format2).
+        if not floats_in(value):
+            assert canonical.digest(value) == sha(json.dumps(value, sort_keys=True, separators=(",", ":"),
+                                                             ensure_ascii=False).encode("utf-8")), value
         return digest_of(value)
 
     monkeypatch.setattr(peer_sync, "digest_of", checked)
@@ -250,4 +262,4 @@ def test_digest_is_peer_syncs_digest_of_for_every_unit_value_of_test_peer_syncs_
     given = {"tmp_path": tmp_path, "conn": conn}
     fn(**{p: given[p] for p in inspect.signature(fn).parameters})
     if name in BUILT:
-        assert seen
+        assert any(not floats_in(value) for value in seen)

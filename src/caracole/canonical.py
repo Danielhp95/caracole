@@ -8,6 +8,8 @@ module by tests/conformance/vectors/canonical/).
   ``0.0000001``), so a value and a text it was stored as have one digest. For a value with no non-integral number it
   is exactly ``json.dumps``'s text, which keeps FORMAT 1's unit digests. A lone surrogate, an exponent beyond
   ±``MAX_EXPONENT`` or containers nested deeper than ``MAX_DEPTH`` make it ``NotCanonical`` (a ValueError).
+  C is the text a digest is taken of, not a way to store a value: 238.0 and 1e16 read back from it as integers.
+  Store a value as ``json.dumps`` writes it, which keeps each float a float.
 - ``digest(value)``, D(v): the lowercase hex SHA-256 of C(v)'s UTF-8, a sync unit's digest.
 - ``read(text)``: what ``json.loads(text)`` reads with its defaults (``strict``: whitespace is space, tab, newline
   and return alone; no raw control character in a string; no ``01``, ``+1``, ``.5``, ``1.`` or BOM; no integer of

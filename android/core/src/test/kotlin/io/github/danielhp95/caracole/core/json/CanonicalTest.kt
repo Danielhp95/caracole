@@ -88,13 +88,14 @@ class CanonicalTest {
         assertTrue(Canonical.KEY_ORDER.compare("a", "ab") < 0 && Canonical.KEY_ORDER.compare("ab", "a") > 0)
     }
 
-    @Test fun aNumberIsWrittenByTheDecimalRuleWhateverMadeItsLiteral() {
-        assertEquals("[238,0.0000001,10000000,0,4.5]", Canonical.write(JsonArray(listOf(
-            JsonPrimitive(238.0), JsonPrimitive(1e-7), JsonPrimitive(1e7), JsonPrimitive(-0.0), JsonPrimitive(4.5),
-        ))))
-        assertEquals("[NaN,Infinity,-Infinity]", Canonical.write(JsonArray(listOf(
-            JsonPrimitive(Double.NaN), JsonPrimitive(Double.POSITIVE_INFINITY), JsonPrimitive(Double.NEGATIVE_INFINITY),
-        ))))
+    @Test fun aNumberIsWrittenByTheDecimalRuleOnTheLiteralItCarries() {
+        val written = "[238,0.0000001,10000000,0,4.5]"
+        assertEquals(written, Canonical.write(JsonArray(listOf("238.0", "1e-07", "10000000.0", "-0.0", "4.5").map { JsonUnquotedLiteral(it) })))
+        // A Double carries Python's repr through PyJson.float, the literal Python's canonical.dumps reads.
+        assertEquals(written, Canonical.write(JsonArray(listOf(238.0, 1e-7, 1e7, -0.0, 4.5).map(PyJson::float))))
+        assertEquals("[NaN,Infinity,-Infinity]", Canonical.write(JsonArray(
+            listOf(Double.NaN, Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY).map(PyJson::float),
+        )))
         assertEquals(Canonical.digest(JsonPrimitive(238)), Canonical.hashStoredJson("238.0"))
         assertEquals("0.12345678901234567890123456789012345", Canonical.write(Canonical.parse("0.12345678901234567890123456789012345")))
         assertEquals("1" + "0".repeat(1000), Canonical.write(Canonical.parse("1e1000")))
@@ -107,6 +108,16 @@ class CanonicalTest {
         }
         assertFailsWith<CanonicalError> { Canonical.write(JsonUnquotedLiteral("7".repeat(4301))) }
         assertEquals("7".repeat(4300), Canonical.write(JsonUnquotedLiteral("7".repeat(4300))))
+    }
+
+    @Test fun aDoubleDigestsAsPythonsFloatThroughPyJsonFloatNeverThroughJsonPrimitive() {
+        val tiny = Double.MIN_VALUE
+        assertEquals("0." + "0".repeat(323) + "5", Canonical.write(PyJson.float(tiny))) // canonical.dumps(5e-324)
+        assertEquals("200000000000000000000000", Canonical.write(PyJson.float(2e23)))
+        // JsonPrimitive(Double) carries Double.toString's literal, 4.9E-324: another number's exact value, so another
+        // digest than Python's (as 1.9999999999999998E23 is, where a JDK before 19 writes 2e23 so).
+        assertEquals("0." + "0".repeat(323) + "49", Canonical.write(JsonPrimitive(tiny)))
+        assertNotEquals(Canonical.digest(PyJson.float(tiny)), Canonical.digest(JsonPrimitive(tiny)))
     }
 
     @Test fun theDecimalRuleIsBigDecimalsExactValuePlain() {

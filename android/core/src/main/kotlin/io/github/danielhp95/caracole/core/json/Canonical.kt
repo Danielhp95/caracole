@@ -14,9 +14,18 @@ import java.security.MessageDigest
  * - [write], C(v): members sorted by key in code-point order ([KEY_ORDER]), `{"k":v,…}` and `[v,…]` with no spaces,
  *   strings escaped as Python's json writes them with ensure_ascii=False, `true`, `false`, `null`, `NaN`,
  *   `Infinity` and `-Infinity` as they are, an integer literal as its decimal (`-0` as `0`), and any other number
- *   literal (a JsonPrimitive's content, as a text gave it or `Double.toString` made it) as its exact decimal value in
- *   plain notation, computed on its digits. A lone surrogate, an exponent written beyond ±[MAX_EXPONENT], an integer
- *   of more than [MAX_INT_DIGITS] digits or nesting deeper than [MAX_DEPTH] is a CanonicalError.
+ *   literal (a JsonPrimitive's content) as its exact decimal value in plain notation, computed on its digits. A lone
+ *   surrogate, an exponent written beyond ±[MAX_EXPONENT], an integer of more than [MAX_INT_DIGITS] digits or
+ *   nesting deeper than [MAX_DEPTH] is a CanonicalError.
+ *
+ *   A number's literal must be the one Python digests: a stored text's own literal, or a float's repr, which
+ *   PyJson.float makes from a Double. Never `JsonPrimitive(Double)`, whose literal is `Double.toString`'s: 5e-324 is
+ *   `4.9E-324` there (and 2e23 `1.9999999999999998E23` before JDK 19), another number's exact value, so another
+ *   digest than Python's, and a unit that differs after every sync.
+ *
+ *   C is the text a digest is taken of, not a way to store a value: it writes the float 238.0 as `238` and 1e16 as
+ *   `10000000000000000`, which read back as integers. Store a value as PyJson.dumps writes it, which keeps each
+ *   literal.
  * - [digest], D(v): the lowercase hex SHA-256 of C(v)'s UTF-8.
  * - [parse]: the strict reading, what Python's `json.loads` reads and nothing it refuses (StrictReader).
  * - [hashStoredJson], H(text), for versions.raw and songs.lyrics_json: null for null, D of what the text holds when
@@ -108,7 +117,12 @@ object Canonical {
 
     private fun ownBytes(text: String) = sha256Hex(JsonText.utf8(text))
 
-    /** The strict reading: literals kept, the last duplicate wins; CanonicalError when not JSON. */
+    /**
+     * The strict reading: literals kept, the last duplicate wins; CanonicalError when not JSON. A lone surrogate,
+     * escaped or raw, reads into a String as it is (and [write] of it is a CanonicalError), but an escaped high
+     * surrogate beside a raw low one (or the other way round), two lone surrogates to Python, reads as the pair its
+     * UTF-16 units make: [hashStoredJson] tells them apart, and SQLite text never holds a raw one.
+     */
     fun parse(text: String): JsonElement = StrictReader(text).read()
 
     fun sha256Hex(bytes: ByteArray): String = JsonText.hex(MessageDigest.getInstance("SHA-256").digest(bytes))

@@ -16,9 +16,16 @@ db.kv_set_json answer, which core.json.Canonical and core.json.PyJson must answe
   ``ensure_ascii``: kv-shaped values. A corpus line sorts its keys, and insertion order is what's tested, so each
   record's value is its ``value`` key, the value's JSON text in its insertion order (``json.dumps(value, indent=1)``,
   ASCII), which Kotlin reads with ``Canonical.parse``; ``args`` is empty.
+- ``float_text.jsonl``: ``json.dumps(x)`` of a float, its repr (or ``NaN``, ``Infinity``, ``-Infinity``), which
+  Kotlin's ``PyJson.floatText`` must write from the Double the record's ``args[0]`` reads as: every power of two (a
+  double whose lower neighbour is nearer than its upper), ties between two shortest digit strings, the doubles whose
+  ``Double.toString`` digits are no shortest ones (2e+23, 5e-324), and seeded random ones.
 """
 
 import json
+import math
+import random
+import struct
 from pathlib import Path
 
 from helpers.corpus import VECTORS, check, jsonl
@@ -241,3 +248,38 @@ def test_a_value_reads_back_from_its_text_in_its_insertion_order():
     for value in KV_VALUES:
         text = json.dumps(value, indent=1)
         assert json.dumps(json.loads(text), ensure_ascii=False) == json.dumps(value, ensure_ascii=False)
+
+
+# --- a float's text -------------------------------------------------------------------------------------------
+
+def bits(x: float) -> int:
+    return struct.unpack("<Q", struct.pack("<d", x))[0]
+
+
+def floats() -> list[float]:
+    rng = random.Random(20261103)
+    xs = [0.0, -0.0, float("nan"), float("inf"), float("-inf"), 5e-324, -5e-324, 1e-323, 2.2250738585072014e-308,
+          math.nextafter(2.2250738585072014e-308, 0), 1.7976931348623157e308, -1.7976931348623157e308, 1.0, -1.0, 0.1,
+          0.2, 0.1 + 0.2, 0.3, 1 / 3, 2 / 3, 4.35, 238.0, 4.5, 213.0, 184.0, 4.8925, 4.54038, 253.1004, 1867.25,
+          123456789.125, 12345678.9, 2.5e-10, 1e-07, 1e-05, 9.999999999999999e-05, 0.0001, 0.00012345, 1e7, 1e15,
+          1e16, 1.5e16, 9999999999999998.0, 1e22, 1e23, 2e23, 8.41e21, 2.82879384806159e17, 1e300, 1e-300,
+          float(2 ** 53), float(2 ** 53 + 2), float(2 ** 63), float(2 ** 64), 2.0 ** 1023]
+    xs += [2.0 ** k for k in range(-1074, 1024)]
+    xs += [math.nextafter(2.0 ** k, direction) for k in rng.sample(range(-1073, 1023), 150) for direction in (0, math.inf)]
+    # 2^50 to 2^51 steps by a quarter: k.25 and k.75 lie halfway between two 17-digit strings that both read as them.
+    xs += [float(2 ** 50 + k) + quarter for k in rng.sample(range(2 ** 50), 30) for quarter in (0.25, 0.75)]
+    xs += [struct.unpack("<d", struct.pack("<Q", rng.getrandbits(64)))[0] for _ in range(1000)]
+    xs += [round(rng.uniform(-1e4, 1e4), rng.randrange(0, 7)) for _ in range(300)]
+    xs += [float(f"{rng.randrange(1, 10 ** rng.randrange(1, 18))}e{rng.randrange(-40, 40)}") for _ in range(300)]
+    seen, out = set(), []
+    for x in xs:
+        if bits(x) not in seen:
+            seen.add(bits(x))
+            out.append(x)
+    return out
+
+
+def test_float_text_vectors():
+    records = [{"fn": "json.dumps", "args": [x], "kw": {}, "out": json.dumps(x)} for x in floats()]
+    assert all(r["out"] == repr(r["args"][0]) for r in records if math.isfinite(r["args"][0]))
+    write("float_text", records)
