@@ -9,7 +9,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
-/** What the app's PathHandler answers the WebView ([Mirror.respond]), and where a link goes ([Links.route]). */
+/** What the app's PathHandler answers the WebView ([Mirror.respond]), what the phone's server finds of a path once
+ * the phone's own state gates it ([Mirror.pageFor]), and where a link goes ([Links.route]). */
 class MirrorLookupTest {
     @get:Rule val folder = TemporaryFolder()
 
@@ -72,6 +73,90 @@ class MirrorLookupTest {
         SyncEngine(mirror).sync(server.address)
         assertEquals(Response.NOT_FOUND, mirror.respond("Estopa/Tu calorro/sheet.html"))
         assertEquals(200, mirror.respond("Other/Song/sheet.html").status)
+    }
+
+    private val song = "song/estopa/tu-calorro"
+    private val digest = "d".repeat(64)
+
+    /** The library of [synced], each file of the song naming its unit and digest as caracole serve lists them. */
+    private fun syncedWithUnits() {
+        val files = mapOf(
+            "index.html" to "<html>library</html>".toByteArray(),
+            "Estopa/Tu calorro/sheet.html" to sheet,
+            "Estopa/Tu calorro/sheet.pdf" to pdf,
+            "_songbooks/Campfire/songbook.html" to "<html>book</html>".toByteArray(),
+        )
+        server.publish(
+            files,
+            headers = mapOf("Estopa/Tu calorro/sheet.html" to mapOf("Content-Security-Policy" to csp)),
+            units = mapOf(
+                "Estopa/Tu calorro/sheet.html" to (song to digest),
+                "Estopa/Tu calorro/sheet.pdf" to (song to digest),
+                "_songbooks/Campfire/songbook.html" to ("songbook/campfire" to "e".repeat(64)),
+            ),
+        )
+        SyncEngine(mirror).sync(server.address)
+    }
+
+    /** A gate that answers [answer] for every unit, and records what it was asked. */
+    private class Asked(val answer: Gate) : UnitGate {
+        val asked = mutableListOf<Pair<String, String?>>()
+        override fun check(unit: String, digest: String?): Gate {
+            asked.add(unit to digest)
+            return answer
+        }
+    }
+
+    @Test
+    fun `a file of a unit the phone holds as the computer did is the page, its entry and its blob`() {
+        syncedWithUnits()
+        val gate = Asked(Gate.SERVE)
+        val page = assertIs<Looked.Page>(mirror.pageFor("Estopa/Tu calorro/sheet.html", gate))
+        assertEquals(listOf<Pair<String, String?>>(song to digest), gate.asked, "the gate is asked with the unit and digest listed")
+        assertEquals(song, page.entry.unit)
+        assertEquals(mapOf("Content-Security-Policy" to csp), page.entry.headers)
+        assertContentEquals(sheet, page.file.readBytes())
+    }
+
+    @Test
+    fun `a file of a unit the phone changed or removed is kept back, with what the gate said`() {
+        syncedWithUnits()
+        for (said in listOf(Gate.CHANGED, Gate.REMOVED)) {
+            val gate = Asked(said)
+            for (path in listOf("Estopa/Tu calorro/sheet.html", "Estopa/Tu calorro/sheet.pdf")) {
+                val gated = assertIs<Looked.Gated>(mirror.pageFor(path, gate), "$said: $path")
+                assertEquals(said, gated.gate)
+                assertEquals(path, gated.entry.path)
+            }
+            val book = assertIs<Looked.Gated>(mirror.pageFor("_songbooks/Campfire/songbook.html", gate))
+            assertEquals("songbook/campfire", book.entry.unit)
+            assertEquals(listOf<Pair<String, String?>>(song to digest, song to digest, "songbook/campfire" to "e".repeat(64)), gate.asked)
+        }
+    }
+
+    @Test
+    fun `a file of no unit is served whatever the gate would say, and a path not listed is missing`() {
+        syncedWithUnits()
+        val gate = Asked(Gate.REMOVED)
+        val page = assertIs<Looked.Page>(mirror.pageFor("index.html", gate))
+        assertNull(page.entry.unit)
+        assertEquals(Looked.Missing, mirror.pageFor("Estopa/Tu calorro/sheet (auto).html", gate))
+        mirror.blob(FakeCaracole.sha256(pdf)).delete()
+        assertEquals(Looked.Missing, mirror.pageFor("Estopa/Tu calorro/sheet.pdf", gate), "a blob gone is no file")
+        assertEquals(emptyList<Pair<String, String?>>(), gate.asked, "the gate is asked only of a file there is, of a unit")
+    }
+
+    @Test
+    fun `the gate reads the units of the list a sync swaps in`() {
+        syncedWithUnits()
+        server.publish(
+            mapOf("index.html" to "<html>library</html>".toByteArray(), "Estopa/Tu calorro/sheet.html" to sheet),
+            units = mapOf("Estopa/Tu calorro/sheet.html" to (song to "f".repeat(64))),
+        )
+        SyncEngine(mirror).sync(server.address)
+        val gate = Asked(Gate.SERVE)
+        assertIs<Looked.Page>(mirror.pageFor("Estopa/Tu calorro/sheet.html", gate))
+        assertEquals(listOf<Pair<String, String?>>(song to "f".repeat(64)), gate.asked)
     }
 
     @Test

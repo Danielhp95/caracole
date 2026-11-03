@@ -1,0 +1,6 @@
+{"corpus":"sync/fixtures/take_entries","header":true,"made_by":"tests/test_conformance_sync.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"row":{"key":"oasis","tbl":"alias","value":"[\"oasis-ug\"]","written":"Oasis"},"table":"phone_overrides"}
+{"row":{"key":"oasis","tbl":"artist_url","value":"\"https://www.ultimate-guitar.com/artist/oasis_77\"","written":"Oasis"},"table":"phone_overrides"}
+{"row":{"key":"77","tbl":"block","value":"true","written":"77"},"table":"phone_overrides"}
+{"row":{"key":"old","name":"Old","position":0,"songs":"[[\"A - B\",{}]]"},"table":"phone_songbooks"}
+{"kv":"phone:schema","value":"1"}

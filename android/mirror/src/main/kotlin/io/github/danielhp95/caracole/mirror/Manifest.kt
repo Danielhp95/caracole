@@ -33,8 +33,10 @@ data class Entry(
 }
 
 /**
- * caracole's offline list: the page to open first ([start]) and the files ([entries]); [skipped] says which
- * entries broke the contract and were left out, one line each.
+ * caracole's offline list: the page its copy opens with ([start], the computer's library page; on the phone the
+ * local server's `/` is the start page, and nothing in the mirror navigates to this one) and the files ([entries]);
+ * [skipped] says which entries broke the contract and were left out, one line each. A list of the format before
+ * files named their units reads the same, every file of no unit.
  */
 class Manifest(val start: String, val entries: List<Entry>, val skipped: List<String>) {
     val byPath: Map<String, Entry> = entries.associateBy { it.path }
@@ -49,6 +51,9 @@ class Manifest(val start: String, val entries: List<Entry>, val skipped: List<St
         val HEADERS = listOf("Content-Security-Policy", "Referrer-Policy", "X-Content-Type-Options")
 
         private val SHA256 = Regex("[0-9a-f]{64}")
+
+        /** A sync unit's id, as peer_sync.py names one: its kind, a slash, and its key ("song/estopa/tu-calorro"). */
+        private val UNIT = Regex("[a-z_]+/[^\\x00-\\x1f\\x7f]+")
         private val MIME = Regex("[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*/[A-Za-z0-9][A-Za-z0-9!#$&^_.+-]*")
 
         /**
@@ -127,7 +132,19 @@ class Manifest(val start: String, val entries: List<Entry>, val skipped: List<St
                 }
                 else -> throw Invalid("the headers of “$path” aren't an object")
             }
-            return Entry(path, url, size, sha256, type, headers)
+            val unit = when (val given = item["unit"]) {
+                null -> null
+                is String -> given.takeIf { UNIT.matches(it) } ?: throw Invalid("the unit of “$path” isn't a unit's id")
+                else -> throw Invalid("the unit of “$path” isn't a unit's id")
+            }
+            val digest = when (val given = item["digest"]) {
+                null -> null
+                is String -> given.takeIf { SHA256.matches(it) }
+                    ?: throw Invalid("the digest of “$path” isn't 64 lowercase hex digits")
+                else -> throw Invalid("the digest of “$path” isn't 64 lowercase hex digits")
+            }
+            if (digest != null && unit == null) throw Invalid("“$path” has a digest of no unit")
+            return Entry(path, url, size, sha256, type, headers, unit, digest)
         }
 
         /** What is wrong with [path] as the contract has it, or null. */
