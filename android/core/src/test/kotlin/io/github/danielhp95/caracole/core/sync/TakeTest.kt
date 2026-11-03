@@ -332,6 +332,35 @@ class TakeTest {
         }
     }
 
+    @Test fun everyTakesFixtureCopiedUnitByUnitIntoAnEmptyPhoneIsTheSameLibrary() {
+        // The take.jsonl fixtures have no values.jsonl records: each is read by the phone (Units, whose readings
+        // UnitsTest holds to Python's), its every unit taken into an empty phone, which then holds them alike.
+        val fixtures = Corpus.records("sync/take.jsonl").map { text(it.extra["fixture"])!! }.distinct()
+        assertTrue(fixtures.size >= 15)
+        for (fixture in fixtures) {
+            val from = phone("sync/fixtures/$fixture.jsonl")
+            val (state, documents) = from.write { db ->
+                Units.libraryState(db).let { s -> s to s.keys.associateWith { Units.document(db, from.library, it) } }
+            }
+            val source = InlineSource(documents, keptFiles("sync/fixtures/$fixture.jsonl"))
+            val into = phone()
+            val done = into.write { db ->
+                Take.applyUnits(db, into.store, source, state.values.map { it.id to it.digest }, state.mapValues { null }, NOW)
+            }
+            assertEquals(emptyList(), done.left, fixture)
+            into.write { db ->
+                assertEquals(state, Units.libraryState(db), fixture)
+                for ((id, doc) in documents) {
+                    assertEquals(Canonical.write(doc!!), Canonical.write(Units.document(db, into.library, id)!!), "$fixture $id")
+                }
+            }
+            // Its kept files alike; the lyrics' files the take writes from lyrics_json besides (lyrics_files.jsonl's,
+            // and take.jsonl's `files`) were never in the fixture's folder.
+            fun kept(library: File) = filesOf(library).filter { it[0].substringAfterLast('/') !in LYRICS }
+            assertEquals(kept(from.library), kept(into.library), fixture)
+        }
+    }
+
     /** A fixture's kept files, by song key, name and SHA-256, with their bytes. */
     private fun keptFiles(fixture: String): List<InlineSource.Kept> {
         val lines = Corpus.lines(fixture).filter { it["header"] != JsonPrimitive(true) }
@@ -496,5 +525,6 @@ class TakeTest {
 
     companion object {
         const val NOW = "2026-10-31T00:00:00Z"
+        val LYRICS = setOf("lyrics.txt", "lyrics.lrc")
     }
 }
