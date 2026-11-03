@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.py
 
 import io.github.danielhp95.caracole.core.testing.Corpus
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Test
@@ -37,8 +38,10 @@ class PyRegexTest {
             }
             val got: Any? = when (r.fn) {
                 "re.findall" -> PyRe.findall(regex, s)
-                "re.split" -> PyRe.split(regex, s)
-                "re.sub" -> r.kw["repl"]!!.jsonPrimitive.content.let { repl -> PyRe.sub(regex, s) { repl } }
+                "re.split" -> PyRe.split(regex, s, r.kw["maxsplit"]?.jsonPrimitive?.int ?: 0)
+                "re.sub" -> r.kw["repl"]!!.jsonPrimitive.content.let { repl ->
+                    PyRe.sub(regex, s, r.kw["count"]?.jsonPrimitive?.int ?: 0) { repl }
+                }
                 "re.fullmatch" -> PyRe.fullmatch(regex, s)?.value
                 else -> error("no Kotlin function for ${r.fn}")
             }
@@ -49,7 +52,7 @@ class PyRegexTest {
                 else -> out.jsonPrimitive.content
             }
             if (got != want && wrong.size < 30) {
-                wrong += "${r.fn}(${show(pattern)}, ${show(s)}${if (ignoreCase) ", IGNORECASE" else ""}) = " +
+                wrong += "${r.fn}(${show(pattern)}, ${show(s)}${if (ignoreCase) ", IGNORECASE" else ""}${r.kw}) = " +
                     "${show(got)}, Python ${show(want)}"
             }
         }
@@ -74,6 +77,47 @@ class PyRegexTest {
         assertTrue(Regex("[" + PyRegex.DIGIT + "]+").matches("２０١١𝟎"))
         assertTrue(Regex("[" + PyRegex.SPACE + "]+").matches("\u001c\u0085\u3000"))
         assertFalse(Regex("[" + PyRegex.SPACE + "]").matches("\u200B"))
+    }
+
+    @Test fun aClassOfManyRangesMatchesItsSetAtEveryEdge() {
+        // asClass writes a class of many ranges as a tree of spans: each range's edges, inside and out, and a
+        // code point within it must match as the set says, in every class \w \s \d and IGNORECASE make.
+        val sets = listOf(PyRegex.Sets.word, PyRegex.Sets.notWord, PyRegex.Sets.space, PyRegex.Sets.notSpace,
+                          PyRegex.Sets.digit, PyRegex.Sets.notDigit, PyRegex.Sets.word.closedUnderIgnoreCase(),
+                          CodePointSet.of(intArrayOf(0x41, 0x5A, 0x61, 0x7A)).closedUnderIgnoreCase().complement())
+        val wrong = mutableListOf<String>()
+        for (set in sets) {
+            val regex = Regex("(?=|\uDBFF\uDFFF)" + set.asClass())
+            val edges = sortedSetOf<Int>()
+            for (k in 0 until set.rangeCount) {
+                val (a, b) = set.range(k)
+                edges += listOf(a - 1, a, (a + b) / 2, b, b + 1)
+            }
+            for (cp in edges) {
+                if (cp < 0 || cp > 0x10FFFF || cp in 0xD800..0xDFFF) continue
+                val text = String(Character.toChars(cp))
+                if (regex.matches(text) != cp in set && wrong.size < 20) wrong += "U+%04X in %d ranges".format(cp, set.rangeCount)
+            }
+        }
+        assertTrue(wrong.isEmpty(), wrong.joinToString("\n"))
+        // A class of many ranges is no flat run of them: java.util.regex tests a flat class's ranges one by one.
+        val word = PyRegex.Sets.word.asClass()
+        assertTrue(PyRegex.Sets.word.rangeCount > 700 && "&&" in word)
+        val longestRun = word.split('[', ']', '&').maxOf { it.split("\\x{").size - 1 }
+        assertTrue(longestRun <= 20, "a flat run of $longestRun code points in \\w's class")
+    }
+
+    @Test fun aTitleIsSplitAndSearchedInMicrosecondsOnTheJvm() {
+        // Coarse, for a machine shared by many builds: the flat classes took about 250 µs a title, the tree 6.
+        val split = PyRegex.compile("[\\W_]+")
+        val live = PyRegex.compile("(?i)\\b(?:live|vivo|directo)\\b")
+        val titles = listOf("Hotel California (Live at the Forum) - 2013", "宋冬野 - 董小姐 (Live)",
+                            "Ελληνικά: ΤΡΥΠΕΣ σε directo", "ह\u093F\u0902द\u0940 ग\u093Eन\u093E और क\u0941छ शब\u094Dद", "Привет мир — живое 1999")
+        repeat(500) { for (t in titles) { PyRe.split(split, t); PyRe.findall(live, t) } }
+        val start = System.nanoTime()
+        repeat(4000) { for (t in titles) { PyRe.split(split, t); PyRe.findall(live, t) } }
+        val seconds = (System.nanoTime() - start) / 1e9
+        assertTrue(seconds < 3.0, "40,000 splits and searches of a title took $seconds s")
     }
 
     @Test fun aBoundaryReadsCodePointsBeyondTheBmp() {

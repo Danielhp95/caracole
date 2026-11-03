@@ -11,6 +11,7 @@ internal class PyPattern(private val pattern: String) {
     private var i = 0
     private val out = StringBuilder()
     private var ignoreCase = false
+    private var multiline = false
     private var atStart = true
 
     /** What came last, for Python's "nothing to repeat" and "multiple repeat". */
@@ -20,9 +21,10 @@ internal class PyPattern(private val pattern: String) {
 
     private enum class Kind { ROOT, GROUP, LOOKAHEAD, LOOKBEHIND }
 
-    /** A group being read: the case folding outside it, its number (0 for none), and its width so far, in code
-     * points: the alternatives done (low and high), the current one without its last item, and that item. */
-    private class Frame(val kind: Kind, val ignoreCaseBefore: Boolean, val number: Int) {
+    /** A group being read: the case folding and MULTILINE outside it, its number (0 for none), and its width so
+     * far, in code points: the alternatives done (low and high), the current one without its last item, and that
+     * item. */
+    private class Frame(val kind: Kind, val ignoreCaseBefore: Boolean, val multilineBefore: Boolean, val number: Int) {
         var doneLo = -1L
         var doneHi = 0L
         var lo = 0L
@@ -57,7 +59,7 @@ internal class PyPattern(private val pattern: String) {
         }
     }
 
-    private val root = Frame(Kind.ROOT, false, 0)
+    private val root = Frame(Kind.ROOT, false, false, 0)
     private val open = ArrayDeque<Frame>()
     private val frame: Frame get() = open.lastOrNull() ?: root
     private var groups = 0
@@ -106,7 +108,7 @@ internal class PyPattern(private val pattern: String) {
             '}'.code -> { i++; one("\\}") }
             ']'.code -> { i++; one("\\]") }
             '.'.code -> { i++; one(".") }
-            '^'.code -> { i++; at("^") }
+            '^'.code -> { i++; at(if (multiline) LINE_START else "^") }
             '$'.code -> { i++; at("$") }
             '|'.code -> {
                 i++
@@ -172,7 +174,7 @@ internal class PyPattern(private val pattern: String) {
     }
 
     private fun opened(text: String, kind: Kind, number: Int = 0) {
-        open.addLast(Frame(kind, ignoreCase, number))
+        open.addLast(Frame(kind, ignoreCase, multiline, number))
         out.append(text)
     }
 
@@ -181,6 +183,7 @@ internal class PyPattern(private val pattern: String) {
         val group = open.removeLastOrNull() ?: fail("unbalanced parenthesis")
         group.alternative()
         ignoreCase = group.ignoreCaseBefore
+        multiline = group.multilineBefore
         val lo = group.doneLo
         val hi = group.doneHi
         if (group.kind == Kind.LOOKBEHIND && lo != hi) fail("look-behind requires fixed-width pattern")
@@ -259,12 +262,15 @@ internal class PyPattern(private val pattern: String) {
                 atStart = true
                 last = before
                 if ('i' in on) ignoreCase = true
+                if ('m' in on) multiline = true
                 if (ms.isNotEmpty()) out.append("(?").append(ms).append(')')
             }
             ':'.code -> {
                 opened("(?" + ms + (if (msOff.isNotEmpty()) "-$msOff" else "") + ":", Kind.GROUP)
                 if ('i' in on) ignoreCase = true
                 if ('i' in off) ignoreCase = false
+                if ('m' in on) multiline = true
+                if ('m' in off) multiline = false
             }
             else -> fail("missing -, : or )")
         }
@@ -481,6 +487,10 @@ internal class PyPattern(private val pattern: String) {
     }
 
     companion object {
+        /** MULTILINE's `^`: the start, or just after a `\n`, the end of the text included. java.util.regex's own
+         * `(?m)^` never matches at the end after a final line end, where Python's does. */
+        private const val LINE_START = "(?<![^\\n])"
+
         /** A lookahead that always holds, carrying U+10FFFF as it is: java.util.regex then steps by code point. */
         private const val BY_CODE_POINT = "(?=|\uDBFF\uDFFF)"
 

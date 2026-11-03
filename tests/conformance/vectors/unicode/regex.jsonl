@@ -6500,6 +6500,26 @@
 {"args":["^\\w+$","abc\r"],"fn":"re.findall","out":[]}
 {"args":["^\\w+$","abc\n\n"],"fn":"re.findall","out":[]}
 {"args":["(?m)^\\w+$","ab\ncdef gh\rij"],"fn":"re.findall","out":["ab"]}
+{"args":["(?m)^",""],"fn":"re.findall","out":[""]}
+{"args":["(?m)^","\n"],"fn":"re.findall","out":["",""]}
+{"args":["(?m)^","a\n"],"fn":"re.findall","out":["",""]}
+{"args":["(?m)^","a\n\n"],"fn":"re.findall","out":["","",""]}
+{"args":["(?m)^","a\nb"],"fn":"re.findall","out":["",""]}
+{"args":["(?m)$",""],"fn":"re.findall","out":[""]}
+{"args":["(?m)$","\n"],"fn":"re.findall","out":["",""]}
+{"args":["(?m)$","a\n"],"fn":"re.findall","out":["",""]}
+{"args":["(?m)$","a\n\n"],"fn":"re.findall","out":["","",""]}
+{"args":["(?m)^$","\n\n"],"fn":"re.findall","out":["","",""]}
+{"args":["(?m)^$","a\n\nb\n"],"fn":"re.findall","out":["",""]}
+{"args":["(?m:^)x|^y","x\ny\nx"],"fn":"re.findall","out":["x","x"]}
+{"args":["(?m:^)x|^y","y\nx\n"],"fn":"re.findall","out":["y","x"]}
+{"args":["(?m)(?-m:^)a|^b","a\nb\na"],"fn":"re.findall","out":["a","b"]}
+{"args":["(?m)(?-m:^)a|^b","b\na\nb"],"fn":"re.findall","out":["b","b"]}
+{"args":["(?m)^","a\nb\n"],"fn":"re.split","out":["","a\n","b\n",""]}
+{"args":["(?m)^","\n\n"],"fn":"re.split","out":["","\n","\n",""]}
+{"args":["(?m)^","a\n"],"fn":"re.sub","kw":{"repl":"-"},"out":"-a\n-"}
+{"args":["(?m)^","a\nb\n\n"],"fn":"re.sub","kw":{"repl":"-"},"out":"-a\n-b\n-\n-"}
+{"args":["(?m)^",""],"fn":"re.sub","kw":{"repl":"-"},"out":"-"}
 {"args":["\\w+\\Z","abc\n"],"fn":"re.findall","out":[]}
 {"args":["\\w+\\Z","abc"],"fn":"re.findall","out":["abc"]}
 {"args":["\\w+\\z","abc\n"],"fn":"re.findall","out":[]}
@@ -6578,6 +6598,17 @@
 {"args":[".*","a\nb"],"fn":"re.fullmatch","out":null}
 {"args":[".*","ab"],"fn":"re.fullmatch","out":"ab"}
 {"args":["a|ab","ab"],"fn":"re.fullmatch","out":"ab"}
+{"args":[" ","a b c"],"fn":"re.split","kw":{"maxsplit":-1},"out":["a b c"]}
+{"args":[" ","a b c"],"fn":"re.split","kw":{"maxsplit":0},"out":["a","b","c"]}
+{"args":[" ","a b c"],"fn":"re.split","kw":{"maxsplit":1},"out":["a","b c"]}
+{"args":[" ","a b c"],"fn":"re.split","kw":{"maxsplit":5},"out":["a","b","c"]}
+{"args":["( )","a b c"],"fn":"re.split","kw":{"maxsplit":1},"out":["a"," ","b c"]}
+{"args":["x*","abc"],"fn":"re.split","kw":{"maxsplit":2},"out":["","a","bc"]}
+{"args":[" ","a b c"],"fn":"re.sub","kw":{"count":-1,"repl":"-"},"out":"a b c"}
+{"args":[" ","a b c"],"fn":"re.sub","kw":{"count":0,"repl":"-"},"out":"a-b-c"}
+{"args":[" ","a b c"],"fn":"re.sub","kw":{"count":1,"repl":"-"},"out":"a-b c"}
+{"args":["x*","abc"],"fn":"re.sub","kw":{"count":2,"repl":"-"},"out":"-a-bc"}
+{"args":["x*",""],"fn":"re.sub","kw":{"count":-1,"repl":"-"},"out":""}
 {"args":["\\e"],"err":"re.error","fn":"re.compile"}
 {"args":["\\q"],"err":"re.error","fn":"re.compile"}
 {"args":["[\\8]"],"err":"re.error","fn":"re.compile"}

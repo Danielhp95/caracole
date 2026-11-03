@@ -53,8 +53,10 @@ object PyRe {
         return finditer(regex, s).map { if (groups == 0) it.value else it.groups[1]?.value ?: "" }.toList()
     }
 
-    /** re.split: the text between the matches, each match's groups after it (null where one took no part). */
+    /** re.split: the text between the matches, each match's groups after it (null where one took no part); at
+     * most [maxsplit] splits when it is above 0, and none when it is below, as Python's loop reads it. */
     fun split(regex: Regex, s: String, maxsplit: Int = 0): List<String?> {
+        if (maxsplit < 0) return listOf(s)
         val groups = groupCount(regex)
         val out = ArrayList<String?>()
         var last = 0
@@ -70,8 +72,10 @@ object PyRe {
         return out
     }
 
-    /** re.sub with a function: each match (the first [count], when it isn't 0) replaced by what [repl] makes of it. */
+    /** re.sub with a function: each match (the first [count], when it is above 0; none, when it is below) replaced
+     * by what [repl] makes of it. */
     fun sub(regex: Regex, s: String, count: Int = 0, repl: (MatchResult) -> String): String {
+        if (count < 0) return s
         val out = StringBuilder()
         var last = 0
         var n = 0

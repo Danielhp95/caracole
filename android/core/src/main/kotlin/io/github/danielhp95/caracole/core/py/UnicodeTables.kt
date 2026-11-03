@@ -93,6 +93,10 @@ internal class CodePointTable private constructor(private val index: IntArray, p
 internal class CodePointSet private constructor(private val ranges: IntArray) {
     val isEmpty: Boolean get() = ranges.isEmpty()
 
+    /** How many ranges the set is, and the [k]th, (start, end). */
+    val rangeCount: Int get() = ranges.size / 2
+    fun range(k: Int): Pair<Int, Int> = ranges[2 * k] to ranges[2 * k + 1]
+
     operator fun contains(cp: Int): Boolean {
         var lo = 0
         var hi = ranges.size / 2 - 1
@@ -131,9 +135,10 @@ internal class CodePointSet private constructor(private val ranges: IntArray) {
 
     /** The ranges as a java.util.regex class body: `\x{…}` escapes in the BMP, the code points beyond it as they
      * are, so that java.util.regex reads the pattern by code point (its lookbehind steps by UTF-16 unit otherwise). */
-    fun body(): String {
-        val out = StringBuilder()
-        for (i in 0 until ranges.size / 2) {
+    fun body(): String = StringBuilder().also { body(it, 0, ranges.size / 2) }.toString()
+
+    private fun body(out: StringBuilder, from: Int, to: Int) {
+        for (i in from until to) {
             val (a, b) = ranges[2 * i] to ranges[2 * i + 1]
             point(out, a)
             if (b > a) {
@@ -141,13 +146,63 @@ internal class CodePointSet private constructor(private val ranges: IntArray) {
                 point(out, b)
             }
         }
-        return out.toString()
     }
 
-    /** A class matching exactly this set; one that matches nothing when it is empty. */
-    fun asClass(): String = if (isEmpty) "(?!)" else "[" + body() + "]"
+    /**
+     * A class matching exactly this set; one that matches nothing when it is empty.
+     *
+     * OpenJDK's java.util.regex tests a class's ranges one after another, and `\w` has 771 of them: a character
+     * that is no word character, a space, was tested against each. So a class of many ranges is written as a
+     * search tree: its ASCII ranges first, then the rest in halves, each half a nested class gated by its span,
+     * `[[\x{80}-\x{2ff}]&&[…]]`, so that a code point is tested against a few spans and one leaf of [LEAF] ranges.
+     * It matches what the flat class matches (PyRegexTest checks every range's edges), and Android's ICU, which
+     * makes one set of any class, reads `&&` and nested classes alike.
+     */
+    fun asClass(): String {
+        if (isEmpty) return "(?!)"
+        val n = ranges.size / 2
+        val out = StringBuilder("[")
+        if (n <= LEAF) {
+            body(out, 0, n)
+        } else {
+            // The ASCII ranges, tested first; then the rest, a range across U+0080 cut in two.
+            var ascii = 0
+            while (ascii < n && ranges[2 * ascii] < 0x80) ascii++
+            val split = ascii > 0 && ranges[2 * ascii - 1] >= 0x80
+            val rest = if (split) of(intArrayOf(0x80, ranges[2 * ascii - 1]) + ranges.copyOfRange(2 * ascii, ranges.size))
+                       else CodePointSet(ranges.copyOfRange(2 * ascii, ranges.size))
+            if (split) {
+                CodePointSet(ranges.copyOfRange(0, 2 * ascii).also { it[it.size - 1] = 0x7F }).body(out, 0, ascii)
+            } else {
+                body(out, 0, ascii)
+            }
+            rest.tree(out, 0, rest.ranges.size / 2)
+        }
+        return out.append(']').toString()
+    }
+
+    /** Ranges [from, to) as class items: flat when few, else two nested classes, each gated by its span. */
+    private fun tree(out: StringBuilder, from: Int, to: Int) {
+        if (to - from <= LEAF) {
+            body(out, from, to)
+            return
+        }
+        val mid = (from + to) ushr 1
+        for ((a, b) in listOf(from to mid, mid to to)) {
+            out.append("[[")
+            point(out, ranges[2 * a])
+            out.append('-')
+            point(out, ranges[2 * b - 1])
+            out.append("]&&[")
+            tree(out, a, b)
+            out.append("]]")
+        }
+    }
 
     companion object {
+        /** The most ranges [asClass] writes flat, in a class or a leaf of its tree. */
+        private const val LEAF = 8
+
         /** From ranges in any order, overlapping or not. */
         fun of(ranges: IntArray): CodePointSet {
             require(ranges.size % 2 == 0)

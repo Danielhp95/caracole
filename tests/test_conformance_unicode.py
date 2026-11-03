@@ -50,7 +50,8 @@ Vectors, tests/conformance/vectors/unicode/:
   \\B`` over the random strings, Python's pattern syntax the phone translates (``core.py.PyRegex.compile``), sre's
   IGNORECASE over every class (``kw.flags``), and caracole's own patterns (normalize.py's, song_names.py's) over
   names like those they read. ``re.fullmatch`` answers the matched text or null; ``re.sub`` replaces with
-  ``kw.repl``, a plain string.
+  ``kw.repl``, a plain string, the first ``kw.count`` matches where it is given, as ``re.split`` splits at the first
+  ``kw.maxsplit`` (a negative one: none).
 """
 
 from __future__ import annotations
@@ -281,11 +282,18 @@ TABLES = {"flags.txt": flags_txt, "category.txt": category_txt, "combining.txt":
           "decomposition.txt": decomposition_txt, "case.txt": case_txt, "ignorecase.txt": ignorecase_txt}
 
 
-@pytest.mark.parametrize("name", sorted(TABLES))
+# The tables, and the tests, that ask Python about every code point (_properties): about half a second in a process
+# of its own, several on the shared machine, so outside the quick loop (-m "not slow").
+EVERY_CODE_POINT = {"flags.txt", "category.txt", "combining.txt"}
+
+
+@pytest.mark.parametrize(
+    "name", [pytest.param(n, marks=pytest.mark.slow) if n in EVERY_CODE_POINT else n for n in sorted(TABLES)])
 def test_the_unicode_tables_are_pythons(name):
     check(UNICODE / name, TABLES[name]())
 
 
+@pytest.mark.slow  # _properties
 def test_unassigned_code_points_hold_no_property_and_combine_with_nothing():
     """_properties probes no Cn code point for case-ignorable: none is, and none has a flag, a combining class or a
     mapping."""
@@ -300,6 +308,7 @@ def test_unassigned_code_points_hold_no_property_and_combine_with_nothing():
         assert (c.lower(), c.upper(), c.casefold()) == (c, c, c), hex(cp)
 
 
+@pytest.mark.slow  # _properties
 def test_ignorecase_classes_are_exactly_what_sre_matches_and_keep_utf16_lengths():
     """A literal ``c`` under IGNORECASE matches ``lower(x)`` in ``{lower(c)} ∪ _EXTRA_CASES[lower(c)]`` (or ``c``
     alone when it is uncased): that set must be ``c``'s class, or mapping a subject to representatives would match
@@ -326,6 +335,26 @@ def test_ignorecase_classes_are_exactly_what_sre_matches_and_keep_utf16_lengths(
     for bit in (5, 6, 2):  # \s, \w, \d (isdecimal)
         varies = [cp for cp in lowered if flags[cp] >> bit & 1 != flags[lowers[cp]] >> bit & 1]
         assert not varies, f"{FLAG_NAMES[bit]} differs from its lower case at {_seq(varies[:20])}"
+
+
+@pytest.mark.slow  # _properties, then lower() four times over every code point
+def test_the_cased_and_case_ignorable_bits_are_what_lower_reads_at_every_code_point():
+    """Final_Sigma reads two bits, and lower() pins both, over every code point (Cn included, which _properties
+    doesn't probe): ``A c Σ`` and `` c Σ`` lower Σ alike unless c is case-ignorable (bit 10); and a c that isn't,
+    before Σ, makes it final only when cased (bit 9), after it only when not (lower() skips a case-ignorable one
+    both ways). Cased comes of ``islower() or isupper() or istitle()``, never of lower(): this ties the two."""
+    flags = _properties()[0]
+    wrong = []
+    for cp in itertools.chain(range(0xD800), range(0xE000, MAX)):
+        c = chr(cp)
+        ignorable = _ends_in_final_sigma("A" + c + "Σ") != _ends_in_final_sigma(" " + c + "Σ")
+        if ignorable != bool(flags[cp] >> 10 & 1):
+            wrong.append(f"U+{cp:04X} case-ignorable {ignorable}")
+        elif not ignorable:
+            cased = bool(flags[cp] >> 9 & 1)
+            if _ends_in_final_sigma(c + "Σ") != cased or (("AΣ" + c).lower()[1] == "ς") == cased:
+                wrong.append(f"U+{cp:04X} cased {cased}")
+    assert not wrong, "; ".join(wrong[:20])
 
 
 # --- strings.jsonl -------------------------------------------------------------------------------------------
@@ -542,31 +571,35 @@ def test_py_jsonl():
 # --- regex.jsonl ---------------------------------------------------------------------------------------------
 
 
-def _call(fn: str, pattern: str, s: str, *, ignorecase: bool = False, repl: str | None = None) -> dict:
+def _call(fn: str, pattern: str, s: str, *, ignorecase: bool = False, repl: str | None = None,
+          limit: int | None = None) -> dict:
     flags = re.IGNORECASE if ignorecase else 0
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", FutureWarning)  # "[[" and "&&" in SYNTAX, as Python reads them today
-        return _answer(fn, pattern, s, flags, repl)
+        return _answer(fn, pattern, s, flags, repl, limit)
 
 
-def _answer(fn: str, pattern: str, s: str, flags: int, repl: str | None) -> dict:
+def _answer(fn: str, pattern: str, s: str, flags: int, repl: str | None, limit: int | None) -> dict:
+    """One call's record; ``limit`` is re.split's ``maxsplit`` or re.sub's ``count``, its kw named so."""
     if fn == "re.findall":
         out = re.findall(pattern, s, flags)
     elif fn == "re.split":
-        out = re.split(pattern, s, flags=flags)
+        out = re.split(pattern, s, maxsplit=limit or 0, flags=flags)
     elif fn == "re.fullmatch":
         m = re.fullmatch(pattern, s, flags)
         out = m.group(0) if m else None
     elif fn == "re.sub":
-        out = re.sub(pattern, lambda _: repl, s, flags=flags)
+        out = re.sub(pattern, lambda _: repl, s, count=limit or 0, flags=flags)
     else:
         raise ValueError(fn)
     record: dict = {"fn": fn, "args": [pattern, s], "out": out}
-    kw = {}
+    kw: dict = {}
     if flags:
         kw["flags"] = "IGNORECASE"
     if repl is not None:
         kw["repl"] = repl
+    if limit is not None:
+        kw["maxsplit" if fn == "re.split" else "count"] = limit
     if kw:
         record["kw"] = kw
     return record
@@ -578,6 +611,13 @@ SYNTAX = [
     ("re.findall", r"(?s).", ["a\nb"]),
     ("re.findall", r"^\w+$", ["abc\n", "abc\x85", "abc\u2028", "abc\r", "abc\n\n"]),
     ("re.findall", r"(?m)^\w+$", ["ab\ncd\x85ef\u2028gh\rij"]),
+    ("re.findall", r"(?m)^", ["", "\n", "a\n", "a\n\n", "a\nb"]),
+    ("re.findall", r"(?m)$", ["", "\n", "a\n", "a\n\n"]),
+    ("re.findall", r"(?m)^$", ["\n\n", "a\n\nb\n"]),
+    ("re.findall", r"(?m:^)x|^y", ["x\ny\nx", "y\nx\n"]),
+    ("re.findall", r"(?m)(?-m:^)a|^b", ["a\nb\na", "b\na\nb"]),
+    ("re.split", r"(?m)^", ["a\nb\n", "\n\n"]),
+    ("re.sub", r"(?m)^", ["a\n", "a\nb\n\n", ""]),
     ("re.findall", r"\w+\Z", ["abc\n", "abc"]),
     ("re.findall", r"\w+\z", ["abc\n", "abc"]),
     ("re.findall", r"\Aab", ["abab"]),
@@ -624,6 +664,15 @@ SYNTAX = [
     ("re.fullmatch", r".*", ["a\nb", "a\x85b"]),
     ("re.fullmatch", r"a|ab", ["ab"]),
 ]
+# re.split's maxsplit and re.sub's count, a negative one included (Python's loops then split and replace nothing):
+# each (fn, pattern, subject, limit).
+LIMITS = [
+    ("re.split", " ", "a b c", -1), ("re.split", " ", "a b c", 0), ("re.split", " ", "a b c", 1),
+    ("re.split", " ", "a b c", 5), ("re.split", "( )", "a b c", 1), ("re.split", "x*", "abc", 2),
+    ("re.sub", " ", "a b c", -1), ("re.sub", " ", "a b c", 0), ("re.sub", " ", "a b c", 1),
+    ("re.sub", "x*", "abc", 2), ("re.sub", "x*", "", -1),
+]
+
 # What Python itself refuses: the phone refuses it too.
 SYNTAX_ERRORS = [r"\e", r"\q", r"[\8]", r"(?L)a", r"a**", r"(", r"[a", r"[z-a]", r"*a", r"a{3,2}", r"(?P<1>a)",
                  r"\1", r"(a)\2", r"(?<=a*)b", r"[\w-z]", r"a)", r"(?P=x)", r"\x4", r"\u12", r"\400"]
@@ -675,6 +724,8 @@ def regex_records() -> list[dict]:
     for fn, pattern, subjects in SYNTAX:
         for s in subjects:
             records.append(_call(fn, pattern, s, repl="-" if fn == "re.sub" else None))
+    for fn, pattern, s, limit in LIMITS:
+        records.append(_call(fn, pattern, s, repl="-" if fn == "re.sub" else None, limit=limit))
     for pattern in SYNTAX_ERRORS:
         try:
             re.compile(pattern)
