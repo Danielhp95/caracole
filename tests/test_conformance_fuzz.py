@@ -12,7 +12,8 @@ Each record's ``case`` says where its strings come from: ``short/<alphabet>`` an
 random pairs each (helpers/rapidfuzz_cpp.py ``random_pairs``: Latin, accented, CJK, supplementary characters, spaces
 of every kind, NBSP in strings CPython stores in one byte a character and in wider ones); ``search``, calls caracole's
 search tests made (search.py and lacuerda_index.py, recorded once and sampled); ``edge``, empty strings, block
-boundaries and the like; for extract, ``ties``, choices repeated and spelled close, at cutoffs 80 and 90.
+boundaries and the like; for extract, ``ties``, choices repeated and spelled close, at cutoffs 80 and 90, and
+``many``, more choices passing the cutoff than a limit of 20 or 3 keeps, a tie straddling the cut.
 """
 
 import random
@@ -20,7 +21,7 @@ import random
 from rapidfuzz import fuzz, process
 
 from helpers.corpus import VECTORS, check, jsonl
-from helpers.rapidfuzz_cpp import ALPHABETS, random_pairs
+from helpers.rapidfuzz_cpp import ALPHABETS, changed, random_pairs
 
 MADE_BY = "tests/test_conformance_fuzz.py"
 SEED = 20261103
@@ -258,10 +259,34 @@ def extract_cases():
     return out
 
 
+def many_cases():
+    """``(case, query, choices)`` with more choices passing the cutoff than the limit keeps: 25 to 60 close spellings
+    of the query, a few repeated, as search's ``_close_words`` meets a whole letter of an index's words."""
+    rng = random.Random(SEED + 2)
+    names = sorted(ALPHABETS)
+    out = []
+    for _ in range(40):
+        alphabet = ALPHABETS[rng.choice(names)].replace(" ", "") or "ab"
+        query = "".join(rng.choice(alphabet) for _ in range(rng.randint(8, 14)))
+        choices = [changed(rng, query, alphabet, rng.choice((0, 1, 1, 1, 2, 2, 3, 5)))
+                   for _ in range(rng.randint(25, 60))]
+        choices += [rng.choice(choices) for _ in range(rng.randint(2, 8))]  # ties, some across the cut
+        rng.shuffle(choices)
+        out.append(("many", query, choices))
+    return out
+
+
+def passing(record):
+    """What ``record``'s extract keeps with no limit."""
+    query, choices = record["args"]
+    return process.extract(query, choices, scorer=fuzz.ratio, score_cutoff=record["kw"]["score_cutoff"], limit=None)
+
+
 def extracts():
     records = []
-    for case, query, choices in extract_cases():
-        for cutoff, limit in ((80, 20), (90, 20), (80, 1), (90, None)):
+    runs = ((80, 20), (90, 20), (80, 1), (90, None))
+    for case, query, choices in extract_cases() + many_cases():
+        for cutoff, limit in runs + (((80, 3), (90, 3)) if case == "many" else ()):
             got = process.extract(query, choices, scorer=fuzz.ratio, score_cutoff=cutoff, limit=limit)
             records.append({"fn": "rapidfuzz.process.extract", "args": [query, choices],
                             "kw": {"limit": limit, "score_cutoff": cutoff, "scorer": "rapidfuzz.fuzz.ratio"},
@@ -303,5 +328,11 @@ def test_the_corpus_holds_what_the_kotlin_port_must_meet():
     records = extracts()
     assert any(len({r[1] for r in rec["out"]}) < len(rec["out"]) for rec in records)
     assert {rec["kw"]["score_cutoff"] for rec in records if rec["out"]} == {80, 90}
+    # A limit above 1 cuts the results short (search's CLOSE_WORDS of 20, and 3), a tie straddling the cut too.
+    for limit in (3, 20):
+        cut = [rec for rec in records if rec["kw"]["limit"] == limit and len(rec["out"]) == limit
+               and len(passing(rec)) > limit]
+        assert len(cut) >= 20, limit
+        assert any(passing(rec)[limit][1] == rec["out"][-1][1] for rec in cut), limit
     # Both kinds of string storage meet NBSP: the one-byte (no space) and the wider (a space).
     assert fuzz.token_sort_ratio("b\xa0a", "a b") != fuzz.token_sort_ratio("b\xa0aĀ", "a bĀ")

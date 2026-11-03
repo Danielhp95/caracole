@@ -30,7 +30,8 @@ which the test holds equal to it.
 
 ``random_pairs(rng, n, long=)`` makes the seeded pairs both tests share (and tests/test_conformance_fuzz.py writes
 for Kotlin): ``n`` pairs over ``ALPHABETS``, short (0 to 12 characters each) or long (a needle of 20 to 80 and a
-haystack up to 40 longer, or shorter, or of its length, often holding the needle a little changed).
+haystack up to 40 longer, or shorter, or of its length, often holding the needle a little changed), and
+``changed(rng, s, alphabet, edits)`` ``s`` after that many random insertions, deletions and substitutions.
 """
 
 import math
@@ -208,7 +209,7 @@ def _word(rng, alphabet, k):
     return "".join(rng.choice(alphabet) for _ in range(k))
 
 
-def _changed(rng, s, alphabet, edits):
+def changed(rng, s, alphabet, edits):
     chars = list(s)
     for _ in range(edits):
         op = rng.randrange(3)
@@ -232,17 +233,17 @@ def random_pairs(rng, n, *, long=False):
         alphabet = ALPHABETS[name]
         if not long:
             a = _word(rng, alphabet, rng.randint(0, 12))
-            b = _word(rng, alphabet, rng.randint(0, 12)) if rng.random() < 0.7 else _changed(rng, a, alphabet, 2)
+            b = _word(rng, alphabet, rng.randint(0, 12)) if rng.random() < 0.7 else changed(rng, a, alphabet, 2)
         else:
             a = _word(rng, alphabet, rng.randint(20, 80))
             shape = rng.random()
             if shape < 0.2:  # one length
-                b = _word(rng, alphabet, len(a)) if rng.random() < 0.5 else _changed(rng, a, alphabet, 3)
+                b = _word(rng, alphabet, len(a)) if rng.random() < 0.5 else changed(rng, a, alphabet, 3)
                 b = (b + _word(rng, alphabet, len(a)))[:len(a)]
             elif shape < 0.35:  # the haystack the shorter
-                b = _changed(rng, a[rng.randrange(len(a) // 2):], alphabet, rng.randint(0, 6))
+                b = changed(rng, a[rng.randrange(len(a) // 2):], alphabet, rng.randint(0, 6))
             elif shape < 0.7:  # the needle within the haystack, changed
-                inner = _changed(rng, a, alphabet, rng.randint(0, 8))
+                inner = changed(rng, a, alphabet, rng.randint(0, 8))
                 b = _word(rng, alphabet, rng.randint(0, 20)) + inner + _word(rng, alphabet, rng.randint(0, 15))
             else:
                 b = _word(rng, alphabet, len(a) + rng.randint(1, 40))
