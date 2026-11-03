@@ -1,0 +1,244 @@
+package io.github.danielhp95.caracole.server.routes.library
+
+import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.keys.Normalize
+import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobQueue
+import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.page.SongCards
+import io.github.danielhp95.caracole.server.routes.LibraryRoutes
+import io.github.danielhp95.caracole.server.testing.TestApp
+import io.github.danielhp95.caracole.server.testing.header
+import io.github.danielhp95.caracole.server.testing.json
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import org.junit.After
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+/** A song added and removed from the library page on the phone, through TestApp. */
+class LibraryRoutesTest {
+    @get:Rule val tmp = TemporaryFolder()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private lateinit var queue: JobQueue
+    private lateinit var app: TestApp
+
+    private object NoCards : SongCards {
+        override fun cards(db: Db, songs: List<SongRow>): Map<Long, JsonObject> = emptyMap()
+    }
+
+    @Before fun up() {
+        queue = JobQueue(scope)
+        val dir = tmp.newFolder("phone")
+        app = TestApp(dir, modules = { database ->
+            listOf(LibraryRoutes(LibraryStore(java.io.File(dir, "library")), queue, NoCards, database))
+        })
+    }
+
+    @After fun down() {
+        scope.cancel()
+        if (::app.isInitialized) app.close()
+    }
+
+    private fun error(answer: io.github.danielhp95.caracole.server.http.Response): String =
+        answer.json.jsonObject.getValue("error").jsonPrimitive.content
+
+    private fun waitFor(view: JsonObject): Job = runBlocking {
+        withTimeout(20_000) { queue.await(view.getValue("id").jsonPrimitive.int) }
+    }
+
+    private fun song(artist: String, title: String): SongRow? =
+        app.database.read { Songs.byKey(it, Normalize.identityKey(artist, title)) }
+
+    // --- what is refused before anything is queued -----------------------------------------------------------------
+
+    @Test fun `a request with no artist or title, or a field too long, is refused before anything is queued`() {
+        val cases = listOf(
+            listOf("artist" to "Soda Stereo", "title" to "  ") to "A song needs an artist and a title.",
+            listOf("artist" to "x".repeat(201), "title" to "T") to "The artist is too long: 200 characters at most.",
+            listOf("artist" to "A", "title" to "T", "album" to "x".repeat(301)) to "The album is too long: 300 characters at most.",
+            listOf("artist" to "A", "title" to "T", "duration" to "4:75") to
+                "The length is a bad duration '4:75': write m:ss, h:mm:ss or whole seconds.",
+            listOf("artist" to "A", "title" to "T", "duration" to "0:00") to
+                "The length is a bad duration '0:00': it must be longer than zero.",
+            listOf("artist" to "A", "title" to "T", "duration" to "four minutes") to
+                "The length 'four minutes' isn't a duration: write m:ss, h:mm:ss or whole seconds.",
+            listOf("artist" to "Simon - Garfunkel", "title" to "T") to
+                "caracole can't add this song: wanted.txt can't hold an artist name with ' - ' in it: 'Simon - Garfunkel'",
+            listOf("q" to "x".repeat(501)) to "The text is too long: 500 characters at most.",
+        )
+        for ((fields, said) in cases) {
+            for (path in listOf("/request", "/lookup")) {
+                val answer = app.postScript(path, fields)
+                assertEquals(400, answer.status, "$path $fields")
+                assertEquals(said, error(answer), "$path $fields")
+            }
+        }
+    }
+
+    @Test fun `a sheet from a YouTube video isn't on the phone yet`() {
+        val answer = app.postScript("/request", listOf("artist" to "A", "title" to "T",
+                                                       "youtube" to "https://youtu.be/dQw4w9WgXcQ"))
+        assertEquals(409, answer.status)
+        assertEquals("A sheet from a YouTube video isn't on the phone yet.", error(answer))
+    }
+
+    @Test fun `a removal of a song the library hasn't got is 404, and one naming none is 400`() {
+        assertEquals(404, app.postScript("/remove", listOf("song" to "41")).status)
+        assertEquals("That song isn't in the library: removed already, maybe.", error(app.postScript("/remove", listOf("song" to "41"))))
+        assertEquals(400, app.postScript("/remove", listOf("song" to "")).status)
+        assertEquals(404, app.postScript("/lookup", listOf("song" to "41")).status)
+    }
+
+    @Test fun `durations read as wanted dot txt reads them`() {
+        assertEquals(272_000L, SongForm.parseDuration("4:32"))
+        assertEquals(3_723_000L, SongForm.parseDuration("1:02:03"))
+        assertEquals(95_000L, SongForm.parseDuration(" 95 "))
+        assertEquals(272_000L, SongForm.parseDuration("４:３２"))  // NFKC first
+        assertNull(SongForm.parseDuration("4.32"))
+        assertNull(SongForm.parseDuration("1:2:3:4"))
+    }
+
+    @Test fun `the back address a removal goes to is the library page's own, at the song's card`() {
+        assertEquals("/#tab=library&q=creep&song=7", LibraryRoutes.libraryAt(LibraryRoutes.back("#tab=library&song=3&q=creep"), 7))
+        assertEquals("/#song=7", LibraryRoutes.libraryAt(LibraryRoutes.back("<script>"), 7))
+    }
+
+    // --- with the lanes it stands on -------------------------------------------------------------------------------
+
+    @Test fun `a request adds the song as an add job under its identity key`() {
+        Landed.assume()
+        val answer = app.postScript("/request", listOf("artist" to " Soda Stereo ", "title" to "De Música Ligera",
+                                                       "album" to "Canción Animal", "duration" to "3:31"))
+        assertEquals(200, answer.status, answer.json.toString())
+        val view = answer.json.jsonObject.getValue("job").jsonObject
+        assertEquals(JsonPrimitive("add"), view["kind"])
+        val job = waitFor(view)
+        assertEquals("done", job.state)
+        assertEquals(Normalize.identityKey("Soda Stereo", "De Música Ligera"), job.spec.key)
+        val added = assertNotNull(song("Soda Stereo", "De Música Ligera"))
+        assertEquals("Soda Stereo", added.artist)
+        assertEquals("Canción Animal", added.album)
+        assertEquals(211_000L, added.durationMs)
+        // Without the script, the browser goes to the request's line.
+        val page = app.post("/request", listOf("artist" to "Soda Stereo", "title" to "Persiana Americana"))
+        assertEquals(303, page.status)
+        assertNotNull(page.header("Location"))
+    }
+
+    @Test fun `Fetch now adds the song too, its line saying the computer's next run fetches it`() {
+        Landed.assume()
+        val answer = app.postScript("/request", listOf("artist" to "Radiohead", "title" to "Creep", "fetch" to "1"))
+        val job = waitFor(answer.json.jsonObject.getValue("job").jsonObject)
+        assertEquals("done", job.state)
+        assertNotNull(song("Radiohead", "Creep"))
+        val line = JobViews.view(job, queue).getValue("line").jsonObject.getValue("text").jsonPrimitive.content
+        assertEquals(LibraryRoutes.FETCH_LATER, line)
+    }
+
+    @Test fun `one text is read as song_names reads it, and one that names no artist is refused`() {
+        Landed.assume()
+        val answer = app.postScript("/request", listOf("q" to "Soda Stereo - De Música Ligera"))
+        assertEquals("done", waitFor(answer.json.jsonObject.getValue("job").jsonObject).state)
+        assertNotNull(song("Soda Stereo", "De Música Ligera"))
+        val refused = app.postScript("/request", listOf("q" to "música"))
+        assertEquals(400, refused.status)
+        assertTrue("doesn't say who the artist is" in error(refused))
+    }
+
+    @Test fun `Get it adds the song and answers a lookup's shape, which the page follows`() {
+        Landed.assume()
+        val answer = app.postScript("/lookup", listOf("artist" to "Radiohead", "title" to "Karma Police",
+                                                      "ug" to "radiohead/karma-police"))
+        assertEquals(202, answer.status)
+        val data = answer.json.jsonObject
+        val id = data.getValue("job").jsonPrimitive.int
+        assertEquals(JsonPrimitive("/api/jobs/$id"), data["url"])
+        assertEquals(JsonPrimitive(id), data.getValue("view").jsonObject["id"])
+        assertEquals("done", waitFor(data.getValue("view").jsonObject).state)
+        assertNotNull(song("Radiohead", "Karma Police"))
+        // A song the library has: the same song, never a second.
+        val again = app.postScript("/lookup", listOf("song" to song("Radiohead", "Karma Police")!!.id.toString()))
+        assertEquals("done", waitFor(again.json.jsonObject.getValue("view").jsonObject).state)
+        assertEquals(1, app.database.read { Songs.list(it) }.size)
+    }
+
+    @Test fun `add then remove leaves a tombstone, and the song stays removed until asked for again`() {
+        Landed.assume()
+        waitFor(app.postScript("/request", listOf("artist" to "Oasis", "title" to "Wonderwall")).json.jsonObject.getValue("job").jsonObject)
+        val wonderwall = assertNotNull(song("Oasis", "Wonderwall"))
+
+        val question = app.postScript("/remove", listOf("song" to wonderwall.id.toString()))
+        assertEquals(200, question.status)
+        val removal = question.json.jsonObject.getValue("removal").jsonObject
+        assertEquals(listOf("song", "key", "display", "brief", "goes", "stays", "notes"), removal.keys.toList())
+        assertEquals(JsonPrimitive(wonderwall.key), removal["key"])
+        assertEquals(JsonPrimitive("Deletes its record."), removal["brief"])
+        assertNotNull(song("Oasis", "Wonderwall"), "the question changes nothing")
+
+        val refused = app.postScript("/remove", listOf("song" to wonderwall.id.toString(), "confirm" to "1", "key" to "oasis/other"))
+        assertEquals(409, refused.status)
+
+        val confirmed = app.postScript("/remove", listOf("song" to wonderwall.id.toString(), "confirm" to "1",
+                                                         "key" to wonderwall.key, "back" to "#tab=library"))
+        assertEquals(200, confirmed.status)
+        val view = confirmed.json.jsonObject.getValue("job").jsonObject
+        assertEquals(JsonPrimitive("remove"), view["kind"])
+        val job = waitFor(view)
+        assertEquals("done", job.state)
+        assertEquals("remove:${wonderwall.key}", job.spec.key)
+        assertNull(song("Oasis", "Wonderwall"))
+        assertTrue(app.database.read { Songs.isRemoved(it, wonderwall.key) })
+
+        // Asked for again, it comes back new.
+        waitFor(app.postScript("/request", listOf("artist" to "Oasis", "title" to "Wonderwall")).json.jsonObject.getValue("job").jsonObject)
+        assertNotNull(song("Oasis", "Wonderwall"))
+        assertTrue(!app.database.read { Songs.isRemoved(it, wonderwall.key) })
+    }
+
+    @Test fun `a removal confirmed goes back to the library page as it was left, at the song's card`() {
+        Landed.assume()
+        waitFor(app.postScript("/request", listOf("artist" to "Blur", "title" to "Song 2")).json.jsonObject.getValue("job").jsonObject)
+        val song2 = assertNotNull(song("Blur", "Song 2"))
+        val page = app.post("/remove", listOf("song" to song2.id.toString(), "confirm" to "1", "key" to song2.key,
+                                              "back" to "#tab=library&q=blur"))
+        assertEquals(303, page.status)
+        assertEquals("/#tab=library&q=blur&song=${song2.id}", page.header("Location"))
+    }
+
+    @Test fun `the question names the files the phone keeps for the song`() {
+        Landed.assume()
+        waitFor(app.postScript("/request", listOf("artist" to "Estopa", "title" to "Tu Calorro")).json.jsonObject.getValue("job").jsonObject)
+        val calorro = assertNotNull(song("Estopa", "Tu Calorro"))
+        app.database.writeBlocking { db ->
+            db.execute("INSERT INTO versions (provider, tab_id, song_id, slot, kind, url, fetched_at) " +
+                       "VALUES ('inbox', 'g', ?, 'guitar', 'guitar', '', '2026-11-03T10:00:00Z')", calorro.id)
+            db.execute("INSERT INTO files (version_id, song_id, name, path, sha256, kept_rank, created_at) VALUES " +
+                       "(?, ?, 'guitar-1.gp5', 'Estopa/Tu Calorro/guitar-1.gp5', ?, 0, '2026-11-03T10:00:00Z')",
+                       db.lastRowid(), calorro.id, "ab".repeat(32))
+        }
+        val removal = app.postScript("/remove", listOf("song" to calorro.id.toString())).json.jsonObject.getValue("removal").jsonObject
+        assertEquals(JsonPrimitive("Deletes the phone's 1 file for it and its record."), removal["brief"])
+        assertTrue(removal.getValue("goes").jsonArray.first().jsonPrimitive.content.endsWith("guitar-1.gp5"))
+    }
+}
