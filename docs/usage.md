@@ -5896,7 +5896,30 @@ for caracole serve.
 
 ### The Sync tab
 
-Not built yet.
+The library page caracole serve serves has a **Sync** tab, before Requests, which syncs this library with another
+caracole's (the phone's has the same tab), as `caracole peer sync` does from a terminal:
+
+1. **Compare**: type the other caracole serve's address (`http://192.168.1.20:8737`), or press a caracole synced
+   with before, listed under the field with when (the newest's address is in the field already). caracole serve asks
+   the other for its library's units, one request, and lists every unit the two hold differently (`POST
+   /sync/compare`), grouped as Songs, Removals, Songbooks, Artists' aliases, Artists' UG pages and Blocked tabs, each
+   with why it differs and what the sync proposes: **keep here's**, **take there's**, or **CONFLICT** where both
+   changed it. Nothing changes on either side.
+2. **Choose**: each difference has Here, There or Skip, its proposal's side chosen at first; a conflict has none
+   until you choose, and two buttons settle every conflict at once (Keep here's, Take there's).
+3. **Sync**, once every conflict has a side (`POST /sync/apply`): only the comparison and your choices are sent,
+   never a song. It queues `caracole peer sync ADDRESS --push --compared HASH --choose=SIDE:ID …` (see above), which
+   takes here what comes from there and pushes there what goes there, so the other side needn't reach this one.
+   A comparison is kept 10 minutes, and Sync compares again first: when either side changed since, it is refused
+   ("compare them again, and choose again") before anything is queued. With nothing to take or give, Sync still
+   records that the two agree (and the phone's brings the computer's newer pages and indexes).
+
+The tab then follows the sync, a step at a time (Compare, Take, Give, Agree), and says what it took here, gave there
+and left as it was, with why (a unit you skipped, or one that changed on a side since the comparison: "Synced: 1
+change left as it was"), then offers **Reload**. The sync is a request like any, in the Requests tab too, where a
+sync that left something or failed offers **Compare again**, never Try again, as its choices were made on a
+comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
+two agree on, and the other side's address and name, which `GET /api/sync` lists.
 
 ### What the offline copy lists
 

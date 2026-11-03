@@ -1,7 +1,7 @@
 """caracole serve's library page and its forms: a song requested, and a song of the library fetched now.
 
-    GET  /, /index.html   the library page, with its forms (library_page, WebControls), and its line in the
-                          log (page_log.py)
+    GET  /, /index.html   the library page, with its forms (library_page, WebControls) and its Sync tab
+                          (sync_routes.py), and its line in the log (page_log.py)
     POST /request         a song for wanted.txt, its ``artist`` and ``title`` (or one text, ``q``, read as
                           song_names.py reads it); with ``fetch``, looked up now too; with ``youtube``, its sheet
                           made from that YouTube video instead (youtube_routes.py)
@@ -77,7 +77,7 @@ def library(app: WebApp, asked: Request) -> Response:
                 j for j in jobs if j.active and not j.song_key.startswith(INDEX_READS)]))
             controls = WebControls(app.csrf, busy, app.queue.active_count(), held, removing=removing, jobs=active,
                                    timers=app.timers, guitar=available(app.cfg.alphatab_dir),
-                                   badge=app.library_name.badge)
+                                   badge=app.library_name.badge, sync=True)
             html = build_library_page(conn, app.cfg, overrides, datetime.now(UTC).replace(microsecond=0),
                                       controls=controls, note=built.note)
     except Refused as e:
