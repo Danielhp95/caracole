@@ -27,9 +27,6 @@ import java.io.File
 data class Applied(val taken: List<String>, val left: List<Pair<String, String>>, val songs: List<Long>,
                    val respelled: List<String>, val songbooksChanged: Boolean)
 
-/** A unit that can't be taken: why, said to the owner; the rest go on (peer_sync.UnitError). */
-class UnitError(message: String) : Exception(message)
-
 /**
  * peer_sync.apply_units on the phone (the plan's §5.6, the rules both sides keep): each unit chosen read from a
  * [UnitSource] and made the phone's, whole or not at all, and left, saying why, when either side holds it otherwise
