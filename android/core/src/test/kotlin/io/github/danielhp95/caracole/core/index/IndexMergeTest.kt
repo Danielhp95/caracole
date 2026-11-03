@@ -63,9 +63,7 @@ class IndexMergeTest(@Suppress("unused") private val label: String, private val 
                 assertEquals(0, backups)
                 assertEquals(before, database.read { Dumps.lines(it) })
             } else {
-                val merged = waitingOnLanes {
-                    database.writeBlocking { IndexTransfer.merge(it, export, now, sites) { backups++ } }
-                }
+                val merged = database.writeBlocking { IndexTransfer.merge(it, export, now, sites) { backups++ } }
                 val out = record.out!!.jsonObject
                 assertEquals(out.getValue("changed").jsonPrimitive.boolean, merged.changed)
                 assertEquals(if (out.getValue("backup").jsonPrimitive.boolean) 1 else 0, backups)

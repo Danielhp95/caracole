@@ -12,14 +12,69 @@ import kotlin.test.assertEquals
 
 /**
  * How long a merge of a big UG index takes on the JVM: 200,000 generated ug_index rows in one sitemap of an export,
- * merged into a new phone seeded as an app's is, its time printed (no assertion: a figure for the plan's risks).
+ * merged into a new phone seeded as an app's is, and into one with matched songs whose new tabs mark them, each time
+ * printed (no assertion on it: a figure for the plan's risks).
  */
 class MergeSpeedTest {
     @get:Rule val tmp = TemporaryFolder()
 
     private val rows = 200_000
+    private val now = "2026-11-03T12:00:00Z"
+
+    private fun artist(i: Int) = "artist-${i % 9973}"
+    private fun song(i: Int) = "song-${i / 7}"
 
     @Test fun twoHundredThousandUgRowsMerged() {
+        val export = bigExport()
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            database.writeBlocking { IndexTransfer.seedFresh(it) }
+            val started = System.nanoTime()
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export, now) }
+            val took = (System.nanoTime() - started) / 1_000_000
+            assertEquals(mapOf("sitemap" to 1), merged.sites["ug"])
+            val count = database.read { db -> db.one("SELECT COUNT(*) FROM ug_index") { it.long(0)!! } }
+            assertEquals(rows.toLong(), count)
+            println("MergeSpeedTest: $rows ug_index rows merged in $took ms into a new phone")
+        }
+    }
+
+    @Test fun twoHundredThousandUgRowsMergedIntoAPhoneWithSongs() {
+        val export = bigExport()
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            val matched = (1..rows step 1000).map { artist(it) to song(it) }.distinct()
+            database.writeBlocking { db ->
+                IndexTransfer.seedFresh(db)
+                matched.forEachIndexed { n, (artist, song) ->
+                    db.execute(
+                        "INSERT INTO songs (key, artist, title, artists, source_ids, status, match_decision, " +
+                            "match_artist_key, match_song_key, added_at, created_at, updated_at) VALUES " +
+                            "(?, ?, ?, '[]', '{}', 'wanted', 'accept', ?, ?, ?, ?, ?)",
+                        "$artist/$song", artist, song, artist, song, now, now, "2026-11-01T00:00:00Z",
+                    )
+                    // One more of each, in review: never marked.
+                    db.execute(
+                        "INSERT INTO songs (key, artist, title, artists, source_ids, status, match_decision, " +
+                            "match_artist_key, match_song_key, added_at, created_at, updated_at) VALUES " +
+                            "(?, ?, ?, '[]', '{}', 'wanted', 'review', ?, ?, ?, ?, ?)",
+                        "$artist/$song-$n", artist, "$song $n", artist, song, now, now, "2026-11-01T00:00:00Z",
+                    )
+                }
+            }
+            val started = System.nanoTime()
+            database.writeBlocking { IndexTransfer.merge(it, export, now) }
+            val took = (System.nanoTime() - started) / 1_000_000
+            val marked = database.read { db ->
+                db.query("SELECT match_decision, COUNT(*) FROM songs WHERE ug_dirty = 1 AND updated_at = ? " +
+                             "GROUP BY match_decision", now) { it.text(0)!! to it.long(1)!! }
+            }
+            assertEquals(listOf("accept" to matched.size.toLong()), marked)
+            println("MergeSpeedTest: $rows ug_index rows merged in $took ms into a phone of ${2 * matched.size} " +
+                        "songs, ${matched.size} of them marked")
+        }
+    }
+
+    /** An export of [rows] UG tabs in one sitemap, beside partial-export's gtptabs.com and MuseScore. */
+    private fun bigExport(): File {
         val export = File(tmp.newFolder(), "export.sqlite")
         Fixtures.loadRaw(export, "index/fixtures/partial-export.jsonl")
         val made = System.nanoTime()
@@ -43,8 +98,8 @@ class MergeSpeedTest {
                         "VALUES (?, ?, ?, 'chords', 'big', '2026-10-28T03:30:00Z', ?)",
                 ).use { st ->
                     for (i in 1..rows) {
-                        val artist = "artist-${i % 9973}"
-                        val song = "song-${i / 7}"
+                        val artist = artist(i)
+                        val song = song(i)
                         st.bindLong(1, i.toLong())
                         st.bindText(2, artist)
                         st.bindText(3, song)
@@ -63,18 +118,8 @@ class MergeSpeedTest {
                 c.close()
             }
         }
-        val generated = (System.nanoTime() - made) / 1_000_000
-        TestDb.fresh(tmp.newFolder()).use { database ->
-            database.writeBlocking { IndexTransfer.seedFresh(it) }
-            val started = System.nanoTime()
-            val merged = waitingOnLanes {
-                database.writeBlocking { IndexTransfer.merge(it, export, "2026-11-03T12:00:00Z") }
-            }
-            val took = (System.nanoTime() - started) / 1_000_000
-            assertEquals(mapOf("sitemap" to 1), merged.sites["ug"])
-            val count = database.read { db -> db.one("SELECT COUNT(*) FROM ug_index") { it.long(0)!! } }
-            assertEquals(rows.toLong(), count)
-            println("MergeSpeedTest: $rows ug_index rows merged in $took ms (export generated in $generated ms)")
-        }
+        val took = (System.nanoTime() - made) / 1_000_000
+        println("MergeSpeedTest: an export of $rows ug_index rows generated in $took ms")
+        return export
     }
 }

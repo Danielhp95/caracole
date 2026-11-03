@@ -209,10 +209,15 @@ internal object Merge {
         val names = newerRecords(db, UG_SITEMAPS, "indexed_at")
         plan.take("sitemap", names.size) { c ->
             taken(c, names)
-            val new = c.query(
-                "SELECT t.tab_id FROM $THEIRS.ug_index t WHERE t.sitemap IN (SELECT name FROM $TAKEN) " +
-                    "AND NOT EXISTS (SELECT 1 FROM main.ug_index m WHERE m.tab_id = t.tab_id) ORDER BY t.tab_id",
-            ) { it.long(0)!! }
+            // The tabs the database never had, kept for the songs they may be for (none on a new phone).
+            val songs = NewTabs.songs(c)
+            if (songs.isNotEmpty()) {
+                NewTabs.remember(
+                    c,
+                    "SELECT t.tab_id FROM $THEIRS.ug_index t WHERE t.sitemap IN (SELECT name FROM $TAKEN) " +
+                        "AND NOT EXISTS (SELECT 1 FROM main.ug_index m WHERE m.tab_id = t.tab_id)",
+                )
+            }
             // As a refresh stores a sitemap (ug/index.py upsert_rows): a row the database has keeps where and when it
             // was first seen, and takes the file's keys and path.
             c.execute(
@@ -226,7 +231,7 @@ internal object Merge {
                     "OR ug_index.type != excluded.type OR ug_index.path != excluded.path",
             )
             takeRecords(c, UG_SITEMAPS, names)
-            NewTabs.markDirty(c, new, now)
+            if (songs.isNotEmpty()) NewTabs.markDirty(c, songs, now)
         }
         val newerTabs = "FROM $THEIRS.ug_artist_tabs t LEFT JOIN main.ug_artist_tabs m ON m.page = t.page AND " +
             "m.tab_id = t.tab_id WHERE m.page IS NULL OR t.read_at > m.read_at"

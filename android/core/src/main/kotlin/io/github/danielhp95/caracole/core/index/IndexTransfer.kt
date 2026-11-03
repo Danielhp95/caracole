@@ -52,9 +52,13 @@ object IndexTransfer {
     /**
      * The export's sites into [db] (every one it holds, with none asked for; else those of [sites], in caracole's
      * order), [now] (a stamp) the time a song marked to fetch again is updated at, [backup] called once before the
-     * first change. Called inside Database.write.
+     * first change. Called inside Database.write, in no transaction or savepoint of the caller's: else an
+     * IllegalStateException, nothing written (a [TransferError] is the file's alone).
      */
     fun merge(db: Db, export: File, now: String, sites: List<String>? = null, backup: (() -> Unit)? = null): Merged {
+        // A caller's mistake, never the file's: SQLite attaches no database within a transaction.
+        check(!db.raw.inTransaction()) { "an index merge runs in no transaction (ATTACH runs in none)" }
+        check(Merge.THEIRS !in attached(db)) { "a database is attached as ${Merge.THEIRS} already" }
         if (!export.exists()) throw TransferError("$export: no such file")
         if (sameFile(export, mainFile(db))) throw TransferError("$export is the database itself")
         try {
@@ -135,6 +139,8 @@ object IndexTransfer {
 
     private fun mainFile(db: Db): File? = db.query("PRAGMA database_list") { it.text(1) to it.text(2) }
         .firstOrNull { it.first == "main" && !it.second.isNullOrEmpty() }?.second?.let(::File)
+
+    private fun attached(db: Db): List<String> = db.query("PRAGMA database_list") { it.text(1)!! }
 
     private fun sameFile(a: File, b: File?): Boolean = b != null && try {
         a.canonicalFile == b.canonicalFile

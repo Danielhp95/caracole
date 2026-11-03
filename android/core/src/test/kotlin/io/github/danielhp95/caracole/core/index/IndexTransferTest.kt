@@ -54,7 +54,7 @@ class IndexTransferTest {
         val export = export("full-export")
         TestDb.fresh(tmp.newFolder()).use { database ->
             database.writeBlocking { IndexTransfer.seedFresh(it) }
-            val merged = waitingOnLanes { database.writeBlocking { IndexTransfer.merge(it, export, now) } }
+            val merged = database.writeBlocking { IndexTransfer.merge(it, export, now) }
             assertTrue(merged.changed)
             val after = database.read { Dumps.lines(it) }
             assertEquals(Dumps.fixture("fresh-after"), after)
@@ -102,6 +102,28 @@ class IndexTransferTest {
             assertEquals(listOf("main"), database.writeBlocking { db ->
                 db.query("PRAGMA database_list") { it.text(1)!! }.filter { it != "temp" }
             })
+        }
+    }
+
+    @Test fun aMergeInsideTheCallersTransactionIsTheCallersMistakeNotTheFiles() {
+        val export = export("partial-export")
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            database.writeBlocking { Fixtures.load(it, "index/fixtures/phone-before.jsonl") }
+            val before = database.read { Dumps.lines(it) }
+            assertFailsWith<IllegalStateException> {
+                database.writeBlocking { db -> db.savepoint("callers") { IndexTransfer.merge(db, export, now) } }
+            }
+            assertFailsWith<IllegalStateException> {
+                database.writeBlocking { db ->
+                    db.attach(export, "theirs")
+                    try {
+                        IndexTransfer.merge(db, export, now)
+                    } finally {
+                        db.detach("theirs")
+                    }
+                }
+            }
+            assertEquals(before, database.read { Dumps.lines(it) })
         }
     }
 

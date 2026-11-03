@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import org.junit.AssumptionViolatedException
 
 /**
  * helpers.corpus.dump_fixture on the phone: a database's fixture records, each line as the corpus writes it
@@ -56,13 +55,4 @@ internal object Dumps {
     /** A fixture's lines, its header left out. */
     fun fixture(name: String): List<String> =
         Corpus.text("index/fixtures/$name.jsonl").split('\n').filter { it.isNotEmpty() }.drop(1)
-}
-
-/** [block], or the test skipped while a lane it reaches is still a skeleton's TODO (Phase A of lane index-transfer:
- * the re-key paths are lanes search-ug's, search-lacuerda's, search-sites' and keys'). */
-internal fun <T> waitingOnLanes(block: () -> T): T = try {
-    block()
-} catch (e: NotImplementedError) {
-    val lane = Regex("lane ([a-z-]+)").find(e.message.orEmpty())?.groupValues?.get(1) ?: throw e
-    throw AssumptionViolatedException("waiting on lane $lane")
 }

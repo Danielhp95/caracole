@@ -30,7 +30,8 @@ made ``BUILT``:
 - ``<case>-after``: the phone after a merge (``dump_fixture``, ``phone:schema`` among its kv, as the replay makes the
   phone's tables).
 - ``stamps``, ``overflow``: phones for ``newest`` alone: odd times in every place it reads one; a time a UTC
-  conversion takes out of range (``OverflowError``).
+  conversion takes out of range (``OverflowError``). ``newest-0`` to ``newest-3``: one time in every place newest
+  reads one, each site's its own, and each place the single newest of its site in one of them.
 
 **Vectors**:
 
@@ -57,7 +58,7 @@ import json
 import random
 import sqlite3
 from contextlib import closing
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -242,6 +243,61 @@ def newest_overflow(conn: sqlite3.Connection) -> None:
     db.kv_set(conn, gtptabs_fetch.SITE.complete_key, "0001-01-01T00:00:00+01:00")
 
 
+def _record(key: str, stamp: str) -> Any:
+    return lambda conn, at: db.kv_set_json(conn, key, {"s": {stamp: at}})
+
+
+def _kv_time(key: str) -> Any:
+    return lambda conn, at: db.kv_set(conn, key, at)
+
+
+def _read_at(insert: str) -> Any:
+    return lambda conn, at: conn.execute(insert, (at,))
+
+
+def _newest_sources() -> dict[str, list[Any]]:
+    """Each place newest reads a time of a site's, in its order: each a writer of that one time."""
+    from caracole.ug import index as ug
+
+    def site_index(site: Any) -> list[Any]:
+        return [_record(site.sitemaps_key, "checked_at"), _kv_time(site.complete_key)]
+
+    return {
+        "ug": [_record(ug.SITEMAPS_KEY, "indexed_at"),
+               _read_at("INSERT INTO ug_artist_tabs (page, tab_id, type, artist, title, url, artist_key, song_key, "
+                        "artist_forms, title_forms, forms, read_at) VALUES ('p', 1, 'chords', 'A', 'B', 'u', 'a', "
+                        "'b', 'a', 'b', 'a b', ?)"),
+               _kv_time(ug.REFRESHED_KEY), _kv_time(ug.BUILT_KEY)],
+        "lacuerda": [_record(lacuerda_index.PAGES_KEY, "checked_at"), _kv_time(lacuerda_index.COMPLETE_KEY)],
+        "gtptabs": site_index(gtptabs_fetch.SITE),
+        "musescore": site_index(musescore_fetch.SITE),
+        "harptabs": [*site_index(harptabs_fetch.SITE),
+                     _read_at("INSERT INTO harptabs_artists (path, page_id, key, name, tabs, read_at) "
+                              "VALUES ('artist/1/a', 1, 'a', 'A', 0, ?)")],
+        "gametabs": [*site_index(gametabs_fetch.SITE),
+                     _read_at("INSERT INTO gametabs_games (path, game, name, tabs, read_at) "
+                              "VALUES ('tabs/a', 'a', 'A', 0, ?)")],
+    }
+
+
+NEWEST_SOURCES = 4  # the most places a site has a time (UG's), so that each is the newest of its site in one phone
+
+
+def newest_source(k: int) -> Any:
+    """A phone where each site's k-th place (round its list) holds its newest time and every other place an earlier
+    one, each site's times its own: a port of newest that drops a place, or reads it for another site, answers
+    otherwise."""
+    def build(conn: sqlite3.Connection) -> None:
+        sources = _newest_sources()
+        assert list(sources) == list(index_transfer.SITES)
+        assert max(map(len, sources.values())) == NEWEST_SOURCES
+        for j, places in enumerate(sources.values()):
+            for i, write in enumerate(places):
+                at = LATE + timedelta(hours=j) if i == k % len(places) else EARLY + timedelta(hours=j, minutes=i)
+                write(conn, _stamp(at))
+    return build
+
+
 # --- the exports -----------------------------------------------------------------------------------------------------
 
 
@@ -268,6 +324,7 @@ PHONES: dict[str, Any] = {
     "phone": phone,
     "stamps": newest_stamps,
     "overflow": newest_overflow,
+    **{f"newest-{k}": newest_source(k) for k in range(NEWEST_SOURCES)},
 }
 
 # Each merge: its name (its after's), the export, the phone before (a fixture), the sites asked for.
@@ -290,7 +347,8 @@ MERGES: list[tuple[str, str, str, list[str] | None]] = [
 ]
 
 NEWEST = ["fresh-before", "unseeded-before", "phone-before", "phone-after", "fresh-after", "unseeded-after",
-          "rekey-after", "partial-after", "phone-sites-after", "stamps-before", "overflow-before"]
+          "rekey-after", "partial-after", "phone-sites-after", "stamps-before", "overflow-before",
+          *(f"newest-{k}-before" for k in range(NEWEST_SOURCES))]
 
 
 # --- making them -----------------------------------------------------------------------------------------------------
@@ -521,6 +579,14 @@ def test_merge_jsonl_is_what_index_transfer_merge_takes(corpus):
 
 def test_newest_jsonl_is_what_index_transfer_newest_says(corpus):
     check(INDEX / "newest.jsonl", jsonl(corpus.newest(), corpus="index/newest", made_by=MADE_BY))
+
+
+@pytest.mark.parametrize("k", range(NEWEST_SOURCES))
+def test_each_place_newest_reads_is_the_newest_of_its_site_in_one_phone(tmp_path, k):
+    with closing(_fresh(tmp_path / "caracole.sqlite")) as conn:
+        newest_source(k)(conn)
+        assert index_transfer.newest(conn) == {name: _stamp(LATE + timedelta(hours=j))
+                                               for j, name in enumerate(index_transfer.SITES)}
 
 
 def test_stamps_jsonl_is_how_stamps_parse_reads_a_time():

@@ -1,0 +1,17 @@
+{"corpus":"index/fixtures/newest-1-before","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"row":{"artist":"A","artist_forms":"a","artist_key":"a","forms":"a b","label":null,"page":"p","rating":0.0,"read_at":"2026-10-28T03:30:00Z","song_key":"b","tab_id":1,"title":"B","title_forms":"b","type":"chords","url":"u","votes":0},"table":"ug_artist_tabs"}
+{"row":{"key":"a","name":"A","page_id":1,"path":"artist/1/a","read_at":"2026-10-19T07:32:00Z","tabs":0},"table":"harptabs_artists"}
+{"row":{"game":"a","name":"A","path":"tabs/a","read_at":"2026-10-19T08:32:00Z","tabs":0},"table":"gametabs_games"}
+{"kv":"gametabs:index:complete_at","value":"2026-10-28T08:30:00Z"}
+{"kv":"gametabs:sitemaps","value":"{\"s\": {\"checked_at\": \"2026-10-19T08:30:00Z\"}}"}
+{"kv":"gtptabs:index:complete_at","value":"2026-10-28T05:30:00Z"}
+{"kv":"gtptabs:sitemaps","value":"{\"s\": {\"checked_at\": \"2026-10-19T05:30:00Z\"}}"}
+{"kv":"harptabs:index:complete_at","value":"2026-10-28T07:30:00Z"}
+{"kv":"harptabs:sitemaps","value":"{\"s\": {\"checked_at\": \"2026-10-19T07:30:00Z\"}}"}
+{"kv":"lacuerda:index:complete_at","value":"2026-10-28T04:30:00Z"}
+{"kv":"lacuerda:index:pages","value":"{\"s\": {\"checked_at\": \"2026-10-19T04:30:00Z\"}}"}
+{"kv":"musescore:index:complete_at","value":"2026-10-28T06:30:00Z"}
+{"kv":"musescore:sitemaps","value":"{\"s\": {\"checked_at\": \"2026-10-19T06:30:00Z\"}}"}
+{"kv":"ug:index:built_at","value":"2026-10-19T03:33:00Z"}
+{"kv":"ug:index:refreshed_at","value":"2026-10-19T03:32:00Z"}
+{"kv":"ug:sitemaps","value":"{\"s\": {\"indexed_at\": \"2026-10-19T03:30:00Z\"}}"}
