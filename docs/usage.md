@@ -5750,8 +5750,10 @@ your home database's indexes into a service's, see
 ## Two caracoles: the phone's and the computer's
 
     caracole peer diff ADDRESS [--json]                        # what differs, and which side each would come from
-    caracole peer sync ADDRESS [--here ADDRESS] [--prefer here|there] [--yes]
+    caracole peer sync ADDRESS [--here ADDRESS | --push] [--prefer here|there] [--choose SIDE:ID]...
+                               [--compared HASH] [--progress] [--yes]
     caracole peer pull ADDRESS --unit ID [--unit ID]...        # take these from there
+    caracole peer take [--progress] DIR                        # a push caracole serve staged (it queues this)
     caracole peer new-id                                       # for a database copied from another caracole's
 
 You can keep a caracole on the computer and another on the phone, each with its own library, and use either alone:
@@ -5828,19 +5830,115 @@ Sync page in caracole serve comes next ([the design](superpowers/specs/2026-10-3
 
 ### The phone pushes its changes (POST /peer/push)
 
-Not built yet.
+The phone starts every sync and serves nothing to the network, so the computer can't be asked to pull from it. Once
+the phone has taken what it takes, it pushes what the computer takes, in three requests to the computer's
+`caracole serve`, each with the form token (`GET /api/peer/state` gives it) in an `X-Caracole-Form-Token` header:
+
+1. **`POST /peer/push/new`**, JSON `{"format", "from", "files"}`: the sync's format, the phone's id, and the SHA-256
+   of each file its units keep. caracole serve answers `{"push": "<16 hex>", "need": […]}`: the files it has no
+   readable copy of. It keeps the push in `state_dir/peer/push-<id>/`, a folder only its owner reads, never in the
+   library.
+2. **`POST /peer/push/file?push=<id>&sha256=<sha256>`**, the bytes of each file needed
+   (`application/octet-stream`, 64 MiB at most), kept once their SHA-256 is the one named.
+3. **`POST /peer/push?push=<id>`**, JSON (16 MiB at most): the push itself, `{"format", "from", "name",
+   "caracole", "at", "units", "take"}`: the phone's library's name and caracole's version, the computer's time in
+   the state it compared, its whole state after its own take (each unit's label and digest), and the units the
+   computer takes, each with the computer's digest of it as compared (`expected`), the phone's digest now, and its
+   document as `GET /api/peer/unit` gives one (null for a unit the phone hasn't got: a song it removed). caracole
+   serve checks that each document is what its digest says and that every file its songs keep was sent or is kept
+   here already, then queues `caracole peer take --progress` of the push, "Changes from <its library>" in the
+   Requests tab, and answers `{"job": …}`, the request as `/jobs.json` gives it, which the phone follows at
+   `GET /api/jobs/<id>`. A second push from the same caracole while its first waits or runs is refused (409) and
+   stays open, to send again once the first is taken.
+
+**`caracole peer take`** takes the push as a pull takes the other side's units, under caracole's lock, waiting for
+the nightly run as a lookup does: it reads the push again (**check**), backs the database up
+(`…-before-sync.sqlite`), takes each unit (**take**), leaving one that changed here since the phone compared ("changed
+here since the comparison"), one whose document isn't what was compared, or a song whose file isn't as sent, then
+renders the songs taken, makes the songbooks and writes the pages (**render**), and keeps what the two now agree on,
+stamped with the time the phone compared at (**agree**). It says each unit it took or left (`--progress`: as JSON
+lines, which the Requests tab reads), exits 0 unless caracole hits a bug, and deletes the push's folder.
+
+At most two pushes are here at once, open or sent and not taken yet, and a push's files come to 2 GiB at most. A
+push left for an hour is deleted, when caracole serve starts, as a push is opened, sent or sent a file, and as a take
+ends; never one a take is taking. A request from another site's page is refused, and so is one whose token is
+older than the server, with `"reload": true`: the phone reads the state again for a fresh token. A body longer than
+16 KiB is read only once its host name, origin, token and content type pass, so another site's page can't have the
+server read megabytes it then refuses; the answer to one longer than its route allows (411, 413) is plain text.
+
+**`GET /api/peer/index`** gives this library's site indexes as `caracole index export` writes them, a SQLite file
+(`?sites=ug,lacuerda` for those alone), which the phone merges as `caracole index merge` does. caracole serve
+copies them in one read, taking no lock, into a file of `cache_dir/peer/` that is gone once it is sent. One copy is
+out at a time (503 while another is being sent), a HEAD makes none (405), and a copy a killed server left behind is
+deleted an hour later.
 
 ### Syncing by hand: peer sync --push, --choose, --compared
 
-Not built yet.
+`caracole peer sync` can give the other side what goes there in three ways: **`--push`** pushes it, as the phone
+does (above), so only this side needs to reach the other; it waits, ten minutes at most, for the other to take the
+push, and says each unit it gave or left. **`--here ADDRESS`** asks the other to pull it from this side's own
+caracole serve. With neither, it prints the `caracole peer pull` line to run there.
+
+**`--choose SIDE:ID`** settles one unit, whatever is proposed for it: `here` (here's is kept, and the other side
+takes it), `there` (taken here) or `skip` (left on both sides), then the unit's id as `diff --json` names it
+(`--choose=there:song/radiohead/creep`), again for each unit. A conflict neither chosen nor settled by `--prefer` is
+left, and said. A choice naming a unit the two don't hold differently now is refused (exit 2).
+
+**`--compared HASH`**: the comparison the choices were made on, `diff --json`'s `"compared"` (the SHA-256 of what
+it found). The sync compares again first, and refuses, before it changes anything (exit 1), when the two differ from
+it now: compare again, and choose again.
+
+Each unit taken here is checked against both sides' digests as compared, so one that changed on either side since is
+left as it is. Then the sync keeps what the two agree on, stamped by the other side's clock, and the other side's
+address and name, which caracole serve's Sync tab lists. A unit left doesn't fail the sync (exit 0): it says why.
+**`--progress`** prints its stages, compare, take, give and agree, and each unit taken, given or left, as JSON lines
+for caracole serve.
 
 ### The Sync tab
 
-Not built yet.
+The library page caracole serve serves has a **Sync** tab, before Requests, which syncs this library with another
+caracole's (the phone's has the same tab), as `caracole peer sync` does from a terminal:
+
+1. **Compare**: type the other caracole serve's address (`http://192.168.1.20:8737`), or press a caracole synced
+   with before, listed under the field with when (the newest's address is in the field already). caracole serve asks
+   the other for its library's units, one request, and lists every unit the two hold differently (`POST
+   /sync/compare`), grouped as Songs, Removals, Songbooks, Artists' aliases, Artists' UG pages and Blocked tabs, each
+   with why it differs and what the sync proposes: **keep here's**, **take there's**, or **CONFLICT** where both
+   changed it. Nothing changes on either side.
+2. **Choose**: each difference has Here, There or Skip, its proposal's side chosen at first; a conflict has none
+   until you choose, and two buttons settle every conflict at once (Keep here's, Take there's).
+3. **Sync**, once every conflict has a side (`POST /sync/apply`): only the comparison and your choices are sent,
+   never a song. It queues `caracole peer sync ADDRESS --push --compared HASH --choose=SIDE:ID …` (see above), which
+   takes here what comes from there and pushes there what goes there, so the other side needn't reach this one.
+   A comparison is kept 10 minutes, and Sync compares again first: when either side changed since, it is refused
+   ("compare them again, and choose again") before anything is queued. With nothing to take or give, Sync still
+   records that the two agree (and the phone's brings the computer's newer pages and indexes).
+
+The tab then follows the sync, a step at a time (Compare, Take, Give, Agree), and says what it took here, gave there
+and left as it was, with why (a unit you skipped, or one that changed on a side since the comparison: "Synced: 1
+change left as it was"), then offers **Reload**. The sync is a request like any, in the Requests tab too, where a
+sync that left something or failed offers **Compare again**, never Try again, as its choices were made on a
+comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
+two agree on, and the other side's address and name, which `GET /api/sync` lists.
 
 ### What the offline copy lists
 
-Not built yet.
+`GET /api/offline` (see [caracole serve](#caracole-serve)) lists every file the
+app copies. Each file of a song or a songbook also says which sync unit it is
+of, as `caracole peer diff` names units: `unit`, `song/<key>` for a file in a
+song's folder or `songbook/<name key>` (its name in lowercase, its spaces
+collapsed) for one in a songbook's, and `digest`, that unit's digest when the
+list was made. The app's own caracole shows a page it copied unless the phone
+changed or removed that song since: a song changed on the phone says so and
+links to the phone's sheet text, and a song removed on the phone says it was
+removed. When two songs' names make one folder, each file there is of the song
+caracole wrote it for (its kept files, and the pages and PDFs made of them); a
+file either could be, such as its `info.json`, carries no unit. `index.html`,
+and a songbook's files once songbooks.toml no longer names it, carry no unit
+either, and are shown as they are. The units are read as a sync reads them:
+while overrides.toml or songbooks.toml can't be read, `/api/offline` answers 503
+with what is wrong, and the app keeps the copy it has. The list's `format` is
+still 1.
 
 ## Running it on a server
 

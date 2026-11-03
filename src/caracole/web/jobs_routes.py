@@ -23,12 +23,18 @@ it is over and the page asks (``?jobs=``), its song's card as the library page d
 songbooks as its Songbooks tab has them now, which the page draws again: a songbook's change, a lookup
 (``caracole get`` makes the songbooks its song is in again) and a removal each change them. A job says
 what it is about (``kind``: a song's, a removal's, a songbook's), so the page shows each where it
-belongs. Every route that queues a job answers the page's script with its view (``WebApp.queued``).
+belongs. A sync with another caracole (``caracole peer sync``, the Sync tab's: kind "sync") and a push another
+caracole sent, taken (``caracole peer take``: "peer-push"), are no song's: their views carry their stages
+(``steps``), no ``count``, and, once over, what they took, gave and left (``outcome``: ``peer_outcome``), as the Sync
+tab draws them and the phone's views say them too (docs/superpowers/plans/2026-11-03-android-port-m1-m3.md §5.3); a
+sync's ``details`` is the Sync tab. Every route that queues a job answers the page's script with its view
+(``WebApp.queued``).
 app.py checks that /jobs.json and /requests.json are asked for by the page's own script, as a write would be.
 """
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from contextlib import closing
 from datetime import UTC, datetime
@@ -57,13 +63,15 @@ from caracole.web.jobs import (
 )
 from caracole.web.pages import Refused
 from caracole.web.review_routes import picks_waiting, review_first
-from caracole.web.status import REQUESTS, SongFacts, details_href, job_line, song_line
+from caracole.web.status import REQUESTS, SongFacts, details_href, job_line, peer_kind, song_line
 
 if TYPE_CHECKING:
     from caracole.overrides import Overrides
     from caracole.songs import Song
 
 MAX_ASKED = 50  # jobs one /jobs.json answer is asked about
+SYNC_TAB = "#tab=sync"  # a sync's details: the library page's Sync tab, which follows it
+_AGREED = re.compile(r"^(\d+) units? the two agree on$")  # ``caracole peer sync``'s and ``take``'s agree stage, done
 
 
 ROUTES = (
@@ -233,7 +241,9 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     """A job as /jobs.json gives it; ``jobs`` is the whole queue. ``kind`` says what it is about: a song
     ("song"), a song's removal ("remove"), an export of a song's sheet ("export", which is no song's line: its
     ``songId`` is None), or a songbook ("songbook", which ``songbook`` names), whose ``songbook_page`` its line
-    links once it is done. A song's job names it by its id (``songId``) and its identity key (``identity``, the
+    links once it is done; a sync with another caracole ("sync"), a push it sent, taken ("peer-push"), and a pull
+    it asked for ("peer-pull"), no song's (``status.peer_kind``), a sync's ``details`` the Sync tab and the first two's
+    ``steps``, ``count`` and ``outcome`` (``peer_outcome``) §5.3's. A song's job names it by its id (``songId``) and its identity key (``identity``, the
     job's key: ``song_of`` finds the song by it): songs.id has no AUTOINCREMENT, so once the newest song is
     removed the next one added gets its id again, and a page that knew the one by that id tells the other by its
     identity.
@@ -241,16 +251,24 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     Its ``line`` is as a song's line says it (``song_line``): Ready alone, and its sheet as ``sheet``, which the
     list of requests opens by the song's name. A lookup's ``steps`` and, while it runs, its ``count`` are
     outcome.py's ``progress``: none once it ends Ready."""
-    from caracole.web.outcome import progress
+    from caracole.web.outcome import PEER_STEPS, progress
     from caracole.web.songbooks import songbook_of
 
     songbook = songbook_of(job.song_key)
-    kind = ("remove" if job.song_key.startswith(REMOVING) else "export" if job.song_key.startswith((EXPORTING, READING))
-            else "songbook" if songbook is not None else "song")
+    peer = peer_kind(job)
+    kind = peer or ("remove" if job.song_key.startswith(REMOVING) else "export"
+                    if job.song_key.startswith((EXPORTING, READING)) else "songbook" if songbook is not None else "song")
     line = job_line(job, facts, ahead=_ahead(jobs, job), songbook_page=songbook_page)
     shown = song_line(line) if kind == "song" else line
     seen = {"id": job.id, "display": job.display or job.title, "songId": song_id, "kind": kind,
-            "state": job.state, "fetching": job.fetching, "line": shown.as_json(), "details": details_href(job.id)}
+            "state": job.state, "fetching": job.fetching, "line": shown.as_json(),
+            "details": SYNC_TAB if kind == "sync" else details_href(job.id)}
+    if peer in ("sync", "peer-push"):  # its stages, each a step named as the Requests tab names it, and once over
+        # what it took, gave and left
+        seen["steps"] = [{"name": s.name, "label": PEER_STEPS.get(s.name, s.label), "state": s.state,
+                          "detail": s.detail} for s in job.stages]
+        seen["count"] = None
+        seen["outcome"] = peer_outcome(job)
     if shown is not line and line.link is not None:
         seen["sheet"] = line.link[1]
     if kind == "song":
@@ -260,6 +278,21 @@ def view(job: Job, jobs: list[Job], song_id: int | None, facts: SongFacts | None
     if songbook is not None:
         seen["songbook"] = songbook
     return seen
+
+
+def peer_outcome(job: Job) -> dict[str, Any] | None:
+    """What a sync or a take did, once it is over (None while it waits or runs): the units it took here (``taken``),
+    gave there (``given``) and left as they were, each with why (``left``), as its command said them (``Job.units``);
+    how many units the two agree on now (``agreed``, its agree stage's count; None when it didn't agree), and the sites
+    whose indexes it brought up to date (``indexed``: none on a computer, the phone's sync's)."""
+    if job.active:
+        return None
+    agree = next((s for s in job.stages if s.name == "agree" and s.state == "done"), None)
+    count = _AGREED.match(agree.detail.strip()) if agree is not None else None
+    return {"taken": [u for u, said, _ in job.units if said == "taken"],
+            "given": [u for u, said, _ in job.units if said == "given"],
+            "left": [[u, why] for u, said, why in job.units if said == "left"],
+            "agreed": int(count[1]) if count else None, "indexed": []}
 
 
 def _songbooks(app: WebApp, conn: sqlite3.Connection, overrides: Overrides) -> dict[str, Any]:
@@ -285,6 +318,8 @@ def song_of(app: WebApp, conn: sqlite3.Connection, overrides: Overrides | None,
     song its job names (``Job.song_id``) and is none of its requests: no id. A job
     that is over doesn't change, so its answer is worked out once (``app._ended``).
     """
+    if peer_kind(job) is not None:  # a sync's, a take's or a pull's: no song's
+        return None, None
     over = not job.active
     if over:
         with app._ended_lock:

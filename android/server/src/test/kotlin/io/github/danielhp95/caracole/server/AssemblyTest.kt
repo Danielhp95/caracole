@@ -29,12 +29,13 @@ class AssemblyTest {
         TestDb.fresh(tmp.root).use { database ->
             val phone = Phone(PhoneDeps(database, tmp.newFolder("library"), tmp.newFolder("state"), null, scope,
                                         NoAddress, secret = "s".repeat(64), csrf = "tok"))
-            val search = phone.search.routes.single { it.path == "/api/search" }
-            val answer = search.get!!.answer(Request("GET", "/api/search?q=caf%C3%A9", emptyMap(), ByteArray(0)))
-            assertEquals(200, answer.status)
-            assertEquals("""{"query":"café","library":[],"index":[],"short":true}""",
-                         String((answer.body as Body.Bytes).bytes))
             assertEquals(emptyList(), phone.queue.snapshot())
+            // The search route is search-routes' own (no longer neutral): a query too short to search answers so.
+            val search = phone.search.routes.single { it.path == "/api/search" }
+            val answer = search.get!!.answer(Request("GET", "/api/search?q=+c%C3%A9+", emptyMap(), ByteArray(0)))
+            assertEquals(200, answer.status)
+            assertEquals("""{"query":"cé","library":[],"index":[],"short":true}""",
+                         String((answer.body as Body.Bytes).bytes))
         }
         scope.cancel()
     }

@@ -2980,7 +2980,7 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     names = sorted(m.name for m in pkgutil.iter_modules(web.__path__) if m.name.endswith("_routes"))
     assert names == ["export_routes", "guitar_routes", "harmonica_routes", "jobs_routes", "library_routes",
                      "offline_routes", "peer_routes", "remove_routes", "review_routes", "search_routes",
-                     "songbook_routes", "versions_routes", "youtube_routes"]
+                     "songbook_routes", "sync_routes", "versions_routes", "youtube_routes"]
     gathered = []
     for name in names:
         module = importlib.import_module(f"caracole.web.{name}")
@@ -2999,6 +2999,125 @@ def test_the_router_answers_the_routes_of_each_route_module_and_each_lists_its_o
     assert route_for("POST", "/songbook/make").page == "the library"
     assert route_for("POST", "/lookup").page == "the page" and route_for("GET", "/jobs.json").script_only
     assert route_for("GET", "/export.pdf").path == "/export.pdf" and route_for("POST", "/export") is None
+
+
+# --- a body's kind and limit, by route ------------------------------------------------------------------------------
+
+
+def with_test_routes(monkeypatch, *extra):
+    """Every route module's routes, and ``extra`` beside them."""
+    from caracole.web import app as app_module
+    from caracole.web.app import routes
+
+    table = dict(routes()) | {(r.method, r.path): r for r in extra}
+    monkeypatch.setattr(app_module, "routes", lambda: table)
+
+
+def sent(app, path, body, kind, *, token="tok", **headers):
+    """A POST that isn't a form, as another caracole sends one: its form token in a header."""
+    given = {"host": HOST, "content-type": kind, "accept": JSON} | (
+        {"x-caracole-form-token": token} if token is not None else {}) | headers
+    return app.handle(Request("POST", path, given, body))
+
+
+def test_every_route_says_its_bodys_kind_and_limit_and_the_server_reads_no_more():
+    from caracole.web.app import BODIES, MAX_BODY, Route, routes
+
+    assert all(r.body in BODIES and r.limit >= MAX_BODY for r in routes().values())
+    with pytest.raises(ValueError):
+        Route("POST", "/x", lambda app, asked, body: None, body="xml")
+    with pytest.raises(ValueError):
+        Route("POST", "/x", lambda app, asked, body: None, limit=0)
+
+
+def test_the_body_limit_is_the_routes_else_16_kib(app):
+    assert app.body_limit("POST", "/request") == 16 * 1024
+    assert app.body_limit("POST", "/peer/pull") == 1024 * 1024
+    assert app.body_limit("POST", "/peer/%70ull?x=1") == 1024 * 1024  # the address as the router reads it
+    assert app.body_limit("POST", "/peer/push/new") == 1024 * 1024
+    assert app.body_limit("POST", "/peer/push/file?push=0123456789abcdef&sha256=00") == 64 * 1024 * 1024
+    assert app.body_limit("POST", "/peer/push?push=0123456789abcdef") == 16 * 1024 * 1024
+    for target in ("/nowhere", "/%ff", "/api/peer/state", "/peer/pull/x", "/peer/push/new/x"):
+        assert app.body_limit("POST", target) == 16 * 1024, target
+
+
+def test_a_json_or_bytes_route_reads_its_kind_with_the_form_token_in_a_header(app, monkeypatch):
+    from caracole.web.app import Route, json_response
+
+    with_test_routes(monkeypatch,
+                     Route("POST", "/t/json", lambda app, asked, data: json_response(200, {"got": data}),
+                           body="json", limit=64),
+                     Route("POST", "/t/bytes", lambda app, asked, data: json_response(200, {"n": len(data)}),
+                           body="bytes", limit=8))
+    response = sent(app, "/t/json", '{"a": [1, "\\u00e9", null], "b": "é"}'.encode(), JSON)
+    assert response.status == 200 and answer(response) == {"got": {"a": [1, "é", None], "b": "é"}}
+    assert answer(sent(app, "/t/json", b"[]", "Application/JSON; charset=utf-8")) == {"got": []}
+    assert answer(sent(app, "/t/bytes", b"\x00\xff", "application/octet-stream")) == {"n": 2}
+    assert answer(sent(app, "/t/bytes", b"", "application/octet-stream", origin=f"http://{HOST}")) == {"n": 0}
+
+    def refused(response, status):
+        assert response.status == status, (response.status, response.body[:200])
+        return answer(response)
+
+    # the token in its header: none, an old one, or a form's field instead, says to read it again
+    assert refused(sent(app, "/t/json", b"{}", JSON, token=None), 403)["reload"] is True
+    assert refused(sent(app, "/t/json", b"{}", JSON, token="old"), 403)["reload"] is True
+    assert refused(sent(app, "/t/bytes", b"csrf=tok", "application/octet-stream", token=None), 403)["reload"]
+    # another site's, with the token all the same
+    for other in ({"sec-fetch-site": "cross-site"}, {"origin": "http://evil.example"}):
+        assert "reload" not in refused(sent(app, "/t/json", b"{}", JSON, **other), 403)
+    # its own kind alone
+    assert refused(sent(app, "/t/json", b"{}", "application/x-www-form-urlencoded"), 415)
+    assert refused(sent(app, "/t/json", b"{}", "text/plain"), 415)
+    assert refused(sent(app, "/t/bytes", b"x", JSON), 415)
+    assert refused(sent(app, "/t/bytes", b"x", ""), 415)
+    # up to its limit
+    assert answer(sent(app, "/t/json", b'"' + b"x" * 62 + b'"', JSON)) == {"got": "x" * 62}
+    assert refused(sent(app, "/t/json", b'"' + b"x" * 63 + b'"', JSON), 413)
+    assert refused(sent(app, "/t/bytes", b"123456789", "application/octet-stream"), 413)
+    # JSON that can't be read
+    for body in (b"{", b'{"a": 1} x', b"\xff", b"", b"'a'"):
+        assert refused(sent(app, "/t/json", body, JSON), 400) == {"error": "That can't be read as JSON."}, body
+    with_test_routes(monkeypatch, Route("POST", "/t/json", lambda app, asked, data: json_response(200, {}),
+                                        body="json", limit=10 ** 6))
+    assert refused(sent(app, "/t/json", b"[" * 100_000 + b"]" * 100_000, JSON), 400)
+
+
+def test_what_its_headers_alone_refuse_is_answered_unread_as_it_would_be_read(app, monkeypatch):
+    # server.py asks it before it reads a body longer than 16 KiB: the same answer, the same order of checks
+    from caracole.web.app import Route, json_response
+
+    with_test_routes(monkeypatch,
+                     Route("POST", "/t/json", lambda app, asked, data: json_response(200, {}), body="json",
+                           limit=10 ** 6),
+                     Route("POST", "/t/form", lambda app, asked, form: json_response(200, {}), limit=10 ** 6))
+    cases = [("/t/json", {"host": "evil.example"}), ("/t/json", {"sec-fetch-site": "cross-site"}),
+             ("/t/json", {"origin": "http://evil.example"}), ("/t/json", {"x-caracole-form-token": "old"}),
+             ("/t/json", {"content-type": "text/plain"}), ("/t/form", {"content-type": "text/plain"}),
+             ("/t/form", {"sec-fetch-site": "same-site", "content-type": "application/x-www-form-urlencoded"}),
+             ("/t/json", {"accept": JSON, "x-caracole-form-token": ""})]
+    for path, change in cases:
+        headers = {"host": HOST, "content-type": JSON, "x-caracole-form-token": "tok"} | change
+        early = app.refused_unread("POST", path, headers)
+        late = app.handle(Request("POST", path, headers, b"{}"))
+        assert early is not None and (early.status, early.body, early.headers) == (
+            late.status, late.body, late.headers), (path, change)
+    passing = {"host": HOST, "content-type": JSON, "x-caracole-form-token": "tok"}
+    assert app.refused_unread("POST", "/t/json", passing) is None
+    assert app.refused_unread("POST", "/t/form", passing | {"content-type": "application/x-www-form-urlencoded"}
+                              ) is None  # its csrf field, in the body, is read with it
+    assert app.refused_unread("POST", "/nowhere", passing) is None  # 16 KiB at most: read, then refused
+
+
+def test_a_form_route_reads_a_form_alone_up_to_its_own_limit(app, monkeypatch):
+    from caracole.web.app import Route, json_response
+
+    with_test_routes(monkeypatch, Route("POST", "/t/form", lambda app, asked, form: json_response(200, form),
+                                        limit=32 * 1024))
+    assert answer(post(app, "/t/form", {"pad": "x" * 30_000}, accept=JSON))["pad"] == "x" * 30_000
+    assert post(app, "/t/form", {"pad": "x" * 33_000}).status == 413
+    assert post(app, "/request", {"pad": "x" * 17_000}).status == 413  # 16 KiB, as ever
+    assert sent(app, "/t/form", b'{"csrf": "tok"}', JSON).status == 415  # JSON, the token in its header: no form
 
 
 # --- LaCuerda's own search -------------------------------------------------------------------------------

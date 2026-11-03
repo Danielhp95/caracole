@@ -83,6 +83,28 @@ class SyncEngineTest {
     }
 
     @Test
+    fun `a sync keeps each file's unit and digest, and a list whose digests alone changed downloads nothing`() {
+        val song = "song/estopa/tu-calorro"
+        val units = mapOf("Estopa/Tu calorro/sheet.html" to (song to "d".repeat(64)),
+                          "Estopa/Tu calorro/sheet.pdf" to (song to "d".repeat(64)))
+        server.publish(library, units = units)
+        engine.sync(server.address)
+        val first = assertNotNull(mirror.reload())
+        assertEquals(song to "d".repeat(64), first.byPath.getValue("Estopa/Tu calorro/sheet.pdf").let { it.unit to it.digest })
+        assertNull(first.byPath.getValue("index.html").unit)
+        server.requests.clear()
+
+        // The song changed on the computer, its pages not yet made again: the same bytes, the unit's new digest.
+        server.publish(library, units = units.mapValues { (_, unit) -> unit.first to "e".repeat(64) })
+        val report = engine.sync(server.address)
+        assertEquals(SyncReport(4, library.values.sumOf { it.size.toLong() }, 0, 0, 0, 0, emptyList()), report)
+        assertEquals(listOf("/api/offline"), server.requests.toList(), "no file downloaded")
+        assertContentEquals(server.manifest, mirror.manifestFile.readBytes(), "the list swapped in whole")
+        assertEquals("e".repeat(64), assertNotNull(mirror.manifest()).byPath.getValue("Estopa/Tu calorro/sheet.html").digest)
+        assertMirrors(library)
+    }
+
+    @Test
     fun `nothing new is nothing downloaded`() {
         server.publish(library)
         engine.sync(server.address)

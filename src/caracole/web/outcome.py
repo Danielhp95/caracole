@@ -45,6 +45,12 @@ the job and what the library knows of its song:
   ran or waited, and tries again, a removal by asking what goes again, as a failed one does; its step and stage
   that ran then are drawn failed.
 
+- **A sync with another caracole** (``caracole peer sync``, the Sync tab's), a push another sent taken (``caracole peer
+  take``) and a pull it asked for (``peer pull``; ``status.peer_kind``): their stages as steps (``PEER_STEPS``: Compare,
+  Take, Give, Agree; Check, Take, Render, Agree), each skipped one not drawn; over, Synced or Taken, what it took
+  and gave in a sentence, how many changes it left, and for a sync, the next step Compare again (the Sync tab), never
+  Try again: a sync is made of the choices of one comparison, and a push is the other caracole's to send again.
+
 A reason is a site's own answer, worded for a person: a lookup's stage that ended in a wait or an error
 says which site, what it answered and what waits ("LRCLIB answered 503: the lyrics wait for tonight's
 run."); a Not found says Ultimate Guitar has no chords for it only when the fetch asked it
@@ -64,8 +70,9 @@ from urllib.parse import urlencode
 
 from caracole.get import GTPTABS_KEPT, MATCH_NOT_FOUND, SHEET_FROM
 from caracole.icons import tag
+from caracole.logs import plural
 from caracole.web.jobs import INDEX_READS, INTERRUPTED, LOOKUP, REMOVING, Job, Stage
-from caracole.web.status import READY, Line, SongFacts
+from caracole.web.status import READY, Line, SongFacts, peer_kind
 
 if TYPE_CHECKING:
     from caracole.config import Config
@@ -120,6 +127,10 @@ CANCELLED = "Taken out of the queue before it ran."
 INTERRUPTED_RAN = "caracole serve stopped while it ran: run it again to finish it."
 INTERRUPTED_WAITED = "caracole serve stopped before it ran: Try again runs it."
 _ELSEWHERE = {"lacuerda": "LaCuerda has a sheet", "gtptabs": "gtptabs.com's index lists a page for it"}
+# A sync's and a take's steps, by their stages' names (jobs.PEER_SYNC_STAGES, PEER_TAKE_STAGES; the phone's sync adds
+# mirror and index).
+PEER_STEPS = {"compare": "Compare", "check": "Check", "take": "Take", "give": "Give", "render": "Render",
+              "mirror": "Pages", "agree": "Agree", "index": "Indexes"}
 
 
 @dataclass(frozen=True)
@@ -145,6 +156,9 @@ class Action:
     fields: tuple[tuple[str, str], ...] = ()
 
 
+COMPARE_AGAIN = Action("Compare again", href="/#tab=sync")  # a sync's next step: the Sync tab, a comparison afresh
+
+
 @dataclass(frozen=True)
 class Outcome:
     """How a finished request ended: ``tone`` (status.py's), ``word``, ``reason`` ("" for none), ``action``,
@@ -163,6 +177,9 @@ class Outcome:
 def steps(job: Job, facts: SongFacts | None = None) -> list[Chip]:
     """The request's steps, as the Requests tab draws the one that runs; ``facts``: its song's, for where its
     sheet came from."""
+    if peer_kind(job) is not None:  # a sync's or a take's: its stages, each skipped one not drawn
+        return [Chip(PEER_STEPS.get(stage.name, stage.label), "failed" if stage.state == INTERRUPTED else stage.state)
+                for stage in job.stages if stage.state != "skipped"]
     if job.stages and job.from_youtube:
         return _youtube_steps(job)
     if job.stages:
@@ -283,6 +300,9 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
         # what goes is asked again, as of now: never removed unasked
         again = (Action("Try again", post="/remove", fields=(("song", str(job.song_id)),))
                  if job.song_id is not None else None)
+    peer = peer_kind(job)
+    if peer is not None and job.state != "cancelled":
+        return _peer_outcome(job, peer, line)
     if job.state == INTERRUPTED:  # the server stopped before it was over
         return Outcome("waiting", "Interrupted", INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED, again)
     if tone == "failed":
@@ -311,6 +331,29 @@ def outcome(job: Job, line: Line, facts: SongFacts | None = None, *, song_id: in
     if tone == "waiting":
         return Outcome("waiting", text, _waits(job.stages) or ("" if job.stages else NOT_ASKED), again)
     return Outcome(tone, word, _sentence(rest[:1].upper() + rest[1:]) if rest else "")
+
+
+def _peer_outcome(job: Job, kind: str, line: Line) -> Outcome:
+    """A sync, a take or a pull over: Synced or Taken, what it took and gave, and what it left; else how it failed or
+    was stopped. A sync's next step is a comparison afresh in the Sync tab, never Try again (its choices were made on a
+    comparison that is past); a take's or a pull's is the other caracole's to send again."""
+    action = COMPARE_AGAIN if kind == "sync" else None
+    if job.state == INTERRUPTED:
+        return Outcome("waiting", "Interrupted", INTERRUPTED_RAN if job.started_at else INTERRUPTED_WAITED, action)
+    if line.tone == "failed":
+        return Outcome("failed", "Failed", _sentence(line.text), action)
+    taken = sum(1 for _, said, _ in job.units if said == "taken")
+    given = sum(1 for _, said, _ in job.units if said == "given")
+    left = sum(1 for _, said, _ in job.units if said == "left")
+    parts = [f"took {plural(taken, 'change')} here"] if taken or kind != "sync" else []
+    parts += [f"gave {plural(given, 'change')} there"] if given else []
+    said = (" and ".join(parts)).capitalize() + "." if parts else "Nothing changed on either side."
+    if line.tone == "ready":
+        return Outcome("ready", line.text, said)
+    word = line.text.partition(": ")[0] if left else "Not taken"
+    reason = f"{said} {plural(left, 'change')} left as {'it was' if left == 1 else 'they were'}." if left else (
+        _sentence(line.text))
+    return Outcome("waiting", word, reason, action)
 
 
 def _not_found(job: Job, facts: SongFacts | None, song_id: int | None) -> Outcome:

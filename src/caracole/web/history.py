@@ -227,6 +227,7 @@ def _record(job: Job, lines: int, line_chars: int) -> dict[str, Any]:
                     "running_detail": s.running_detail} for s in job.stages],
         "song_id": job.song_id, "song_display": job.song_display, "files": dict(job.files),
         "seconds_to_sheet": job.seconds_to_sheet, "together": list(job.together),
+        "units": [list(unit) for unit in job.units],
     }
 
 
@@ -254,7 +255,13 @@ def _job(record: Mapping[str, Any]) -> Job:
         files={_str(k): _str(v) for k, v in _dict(record.get("files", {})).items()},
         seconds_to_sheet=_maybe_number(record.get("seconds_to_sheet")),
         together=tuple(_int(n) for n in _list(record.get("together", []))),
+        units=[_unit_of(unit) for unit in _list(record.get("units", []))],
     )
+
+
+def _unit_of(record: Any) -> tuple[str, str, str]:
+    unit_id, outcome, why = _list(record)
+    return _str(unit_id), _str(outcome), _str(why)
 
 
 def _step_of(record: Any) -> Step:
