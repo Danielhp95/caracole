@@ -24,6 +24,7 @@ from caracole.viewer import build_viewer
 from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
 
+from conftest import add_song
 from helpers import browser
 from helpers.browser import in_chromium
 from helpers.guitar import keep_guitar
@@ -130,7 +131,10 @@ def test_the_manifest_lists_the_library_page_first_then_each_file_it_links_to(ap
     assert paths(listed) == LISTED
     assert paths(listed)[1:] == sorted(paths(listed)[1:])  # by path, after the page the app opens first
     assert listed["files"][0]["url"] == "/offline/index.html"
-    assert all(sorted(entry) == ["headers", "path", "sha256", "size", "type", "url"] for entry in listed["files"])
+    first, *rest = listed["files"]
+    assert sorted(first) == ["headers", "path", "sha256", "size", "type", "url"]  # the page of no unit
+    assert all(sorted(entry) == ["digest", "headers", "path", "sha256", "size", "type", "unit", "url"]
+               for entry in rest)
 
 
 def test_each_address_answers_exactly_the_bytes_type_and_headers_listed(app, library):
@@ -187,6 +191,85 @@ def test_a_written_page_goes_with_its_own_policy_in_a_sandbox_and_the_library_pa
 def test_the_same_library_gives_the_same_answer(app, library):
     first = get(app, "/api/offline").body
     assert get(app, "/api/offline").body == first
+
+
+# --- each file's unit, for the phone's gate ------------------------------------------------------------------
+
+
+def units_now(app):
+    """Each unit of the app's library now, by id, with its digest (peer_sync.library_state, as a sync compares)."""
+    from caracole.peer_sync import library_state
+    from caracole.songbook import load_songbooks
+
+    with app.db() as conn:
+        state = library_state(conn, app.overrides(), load_songbooks(songbooks_file(app.cfg.library_dir)))
+    return {unit.id: unit.digest for unit in state.values()}
+
+
+def unit_of(conn, artist, title):
+    return "song/" + conn.execute("SELECT key FROM songs WHERE artist = ? AND title = ?", (artist, title)).fetchone()[0]
+
+
+def test_each_file_of_a_song_or_a_songbook_names_its_unit_and_the_units_digest(app, conn, library):
+    units = units_now(app)
+    expected = {FOLDER: unit_of(conn, "Soda Stereo", "De Música Ligera"),
+                AUTO: unit_of(conn, "Placeholder Band", "Synthetic Song"), BOOK: "songbook/campfire"}
+    assert set(expected.values()) <= set(units)
+    for entry in manifest(app)["files"]:
+        if entry["path"] == "index.html":  # the library page is no unit's
+            assert "unit" not in entry and "digest" not in entry
+            continue
+        unit = expected[entry["path"].rpartition("/")[0]]
+        assert (entry["unit"], entry["digest"]) == (unit, units[unit]), entry["path"]
+
+
+def test_a_files_digest_is_its_units_now_whatever_its_bytes(app, conn, library):
+    # The digest is the unit's when the manifest is made: a song changed since its pages were written names its new
+    # digest beside its old pages' bytes, which is how the phone knows a page no longer is the song's.
+    sheet, auto = f"{FOLDER}/sheet.pdf", f"{AUTO}/sheet (auto).pdf"
+    before = {entry["path"]: entry for entry in manifest(app)["files"]}
+    conn.execute("UPDATE songs SET review = 1 WHERE artist = 'Soda Stereo'")
+    after = {entry["path"]: entry for entry in manifest(app)["files"]}
+    assert after[sheet]["sha256"] == before[sheet]["sha256"]
+    assert after[sheet]["digest"] != before[sheet]["digest"]
+    assert after[sheet]["digest"] == units_now(app)[after[sheet]["unit"]]
+    assert after[f"{FOLDER}/sheet.html"]["digest"] == after[sheet]["digest"]  # every file of the song
+    assert after[auto] == before[auto]  # another song's are as they were
+
+
+def test_a_folder_two_songs_share_is_the_units_of_the_song_that_keeps_files_there(app, conn, cfg):
+    # Two titles alike in their first 120 bytes, a folder's name at most (library.safe_name), are two songs in one
+    # folder (library.song_folder), where only one of them keeps files (library.SharedFolder): they are its.
+    from caracole.library import MAX_NAME_BYTES
+
+    long = "La " + "canción más larga " * 8
+    assert len(long.encode("utf-8")) > MAX_NAME_BYTES
+    rendered_song(conn, cfg, "Placeholder Band", "Synthetic Song", auto=True)
+    keeper = rendered_song(conn, cfg, "Soda Stereo", long + "uno")
+    other = add_song(conn, "Soda Stereo", long + "dos", added_at="2026-10-02T00:00:00Z")
+    assert other.key != keeper.key and song_dir(cfg.library_dir, other) == song_dir(cfg.library_dir, keeper)
+    write_pages(conn, cfg)
+    shared = song_dir(cfg.library_dir, keeper).relative_to(cfg.library_dir).as_posix() + "/"
+    listed = {entry["path"]: entry for entry in manifest(app)["files"]}
+    assert f"{shared}sheet.html" in listed
+    assert {entry["unit"] for path, entry in listed.items() if path.startswith(shared)} == {f"song/{keeper.key}"}
+
+
+def test_a_songbook_no_longer_in_songbooks_toml_leaves_its_files_of_no_unit(app, library):
+    songbooks_file(app.cfg.library_dir).write_text("", encoding="utf-8")  # Campfire gone; its files still linked
+    listed = {entry["path"]: entry for entry in manifest(app)["files"]}
+    assert "unit" not in listed[f"{BOOK}/songbook.html"] and "digest" not in listed[f"{BOOK}/songbook.html"]
+
+
+@pytest.mark.parametrize("name", ["overrides.toml", "songbooks.toml"])
+def test_without_the_units_there_is_no_copy(app, library, name):
+    # A unit's digest is read from overrides.toml and songbooks.toml, as a sync reads it: without them the manifest
+    # can't say which pages are still their songs', and the app keeps the copy it has.
+    broken = app.cfg.overrides_file if name == "overrides.toml" else songbooks_file(app.cfg.library_dir)
+    broken.write_text("[unclosed\n", encoding="utf-8")
+    response = get(app, "/api/offline")
+    assert response.status == 503 and header(response, "content-type") == JSON_TYPE
+    assert f"{name} can't be read" in json.loads(response.body)["error"]
 
 
 # --- only what serve sends now ------------------------------------------------------------------------------
