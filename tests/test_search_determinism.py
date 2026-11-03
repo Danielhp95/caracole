@@ -135,6 +135,26 @@ def test_a_gametabs_tab_two_pages_list_is_named_alike_whichever_went_in_first(tm
     assert plain(search.search_gametabs(first, "overworld")) == plain(search.search_gametabs(second, "overworld"))
 
 
+def test_harptabs_tabs_of_one_id_past_the_pages_asked_for_are_the_same_whichever_went_in_first(tmp_path):
+    # One tab under two slugs, its apostrophe written either way: one key, one id, and one page asked for.
+    first, second = both_orders(tmp_path, harptabs_rows, ["tab/30906/can-t-help-falling-in-love",
+                                                          "tab/30906/cant-help-falling-in-love"])
+    query = "can't help falling in love"
+    assert plain(search.search_harptabs(first, query, songs=1)) == plain(search.search_harptabs(second, query, songs=1))
+
+
+def test_a_gametabs_tab_two_pages_list_is_its_last_pages_by_their_numbers(tmp_path):
+    # Page 10 comes after page 2, though "?page=10" sorts before "?page=2" as text.
+    def fill(conn, tabs):
+        gametabs_rows(conn, ["https://gametabs.net/tabs/zelda/overworld"])
+        conn.executemany(
+            "INSERT INTO gametabs_game_tabs (page, path, game, title, title_key, views, place) "
+            "VALUES (?, 'tabs/zelda/overworld', 'zelda', ?, 'overworld', 5, 0)", tabs)
+
+    for conn in both_orders(tmp_path, fill, [("tabs/zelda?page=2", "Overworld"), ("tabs/zelda?page=10", "OVERWORLD")]):
+        assert [h.title for h in search.search_gametabs(conn, "overworld")] == ["OVERWORLD"]
+
+
 def test_ultimate_guitars_artists_past_those_a_suggestion_reads_are_the_same_whichever_went_in_first(tmp_path,
                                                                                                       monkeypatch):
     monkeypatch.setattr(search, "CLOSE_ARTISTS", 1)
@@ -248,7 +268,7 @@ def test_lacuerdas_index_answers_alike_whichever_rows_went_in_first(tmp_path):
 # Each case hangs on the order of two things a set held: the score of each is made to tie (the readings patched), so
 # the first one iterated says which reading the hit is, or which game comes first.
 SEEDED = r'''
-import json, sys, tempfile
+import json, sys
 from pathlib import Path
 
 from caracole import db, search
@@ -267,7 +287,7 @@ search._Query.readings = by_name
 out["names_reading"] = search._names_reading([search._Query("x")], ["宋冬野"], "斑马")
 search._Query.readings = readings
 
-conn = db.connect(Path(tempfile.mkdtemp()) / "c.sqlite")
+conn = db.connect(Path(sys.argv[1]) / "c.sqlite")
 # _harp_songs: an artist's page read, whose name and slug are two forms.
 conn.execute("INSERT INTO harptabs_index (path, kind, page_id, key, sitemap) VALUES ('artist/1/abc', 'artist', 1, "
              "'abc', 's')")
@@ -309,12 +329,13 @@ sys.stdout.write(json.dumps(out, ensure_ascii=False))
 
 
 @pytest.mark.slow
-def test_a_set_of_names_is_read_in_one_order_whatever_the_hash_seed():
+def test_a_set_of_names_is_read_in_one_order_whatever_the_hash_seed(tmp_path):
     env = {**os.environ, "PYTHONPATH": subprocess_pythonpath(f"{SRC}{os.pathsep}{TESTS}")}
     answers = {}
     for seed in range(8):
-        done = subprocess.run([sys.executable, "-c", SEEDED], env={**env, "PYTHONHASHSEED": str(seed)},
-                              capture_output=True, text=True, check=True)
+        (tmp_path / str(seed)).mkdir()
+        done = subprocess.run([sys.executable, "-c", SEEDED, str(tmp_path / str(seed))],
+                              env={**env, "PYTHONHASHSEED": str(seed)}, capture_output=True, text=True, check=True)
         answers[seed] = json.loads(done.stdout)
     for case in answers[0]:
         seen = {json.dumps(a[case]) for a in answers.values()}

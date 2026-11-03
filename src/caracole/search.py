@@ -914,7 +914,8 @@ def _lacuerda_suggestions(conn: sqlite3.Connection, words: Sequence[str]) -> lis
         return []
     where = " OR ".join("artist_key LIKE ? OR artist_key LIKE ?" for _ in firsts)
     rows = conn.execute(f"SELECT artist, artist_slug, artist_key, songs FROM lacuerda_index WHERE title = '' "
-                        f"AND ({where}) ORDER BY path", [p for c in firsts for p in (f"{c}%", f"%-{c}%")])
+                        f"AND ({where}) ORDER BY +path",  # +path: the table scanned, the rows found sorted, never
+                        [p for c in firsts for p in (f"{c}%", f"%-{c}%")])  # every row read through the paths' index
     letters = sum(len(w) for w in words)
     close = []
     for artist, slug, key, songs in rows:
@@ -1400,7 +1401,7 @@ def _gametabs_paths(conn: sqlite3.Connection, patterns: Sequence[str]) -> list[s
         "ORDER BY path LIMIT ?", (TAB, *patterns, SITE_ROWS_READ))}
     paths.update(r[0] for r in conn.execute(
         f"SELECT path FROM gametabs_game_tabs WHERE {' OR '.join('composers LIKE ?' for _ in patterns)} "
-        "ORDER BY path LIMIT ?", (*patterns, SITE_ROWS_READ)))
+        "ORDER BY +path LIMIT ?", (*patterns, SITE_ROWS_READ)))  # +path: as in _lacuerda_suggestions
     return sorted(paths)
 
 
@@ -1408,13 +1409,14 @@ def _gametabs_tracks(conn: sqlite3.Connection,
                      paths: Sequence[str]) -> tuple[dict[tuple[str, str], list[_GameTab]], dict[str, str]]:
     """The tabs of ``paths`` by track, a game's slug and a title's key (the title its game's page lists, else the
     sitemap's key; a tab with neither is none), in the order of ``paths``, and the names of their games as their
-    pages head them. A tab two of a game's pages list is the last page's."""
+    pages head them. A tab two of a game's pages list is the last page's, by their numbers (``?page=10`` after
+    ``?page=2``: a game's pages' addresses differ in their number alone)."""
     from caracole.gametabs import TAB, title_key
 
     marks = ", ".join("?" for _ in paths)
     listed = {r[0]: tuple(r)[1:] for r in conn.execute(
         f"SELECT path, title, views, rating, instruments, composers FROM gametabs_game_tabs WHERE path IN ({marks}) "
-        "ORDER BY path, page", list(paths))}
+        "ORDER BY path, length(page), page", list(paths))}
     keyed = {r[0]: tuple(r)[1:] for r in conn.execute(
         f"SELECT path, game, key FROM gametabs_index WHERE kind = ? AND path IN ({marks})", (TAB, *paths))}
     games = {game for game, _ in keyed.values()} | {path.split("/")[1] for path in listed}
@@ -1488,7 +1490,7 @@ def search_harptabs(conn: sqlite3.Connection, query: str, *, songs: int = SITE_R
         keys = list(dict.fromkeys((joined(key), key)))
         rows = conn.execute(
             f"SELECT path FROM harptabs_index i WHERE kind = ? AND key IN ({', '.join('?' for _ in keys)}) AND NOT "
-            "EXISTS (SELECT 1 FROM harptabs_artist_tabs t WHERE t.tab_id = i.page_id) ORDER BY page_id LIMIT ?",
+            "EXISTS (SELECT 1 FROM harptabs_artist_tabs t WHERE t.tab_id = i.page_id) ORDER BY page_id, path LIMIT ?",
             (TAB, *keys, n)).fetchall()
         return [page_url(row[0]) for row in rows]
 
