@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole
 import android.Manifest
 import android.app.Activity
 import android.content.ActivityNotFoundException
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
@@ -15,6 +16,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.Switch
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -89,7 +91,7 @@ class SettingsActivity : Activity() {
         findViewById<Button>(R.id.import_computer).setOnClickListener {
             settings.server = address.text.toString().trim()
             askToNotify()
-            IndexImports.fromComputer(this)
+            importing { IndexImports.fromComputer(it) }
         }
         findViewById<Button>(R.id.import_file).setOnClickListener { pickIndex() }
 
@@ -132,7 +134,36 @@ class SettingsActivity : Activity() {
             // A document that can't be kept: the import reads it while the grant lasts.
         }
         askToNotify()
-        IndexImports.fromFile(this, uri)
+        importing(refused = {
+            // Another import is under way: the right to read this one is given back now, never kept for nothing
+            // (Android keeps only so many).
+            try {
+                it.contentResolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            } catch (e: SecurityException) {
+                // It wasn't kept: nothing to give back.
+            }
+        }) { IndexImports.fromFile(it, uri) }
+    }
+
+    /**
+     * An import asked for ([start]: false while another is under way), in the app's own scope, so leaving the screen
+     * at once still starts it; one refused gives back what it holds ([refused]) and says so.
+     */
+    private fun importing(refused: (Context) -> Unit = {}, start: suspend (Context) -> Boolean) {
+        val app = applicationContext
+        Caracole.background.launch {
+            val said = try {
+                if (start(app)) return@launch
+                app.getString(R.string.import_under_way)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // WorkManager couldn't take it: said, never a crash.
+                app.getString(R.string.import_not_started, e.message ?: e.javaClass.simpleName)
+            }
+            refused(app)
+            withContext(Dispatchers.Main) { Toast.makeText(app, said, Toast.LENGTH_LONG).show() }
+        }
     }
 
     /** Android 13 and later show the import's notification only once asked; it runs either way. */

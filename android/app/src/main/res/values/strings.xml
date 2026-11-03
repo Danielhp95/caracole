@@ -38,6 +38,8 @@
     <string name="import_copying">Copying the file…</string>
     <string name="import_merging">Merging the index…</string>
     <string name="import_no_picker">No app on this phone picks a file.</string>
+    <string name="import_under_way">An import is under way already: wait for it to end.</string>
+    <string name="import_not_started">The import couldn\'t start: %1$s</string>
     <string name="jobs_channel">Work in the background</string>
 
     <string name="syncing_asking">Syncing: asking caracole…</string>

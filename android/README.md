@@ -113,9 +113,11 @@ build`); the phone never asks the sites for them. In Settings, under Import inde
 - **From a file** takes a file made on the computer with `caracole index export indexes.sqlite` and copied to the
   phone.
 
-The import runs in the background, with a notification while it lasts. The phone merges the file as `caracole index
-merge` does: each site's newer reads win, and nothing it holds goes back. Settings shows how the last import ended.
-Import again now and then to bring the sites' new songs.
+The import runs in the background, with a notification while it lasts, one import at a time: asked for while one
+runs, Settings says so. The phone merges the file as `caracole index merge` does: each site's newer reads win, and
+nothing it holds goes back. It waits for a sync that runs, and a sync waits for it. Settings shows how the last
+import ended, or why it failed, in the computer's words or the merge's ("the file was exported at schema version
+14…": export it again with the computer's caracole). Import again now and then to bring the sites' new songs.
 
 Then the library page's search works with the computer off: your songs, and the songs of Ultimate Guitar,
 LaCuerda, gtptabs.com, MuseScore, harptabs.com and gametabs.net as the indexes list them, "Did you mean", and an
@@ -184,8 +186,8 @@ emulators 37.1 and 37.2 crashed in their own render thread when the WebView went
 the host's `127.0.0.1` is `10.0.2.2`. The instrumented tests sync from a running caracole serve. EndToEndTest opens
 the library page and a viewer, transposes, and hands off a PDF and a Guitar Pro file. PinchTest pinches the library
 page and a sheet, larger and smaller, and checks the size label and that the chords stay over their syllables.
-LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, and the WebView
-never loads another loopback port:
+LocalServerTest needs no computer: the app's server answers its page only with the launch's cookie, the WebView
+never loads another loopback port, and a first start's database is made whole:
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk

@@ -10,6 +10,7 @@ import androidx.test.espresso.intent.Intents.intending
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasAction
 import androidx.test.espresso.intent.matcher.IntentMatchers.hasData
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import io.github.danielhp95.caracole.Pages.evaluate
 import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
@@ -18,10 +19,12 @@ import org.hamcrest.Matchers.allOf
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.InetAddress
 import java.net.ServerSocket
@@ -39,8 +42,9 @@ import kotlin.concurrent.thread
  * Its server listens on 127.0.0.1 and answers its library page at `/` to a request with the launch's cookie, and
  * refuses one without it (403, "Not this app's caracole."), so no other app on the phone can use it. The WebView
  * carries that cookie and loads the server's exact origin alone: another server on another loopback port (as a
- * Termux caracole serve on 8737 would be) never hears from it, neither when the app is told to load it nor when the
- * page follows a link to it, which opens in the browser instead.
+ * Termux caracole serve on 8737 would be) never hears from it, neither when the app is told to load it, nor when the
+ * page follows a link to it, which opens in the browser instead, nor when a page there asks it for a resource. And
+ * the database a first start makes is named only once whole, seeded, with no WAL left behind.
  */
 @RunWith(AndroidJUnit4::class)
 class LocalServerTest {
@@ -113,19 +117,54 @@ class LocalServerTest {
                 waitUntil("the WebView to give up on it") {
                     url(main).startsWith(elsewhere) && evaluate(main, "document.readyState") == "complete"
                 }
-                // A page of the server's own asks it for something: not a request either.
-                main.onActivity { it.findViewById<WebView>(R.id.web).loadUrl("$origin/") }
-                waitUntil("the library page again") {
-                    url(main) == "$origin/" && evaluate(main, "document.readyState") == "complete"
+                // From that page, the app's own 404 with no policy of its own (the library page's would refuse these
+                // before the WebView ever asked the app), a fetch and an image of that origin: each answered in the
+                // app (a 404, or refused), and neither opens a socket.
+                evaluate(main, """(() => {
+                    window.probes = {};
+                    const done = (name, how) => { window.probes[name] = how; };
+                    fetch(${JSONObject.quote(elsewhere + "fetched")}).then((r) => done("fetch", "status " + r.status),
+                                                                          () => done("fetch", "refused"));
+                    const image = new Image();
+                    image.onload = () => done("image", "loaded");
+                    image.onerror = () => done("image", "refused");
+                    image.src = ${JSONObject.quote(elsewhere + "image.png")};
+                    return 1;
+                })()""")
+                waitUntil("the fetch and the image to settle") {
+                    evaluate(main, "Object.keys(window.probes || {}).length") == 2
                 }
-                evaluate(main, "(() => { const i = document.createElement('iframe'); " +
-                    "i.src = ${JSONObject.quote(elsewhere + "frame")}; document.body.appendChild(i); return 1; })()")
-                Thread.sleep(2_000)
+                val probes = JSONObject(evaluate(main, "JSON.stringify(window.probes)") as String)
+                assertTrue("the app's own answer: $probes", probes.getString("fetch") in setOf("status 404", "refused"))
+                assertEquals("refused", probes.getString("image"))
             } finally {
                 Intents.release()
             }
         }
         assertEquals("connections the other server heard", 0, heard.get())
+    }
+
+    @Test
+    fun aFirstStartMakesTheDatabaseWholeSeededWithNoWalLeft() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val dir = File(context.cacheDir, "first-start-${System.nanoTime()}").apply { mkdirs() }
+        try {
+            val file = File(dir, "caracole.sqlite")
+            Caracole.openDatabase(file).use { database ->
+                assertEquals("the kv a fresh computer's database holds", "2",
+                             database.read { it.kvGet("lacuerda:index:keys") })
+                assertEquals("the phone's own tables", "1", database.read { it.kvGet("phone:schema") })
+            }
+            assertTrue("named once made whole", file.isFile)
+            assertFalse(File(dir, "caracole.sqlite.new").exists())
+            val wal = File(dir, "caracole.sqlite-wal")
+            assertTrue("no WAL left with what the file lacks", !wal.exists() || wal.length() == 0L)
+            Caracole.openDatabase(file).use { database ->
+                assertEquals("opened again as it is", "2", database.read { it.kvGet("lacuerda:index:keys") })
+            }
+        } finally {
+            dir.deleteRecursively()
+        }
     }
 
     /** [url]'s status and text, asked as another app on the phone would, with [cookie] or none. */

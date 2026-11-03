@@ -132,7 +132,9 @@ class MainActivity : Activity() {
             withContext(Dispatchers.IO) { Caracole.phone(this@MainActivity) }
         } catch (e: CancellationException) {
             throw e
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Anything, an Error among them (the bundled SQLite's native library that won't load, say): said on the
+            // screen, never a crash.
             say(getString(R.string.no_server, e.message ?: e.javaClass.simpleName))
             return
         }

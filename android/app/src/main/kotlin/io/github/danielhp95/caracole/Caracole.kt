@@ -43,7 +43,8 @@ object Caracole {
     /** The served pages' form token, made at each launch as caracole serve makes its own. */
     private val csrf: String = hex(32)
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    /** The process's own work: the phone's job queue, and what a screen starts that must outlive it. */
+    val background = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     @Volatile private var mirror: Mirror? = null
     @Volatile private var phone: Phone? = null
@@ -66,15 +67,13 @@ object Caracole {
 
     private fun start(context: Context): Phone {
         val files = context.filesDir
-        val database = PhoneDatabase.open(File(files, DATABASE), { Database(it) }) { fresh ->
-            fresh.writeBlocking { db -> IndexTransfer.seedFresh(db) }
-        }
+        val database = openDatabase(File(files, DATABASE))
         try {
             val library = File(files, "library").apply { mkdirs() }
             val state = File(files, "state").apply { mkdirs() }
             cacheDir(context).mkdirs()
             val phone = Phone(PhoneDeps(
-                database = database, libraryDir = library, stateDir = state, mirror = mirror(context), scope = scope,
+                database = database, libraryDir = library, stateDir = state, mirror = mirror(context), scope = background,
                 settings = SavedAddress(Settings(context)), secret = secret, csrf = csrf,
             ))
             phone.server.start(PORT)
@@ -82,6 +81,19 @@ object Caracole {
         } catch (e: Throwable) {
             database.close()
             throw e
+        }
+    }
+
+    /**
+     * The phone's database at [file], made whole on the first start ([PhoneDatabase]): migrated, seeded with the kv
+     * records a fresh computer's database holds (IndexTransfer.seedFresh), and its WAL checkpointed into the file and
+     * truncated, so a close that leaves its WAL behind (a connection's close failing) leaves an empty one, never a
+     * database the next start can't name.
+     */
+    internal fun openDatabase(file: File): Database = PhoneDatabase.open(file, { Database(it) }) { fresh ->
+        fresh.writeBlocking { db ->
+            IndexTransfer.seedFresh(db)
+            db.query("PRAGMA wal_checkpoint(TRUNCATE)") { }
         }
     }
 
