@@ -13,9 +13,12 @@ class ManifestTest {
     private val address = ServerAddress.parse("192.168.1.20:8737")
     private val sha = "a".repeat(64)
 
+    private val digest = "d".repeat(64)
+
     private fun entry(path: String, url: String = "/x", size: Long = 3, sha256: String = sha,
-                      type: String = "text/html; charset=utf-8", headers: Map<String, String> = emptyMap()) =
-        Entry(path, url, size, sha256, type, headers)
+                      type: String = "text/html; charset=utf-8", headers: Map<String, String> = emptyMap(),
+                      unit: String? = null, digest: String? = null) =
+        Entry(path, url, size, sha256, type, headers, unit, digest)
 
     private fun parse(text: String) = Manifest.parse(text.toByteArray(), address)
 
@@ -48,6 +51,64 @@ class ManifestTest {
         assertEquals("application/pdf", pdf.mimeType)
         assertNull(pdf.charset)
         assertEquals("sheet.pdf", pdf.name)
+    }
+
+    @Test
+    fun `a file names the unit it is of and the unit's digest, the library page neither`() {
+        val text = manifestJson(
+            "index.html",
+            listOf(
+                entryJson(entry("index.html", "/offline/index.html")),
+                entryJson(entry("Estopa/Tu calorro/sheet.html", unit = "song/estopa/tu-calorro", digest = digest)),
+                entryJson(entry("_songbooks/Campfire/songbook.pdf", type = "application/pdf",
+                                unit = "songbook/campfire", digest = "e".repeat(64))),
+                entryJson(entry("Estopa/Tu calorro/sheet.pdf", type = "application/pdf", unit = "song/estopa/tu-calorro")),
+            ),
+        )
+        val manifest = parse(text)
+        assertEquals(emptyList(), manifest.skipped)
+        val page = manifest.byPath.getValue("index.html")
+        assertNull(page.unit)
+        assertNull(page.digest)
+        val sheet = manifest.byPath.getValue("Estopa/Tu calorro/sheet.html")
+        assertEquals("song/estopa/tu-calorro" to digest, sheet.unit to sheet.digest)
+        val book = manifest.byPath.getValue("_songbooks/Campfire/songbook.pdf")
+        assertEquals("songbook/campfire" to "e".repeat(64), book.unit to book.digest)
+        val pdf = manifest.byPath.getValue("Estopa/Tu calorro/sheet.pdf")
+        assertEquals("song/estopa/tu-calorro" to null, pdf.unit to pdf.digest, "a unit whose digest wasn't given")
+    }
+
+    @Test
+    fun `a manifest of format 1's fields alone still reads, every file of no unit`() {
+        // As a caracole serve from before the units lists it: the same format, and no unit or digest anywhere.
+        val text = """{"format": 1, "start": "index.html", "files": [
+            {"path": "index.html", "url": "/offline/index.html", "size": 3, "sha256": "$sha", "type": "text/html; charset=utf-8", "headers": {}},
+            {"path": "Estopa/Tu calorro/sheet.pdf", "url": "/Estopa/Tu%20calorro/sheet.pdf", "size": 3, "sha256": "$sha", "type": "application/pdf"}]}"""
+        val manifest = parse(text)
+        assertEquals(listOf("index.html", "Estopa/Tu calorro/sheet.pdf"), manifest.entries.map { it.path })
+        assertEquals(emptyList(), manifest.skipped)
+        assertTrue(manifest.entries.all { it.unit == null && it.digest == null })
+    }
+
+    @Test
+    fun `a unit or a digest that breaks the contract skips its file`() {
+        val good = entryJson(entry("index.html"))
+        val bad = listOf(
+            entry("u1.pdf", unit = "", digest = digest), entry("u2.pdf", unit = "song", digest = digest),
+            entry("u3.pdf", unit = "/estopa", digest = digest), entry("u4.pdf", unit = "song/", digest = digest),
+            entry("u5.pdf", unit = "song/a\nb", digest = digest),
+            entry("d1.pdf", unit = "song/a/b", digest = "D".repeat(64)), entry("d2.pdf", unit = "song/a/b", digest = "abc"),
+            entry("d3.pdf", digest = digest),
+        ).map { entryJson(it) }
+        val odd = listOf(
+            """{"path": "o1.pdf", "url": "/o", "size": 1, "sha256": "$sha", "type": "application/pdf", "unit": 42}""",
+            """{"path": "o2.pdf", "url": "/o", "size": 1, "sha256": "$sha", "type": "application/pdf", "unit": "song/a/b", "digest": 7}""",
+        )
+        val nulls = """{"path": "n.pdf", "url": "/n", "size": 1, "sha256": "$sha", "type": "application/pdf", "unit": null, "digest": null}"""
+        val manifest = parse(manifestJson("index.html", listOf(good) + bad + odd + nulls))
+        assertEquals(listOf("index.html", "n.pdf"), manifest.entries.map { it.path }, "null is none")
+        assertEquals(bad.size + odd.size, manifest.skipped.size, manifest.skipped.joinToString("\n"))
+        assertTrue(manifest.skipped.any { "d3.pdf" in it && "digest" in it }, manifest.skipped.joinToString("\n"))
     }
 
     @Test

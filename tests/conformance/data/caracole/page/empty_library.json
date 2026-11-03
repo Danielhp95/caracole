@@ -1,0 +1,224 @@
+{
+ "fold": {
+  "ø": "o",
+  "Ø": "o",
+  "æ": "ae",
+  "Æ": "ae",
+  "œ": "oe",
+  "Œ": "oe",
+  "ß": "ss",
+  "ẞ": "ss",
+  "đ": "d",
+  "Đ": "d",
+  "ł": "l",
+  "Ł": "l",
+  "þ": "th",
+  "Þ": "th",
+  "ð": "d",
+  "Ð": "d",
+  "ı": "i",
+  "ħ": "h",
+  "Ħ": "h"
+ },
+ "icons": {
+  "ug": {
+   "name": "Ultimate Guitar",
+   "letters": "UG"
+  },
+  "lacuerda": {
+   "name": "LaCuerda",
+   "letters": "LC"
+  },
+  "lrclib": {
+   "name": "LRCLIB",
+   "letters": "LR"
+  },
+  "megalobiz": {
+   "name": "Megalobiz",
+   "letters": "MZ"
+  },
+  "azlyrics": {
+   "name": "AZLyrics",
+   "letters": "AZ"
+  },
+  "gtptabs": {
+   "name": "gtptabs.com",
+   "letters": "GT"
+  },
+  "musescore": {
+   "name": "MuseScore",
+   "letters": "MS"
+  },
+  "harptabs": {
+   "name": "harptabs.com",
+   "letters": "HT"
+  },
+  "gametabs": {
+   "name": "gametabs.net",
+   "letters": "GM"
+  },
+  "youtube": {
+   "name": "YouTube",
+   "letters": "YT"
+  },
+  "auto": {
+   "name": "the audio (auto-chords)",
+   "letters": "♪",
+   "glyph": true
+  },
+  "inbox": {
+   "name": "your inbox",
+   "letters": "↓",
+   "glyph": true
+  }
+ },
+ "catalogue": {
+  "I V vi IV": "the pop progression",
+  "I vi IV V": "the '50s progression",
+  "I vi ii V": "the circle of fifths",
+  "I IV vii iii vi ii V": "the circle of fifths",
+  "V i iv ♭VII ♭III ♭VI ii": "the circle of fifths",
+  "I IV V I V vi iii IV": "Pachelbel's Canon",
+  "IV V iii vi": "the royal road",
+  "I ♭VII IV": "the double-plagal progression",
+  "I V/vi IV iv": "the Creep progression",
+  "i ♭VII ♭VI ♭VII": "the Aeolian shuttle",
+  "I ii V": "ii–V–I",
+  "V i ii": "the minor ii–V–i",
+  "I IV V": "I–IV–V",
+  "I IV I V IV": "the 12-bar blues",
+  "I IV I V IV I V": "the 12-bar blues",
+  "I IV I IV I V IV": "the 12-bar blues",
+  "I IV I IV I V IV I V": "the 12-bar blues",
+  "I V I V I V IV": "the 8-bar blues",
+  "V i ♭VII ♭VI": "the Andalusian cadence",
+  "i ♭VII ♭VI v": "the lament",
+  "V V/vi V/ii V/V": "the ragtime progression",
+  "I V/vi V/ii V/V V": "the ragtime progression",
+  "I ♭VI ♭III ♭VII IV": "the extended plagal progression",
+  "I iv ♭VII": "the backdoor progression",
+  "i ♭VI ♭VII": "the Aeolian cadence",
+  "I ♭VI ♭VII": "the Aeolian cadence",
+  "I IV iv": "the minor plagal cadence",
+  "I iii IV": "the puff progression",
+  "I V/vi IV": "the puff progression",
+  "I IV ii V": "the Montgomery-Ward bridge",
+  "I IV vii V/vi vi ii V": "the circle of fifths",
+  "IV V vi V": "the Aeolian shuttle",
+  "IV V/vi vi V": "the Andalusian cadence",
+  "IV iii vi V": "the lament",
+  "i ♭VI ♭III ♭VII": "the pop progression",
+  "i ♭VI ♭VII ♭III": "the '50s progression",
+  "i iv ♭VII ♭III": "the circle of fifths",
+  "i iv ♭VII ♭III ♭VI ii v": "the circle of fifths",
+  "i v ♭VI ♭III ♭VI ♭VII ♭III ♭VII": "Pachelbel's Canon",
+  "i ♭VI ♭VII v": "the royal road",
+  "♭II ♭VI ♭III": "the double-plagal progression",
+  "V ♭VI ♭vi ♭III": "the Creep progression",
+  "I V/♭VII ♭VII V": "the ragtime progression",
+  "I V/♭VII ♭VII ♭III V": "the ragtime progression",
+  "VII ♭V ♭II ♭VI ♭III": "the extended plagal progression",
+  "♭II ♭III ♭vi": "the backdoor progression",
+  "♭III ♭VI ♭vi": "the minor plagal cadence",
+  "v ♭VI ♭III": "the puff progression",
+  "V ♭VI ♭III": "the puff progression",
+  "iv ♭VII ♭III ♭VI": "the Montgomery-Ward bridge"
+ },
+ "songbooks": {
+  "books": [],
+  "error": null,
+  "keys": [
+   "C",
+   "C#",
+   "D",
+   "Eb",
+   "E",
+   "F",
+   "F#",
+   "G",
+   "Ab",
+   "A",
+   "Bb",
+   "B"
+  ],
+  "modes": [
+   [
+    "ionian",
+    "Major"
+   ],
+   [
+    "dorian",
+    "Dorian"
+   ],
+   [
+    "phrygian",
+    "Phrygian"
+   ],
+   [
+    "lydian",
+    "Lydian"
+   ],
+   [
+    "mixolydian",
+    "Mixolydian"
+   ],
+   [
+    "aeolian",
+    "Minor"
+   ],
+   [
+    "locrian",
+    "Locrian"
+   ]
+  ],
+  "capoMax": 11,
+  "instruments": [
+   [
+    "guitar",
+    "Guitar",
+    true
+   ],
+   [
+    "ukulele",
+    "Ukulele",
+    true
+   ],
+   [
+    "ukulele-low-g",
+    "Ukulele, low G",
+    true
+   ],
+   [
+    "baritone",
+    "Baritone ukulele",
+    true
+   ],
+   [
+    "piano",
+    "Piano",
+    false
+   ],
+   [
+    "harmonica",
+    "Harmonica",
+    false
+   ],
+   [
+    "flute",
+    "Flute",
+    false
+   ],
+   [
+    "recorder",
+    "Recorder",
+    false
+   ]
+  ],
+  "fileLabels": [
+   "PDF",
+   "PDF, Traditional",
+   "Phone page",
+   "ChordPro"
+  ]
+ }
+}

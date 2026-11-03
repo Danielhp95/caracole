@@ -5900,7 +5900,22 @@ Not built yet.
 
 ### What the offline copy lists
 
-Not built yet.
+`GET /api/offline` (see [caracole serve](#caracole-serve)) lists every file the
+app copies. Each file of a song or a songbook also says which sync unit it is
+of, as `caracole peer diff` names units: `unit`, `song/<key>` for a file in a
+song's folder or `songbook/<name key>` (its name in lowercase, its spaces
+collapsed) for one in a songbook's, and `digest`, that unit's digest when the
+list was made. The app's own caracole shows a page it copied unless the phone
+changed or removed that song since: a song changed on the phone says so and
+links to the phone's sheet text, and a song removed on the phone says it was
+removed. When two songs' names make one folder, each file there is of the song
+caracole wrote it for (its kept files, and the pages and PDFs made of them); a
+file either could be, such as its `info.json`, carries no unit. `index.html`,
+and a songbook's files once songbooks.toml no longer names it, carry no unit
+either, and are shown as they are. The units are read as a sync reads them:
+while overrides.toml or songbooks.toml can't be read, `/api/offline` answers 503
+with what is wrong, and the app keeps the copy it has. The list's `format` is
+still 1.
 
 ## Running it on a server
 
