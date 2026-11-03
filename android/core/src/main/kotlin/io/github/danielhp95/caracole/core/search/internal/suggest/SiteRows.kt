@@ -35,11 +35,11 @@ internal object SiteRows {
     fun songsLike(db: Db, patterns: List<String>, limit: Int): List<LaCuerdaSong> {
         if (patterns.isEmpty()) return emptyList()
         val where = patterns.joinToString(" OR ") { "title_key LIKE ? OR artist_key LIKE ?" }
-        val args = patterns.flatMap { listOf(it, it) } + limit
+        val args: List<Any?> = patterns.flatMap { listOf(it, it) } + limit
         return db.query(
             "SELECT path, artist_slug, artist, artist_key, title, title_key, songs, versions, acordes, popular, page " +
                 "FROM lacuerda_index WHERE title != '' AND ($where) ORDER BY path LIMIT ?",
-            *args.toTypedArray(),
+            *args.toTypedArray<Any?>(),
         ) { lacuerdaSong(it) }
     }
 

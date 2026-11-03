@@ -123,19 +123,20 @@ class SearchUgTest {
 
 /** How the search lanes' tests replay a vector of search.py's answers over its fixtures. */
 internal object SearchVectors {
-    /** A record whose answer needs a port another lane has yet to land: [replay] counts it in its `waiting`. */
+    /** A record whose answer needs a port another lane has yet to land: [replay] fails it as one that "waits", never
+     * passes or skips it. */
     class Waiting(message: String) : Exception(message)
 
     /** Every record of [vector] (its functions [fns], those [only] keeps) answered by [answer] over its fixture,
      * loaded once into a fresh database and read through Database.read as the phone reads; a record of no fixture
      * gets no database. Fails naming every record whose answer differs, with where; a record [answer] says is
-     * [Waiting] goes into [waiting] instead. */
+     * [Waiting] fails as one that waits. */
     fun replay(tmp: TemporaryFolder, vector: String, fns: Set<String>, only: (Record) -> Boolean = { true },
-               waiting: MutableSet<String>? = null, answer: (Db?, Record) -> JsonElement) {
+               answer: (Db?, Record) -> JsonElement) {
         val records = Corpus.records(vector).filter { it.fn in fns && only(it) }
         assertTrue(records.isNotEmpty(), "$vector has no record of $fns")
         val wrong = ArrayList<String>()
-        val pending = waiting ?: HashSet()
+        val pending = ArrayList<String>()
         for ((fixture, group) in records.groupBy { it.fixture() }) {
             if (fixture == null) {
                 group.forEach { check(it, null, answer, wrong, pending) }
@@ -145,7 +146,7 @@ internal object SearchVectors {
                 database.read { db -> group.forEach { check(it, db, answer, wrong, pending) } }
             }
         }
-        if (waiting == null) wrong.addAll(pending.map { "waits: $it" })
+        wrong.addAll(pending.map { "waits: $it" })
         if (wrong.isNotEmpty()) fail("${wrong.size} of ${records.size} records of $vector differ:\n" + wrong.take(25).joinToString("\n"))
     }
 
@@ -159,7 +160,7 @@ internal object SearchVectors {
     }
 
     private fun check(r: Record, db: Db?, answer: (Db?, Record) -> JsonElement, wrong: MutableList<String>,
-                      waiting: MutableSet<String>) {
+                      waiting: MutableList<String>) {
         val where = "${r.fn.substringAfterLast('.')} ${r.fixture()} ${r.args} ${r.kw}"
         if (r.err != null) {
             val raised = try {

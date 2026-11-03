@@ -160,9 +160,11 @@ internal object Close {
             .sortedWith(Py.CODE_POINT_ORDER)
         if (firsts.isEmpty()) return emptyList()
         val where = firsts.joinToString(" OR ") { "artist_key LIKE ? OR artist_key LIKE ?" }
+        // +path, exactly as search.py writes it: the table scanned, the rows found sorted, never every row read
+        // through the paths' index. Same rows, same order, a cheaper plan: keep the `+`.
         val rows = db.query(
-            "SELECT artist, artist_slug, artist_key, songs FROM lacuerda_index WHERE title = '' AND ($where) ORDER BY path",
-            *firsts.flatMap { listOf("$it%", "%-$it%") }.toTypedArray(),
+            "SELECT artist, artist_slug, artist_key, songs FROM lacuerda_index WHERE title = '' AND ($where) ORDER BY +path",
+            *firsts.flatMap { listOf("$it%", "%-$it%") }.toTypedArray<String>(),
         ) { listOf<Any>(it.text(0)!!, it.text(1)!!, it.text(2)!!, it.long(3)!!.toInt()) }
         val letters = words.sumOf { Py.len(it) }
         val close = ArrayList<Weighed>()

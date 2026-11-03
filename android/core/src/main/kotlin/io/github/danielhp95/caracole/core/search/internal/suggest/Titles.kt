@@ -202,7 +202,7 @@ internal object Titles {
             "SELECT artist, song_key, COUNT(*) FROM harptabs_artist_tabs WHERE song_key IN (SELECT DISTINCT song_key FROM " +
                 "harptabs_artist_tabs WHERE " + holds("song_key", needles) + ") GROUP BY artist, song_key " +
                 "ORDER BY artist, song_key LIMIT ?",
-            *(needles + SiteRows.SITE_TITLES_READ).toTypedArray(),
+            *(needles + SiteRows.SITE_TITLES_READ).toTypedArray<Any?>(),
         ) { Triple(it.text(0)!!, it.text(1)!!, it.long(2)!!.toInt()) }
         val paths = rows.map { it.first }.distinct().sortedWith(Py.CODE_POINT_ORDER)
         val names = HashMap<String, Pair<String, String>>()

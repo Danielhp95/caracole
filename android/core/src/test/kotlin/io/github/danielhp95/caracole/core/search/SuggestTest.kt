@@ -19,7 +19,6 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -35,12 +34,11 @@ import kotlin.test.assertTrue
  * gtptabs.com's, MuseScore's and harptabs.com's searches of the query (tests/test_conformance_search.py `_sites`).
  * Those searches are other lanes' (search-sites, search-lacuerda), so this test reads them where the corpus recorded
  * them for that fixture and query (vectors/search/lacuerda.jsonl and sites.jsonl, the same calls), and asks
- * SiteSearch and LaCuerda for the rest: until those lanes land, those records wait, and the test says how many.
+ * SiteSearch and LaCuerda for the rest. A record whose answer still needs one of those ports fails, named "waits":
+ * a record that waits is never a record that matches, so this test passes only once every one of them does.
  */
 class SuggestTest {
     @get:Rule val tmp = TemporaryFolder()
-
-    private val pending = HashSet<String>()
 
     @Test fun everyArtistSuggestionIsWhatSearchPySuggests() =
         SearchVectors.replay(tmp, VECTOR, setOf(SUGGEST_ARTISTS)) { db, r ->
@@ -60,13 +58,9 @@ class SuggestTest {
         tmp, VECTOR, setOf(SUGGESTIONS), only = { it.string("sites") == null },
     ) { db, r -> suggestions(db!!, r, emptyList()) }
 
-    @Test fun everySuggestionBesideTheOtherSitesAnswersIsWhatSearchPySuggests() {
-        SearchVectors.replay(tmp, VECTOR, setOf(SUGGESTIONS), only = { it.string("sites") == "api" }, waiting = pending) { db, r ->
-            suggestions(db!!, r, sites(db, r))
-        }
-        Assume.assumeTrue("${pending.size} records wait for lanes search-sites and search-lacuerda: " +
-                              pending.take(3).joinToString("; "), pending.isEmpty())
-    }
+    @Test fun everySuggestionBesideTheOtherSitesAnswersIsWhatSearchPySuggests() = SearchVectors.replay(
+        tmp, VECTOR, setOf(SUGGESTIONS), only = { it.string("sites") == "api" },
+    ) { db, r -> suggestions(db!!, r, sites(db, r)) }
 
     @Test fun theVectorHoldsTheThreeFunctions() {
         assertEquals(setOf(SUGGEST_ARTISTS, SUGGEST_TITLES, SUGGESTIONS), Corpus.records(VECTOR).map { it.fn }.toSet())

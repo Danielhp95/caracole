@@ -78,6 +78,60 @@ class ArtistTabsTest {
         }
     }
 
+    /**
+     * _file's two order rules, which the fixture's pages never tie: Counter.most_common(1) gives a tie to the artist
+     * key counted first (the index's tabs in tab_id order, else the page's own), and songs.setdefault keeps the first
+     * indexed tab's key of a song the index files under two. The expected keys are what Python's
+     * `artist_tabs.refile(conn, [P, Q])` filed these very rows under (run once on a fresh database, pasted here).
+     */
+    @Test fun aTieGoesToTheArtistKeyCountedFirstAndASongToItsFirstIndexedTabsKey() {
+        val p = "https://www.ultimate-guitar.com/artist/ties_1"
+        val q = "https://www.ultimate-guitar.com/artist/own_2"
+        val tabs = listOf(
+            Triple(p, 1L, "Ties" to "Creep"), Triple(p, 2L, "Ties" to "Creep"), Triple(p, 3L, "Ties" to "Creep"),
+            Triple(p, 4L, "Ties" to "Other Song"), Triple(p, 5L, "Ties" to "Lullaby"), Triple(p, 6L, "Ties" to "Lullaby"),
+            Triple(q, 10L, "Beta Band" to "One"), Triple(q, 11L, "Alpha Band" to "Two"),
+            Triple(q, 12L, "Alpha Band" to "Three"), Triple(q, 13L, "Beta Band" to "Four"),
+        )
+        // The index lists four of P's tabs: two under zeta, two under alpha (zeta's first), and Creep under two keys.
+        val index = listOf(Triple(2L, "zeta", "kreep"), Triple(3L, "alpha", "creeep"),
+                           Triple(5L, "alpha", "lullaby-acoustic"), Triple(6L, "zeta", "lulaby"))
+        val dir = tmp.newFolder()
+        TestDb.fresh(dir).use { database ->
+            database.writeBlocking { db ->
+                for ((page, tabId, names) in tabs) {
+                    db.execute(
+                        "INSERT INTO ug_artist_tabs (page, tab_id, type, artist, title, label, rating, votes, url, " +
+                            "artist_key, song_key, artist_forms, title_forms, forms, read_at) VALUES (?, ?, 'Chords', ?, ?, " +
+                            "NULL, 0, 0, ?, 'x', 'y', '', '', '', '2026-11-01T00:00:00Z')",
+                        page, tabId, names.first, names.second, "https://tabs.ultimate-guitar.com/tab/$tabId",
+                    )
+                }
+                for ((tabId, artistKey, songKey) in index) {
+                    db.execute(
+                        "INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                            "VALUES (?, ?, ?, 'chords', 's', '2026-11-01T00:00:00Z', '')",
+                        tabId, artistKey, songKey,
+                    )
+                }
+                assertEquals(tabs.size, ArtistTabs.refile(db, listOf(p, q)))
+                val filed = db.query("SELECT page, tab_id, artist_key, song_key FROM ug_artist_tabs ORDER BY page, tab_id") {
+                    listOf(it.text(0)!!, it.long(1)!!.toString(), it.text(2)!!, it.text(3)!!)
+                }
+                assertEquals(
+                    listOf(
+                        listOf(q, "10", "beta-band", "one"), listOf(q, "11", "beta-band", "two"),
+                        listOf(q, "12", "beta-band", "three"), listOf(q, "13", "beta-band", "four"),
+                        listOf(p, "1", "zeta", "kreep"), listOf(p, "2", "zeta", "kreep"), listOf(p, "3", "zeta", "kreep"),
+                        listOf(p, "4", "zeta", "other-song"), listOf(p, "5", "zeta", "lullaby"),
+                        listOf(p, "6", "zeta", "lullaby"),
+                    ),
+                    filed,
+                )
+            }
+        }
+    }
+
     @Test fun aTabsNamesAreItsSlugKeysAndEveryFormHyphenatedAndTogether() {
         val n = ArtistTabs.names("Song Dongye (宋冬野)", "斑马 斑马 Banma Banma Zebra Zebra")
         assertEquals("song-dongye-宋冬野", n.artistKey)
