@@ -157,10 +157,17 @@ cooldowns merge, the later end kept (phase 2).
    overrides.py's and songbook.py's writers of a unit whole. Format 2, done: the tagged base, the state's `now` and
    `indexes`, the canonical hashing of a version's raw record and a song's lyrics, a unit's value read from its
    document, the compare-and-swap of both sides' digests, and a song taken with the peer's names, its artist
-   respelled and its folder moved, whole or not at all. Still to come here: the site indexes merged both ways over
-   HTTP (today `caracole index export` and `merge`, by hand), and cooldowns moved across.
-3. **The Sync page** in caracole serve, usable from the phone's browser and the app.
-4. **The phone.** The research (2026-10-31, from package recipes, PyPI and the pinned nixpkgs, nothing run on a
+   respelled and its folder moved, whole or not at all. The push, done: `POST /peer/push/new`, `/peer/push/file` and
+   `/peer/push` stage another caracole's units in caracole serve, `caracole peer take` takes them, and `caracole peer
+   sync --push` gives a side its units with no need for it to reach this one, as the phone always does. The site
+   indexes over HTTP, done one way: `GET /api/peer/index`, which the phone imports and a sync merges when the
+   computer's are newer. Still to come, in the Android port's milestone 4 (docs/android_port.md): the indexes from
+   the phone to the computer, and cooldowns moved across.
+3. **The Sync page**, done: the library page's Sync tab (web/sync_routes.py, library_assets/sync.js), the same page
+   and routes in caracole serve and in the Android app. The Requests tab on the phone comes with milestone 4.
+4. **The phone**, built in Kotlin (docs/android_port.md, milestones 1–3): the app's own caracole on 127.0.0.1, its
+   Sync tab syncing with the computer both ways. The Termux route below stays for caracole itself on a phone
+   (android/README.md). The research (2026-10-31, from package recipes, PyPI and the pinned nixpkgs, nothing run on a
    phone) found Termux the route: from F-Droid or GitHub, its Python 3.14, Perl, SQLite with FTS5, clang and cmake;
    caracole by pip with deploy.md's constraints, rapidfuzz, selectolax and opencc built there from source (no
    Android wheels); ChordPro by cpanm (Object::Pad and its XS parsers, the rest pure Perl); the site indexes by

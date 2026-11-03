@@ -24,8 +24,9 @@ object PyRe {
         while (at <= s.length) {
             var m: MatchResult? = null
             if (mustAdvance) {
-                // Checked, not trusted: an engine whose \G were elsewhere could otherwise match empty here forever.
+                // Checked, not trusted: an engine that read the guard otherwise could match empty here forever.
                 m = nonEmpty(regex).matchAt(s, at)?.takeIf { it.range.first == at && it.range.last + 1 > at }
+                    ?.let(::withoutTheGuard)
                 if (m == null) {
                     if (at >= s.length) break
                     at += Character.charCount(s.codePointAt(at))
@@ -38,10 +39,63 @@ object PyRe {
         }
     }
 
-    /** [regex] matching only where it ends after it began: `\G` is where the match began, as both
-     * java.util.regex and Android's ICU read it at a region's start. */
+    /**
+     * [regex] matching only where it ends after it began. Its group 1, before [regex]'s own, takes the rest of the
+     * text where the match begins, and the match may not end where that rest begins again, which only the place it
+     * began does. No `(?!\G)`: Android's ICU answers a `\G` inside a lookaround as though no match were there, so a
+     * pattern whose first alternative is empty (`|c+`, `b{,2}|c+`) matched empty again and never found the longer
+     * one (CorpusOnDeviceTest, unicode/regex.jsonl). [regex]'s groups are one further on in it, its numbered
+     * backreferences moved with them ([referencesMoved]), and [withoutTheGuard] gives the match [regex]'s own groups.
+     */
     private fun nonEmpty(regex: Regex): Regex = synchronized(NON_EMPTY) {
-        NON_EMPTY.getOrPut(regex) { Regex("(?:" + regex.pattern + ")(?!\\G)", regex.options) }
+        NON_EMPTY.getOrPut(regex) {
+            Regex("(?=((?s:.*)))(?:" + referencesMoved(regex.pattern) + ")(?!\\1)", regex.options)
+        }
+    }
+
+    /**
+     * [pattern] with each numbered backreference to the next group: `(?:\N)`, as PyPattern writes one, outside a
+     * class and not escaped, becomes `(?:\N+1)`. A named one (`\k<name>`) refers to its group by its name.
+     */
+    internal fun referencesMoved(pattern: String): String {
+        val out = StringBuilder(pattern.length + 8)
+        var i = 0
+        var inClass = 0
+        while (i < pattern.length) {
+            val c = pattern[i]
+            if (c == '\\') {
+                out.append(pattern, i, minOf(i + 2, pattern.length))
+                i += 2
+                continue
+            }
+            if (inClass == 0 && pattern.startsWith("(?:\\", i)) {
+                var j = i + 4
+                while (j < pattern.length && pattern[j] in '0'..'9') j++
+                if (j > i + 4 && j < pattern.length && pattern[j] == ')') {
+                    out.append("(?:\\").append(pattern.substring(i + 4, j).toInt() + 1).append(')')
+                    i = j + 1
+                    continue
+                }
+            }
+            if (c == '[') inClass++ else if (c == ']' && inClass > 0) inClass--
+            out.append(c)
+            i++
+        }
+        return out.toString()
+    }
+
+    /** A match of [nonEmpty]'s pattern as its pattern's own: group 1, the guard's, left out. */
+    private fun withoutTheGuard(m: MatchResult): MatchResult = object : MatchResult {
+        override val range: IntRange get() = m.range
+        override val value: String get() = m.value
+        override val groups: MatchGroupCollection = object : AbstractCollection<MatchGroup?>(), MatchNamedGroupCollection {
+            override val size: Int get() = m.groups.size - 1
+            override fun iterator(): Iterator<MatchGroup?> = (0 until size).map { get(it) }.iterator()
+            override fun get(index: Int): MatchGroup? = m.groups[if (index == 0) 0 else index + 1]
+            override fun get(name: String): MatchGroup? = (m.groups as MatchNamedGroupCollection)[name]
+        }
+        override val groupValues: List<String> get() = groups.map { it?.value ?: "" }
+        override fun next(): MatchResult? = m.next()?.let(::withoutTheGuard)
     }
 
     private val NON_EMPTY = java.util.WeakHashMap<Regex, Regex>()

@@ -372,6 +372,8 @@ Below the table, a section for each step whose modules have more to say.
 | config.py | caracole.toml and directories, and no secret (ntfy is a topic's URL alone); `name`, what the pages call the library (`Config.library_name`: else its folder's name) |
 | index_transfer.py | `caracole index export` and `merge` (below) |
 | peer_sync.py | two caracoles compared and synced, unit by unit (below) |
+| canonical.py | canonical JSON: one text, so one digest, for a value in Python and in Kotlin (`dumps`, `digest`, `read`, `stored_hash`; docs/superpowers/specs/2026-11-03-canonical-json.md); the standard library alone |
+| peer_push.py | a push: the units another caracole (the phone) gives this one, staged by caracole serve, taken by `caracole peer take` (below) |
 | service.py | whether this machine runs caracole as a service (below) |
 | db.py | the schema, migrations, `kv`, `savepoint` (atomic writes on the autocommit connection) |
 | http.py | `PoliteClient`, robots rules, cached answers (`stale`, `read_once_more`; `cached` and `CachedAnswers` read the cache alone, sending nothing) |
@@ -422,7 +424,11 @@ Below the table, a section for each step whose modules have more to say.
     (`overrides.song_entries`);
   - `removed/`, `songbook/`, `alias/`, `artist_url/`, `block/`;
   - never what caracole makes of one, nor what a lookup finds again.
-- Each unit's `digest` is its canonical JSON's SHA-256.
+- Each unit's `digest` is its canonical JSON's SHA-256 (canonical.py's `digest`), a version's raw record and a song's
+  lyrics hashed canonicalized (`stored_hash`), so the phone's Kotlin gets the same digest of the same record.
+- **FORMAT 2** (`FORMAT`) is of every document a side answers (the state, a unit, a push) and of the base each keeps
+  (`{"format": 2, "units": …}`): a base of another format reads as none, so the first sync after a format bump
+  compares as a first sync (no shim).
 - **Comparing** (`compare`): three ways, against the base.
   - The base is each side's agreements with that peer (kv `sync:base:<peer id>`: a digest or None, and when),
     recorded by `record_agreement` at the end of every pull, and merged with the peer's by the later
@@ -440,6 +446,11 @@ Below the table, a section for each step whose modules have more to say.
   - A song gone there is removed as `caracole remove` does.
   - `songbook.put_songbook`, `overrides.put_alias`, `put_artist_url`, `put_block`.
   - Then the command renders the songs taken, the songbooks and the pages, after a backup (`before-sync`).
+- **Giving** a side what it takes, two ways: `caracole peer sync --here` asks the other to pull (`POST /peer/pull`),
+  and `--push` pushes (peer_push.py `Pusher`), as the phone, which serves nothing to the network, always does.
+- **A push** (peer_push.py): `POST /peer/push/new` names the files its units keep by their SHA-256, `POST
+  /peer/push/file` sends each one this side needs, `POST /peer/push` the document, checked against each unit's digest;
+  then `caracole peer take DIR` takes its units from the staging folder as a pull takes a peer's, and deletes it.
 
 #### service.py
 
@@ -925,6 +936,14 @@ It is rows.js's, shared by both pages:
   agreed on with the asker and the form token (no wider than a page's, which any client that reaches the server reads,
   for a sync's `POST /peer/pull`); `GET /api/peer/unit` and `/api/peer/file` (peer_sync.py, read-only, as
   `/api/offline` is); and `POST /peer/pull`, `caracole peer pull` queued as any change (test_web_peer.py).
+  - A push, the phone's (peer_push.py): `POST /peer/push/new`, `/peer/push/file` and `/peer/push`, `json` and `bytes`
+    routes with the form token in their header, then `caracole peer take --progress DIR` queued.
+  - `GET /api/peer/index[?sites=]`: this library's site indexes as `caracole index export` writes them, a SQLite file
+    streamed from a temporary export (`cache_dir/peer/`), one at a time.
+- **sync_routes.py** is the library page's Sync tab (library_assets/sync.js, sync-tab.html, sync-panel.html):
+  `GET /api/sync`, `POST /sync/compare` (one `GET /api/peer/state` of the other caracole, kept 10 minutes) and `POST
+  /sync/apply` (`caracole peer sync --push --compared HASH --choose=…` queued, a job of kind `sync`). The phone
+  answers the same three routes with the same shapes (vectors/web/sync_routes.jsonl).
 
 ##### The router
 
@@ -1079,9 +1098,17 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 - `:server` (plain JVM): web/ on the phone, on Ktor CIO at 127.0.0.1 behind a launch secret: `http/` (app.py,
   security.py, inline.py, the message page), `files/`, `page/` (library_page.py's page, from library_assets/ copied
   byte for byte at build time), `jobs/` (jobs.py, jobs_routes.py), `routes/`, and `Assembly.kt`, the phone whole.
-- `:app`: the Android app on its own server; `:e2e`: the end-to-end phases against a real caracole serve.
-- Until a lane lands, a function the running app reaches answers neutrally through `core.stub`, and the others are
-  `TODO` naming their lane.
+- `:app`: the Android app on its own server (`Caracole.kt`: one `Phone` a process, its server on
+  `http://127.0.0.1:8738`, else a free port; the launch's secret a cookie, `caracole-launch`, set in the WebView, which
+  loads that exact origin alone, `mirror.Links`); Settings' Import indexes (from the computer's `GET /api/peer/index`
+  or a file, a foreground job); the Sync tab's sync in a foreground service (`SyncService`).
+- `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
+  tests/test_android_e2e.py, below).
+- Milestones 1–3 are built (docs/android_port.md's status); lookups, the page builder, songbooks and PDFs on the phone
+  are later rounds', their routes `server/routes/Stubs.kt`'s "… isn't on the phone yet." (409). `core.stub` is where a
+  later lane's neutral answer goes until it lands; no call is left.
+- `app/src/androidTest/` runs on a device or an emulator alone (the device step, below): `BundledSqliteTest`,
+  `CorpusOnDeviceTest`, `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
 
 tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
 root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through
@@ -1103,6 +1130,9 @@ helpers/corpus.py.
 - `:core` never calls a JDK or ICU text API (case, normalization, `Character` classes, `java.util.regex`'s own `\w`
   or `\s`, `Collator`): their Unicode is not Python's, and on Android it varies by device. It uses `core.py` and its
   tables (`ForbiddenApiTest`).
+- What the JVM can't show, the device does: `CorpusOnDeviceTest` answers every record of the `unicode`, `keys`,
+  `pinyin`, `fuzz` and `canonical` vectors under Android's runtime and ICU-backed regex (it found ICU reading a `\G`
+  inside a lookaround otherwise than the JDK: py/PyRe.kt's guard after an empty match uses no `\G`).
 
 ## Development
 
@@ -1122,7 +1152,20 @@ pytest -q -m "not slow" --lf -x   # what failed last time, stopping at the first
 pytest -q tests/test_fetch.py     # given paths, pytest runs them in one process
 nix develop .#autochords -c pytest -m autochords   # the model tests
 nix develop ./android -c gradle -p android test    # the Android side: :mirror, :core, :server, :app, :e2e on the JVM
+CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py   # the phone and the computer synced
 ```
+
+- tests/test_android_e2e.py, marked `android_e2e` and `slow`, is skipped unless `CARACOLE_ANDROID_E2E=1`: the goal's
+  scenario (docs/android_port.md), a computer built by tests/helpers/e2e_library.py with no request and real `caracole
+  serve` processes, the phone android/e2e's `PhoneScenarioTest` on the JVM, a Gradle run a phase.
+- **The device step**, the one place an emulator runs, one at a time (android/README.md, "Try it on an emulator"):
+  `nix develop ./android#emulator`, the AVD made once (`avdmanager` writes it under `~/.config/.android/avd`: give
+  `ANDROID_AVD_HOME` that folder), `emulator -avd caracole -gpu host` with `LD_LIBRARY_PATH=/run/opengl-driver/lib`
+  (and `QT_QPA_PLATFORM=xcb` on Wayland), a computer of its own for each test that changes the phone's library
+  (`nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`, the emulator's
+  `http://10.0.2.2:PORT`), `adb shell pm clear io.github.danielhp95.caracole` between them, and each class alone with
+  `adb -s emulator-5554 shell am instrument -w -e class io.github.danielhp95.caracole.CLASS [-e server …]
+  io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner`.
 
 - Given no paths, pytest runs on pytest-xdist workers (conftest.py: `-n auto`, at most 12, `--dist worksteal`).
 - `-n 0` runs it in one process, as `--pdb`, `--trace`, `-s` and `-m autochords` do.
@@ -1180,8 +1223,13 @@ nix develop ./android -c gradle -p android test    # the Android side: :mirror, 
 nix develop -c pytest -q
 nix develop .#autochords -c pytest -m autochords   # when auto-chords is touched
 nix develop ./android -c gradle -p android test    # when android/ or the corpus is touched
+CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py   # when sync, android/ or the corpus is
 nix flake check
 ```
+
+- `nix flake check`'s package build runs the suite on a tree of pyproject.toml, README.md, LICENSE, src/ and tests/
+  alone: a test that reads docs/ or android/ skips there (test_nix_package.py, test_android_termux.py,
+  test_canonical.py).
 
 - `nix flake check` builds three checks:
   - `package` and `autochords` each run the suite (minus the tests marked `autochords`), then check that the installed

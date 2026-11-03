@@ -138,6 +138,19 @@ class PyRegexTest {
         assertEquals(4, PyRegex.ignoreCase("𐐨𐐀").length) // Deseret keeps its UTF-16 length
     }
 
+    @Test fun afterAnEmptyMatchTheLongerOneThereIsFoundWithItsOwnGroups() {
+        // Python 3.14's answers. On Android's ICU a `(?!\G)` guard never held (CorpusOnDeviceTest found it): the
+        // guard is a group of its own now, so the pattern's groups and numbered backreferences move past it.
+        assertEquals(listOf("", "", "ccc", "", ""), PyRe.findall(PyRegex.compile("|c+"), "acccd"))
+        assertEquals(listOf("", "", "ccc", "", ""), PyRe.findall(PyRegex.compile("(|c+)"), "acccd"))
+        assertEquals(listOf("", "", "c", "", "", ""), PyRe.findall(PyRegex.compile("|(c)\\1"), "acccd"))
+        assertEquals(listOf("", null, "a", null, "", "c", "", null, "c", null, "d", null, ""),
+                     PyRe.split(PyRegex.compile("|(c)\\1"), "acccd"))
+        assertEquals("<>a<><c><>c<>d<>", PyRe.sub(PyRegex.compile("|(c)\\1"), "acccd") { "<" + (it.groups[1]?.value ?: "") + ">" })
+        assertEquals(listOf("", "", "c", "", ""), PyRe.findall(PyRegex.compile("(?P<x>|c)(?P=x)"), "accd"))
+        assertEquals("(?:\\2)[(?:\\1)]\\(?:\\1)(?:\\10)", PyRe.referencesMoved("(?:\\1)[(?:\\1)]\\(?:\\1)(?:\\9)"))
+    }
+
     @Test fun whatThePhoneRefusesItSaysSo() {
         // Valid Python the translation doesn't carry: refused, never read otherwise.
         for (pattern in listOf("\\N{LATIN SMALL LETTER A}", "(?x)a b", "(?a)\\w", "(a)(?(1)a|b)", "(?P<a_b>x)",

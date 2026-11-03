@@ -19,6 +19,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.danielhp95.caracole.Pages.evaluate
 import io.github.danielhp95.caracole.Pages.url
 import io.github.danielhp95.caracole.Pages.waitUntil
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -38,8 +39,9 @@ import java.security.MessageDigest
  *
  * (`-e shots 6000` holds each screen 6 s after logging "CARACOLE-SHOT <name>", for screenshots taken from the
  * host.) It syncs a fresh copy, runs Settings' Test, opens the library page (the phone's own server's, at its
- * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that its
- * script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
+ * origin, http://127.0.0.1:8738) and a sheet viewer from it, and records what the viewer's sandbox does, that each
+ * link it shows to caracole serve's own pages (Export PDF) is answered by the phone's stub ("… isn't on the phone
+ * yet."), that its script transposes, and that a PDF (a link) and a Guitar Pro file (a download link) go to another app, read from
  * the phone's server with the launch's cookie. Every ACTION_VIEW is stubbed: nothing outside the app opens. Without
  * `server` it is skipped.
  */
@@ -119,8 +121,19 @@ class EndToEndTest {
                     .map(a => a.getAttribute('href')).filter(h => /^\/(export|versions|guitar)/.test(h)),
                 exportShown: (() => { const e = document.getElementById('export'); return !!e && !e.hidden; })()})""") as String)
             record("viewer", sandbox)
-            assertEquals("no link to caracole serve's own pages", 0, sandbox.getJSONArray("serverLinks").length())
-            assertFalse("no Export PDF link", sandbox.getBoolean("exportShown"))
+            // Served from the phone's own server, the viewer links caracole serve's own pages (Export PDF, a version's,
+            // the Guitar Pro page) as it does on the computer, and the phone answers each with its stub: the message
+            // page, 409, "… isn't on the phone yet." (Stubs).
+            val serverLinks = sandbox.getJSONArray("serverLinks")
+            val answered = JSONObject()
+            for (i in 0 until serverLinks.length()) {
+                val href = serverLinks.getString(i)
+                val (status, text) = stubbed(origin + href)
+                answered.put(href, status)
+                assertEquals("$href on the phone", 409, status)
+                assertTrue("$href: $text", "on the phone yet" in text)
+            }
+            record("server links", answered)
             shot("sheet")
 
             // Its script runs: one semitone up changes the key and the chords shown, and the address keeps it.
@@ -132,7 +145,9 @@ class EndToEndTest {
             val after = JSONObject(js(shown) as String)
             record("transpose", JSONObject().put("before", before).put("after", after))
             assertTrue(after.getString("chords") != before.getString("chords"))
-            assertTrue(after.getString("hash").contains("t=1"))
+            // One up from where the sheet was: from its own version's move (a song's [version] opens at its t=), or 0.
+            val t = { hash: String -> Regex("(?:^#|&)t=(-?\\d+)").find(hash)?.groupValues?.get(1)?.toInt() ?: 0 }
+            assertEquals(after.getString("hash"), t(before.getString("hash")) + 1, t(after.getString("hash")))
             shot("sheet-transposed")
 
             Intents.init()
@@ -158,11 +173,16 @@ class EndToEndTest {
                 record("back", url(main))
 
                 // The library page's Guitar Pro link, which has `download`: the download listener hands it off.
-                val gp = library.getJSONArray("downloads")
-                if (gp.length() > 0) {
-                    val href = gp.getString(0)
+                // (Its first such link that is a Guitar Pro file: the page gives its PDFs and texts `download` too.)
+                val downloads = library.getJSONArray("downloads")
+                val gp = (0 until downloads.length()).map { downloads.getString(it) }
+                    .filter { Regex("\\.(gp[345x]?|ptb)$", RegexOption.IGNORE_CASE).containsMatchIn(it) }
+                record("guitarPro", JSONArray(gp))
+                if (gp.isNotEmpty()) {
+                    val href = gp.first()
+                    val gpLink = "a[download][href=${JSONObject.quote(href)}]"
                     val sent = Intents.getIntents().size
-                    if (!tap(main, "a[download]", optional = true)) js("document.querySelector('a[download]').click()")
+                    if (!tap(main, gpLink, optional = true)) js("document.querySelector(${JSONObject.quote(gpLink)}).click()")
                     val file = handedOff(null, since = sent)
                     val path = java.net.URLDecoder.decode(href, "UTF-8")
                     checkCopy(file, manifest.byPath.getValue(path).sha256)
@@ -186,9 +206,19 @@ class EndToEndTest {
                     } catch (e: AssertionError) {
                         null
                     }
-                    record("viewerGuitar", JSONObject().put("link", link ?: "none").put("handedOff", reached ?: "nothing: the tap opened no app"))
+                    record("viewerGuitar", JSONObject().put("link", link ?: "none").put("handedOff", reached ?: "nothing: the tap opened no app")
+                        .put("at", url(main)))
                     shot("viewer-guitar")
+                    // Served, the link is the Guitar Pro page's (/guitar), which the tap may have opened in the WebView:
+                    // the phone's stub, one page more to go back from.
                     instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
+                    waitUntil("back from the Guitar Pro link") {
+                        val at = url(main).substringBefore('#')
+                        (at == libraryPage || at.endsWith("sheet.html")) && js("document.readyState") == "complete"
+                    }
+                    if (url(main).substringBefore('#').endsWith("sheet.html")) {
+                        instrumentation.uiAutomation.executeShellCommand("input keyevent KEYCODE_BACK").close()
+                    }
                     loadedAt(main, libraryPage)
                 }
             } finally {
@@ -204,6 +234,20 @@ class EndToEndTest {
         // The research's open question, answered last so that every other check above ran and was recorded.
         assertEquals("the viewer runs in a sandbox, an opaque origin", "null", found.getJSONObject("viewer").getString("origin"))
         assertFalse(found.getJSONObject("viewer").getString("storage") == "allowed")
+    }
+
+    /** [url]'s status and text, asked of the phone's server with the launch's cookie, as the WebView asks it. */
+    private fun stubbed(url: String): Pair<Int, String> {
+        val connection = java.net.URL(url).openConnection() as java.net.HttpURLConnection
+        try {
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Cookie", "${io.github.danielhp95.caracole.server.http.Security.SECRET_COOKIE}=${Caracole.secret}")
+            val status = connection.responseCode
+            val body = (if (status >= 400) connection.errorStream else connection.inputStream)?.use { it.readBytes() } ?: ByteArray(0)
+            return status to body.toString(Charsets.UTF_8)
+        } finally {
+            connection.disconnect()
+        }
     }
 
     /** The page at [address] (its fragment aside) once it has loaded. */

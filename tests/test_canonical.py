@@ -21,9 +21,16 @@ def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+# The package's own build runs the suite on a source tree without docs/: there the spec's rows are none.
+HAS_SPEC = SPEC.is_file()
+needs_the_spec = pytest.mark.skipif(not HAS_SPEC, reason="docs/ is not in this tree")
+
+
 def spec_rows():
-    """The spec's table of vectors: (row, stored text, C or None, why there is none, H)."""
+    """The spec's table of vectors: (row, stored text, C or None, why there is none, H); none without the spec."""
     rows = []
+    if not HAS_SPEC:
+        return rows
     cell = r"`((?:[^`]|``)*)`"
     for line in SPEC.read_text("utf-8").splitlines():
         m = re.fullmatch(r"\| (\d+) \| (.+?) \| (.+?) \| `([0-9a-f]{64})` \|", line)
@@ -42,6 +49,7 @@ def spec_rows():
 ROWS = spec_rows()
 
 
+@needs_the_spec
 def test_the_spec_has_its_vectors():
     assert [r[0] for r in ROWS] == list(range(1, 42))
     assert {r[3] for r in ROWS} == {None, "not JSON", "not canonicalizable"}

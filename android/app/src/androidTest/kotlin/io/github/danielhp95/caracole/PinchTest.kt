@@ -153,9 +153,13 @@ class PinchTest {
             assertEquals(small, zoom(main))
             evaluate(main, "document.getElementById('smaller').click()")
 
-            // A sheet in Chinese with its readings, at that size, then larger.
-            val chinese = manifest.entries.map { it.path }
-                .firstOrNull { path -> path.endsWith("/sheet.html") && path.any { it.code in 0x4E00..0x9FFF } }
+            // A sheet in Chinese with its readings, at that size, then larger: one whose page carries them (the data's
+            // `pinyin`, which a sheet whose words hold no Chinese has none of, whatever its title).
+            val mirror = Caracole.mirror(context)
+            val chinese = manifest.entries
+                .filter { e -> e.path.endsWith("/sheet.html") && e.path.any { it.code in 0x4E00..0x9FFF } }
+                .firstOrNull { e -> "\"pinyin\":" in mirror.blob(e.sha256).readText() }?.path
+            record("pinyin sheet", chinese ?: "none: no Chinese sheet of this library has readings")
             if (chinese != null) {
                 open(main, Pages.address(chinese) + "#py=1")
                 waitUntil("the readings") { evaluate(main, "document.querySelector('#sheet ruby.py') !== null") == true }

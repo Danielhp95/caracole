@@ -4,11 +4,16 @@ A plan for a phone app that keeps a library of its own and works with the comput
 keeps songbooks and plays sheets. It syncs with the computer's caracole both ways, and the owner chooses a side
 wherever the two differ. Nothing in it needs Termux or Python on the phone.
 
-Status: a plan, not built. The research behind it, with sources, is
+Status: milestones 1–3 are built (2026-11-03): the Kotlin core with the conformance corpus, search with the computer
+off, and sync from the phone, both ways. The goal's 20-songs scenario passes end to end on the JVM
+(`CARACOLE_ANDROID_E2E=1 nix develop -c pytest -q -n 0 tests/test_android_e2e.py`), and the app's tests pass on an
+Android 16 emulator (x86_64), the device step of the plan
+([superpowers/plans/2026-11-03-android-port-m1-m3.md](superpowers/plans/2026-11-03-android-port-m1-m3.md) §9). What
+only a real phone can show, and what waits for milestone 4, are [below](#built-milestones-1-to-3). Milestones 4–6 are
+still a plan. The research behind it, with sources, is
 [superpowers/specs/2026-11-02-android-native-port-feasibility.md](superpowers/specs/2026-11-02-android-native-port-feasibility.md).
 The sync protocol it builds on is designed in
-[superpowers/specs/2026-10-31-phone-server-sync-design.md](superpowers/specs/2026-10-31-phone-server-sync-design.md)
-and is built on the computer's side.
+[superpowers/specs/2026-10-31-phone-server-sync-design.md](superpowers/specs/2026-10-31-phone-server-sync-design.md).
 
 ## In short
 
@@ -37,9 +42,11 @@ and is built on the computer's side.
 - **`caracole serve`** is its web interface on the LAN. It runs the library page (search, cards, songbooks,
   requests) and the sheet viewer. The pages are static HTML and JavaScript. They talk only to caracole serve, which
   runs every change as a queued `caracole` command.
-- **The Android app** ([android/](../android/README.md), about 3,700 lines of Kotlin with its tests) is a read-only,
-  offline copy of the computer's library. It downloads what `GET /api/offline` lists and shows it in a WebView, with
-  pinch-to-resize text. It can't search the sites, add a song or change anything.
+- **The Android app** ([android/](../android/README.md)) copies the computer's library (what `GET /api/offline`
+  lists) and shows it through a caracole of its own, a server on 127.0.0.1 that only the app can use. With the
+  computer's indexes imported it searches the sites with the computer off, adds and removes songs, and syncs with
+  the computer both ways from the library page's Sync tab (milestones 1–3, [below](#built-milestones-1-to-3)). It
+  doesn't look songs up on the sites yet.
 - **Sync between two caracoles** works on the computer's side today (`caracole peer diff`, `sync`, `pull`). It cuts
   a library into units: each song, each removed song, each songbook, and a few per-artist and per-tab settings. Each
   unit has a digest, and two libraries are compared three ways against the last state they agreed on. A unit
@@ -285,26 +292,73 @@ Each one ends with something usable.
 Milestones 2 and 3 already cover most of the goal: songs changed on the computer reach the phone and come back.
 Milestones 4 and 5 are the bulk of the work.
 
+### Built: milestones 1 to 3
+
+Built on 2026-11-03, in android/ (`:core`, `:server`, `:mirror`, `:app`, `:e2e`) and on the computer's side
+(canonical.py, peer_push.py, web/sync_routes.py and the Sync tab, `GET /api/peer/index`, sync format 2):
+
+- The phone's database is caracole's schema in the bundled SQLite (3.50.1, FTS5), migrated as db.py migrates it.
+  Keys, Python's Unicode and `re`, pinyin, rapidfuzz, canonical JSON, search, the index merge and sync are Kotlin
+  ports held to the Python by the conformance corpus, on the JVM and, through `CorpusOnDeviceTest`, under Android's
+  runtime.
+- The app serves the library page and the mirrored pages itself on `http://127.0.0.1:8738`, behind the launch's
+  cookie. It imports the computer's indexes (from caracole serve or from a file), searches them with the computer
+  off, adds songs (Get it, the request form) and removes them.
+- The Sync tab compares the phone with the computer, lists the differences with a proposal each, takes the owner's
+  choices, and syncs: what the computer changed taken, what the phone changed pushed (`POST /peer/push`), the pages
+  copied, the agreement recorded, the computer's newer indexes merged.
+- The goal's scenario passes end to end (tests/test_android_e2e.py): 20 songs reach the phone with their changes;
+  with the computer off the phone searches, adds three songs and removes two; the second sync lists the expected
+  differences, the owner's choice for the conflict applies, and both libraries end unit for unit equal.
+- On an Android 16 emulator (x86_64): `BundledSqliteTest`, `CorpusOnDeviceTest`, `LocalServerTest`, `EndToEndTest`,
+  `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest` pass. `CorpusOnDeviceTest` found one difference the JVM can't
+  show: ICU reads a `\G` inside a lookaround otherwise than the JDK, which PyRe's search after an empty match leaned
+  on; it no longer does.
+
+**What only a real phone can show:**
+
+- `BundledSqliteTest` on arm64 (the emulator is x86_64);
+- the index import's time and storage for the full UG index (1.4 M rows, about 400 MB, through triggers);
+- `/api/search`'s latency on that index;
+- a WebView whose Chromium differs from the emulator's (cookies on `http://127.0.0.1`, `Sec-Fetch-Site`);
+- doze and the background limits during a long sync or import;
+- Wi-Fi or tailnet reachability of the computer;
+- the APK's size on arm64.
+
+**Deferred to milestone 4:**
+
+- the index from the phone to the computer: a sync merges the computer's newer indexes into the phone, never the
+  other way (the phone builds none until it looks songs up);
+- cooldowns moved across at a sync (the state document has room for them);
+- the Requests tab on the phone: its page has none; a job shows on its song's line and a sync on the Sync tab, and
+  the history lives in memory until the app stops.
+
 ## Changes on the computer's side
 
 The port needs these in the Python caracole:
 
-- `POST /peer/push`: the computer takes units the phone sends, checked against their digests.
-- Version records and lyrics hashed canonicalized, with a sync format bump.
-- `GET /api/peer/index`, and the index merged both ways at a sync.
-- Cooldowns moved across at a sync (already planned).
-- The Sync page, as a tab of the library page.
-- The conformance corpus writer, in the test suite.
+- `POST /peer/push`: the computer takes units the phone sends, checked against their digests. Built (peer_push.py,
+  `caracole peer take`).
+- Version records and lyrics hashed canonicalized, with a sync format bump. Built (canonical.py, format 2).
+- `GET /api/peer/index`, and the index merged both ways at a sync. Built from the computer to the phone; the other
+  way waits for milestone 4.
+- Cooldowns moved across at a sync (already planned). Milestone 4.
+- The Sync page, as a tab of the library page. Built (web/sync_routes.py, library_assets/sync.js).
+- The conformance corpus writer, in the test suite. Built (tests/test_conformance_*.py, tests/conformance/).
 
 ## Risks and open questions
 
 - **Two implementations to maintain.** Every later change to search, lookups, theory or sync has to be made twice.
   This is the largest cost over time. The corpus catches drift but doesn't prevent the extra work.
-- **FTS5 in the bundled SQLite** is unverified. Check `PRAGMA compile_options` on a phone, or fall back to
-  sqlite.org's bindings built with FTS5.
+- **FTS5 in the bundled SQLite** is in: `BundledSqliteTest` reads `ENABLE_FTS5` in `PRAGMA compile_options` and
+  runs the three FTS5 indexes search reads, on the JVM and on the x86_64 emulator. arm64 is a real phone's to show.
 - **Page builds on a phone.** The harmony tables are computed for every transposition and mode, so measure how long
   that takes. A page is built once and kept until its sheet or the builder changes, as on the computer.
 - **The index's size.** About 400 MB, so the first transfer should be over Wi-Fi.
+- **The index merge's speed**, measured on the JVM (MergeSpeedTest, on the development machine): 200,000 `ug_index`
+  rows merged through the triggers in about 1.0 s into a new phone (946 ms) and into a phone of 400 songs, 200 of
+  them marked (1,053 ms), the export generated in 140–180 ms. The full index is seven times that, so some seconds on
+  a laptop and, by a phone's slower storage and cores, likely a minute or more: a real phone's to measure.
 - **Android's background limits.** The local server lives while the app does. Lookups are short (a few requests),
   but an index import or a long sync belongs in a foreground service or WorkManager.
 - **The localhost secret** is a departure from caracole's no-secret rule, and the owner's decision.
