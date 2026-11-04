@@ -49,7 +49,10 @@ class AzLyricsTest {
         val pomme = AzLyrics.parseArtist(page("azlyrics/artist_pomme.html"))
         assertEquals("Pomme", pomme.name)
         assertEquals("https://www.azlyrics.com/lyrics/pomme/mononoke.html", AzLyrics.pickSong(pomme, "Pomme", "Mononoke")?.url)
-        assertNull(AzLyrics.pickSong(pomme, "Pomme", "Ma Meilleure Ennemie"))
+        // Its own line, linked under Stromae's name (a duet), never the remix's beside it.
+        assertEquals("https://www.azlyrics.com/lyrics/stromae/mameilleureennemie.html",
+                     AzLyrics.pickSong(pomme, "Pomme", "Ma Meilleure Ennemie")?.url)
+        assertNull(AzLyrics.pickSong(pomme, "Pomme", "Grandiose"))
         val text = AzLyrics.parseLyrics(page("azlyrics/lyrics_mononoke.html"))
         assertTrue(text.startsWith("[Couplet 1]\nDes mots inventés pour ce test\nRien & personne"), text)
         assertFailsWith<AzLyricsParseError> { AzLyrics.parseArtist(page("azlyrics/not_found.html")) }

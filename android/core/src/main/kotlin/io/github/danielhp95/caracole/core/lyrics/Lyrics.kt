@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.core.lyrics
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.library.internal.LyricsFiles
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
@@ -51,9 +52,6 @@ data class Lyrics(val plain: String, val synced: String?, val instrumental: Bool
             )
         }
 
-        private val LINE_STAMP = PyRegex.compile("""\[(\d+):(\d{2}(?:\.\d+)?)\]""")
-        private val LEADING_STAMPS = PyRegex.compile("""(?:\s*\[\d+:\d{2}(?:\.\d+)?\])+""")
-        private val WORD_STAMP = PyRegex.compile("""<\d+:\d{2}(?:\.\d+)?>""")
         private val ID_TAG = PyRegex.compile("""(?i)\[(?:ar|al|ti|au|by|re|ve|la|id|length|offset|tool|#):[^\]]*\]""")
 
         /** lyrics._text: a string's text with its line ends made LF; "" for anything else. */
@@ -71,28 +69,13 @@ data class Lyrics(val plain: String, val synced: String?, val instrumental: Bool
         private fun withoutIdTags(plain: String): String =
             plain.split("\n").filter { PyRe.fullmatch(ID_TAG, Py.strip(it)) == null }.joinToString("\n").trim('\n')
 
-        /** lyrics.synced_lines: LRC text's timed lines as (seconds, text), in time order. */
-        fun syncedLines(synced: String): List<Pair<Double, String>> {
-            val timed = ArrayList<Pair<Double, String>>()
-            for (line in text(JsonPrimitive(synced)).split("\n")) {
-                val stamps = PyRe.match(LEADING_STAMPS, line) ?: continue
-                val words = Py.split(PyRe.sub(WORD_STAMP, line.substring(stamps.range.last + 1)) { "" }).joinToString(" ")
-                for (m in PyRe.finditer(LINE_STAMP, stamps.value)) {
-                    timed.add(m.groupValues[1].toLong() * 60 + m.groupValues[2].toDouble() to words)
-                }
-            }
-            return timed.sortedBy { it.first }  // stable, as Python's sort
-        }
+        /** lyrics.synced_lines: LRC text's timed lines as (seconds, text), in time order: library.internal.LyricsFiles',
+         * the one reading of LRC's stamps (any Unicode decimal digits, a minute of any length, as Python's `\d`,
+         * `int()` and `float()` read them). */
+        fun syncedLines(synced: String): List<Pair<Double, String>> = LyricsFiles.syncedLines(synced)
 
         /** lyrics.plain_from_synced: plain lyrics from LRC text; an empty timed line a break between stanzas. */
-        fun plainFromSynced(synced: String): String {
-            val out = ArrayList<String>()
-            for ((_, line) in syncedLines(synced)) {
-                if (line.isNotEmpty() || (out.isNotEmpty() && out.last().isNotEmpty())) out.add(line)
-            }
-            while (out.isNotEmpty() && out.last().isEmpty()) out.removeAt(out.size - 1)
-            return out.joinToString("\n")
-        }
+        fun plainFromSynced(synced: String): String = LyricsFiles.plainFromSynced(synced)
     }
 }
 

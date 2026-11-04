@@ -103,7 +103,7 @@ internal object LyricsFiles {
 
     /** lyrics.synced_lines: each line's stamps' times with its text, word stamps out and spaces collapsed, by time
      * (a stable sort). */
-    private fun syncedLines(synced: String): List<Pair<Double, String>> {
+    fun syncedLines(synced: String): List<Pair<Double, String>> {
         val timed = mutableListOf<Pair<Double, String>>()
         for (line in synced.replace("\r\n", "\n").replace("\r", "\n").split("\n")) {  // lyrics._text's line ends
             val cps = line.codePoints().toArray()
