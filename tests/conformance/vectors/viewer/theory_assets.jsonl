@@ -1,0 +1,4 @@
+{"corpus":"viewer/theory_assets","header":true,"made_by":"tests/test_conformance_viewer_theory.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["sheet"],"fn":"test_conformance_viewer_theory.page_assets","out":{"scripts":["strum.js","overlay.js","instruments.js","winds.js","viewer.js"],"styles":["viewer.css"]}}
+{"args":["songbook"],"fn":"test_conformance_viewer_theory.page_assets","out":{"scripts":["book.js","strum.js","overlay.js","instruments.js","winds.js","viewer.js"],"styles":["viewer.css","book.css"]}}
+{"args":["harmonica"],"fn":"test_conformance_viewer_theory.page_assets","out":{"scripts":["strum.js","overlay.js","harptab.js"],"styles":["viewer.css","harptab.css"]}}
