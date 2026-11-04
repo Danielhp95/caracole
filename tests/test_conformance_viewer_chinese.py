@@ -292,6 +292,53 @@ def test_what_the_phone_takes_for_granted_of_opencc():
             assert len(value) == len(key), (name, key, value)
 
 
+def _groups(spec: dict, *, tofu: bool):
+    """Each group a dictionary's spec holds, as the config reads it: its policy and the members left in it."""
+    if spec.get("may_output_tofu") and not tofu or spec["type"] != "group":
+        return
+    members = [child for child in spec["dicts"] if _files(child, tofu=tofu)]
+    if members:
+        yield spec.get("match_policy", "short_circuit"), members
+    for child in members:
+        yield from _groups(child, tofu=tofu)
+
+
+def test_the_vectors_tell_the_group_policies_apart_wherever_this_data_can():
+    """What the vectors can't show of the two policies, this data never needs: an OpenCC whose dictionaries need it
+    fails here by name, and its vectors then need texts that tell the policies apart (OpenCC.kt follows
+    PrefixMatch.cpp for both).
+
+    - ``short_circuit``: every member after the first holds one-character keys alone, so the first member that
+      matches is also the longest match, the first of them on a tie: what ``union`` would answer.
+    - ``union``: a key two members hold has one first value in both, so its tie-break changes nothing; its longest
+      match is told apart, as some later member's key goes on from an earlier member's.
+    """
+    longer = False
+    for name in CONFIGS:
+        c = config(name)
+        specs = [(stage["dict"], False) for stage in [*c.get("normalization", []), *c["conversion_chain"]]]
+        if "segmentation" in c:
+            specs.append((c["segmentation"]["dict"], True))
+        for spec, tofu in specs:
+            for policy, members in _groups(spec, tofu=tofu):
+                files = [_files(member, tofu=tofu) for member in members]
+                held = [{key: value for file in fs for key, value in entries(file.removesuffix(".ocd2"))}
+                        for fs in files]
+                if policy == "short_circuit":
+                    for fs, keys in zip(files[1:], held[1:]):
+                        assert max(map(len, keys)) == 1, (name, fs, "a later member's key of two characters")
+                    continue
+                assert all(member["type"] == "ocd2" for member in members), (name, "a union of groups")
+                first: dict[str, str] = {}
+                for fs, keys in zip(files, held):
+                    for key, value in keys.items():
+                        assert first.setdefault(key, value) == value, (name, fs, key, "a tie a union breaks")
+                for n, keys in enumerate(held[1:], start=1):
+                    earlier = set().union(*held[:n])
+                    longer |= any(key[:end] in earlier for key in keys for end in range(1, len(key)))
+    assert longer, "no union's longest match the vectors show"
+
+
 # --- the vectors ------------------------------------------------------------------------------------------------------
 
 
