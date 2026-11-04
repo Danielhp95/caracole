@@ -53,6 +53,20 @@ class StampsTest {
         assertTrue(Regex("""\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ""").matches(Stamps.now()))
     }
 
+    /** history.py's `_time` keeps `datetime.fromisoformat`'s time as read: JobHistory reads it with [Stamps.fromisoformat],
+     * the same reader, which keeps a time whose UTC is outside years 1 to 9999 and raises where Python does. */
+    @Test fun fromisoformatKeepsTheTimeAsReadWhereParseWouldConvertIt() {
+        assertEquals(Stamps.parse("2026-10-18T03:30:00Z"), Stamps.fromisoformat("2026-10-18T05:30:00+02:00"))
+        assertEquals(Stamps.parse("2026-10-18T03:30:00Z"), Stamps.fromisoformat("2026-10-18 03:30"))
+        val early = "0001-01-01T00:00:00+01:00"
+        assertEquals(-3_600_000_000L, Stamps.fromisoformat(early))
+        assertEquals(Instant.parse("0000-12-31T23:00:00Z"), Stamps.instant(Stamps.fromisoformat(early)))
+        assertFailsWith<ArithmeticException> { Stamps.parse(early) }
+        for (text in listOf("", "soon", "2026-02-30", "2026-10-21T24:00:01", "2026-10-21T03:30:00+24:00")) {
+            assertFailsWith<IllegalArgumentException>(text) { Stamps.fromisoformat(text) }
+        }
+    }
+
     @Test fun aTimeThatIsNoneSaysSoInPythonsWords() {
         assertEquals("2026-10-31T00:00:00Z", Stamps.stampOf("2026-10-31T02:00:00+02:00"))
         assertEquals("2026-10-31T00:00:00Z", Stamps.stampOf("2026-10-31"))

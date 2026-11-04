@@ -28,7 +28,8 @@ import java.time.Instant
  * - `24:00` with nothing after it the next day's midnight, where the date is one.
  *
  * Anything else is no time (null). A time whose UTC falls outside years 1 to 9999 is an [ArithmeticException], as
- * `astimezone` raises Python's OverflowError, which a merge never catches either.
+ * `astimezone` raises Python's OverflowError, which a merge never catches either. [fromisoformat] is the same reader
+ * for a caller that keeps the time as read (web/history.py's `_time`, JobHistory), and [isoformat] the writer of one.
  */
 object Stamps {
     private const val DAY_US = 86_400_000_000L
@@ -48,6 +49,16 @@ object Stamps {
         val utc = read.local - (read.offset ?: 0L)
         if (utc < MIN_US || utc >= END_US) throw ArithmeticException("date value out of range: $value")
         return utc
+    }
+
+    /**
+     * `datetime.fromisoformat(value)` itself, as the aware time it names, a naive one UTC: its instant here, whatever
+     * year its UTC falls in (history.py's `_time` keeps the datetime as read, never converting it, so
+     * `0001-01-01T00:00:00+01:00` is a time there); [IllegalArgumentException] where Python raises ValueError.
+     */
+    fun fromisoformat(value: String): Long {
+        val read = read(value) ?: throw IllegalArgumentException("Invalid isoformat string: ${PyRepr.str(value)}")
+        return read.local - (read.offset ?: 0L)
     }
 
     /**
@@ -124,14 +135,14 @@ object Stamps {
     }
 
     private fun read(value: String): Read? = try {
-        fromisoformat(value)
+        readIso(value)
     } catch (_: Bad) {
         null
     }
 
     private fun isSurrogate(c: Char) = c in '\uD800'..'\uDFFF'
 
-    private fun fromisoformat(value: String): Read {
+    private fun readIso(value: String): Read {
         // _sanitize_isoformat_str: at least 7 characters; a surrogate at 7, 8 or 10 (the first) read as 'T'.
         val points = value.codePoints().toArray()
         if (points.size < 7) throw Bad()
