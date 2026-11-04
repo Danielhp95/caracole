@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.lacuerda.SearchGate
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.names.SongNames
 import io.github.danielhp95.caracole.core.search.IndexFound
+import io.github.danielhp95.caracole.core.search.LaCuerdaUnlisted
 import io.github.danielhp95.caracole.core.search.IndexHit
 import io.github.danielhp95.caracole.core.search.LibraryHit
 import io.github.danielhp95.caracole.core.search.Search
@@ -47,7 +48,7 @@ internal class IndexAnswers(
 /**
  * One search's answer, as search_routes._found_for makes it, over [db]: your songs, the artists the query names, the
  * index's songs, which leads, the row Enter may act on, each site's rows, the songs spelled close to it, where it
- * looked, a LaCuerda artist's page to read (`lacuerda_unlisted`, [Unlisted]) and whether LaCuerda's own search may be
+ * looked, a LaCuerda artist's page to read (`lacuerda_unlisted`, LaCuerdaUnlisted) and whether LaCuerda's own search may be
  * sent for it (`lacuerda_search`: LaCuerdaSearch.gate under [config] at [now], with its `why` when it failed lately;
  * null with [searchesLacuerda] false, as `WebApp(searches_lacuerda=False)` answers). What the phone can't answer is
  * null: `progression` (M5's progressions) and `youtube` (the phone runs no yt-dlp). [check] is called between two of
@@ -104,8 +105,8 @@ internal class Found(
         check()
         val suggest = close.map { suggestion(rows, it) }
         check()
-        val unlisted = Unlisted.lacuerdaUnlisted(db, q, kept.indexFound.artists, kept.indexFound.songs, kept.indexFound.lead,
-                                                 kept.lcArtists + kept.lacuerda)
+        val unlisted = LaCuerdaUnlisted.of(db, q, kept.indexFound.artists, kept.indexFound.songs, kept.indexFound.lead,
+                                           lacuerdaArtists = kept.lcArtists, lacuerdaSongs = kept.lacuerda)
             ?.let { (name, letter) -> obj("name" to name, "letter" to letter) }
         check()
         val gate = if (searchesLacuerda) lacuerdaSearchGate(q, kept, mine) else null

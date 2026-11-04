@@ -395,6 +395,12 @@ def lookups(cfg, songs) -> list[dict[str, Any]]:
     a(_asked(cfg, "/versions/keep-more", "an ignored song", [("song", str(eres.id))]))
     a(_asked(cfg, "/versions/keep-more", "an id that is no number", [("song", "zz")]))
     a(_asked(cfg, "/versions/keep-more", "an id no song has", [("song", "9999")]))
+    # by a viewer's path (caracole serve's versions page): the phone writes no viewer of its own, so none names a sheet
+    a(_asked(cfg, "/versions/keep-more", "no song and no sheet", []))
+    a(_asked(cfg, "/versions/keep-more", "a song of spaces, no sheet", [("song", "  ")]))
+    a(_asked(cfg, "/versions/keep-more", "a sheet no viewer was written for",
+             [("sheet", "Los Prisioneros/Tren al Sur/sheet.html")]))
+    a(_asked(cfg, "/versions/keep-more", "a sheet that is no viewer's path", [("sheet", "../sheet.html")]))
     return out
 
 
@@ -562,6 +568,10 @@ def test_the_cases_meet_what_they_name(made):
     assert out[("POST /lookup", "an Ultimate Guitar song picked, matched to your song", True)]["wanted"] is False
     assert out[("POST /versions/keep-more", "versions left to keep", True)]["status"] == 303
     assert out[("POST /versions/keep-more", "nothing left to keep", True)]["status"] == 409
+    for case in ("no song and no sheet", "a song of spaces, no sheet", "a sheet no viewer was written for",
+                 "a sheet that is no viewer's path"):
+        assert out[("POST /versions/keep-more", case, True)] == {
+            "status": 404, "title": "Not found", "message": "There's no such sheet in the library."}, case
     states = {r["case"]: r["out"] for r in made["routes"][1:] if r["fn"] == "POST /lacuerda/search"}
     assert states["auto: sent by the page"]["job"]["steps"][0][1][-1] == "--auto"
     assert states["by hand"]["job"]["steps"][0][1][-1] == "--progress"

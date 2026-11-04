@@ -12,9 +12,9 @@ import io.github.danielhp95.caracole.core.http.Transport
 import io.github.danielhp95.caracole.core.http.TransportError
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.server.http.App
 import io.github.danielhp95.caracole.server.http.Security
 import io.github.danielhp95.caracole.server.jobs.Job
-import io.github.danielhp95.caracole.server.jobs.JobViews
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import org.json.JSONObject
@@ -40,9 +40,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * Get it, posted as the library page's script posts it to the app's own server, queues `caracole get`, which adds its
  * song and asks each site, every one refusing ("refused", as a phone with no network answers): it ends done, its song
  * in the library, LRCLIB's stage failed, every site's failed or skipped (a lane's port still neutral), none a miss,
- * its line status.py's ("Added: the nightly run looks for it"). While it runs the app is kept in the foreground, its
- * `jobs` notification naming the song; once it is over the notification goes. The sites answer slowly here, so that
- * the lookup is seen running.
+ * its line the one the library page shows (/jobs.json's, its song's facts read: status.py's "Not fetched yet", never
+ * "Not found"). While it runs the app is kept in the foreground, its `jobs` notification naming the song; once it is
+ * over the notification goes. The sites answer slowly here, so that the lookup is seen running.
  */
 @RunWith(AndroidJUnit4::class)
 class LookupOfflineTest {
@@ -83,7 +83,9 @@ class LookupOfflineTest {
             for (site in listOf("ug", "lacuerda", "gtptabs", "harptabs", "gametabs")) {
                 assertTrue("$site: ${job.asJson()}", stages.getValue(site).state in setOf("failed", "skipped"))
             }
-            assertEquals("Added: the nightly run looks for it", JobViews.line(job).text)
+            val line = PhoneForms.line(id)
+            assertEquals(line.toString(), "Not fetched yet", line.getString("text"))
+            assertEquals(line.toString(), "waiting", line.getString("tone"))
             assertTrue("the sites were asked", asked.get() > 0)
             val song = phone.parts.database.read { Songs.byKey(it, Normalize.identityKey(ARTIST, TITLE)) }
             assertNotNull("the song added", song)
@@ -105,10 +107,14 @@ class LookupOfflineTest {
 internal object PhoneForms {
     private val TOKEN = Regex("""name="csrf" value="([0-9a-f]+)"""")
 
+    /** The form token the library page carries (its request form's). */
+    private fun token(origin: String): String =
+        TOKEN.find(get("$origin/").second)?.groupValues?.get(1) ?: throw AssertionError("no form token")
+
     /** [path]'s status and text for [fields], with the token; as JSON, unless [json] is false. */
     fun post(path: String, vararg fields: Pair<String, String>, json: Boolean = true): Pair<Int, String> {
         val origin = Pages.origin()
-        val token = TOKEN.find(get("$origin/").second)?.groupValues?.get(1) ?: throw AssertionError("no form token")
+        val token = token(origin)
         val body = (listOf("csrf" to token) + fields).joinToString("&") { (name, value) ->
             URLEncoder.encode(name, "UTF-8") + "=" + URLEncoder.encode(value, "UTF-8")
         }.toByteArray()
@@ -127,6 +133,31 @@ internal object PhoneForms {
         } finally {
             connection.disconnect()
         }
+    }
+
+    /** [path] read as the library page's script reads it: JSON, the form token in its header, the launch's cookie. */
+    fun script(path: String): Pair<Int, String> {
+        val origin = Pages.origin()
+        val token = token(origin)
+        val connection = URL("$origin$path").openConnection() as HttpURLConnection
+        try {
+            connection.instanceFollowRedirects = false
+            connection.setRequestProperty("Cookie", "${Security.SECRET_COOKIE}=${Caracole.secret}")
+            connection.setRequestProperty("Sec-Fetch-Site", "same-origin")
+            connection.setRequestProperty("Accept", "application/json")
+            connection.setRequestProperty(App.TOKEN_HEADER, token)
+            return answer(connection)
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    /** The line the library page shows for request [id]: /jobs.json's view of it, its song's facts read
+     * (jobs_routes.view), `{tone, text, link, details}`. */
+    fun line(id: Int): JSONObject {
+        val (status, body) = script("/jobs.json?jobs=$id")
+        if (status != 200) throw AssertionError("/jobs.json?jobs=$id: HTTP $status $body")
+        return JSONObject(body).getJSONArray("jobs").getJSONObject(0).getJSONObject("line")
     }
 
     /** [url]'s status and text, with the launch's cookie. */

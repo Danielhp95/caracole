@@ -21,9 +21,13 @@ import io.github.danielhp95.caracole.core.sites.SiteSearch
 import io.github.danielhp95.caracole.core.ug.SheetVersions
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.jobs.Command
+import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
+import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.SongFacts
+import io.github.danielhp95.caracole.server.page.SongCards
 import io.github.danielhp95.caracole.server.routes.LibraryRoutes
 import io.github.danielhp95.caracole.server.routes.library.NamedSong
 import io.github.danielhp95.caracole.server.routes.library.SongForm
@@ -60,6 +64,9 @@ internal object LookupForms {
 
     const val NO_SUCH_SONG = "That song isn't in the library."
 
+    /** versions_routes._NO_SHEET: a viewer's path that names no sheet of the library's. */
+    private val NO_SHEET get() = Refused(404, "Not found", "There's no such sheet in the library.")
+
     /** review.SHOWN: the candidates a review lists. */
     private const val SHOWN = 9
 
@@ -71,6 +78,20 @@ internal object LookupForms {
 
     /** search_routes._HARP_ARTIST: the path of a harptabs.com artist's page. */
     private val HARP_ARTIST = PyRegex.compile("""artist/\d{1,9}/[a-z0-9-]{1,200}""")
+
+    // --- what every form answers -----------------------------------------------------------------------------------
+
+    /**
+     * app.job_view: a job just queued, as /jobs.json gives it to the library page's script (JobsRoutes): its song as
+     * the library has it now and what the library knows of it (SongFacts.songOf, through the queue's [SongFacts.ended],
+     * as /jobs.json reads them), so a job's view is one whichever form queued it (a lookup's, Fetch now's on the
+     * request form, an add's).
+     */
+    fun view(database: Database, queue: JobQueue, cards: SongCards, job: Job, now: Instant): JsonObject {
+        val ahead = if (job.state == Job.QUEUED) queue.ahead(job) else 0
+        val (songId, facts) = database.read { db -> SongFacts.ended(queue).songOf(db, job, cards, now) }
+        return JobViews.view(job, ahead, songId, facts = facts)
+    }
 
     // --- what every form names -------------------------------------------------------------------------------------
 
@@ -344,13 +365,20 @@ internal object LookupForms {
     }
 
     /**
-     * versions_routes.versions_post's Fetch them (POST /versions/keep-more, by `song`, the library page's card alone
-     * posts it): the song's UG versions not kept yet, as many as a lookup may, `caracole versions --keep-more
-     * --progress`, under the song's key; refused when none is left to keep (sheet_versions.may_keep under [config]'s
-     * rank), then for a song ignored.
+     * versions_routes.versions_post's Fetch them (POST /versions/keep-more, by `song`, as the library page's card posts
+     * it): the song's UG versions not kept yet, as many as a lookup may, `caracole versions --keep-more --progress`,
+     * under the song's key; refused when none is left to keep (sheet_versions.may_keep under [config]'s rank), then for
+     * a song ignored.
+     *
+     * A post with no `song` names its song by a viewer's path in the library (`sheet`), as caracole serve's versions
+     * page posts it; the phone writes no viewer of its own yet (the computer's pages it mirrors are none of its
+     * records), so no such path names a sheet of its: refused as versions_routes refuses a path that names none
+     * ([NO_SHEET]).
      */
     fun keepMore(database: Database, config: PhoneConfig, form: Map<String, String>): LookupAsk {
-        val asked = songId(form["song"].orEmpty())
+        val text = form["song"].orEmpty()
+        if (Py.strip(text).isEmpty()) throw NO_SHEET
+        val asked = songId(text)
         val (song, overrides, toKeep) = database.read { db ->
             val overrides = overrides(db)
             val song = song(db, asked)

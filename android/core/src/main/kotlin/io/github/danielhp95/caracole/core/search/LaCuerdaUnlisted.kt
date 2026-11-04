@@ -1,67 +1,57 @@
-package io.github.danielhp95.caracole.server.routes.search
+package io.github.danielhp95.caracole.core.search
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
+import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaFind
 import io.github.danielhp95.caracole.core.py.Py
-import io.github.danielhp95.caracole.core.search.ArtistHit
-import io.github.danielhp95.caracole.core.search.IndexHit
-import io.github.danielhp95.caracole.core.search.Search
-import io.github.danielhp95.caracole.core.search.SearchLimits
-import io.github.danielhp95.caracole.core.search.SiteArtist
-import io.github.danielhp95.caracole.core.search.SiteHit
 
 /**
- * search.lacuerda_unlisted on the phone, /api/search's `lacuerda_unlisted`: for a query LaCuerda's index has no artist
- * by, while it hasn't read whole the listing of the letter their name would be in (LaCuerda.unreadLetter), the name
- * whose page can tell whether LaCuerda has them, and that letter as LaCuerda's menu names it ("E"); null when the
- * index can tell.
+ * search.lacuerda_unlisted on the phone (/api/search's `lacuerda_unlisted`, the server's Found): for a query
+ * LaCuerda's index has no artist by, while it hasn't read whole the listing of the letter their name would be in
+ * (LaCuerda.unreadLetter), the name whose page can tell whether LaCuerda has them, and that letter as LaCuerda's menu
+ * names it ("E"); null when the index can tell.
  *
- * LaCuerda's own answer ([lacuerda]: searchLacuerda's artists and songs) tells first: anything strong, and there is
- * nothing to offer. Then the Ultimate Guitar index's ([artists], [songs], [lead], findIndex's): a song by its title
- * alone that is strong is a title, no name; else the artist that leads, or one named whole or by a run of their
- * name's words ([namedInARun]: "bunbury" of Enrique Bunbury, never "silvio rodriguez" of Silvio Martinez Rodriguez);
- * else the artist of a strong song. Else none when LaCuerda has an artist whose whole name is among the query's
- * words (their row, LaCuerdaFind.NAMED, says it); else the artist of an Ultimate Guitar song read by both its names
- * whose whole name starts or ends the query ([namedAtAnEnd]); else the query less a title an index knows at its end
- * or its start ([lessATitle]); else the query. A name LaCuerda's listings give, under any of its spellings, is no
- * page to read (LaCuerda.artistSlugs). vectors/web/api_search.jsonl and api_search_gate.jsonl hold it to Python's
- * answers (tests/test_conformance_lookup_routes.py).
+ * LaCuerda's own answer (searchLacuerda's artists and songs) tells first: anything strong, and there is nothing to
+ * offer. Then the Ultimate Guitar index's (findIndex's artists, songs and lead): a song by its title alone that is
+ * strong is a title, no name; else the artist that leads, or one named whole or by a run of their name's words
+ * ([namedInARun]: "bunbury" of Enrique Bunbury, never "silvio rodriguez" of Silvio Martinez Rodriguez); else the
+ * artist of a strong song. Else none when LaCuerda has an artist whose whole name is among the query's words (their
+ * row, LaCuerdaFind.NAMED, says it); else the artist of an Ultimate Guitar song read by both its names whose whole
+ * name starts or ends the query ([namedAtAnEnd]); else the query less a title an index knows at its end or its start
+ * ([lessATitle]); else the query. With `artist` (`caracole search --artist NAME`'s) the query is the name. A name
+ * LaCuerda's listings give, under any of its spellings, is no page to read (LaCuerda.artistSlugs).
+ * vectors/web/api_search.jsonl and api_search_gate.jsonl hold it to Python's answers
+ * (tests/test_conformance_search.py, tests/test_conformance_lookup_routes.py).
  */
-internal object Unlisted {
+object LaCuerdaUnlisted {
     /** search.TITLE_WORDS: a title at a query's end that leaves the rest as its artist is two words at least. */
     private const val TITLE_WORDS = 2
 
-    /** lacuerda_index.NAMED: a LaCuerda artist's whole name among the query's words (LaCuerdaFind's, internal to
-     * :core; the vectors hold the two alike). */
-    private const val NAMED = 80.0
-
-    /** search_routes._lacuerda_unlisted: the name and the letter, or null. */
-    fun lacuerdaUnlisted(db: Db, q: String, artists: List<ArtistHit>, songs: List<IndexHit>, lead: String?,
-                         lacuerda: List<Any>): Pair<String, String>? {
-        if (lacuerda.any { score(it) >= SearchLimits.STRONG }) return null
-        val name = unlistedName(db, q, artists, songs, lead, lacuerda) ?: return null
+    /** search.lacuerda_unlisted: the name and the letter, or null. [artists], [songs] and [lead] are the Ultimate
+     * Guitar index's answer (findIndex's), none with [artist]. */
+    fun of(db: Db, q: String, artists: List<ArtistHit> = emptyList(), songs: List<IndexHit> = emptyList(),
+           lead: String? = null, lacuerdaArtists: List<SiteArtist> = emptyList(),
+           lacuerdaSongs: List<SiteHit> = emptyList(), artist: Boolean = false): Pair<String, String>? {
+        val strong = lacuerdaArtists.any { it.score >= SearchLimits.STRONG } ||
+            lacuerdaSongs.any { it.score >= SearchLimits.STRONG }
+        if (strong) return null
+        val name = (if (artist) q else unlistedName(db, q, artists, songs, lead, lacuerdaArtists)) ?: return null
         if (LaCuerda.artistSlugs(db, name).isNotEmpty()) return null  // LaCuerda lists them, under the name it writes
         val letter = LaCuerda.unreadLetter(db, name) ?: return null
         return name to LaCuerda.lettersText(listOf(letter))
     }
 
-    private fun score(hit: Any): Double = when (hit) {
-        is SiteArtist -> hit.score
-        is SiteHit -> hit.score
-        else -> throw IllegalArgumentException("not a site's hit: $hit")
-    }
-
-    /** search._unlisted_name. */
+    /** search._unlisted_name (of LaCuerda's answer, its artists alone tell: a song is no artist's whole name). */
     private fun unlistedName(db: Db, q: String, artists: List<ArtistHit>, songs: List<IndexHit>, lead: String?,
-                             lacuerda: List<Any>): String? {
+                             lacuerda: List<SiteArtist>): String? {
         val first = songs.firstOrNull { it.score >= SearchLimits.STRONG }
         val byTitle = first != null && first.via == "title"  // a strong song by its title alone: a title, no name
         val named = artists.filter { !it.part || namedInARun(q, it.artistKey) }
         if (named.isNotEmpty() && (lead == "artist" || !byTitle)) return named[0].artist
         if (byTitle) return null
         if (first != null && first.artist.isNotEmpty() && !Search.noOnes(first.artistKey)) return first.artist
-        if (lacuerda.any { it is SiteArtist && it.via == "both" && it.score >= NAMED }) return null
+        if (lacuerda.any { it.via == "both" && it.score >= LaCuerdaFind.NAMED }) return null
         return namedAtAnEnd(q, songs) ?: lessATitle(db, q) ?: q
     }
 

@@ -3,6 +3,9 @@ package io.github.danielhp95.caracole.server.routes.library
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverrideUrls
+import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.server.jobs.Job
@@ -256,7 +259,8 @@ class LibraryRoutesTest {
         )
         for ((path, fields) in asked) {
             val job = added(fields, path)
-            assertTrue(job.state == "done" || job.state == "failed", "$path $fields: ${job.state}")
+            // every site refused: a lookup ends done all the same (get.py exits 0 on a provider's error)
+            assertEquals(Job.DONE, job.state, "$path $fields: ${job.asJson()}")
             assertEquals(creep.key, job.spec.key)
             assertEquals(creep.id, job.songId)
             // An add writes nothing; a lookup looks the song up (what it found, or failed on), never the form's names,
@@ -320,6 +324,43 @@ class LibraryRoutesTest {
             assertEquals(JsonPrimitive(song.id), shown["songId"])
             assertEquals(JsonPrimitive("Blur - Song 2"), shown.getValue("card").jsonObject["display"])
             assertEquals("Added: the nightly run looks for it", shown.getValue("line").jsonObject.getValue("text").jsonPrimitive.content)
+        }
+    }
+
+    @Test fun `Add with a LaCuerda pick records it for the song, and its line says tonight's run gets it`() {
+        val dir = tmp.newFolder("picked")
+        TestApp(dir, modules = { database ->
+            listOf(JobsRoutes(queue, NoCards, database), LibraryRoutes(LibraryStore(java.io.File(dir, "library")), queue,
+                                                                       NoCards, database))
+        }).use { paged ->
+            val url = "https://acordes.lacuerda.net/estopa/fuego"
+            val view = paged.postScript("/request", listOf("artist" to "Estopa", "title" to "Fuego", "lacuerda" to url))
+                .json.jsonObject.getValue("job").jsonObject
+            val job = waitFor(view)
+            assertEquals(Job.DONE, job.state, job.asJson().toString())
+            assertEquals("add", job.spec.kind)
+            val song = assertNotNull(paged.database.read { Songs.byKey(it, Normalize.identityKey("Estopa", "Fuego")) })
+            val entries = paged.database.read { OverridesStore.songEntries(it, song.key) }
+            assertTrue("lacuerda" in entries, "$entries")
+            assertEquals(OverrideUrls.lacuerdaPickFromUrl(url).url,
+                         paged.database.read { Overrides.read(it) }.lacuerda[song.key]?.url)
+            val shown = paged.script("/jobs.json?jobs=${job.id}").json.jsonObject.getValue("jobs").jsonArray.single()
+                .jsonObject.getValue("line").jsonObject
+            assertEquals("Added: tonight's run gets the sheet you picked on LaCuerda", shown.getValue("text").jsonPrimitive.content)
+
+            // a song of the library LaCuerda answered for lately: a new pick is asked for at once
+            paged.database.writeBlocking { db ->
+                db.execute("UPDATE songs SET lacuerda_checked_at = '2026-11-01T00:00:00Z' WHERE id = ?", song.id)
+            }
+            val other = "https://acordes.lacuerda.net/estopa/fuego-2.shtml"
+            val again = waitFor(paged.postScript("/request", listOf("artist" to "estopa", "title" to "fuego",
+                                                                     "lacuerda" to other)).json.jsonObject.getValue("job").jsonObject)
+            assertEquals(Job.DONE, again.state, again.asJson().toString())
+            val after = assertNotNull(paged.database.read { Songs.byId(it, song.id) })
+            assertNull(after.lacuerdaCheckedAt)
+            assertEquals(OverrideUrls.lacuerdaPickFromUrl(other).url,
+                         paged.database.read { Overrides.read(it) }.lacuerda[song.key]?.url)
+            assertEquals(1, paged.database.read { Songs.list(it) }.size)
         }
     }
 

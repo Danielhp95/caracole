@@ -33,7 +33,7 @@ import java.util.Collections
  * Every connection java.net's HttpURLConnection opens asks the default ProxySelector first, so one installed here
  * hears each, whatever its host: the test's own posts to the app's server on 127.0.0.1 are heard (so a count of none
  * means something), a site never. The lookup still ends as one with no network does: its song added, its sites'
- * stages failed ("refused") or skipped, none a miss.
+ * stages failed ("refused") or skipped, none a miss, its line "Not fetched yet".
  */
 @RunWith(AndroidJUnit4::class)
 class NoNetworkTest {
@@ -70,8 +70,11 @@ class NoNetworkTest {
         val phone = Caracole.phone(context)
         val (status, body) = PhoneForms.post("/lookup", "artist" to ARTIST, "title" to TITLE)
         assertEquals(body, 202, status)
-        val job = runBlocking { withTimeout(120_000) { phone.queue.await(JSONObject(body).getInt("job")) } }
+        val id = JSONObject(body).getInt("job")
+        val job = runBlocking { withTimeout(120_000) { phone.queue.await(id) } }
         assertEquals(job.asJson().toString(), Job.DONE, job.state)
+        // the line the library page shows, read from the app's own server as its script reads it
+        assertEquals("Not fetched yet", PhoneForms.line(id).getString("text"))
 
         val hosts = synchronized(heard) { heard.map { it.host } }
         assertTrue("the test's own posts to the app's server were heard: $hosts", "127.0.0.1" in hosts)

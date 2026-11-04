@@ -78,10 +78,27 @@ class LookupRoutesTest {
         TestApp.form(listOf("csrf" to TestApp.CSRF) + fields),
     )
 
-    private fun search(q: String): JsonObject = handle(
-        "GET", "/api/search?q=${URLEncoder.encode(q, Charsets.UTF_8)}&box=t",
+    /** A read by the page's own script: JSON, the form token in its header. */
+    private fun script(target: String): JsonObject = handle(
+        "GET", target,
         mapOf("sec-fetch-site" to "same-origin", "accept" to "application/json", TestApp.TOKEN_HEADER to TestApp.CSRF),
     ).json.jsonObject
+
+    private fun search(q: String): JsonObject = script("/api/search?q=${URLEncoder.encode(q, Charsets.UTF_8)}&box=t")
+
+    /** The job's line as the library page shows it: /jobs.json's view, with what the library knows of its song now
+     * (SongFacts.songOf, as jobs_routes.view reads it), never a line of a job with no song's facts. */
+    private fun shownLine(id: Int): JsonObject = script("/jobs.json?jobs=$id").getValue("jobs").jsonArray.single()
+        .jsonObject.getValue("line").jsonObject
+
+    /** status.py's line for a lookup over with no sheet found and its song not checked by it (every site refused, so
+     * none answered): "Not fetched yet", waiting, the request's output linked; never "Not found", a miss's words. */
+    private fun assertNotFetchedYet(id: Int) {
+        val line = shownLine(id)
+        assertEquals(JsonPrimitive("Not fetched yet"), line["text"], "$line")
+        assertEquals(JsonPrimitive("waiting"), line["tone"], "$line")
+        assertEquals(JsonPrimitive(JobViews.detailsHref(id)), line["details"], "$line")
+    }
 
     /** The job an answer queued: `{job: N, url, view}` (a lookup's, a read's) or `{job: view}` (a form's). */
     private fun jobOf(answer: Response): Int = when (val job = answer.json.jsonObject.getValue("job")) {
@@ -118,9 +135,8 @@ class LookupRoutesTest {
         assertEquals("Fito Páez", song.artist)
         assertFalse(song.matchDecision == "not_found", "a refused site makes no miss: ${song.matchDecision}")
         assertFalse(song.lyricsStatus == "missing", "a refused site makes no miss: ${song.lyricsStatus}")
-        // status.py's line for a song added that no site gave anything yet: the nightly run tries again
         assertEquals("done", job.state)
-        assertEquals("Added: the nightly run looks for it", JobViews.line(job).text)
+        assertNotFetchedYet(id)
     }
 
     @Test fun `a lookup the page's script didn't post goes to its line in the Requests tab, the phone having no lookup page`() {
@@ -134,9 +150,11 @@ class LookupRoutesTest {
     @Test fun `Fetch now on the request form is a lookup, which adds the song`() {
         val answer = post("/request", "artist" to "Soda Stereo", "title" to "De Música Ligera", "fetch" to "1")
         val job = done(jobOf(answer))
+        assertEquals(Job.DONE, job.state, job.asJson().toString())
         assertEquals("song", job.spec.kind)
         assertEquals(JobCommands.LOOKUP, job.steps.single().args.first())
         assertNotNull(phone.parts.database.read { Songs.byKey(it, Normalize.identityKey("Soda Stereo", "De Música Ligera")) })
+        assertNotFetchedYet(job.id)
     }
 
     @Test fun `a song a lookup added is found by the next search, the search's answers forgotten once a job ends`() {
@@ -172,9 +190,13 @@ class LookupRoutesTest {
 
     @Test fun `Fetch now on a card, an artist's Songs and Fetch them each queue their command`() {
         val added = done(jobOf(post("/request", "artist" to "Estopa", "title" to "Tu Calorro")))
+        // a plain add asks no site: status.py's line for an add, the song's facts read
+        assertEquals(JsonPrimitive("Added: the nightly run looks for it"), shownLine(added.id)["text"])
         val id = assertNotNull(added.songId ?: phone.parts.database.read { Songs.byKey(it, "estopa/tu-calorro") }?.id)
         val fetched = done(jobOf(post("/fetch", "song" to "$id")))
+        assertEquals(Job.DONE, fetched.state, fetched.asJson().toString())
         assertEquals(listOf("get", "--progress", "--", "Estopa", "Tu Calorro"), fetched.steps.single().args)
+        assertNotFetchedYet(fetched.id)
         val none = post("/versions/keep-more", "song" to "$id")
         assertEquals(409, none.status, "a song with no UG version has none to keep")
         val unread = post("/lacuerda/artist", "name" to "Fito Páez")

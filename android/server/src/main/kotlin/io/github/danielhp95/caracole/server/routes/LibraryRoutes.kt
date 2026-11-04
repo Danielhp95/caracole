@@ -2,9 +2,13 @@ package io.github.danielhp95.caracole.server.routes
 
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.db.Database
+import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.OverrideWriters
+import io.github.danielhp95.caracole.core.library.OverridesError
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
+import io.github.danielhp95.caracole.core.library.Versions
 import io.github.danielhp95.caracole.server.http.MessagePage
 import io.github.danielhp95.caracole.server.http.PostAnswer
 import io.github.danielhp95.caracole.server.http.Refused
@@ -23,6 +27,7 @@ import io.github.danielhp95.caracole.server.routes.library.SongForm
 import io.github.danielhp95.caracole.server.routes.lookup.LookupForms
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.time.Instant
 
 /**
  * A song added to the phone's library, and one removed, from the library page's forms (library_routes.py's
@@ -30,9 +35,10 @@ import kotlinx.serialization.json.JsonPrimitive
  *
  *     POST /request   a song for the library, its `artist` and `title` (or one text, `q`, read as song_names.py
  *                     reads it), with its album and length: added (LibraryStore.add) as an `add` job under its
- *                     identity key; with `fetch` (Fetch now), looked up now instead, `caracole get --progress`, which
- *                     adds it (LookupForms.fetchNow: with the LaCuerda song or version it picked); with `youtube`,
- *                     refused (not on the phone yet)
+ *                     identity key, the LaCuerda song or version it picked (`lacuerda`) recorded under `[lacuerda]`
+ *                     for the song, as `caracole add --lacuerda` records it; with `fetch` (Fetch now), looked up now
+ *                     instead, `caracole get --progress`, which adds it (LookupForms.fetchNow: with that pick); with
+ *                     `youtube`, refused (not on the phone yet)
  *     POST /remove    what removing a song takes ({removal: {song, key, display, brief, goes, stays, notes}}, its
  *                     data; the message page to a browser without the script); with `confirm` and the song's `key`,
  *                     the removal queued under `remove:<key>` (LibraryStore.remove: a tombstone, so the song stays
@@ -43,9 +49,12 @@ import kotlinx.serialization.json.JsonPrimitive
  * add's, the song named as the library names it. A new song's names are those wanted.txt's line would hold
  * (wanted._clean). Every write runs in its job, inside Database.write; the job names the song it added once added
  * (JobContext.song), so /jobs.json gives a job over its song's card ([cards]: JobsRoutes draws it; an answer here is
- * the job just queued, which has none, as app.job_view gives none). Of the site picks a form may carry, a request
- * reads the LaCuerda song or version alone (library_routes.lacuerda_field), which Fetch now's lookup asks for and an
- * add keeps no further; the others it never reads. A full queue is refused, 503, nothing written.
+ * the job just queued, as app.job_view gives it, its song as the library has it now: LookupForms.view, the lookups'
+ * too). Of the site picks a form may carry, a request reads the LaCuerda song or version alone
+ * (library_routes.lacuerda_field), which Fetch now's lookup asks for and an add records in the same write as the song
+ * (OverrideWriters.addLacuerda, under the song's name as the library has it, its LaCuerda check cleared so the pick is
+ * asked for at once): its line then says tonight's run gets it (status.py's); the others it never reads. A full queue
+ * is refused, 503, nothing written.
  */
 class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: SongCards, val database: Database) :
     RouteModule {
@@ -67,22 +76,19 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
         }
         val found = database.read { Songs.byKey(it, song.key) }
         val display = found?.let { "${it.artist} - ${it.title}" } ?: song.display
-        return Answers.queued(view(add(song, found, "Add $display", display)))
+        return Answers.queued(view(add(song, found, "Add $display", display, lacuerda)))
     }
 
-    /** The view of a job just queued, its song the one the library has of its key (jobs_routes.song_of). */
-    private fun view(job: Job): JsonObject {
-        val ahead = if (job.state == Job.QUEUED) queue.ahead(job) else 0
-        val song = database.read { Songs.byKey(it, job.spec.key.removePrefix(REMOVING)) }
-        return JobViews.view(job, ahead, song?.id ?: job.songId)
-    }
+    /** app.job_view: a job just queued, as /jobs.json gives it (LookupForms.view, every form's). */
+    private fun view(job: Job): JsonObject = LookupForms.view(database, queue, cards, job, Instant.now())
 
     /**
      * [song] added as an `add` job under its key: [found], the song the library has of it (nothing written to it),
      * else a new one. Inside the job's write the library is looked at again, so a song another job added meanwhile is
-     * never written to either.
+     * never written to either. [lacuerda], the LaCuerda pick (as caracole asks for it), is recorded in that write,
+     * both or neither: a pick overrides.toml can't take adds no song.
      */
-    private fun add(song: NamedSong, found: SongRow?, title: String, display: String): Job {
+    private fun add(song: NamedSong, found: SongRow?, title: String, display: String, lacuerda: String? = null): Job {
         val key = found?.key ?: song.key
         return queue.submitOrRefuse(JobSpec(
             title = title, key = key, kind = "add", stages = listOf(ADD to "Adding to the library"),
@@ -92,17 +98,37 @@ class LibraryRoutes(val store: LibraryStore, val queue: JobQueue, val cards: Son
                 val (added, new) = database.write { db ->
                     store.ensureCurrentKeys(db)
                     val have = found?.let { Songs.byId(db, it.id) } ?: Songs.byKey(db, key)
-                    when {
+                    val added = when {
                         have != null -> have to false
                         found != null -> throw IllegalStateException(NO_SUCH_SONG)  // removed since it was asked for
                         else -> store.add(db, song.artist, song.title, album = song.album, durationMs = song.durationMs,
                                           now = Answers.now()) to true
                     }
+                    if (lacuerda != null) pickLacuerda(db, added.first, lacuerda)
+                    added
                 }
                 context.song(added.id, added.display)
-                context.stage(ADD, "done", if (new) "" else "In your library as ${added.display}.")
+                val said = listOfNotNull(
+                    if (new) null else "In your library as ${added.display}.",
+                    lacuerda?.let { "The sheet you picked on LaCuerda ($it) is recorded under [lacuerda]." },
+                )
+                context.stage(ADD, "done", said.joinToString(" "))
             },
         ), FULL).first
+    }
+
+    /** sources._record_lacuerda: the song's `[lacuerda]`, the pick at [url], and its LaCuerda check cleared, so the
+     * next lookup asks for the pick at once, however lately LaCuerda answered for the song. */
+    private fun pickLacuerda(db: Db, song: SongRow, url: String) {
+        try {
+            OverrideWriters.addLacuerda(db, song.display, url)
+        } catch (e: OverridesError) {
+            throw IllegalStateException("caracole can't add this song: its LaCuerda pick can't be recorded in " +
+                                        "overrides.toml: ${e.message}")
+        }
+        if (song.lacuerdaCheckedAt != null) {
+            Versions.updateSong(db, song.id, mapOf("lacuerda_checked_at" to null), Answers.now())
+        }
     }
 
     private fun remove(form: Map<String, String>): Response {

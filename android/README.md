@@ -289,7 +289,8 @@ computer off:
 
 - **Get it** on a search's line, and **Fetch now** on the request form, look the song up now: the song you have, or a
   new one, which the lookup adds. A pick on the line (an Ultimate Guitar song or tab, a LaCuerda song, a harptabs.com
-  or gametabs.net tab) is the one it asks for.
+  or gametabs.net tab) is the one it asks for. **Add** with a LaCuerda song picked records the pick for the song, as
+  `caracole add --lacuerda` does, for the next lookup or the computer's nightly run once synced.
 - **Fetch now** on a song's card looks up a song you have, unless it is ignored or caracole isn't sure which Ultimate
   Guitar song it is (review it first).
 - An artist's **Songs** reads their page on LaCuerda or harptabs.com, and **Fetch them** keeps more of a song's
@@ -301,8 +302,8 @@ Each is a request of the Requests tab, one at a time behind any other, its line 
 in caracole serve's words. A form posted without the page's script goes to that request's line in the Requests tab.
 The phone keeps the computer's politeness, at the lookup pace (a few requests a song, 60 an hour to a site), with its
 own counts, cooldowns and cache: two caracoles at one address may together send more than either one's limits. A
-site that refuses or fails is never a miss: the song is added, its stage says what went wrong, and the next lookup
-or the computer's nightly run, once synced, tries again. The sites' answers are kept for ever under the app's files
+site that refuses or fails is never a miss: the song is added, its stage says what went wrong, its line says "Not
+fetched yet", and the next lookup or the computer's nightly run, once synced, tries again. The sites' answers are kept for ever under the app's files
 (`state/cache/http/`), never in a cache Android may clear.
 
 While a lookup runs, the app stays in the foreground, with a notification naming the song and what the lookup does

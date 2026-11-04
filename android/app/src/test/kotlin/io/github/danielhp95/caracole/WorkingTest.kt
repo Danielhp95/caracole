@@ -1,8 +1,14 @@
 package io.github.danielhp95.caracole
 
+import io.github.danielhp95.caracole.server.jobs.Command
+import io.github.danielhp95.caracole.server.jobs.CommandRunner
+import io.github.danielhp95.caracole.server.jobs.Commands
+import io.github.danielhp95.caracole.server.jobs.Job
+import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobSpec
 import io.github.danielhp95.caracole.server.jobs.JobViews
+import io.github.danielhp95.caracole.server.jobs.SongFacts
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -10,9 +16,13 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Test
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /**
  * What keeps the phone's caracole working while its queue has a job ([Working]): the line its foreground service's
@@ -57,37 +67,75 @@ class WorkingTest {
         assertNull(Working.lineOf(queue.snapshot()), "nothing waits or runs")
     }
 
+    /** A lookup's job of its real commands ([JobCommands]'s), run by [lookups]' runners, until its gate opens. */
+    private fun lookup(title: String, key: String, display: String, commands: List<Command>,
+                       gate: CompletableDeferred<Unit>): Job {
+        gates[commands.single().args.drop(1).joinToString(" ")] = gate
+        val kind = JobCommands.kindOf(key, commands.map { it.args }, emptyList())
+        return lookups.submit(JobSpec(title = title, key = key, kind = kind, stages = emptyList(), display = display,
+                                      commands = commands, fetching = true)).first
+    }
+
+    private val gates = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
+
+    /** A queue whose `get` runs its song stage until its gate opens, and whose site reads wait for theirs. */
+    private val lookups = JobQueue(scope, commands = Commands(mapOf(
+        "get" to CommandRunner { args, context ->
+            context.stage("song", "running")
+            gates.getValue(args.drop(1).joinToString(" ")).await()
+        },
+        "lacuerda" to CommandRunner { args, _ -> gates.getValue(args.drop(1).joinToString(" ")).await() },
+    )))
+
     @Test
     fun `a lookup is named by its song and the line the library page shows for it, and by its title while it waits`() {
-        val lookup = CompletableDeferred<Unit>()
-        val song = queue.submit(JobSpec(
-            title = "Fetch Estopa - Tu calorro", key = "estopa/tu-calorro", kind = "song", display = "Estopa - Tu calorro",
-            stages = listOf("song" to "Find the song", "lyrics" to "Lyrics from LRCLIB"),
-            run = { context -> context.stage("lyrics", "running"); lookup.await() },
-        )).first
-        waitFor("the lookup's stage") { queue.job(song.id)?.stages?.any { it.state == "running" } == true }
-        val line = JobViews.line(queue.job(song.id)!!).text
-        assertEquals("Estopa - Tu calorro: $line", Working.lineOf(queue.snapshot()))
+        val first = CompletableDeferred<Unit>()
+        val song = lookup("Fetch Estopa - Tu calorro", "estopa/tu-calorro", "Estopa - Tu calorro",
+                          JobCommands.lookupSteps("Estopa", "Tu calorro"), first)
+        assertTrue(Working.isLookup(song))
+        waitFor("the lookup's song stage") { lookups.job(song.id)?.stages?.any { it.state == "running" } == true }
+        // the library page's line: a song new to the library is being added; one it has is being looked up
+        assertEquals("Estopa - Tu calorro: Adding to the library…", Working.lineOf(lookups.snapshot()))
+        val known = JobViews.line(lookups.job(song.id)!!, facts = SongFacts()).text
+        assertNotEquals("Adding to the library…", known)
+        assertEquals("Estopa - Tu calorro: $known", Working.lineOf(lookups.snapshot()) { SongFacts() })
         val read = CompletableDeferred<Unit>()
-        submit("lacuerda-artist", "Estopa on LaCuerda", read)
-        val waiting = queue.submit(JobSpec(
-            title = "Search LaCuerda for “corazones rotos”", key = "lacuerda-search:corazones-rotos",
-            kind = "lacuerda-search", display = "“corazones rotos” on LaCuerda", stages = emptyList(), run = { },
-        )).first
-        assertEquals("Estopa - Tu calorro: $line (2 more waiting)", Working.lineOf(queue.snapshot()))
-        lookup.complete(Unit)
-        waitFor("the read to run") { queue.snapshot().any { it.spec.kind == "lacuerda-artist" && it.state == "running" } }
+        val artist = lookup("Read the page of Estopa on LaCuerda", "${JobCommands.LACUERDA_ARTIST}estopa",
+                            "Estopa on LaCuerda", JobCommands.lacuerdaArtistSteps("estopa", "Estopa"), read)
+        assertTrue(Working.isLookup(artist))
+        val search = CompletableDeferred<Unit>()
+        val waiting = lookup("Search LaCuerda for “corazones rotos”", "${JobCommands.LACUERDA_SEARCH}corazones-rotos",
+                             "“corazones rotos” on LaCuerda",
+                             JobCommands.lacuerdaSearchSteps("corazones rotos", auto = true), search)
+        assertEquals("Estopa - Tu calorro: $known (2 more waiting)", Working.lineOf(lookups.snapshot()) { SongFacts() })
+        first.complete(Unit)
+        waitFor("the read to run") { lookups.job(artist.id)?.state == "running" }
         read.complete(Unit)
-        waitFor("the search to end") { queue.job(waiting.id)?.active == false }
-        assertNull(Working.lineOf(queue.snapshot()))
+        search.complete(Unit)
+        waitFor("the search to end") { lookups.job(waiting.id)?.active == false }
+        assertNull(Working.lineOf(lookups.snapshot()))
         // waiting its turn behind an import, a lookup is named by its request's title
         val merge = CompletableDeferred<Unit>()
-        running(submit("index", "The computer's index", merge).id)
+        val import = lookups.submit(JobSpec(title = "The computer's index", key = "index", kind = "index",
+                                            display = "The computer's index", stages = listOf("index" to "index"),
+                                            run = { merge.await() })).first
+        waitFor("the import to run") { lookups.job(import.id)?.state == "running" }
         val asked = CompletableDeferred<Unit>()
-        submit("song", "Fetch Estopa - Fuego", asked)
-        assertEquals("Fetch Estopa - Fuego: waiting its turn", Working.lineOf(queue.snapshot()))
+        lookup("Fetch Estopa - Fuego", "estopa/fuego", "Estopa - Fuego", JobCommands.lookupSteps("Estopa", "Fuego"),
+               asked)
+        assertEquals("Fetch Estopa - Fuego: waiting its turn", Working.lineOf(lookups.snapshot()))
         merge.complete(Unit)
         asked.complete(Unit)
+    }
+
+    @Test
+    fun `a job of the phone's own is no lookup, whatever its kind`() {
+        val gate = CompletableDeferred<Unit>()
+        val own = submit("song", "Estopa - Tu calorro", gate)
+        running(own.id)
+        assertFalse(Working.isLookup(queue.job(own.id)!!))
+        assertEquals("Estopa - Tu calorro…", Working.lineOf(queue.snapshot()))
+        gate.complete(Unit)
     }
 
     @Test

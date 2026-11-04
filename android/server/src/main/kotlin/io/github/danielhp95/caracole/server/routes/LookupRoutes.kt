@@ -9,8 +9,6 @@ import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
 import io.github.danielhp95.caracole.server.jobs.Job
-import io.github.danielhp95.caracole.server.jobs.JobViews
-import io.github.danielhp95.caracole.server.jobs.SongFacts
 import io.github.danielhp95.caracole.server.jobs.Status
 import io.github.danielhp95.caracole.server.routes.library.Answers
 import io.github.danielhp95.caracole.server.routes.lookup.LookupAsk
@@ -93,12 +91,9 @@ class LookupRoutes(val parts: PhoneParts, private val clock: () -> Instant = Ins
     private fun line(job: Job): Response =
         Response(303, Body.Empty, mutableListOf("Location" to "/${Status.detailsHref(job.id)}"))
 
-    /** WebApp.job_view: a job just queued, as /jobs.json gives it, its song as the library has it now. */
-    private fun view(job: Job): JsonObject {
-        val ahead = if (job.state == Job.QUEUED) parts.queue.ahead(job) else 0
-        val (songId, facts) = parts.database.read { db -> SongFacts.songOf(db, job, parts.cards, clock()) }
-        return JobViews.view(job, ahead, songId, facts = facts)
-    }
+    /** app.job_view: a job just queued, as /jobs.json gives it, its song as the library has it now (LookupForms.view,
+     * the request form's too). */
+    private fun view(job: Job): JsonObject = LookupForms.view(parts.database, parts.queue, parts.cards, job, clock())
 
     private fun wantsJson(request: Request): Boolean =
         "application/json" in PyText.lower(request.headers["accept"].orEmpty())
