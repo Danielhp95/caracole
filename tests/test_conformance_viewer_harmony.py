@@ -66,11 +66,12 @@ first); a relation ``[kind, source, target]``; a chord's notes ``[[note, interva
 
 - ``progressions_of(chords, sections, key)``: ``[[name, progression] for each section with one]``
   (``progressions``), each chord the sections play once in ``chords`` and a section ``[name, [index in chords or
-  null, …]]``. The sections: ``HAND``, the cases of tests/test_viewer_harmony.py (their
-  chord names, "N.C." none); each progression of ``viewer_corpus.progressions()`` played once in its key and in the
-  relative one, within a longer section (``ODD`` chords around it, which start no row), and twice with a pass that
-  varies it, and the first of each row's in every turn of its cycle; the corpus sheets' sections (page.py's
-  ``_places``, a section's chords as the page reads them, loosely), in their page's key (``page._read_song``; one
+  null, …]]``. The sections: ``HAND``, the cases of tests/test_viewer_harmony.py (their chord names, "N.C."
+  none), and ``RULE_SECTIONS``, each telling a rule from its near miss; each progression of
+  ``viewer_corpus.progressions()`` played once in its key and in the relative one, within a longer section (``ODD``
+  chords around it, which start no row), and twice with a pass that varies it, and the first of each row's in every
+  turn of its cycle; the corpus sheets' sections (page.py's ``_places``, a section's chords as the page reads them,
+  loosely), in their page's key (``page._read_song``; one
   ``mode-`` sheet in ``MODE_SHEETS_EVERY``, every other sheet) and, one sheet in ``OTHER_MODE_EVERY``, mapped into a
   seeded other mode as the page's ``mapped`` has them (``map_chord``);
   ``SYNTHETIC`` seeded sections: a cycle of a progression's or a mode's chords played round, passes changed, added to
@@ -80,7 +81,7 @@ first); a relation ``[kind, source, target]``; a chord's notes ``[[note, interva
   sequences of numerals (cycles played round with passes varied, and random ones), ``BATCH`` a record.
 - ``contained_of(items)``: ``[held, mode, seams]`` → ``[[name, times, numerals, key], …]`` (``_contained``), over
   ``CONTAINED`` seeded sections made of the catalogue's rows as ``_rows(mode)`` writes them, in every mode, joined
-  with fillers, their seams ``_fold``'s or seeded.
+  with fillers, their seams ``_fold``'s or seeded; then ``RULE_CONTAINED``, each telling a rule from its near miss.
 - ``ending_of(items)``: each list of cores → ``_ending``.
 - ``typed_of(items)``: each typed text (a string, or a list of numerals) → ``[progression_key, name_of,
   read_typed]``: every row of the catalogue as a list and as typed (spaces, dashes, commas), in a minor key's own way,
@@ -97,13 +98,17 @@ an object's members), which Kotlin's ``core.json.PyJson.dumps(compact = true)`` 
 - ``tables_of(names, key, places)``: ``tables`` for a sheet whose chords (as written) are ``names`` and whose
   places are ``places`` (``[[chord index, section], …]``, page.py's ``_places``), in ``key`` (its page's), its chords
   read loosely and ``mapped`` and ``alts`` made as page.py makes them (``map_chord``, ``alternatives``): ``{"order":
-  its members, "sha256": {member: …}}``, and ``"whole"``, kept, for ``HAND_SHEETS`` (tests/test_viewer_numerals.py's)
-  and the first ``WHOLE_TABLES`` corpus sheet of ``WHOLE_CHORDS`` chords at most. Then ``TABLES`` corpus sheets:
-  every edge, fixture and qualities sheet with a key, then seeded mode and catalogue ones; and ``NO_KEY_TABLES`` of
-  them with no key (``tones`` alone).
+  its members, "sha256": {member: …}}``, and ``"whole"``, kept, for ``HAND_SHEETS`` (tests/test_viewer_numerals.py's),
+  ``RULE_SHEETS`` (each telling a rule from its near miss) and the first ``WHOLE_TABLES`` corpus sheet of
+  ``WHOLE_CHORDS`` chords at most. Then ``TABLES`` corpus sheets: every edge, fixture and qualities sheet with a key,
+  then seeded mode and catalogue ones; and ``NO_KEY_TABLES`` of them with no key (``tones`` alone).
 - ``parts_of(texts)``: each text's ``_parts``; ``text_of(texts, key)``: ``text_of`` (kept: a ``by`` object);
   ``pitch_class_of(notes)``; ``page_name_of(items)``: ``[chord, key, s]`` → ``page_name(chord, spelling(key), s)``;
   ``role_of(items)``: ``[chord, key]`` → ``role``.
+
+A sheet is read as its page reads it (``page._read_song``'s sheet and key, without the page's data: ``_read``).
+``test_the_rule_cases_answer_as_their_rules_say`` checks each rule case still answers as its rule says, so that a
+mutation of one of those rules (which the seeded inputs alone left unseen) changes a record.
 
 Regenerate: ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_viewer_harmony.py``, then
 ``nix develop ./android -c gradle -p android :viewer:test``.
@@ -120,6 +125,7 @@ from dataclasses import replace
 from typing import Any
 
 from caracole.viewer import harmony, harmony_tables, page, theory
+from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import MODES, QUALITIES, Chord, Key, alternatives, map_chord, spelling
 from helpers import viewer_corpus
 from helpers.corpus import check, jsonl
@@ -454,6 +460,18 @@ HAND: tuple[tuple[Key, tuple[tuple[str, str], ...]], ...] = tuple(
         (C, (("Intro", ""), ("Verse", "C G"), ("Bridge", "N.C."), ("Chorus", "Am F"))), (C, ()),
         (C, (("Verse", "C D"), ("Chorus", "G C"))), (C, "C N.C. G N.C. Am F"),
     ))
+# Inputs that tell a rule from its near miss, which the seeded ones may not hold (test_the_rule_cases_answer_as_their_
+# rules_say). A held suspension takes the next chord's third (``_merged``): Asus4 A is VI, so this is no pop
+# progression, which it would be if the held chord kept the suspension's "?".
+RULE_SECTIONS: tuple[tuple[Key, tuple[tuple[str, str], ...]], ...] = ((C, (("Verse", "C G Asus4 A F"),)),)
+# ``_contained``: a run that ends on the chord it starts with may end on a seam (the blues twice round, its seams on
+# its I's: the 12-bar blues ×2, none if a seam on its last chord cut it); and the chord it lends to the next run is
+# held once (the blues lending its I to I–IV–V holds no more chords than the extended plagal progression and I–IV–V
+# apart, which win on the fewest runs and the tonic; counted twice, the blues would).
+RULE_CONTAINED: tuple[list, ...] = (
+    [["I", "IV", "I", "V", "IV", "I", "IV", "I", "V", "IV", "I"], "ionian", [5, 10]],
+    [["♭VI", "♭III", "♭VII", "IV", "I", "IV", "I", "V", "IV", "I", "IV", "V"], "ionian", []],
+)
 # Dressings a synthetic section's chord may wear: (suffix, the quality it is read as), by its third.
 _DRESS_MAJOR = ("maj7", "7", "add9", "6", "sus4", "sus2", "5")
 _DRESS_MINOR = ("m7", "m9", "m6", "sus4", "5")
@@ -509,14 +527,29 @@ def sheet_sections(sheet, chords: list[Chord | None]) -> list[tuple[str, list[Ch
     return [(str(n), [chords[i] for i, m in places if m == n]) for n in numbers]
 
 
+def _read(cho: str, key: str | None, key_source: str | None) -> tuple:
+    """A sheet as its page reads it, ``page._read_song``'s sheet and key without the page's data (which is most of its
+    time: harmony_tables.tables and harp.py's, for every sheet): (sheet, its chords read loosely, the key of its
+    shapes)."""
+    sheet = parse_sheet(cho)
+    chords = _loose(sheet.chords)
+    return sheet, chords, page._song_key(sheet, chords, key, key_source)[0]
+
+
 @functools.cache
 def _read_sheets() -> tuple:
     """Each corpus sheet as its page reads it: (corpus sheet, sheet, its chords read loosely, its page's key)."""
-    out = []
-    for s in viewer_corpus.sheets():
+    return tuple((s, *_read(s.cho, s.key, s.key_source)) for s in viewer_corpus.sheets())
+
+
+def test_a_sheet_is_read_as_its_page_reads_it():
+    named = (viewer_corpus.sheet(n) for n in ("edge-0", "fixture:ug/tab_chords.html"))
+    for s in [*viewer_corpus.sheets()[::40], *named]:
         sheet, key, _, _ = page._read_song(s.cho, s.key, s.key_source, 0)
-        out.append((s, sheet, _loose(sheet.chords), key))
-    return tuple(out)
+        assert _read(s.cho, s.key, s.key_source) == (sheet, _loose(sheet.chords), key), s.name
+    for cho in HAND_SHEETS + RULE_SHEETS:
+        sheet, key, _, _ = page._read_song(cho, None, None, 0)
+        assert _read(cho, None, None) == (sheet, _loose(sheet.chords), key)
 
 
 def _dressed(rng: random.Random, chord: Chord, share: float) -> Chord:
@@ -588,8 +621,14 @@ def _synthetic_sections(rng: random.Random) -> list[tuple[list[tuple[str, list[C
 
 
 def progression_inputs() -> list[tuple[list[tuple[str, list[Chord | None]]], Key]]:
+    return list(_progression_inputs())
+
+
+@functools.cache
+def _progression_inputs() -> tuple[tuple[list[tuple[str, list[Chord | None]]], Key], ...]:
     rng = random.Random(PROGRESSION_SEED)
-    inputs = [([(name, _hand_section(names)) for name, names in sections], key) for key, sections in HAND]
+    inputs = [([(name, _hand_section(names)) for name, names in sections], key)
+              for key, sections in HAND + RULE_SECTIONS]
     seen_rows: set[int] = set()
     for p in viewer_corpus.progressions():
         chords = _loose(p.chords)
@@ -611,7 +650,7 @@ def progression_inputs() -> list[tuple[list[tuple[str, list[Chord | None]]], Key
             mode = rng.choice([m for m in MODES if m != key.mode])
             mapped = [None if c is None else map_chord(c, key, mode) for c in chords]
             inputs.append((sheet_sections(sheet, mapped), Key(key.tonic, mode)))
-    return inputs + _synthetic_sections(rng)
+    return tuple(inputs + _synthetic_sections(rng))
 
 
 def _fold_inputs(rng: random.Random) -> list[list[str]]:
@@ -661,7 +700,7 @@ def _contained_inputs(rng: random.Random) -> list[list]:
         seams = list(harmony._fold(held)[3]) if rng.random() < 0.6 else sorted(
             {rng.randrange(1, len(held)) for _ in range(rng.randint(0, 3))} if len(held) > 1 else set())
         out.append([held, mode, seams])
-    return out
+    return out + [list(item) for item in RULE_CONTAINED]
 
 
 def contained_records() -> list[dict]:
@@ -788,6 +827,13 @@ HAND_SHEETS = (
     "{title: In G}\n{artist: Synthetic}\n{key: G}\n{comment: Verse}\n[G]Made up [G7]words to [C]sing a[G]long\n"
     "[G]made up [Em]words to [D7]sing a[G]long\n",
 )
+# Sheets that tell a rule of ``tables`` from its near miss, kept whole (test_the_rule_cases_answer_as_their_rules_say):
+# D read otherwise than most of its places read it (V/V, going to G) at two places, going to C, which share the one
+# reading added for it.
+RULE_SHEETS = (
+    "{title: D read two ways}\n{artist: Synthetic}\n{key: C}\n{comment: Verse}\n[D]One [G]two [D]three [G]four\n"
+    "[D]five [G]six [D]seven [C]eight\n[D]nine [C]ten\n",
+)
 WHOLE_CHORDS = 8  # a sheet whose tables are kept whole plays this many chords at most
 NO_KEY_TABLES = 4
 
@@ -852,9 +898,9 @@ def _text_inputs() -> list[tuple[list[str], Key]]:
 
 def tables_records() -> list[dict]:
     out = []
-    for cho in HAND_SHEETS:
-        sheet, key, _, _ = page._read_song(cho, None, None, 0)
-        out.append(tables_record(sheet, _loose(sheet.chords), key, True))
+    for cho in HAND_SHEETS + RULE_SHEETS:
+        sheet, chords, key = _read(cho, None, None)
+        out.append(tables_record(sheet, chords, key, True))
     keyed, no_key = tables_sheets()
     small = [n for n, (_, sheet, _, _) in enumerate(keyed) if len(sheet.chords) <= WHOLE_CHORDS][:WHOLE_TABLES]
     out += [tables_record(sheet, chords, key, n in small) for n, (_, sheet, chords, key) in enumerate(keyed)]
@@ -900,3 +946,24 @@ def test_the_tables_records_read_their_chords_back():
 def test_harmony_tables_vectors_are_harmony_tables_pys_answers():
     check(viewer_corpus.VIEWER_VECTORS / "harmony_tables.jsonl",
           jsonl(tables_records(), corpus="viewer/harmony_tables", made_by=MADE_BY))
+
+
+def test_the_rule_cases_answer_as_their_rules_say():
+    """``RULE_SECTIONS``, ``RULE_CONTAINED`` and ``RULE_SHEETS`` are in the vectors and answer as the rule each tells
+    from its near miss says: so a port that breaks one of those rules fails a record."""
+    key, sections = RULE_SECTIONS[0]
+    held = [(name, _hand_section(names)) for name, names in sections]
+    assert (held, key) in progression_inputs()
+    (_, p), = harmony.progressions(held, key)
+    assert p.numerals[2:4] == ("VIsus4", "V/ii") and p.name is None and not p.contains
+    blues, plagal = (harmony._contained(held, mode, seams) for held, mode, seams in RULE_CONTAINED)
+    assert [(c.name, c.times) for c in blues] == [("the 12-bar blues", 2)]
+    assert [(c.name, c.times) for c in plagal] == [("the extended plagal progression", 1), ("I–IV–V", 1)]
+    assert all(list(item) in _contained_inputs(random.Random(PROGRESSION_SEED + 2)) for item in RULE_CONTAINED)
+    sheet, chords, key = _read(RULE_SHEETS[0], None, None)
+    mapped, alts = mapped_and_alts(chords, key)
+    tables = harmony_tables.tables(chords, key, page._places(sheet), mapped, alts)
+    d = sheet.chords.index("D")
+    assert tables["numerals"]["ionian"][d][0] == "V/V"
+    assert len(tables["numerals"]["ionian"]) == len(chords) + 1 and tables["numerals"]["ionian"][-1][0] == "II"
+    assert list(tables["places"]["ionian"].values()) == [len(chords)] * 2
