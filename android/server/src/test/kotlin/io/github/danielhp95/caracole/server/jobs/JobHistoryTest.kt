@@ -135,11 +135,10 @@ class JobHistoryTest {
     }
 
     @Test fun aKindOfThePhonesOwnIsToldByItsKeysPrefix() {
-        val render = PhoneKinds.Kind("render", "render:", "render" to "Making the pages", "{done} of {total}",
-                                     "Pages made again", "Not made: {why}")
-        assertEquals("render", JobCommands.kindOf("render:b1", emptyList(), listOf("render"), listOf(render)))
-        assertEquals("song", JobCommands.kindOf("render/song", emptyList(), emptyList(), listOf(render)))
-        assertEquals("remove", JobCommands.kindOf("remove:a/t", emptyList(), emptyList(), listOf(render)))
+        val render = mapOf("render:" to "render")  // PhoneKinds' render kind, a stand-in
+        assertEquals("render", JobCommands.kindOf("render:b1", emptyList(), listOf("render"), render))
+        assertEquals("song", JobCommands.kindOf("render/song", emptyList(), emptyList(), render))
+        assertEquals("remove", JobCommands.kindOf("remove:a/t", emptyList(), emptyList(), render))
     }
 
     @Test fun aTimeIsWrittenAsPythonsIsoformatInUtcAndReadAsFromisoformatReadsIt() {

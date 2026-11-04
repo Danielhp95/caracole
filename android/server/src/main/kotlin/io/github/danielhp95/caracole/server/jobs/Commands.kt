@@ -312,12 +312,12 @@ object JobCommands {
     /**
      * The kind (JobSpec.kind) of a job read back from the history, which keeps none (history.py's format 1) for a job
      * of commands: by its key, as jobs_routes.view tells them apart (a removal, an export, a songbook's change, a
-     * site's index read, a sync), or a kind of the phone's own by its key's prefix ([phoneKinds], PhoneKinds': the
-     * render job's `render:`…), else by its first command (`versions`, `review`); an add the phone ran itself (no
-     * command, an `add` stage) is "add"; any other a song's ("song").
+     * site's index read, a sync), or a kind of the phone's own by its key's prefix ([phoneKinds], each prefix's kind,
+     * PhoneKinds': the render job's `render:`…), else by its first command (`versions`, `review`); an add the phone
+     * ran itself (no command, an `add` stage) is "add"; any other a song's ("song").
      */
     fun kindOf(key: String, commands: List<List<String>>, stageNames: List<String>,
-               phoneKinds: Collection<PhoneKinds.Kind> = PhoneKinds.ALL.values): String = when {
+               phoneKinds: Map<String, String> = PhoneKinds.ALL.values.associate { it.key to it.kind }): String = when {
         key.startsWith(REMOVING) -> "remove"
         key.startsWith(EXPORTING) -> "export"
         key.startsWith(READING) -> "harmonica"
@@ -330,7 +330,7 @@ object JobCommands {
         key.startsWith(INDEX_MERGE) -> "index-merge"
         key.startsWith(SYNCING) -> "sync"
         key == "index" -> "index"
-        phoneKinds.any { key.startsWith(it.key) } -> phoneKinds.first { key.startsWith(it.key) }.kind
+        phoneKinds.keys.any { key.startsWith(it) } -> phoneKinds.entries.first { key.startsWith(it.key) }.value
         commands.isEmpty() && "add" in stageNames -> "add"
         commands.firstOrNull()?.firstOrNull() == VERSIONS -> "versions"
         commands.firstOrNull()?.firstOrNull() == "review" -> "review"
