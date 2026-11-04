@@ -1,0 +1,223 @@
+{"corpus":"songbook/writers_names","header":true,"made_by":"tests/test_conformance_songbook.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"args":["Campfire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Campfire"}
+{"args":["Campfire"],"fn":"caracole.songbook.name_key","kw":{},"out":"campfire"}
+{"args":["Campfire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"campfire"}
+{"args":["campfire"],"fn":"caracole.songbook.check_name","kw":{},"out":"campfire"}
+{"args":["campfire"],"fn":"caracole.songbook.name_key","kw":{},"out":"campfire"}
+{"args":["campfire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"campfire"}
+{"args":["  Camp \t fire  "],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp fire"}
+{"args":["  Camp \t fire  "],"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["  Camp \t fire  "],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp fire"}
+{"args":["Camp　fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp fire"}
+{"args":["Camp　fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp　fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp fire"}
+{"args":["Camp fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp fire"}
+{"args":["Camp fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp fire"}
+{"args":["Camp fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp fire"}
+{"args":["Camp fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp fire"}
+{"args":["Camp\u001cfire"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\x1cfire'"}
+{"args":["Camp\u001cfire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp\u001cfire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"campfire"}
+{"args":["Campfire"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\x85fire'"}
+{"args":["Campfire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Campfire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp fire"}
+{"args":["Camp​fire"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\u200bfire'"}
+{"args":["Camp​fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp​fire"}
+{"args":["Camp​fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp​fire"}
+{"args":["Camp﻿fire"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\ufefffire'"}
+{"args":["Camp﻿fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp﻿fire"}
+{"args":["Camp﻿fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp﻿fire"}
+{"args":["Camp­fire"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\xadfire'"}
+{"args":["Camp­fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp­fire"}
+{"args":["Camp­fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp­fire"}
+{"args":["؀Camp"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: '\\u0600Camp'"}
+{"args":["؀Camp"],"fn":"caracole.songbook.name_key","kw":{},"out":"؀camp"}
+{"args":["؀Camp"],"fn":"caracole.songbook._folder_key","kw":{},"out":"؀camp"}
+{"args":["Camp󠀁"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\U000e0001'"}
+{"args":["Camp󠀁"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp󠀁"}
+{"args":["Camp󠀁"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp󠀁"}
+{"args":["‍"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: '\\u200d'"}
+{"args":["‍"],"fn":"caracole.songbook.name_key","kw":{},"out":"‍"}
+{"args":["‍"],"fn":"caracole.songbook._folder_key","kw":{},"out":"‍"}
+{"args":["tab\u0000name"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'tab\\x00name'"}
+{"args":["tab\u0000name"],"fn":"caracole.songbook.name_key","kw":{},"out":"tab\u0000name"}
+{"args":["tab\u0000name"],"fn":"caracole.songbook._folder_key","kw":{},"out":"tabname"}
+{"args":["new\nline"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'new\\nline'"}
+{"args":["new\nline"],"fn":"caracole.songbook.name_key","kw":{},"out":"new line"}
+{"args":["new\nline"],"fn":"caracole.songbook._folder_key","kw":{},"out":"new line"}
+{"args":["Camp\rfire"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\rfire'"}
+{"args":["Camp\rfire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp fire"}
+{"args":["Camp\rfire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp fire"}
+{"args":["Campfire"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'Camp\\x7ffire'"}
+{"args":["Campfire"],"fn":"caracole.songbook.name_key","kw":{},"out":"campfire"}
+{"args":["Campfire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"campfire"}
+{"args":[""],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook needs a name"}
+{"args":[""],"fn":"caracole.songbook.name_key","kw":{},"out":""}
+{"args":[""],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
+{"args":["   "],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook needs a name"}
+{"args":["   "],"fn":"caracole.songbook.name_key","kw":{},"out":""}
+{"args":["   "],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
+{"args":["\t\t"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook needs a name"}
+{"args":["\t\t"],"fn":"caracole.songbook.name_key","kw":{},"out":""}
+{"args":["\t\t"],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
+{"args":[".hidden"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.hidden'"}
+{"args":[".hidden"],"fn":"caracole.songbook.name_key","kw":{},"out":".hidden"}
+{"args":[".hidden"],"fn":"caracole.songbook._folder_key","kw":{},"out":"hidden"}
+{"args":["  .hidden"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.hidden'"}
+{"args":["  .hidden"],"fn":"caracole.songbook.name_key","kw":{},"out":".hidden"}
+{"args":["  .hidden"],"fn":"caracole.songbook._folder_key","kw":{},"out":"hidden"}
+{"args":["."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.'"}
+{"args":["."],"fn":"caracole.songbook.name_key","kw":{},"out":"."}
+{"args":["."],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
+{"args":[".."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '..'"}
+{"args":[".."],"fn":"caracole.songbook.name_key","kw":{},"out":".."}
+{"args":[".."],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
+{"args":["..."],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '...'"}
+{"args":["..."],"fn":"caracole.songbook.name_key","kw":{},"out":"..."}
+{"args":["..."],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
+{"args":["---"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name needs a letter or a digit: '---'"}
+{"args":["---"],"fn":"caracole.songbook.name_key","kw":{},"out":"---"}
+{"args":["---"],"fn":"caracole.songbook._folder_key","kw":{},"out":"---"}
+{"args":["///"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name needs a letter or a digit: '///'"}
+{"args":["///"],"fn":"caracole.songbook.name_key","kw":{},"out":"///"}
+{"args":["///"],"fn":"caracole.songbook._folder_key","kw":{},"out":"---"}
+{"args":["?*"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name needs a letter or a digit: '?*'"}
+{"args":["?*"],"fn":"caracole.songbook.name_key","kw":{},"out":"?*"}
+{"args":["?*"],"fn":"caracole.songbook._folder_key","kw":{},"out":"_"}
+{"args":["<>:|"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name needs a letter or a digit: '<>:|'"}
+{"args":["<>:|"],"fn":"caracole.songbook.name_key","kw":{},"out":"<>:|"}
+{"args":["<>:|"],"fn":"caracole.songbook._folder_key","kw":{},"out":"-"}
+{"args":["🔥"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name needs a letter or a digit: '🔥'"}
+{"args":["🔥"],"fn":"caracole.songbook.name_key","kw":{},"out":"🔥"}
+{"args":["🔥"],"fn":"caracole.songbook._folder_key","kw":{},"out":"🔥"}
+{"args":["🔥 Fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"🔥 Fire"}
+{"args":["🔥 Fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"🔥 fire"}
+{"args":["🔥 Fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"🔥 fire"}
+{"args":["篝火"],"fn":"caracole.songbook.check_name","kw":{},"out":"篝火"}
+{"args":["篝火"],"fn":"caracole.songbook.name_key","kw":{},"out":"篝火"}
+{"args":["篝火"],"fn":"caracole.songbook._folder_key","kw":{},"out":"篝火"}
+{"args":["宋冬野"],"fn":"caracole.songbook.check_name","kw":{},"out":"宋冬野"}
+{"args":["宋冬野"],"fn":"caracole.songbook.name_key","kw":{},"out":"宋冬野"}
+{"args":["宋冬野"],"fn":"caracole.songbook._folder_key","kw":{},"out":"宋冬野"}
+{"args":["Ⅻ"],"fn":"caracole.songbook.check_name","kw":{},"out":"Ⅻ"}
+{"args":["Ⅻ"],"fn":"caracole.songbook.name_key","kw":{},"out":"ⅻ"}
+{"args":["Ⅻ"],"fn":"caracole.songbook._folder_key","kw":{},"out":"ⅻ"}
+{"args":["²"],"fn":"caracole.songbook.check_name","kw":{},"out":"²"}
+{"args":["²"],"fn":"caracole.songbook.name_key","kw":{},"out":"²"}
+{"args":["²"],"fn":"caracole.songbook._folder_key","kw":{},"out":"²"}
+{"args":["٣"],"fn":"caracole.songbook.check_name","kw":{},"out":"٣"}
+{"args":["٣"],"fn":"caracole.songbook.name_key","kw":{},"out":"٣"}
+{"args":["٣"],"fn":"caracole.songbook._folder_key","kw":{},"out":"٣"}
+{"args":["ǅ"],"fn":"caracole.songbook.check_name","kw":{},"out":"ǅ"}
+{"args":["ǅ"],"fn":"caracole.songbook.name_key","kw":{},"out":"ǆ"}
+{"args":["ǅ"],"fn":"caracole.songbook._folder_key","kw":{},"out":"ǆ"}
+{"args":["Café"],"fn":"caracole.songbook.check_name","kw":{},"out":"Café"}
+{"args":["Café"],"fn":"caracole.songbook.name_key","kw":{},"out":"café"}
+{"args":["Café"],"fn":"caracole.songbook._folder_key","kw":{},"out":"café"}
+{"args":["Café"],"fn":"caracole.songbook.check_name","kw":{},"out":"Café"}
+{"args":["Café"],"fn":"caracole.songbook.name_key","kw":{},"out":"café"}
+{"args":["Café"],"fn":"caracole.songbook._folder_key","kw":{},"out":"café"}
+{"args":["Straße"],"fn":"caracole.songbook.check_name","kw":{},"out":"Straße"}
+{"args":["Straße"],"fn":"caracole.songbook.name_key","kw":{},"out":"strasse"}
+{"args":["Straße"],"fn":"caracole.songbook._folder_key","kw":{},"out":"strasse"}
+{"args":["İstanbul"],"fn":"caracole.songbook.check_name","kw":{},"out":"İstanbul"}
+{"args":["İstanbul"],"fn":"caracole.songbook.name_key","kw":{},"out":"i̇stanbul"}
+{"args":["İstanbul"],"fn":"caracole.songbook._folder_key","kw":{},"out":"i̇stanbul"}
+{"args":["a:b"],"fn":"caracole.songbook.check_name","kw":{},"out":"a:b"}
+{"args":["a:b"],"fn":"caracole.songbook.name_key","kw":{},"out":"a:b"}
+{"args":["a:b"],"fn":"caracole.songbook._folder_key","kw":{},"out":"a - b"}
+{"args":["Fire."],"fn":"caracole.songbook.check_name","kw":{},"out":"Fire."}
+{"args":["Fire."],"fn":"caracole.songbook.name_key","kw":{},"out":"fire."}
+{"args":["Fire."],"fn":"caracole.songbook._folder_key","kw":{},"out":"fire"}
+{"args":["Fire. "],"fn":"caracole.songbook.check_name","kw":{},"out":"Fire."}
+{"args":["Fire. "],"fn":"caracole.songbook.name_key","kw":{},"out":"fire."}
+{"args":["Fire. "],"fn":"caracole.songbook._folder_key","kw":{},"out":"fire"}
+{"args":["AC/DC"],"fn":"caracole.songbook.check_name","kw":{},"out":"AC/DC"}
+{"args":["AC/DC"],"fn":"caracole.songbook.name_key","kw":{},"out":"ac/dc"}
+{"args":["AC/DC"],"fn":"caracole.songbook._folder_key","kw":{},"out":"ac-dc"}
+{"args":["Camp/Fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp/Fire"}
+{"args":["Camp/Fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp/fire"}
+{"args":["Camp/Fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp-fire"}
+{"args":["Camp-Fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp-Fire"}
+{"args":["Camp-Fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp-fire"}
+{"args":["Camp-Fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp-fire"}
+{"args":["Camp: Fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp: Fire"}
+{"args":["Camp: Fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp: fire"}
+{"args":["Camp: Fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp - fire"}
+{"args":["Camp - Fire"],"fn":"caracole.songbook.check_name","kw":{},"out":"Camp - Fire"}
+{"args":["Camp - Fire"],"fn":"caracole.songbook.name_key","kw":{},"out":"camp - fire"}
+{"args":["Camp - Fire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"camp - fire"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"caracole.songbook.check_name","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"caracole.songbook.name_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"caracole.songbook._folder_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'…"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"caracole.songbook.name_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"caracole.songbook._folder_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook.check_name","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook.name_key","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook._folder_key","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: 'éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé'…"}
+{"args":["ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook.name_key","kw":{},"out":"ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook._folder_key","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook.check_name","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook.name_key","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook._folder_key","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: 'éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé'…"}
+{"args":["ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook.name_key","kw":{},"out":"ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["ééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"],"fn":"caracole.songbook._folder_key","kw":{},"out":"éééééééééééééééééééééééééééééééééééééééééééééééééééééééééééé"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"],"fn":"caracole.songbook.check_name","kw":{},"out":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"],"fn":"caracole.songbook.name_key","kw":{},"out":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"],"fn":"caracole.songbook._folder_key","kw":{},"out":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'…"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"],"fn":"caracole.songbook.name_key","kw":{},"out":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"],"fn":"caracole.songbook._folder_key","kw":{},"out":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥🔥"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥'…"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥🔥"],"fn":"caracole.songbook.name_key","kw":{},"out":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥🔥"}
+{"args":["xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥🔥"],"fn":"caracole.songbook._folder_key","kw":{},"out":"xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx🔥🔥"}
+{"args":["🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: '🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥'…"}
+{"args":["🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"],"fn":"caracole.songbook.name_key","kw":{},"out":"🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"}
+{"args":["🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"],"fn":"caracole.songbook._folder_key","kw":{},"out":"🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥"}
+{"args":["  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  "],"fn":"caracole.songbook.check_name","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  "],"fn":"caracole.songbook.name_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["  aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa  "],"fn":"caracole.songbook._folder_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"fn":"caracole.songbook.check_name","kw":{},"out":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}
+{"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"fn":"caracole.songbook.name_key","kw":{},"out":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}
+{"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"fn":"caracole.songbook._folder_key","kw":{},"out":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}
+{"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name is 80 characters at most: 'a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a '…"}
+{"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"fn":"caracole.songbook.name_key","kw":{},"out":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}
+{"args":["a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a "],"fn":"caracole.songbook._folder_key","kw":{},"out":"a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a a"}
+{"args":[".It's"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): \".It's\""}
+{"args":[".It's"],"fn":"caracole.songbook.name_key","kw":{},"out":".it's"}
+{"args":[".It's"],"fn":"caracole.songbook._folder_key","kw":{},"out":"it's"}
+{"args":[".\"quoted\""],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.\"quoted\"'"}
+{"args":[".\"quoted\""],"fn":"caracole.songbook.name_key","kw":{},"out":".\"quoted\""}
+{"args":[".\"quoted\""],"fn":"caracole.songbook._folder_key","kw":{},"out":"quoted"}
+{"args":[".a\\b"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't start with a dot (its folder would be hidden): '.a\\\\b'"}
+{"args":[".a\\b"],"fn":"caracole.songbook.name_key","kw":{},"out":".a\\b"}
+{"args":[".a\\b"],"fn":"caracole.songbook._folder_key","kw":{},"out":"a-b"}
+{"args":["It's \"it\""],"fn":"caracole.songbook.check_name","kw":{},"out":"It's \"it\""}
+{"args":["It's \"it\""],"fn":"caracole.songbook.name_key","kw":{},"out":"it's \"it\""}
+{"args":["It's \"it\""],"fn":"caracole.songbook._folder_key","kw":{},"out":"it's it"}
+{"args":["\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: '\\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'"}
+{"args":["\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"caracole.songbook.name_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["\naaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"],"fn":"caracole.songbook._folder_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"],"err":"SongbookError","fn":"caracole.songbook.check_name","kw":{},"words":"A songbook's name can't hold a line break or a control character: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\\n'"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"],"fn":"caracole.songbook.name_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n"],"fn":"caracole.songbook._folder_key","kw":{},"out":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}
+{"args":["Dad's \"best\" \\ songs"],"fn":"caracole.songbook.check_name","kw":{},"out":"Dad's \"best\" \\ songs"}
+{"args":["Dad's \"best\" \\ songs"],"fn":"caracole.songbook.name_key","kw":{},"out":"dad's \"best\" \\ songs"}
+{"args":["Dad's \"best\" \\ songs"],"fn":"caracole.songbook._folder_key","kw":{},"out":"dad's best - songs"}
+{"args":["ﬁre"],"fn":"caracole.songbook.check_name","kw":{},"out":"ﬁre"}
+{"args":["ﬁre"],"fn":"caracole.songbook.name_key","kw":{},"out":"fire"}
+{"args":["ﬁre"],"fn":"caracole.songbook._folder_key","kw":{},"out":"fire"}
+{"args":["Σίσυφος"],"fn":"caracole.songbook.check_name","kw":{},"out":"Σίσυφος"}
+{"args":["Σίσυφος"],"fn":"caracole.songbook.name_key","kw":{},"out":"σίσυφοσ"}
+{"args":["Σίσυφος"],"fn":"caracole.songbook._folder_key","kw":{},"out":"σίσυφοσ"}
+{"args":["ΣΊΣΥΦΟΣ"],"fn":"caracole.songbook.check_name","kw":{},"out":"ΣΊΣΥΦΟΣ"}
+{"args":["ΣΊΣΥΦΟΣ"],"fn":"caracole.songbook.name_key","kw":{},"out":"σίσυφοσ"}
+{"args":["ΣΊΣΥΦΟΣ"],"fn":"caracole.songbook._folder_key","kw":{},"out":"σίσυφοσ"}
+{"args":["𝔉ire"],"fn":"caracole.songbook.check_name","kw":{},"out":"𝔉ire"}
+{"args":["𝔉ire"],"fn":"caracole.songbook.name_key","kw":{},"out":"𝔉ire"}
+{"args":["𝔉ire"],"fn":"caracole.songbook._folder_key","kw":{},"out":"𝔉ire"}

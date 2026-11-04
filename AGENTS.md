@@ -1327,9 +1327,31 @@ Not built yet. (lookup.)
   and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
   function, its words harmony.py's own), its tables harmony.py's exported to data/caracole/viewer/harmony.json
   (tests/test_conformance_viewer_harmony.py, `vectors/viewer/harmony_chords.jsonl`, HarmonyReplay); its progressions
-  and tables (harmony-progressions): not built yet.
+  and tables (harmony-progressions):
+  - `progressions`, `progressionKey`, `nameOf`, `readTyped` (each of a list or of a string typed) and `catalogue`
+    (`catalogue_keys`), `HarmonyProgressions` function for function (`_fold`, `_passes`, `_varies`, `_whole`, `_rows`,
+    `_contained`, `_ending`, public for the replay), CATALOGUE, `_LOOPS` and its other tables and patterns exported to
+    harmony.json too, a key's turn chosen by code point as Python compares str;
+  - `HarmonyTables.tables`, harmony_tables.py's, each object in Python's insertion order (a chord's reading the one most
+    of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
+  - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
+    kept whole).
 - A sheet's versions and progressions (version-progressions): not built yet.
-- A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
+- A harmonica tab read (harptab-read): `viewer.harptab`, harptab.py's reading half, Q for Q:
+  - `Notation`, `Symbol` and the presets as data (data/caracole/viewer/harptab.json, every constant and pattern of
+    harptab.py, written by tests/test_conformance_viewer_harptab.py), each notation compiled at run time into its
+    tokenizer (`Tokens`, `_alt`'s order and `re.escape`'s rules, through core.py.PyRegex);
+  - `HarpTabs.scan` and its passes (Scanner.kt), its columns Python's code points (`Group.col`, `digit`, `end`), the
+    text UTF-16 while it runs; a notation that folds reads a symbol as its tokenizer's IGNORECASE does
+    (`Notation.meaning`: an "ı" or an "İ" is its "i", `PyRegex.ignoreCase`); the legends (`legend`, `meaning`,
+    `entry`); the candidates, `weighed` (Python's builtin sum, Py.fsum), `read` and `readings`; a pin's `checkSpec`
+    (Python's words and its reprs), `pinned` and `specOf`; `said`, `Reading.standard`; Python's `expandtabs`,
+    `swapcase` (a capital sigma by its context) and `_fold_accents` (`HarpTabText`).
+  - `Scan`, `Reading`, `Prepared` and `Weighed` are the seam harptab-layout builds `parse` on.
+  - `HarptabReplay` (area `harptab`) replays vectors/viewer/harptab_read.jsonl: each fixture tab, the tests' literals
+    and drawn tabs in every notation, their candidates, scores, scans (whole or by digest), readings and pins, each
+    pin's tab read as it says (`read(notation=)`).
+- A harmonica tab laid out (harptab-layout): not built yet.
 - The sheet page (pages): not built yet.
 - A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.

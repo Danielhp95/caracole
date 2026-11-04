@@ -253,6 +253,21 @@ def test_a_letter_a_legend_writes_in_one_case_reads_the_tabs_other_case():
     assert found.reading.source == "legend" and found.reading.said() == "4 blow · - draw · (h) hold · (w) wah"
 
 
+def test_a_letter_in_either_case_means_what_its_tokenizer_reads_it_as():
+    # re.I reads a dotless ı and a dotted İ as an i, which casefold keeps apart: the symbol meant is the i's
+    wah = LETTERS.changed((Symbol("i", "wah", "after"),))
+    for written in ("4bi", "4bI", "4bı", "4bİ"):
+        found = scan(written, notation=wah)
+        assert [(g.label(), g.effects) for g in found.groups] == [("4", ("wah",))], written
+        assert found.used[(written[-1], "wah", "after", 1)] == 1
+    assert wah.meaning("ı", "after") == wah.meaning("İ", "after") == Symbol("i", "wah", "after")
+    assert SIGNS.meaning("B", "after") is None  # a notation that reads one case alone reads no other
+    # and a tab whose own legend says so is read
+    found = parse("I = wah\nB = blow\nD = draw\n\n4B 5D 4BI 6D\n4Bı 5D\n")
+    assert found.reading.source == "legend"
+    assert [g.effects for r in found.rows() for g in r.groups] == [(), (), ("wah",), (), ("wah",), ()]
+
+
 # --- Spokey Dokey ---------------------------------------------------------------------------------------------------
 
 
@@ -354,6 +369,8 @@ def test_a_pinned_reading_is_read_whatever_the_others_score():
     ("staff", "signs, brackets, letters, signs after, barrett or legend"),
     ({"as": "staff"}, "signs, brackets, letters, signs after or barrett"),
     ({"as": "legend"}, "signs, brackets, letters, signs after or barrett"),
+    ({"as": ["signs"]}, "signs, brackets, letters, signs after or barrett, got ['signs']"),
+    ({"as": {"signs": 1}}, "signs, brackets, letters, signs after or barrett, got {'signs': 1}"),
     ({"*": "squeak"}, "what a symbol means"),
     ({"": "bend"}, "a symbol"),
     ({"*": 2}, "what a symbol means"),
