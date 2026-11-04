@@ -18,7 +18,8 @@ import java.nio.charset.CodingErrorAction
  * newline, or null for one the lyrics have no text for, which goes; both null for no lyrics, or lyrics that can't be
  * read. lyrics.lyrics_from_json's reading of the JSON, LRCLIB's bare records included (Lyrics.from_record: LRC's ID
  * tags dropped, the plain text made from the timed one where it has none), with Python's `\s`, `\d`, `str.strip()` and
- * IGNORECASE. vectors/library/lyrics_files.jsonl holds Python's answers.
+ * IGNORECASE. vectors/library/lyrics_files.jsonl holds Python's answers. [files] is what the lyrics passes write
+ * (core.lyrics: LRCLIB's, Megalobiz's and AZLyrics'), and [plainFromSynced] Megalobiz's plain text of its timed one.
  */
 internal object LyricsFiles {
     const val TXT = "lyrics.txt"
@@ -26,6 +27,13 @@ internal object LyricsFiles {
 
     fun of(lyricsJson: String?): LinkedHashMap<String, ByteArray?> {
         val (plain, synced) = read(lyricsJson) ?: ("" to null)
+        return files(plain, synced)
+    }
+
+    /** lyrics.write_lyrics' files of lyrics whose plain text is [plain] and timed one [synced]: `lyrics.txt` when
+     * the plain text has any (Lyrics.has_lyrics), `lyrics.lrc` when there is timed text, each ending in a newline;
+     * null for one that goes. */
+    fun files(plain: String, synced: String?): LinkedHashMap<String, ByteArray?> {
         val texts = linkedMapOf(TXT to plain.takeIf { Py.strip(it).isNotEmpty() }, LRC to synced)
         val out = LinkedHashMap<String, ByteArray?>()
         for ((name, text) in texts) out[name] = if (text.isNullOrEmpty()) null else utf8(text.trimEnd('\n') + "\n")
@@ -86,7 +94,7 @@ internal object LyricsFiles {
     }
 
     /** lyrics.plain_from_synced: an empty timed line a break between stanzas. */
-    private fun plainFromSynced(synced: String): String {
+    fun plainFromSynced(synced: String): String {
         val out = mutableListOf<String>()
         for ((_, text) in syncedLines(synced)) if (text.isNotEmpty() || (out.isNotEmpty() && out.last().isNotEmpty())) out += text
         while (out.isNotEmpty() && out.last().isEmpty()) out.removeAt(out.size - 1)
@@ -97,7 +105,7 @@ internal object LyricsFiles {
      * (a stable sort). */
     private fun syncedLines(synced: String): List<Pair<Double, String>> {
         val timed = mutableListOf<Pair<Double, String>>()
-        for (line in synced.split("\n")) {
+        for (line in synced.replace("\r\n", "\n").replace("\r", "\n").split("\n")) {  // lyrics._text's line ends
             val cps = line.codePoints().toArray()
             val (stamps, end) = leadingStamps(cps)
             if (stamps.isEmpty()) continue
