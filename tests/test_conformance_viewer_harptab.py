@@ -75,9 +75,7 @@ from caracole import harptabs
 from caracole.viewer import harptab
 from caracole.viewer.harptab import (
     DOTS,
-    PRESET,
     PRESETS,
-    SIGNS,
     STAR_BENDS,
     Notation,
     Reading,
