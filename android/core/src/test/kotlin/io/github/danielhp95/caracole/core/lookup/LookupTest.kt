@@ -10,7 +10,6 @@ import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.LibraryStore
-import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.SharedFolder
 import io.github.danielhp95.caracole.core.library.SongRow
@@ -21,7 +20,6 @@ import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.core.testing.replays.LookupReplay
 import kotlinx.serialization.json.JsonObject
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -276,24 +274,48 @@ class LookupTest {
     }
 
     @Test fun aPickIsRecordedInTheOverridesAndSaidInTheSongStage() = phone { db ->
-        assumeTrue("waiting on overrides-model: OverrideWriters and OverrideUrls are its", overridesModel())
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", ug = "radiohead/creep")).run(db)
         assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [match] radiohead/creep", result.details["song"])
     }
 
+    @Test fun aTabPickedKeepsThePinsOfTheOtherKindGroupAsWrittenAndReplacesTheRest() = phone { db ->
+        // get.py's `_other_pins`: chords and ukulele chords are one group (either is the sheet), text tabs another; a
+        // pin of the pick's group, or of a tab the index doesn't know, is replaced; the others stay as written.
+        for ((id, type) in listOf(4169L to "chords", 5000L to "tabs", 6000L to "chords", 6500L to "ukulele",
+                                  7000L to "tabs")) {
+            db.execute("INSERT INTO ug_index (tab_id, artist_key, song_key, type, sitemap, first_seen, path) " +
+                           "VALUES (?, 'radiohead', 'creep', ?, 'test', '2026-11-03T12:00:00Z', ?)",
+                       id, type, "radiohead/creep-$type-$id")
+        }
+        val key = Normalize.identityKey("Radiohead", "Creep")
+        val pasted = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-tabs-5000"
+        val before = Overrides(pin = mapOf(key to listOf(5000L, 6000L, 6500L, 9999L, 7000L)),
+                               pinUrls = mapOf(key to listOf(pasted)))
+        val result = lookup(stages(), LookupRequest("Radiohead", "Creep", tab = ug), overrides = before).run(db)
+        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [pin] tab 4169", result.details["song"])
+        val after = Overrides.read(db)
+        assertEquals(listOf(4169L, 5000L, 7000L), after.pin[key])  // the tabs beside the chords picked
+        assertEquals(listOf(ug, pasted, "https://tabs.ultimate-guitar.com/tab/7000"), after.pinUrls[key])
+        // A pick the index doesn't know: nothing of the song's pins stays beside it.
+        heard.clear()
+        val unknown = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-chords-8888"
+        lookup(stages(), LookupRequest("Radiohead", "Creep", tab = unknown), overrides = before).run(db)
+        assertEquals(listOf(8888L), Overrides.read(db).pin[key])
+    }
+
+    @Test fun aStageWithNothingToAskOutsideTheLyricsIsDoneWithNoWords() = phone { db ->
+        val nothing = SiteStage { LookupWords.NOTHING_TO_ASK }
+        val result = lookup(stages(lacuerda = nothing, gtptabs = nothing, harptabs = nothing)).run(db)
+        assertEquals("done" to "", result.states["gtptabs"] to result.details["gtptabs"])
+        assertEquals("done" to "", result.states["harptabs"] to result.details["harptabs"])
+        assertEquals("skipped" to "asked already, for the sheet", result.states["lacuerda"] to result.details["lacuerda"])
+        assertTrue(ends().none { it.second == LookupWords.NOTHING_TO_ASK.state }, "${ends()}")
+    }
+
     @Test fun aTabOfAKindCaracoleDoesntUseIsRefusedBeforeAnythingIsWritten() = phone { db ->
-        assumeTrue("waiting on overrides-model: OverrideUrls.classifyTabUrl is its", overridesModel())
         val tab = "https://tabs.ultimate-guitar.com/tab/radiohead/creep-guitar-pro-224003"
         val result = lookup(stages(), LookupRequest("Radiohead", "Creep", tab = tab)).run(db)
         assertEquals("tab 224003 is not a chords, tabs or ukulele chords page", result.refused)
         assertNull(Songs.byKey(db, Normalize.identityKey("Radiohead", "Creep")))
-    }
-
-    /** Whether overrides-model's writers and readings are on main yet (Phase A's guard). */
-    private fun overridesModel(): Boolean = try {
-        OverrideUrls.tabIdFromUrl("85053")
-        true
-    } catch (_: NotImplementedError) {
-        false
     }
 }

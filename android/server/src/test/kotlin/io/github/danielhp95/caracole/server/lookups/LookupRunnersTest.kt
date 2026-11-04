@@ -15,6 +15,7 @@ import io.github.danielhp95.caracole.core.lookup.Pace
 import io.github.danielhp95.caracole.core.lookup.Pacing
 import io.github.danielhp95.caracole.core.lookup.SiteStage
 import io.github.danielhp95.caracole.core.lookup.SiteStages
+import io.github.danielhp95.caracole.core.lookup.RenderStats
 import io.github.danielhp95.caracole.core.lookup.SongPages
 import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.lookup.StageEnd
@@ -34,9 +35,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
-import io.github.danielhp95.caracole.core.library.OverrideUrls
-import io.github.danielhp95.caracole.core.ug.SheetVersions
-import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -64,12 +62,29 @@ class LookupRunnersTest {
         quiet, ugSheet, quiet, quiet, quiet, lrclib, SiteStage { LookupWords.NOTHING_TO_ASK },
         SiteStage { LookupWords.NOTHING_TO_ASK }, quiet, quiet, quiet)
 
-    private fun parts(database: Database, scope: CoroutineScope, queue: JobQueue): PhoneParts {
+    private fun parts(database: Database, scope: CoroutineScope, queue: JobQueue,
+                      pages: SongPages = SongPages.NONE): PhoneParts {
         val state = File(tmp.root, "state").apply { mkdirs() }
         return PhoneParts(database, LibraryStore(File(tmp.root, "library")), state, { PhoneConfig.DEFAULTS }, queue,
                           MirrorPageData(null),
                           { Clients(PhoneConfig.DEFAULTS, File(state, "cache"), { site }, pacing) },
-                          SongPages.NONE, SongbookPages.NONE, Alerts.NONE, pacing, searchesLacuerda = false)
+                          pages, SongbookPages.NONE, Alerts.NONE, pacing, searchesLacuerda = false)
+    }
+
+    /** A job's context that keeps what it is told. */
+    private class Heard : JobContext {
+        val stages = ArrayList<Triple<String, String, String>>()
+        val said = ArrayList<String>()
+        override fun stage(name: String, state: String, detail: String) {
+            stages += Triple(name, state, detail)
+        }
+
+        override fun say(line: String) {
+            said += line
+        }
+
+        override fun outcome(value: kotlinx.serialization.json.JsonObject) {}
+        override val isCancelled: Boolean = false
     }
 
     /** A queue whose runners are [runners] of the phone's parts, the job of [commands] run in it to its end. */
@@ -102,6 +117,16 @@ class LookupRunnersTest {
         val song = database.read { Songs.byKey(it, Normalize.identityKey("Radiohead", "Creep")) }!!
         assertEquals(song.id, job.songId)
         assertEquals("Radiohead - Creep", job.songDisplay)
+    }
+
+    @Test fun aLookupReadsAndWritesThePhonesOwnOverrides() = job(JobCommands.lookupSteps("Radiohead", "Creep",
+                                                                                       ug = "radiohead/creep"), { p ->
+        mapOf("get" to GetRunner(p, stages = stages()))  // Overrides.read, the phone's
+    }) { job, database ->
+        assertEquals(Job.DONE, job.state, "${job.steps.single().output}")
+        assertEquals("${LookupWords.ADDED}; recorded in overrides.toml: [match] radiohead/creep", job.stages[0].detail)
+        val key = Normalize.identityKey("Radiohead", "Creep")
+        assertEquals("radiohead" to "creep", database.read { Overrides.read(it) }.match[key])
     }
 
     @Test fun aRefusedLookupFailsItsStepAndSaysWhy() = job(JobCommands.lookupSteps("Radiohead", "Creep"), { p ->
@@ -198,6 +223,64 @@ class LookupRunnersTest {
         assertEquals(listOf("Searched: LaCuerda has 2 songs for “x”, in the index now.", line), said)
     }
 
+    @Test fun aLookupCommandsProgressLinesAreTheQueuesOwn() {
+        // :core's words for a command's lines (core/lookup/sites/ can't reach :server's) are the queue's to the byte.
+        assertEquals(JobCommands.PROGRESS_PREFIX, LookupWords.PROGRESS_PREFIX)
+        val event = kotlinx.serialization.json.JsonObject(linkedMapOf(
+            "stage" to kotlinx.serialization.json.JsonPrimitive("version"),
+            "state" to kotlinx.serialization.json.JsonPrimitive("done"),
+            "detail" to kotlinx.serialization.json.JsonPrimitive("Kept tab 4169 beside the sheet of Sigur Rós - Hoppípolla")))
+        assertEquals(JobCommands.progressLine(event), LookupWords.progressLine(event))
+        assertEquals(JobCommands.progressLine(event),
+                     LookupWords.stageLine("version", "done", "Kept tab 4169 beside the sheet of Sigur Rós - Hoppípolla"))
+        assertEquals("""caracole-progress: {"song":{"id":7,"display":"Sigur Rós - Hoppípolla"}}""",
+                     LookupWords.songLine(7, "Sigur Rós - Hoppípolla"))
+        assertEquals("lookup:lacuerda-search:2026-11-03T12:00:00Z", LookupWords.searchRunId(now))
+        assertEquals(Pace.lookupRunId(now), LookupWords.lookupRunOf(now))
+    }
+
+    @Test fun aKeepsPagesAreMadeAtItsPdfAndPagesEventsAndEndedInThePhonesWords() {
+        val scope = CoroutineScope(SupervisorJob())
+        TestDb.fresh(tmp.newFolder()).use { database ->
+            val made = ArrayList<List<Long>>()
+            val rendering = SongPages { _, ids, _ -> made += ids.toList(); RenderStats(written = 1) }
+            val failing = SongPages { _, ids, _ -> RenderStats(failed = mapOf(ids.first() to "the page can't be made")) }
+            database.writeBlocking { db ->
+                val song = LibraryStore(File(tmp.root, "library")).add(db, "Radiohead", "Creep", now = "2026-11-03T12:00:00Z")
+                val words = "the version's page made"
+                for ((pages, pdf) in listOf(SongPages.NONE to ("skipped" to LookupWords.NO_PDFS),
+                                            rendering to ("done" to words),
+                                            failing to ("failed" to "the page can't be made"))) {
+                    val heard = Heard()
+                    val p = parts(database, scope, JobQueue(scope), pages)
+                    val lines = LookupJobs.CommandLines(heard, reports = true, LookupJobs.CommandPages(p, db, song, words))
+                    lines.say(LookupWords.stageLine("version", "done", "Kept tab 4169 beside the sheet of Radiohead - Creep"))
+                    lines.say(LookupWords.stageLine("pdf", "running"))
+                    lines.say(LookupWords.stageLine("pdf", "done", words))
+                    lines.say("Viewer: /library/Radiohead/Creep/version-4169.html")
+                    lines.say(LookupWords.stageLine("pages", "running"))
+                    lines.say(LookupWords.stageLine("pages", "done", "_todo.md and index.html rewritten"))
+                    assertEquals(listOf(Triple("version", "done", "Kept tab 4169 beside the sheet of Radiohead - Creep"),
+                                        Triple("pdf", "running", ""), Triple("pdf", pdf.first, pdf.second),
+                                        Triple("pages", "running", ""), Triple("pages", "done", LookupWords.LIBRARY_PAGE)),
+                                 heard.stages)
+                    assertEquals(listOf("Viewer: /library/Radiohead/Creep/version-4169.html"), heard.said)
+                }
+                assertEquals(listOf(listOf(song.id)), made)  // the pages made once, at the pdf stage's running event
+                // A version that isn't kept: versions_cmd.py's pages alone, nothing rendered.
+                val heard = Heard()
+                val lines = LookupJobs.CommandLines(heard, reports = true,
+                                                    LookupJobs.CommandPages(parts(database, scope, JobQueue(scope), rendering),
+                                                                            db, song, words))
+                lines.say(LookupWords.stageLine("pages", "running"))
+                assertEquals(listOf(Triple("pages", "running", ""), Triple("pages", "done", LookupWords.LIBRARY_PAGE)),
+                             heard.stages)
+                assertEquals(1, made.size)
+            }
+        }
+        scope.cancel()
+    }
+
     @Test fun eachLookupCommandIsItsRunnersAndSaysItsLastLine() {
         for (args in listOf(listOf("lacuerda", "--artist=soda  stereo"), listOf("harptabs", "--artist=Billy Joel"),
                             listOf("lacuerda", "--search=de musica ligera", "--progress"))) {
@@ -251,7 +334,6 @@ class LookupRunnersTest {
     }
 
     @Test fun aKeepFindsTheSongAndSaysTheCommandsLastLine() {
-        assumeTrue("waiting on overrides-model: OverrideUrls.tabIdFromUrl and overrideKey are its", overridesModel())
         job(JobCommands.versionSteps("Radiohead", "Creep", keep = "4169"), { p ->
             p.database.writeBlocking { p.store.add(it, "Radiohead", "Creep", now = "2026-11-03T12:00:00Z") }
             mapOf("versions" to VersionsRunner(p, none, stages()))
@@ -262,8 +344,6 @@ class LookupRunnersTest {
     }
 
     @Test fun aClearWithNoPinSaysSoAndLooksNothingUp() {
-        assumeTrue("waiting on overrides-model and rank-coverage: overrideKey, SheetVersions.sheetPins",
-                   overridesModel() && rankCoverage())
         job(JobCommands.versionSteps("Radiohead", "Creep"), { p ->
             p.database.writeBlocking { p.store.add(it, "Radiohead", "Creep", now = "2026-11-03T12:00:00Z") }
             mapOf("versions" to VersionsRunner(p, none, stages()))
@@ -272,21 +352,5 @@ class LookupRunnersTest {
             assertEquals(listOf("No [pin] chooses the sheet of Radiohead - Creep: caracole's pick is the sheet already."),
                          job.steps.single().output)
         }
-    }
-
-    /** Whether overrides-model's readings are on main yet (Phase A's guard). */
-    private fun overridesModel(): Boolean = try {
-        OverrideUrls.overrideKey("Radiohead - Creep")
-        true
-    } catch (_: NotImplementedError) {
-        false
-    }
-
-    /** Whether rank-coverage's sheet versions are on main yet (Phase A's guard). */
-    private fun rankCoverage(): Boolean = try {
-        SheetVersions.versionNames("1")
-        true
-    } catch (_: NotImplementedError) {
-        false
     }
 }

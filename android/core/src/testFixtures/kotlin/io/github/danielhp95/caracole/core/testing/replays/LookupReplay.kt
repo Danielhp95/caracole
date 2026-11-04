@@ -44,6 +44,8 @@ import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.lookup.SongbookStats
 import io.github.danielhp95.caracole.core.lookup.StageContext
 import io.github.danielhp95.caracole.core.lookup.StageEnd
+import io.github.danielhp95.caracole.core.lookup.internal.SongbooksStage
+import io.github.danielhp95.caracole.core.songbooks.SongbookError
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -106,8 +108,7 @@ object LookupReplay : AreaReplay {
                     misses.check(got == end(r.out!!)) { "_then(${r.kw}) = $got, Python's ${r.out}" }
                 }
                 "caracole.get._Lookup.sheet" -> sheet(database, db, store, cache, r, misses)
-                "caracole.get._Lookup.pdf" ->
-                    misses.check(StageEnd("skipped", LookupWords.NO_SHEET_YET) == end(r.out!!)) { "$case: ${r.out}" }
+                "caracole.get._Lookup.pdf" -> pdf(database, db, store, cache, r, misses)
                 "caracole.get._Lookup.lacuerda" -> {
                     val got = LookupWords.lacuerdaAgain(end(r.kw.getValue("said")))
                     misses.check(got == end(r.out!!)) { "lacuerda again (${r.kw}) = $got, Python's ${r.out}" }
@@ -211,23 +212,52 @@ object LookupReplay : AreaReplay {
         Kept.keepFile(db, store, song, id, "sheet.txt", "[C]$provider\n".toByteArray(), 0, "2026-11-03T12:00:00Z")
     }
 
+    /** The pdf stage of a song with no sheet, through the frame. */
+    private fun pdf(database: Database, db: Db, store: LibraryStore, cache: File, r: Record, misses: Misses) {
+        val case = r.extra["case"]?.jsonPrimitive?.content
+        PoliteDb.fresh(db, JsonArray(emptyList()))
+        noSongs(db)
+        val now = Instant.parse("2026-11-03T12:00:00Z")
+        val quiet = SiteStage { StageEnd("skipped", "") }
+        val stages = SiteStages(quiet, quiet, quiet, quiet, quiet, quiet, quiet, quiet, quiet, quiet, quiet)
+        val cfg = PhoneConfig.DEFAULTS
+        val pacing = fixed(now)
+        val result = Lookup(cfg, database, store, Clients(cfg, cache, { RefusingTransport }, pacing), SongPages.NONE,
+                            SongbookPages.NONE, Alerts.NONE, LookupRequest("Radiohead", "Creep"),
+                            object : Progress {
+                                override fun stage(name: String, state: String, detail: String) {}
+                            }, pacing, stages, readOverrides = { Overrides() }).run(db)
+        val got = StageEnd(result.states.getValue("pdf"), result.details.getValue("pdf"))
+        misses.check(got == end(r.out!!)) { "$case: pdf $got, Python's ${r.out}" }
+    }
+
+    /** The songbooks stage over the record's songbooks.toml, listing and pass, through the frame's own stage. */
     private fun songbooks(r: Record, misses: Misses) {
         val case = r.extra["case"]?.jsonPrimitive?.content
         val kw = r.kw
-        val listing = kw["listing"]?.jsonArray?.map(::text).orEmpty()
-        val names = listing.joinToString(", ")
+        val known = setOf("error", "songbooks", "listing", "stats")
+        misses.check(kw.keys.all { it in known }) { "$case: a songbooks record's fields ${kw.keys}, the replay's $known" }
         val stats = kw["stats"]?.jsonObject.orEmpty()
-        val got = when {
-            "error" in kw -> StageEnd("skipped", LookupWords.songbooksUnread(text(kw.getValue("error"))))
-            kw["songbooks"]?.jsonPrimitive?.boolean == false -> StageEnd("skipped", LookupWords.SONGBOOKS_LEFT)
-            listing.isEmpty() -> StageEnd("skipped", LookupWords.NO_SONGBOOK)
-            else -> LookupWords.songbooksEnd(names, SongbookStats(
-                rendered = stats["rendered"]?.jsonPrimitive?.int ?: 0,
-                failed = stats["failed"]?.jsonArray?.map(::text).orEmpty(),
-                fontError = stats["font_error"]?.let(::text)))
-        }
+        misses.check(stats.keys.all { it in setOf("rendered", "failed", "font_error") }) { "$case: stats ${stats.keys}" }
+        val running = ArrayList<String>()
+        var rendered: Set<String>? = null
+        val got = SongbooksStage.end(
+            read = { kw["error"]?.let { throw SongbookError(text(it)) } ?: emptyList<Unit>() },
+            leaves = kw["songbooks"]?.jsonPrimitive?.boolean == false,
+            listing = { kw["listing"]?.jsonArray?.map(::text).orEmpty() },
+            running = { running += it },
+            render = { names ->
+                rendered = names
+                SongbookStats(rendered = stats["rendered"]?.jsonPrimitive?.int ?: 0,
+                              failed = stats["failed"]?.jsonArray?.map(::text).orEmpty(),
+                              fontError = stats["font_error"]?.let(::text))
+            })
         val want = r.out!!.jsonObject
         misses.check(got == end(want.getValue("end"))) { "$case: songbooks $got, Python's ${want["end"]}" }
+        val heard = want.getValue("running").jsonArray.map(::text)
+        misses.check(running == heard) { "$case: songbooks running $running, Python's $heard" }
+        val listing = kw["listing"]?.jsonArray?.map(::text).orEmpty()
+        misses.check(rendered == null || rendered!!.toList() == listing) { "$case: made $rendered, the listing $listing" }
     }
 
     private fun lines(r: Record, misses: Misses) {
@@ -389,13 +419,24 @@ object LookupReplay : AreaReplay {
         Pacing(sleep = {}, draws = { low, _ -> low }, wallSeconds = { now.epochSecond.toDouble() },
                monotonic = { 0.0 }, clock = { now })
 
-    /** config.DEFAULT_PROVIDERS with a record's fields over theirs (config.py's names). */
-    private fun configured(overrides: JsonObject): PhoneConfig =
-        PhoneConfig.DEFAULTS.copy(providers = PhoneConfig.DEFAULTS.providers.mapValues { (name, p) ->
+    /** The provider fields a record may set, config.py's names: any other is a record this replay can't apply. */
+    private val CONFIGURED = setOf("enabled", "lookup_requests", "lookup_per_hour")
+
+    /** config.DEFAULT_PROVIDERS with a record's fields over theirs (config.py's names); a provider or a field the
+     * replay doesn't apply fails the replay, never passes unread. */
+    private fun configured(overrides: JsonObject): PhoneConfig {
+        val unknown = overrides.keys - PhoneConfig.DEFAULTS.providers.keys
+        if (unknown.isNotEmpty()) throw AssertionError("a record configures no provider of the phone's: $unknown")
+        for ((name, f) in overrides) {
+            val fields = f.jsonObject.keys - CONFIGURED
+            if (fields.isNotEmpty()) throw AssertionError("a record sets $name's $fields, which the replay doesn't apply")
+        }
+        return PhoneConfig.DEFAULTS.copy(providers = PhoneConfig.DEFAULTS.providers.mapValues { (name, p) ->
             overrides[name]?.jsonObject?.let { f ->
                 p.copy(enabled = f["enabled"]?.jsonPrimitive?.boolean ?: p.enabled,
                        lookupRequests = f["lookup_requests"]?.jsonPrimitive?.int ?: p.lookupRequests,
                        lookupPerHour = f["lookup_per_hour"]?.jsonPrimitive?.int ?: p.lookupPerHour)
             } ?: p
         })
+    }
 }

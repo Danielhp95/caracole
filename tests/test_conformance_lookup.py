@@ -127,13 +127,38 @@ def frozen(monkeypatch, now: str) -> None:
     monkeypatch.setattr(_common, "datetime", Frozen)
 
 
+def interactive_policy(cfg, conn: sqlite3.Connection, provider: str, now: str):
+    """The policy ``make_client(..., interactive=True)`` gives a lookup's client at ``now``: make_client itself, run
+    with caracole's lock, its pause and its client class stood in for and its policies' clock at ``now``, so that a
+    change to how it makes a lookup's policy changes these vectors."""
+    from unittest import mock
+
+    made: dict[str, Any] = {}
+
+    class Made:
+        def __init__(self, provider, policy, *_args, **_kwargs):
+            made["policy"] = policy
+
+    lookup_policy, within_the_day = _common.lookup_policy, _common.within_the_day
+    with mock.patch.object(_common, "_acquire", lambda *_a, **_k: None), \
+            mock.patch.object(_common, "_release", lambda *_a, **_k: None), \
+            mock.patch.object(_common, "_pause_after_last_request", lambda *_a, **_k: None), \
+            mock.patch.object(_common, "_locked_client", lambda: Made), \
+            mock.patch.object(_common, "lookup_policy",
+                              lambda c, cn, p, _now=None: lookup_policy(c, cn, p, at(now))), \
+            mock.patch.object(_common, "within_the_day",
+                              lambda cn, p, policy, _now=None: within_the_day(cn, p, policy, at(now))):
+        _common.make_client(cfg, conn, provider, RUN, interactive=True)
+    return made["policy"]
+
+
 class FakeClient:
-    """A lookup's client as make_client(..., interactive=True) makes it at ``now``, which sends nothing itself."""
+    """A lookup's client as make_client(..., interactive=True) makes it at ``now`` (its policy make_client's own,
+    ``interactive_policy``), which sends nothing itself."""
 
     def __init__(self, cfg, conn, provider: str, now: str, requests_made: int = 0):
         self.provider = provider
-        lookup = _common.lookup_policy(cfg, conn, provider, at(now))
-        self.policy = _common.within_the_day(conn, provider, lookup, at(now))
+        self.policy = interactive_policy(cfg, conn, provider, now)
         self.requests_made = requests_made
 
     def close(self) -> None:

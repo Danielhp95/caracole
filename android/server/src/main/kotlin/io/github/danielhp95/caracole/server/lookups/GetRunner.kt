@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.server.lookups
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.library.Kept
 import io.github.danielhp95.caracole.core.library.OverrideUrls
 import io.github.danielhp95.caracole.core.library.Overrides
 import io.github.danielhp95.caracole.core.library.OverridesError
@@ -212,62 +211,85 @@ internal object LookupJobs {
         return song
     }
 
-    /** A lookup command's [CommandContext]: its database, its envelope at [runId] (the lookup pace's, or the
-     * command's own run), its time, and its lines said as the job's: a `caracole-progress:` line it says
-     * (JobCommands.progressLine of get.py's events) is the job's event when the command reports them
-     * ([JobCommands.reports], as web/jobs.py's emit reads them), else a line of its output. The command records its
-     * own good run, as its Python does; the caller closes [asking]. */
+    /**
+     * A lookup command's [CommandContext]: its database, its envelope at [runId] (the lookup pace's, or the command's
+     * own run, LookupWords.lookupRunOf), its time, and its lines said as the job's ([CommandLines]): a progress line it
+     * says (LookupWords.progressLine of its Python's events) is the job's event when the command reports them
+     * ([JobCommands.reports], as web/jobs.py's emit reads them), else a line of its output; with [pages] (versions
+     * --keep and --keep-more), the song's pages are made at its `pdf` and `pages` running events. The command records
+     * its own good run, as its Python does (LookupWords' contract); the caller closes [asking].
+     */
     fun context(parts: PhoneParts, db: Db, args: List<String>, context: JobContext, now: Instant,
-                runId: String = Pace.lookupRunId(now)): Pair<CommandContext, InteractiveAsk> {
+                runId: String = Pace.lookupRunId(now), pages: CommandPages? = null): Pair<CommandContext, InteractiveAsk> {
         val ask = InteractiveAsk(parts.clients(), db, runId, now, parts.alerts, parts.config())
-        val reports = JobCommands.reports(args)
+        val lines = CommandLines(context, JobCommands.reports(args), pages)
         val c = object : CommandContext {
             override val db: Db = db
             override val asking = ask
             override val now: Instant = now
-            override fun say(line: String) = said(context, line, reports)
+            override fun say(line: String) = lines.say(line)
         }
         return c to ask
     }
 
-    /** A command's line: get.py's progress event to the job, or output (web/jobs.py's emit). */
-    fun said(context: JobContext, line: String, reports: Boolean) {
-        if (!reports || !line.startsWith(JobCommands.PROGRESS_PREFIX)) return context.say(line)
-        val event = runCatching { PyJson.loads(line.substring(JobCommands.PROGRESS_PREFIX.length)) }.getOrNull()
-            as? JsonObject ?: return context.say(line)
-        (event["stage"] as? JsonPrimitive)?.takeIf { it.isString }?.let { name ->
-            val state = (event["state"] as? JsonPrimitive)?.content.orEmpty()
-            val detail = (event["detail"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
-            return context.stage(name.content, state, detail)
-        }
-        (event["song"] as? JsonObject)?.let { song ->
-            val id = (song["id"] as? JsonPrimitive)?.longOrNull ?: return
-            return context.song(id, (song["display"] as? JsonPrimitive)?.content.orEmpty())
-        }
-        (event["files"] as? JsonObject)?.let { files ->
-            val seconds = (event["seconds"] as? JsonPrimitive)?.doubleOrNull ?: 0.0
-            return context.readable(files.mapValues { (it.value as? JsonPrimitive)?.content.orEmpty() }, seconds)
-        }
-        // any other event (a command's `done`) is no line of its output, and nothing the job keeps
-    }
+    /** A command's line: its progress event to the job, or output (web/jobs.py's emit). */
+    fun said(context: JobContext, line: String, reports: Boolean) = CommandLines(context, reports).say(line)
 
-    /** The song's kept files, by name and SHA-256: what a keep may change. */
-    fun kept(db: Db, song: SongRow): Set<Pair<String, String>> =
-        Kept.keptFiles(db, song.id).mapTo(HashSet()) { it.name to it.sha256 }
+    /** The song in [db] whose pages a command makes ([CommandLines]), [made] the pdf stage's words once they are. */
+    class CommandPages(val parts: PhoneParts, val db: Db, val song: SongRow, val made: String)
 
-    /** The song's pages made after a command changed its kept files (render_all for the song: the pdf stage, words
-     * [made]), then the library page, which the phone makes as it is asked for. */
-    fun pages(parts: PhoneParts, db: Db, song: SongRow, context: JobContext, made: String) {
-        context.stage("pdf", "running")
-        if (parts.pages === SongPages.NONE) {
-            context.stage("pdf", "skipped", LookupWords.NO_PDFS)
-        } else {
-            val stats = parts.pages.render(db, listOf(song.id), null)
-            val failed = stats.failed[song.id]
-            if (failed != null) context.stage("pdf", "failed", failed) else context.stage("pdf", "done", made)
+    /**
+     * What a lookup command says, as web/jobs.py's emit reads it: a progress line (LookupWords.PROGRESS_PREFIX) its
+     * job's stage, song or readable files when [reports], else a line of its output, as any other line. With [pages],
+     * the command's `pdf` and `pages` running events are where versions_cmd.py makes the song's pages: they are made
+     * then (the pdf stage's SongPages, skipped with get.py's NO_PDFS while it is NONE; the library page, made as it is
+     * asked for), both stages ended in the phone's words, and the command's own ends of them are not said.
+     */
+    class CommandLines(private val context: JobContext, private val reports: Boolean,
+                       private val pages: CommandPages? = null) {
+        fun say(line: String) {
+            val event = if (line.startsWith(LookupWords.PROGRESS_PREFIX)) {
+                runCatching { PyJson.loads(line.substring(LookupWords.PROGRESS_PREFIX.length)) }.getOrNull() as? JsonObject
+            } else {
+                null
+            }
+            if (event == null) return context.say(line)
+            (event["stage"] as? JsonPrimitive)?.takeIf { it.isString }?.let { name ->
+                val state = (event["state"] as? JsonPrimitive)?.content.orEmpty()
+                val detail = (event["detail"] as? JsonPrimitive)?.takeIf { it.isString }?.content.orEmpty()
+                if (pages != null && name.content in MADE_HERE) return made(pages, name.content, state)
+                if (!reports) return context.say(line)
+                return context.stage(name.content, state, detail)
+            }
+            if (!reports) return context.say(line)
+            (event["song"] as? JsonObject)?.let { song ->
+                val id = (song["id"] as? JsonPrimitive)?.longOrNull ?: return
+                return context.song(id, (song["display"] as? JsonPrimitive)?.content.orEmpty())
+            }
+            (event["files"] as? JsonObject)?.let { files ->
+                val seconds = (event["seconds"] as? JsonPrimitive)?.doubleOrNull ?: 0.0
+                return context.readable(files.mapValues { (it.value as? JsonPrimitive)?.content.orEmpty() }, seconds)
+            }
+            // any other event (a command's `done`) is no line of its output, and nothing the job keeps
         }
-        context.stage("pages", "running")
-        context.stage("pages", "done", LookupWords.LIBRARY_PAGE)
+
+        /** The `pdf` or `pages` stage [name] of [p]'s song: made at its running event, and ended there. */
+        private fun made(p: CommandPages, name: String, state: String) {
+            if (state != "running") return  // the command's own end: the phone's is said
+            val (ended, words) = when {
+                name == "pages" -> "done" to LookupWords.LIBRARY_PAGE
+                p.parts.pages === SongPages.NONE -> "skipped" to LookupWords.NO_PDFS
+                else -> p.parts.pages.render(p.db, listOf(p.song.id), null).failed[p.song.id]?.let { "failed" to it }
+                    ?: ("done" to p.made)
+            }
+            if (!reports) return
+            context.stage(name, "running", "")
+            context.stage(name, ended, words)
+        }
+
+        private companion object {
+            val MADE_HERE = setOf("pdf", "pages")
+        }
     }
 
     /** `" ".join(text.split())`. */

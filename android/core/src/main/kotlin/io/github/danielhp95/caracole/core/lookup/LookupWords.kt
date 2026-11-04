@@ -4,8 +4,11 @@ import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.index.Stamps
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.library.SharedFolder
 import io.github.danielhp95.caracole.core.py.PyFormat
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.File
 import java.time.Instant
 
@@ -193,6 +196,52 @@ object LookupWords {
         stats.fontError != null -> StageEnd("skipped", stats.fontError)
         else -> StageEnd("done", if (stats.rendered > 0) "$names made again" else "$names up to date")
     }
+
+    // --- a lookup command's lines and records ----------------------------------------------------------------------
+    //
+    // A lookup command on the phone (core/lookup/sites/'s VersionsCommands, LaCuerdaCommands, HarpTabsCommands), run
+    // by its runner of server/lookups in a CommandContext:
+    // - says its Python's `--progress` events as [progressLine]s ([stageLine], [songLine]) and its other lines as
+    //   they are, through `CommandContext.say`, and returns its last line, which the runner says; the runner makes
+    //   each event its job's (or, for a command line without `--progress`, a line of its output, as caracole serve
+    //   keeps one);
+    // - asks every site through `CommandContext.asking`, the envelope (InteractiveAsk), which records a block
+    //   (Health.recordBlock, its cooldown in Asked.Blocked, Alerts.blocked once) and an error (Health.recordError):
+    //   a command never records either itself, and words them from the Asked it gets;
+    // - records its own good run where its Python does: Health.recordOk(c.db, provider, c.now), after
+    //   Health.answeredAny of its run, [lookupRunOf] (`lookup:` and `c.now`, or [searchRunId] for LaCuerda's
+    //   search), where its Python reads answered_any, or when `c.asking.requests[provider]` is more than none where
+    //   its Python counts requests (versions_cmd.py's keep);
+    // - `versions --keep` and `--keep-more`: the runner begins the song stage and finds the song; the command says
+    //   from `{"song": …}` on, and versions_cmd.py's `pdf` and `pages` running events where it makes the song's
+    //   pages, which the runner makes then and ends in the phone's words (its own ends of those two are not said).
+
+    /** get.PROGRESS_PREFIX: what begins a line of `caracole get --progress` (and the other commands' `--progress`). */
+    const val PROGRESS_PREFIX = "caracole-progress: "
+
+    /** get.progress_line: a progress event as the line a command with `--progress` prints, `json.dumps(event,
+     * ensure_ascii=False, separators=(",", ":"))` after [PROGRESS_PREFIX]. */
+    fun progressLine(event: JsonObject): String = PROGRESS_PREFIX + PyJson.dumps(event, compact = true)
+
+    /** lacuerda_search.RUN: after `lookup:`, how a search of LaCuerda's is named in events. */
+    const val LACUERDA_SEARCH_RUN = "lacuerda-search:"
+
+    /** A LaCuerda search's run at [now], `lookup:lacuerda-search:` and the time (commands/lyrics.py's), whose
+     * requests count in the hour's searches. */
+    fun searchRunId(now: Instant): String = Pace.LOOKUP_RUN + LACUERDA_SEARCH_RUN + Stamps.of(now)
+
+    /** A lookup command's run at [now]: `_common.lookup_run_id`, or [searchRunId] for LaCuerda's search. */
+    fun lookupRunOf(now: Instant, search: Boolean = false): String = if (search) searchRunId(now) else Pace.lookupRunId(now)
+
+    /** [progressLine] of a stage's event, `{"stage": name, "state": state, "detail": detail}`. */
+    fun stageLine(name: String, state: String, detail: String = ""): String =
+        progressLine(JsonObject(linkedMapOf("stage" to JsonPrimitive(name), "state" to JsonPrimitive(state),
+                                            "detail" to JsonPrimitive(detail))))
+
+    /** [progressLine] of the song a command is about, `{"song": {"id": id, "display": display}}`. */
+    fun songLine(id: Long, display: String): String =
+        progressLine(JsonObject(mapOf("song" to JsonObject(linkedMapOf("id" to JsonPrimitive(id),
+                                                                        "display" to JsonPrimitive(display))))))
 
     // --- caracole get's lines (commands/get.py) -------------------------------------------------------------------
 

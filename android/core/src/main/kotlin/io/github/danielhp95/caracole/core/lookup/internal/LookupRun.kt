@@ -34,7 +34,6 @@ import io.github.danielhp95.caracole.core.lookup.sites.NotYet
 import io.github.danielhp95.caracole.core.py.PyPath
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyRegex
-import io.github.danielhp95.caracole.core.songbooks.SongbookError
 import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
@@ -140,9 +139,13 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         } finally {
             running = null
         }
-        report(name, out.state, out.detail)
+        val end = done(out)
+        report(name, end.state, end.detail)
         checkReadable()
     }
+
+    /** A stage's end as get.py reads one: its None ([LookupWords.NOTHING_TO_ASK]) `done` with no words. */
+    private fun done(end: StageEnd): StageEnd = if (end == LookupWords.NOTHING_TO_ASK) StageEnd("done", "") else end
 
     private fun refuse(why: String): LookupResult {
         refused = why
@@ -237,18 +240,18 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
                 picked += "[pin] tab $tabId"
             }
             request.lacuerda?.takeIf { it.isNotEmpty() }?.let { url ->
-                val pick = PickPages.url(OverrideUrls.lacuerdaPickFromUrl(url))
+                val pick = OverrideUrls.lacuerdaPickFromUrl(url).url
                 OverrideWriters.addLacuerda(db, song.display, pick)
                 Versions.updateSong(db, song.id, mapOf("lacuerda_checked_at" to null), Stamps.of(pacing.clock()))
                 picked += "[lacuerda] $pick"
             }
             request.harptabs?.takeIf { it.isNotEmpty() }?.let { url ->
-                val pick = PickPages.url(OverrideUrls.harptabsPickFromUrl(url))
+                val pick = OverrideUrls.harptabsPickFromUrl(url).url
                 OverrideWriters.addHarptabs(db, song.display, pick)
                 picked += "[harptabs] $pick"
             }
             request.gametabs?.takeIf { it.isNotEmpty() }?.let { url ->
-                val pick = PickPages.url(OverrideUrls.gametabsPickFromUrl(url))
+                val pick = OverrideUrls.gametabsPickFromUrl(url).url
                 OverrideWriters.addGametabs(db, song.display, pick)
                 picked += "[gametabs] $pick"
             }
@@ -273,7 +276,7 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
             return  // said as the pin is recorded
         }
         val kind = OverrideUrls.classifyTabUrl(OverrideUrls.pinUrl(tab))
-        if (kind != null && kind != BARE && kind != UNRECOGNIZED) {
+        if (kind != null && kind != OverrideUrls.BARE && kind != OverrideUrls.UNRECOGNIZED) {
             throw Stop("tab $tabId is not a chords, tabs or ukulele chords page")
         }
     }
@@ -282,10 +285,9 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
      * group (a text tab beside a chords sheet you pick), by the offline index's types; chords and ukulele chords are
      * one group. A pin of the pick's group, or of a tab the index doesn't know on either side, is replaced. */
     private fun otherPins(song: SongRow, tabId: Long): List<String> {
-        fun group(tab: Long): Int? = when (db.one("SELECT type FROM ug_index WHERE tab_id = ?", tab) { it.text(0) }) {
-            "chords", "ukulele" -> 0
-            "tabs" -> 1
-            else -> null
+        fun group(tab: Long): Int? {
+            val type = db.one("SELECT type FROM ug_index WHERE tab_id = ?", tab) { it.text(0) }
+            return PIN_GROUPS.indexOfFirst { type in it }.takeIf { it >= 0 }
         }
         val mine = group(tabId) ?: return emptyList()
         val pasted = overrides.pinUrls[song.key].orEmpty()
@@ -297,12 +299,15 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
     // --- the stages ---------------------------------------------------------------------------------------------
 
     /** A site's stage, asked through [asking] about the song as it is now; a file it would write where another
-     * song keeps one fails it in get.py's words. The song is read again after. */
-    private fun site(stage: SiteStage, asking: Asking = plain): StageEnd {
+     * song keeps one fails it in get.py's words. The song is read again after. [LookupWords.NOTHING_TO_ASK] is
+     * get.py's None: kept as it is for the lyrics' `_then` ([nothing]), else `done` with no words, as get.py's stage
+     * reads a None. */
+    private fun site(stage: SiteStage, asking: Asking = plain, nothing: Boolean = false): StageEnd {
         val current = Songs.byId(db, song.id) ?: song
         found = current
         return try {
             stage.run(StageContext(db, current, overrides, lookup.cfg, lookup.store, asking, now))
+                .let { if (nothing) it else done(it) }
         } catch (e: SharedFolder) {
             StageEnd("failed", LookupWords.sharedFolder(e))
         } finally {
@@ -318,7 +323,7 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
         val pick = picked() ?: return false
         val kept = keptSheet() ?: return false
         val version = Versions.get(db, kept.versionId) ?: return false
-        return version.provider == "lacuerda" && PickPages.holds(pick, version.tabId)
+        return version.provider == "lacuerda" && pick.holds(version.tabId)
     }
 
     /** The sheet: the LaCuerda one picked first; Ultimate Guitar's only when LaCuerda can't give it, the stage then
@@ -366,8 +371,8 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
      * without any. */
     private fun lyrics(): StageEnd {
         var out = site(lookup.stages.lrclib)
-        out = then(out, site(lookup.stages.megalobiz))
-        return then(out, site(lookup.stages.azlyrics))
+        out = then(out, site(lookup.stages.megalobiz, nothing = true))
+        return then(out, site(lookup.stages.azlyrics, nothing = true))
     }
 
     private fun then(out: StageEnd, then: StageEnd): StageEnd {
@@ -394,19 +399,10 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
     /** The songbooks that list the song, made again; none while milestone 6's songbooks aren't on the phone. */
     private fun songbooks(): StageEnd {
         if (lookup.songbooks === SongbookPages.NONE) return StageEnd("skipped", NotYet.WORDS)
-        val books = try {
-            Songbooks.all(db)
-        } catch (e: SongbookError) {
-            return StageEnd("skipped", LookupWords.songbooksUnread(e.message))
-        }
-        if (!request.songbooks) return StageEnd("skipped", LookupWords.SONGBOOKS_LEFT)
-        val mine = Songbooks.listing(db, books, song)
-        if (mine.isEmpty()) return StageEnd("skipped", LookupWords.NO_SONGBOOK)
-        val names = mine.joinToString(", ") { it.name }
-        // A second running event, carrying the names for the line's "Remaking songbook X…", as get.py's.
-        lookup.progress.stage("songbooks", "running", names)
-        val stats = lookup.songbooks.render(db, mine.mapTo(LinkedHashSet()) { it.name })
-        return LookupWords.songbooksEnd(names, stats)
+        return SongbooksStage.end(read = { Songbooks.all(db) }, leaves = !request.songbooks,
+                                  listing = { books -> Songbooks.listing(db, books, song).map { it.name } },
+                                  running = { names -> lookup.progress.stage("songbooks", "running", names) },
+                                  render = { names -> lookup.songbooks.render(db, names) })
     }
 
     /** ug/fetch.py's note_looked_up: the last songs a lookup fetched, newest last (kv `lookup:songs`). */
@@ -417,8 +413,9 @@ internal class LookupRun(private val lookup: Lookup, private val db: Db) {
     }
 
     private companion object {
-        const val BARE = "bare"  // ug/sitemap.BARE (OverrideUrls.BARE once overrides-model lands)
-        const val UNRECOGNIZED = "unrecognized"  // ug/sitemap.UNRECOGNIZED
+        /** get.py's `_other_pins` groups, the kinds a pin replaces: ug/fetch.py's CHORDS_KINDS + UKULELE_KINDS (either
+         * is the sheet), and TAB_KINDS. */
+        val PIN_GROUPS: List<Set<String>> = listOf(setOf("chords", "ukulele"), setOf("tabs"))
         const val HARMONICA_KIND = "harmonica"  // inbox.HARMONICA_KIND
         val HARMONICA_FILE = PyRegex.compile("""harmonica-(\d+)\.txt""")  // inbox.HARMONICA_FILE
         const val LOOKED_UP = "lookup:songs"  // ug/fetch._LOOKED_UP

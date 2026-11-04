@@ -24,8 +24,11 @@ import io.github.danielhp95.caracole.server.jobs.JobContext
  * - `--keep=TAB` and `--keep-more`: the `song` stage begun and the song found (`_common.song_named`), then
  *   [VersionsCommands.keep] or [VersionsCommands.keepMore] (lane ug-fetch-artist's) in one `database.writeBlocking`,
  *   through a lookup command's context (LookupJobs.context: the lookup pace, the command's progress lines its job's
- *   events), its last line said; once the song's kept files changed, its pages (`pdf`, while milestone 5's are none,
- *   skipped with get.py's NO_PDFS) and the library page (`pages`);
+ *   events), its last line said. The command says versions_cmd.py's events from `{"song": …}` on, and its `pdf` and
+ *   `pages` running events where versions_cmd.py makes the song's pages (a version kept: pdf, then pages; any other
+ *   outcome past its refusals: pages alone); at each the runner makes them (the pdf stage's SongPages, skipped with
+ *   get.py's NO_PDFS while milestone 5's are none; the library page) and ends the stage in the phone's words
+ *   (LookupJobs.CommandLines);
  * - `--choose=TAB`: `caracole get --tab` at the version's own address (a version of the song UG still has, not under
  *   `[block]`);
  * - `--clear`: the song's chords pins taken out of `[pin]` (OverrideWriters.removePin), then `caracole get`.
@@ -85,18 +88,15 @@ class VersionsRunner(val parts: PhoneParts, private val readOverrides: (Db) -> O
         parts.database.writeBlocking { db ->
             val overrides = LookupJobs.overrides(db, readOverrides)
             val song = LookupJobs.songNamed(parts, db, display, overrides)
-            val before = LookupJobs.kept(db, song)
-            val (c, ask) = LookupJobs.context(parts, db, args, context, LookupJobs.now(parts))
+            val made = if (tab != null) "the version's page made" else "the versions' pages made"
+            val (c, ask) = LookupJobs.context(parts, db, args, context, LookupJobs.now(parts),
+                                              pages = LookupJobs.CommandPages(parts, db, song, made))
             val said = try {
                 if (tab != null) VersionsCommands.keep(c, song, tab) else VersionsCommands.keepMore(c, song)
             } finally {
                 ask.close()
             }
             context.say(said)
-            if (LookupJobs.kept(db, song) != before) {
-                LookupJobs.pages(parts, db, song, context,
-                                 if (tab != null) "the version's page made" else "the versions' pages made")
-            }
         }
     }
 

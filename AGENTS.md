@@ -1268,7 +1268,8 @@ Not built yet. (html-tokenizer, html-tree.)
     `lookup:songs`.
 - Each site's stage is its lane's file of core/lookup/sites/, called with a `StageContext` whose `asking` is the
   envelope or `InteractiveAsk.afterTheSheet`. A stage words its site's answer as get.py's work does and every other
-  `Asked` through `LookupWords.end`; `LookupWords.NOTHING_TO_ASK` is get.py's None (Megalobiz's, AZLyrics'). A
+  `Asked` through `LookupWords.end`; `LookupWords.NOTHING_TO_ASK` is get.py's None: in the lyrics, Megalobiz's or
+  AZLyrics' nothing to ask (`_then` says what the sites before said), anywhere else `done` with no words. A
   `SharedFolder` fails the stage in get.py's words; anything else is a bug, said in its stage and `LookupResult.bug`.
 - `InteractiveAsk` is get.py's `_ask`: `_usable`'s words, a block recorded, an error counted, a spent budget worded
   the lookup's, the hour's or kept for sheets; one client a provider a lookup (`Clients.interactive`, at the lookup's
@@ -1283,12 +1284,27 @@ Not built yet. (html-tokenizer, html-tree.)
   next stage.
 - server/lookups' runners: `GetRunner` (`caracole get`, its options checked as commands/get.py checks them,
   `LookupLines` and `LookupWords.totals` its output; a refusal or a bug exits 1), `VersionsRunner` (`--keep` and
-  `--keep-more` to `VersionsCommands`, then the song's pages and the library page once its kept files changed;
-  `--choose` as get `--tab` at the version's address; `--clear` as `removePin`, then get), `LaCuerdaRunner` (`--artist`,
-  `--search` to `LaCuerdaCommands`) and `HarpTabsRunner` (`--artist`).
-- A lookup command runs in `LookupJobs.context`: what it says is its job's output, a get.py progress line
-  (`JobCommands.progressLine`) its job's event when the command reports them (`JobCommands.reports`, as web/jobs.py's
-  emit reads it); its last line is the one it returns; it records its own good run, as its Python does.
+  `--keep-more` to `VersionsCommands`; `--choose` as get `--tab` at the version's address; `--clear` as `removePin`,
+  then get), `LaCuerdaRunner` (`--artist`, `--search` to `LaCuerdaCommands`) and `HarpTabsRunner` (`--artist`).
+  - A refused lookup's step ends with `error: Nothing looked up: ….` and a bug's with `error: a bug in caracole: …`
+    (the queue writes an `error:` line for every step that fails), where the computer's says the first plainly and
+    logs the second; the stage the library page's line reads says the same on both.
+- A lookup command (core/lookup/sites/'s `VersionsCommands`, `LaCuerdaCommands`, `HarpTabsCommands`) runs in
+  `LookupJobs.context`, a `CommandContext` (the whole contract: LookupWords' section on a lookup command):
+  - it says its Python's `--progress` events as `LookupWords.progressLine`s (`stageLine`, `songLine`; the queue's
+    `JobCommands.progressLine` to the byte, a test checks), its job's events when it reports them
+    (`JobCommands.reports`, as web/jobs.py's emit reads them), and its other lines; its last line is the one it
+    returns;
+  - it asks through `c.asking`, which records a block (and alerts once) and an error: a command never records
+    either itself;
+  - it records its own good run where its Python does: `Health.recordOk` after `Health.answeredAny` of its run
+    (`LookupWords.lookupRunOf(c.now)`, `searchRunId` for LaCuerda's search), or after any request where versions_cmd.py
+    counts them;
+  - `versions --keep` and `--keep-more`: the runner begins the song stage and finds the song, the command says from
+    `{"song": …}` on, and at its `pdf` and `pages` running events (versions_cmd.py's: a version kept, pdf then pages;
+    any other outcome past its refusals, pages alone) the runner makes the song's pages and ends both stages in the
+    phone's words (`NO_PDFS` while `SongPages` is `NONE`, `LIBRARY_PAGE`), the command's own ends of them unsaid
+    (`LookupJobs.CommandLines`).
 
 ##### Site passes on the phone
 

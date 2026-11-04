@@ -1,7 +1,6 @@
 package io.github.danielhp95.caracole.server.lookups
 
-import io.github.danielhp95.caracole.core.index.Stamps
-import io.github.danielhp95.caracole.core.lookup.Pace
+import io.github.danielhp95.caracole.core.lookup.LookupWords
 import io.github.danielhp95.caracole.core.lookup.sites.LaCuerdaCommands
 import io.github.danielhp95.caracole.server.PhoneParts
 import io.github.danielhp95.caracole.server.jobs.CommandExit
@@ -12,8 +11,8 @@ import io.github.danielhp95.caracole.server.jobs.JobContext
  * `caracole lacuerda --artist=NAME` and `--search=QUERY [--progress] [--auto]` on the phone (commands/lyrics.py),
  * each a lookup command (lane lacuerda-sheets' [LaCuerdaCommands]) run in one `database.writeBlocking` through
  * LookupJobs.context, its name or query with its whitespace folded, its last line said: an artist's page at the lookup
- * pace, and LaCuerda's own search, whose run is `lookup:lacuerda-search:<time>` (lacuerda_search.RUN), as its hour's
- * searches are counted. Its listings (`--index`) and its bulk pass aren't on the phone.
+ * pace, and LaCuerda's own search, whose run is `lookup:lacuerda-search:<time>` (LookupWords.searchRunId), as its
+ * hour's searches are counted. Its listings (`--index`) and its bulk pass aren't on the phone.
  */
 class LaCuerdaRunner(val parts: PhoneParts) : CommandRunner {
     override suspend fun run(args: List<String>, context: JobContext) {
@@ -34,7 +33,7 @@ class LaCuerdaRunner(val parts: PhoneParts) : CommandRunner {
         }
         val now = LookupJobs.now(parts)
         parts.database.writeBlocking { db ->
-            val run = if (search != null) Pace.LOOKUP_RUN + SEARCH_RUN + Stamps.of(now) else Pace.lookupRunId(now)
+            val run = LookupWords.lookupRunOf(now, search = search != null)
             val (c, ask) = LookupJobs.context(parts, db, args, context, now, run)
             val said = try {
                 if (search != null) LaCuerdaCommands.search(c, LookupJobs.folded(search), auto = "--auto" in o)
@@ -44,9 +43,5 @@ class LaCuerdaRunner(val parts: PhoneParts) : CommandRunner {
             }
             context.say(said)
         }
-    }
-
-    private companion object {
-        const val SEARCH_RUN = "lacuerda-search:"  // lacuerda_search.RUN
     }
 }
