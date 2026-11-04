@@ -282,13 +282,17 @@ class LookupRunnersTest {
     }
 
     @Test fun eachLookupCommandIsItsRunnersAndSaysItsLastLine() {
-        for (args in listOf(listOf("lacuerda", "--artist=soda  stereo"), listOf("harptabs", "--artist=Billy Joel"),
-                            listOf("lacuerda", "--search=de musica ligera", "--progress"))) {
+        val notYet = "Not on the phone yet."  // each site lane's until it lands
+        val noIndex = "Not read: harptabs.com's index is empty: the nightly run reads its sitemap, or caracole " +
+            "harptabs --index now."  // lane harptabs': nothing asked of a phone with no index
+        for ((args, said) in listOf(listOf("lacuerda", "--artist=soda  stereo") to notYet,
+                                    listOf("harptabs", "--artist=Billy Joel") to noIndex,
+                                    listOf("lacuerda", "--search=de musica ligera", "--progress") to notYet)) {
             job(listOf(io.github.danielhp95.caracole.server.jobs.Command("Ask", args)), { p ->
                 mapOf("lacuerda" to LaCuerdaRunner(p), "harptabs" to HarpTabsRunner(p))
             }) { job, _ ->
                 assertEquals(Job.DONE, job.state, "$args")
-                assertEquals(listOf("Not on the phone yet."), job.steps.single().output)  // each site lane's until
+                assertEquals(listOf(said), job.steps.single().output)
             }
         }
     }
