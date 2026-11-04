@@ -34,8 +34,23 @@ data class Exported(val path: File, val sites: List<String>, val rows: Map<Strin
  * inside Database.write, in no transaction (ATTACH runs in none).
  */
 object IndexExport {
-    /** index_transfer.PAGES: each site's tables a lookup reads a page into, by the column naming the page, and the kv
-     * records of how their rows are keyed. */
+    /**
+     * index_transfer.PAGES: each site's tables a lookup reads a page into, by the column naming the page, and the kv
+     * records of how their rows are keyed.
+     *
+     * **The page a site lane notes** (Reads.note(db, site, page, at), for each store a lookup makes) is exactly the
+     * value its store writes in that column, never another spelling of the same page: an export matches it as it is
+     * (`WHERE <column> IN (…)`), so a page noted otherwise sends no row, silently.
+     * - `ug`: `ug_artist_tabs.page`, the artist page's address ArtistTabs.store is given (artist_tabs.store's `page`:
+     *   "https://www.ultimate-guitar.com/artist/634073", never "/artist/634073").
+     * - `lacuerda`: `lacuerda_index.page`, "<slug>/" for an artist page (store_songs' `f"{slug}/"`, the slash too:
+     *   "estopa/") and "busca.php" (SEARCH_PAGE) for the rows its search stored.
+     * - `harptabs`: `harptabs_artists.path`, the artist page's path store_artist_page is given ("artist/1178/billy-joel";
+     *   its tabs follow by `harptabs_artist_tabs.artist`), store_gone's too.
+     * - `gametabs`: `gametabs_games.path`, the game page's path store_game_page is given ("tabs/actraiser"; its tabs by
+     *   `gametabs_game_tabs.page`).
+     * ExportTest's `aPageNotedAsItsStoreWritesItIsSentAndAnotherSpellingIsNot` pins it.
+     */
     internal class Pages(val tables: List<Pair<String, String>>, val kv: List<String>)
 
     internal val PAGES: Map<String, Pages> = linkedMapOf(

@@ -347,6 +347,94 @@ def test_the_phones_reads_merge_as_its_rules_take_them_and_move_no_record_of_the
     assert merge(conn, path, state=tmp_path / "state").changed is False  # a second merge takes nothing
 
 
+def _pages_export(home, tmp_path, name="reads.sqlite") -> Path:
+    reads(home)
+    return transfer.export(home, tmp_path / name, now=NOW, pages={
+        "ug": [SODA], "lacuerda": ["soda_stereo/", lacuerda_index.SEARCH_PAGE],
+        "harptabs": ["artist/50/the-beatles"]}).path
+
+
+def _altered(path: Path, *sql: str, params=()) -> Path:
+    out = sqlite3.connect(path)
+    for statement in sql:
+        out.execute(statement, params if "?" in statement else ())
+    out.commit()
+    out.close()
+    return path
+
+
+def test_a_phones_export_of_pages_is_one_check_pages_takes(home, conn, tmp_path):
+    path = _pages_export(home, tmp_path)
+    assert transfer.check_pages(conn, path) == ("ug", "lacuerda", "harptabs")
+    empty = transfer.export(home, tmp_path / "none.sqlite", now=NOW, pages={}).path
+    assert transfer.check_pages(conn, empty) == ()
+
+
+def test_check_pages_refuses_a_whole_export_whose_records_a_merge_would_take_with_no_rows(home, conn, tmp_path):
+    full(home)
+    with pytest.raises(transfer.TransferError, match="holds gtptabs.com's index, of which no lookup reads a page"):
+        transfer.check_pages(conn, export(home, tmp_path, name="all.sqlite"))
+    with pytest.raises(transfer.TransferError, match="ug_index holds rows, and an export of pages none"):
+        transfer.check_pages(conn, export(home, tmp_path, ["ug"], name="ug.sqlite"))
+    lacuerda = export(home, tmp_path, ["lacuerda"], name="lacuerda.sqlite")
+    with pytest.raises(transfer.TransferError, match="kv holds 'lacuerda:index:complete_at', and an export of pages"):
+        transfer.check_pages(conn, lacuerda)
+    path = _pages_export(home, tmp_path)  # a phone's, with a listing's record slipped in
+    _altered(path, "INSERT INTO kv (key, value) VALUES (?, ?)", params=(lacuerda_index.PAGES_KEY, "{}"))
+    with pytest.raises(transfer.TransferError, match="kv holds 'lacuerda:index:pages'"):
+        transfer.check_pages(conn, path)
+
+
+def test_check_pages_tells_another_version_apart(home, conn, tmp_path):
+    path = _altered(_pages_export(home, tmp_path), f"UPDATE {transfer.META} SET value = ? WHERE key = 'schema'",
+                    params=(str(db.SCHEMA_VERSION + 1),))
+    with pytest.raises(transfer.OtherVersion, match=f"schema version {db.SCHEMA_VERSION + 1}"):
+        transfer.check_pages(conn, path)
+    path = _altered(_pages_export(home, tmp_path, "cols.sqlite"), "ALTER TABLE harptabs_artists ADD COLUMN x TEXT")
+    with pytest.raises(transfer.OtherVersion, match="harptabs_artists has the columns"):
+        transfer.check_pages(conn, path)
+    path = _altered(_pages_export(home, tmp_path, "generated.sqlite"),
+                    "ALTER TABLE harptabs_artists ADD COLUMN y TEXT GENERATED ALWAYS AS (upper(name)) VIRTUAL")
+    with pytest.raises(transfer.OtherVersion, match="harptabs_artists has the columns.*y"):
+        transfer.check_pages(conn, path)
+    path = _altered(_pages_export(home, tmp_path, "more.sqlite"), "CREATE TABLE songs (id INTEGER)")
+    with pytest.raises(transfer.TransferError, match="holds the tables .*songs"):
+        transfer.check_pages(conn, path)
+
+
+@pytest.mark.parametrize("sql", [
+    "CREATE VIEW sneaky AS SELECT 1",
+    "CREATE TRIGGER t AFTER INSERT ON kv BEGIN SELECT 1; END",
+    "CREATE INDEX lookups ON kv (value)",
+    "CREATE VIRTUAL TABLE words USING fts5(word)",
+])
+def test_a_merge_refuses_a_file_that_holds_more_than_tables_and_changes_nothing(home, conn, tmp_path, sql):
+    full(home)
+    path = _altered(export(home, tmp_path), sql)
+    before = snapshot(conn)
+
+    with pytest.raises(transfer.TransferError, match="an index export of caracole's holds tables alone"):
+        merge(conn, path, state=tmp_path / "state")
+    with pytest.raises(transfer.TransferError, match="holds tables alone"):
+        transfer.check_pages(conn, path)
+
+    assert snapshot(conn) == before
+    assert backup.backups(tmp_path / "state") == []
+
+
+def test_a_merge_trusts_no_function_of_the_files_schema_and_leaves_the_connection_as_it_was(home, conn, tmp_path):
+    full(home)
+    path = export(home, tmp_path)
+    seen = []
+    conn.set_trace_callback(lambda sql: seen.append(sql) if "trusted_schema" in sql else None)
+    try:
+        merge(conn, path, state=tmp_path / "state")
+    finally:
+        conn.set_trace_callback(None)
+    assert "PRAGMA trusted_schema = OFF" in seen
+    assert conn.execute("PRAGMA trusted_schema").fetchone()[0] == 1  # as it was before
+
+
 # --- merge: round trips --------------------------------------------------------------------------------------------
 
 TABLES = {

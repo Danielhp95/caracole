@@ -88,8 +88,9 @@ def test_a_merge_that_takes_nothing_says_so_and_still_deletes_the_file(tmp_path,
     assert not copy.exists()
 
 
-def test_a_refused_file_fails_its_stage_in_its_words_and_is_deleted(tmp_path, state):
-    path = tmp_path / "index-0123456789abcdef.sqlite"
+def test_a_refused_file_serve_staged_fails_its_stage_in_its_words_and_is_deleted(tmp_path, state):
+    path = state / "peer" / "index-0123456789abcdef.sqlite"
+    path.parent.mkdir()
     sqlite3.connect(path).close()
 
     result = invoke(tmp_path, "merge", "--delete", "--progress", "--", str(path))
@@ -100,6 +101,56 @@ def test_a_refused_file_fails_its_stage_in_its_words_and_is_deleted(tmp_path, st
     assert failed["detail"].startswith(f"{path} is no index export of caracole's")
     assert "no index export" in result.stderr
     assert not path.exists()  # it can never be merged here
+
+
+def test_delete_never_deletes_the_database_itself_refused(tmp_path, state):
+    database = state / "caracole.sqlite"
+
+    result = invoke(tmp_path, "merge", "--delete", "--progress", "--", str(database))
+
+    assert result.exit_code == 2
+    assert events(result.stdout)[-1] == {"stage": "merge", "state": "failed",
+                                         "detail": f"{database} is the database itself"}
+    assert database.exists()
+    conn = db.connect(database)  # whole, and still caracole's
+    try:
+        assert conn.execute("PRAGMA quick_check").fetchone()[0] == "ok"
+    finally:
+        conn.close()
+
+
+@pytest.mark.parametrize("name", ["wanted.txt", "backups/caracole-before-merge.sqlite", "index-0123456789abcdef.sqlite"])
+def test_delete_keeps_a_refused_file_named_by_hand(tmp_path, state, name):
+    """Only a file of serve's staging (state_dir/peer/index-<16 hex>.sqlite) is deleted refused: a typo, a backup,
+    or an export's look-alike elsewhere stays as it was."""
+    path = tmp_path / "data" / name
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if name.endswith(".sqlite"):
+        sqlite3.connect(path).close()
+    else:
+        path.write_text("Radiohead - Creep\n", encoding="utf-8")
+    before = path.read_bytes()
+
+    result = invoke(tmp_path, "merge", "--delete", "--progress", "--", str(path))
+
+    assert result.exit_code == 2
+    assert events(result.stdout)[-1]["state"] == "failed"
+    assert path.read_bytes() == before
+
+
+def test_a_database_it_cant_open_fails_its_stage_and_keeps_the_file_for_try_again(tmp_path, state):
+    path = phone_reads(tmp_path)
+    conn = sqlite3.connect(state / "caracole.sqlite")
+    conn.execute(f"PRAGMA user_version = {db.SCHEMA_VERSION + 1}")  # a newer caracole's
+    conn.close()
+
+    result = invoke(tmp_path, "merge", "--delete", "--progress", "--", str(path))
+
+    assert result.exit_code == 2
+    [running, failed] = events(result.stdout)
+    assert running["state"] == "running"
+    assert failed["state"] == "failed" and failed["detail"].startswith("Not merged: caracole's lock or its database")
+    assert path.exists()
 
 
 def test_no_room_for_the_backup_keeps_the_file_for_try_again(tmp_path, state, monkeypatch):

@@ -22,8 +22,10 @@ and this library's site indexes.
                                  none), as ``caracole index export`` writes them, a SQLite file streamed, one at a
                                  time
     POST /peer/index             The index pages another caracole's lookups read (the phone's: an index export of
-                                 pages, its bytes, ``peer_push.stage_index``), staged, then ``caracole index merge
-                                 --delete --progress -- FILE`` queued (``jobs.index_merge_job``): 202 ``{"job": N}``
+                                 pages, its bytes, ``peer_push.stage_index``), staged and read as the merge takes it
+                                 (``index_transfer.check_pages``: 400, 409 for another version), then ``caracole
+                                 index merge --delete --progress -- FILE`` queued (``jobs.index_merge_job``): 202
+                                 ``{"job": N}``
 
 Another caracole reads the first three to compare the two and to take what the owner chose (``caracole peer``). They
 are reads, as a search is: no lock, no site asked, nothing written. Under ``/api/``, another site's page can't read
@@ -310,7 +312,14 @@ def index(app: WebApp, asked, params: dict[str, str]) -> Response:
 def push_index(app: WebApp, data: bytes) -> Response:
     """``POST /peer/index``: the index pages another caracole's lookups read, staged (``peer_push.stage_index``), and
     their merge queued, ``caracole index merge --delete --progress -- FILE``, a job of no song's; 202 with its id.
-    Index exports left an hour that no waiting request names go first (``peer_push.sweep_indexes``)."""
+    Index exports left an hour that no waiting request names go first (``peer_push.sweep_indexes``).
+
+    Before the 202, which the phone forgets its reads on, the file is read as the merge will take it
+    (``index_transfer.check_pages``): an export of pages alone, of this caracole's layout, schema and columns. One
+    that isn't is refused and deleted, 409 for another version (the phone keeps its reads until the two agree), 400
+    for anything else, so that a file this side would refuse never costs the phone its reads, and nothing but pages
+    reaches the merge from the network."""
+    from caracole import index_transfer
     from caracole.web import jobs
 
     state_dir = app.cfg.state_dir
@@ -323,8 +332,22 @@ def push_index(app: WebApp, data: bytes) -> Response:
     except OSError as e:
         raise Refused(503, "Not kept", f"The index pages couldn't be kept: {e}.") from e
     try:
+        with app.db() as conn:
+            index_transfer.check_pages(conn, path)
         job, _ = app.submit(**jobs.index_merge_job(path))
+    except index_transfer.OtherVersion as e:
+        path.unlink(missing_ok=True)
+        raise Refused(409, "Not merged", f"{_unstaged(e, path)} Bring both caracoles to one version first.") from None
+    except index_transfer.TransferError as e:
+        path.unlink(missing_ok=True)
+        raise Refused(400, "Not merged", _unstaged(e, path)) from None
     except Refused:
         path.unlink(missing_ok=True)
         raise
     return json_response(202, {"job": job.id})
+
+
+def _unstaged(e: Exception, path) -> str:
+    """A refusal of a staged export in words of the file posted, never of the path it was staged at."""
+    said = str(e).replace(str(path), "The index export")
+    return said[:1].upper() + said[1:] + ("" if said.endswith(".") else ".")

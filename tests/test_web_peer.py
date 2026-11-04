@@ -253,6 +253,39 @@ def test_index_pages_past_64_mib_are_refused_unread_and_bytes_that_are_no_export
     assert _staged(cfg) == []
 
 
+def test_an_export_this_side_would_refuse_is_refused_before_the_phone_forgets_its_reads(phone_side, cfg, tmp_path):
+    """The phone forgets its reads on a 202: an export the merge would refuse is refused here, unstaged, 409 for
+    another version (the phone keeps its reads until the two agree), 400 for one that isn't of pages alone."""
+    import sqlite3
+    from datetime import UTC, datetime
+
+    import test_index_transfer as tt
+
+    from caracole import db, index_transfer
+
+    path = tmp_path / "newer.sqlite"
+    path.write_bytes(_index_export(tmp_path))
+    out = sqlite3.connect(path)
+    out.execute(f"UPDATE {index_transfer.META} SET value = ? WHERE key = 'schema'", (str(db.SCHEMA_VERSION + 1),))
+    out.commit()
+    out.close()
+    status, _, body = phone_side.ask("POST", "/peer/index", path.read_bytes(), kind="application/octet-stream")
+    said = json.loads(body)["error"]
+    assert status == 409 and said.startswith("The index export was exported at schema version")
+    assert "Bring both caracoles to one version first." in said and str(cfg.state_dir) not in said
+
+    home = tt.database(tmp_path, "home")
+    try:
+        tt.full(home)  # a whole export: the sitemaps' rows and records, which a merge would take as the phone's
+        index_transfer.export(home, tmp_path / "whole.sqlite", ["ug"], now=datetime(2026, 11, 3, tzinfo=UTC))
+    finally:
+        home.close()
+    status, _, body = phone_side.ask("POST", "/peer/index", (tmp_path / "whole.sqlite").read_bytes(),
+                                     kind="application/octet-stream")
+    assert status == 400 and "ug_index holds rows, and an export of pages none" in json.loads(body)["error"]
+    assert _staged(cfg) == [] and phone_side.runner.calls == []
+
+
 def test_two_index_exports_wait_at_most_and_one_left_an_hour_that_no_request_names_goes(cfg, tmp_path):
     import os
     import time

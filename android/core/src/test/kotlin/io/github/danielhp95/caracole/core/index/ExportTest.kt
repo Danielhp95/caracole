@@ -100,6 +100,39 @@ class ExportTest {
         }
     }
 
+    /** Export.kt's contract with the site lanes (IndexExport.PAGES): a page noted as its store writes it (UG's
+     * address whole, LaCuerda's "<slug>/" and "busca.php", harptabs.com's and gametabs.net's paths) sends its rows,
+     * through Reads.since; another spelling of the same page (a path for UG's address, a slug without its slash)
+     * sends none. */
+    @Test fun aPageNotedAsItsStoreWritesItIsSentAndAnotherSpellingIsNot() {
+        val dir = tmp.newFolder()
+        TestDb.fresh(dir).use { database ->
+            database.writeBlocking { db ->
+                Fixtures.load(db, "index/fixtures/reads-before.jsonl")
+                db.execute("DELETE FROM kv WHERE key LIKE 'phone:%'")
+                Reads.note(db, "ug", "https://www.ultimate-guitar.com/artist/634073", "2026-11-03T10:00:00Z")
+                Reads.note(db, "lacuerda", "estopa/", "2026-11-03T10:00:01Z")
+                Reads.note(db, "lacuerda", "busca.php", "2026-11-03T10:00:02Z")
+                Reads.note(db, "harptabs", "artist/1178/billy-joel", "2026-11-03T10:00:03Z")
+                Reads.note(db, "gametabs", "tabs/actraiser", "2026-11-03T10:00:04Z")
+            }
+            val rows = database.writeBlocking { db ->
+                IndexExport.export(db, File(dir, "as-stored.sqlite"), Reads.since(db, "pc"), "2026-11-03T12:00:00Z").rows
+            }
+            for (table in listOf("ug_artist_tabs", "lacuerda_index", "harptabs_artists", "harptabs_artist_tabs",
+                                 "gametabs_games", "gametabs_game_tabs")) {
+                assertTrue(rows.getValue(table) > 0, "$table: no row of a page noted as its store writes it")
+            }
+            val other = database.writeBlocking { db ->
+                IndexExport.export(db, File(dir, "other.sqlite"), mapOf(
+                    "ug" to listOf("/artist/634073"), "lacuerda" to listOf("estopa"),
+                    "harptabs" to listOf("/artist/1178/billy-joel"), "gametabs" to listOf("actraiser"),
+                ), "2026-11-03T12:00:00Z").rows
+            }
+            assertEquals(setOf(0), other.values.toSet(), "another spelling of the same page sends no row")
+        }
+    }
+
     @Test fun anExportOfNoPageIsOfNoSite() {
         val dir = tmp.newFolder()
         TestDb.fresh(dir).use { database ->
