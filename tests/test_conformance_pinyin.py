@@ -1,23 +1,32 @@
 """pypinyin 0.55.0 for the phone: the dictionaries core.pinyin.Pinyin reads, and what pypinyin answers caracole.
 
-caracole asks pypinyin three things, all in Style.NORMAL (normalize.py): ``lazy_pinyin(s)`` (``romanize``),
+caracole asks pypinyin four things: in Style.NORMAL (normalize.py) ``lazy_pinyin(s)`` (``romanize``),
 ``lazy_pinyin(text, errors="ignore")`` and ``pinyin(c, style=Style.NORMAL, heteronym=True)[0]``
-(``_pinyin_readings``). pypinyin reads a text so (core.py, converter.py, utils.py, seg/simpleseg.py, seg/mmseg.py):
+(``_pinyin_readings``); in Style.TONE (viewer/pinyin.py) ``lazy_pinyin(text, style=Style.TONE, errors=_none)``, where
+``_none`` gives "" for each character of what it reads no pinyin in (``EMPTY_EACH``). pypinyin reads a text so
+(core.py, converter.py, utils.py, seg/simpleseg.py, seg/mmseg.py):
 
 1. simpleseg cuts the text into runs of the characters ``RE_HANS`` matches and runs of the others (hans.txt).
-2. A run of others is itself (``errors="default"``) or nothing (``"ignore"``).
+2. A run of others is itself (``errors="default"``), nothing (``"ignore"``) or "" for each of its code points
+   (``EMPTY_EACH``).
 3. A run of Han is cut by mmseg's forward maximum matching over PHRASES_DICT (``no_non_phrases=True``): from where
    it stands, the text is read one more character at a time while what it read is a prefix of some phrase; the
    word is the longest phrase among those prefixes, or with none the first character alone. When the whole rest of
    the run is a prefix of a phrase, the word is again the longest phrase among its prefixes and the cut goes on
    after it; with none, each character of the rest is a word alone, and the run ends there.
 4. A phrase reads as the first reading of each of its syllables (phrases.txt). A lone character reads as its first
-   reading in PINYIN_DICT (chars.txt), else as itself (``"default"``) or nothing (``"ignore"``).
-5. ``heteronym=True``, a character alone: its readings with duplicates and empty ones dropped, ``[""]`` were none
-   left (``_remove_dup_and_empty``); a Han character with no reading, or any other character, is itself.
+   reading in PINYIN_DICT (chars.txt), else as itself (``"default"``), nothing (``"ignore"``) or ""
+   (``EMPTY_EACH``).
+5. ``heteronym=True``, a character alone: its readings in the style asked, then duplicates and empty ones dropped,
+   ``[""]`` were none left (``_remove_dup_and_empty``); a Han character with no reading, or any other character, is
+   itself.
 
-Style.NORMAL is pypinyin's own (style/others.py, ``replace_symbol_to_no_symbol``: tone marks dropped, ü written v,
-'绿色' read ``lv se``), applied here, so the phone strips no tone.
+Each reading is in the style asked: Style.TONE is the dictionaries' own reading (style/tone.py's ``to_tone`` gives it
+as it is), Style.NORMAL pypinyin's ``to_normal`` of it (style/others.py, ``replace_symbol_to_no_symbol``: each tone
+mark replaced by symbols.txt's replacement, the one-character symbols first, then those of two, then every digit
+dropped: tone marks dropped, ü written v, '绿色' read ``lv se``). The data holds Style.TONE alone, and the phone
+derives Style.NORMAL from it as pypinyin does (a reading of a heteronym's in NORMAL, then the duplicates dropped:
+zhōng and zhòng are one zhong): M1's NORMAL vectors guard that derivation, and the TONE ones the data.
 
 The data, a main resource of the phone's ``:core`` (caracole/pinyin/ on its classpath), UTF-8, a line each:
 
@@ -25,10 +34,16 @@ The data, a main resource of the phone's ``:core`` (caracole/pinyin/ on its clas
   hex, in order, neither overlapping nor touching (``RE_HANS`` is not normalize.py's ``_HAN``: it holds U+3007, the
   private-use E815–E864, U+FA18 and the extensions C to I).
 - ``chars.txt``: ``<code point in lowercase hex> <reading>,<reading>,…``, every entry of PINYIN_DICT by code point,
-  its readings in Style.NORMAL in PINYIN_DICT's order, duplicates kept.
-- ``phrases.txt``: ``<phrase> <syllable> <syllable> …``, every entry of PHRASES_DICT, each syllable the Style.NORMAL
+  its readings in Style.TONE in PINYIN_DICT's order, duplicates kept.
+- ``phrases.txt``: ``<phrase> <syllable> <syllable> …``, every entry of PHRASES_DICT, each syllable the Style.TONE
   of the phrase's first reading of that character (all ``lazy_pinyin`` reads), in UTF-16 order, which the phone's
   binary search keeps.
+- ``symbols.txt``: ``<symbol> <replacement>``, pypinyin's ``phonetic_symbol`` (its tone marks, each a character or
+  two: 'm̄' is m and U+0304) in its order, which ``to_normal`` replaces.
+
+What the phone takes for granted of them is checked here
+(``test_what_the_phone_takes_for_granted_of_the_dictionaries``): a reading is made of lowercase ASCII letters, ê and the symbols' characters, and holds no digit, so the digits
+``to_normal`` drops are the symbols' own (ASCII); every reading's NORMAL derived from the data is pypinyin's.
 
 The vectors (``helpers.corpus.jsonl``):
 
@@ -39,6 +54,10 @@ The vectors (``helpers.corpus.jsonl``):
   polyphones, Han with no reading, supplementary-plane Han, Latin, digits, kana, Hangul, punctuation and spaces; the
   string literals of tests/test_normalize.py and tests/test_search.py that hold a character beyond ASCII; and the
   edges (empty, each of RE_HANS's ranges' ends and their neighbours, newlines).
+- ``vectors/pinyin/tone.jsonl``: ``lazy_tone(text, errors)`` below, ``lazy_pinyin(text, style=Style.TONE,
+  errors=…)``, ``errors`` "default" and "empty_each" (``EMPTY_EACH``, viewer/pinyin.py's ``_none``), over every
+  ``TONE_STRIDE``-th of the texts of polyphone phrases (each in one mode, by turns), the first ``TONE_MIXES`` mixes,
+  the mmseg stops, the literals and the edges (each in both).
 - ``vectors/pinyin/heteronyms.jsonl``: ``heteronyms(text)`` below, each character's
   ``pinyin(c, style=Style.NORMAL, heteronym=True)[0]``, over every code point of PINYIN_DICT, ``CHARS_A_RECORD`` a
   record in order, then characters with no reading. A record is read one code point at a time, never as one call:
@@ -68,13 +87,19 @@ LITERALS_FROM = ("test_normalize.py", "test_search.py")
 SEED = 20261103
 MIXES = 3000
 PHRASES_A_TEXT = 40
+TONE_STRIDE = 5
+TONE_MIXES = 600
 CHARS_A_RECORD = 100
 SEPARATORS = (" ", "，", "\n", "a", "、", " · ")
 LAZY = "pypinyin.lazy_pinyin"
+LAZY_TONE = "test_conformance_pinyin.lazy_tone"
 HETERONYMS = "test_conformance_pinyin.heteronyms"
 HETERONYMS_NOTE = ("out[i] is pinyin(c, style=Style.NORMAL, heteronym=True)[0] of the i-th code point c of args[0]: "
                    "Pinyin.heteronyms(c), a code point at a time")
 ERRORS = ("default", "ignore")
+TONE_ERRORS = ("default", "empty_each")
+# What a reading is made of: lowercase ASCII letters, ê, and the characters of pypinyin's symbols (checked).
+READING_LETTERS = frozenset("abcdefghijklmnopqrstuvwxyzê")
 
 
 def normal(reading: str) -> str:
@@ -82,6 +107,18 @@ def normal(reading: str) -> str:
     from pypinyin.style._utils import replace_symbol_to_no_symbol
 
     return replace_symbol_to_no_symbol(reading)
+
+
+def empty_each(chars: str) -> list[str]:
+    """``EMPTY_EACH``: what viewer/pinyin.py's ``_none`` gives what pypinyin reads no pinyin in, "" a character."""
+    return [""] * len(chars)
+
+
+def lazy_tone(text: str, errors: str) -> list[str]:
+    """``lazy_pinyin(text, style=Style.TONE, errors=…)``, ``errors`` "default" or "empty_each" (``EMPTY_EACH``)."""
+    from pypinyin import Style, lazy_pinyin
+
+    return lazy_pinyin(text, style=Style.TONE, errors=empty_each if errors == "empty_each" else errors)
 
 
 def heteronyms(text: str) -> list[list[str]]:
@@ -121,49 +158,81 @@ def hans_txt() -> str:
 def chars_txt() -> str:
     from pypinyin.constants import PINYIN_DICT
 
-    return "".join(f"{cp:x} {','.join(normal(r) for r in PINYIN_DICT[cp].split(','))}\n" for cp in sorted(PINYIN_DICT))
+    return "".join(f"{cp:x} {PINYIN_DICT[cp]}\n" for cp in sorted(PINYIN_DICT))
 
 
 @functools.cache
 def phrases_txt() -> str:
     from pypinyin.constants import PHRASES_DICT
 
-    return "".join(f"{p} {' '.join(normal(syllable[0]) for syllable in PHRASES_DICT[p])}\n"
+    return "".join(f"{p} {' '.join(syllable[0] for syllable in PHRASES_DICT[p])}\n"
                    for p in sorted(PHRASES_DICT, key=_utf16))
+
+
+def symbols_txt() -> str:
+    from pypinyin.phonetic_symbol import phonetic_symbol
+
+    return "".join(f"{symbol} {replacement}\n" for symbol, replacement in phonetic_symbol.items())
 
 
 def test_hans_txt_is_the_ranges_re_hans_matches():
     check(PINYIN_DATA / "hans.txt", hans_txt())
 
 
-def test_chars_txt_is_pinyin_dict_in_normal_style():
+def test_chars_txt_is_pinyin_dict_in_tone_style():
     check(PINYIN_DATA / "chars.txt", chars_txt())
 
 
-def test_phrases_txt_is_phrases_dict_in_normal_style():
+def test_phrases_txt_is_phrases_dict_in_tone_style():
     check(PINYIN_DATA / "phrases.txt", phrases_txt())
+
+
+def test_symbols_txt_is_the_tone_marks_normal_style_replaces():
+    check(PINYIN_DATA / "symbols.txt", symbols_txt())
 
 
 def test_what_the_phone_takes_for_granted_of_the_dictionaries():
     """The data's format, and the phone's port, rest on these: a bump of pypinyin that breaks one says so here."""
+    from pypinyin import Style
     from pypinyin.constants import PHRASES_DICT, PINYIN_DICT, RE_HANS
+    from pypinyin.phonetic_symbol import phonetic_symbol
+    from pypinyin.style import convert
 
-    syllable = set("abcdefghijklmnopqrstuvwxyzê")
+    data = _Data(hans_txt(), chars_txt(), phrases_txt(), symbols_txt())
+    marks = {c for symbol in phonetic_symbol for c in symbol}
+    letters = READING_LETTERS | marks
+    # The symbols: none holds a space or a digit, a replacement's digits are ASCII's, and no symbol of two characters
+    # begins with one that a symbol of one replaces (so the order of the two passes is the phone's alone).
+    for symbol, replacement in phonetic_symbol.items():
+        assert symbol and " " not in symbol and not any(c.isdigit() for c in symbol), symbol
+        assert replacement and all(c.isascii() or c in READING_LETTERS for c in replacement), replacement
+        assert len(symbol) in (1, 2), symbol
+    assert not {c for s in phonetic_symbol if len(s) == 2 for c in s} & {s for s in phonetic_symbol if len(s) == 1}
+
+    def reading(r: str, where: str) -> None:
+        assert r and set(r) <= letters and not any(c.isdigit() for c in r), f"{where} reads {r!r}"
+        # pypinyin's own styles of it are the dictionary's reading and to_normal's, which the data derives.
+        assert convert(r, Style.TONE, True) == r, f"{where}: {r!r} in Style.TONE"
+        assert data.normal(r) == normal(r) == convert(r, Style.NORMAL, True), f"{where}: {r!r} in Style.NORMAL"
+        assert normal(r) and set(normal(r)) <= READING_LETTERS, f"{where} reads {r!r}"
+
     for cp, readings in PINYIN_DICT.items():
         assert RE_HANS.match(chr(cp)), f"U+{cp:04X} has readings but RE_HANS doesn't match it"
         for r in readings.split(","):
-            assert normal(r) and set(normal(r)) <= syllable, f"U+{cp:04X} reads {r!r}"
+            reading(r, f"U+{cp:04X}")
     for phrase, readings in PHRASES_DICT.items():
         # heteronyms() reads a character from chars.txt alone, never as a phrase of one character.
         assert len(phrase) > 1, f"{phrase!r} is a phrase of one character"
         assert RE_HANS.match(phrase), f"{phrase!r} holds a character RE_HANS doesn't match"
         assert len(readings) == len(phrase), f"{phrase!r} has {len(readings)} syllables"
-        assert all(r and normal(r[0]) and set(normal(r[0])) <= syllable for r in readings), phrase
-    # A Han character with no reading reads as itself, Style.NORMAL leaving it as it is.
+        for r in readings:
+            assert r, phrase
+            reading(r[0], phrase)
+    # A Han character with no reading reads as itself in either style.
     for a, b in han_ranges():
         for cp in range(a, b + 1):
             if cp not in PINYIN_DICT:
-                assert normal(chr(cp)) == chr(cp), f"U+{cp:04X}"
+                assert normal(chr(cp)) == chr(cp) == convert(chr(cp), Style.TONE, True), f"U+{cp:04X}"
 
 
 # --- the vectors -------------------------------------------------------------------------------------------------
@@ -289,6 +358,16 @@ def lazy_records() -> tuple[dict, ...]:
                  for text in texts for errors in ERRORS)
 
 
+def tone_records() -> tuple[dict, ...]:
+    phrase_texts = _phrase_texts()[::TONE_STRIDE]
+    records = [{"fn": LAZY_TONE, "args": [text, TONE_ERRORS[n % 2]], "kw": {},
+                "out": lazy_tone(text, TONE_ERRORS[n % 2])} for n, text in enumerate(phrase_texts)]
+    texts = _mixes()[:TONE_MIXES] + _mmseg_stops() + _literals() + _edges()
+    records += [{"fn": LAZY_TONE, "args": [text, errors], "kw": {}, "out": lazy_tone(text, errors)}
+                for text in texts for errors in TONE_ERRORS]
+    return tuple(records)
+
+
 def heteronym_records() -> tuple[dict, ...]:
     from pypinyin.constants import PINYIN_DICT
 
@@ -321,10 +400,28 @@ def test_lazy_vectors_are_pypinyins_answers_and_the_data_reads_each():
     assert any(a["out"] != b["out"] for a, b in zip(lazy[::2], lazy[1::2]))
     assert lazy_pinyin("朝阳") == ["zhao", "yang"] and lazy_pinyin("绿色") == ["lv", "se"]
     # The data alone reads each, as the phone does.
-    data = _Data(hans_txt(), chars_txt(), phrases_txt())
+    data = _Data(hans_txt(), chars_txt(), phrases_txt(), symbols_txt())
     for record in lazy:
         text, errors = record["args"][0], record["kw"]["errors"]
         assert data.lazy(text, errors) == record["out"], (text, errors)
+
+
+# Its records are built once, pypinyin reading a fifth of the phrases in Style.TONE: over plan §3's budget too.
+@pytest.mark.slow
+def test_tone_vectors_are_pypinyins_answers_and_the_data_reads_each():
+    from pypinyin import Style, lazy_pinyin
+
+    records = tone_records()
+    check(VECTORS / "pinyin" / "tone.jsonl", jsonl(records, corpus="pinyin/tone", made_by=MADE_BY))
+    # They hold what they mean to: the tone marks, and "" for each character no pinyin is read in.
+    assert lazy_pinyin("绿色", style=Style.TONE) == ["lǜ", "sè"] and lazy_tone("a中b", "empty_each") == ["", "zhōng", ""]
+    assert lazy_tone("Song 冬野 \u3402", "empty_each") == ["", "", "", "", "", "dōng", "yě", "", ""]
+    assert {r["args"][1] for r in records} == set(TONE_ERRORS)
+    assert any(a["out"] != b["out"] for a, b in zip(records[-2::-2], records[-1::-2]))
+    data = _Data(hans_txt(), chars_txt(), phrases_txt(), symbols_txt())
+    for record in records:
+        text, errors = record["args"]
+        assert data.lazy(text, errors, tone=True) == record["out"], (text, errors)
 
 
 def test_heteronym_vectors_are_pypinyins_answers_and_the_data_reads_each():
@@ -334,7 +431,7 @@ def test_heteronym_vectors_are_pypinyins_answers_and_the_data_reads_each():
     check(VECTORS / "pinyin" / "heteronyms.jsonl", jsonl(records, corpus="pinyin/heteronyms", made_by=MADE_BY))
     read = {cp for r in records for cp in map(ord, r["args"][0]) if cp in PINYIN_DICT}
     assert read == set(PINYIN_DICT)
-    data = _Data(hans_txt(), chars_txt(), "")
+    data = _Data(hans_txt(), chars_txt(), "", symbols_txt())
     for record in records:
         assert [data.heteronyms(ord(c)) for c in record["args"][0]] == record["out"], record["args"][0]
 
@@ -343,15 +440,23 @@ def test_heteronym_vectors_are_pypinyins_answers_and_the_data_reads_each():
 
 
 class _Data:
-    """The three files as core.pinyin.Pinyin reads them: hans.txt's ranges, chars.txt's readings, phrases.txt's
-    phrases in UTF-16 order (a binary search finds a word, and whether it begins a phrase)."""
+    """The four files as core.pinyin.Pinyin reads them: hans.txt's ranges, chars.txt's readings, phrases.txt's
+    phrases in UTF-16 order (a binary search finds a word, and whether it begins a phrase), symbols.txt's tone marks
+    (a reading in Style.NORMAL derived from its Style.TONE, as pypinyin's ``to_normal`` does)."""
 
-    def __init__(self, hans: str, chars: str, phrases: str):
+    def __init__(self, hans: str, chars: str, phrases: str, symbols: str):
         self.starts, self.ends = [], []
         for line in hans.splitlines():
             a, b = line.split(" ")
             self.starts.append(int(a, 16))
             self.ends.append(int(b, 16))
+        self.single, self.double = {}, []
+        for line in symbols.splitlines():
+            symbol, replacement = line.split(" ")
+            if len(symbol) == 1:
+                self.single[symbol] = replacement
+            else:
+                self.double.append((symbol, replacement))
         self.chars = {}
         for line in chars.splitlines():
             cp, readings = line.split(" ")
@@ -362,6 +467,14 @@ class _Data:
             self.phrases.append(_utf16(phrase))
             self.syllables.append(syllables)
         assert self.phrases == sorted(self.phrases)
+
+    def normal(self, reading: str) -> str:
+        """``to_normal``: each one-character symbol replaced, then each of two, then the digits dropped (ASCII's
+        alone: a reading holds none of its own)."""
+        out = "".join(self.single.get(c, c) for c in reading)
+        for symbol, replacement in self.double:
+            out = out.replace(symbol, replacement)
+        return "".join(c for c in out if not "0" <= c <= "9")
 
     def is_han(self, cp: int) -> bool:
         i = bisect.bisect_right(self.starts, cp) - 1
@@ -393,7 +506,8 @@ class _Data:
             start = valid
         return words
 
-    def lazy(self, text: str, errors: str) -> list[str]:
+    def lazy(self, text: str, errors: str, tone: bool = False) -> list[str]:
+        style = (lambda r: r) if tone else self.normal
         out: list[str] = []
         runs: list[str] = []
         for c in text:
@@ -403,22 +517,24 @@ class _Data:
                 runs.append(c)
         for run in runs:
             if not self.is_han(ord(run[0])):
-                out += [run] if errors == "default" else []
+                out += [run] if errors == "default" else [""] * len(run) if errors == "empty_each" else []
                 continue
             for word in self.cut(run):
                 _, phrase = self._at(word)
                 if phrase is not None:
-                    out += self.syllables[phrase]
+                    out += [style(s) for s in self.syllables[phrase]]
                     continue
                 for c in word:
                     if ord(c) in self.chars:
-                        out.append(self.chars[ord(c)][0])
+                        out.append(style(self.chars[ord(c)][0]))
                     elif errors == "default":
                         out.append(c)
+                    elif errors == "empty_each":
+                        out.append("")
         return out
 
     def heteronyms(self, cp: int) -> list[str]:
         if not self.is_han(cp) or cp not in self.chars:
             return [chr(cp)]
-        kept = list(dict.fromkeys(r for r in self.chars[cp] if r))
+        kept = list(dict.fromkeys(r for r in map(self.normal, self.chars[cp]) if r))
         return kept or [""]
