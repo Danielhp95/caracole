@@ -1210,7 +1210,27 @@ Not built yet. (lookup.)
 
 ##### The Requests tab on the phone
 
-Not built yet. (job-views, requests-feed.)
+- **Its lines** (server/jobs: `Status`, `Outcomes`, `SongFacts`, `JobViews`, `JobsRoutes`): every job's line, chips
+  and outcome as status.py, outcome.py and jobs_routes.view say them, for every kind caracole serve queues and the
+  phone's own:
+  - a job of commands is read as caracole serve's; one of the phone's own (a run, no command) as caracole serve's of
+    the same request (`Shape`): an add's or a removal's stage its one command, a staged one's stages under its title;
+  - with no to-do page: status.job_line's `todo=None`, the same words with no link;
+  - its song as the library has it now (`SongFacts.songOf`, jobs_routes.song_of: the sheet its card opens, review,
+    the picker, ignored and a LaCuerda pick by the phone's overrides, `checked_now` by `ug_checked_at` and the
+    artist page's check, read as strptime reads them, `elsewhere` from the local indexes and `Health.isCooling`);
+  - what a job over came to worked out once, the queue's one answer (`SongFacts.ended(queue)`, jobs_routes'
+    `_ended`), which every route that says a job's line asks, /jobs.json's and the Requests tab's alike;
+  - PhoneKinds' kinds (render, inbox, backup, restore) say §5.3's table's words, the ones their run filled in as
+    their stage's detail (`context.stage(<its stage>, state, PhoneKinds.fill(…))`, done, running or failed; inbox's
+    wait a done detail in `otherwise`'s words: `JobViewsTest.thePhonesOwnKindsSayTheirTablesWordsAsTheirRunFilledThemIn`),
+    and the phone's index import "Merging the computer's index…";
+  - vectors/web/job_views.jsonl (the phone's own jobs), job_views_kinds.jsonl (every kind of commands in every state,
+    every stage a line words running, a sync's, a take's and a merge's commands), outcome.jsonl (the same and each
+    site's waits and errors, then the tables of words whole, its `tables` record) and job_views_song_of.jsonl
+    (song_of over a small library a record, its fixture), written by tests/test_conformance_sync_routes.py and
+    test_conformance_web.py (`JobViewsReplay`, area `job-views`).
+- The tab itself: not built yet (requests-feed).
 
 ##### The computer's settings on the phone
 
