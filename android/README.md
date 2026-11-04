@@ -226,7 +226,11 @@ serve has no sign-in, so any app on the phone can use it on 127.0.0.1.
 `nix develop ./android#emulator` adds the emulator, `adb`, `avdmanager` and an Android 36 x86_64 image:
 
     avdmanager create avd -n caracole -k "system-images;android-36;google_apis;x86_64" -d pixel_6
-    LD_LIBRARY_PATH=/run/opengl-driver/lib emulator -avd caracole -gpu host
+    ANDROID_AVD_HOME=~/.config/.android/avd QT_QPA_PLATFORM=xcb LD_LIBRARY_PATH=/run/opengl-driver/lib \
+        emulator -avd caracole -gpu host -no-snapshot-save
+
+`ANDROID_AVD_HOME` is where avdmanager made the AVD (the emulator looks in `~/.android/avd` otherwise);
+`QT_QPA_PLATFORM=xcb` runs its window through XWayland on a Wayland desktop.
 
 Use `-gpu host`. With the software renderers (`swiftshader_indirect`, and the lavapipe fallback of `-gpu guest`),
 emulators 37.1 and 37.2 crashed in their own render thread when the WebView went back a page. On the emulator,
@@ -243,6 +247,24 @@ DIR PORT`):
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
     adb install -r -t android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
     adb shell am instrument -w -e server http://10.0.2.2:8737 \
-        io.github.danielhp95.caracole.test/androidx.test.runner.AndroidJUnitRunner
+        io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
 
-Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them.
+Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them. The runner, `CaracoleTestRunner`, lets the
+app send no request to a site: every test's sites refuse, unless the test names the fake sites server.
+
+`android/scripts/device-test.sh` does all of it, one caller at a time (it builds first, then holds the emulator's
+lock, `${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`), starting the emulator if none is
+up and leaving it up:
+
+    android/scripts/device-test.sh --area unicode,keys    # CorpusOnDeviceTest's areas (none named: every one)
+    android/scripts/device-test.sh --app                  # EndToEndTest, PinchTest, SyncTabTest, PhoneEndToEndTest,
+                                                          # each against a computer of its own
+    android/scripts/device-test.sh LocalServerTest NoSitesTest SyncTabTest=/tmp/lib   # classes, one a computer
+
+## Lookups on the phone
+
+Not built yet.
+
+## Performance notes
+
+Not built yet.

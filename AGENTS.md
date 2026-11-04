@@ -1102,13 +1102,47 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   `http://127.0.0.1:8738`, else a free port; the launch's secret a cookie, `caracole-launch`, set in the WebView, which
   loads that exact origin alone, `mirror.Links`); Settings' Import indexes (from the computer's `GET /api/peer/index`
   or a file, a foreground job); the Sync tab's sync in a foreground service (`SyncService`).
+- `:viewer` (plain JVM, milestone 5): the page builder, viewer/ in Kotlin, with viewer/'s `.js`, `.css` and voicings
+  copied byte for byte at build time (`copyViewerAssets`).
 - `:e2e`: the end-to-end phases against a real caracole serve (`PhoneScenarioTest`, driven by
   tests/test_android_e2e.py, below).
 - Milestones 1–3 are built (docs/android_port.md's status); lookups, the page builder, songbooks and PDFs on the phone
-  are later rounds', their routes `server/routes/Stubs.kt`'s "… isn't on the phone yet." (409). `core.stub` is where a
-  later lane's neutral answer goes until it lands; no call is left.
-- `app/src/androidTest/` runs on a device or an emulator alone (the device step, below): `BundledSqliteTest`,
-  `CorpusOnDeviceTest`, `LocalServerTest`, `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
+  are later rounds', their routes `server/routes/Stubs.kt`'s "… isn't on the phone yet." (409), or a route module of
+  their own answering it neutrally until its lane lands; a declaration not built yet is `TODO("lane <id>")` in a file
+  its lane owns (docs/superpowers/plans/2026-11-03-android-port-m4-m6.md, §5).
+- `app/src/androidTest/` runs on a device or an emulator alone (the device step, below), under `CaracoleTestRunner`:
+  `BundledSqliteTest`, `CorpusOnDeviceTest` (one test per corpus area, `core.testing.Replays` and
+  `server.testing.ServerReplays`; `-e area NAME[,NAME…]` picks some), `NoSitesTest`, `LocalServerTest`,
+  `EndToEndTest`, `PinchTest`, `SyncTabTest` and `PhoneEndToEndTest`.
+
+##### core.http, core.health, core.config
+
+Not built yet. (http-client: core.http; health-pace: core.health, core.config, `Pace`, `Clients`.)
+
+##### core.html
+
+Not built yet. (html-tokenizer, html-tree.)
+
+##### Lookups on the phone
+
+Not built yet. (lookup.)
+
+##### Site passes on the phone
+
+- Ultimate Guitar's pages (ug-pages), ranking and coverage (rank-coverage), its sheet (ug-fetch-sheet) and its artist
+  pages (ug-fetch-artist): not built yet.
+- The matcher (matcher): not built yet.
+- LRCLIB, Megalobiz and AZLyrics (lyrics): not built yet.
+- LaCuerda's pages and search (lacuerda-pages) and sheets (lacuerda-sheets): not built yet.
+- harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
+
+##### The Requests tab on the phone
+
+Not built yet. (job-views, requests-feed.)
+
+##### The computer's settings on the phone
+
+Not built yet. (crossing-phone.)
 
 tests/conformance/ is the corpus between the two (its README): `data/caracole/` the phone's runtime data (a resource
 root of `:core`), `vectors/` what the Kotlin tests compare with, both written by `tests/test_conformance_*.py` through
@@ -1127,9 +1161,10 @@ helpers/corpus.py.
 - A `SCHEMA_VERSION` or `KEY_VERSION` bump moves the phone in lockstep: migrations.json regenerated,
   `Database.SCHEMA_VERSION` and `Normalize.KEY_VERSION` bumped, `LibraryStore.ensureCurrentKeys` re-keying as
   `songs.ensure_current_keys` does.
-- `:core` never calls a JDK or ICU text API (case, normalization, `Character` classes, `java.util.regex`'s own `\w`
-  or `\s`, `Collator`): their Unicode is not Python's, and on Android it varies by device. It uses `core.py` and its
-  tables (`ForbiddenApiTest`).
+- `:core`, `:viewer` and `:server` never call a JDK or ICU text API (case, normalization, `Character` classes,
+  `java.util.regex`'s own `\w` or `\s`, `Collator`): their Unicode is not Python's, and on Android it varies by
+  device. They use `core.py` and its tables, held by the shared check `core.testing.ForbiddenApis` (each module's
+  `ForbiddenApiTest`; :server's allow list names the M1–3 files a later lane ports, each with its lane).
 - What the JVM can't show, the device does: `CorpusOnDeviceTest` answers every record of the `unicode`, `keys`,
   `pinyin`, `fuzz` and `canonical` vectors under Android's runtime and ICU-backed regex (it found ICU reading a `\G`
   inside a lookaround otherwise than the JDK: py/PyRe.kt's guard after an empty match uses no `\G`).
@@ -1280,6 +1315,17 @@ nix flake check
     program for every test, so a command reading the real environment in `nix develop .#autochords` (torch, the model
     paths, yt-dlp on PATH) finds the route off.
   - Nothing blocks the network for the whole suite; only the package build's sandbox has none.
+- **A Kotlin test never reaches the network**: every Gradle `Test` task sets `caracole.network=loopback`, under which
+  `core.http.RealTransport` refuses any host but loopback and the emulator's `10.0.2.2`; the app's instrumentation
+  runner, `CaracoleTestRunner`, sets it too, before `Application.onCreate`, and makes `Caracole.sitesForTests` a
+  transport that refuses every site unless a test sets another. `PhoneDeps.transport` has no default: every `Phone` a
+  test builds names its transport.
+- **The device**: a lane's device tests run only through `android/scripts/device-test.sh` (`--area NAME` for a
+  corpus area, `--app` for the app's classes, `CLASS[=DIR]` for its own), which builds first, then holds the
+  emulator's lock (`${CARACOLE_EMULATOR_LOCK:-${XDG_RUNTIME_DIR:-/tmp}/caracole-emulator.lock}`) while it installs and
+  runs, starts the one emulator if none is up and leaves it up.
+- **Big data sets** (more than a few thousand rows) run only in a `*Bench` class of the gated `bench` task
+  (`nix develop ./android -c gradle -p android bench`: a 3 GiB heap, one fork), never in `test`, which excludes them.
 - `load_config` takes `env=`, and unit tests pass it. CLI tests read the real environment: clear what could leak in,
   as `OUTSIDE_SETTINGS` does in test_commands_sources.py.
 - **Heavy imports** stay inside the command function: `cli.build_app` imports every module in commands/ on every
@@ -1393,6 +1439,17 @@ picks one).
   the owner chose, on 2026-10-28, that caracole does not keep it), nor an API's own rate (Megalobiz's 30 a minute;
   the owner chose, on 2026-11-03, the wait times divided by 4, quicker than that). The Sites tab says so of both
   (sites.py `CRAWL_DELAY_ASKED`, `API_PACE_ASKED`).
+
+#### Two caracoles, each its own politeness
+
+- A phone and a computer each keep their own limits, request counts (`events`), cooldowns, pace
+  (`http:last_request:`) and the kv records that gate a request, and nothing of them crosses at a sync: the owner's
+  choice of 2026-11-03 ("Don't do the polite request across 2 devices";
+  docs/superpowers/specs/2026-11-03-politeness-crossing.md).
+- So two caracoles at one address may together send a site more than either one's limits; each keeps every rule
+  here on its own, and the phone looks songs up at the lookup pace alone.
+- What the phone takes from the computer is its settings (provider switches, lookup settings, `[match]`, `[rank]`, the
+  user agent, the library's name: kv `phone:settings`), never its politeness.
 
 #### Turning a provider off
 

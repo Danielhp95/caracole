@@ -1,0 +1,14 @@
+from selectolax.lexbor import LexborHTMLParser
+def show(h, sel):
+    t = LexborHTMLParser(h)
+    n = t.css_first(sel)
+    print(repr(h[:60]), '->', repr(n.text(deep=True)) if n else None)
+show("<div id=t_body><pre>\nA\r\nB\rC</pre></div>", "pre")
+show("<pre><script>var x='<b>';</script>T<br>U<!--c-->V</pre>", "pre")
+show("<p>&amp頭 &ampx &notit; &#x80; &#0; a&nbsp;b</p>", "p")
+show("<a title='&ampx &amp=y &amp頭'>x</a>", "a")
+t = LexborHTMLParser("<a title='&ampx &amp=y &amp頭'>x</a>"); print(t.css_first('a').attributes)
+t = LexborHTMLParser("<ul id=B_MAIN><li>one<li>two</ul>"); print([n.text() for n in t.css("ul#b_main > li")], [n.text() for n in t.css("ul#B_MAIN > li")])
+t = LexborHTMLParser("<!doctype html><ul id=B_MAIN class=Foo><li>one<li>two</ul>"); print([n.text() for n in t.css("ul#b_main > li")], [n.text() for n in t.css("ul.foo > li")])
+t = LexborHTMLParser("<pre><A>Bm</A>  x <b>y</b></pre>")
+print([(c.tag, c.text_content) for c in t.css_first('pre').iter(include_text=True)])

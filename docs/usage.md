@@ -5927,6 +5927,14 @@ sync that left something or failed offers **Compare again**, never Try again, as
 comparison that is past. caracole serve writes nothing for it but the request: `caracole peer sync` keeps what the
 two agree on, and the other side's address and name, which `GET /api/sync` lists.
 
+### Each caracole's own politeness, and the computer's settings on the phone
+
+Not built yet.
+
+### The phone's reads go to the computer (POST /peer/index)
+
+Not built yet.
+
 ### What the offline copy lists
 
 `GET /api/offline` (see [caracole serve](#caracole-serve)) lists every file the
