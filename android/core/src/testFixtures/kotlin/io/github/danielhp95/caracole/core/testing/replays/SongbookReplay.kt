@@ -25,8 +25,8 @@ import java.nio.file.Files
  * songbook-entries), every record answered as songbook.py answered it, a refusal by its class and its words exactly:
  *
  * - writers_names.jsonl: Songbooks.checkName, nameKey and folderKey;
- * - writers_entries.jsonl: entryKeys (in Python's order), sameEntry, and findEntrySong over writers_library.jsonl's
- *   library (the song's key, or null);
+ * - writers_entries.jsonl: entryKeys (in Python's order), sameEntry, and findEntrySong over the library of the
+ *   fixture its record names (fixtures/writers-library.jsonl: the song's key, or null);
  * - writers.jsonl: each writer over phone_songbooks holding the record's `before` (each put in order, as a sync puts
  *   one), its result, the songbooks after (Songbooks.all, and the rows SongbookStore holds, each as
  *   peer_sync.songbook_value), and their units (Units.libraryState's label and digest, Units.document the value),
@@ -38,14 +38,20 @@ object SongbookReplay : AreaReplay {
 
     const val NAMES = "songbook/writers_names.jsonl"
     const val ENTRIES = "songbook/writers_entries.jsonl"
-    const val LIBRARY = "songbook/writers_library.jsonl"
     const val WRITERS = "songbook/writers.jsonl"
+
+    /** A fixture of vectors/songbook/fixtures/, by the name a record gives it. */
+    fun fixture(name: String) = "songbook/fixtures/$name.jsonl"
 
     override fun replay(misses: Misses) {
         names(misses)
-        withDb { db, _ ->
-            Fixtures.load(db, LIBRARY)
-            entries(db, misses)
+        val records = Corpus.records(ENTRIES)
+        withDb { db, _ -> entries(db, records.filter { "fixture" !in it.extra }, misses) }
+        for ((name, group) in records.filter { "fixture" in it.extra }.groupBy { text(it.extra.getValue("fixture")) }) {
+            withDb { db, _ ->
+                Fixtures.load(db, fixture(name))
+                entries(db, group, misses)
+            }
         }
         withDb { db, dir -> writers(db, dir, misses) }
     }
@@ -63,8 +69,8 @@ object SongbookReplay : AreaReplay {
         }
     }
 
-    private fun entries(db: Db, misses: Misses) {
-        for (r in Corpus.records(ENTRIES)) {
+    private fun entries(db: Db, records: List<Record>, misses: Misses) {
+        for (r in records) {
             val text = text(r.args[0])
             val got = when (r.fn) {
                 "caracole.songbook.entry_keys" ->

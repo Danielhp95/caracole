@@ -142,6 +142,24 @@ class SongbooksTest {
         assertEquals(listOf("Camp/Fire", "Late night"), database.read { db -> Songbooks.all(db).map { it.name } })
     }
 
+    @Test fun aPutChecksTheNameFirstAsPutSongbookDoesAndATakeTheSettingFirstAsApplyUnitsDoes() {
+        val badEntry = Json.parseToJsonElement("""[["A - B", {"tempo": 90}]]""") as JsonArray
+        val e = assertFailsWith<SongbookError> { write { db -> SongbookStore.put(db, ".x", badEntry) } }
+        assertEquals("A songbook's name can't start with a dot (its folder would be hidden): '.x'", e.message)
+        assertFailsWith<IllegalArgumentException> { write { db -> SongbookStore.put(db, "Campfire", badEntry) } }
+
+        val docs = mapOf("songbook/.x" to obj("""{"name": ".x", "songs": [["A - B", {"capo": 99}]]}"""))
+        val source = object : UnitSource {
+            override fun unit(id: String): JsonObject? = docs[id]
+            override fun file(songKey: String, name: String, sha256: String): ByteArray = error("no file")
+        }
+        val wanted = docs.map { (id, doc) -> id to Canonical.digest(Units.valueOfDocument(id, doc)!!) }
+        val done = write { db -> Take.applyUnits(db, LibraryStore(tmp.root), source, wanted, emptyMap(), NOW) }
+        // apply_units' words for this very unit (peer_sync._apply checks the setting before put_songbook the name)
+        assertEquals(listOf("songbook/.x" to "a setting: capo must be a fret from 0 to 11, got 99"), done.left)
+        assertEquals(emptyList(), rows())
+    }
+
     private fun obj(text: String): JsonObject = Json.parseToJsonElement(text).jsonObject
 
     private companion object {

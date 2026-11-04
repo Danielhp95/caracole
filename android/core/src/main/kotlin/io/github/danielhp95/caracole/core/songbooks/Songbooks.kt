@@ -258,7 +258,10 @@ object Songbooks {
         TODO("lane songbook-entries")
 
     /** songbook.songbooks_listing: the songbooks of [books] whose entries name [song], each found as
-     * [findEntrySong] finds it, never by a search (get.py's songbooks stage; SongbookEntries' songs_to_get). */
+     * [findEntrySong] finds it, never by a search (get.py's songbooks stage; SongbookEntries' songs_to_get).
+     * find_song re-keys the library on every call (ensure_current_keys) and [findEntrySong] doesn't, so whatever
+     * lists (this, and songs_to_get) runs LibraryStore.ensureCurrentKeys in the same write first, with a test of a
+     * song whose stored key is a KEY_VERSION behind. */
     fun listing(db: Db, books: List<Songbook>, song: SongRow): List<Songbook> = TODO("lane songbook-entries")
 
     /** songbook.rename_songbook: give the songbook another name ([checkName]'s, checked first), in its place, its

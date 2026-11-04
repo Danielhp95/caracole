@@ -45,12 +45,14 @@ object SongbookStore {
      *
      * Each song is `[entry text, parts]`, and its parts are kept as songbook_value gives them back: only the key,
      * the mode, the capo and the instrument that say something (a null part is none), so what is stored is what a
-     * songbook unit's value holds. An entry that isn't a text and an object of those parts is refused, before the
-     * name (IllegalArgumentException, as check_setting refuses an unknown part before the take puts the songbook).
+     * songbook unit's value holds. The name is checked first, as put_songbook checks it; then an entry that isn't
+     * a text and an object of those parts is refused (IllegalArgumentException). A take checks each song's setting
+     * itself before it puts the songbook (Take.takeSongbook, as peer_sync._apply calls check_setting first), so a
+     * unit with a bad name and a bad setting is left for its setting there, as on the computer.
      */
     fun put(db: Db, name: String, songs: JsonArray?) {
-        val text = songs?.let { Canonical.write(JsonArray(it.map(::entry))) }
         val clean = Songbooks.checkName(name)
+        val text = songs?.let { Canonical.write(JsonArray(it.map(::entry))) }
         val key = nameKey(clean)
         val books = all(db)
         val at = books.indexOfFirst { nameKey(it.name) == key }

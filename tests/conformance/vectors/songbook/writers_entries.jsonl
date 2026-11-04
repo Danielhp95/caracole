@@ -63,21 +63,21 @@
 {"args":["Café - Ça va","Café - Ça va"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
 {"args":["Café - Ça va","Cafe - Ca va"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
 {"args":["Cafe - Ca va","Café - Ça va"],"fn":"caracole.songbook.same_entry","kw":{},"out":true}
-{"args":["radiohead - karma police"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"radiohead/karma-police"}
-{"args":["Radiohead - Karma Police"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"radiohead/karma-police"}
-{"args":["宋冬野 - 斑馬，斑馬"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"宋冬野/斑马斑马"}
-{"args":["Radiohead - Karma Police Live"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":["ban ma ban ma"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":["Song Dongye - Ban Ma Ban Ma"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":["Earth - Wind - Fire - September"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"earth-wind-fire/september"}
-{"args":["Earth - Wind - Fire"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":["A - B - C"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"a-b/c"}
-{"args":["A - B"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":["Soda Stereo - De Musica Ligera"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"soda-stereo/de-musica-ligera"}
-{"args":["Soda Stereo - De Música Ligera (Remastered 2007)"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"soda-stereo/de-musica-ligera"}
-{"args":["Nobody - Nothing"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":[""],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":["Creep"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
-{"args":["Oasis - Wonderwall"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}
-{"args":["Oasis  -  Wonderwall"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}
-{"args":["oasis - wonderwall (live)"],"fixture":"songbook/writers_library.jsonl","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}
+{"args":["radiohead - karma police"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"radiohead/karma-police"}
+{"args":["Radiohead - Karma Police"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"radiohead/karma-police"}
+{"args":["宋冬野 - 斑馬，斑馬"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"宋冬野/斑马斑马"}
+{"args":["Radiohead - Karma Police Live"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["ban ma ban ma"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Song Dongye - Ban Ma Ban Ma"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Earth - Wind - Fire - September"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"earth-wind-fire/september"}
+{"args":["Earth - Wind - Fire"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["A - B - C"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"a-b/c"}
+{"args":["A - B"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Soda Stereo - De Musica Ligera"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"soda-stereo/de-musica-ligera"}
+{"args":["Soda Stereo - De Música Ligera (Remastered 2007)"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"soda-stereo/de-musica-ligera"}
+{"args":["Nobody - Nothing"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":[""],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Creep"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":null}
+{"args":["Oasis - Wonderwall"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}
+{"args":["Oasis  -  Wonderwall"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}
+{"args":["oasis - wonderwall (live)"],"fixture":"writers-library","fn":"caracole.songbook.find_entry_song","kw":{},"out":"oasis/wonderwall"}

@@ -11,7 +11,10 @@ message, songbook.py's words exactly; ``case`` says what a record shows:
 - songbook/writers_entries.jsonl: ``caracole.songbook.entry_keys`` (``out`` the keys sorted, as Python sorts text),
   ``same_entry`` of two entries, and ``find_entry_song`` over the library of ``fixture`` (``out`` the song's key, or
   null): by an identity key of a cut at " - " alone, the first in sorted order the library has, never by a search;
-- songbook/writers_library.jsonl: that library, a fixture (helpers.corpus.dump_fixture's records);
+  asked of that fixture replayed into a fresh database (helpers.corpus.replay_fixture), as Kotlin's Fixtures.load
+  replays it;
+- songbook/fixtures/writers-library.jsonl: that library, the fixture ``writers-library`` (helpers.corpus.dump_fixture's
+  records), a fixture's file where the spec puts them, never a vector of records;
 - songbook/writers.jsonl: each writer over the songbooks ``before`` (songbooks.toml made of them in order, each
   ``peer_sync.songbook_value``'s ``{name, songs: [[entry, parts]]}``): ``make_songbook``, ``add_to_songbook``,
   ``remove_from_songbook``, ``move_in_songbook``, ``rename_songbook``, ``delete_songbook`` and ``put_songbook``
@@ -35,17 +38,18 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping, Sequence
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from helpers.corpus import VECTORS, check, dump_fixture, jsonl, plain
+from helpers.corpus import VECTORS, check, dump_fixture, jsonl, plain, read_fixture, replay_fixture
 
 MADE_BY = "tests/test_conformance_songbook.py"
 SONGBOOK = VECTORS / "songbook"
 NOW = "2026-11-03T12:00:00Z"
-LIBRARY_FIXTURE = "songbook/writers_library.jsonl"
+LIBRARY_FIXTURE = "writers-library"  # vectors/songbook/fixtures/writers-library.jsonl
 
 # --- names ----------------------------------------------------------------------------------------------------------
 
@@ -138,6 +142,7 @@ def library_fixture(conn) -> list[dict]:
 
 
 def entry_records(conn) -> list[dict]:
+    """``ENTRIES``, ``SAME`` and ``FOUND``, ``find_entry_song`` asked of ``conn``: the library fixture replayed."""
     from caracole.songbook import entry_keys, find_entry_song, same_entry
 
     out = []
@@ -353,26 +358,30 @@ def corpus(tmp_path_factory) -> dict[str, str]:
     from helpers.peer_libraries import Library
 
     root = tmp_path_factory.mktemp("songbook-corpus")
-    state = root / "library.sqlite"
-    state.write_bytes(migrated_database())
-    conn = db.connect(state)
+    built, replayed = root / "built.sqlite", root / "replayed.sqlite"
+    for state in (built, replayed):
+        state.write_bytes(migrated_database())
+    library = f"fixtures/{LIBRARY_FIXTURE}.jsonl"
     phone = Library(root / "phone")
     phone.cfg.library_dir.mkdir(parents=True, exist_ok=True)
     try:
+        with closing(db.connect(built)) as conn:
+            fixture = jsonl(library_fixture(conn), corpus=f"songbook/fixtures/{LIBRARY_FIXTURE}", made_by=MADE_BY)
+        with closing(db.connect(replayed)) as conn:
+            replay_fixture(conn, read_fixture(fixture))
+            entries = jsonl(entry_records(conn), corpus="songbook/writers_entries", made_by=MADE_BY)
         texts = {
             "writers_names.jsonl": jsonl(name_records(), corpus="songbook/writers_names", made_by=MADE_BY),
-            "writers_library.jsonl": jsonl(library_fixture(conn), corpus="songbook/writers_library",
-                                           made_by=MADE_BY),
-            "writers_entries.jsonl": jsonl(entry_records(conn), corpus="songbook/writers_entries", made_by=MADE_BY),
+            library: fixture,
+            "writers_entries.jsonl": entries,
             "writers.jsonl": jsonl(writer_records(phone), corpus="songbook/writers", made_by=MADE_BY),
         }
     finally:
-        conn.close()
         phone.close()
     return texts
 
 
-VECTOR_FILES = ("writers_names.jsonl", "writers_library.jsonl", "writers_entries.jsonl", "writers.jsonl")
+VECTOR_FILES = ("writers_names.jsonl", f"fixtures/{LIBRARY_FIXTURE}.jsonl", "writers_entries.jsonl", "writers.jsonl")
 
 
 @pytest.mark.parametrize("name", VECTOR_FILES)
