@@ -18,7 +18,8 @@ Vectors (tests/conformance/vectors/http/):
   ``site`` (``http._site``) and ``resolve`` (the next request a redirect makes, ``Client._redirect_url``); an error is
   ``{"err": "<type>: <message>"}``;
 - ``robots.jsonl``: ``robots_disallows`` of every URL tests/test_http.py names, each rule matched and nearly matched;
-- ``rules.jsonl``: ``stale``, ``retry_after`` and ``is_challenge``;
+- ``rules.jsonl``: ``stale``, ``retry_after``, ``is_challenge``, and ``decode``: what httpx's content decoders
+  make of a body under its ``Content-Encoding`` headers (its bytes, or the DecodingError zlib names);
 - ``client.jsonl``: one scripted session of a ``PoliteClient`` for each case of tests/test_http.py (and a few more):
   its steps and what each came to, every request sent with its headers, the site's answers in turn, the events, the
   sleeps for the draws given, and the cache it left.
@@ -40,6 +41,7 @@ import hashlib
 import json
 import random
 import unicodedata
+import zlib
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -285,6 +287,7 @@ URLS = [
     "https://B\u00fccher.example/", "https://xn--fiqs8s.icom.museum/x", "https://-bad\u00e9.com/",
     "https://bad\u00e9-.com/", "https://ab--\u00e9.com/", "https://\u0301\u00e9.com/", "https://e\u0301.com/",
     "https://\u05d0\u05d1.com/", "https://\u05d0a.com/", "https://a\u200cb.com/", "https://\u0915\u094d\u200cb.com/",
+    "https://xn--ab-m1t.com/", "https://xn--ab-j1t.com/", "https://xn--11b2ezcs70k.com/", "https://xn--11b2ezcw70k.com/",
     "https://l\u00b7l.com/", "https://a\u00b7.com/", "https://\u30fb\u30a2.jp/", "https://\u30fbx.jp/",
     "https://\u0661\u06f1.com/", "https://\u00e9" + "a" * 70 + ".com/", "https://\u00e9." + "a." * 130 + "com/",
     "https://\u00e9\u3002com/", "https://\u00e9\uff0ecom/", "https://\u00e9..com/", "https://.\u00e9.com/",
@@ -418,7 +421,7 @@ ROBOTS_URLS = [
     "https://tabs.ultimate-guitar.com/tab/print?id=1#frag", "http://tabs.ultimate-guitar.com/tab/print?id=1",
     "https://tabs.ultimate-guitar.com", "https://tabs.ultimate-guitar.com?x", "https://i.ytimg.com/sb/abc/x.jpg",
     "https://i.ytimg.com/vi/abc/hqdefault.jpg", "https://megalobiz.com/lrc/details/1", "https://megalobiz.com/favicon.ico",
-    "https://xn--mller-kva.de/search/", "https://m\u00fcller.de/", "https://xn--zz.com/", "relative/path", "",
+    "https://xn--mller-kva.de/search/", "https://m\u00fcller.de/", "https://xn--zz.com/", "https://xn--ab-m1t.com/", "relative/path", "",
 ]
 
 
@@ -491,6 +494,98 @@ CHALLENGES = [
 ]
 
 
+# --- what httpx's content decoders make of a body (rules.jsonl's "decode") ----------------------------------
+
+DECODED = ("<html>" + "Wonderwall, " * 60 + "</html>").encode()
+BIG = DECODED * 12  # more than 4 KiB decoded: its digest
+
+
+def _raw_deflate(data: bytes) -> bytes:
+    co = zlib.compressobj(9, zlib.DEFLATED, -15)
+    return co.compress(data) + co.flush()
+
+
+def _gz(data: bytes = DECODED, *, flags: int = 0, method: int = 8, extra: bytes = b"", name: bytes = b"",
+        comment: bytes = b"", hcrc: int | None = None, crc: int | None = None, size: int | None = None,
+        deflated: bytes | None = None, trailer: int = 8) -> bytes:
+    """A gzip member as RFC 1952 lays it out, each field given or right; ``trailer`` its last bytes kept."""
+    head = bytes([0x1F, 0x8B, method, flags]) + (1_700_000_000).to_bytes(4, "little") + b"\x02\x03"
+    if flags & 0x04:
+        head += len(extra).to_bytes(2, "little") + extra
+    if flags & 0x08:
+        head += name + b"\x00"
+    if flags & 0x10:
+        head += comment + b"\x00"
+    if flags & 0x02:
+        head += ((zlib.crc32(head) & 0xFFFF) if hcrc is None else hcrc).to_bytes(2, "little")
+    tail = ((zlib.crc32(data) if crc is None else crc).to_bytes(4, "little")
+            + ((len(data) if size is None else size) & 0xFFFFFFFF).to_bytes(4, "little"))
+    return head + (_raw_deflate(data) if deflated is None else deflated) + tail[:trailer]
+
+
+def _zlib(data: bytes = DECODED, *, adler: int | None = None, zdict: bytes | None = None) -> bytes:
+    co = zlib.compressobj(9, zlib.DEFLATED, 15, zdict=zdict) if zdict else zlib.compressobj(9)
+    out = co.compress(data) + co.flush()
+    return out if adler is None else out[:-4] + adler.to_bytes(4, "big")
+
+
+GZ = _gz()
+GZ_HEAD = len(_gz(deflated=b"", trailer=0))
+GZIP = [("Content-Encoding", "gzip")]
+DEFLATE = [("Content-Encoding", "deflate")]
+DECODE = [
+    # gzip, one member as zlib's gzip mode (windowBits 16 + 15) reads it: an error as soon as the bytes show it,
+    # nothing while they don't
+    (GZIP, GZ), (GZIP, gzip.compress(DECODED, mtime=0)), (GZIP, _gz(BIG)), (GZIP, b""), (GZIP, b"h"),
+    (GZIP, b"\x1f"), (GZIP, b"he"), (GZIP, b"hello"), (GZIP, b"not gzip at all"), (GZIP, b"\x1f\x8b"),
+    (GZIP, b"\x1f\x8b\x08"), (GZIP, b"\x1f\x8b\x07"), (GZIP, b"\x1f\x8b\x07\x00"), (GZIP, _gz(method=7)),
+    *[(GZIP, _gz(flags=f)) for f in (0x01, 0x20, 0x40, 0x80, 0xE0, 0x21)],
+    (GZIP, _gz(flags=0x04, extra=b"AP\x02\x00hi")), (GZIP, _gz(flags=0x08, name=b"wonderwall.html")),
+    (GZIP, _gz(flags=0x10, comment=b"a comment")), (GZIP, _gz(flags=0x02)), (GZIP, _gz(flags=0x02, hcrc=0x1234)),
+    (GZIP, _gz(flags=0x1E, extra=b"xy", name=b"n", comment=b"c")),
+    (GZIP, _gz(flags=0x1E, extra=b"xy", name=b"n", comment=b"c", hcrc=0)),
+    (GZIP, GZ[:5]), (GZIP, GZ[:9]), (GZIP, GZ[:10]), (GZIP, _gz(flags=0x02)[:11]),
+    (GZIP, _gz(flags=0x04, extra=b"abcdef")[:14]), (GZIP, _gz(flags=0x08, name=b"no end")[:15]),
+    (GZIP, GZ[:GZ_HEAD + 20]), (GZIP, GZ[:-8]), *[(GZIP, GZ[:-k]) for k in (7, 6, 4, 2, 1)],
+    (GZIP, _gz(crc=0)), (GZIP, _gz(crc=0, trailer=4)), (GZIP, _gz(crc=0, trailer=3)), (GZIP, _gz(size=1)),
+    (GZIP, _gz(size=1, trailer=7)), (GZIP, GZ + b"trailing bytes"), (GZIP, GZ + _gz(b"a second member")),
+    (GZIP, _gz(deflated=b"\xff\xff\xff")), (GZIP, _gz(deflated=b"\x01\x05\x00\x00\x00hello")),
+    (GZIP, _gz(deflated=b"\x01\x05\x00\xfa\xffhello")), (GZIP, _gz(deflated=b"\x03\x00")),
+    (GZIP, _gz(b"")),
+    # deflate: zlib's stream, else (its first attempt failed) a raw one
+    (DEFLATE, _zlib()), (DEFLATE, _raw_deflate(DECODED)), (DEFLATE, _zlib(BIG)), (DEFLATE, b""), (DEFLATE, b"x"),
+    (DEFLATE, b"hello world"), (DEFLATE, _zlib()[:30]), (DEFLATE, _raw_deflate(DECODED)[:30]),
+    (DEFLATE, _zlib(adler=0)), (DEFLATE, _zlib(zdict=b"Wonderwall, ")), (DEFLATE, b"\x88\x1b" + _zlib()[2:]),
+    (DEFLATE, b"\x78\x9c\xff\xff\xff"), (DEFLATE, _zlib() + b"after"), (DEFLATE, GZ),
+    # the codings named, applied last first
+    ([("Content-Encoding", "gzip, deflate")], _zlib(GZ)), ([("Content-Encoding", "deflate, gzip")], _gz(_zlib())),
+    ([("Content-Encoding", "gzip, gzip")], _gz(GZ)), ([("Content-Encoding", "deflate"), ("Content-Encoding", "gzip")],
+                                                      _gz(_zlib())),
+    ([("Content-Encoding", "identity, gzip")], GZ), ([("Content-Encoding", "br, gzip")], GZ),
+    ([("Content-Encoding", "gzip,,identity")], GZ), ([("content-encoding", " GZIP ")], GZ),
+    ([("Content-Encoding", "Gzip\t")], GZ), ([("Content-Encoding", "x-gzip")], GZ),
+    ([("Content-Encoding", "gzip, deflate")], _zlib(b"not gzip inside")), ([("Content-Encoding", "identity")], GZ),
+    ([("Content-Encoding", "br")], DECODED), ([("Content-Encoding", "compress")], DECODED),
+    ([("Content-Encoding", "")], DECODED), ([], GZ), ([("Content-Type", "text/html")], DECODED),
+]
+
+
+def _decoded(headers: list[tuple[str, str]], body: bytes) -> Any:
+    """What httpx makes of ``body`` under ``headers``: its decoders' bytes, or their DecodingError."""
+    try:
+        return body_out(httpx.Response(200, headers=headers, content=body).content)
+    except httpx.DecodingError as e:
+        return err(e)
+
+
+def test_the_decoder_cases_reach_every_error_zlib_names():
+    said = {r["out"]["err"] for r in rules_records() if r["fn"] == "decode" and "err" in r["out"]}
+    for words in ("incorrect header check", "unknown compression method", "unknown header flags set",
+                  "header crc mismatch", "incorrect data check", "incorrect length check", "invalid block type",
+                  "invalid stored block lengths"):
+        assert any(words in e for e in said), words
+
+
 def rules_records() -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
     for from_cache, fetched_at, now, days in STALE:
@@ -505,6 +600,9 @@ def rules_records() -> list[dict[str, Any]]:
         carried = body if isinstance(body, dict) else body_in(body)
         out.append({"fn": "is_challenge", "args": [[[k, v] for k, v in headers.items()], carried],
                     "out": http.is_challenge(headers, body_bytes(carried))})
+    for headers, body in DECODE:
+        out.append({"fn": "decode", "args": [[[k, v] for k, v in headers], body_in(body)],
+                    "out": _decoded(headers, body)})
     return out
 
 
@@ -980,6 +1078,20 @@ def sessions() -> list[Session]:
                  get("https://m\u00fcller.de/x"), get("HTTPS://X.TEST:443/a/./b/../c")]),
         Session("a provider of no policy is paced by its own", ok(), [get(X1), get(X2)], provider="ytimg",
                 delay=(0.0, 0.0)),
+        Session("a URL's user and password go as httpx's basic auth", ok(b"page"),
+                [get("https://u:p@x.test/a"), get("https://u%20x:p%C3%A9@x.test/b"), get("https://u@x.test/c"),
+                 get("https://:p@x.test/d"), get("https://u:%ff@x.test/e"), get("https://@x.test/f"),
+                 get("https://u:p@x.test/g", conditional=True)], delay=(0.0, 0.0)),
+        Session("basic auth goes with a redirect on its origin, never off it",
+                in_turn((302, {"Location": "/tab/b"}, b""), (302, {"Location": WWW + "/artist/a_1"}, b""),
+                        (200, {}, b"page")), [get("https://u:p@tabs.ultimate-guitar.com/tab/a")]),
+        Session("basic auth goes with a redirect from http to https on its host",
+                in_turn((301, {"Location": "https://x.test/b"}, b""), (301, {"Location": "http://x.test/c"}, b""),
+                        (200, {}, b"page")), [get("http://u:p@x.test/a")]),
+        Session("a redirect's own user and password are its basic auth",
+                in_turn((302, {"Location": "https://v:q@www.ultimate-guitar.com/x"}, b""),
+                        (302, {"Location": "https://w@www.ultimate-guitar.com/y"}, b""), (200, {}, b"page")),
+                [get("https://u:p@tabs.ultimate-guitar.com/tab/a")]),
     ]
     return out
 

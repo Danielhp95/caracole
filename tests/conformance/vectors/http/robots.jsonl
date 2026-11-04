@@ -816,5 +816,6 @@
 {"args":["https://xn--mller-kva.de/search/"],"fn":"robots_disallows","out":null}
 {"args":["https://müller.de/"],"fn":"robots_disallows","out":null}
 {"args":["https://xn--zz.com/"],"fn":"robots_disallows","out":"not a valid URL"}
+{"args":["https://xn--ab-m1t.com/"],"fn":"robots_disallows","out":"not a valid URL"}
 {"args":["relative/path"],"fn":"robots_disallows","out":null}
 {"args":[""],"fn":"robots_disallows","out":null}

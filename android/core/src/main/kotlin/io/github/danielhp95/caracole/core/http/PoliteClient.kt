@@ -3,11 +3,14 @@ package io.github.danielhp95.caracole.core.http
 import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyStr
+import io.github.danielhp95.caracole.core.py.PyUrl
 import java.io.File
 import java.math.BigDecimal
+import java.math.BigInteger
 import java.math.RoundingMode
 import java.time.Duration
 import java.time.Instant
+import java.util.Base64
 
 /**
  * http.py's PoliteClient on the phone: one provider's HTTP client, cache-first, budgeted, paced, never escalating,
@@ -24,7 +27,8 @@ import java.time.Instant
  * - LRCLIB's 503 with a Retry-After it can wait asked once more after it and a jitter under a second.
  * - [maxConsecutiveErrors] other errors in a row: [ProviderUnavailable].
  *
- * Every request goes through [transport], with httpx's headers and [userAgent]; each is an [Event] for [onEvent].
+ * Every request goes through [transport], with httpx's headers and [userAgent] (and, for a URL that names a user or a
+ * password, httpx's basic auth); each is an [Event] for [onEvent].
  */
 class PoliteClient(override val provider: String, override var policy: ProviderPolicy, val cacheDir: File,
                    val userAgent: String, val transport: Transport, val sleep: (Double) -> Unit, val draws: Draws,
@@ -122,8 +126,9 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
      * one asked for, or the last hop) and its answer. */
     private fun answer(full: String, extra: List<Pair<String, String>>): Pair<String, Answer> {
         val first = HttpxUrl.parse(full)
-        val headers = listOf("Host" to first.netloc, "Accept" to "*/*", "Accept-Encoding" to "gzip, deflate",
+        var headers = listOf("Host" to first.netloc, "Accept" to "*/*", "Accept-Encoding" to "gzip, deflate",
                              "Connection" to "keep-alive", "User-Agent" to userAgent) + extra
+        basicAuth(first)?.let { headers = headers + ("Authorization" to it) }
         var at = full
         var resp = send(at, Sent(first, HttpRequest("GET", first.toString(), headers)))
         var hops = 0
@@ -197,8 +202,9 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
         return answer
     }
 
-    /** httpx's next request for a redirect: its URL (`_redirect_url`) and the headers it carries on, its Host the new
-     * one's when it leaves the origin. */
+    /** httpx's next request for a redirect: its URL (`_redirect_url`) and the headers it carries on
+     * (`_redirect_headers`): off the origin its Host the new one's and no Authorization (but from http to https on
+     * the host); then the new URL's own basic auth, as `send` adds it. */
     private fun redirect(sent: Sent, got: HttpAnswer): Sent? {
         if (got.status !in REDIRECTS) return null
         val locations = got.headers.filter { Py.asciiLower(it.first) == "location" }.map { it.second }
@@ -208,11 +214,12 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
         val sameOrigin = url.scheme == sent.url.scheme && url.decodedHost == sent.url.decodedHost &&
             url.portOrDefault == sent.url.portOrDefault
         if (!sameOrigin) {
-            val at = headers.indexOfFirst { Py.asciiLower(it.first) == "host" }
-            headers = if (at < 0) headers + ("Host" to url.netloc)
-                      else headers.filterIndexed { i, h -> i == at || Py.asciiLower(h.first) != "host" }
-                          .map { if (Py.asciiLower(it.first) == "host") "Host" to url.netloc else it }
+            val upgrade = sent.url.decodedHost == url.decodedHost && sent.url.scheme == "http" &&
+                sent.url.portOrDefault == HTTP_PORT && url.scheme == "https" && url.portOrDefault == HTTPS_PORT
+            if (!upgrade) headers = headers.filter { Py.asciiLower(it.first) != "authorization" }
+            headers = withHeader(headers, "Host", url.netloc)
         }
+        basicAuth(url)?.let { headers = withHeader(headers, "Authorization", it) }
         return Sent(url, HttpRequest("GET", url.toString(), headers))
     }
 
@@ -242,6 +249,28 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
 
     private companion object {
         val REDIRECTS = setOf(301, 302, 303, 307, 308)
+        val HTTP_PORT: BigInteger = BigInteger.valueOf(80)
+        val HTTPS_PORT: BigInteger = BigInteger.valueOf(443)
+
+        /** httpx's Headers[name] = value: the first of the name (any case) takes it, under [name]; any later one goes;
+         * none: it comes last. */
+        fun withHeader(headers: List<Pair<String, String>>, name: String, value: String): List<Pair<String, String>> {
+            val key = Py.asciiLower(name)
+            val at = headers.indexOfFirst { Py.asciiLower(it.first) == key }
+            if (at < 0) return headers + (name to value)
+            return headers.filterIndexed { i, h -> i == at || Py.asciiLower(h.first) != key }
+                .map { if (Py.asciiLower(it.first) == key) name to value else it }
+        }
+
+        /** httpx's BasicAuth for a URL that names a user or a password (`_build_request_auth`): `Basic`, then the
+         * base64 of both, unquoted (`URL.username`, `.password`), in UTF-8 and joined by a colon; none for neither. */
+        fun basicAuth(url: HttpxUrl): String? {
+            val colon = url.userinfo.indexOf(':')
+            val user = PyUrl.unquote(if (colon < 0) url.userinfo else url.userinfo.substring(0, colon))
+            val password = PyUrl.unquote(if (colon < 0) "" else url.userinfo.substring(colon + 1))
+            if (user.isEmpty() && password.isEmpty()) return null
+            return "Basic " + Base64.getEncoder().encodeToString("$user:$password".toByteArray(Charsets.UTF_8))
+        }
 
         /** f"{x:.1f}": the double's exact value rounded half to even, as Python formats one. */
         fun oneDecimal(x: Double): String = BigDecimal(x).setScale(1, RoundingMode.HALF_EVEN).toPlainString()

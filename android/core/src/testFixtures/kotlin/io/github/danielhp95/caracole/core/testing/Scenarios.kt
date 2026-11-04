@@ -40,7 +40,11 @@ class ScenarioWorld(val db: Db, val library: File, val cacheDir: File, val trans
  * no pause) with the record's budget and delay, its user agent config.py's; its pauses counted and never slept (a
  * pause's length is random in Python, so only how many is compared), its clocks fixed at the record's `now`. The
  * events are those the clients told (each [Event] as `[provider, url, status, decision]`, as EventLog writes their
- * rows); [eventLog], when given, is told them too (health-pace's EventLog, so the pass sees its rows).
+ * rows); [eventLog], when given, is told them too (health-pace's EventLog, so the pass sees its rows), under the
+ * record's `run`, else scenario.py's default `lookup:<now>` (scenario.py writes no `run` yet: a record made with
+ * another one must carry it, lookup-scenarios' turn on that file). EventLog writes the `events` row alone, as
+ * health.py's does, so the kv compared is the pass's own (`http:last_request:` is the lookup's clients', never a
+ * scenario's).
  */
 object Scenarios {
     /** Python's draw for a pause a scenario never sleeps: any u will do, and u = 0.5 is the middle of the delay. */

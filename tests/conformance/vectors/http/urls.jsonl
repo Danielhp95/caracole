@@ -113,6 +113,10 @@
 {"args":["https://אa.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'אa.com'"}}
 {"args":["https://a‌b.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'a\\u200cb.com'"}}
 {"args":["https://क्‌b.com/"],"fn":"url","out":{"absolute":true,"host":"क्‌b.com","netloc":"xn--b-tud2ow90g.com","port":null,"raw_path":"/","scheme":"https","site":"क्‌b.com","str":"https://xn--b-tud2ow90g.com/"}}
+{"args":["https://xn--ab-m1t.com/"],"fn":"url","out":{"absolute":true,"host":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200D at position 2 in 'a\\u200db'"},"netloc":"xn--ab-m1t.com","port":null,"raw_path":"/","scheme":"https","site":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200D at position 2 in 'a\\u200db'"},"str":"https://xn--ab-m1t.com/"}}
+{"args":["https://xn--ab-j1t.com/"],"fn":"url","out":{"absolute":true,"host":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200C at position 2 in 'a\\u200cb'"},"netloc":"xn--ab-j1t.com","port":null,"raw_path":"/","scheme":"https","site":{"err":"IDNAError: Unknown codepoint adjacent to joiner U+200C at position 2 in 'a\\u200cb'"},"str":"https://xn--ab-j1t.com/"}}
+{"args":["https://xn--11b2ezcs70k.com/"],"fn":"url","out":{"absolute":true,"host":"क्‌ष.com","netloc":"xn--11b2ezcs70k.com","port":null,"raw_path":"/","scheme":"https","site":"क्‌ष.com","str":"https://xn--11b2ezcs70k.com/"}}
+{"args":["https://xn--11b2ezcw70k.com/"],"fn":"url","out":{"absolute":true,"host":"क्‍ष.com","netloc":"xn--11b2ezcw70k.com","port":null,"raw_path":"/","scheme":"https","site":"क्‍ष.com","str":"https://xn--11b2ezcw70k.com/"}}
 {"args":["https://l·l.com/"],"fn":"url","out":{"absolute":true,"host":"l·l.com","netloc":"xn--ll-0ea.com","port":null,"raw_path":"/","scheme":"https","site":"l·l.com","str":"https://xn--ll-0ea.com/"}}
 {"args":["https://a·.com/"],"fn":"url","out":{"err":"InvalidURL: Invalid IDNA hostname: 'a·.com'"}}
 {"args":["https://・ア.jp/"],"fn":"url","out":{"absolute":true,"host":"・ア.jp","netloc":"xn--cckyj.jp","port":null,"raw_path":"/","scheme":"https","site":"・ア.jp","str":"https://xn--cckyj.jp/"}}

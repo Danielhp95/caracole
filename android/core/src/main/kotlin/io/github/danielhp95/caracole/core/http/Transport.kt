@@ -32,9 +32,11 @@ class TransportError(val kind: String, message: String) : Exception(message)
 /**
  * The phone's own transport: `java.net.HttpURLConnection` (OkHttp's on Android), no redirect followed, httpx's
  * request headers (Accept any type, `Accept-Encoding: gzip, deflate`, `Connection: keep-alive`, the user agent, and the
- * Host the platform writes from the URL, which is httpx's), gzip and deflate decoded by caracole as httpx decodes
- * them (a body whose Content-Encoding is gzip alone Android's OkHttp ungzips itself), 30 s timeouts, its errors named
- * as httpx names them. While the system property `caracole.network` is
+ * Host the platform writes from the URL, which is httpx's), a URL httpx's client won't send refused as it refuses it
+ * ([protocolOf]), gzip and deflate decoded by caracole as httpx decodes them (a body whose Content-Encoding is gzip
+ * alone Android's OkHttp ungzips itself), 30 s timeouts, its errors named as httpx names them. Where the platform
+ * does otherwise (a GET sent again on a connection that fails as it's read; Android writing a path's `|`, `^` and `\`
+ * again) AGENTS.md says so. While the system property `caracole.network` is
  * `loopback` (every Gradle test task, and the app under `CaracoleTestRunner`), it refuses any host but loopback and the
  * emulator's 10.0.2.2, before a socket opens, so no test ever reaches a site.
  */
@@ -43,12 +45,13 @@ object RealTransport : Transport {
     private const val TIMEOUT_MS = 30_000
 
     override fun send(request: HttpRequest): HttpAnswer {
-        refuseUnderTests(request.url)
+        val opened = protocolOf(request.url)
+        refuseUnderTests(opened)
         val connection = try {
-            URL(request.url).openConnection() as HttpURLConnection
+            URL(opened).openConnection()
         } catch (e: IOException) {
             throw TransportError("UnsupportedProtocol", e.message ?: e.toString())
-        }
+        } as? HttpURLConnection ?: throw TransportError("UnsupportedProtocol", unsupported(URL(opened).protocol))
         try {
             connection.instanceFollowRedirects = false
             connection.connectTimeout = TIMEOUT_MS
@@ -113,27 +116,70 @@ object RealTransport : Transport {
         return read
     }
 
-    /** [TransportError] ("refused") for a site's URL while `caracole.network` is `loopback`. */
+    private fun unsupported(scheme: String) = "Request URL has an unsupported protocol '$scheme://'."
+
+    /**
+     * The URL to open for [url], as httpx's client and httpcore take it: one with no scheme or no host (httpx merges
+     * it with its empty base URL) is "missing an 'http://' or 'https://' protocol", a scheme but http, https, ws and
+     * wss an unsupported protocol (both httpx's UnsupportedProtocol, before any socket), and ws and wss are asked as
+     * http and https are (httpcore's ports and TLS for them), so HttpURLConnection can open them.
+     */
+    private fun protocolOf(url: String): String {
+        val parsed = try {
+            HttpxUrl.parse(url)
+        } catch (e: UrlError) {
+            throw TransportError(e.kind, e.message ?: "")
+        }
+        if (!parsed.isAbsolute) throw TransportError("UnsupportedProtocol", "Request URL is missing an 'http://' or 'https://' protocol.")
+        return when (parsed.scheme) {
+            "http", "https" -> url
+            "ws" -> "http" + url.substring(2)
+            "wss" -> "https" + url.substring(3)
+            else -> throw TransportError("UnsupportedProtocol", unsupported(parsed.scheme))
+        }
+    }
+
+    /**
+     * [TransportError] ("refused") for a site's URL while `caracole.network` is `loopback`: its host as urlsplit reads
+     * it (after the netloc's last `@`), as Android's OkHttp reads it (its authority ends at the first of `/\?#`, so
+     * `http://site\@127.0.0.1/` is the site's) and as java.net.URL reads it must each be loopback or 10.0.2.2.
+     */
     fun refuseUnderTests(url: String) {
         if (System.getProperty(NETWORK) != "loopback") return
-        val netloc = try {
-            PyUrl.urlsplit(url).netloc.substringAfterLast('@')
+        val split = try {
+            PyUrl.urlsplit(url).netloc
         } catch (e: PyUrl.Invalid) {
             ""
         }
-        val host = Py.asciiLower(if (netloc.startsWith("[")) netloc.substringBefore(']') + "]" else netloc.substringBefore(':'))
-        if (host !in LOOPBACK) throw TransportError("refused", "no request to $host from a test (caracole.network=loopback)")
+        val okHttp = url.substringAfter(':', "").trimStart('/', '\\').takeWhile { it !in "/\\?#" }
+        val javaNet = try {
+            URL(url).host ?: ""
+        } catch (e: IOException) {
+            ""
+        }
+        for (host in listOf(hostOf(split), hostOf(okHttp), Py.asciiLower(javaNet))) {
+            if (host !in LOOPBACK) throw TransportError("refused", "no request to $host from a test (caracole.network=loopback)")
+        }
+    }
+
+    private fun hostOf(authority: String): String {
+        val at = authority.substringAfterLast('@')
+        return Py.asciiLower(if (at.startsWith("[")) at.substringBefore(']') + "]" else at.substringBefore(':'))
     }
 
     private val LOOPBACK = setOf("127.0.0.1", "localhost", "[::1]", "10.0.2.2")
 }
 
 /**
- * httpx's content decoders: each `Content-Encoding` named (the headers' values, split at commas, trimmed and
- * lowercased) applied last first, `gzip` one member as zlib reads it, `deflate` zlib's stream or else a raw one,
- * `identity` and any other left as they are. A body that won't decode is httpx's DecodingError.
+ * httpx's content decoders (`Response.content` read whole): each `Content-Encoding` named (the headers' values, split
+ * at commas, stripped and lowercased) applied last first, `gzip` one member as zlib's gzip mode reads it, `deflate`
+ * zlib's stream or, when that fails, a raw one, `identity` and any other left as they are. A body that won't decode
+ * is httpx's DecodingError, its words zlib's (`Error -3 while decompressing data: …`); one cut short gives what it
+ * gave, as zlib's decompressobj and its flush do (vectors/http/rules.jsonl's `decode`).
  */
 internal object ContentDecoding {
+    private val EMPTY = ByteArray(0)
+
     fun decode(headers: List<Pair<String, String>>, body: ByteArray): ByteArray {
         val codings = headers.filter { Py.asciiLower(it.first) == "content-encoding" }
             .flatMap { it.second.split(',') }
@@ -150,29 +196,33 @@ internal object ContentDecoding {
         return data
     }
 
-    private fun error(e: Exception): TransportError = TransportError("DecodingError", e.message ?: e.toString())
+    /** Z_DATA_ERROR as CPython's zlib words it. */
+    private fun decoding(why: String?): TransportError =
+        TransportError("DecodingError", "Error -3 while decompressing data: ${why ?: "invalid input data"}")
 
-    /** Inflate what [data] holds from [offset]: everything a whole stream gives, or what a cut-short one gave. */
+    /** Inflate what [data] holds from [offset]: everything a whole stream gives, or what a cut-short one gave; a
+     * stream that needs a preset dictionary gives nothing ([Inflater.needsDictionary] then says so). */
     private fun inflate(inflater: Inflater, data: ByteArray, offset: Int): ByteArray {
         inflater.setInput(data, offset, data.size - offset)
         val out = ByteArrayOutputStream()
         val buffer = ByteArray(8192)
         while (!inflater.finished()) {
             val n = inflater.inflate(buffer)
-            if (n == 0) {
-                if (inflater.needsInput() || inflater.needsDictionary()) break
-            }
+            if (n == 0 && (inflater.needsInput() || inflater.needsDictionary())) break
             out.write(buffer, 0, n)
         }
         return out.toByteArray()
     }
 
+    /** httpx's DeflateDecoder: zlib's stream; when its first attempt fails (an error, or zlib's Z_NEED_DICT, its
+     * "Error 2"), the whole body again as a raw deflate stream, whose error is the body's. */
     fun inflate(data: ByteArray): ByteArray {
         val zlib = Inflater(false)
         try {
-            return inflate(zlib, data, 0)
+            val out = inflate(zlib, data, 0)
+            if (!zlib.needsDictionary()) return out
         } catch (e: DataFormatException) {
-            // httpx's DeflateDecoder: a body that isn't a zlib stream is read again as a raw deflate one
+            // read again as raw
         } finally {
             zlib.end()
         }
@@ -180,54 +230,60 @@ internal object ContentDecoding {
         try {
             return inflate(raw, data, 0)
         } catch (e: DataFormatException) {
-            throw error(e)
+            throw decoding(e.message)
         } finally {
             raw.end()
         }
     }
 
+    /**
+     * httpx's GZipDecoder, zlib's inflate with windowBits 16 + 15 (inflate.c's header states): the magic once two
+     * bytes are there, the method and the reserved flags once four are, then the time and the OS, FEXTRA, FNAME,
+     * FCOMMENT and FHCRC (the CRC-32 of the header before it, its low 16 bits) as their flags say, the deflate data,
+     * and the trailer's CRC-32 once its four bytes are there and its length once the next four are. A header or a
+     * trailer cut short is no error (zlib waits for more, and flush gives nothing more); what follows the member is
+     * left unread (unused_data).
+     */
     fun gunzip(data: ByteArray): ByteArray {
-        if (data.isEmpty()) return data
-        if (data.size < 10) return ByteArray(0)  // a header cut short: zlib waits for more, and flush gives nothing
-        if ((data[0].toInt() and 0xFF) != 0x1F || (data[1].toInt() and 0xFF) != 0x8B) {
-            throw TransportError("DecodingError", "Error -3 while decompressing data: incorrect header check")
+        val n = data.size
+        fun at(i: Int) = data[i].toInt() and 0xFF
+        if (n < 2) return EMPTY
+        if (at(0) != 0x1F || at(1) != 0x8B) throw decoding("incorrect header check")
+        if (n < 4) return EMPTY
+        if (at(2) != 8) throw decoding("unknown compression method")
+        val flags = at(3)
+        if (flags and 0xE0 != 0) throw decoding("unknown header flags set")
+        var pos = 10
+        if (n < pos) return EMPTY
+        if (flags and 0x04 != 0) {
+            if (n < pos + 2) return EMPTY
+            pos += 2 + (at(pos) or (at(pos + 1) shl 8))
+            if (n < pos) return EMPTY
         }
-        if ((data[2].toInt() and 0xFF) != 8) {
-            throw TransportError("DecodingError", "Error -3 while decompressing data: unknown compression method")
+        for (flag in intArrayOf(0x08, 0x10)) {
+            if (flags and flag == 0) continue
+            while (pos < n && at(pos) != 0) pos++
+            if (pos >= n) return EMPTY
+            pos++
         }
-        val flags = data[3].toInt() and 0xFF
-        var at = 10
-        if (flags and 4 != 0) {
-            if (at + 2 > data.size) return ByteArray(0)
-            at += 2 + ((data[at].toInt() and 0xFF) or ((data[at + 1].toInt() and 0xFF) shl 8))
+        if (flags and 0x02 != 0) {
+            if (n < pos + 2) return EMPTY
+            val crc = CRC32().apply { update(data, 0, pos) }.value and 0xFFFF
+            if ((at(pos) or (at(pos + 1) shl 8)).toLong() != crc) throw decoding("header crc mismatch")
+            pos += 2
         }
-        if (flags and 8 != 0) {
-            while (at < data.size && data[at].toInt() != 0) at++
-            at++
-        }
-        if (flags and 16 != 0) {
-            while (at < data.size && data[at].toInt() != 0) at++
-            at++
-        }
-        if (flags and 2 != 0) at += 2
-        if (at > data.size) return ByteArray(0)
         val inflater = Inflater(true)
         try {
-            val out = inflate(inflater, data, at)
-            if (inflater.finished()) {
-                val trailer = data.size - inflater.remaining
-                if (trailer + 8 <= data.size) {
-                    val crc = CRC32().also { it.update(out) }.value
-                    val said = le32(data, trailer)
-                    if (said != crc) throw TransportError("DecodingError", "Error -3 while decompressing data: incorrect data check")
-                    if (le32(data, trailer + 4) != (out.size.toLong() and 0xFFFFFFFFL)) {
-                        throw TransportError("DecodingError", "Error -3 while decompressing data: incorrect length check")
-                    }
-                }
-            }
+            val out = inflate(inflater, data, pos)
+            if (!inflater.finished()) return out
+            val trailer = n - inflater.remaining
+            if (n - trailer < 4) return out
+            if (le32(data, trailer) != CRC32().apply { update(out) }.value) throw decoding("incorrect data check")
+            if (n - trailer < 8) return out
+            if (le32(data, trailer + 4) != (out.size.toLong() and 0xFFFFFFFFL)) throw decoding("incorrect length check")
             return out
         } catch (e: DataFormatException) {
-            throw error(e)
+            throw decoding(e.message)
         } finally {
             inflater.end()
         }

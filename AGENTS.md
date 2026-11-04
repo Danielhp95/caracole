@@ -1125,13 +1125,26 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     host not ASCII through `Idna`, the idna package's encode and decode), `resolve` its next request's URL (urljoin as
     3.14 has it); a string httpx refuses an `UrlError` named as Python's exception;
   - `Robots.disallows`; `HttpRules` (`stale`, `retryAfter` with email.utils's dates, `isChallenge`, `readOnceMore`);
-  - `PoliteClient` and `CachedAnswers`: the cache as http.py lays it out (`HttpCache`), httpx's request headers, the
-    budget, the pause for given draws, redirects, blocks, LRCLIB's 503, the breaker, each case of tests/test_http.py
-    a session of `client.jsonl`;
-  - `RealTransport`: HttpURLConnection, no redirect followed, httpx's header set, gzip and deflate decoded as httpx
-    decodes them (Android's OkHttp ungzips a body of `Content-Encoding: gzip` itself), errors named as httpx's, every
-    host but loopback and 10.0.2.2 refused under `caracole.network=loopback`; `RoutedTransport`, a test's sites through
-    the fake sites server (`GET {base}/fetch?url=…`).
+  - `PoliteClient` and `CachedAnswers`: the cache as http.py lays it out (`HttpCache`), httpx's request headers (a
+    URL's user and password its basic auth, carried on a redirect as httpx carries it), the budget, the pause for
+    given draws, redirects, blocks, LRCLIB's 503, the breaker, each case of tests/test_http.py a session of
+    `client.jsonl`; `Response.json()` reads the bytes as `json.loads` does (py-sites' `PyJson.loads(ByteArray)`: a
+    byte that isn't the text's encoding an error, never `text`'s U+FFFD);
+  - `RealTransport`: HttpURLConnection, no redirect followed, httpx's header set, a URL httpx won't send refused with
+    its UnsupportedProtocol before any socket (ws and wss asked as http and https), gzip and deflate decoded as
+    httpx's decoders decode them (zlib's gzip mode: `rules.jsonl`'s `decode`), errors named as httpx's, every host but
+    loopback and 10.0.2.2 refused under `caracole.network=loopback` (the host as urlsplit, OkHttp and java.net.URL
+    each read it); `RoutedTransport`, a test's sites through the fake sites server (`GET {base}/fetch?url=…`).
+  - What the platform does otherwise than httpx, each the owner's to decide (RealTransportChecks pins the second):
+    - a connection that fails as the answer is read: the JDK's HttpURLConnection sends the GET once more by itself,
+      and Android's OkHttp may on another route, so a site can see two requests for one PoliteClient counted, paced
+      and budgeted;
+    - Android's OkHttp writes a path's `|` and `^` percent-encoded and its `\` as `/` (httpx sends all three as they
+      are; the query is left alone);
+    - Android's OkHttp ungzips a body of `Content-Encoding: gzip` itself, a body it can't read failing in its own
+      words (DecodingError still);
+    - http.py's httpx client keeps the cookies a site sets for the client's life (a run's, a lookup's) and sends them
+      back; the phone keeps none.
 - core.testing's `Scenarios.replay` replays a scenario record (§3 of the M4-6 plan: the fixture, the cache, the
   answers; the result or what it raised, the requests, the rows, kv, files, events and pauses compared), and
   `RealTransportChecks` the transport against a ServerSocket on loopback (RealTransportTest on the JVM,

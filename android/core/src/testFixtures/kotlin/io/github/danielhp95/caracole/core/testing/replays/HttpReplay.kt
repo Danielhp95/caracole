@@ -2,6 +2,7 @@ package io.github.danielhp95.caracole.core.testing.replays
 
 import io.github.danielhp95.caracole.core.config.ProviderPolicy
 import io.github.danielhp95.caracole.core.http.BudgetExhausted
+import io.github.danielhp95.caracole.core.http.ContentDecoding
 import io.github.danielhp95.caracole.core.http.Draws
 import io.github.danielhp95.caracole.core.http.Event
 import io.github.danielhp95.caracole.core.http.HttpAnswer
@@ -197,6 +198,15 @@ object HttpReplay : AreaReplay {
                 "is_challenge" -> {
                     val got = HttpRules.isChallenge(headers(r.args[0]), body(r.args[1]))
                     misses.check(got == r.out!!.jsonPrimitive.boolean) { "is_challenge(${r.args.toString().take(160)}) = $got, Python's ${r.out}" }
+                }
+                "decode" -> {
+                    val pairs = r.args[0].jsonArray.map { h -> h.jsonArray[0].jsonPrimitive.content to h.jsonArray[1].jsonPrimitive.content }
+                    val got: JsonElement = try {
+                        bodyOut(ContentDecoding.decode(pairs, body(r.args[1])))
+                    } catch (e: TransportError) {
+                        JsonObject(mapOf("err" to JsonPrimitive("${e.kind}: ${e.message}")))
+                    }
+                    misses.check(got == r.out) { "decode($pairs, ${r.args[1].toString().take(80)}) = $got, Python's ${r.out}" }
                 }
                 else -> misses.check(false) { "rules.jsonl: no function ${r.fn}" }
             }
@@ -500,12 +510,72 @@ object RealTransportChecks {
     /** Every check, in turn; an AssertionError names the first that fails. */
     fun all() {
         httpxsHeaderSet()
+        theRequestTargetIsHttpxs()
         noRedirectIsFollowed()
         gzipAndDeflateAreDecoded()
         anErrorIsAnsweredWithItsBody()
         aRefusedConnectionIsAConnectError()
+        aProtocolHttpxRefusesIsRefusedAsHttpxDoes()
         routedRequestsCarryTheSitesUrlInTheQuery()
         everySiteIsRefusedUnderTheTests()
+    }
+
+    private val isAndroid: Boolean get() = System.getProperty("java.vm.name")?.contains("Dalvik") == true
+
+    /** A path and a query of what httpx sends as it is (`|`, `^`, `\`, `'`, `{}` in the query, a `%` that escapes
+     * nothing): the request line on the JVM is `GET <Urls.target> HTTP/1.1`; on Android, OkHttp writes its path again
+     * as [ANDROID_TARGET] says (AGENTS.md, core.http). */
+    fun theRequestTargetIsHttpxs() {
+        LoopbackSite { answer(200, body = "odd".toByteArray()) }.use { site ->
+            val dir = java.nio.file.Files.createTempDirectory("caracole-real").toFile()
+            try {
+                val client = PoliteClient("ug", ProviderPolicy(budget = 5, delay = 0.0 to 0.0), dir, "caracole/0.1 (test)",
+                                          io.github.danielhp95.caracole.core.http.RealTransport, sleep = {},
+                                          draws = { low, _ -> low }, monotonic = { 0.0 }, wallClock = { Instant.EPOCH })
+                val url = "${site.base}$ODD_TARGET#frag"
+                val r = client.get(url)
+                check(r.status == 200 && r.text == "odd") { "the answer: ${r.status} ${r.text}" }
+                check(Urls.target(url) == ODD_TARGET) { "httpx's target of $url: ${Urls.target(url)}" }
+                val want = if (isAndroid) ANDROID_TARGET else ODD_TARGET
+                val line = site.heads.single().line
+                check(line == "GET $want HTTP/1.1") { "the request line: $line, not GET $want HTTP/1.1" }
+            } finally {
+                dir.deleteRecursively()
+            }
+        }
+    }
+
+    /** What httpx sends as it is, and str(httpx.URL) keeps (vectors/http/urls.jsonl's `https://x.test/p?q=…`). */
+    const val ODD_TARGET = "/a|b^c%zz/d'\\e?q='|^{}\\%zz"
+
+    /** [ODD_TARGET] as Android's HttpURLConnection (OkHttp's HttpUrl) writes it, seen on the emulator (Android 16):
+     * the path's `|` and `^` percent-encoded and its `\` a `/`; the query and a `%` that escapes nothing as httpx's. */
+    const val ANDROID_TARGET = "/a%7Cb%5Ec%zz/d'/e?q='|^{}\\%zz"
+
+    /** A URL httpx's client won't send: no request, httpx's UnsupportedProtocol and its words; ws and wss asked as
+     * http and https (httpcore's). */
+    fun aProtocolHttpxRefusesIsRefusedAsHttpxDoes() {
+        val missing = "Request URL is missing an 'http://' or 'https://' protocol."
+        for ((url, words) in listOf(
+            "ftp://127.0.0.1/f" to "Request URL has an unsupported protocol 'ftp://'.",
+            "gopher://127.0.0.1/" to "Request URL has an unsupported protocol 'gopher://'.",
+            "file:///etc/passwd" to missing, "mailto:x@y.test" to missing, "jar:file:/x!/y" to missing,
+            "//127.0.0.1/x" to missing, "/relative" to missing,
+        )) {
+            val e = try {
+                io.github.danielhp95.caracole.core.http.RealTransport.send(HttpRequest("GET", url, emptyList()))
+                null
+            } catch (e: TransportError) {
+                e
+            }
+            check(e?.kind == "UnsupportedProtocol" && e.message == words) { "$url: ${e?.kind}: ${e?.message}, httpx's $words" }
+        }
+        LoopbackSite { answer(200, body = "ws".toByteArray()) }.use { site ->
+            val r = io.github.danielhp95.caracole.core.http.RealTransport.send(
+                HttpRequest("GET", "ws://127.0.0.1:${site.port}/socket", listOf("Accept" to "*/*")))
+            check(r.status == 200 && String(r.body) == "ws") { "ws:// asked as http://: ${r.status}" }
+            check(site.heads.single().line == "GET /socket HTTP/1.1") { "ws:// asked as ${site.heads.single().line}" }
+        }
     }
 
     /** A PoliteClient over RealTransport sends httpx's header set and no other, and reads the answer. */
@@ -618,7 +688,9 @@ object RealTransportChecks {
             "caracole.network is ${System.getProperty(io.github.danielhp95.caracole.core.http.RealTransport.NETWORK)}"
         }
         for (url in listOf("https://tabs.ultimate-guitar.com/tab/1", "https://lrclib.net/api/get?x=1", "http://192.168.1.20:8737/",
-                           "http://[2001:db8::1]/", "http://127.0.0.2/", "http://localhost.example.com/", "http://10.0.2.3/")) {
+                           "http://[2001:db8::1]/", "http://127.0.0.2/", "http://localhost.example.com/", "http://10.0.2.3/",
+                           "http://tabs.ultimate-guitar.com\\@127.0.0.1/", "http://127.0.0.1\\@tabs.ultimate-guitar.com/",
+                           "http://u@127.0.0.1@tabs.ultimate-guitar.com/", "ws://tabs.ultimate-guitar.com/")) {
             val e = try {
                 io.github.danielhp95.caracole.core.http.RealTransport.send(HttpRequest("GET", url, emptyList()))
                 null

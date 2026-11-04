@@ -187,14 +187,16 @@ internal object Idna {
         for ((pos, cp) in cps.withIndex()) {
             if (cp in t.classes.getValue("PVALID")) continue
             if (cp in t.classes.getValue("CONTEXTJ")) {
+                // idna raises its InvalidCodepointContext for a joiner out of context inside `try: … except
+                // ValueError:`, which catches it (an IDNAError is a ValueError) as it catches a code point with no
+                // name: either way the label's error is this IDNAError.
                 val valid = try {
                     contextj(cps, pos)
                 } catch (e: NoName) {
-                    throw error("Unknown codepoint adjacent to joiner ${unot(cp)} at position ${pos + 1} in ${PyStr.repr(label)}")
+                    false
                 }
                 if (!valid) {
-                    throw error("Joiner ${unot(cp)} not allowed at position ${pos + 1} in ${PyStr.repr(label)}",
-                                "InvalidCodepointContext")
+                    throw error("Unknown codepoint adjacent to joiner ${unot(cp)} at position ${pos + 1} in ${PyStr.repr(label)}")
                 }
             } else if (cp in t.classes.getValue("CONTEXTO")) {
                 if (!contexto(cps, pos)) {

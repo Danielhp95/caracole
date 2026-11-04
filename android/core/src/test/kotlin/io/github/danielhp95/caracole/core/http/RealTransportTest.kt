@@ -8,6 +8,8 @@ import org.junit.Test
 class RealTransportTest {
     @Test fun itSendsHttpxsHeaderSetAndNoOther() = RealTransportChecks.httpxsHeaderSet()
 
+    @Test fun itSendsTheRequestTargetHttpxSends() = RealTransportChecks.theRequestTargetIsHttpxs()
+
     @Test fun itFollowsNoRedirect() = RealTransportChecks.noRedirectIsFollowed()
 
     @Test fun itDecodesGzipAndDeflateAsHttpxDoes() = RealTransportChecks.gzipAndDeflateAreDecoded()
@@ -15,6 +17,8 @@ class RealTransportTest {
     @Test fun anErrorComesWithItsBodyAndItsHeadersInOrder() = RealTransportChecks.anErrorIsAnsweredWithItsBody()
 
     @Test fun aRefusedConnectionIsHttpxsConnectError() = RealTransportChecks.aRefusedConnectionIsAConnectError()
+
+    @Test fun aProtocolHttpxRefusesIsRefusedAsHttpxDoes() = RealTransportChecks.aProtocolHttpxRefusesIsRefusedAsHttpxDoes()
 
     @Test fun routedRequestsCarryTheSitesUrlInTheQuery() = RealTransportChecks.routedRequestsCarryTheSitesUrlInTheQuery()
 
