@@ -51,6 +51,28 @@ class PoliteClientTest {
         assertEquals(1, site.requests.size)
     }
 
+    @Test fun theCacheRootHoldsEachAnswersMetaAndBodyAsHttpPyLaysThemOut() {
+        val url = "https://tabs.ultimate-guitar.com/tab/1"
+        val c = client(FakeTransport(mapOf("GET $url" to FakeTransport.answer(200, "page"))))
+        c.get(url)
+        val root = java.io.File(java.io.File(tmp.root, "http"), "ug")
+        assertEquals(root, c.cacheRoot)
+        assertEquals(root, CachedAnswers("ug", tmp.root).cacheRoot)
+        val key = java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        assertEquals(listOf("${key.take(2)}/$key.body", "${key.take(2)}/$key.json"),
+                     root.walkTopDown().filter { it.isFile }.map { it.relativeTo(root).invariantSeparatorsPath }.sorted().toList())
+        assertEquals(null, object : Client {
+            override val provider = "fake"
+            override val requestsMade = 0
+            override var policy = ProviderPolicy(budget = 0, delay = 0.0 to 0.0)
+            override fun get(url: String, params: List<Pair<String, String>>?, cache: Boolean, conditional: Boolean,
+                             accept: Set<Int>, maxAge: java.time.Duration?) = throw AssertionError()
+            override fun cached(url: String, accept: Set<Int>): Response? = null
+            override fun hasCached(url: String, accept: Set<Int>) = false
+        }.cacheRoot)
+    }
+
     @Test fun readOnceMoreAsksPastTheCacheForACopyThatWontRead() {
         val url = "https://x.test/page"
         val first = FakeTransport(mapOf("GET $url" to FakeTransport.answer(200, "<html>Maintenance</html>")))

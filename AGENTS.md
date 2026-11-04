@@ -1125,10 +1125,10 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     host not ASCII through `Idna`, the idna package's encode and decode), `resolve` its next request's URL (urljoin as
     3.14 has it); a string httpx refuses an `UrlError` named as Python's exception;
   - `Robots.disallows`; `HttpRules` (`stale`, `retryAfter` with email.utils's dates, `isChallenge`, `readOnceMore`);
-  - `PoliteClient` and `CachedAnswers`: the cache as http.py lays it out (`HttpCache`), httpx's request headers (a
-    URL's user and password its basic auth, carried on a redirect as httpx carries it), the budget, the pause for
-    given draws, redirects, blocks, LRCLIB's 503, the breaker, each case of tests/test_http.py a session of
-    `client.jsonl`; `Response.json()` reads the bytes as `json.loads` does (py-sites' `PyJson.loads(ByteArray)`: a
+  - `PoliteClient` and `CachedAnswers`: the cache as http.py lays it out (`HttpCache` under `cacheRoot`, http.py's
+    `cache_root`), httpx's request headers (a URL's user and password its basic auth, carried on a redirect as httpx
+    carries it), the budget, the pause for given draws, redirects, blocks, LRCLIB's 503, the breaker, each case of
+    tests/test_http.py a session of `client.jsonl`; `Response.json()` reads the bytes as `json.loads` does (py-sites' `PyJson.loads(ByteArray)`: a
     byte that isn't the text's encoding an error, never `text`'s U+FFFD);
   - `RealTransport`: HttpURLConnection, no redirect followed, httpx's header set, a URL httpx won't send refused with
     its UnsupportedProtocol before any socket (ws and wss asked as http and https), gzip and deflate decoded as

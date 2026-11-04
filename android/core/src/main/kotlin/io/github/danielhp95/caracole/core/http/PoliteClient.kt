@@ -34,7 +34,8 @@ class PoliteClient(override val provider: String, override var policy: ProviderP
                    val userAgent: String, val transport: Transport, val sleep: (Double) -> Unit, val draws: Draws,
                    val onEvent: ((Event) -> Unit)? = null, val maxConsecutiveErrors: Int = 3,
                    val monotonic: () -> Double, val wallClock: () -> Instant) : Client, AutoCloseable {
-    private val cache = HttpCache(File(File(cacheDir, "http"), provider))
+    override val cacheRoot: File = File(File(cacheDir, "http"), provider)
+    private val cache = HttpCache(cacheRoot)
     private var made = 0
     private var lastRequest: Double? = null
     private var errorsInARow = 0
