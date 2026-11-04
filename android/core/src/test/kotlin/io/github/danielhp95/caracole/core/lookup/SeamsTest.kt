@@ -14,7 +14,7 @@ class SeamsTest {
         TestDb.fresh(tmp.root).use { database ->
             database.read { db ->
                 assertEquals(RenderStats(), SongPages.NONE.render(db, listOf(1L), null))
-                assertEquals(RenderStats(), SongbookPages.NONE.render(db, null))
+                assertEquals(SongbookStats(), SongbookPages.NONE.render(db, null))
             }
         }
     }

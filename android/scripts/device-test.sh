@@ -3,7 +3,7 @@
 #
 #   android/scripts/device-test.sh [--computer DIR] [--sites SCENARIO] [--area NAME[,NAME...]] [--app] [CLASS[=DIR]]...
 #
-#   --area NAMES    CorpusOnDeviceTest's areas (core.testing.Replays, server.testing.ServerReplays); "all" or an empty
+#   --area NAMES    CorpusOnDeviceTest's areas (core, server and viewer.testing's Replays); "all" or an empty
 #                   list: every one
 #   --app           the app's classes: EndToEndTest, PinchTest, SyncTabTest and PhoneEndToEndTest, each against a
 #                   computer of its own (tests.helpers.e2e_library in a fresh folder), as the M1-3 integration ran them

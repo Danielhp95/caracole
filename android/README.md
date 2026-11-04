@@ -268,3 +268,23 @@ Not built yet.
 ## Performance notes
 
 Not built yet.
+
+## Pages built on the phone
+
+Not built yet.
+
+## Songbooks, versions and printing
+
+Not built yet.
+
+## Guitar Pro
+
+Not built yet.
+
+## Sharing files to caracole
+
+Not built yet.
+
+## Alerts and backups
+
+Not built yet.

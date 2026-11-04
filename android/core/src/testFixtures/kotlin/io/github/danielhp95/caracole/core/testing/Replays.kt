@@ -8,6 +8,7 @@ import io.github.danielhp95.caracole.core.testing.replays.HealthReplay
 import io.github.danielhp95.caracole.core.testing.replays.HtmlReplay
 import io.github.danielhp95.caracole.core.testing.replays.HttpReplay
 import io.github.danielhp95.caracole.core.testing.replays.IndexExportReplay
+import io.github.danielhp95.caracole.core.testing.replays.InboxReplay
 import io.github.danielhp95.caracole.core.testing.replays.IndexReplay
 import io.github.danielhp95.caracole.core.testing.replays.KeysReplay
 import io.github.danielhp95.caracole.core.testing.replays.LaCuerdaReplay
@@ -23,6 +24,7 @@ import io.github.danielhp95.caracole.core.testing.replays.PyReplay
 import io.github.danielhp95.caracole.core.testing.replays.RankReplay
 import io.github.danielhp95.caracole.core.testing.replays.SearchReplay
 import io.github.danielhp95.caracole.core.testing.replays.SettingsReplay
+import io.github.danielhp95.caracole.core.testing.replays.SongbookReplay
 import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
 import io.github.danielhp95.caracole.core.testing.replays.TabFilesReplay
 import io.github.danielhp95.caracole.core.testing.replays.UgFetchReplay
@@ -48,12 +50,17 @@ object Replays {
         PyReplay, HtmlReplay, HttpReplay, HealthReplay, PaceReplay, LibraryWritesReplay, OverridesReplay,
         UgPagesReplay, RankReplay, MatchReplay, UgFetchReplay, LyricsReplay, LaCuerdaReplay, HarpTabsReplay,
         GameTabsReplay, TabFilesReplay, LookupReplay, LookupScenariosReplay, SettingsReplay, IndexExportReplay,
+        SongbookReplay, InboxReplay,
     )
 
-    /** The areas named (every one when [names] is empty), [IllegalArgumentException] for a name no area has. */
+    /** The areas named (every one when [names] is empty), [IllegalArgumentException] for a name no area has. An area
+     * is named with hyphens ("job-views"); a name with underscores, as the plan writes some ("job_views"), names it
+     * too. */
     fun named(names: Collection<String>, among: List<AreaReplay> = all): List<AreaReplay> {
         if (names.isEmpty()) return among
         val byName = among.associateBy { it.area }
-        return names.map { byName[it] ?: throw IllegalArgumentException("no corpus area $it (${byName.keys})") }
+        return names.map {
+            byName[it.replace('_', '-')] ?: throw IllegalArgumentException("no corpus area $it (${byName.keys})")
+        }
     }
 }
