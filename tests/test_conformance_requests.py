@@ -22,7 +22,7 @@
     "out"}``: the Requests tab's answer (``out``: its text, as ``json_response`` writes it, so its key order too)
     under ``TZ=<tz>`` (UTC and Europe/Madrid), for ``jobs`` newest first, each as history.py's line holds it
     (``_record``, its output whole), which JobHistory.jobOf reads; ``lines``, status.py's line of each by its id
-    (``Line.as_json``); ``outcomes``, outcome.py's of each over (``tone``, ``word``, ``reason``, ``action`` and
+    (``Line.as_json``, with ``todo=None``, as the phone's lines are); ``outcomes``, outcome.py's of each over (``tone``, ``word``, ``reason``, ``action`` and
     ``also``, each ``{label, href, post, fields: [[name, value], …]}`` or null), given for every one as
     jobs_routes.requests_json gives them; ``steps``, the running one's chips (``outcome.steps``, ``Chip.as_json``),
     which feed.py works out of the job and its song's facts; ``picks``, the songs that wait for a pick by key
@@ -365,7 +365,8 @@ def feed_record(note: str, zone: str, now: str, found: list[tuple[Job, SongFacts
     and ``lines``, made up, in place of outcome.py's and status.py's."""
     jobs = [j for j, _, _ in found]
     facts = {j.id: f for j, f, _ in found}
-    made_lines = {j.id: job_line(j, f, ahead=sum(1 for o in jobs if o.active and o.id < j.id)) for j, f, _ in found}
+    made_lines = {j.id: job_line(j, f, ahead=sum(1 for o in jobs if o.active and o.id < j.id), todo=None)
+                  for j, f, _ in found}  # the phone's: no to-do page
     made_lines |= lines or {}
     said = {j.id: outcome(j, made_lines[j.id], f, song_id=song_id) for j, f, song_id in found
             if not j.active and j.id in made_lines}

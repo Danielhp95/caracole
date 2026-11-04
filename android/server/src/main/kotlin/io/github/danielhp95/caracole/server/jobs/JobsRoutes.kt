@@ -103,28 +103,6 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
         return json(200, job.asJson())
     }
 
-    /** A songbook's change that is done: its songbook's page, relative to the library page, while the phone has
-     * written one (songbooks.songbook_page: kv `songbook:<folder>`'s songbook.html, as songbook.written_page reads it);
-     * null for any other job, a deletion, or a songbook with no page. */
-    private fun songbookPage(db: Db, job: Job): String? {
-        if (job.state != Job.DONE || job.steps.isEmpty()) return null
-        val book = Status.songbookOf(job.key) ?: return null
-        val after = book.after ?: return null
-        val folder = SafeName.safeName(after)
-        val record = db.kvGet("songbook:$folder")?.let {
-            try {
-                Json.parseToJsonElement(it)
-            } catch (e: IllegalArgumentException) {
-                null
-            }
-        } as? JsonObject ?: return null
-        val entry = (record["files"] as? JsonObject)?.get("songbook.html") as? JsonObject ?: return null
-        val sha = entry["sha256"] as? JsonPrimitive
-        val size = entry["size"] as? JsonPrimitive
-        if (sha == null || !sha.isString || size == null || size.isString || size.content.toLongOrNull() == null) return null
-        return "_songbooks/${PyUrl.quote(folder, safe = "")}/songbook.html"
-    }
-
     /** A request that hasn't started, taken out of the queue (jobs_routes.cancel); back to its tab. */
     private fun cancel(form: Map<String, String>): Response {
         val text = PyText.strip(form["job"] ?: "")
@@ -171,5 +149,27 @@ class JobsRoutes(val queue: JobQueue, val cards: SongCards, val database: Databa
 
         /** The job id [text] names; null for a number no job has. */
         private fun idOf(text: String): Int? = text.toBigInteger().takeIf { it <= MAX_ID }?.toInt()
+
+        /** A songbook's change that is done: its songbook's page, relative to the library page, while the phone has
+         * written one (songbooks.songbook_page: kv `songbook:<folder>`'s songbook.html, as songbook.written_page reads it);
+         * null for any other job, a deletion, or a songbook with no page. The Requests tab's too (RequestsRoutes). */
+        internal fun songbookPage(db: Db, job: Job): String? {
+            if (job.state != Job.DONE || job.steps.isEmpty()) return null
+            val book = Status.songbookOf(job.key) ?: return null
+            val after = book.after ?: return null
+            val folder = SafeName.safeName(after)
+            val record = db.kvGet("songbook:$folder")?.let {
+                try {
+                    Json.parseToJsonElement(it)
+                } catch (e: IllegalArgumentException) {
+                    null
+                }
+            } as? JsonObject ?: return null
+            val entry = (record["files"] as? JsonObject)?.get("songbook.html") as? JsonObject ?: return null
+            val sha = entry["sha256"] as? JsonPrimitive
+            val size = entry["size"] as? JsonPrimitive
+            if (sha == null || !sha.isString || size == null || size.isString || size.content.toLongOrNull() == null) return null
+            return "_songbooks/${PyUrl.quote(folder, safe = "")}/songbook.html"
+        }
     }
 }

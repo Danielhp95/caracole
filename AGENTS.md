@@ -1230,7 +1230,25 @@ Not built yet. (lookup.)
     site's waits and errors, then the tables of words whole, its `tables` record) and job_views_song_of.jsonl
     (song_of over a small library a record, its fixture), written by tests/test_conformance_sync_routes.py and
     test_conformance_web.py (`JobViewsReplay`, area `job-views`).
-- The tab itself: not built yet (requests-feed).
+- **Its tab** (`server/jobs/Feed.kt`, `server/routes/RequestsRoutes.kt`, `server/page/LibraryPage.kt`): the library
+  page's Requests tab as caracole serve's (feed.py, jobs_routes.py, library_page.py):
+  - the tab and its panel are library_page's `_requests_tab` and `_requests_panel`, exported as they are into
+    data/caracole/page/requests.json (`RequestsTab`), the tab counting `ServerControls.active`;
+  - `GET /requests.json` (the page's script alone, `?open=N,M`) is `Feed.feed` over the queue's snapshot: each job's
+    line `JobViews.line` (its song's facts through `SongFacts.ended`, the cache /jobs.json shares, its songbook's page
+    `JobsRoutes.songbookPage`), each one over `Outcomes.outcome`, the running one's `Outcomes.steps`, and the songs
+    that wait for a pick (review_routes.picks_waiting: a review with candidates, `SongFacts.hasCandidates`, or a song
+    the index didn't match, `search`);
+  - the times are the phone's zone's, named as Python's `%Z` names them, tzdata's abbreviations (CET and CEST), from
+    requests.json's `zones` (`ZoneNames`: every zone's labels of letters by offset and since when, else the offset's
+    number, `-03`, `+0545`), never java.time's or ICU's "GMT+01:00"; month names the C locale's;
+  - `POST /jobs/again` is jobs_routes.again over `JobQueue.again`, its refusals caracole serve's words, but a request
+    of the phone's own read back from the history, with nothing left to run (`JobNotRepeatable`): 409, the phone's
+    words (`RequestsRoutes.NOT_REPEATABLE`);
+  - vectors/web/requests.jsonl (feed.py's answer byte for byte under UTC and Europe/Madrid, `_ordinal`, `_ago`,
+    `stamps.shown(local=True)` in zones of letters and numbers either side of a change of clocks, the tab for a
+    count, feed.py's words) and requests.json, written by tests/test_conformance_requests.py (`RequestsReplay`, area
+    `requests`), with library_page.json's pages whole, the tab in them.
 
 ##### The computer's settings on the phone
 

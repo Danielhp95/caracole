@@ -3,6 +3,7 @@ package io.github.danielhp95.caracole.server.routes
 import io.github.danielhp95.caracole.server.jobs.CommandExit
 import io.github.danielhp95.caracole.server.jobs.CommandRunner
 import io.github.danielhp95.caracole.server.jobs.Commands
+import io.github.danielhp95.caracole.server.jobs.Feed
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobCommands
 import io.github.danielhp95.caracole.server.jobs.JobHistory
@@ -14,34 +15,43 @@ import io.github.danielhp95.caracole.server.testing.header
 import io.github.danielhp95.caracole.server.testing.json
 import io.github.danielhp95.caracole.server.testing.text
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.test.TestScope
-import kotlinx.coroutines.test.runCurrent
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.After
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.time.Instant
 import java.time.ZoneId
+import java.util.Collections
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
-/** The Requests tab's routes on the phone, through the App: /requests.json for the page's script alone, Feed's answer,
- * and Try again in jobs_routes.again's words and rules. */
-// The worker runs in the test's backgroundScope, whose tasks runCurrent runs.
-@OptIn(ExperimentalCoroutinesApi::class)
+/** The Requests tab's routes on the phone, through the App: /requests.json for the page's script alone, Feed's answer
+ * of the queue's jobs, their lines, outcomes, steps and picks, and Try again in jobs_routes.again's words and rules. */
+// The queue's worker runs on a scope of the test's own (not runTest's, which would report a coroutine exception
+// another class leaked as this one's), each step waited for by the job's end or its state.
 class RequestsRoutesTest {
     @get:Rule val tmp = TemporaryFolder()
 
-    /** The queue's clock and the feed's: late on the 3rd in UTC, after midnight in Madrid. */
-    private val NOW = Instant.parse("2026-11-03T23:30:00Z")
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    /** The commands the queue runs: each looks the song up, saying a line; one of a title "Fails" fails. */
-    private val ran = ArrayList<List<String>>()
+    @After fun stop() = scope.cancel()
+
+    /** The queue's clock and the feed's: late on the 3rd in UTC, after midnight in Madrid. */
+    private val now = Instant.parse("2026-11-03T23:30:00Z")
+
+    /** The commands the queue runs: each looks the song up, saying a line; one of a title "Fails" fails, one of
+     * "Held" waits for the gate. */
+    private val ran: MutableList<List<String>> = Collections.synchronizedList(ArrayList())
     private val gate = CompletableDeferred<Unit>()
     private val commands = Commands(mapOf(
         "get" to CommandRunner { args, context ->
@@ -53,21 +63,39 @@ class RequestsRoutesTest {
         "lacuerda" to CommandRunner { args, _ -> ran += args },
     ))
 
-    private fun TestScope.app(limit: Int = JobQueue.LIMIT): Pair<TestApp, JobQueue> {
-        val queue = JobQueue(backgroundScope, limit = limit, clock = { NOW }, commands = commands)
-        val madrid = ZoneId.of("Europe/Madrid")
-        return TestApp(tmp.root, { database ->
-            listOf(RequestsRoutes(TestParts.of(database, tmp.root, backgroundScope, queue), clock = { NOW },
-                                  zone = { madrid }))
+    private fun app(limit: Int = JobQueue.LIMIT,
+                    queue: JobQueue = JobQueue(scope, limit = limit, clock = { now }, commands = commands),
+                    zone: ZoneId = ZoneId.of("Europe/Madrid")): Pair<TestApp, JobQueue> =
+        TestApp(tmp.root, { database ->
+            listOf(RequestsRoutes(TestParts.of(database, tmp.root, scope, queue), clock = { now }, zone = { zone }))
         }) to queue
-    }
 
     private fun lookup(title: String, songbooks: Boolean = true) = JobSpec(
         "Look up A - $title", "a/${title.lowercase()}", "song", emptyList(), display = "A - $title",
         commands = JobCommands.lookupSteps("A", title, songbooks = songbooks), fetching = true,
     )
 
-    @Test fun requestsJsonIsThePagesScriptsAlone() = runTest {
+    /** The job once over. */
+    private fun ended(queue: JobQueue, job: Job): Job = runBlocking { withTimeout(10_000) { queue.await(job.id) } }
+
+    /** Once the job runs. */
+    private fun running(queue: JobQueue, job: Job) {
+        val deadline = System.nanoTime() + 10_000_000_000L
+        while (queue.job(job.id)!!.state != Job.RUNNING) {
+            check(System.nanoTime() < deadline) { "request ${job.id} never ran" }
+            Thread.sleep(2)
+        }
+    }
+
+    private fun release(queue: JobQueue, held: Job) {
+        gate.complete(Unit)
+        ended(queue, held)
+    }
+
+    private fun says(request: kotlinx.serialization.json.JsonObject): String =
+        request.getValue("says").jsonObject.getValue("text").jsonPrimitive.content
+
+    @Test fun requestsJsonIsThePagesScriptsAlone() {
         val (test, _) = app()
         test.use {
             assertEquals(403, test.get("/requests.json").status)
@@ -79,21 +107,21 @@ class RequestsRoutesTest {
         }
     }
 
-    @Test fun theFeedHasTheRunningRequestThoseQueuedAndThoseOverEachOutputOpenedAsAsked() = runTest {
+    @Test fun theFeedHasTheRunningRequestThoseQueuedAndThoseOverEachOutputOpenedAsAsked() {
         val (test, queue) = app()
         test.use {
             val done = queue.submit(lookup("Done")).first
-            runCurrent()
+            ended(queue, done)
             val held = queue.submit(lookup("Held")).first
             val waiting = queue.submit(lookup("Waits")).first
-            runCurrent()
+            running(queue, held)
             val feed = test.script("/requests.json?open=${done.id},x").json.jsonObject
             assertEquals(JsonPrimitive(2), feed["active"])
             val groups = feed.getValue("groups").jsonArray.map { it.jsonObject }
             assertEquals(listOf("Now", "Today"), groups.map { it.getValue("name").jsonPrimitive.content })
-            val now = groups[0].getValue("requests").jsonArray.map { it.jsonObject }
-            assertEquals(listOf(held.id, waiting.id), now.map { it.getValue("id").jsonPrimitive.content.toInt() })
-            assertEquals("Queued, next", now[1].getValue("says").jsonObject.getValue("text").jsonPrimitive.content)
+            val current = groups[0].getValue("requests").jsonArray.map { it.jsonObject }
+            assertEquals(listOf(held.id, waiting.id), current.map { it.getValue("id").jsonPrimitive.content.toInt() })
+            assertEquals("Queued, next", says(current[1]))
             val over = groups[1].getValue("requests").jsonArray.single().jsonObject
             assertEquals(done.id, over.getValue("id").jsonPrimitive.content.toInt())
             val output = over.getValue("output").jsonObject
@@ -104,42 +132,94 @@ class RequestsRoutesTest {
                          })
             assertTrue(" · requested 2026-11-04 00:30 CET" in output.getValue("meta").jsonPrimitive.content,
                        output.getValue("meta").toString())
-            assertTrue("lines" !in now[0].getValue("output").jsonObject.getValue("steps").jsonArray.single().jsonObject)
-            gate.complete(Unit)
-            runCurrent()
+            assertTrue("lines" !in current[0].getValue("output").jsonObject.getValue("steps").jsonArray.single().jsonObject)
+            release(queue, held)
         }
     }
 
-    @Test fun tryAgainQueuesARequestOverAgainWithItsCommandsAsJobsRoutesDoes() = runTest {
+    @Test fun eachRequestOverSaysItsOutcomeAndTheRunningOneItsSteps() {
+        val (test, queue) = app()
+        test.use {
+            val failed = queue.submit(lookup("Fails")).first
+            ended(queue, failed)
+            val held = queue.submit(lookup("Held")).first
+            running(queue, held)
+            val groups = test.script("/requests.json").json.jsonObject.getValue("groups").jsonArray.map { it.jsonObject }
+            val shown = groups.first().getValue("requests").jsonArray.single().jsonObject
+            assertEquals(held.id, shown.getValue("id").jsonPrimitive.content.toInt())
+            assertEquals(listOf("Song", "Match", "Sheet", "PDF", "Lyrics", "Extras", "Songbooks"),
+                         shown.getValue("steps").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content })
+            val over = groups.last().getValue("requests").jsonArray.single().jsonObject
+            assertEquals(failed.id, over.getValue("id").jsonPrimitive.content.toInt())
+            assertEquals("Failed", says(over))
+            assertEquals("it failed.", over.getValue("reason").jsonPrimitive.content)  // its error line, as outcome._sentence ends it
+            val again = over.getValue("actions").jsonArray.single().jsonObject
+            assertEquals("Try again", again.getValue("label").jsonPrimitive.content)
+            assertEquals("/jobs/again", again.getValue("post").jsonPrimitive.content)
+            assertEquals(JsonPrimitive("${failed.id}"), again.getValue("fields").jsonObject["job"])
+            release(queue, held)
+        }
+    }
+
+    @Test fun aLookupThatEndedWaitingForThePickSaysSoAndOffersThePicker() {
+        val queue = JobQueue(scope, clock = { now }, commands = Commands(mapOf(
+            "get" to CommandRunner { _, context ->
+                for (stage in listOf("song", "match")) context.stage(stage, Job.DONE)
+                context.stage("sheet", Job.SKIPPED, "needs review first")
+            },
+        )))
+        val (test, _) = app(queue = queue, zone = ZoneId.of("UTC"))
+        test.use {
+            val id = test.database.writeBlocking { db ->
+                db.execute("INSERT INTO songs (key, artist, title, artists, added_at, created_at, updated_at, review, " +
+                           "match_candidates) VALUES ('a/picked', 'A', 'Picked', '[\"A\"]', '2026-11-01T00:00:00Z', " +
+                           "'2026-11-01T00:00:00Z', '2026-11-01T00:00:00Z', 1, " +
+                           "'[{\"artist_key\": \"a\", \"song_key\": \"picked\", \"score\": 80}]')")
+                db.lastRowid()
+            }
+            ended(queue, queue.submit(lookup("Picked")).first)
+            val over = test.script("/requests.json").json.jsonObject.getValue("groups").jsonArray.single().jsonObject
+                .getValue("requests").jsonArray.single().jsonObject
+            assertEquals("Needs review", says(over))
+            assertEquals("/review?song=$id",
+                         over.getValue("actions").jsonArray.single().jsonObject.getValue("href").jsonPrimitive.content)
+            val sheet = over.getValue("output").jsonObject.getValue("stages").jsonArray.map { it.jsonObject }
+                .single { it.getValue("label").jsonPrimitive.content == "The sheet" }
+            assertEquals("Waits for a pick", sheet.getValue("badge").jsonObject.getValue("text").jsonPrimitive.content)
+            assertEquals(Feed.PICK_STAGE, sheet.getValue("note").jsonPrimitive.content)
+        }
+    }
+
+    @Test fun tryAgainQueuesARequestOverAgainWithItsCommandsAsJobsRoutesDoes() {
         val (test, queue) = app()
         test.use {
             val first = queue.submit(lookup("Fails", songbooks = false)).first
             val search = queue.submit(JobSpec("Search LaCuerda for x", "lacuerda-search:x", "lacuerda-search",
                                               emptyList(), commands = JobCommands.lacuerdaSearchSteps("x", auto = true))).first
-            runCurrent()
-            assertEquals(Job.FAILED, queue.job(first.id)!!.state)
+            assertEquals(Job.FAILED, ended(queue, first).state)
+            ended(queue, search)
             ran.clear()
             val script = test.postScript("/jobs/again", listOf("job" to "${first.id}"))
             assertEquals(200, script.status, script.text)
             val view = script.json.jsonObject.getValue("job").jsonObject
             val again = view.getValue("id").jsonPrimitive.content.toInt()
             assertTrue(again > search.id)
-            runCurrent()
+            ended(queue, queue.job(again)!!)
             // made with its songbooks now: no --no-songbooks before --
-            assertEquals(listOf(JobCommands.lookupSteps("A", "Fails").single().args), ran)
+            assertEquals(listOf(JobCommands.lookupSteps("A", "Fails").single().args), ran.toList())
             val page = test.post("/jobs/again", listOf("job" to " ${search.id} "))
             assertEquals(303, page.status)
             assertEquals("/#tab=requests", page.header("Location"))
-            runCurrent()
+            ended(queue, queue.snapshot().first())
             assertEquals(listOf("lacuerda", "--search=x", "--progress"), ran.last())  // asked by hand: no --auto
         }
     }
 
-    @Test fun tryAgainRefusesInCaracoleServesWords() = runTest {
+    @Test fun tryAgainRefusesInCaracoleServesWords() {
         val (test, queue) = app()
         test.use {
-            val running = queue.submit(lookup("Held")).first
-            runCurrent()
+            val held = queue.submit(lookup("Held")).first
+            running(queue, held)
             fun refused(job: String): Pair<Int, String> = test.postScript("/jobs/again", listOf("job" to job)).let {
                 it.status to it.text
             }
@@ -149,23 +229,19 @@ class RequestsRoutesTest {
             assertEquals(400, refused("٣").first)  // a digit of another script is no request's
             assertEquals(404, refused("99").first)
             assertEquals(404, refused("999999999999").first)
-            val (status, text) = refused("${running.id}")
+            val (status, text) = refused("${held.id}")
             assertEquals(409, status)
             assertTrue("still queued or running" in text, text)
-            gate.complete(Unit)
-            runCurrent()
+            release(queue, held)
         }
     }
 
-    @Test fun aRequestOfThePhonesOwnReadBackFromTheHistoryHasNothingToRunAgain() = runTest {
+    @Test fun aRequestOfThePhonesOwnReadBackFromTheHistoryHasNothingToRunAgain() {
         val history = JobHistory(tmp.newFile("requests.jsonl").also { it.delete() })
-        val first = JobQueue(backgroundScope, history = history)
-        first.submit(JobSpec("Import the index", "index", "index", listOf("merge" to "Merging the index")) {})
-        runCurrent()
-        val queue = JobQueue(backgroundScope, history = history, commands = commands)
-        val test = TestApp(tmp.root, { database ->
-            listOf(RequestsRoutes(TestParts.of(database, tmp.root, backgroundScope, queue)))
-        })
+        val first = JobQueue(scope, history = history)
+        ended(first, first.submit(JobSpec("Import the index", "index", "index",
+                                          listOf("merge" to "Merging the index")) {}).first)
+        val (test, queue) = app(queue = JobQueue(scope, history = history, commands = commands))
         test.use {
             val old = queue.snapshot().single()
             val answer = test.postScript("/jobs/again", listOf("job" to "${old.id}"))
@@ -174,18 +250,17 @@ class RequestsRoutesTest {
         }
     }
 
-    @Test fun aFullQueueRefusesTryAgainAsEveryRequestIsRefused() = runTest {
+    @Test fun aFullQueueRefusesTryAgainAsEveryRequestIsRefused() {
         val (test, queue) = app(limit = 1)
         test.use {
             val over = queue.submit(lookup("Done")).first
-            runCurrent()
-            queue.submit(lookup("Held"))
-            runCurrent()
+            ended(queue, over)
+            val held = queue.submit(lookup("Held")).first
+            running(queue, held)
             val answer = test.postScript("/jobs/again", listOf("job" to "${over.id}"))
             assertEquals(503, answer.status)
             assertTrue(JobQueue.QUEUE_FULL in answer.text, answer.text)
-            gate.complete(Unit)
-            runCurrent()
+            release(queue, held)
         }
     }
 }

@@ -131,8 +131,9 @@ data class SongFacts(val sheet: String? = null, val review: Boolean = false, val
                 ?.let { (it["href"] as? JsonPrimitive)?.content }
         }
 
-        /** review.candidates_of(song) has one: a stored candidate that names a UG song. */
-        private fun hasCandidates(song: SongRow): Boolean {
+        /** review.candidates_of(song) has one: a stored candidate that names a UG song (the Requests tab's picks
+         * too, RequestsRoutes). */
+        internal fun hasCandidates(song: SongRow): Boolean {
             val stored = try {
                 Json.parseToJsonElement(song.matchCandidates.ifEmpty { "[]" })
             } catch (e: IllegalArgumentException) {

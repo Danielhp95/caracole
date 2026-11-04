@@ -1,6 +1,10 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.library.OverridesStore
+import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.server.PhoneParts
@@ -11,6 +15,7 @@ import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
+import io.github.danielhp95.caracole.server.jobs.Chip
 import io.github.danielhp95.caracole.server.jobs.Feed
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobNotOver
@@ -18,9 +23,13 @@ import io.github.danielhp95.caracole.server.jobs.JobNotRepeatable
 import io.github.danielhp95.caracole.server.jobs.JobQueue
 import io.github.danielhp95.caracole.server.jobs.JobViews
 import io.github.danielhp95.caracole.server.jobs.JobsRoutes
+import io.github.danielhp95.caracole.server.jobs.Outcomes
 import io.github.danielhp95.caracole.server.jobs.QueueFull
+import io.github.danielhp95.caracole.server.jobs.SongFacts
 import io.github.danielhp95.caracole.server.routes.library.Answers
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import java.time.Instant
 import java.time.ZoneId
 
@@ -50,15 +59,70 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
 
     private val queue: JobQueue get() = parts.queue
 
-    /** Every request, as the Requests tab draws it: the one that runs and those queued, then the finished ones; what
-     * each command printed only for the requests the tab has opened ([open]: `?open=N,M`). */
+    /** What each job over came to, worked out once: the queue's, which /jobs.json's views share (SongFacts.ended). */
+    private val ended = SongFacts.ended(queue)
+
+    /**
+     * Every request, as the Requests tab draws it (jobs_routes.requests_json): the one that runs and those queued,
+     * then the finished ones, each with its outcome and its next step; what each command printed only for the requests
+     * the tab has opened ([open]: `?open=N,M`). Each job's line is the one /jobs.json gives it (JobViews.line: its
+     * song's facts, a songbook's page), the running one's chips and each finished one's outcome are Outcomes', and a
+     * song a finished request waits for a pick of is [picksWaiting]'s. The database unreadable, the lines say only how
+     * the jobs went.
+     */
     private fun requestsJson(open: String?): Response {
         val opened = JobsRoutes.jobIds(open) ?: emptySet()
         val jobs = queue.snapshot()
-        // waiting on job-views: each job's line with what the library knows of its song (Status, SongFacts), the
-        // running one's chips and each finished one's outcome (Outcomes), and the songs that wait for a pick.
-        val lines = jobs.associate { job -> job.id to JobViews.line(job, ahead(jobs, job)) }
-        return json(Feed.feed(jobs, lines, opened = opened, now = clock(), zone = zone()))
+        val now = clock()
+        var songs: Map<Int, Pair<Long?, SongFacts?>> = emptyMap()
+        var books: Map<Int, String?> = emptyMap()
+        var picks: Map<String, Feed.Pick> = emptyMap()
+        try {
+            parts.database.read { db ->
+                ended.forget(jobs)
+                songs = jobs.associate { it.id to ended.songOf(db, it, parts.cards, now) }
+                books = jobs.associate { it.id to JobsRoutes.songbookPage(db, it) }
+                picks = picksWaiting(db, jobs)
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {  // the lines say only how the jobs went, then
+            songs = emptyMap()
+            books = emptyMap()
+            picks = emptyMap()
+        }
+        val facts = songs.mapValues { it.value.second }
+        val lines = jobs.associate { job ->
+            job.id to JobViews.line(job, ahead(jobs, job), facts[job.id], songbookPage = books[job.id])
+        }
+        val outcomes = jobs.filter { !it.active }.associate { job ->
+            job.id to Outcomes.outcome(job, lines.getValue(job.id), facts[job.id], songs[job.id]?.first).asJson()
+        }
+        val steps = jobs.filter { it.state == Job.RUNNING }.associate { job ->
+            job.id to Outcomes.steps(job, facts[job.id]).map(Chip::asJson)
+        }
+        return json(Feed.feed(jobs, lines, outcomes, steps, picks, opened, now, zone()))
+    }
+
+    /**
+     * review_routes.picks_waiting on the phone: the songs of finished requests that wait for a pick now, by the
+     * request's key, as review_routes._offer offers them: a song in review with candidates to pick from (not one
+     * ignored); a song the offline index didn't match, whose pick is what `caracole search` finds (`search`).
+     */
+    private fun picksWaiting(db: Db, jobs: List<Job>): Map<String, Feed.Pick> {
+        val picks = LinkedHashMap<String, Feed.Pick>()
+        for (key in jobs.filter { !it.active }.map { it.key }.toSortedSet()) {
+            val song = Songs.byKey(db, key) ?: continue
+            offer(db, song)?.let { picks[key] = it }
+        }
+        return picks
+    }
+
+    private fun offer(db: Db, song: SongRow): Feed.Pick? {
+        if (song.status == "ignored" || "ignore" in OverridesStore.songEntries(db, song.key)) return null
+        if (song.review) return if (SongFacts.hasCandidates(song)) Feed.Pick(song.id) else null
+        if (song.matchDecision != "not_found") return null
+        return Feed.Pick(song.id, search = true)
     }
 
     /** A request that is over, its commands queued again as a new request (Try again); back to the Requests tab. */
@@ -77,7 +141,21 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
         } catch (e: QueueFull) {
             throw Refused(503, "The queue is full", JobQueue.QUEUE_FULL)
         }
-        return Answers.queued(JobViews.view(queued, queue), "/${JobViews.REQUESTS}")
+        return Answers.queued(view(queued), "/${JobViews.REQUESTS}")
+    }
+
+    /** A job just queued, as /jobs.json gives it to the library page's script (WebApp.job_view): its song as the
+     * library has it now; the job alone when the database can't be read. */
+    private fun view(job: Job): JsonObject = try {
+        parts.database.read { db ->
+            val (songId, facts) = ended.songOf(db, job, parts.cards, clock())
+            JobViews.view(job, if (job.state == Job.QUEUED) queue.ahead(job) else 0, songId, facts = facts,
+                          songbookPage = JobsRoutes.songbookPage(db, job))
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {  // the job is queued all the same
+        JobViews.view(job, queue)
     }
 
     /** The request a form names (`job`): plain digits, twelve at most; Refused (400) when it names none; null for a
