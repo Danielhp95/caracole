@@ -38,8 +38,8 @@ settings, a file read from the phone's server for another app, an index fetched 
    - or copy the APK to the phone and open it there. Android asks you to allow installs from that app (Files, say)
      once.
 2. **Open it**: caracole, in the launcher. The first start opens Settings: type the computer's address there, tap
-   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty; its
-   pages say caracole, with a Phone badge beside it.
+   **Test**, then **Sync now** ([below](#point-it-at-caracole-serve)). Until then the library page is empty. Its
+   pages say caracole, with a Phone badge beside it (a sync doesn't bring the computer's library name yet).
 3. **Import the indexes**, so that its search finds the sites' songs with the computer off: Settings › Import
    indexes › **From the computer** (caracole serve at that address), or **From a file**, one made on the computer
    with `caracole index export indexes.sqlite` and copied to the phone (`adb push indexes.sqlite /sdcard/Download/`,
@@ -245,8 +245,9 @@ serve has no sign-in, so any app on the phone can use it on 127.0.0.1.
 To try the app by hand there, install it as on a phone
 (`adb install -r android/app/build/outputs/apk/debug/app-debug.apk`), start it
 (`adb shell am start -n io.github.danielhp95.caracole/.MainActivity`, or from the emulator's launcher), and point it
-at a computer of its own: `nix develop -c python -m tests.helpers.e2e_library serve DIR PORT` builds a
-library of 20 songs in DIR with no request and serves it, which the emulator reaches at `http://10.0.2.2:PORT`. Its
+at a computer of its own: `nix develop -c python -m tests.helpers.e2e_library serve DIR PORT --address 127.0.0.1`
+builds a library of 20 songs in DIR with no request and serves it on the host's loopback alone (caracole serve has
+no sign-in: never on the LAN for a test), which the emulator reaches at `http://10.0.2.2:PORT`. Its
 Settings then imports that computer's indexes (From the computer), or a file pushed to the emulator's Download
 folder (`adb push indexes.sqlite /sdcard/Download/`, then From a file). `adb shell pm clear
 io.github.danielhp95.caracole` starts it over, as new. Never PORT 8737 on a machine whose caracole-web listens there.
@@ -260,12 +261,12 @@ LocalServerTest needs no computer: the app's server answers its page only with t
 never loads another loopback port, and a first start's database is made whole. SyncTabTest opens the Sync tab from
 the menu, compares with the computer and syncs, then compares again and finds nothing that differs (it changes the
 phone's library, so give it a computer of its own, such as `nix develop -c python -m tests.helpers.e2e_library serve
-DIR PORT`):
+DIR PORT --address 127.0.0.1`):
 
     nix develop ./android -c gradle -p android assembleDebug assembleDebugAndroidTest
     adb install -r -t android/app/build/outputs/apk/debug/app-debug.apk
     adb install -r -t android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-    adb shell am instrument -w -e server http://10.0.2.2:8737 \
+    adb shell am instrument -w -e server http://10.0.2.2:PORT \
         io.github.danielhp95.caracole.test/io.github.danielhp95.caracole.CaracoleTestRunner
 
 Add `-e class io.github.danielhp95.caracole.PinchTest` to run one of them. The runner, `CaracoleTestRunner`, lets the
