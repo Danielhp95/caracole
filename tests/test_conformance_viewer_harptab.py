@@ -65,23 +65,28 @@ lyric, label, parts, placement, confidence, trusted, above, digest]``: its ``par
 places in the row's groups and the length of the words sung from there, in code points (the parts' words together end
 ``lyric.rstrip()``, so the lengths are the words), ``placement`` its Counter as a dict, ``digest`` its text, groups
 and unknown by their digest (the groups are its line's scan, which harptab_read's records hold); a section's other
-items ``["words", lines]``, ``["prose", text]``, ``["gap"]``, ``["legend", legend]``. Each record is one of:
+items ``["words", lines]``, ``["prose", text]``, ``["gap"]``, ``["legend", legend]``. Most answers are kept by their
+digest, to keep the file within the viewer's budget (tests/conformance/budget.json): one compares as strictly, and
+the whole ones, ``LayoutTest``'s cases and Python's own tell where an answer differs. Each record is one of:
 
-- ``parse_of(body, harp, spec)``: ``parse(body, harp=, notation=pinned(spec, body))`` (``spec`` null for none):
-  ``{"notes", "sections": [[label, chorus, items], …], "reading": its digest (``reading_digest``), "key", "missed",
-  "chromatic", "legend", "harp", "convention", "readable", "kinds": each line's kind, a letter of ``_KINDS_SHORT``,
-  "above": ``_above``'s}``, whole for ``LAYOUT_WHOLE``'s tabs and one in ``LAYOUT_WHOLE_EVERY`` of the others, else
-  ``{"short": its digest, "kinds", "above"}``. The tabs: harptab_read's (a text one as ``{"read": n}``, the body of
-  that file's n-th ``tab_of`` record), and ``layout_tab``'s drawn ones; each also read as its second reading's pin
-  says (``spec_of``), where it has one.
+- ``parse_of(tabs)``: each ``[body, harp, specs]`` → ``[layout for each spec]``, ``parse(body, harp=,
+  notation=pinned(spec, body))`` (``spec`` null for none) as ``{"notes", "sections": [[label, chorus, items], …],
+  "reading": its digest (``reading_digest``), "key", "missed", "chromatic", "legend", "harp", "convention",
+  "readable", "kinds": each line's kind, a letter of ``_KINDS_SHORT``, "above": ``_above``'s}``, whole for
+  ``LAYOUT_WHOLE``'s tabs read as they read, else by its digest. The tabs: harptab_read's (a text one as ``{"read":
+  n}``, the body of that file's n-th ``tab_of`` record), and ``DRAWN`` tabs of ``layout_tab``'s; each read as it
+  reads, then as its second reading's pin says (``spec_of``), where it has one that pins a notation.
+- ``lines_of(tabs)``: each ``[body, places]`` → the digest of ``line_of``'s answer for each of the tab's lines there
+  (``worded_lines``: every line of words, as ``parse`` prepares them), for ``LINES_FROM``'s tabs.
 - ``line_of(lines)``: each line → ``[_is_label, _is_label(beside_row=True), _label_text (null unless either),
-  _is_prose([line, "la la"]), _syllables, named_key([line])]``: ``EDGE_LINES`` and the lines of words of
-  ``LAYOUT_WHOLE``'s tabs. ``named_key_of(blocks)``: ``named_key`` of a few blocks.
+  _is_prose([line, "la la"]), _syllables, named_key([line])]``: ``EDGE_LINES``. ``named_key_of(blocks)``:
+  ``named_key`` of a few blocks.
 - ``syllable_starts_of(lyrics)``: ``EDGE_LYRICS`` and one in ``LYRICS_EVERY`` of the rows' words.
 - ``align_of(items)``: ``[line, lyric, notation, reach, trusted]`` → ``align`` of the row ``scan(line)`` gives, with
-  those words: ``[parts, placement]`` (``drawn_alignment``: holes on, near, inside and past the syllables).
-- ``cuts_of(items)``: ``[lyric, [a, b], anchors, fixed]`` → ``_cuts``: drawn words, and ``MAX_CUTS``'s edges
-  (``cut_inputs``).
+  those words: ``[parts, placement]`` (``alignments``: holes on, near, inside and past the syllables, every row one
+  ``align`` places).
+- ``cuts_of(items)``: ``[lyric, [a, b], anchors, fixed]`` → ``_cuts``: drawn words, ``TIED_CUTS`` and ``MAX_CUTS``'s
+  edges (``cut_inputs``).
 
 Regenerate: ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_conformance_viewer_harptab.py``, then
 ``nix develop ./android -c gradle -p android :viewer:test``.
@@ -90,6 +95,7 @@ Regenerate: ``CARACOLE_CORPUS=write nix develop -c pytest -q -n 0 tests/test_con
 from __future__ import annotations
 
 import ast
+import dataclasses
 import functools
 import hashlib
 import json
@@ -97,6 +103,8 @@ import random
 import re
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from caracole import harptabs
 from caracole.viewer import harptab
@@ -785,16 +793,19 @@ def test_every_preset_and_every_kind_of_record_is_in_the_vectors():
 # --- the layout (lane harptab-layout): vectors/viewer/harptab_layout.jsonl -------------------------------------------
 
 LAYOUT_SEED = SEED + 1000
-LAYOUT_WHOLE = ("harptabs/tabs/", "harptabs/layout/")  # kept whole
-LAYOUT_WHOLE_EVERY = 12  # of the other tabs, one in this many kept whole, the others by their digest
-LAYOUT_PINNED_WHOLE = ("harptabs/layout/",)  # a tab read as another reading's pin says, kept whole
-LYRICS_EVERY = 3  # of the rows' words, one in this many for syllable_starts_of
-ALIGNMENTS = 250  # rows drawn for align_of
-CUT_WORDS = 160  # words drawn for cuts_of
+# The tabs whose layout is kept whole (read as they read, unpinned): layout/'s small ones, between them rows with their
+# words below and above, prose, the tabber's words, gaps and notes. Every other layout is kept by its digest.
+LAYOUT_WHOLE = ("harptabs/layout/14346_", "harptabs/layout/16988_", "harptabs/layout/20960_",
+                "harptabs/layout/23467_", "harptabs/layout/28721_")
+LINES_FROM = ("harptabs/tabs/", "harptabs/layout/")  # the tabs whose lines of words lines_of reads
+DRAWN = 24  # tabs drawn for the layout (layout_tab)
+LYRICS_EVERY = 10  # of the rows' words, one in this many for syllable_starts_of
+ALIGNMENTS = 150  # rows drawn for align_of
+CUT_WORDS = 80  # words drawn for cuts_of
 _KINDS_SHORT = {"legend": "l", "blank": "b", "holes": "h", "missed": "m", "text": "t"}
 # Lines the layout reads as a section's name, a row's words, the tabber's prose or a harp's key, each way it reads
-# them: test_viewer_harptab_layout.py's headings, and the edges of each rule (32 characters, "--", a colon, an
-# address, a repeat mark, a key's sharp or flat).
+# them: test_viewer_harptab_layout.py's headings, and the edges of each rule (32 characters stripped, and 31, 33 and
+# 34, "--", a colon, an address, a repeat mark, a key's sharp or flat).
 EDGE_LINES = (
     "End of the road", "Break my heart", "Break it down", "Chorus", "INTRO", "fade:", "(D harp):", "Synth 1:",
     "bar 12:", "Refr.:", "(Chorus)", "[V1]", "2. Strophe:", "Harp: C", "A part:", "refrain :", "(Repetir 2x)",
@@ -810,6 +821,8 @@ EDGE_LINES = (
     "C harmonika", "harmonica: G", "Harp: C#m", "HARP IN e", "play it on a G  harp", "harp de A", "harp Ab.",
     "harpa en C", "AB harp", "Gb harmonica", "harmonica in B♭", "Øl, øl og mere øl.", "rhythm", "ÉXHALE", "日本語",
     "  indented words  ", "　wide space", "la\tla", "don't stop", "rock'n'roll", "4 5 6", "do 3, slip to 6",
+    "a" * 31 + ":", "[" + "a" * 30 + "]", "(" + "a" * 30 + ")", "  " + "a" * 31 + "-  ", "Chorus " + "a" * 25,
+    "[" + "a" * 31 + "]",
 )
 # Words a row is sung to, for syllable_starts and the rows drawn: hyphens, commas and stops inside a word and at its
 # ends, letters of every script, digits.
@@ -817,6 +830,15 @@ EDGE_LYRICS = (
     "des-ert hea-vy,and", "On des-ert", "tomorrow", "air--", "la la la", "an - y - bo - dy", "-x x- -x-", "a--b",
     "a.b,c;d!e?f", "4-ever 2-day", "¿qué? ¡sí!", "Straße-weg", "日本-語 🎵-a", "corazón,mío", "x_y-z", "a,,b",
     "'tis-the", "rock'n'roll", "", "   ", " leading", "trailing   ", "ΑΣ-ΒΓ", "naïve-café", "a-1b", "a-_b",
+)
+# Words whose best cuts tie, or all but tie, between two ways that weigh each of _cuts' numbers apart (a cut's 0.6 a
+# column from its hole, _rank's 0.8 and 1.6): each answer moves if one of them does.
+TIED_CUTS = (
+    ["nseadizt", [0, 8], [3, 4, 7], [0, 8]], ["aimifsw", [0, 7], [1, 2, 5], [0, 7]],
+    ["pguipafvxr", [0, 10], [3, 4, 7], [0, 10]], ["paoxyw", [0, 6], [1, 4, 5], [0, 6]],
+    ["tepfaushnpm", [0, 11], [3, 4, 9], [0, 11]], ["oehciygtzy", [0, 10], [1, 6, 8], [0, 10]],
+    ["itxhuixxl", [0, 9], [1, 5, 8], [0, 9]], ["wrvhoyzbuii", [0, 11], [1, 10], [0, 11]],
+    ["zphhiondeahl", [0, 12], [6, 11], [0, 12]], ["ziaerxl", [0, 7], [1, 4, 5], [0, 7]],
 )
 
 
@@ -864,17 +886,26 @@ def tab_layout(t: harptab.Tab, kinds: str, above: bool) -> dict:
             "convention": t.convention, "readable": t.readable, "kinds": kinds, "above": above}
 
 
-def layout_of(body: str, chip: str | None, notation: Notation | None, whole: bool) -> dict:
-    """``parse(body, harp=chip, notation=)``, whole or by its digest (with its lines' kinds, each a letter of
-    ``_KINDS_SHORT``, and whether it writes its words above its rows, kept whole either way)."""
+@dataclasses.dataclass(frozen=True)
+class Laid:
+    """One tab parsed for the records: as a record names it, read as it reads or as ``spec`` pins it."""
+    ref: Any
+    chip: str | None
+    spec: Any
+    tab: harptab.Tab
+    layout: dict  # tab_layout's
+
+
+def laid(ref: Any, body: str, chip: str | None, spec: Any, notation: Notation | None) -> Laid:
+    """``parse(body, harp=chip, notation=)``, with its lines' kinds (each a letter of ``_KINDS_SHORT``) and whether it
+    writes its words above its rows."""
     t = harptab.parse(body, harp=chip, notation=notation)
     found_chip, lines, legends, in_legend = harptab._prepared(body, chip)
     _, scans = harptab.read(["" if n in in_legend else line for n, line in enumerate(lines)], harp_chip=found_chip,
                             notation=notation, legends=legends)
     kinds = harptab._line_kinds(lines, scans, in_legend)
     above = harptab._above(lines, kinds, scans)
-    out = tab_layout(t, "".join(_KINDS_SHORT[k] for k in kinds), above)
-    return out if whole else {"short": short(out), "kinds": out["kinds"], "above": above}
+    return Laid(ref, chip, spec, t, tab_layout(t, "".join(_KINDS_SHORT[k] for k in kinds), above))
 
 
 def layout_tabs() -> list[tuple[Any, str, str | None]]:
@@ -883,8 +914,30 @@ def layout_tabs() -> list[tuple[Any, str, str | None]]:
     (``layout_tab``)."""
     rng = random.Random(LAYOUT_SEED)
     out = [(ref if "fixture" in ref else {"read": n}, body, chip) for n, (ref, body, chip) in enumerate(tabs())]
-    out += [({"text": body}, body, rng.choice(CHIPS)) for body in (layout_tab(rng) for _ in range(40))]
+    out += [({"text": body}, body, rng.choice(CHIPS)) for body in (layout_tab(rng) for _ in range(DRAWN))]
     return out
+
+
+@functools.cache
+def layout_parses() -> tuple[tuple[tuple[Any, str, str | None], tuple[Laid, ...]], ...]:
+    """Each tab of ``layout_tabs`` parsed as it reads, then as its second reading's pin says (``spec_of``) where it has
+    one that pins a notation: the rows another notation draws, or a tab shown as written."""
+    out = []
+    for tab in layout_tabs():
+        ref, body, chip = tab
+        parses = [laid(ref, body, chip, None, None)]
+        found = harptab.readings(body, harp=chip)
+        if len(found) > 1:
+            spec = harptab.spec_of(found[1])
+            notation = harptab.pinned(spec, body)
+            if notation is not None:
+                parses.append(laid(ref, body, chip, spec, notation))
+        out.append((tab, tuple(parses)))
+    return tuple(out)
+
+
+def _whole(p: Laid) -> bool:
+    return p.spec is None and isinstance(p.ref, dict) and p.ref.get("fixture", "").startswith(LAYOUT_WHOLE)
 
 
 _PROSE = ("Listen to the record first", "Repeat the chorus", "https://example.com/tab", "Enjoy it",
@@ -961,6 +1014,27 @@ def drawn_alignment(rng: random.Random) -> tuple[str, str]:
     return line, lyric
 
 
+_NOTATIONS_BY_ROW = {notation_row(n): n for n in PRESETS}
+
+
+def alignments(rng: random.Random) -> list[list]:
+    """``ALIGNMENTS`` rows for ``align_of``: ``[line, lyric, notation, reach, trusted]``, each one ``align`` can place
+    (a trusted row with words has a group of holes, as every row ``parse`` trusts has: what it couldn't read goes with
+    a hole), the others drawn again; a row of no holes is aligned played alone or shown as written."""
+    notations = (harptab.SIGNS, harptab.SIGNS, harptab.SIGNS, harptab.BRACKETS, harptab.LETTERS)
+    out: list[list] = []
+    while len(out) < ALIGNMENTS:
+        line, lyric = drawn_alignment(rng)
+        notation = rng.choice(notations)
+        reach = rng.choice((3, 3, 3, 3, 0, 1, 5))
+        item = [line, lyric if rng.random() < 0.95 else None, notation_row(notation), reach, rng.random() < 0.95]
+        groups = harptab.scan(line, notation=notation).groups
+        if item[1] is not None and item[4] and groups and not any(g.holes for g in groups):
+            continue
+        out.append(item)
+    return out
+
+
 def drawn_cut(rng: random.Random) -> list:
     """A word with holes written inside it, for ``_cuts``: ``[lyric, [a, b], anchors, fixed]``."""
     letters = "aeiouybcdfghlmnprstvwxzáñ'"
@@ -975,9 +1049,10 @@ def drawn_cut(rng: random.Random) -> list:
 
 
 def cut_inputs(rng: random.Random) -> list[list]:
-    """Drawn words, and the edges of ``MAX_CUTS``: one word's every way weighed (59 holes × 338 places, just under),
-    or none (59 × 339, just over: no cut), at exactly ``MAX_CUTS`` (100 × 200), and counts past any machine word."""
-    out = [drawn_cut(rng) for _ in range(CUT_WORDS)]
+    """Drawn words, ``TIED_CUTS``, and the edges of ``MAX_CUTS``: one word's every way weighed (59 holes × 338
+    places, just under), or none (59 × 339, just over: no cut), at exactly ``MAX_CUTS`` (100 × 200), and counts past
+    any machine word."""
+    out = [drawn_cut(rng) for _ in range(CUT_WORDS)] + [list(item) for item in TIED_CUTS]
     for holes, places in ((59, 338), (59, 339), (100, 200), (2, 3), (30, 77)):
         word = ("ba" * places)[:places + 1]
         anchors = sorted(rng.sample(range(1, places + 1), holes))
@@ -985,64 +1060,6 @@ def cut_inputs(rng: random.Random) -> list[list]:
     word = "a" + "bcdefghijklmnopqrstuvwxyz" * 3  # test_a_word_with_many_holes_inside_never_takes_long
     out.append([word, [0, len(word)], list(range(1, 60, 2)), [0, len(word)]])
     return out
-
-
-def layout_records() -> list[dict]:
-    rng = random.Random(LAYOUT_SEED + 1)
-    out: list[dict] = []
-    lyrics: dict[str, None] = {}
-    lines: dict[str, None] = dict.fromkeys(EDGE_LINES)
-    for n, (ref, body, chip) in enumerate(layout_tabs()):
-        fixture = isinstance(ref, dict) and ref.get("fixture", "")
-        whole = bool(fixture and fixture.startswith(LAYOUT_WHOLE)) or n % LAYOUT_WHOLE_EVERY == 0
-        out.append({"fn": HELPER + "parse_of", "args": [ref, chip, None], "out": layout_of(body, chip, None, whole)})
-        # read as another reading's pin says: the rows another notation draws, or shows as written
-        found = harptab.readings(body, harp=chip)
-        if len(found) > 1 and (fixture or n % 3 == 0):
-            spec = harptab.spec_of(found[1])
-            notation = harptab.pinned(spec, body)
-            if notation is not None:
-                pinned_whole = bool(fixture and fixture.startswith(LAYOUT_PINNED_WHOLE)) or n % LAYOUT_WHOLE_EVERY == 0
-                out.append({"fn": HELPER + "parse_of", "args": [ref, chip, spec],
-                            "out": layout_of(body, chip, notation, pinned_whole)})
-        t = harptab.parse(body, harp=chip)
-        for r in t.rows():
-            if r.lyric is not None:
-                lyrics.setdefault(r.lyric, None)
-        if fixture and fixture.startswith(LAYOUT_WHOLE):  # its lines of words: a line of holes names no section
-            for line in harptab._prepared(body, chip)[1]:
-                if re.search(r"[^\W\d_]", line):
-                    lines.setdefault(line, None)
-    line_items = list(lines)
-    for batch in _batches(line_items):
-        out.append({"fn": HELPER + "line_of", "args": [batch],
-                    "out": [line_row(line) for line in batch]})
-    out.append({"fn": HELPER + "named_key_of", "args": [[["la la", "I use an A harp", "harp in Bb"],
-                                                          ["harmonica Diatonic", "a harp in a minor key"], [],
-                                                          ["no key", "", "ARMONICA EN C", "G harp"]]],
-                "out": [harptab.named_key(block) for block in (["la la", "I use an A harp", "harp in Bb"],
-                                                               ["harmonica Diatonic", "a harp in a minor key"], [],
-                                                               ["no key", "", "ARMONICA EN C", "G harp"])]})
-    for batch in _batches(list(EDGE_LYRICS) + list(lyrics)[::LYRICS_EVERY]):
-        out.append({"fn": HELPER + "syllable_starts_of", "args": [batch],
-                    "out": [harptab.syllable_starts(lyric) for lyric in batch]})
-    notations = (harptab.SIGNS, harptab.SIGNS, harptab.SIGNS, harptab.BRACKETS, harptab.LETTERS)
-    alignments = []
-    for _ in range(ALIGNMENTS):
-        line, lyric = drawn_alignment(rng)
-        notation = rng.choice(notations)
-        reach = rng.choice((3, 3, 3, 3, 0, 1, 5))
-        alignments.append([line, lyric if rng.random() < 0.95 else None, notation_row(notation), reach,
-                           rng.random() < 0.95])
-    for batch in _batches(alignments):
-        out.append({"fn": HELPER + "align_of", "args": [batch], "out": [answer(aligned, *item) for item in batch]})
-    for batch in _batches(cut_inputs(rng)):
-        out.append({"fn": HELPER + "cuts_of", "args": [batch],
-                    "out": [harptab._cuts(lyric, tuple(word), anchors, fixed) for lyric, word, anchors, fixed in batch]})
-    return out
-
-
-_NOTATIONS_BY_ROW = {notation_row(n): n for n in PRESETS}
 
 
 def line_row(line: str) -> list:
@@ -1063,6 +1080,46 @@ def aligned(line: str, lyric: str | None, notation: Any, reach: int, trusted: bo
     return [parts_row(row), dict(row.placement)]
 
 
+def worded_lines(body: str) -> list[int]:
+    """The places of a tab's lines of words (a letter in them), as ``parse`` prepares its lines."""
+    return [n for n, line in enumerate(harptab._prepared(body, None)[1]) if re.search(r"[^\W\d_]", line)]
+
+
+@functools.cache
+def layout_records() -> tuple[dict, ...]:
+    rng = random.Random(LAYOUT_SEED + 1)
+    out: list[dict] = []
+    parsed = layout_parses()
+    for batch in _batches(list(parsed)):
+        tabs_ = [[ref, chip, [p.spec for p in ps]] for (ref, _, chip), ps in batch]
+        out.append({"fn": HELPER + "parse_of", "args": [tabs_],
+                    "out": [[p.layout if _whole(p) else short(p.layout) for p in ps] for _, ps in batch]})
+    worded = [(ref, worded_lines(body)) for ref, body, _ in layout_tabs()
+              if isinstance(ref, dict) and ref.get("fixture", "").startswith(LINES_FROM)]
+    prepared = {ref["fixture"]: harptab._prepared(body, None)[1] for ref, body, _ in layout_tabs() if "fixture" in ref}
+    for batch in _batches(worded):
+        out.append({"fn": HELPER + "lines_of", "args": [[[ref, numbers] for ref, numbers in batch]],
+                    "out": [short([line_row(prepared[ref["fixture"]][n]) for n in numbers]) for ref, numbers in batch]})
+    for batch in _batches(list(dict.fromkeys(EDGE_LINES))):
+        out.append({"fn": HELPER + "line_of", "args": [batch], "out": [line_row(line) for line in batch]})
+    blocks = [["la la", "I use an A harp", "harp in Bb"], ["harmonica Diatonic", "a harp in a minor key"], [],
+              ["no key", "", "ARMONICA EN C", "G harp"]]
+    out.append({"fn": HELPER + "named_key_of", "args": [blocks], "out": [harptab.named_key(b) for b in blocks]})
+    lyrics = dict.fromkeys(r.lyric for _, ps in parsed for p in ps[:1] for r in p.tab.rows() if r.lyric is not None)
+    for batch in _batches(list(dict.fromkeys(EDGE_LYRICS)) + list(lyrics)[::LYRICS_EVERY]):
+        out.append({"fn": HELPER + "syllable_starts_of", "args": [batch],
+                    "out": [harptab.syllable_starts(lyric) for lyric in batch]})
+    for batch in _batches(alignments(rng)):
+        out.append({"fn": HELPER + "align_of", "args": [batch], "out": [answer(aligned, *item) for item in batch]})
+    for batch in _batches(cut_inputs(rng)):
+        out.append({"fn": HELPER + "cuts_of", "args": [batch], "out": [cuts(*item) for item in batch]})
+    return tuple(out)
+
+
+def cuts(lyric: str, word: list[int], anchors: list[int], fixed: list[int]) -> list[int | None]:
+    return harptab._cuts(lyric, (word[0], word[1]), anchors, fixed)
+
+
 @functools.cache
 def layout_jsonl() -> str:
     return jsonl(layout_records(), corpus="viewer/harptab_layout", made_by=MADE_BY)
@@ -1073,19 +1130,42 @@ def test_harptab_layout_vectors_are_harptab_pys_answers():
 
 
 def test_the_layout_vectors_hold_every_kind_of_record_and_of_item():
+    """What the records hold, whole or by their digest: every kind of record, of item, of row and of placement."""
     records = [json.loads(line) for line in layout_jsonl().splitlines()[1:]]
     kinds = {r["fn"].removeprefix(HELPER) for r in records}
-    assert kinds == {"parse_of", "line_of", "named_key_of", "syllable_starts_of", "align_of", "cuts_of"}
-    parsed = [r["out"] for r in records if r["fn"].endswith("parse_of") and "sections" in r["out"]]
-    items = {item[0] for out in parsed for s in out["sections"] for item in s[2]}
-    assert items == {"row", "words", "prose", "gap", "legend"}
-    rows = [item for out in parsed for s in out["sections"] for item in s[2] if item[0] == "row"]
-    assert {r[7] for r in rows} == {True, False} and {r[8] for r in rows} == {True, False}  # trusted, above
-    aligned_ = [out for r in records if r["fn"].endswith("align_of") for out in r["out"] if isinstance(out, list)]
-    assert {k for r in rows for k in r[5]} | {k for _, placement in aligned_ for k in placement} == {
+    assert kinds == {"parse_of", "lines_of", "line_of", "named_key_of", "syllable_starts_of", "align_of", "cuts_of"}
+    parses = [p for _, ps in layout_parses() for p in ps]
+    items = [i for p in parses for s in p.tab.sections for i in s.items]
+    assert {type(i).__name__ for i in items} == {"Row", "Words", "Prose", "Gap", "Legend"}
+    rows = [i for i in items if isinstance(i, harptab.Row)]
+    assert {r.trusted for r in rows} == {True, False} and {r.above for r in rows} == {True, False}
+    aligned_ = [out for r in records if r["fn"].endswith("align_of") for out in r["out"]]
+    assert all(isinstance(out, list) for out in aligned_)  # no row align can't place
+    assert {k for r in rows for k in r.placement} | {k for _, placement in aligned_ for k in placement} == {
         "snap", "split", "held", "gap"}
-    assert {out["readable"] for out in parsed} == {True, False} and {out["chromatic"] for out in parsed} == {True, False}
-    assert any(out["key"] for out in parsed) and any(out["missed"] for out in parsed)
-    assert any(r["args"][2] is not None for r in records if r["fn"].endswith("parse_of"))  # read as pinned
+    assert {p.tab.readable for p in parses} == {True, False} and {p.tab.chromatic for p in parses} == {True, False}
+    assert any(p.tab.key for p in parses) and any(p.tab.missed for p in parses)
+    assert any(p.spec is not None for p in parses)  # read as pinned
+    whole = [out for r in records if r["fn"].endswith("parse_of") for outs in r["out"] for out in outs
+             if isinstance(out, dict)]
+    assert len(whole) == len(LAYOUT_WHOLE)
+    assert {item[0] for out in whole for s in out["sections"] for item in s[2]} >= {"row", "words", "prose", "gap"}
+    assert {item[8] for out in whole for s in out["sections"] for item in s[2] if item[0] == "row"} == {True, False}
     cuts = [out for r in records if r["fn"].endswith("cuts_of") for out in r["out"]]
     assert any(all(c is None for c in out) for out in cuts) and any(None not in out for out in cuts)
+    assert {len(line.strip()) for line in EDGE_LINES} >= {31, 32, 33, 34}
+
+
+@pytest.mark.parametrize("rank", [(0.8, 0.81), (0.8, 0.79), (1.6, 1.61), (1.6, 1.59)])
+def test_the_tied_cuts_tell_each_of_ranks_numbers_apart(monkeypatch, rank):
+    """``TIED_CUTS`` answer otherwise when one of ``_rank``'s numbers moves by a hundredth either way."""
+    want = [cuts(*item) for item in TIED_CUTS]
+    was, now = rank
+    real = harptab._rank
+
+    def moved(lyric: str, k: int) -> float:
+        got = real(lyric, k)
+        return now if got == was else got
+
+    monkeypatch.setattr(harptab, "_rank", moved)
+    assert [cuts(*item) for item in TIED_CUTS] != want

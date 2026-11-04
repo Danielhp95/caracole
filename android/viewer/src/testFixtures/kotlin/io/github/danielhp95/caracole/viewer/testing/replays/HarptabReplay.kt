@@ -201,9 +201,16 @@ object HarptabReplay : AreaReplay {
 
     // --- the layout (vectors/viewer/harptab_layout.jsonl) ---------------------------------------------------------
 
-    fun layout() = replay("viewer/harptab_layout.jsonl", 6) { record, misses ->
+    fun layout() = replay("viewer/harptab_layout.jsonl", 7) { record, misses ->
         when (record.fn) {
             H + "parse_of" -> parseOf(record, misses)
+            H + "lines_of" -> each(misses, record) { item ->
+                val (ref, numbers) = item.jsonArray
+                answer {
+                    val lines = HarpTabs.prepared(body(ref.jsonObject), null).lines
+                    JsonPrimitive(short(JsonArray(numbers.jsonArray.map { lineRow(lines[it.jsonPrimitive.int]) })))
+                }
+            }
             H + "line_of" -> each(misses, record) { line -> answer { lineRow(line.jsonPrimitive.content) } }
             H + "named_key_of" -> each(misses, record) { block ->
                 answer { HarpTabs.namedKey(block.jsonArray.map { it.jsonPrimitive.content })?.let(::JsonPrimitive) ?: JsonNull }
@@ -232,14 +239,22 @@ object HarptabReplay : AreaReplay {
     private fun body(ref: JsonObject): String = ref["fixture"]?.let { PyText.utf8(Corpus.fixture(it.jsonPrimitive.content))!! }
         ?: ref["read"]?.let { readBodies[it.jsonPrimitive.int] } ?: ref.getValue("text").jsonPrimitive.content
 
+    /** A batch of tabs, each read as it reads and as each of its pins says: its layout whole, or by its digest. */
     private fun parseOf(record: Record, misses: Misses) {
-        val ref = record.args[0].jsonObject
+        val items = record.args[0].jsonArray
+        val outs = record.out!!.jsonArray
+        misses.check(items.size == outs.size) { "parse_of: ${items.size} tabs, ${outs.size} answers" }
+        for ((item, out) in items.zip(outs)) {
+            val (ref, chip, specs) = item.jsonArray
+            for ((spec, want) in specs.jsonArray.zip(out.jsonArray)) parsed(misses, ref.jsonObject, chip, spec, want)
+        }
+    }
+
+    private fun parsed(misses: Misses, ref: JsonObject, chipValue: JsonElement, spec: JsonElement, want: JsonElement) {
         val body = body(ref)
-        val chip = record.args[1].let { if (it is JsonNull) null else it.jsonPrimitive.content }
-        val spec = record.args[2]
+        val chip = if (chipValue is JsonNull) null else chipValue.jsonPrimitive.content
         val what = (ref["fixture"] ?: ref["read"]?.let { JsonPrimitive("read tab $it") } ?: JsonPrimitive(body.take(50))).toString() +
-            (if (spec is JsonNull) "" else " pinned $spec")
-        val want = record.out!!.jsonObject
+            (if (chip == null) "" else " under $chip") + (if (spec is JsonNull) "" else " pinned $spec")
         val got = try {
             val notation = if (spec is JsonNull) null else HarpTabs.pinned(spec, body)
             tabLayout(HarpTabs.parse(body, chip, notation), body, chip, notation)
@@ -247,16 +262,17 @@ object HarptabReplay : AreaReplay {
             misses.check(false) { "$what: parse threw $e" }
             return
         }
-        same(misses, "$what: its lines' kinds", want.getValue("kinds"), got.getValue("kinds"))
-        same(misses, "$what: words above its rows", want.getValue("above"), got.getValue("above"))
-        if ("short" in want) {
-            misses.check(want.getValue("short").jsonPrimitive.content == short(got)) {
-                "$what: its layout ${text(got).take(1200)}, whose digest isn't Python's"
+        if (want is JsonPrimitive) {
+            misses.check(want.content == short(got)) {
+                "$what: its layout (lines ${got["kinds"]}, words above ${got["above"]}) ${text(got).take(1200)}, " +
+                    "whose digest isn't Python's"
             }
             return
         }
-        for (key in want.keys - setOf("sections", "kinds", "above")) same(misses, "$what: $key", want.getValue(key), got.getValue(key))
-        val wantSections = want.getValue("sections").jsonArray
+        val whole = want.jsonObject
+        misses.check(whole.keys == got.keys) { "$what: the members ${got.keys}, Python's ${whole.keys}" }
+        for (key in whole.keys - "sections") same(misses, "$what: $key", whole.getValue(key), got[key] ?: JsonNull)
+        val wantSections = whole.getValue("sections").jsonArray
         val gotSections = got.getValue("sections").jsonArray
         misses.check(wantSections.size == gotSections.size) { "$what: ${gotSections.size} sections, Python's ${wantSections.size}" }
         for ((n, section) in wantSections.withIndex()) {

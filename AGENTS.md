@@ -1341,8 +1341,9 @@ Not built yet. (lookup.)
     cuts weighed as `_cuts` weighs them (`math.comb` exact, the costs summed as Python's builtin sum, Py.fsum), every
     column a code point;
   - `HarptabReplay` replays vectors/viewer/harptab_layout.jsonl too: each tab of harptab_read's records and drawn
-    ones, parsed and read as another reading's pin says, its rows' parts as lengths, its lines and words, `align`
-    and `_cuts` on drawn rows and MAX_CUTS's edges.
+    ones, parsed and read as another reading's pin says (layout/'s small tabs whole, the rest by digest, for the
+    viewer's budget), its rows' parts as lengths, its lines and words, `align` on drawn rows, and `_cuts` on drawn
+    words, on ties that each of its numbers decides (`TIED_CUTS`) and on MAX_CUTS's edges.
 - The sheet page (pages): not built yet.
 - A harmonica tab's page (harmonica-page): not built yet.
 - The phone's own pages, `PhoneRender` (phone-render): not built yet.
