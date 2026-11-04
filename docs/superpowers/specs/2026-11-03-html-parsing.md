@@ -114,22 +114,36 @@ From the doctype by the spec's lists (lexbor's, `CompatMode.of`), or by a missin
 
 ### The vectors
 
-`vectors/html/tokens.jsonl` (every HTML page of the sites' fixtures, by reference, and every page the fake sites
-build), `tokens_edges.jsonl` (the edge set: references in text and attributes, CR, NUL in each state, script data
-and its escapes, RCDATA, RAWTEXT, PLAINTEXT, comments, processing instructions, CDATA (after text at each integration
-point), templates, formatting elements reconstructed, each doctype list's entries, the input cut short in each state) and `tokens_soup.jsonl` (seeded tag soup: 600 pages of markup cut anywhere). lexbor shows no token stream, so each record holds what its tree shows the
-tokenizer decided: the document's mode (by a probe element's id), the doctype's name, each element with an attribute
-once (its tag and attributes; the tree's clones are the same pair), every text node's data in document order joined,
-every comment's and processing instruction's. A `<template>`'s contents are in none of them: selectolax's tree never
-reaches them (its `first_child` is None, `css` finds nothing there; only its serialization shows them).
-`core.testing.replays.HtmlReplay` reads them through `TokensTree`, a tree builder of the replay's own: where each node
-goes in document order (the head before what follows it, a comment after `</body>` in the html element, text a table
-can't hold fostered before it, or into a template opened in the table), the start tags it drops or merges, the text it
-drops, what it switches the tokenizer to, foreign content, the active formatting elements reconstructed (the current
-node `<![CDATA[` is read in), of the adoption agency the furthest block left open, a table part's context, and a
-template's contents in body's rules, never walked. lexbor's tag and attribute names are ASCII-lowercased (its tree
-gives the SVG and MathML ones their case) and the tokenizer's compared as it gives them, so a name it left upper-case
-differs.
+`vectors/html/tokens.jsonl` (every HTML page of the sites' fixtures, by reference, and every page the fake sites build),
+`tokens_edges.jsonl` (the edge set: references in text and attributes, CR, NUL in each state, script data and its
+escapes, RCDATA, RAWTEXT, PLAINTEXT, comments, processing instructions, CDATA (after text at each integration point),
+templates, formatting elements reconstructed, each doctype list's entries, the input cut short in each state) and
+`tokens_soup.jsonl` (seeded tag soup: 600 pages of markup cut anywhere). lexbor shows no token stream, so each record
+holds what its tree shows the tokenizer decided: the document's mode (by a probe element's id), the doctype's name, each
+element with an attribute once (its tag and attributes; the tree's clones are the same pair), every text node's data in
+document order joined, every comment's and processing instruction's. A `<template>`'s contents are in none of them:
+selectolax's tree never reaches them (its `first_child` is None, `css` finds nothing there; only its serialization shows
+them). `core.testing.replays.HtmlReplay` reads them through `TokensTree`, a tree builder of the replay's own: where each
+node goes in document order (the head before what follows it, a comment after `</body>` in the html element, text a
+table can't hold fostered before it, or into a template opened in the table), the start tags it drops or merges, the
+text it drops, what it switches the tokenizer to, foreign content, the active formatting elements reconstructed (the
+current node `<![CDATA[` is read in), of the adoption agency the furthest block left open, a table part's context, and a
+template's contents in body's rules, never walked. lexbor's tag and attribute names are ASCII-lowercased (its tree gives
+the SVG and MathML ones their case) and the tokenizer's compared as it gives them, so a name it left upper-case differs.
+
+### nu.validator's htmlparser (the plan's §11, Q1b)
+
+- Not run: the half-day probe's jar (htmlparser 1.4.16, its last release, of 2020) was not allowed to run on the
+  machine, and nothing went round that; its timing waits for the owner's yes.
+- It can't match the vectors as it stands, nor under a layer of core.html's own, since what differs is gone from its
+  tree: it follows the spec where lexbor departs from it (above), and reads
+  - `<?x y?>` as a bogus comment ending at the first `>`, where lexbor reads a processing instruction;
+  - an attribute written with no value as `""`, as `x=""` is, where lexbor gives null;
+  - an empty system identifier as one written, so `PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" ""` is limited
+    quirks, where lexbor's is quirks.
+- Those three alone answer at least 3 of tokens.jsonl's 47 records otherwise, 12 of the edge set's 523 and 122 of the
+  soup's 600 (each a record whose answer holds a processing instruction, a null value, or that doctype in quirks).
+- So the tokenizer stays hand-written, the default.
 
 ## Text
 
