@@ -1,0 +1,186 @@
+{
+ "voicings": {
+  "TUNING": [
+   40,
+   45,
+   50,
+   55,
+   59,
+   64
+  ],
+  "MAX_POSITIONS": 4,
+  "_FRET_SPAN": 9,
+  "patterns": {
+   "_FINGERING": "\\s*(?P<given>\\(\\s*(?:[xX\\d]{6}|(?:[xX]|\\d{1,2})(?:[\\s.,-]+(?:[xX]|\\d{1,2})){5})\\s*\\)|(?:[xX\\d]{6}|(?:[xX]|\\d{1,2})(?:[\\s.,-]+(?:[xX]|\\d{1,2})){5}))\\s*",
+   "_ENTRY": "\\s*(?:[;|]\\s*)?([A-G][^\\s()\\[\\]:=;|]*?)\\s*(?:[-:=]\\s*)?(\\(\\s*(?:[xX\\d]{6}|(?:[xX]|\\d{1,2})(?:[\\s.,-]+(?:[xX]|\\d{1,2})){5})\\s*\\)|(?:[xX\\d]{6}|(?:[xX]|\\d{1,2})(?:[\\s.,-]+(?:[xX]|\\d{1,2})){5}))(?=\\s*(?:[;|]\\s*)?(?:[A-G]|\\Z))",
+   "_DEFINE_FRETS": "\\bfrets((?:\\s+(?:-1|[xXnN]|\\d+)){6})(?!\\S)",
+   "_DEFINE_FINGERS": "\\bfingers((?:\\s+\\S+){6})(?!\\S)",
+   "_DEFINE_BASE": "\\bbase-fret\\s+(\\d+)(?!\\S)"
+  }
+ },
+ "INSTRUMENTS": [
+  {
+   "id": "guitar",
+   "name": "Guitar",
+   "kind": "strings",
+   "tuning": [
+    40,
+    45,
+    50,
+    55,
+    59,
+    64
+   ],
+   "capo": true,
+   "shapes": "",
+   "easy": null,
+   "voice": "guitar",
+   "sounds": 0,
+   "offset": 0,
+   "about": "Standard tuning, E A D G B E.",
+   "tab": ""
+  },
+  {
+   "id": "ukulele",
+   "name": "Ukulele",
+   "kind": "strings",
+   "tuning": [
+    67,
+    60,
+    64,
+    69
+   ],
+   "capo": true,
+   "shapes": "ukulele:",
+   "easy": "ukulele",
+   "voice": "ukulele",
+   "sounds": 0,
+   "offset": 0,
+   "about": "G C E A, the G string high.",
+   "tab": ""
+  },
+  {
+   "id": "ukulele-low-g",
+   "name": "Ukulele, low G",
+   "kind": "strings",
+   "tuning": [
+    55,
+    60,
+    64,
+    69
+   ],
+   "capo": true,
+   "shapes": "ukulele:",
+   "easy": "ukulele",
+   "voice": "ukulele",
+   "sounds": 0,
+   "offset": 0,
+   "about": "G C E A, the G string low.",
+   "tab": "Ukulele"
+  },
+  {
+   "id": "baritone",
+   "name": "Baritone ukulele",
+   "kind": "strings",
+   "tuning": [
+    50,
+    55,
+    59,
+    64
+   ],
+   "capo": true,
+   "shapes": "ukulele:",
+   "easy": "baritone",
+   "voice": "ukulele",
+   "sounds": 0,
+   "offset": 5,
+   "about": "D G B E, as a guitar's top four strings: a ukulele's shapes, named a fourth lower.",
+   "tab": "Baritone"
+  },
+  {
+   "id": "piano",
+   "name": "Piano",
+   "kind": "keys",
+   "tuning": [],
+   "capo": false,
+   "shapes": "piano:",
+   "easy": null,
+   "voice": "piano",
+   "sounds": 0,
+   "offset": 0,
+   "about": "The chords as they sound, any capo folded in: root position and two inversions, with a bass for the left hand.",
+   "tab": ""
+  },
+  {
+   "id": "harmonica",
+   "name": "Harmonica",
+   "kind": "harmonica",
+   "tuning": [],
+   "capo": false,
+   "shapes": "",
+   "easy": null,
+   "voice": "reed",
+   "sounds": 0,
+   "offset": 0,
+   "about": "A 10-hole diatonic harp, Richter tuned: the harps for the song in their positions, and each chord's holes on the one chosen.",
+   "tab": ""
+  },
+  {
+   "id": "flute",
+   "name": "Flute",
+   "kind": "wind",
+   "tuning": [],
+   "capo": false,
+   "shapes": "",
+   "easy": null,
+   "voice": "flute",
+   "sounds": 0,
+   "offset": 0,
+   "about": "The concert flute, as the song sounds: the key's scale and each chord's notes, with their fingerings.",
+   "tab": ""
+  },
+  {
+   "id": "recorder",
+   "name": "Recorder",
+   "kind": "wind",
+   "tuning": [],
+   "capo": false,
+   "shapes": "",
+   "easy": null,
+   "voice": "recorder",
+   "sounds": 12,
+   "offset": 0,
+   "about": "The soprano recorder, baroque or German fingering: it sounds an octave above the notes it reads.",
+   "tab": ""
+  }
+ ],
+ "EASY": {
+  "ukulele": [
+   [
+    0,
+    5,
+    7,
+    10
+   ],
+   [
+    9,
+    2
+   ]
+  ],
+  "baritone": [
+   [
+    7,
+    0,
+    2,
+    5
+   ],
+   [
+    4,
+    9
+   ]
+  ]
+ },
+ "LOW": 53,
+ "HIGH": 64,
+ "BASS": 41
+}
