@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.routes.library
 
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.server.http.App
 import io.github.danielhp95.caracole.server.http.Body
@@ -8,10 +9,6 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import java.time.Instant
-import java.time.ZoneOffset
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
 
 /** The answers the library's and the Sync tab's routes give, as App gives them (a route module has no App). */
 internal object Answers {
@@ -28,8 +25,6 @@ internal object Answers {
                         JsonObject(mapOf("job" to view)))
     }
 
-    private val STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss'Z'").withZone(ZoneOffset.UTC)
-
-    /** stamps.stamp of now: the phone's clock, as caracole stores a time. */
-    fun now(): String = STAMP.format(Instant.now().truncatedTo(ChronoUnit.SECONDS))
+    /** stamps.stamp of now: the phone's clock, as caracole stores a time (core.index.Stamps). */
+    fun now(): String = Stamps.now()
 }

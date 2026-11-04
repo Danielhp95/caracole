@@ -26,29 +26,6 @@ object PageIcon {
     val mark: String get() = icons.getValue("mark").jsonPrimitive.content
 }
 
-/** library_name.py's LibraryName: the library a page shows, after caracole's name, and its badge. */
-data class LibraryName(val name: String, val badge: String? = null) {
-    /** A tab's title: "caracole · Phone", the page's own before it, the badge first. */
-    fun title(page: String = ""): String = listOf(badge ?: "", page, "caracole", name).filter { it.isNotEmpty() }.joinToString(" · ")
-
-    /** The name, and the badge after it, for a page's header (base.css's `.libname`), escaped. */
-    fun markup(tag: String = "span"): String {
-        val shown = if (!badge.isNullOrEmpty()) {
-            " <span class=\"scratch\" title=\"$BADGE_TITLE\">${PyText.escape(badge)}</span>"
-        } else {
-            ""
-        }
-        return "<$tag class=\"libname\"><span class=\"name\">${PyText.escape(name)}</span>$shown</$tag>"
-    }
-
-    /** The page's icon, for its head: caracole's, or with a badge the same "¿" in the badge's colour. */
-    fun icon(): String = if (!badge.isNullOrEmpty()) PageIcon.scratchLink else PageIcon.link
-
-    companion object {
-        const val BADGE_TITLE = "Not your usual library"
-    }
-}
-
 /**
  * pages.py's message page: an error said plainly, and the way back; its style and policy from
  * caracole/page/message.json (pages.PAGE_STYLE and PAGE_CSP). The page names the library the phone shows, with the
@@ -57,7 +34,7 @@ data class LibraryName(val name: String, val badge: String? = null) {
  */
 object MessagePage {
     /** The badge every page the phone writes itself shows beside the library's name (ServerControls.badge's). */
-    const val PHONE_BADGE = "Phone"
+    const val PHONE_BADGE = LibraryName.PHONE_BADGE
     const val HTML = "text/html; charset=utf-8"
 
     private val page: JsonObject by lazy { Json.parseToJsonElement(caracoleResource("caracole/page/message.json")).jsonObject }
@@ -74,11 +51,11 @@ object MessagePage {
 
     /**
      * The message page of [status]. A route answers one through App.message (or by throwing Refused), which names the
-     * library as the App is configured to; [name]'s default, AppConfig's default name and the phone's badge, is the
-     * plan's signature's (§5.2) and names no other library.
+     * library as the App is configured to (AppConfig.libraryName, read for each page); [name]'s default, the phone's
+     * badge with no library's name, is the plan's signature's (§5.2) and names no other library.
      */
     fun page(status: Int, title: String, message: String, link: Pair<String, String>? = null,
-             name: LibraryName = LibraryName(AppConfig.PHONE, PHONE_BADGE)): Response {
+             name: LibraryName = LibraryName.phone(null)): Response {
         val back = "<a class=\"btn\" href=\"/\">Back to the library</a>"
         val links = if (link != null) {
             "<a class=\"btn\" href=\"${PyText.escape(link.first)}\">${PyText.escape(link.second)}</a> $back"

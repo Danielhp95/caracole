@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.server.jobs
 
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -22,9 +23,6 @@ import java.nio.file.attribute.PosixFilePermissions
 import java.security.SecureRandom
 import java.time.Duration
 import java.time.Instant
-import java.time.LocalDate
-import java.time.LocalDateTime
-import java.time.ZoneOffset
 import java.util.logging.Logger
 
 /**
@@ -521,268 +519,18 @@ class JobHistory(val file: File, val keep: Int = JobQueue.KEEP, val days: Int = 
         // --- times ------------------------------------------------------------------------------------------------
 
         /** A time as history.py writes one: `datetime.isoformat()` in UTC, `2026-11-03T09:30:00+00:00`, its
-         * microseconds when it has any. */
-        fun iso(at: Instant): String {
-            val t = at.atOffset(ZoneOffset.UTC)
-            val micros = t.nano / 1000
-            val base = "${pad(t.year, 4)}-${pad(t.monthValue, 2)}-${pad(t.dayOfMonth, 2)}T" +
-                "${pad(t.hour, 2)}:${pad(t.minute, 2)}:${pad(t.second, 2)}"
-            return base + (if (micros != 0) "." + pad(micros, 6) else "") + "+00:00"
-        }
-
-        private fun pad(n: Int, width: Int): String = n.toString().padStart(width, '0')
+         * microseconds when it has any (core.index.Stamps.isoformat). */
+        fun iso(at: Instant): String = Stamps.isoformat(Stamps.micros(at))
 
         /** history.py's `_time`: `datetime.fromisoformat` of a text ([parseIso]), a naive time UTC (stamps.py's). */
         fun time(value: JsonElement): Instant = parseIso(str(value))
 
         /**
-         * `datetime.fromisoformat(text)` as CPython 3.14's C implementation reads it (Modules/_datetimemodule.c's
-         * datetime_fromisoformat, step for step, over the text's UTF-8 bytes, a read past their end a NUL as the C
-         * string's), a naive time taken as UTC; [IllegalArgumentException] where it raises ValueError. Its quirks are
-         * Python's: a date `YYYY-MM-DD`, `YYYYMMDD` or an ISO week (`2026-W45-1`, `2026W451`, `2026-W45`); any one
-         * character before the time; `HH[:MM[:SS[.f…]]]` or `HHMM[SS[f…]]`, a fraction's digits past six cut;
-         * `24:00` the next day's start; any one character between the time and an offset (`09:30:00 +01:00`); an
-         * offset `Z` or `±HH[:MM[:SS[.f…]]]` (`±HHMM…`), its parts unchecked but its whole within a day either way.
-         * vectors/web/history.jsonl's `_time` records hold it to Python's answers.
+         * `datetime.fromisoformat(text)` as CPython 3.14's C implementation reads it, a naive time taken as UTC, an
+         * aware one kept whatever year its UTC falls in; [IllegalArgumentException] where it raises ValueError. The one
+         * port of that reader is core.index.Stamps' (stamps.py's, [Stamps.fromisoformat]); vectors/web/history.jsonl's
+         * `_time` records hold it to Python's answers here too.
          */
-        internal fun parseIso(text: String): Instant = FromIsoformat(text).read()
-
-        /** CPython 3.14's datetime_fromisoformat over [text], its functions by their C names. */
-        private class FromIsoformat(val text: String) {
-            private lateinit var b: ByteArray
-
-            private fun bad(): Nothing = throw Bad("Invalid isoformat string: $text")
-
-            /** The byte at [i], NUL past the end (the C string's terminator). */
-            private fun at(i: Int): Int = if (i in b.indices) b[i].toInt() and 0xff else 0
-
-            private fun isDigit(c: Int): Boolean = c in '0'.code..'9'.code
-
-            /** parse_digits: [n] digits from [p] into a number, or null where one isn't a digit. */
-            private fun digits(p: Int, n: Int): Int? {
-                var v = 0
-                for (k in 0 until n) {
-                    val c = at(p + k)
-                    if (!isDigit(c)) return null
-                    v = v * 10 + (c - '0'.code)
-                }
-                return v
-            }
-
-            // datetime_fromisoformat ---------------------------------------------------------------------------
-
-            fun read(): Instant {
-                val points = text.codePoints().toArray()
-                if (points.size < 7) bad()  // _sanitize_isoformat_str: "at least 7 characters long"
-                for (pos in intArrayOf(7, 8, 10)) {  // a surrogate separator is read as T
-                    if (pos > points.size) break
-                    if (pos < points.size && points[pos] in 0xD800..0xDFFF) {
-                        points[pos] = 'T'.code
-                        break
-                    }
-                }
-                if (points.any { it in 0xD800..0xDFFF }) bad()  // PyUnicode_AsUTF8AndSize's UnicodeEncodeError
-                b = String(points, 0, points.size).toByteArray(Charsets.UTF_8)
-                val len = b.size
-                val separator = separator(len)
-                if (separator < 0) bad()  // YYYY-Www- (9): no date reads
-                val date = IntArray(3)
-                var rv = date(separator, date)
-                val time = IntArray(4)
-                val tz = LongArray(2)
-                if (rv == 0 && len > separator) {
-                    var p = separator
-                    val lead = at(p)
-                    p += if (lead and 0x80 == 0) 1 else when (lead and 0xf0) {
-                        0xe0 -> 3
-                        0xf0 -> 4
-                        else -> 2
-                    }
-                    rv = time(p, len - p, time, tz)
-                }
-                if (rv < 0) bad()
-                // tzinfo_from_isoformat_results: an offset strictly within a day either way (new_timezone)
-                val offsetMicros = if (rv == 1) tz[0] * 1_000_000L + tz[1] else null
-                if (offsetMicros != null && (offsetMicros <= -DAY_MICROS || offsetMicros >= DAY_MICROS)) bad()
-                var (year, month, day) = date
-                var (hour, minute, second, micro) = time
-                if (hour == 24 && month in 1..12) {
-                    val inMonth = daysInMonth(year, month)
-                    if (day <= inMonth) {
-                        if (minute != 0 || second != 0 || micro != 0) {
-                            throw Bad("minute, second, and microsecond must be 0 when hour is 24")
-                        }
-                        hour = 0
-                        day += 1
-                        if (day > inMonth) {
-                            day = 1
-                            month += 1
-                            if (month > 12) {
-                                month = 1
-                                year += 1
-                            }
-                        }
-                    }
-                }
-                // new_datetime: check_date_args, check_time_args
-                if (year !in 1..9999 || month !in 1..12 || day < 1 || day > daysInMonth(year, month)) bad()
-                if (hour !in 0..23 || minute !in 0..59 || second !in 0..59 || micro !in 0..999_999) bad()
-                val local = LocalDateTime.of(year, month, day, hour, minute, second, micro * 1000)
-                return local.toInstant(ZoneOffset.UTC).minusNanos((offsetMicros ?: 0L) * 1000L)
-            }
-
-            private fun daysInMonth(year: Int, month: Int): Int = when (month) {
-                2 -> if (isLeap(year)) 29 else 28
-                4, 6, 9, 11 -> 30
-                else -> 31
-            }
-
-            private fun isLeap(year: Int): Boolean = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0)
-
-            /** _find_isoformat_datetime_separator: where the date ends, by its characters 4, 5, 8 and 10. */
-            private fun separator(len: Int): Int {
-                if (len == 7) return 7
-                if (at(4) == '-'.code) {
-                    if (at(5) == 'W'.code) {
-                        if (len < 8) return -1
-                        if (len > 8 && at(8) == '-'.code) {
-                            if (len == 9) return -1
-                            if (len > 10 && isDigit(at(10))) return 8
-                            return 10
-                        }
-                        return 8
-                    }
-                    return 10
-                }
-                if (at(4) == 'W'.code) {
-                    var idx = 7
-                    while (idx < len) {
-                        if (!isDigit(at(idx))) break
-                        idx++
-                    }
-                    if (idx < 9) return idx
-                    return if (idx % 2 == 0) 7 else 8
-                }
-                return 8
-            }
-
-            /** parse_isoformat_date: 0, its year, month and day in [out]; or a negative code. */
-            private fun date(len: Int, out: IntArray): Int {
-                var p = 0
-                out[0] = digits(p, 4) ?: return -1
-                p += 4
-                val usesSeparator = at(p) == '-'.code
-                if (usesSeparator) p++
-                if (at(p) == 'W'.code) {
-                    p++
-                    val week = digits(p, 2) ?: return -3
-                    p += 2
-                    val weekDay: Int
-                    if (p < len) {
-                        if (usesSeparator && at(p++) != '-'.code) return -2
-                        weekDay = digits(p, 1) ?: return -4
-                    } else {
-                        weekDay = 1
-                    }
-                    val rv = isoToYmd(out[0], week, weekDay, out)
-                    return if (rv != 0) -3 + rv else 0
-                }
-                out[1] = digits(p, 2) ?: return -1
-                p += 2
-                if (usesSeparator && at(p++) != '-'.code) return -2
-                out[2] = digits(p, 2) ?: return -1
-                return 0
-            }
-
-            /** iso_to_ymd: an ISO year, week and weekday as a date in [out]; 0, or a negative code. */
-            private fun isoToYmd(isoYear: Int, week: Int, weekDay: Int, out: IntArray): Int {
-                if (isoYear < 1 || isoYear > 9999) return -4
-                if (week <= 0 || week >= 53) {
-                    var outOfRange = true
-                    if (week == 53) {
-                        val first = LocalDate.of(isoYear, 1, 1).dayOfWeek.value - 1  // Monday 0
-                        if (first == 3 || (first == 2 && isLeap(isoYear))) outOfRange = false
-                    }
-                    if (outOfRange) return -2
-                }
-                if (weekDay <= 0 || weekDay >= 8) return -3
-                val january1 = LocalDate.of(isoYear, 1, 1)
-                val first = january1.dayOfWeek.value - 1
-                var monday = -first.toLong()  // iso_week1_monday, from January 1st
-                if (first > 3) monday += 7
-                val date = january1.plusDays(monday + (week - 1) * 7L + weekDay - 1)
-                out[0] = date.year
-                out[1] = date.monthValue
-                out[2] = date.dayOfMonth
-                return 0
-            }
-
-            /** parse_hh_mm_ss_ff over [start, end): 0 at the string's end, 1 before something else, or a negative
-             * code; hour, minute, second and microsecond in [out]. */
-            private fun hhMmSsFf(start: Int, end: Int, out: IntArray): Int {
-                out.fill(0)
-                var p = start
-                var hasSeparator = true
-                var i = 0
-                while (i < 3) {
-                    out[i] = digits(p, 2) ?: return -3
-                    p += 2
-                    val c = at(p)
-                    p++
-                    if (i == 0) hasSeparator = c == ':'.code
-                    if (c == '.'.code || c == ','.code) {
-                        if (i < 2) return -3  // a decimal mark on the hour or the minute
-                        if (p >= end) return -3  // no digit after it
-                        break
-                    } else if (p >= end) {
-                        return if (c != 0) 1 else 0
-                    } else if (hasSeparator && c == ':'.code) {
-                        if (i == 2) return -4
-                    } else if (!hasSeparator) {
-                        p--
-                    } else {
-                        return -4
-                    }
-                    i++
-                }
-                val toParse = minOf(end - p, 6)
-                var micro = digits(p, toParse) ?: return -3
-                p += toParse
-                if (toParse < 6) micro *= CORRECTION[toParse - 1]
-                out[3] = micro
-                while (isDigit(at(p))) p++  // the digits past six cut
-                return if (at(p) != 0) 1 else 0
-            }
-
-            /** parse_isoformat_time over [len] bytes from [start]: 0 (no offset), 1 (an offset in [tz]: seconds,
-             * microseconds), or a negative code; the time in [out]. */
-            private fun time(start: Int, len: Int, out: IntArray, tz: LongArray): Int {
-                val end = start + len
-                var at = start
-                do {
-                    val c = at(at)
-                    if (c == 'Z'.code || c == '+'.code || c == '-'.code) break
-                } while (++at < end)
-                val rv = hhMmSsFf(start, at, out)
-                if (rv < 0) return rv
-                if (at == end) return if (rv == 1) -5 else 0
-                if (at(at) == 'Z'.code) {
-                    tz[0] = 0
-                    tz[1] = 0
-                    return if (at(at + 1) != 0) -5 else 1
-                }
-                val sign = if (at(at) == '-'.code) -1 else 1
-                val offset = IntArray(4)
-                val parsed = hhMmSsFf(at + 1, end, offset)
-                tz[0] = sign * (offset[0] * 3600L + offset[1] * 60L + offset[2])
-                tz[1] = sign * offset[3].toLong()
-                return if (parsed != 0) -5 else 1
-            }
-
-            companion object {
-                private val CORRECTION = intArrayOf(100000, 10000, 1000, 100, 10)
-                private const val DAY_MICROS = 86_400_000_000L
-            }
-        }
+        internal fun parseIso(text: String): Instant = Stamps.instant(Stamps.fromisoformat(text))
     }
 }

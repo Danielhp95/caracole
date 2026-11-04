@@ -8,8 +8,10 @@ import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.sync.internal.units.Documents
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -34,8 +36,9 @@ import kotlin.test.fail
 /**
  * peer_sync's units on the phone against vectors/sync (tests/test_conformance_sync.py): over each fixture replayed
  * into a fresh database, every unit library_state lists, with its label, its value and its digest (values.jsonl);
- * every unit's document, and value_of_document of each (documents.jsonl). A value compares by its canonical text, the
- * digest's own; a document as json.dumps(sort_keys=True) writes it, so a REAL cell is Python's float to the digit.
+ * every unit's document, and value_of_document of each (documents.jsonl): SyncReplay's loops, which the device runs
+ * too. A value compares by its canonical text, the digest's own; a document as json.dumps(sort_keys=True) writes it,
+ * so a REAL cell is Python's float to the digit.
  */
 class UnitsTest {
     @get:Rule val tmp = TemporaryFolder()
@@ -85,9 +88,9 @@ class UnitsTest {
     private val values get() = Corpus.records(VALUES)
     private val documents get() = Corpus.records(DOCUMENTS)
 
-    private val fixtures: List<String>
-        get() = (values + documents).mapNotNull { r -> r.extra["fixture"]?.takeUnless { it is JsonNull }?.let(::text) }
-            .distinct()
+    private val fixtures: List<String> get() = SyncReplay.fixtures()
+
+    private fun replayed(name: String, replay: (Misses) -> Unit) = Misses(name).also(replay).assertNone()
 
     @Test fun everyRecordIsOfAFunctionThePhonePorts() {
         assertEquals(setOf(UNIT_VALUE), values.map { it.fn }.toSet())
@@ -97,32 +100,9 @@ class UnitsTest {
         assertTrue(listOf("empty", "plain", "rich", "dense").all { it in fixtures }, "the fixtures: $fixtures")
     }
 
-    @Test fun aLibrarysUnitsAreTheOnesPythonLists() {
-        for (name in fixtures) {
-            val expected = values.filter { text(it.extra.getValue("fixture")) == name }
-                .map { it.out!!.jsonObject }
-                .associate { text(it.getValue("id")) to (text(it.getValue("label")) to text(it.getValue("digest"))) }
-            val state = reading(name) { db, _ -> Units.libraryState(db) }
-            assertEquals(expected.keys.sorted(), state.keys.sorted(), "the units of $name")
-            for ((id, unit) in state) {
-                assertEquals(id, unit.id)
-                assertEquals(expected.getValue(id), unit.label to unit.digest, "$name's $id")
-            }
-        }
-    }
+    @Test fun aLibrarysUnitsAreTheOnesPythonLists() = replayed("the fixtures' units", SyncReplay::libraryState)
 
-    @Test fun eachUnitsValueLabelAndDigestAreItsOwn() = check(values) { r ->
-        val fixture = text(r.extra.getValue("fixture"))
-        val id = text(r.args[0])
-        val out = r.out!!.jsonObject
-        reading(fixture) { db, _ ->
-            val value = Units.value(db, id)
-            differs(r, "value", canonical(out.getValue("value")), canonical(value))
-                ?: differs(r, "digest", text(out.getValue("digest")), Units.digestOf(db, id))
-                ?: differs(r, "digest of the value", text(out.getValue("digest")), value?.let(Canonical::digest))
-                ?: differs(r, "label", text(out.getValue("label")), Units.libraryState(db)[id]?.label)
-        }
-    }
+    @Test fun eachUnitsValueLabelAndDigestAreItsOwn() = replayed(VALUES, SyncReplay::values)
 
     @Test fun aUnitTheLibraryHasntGotHasNoValueAndNoDigest() {
         for (name in fixtures) {
@@ -137,74 +117,13 @@ class UnitsTest {
         }
     }
 
-    @Test fun eachUnitsDocumentIsPythons() = check(documents.filter { it.fn == UNIT_DOCUMENT }) { r ->
-        val fixture = text(r.extra.getValue("fixture"))
-        val id = text(r.args[0])
-        val out = nullable(r.out)?.jsonObject
-        reading(fixture) { db, library ->
-            val doc = Units.document(db, library, id)
-            if (out == null) {
-                differs(r, "document", null, python(doc))
-            } else {
-                differs(r, "format", out["format"], JsonPrimitive(Units.FORMAT))
-                    ?: differs(r, "id", text(out.getValue("id")), id)
-                    ?: differs(r, "document", python(out.getValue("unit")), python(doc))
-                    ?: differs(r, "digest", text(out.getValue("digest")), Units.digestOf(db, id))
-            }
-        }
-    }
+    @Test fun eachUnitsDocumentIsPythons() = replayed(DOCUMENTS, SyncReplay::documents)
 
-    @Test fun aDocumentReadsBackAsPythonReadsIt() = check(documents.filter { it.fn == VALUE_OF_DOCUMENT }) { r ->
-        val id = text(r.args[0])
-        val doc = r.args[1]
-        if (r.err != null) {
-            assertEquals("UnitError", r.err)
-            val e = runCatching { Documents.valueOf(id, nullable(doc)) }.exceptionOrNull()
-            if (e is UnitError) null else "${r.args}: Python raised UnitError, Kotlin ${e ?: "answered"}"
-        } else {
-            val value = if (doc is JsonObject || doc is JsonNull) Units.valueOfDocument(id, doc as? JsonObject)
-            else Documents.valueOf(id, doc)
-            differs(r, "value", canonical(nullable(r.out)), canonical(value))
-        }
-    }
+    @Test fun aDocumentReadsBackAsPythonReadsIt() = replayed("$DOCUMENTS value_of_document", SyncReplay::valueOfDocument)
 
-    /** take.jsonl's records name, for each unit a take asks for, its digest here before (`expected_here`, over the
-     * take's fixture) and the digest of the document there (`wanted`, value_of_document's): the phone's are those. */
-    @Test fun theDigestsATakeComparedAreThePhones() {
-        val takes = Corpus.records(TAKE)
-        assertTrue(takes.isNotEmpty(), "$TAKE has no records")
-        check(takes) { r ->
-            val fixture = text(r.extra.getValue("fixture"))
-            val units = r.extra.getValue("source").jsonObject.getValue("units").jsonObject
-            val wrong = ArrayList<String>()
-            reading(fixture) { db, _ ->
-                for ((id, digest) in r.kw.getValue("expected_here").jsonObject) {
-                    val expected = nullable(digest)?.let(::text)
-                    if (expected != STALE && expected != Units.digestOf(db, id)) {
-                        wrong += "$fixture's $id here: Python $expected, Kotlin ${Units.digestOf(db, id)}"
-                    }
-                }
-            }
-            for (pair in r.args[0] as JsonArray) {
-                val (id, digest) = (pair as JsonArray).let { text(it[0]) to nullable(it[1])?.let(::text) }
-                if (digest == STALE) continue
-                val got = Units.valueOfDocument(id, nullable(units[id])?.jsonObject)?.let(Canonical::digest)
-                if (got != digest) wrong += "$fixture's $id there: Python $digest, Kotlin $got"
-            }
-            wrong.takeIf { it.isNotEmpty() }?.joinToString("; ")
-        }
-    }
+    @Test fun theDigestsATakeComparedAreThePhones() = replayed(TAKE, SyncReplay::takeDigests)
 
-    @Test fun everyUnitsDocumentReadsBackAsItsValue() {
-        for (name in fixtures) {
-            reading(name) { db, library ->
-                for ((id, unit) in Units.libraryState(db)) {
-                    val value = Units.valueOfDocument(id, Units.document(db, library, id))
-                    assertEquals(unit.digest, value?.let(Canonical::digest), "$name: $id")
-                }
-            }
-        }
-    }
+    @Test fun everyUnitsDocumentReadsBackAsItsValue() = replayed("the fixtures' documents", SyncReplay::documentsAsValues)
 
     @Test fun aDocumentThatIsntOfItsKindIsAUnitError() {
         val refused = listOf(
