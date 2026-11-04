@@ -92,7 +92,7 @@ def register(app: typer.Typer) -> None:
         from caracole import peer_sync as sync
 
         cfg = load_cfg(ctx)
-        address, found, state, synced, here_count = _compare(cfg, address)
+        address, found, state, synced, here_count, _, _ = _compare(cfg, address)
         if as_json:
             typer.echo(json.dumps({
                 "peer": {"address": address, "server": state.server, "caracole": state.version, "name": state.name},
@@ -144,6 +144,9 @@ def register(app: typer.Typer) -> None:
         progress: bool = typer.Option(False, "--progress", help="Report each stage and unit as a JSON line, for "
                                                                "caracole serve."),
         yes: bool = typer.Option(False, "--yes", help="Don't ask before taking the changes."),
+        parts: str | None = typer.Option(None, "--parts", metavar="PARTS",
+                                         help="What to sync, by commas: library, songbooks, indexes (all three by "
+                                              "default)."),
     ) -> None:
         """Compare, settle each conflict, take here what comes from there, and give there what goes there."""
         from caracole import peer_sync as sync
@@ -153,6 +156,7 @@ def register(app: typer.Typer) -> None:
         if push and here is not None:
             fail("--push or --here: one way to give there what goes there", 2)
         choices = _choices(choose)
+        asked = _parts(parts) if parts is not None else sync.PARTS
         cfg = load_cfg(ctx)
         if here is not None:
             try:
@@ -161,15 +165,17 @@ def register(app: typer.Typer) -> None:
                 fail(str(e), 2)
         said = _Said(progress)
         said.stage("compare", "running")
-        address, found, state, synced, here_count = _compare(cfg, address)
-        if compared is not None and sync.compared_hash(found) != compared.strip().lower():
+        address, every, state, synced, here_count, _, listed = _compare(cfg, address, asked)
+        if compared is not None and sync.compared_hash(every) != compared.strip().lower():
             said.stage("compare", "failed", STALE)
             fail(STALE)
-        unknown = sorted(set(choices) - {d.id for d in found})
+        unknown = sorted(set(choices) - {d.id for d in every})
         if unknown:
             said.stage("compare", "failed", f"--choose names {unknown[0]}, which isn't a difference now")
             fail(f"--choose names {', '.join(unknown[:3])}, which the two don't hold differently now: compare "
                  "them again.", 2)
+        # The differences of the parts asked for alone are taken, given or said (the hash is of every one).
+        found = sync.in_scope(every, asked, listed=listed)
         said.stage("compare", "done", f"{len(found)} {'difference' if len(found) == 1 else 'differences'}")
         typer.echo(_report(address, state, synced, here_count, found))
 
@@ -408,35 +414,52 @@ def _as_chosen(found: list, choices: dict[str, str]) -> list:
     return chosen
 
 
-def _compare(cfg, address: str):
+def _compare(cfg, address: str, parts: tuple[str, ...] | None = None):
     """The other caracole's state and the comparison: (address, differences, its state, whether the two synced
-    before, how many units here)."""
+    before, how many units here, the answers an import remembered, ``peer_sync.merged_kept``'s, and the songs the
+    two sides' songbooks list, ``peer_sync.listed_songs``'s). The comparison reads the kept answers, so a unit kept
+    here at an import is this side's to give. The songs songbooks list are read only for a sync of the songbooks
+    without the library (``parts``), which needs them: the other side's songbooks asked for, one request each."""
     from caracole import peer_sync as sync
-    from caracole.overrides import OverridesError, load_overrides
-    from caracole.songbook import SongbookError, load_songbooks, songbooks_file
+    from caracole.songbook import name_key
 
     try:
         address = sync.peer_address(address)
     except sync.PeerError as e:
         fail(str(e), 2)
-    try:
-        overrides = load_overrides(cfg.overrides_file)
-        books = load_songbooks(songbooks_file(cfg.library_dir))
-    except (OverridesError, SongbookError) as e:
-        fail(f"This library can't be read: {e}")
+    overrides, books = _library(cfg)
+    listing = parts is not None and "songbooks" in parts and "library" not in parts
     with closing(open_db(cfg)) as conn:
         me = sync.own_id(conn)
+        theirs_books: dict[str, object] = {}
         try:
             with sync.Peer(address, transport=transport_for_peer()) as peer:
                 state = peer.state(me)
+                if listing and state.server != me:
+                    for unit_id in state.units:
+                        if unit_id.startswith("songbook/"):
+                            theirs_books[unit_id] = peer.unit(unit_id)
         except sync.PeerError as e:
             fail(str(e))
         if me is not None and me == state.server:
             fail(f"The caracole at {address} is this one (the same id, {me}): its database is a copy of this "
                  "one's. Give one of them another: caracole peer new-id.")
         mine = sync.library_state(conn, overrides, books)
-        base = sync.merged_base(sync.base_of(conn, state.server) if state.server else None, state.base)
-    return address, sync.compare(mine, state.units, base), state, base is not None, len(mine)
+        here_base = sync.base_of(conn, state.server) if state.server else None
+        base = sync.merged_base(here_base, state.base)
+        kept = sync.merged_kept(here_base, sync.kept_of(conn, state.server) if state.server else {}, state.base,
+                                state.kept)
+    listed: dict[str, list[str]] = {}
+    if listing:
+        units = set(mine) | set(state.units)
+        found_by: dict[str, set[str]] = {}
+        here_books = {f"songbook/{name_key(b.name)}": sync.songbook_value(b) for b in books}
+        for books_of in (here_books, {u: doc for u, doc in theirs_books.items() if doc is not None}):
+            for song, by in sync.listed_songs(books_of, units).items():
+                found_by.setdefault(song, set()).update(by)
+        listed = {song: sorted(by) for song, by in sorted(found_by.items())}
+    return (address, sync.compare(mine, state.units, base, kept), state, base is not None, len(mine), kept,
+            listed)
 
 
 def _pull(cfg, address: str, unit_ids: list[str], compared: dict[str, str | None] | None = None, *,

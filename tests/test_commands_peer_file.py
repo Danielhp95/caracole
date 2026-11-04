@@ -29,7 +29,7 @@ from caracole.web.app import Request, WebApp
 from caracole.web.jobs import JobQueue
 
 from test_commands_peer import CREEP, InProcess, Side, run
-from test_web_app import ALLOWED, Recorder
+from test_web_app import ALLOWED, HOST, Recorder
 
 def write_config(root: Path, name: str) -> Path:
     path = root / "caracole.toml"
@@ -450,3 +450,35 @@ def test_a_song_left_out_of_the_file_is_left_here_saying_why(libraries, tmp_path
         " ".join(line.split()) for line in out.output.splitlines())
     assert "radiohead/creep" in studio.songs() and "oasis/wonderwall" not in studio.songs()
 
+
+
+# --- peer sync --parts, and the answers an import remembered ---------------------------------------------------------
+
+
+def test_a_sync_of_songbooks_alone_takes_the_songbook_and_its_song_and_nothing_else(libraries):
+    desk, studio, _ = libraries
+    desk_with_a_songbook(desk)
+    out = run(studio, "peer", "sync", HOST, "--yes", "--parts", "songbooks")
+    assert out.exit_code == 0, out.output
+    assert studio.songs() == {"radiohead/creep"}
+    assert [b.name for b in load_songbooks(songbooks_file(studio.cfg.library_dir))] == ["Campfire"]
+    assert "Oasis - Wonderwall" not in out.output  # outside the parts: neither taken nor said
+    assert run(studio, "peer", "sync", HOST, "--yes", "--parts", "lyrics").exit_code == 2
+    assert run(studio, "peer", "sync", HOST, "--yes", "--parts", "library,songbooks,indexes").exit_code == 0
+    assert studio.songs() == {"radiohead/creep", "oasis/wonderwall"}
+
+
+def test_a_unit_kept_here_at_an_import_is_given_at_the_next_network_sync(libraries, tmp_path):
+    desk, studio, _ = libraries
+    desk.song(version="key=Am&capo=0")
+    studio.song(version="key=Gm&capo=0")
+    unit = "song/radiohead/creep"
+    out = run(studio, "peer", "import", "--yes", f"--choose=here:{unit}", str(exported(desk, tmp_path / "d.caracole")))
+    assert out.exit_code == 0, out.output
+    assert unit in sync.kept_of(studio.conn, desk.id())
+    diff = json.loads(run(studio, "peer", "diff", HOST, "--json").output)
+    assert [(d["id"], d["proposal"], d["why"]) for d in diff["differences"]] == [(unit, "mine", sync.KEPT_HERE)]
+    out = run(studio, "peer", "sync", HOST, "--push", "--yes")
+    assert out.exit_code == 0, out.output
+    assert load_overrides(desk.cfg.overrides_file).version == {override_key(CREEP): "key=Gm&capo=0"}
+    assert desk.units() == studio.units() and sync.kept_of(studio.conn, desk.id()) == {}
