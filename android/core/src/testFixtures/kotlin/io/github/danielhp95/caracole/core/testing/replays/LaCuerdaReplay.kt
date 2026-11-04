@@ -1,9 +1,17 @@
 package io.github.danielhp95.caracole.core.testing.replays
 
 import io.github.danielhp95.caracole.core.config.PhoneConfig
+import io.github.danielhp95.caracole.core.config.ProviderPolicy
+import io.github.danielhp95.caracole.core.config.RankPolicy
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.health.EventLog
+import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.html.Html
+import io.github.danielhp95.caracole.core.http.BudgetExhausted
+import io.github.danielhp95.caracole.core.http.Client
 import io.github.danielhp95.caracole.core.http.LaCuerdaParseError
+import io.github.danielhp95.caracole.core.http.ProviderBlocked
+import io.github.danielhp95.caracole.core.http.ProviderError
 import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
@@ -13,8 +21,16 @@ import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaPages
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearchAnswer
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearchSong
+import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSheets
 import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSong
+import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaStats
 import io.github.danielhp95.caracole.core.lacuerda.SearchGate
+import io.github.danielhp95.caracole.core.library.LibraryStore
+import io.github.danielhp95.caracole.core.library.Overrides
+import io.github.danielhp95.caracole.core.lookup.Asked
+import io.github.danielhp95.caracole.core.lookup.Asking
+import io.github.danielhp95.caracole.core.lookup.CommandContext
+import io.github.danielhp95.caracole.core.lookup.sites.LaCuerdaCommands
 import io.github.danielhp95.caracole.core.py.PyCodec
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.core.testing.AreaReplay
@@ -22,14 +38,17 @@ import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Fixtures
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
+import io.github.danielhp95.caracole.core.testing.ScenarioWorld
 import io.github.danielhp95.caracole.core.testing.Scenarios
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.ug.UgPage
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.boolean
+import kotlinx.serialization.json.double
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -41,8 +60,10 @@ import java.time.Instant
 /**
  * LaCuerda's pages, its index writers and its own search (vectors/sites/lacuerda_pages.jsonl, lacuerda_store.jsonl,
  * vectors/lookup/lacuerda_gate.jsonl, lacuerda_search.jsonl; tests/test_conformance_lacuerda_lookups.py) answered by
- * core.lacuerda as Python answered them. LaCuerdaPagesTest and LaCuerdaSearchTest call each part on the JVM;
- * CorpusOnDeviceTest runs them all under ART. Lane lacuerda-sheets adds its sheets' records after these.
+ * core.lacuerda as Python answered them; and LaCuerda's sheets, an artist's page and the two lookup commands
+ * (vectors/lookup/lacuerda_sheets.jsonl, commands_lacuerda.jsonl: core.lacuerda's LaCuerdaSheets, core.lookup.sites'
+ * LaCuerdaCommands). LaCuerdaPagesTest, LaCuerdaSearchTest, LaCuerdaSheetsTest and LaCuerdaCommandsTest call each
+ * part on the JVM; CorpusOnDeviceTest runs them all under ART.
  *
  * The phone notes each page a store writes for the next push to the computer (kv `phone:read:lacuerda:<page>`, the
  * store's `at`), which Python doesn't: checked here, and left out of the kv compared with Python's.
@@ -59,6 +80,8 @@ object LaCuerdaReplay : AreaReplay {
         store(misses)
         gate(misses)
         search(misses)
+        sheets(misses)
+        commands(misses)
     }
 
     // --- what a record holds ---------------------------------------------------------------------------------
@@ -366,6 +389,175 @@ object LaCuerdaReplay : AreaReplay {
                 if (htmlReady) throw e  // waiting on html-tree otherwise
             }
         }
+    }
+
+    // --- the sheets and the commands (lane lacuerda-sheets) ---------------------------------------------------
+
+    private const val SHEETS = "lookup/lacuerda_sheets.jsonl"
+    private const val COMMANDS = "lookup/commands_lacuerda.jsonl"
+
+    /** Phase A guard: UG's strip_markup, with which a kept sheet's `sheet.txt` is written, is lane ug-pages'; until
+     * it merges, a record that keeps a sheet waits on it (waiting on ug-pages), as one that parses a page waits on
+     * html-tree. */
+    val ugPagesReady: Boolean by lazy { runCatching { UgPage.stripMarkup("[ch]A[/ch]") }.isSuccess }
+
+    /**
+     * Every scenario of lookup/lacuerda_sheets.jsonl: `lacuerda_sheets` of the record's songs (`kw.only`, the rank
+     * policy's fields that differ from RankPolicy()'s in `kw.rank`) through LaCuerdaSheets.lacuerdaSheets, its stats
+     * as the record writes them, and `read_artist_page` (`kw.artist`) through LaCuerdaSheets.readArtistPage; the
+     * pages each stored noted for the next push ([noted]).
+     */
+    fun sheets(misses: Misses = Misses(SHEETS)) {
+        for (line in Corpus.lines(SHEETS)) {
+            if (line["header"] == JsonPrimitive(true)) continue
+            val kw = line.getValue("kw").jsonObject
+            waitingOnPages {
+                Scenarios.replay(line, misses, events(line)) { world ->
+                    val client = world.clients.getValue(LaCuerdaSheets.PROVIDER)
+                    noting(world, line, misses) {
+                        when (val fn = line.getValue("fn").jsonPrimitive.content) {
+                            "caracole.lacuerda_fetch.lacuerda_sheets" -> stats(LaCuerdaSheets.lacuerdaSheets(
+                                world.db, client, LibraryStore(world.library), rank(kw["rank"]), world.now,
+                                Overrides.read(world.db), kw.getValue("only").jsonArray.map { it.jsonPrimitive.long }.toSet()))
+                            "caracole.lacuerda_fetch.read_artist_page" ->
+                                LaCuerdaSheets.readArtistPage(world.db, client, kw.getValue("artist").jsonPrimitive.content,
+                                                              world.now)
+                            else -> throw AssertionError("no sheets record $fn")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Every record of lookup/commands_lacuerda.jsonl: `caracole lacuerda --artist` (`kw.artist`) or `--search
+     * --progress` (`kw.query`, `kw.auto`) through LaCuerdaCommands, in a command's context over the record's client
+     * ([CommandAsking]): every line it says, then the last it returns, as Python prints them.
+     */
+    fun commands(misses: Misses = Misses(COMMANDS)) {
+        for (line in Corpus.lines(COMMANDS)) {
+            if (line["header"] == JsonPrimitive(true)) continue
+            val kw = line.getValue("kw").jsonObject
+            waitingOnPages {
+                Scenarios.replay(line, misses, events(line)) { world ->
+                    val said = ArrayList<String>()
+                    val c = object : CommandContext {
+                        override val db: Db = world.db
+                        override val asking: Asking =
+                            CommandAsking(world.db, world.clients.getValue(LaCuerdaSheets.PROVIDER), world.now)
+                        override val now: Instant = world.now
+                        override fun say(line: String) {
+                            said += line
+                        }
+                    }
+                    noting(world, line, misses) {
+                        said += when (val command = kw.getValue("command").jsonPrimitive.content) {
+                            "artist" -> LaCuerdaCommands.artist(c, kw.getValue("artist").jsonPrimitive.content, null)
+                            "search" -> LaCuerdaCommands.search(c, kw.getValue("query").jsonPrimitive.content,
+                                                                kw.getValue("auto").jsonPrimitive.boolean)
+                            else -> throw AssertionError("no command $command")
+                        }
+                    }
+                    mapOf("lines" to said)
+                }
+            }
+        }
+    }
+
+    /** [block], which waits on html-tree and ug-pages while either is missing (a page that can't be parsed, or a
+     * sheet that can't be written yet: their stubs' NotImplementedError). */
+    private fun waitingOnPages(block: () -> Unit) {
+        try {
+            block()
+        } catch (e: NotImplementedError) {
+            if (htmlReady && ugPagesReady) throw e
+        }
+    }
+
+    /** [pass], then the pages it noted for the next push checked ([noted]), whatever it came to but a wait on a lane
+     * still to merge. */
+    private fun <T> noting(world: ScenarioWorld, line: JsonObject, misses: Misses, pass: () -> T): T {
+        var waiting = false
+        try {
+            return pass()
+        } catch (e: NotImplementedError) {
+            waiting = true
+            throw e
+        } finally {
+            if (!waiting) noted(world, line, misses)
+        }
+    }
+
+    /** The pages the pass noted for the next push (kv `phone:read:lacuerda:<page>`, at the record's now) checked
+     * against the record's `noted`, then left out of the kv compared with Python's, which notes none. */
+    private fun noted(world: ScenarioWorld, line: JsonObject, misses: Misses) {
+        val at = Stamps.of(world.now)
+        val want = line["noted"]?.jsonArray.orEmpty().associate { it.jsonPrimitive.content to at }
+        misses.check(notes(world.db) == want) { "${line["case"]}: the pages noted ${notes(world.db)}, Python's stores $want" }
+        world.db.execute("DELETE FROM kv WHERE key >= ? AND key < ?", Reads.READ, Reads.READ.dropLast(1) + ";")
+    }
+
+    /** The record's events logged into its database under its run (EventLog), as the scenario's clients log them, so a
+     * command reads them (its hour's requests, whether its run got an answer). */
+    private fun events(line: JsonObject): (Db, String) -> ((io.github.danielhp95.caracole.core.http.Event) -> Unit) {
+        val now = instant(line.getValue("now"))
+        return { db, run -> EventLog(db, run) { now } }
+    }
+
+    /** LaCuerdaStats as the record writes it: the failures as `[song id, error's class, its words]`, the songs that
+     * wait for a shared folder as their error's words. */
+    private fun stats(s: LaCuerdaStats): JsonObject = JsonObject(linkedMapOf(
+        "tried" to JsonPrimitive(s.tried), "errors" to JsonPrimitive(s.errors),
+        "budget_exhausted" to JsonPrimitive(s.budgetExhausted),
+        "failures" to JsonArray(s.failures.map { (song, e) ->
+            JsonArray(listOf(JsonPrimitive(song.id), JsonPrimitive(e::class.simpleName), JsonPrimitive(e.message)))
+        }),
+        "kept" to JsonPrimitive(s.kept), "missing" to JsonPrimitive(s.missing),
+        "shared" to JsonArray(s.shared.map { JsonPrimitive(it.message) }),
+    ))
+
+    /** config.RankPolicy() with the record's fields that differ from it. */
+    private fun rank(given: JsonElement?): RankPolicy {
+        val r = RankPolicy()
+        val o = given as? JsonObject ?: return r
+        return r.copy(
+            coverageThreshold = o["coverage_threshold"]?.jsonPrimitive?.double ?: r.coverageThreshold,
+            lineMatch = o["line_match"]?.jsonPrimitive?.double ?: r.lineMatch,
+            priorVotes = o["prior_votes"]?.jsonPrimitive?.double ?: r.priorVotes,
+            scoredSheets = o["scored_sheets"]?.jsonPrimitive?.int ?: r.scoredSheets,
+            labelPenalty = o["label_penalty"]?.jsonPrimitive?.double ?: r.labelPenalty,
+            variantBonus = o["variant_bonus"]?.jsonPrimitive?.double ?: r.variantBonus,
+        )
+    }
+
+    /**
+     * A lookup command's asking of the record's client, as lane lookup's InteractiveAsk asks for one: none while
+     * LaCuerda cools down; the policy the command gives (the search's one request) else the client's, the lookup's,
+     * which the record's is; a block cools it down (Health.recordBlock) and an error is counted (Health.recordError);
+     * a spent budget the hour's when the client's budget is below `lookup_requests`; the requests counted from the
+     * command's start.
+     */
+    class CommandAsking(private val db: Db, private val client: Client, private val now: Instant) : Asking {
+        private val start = client.requestsMade
+
+        override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> {
+            if (Health.isCooling(db, provider, now)) return Asked.Cooling(Health.state(db, provider).cooldownUntil)
+            if (policy != null) client.policy = policy
+            return try {
+                Asked.Done(work(client))
+            } catch (e: ProviderBlocked) {
+                Asked.Blocked(e, Health.recordBlock(db, e.provider, now, e.message.orEmpty()))
+            } catch (e: BudgetExhausted) {
+                val p = PhoneConfig.read(db).provider(provider)
+                Asked.Spent(hour = client.policy.budget < p.lookupRequests, keptForSheets = false)
+            } catch (e: ProviderError) {
+                Health.recordError(db, e.provider, now, e.message.orEmpty())
+                Asked.Failed(e)
+            }
+        }
+
+        override val requests: Map<String, Int> get() = mapOf(client.provider to client.requestsMade - start)
     }
 
     // --- a database ------------------------------------------------------------------------------------------

@@ -1,0 +1,90 @@
+package io.github.danielhp95.caracole.core.lookup
+
+import io.github.danielhp95.caracole.core.config.ProviderPolicy
+import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.health.Health
+import io.github.danielhp95.caracole.core.health.ProviderState
+import io.github.danielhp95.caracole.core.http.Client
+import io.github.danielhp95.caracole.core.http.ProviderBlocked
+import io.github.danielhp95.caracole.core.http.ProviderError
+import io.github.danielhp95.caracole.core.lacuerda.LaCuerdaSearch
+import io.github.danielhp95.caracole.core.lookup.sites.LaCuerdaCommands
+import io.github.danielhp95.caracole.core.testing.FakeAsking
+import io.github.danielhp95.caracole.core.testing.Misses
+import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.testing.replays.LaCuerdaReplay
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import java.time.Instant
+import kotlin.test.assertEquals
+import kotlin.test.assertNull
+
+/** `caracole lacuerda --artist` and `--search` on the phone against Python's lines and writes
+ * (vectors/lookup/commands_lacuerda.jsonl), and what asking came to that a record can't make (a fake asking). */
+class LaCuerdaCommandsTest {
+    @get:Rule val folder = TemporaryFolder()
+
+    private val now = Instant.parse("2026-11-03T12:00:00Z")
+
+    /** Each command's last line ("Read: ", "Not found: ", "Not read: ", "Searched: ", "Found already: ", "Nothing
+     * found: ", "Not searched: "), its search's progress lines before it, its writes; those that parse a page wait on
+     * html-tree. */
+    @Test fun everyCommandRecordMatches() = Misses("lookup/commands_lacuerda.jsonl").also { LaCuerdaReplay.commands(it) }.assertNone()
+
+    private class Context(override val db: Db, override val asking: Asking, override val now: Instant) : CommandContext {
+        val said = ArrayList<String>()
+        override fun say(line: String) {
+            said += line
+        }
+    }
+
+    private fun <T> world(block: (Db) -> T): T = TestDb.fresh(folder.root).use { it.writeBlocking(block) }
+
+    /** An asking that comes to [asked] and sends nothing. */
+    private fun asking(asked: Asked<Nothing>): Asking = object : Asking {
+        override fun <T> ask(provider: String, policy: ProviderPolicy?, work: (Client) -> T): Asked<T> = asked
+        override val requests: Map<String, Int> = emptyMap()
+    }
+
+    @Test fun anArtistsPageNotReadSaysWhy() = world { db ->
+        fun line(asked: Asked<Nothing>) = LaCuerdaCommands.artist(Context(db, asking(asked), now), "Soda Stereo", null)
+        assertEquals("Not read: the lookup's 6 requests to LaCuerda are spent; ask again later.",
+                     line(Asked.Spent(hour = false, keptForSheets = false)))
+        assertEquals("Not read: this hour's 60 lookup requests to LaCuerda are spent; ask again later.",
+                     line(Asked.Spent(hour = true, keptForSheets = false)))
+        val blocked = ProviderBlocked("lacuerda", "https://acordes.lacuerda.net/soda_stereo/", 403, "HTTP 403")
+        assertEquals("Not read: LaCuerda blocked caracole (lacuerda: 403: https://acordes.lacuerda.net/soda_stereo/: " +
+                         "HTTP 403); no more requests to it until 2026-11-04 14:00 UTC.",
+                     line(Asked.Blocked(blocked, ProviderState("lacuerda", cooldownUntil = Instant.parse("2026-11-04T14:00:00Z")))))
+        assertEquals("Not read: LaCuerda failed (lacuerda: 500: x); nothing changed: try again later.",
+                     line(Asked.Failed(ProviderError("lacuerda", "x", 500))))
+        assertEquals("Not read: LaCuerda is cooling down after a block until 2026-11-04 14:00 UTC; caracole won't ask it " +
+                         "before then.", line(Asked.Cooling(Instant.parse("2026-11-04T14:00:00Z"))))
+        assertEquals("Not read: no client for lacuerda; nothing changed.",
+                     LaCuerdaCommands.artist(Context(db, FakeAsking(emptyMap()), now), "Soda Stereo", null))
+        assertNull(Health.state(db, "lacuerda").cooldownUntil)  // the asking records a block, never the command
+    }
+
+    @Test fun aSearchSaysItsStageThenItsLastLine() = world { db ->
+        val none = Context(db, FakeAsking(emptyMap()), now)
+        val line = LaCuerdaCommands.search(none, "sol y luz", auto = true)
+        assertEquals("Not searched: LaCuerda's search reads only words of 4 letters or more, and “sol y luz” has none.", line)
+        assertEquals(listOf("caracole-progress: {\"stage\":\"search\",\"state\":\"skipped\",\"detail\":\"$line\"}"), none.said)
+
+        val spent = Context(db, asking(Asked.Spent(hour = true, keptForSheets = false)), now)
+        assertEquals("Not searched: the search's one request to LaCuerda is spent; ask again later.",
+                     LaCuerdaCommands.search(spent, "corazón de tiza", auto = false))
+        assertEquals(listOf("running", "skipped"), spent.said.map { it.substringAfter("\"state\":\"").substringBefore('"') })
+        assertNull(db.kvGet(LaCuerdaSearch.FAILED_KEY))
+
+        val failed = Context(db, asking(Asked.Failed(ProviderError("lacuerda", "x", 500))), now)
+        assertEquals("Not searched: LaCuerda failed (lacuerda: 500: x); nothing changed: try again later.",
+                     LaCuerdaCommands.search(failed, "corazón de tiza", auto = true))
+        assertEquals("LaCuerda failed: lacuerda: 500: x", LaCuerdaSearch.failed(db, "corazon-tiza", now)?.error)
+        assertEquals("Not searched: LaCuerda's search for “corazón de tiza” failed less than an hour ago (LaCuerda failed: " +
+                         "lacuerda: 500: x), so the page won't send it by itself before 2026-11-03 13:00 UTC; its Ask " +
+                         "LaCuerda button, Try again or a terminal asks now.",
+                     LaCuerdaCommands.search(failed, "corazón de tiza", auto = true))
+    }
+}

@@ -1291,7 +1291,23 @@ Not built yet. (lookup.)
     `SearchGate.of`) and `search`: its one request, the answer stored and its kv in one savepoint;
   - tests/test_conformance_lacuerda_lookups.py writes vectors/sites/lacuerda_pages.jsonl and lacuerda_store.jsonl,
     vectors/lookup/lacuerda_gate.jsonl and lacuerda_search.jsonl (`LaCuerdaReplay`, area `lacuerda`).
-- LaCuerda's sheets (lacuerda-sheets): not built yet.
+- LaCuerda's sheets (lacuerda-sheets):
+  - `LaCuerdaSheets`, lacuerda_fetch.py for a lookup's songs (`only`): `_to_try` and `mayAsk`, the artist's slugs in
+    `_artist_songs`' order (a slug given first, the listings' `artistSlugs`, then `artistSlugCandidates`; a 404 or
+    "aqui llega:" moving on), each page cached 30 days (a stale copy no answer once the budget is spent), your pick's
+    page, `_record` and `_keep` (`sheet.json` as `json.dumps(indent=2)` and a newline, then `sheet.txt`; no
+    savepoint, as Python's), `lacuerda_checked_at`, a shared folder waiting; and `readArtistPage`. Each page stored is
+    noted for the next push. Python's nightly parts are left out: the popular artists' pages, the listings pass, the
+    handoffs, info.json;
+  - core.lookup.sites' `LaCuerdaPickStage` and `LaCuerdaStage`: get.py's `lacuerda()` through the stage's asking, its
+    words for what the pass came to and for what asking came to (until lane lookup's LookupWords, a copy of its
+    `end`);
+  - `LaCuerdaCommands`, commands/lyrics.py's `lacuerda --artist` and `--search` (the search's `--progress` lines said,
+    the last returned), the cooldown and the gate checked as Python checks them, the block and the error recorded by
+    the asking; the search re-keys the songs before `answered`, as `search_library`'s `list_songs` does, and stores
+    no cached page first (`backfill_cached`: the phone stores each page as it reads it);
+  - tests/test_conformance_lacuerda_lookups.py writes vectors/lookup/lacuerda_sheets.jsonl and commands_lacuerda.jsonl
+    (`LaCuerdaReplay.sheets` and `commands`, each record's `noted` the pages the phone notes).
 - harptabs.com (harptabs), gametabs.net (gametabs), gtptabs.com and MuseScore (tab-files): not built yet.
 
 ##### The Requests tab on the phone
