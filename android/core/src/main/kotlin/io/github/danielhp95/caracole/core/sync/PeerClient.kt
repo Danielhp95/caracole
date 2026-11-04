@@ -19,7 +19,17 @@ import java.io.InputStream
 /** /api/peer/state, as the phone reads it. */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
-                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null)
+                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null) {
+    companion object {
+        /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
+         * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */
+        fun read(document: JsonElement): PeerState = try {
+            Documents.state(document)
+        } catch (e: Documents.Unreadable) {
+            throw PeerError("A state document that can't be read: ${e.message}.", cause = e)
+        }
+    }
+}
 
 /** What the computer answered that the phone can't go on with, said as one sentence ([message]); [status], the
  * HTTP status it answered with, when it answered one. Nothing answering at all is mirror's SyncError.NoAnswer. */
