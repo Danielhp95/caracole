@@ -8,7 +8,12 @@ import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.sync.Base
 import io.github.danielhp95.caracole.core.sync.Compare
+import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import io.github.danielhp95.caracole.core.sync.Difference
+import io.github.danielhp95.caracole.core.sync.KeptEntry
+import io.github.danielhp95.caracole.core.sync.KeptPair
+import io.github.danielhp95.caracole.core.sync.PeerState
+import io.github.danielhp95.caracole.core.sync.Scope
 import io.github.danielhp95.caracole.core.sync.SyncUnit
 import io.github.danielhp95.caracole.core.sync.Take
 import io.github.danielhp95.caracole.core.sync.UnitError
@@ -26,6 +31,7 @@ import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -45,7 +51,10 @@ import java.util.Base64
  *   back as its value ([documentsAsValues]); [takeDigests], the digests take.jsonl's records compared;
  * - the take: [checkedName], every case of take.jsonl ([takes]), every fixture's units taken into an empty phone
  *   ([fixturesTaken]) and every take's fixture copied unit by unit into one ([takesCopied]);
- * - [nameKey], songbook.name_key.
+ * - [nameKey], songbook.name_key;
+ * - the sync redesign's rules (tests/test_conformance_sync_kept.py): the remembered answer ([kept]: merged_kept,
+ *   compare with kept answers, record_kept and record_agreement to the kv's byte, kept_of, a state's kept) and a
+ *   sync's parts ([scope]: in_scope, listed_songs, change_of, names_of).
  *
  * A value compares by its canonical text, the digest's own; a document as json.dumps(sort_keys=True) writes it. Each
  * phone is a database of its own in a temporary folder.
@@ -82,6 +91,8 @@ object SyncReplay : AreaReplay {
         fixturesTaken(misses)
         takesCopied(misses)
         nameKey(misses)
+        kept(misses)
+        scope(misses)
     }
 
     // --- the comparison -------------------------------------------------------------------------------------------
@@ -401,6 +412,122 @@ object SyncReplay : AreaReplay {
             misses.check(got == r.out!!.jsonPrimitive.content) { "name_key($name) = $got, Python ${r.out}" }
         }
     }
+
+    // --- the remembered answer and the parts (vectors/sync/kept.jsonl, scope.jsonl) -----------------------------
+
+    const val KEPT = "sync/kept.jsonl"
+    const val SCOPE = "sync/scope.jsonl"
+
+    /** Every record of kept.jsonl: merged_kept, compare with kept answers, record_kept and record_agreement (the
+     * base's kv text after, byte for byte, and what each returned), kept_of and a state document's kept. */
+    fun kept(misses: Misses) {
+        val records = Corpus.records(KEPT)
+        misses.check(records.map { it.fn }.toSet() == setOf("merged_kept", "compare", "record_kept", "record_agreement",
+                                                          "kept_of", "read_state_document")) { "$KEPT's functions" }
+        withDatabase { database ->
+            each(records, misses) { r ->
+                val given = r.extra.getValue("in").jsonObject
+                when (r.fn) {
+                    "merged_kept" -> differs(r, pairs(r.out), Compare.mergedKept(
+                        base(given["mine"]), keptOf(given["mine_kept"]), base(given["theirs"]), keptOf(given["theirs_kept"])))
+                        ?: differs(r, pairs(r.out)?.keys?.toList(), Compare.mergedKept(
+                            base(given["mine"]), keptOf(given["mine_kept"]), base(given["theirs"]),
+                            keptOf(given["theirs_kept"])).keys.toList())
+                    "compare" -> {
+                        val found = Compare.compare(units(given.getValue("mine")), units(given.getValue("theirs")),
+                                                    merged(given["base"]), pairs(given["kept"]))
+                        differs(r, r.out!!.jsonArray.map { row -> row.jsonArray.map(::text) },
+                                found.map { listOf(it.id, it.proposal, it.why) })
+                    }
+                    "record_kept", "record_agreement", "kept_of" -> database.writeBlocking { db ->
+                        val peer = text(given.getValue("peer"))
+                        val key = "sync:base:$peer"
+                        db.kvDelete(key)
+                        textOrNull(given["kv"])?.let { db.kvSet(key, it) }
+                        if (r.fn == "kept_of") {
+                            differs(r, keptOf(r.out), Compare.keptOf(db, peer))
+                        } else {
+                            val args = given.getValue("args").jsonArray
+                            val returned = if (r.fn == "record_kept") {
+                                Compare.recordKept(db, peer, args[0].jsonObject.mapValues { (_, pair) ->
+                                    textOrNull(pair.jsonArray[0]) to textOrNull(pair.jsonArray[1])
+                                }, text(args[1]))
+                            } else {
+                                Compare.recordAgreement(db, peer, units(args[0]), units(args[1]), text(args[2]))
+                            }
+                            differs(r, textOrNull(r.out), db.kvGet(key))
+                                ?: differs(r, r.extra.getValue("returned").jsonPrimitive.int, returned)
+                        }
+                    }
+                    "read_state_document" ->
+                        differs(r, keptOf(r.out), PeerState.read(given.getValue("doc")).kept)
+                    else -> "an unknown function ${r.fn}"
+                }
+            }
+        }
+    }
+
+    /** Whether Songbooks.entryKeys answers, which listed_songs reads every entry's keys with (waiting on
+     * songbook-writers). */
+    fun listing(): Boolean = runCatching { Songbooks.entryKeys("Eagles - Hotel California") }.isSuccess
+
+    /** Every record of scope.jsonl: in_scope, change_of, names_of and, once Songbooks.entryKeys answers,
+     * [listedSongs]. */
+    fun scope(misses: Misses) {
+        val records = Corpus.records(SCOPE)
+        misses.check(records.map { it.fn }.toSet() == setOf("in_scope", "listed_songs", "change_of", "names_of")) {
+            "$SCOPE's functions"
+        }
+        if (listing()) listedSongs(misses)  // waiting on songbook-writers
+        each(records.filter { it.fn != "listed_songs" }, misses) { r ->
+            val given = r.extra.getValue("in").jsonObject
+            when (r.fn) {
+                "in_scope" -> {
+                    val found = given.getValue("found").jsonArray.map(::difference)
+                    val listed = nullable(given["listed"])?.jsonObject?.mapValues { (_, books) -> books.jsonArray.map(::text) }
+                    val holds = nullable(given["holds"])?.jsonArray?.map(::text)
+                    differs(r, r.out!!.jsonArray.map(::text),
+                            Scope.inScope(found, given.getValue("parts").jsonArray.map(::text), listed ?: emptyMap(), holds)
+                                .map { it.id })
+                }
+                "change_of" -> {
+                    val (here, there) = Scope.changeOf(difference(given.getValue("d")), merged(given["base"]),
+                                                       pairs(given["kept"]))
+                    differs(r, r.out!!.jsonArray.map(::textOrNull), listOf(here, there))
+                }
+                "names_of" -> differs(r, nullable(r.out)?.jsonArray?.map(::text),
+                                      Scope.namesOf(text(given.getValue("unit_id")), text(given.getValue("label")))
+                                          ?.toList())
+                else -> "an unknown function ${r.fn}"
+            }
+        }
+    }
+
+    /** scope.jsonl's listed_songs records: the songs songbooks list, by unit, in order. */
+    fun listedSongs(misses: Misses) {
+        val records = Corpus.records(SCOPE).filter { it.fn == "listed_songs" }
+        misses.check(records.isNotEmpty()) { "$SCOPE has no listed_songs record" }
+        each(records, misses) { r ->
+            val given = r.extra.getValue("in").jsonObject
+            val got = Scope.listedSongs(given.getValue("books").jsonObject, given.getValue("units").jsonArray.map(::text))
+            val want = r.out!!.jsonObject.mapValues { (_, b) -> b.jsonArray.map(::text) }
+            differs(r, want, got) ?: differs(r, want.keys.toList(), got.keys.toList())
+        }
+    }
+
+    /** `{id: [here, there, when]}` (kept answers as stored), else none. */
+    private fun keptOf(e: JsonElement?): Map<String, KeptEntry> =
+        nullable(e)?.jsonObject?.mapValues { (_, entry) ->
+            val (here, there, at) = entry.jsonArray
+            KeptEntry(textOrNull(here), textOrNull(there), text(at))
+        } ?: emptyMap()
+
+    /** `{id: [here, there, chooser]}` (merged_kept's), else null. */
+    private fun pairs(e: JsonElement?): Map<String, KeptPair>? =
+        nullable(e)?.jsonObject?.mapValues { (_, entry) ->
+            val (here, there, chooser) = entry.jsonArray
+            KeptPair(textOrNull(here), textOrNull(there), text(chooser))
+        }
 
     // --- what they share ------------------------------------------------------------------------------------------
 

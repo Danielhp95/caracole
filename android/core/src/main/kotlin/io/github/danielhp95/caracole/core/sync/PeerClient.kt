@@ -16,10 +16,12 @@ import java.io.File
 import java.io.IOException
 import java.io.InputStream
 
-/** /api/peer/state, as the phone reads it. */
+/** /api/peer/state, as the phone reads it: [kept], the answers the computer's imports of the phone's files
+ * remembered for it, as it keeps them (`here` the computer's), its odd entries left out. */
 data class PeerState(val format: Int, val server: String?, val caracole: String, val name: String, val now: String?,
                      val units: Map<String, SyncUnit>, val base: Base?, val token: String,
-                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null) {
+                     val indexes: Map<String, String> = emptyMap(), val settings: JsonObject? = null,
+                     val kept: Kept = emptyMap()) {
     companion object {
         /** A state document, read as [PeerClient.state] reads the computer's (read_state_document): its `settings`
          * the computer's settings, none for a member that isn't an object. A [PeerError] for one that can't be read. */
