@@ -30,9 +30,11 @@ tuple as an array). No fixture: the functions that read the database read one kv
     ``kept`` ``{id: [here, there, chooser]}`` or null), ``out`` ``[here, there]``;
   - ``names_of``: ``in`` ``{unit_id, label}``, ``out`` ``[artist, title]`` or null.
 
-Names in other scripts come from the keys corpus's ``EDGES`` (test_conformance_keys.py). The answers are the same
-under any hash seed (``test_the_vectors_are_the_same_whatever_the_hash_seed``). Regenerate with
-``CARACOLE_CORPUS=write`` (tests/conformance/README.md).
+The bases the cases start from are of ``peer_sync.FORMAT`` (those of another format beside it, ``_format``), so a
+FORMAT bump regenerates vectors that show what they did. Names in other scripts come from the keys corpus's
+``EDGES`` (test_conformance_keys.py). The answers are the same under any hash seed
+(``test_the_vectors_are_the_same_whatever_the_hash_seed``). Regenerate with ``CARACOLE_CORPUS=write``
+(tests/conformance/README.md).
 """
 
 from __future__ import annotations
@@ -72,11 +74,12 @@ def _units(**digests: str) -> dict:
     return {f"song/{name}": _u(f"song/{name}", digest) for name, digest in digests.items()}
 
 
-def _d(unit_id: str, mine: str | None = "m", theirs: str | None = "t", label: str | None = None):
+def _d(unit_id: str, mine: str | None = "m", theirs: str | None = "t", label: str | None = None,
+       proposal: str = "conflict", why: str = ""):
     from caracole import peer_sync as sync
 
     return sync.Difference(unit_id, unit_id if label is None else label, _u(unit_id, mine, label),
-                           _u(unit_id, theirs, label), sync.CONFLICT, "")
+                           _u(unit_id, theirs, label), proposal, why)
 
 
 def _song(artist: str, title: str) -> str:
@@ -106,6 +109,8 @@ def merged_kept_records() -> list[dict]:
          {a: ("t", "h", T1)}),
         ("an agreement at the same time as the other side's kept answer, this side's: the agreement",
          {a: (None, T1)}, {}, None, {a: ("t", "h", T1)}),
+        ("the other side's agreement at the same time as this side's kept answer: the agreement", None,
+         {a: ("h", "t", T1)}, {a: ("x", T1)}, {}),
         ("both sides' kept answers at the same time: this side's", None, {a: ("h", "t", T1)}, None,
          {a: ("t2", "h2", T1)}),
         ("the other side's kept answer later than this side's: the other's, swapped", None, {a: ("h", "t", T1)},
@@ -150,6 +155,8 @@ def compare_records() -> list[dict]:
         ("a lack kept here, new here since", _units(a="h"), _units(a="t"), {}, {a: (None, "t", "mine")}),
         ("a lack kept there, new there since", _units(a="h"), _units(a="t"), {}, {a: ("h", None, "theirs")}),
         ("kept with no base at all: the kept answer still counts", _units(a="h"), _units(a="t"), None, {a: there}),
+        ("kept with no base, beside units compared as a first sync: only here, only there, never synced",
+         _units(a="h", c="c", e="e1"), _units(a="t", d="d", e="e2"), None, {a: here}),
         ("kept over a base that makes it a conflict: the kept answer", _units(a="h"), _units(a="t"), {a: "0"},
          {a: here}),
         ("kept beside units compared as usual, in order",
@@ -166,8 +173,16 @@ def compare_records() -> list[dict]:
             for case, mine, theirs, base, kept in cases]
 
 
-def _stored(units: dict | None = None, kept: dict | None = None, fmt: int = 2) -> str:
-    doc: dict[str, Any] = {"format": fmt, "units": units or {}}
+def _format(offset: int = 0) -> int:
+    """``peer_sync.FORMAT``, or a format beside it (another format's base is none), so that bumping it regenerates
+    vectors that show what they did."""
+    from caracole import peer_sync as sync
+
+    return sync.FORMAT + offset
+
+
+def _stored(units: dict | None = None, kept: dict | None = None, fmt: int | None = None) -> str:
+    doc: dict[str, Any] = {"format": _format() if fmt is None else fmt, "units": units or {}}
     if kept is not None:
         doc["kept"] = kept
     return json.dumps(doc, ensure_ascii=False)
@@ -200,14 +215,15 @@ def record_kept_records(conn: sqlite3.Connection) -> list[dict]:
          _stored({"song/a": ["a1", T0]}, {"song/b": ["b0", "t0", T0], "song/c": ["ch", "ct", T0]}),
          {"song/b": ("bh", "bt"), "song/d": ("dh", "dt")}, T2),
         ("a lack kept, on either side", _stored({}), {"song/x": (None, "t"), "song/y": ("h", None)}, T1),
-        ("a base of another format before is none", _stored({"song/a": ["a1", T0]}, {"song/c": ["c", "c", T0]}, 1),
+        ("a base of another format before is none",
+         _stored({"song/a": ["a1", T0]}, {"song/c": ["c", "c", T0]}, _format(-1)),
          {"song/b": ("bh", "bt")}, T1),
         ("an untagged base before is none", json.dumps({"song/old": ["x", T0]}), {"song/b": ("bh", "bt")}, T1),
         ("a base that isn't JSON is none", "{nonsense", {"song/b": ("bh", "bt")}, T1),
         ("odd kept answers before are left out", _stored({}, ODD_KEPT), {"song/z": ("zh", "zt")}, T1),
         ("nothing to remember, no base: nothing written", None, {}, T1),
-        ("nothing to remember, a base: as it was, byte for byte", '{"format": 2, "units": {"song/b": ["x", "y"]}}',
-         {}, T1),
+        ("nothing to remember, a base: as it was, byte for byte",
+         '{"format": %d, "units": {"song/b": ["x", "y"]}}' % _format(), {}, T1),
         ("keys in code-point order: a supplementary letter after U+FF61", None,
          {WIDE: ("w", "w2"), NARROW: ("n", "n2"), "song/a": ("a", "a2")}, T1),
     ]
@@ -224,24 +240,32 @@ def record_agreement_records(conn: sqlite3.Connection) -> list[dict]:
 
     kept = {"song/b": ["bh", "bt", T1], "song/c": ["ch", "ct", T1]}
     cases = [
-        ("an agreed unit drops its kept answer, the others stay", _stored({}, kept), _units(b="bt"),
-         _units(b="bt")),
+        ("an agreed unit drops its kept answer, the others stay", _stored({}, kept), _units(b="bt", c="ch"),
+         _units(b="bt", c="ct")),
         ("a unit both lack that the base names drops its kept answer",
-         _stored({"song/g": ["x", T0]}, {"song/g": ["gh", "gt", T1], "song/c": ["ch", "ct", T1]}), {}, {}),
-        ("a kept unit both lack that the base doesn't name stays kept", _stored({}, kept), {}, {}),
+         _stored({"song/g": ["x", T0]}, {"song/g": ["gh", "gt", T1], "song/c": ["ch", "ct", T1]}), _units(c="ch"),
+         _units(c="ct")),
+        ("a kept unit both lack, the base naming none: agreed lacking, its answer dropped", _stored({}, kept), {},
+         {}),
+        ("a kept unit both lack, beside one still held otherwise: the one lacking agreed, the other kept",
+         _stored({"song/a": ["a0", T0]}, kept), _units(a="a0", c="ch"), _units(a="a0", c="ct2")),
         ("a kept unit the two still hold otherwise stays kept, its base too",
-         _stored({"song/b": ["b0", T0]}, kept), _units(b="bh"), _units(b="bt")),
+         _stored({"song/b": ["b0", T0]}, kept), _units(b="bh", c="ch"), _units(b="bt", c="ct")),
         ("every kept answer dropped: no kept member", _stored({}, {"song/b": ["bh", "bt", T1]}), _units(b="x"),
          _units(b="x")),
         ("an agreement on units no answer was kept for leaves every kept answer as it was",
-         _stored({"song/a": ["a0", T0]}, kept), _units(a="a1"), _units(a="a1")),
+         _stored({"song/a": ["a0", T0]}, kept), _units(a="a1", b="bh", c="ch"), _units(a="a1", b="bt", c="ct")),
+        ("a kept unit one side lacks now stays kept", _stored({}, kept), _units(b="bh"), _units(c="ct")),
         ("no kept answer before: as before", _stored({"song/a": ["a1", T0]}), _units(a="a2", b="b"),
          _units(a="a2", b="c")),
-        ("odd kept answers before are left out", _stored({}, ODD_KEPT), _units(z="1"), _units(z="1")),
-        ("kept answers in a base of another format are none", _stored({}, kept, 1), _units(c="2"), _units(c="3")),
+        ("odd kept answers before are left out", _stored({}, ODD_KEPT), _units(z="1", a="ah"),
+         _units(z="1", a="at")),
+        ("kept answers in a base of another format are none", _stored({}, kept, _format(-1)), _units(c="2"),
+         _units(c="3")),
         ("keys in code-point order: a supplementary letter after U+FF61",
          _stored({}, {WIDE: ["w", "w2", T1], NARROW: ["n", "n2", T1], "song/a": ["a", "a2", T1]}),
-         {"song/x": _u("song/x", "1")}, {"song/x": _u("song/x", "1")}),
+         {"song/x": _u("song/x", "1"), WIDE: _u(WIDE, "w"), NARROW: _u(NARROW, "n"), "song/a": _u("song/a", "a")},
+         {"song/x": _u("song/x", "1"), WIDE: _u(WIDE, "w2"), NARROW: _u(NARROW, "n2"), "song/a": _u("song/a", "a2")}),
     ]
     out = []
     for case, before, mine, theirs in cases:
@@ -261,7 +285,7 @@ def kept_of_records(conn: sqlite3.Connection) -> list[dict]:
         ("kept answers, a lack among them", _stored({}, {"song/a": ["ah", None, T1], "song/b": [None, "bt", T1]})),
         ("odd entries left out", _stored({}, ODD_KEPT)),
         ("a kept member that isn't an object: none", _stored({}, [["song/a", "h", "t", T1]])),
-        ("a base of another format: none", _stored({}, {"song/a": ["ah", "at", T1]}, 3)),
+        ("a base of another format: none", _stored({}, {"song/a": ["ah", "at", T1]}, _format(1))),
         ("an untagged base: none", json.dumps({"kept": {"song/a": ["ah", "at", T1]}})),
         ("a base that isn't JSON: none", "{nonsense"),
         ("a base that isn't an object: none", "[2]"),
@@ -324,8 +348,21 @@ def in_scope_records() -> list[dict]:
         ("the indexes alone: no unit", every, ["indexes"], None, None),
         ("parts in any order, one twice, one unknown", every, ["songbooks", "library", "library", "lyrics"], None,
          None),
-        ("a song only here, listed, in a sync of the songbooks", [_d(SONG, theirs=None), _d(OTHER, mine=None)],
+        ("a song only here and one only there, listed, in a sync of the songbooks: both come along",
+         [_d(SONG, theirs=None, proposal="mine", why="only here"),
+          _d(OTHER, mine=None, proposal="theirs", why="new there since the last sync")],
          ["songbooks"], {SONG: [BOOK], OTHER: [BOOK]}, None),
+        ("a listed song gone on a side, in a sync of the songbooks: never removed, given, taken or asked",
+         [_d("song/x/a", theirs=None, proposal="theirs", why="gone there since the last sync"),
+          _d("song/x/b", mine=None, proposal="mine", why="gone here since the last sync"),
+          _d("song/x/c", mine=None, proposal="conflict", why="changed on both sides since the last sync"),
+          _d("song/x/d", theirs=None, proposal="conflict", why="changed on both sides since the last sync"),
+          _d("song/x/e", proposal="conflict"), _d(BOOK, theirs=None, proposal="theirs")],
+         ["songbooks"], {f"song/x/{n}": [BOOK] for n in "abcde"}, None),
+        ("a listed song gone on a side, the library asked too: as the library's",
+         [_d("song/x/a", theirs=None, proposal="theirs"), _d("song/x/b", mine=None, proposal="mine"),
+          _d("song/x/c", mine=None, proposal="conflict")],
+         ["songbooks", "library"], {f"song/x/{n}": [BOOK] for n in "abc"}, None),
         ("a file of the songbooks alone never reads a song it lacks as removed",
          [_d(SONG, theirs=None), _d(OTHER), _d(BOOK)], ["songbooks"], {SONG: [BOOK], OTHER: [BOOK]}, ["songbooks"]),
         ("a file of the library alone may remove a song, never a songbook", lacking, parts, None, ["library"]),
@@ -378,6 +415,13 @@ def listed_songs_records() -> list[dict]:
           "songbook/d": {"songs": [["Eagles - Hotel California"], [7, {}], "Eagles - Hotel California",
                                    ["Eagles - Hotel California", {}, "more"], {"text": "Eagles - Hotel California"}]},
           "songbook/e": ["Eagles - Hotel California"]}, [eagles]),
+        ("an entry is read by its text alone, whatever its setting is: null, a number, a list",
+         {BOOK: {"name": "Campfire", "songs": [["Eagles - Hotel California", None]]},
+          BOOK2: {"name": "Z", "songs": [["Eagles - Hotel California", 7]]},
+          "songbook/c": {"name": "C", "songs": [["Eagles - Hotel California", ["x"]]]}}, [eagles]),
+        ("a songbook with no name, or one that isn't text, lists its songs",
+         {BOOK: {"songs": [["Eagles - Hotel California", {}]]},
+          BOOK2: {"name": 7, "songs": [["Eagles - Hotel California", {}]]}}, [eagles]),
         ("a unit of another kind with a song's key isn't listed",
          {BOOK: _book("Campfire", "Eagles - Hotel California")}, [f"removed/{eagles[5:]}", f"songbook/{eagles[5:]}"]),
         ("no songbook", {}, [eagles]),
@@ -497,9 +541,25 @@ def test_the_vectors_show_what_the_design_says(conn):
         "song/a": ["h", "t", "mine"]}
     assert "kept" not in json.loads(kept["record_agreement", "every kept answer dropped: no kept member"])
     assert kept["record_kept", "nothing to remember, no base: nothing written"] is None
+    # the bases the cases start from are of this FORMAT, so the answers merge into them
+    assert json.loads(kept["record_kept", "a base before: its units as they were, the answers beside them"]) == {
+        "format": sync.FORMAT, "units": {"song/a": ["a1", T0]}, "kept": {"song/b": ["bh", "bt", T1]}}
+    assert kept["kept_of", "kept answers, a lack among them"] == {"song/a": ["ah", None, T1],
+                                                                 "song/b": [None, "bt", T1]}
+    assert json.loads(kept["record_agreement", "a kept unit both lack, the base naming none: agreed lacking, its "
+                                               "answer dropped"]) == {
+        "format": sync.FORMAT, "units": {"song/b": [None, T2], "song/c": [None, T2]}}
+    assert kept["merged_kept", "the other side's agreement at the same time as this side's kept answer: the "
+                               "agreement"] == {}
+    assert kept["compare", "kept with no base, beside units compared as a first sync: only here, only there, never "
+                           "synced"] == [["song/a", sync.MINE, sync.KEPT_HERE], ["song/c", sync.MINE, "only here"],
+                                         ["song/d", sync.THEIRS, "only there"],
+                                         ["song/e", sync.CONFLICT, "on both sides, different, and never synced"]]
     scope = {(r["fn"], r["case"]): r["out"] for r in scope_records() if r["fn"] != "names_of"}
     assert scope["in_scope", "a file of the songbooks alone never reads a song it lacks as removed"] == [OTHER, BOOK]
     assert scope["in_scope", "a file of the indexes alone removes nothing"] == [OTHER, BOOK2]
+    assert scope["in_scope", "a listed song gone on a side, in a sync of the songbooks: never removed, given, taken "
+                             "or asked"] == ["song/x/e", BOOK]
     assert scope["listed_songs", "an entry two cuts of which are songs of the units: both listed"] == {
         _song("Earth - Wind", "Fire"): [BOOK], _song("Earth", "Wind - Fire"): [BOOK]}
     names = [r for r in scope_records() if r["fn"] == "names_of"]

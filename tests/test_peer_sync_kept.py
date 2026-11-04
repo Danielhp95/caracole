@@ -69,8 +69,20 @@ def test_the_other_sides_agreement_counts_too_and_two_kept_answers_at_once_are_t
 
 def test_an_agreement_drops_the_kept_answer_of_each_unit_it_agrees_on_and_keeps_the_others(conn):
     sync.record_kept(conn, PEER, {"song/b": ("bh", "bt"), "song/c": ("ch", "ct")}, T1)
-    sync.record_agreement(conn, PEER, {"song/b": U("song/b", "bt")}, {"song/b": U("song/b", "bt")}, T2)
+    sync.record_agreement(conn, PEER, {"song/b": U("song/b", "bt"), "song/c": U("song/c", "ch")},
+                          {"song/b": U("song/b", "bt"), "song/c": U("song/c", "ct")}, T2)
     assert sync.kept_of(conn, PEER) == {"song/c": ("ch", "ct", T1)}
+
+
+def test_a_kept_unit_both_sides_lack_now_is_agreed_lacking_so_one_made_again_is_new_not_a_conflict(conn):
+    # kept at a first import, so no base names it; then both sides lose it
+    sync.record_kept(conn, PEER, {"song/x": ("xh", "xt")}, T1)
+    assert sync.record_agreement(conn, PEER, {}, {}, T2) == 0
+    assert sync.kept_of(conn, PEER) == {} and sync.base_of(conn, PEER) == {"song/x": (None, T2)}
+    base, kept = sync.base_of(conn, PEER), sync.kept_of(conn, PEER)
+    [d] = sync.compare({"song/x": U("song/x", "new")}, {}, sync.merged_base(base, None),
+                       kept=sync.merged_kept(base, kept, None, {}))
+    assert (d.proposal, d.why) == (sync.MINE, "new here since the last sync")
 
 
 def test_a_base_with_no_kept_answer_is_written_as_before(conn):

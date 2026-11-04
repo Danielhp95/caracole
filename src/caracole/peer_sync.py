@@ -52,13 +52,15 @@ latest of the four records (each side's agreement and kept answer) counts, an ag
 the other side's read with its two digests swapped): a kept answer that counts makes the unit, while neither side has
 changed it since, the chooser's, ``KEPT_HERE`` or ``KEPT_THERE``, never a conflict asked again; a change on either
 side after it is compared as usual (``compare``'s ``kept``). An agreement drops the kept answer of every unit it
-agrees on (``record_agreement``), and a base with no kept answer is written as before, with no ``"kept"``.
+agrees on, both sides' versions alike or both lacking it (``record_agreement``), and a base with no kept answer is
+written as before, with no ``"kept"``; the state document carries ``"kept"`` only when given one.
 
 **Parts.** A sync, or a file, is of some of three parts (``PARTS``): the library (songs, tombstones and the entries
 about an artist or a tab), the songbooks, and the site indexes, which no unit is of (``part_of``). A difference is in
 a sync's scope when its unit is of a part asked for, or is a song a songbook lists (``listed_songs``, by any cut of
-an entry's "Artist - Title", ``songbook.entry_keys``) while the songbooks are; and a unit a file lacks of a part the
-file doesn't hold is never read as removed there (``in_scope``'s ``holds``). ``change_of`` says what each side did to
+an entry's "Artist - Title", ``songbook.entry_keys``) while the songbooks are, which brings it along to a side that
+lacks it but never removes it, a part left out never read as a removal; and a unit a file lacks of a part the file
+doesn't hold is never read as removed there (``in_scope``'s ``holds``). ``change_of`` says what each side did to
 a unit since the base, and ``names_of`` reads a song's names from its label, for the pages.
 
 **Taking** (``apply_units``) reads each chosen unit's document from a ``UnitSource`` (the peer, ``Peer``, or a push
@@ -319,11 +321,11 @@ def merged_base(mine: Base | None, theirs: Base | None) -> dict[str, str | None]
 def record_agreement(conn: sqlite3.Connection, peer: str, mine: Mapping[str, Unit], theirs: Mapping[str, Unit],
                      at: str) -> int:
     """Keep, as agreed with ``peer`` at ``at``, every unit the two hold the same now (and those both lack that the
-    base names), dropping the kept answer of each (``record_kept``); the others keep what they had. Return how many
-    were agreed."""
+    base names or an answer was kept for), dropping the kept answer of each (``record_kept``); the others keep what
+    they had. ``mine`` and ``theirs`` are each side's whole state. Return how many were agreed."""
     base, kept = base_of(conn, peer) or {}, kept_of(conn, peer)
     agreed = 0
-    for unit_id in set(mine) | set(theirs) | set(base):
+    for unit_id in set(mine) | set(theirs) | set(base) | set(kept):
         a, b = mine.get(unit_id), theirs.get(unit_id)
         if a is not None and b is not None and a.digest == b.digest:
             base[unit_id] = (a.digest, at)
@@ -802,20 +804,27 @@ def listed_songs(books: Mapping[str, Any], units: Iterable[str]) -> dict[str, li
 def in_scope(found: Sequence[Difference], parts: Iterable[str], *, listed: Mapping[str, Sequence[str]] | None = None,
              holds: Iterable[str] | None = None) -> list[Difference]:
     """The differences of ``found`` (in its order) a sync of ``parts`` is about: a unit of a part asked for, or a song
-    a songbook lists (``listed``, ``listed_songs``'s) while the songbooks are. With ``holds``, the parts a file
-    holds, a unit of a part it doesn't hold that the file lacks is left out: a file of the songbooks alone removes no
-    song."""
+    a songbook lists (``listed``, ``listed_songs``'s) while the songbooks are, which comes along to the side that
+    lacks it, never removed from either (a removal, given, taken or asked, is the library's: left out). With
+    ``holds``, the parts a file holds, a unit of a part it doesn't hold that the file lacks is left out: a file of the
+    songbooks alone removes no song."""
     asked, listed = set(parts), listed or {}
     held = None if holds is None else set(holds)
     kept = []
     for d in found:
         part = part_of(d.id)
-        if not (part in asked or d.id.startswith("song/") and "songbooks" in asked and d.id in listed):
-            continue
+        if part not in asked:
+            if not (d.id.startswith("song/") and "songbooks" in asked and d.id in listed) or _removes(d):
+                continue
         if held is not None and part not in held and d.theirs is None:
             continue
         kept.append(d)
     return kept
+
+
+def _removes(d: Difference) -> bool:
+    """Whether ``d`` may remove its unit on a side: one side lacks it and the proposal isn't to bring it there."""
+    return d.mine is None and d.proposal != THEIRS or d.theirs is None and d.proposal != MINE
 
 
 def change_of(d: Difference, base: Mapping[str, str | None] | None,

@@ -5,9 +5,8 @@ from caracole import normalize
 from caracole import peer_sync as sync
 
 
-def D(i, mine="m", theirs="t"):
-    return sync.Difference(i, i, mine and sync.Unit(i, i, mine), theirs and sync.Unit(i, i, theirs), sync.CONFLICT,
-                           "")
+def D(i, mine="m", theirs="t", proposal=sync.CONFLICT):
+    return sync.Difference(i, i, mine and sync.Unit(i, i, mine), theirs and sync.Unit(i, i, theirs), proposal, "")
 
 
 SONG, OTHER, BOOK = "song/eagles/hotel california", "song/pomme/mononoke", "songbook/campfire"
@@ -29,6 +28,19 @@ def test_songbooks_alone_bring_the_songs_they_list_and_no_other():
     found = [D(SONG), D(OTHER), D(BOOK)]
     kept = sync.in_scope(found, ["songbooks"], listed={SONG: [BOOK]})
     assert [d.id for d in kept] == [SONG, BOOK]
+
+
+def test_a_sync_of_the_songbooks_brings_a_listed_song_along_and_never_removes_one():
+    a, b, c, d, e, f = (f"song/x/{n}" for n in "abcdef")
+    found = [D(a, "m", None, sync.MINE),  # new here: given
+             D(b, None, "t", sync.THEIRS),  # new there: taken
+             D(c, "m", None, sync.THEIRS),  # gone there since: its removal not taken
+             D(d, None, "t", sync.MINE),  # gone here since: its removal not given
+             D(e, None, "t", sync.CONFLICT),  # gone here, changed there: left
+             D(f, "m", "t", sync.CONFLICT)]  # changed on both: asked
+    listed = {u: [BOOK] for u in (a, b, c, d, e, f)}
+    assert [x.id for x in sync.in_scope(found, ["songbooks"], listed=listed)] == [a, b, f]
+    assert [x.id for x in sync.in_scope(found, ["songbooks", "library"], listed=listed)] == [a, b, c, d, e, f]
 
 
 def test_a_songbook_lists_no_removal_or_override_into_the_songbooks_part():
