@@ -743,10 +743,8 @@ def _import(cfg, path, *, name: str | None, said: _Said, parts: tuple[str, ...],
             return PREFER.get(answer.strip().lower())
 
         take, keep = sync.decide(_as_chosen(scoped, choices), PREFER.get(prefer or ""), asked)
-        proposed = {d.id: d.proposal for d in scoped}
         # A "keep mine" answered for what the file would give: remembered, as the file can't take this side's.
-        kept_here = {d.id: (d.mine.digest if d.mine else None, d.theirs.digest if d.theirs else None)
-                     for d in keep if proposed[d.id] != sync.MINE}
+        kept_here = peer_file.kept_answers(scoped, keep)
         settled = {d.id for d in (*take, *keep)}
         left = [(d.id, SKIPPED if choices.get(d.id) == "skip" else UNSETTLED) for d in scoped if d.id not in settled]
         if scoped:

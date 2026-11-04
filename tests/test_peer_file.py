@@ -413,9 +413,10 @@ def test_a_file_cut_short_or_declaring_more_than_it_may_is_refused(tmp_path, exp
     big = declaring(zip_with(tmp_path, {**SMALL, blob: b"x"}, "big.caracole"), {blob: peer_file.FILE_MAX + 1})
     with pytest.raises(peer_file.FileError, match="can't be read whole"):
         peer_file.read_file(big)
-    blobs = {f"files/{c * 64}": b"x" for c in "abc"}
-    many = declaring(zip_with(tmp_path, {**SMALL, **blobs}, "many.caracole"), dict.fromkeys(blobs, 3 * 1024 ** 3))
-    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+    blobs = {f"files/{hashlib.sha256(str(n).encode()).hexdigest()}": b"x" for n in range(65)}
+    many = declaring(zip_with(tmp_path, {**SMALL, "indexes.sqlite": b"x", **blobs}, "many.caracole"),
+                     {"indexes.sqlite": 2 ** 32 - 1} | dict.fromkeys(blobs, peer_file.FILE_MAX))
+    with pytest.raises(peer_file.FileError, match=r"can't be read whole \(it holds more than 8 GiB\)"):
         peer_file.read_file(many)
     state = declaring(zip_with(tmp_path, SMALL, "state.caracole"), {"state.json": peer_file.JSON_MAX + 1})
     with pytest.raises(peer_file.FileError, match="can't be read whole"):

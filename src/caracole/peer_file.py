@@ -479,8 +479,8 @@ def read_file(path: Path, *, name: str | None = None) -> SyncFile:
                 raise _unreadable(f"it has no {needed}")
         try:
             state = sync.read_state_document(_json_member(z, names[STATE]))
-        except sync.StateError as e:
-            raise _unreadable(f"its state: {e}") from None
+        except sync.StateError:
+            raise _unreadable("its state can't be read") from None
         if state.server != manifest["id"]:
             raise _unreadable("its state is another caracole's than its manifest names")
         bases = _json_member(z, names[BASES]) if BASES in names else {}
@@ -501,7 +501,7 @@ def _check_layout(infos: Sequence[zipfile.ZipInfo]) -> None:
         name = info.filename
         blob = name.startswith((FILES, PAGE_BLOBS)) and _SHA256.fullmatch(name.partition("/")[2]) is not None
         if name not in _NAMED and not blob:
-            raise _unreadable(f"a member outside its layout, {name[:80]!r}")
+            raise _unreadable(f"a member outside its layout: {name[:80]}")
         if name in seen:
             raise _unreadable(f"{name[:80]} twice")
         seen.add(name)
@@ -534,8 +534,8 @@ def _json_member(z: zipfile.ZipFile, info: zipfile.ZipInfo) -> Any:
     try:
         with z.open(info) as f:
             data = f.read(JSON_MAX + 1)
-    except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error) as e:
-        raise _unreadable(f"{info.filename}: {e}") from None
+    except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error):
+        raise _unreadable(f"{info.filename} is damaged or cut short") from None
     if len(data) > JSON_MAX:
         raise _unreadable(f"{info.filename} is bigger than it may be")
     try:
@@ -556,8 +556,8 @@ def _index_file(path: Path, name: str) -> SyncFile:
             file.close()
     except sqlite3.OperationalError:
         raise FileError(NOT_A_FILE) from None
-    except sqlite3.Error as e:
-        raise _unreadable(str(e)) from None
+    except sqlite3.Error:
+        raise _unreadable("its SQLite file is damaged") from None
     if meta.get("format") != str(index_transfer.FORMAT):
         raise FileError(OTHER_FORMAT.format(format=meta.get("format")))
     try:
@@ -605,21 +605,23 @@ def check_whole(file: SyncFile) -> None:
         return
     assert file.state is not None
     try:
-        with zipfile.ZipFile(file.path) as z:
-            names = set(z.namelist())
-            for info in z.infolist():
-                digest = hashlib.sha256()
+        z = zipfile.ZipFile(file.path)
+    except (zipfile.BadZipFile, OSError, EOFError, ValueError):
+        raise _unreadable("it is cut short, or no whole zip") from None
+    with z:
+        names = set(z.namelist())
+        for info in z.infolist():
+            digest = hashlib.sha256()
+            try:
                 with z.open(info) as f:
                     while chunk := f.read(CHUNK):
                         digest.update(chunk)
-                blob = info.filename.partition("/")[2]
-                if info.filename.startswith((FILES, PAGE_BLOBS)) and digest.hexdigest() != blob:
-                    raise _unreadable(f"{info.filename} isn't the file its name says")
-            named = _documents(z, file.state)
-    except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error) as e:
-        if isinstance(e, FileError):
-            raise
-        raise _unreadable(str(e)) from None
+            except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error):
+                raise _unreadable(f"{info.filename} is damaged or cut short") from None
+            blob = info.filename.partition("/")[2]
+            if info.filename.startswith((FILES, PAGE_BLOBS)) and digest.hexdigest() != blob:
+                raise _unreadable(f"{info.filename} isn't the file its name says")
+        named = _documents(z, file.state)
     for unit_id, doc in named.items():
         if unit_id.partition("/")[0] != "song":
             continue
@@ -636,10 +638,10 @@ def _check_sqlite(path: Path) -> None:
             (answer,) = file.execute("PRAGMA quick_check").fetchone()
         finally:
             file.close()
-    except sqlite3.Error as e:
-        raise _unreadable(str(e)) from None
+    except sqlite3.Error:
+        raise _unreadable("its SQLite file is damaged") from None
     if answer != "ok":
-        raise _unreadable(str(answer))
+        raise _unreadable("its SQLite file is damaged")
 
 
 def _documents(z: zipfile.ZipFile, state: sync.PeerState) -> dict[str, dict[str, Any]]:
@@ -662,8 +664,8 @@ def _documents(z: zipfile.ZipFile, state: sync.PeerState) -> dict[str, dict[str,
             raise _unreadable(f"{UNITS}'s line {number} is no document of a unit its state names")
         try:
             digest = sync.digest_of(sync.value_of_document(unit_id, doc["unit"]))
-        except (sync.UnitError, ValueError) as e:
-            raise _unreadable(f"{unit_id[:80]}: {e}") from None
+        except (sync.UnitError, ValueError):
+            raise _unreadable(f"{unit_id[:80]}'s document can't be read") from None
         if digest != state.units[unit_id].digest or doc.get("digest") != digest:
             raise _unreadable(f"{unit_id[:80]} isn't what its state says")
         found[unit_id] = doc
@@ -870,6 +872,16 @@ def compare_file(conn: sqlite3.Connection, overrides, books: Sequence, file: Syn
 def in_parts(compared: Compared, parts: Iterable[str]) -> list[sync.Difference]:
     """The differences of ``compared`` an import of ``parts`` is about (``peer_sync.in_scope``)."""
     return sync.in_scope(compared.found, parts, listed=compared.listed)
+
+
+def kept_answers(found: Sequence[sync.Difference], kept: Iterable[sync.Difference]
+                 ) -> dict[str, tuple[str | None, str | None]]:
+    """The answers "keep mine" an import remembers: of the differences ``kept`` here (``peer_sync.decide``'s second
+    list, each as chosen), those the file would have given (``found``'s proposal for it ``THEIRS`` or ``CONFLICT``),
+    each with this side's digest and the file's; a unit proposed this side's already is no answer."""
+    proposed = {d.id: d.proposal for d in found}
+    return {d.id: (d.mine.digest if d.mine else None, d.theirs.digest if d.theirs else None)
+            for d in kept if proposed.get(d.id, sync.MINE) != sync.MINE}
 
 
 def speaks_for(file: SyncFile, unit_id: str) -> bool:
