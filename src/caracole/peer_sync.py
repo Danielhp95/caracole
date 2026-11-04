@@ -54,6 +54,13 @@ changed it since, the chooser's, ``KEPT_HERE`` or ``KEPT_THERE``, never a confli
 side after it is compared as usual (``compare``'s ``kept``). An agreement drops the kept answer of every unit it
 agrees on (``record_agreement``), and a base with no kept answer is written as before, with no ``"kept"``.
 
+**Parts.** A sync, or a file, is of some of three parts (``PARTS``): the library (songs, tombstones and the entries
+about an artist or a tab), the songbooks, and the site indexes, which no unit is of (``part_of``). A difference is in
+a sync's scope when its unit is of a part asked for, or is a song a songbook lists (``listed_songs``, by any cut of
+an entry's "Artist - Title", ``songbook.entry_keys``) while the songbooks are; and a unit a file lacks of a part the
+file doesn't hold is never read as removed there (``in_scope``'s ``holds``). ``change_of`` says what each side did to
+a unit since the base, and ``names_of`` reads a song's names from its label, for the pages.
+
 **Taking** (``apply_units``) reads each chosen unit's document from a ``UnitSource`` (the peer, ``Peer``, or a push
 staged here) and leaves it when it is no longer what was compared, on either side (a compare-and-swap of both
 digests), then makes it this side's (``_take_song``): a song through its wanted.txt line (``songs.upsert_song``, by
@@ -753,6 +760,98 @@ def compared_hash(found: Iterable[Difference]) -> str:
     rows = [[d.id, d.proposal, d.mine.digest if d.mine else None, d.theirs.digest if d.theirs else None]
             for d in sorted(found, key=_order)]
     return hashlib.sha256(canonical.dumps(rows).encode("utf-8")).hexdigest()
+
+
+# --- a sync's parts ---------------------------------------------------------------------------------------------
+
+PARTS = ("library", "songbooks", "indexes")  # what a sync, or a file, may be of; no unit is of the indexes
+_PART_OF = {"song": "library", "removed": "library", "alias": "library", "artist_url": "library",
+            "block": "library", "songbook": "songbooks"}
+
+
+def part_of(unit_id: str) -> str | None:
+    """The part a unit is of, by its kind: ``"library"`` or ``"songbooks"``; None for a kind caracole doesn't know."""
+    return _PART_OF.get(unit_id.partition("/")[0]) if "/" in unit_id else None
+
+
+def listed_songs(books: Mapping[str, Any], units: Iterable[str]) -> dict[str, list[str]]:
+    """The songs songbooks list: for each song unit of ``units`` an entry of a songbook of ``books`` (``{songbook
+    unit: its value, {"name", "songs": [[text, parts], …]}}``, of either side) names by any cut of its "Artist -
+    Title" (``songbook.entry_keys``), the songbook units listing it, sorted, each once. A songbook or an entry that
+    isn't of that shape lists nothing."""
+    from caracole.songbook import entry_keys
+
+    held = set(units)
+    listed: dict[str, set[str]] = {}
+    for book_id, book in books.items():
+        songs = book.get("songs") if isinstance(book, Mapping) else None
+        if not isinstance(songs, list):
+            continue
+        for entry in songs:
+            if not (isinstance(entry, (list, tuple)) and len(entry) == 2 and isinstance(entry[0], str)):
+                continue
+            for key in entry_keys(entry[0]):
+                if f"song/{key}" in held:
+                    listed.setdefault(f"song/{key}", set()).add(book_id)
+    return {song: sorted(found) for song, found in sorted(listed.items())}
+
+
+def in_scope(found: Sequence[Difference], parts: Iterable[str], *, listed: Mapping[str, Sequence[str]] | None = None,
+             holds: Iterable[str] | None = None) -> list[Difference]:
+    """The differences of ``found`` (in its order) a sync of ``parts`` is about: a unit of a part asked for, or a song
+    a songbook lists (``listed``, ``listed_songs``'s) while the songbooks are. With ``holds``, the parts a file
+    holds, a unit of a part it doesn't hold that the file lacks is left out: a file of the songbooks alone removes no
+    song."""
+    asked, listed = set(parts), listed or {}
+    held = None if holds is None else set(holds)
+    kept = []
+    for d in found:
+        part = part_of(d.id)
+        if not (part in asked or d.id.startswith("song/") and "songbooks" in asked and d.id in listed):
+            continue
+        if held is not None and part not in held and d.theirs is None:
+            continue
+        kept.append(d)
+    return kept
+
+
+def change_of(d: Difference, base: Mapping[str, str | None] | None,
+              kept: Mapping[str, KeptPair] | None = None) -> tuple[str | None, str | None]:
+    """What each side did to ``d``'s unit since the base (or since the answer ``kept`` remembers for it), this
+    side's then the other's: ``"new"``, ``"changed"``, ``"gone"``, or None for a side that didn't change it. With no
+    base, a unit on one side alone is new there, and one on both changed on both."""
+    here, there = (d.mine.digest if d.mine else None), (d.theirs.digest if d.theirs else None)
+    pair = None if kept is None else kept.get(d.id)
+    if pair is not None:
+        return _change(here, pair[0]), _change(there, pair[1])
+    if base is not None:
+        was = base.get(d.id)
+        return _change(here, was), _change(there, was)
+    if here is not None and there is not None:
+        return "changed", "changed"
+    return ("new" if here is not None else None), ("new" if there is not None else None)
+
+
+def _change(now: str | None, was: str | None) -> str | None:
+    if now == was:
+        return None
+    if was is None:
+        return "new"
+    return "gone" if now is None else "changed"
+
+
+def names_of(unit_id: str, label: str) -> tuple[str, str] | None:
+    """A song unit's artist and title, read from its label ("Artist - Title"): the cut at a " - " whose
+    ``normalize.identity_key`` is the unit's key (an artist's name may hold one: "Earth - Wind - Fire"), else the
+    first; None for a label with no cut and for a unit of another kind."""
+    from caracole.normalize import identity_key
+
+    kind, _, key = unit_id.partition("/")
+    parts = label.split(" - ")
+    if kind != "song" or len(parts) < 2:
+        return None
+    cuts = [(" - ".join(parts[:i]), " - ".join(parts[i:])) for i in range(1, len(parts))]
+    return next((cut for cut in cuts if identity_key(*cut) == key), cuts[0])
 
 
 # --- the peer ----------------------------------------------------------------------------------------------------
