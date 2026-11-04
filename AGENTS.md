@@ -1335,8 +1335,20 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### Site passes on the phone
 
-- Ultimate Guitar's pages (ug-pages), its sheet (ug-fetch-sheet) and its artist pages (ug-fetch-artist): not built
-  yet.
+- Ultimate Guitar's pages (ug-pages):
+  - core.ug's `UgPage`, `UgArtist` and `UgLookup` are ug/page.py, ug/artist.py and ug/lookup.py: the js-store read
+    through core.html and PyJson.loads, each field as Python's `float()`, `int()` and `str()` read it
+    (internal/pages/`PyValues`: a list's or an object's text its repr), and half of a surrogate pair U+FFFD in every
+    string, keys too (ug/page.py's `_whole`, the computer's fix too); `IndexTab` Python's, its label and its url.
+  - `ArtistTabs.store`, `keepOnly`, `forget` and `backfill` (from the phone's own cache, `CachedAnswers`) write
+    artist_tabs.py's rows; each page a store keeps tabs of is noted (`Reads.note`, site `ug`) for the next push to the
+    computer, at the store's own time (`now`) or the read's if later, never moved back: a list stored from an older
+    copy in the cache after a push is still sent.
+  - A number past a Long (an id) or an Int (a version, a vote count, an artist page's number) is none where Python
+    keeps it (the tab unusable, 0, the next number read), and a page nested deeper than `PyJson.MAX_DEPTH` a
+    PageParseError: UG writes neither.
+  - `UgPagesReplay` (area `ug-pages`) replays vectors/sites/ug_pages*.jsonl and ug_artist*.jsonl
+    (tests/test_conformance_ug_pages.py).
 - core.ug's `Rank`, `Coverage` and `SheetVersions`: rank.py, coverage.py and sheet_versions.py, Python's numbers and
   lists for the same inputs (versions.py's `complete` and `replaces_sheet` are `Rank`'s).
   - A score is Python's float arithmetic (`prior_mean` the builtin sum's, `Py.fsum`), a ranking a stable sort on
@@ -1350,6 +1362,7 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
     against every fixture lyrics) and ug_sheet_versions*.jsonl (over a fixture library): `RankReplay`. They are
     a share of the `sites` area every site lane writes: a record only where it can answer otherwise than another
     (a policy by the fields that differ from `RankPolicy()`'s, which its first record gives).
+- UG's sheet (ug-fetch-sheet) and its artist pages (ug-fetch-artist): not built yet.
 - The matcher (matcher): not built yet.
 - core.lyrics' `Lrclib`, `Megalobiz` and `AzLyrics`: lyrics.py, megalobiz*.py and azlyrics*.py for a lookup's song,
   and their stages, get.py's `_lrclib`, `_megalobiz` and `_azlyrics` (core/lookup/sites/, its words; lane lookup's
