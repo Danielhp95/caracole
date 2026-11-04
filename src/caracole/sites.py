@@ -57,7 +57,8 @@ SITES: tuple[Site, ...] = (
          "An API with no robots rules: nothing is closed to caracole.", asked="Asked song by song"),
     Site("megalobiz", "Timed lyrics, where LRCLIB has none", "megalobiz.com", ("megalobiz.com",),
          "Its official API has no robots rules; its site closes only accounts and editors. caracole keeps the "
-         "API's fair use: your songs alone, its limits, and each song's lyrics links back to its page.",
+         "API's fair use: your songs alone, its 1,000 requests a day, and each song's lyrics links back to its "
+         "page. Its API allows 30 requests a minute; {pace}.",
          asked="Asked song by song"),
     Site("azlyrics", "Plain lyrics, where LRCLIB and Megalobiz have none", "azlyrics.com",
          ("www.azlyrics.com", "azlyrics.com"),
@@ -96,6 +97,9 @@ SITES: tuple[Site, ...] = (
 # The pace a site's robots.txt asks for, where it asks one (gametabs.net's Crawl-delay, tests/fixtures/gametabs/
 # robots.txt), which caracole reports beside its own: since d19226e no Crawl-delay is a floor.
 CRAWL_DELAY_ASKED = {"gametabs": 5.0}
+# The same of a site's API, in seconds between two requests (Megalobiz's 30 a minute, megalobiz.py): since the
+# owner's choice of 2026-11-03, wait times divided by 4, caracole's pace there is quicker.
+API_PACE_ASKED = {"megalobiz": 2.0}
 
 
 def more_paths(site: Site) -> int:
@@ -342,9 +346,10 @@ def _pace(cfg: Config, key: str) -> str:
 
 
 def _robots(cfg: Config, site: Site) -> str:
-    """A site's robots.txt in words, gametabs.net's with the pace caracole keeps there: robots.txt's Crawl-delay is no
-    floor (d19226e), so the sentence says whether caracole waits less, by the owner's choice, or more."""
-    asked = CRAWL_DELAY_ASKED.get(site.key)
+    """A site's robots.txt in words, gametabs.net's and Megalobiz's with the pace caracole keeps there: neither
+    robots.txt's Crawl-delay (d19226e) nor an API's pace is a floor, so the sentence says whether caracole waits
+    less, by the owner's choice, or more."""
+    asked = CRAWL_DELAY_ASKED.get(site.key, API_PACE_ASKED.get(site.key))
     if asked is None:
         return site.robots
     waits = f"caracole waits {_spread(cfg, site.key)}"

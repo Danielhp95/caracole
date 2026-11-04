@@ -11,11 +11,11 @@ songs alone (gametabs_fetch.py).
 **Reading them** (``game_pass``): the sitemaps first, when due (site_index.py: once in 30 days), then each game
 page not read in 30 days, those of your songs first (a game one of your songs' artists names, or one with a tab
 titled as one of your songs), then the rest in the sitemap's order, by their paths. Every request is the
-client's, with its budget and its pauses (10–20 s, never under robots.txt's 5 s), so a pass the budget cuts short
-goes on where it stopped the next time: what it read is in the table, with when. A page is cached for good, as
-every answer is, and asked for again after 30 days (``GAME_MAX_AGE``). ``caracole gametabs --index`` makes a pass
-at the bulk pace with a budget of its own (``--budget``), and the nightly run's gametabs step spends what its
-budget leaves on one. About 1,660 pages at 10–20 s a request: some 7 hours of requests in all.
+client's, with its budget and its pauses (0.25 s, under robots.txt's 5 s by the owner's choice), so a pass the
+budget cuts short goes on where it stopped the next time: what it read is in the table, with when. A page is
+cached for good, as every answer is, and asked for again after 30 days (``GAME_MAX_AGE``). ``caracole gametabs
+--index`` makes a pass at the bulk pace with a budget of its own (``--budget``), and the nightly run's gametabs
+step spends what its budget leaves on one. About 1,660 pages at 0.25 s a request: some 7 minutes of pauses in all.
 
 A block propagates. A spent budget, or a client that gives up on the site for the run, ends a pass. Any other
 provider error (a page that won't parse, fetched again included) counts as an error and leaves what the index

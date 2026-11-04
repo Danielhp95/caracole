@@ -409,7 +409,7 @@ def test_a_songs_musescore_pages_are_linked_as_possible_matches(conn, cfg):
          "source": "musescore"}]
     assert cards[ignored.display]["museScore"] == []
     assert '"Scores on MuseScore"' in html  # the card's heading for them
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (2.5, 5.0), False)})
     assert songs_of(page(conn, off))[oasis.display]["museScore"] == []
 
 

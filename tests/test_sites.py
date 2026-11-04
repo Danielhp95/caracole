@@ -227,7 +227,7 @@ NOW = datetime(2026, 10, 29, 3, 41, tzinfo=UTC)
 
 
 def test_a_site_turned_off_is_off_with_the_setting_that_turned_it_off(conn, cfg):
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     assert status_of(conn, off, "gtptabs", NOW) == Status("off", "Off", "[providers.gtptabs] enabled = false")
 
 
@@ -349,7 +349,7 @@ def test_no_nightly_run_yet(conn, cfg):
 
 def test_an_off_site_has_no_night(conn, cfg):
     kv_set_json(conn, "run:last", RUN)
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     data = sites_data(conn, off, [], NOW)
     assert line(data, "gtptabs")["night"] is None
     assert line(data, "gtptabs")["status"]["state"] == "off"
@@ -358,9 +358,9 @@ def test_an_off_site_has_no_night(conn, cfg):
 def test_each_line_says_its_pace_its_robots_and_its_terms(conn, cfg):
     data = sites_data(conn, cfg, [], NOW)
     assert [s["key"] for s in data["list"]] == [s.key for s in SITES]
-    assert line(data, "ug")["pace"] == "10–20 s between requests"
-    assert line(data, "gametabs")["pace"] == "1 s between requests"
-    assert line(data, "youtube")["pace"] == "15–30 s between runs"
+    assert line(data, "ug")["pace"] == "2.5–5 s between requests"
+    assert line(data, "gametabs")["pace"] == "0.25 s between requests"
+    assert line(data, "youtube")["pace"] == "3.75–7.5 s between runs"
     assert line(data, "ug")["robots"]["paths"][0] == ["/search.php", "its search"]
     assert line(data, "ug")["robots"]["more"] == more_paths(site("ug"))
     assert line(data, "harptabs")["terms"] == site("harptabs").terms
@@ -412,10 +412,20 @@ def test_the_crawl_delay_reported_is_the_one_gametabs_robots_txt_asks():
 
 def test_gametabs_sentence_says_the_pace_caracole_keeps_there(conn, cfg):
     robots = line(sites_data(conn, cfg, [], NOW), "gametabs")["robots"]["text"]
-    assert "asks for 5 s between requests" in robots and "caracole waits 1 s, by your choice" in robots
+    assert "asks for 5 s between requests" in robots and "caracole waits 0.25 s, by your choice" in robots
     slow = dataclasses.replace(cfg, providers={**cfg.providers, "gametabs": ProviderPolicy(20, (10.0, 20.0))})
     robots = line(sites_data(conn, slow, [], NOW), "gametabs")["robots"]["text"]
     assert "caracole waits 10–20 s" in robots and "by your choice" not in robots
+
+
+def test_megalobizs_sentence_says_caracole_may_ask_quicker_than_its_api_allows(conn, cfg):
+    # Its API allows 30 requests a minute, 2 s apart; the owner's choice of 2026-11-03 waits a quarter of what it did.
+    robots = line(sites_data(conn, cfg, [], NOW), "megalobiz")["robots"]["text"]
+    assert "its 1,000 requests a day" in robots and "its limits" not in robots
+    assert "Its API allows 30 requests a minute; caracole waits 0.5–1 s, by your choice." in robots
+    slow = dataclasses.replace(cfg, providers={**cfg.providers, "megalobiz": ProviderPolicy(60, (2.0, 4.0))})
+    robots = line(sites_data(conn, slow, [], NOW), "megalobiz")["robots"]["text"]
+    assert "caracole waits 2–4 s." in robots and "by your choice" not in robots
 
 
 def test_the_total_kept_leaves_musescores_links_out(conn, cfg):

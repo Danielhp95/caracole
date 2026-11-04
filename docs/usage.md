@@ -65,45 +65,45 @@ ytdlp_bin = "yt-dlp"              # or $CARACOLE_YTDLP_BIN; see "Audio from YouT
 
 [providers.ug]                    # Ultimate Guitar
 budget = 60                       # requests per run
-delay = [10, 20]                  # seconds between two requests, chosen at random
-lookup_delay = [0.5, 1.5]         # the same, for a song you look up now (caracole get); [0, 0]: none
+delay = [2.5, 5]                  # seconds between two requests, chosen at random
+lookup_delay = [0.125, 0.375]     # the same, for a song you look up now (caracole get); [0, 0]: none
 lookup_requests = 6               # requests to the site for that one song, at most
 lookup_per_hour = 60              # requests to the site for every lookup of an hour, together
 [providers.lrclib]                # lyrics
 budget = 200
-delay = [1, 2]
+delay = [0.25, 0.5]
 [providers.megalobiz]             # timed lyrics, for the songs LRCLIB has none of, or none timed
 enabled = true                    # false: caracole asks Megalobiz nothing
 budget = 60                       # and never more than 900 a day (UTC), every run's and lookup's together
-delay = [2, 4]
-lookup_delay = [2, 3]             # under its API's 30 requests a minute
+delay = [0.5, 1]                  # quicker than its API's 30 requests a minute, your choice
+lookup_delay = [0.5, 0.75]
 [providers.azlyrics]              # plain lyrics, for the songs LRCLIB and Megalobiz have none of
 enabled = true                    # false: caracole asks AZLyrics nothing
 delay = [0, 0]                    # two requests a song, one right after the other; no budget by default
 lookup_delay = [0, 0]
 [providers.lacuerda]              # Spanish chord sheets, and its listings of every artist
 budget = 30
-delay = [10, 20]
+delay = [2.5, 5]
 [providers.gtptabs]               # Guitar Pro files, downloaded for you
 enabled = true                    # false: caracole asks gtptabs.com nothing
 budget = 20
-delay = [10, 20]
+delay = [2.5, 5]
 [providers.musescore]             # MuseScore's song sitemaps, for links to its pages
 enabled = true                    # false: caracole asks MuseScore nothing
 budget = 10
-delay = [10, 20]
+delay = [2.5, 5]
 [providers.harptabs]              # harmonica tabs, kept for your songs
 enabled = true                    # false: caracole asks harptabs.com nothing
 budget = 20
-delay = [10, 20]
+delay = [2.5, 5]
 [providers.gametabs]              # text tabs of game music, kept for your songs
 enabled = true                    # false: caracole asks gametabs.net nothing
 budget = 20
-delay = [1, 1]                    # one request a second
+delay = [0.25, 0.25]              # four requests a second
 [providers.youtube]               # the audio of songs nobody has charted, with auto-chords
 enabled = true                    # false: caracole runs no yt-dlp; on only with auto-chords
 budget = 6                        # yt-dlp runs per run, each a search or a download
-delay = [15, 30]                  # seconds between two yt-dlp runs
+delay = [3.75, 7.5]               # seconds between two yt-dlp runs
 [providers.ytimg]                 # YouTube's image host: a suggested video's thumbnail
 enabled = true                    # false: suggestions come without thumbnails
 budget = 20
@@ -206,17 +206,19 @@ other: delete it, and the token.
 the library page suggests for a search). Any other `[providers.…]` table is an error, like any other
 unknown key. Each has the three `lookup_` keys too, with the defaults above
 (YouTube's and its image host's go unused: a lookup runs no yt-dlp; Megalobiz's `lookup_delay` is
-2–3 seconds). Megalobiz's API allows one address 30 requests a minute and 1,000 a day: besides its
+0.5–0.75 seconds). Megalobiz's API allows one address 30 requests a minute and 1,000 a day: caracole's
+pauses there, a quarter of what they were before 3 November 2026, your choice, can go past 30 a minute
+(a 429 is a block, as anywhere), and besides its
 `budget`, caracole sends it at most 900 requests a UTC day, counting every run's, command's and
 lookup's in its event log, and a client gets only what the day has left (none, once it is spent: the
 songs wait for the next day). AZLyrics has no `budget` by default, your choice: it is asked only about
 songs with no lyrics, each at most once in 30 days (a `budget` set under `[providers.azlyrics]` is kept).
 
 **Two paces.** Bulk work, the nightly run, `caracole index build` and every
-command but `caracole get`, keeps `budget` and `delay`: 10–20 seconds between
+command but `caracole get`, keeps `budget` and `delay`: 2.5–5 seconds between
 two requests to Ultimate Guitar, whichever caracole sends them. A lookup
 (`caracole get`, and the lookups of `caracole serve`) is one song you asked
-for just now, so it keeps `lookup_delay` instead, about a second, and stops
+for just now, so it keeps `lookup_delay` instead, a quarter of a second, and stops
 after `lookup_requests` requests to a site; every lookup of the last hour
 shares `lookup_per_hour`, so a script or a stuck button can't turn lookups
 into a crawl. Half of that hour is kept for sheets: what follows a lookup's
@@ -285,7 +287,8 @@ its game's page, which caracole reads into a local index (`caracole gametabs
 budget leaves): until a game's page is read, a song is found by its game
 alone. gametabs.net's terms forbid bots and scrapers without its written
 permission; reading it anyway is the owner's choice, on every other rule
-caracole keeps: its robots.txt's closed paths (not its 5-second `Crawl-delay`), caracole's own
+caracole keeps: its robots.txt's closed paths (not its 5-second `Crawl-delay`: caracole waits a quarter
+of a second there, your choice), caracole's own
 user agent, the paces and budgets, and a block (a 403, a 429 or a challenge)
 honoured with a cooldown and one alert, never worked around. It keeps the tabs
 of your own songs alone, for you, never a mirror of the site.
@@ -613,7 +616,7 @@ In order:
    song shows there with its sheet, and no Get it. A songbooks.toml that cannot
    be read is said on that line and stops nothing: the lookup still exits 0.
 
-It keeps the interactive pace ([Two paces](#configure)): about a second
+It keeps the interactive pace ([Two paces](#configure)): a quarter of a second
 between two requests to a site, six requests to a site at most, and sixty an
 hour for every lookup together. What it leaves undone, the nightly run does.
 A site cooling down after a block is left alone; a block, a spent budget or a
@@ -876,8 +879,8 @@ pages, in their own sitemaps, `sitemap_ukulele1.xml` to `sitemap_ukulele4.xml`)
 are the same chord-over-lyrics sheets with ukulele shapes beside them: a song
 with no chords on UG takes its sheet from them (see [caracole
 fetch](#one-step-at-a-time)). `caracole index build` reads the sitemap index
-and its 45 tab sitemaps, one request at a time, 10–20 seconds apart: about 46
-requests, 80 MB and 12 minutes. Its budget is 100 requests, more than a night's, so one build is
+and its 45 tab sitemaps, one request at a time, 2.5–5 seconds apart: about 46
+requests, 80 MB and 4 minutes. Its budget is 100 requests, more than a night's, so one build is
 enough. A block or a spent budget keeps the sitemaps read so far, and the next
 refresh reads the rest. Until then the index is incomplete, and no song is
 matched against it: a song in a sitemap not read yet isn't missing from UG.
@@ -902,11 +905,11 @@ holds and the state it is in. A small example, five sitemaps where UG lists 41:
     Only the sitemaps UG publishes for search engines are read: no tab itself is downloaded.
     Reading the sitemap index...
     The sitemap index lists 5 tab sitemaps (sitemap1.xml to sitemap4.xml and sitemap_last.xml): 5 to download.
-    About 250,000 tab URLs (up to 50,000 a sitemap). 5 requests, 10-20 s apart: about 1 min.
-    [1/5] sitemap1.xml  2,000 tabs: 1,315 indexed, 221 bare ids, 454 of other types, 10 closed by robots.txt  4 left, about 1 min
-    [2/5] sitemap2.xml  2,000 tabs: 1,329 indexed, 201 bare ids, 465 of other types, 5 closed by robots.txt  3 left, about 50 s
-    [3/5] sitemap3.xml  2,000 tabs: 1,332 indexed, 204 bare ids, 462 of other types, 2 closed by robots.txt  2 left, about 30 s
-    [4/5] sitemap4.xml  2,000 tabs: 1,318 indexed, 215 bare ids, 459 of other types, 8 closed by robots.txt  1 left, about 15 s
+    About 250,000 tab URLs (up to 50,000 a sitemap). 5 requests, 2.5-5 s apart: about 20 s.
+    [1/5] sitemap1.xml  2,000 tabs: 1,315 indexed, 221 bare ids, 454 of other types, 10 closed by robots.txt  4 left, about 15 s
+    [2/5] sitemap2.xml  2,000 tabs: 1,329 indexed, 201 bare ids, 465 of other types, 5 closed by robots.txt  3 left, about 10 s
+    [3/5] sitemap3.xml  2,000 tabs: 1,332 indexed, 204 bare ids, 462 of other types, 2 closed by robots.txt  2 left, about 8 s
+    [4/5] sitemap4.xml  2,000 tabs: 1,318 indexed, 215 bare ids, 459 of other types, 8 closed by robots.txt  1 left, about 4 s
     [5/5] sitemap_last.xml  600 tabs: 414 indexed, 58 bare ids, 128 of other types
     Index built: 5 sitemaps read; 5,708 new tabs.
       Indexed     5,708 tabs: chords 3,225, tabs 2,483
@@ -915,7 +918,7 @@ holds and the state it is in. A small example, five sitemaps where UG lists 41:
       Left out    1,968 of other types (guitar-pro 772, bass 469, power 352, ukulele 224, drums 76, video 75)
       robots.txt  25 tabs left out: robots.txt closes their pages
       Requests    6 of a budget of 100
-      Duration    1 min 17 s
+      Duration    32 s
     The index is complete: `caracole match` can now match your songs against it, and the nightly run keeps it up to date.
 
 On a terminal the sitemap lines share one line, rewritten in place, and the
@@ -930,14 +933,14 @@ or a spent budget (which exit 0), or another error (which exits 1), it says
 why, sums up what it read, and says how to resume and where. Blocked at the
 13th of 41 sitemaps (small ones, in this example):
 
-    [12/41] sitemap12.xml  200 tabs: 159 indexed, 21 bare ids, 20 of other types  29 left, about 8 min
+    [12/41] sitemap12.xml  200 tabs: 159 indexed, 21 bare ids, 20 of other types  29 left, about 2 min
     Ultimate Guitar blocked caracole (ug: 403: https://www.ultimate-guitar.com/sitemap13.xml: HTTP 403). No more requests to it until 2026-10-20 22:54 UTC (block #1); the sitemaps read so far are kept.
     Index build stopped after 12 of 41 sitemaps; 1,891 new tabs.
       ...
       Requests    14 of a budget of 100
-      Duration    3 min 26 s
+      Duration    1 min 2 s
     The index is partial: 12 of 41 tab sitemaps indexed, so no song is matched against it yet.
-    To resume, run `caracole index refresh` after 2026-10-20 22:54 UTC: it reads the 29 sitemaps left, sitemap13.xml to sitemap40.xml and sitemap_last.xml (30 requests, about 7 min). The nightly run does the same.
+    To resume, run `caracole index refresh` after 2026-10-20 22:54 UTC: it reads the 29 sitemaps left, sitemap13.xml to sitemap40.xml and sitemap_last.xml (30 requests, about 2 min). The nightly run does the same.
 
 **`caracole index build --from DIR`** builds the index offline, from sitemap
 files you already have: `sitemap1.xml` to `sitemap40.xml`,
@@ -1131,7 +1134,7 @@ The run ends with a short summary, and sends the same words to ntfy. On a first
 night, with one song in wanted.txt, the index not built yet and LRCLIB
 overloaded, it reads:
 
-    First, build the index once: caracole index build (about 10 minutes).
+    First, build the index once: caracole index build (about 4 minutes).
     Until then, no song is matched or looked for on Ultimate Guitar.
 
     Songs: 1 in wanted.txt, 1 new.
@@ -1167,7 +1170,7 @@ the lines that need you or went wrong. A site turned off
 shows its step as skipped.
 
 **The budget.** A run sends Ultimate Guitar at most 60 requests, the index
-refresh included, 10–20 seconds apart and one at a time. It settles the sheet
+refresh included, 2.5–5 seconds apart and one at a time. It settles the sheet
 of every waiting song first, newest songs first: a few requests a song, for
 its versions pages and then up to three sheets scored against the lyrics. What
 is left goes to text tabs, about a page a song. Before sheets came first, a
@@ -1175,33 +1178,33 @@ live run spent 8–12 requests a song.
 A long list therefore fills in over a few nights, and a song the budget cut
 off half-way resumes from the cache the next night.
 
-gtptabs.com gets at most 20 requests a run, 10–20 seconds apart. The first
+gtptabs.com gets at most 20 requests a run, 2.5–5 seconds apart. The first
 run spends seven on its sitemap index and six sitemaps, and reads them again
 after 30 days, when each unchanged one costs a request. Then each song costs
 its artist's page, which serves every song by that artist for 30 days, and a
 download for its file.
 
-harptabs.com gets at most 20 requests a run, 10–20 seconds apart. The first run
+harptabs.com gets at most 20 requests a run, 2.5–5 seconds apart. The first run
 spends one on its sitemap, a single 6.4 MB file with no validators, read again
 after 30 days. Then a song costs the pages of the tabs titled as it is (only
 when the sitemap lists an artist by its artist's name), eight at most, each
 read once and cached for good: most songs cost one or two, a common title a few
 more. Its artist pages, for searches, cost one request each, and are read again
 after 30 days: what the budget leaves reads about 15 a night, so the whole
-index (about 10,400 artists) is `caracole harptabs --index`'s, which at 10–20
-seconds a request takes some 44 hours of requests, a `--budget` at a time.
+index (about 10,400 artists) is `caracole harptabs --index`'s, which at 2.5–5
+seconds a request takes some 11 hours of requests, a `--budget` at a time.
 
-gametabs.net gets at most 20 requests a run, 10–20 seconds apart (its
-robots.txt asks 5 at least, which a quicker pace would keep too). The first run
+gametabs.net gets at most 20 requests a run, a quarter of a second apart (its
+robots.txt asks 5 seconds, which caracole doesn't keep, your choice). The first run
 spends seven on its sitemap index and six sitemaps, read again after 30 days
 with their ETags, so each unchanged one costs a request. Then a song costs the
 pages of the tabs titled as it is of a game or composer its line names, four at
 most, each read once and cached for good. Its game pages, for composers, cost
 one request each, and are read again after 30 days: what the budget leaves
 reads about ten a night, so the whole index (about 1,660 pages) is `caracole
-gametabs --index`'s, which at 10–20 seconds a request takes some 7 hours.
+gametabs --index`'s, which at a quarter of a second a request spends some 7 minutes in pauses.
 
-MuseScore gets at most 10 requests a run, 10–20 seconds apart, all for its song
+MuseScore gets at most 10 requests a run, 2.5–5 seconds apart, all for its song
 sitemaps: an index and 18 files of about 40,000 song pages each, read over two
 nights, the second going on where the first stopped, then again each month with
 conditional requests. They name each song's title, never its artist. When
@@ -1210,9 +1213,9 @@ protection answered with a challenge: caracole takes that as a block, like a
 403, and lists what it read before, if anything (see
 [the to-do page](#the-to-do-page)).
 
-YouTube gets at most 6 yt-dlp runs a night, 15–30 seconds apart: a search and a
-download a song, so three songs. Inside each run yt-dlp waits 2 seconds between
-its own requests, and 10–20 seconds before a download.
+YouTube gets at most 6 yt-dlp runs a night, 3.75–7.5 seconds apart: a search and a
+download a song, so three songs. Inside each run yt-dlp waits half a second between
+its own requests, and 2.5–5 seconds before a download.
 
 **Errors are never misses.** A block (HTTP 403, 429 or a challenge page)
 stops that site for the rest of the run and sends one ntfy message, which
@@ -1472,12 +1475,12 @@ and cache.
   artists first, then the others in the sitemap's order. An artist page lists
   the artist's 30 most viewed tabs and says how many they have; the rest come
   from the site's API, which robots.txt closes, so caracole knows those 30. It
-  asks at the bulk pace (10–20 s apart) with a budget of its own: `--budget N`
+  asks at the bulk pace (2.5–5 s apart) with a budget of its own: `--budget N`
   requests, 100 by default, and goes on where the last one stopped. It prints
   `Index: harptabs.com's sitemap read.`, `harptabs.com: 99 artist pages read;
   99 of 10428 artists read, 412 tabs in the index.` and, with the budget spent,
   `The budget of 100 requests is spent: caracole harptabs --index reads the
-  next 10329 artists, about 43 h of requests at this pace.`; or `harptabs.com's
+  next 10329 artists, about 10 h 46 min of requests at this pace.`; or `harptabs.com's
   artist index is up to date: …` when nothing was due. A page that answers 404
   keeps no tab (`1 gone`); one that won't parse (one that says the artist has
   tabs and lists none caracole can read among them), or any other error, leaves what
@@ -1528,20 +1531,20 @@ and cache.
   game page lists 50 tabs, each with its composers, its instruments, its views
   and its rating; a game with more has more pages (`?page=2`), which the
   sitemaps list too. That is how a song is found by its composer, and how a
-  search finds a tab by its composer. It asks at the bulk pace (10–20 s apart,
-  never under robots.txt's 5 s) with a budget of its own: `--budget N`
+  search finds a tab by its composer. It asks at the bulk pace (0.25 s apart,
+  under robots.txt's 5 s, your choice) with a budget of its own: `--budget N`
   requests, 100 by default, and goes on where the last one stopped. It prints
   `Index: gametabs.net's 6 sitemaps read.`, `gametabs.net: 93 game pages read;
   93 of 1658 game pages read, 512 tabs in the index.` and, with the budget
   spent, `The budget of 100 requests is spent: caracole gametabs --index reads
-  the next 1565 game pages, about 7 h of requests at this pace.`; or
+  the next 1565 game pages, about 7 min of requests at this pace.`; or
   `gametabs.net's game index is up to date: …` when nothing was due. A page
   that answers 404 keeps no tab (`1 gone`); one that won't parse, or any other
   error, leaves what the index held of that page, and is asked for again next
   time. It holds caracole's lock while it runs, as the nightly run does,
   letting a lookup go first in its pauses: a nightly run waits for it, so give
   it a budget that ends before night (the whole index, about 1,660 pages, is
-  some 7 hours: `--budget 1700`). A cooldown, a block or a spent budget exits
+  some 7 minutes of pauses: `--budget 1700`). A cooldown, a block or a spent budget exits
   0; `--budget` goes with `--index` alone (exit 2).
 - **`caracole musescore`** reads MuseScore's song sitemaps into the local index
   the to-do page's MuseScore links come from, when it never has, or last did 30
@@ -1768,7 +1771,7 @@ and cache.
   there; its badge stands in, and the site is asked again in a week`, or why it
   asked nothing (turned off, cooling down). Unlike the run's icons step, it
   also tries a site whose last try failed less than a week ago, and YouTube,
-  with its provider's budget and pace (15–30 s), unless `[providers.youtube]
+  with its provider's budget and pace (3.75–7.5 s), unless `[providers.youtube]
   enabled = false` turned it off. What a site answered less than a week ago
   still comes from the cache, so running it again sooner asks that site nothing. A block cools that site
   down and sends one ntfy message, as any block does, and the others are still
@@ -1851,11 +1854,11 @@ request any caracole sent there, so the pauses hold whichever caracole sends.
 
 A lookup (`caracole get`) never waits behind a whole run: it says
 `Another caracole is running (pid 4242: run); it lets a lookup go first at its
-next pause, or between two songs.`, and the run, which spends most of its time in its 10–20 second
-pauses (its youtube step, in its 15–30 seconds between two yt-dlp runs), lets go
+next pause, or between two songs.`, and the run, which spends most of its time in its 2.5–5 second
+pauses (its youtube step, in its 3.75–7.5 seconds between two yt-dlp runs), lets go
 of the lock in the pause it is in, takes it back once the lookup is done, and
 waits a whole pause again before its next request, to any site the lookup
-asked: its next request to Ultimate Guitar waits UG's 10–20 seconds after the
+asked: its next request to Ultimate Guitar waits UG's 2.5–5 seconds after the
 lookup's last one, even when the lookup went first in a pause of LRCLIB's. The
 run then reads each song again before its turn, and overrides.toml too, in that
 step and in every step after it, so a song the lookup fetched isn't fetched
@@ -1905,11 +1908,14 @@ way, then the next auto-chords run puts each chord over its word.
 - **An error is never a miss.** A song LRCLIB missed and Megalobiz failed on goes back to pending,
   and the next run asks both again (LRCLIB from its cache, sending nothing). A 429 is a block, as
   anywhere: Megalobiz cools down, one ntfy alert goes out.
-- Its **fair use**, which caracole keeps: your songs alone (never a mirror), within its limits (30
-  requests a minute, 1,000 a day from one address: caracole stops at 900 a day, see
-  [Two paces](#configure)), every answer cached, and a link back to each song's page there wherever its
+- Its **fair use**, which caracole keeps: your songs alone (never a mirror), within its 1,000
+  requests a day from one address (caracole stops at 900 a day, see [Two paces](#configure)), every
+  answer cached, and a link back to each song's page there wherever its
   lyrics show: the Lyrics tile of the song's card says **From Megalobiz**, a link to it, and
   `info.json` has it as `lyrics_from`.
+- Its API also allows **30 requests a minute**, which caracole no longer keeps: its pauses there are
+  0.5–1 seconds (a lookup's 0.5–0.75), a quarter of what they were, your choice of 3 November 2026.
+  A busy night may meet its 429, a block like any other.
 - `[providers.megalobiz] enabled = false` turns it off.
 
 For the songs both leave with no lyrics at all, caracole asks [AZLyrics](https://www.azlyrics.com/) after
@@ -1955,8 +1961,8 @@ it honours it. It does so on these terms:
   default in `packages.autochords`, which has yt-dlp; `[providers.youtube]
   enabled = false` turns it off.
 - **A few songs a night**: a budget of 6 yt-dlp runs (a search or a download
-  each), 15–30 seconds apart, one at a time; yt-dlp's own pauses space out its
-  requests inside a run (`--sleep-requests 2`, and 10–20 seconds before a
+  each), 3.75–7.5 seconds apart, one at a time; yt-dlp's own pauses space out its
+  requests inside a run (`--sleep-requests 0.5`, and 2.5–5 seconds before a
   download).
 - **Blocks honoured**: "Sign in to confirm you're not a bot", an HTTP 429 or 403,
   a rate limit or a captcha stops YouTube for the night and starts its

@@ -10,7 +10,7 @@ asked by hand with caracole's own user agent (``config.DEFAULT_USER_AGENT``): ro
 first child, three game pages and two tab pages, all 200, from a plain nginx (no Cloudflare, no challenge):
 
 - **robots.txt** gives its ``User-agent: *`` group ``Crawl-delay: 5``, which caracole does not keep (the owner's
-  choice: its pace is the policy's, a second) and closes
+  choice: its pace is the policy's, a quarter of a second) and closes
   ``/api/``, ``/admin/``, ``/*.log$``, ``/*.php$``, the pages behind a login (``/preparing-tab-file-download``,
   every attachment's download, among them), the filters ``/tabs?*``, ``/login?*`` and ``/create-account?*``, and
   retired paths (``http.ROBOTS_DISALLOW``); it names the sitemap index, and closes the whole site to the AI

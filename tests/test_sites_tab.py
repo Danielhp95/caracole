@@ -154,7 +154,7 @@ def test_on_a_phone_a_line_keeps_site_status_and_chevron(conn, cfg):
 
 @in_chromium
 def test_an_off_site_is_dimmed_and_says_off(conn, cfg):
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     out = run_in_page(build_library_page(conn, off, Overrides(), NOW), off, """
       const g = q('.site-line[data-site="gtptabs"]');
       out = {off: g.closest('.site').classList.contains('is-off'), badge: g.querySelector('.badge').textContent,

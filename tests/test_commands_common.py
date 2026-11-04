@@ -317,18 +317,18 @@ def pauses(monkeypatch):
 
 
 def test_a_new_client_pauses_after_another_process_s_last_request(cfg, conn, pauses):
-    # UG's policy: 10-20 s between requests, whichever process sends them.
-    log_request(conn, "ug", ago=3)
+    # UG's policy: 2.5-5 s between requests, whichever process sends them.
+    log_request(conn, "ug", ago=1)
     make_client(cfg, conn, "ug", "run").close()
     pause = sum(pauses)  # slept in slices, each a chance to hand the lock to a lookup
-    assert 10 - 4 <= pause <= 20 - 3
+    assert 2.5 - 2 <= pause <= 5 - 1
     assert max(pauses) <= _common.HANDOFF_SLICE
 
 
 def test_a_request_logged_in_the_future_costs_one_pause_at_most(cfg, conn, pauses):
     log_request(conn, "ug", ago=-3600)  # the clock was set back since
     make_client(cfg, conn, "ug", "run").close()
-    assert sum(pauses) <= 20
+    assert sum(pauses) <= 5
 
 
 @pytest.mark.parametrize(
@@ -383,7 +383,7 @@ def test_an_interactive_client_keeps_the_lookup_pace(cfg, conn, site):
     client = make_client(cfg, conn, "ug", _common.lookup_run_id(now), interactive=True)
     try:
         ug = cfg.provider("ug")
-        assert client.policy.delay == ug.lookup_delay == (0.5, 1.5)
+        assert client.policy.delay == ug.lookup_delay == (0.125, 0.375)
         assert client.policy.budget == ug.lookup_requests == 6
     finally:
         client.close()
@@ -456,14 +456,15 @@ def test_a_site_with_a_daily_cap_gets_what_the_utc_day_leaves_of_it(cfg, conn, s
         other.close()
 
 
-def test_a_lookups_first_request_waits_only_the_short_gap_after_the_last_one(cfg, conn, site, pauses):
+def test_a_lookups_first_request_waits_only_the_short_gap_after_the_last_one(cfg, conn, site, pauses, monkeypatch):
+    monkeypatch.setattr(_common.random, "uniform", lambda low, high: high)  # each gap its longest
     bulk = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
     bulk.get("https://tabs.ultimate-guitar.com/tab/1")
     bulk.close()
     client = make_client(cfg, conn, "ug", _common.lookup_run_id(_common.utcnow()), interactive=True)
     client.close()
-    # UG's bulk pause is 10-20 s; a lookup's gap is 0.5-1.5 s, counted to the fraction of a second.
-    assert 0.3 <= sum(pauses) <= 1.5
+    # UG's bulk pause is 2.5-5 s; a lookup's gap is 0.125-0.375 s, counted to the fraction of a second.
+    assert 0.375 - 0.25 <= sum(pauses) <= 0.375
 
 
 def test_bulk_work_after_a_lookup_keeps_the_long_pause(cfg, conn, site, pauses):
@@ -472,7 +473,7 @@ def test_bulk_work_after_a_lookup_keeps_the_long_pause(cfg, conn, site, pauses):
     lookup.get("https://tabs.ultimate-guitar.com/tab/1")
     lookup.close()
     make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z").close()
-    assert 9.5 <= sum(pauses) <= 20
+    assert 2 <= sum(pauses) <= 5
 
 
 def a_lookup_in_a_pause(conn, monkeypatch, *, blocked: bool = False, asked: str | None = None) -> list[int]:
@@ -526,11 +527,11 @@ def test_bulk_work_sends_nothing_more_to_a_site_that_blocked_a_lookup_it_let_go_
 
 def test_a_block_a_lookup_met_in_a_new_clients_first_pause_stops_its_first_request(cfg, conn, site, pauses,
                                                                                    monkeypatch):
-    # `caracole fetch`, started 3 s after another caracole's UG request, waits out UG's pause before its first
+    # `caracole fetch`, started a second after another caracole's UG request, waits out UG's pause before its first
     # one, and lets a lookup go first meanwhile, which UG blocks: the fetch sends UG nothing.
     from caracole.http import ProviderBlocked
 
-    log_request(conn, "ug", ago=3)
+    log_request(conn, "ug", ago=1)
     turns = a_lookup_in_a_pause(conn, monkeypatch, blocked=True)
     client = make_client(cfg, conn, "ug", "2026-10-19T03:30:00Z")
     try:
@@ -756,7 +757,7 @@ def test_the_nightly_run_hands_the_lock_to_a_lookup_alone_never_to_another_comma
 
 @pytest.mark.slow
 def test_the_youtube_steps_pauses_hand_the_lock_to_a_waiting_lookup_too(cfg, conn, tmp_path, monkeypatch):
-    # The nightly run's youtube step holds caracole's lock for minutes, 15 to 30 seconds between two yt-dlp
+    # The nightly run's youtube step holds caracole's lock for minutes, 3.75 to 7.5 seconds between two yt-dlp
     # runs: a lookup waiting meanwhile goes first in that pause, as in a client's, and the pause starts again.
     import dataclasses
 

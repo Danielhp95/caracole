@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from caracole.icons import IconRun
 
 # For a site caracole.toml has no provider for: a request or two, ever, at the usual pace.
-ICON_POLICY = ProviderPolicy(budget=4, delay=(10.0, 20.0))
+ICON_POLICY = ProviderPolicy(budget=4, delay=(2.5, 5.0))
 
 
 def register(app: typer.Typer) -> None:

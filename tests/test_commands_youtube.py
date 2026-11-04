@@ -709,11 +709,11 @@ def test_search_goes_alone(tmp_path, fake, conn, image_host, args):
 
 @pytest.mark.slow
 def test_the_thumbnail_comes_right_after_the_search_with_no_pause(tmp_path, fake, conn, image_host):
-    # YouTube's pause between two yt-dlp runs is 15–30 s; the thumbnail is YouTube's image host's, a provider of its
+    # YouTube's pause between two yt-dlp runs is 3.75–7.5 s; the thumbnail is YouTube's image host's, a provider of its
     # own with none: neither that pause nor YouTube's last request (the search, just now) delays it.
     vikingos_found(fake)
     config = write_config(tmp_path, fake)
-    config.write_text(config.read_text().replace("delay = [0, 0]", "delay = [15, 30]"), encoding="utf-8")
+    config.write_text(config.read_text().replace("delay = [0, 0]", "delay = [3.75, 7.5]"), encoding="utf-8")
     result = invoke(config, "--search", SEARCHED)
     assert result.exit_code == 0, result.output
     assert image_host.asked == [f"https://i.ytimg.com/vi/{VIKINGOS}/hqdefault.jpg"]
@@ -763,7 +763,7 @@ def test_video_reads_a_pasted_videos_metadata_and_thumbnail_with_no_download(tmp
 
     vikingos_video(fake)
     config = write_config(tmp_path, fake)
-    config.write_text(config.read_text().replace("delay = [0, 0]", "delay = [15, 30]"), encoding="utf-8")
+    config.write_text(config.read_text().replace("delay = [0, 0]", "delay = [3.75, 7.5]"), encoding="utf-8")
     result = invoke(config, "--video", PASTED_LINK, "--progress")
     assert result.exit_code == 0, result.output
     assert result.output.splitlines()[-1] == (f"Searched: YouTube's video {VIKINGOS} is Somos vikingos veganos - "

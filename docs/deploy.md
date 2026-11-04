@@ -778,7 +778,7 @@ A commit that moves `flake.lock`, `nix/pdf-fonts.py`, `nix/alphatab.nix` or
 On either system:
 
 ```sh
-sudo caracole-admin index build              # once: Ultimate Guitar's sitemaps, about 10 minutes
+sudo caracole-admin index build              # once: Ultimate Guitar's sitemaps, about 4 minutes
 sudo caracole-admin add "Soda Stereo - De Música Ligera"   # or a line in wanted.txt
 sudo caracole-admin get "Radiohead - Creep"  # one song looked up now, its sheet in seconds
 systemctl list-timers caracole.timer         # when the next run starts

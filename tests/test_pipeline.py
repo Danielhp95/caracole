@@ -351,7 +351,7 @@ def test_gtptabs_turned_off_is_skipped_and_gets_no_client(conn, cfg, tmp_path):
     from caracole.config import ProviderPolicy
     from caracole.pipeline import default_steps, make_services
 
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "gtptabs": ProviderPolicy(20, (2.5, 5.0), False)})
     made = make_services(off, conn, "2026-10-19T03:30:00Z")
     try:
         assert set(made.clients) == {"ug", "lrclib", "megalobiz", "azlyrics", "lacuerda", "musescore", "harptabs", "gametabs"}
@@ -528,7 +528,7 @@ def test_megalobiz_turned_off_is_skipped(conn, cfg):
     from caracole.config import ProviderPolicy
     from caracole.pipeline import default_steps
 
-    off = replace(cfg, providers={**cfg.providers, "megalobiz": ProviderPolicy(budget=60, delay=(2.0, 4.0),
+    off = replace(cfg, providers={**cfg.providers, "megalobiz": ProviderPolicy(budget=60, delay=(0.5, 1.0),
                                                                             enabled=False)})
     steps = [s for s in default_steps() if s.name == "megalobiz"]
     report = run_pipeline(off, conn=conn, services=Services(clients={}, notifier=Outbox().notifier()), steps=steps,
@@ -633,7 +633,7 @@ def test_musescore_turned_off_is_skipped(conn, cfg):
 
     from caracole.config import ProviderPolicy
 
-    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (10.0, 20.0), False)})
+    off = dataclasses.replace(cfg, providers={**cfg.providers, "musescore": ProviderPolicy(10, (2.5, 5.0), False)})
     site = FakeMuseScore()
     report = musescore_run(conn, cfg, site, config=off)
     assert report.steps["musescore"] == "skipped: musescore is off ([providers.musescore] enabled = false)"
@@ -1098,7 +1098,7 @@ def test_the_default_steps_say_in_the_summary_what_they_did_and_leave_out_the_ze
     steps = [s for s in default_steps() if s.name in ("sync", "index", "match", "scan", "render", "todo")]
     report = run_pipeline(cfg, conn=conn, services=services(Outbox()), steps=steps, now=NOW)
     lines = report.summary().splitlines()
-    assert lines[:2] == ["First, build the index once: caracole index build (about 10 minutes).",
+    assert lines[:2] == ["First, build the index once: caracole index build (about 4 minutes).",
                          "Until then, no song is matched or looked for on Ultimate Guitar."]
     assert "Songs: 1 in wanted.txt, 1 new." in lines
     assert not [line for line in lines if " 0 " in line or line.startswith(("Matching", "PDFs", "Music"))]
@@ -1262,7 +1262,7 @@ def test_youtube_turned_off_is_skipped(conn, cfg, tmp_path, monkeypatch):
     from caracole.config import ProviderPolicy
 
     ycfg, fake = youtube_cfg(cfg, tmp_path, monkeypatch)
-    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (15.0, 30.0), False)})
+    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (3.75, 7.5), False)})
     report = run_pipeline(off, conn=conn, services=services(Outbox()), steps=youtube_step(), now=NOW)
     assert report.steps["youtube"] == "skipped: youtube is off ([providers.youtube] enabled = false)"
     assert fake.argvs() == []

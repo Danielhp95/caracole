@@ -113,7 +113,7 @@ def run(tmp_path: Path, *args: str, ntfy: bool = False):
 
 def the_users_night(tmp_path: Path) -> str:
     return (
-        "First, build the index once: caracole index build (about 10 minutes).\n"
+        "First, build the index once: caracole index build (about 4 minutes).\n"
         "Until then, no song is matched or looked for on Ultimate Guitar.\n"
         "\n"
         "Songs: 1 in wanted.txt, 1 new.\n"
@@ -158,7 +158,7 @@ def test_quiet_keeps_what_needs_you_and_what_went_wrong(tmp_path, sites, clock):
     result = run(tmp_path, "-q")
     assert result.exit_code == 0, result.output
     assert result.stdout == (
-        "First, build the index once: caracole index build (about 10 minutes).\n"
+        "First, build the index once: caracole index build (about 4 minutes).\n"
         "Until then, no song is matched or looked for on Ultimate Guitar.\n"
         "\n"
         "LRCLIB didn't answer (HTTP 503), so the lyrics of 1 song will be tried again on the next run.\n"
@@ -245,7 +245,7 @@ def test_under_systemd_every_line_carries_its_journal_priority(tmp_path):
     [page] = [line for line in lines if "library page" in line]
     assert page.startswith("<4>library page written to ") and " with no songs: " in page
     lines.remove(page)
-    assert lines[:2] == ["<4>First, build the index once: caracole index build (about 10 minutes).",
+    assert lines[:2] == ["<4>First, build the index once: caracole index build (about 4 minutes).",
                          "<4>Until then, no song is matched or looked for on Ultimate Guitar."]
     assert all(line[:3] in ("<3>", "<4>", "<6>", "<7>") for line in lines), lines  # and no blank line
     assert "<6>Requests: Ultimate Guitar 0 of 60, LRCLIB 0 of 200, LaCuerda 0 of 30." in lines

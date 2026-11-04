@@ -292,7 +292,7 @@ def match_lines(match: AddedMatch | None, *, lacuerda: str | None = None) -> lis
                  else "Ultimate Guitar's offline index has")
         return [f"{index} no song of theirs by this name; the sheet is the one you picked on LaCuerda."]
     if match.result is None:
-        return ["The offline index is empty: run `caracole index build` once (about 10 minutes), and the "
+        return ["The offline index is empty: run `caracole index build` once (about 4 minutes), and the "
                 "song can be matched."]
     r = match.result
     if r.decision in ("accept", "pinned"):

@@ -14,8 +14,8 @@ by the site's ids. Every request is the client's, with its budget and its pauses
 cuts short goes on where it stopped the next time: what it read is in the table, with when. A page is
 cached for good, as every answer is, and asked for again after 30 days (``ARTIST_MAX_AGE``). ``caracole
 harptabs --index`` makes a pass at the bulk pace with a budget of its own (``--budget``), and the
-nightly run's harptabs step spends what its budget leaves on one. About 10,400 artists at 10–20 s a
-request: some 44 hours of requests in all.
+nightly run's harptabs step spends what its budget leaves on one. About 10,400 artists at 2.5–5 s a
+request: some 11 hours of requests in all.
 
 **One page now** (``read_artist``): what an artist's Songs on caracole serve's pages asks for, as
 ``caracole harptabs --artist`` (a lookup's pace), once in 30 days too.

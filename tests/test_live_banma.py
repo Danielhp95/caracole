@@ -156,9 +156,9 @@ def kept_sheet(cfg, conn, key):
 
 def polite(requests, pauses):
     """Every UG request open in robots.txt (no search.php, no download or print page), one at a time,
-    10 to 20 seconds after the one before."""
+    2.5 to 5 seconds after the one before."""
     assert all(robots_disallows(u) is None and "search.php" not in u for u in requests), requests
-    assert len(pauses) == max(len(requests) - 1, 0) and all(10 <= p <= 20 for p in pauses), pauses
+    assert len(pauses) == max(len(requests) - 1, 0) and all(2.5 <= p <= 5 for p in pauses), pauses
     return True
 
 

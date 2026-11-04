@@ -81,7 +81,7 @@ def run(conn, cfg, overrides=None, *, budget=6, now=NOW, songs=None):
 
 def test_the_route_needs_auto_chords_its_models_and_yt_dlp(ycfg, cfg, tmp_path, monkeypatch):
     assert yf.route_problem(ycfg) is None
-    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (15.0, 30.0), False)})
+    off = dataclasses.replace(ycfg, providers={**ycfg.providers, "youtube": ProviderPolicy(6, (3.75, 7.5), False)})
     assert yf.route_problem(off) == "turned off ([providers.youtube] enabled = false)"
     no_models = dataclasses.replace(ycfg, autochords=AutochordsConfig(None, tmp_path / "models" / "beat.ckpt"))
     assert yf.route_problem(no_models) == "auto-chords has no BTC weights configured"

@@ -2,12 +2,12 @@
 
 Two paces (``config.ProviderPolicy``). Bulk work, every command but ``caracole
 get``, ``caracole lacuerda --artist`` and ``caracole lacuerda --search``, keeps
-a provider's ``delay`` (10-20 s for UG) between any two requests to it,
+a provider's ``delay`` (2.5-5 s for UG) between any two requests to it,
 whichever caracole sent them, and its ``budget`` a run. An interactive lookup
 (``caracole get``: one song asked for just now; ``caracole lacuerda
 --artist``: one LaCuerda artist's page; ``caracole lacuerda --search``: one
 query of LaCuerda's search) takes
-``make_client(..., interactive=True)``: ``lookup_delay`` (about a second)
+``make_client(..., interactive=True)``: ``lookup_delay`` (0.125-0.375 s)
 between two requests, ``lookup_requests`` for the song, and ``lookup_per_hour``
 for every lookup of the last hour together, counted from ``events`` (runs named
 ``lookup:…``).
@@ -706,7 +706,7 @@ def make_client(
 
     Bulk work's client keeps the provider's ``delay`` and ``budget``, and hands
     the lock to a waiting lookup in its pauses. ``interactive``, a lookup's
-    (``caracole get``), keeps ``lookup_policy``: a gap of about a second, and a
+    (``caracole get``), keeps ``lookup_policy``: a gap of a quarter of a second, and a
     few requests; its run id starts with ``lookup:`` so the hourly budget counts
     them, and it never hands the lock over. Either way, a site with a ``per_day``
     (Megalobiz) gets no more than what the UTC day leaves of it (``within_the_day``).
