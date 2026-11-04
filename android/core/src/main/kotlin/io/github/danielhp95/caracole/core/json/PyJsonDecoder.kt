@@ -14,8 +14,8 @@ import kotlinx.serialization.json.JsonUnquotedLiteral
  * _parse_array_unicode, scanstring_unicode, _match_number_unicode) and json.decoder's JSONDecoder.decode: the same
  * values and the same [PyJson.DecodeError]s, each at the place Python names (in code points).
  *
- * By a loop and a stack of the containers open, never recursion, so no depth overflows it (Python's limit is its C
- * stack, a RecursionError the site parsers read as a page that won't parse; this reads such a text whole).
+ * By a loop and a stack of the containers open, never recursion; a container opened inside [PyJson.MAX_DEPTH] open
+ * ones is its [PyJson.RecursionError] (Python's limit is its C stack's, about 50,000 deep on the computer).
  */
 @OptIn(ExperimentalSerializationApi::class)
 internal class PyJsonDecoder(private val s: String, private val bomCheck: Boolean = true) {
@@ -67,6 +67,7 @@ internal class PyJsonDecoder(private val s: String, private val bomCheck: Boolea
                     idx = end
                 }
                 '{' -> {
+                    if (stack.size >= PyJson.MAX_DEPTH) throw PyJson.tooDeep("decoding a JSON object from a unicode string")
                     idx = space(idx + 1)
                     if (idx > last || s[idx] != '}') {
                         val open = Open(LinkedHashMap())
@@ -78,6 +79,7 @@ internal class PyJsonDecoder(private val s: String, private val bomCheck: Boolea
                     idx++
                 }
                 '[' -> {
+                    if (stack.size >= PyJson.MAX_DEPTH) throw PyJson.tooDeep("decoding a JSON array from a unicode string")
                     idx = space(idx + 1)
                     if (idx > last || s[idx] != ']') {
                         stack.add(Open(null))

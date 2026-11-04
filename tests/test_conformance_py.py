@@ -33,9 +33,12 @@ Vectors, tests/conformance/vectors/py/ (lane py-format adds its own ``format*.js
   of its UTF-8 (``surrogatepass``). ``err``, ``"<type>: <message>"``, for a text Python refuses: the message is
   ``JSONDecodeError``'s, positions in code points (a UTF-16 or UTF-32 decoding error by its type alone). The
   fixtures' JSON (UG's js-store, harptabs.com's ld+json, gametabs.net's attributes, LRCLIB's and Megalobiz's
-  answers) gives ``indent`` and ``ascii`` (as its digest) alone. ``json.loads.numbers`` records batch number
-  literals, ``out`` each one's ``json.dumps``. ``json.loads(bytes)``'s ``args[0]`` is a fixture reference or
-  ``{"hex": …}``.
+  answers; ``JSON_PAGES`` and ``JSON_FILES`` name them) gives ``indent`` and ``ascii`` (as its digest) alone.
+  ``json.loads.numbers`` records batch number literals, ``out`` each one's ``json.dumps``. ``json.loads(bytes)``'s
+  ``args[0]`` is a fixture reference or ``{"hex": …}``; a ``json.loads(bytes).each`` record's is a list of hex
+  inputs (UTF-8's decoder, branch by branch) that all answer as it says. The phone reads no deeper than
+  ``PyJson.MAX_DEPTH`` (512, canonical.py's) containers, where Python's limit is its stack's: no record nests so
+  deep.
 - ``sites_numbers.jsonl``: ``float`` and ``int`` over batches of strings, ``out`` each answer: a float as the 16
   lowercase hex digits of its IEEE bits, an int as its decimal, ``null`` where Python raises ValueError.
 - ``sites_capitalize.jsonl``: ``str.capitalize`` of every code point alone (``out`` the ``[cp, text]`` of those it
@@ -285,22 +288,48 @@ def _loads_record(text: str, note: str | None = None) -> dict:
     return record
 
 
-def _fixture_json() -> list[tuple[str, str]]:
-    """The JSON texts caracole's site parsers read from the fixtures' pages, as each reads it: (where, text)."""
+# The fixtures whose JSON the records hold, named one by one, never globbed: a fixture another lane adds changes no
+# vector until it is listed here (by lane py-sites or py-format, which own this file in turn).
+JSON_PAGES = (
+    "gametabs/game_actraiser.html", "gametabs/game_final-fantasy-vii.html", "gametabs/game_hollow-knight.html",
+    "gametabs/tab_actraiser_fillmore.html", "gametabs/tab_hollow-knight_resting-grounds-2.html",
+    "harptabs/artist_1178_billy-joel.html", "harptabs/artist_4.html", "harptabs/tab_25_piano-man.html",
+    "harptabs/tab_29910_knockin-on-heavens-door.html", "harptabs/tab_89_la-bamba.html", "lacuerda/song.html",
+    "ug/artist.html", "ug/tab_chords.html", "ug/tab_pro.html", "ug/tab_ukulele.html",
+)
+JSON_FILES = (
+    "lrclib/get_hit.json", "lrclib/get_instrumental.json", "lrclib/search_banma.json", "lrclib/search_empty.json",
+    "megalobiz/lrc_24519.json", "megalobiz/lrc_not_found.json", "megalobiz/rate_limited.json",
+    "megalobiz/search_empty.json", "megalobiz/search_hotel_california.json", "megalobiz/search_megalovania.json",
+    "megalobiz/search_vacaciones.json",
+)
+
+
+def _page_json(rel: str) -> list[tuple[str, str]]:
+    """The JSON texts caracole's site parsers read from the fixture page ``rel``, as each reads it: (where, text)."""
     from selectolax.lexbor import LexborHTMLParser
 
     found = []
-    for path in sorted(FIXTURES.rglob("*.html")):
-        rel = path.relative_to(FIXTURES).as_posix()
-        tree = LexborHTMLParser(path.read_bytes().decode("utf-8", errors="replace"))
-        for node in tree.css("div.js-store"):
-            found.append((f"{rel} div.js-store data-content", node.attributes.get("data-content") or ""))
-        for node in tree.css('script[type="application/ld+json"]'):
-            found.append((f"{rel} ld+json", node.text(deep=True) or ""))
-        for attr in ("data-tab", "data-prepopulated-instruments"):
-            for node in tree.css(f"[{attr}]"):
-                found.append((f"{rel} {attr}", node.attributes.get(attr) or ""))
+    tree = LexborHTMLParser((FIXTURES / rel).read_bytes().decode("utf-8", errors="replace"))
+    for node in tree.css("div.js-store"):
+        found.append((f"{rel} div.js-store data-content", node.attributes.get("data-content") or ""))
+    for node in tree.css('script[type="application/ld+json"]'):
+        found.append((f"{rel} ld+json", node.text(deep=True) or ""))
+    for attr in ("data-tab", "data-prepopulated-instruments"):
+        for node in tree.css(f"[{attr}]"):
+            found.append((f"{rel} {attr}", node.attributes.get(attr) or ""))
     return found
+
+
+def _fixture_json() -> list[tuple[str, str]]:
+    return [found for rel in JSON_PAGES for found in _page_json(rel)]
+
+
+def test_the_listed_fixtures_exist_and_each_page_holds_json():
+    for rel in JSON_PAGES + JSON_FILES:
+        assert (FIXTURES / rel).is_file(), rel
+    for rel in JSON_PAGES:
+        assert _page_json(rel), f"{rel} holds no JSON a site parser reads"
 
 
 LOADS_CURATED = [
@@ -440,9 +469,9 @@ def json_records() -> list[dict]:
         except ValueError as e:
             record["err"] = _err(e)
         records.append(record)
-    for path in sorted(FIXTURES.rglob("*.json")):
-        body = path.read_bytes()
-        record: dict = {"fn": "json.loads(bytes)", "args": [fixture_ref(path)]}
+    for rel in JSON_FILES:
+        body = (FIXTURES / rel).read_bytes()
+        record: dict = {"fn": "json.loads(bytes)", "args": [fixture_ref(rel)]}
         try:
             record["out"] = _dumps_out(json.loads(body), whole=False)
         except ValueError as e:
@@ -475,7 +504,7 @@ def json_records() -> list[dict]:
             # UTF-16's and UTF-32's decoding errors by their type alone; UTF-8's and the JSON's with their message
             record["err"] = type(e).__name__ if isinstance(e, UnicodeDecodeError) and _wide(raw) else _err(e)
         records.append(record)
-    return records
+    return records + utf8_records()
 
 
 def _wide(raw: bytes) -> bool:
@@ -491,7 +520,46 @@ BYTES_CASES = [
     "[1, \"é\"]".encode("utf-16"), "[1, \"é\"]".encode("utf-16-le"), "[1, \"é\"]".encode("utf-16-be"),
     "[1, \"😀\"]".encode("utf-32"), "[1, \"😀\"]".encode("utf-32-le"), "[1, \"😀\"]".encode("utf-32-be"),
     "1".encode("utf-16-le"), "1".encode("utf-16-be"), b"\x00\x00\x00", b"1\x00",
+    # UTF-16's and UTF-32's lone surrogates, which surrogatepass passes: alone, last, reversed, after a BOM
+    '["\ud800"]'.encode("utf-16-le", "surrogatepass"), '"\udc00"'.encode("utf-16-be", "surrogatepass"),
+    b'"\x00\x00\xd8"\x00', b'"\x00\x00\xd8', b'\x00"\xd8\x00', b'"\x00\x00\xdc\x00\xd8"\x00',
+    b'\xff\xfe"\x00\x00\xdc"\x00', b'\xfe\xff\x00"\xd8\x00\x00"', '"\ud800"'.encode("utf-32-le", "surrogatepass"),
+    '"\udfff"'.encode("utf-32-be", "surrogatepass"), b'"\x00\x00\x00\x00\x00\x11\x00"\x00\x00\x00',
 ]
+
+# UTF-8's decoder branch by branch (PyJsonBytes' error ranges and surrogatepass): every sequence of one or two bytes
+# of UTF8_POOL, of three after a lead of three or four bytes, of four after a lead of four (its last two from
+# UTF8_TAIL), between a string's quotes and with no closing one, and the two-byte ones after the UTF-8 BOM.
+UTF8_POOL = bytes.fromhex("41 80 8f 90 9f a0 bf c0 c2 df e0 e1 ed ef f0 f1 f4 f5 ff")
+UTF8_TAIL = bytes.fromhex("41 80 bf c2")
+
+
+def _utf8_inputs() -> list[bytes]:
+    pool = [bytes([b]) for b in UTF8_POOL]
+    tail = [bytes([b]) for b in UTF8_TAIL]
+    pairs = [a + b for a in pool for b in pool]
+    seqs = pool + pairs
+    seqs += [a + b + c for a in pool if 0xE0 <= a[0] < 0xF5 for b in pool for c in pool]
+    seqs += [a + b + c + d for a in pool if 0xF0 <= a[0] < 0xF5 for b in pool for c in tail for d in tail]
+    out = [b'"' + seq + end for seq in seqs for end in (b'"', b"")]
+    return out + [b"\xef\xbb\xbf" + b'"' + seq + b'"' for seq in pairs]
+
+
+def _bytes_answer(raw: bytes) -> dict:
+    try:
+        return {"out": _dumps_out(json.loads(raw))}
+    except ValueError as e:
+        return {"err": _err(e)}
+
+
+def utf8_records() -> list[dict]:
+    """``json.loads(bytes).each`` records: the inputs (``args[0]``, hex) that answer alike, with that answer."""
+    groups: dict[str, tuple[dict, list[str]]] = {}
+    for raw in _utf8_inputs():
+        answer = _bytes_answer(raw)
+        key = json.dumps(answer, sort_keys=True)
+        groups.setdefault(key, (answer, []))[1].append(raw.hex())
+    return [{"fn": "json.loads(bytes).each", "args": [inputs], **answer} for answer, inputs in groups.values()]
 
 
 def test_sites_json_jsonl():

@@ -107,6 +107,7 @@ object PyReplay : AreaReplay {
     fun json() {
         val misses = Misses("py/sites_json.jsonl")
         var fixtures = 0
+        var each = 0
         for (r in Corpus.records("py/sites_json.jsonl")) {
             when (r.fn) {
                 "json.loads" -> loaded(misses, r, r.args[0].jsonPrimitive.content) { PyJson.loads(it) }
@@ -115,6 +116,10 @@ object PyReplay : AreaReplay {
                     val bytes = arg["fixture"]?.let { fixtures++; Corpus.fixture(it.jsonPrimitive.content) }
                         ?: unhex(arg.getValue("hex").jsonPrimitive.content)
                     loaded(misses, r, bytes) { PyJson.loads(it) }
+                }
+                "json.loads(bytes).each" -> r.args[0].jsonArray.forEach { hex ->
+                    each++
+                    loaded(misses, r, unhex(hex.jsonPrimitive.content)) { PyJson.loads(it) }
                 }
                 "json.loads.numbers" -> {
                     val outs = r.out!!.jsonArray
@@ -129,7 +134,8 @@ object PyReplay : AreaReplay {
             }
         }
         assertTrue("the fixtures' JSON files read: $fixtures", fixtures >= 10)
-        assertTrue("records checked: ${misses.checked}", misses.checked > 3000)
+        assertTrue("UTF-8's byte sequences read: $each", each > 7000)
+        assertTrue("records checked: ${misses.checked}", misses.checked > 10_000)
         misses.assertNone()
     }
 
@@ -172,6 +178,7 @@ object PyReplay : AreaReplay {
     private fun python(e: Exception, raised: String): String? {
         val type = when {
             e is PyJson.DecodeError -> "JSONDecodeError"
+            e is PyJson.RecursionError -> "RecursionError"
             e is IllegalArgumentException && e.message.orEmpty().startsWith("Exceeds the limit") -> "ValueError"
             e is IllegalArgumentException -> "UnicodeDecodeError"
             else -> return null

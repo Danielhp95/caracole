@@ -38,9 +38,42 @@ class PyJsonLoadsTest {
         assertEquals(8, e.pos)
     }
 
-    @Test fun nestingAsDeepAsItGoesReadsWithNoStackOverflow() {
-        val deep = "[".repeat(200_000) + "]".repeat(200_000)
-        assertTrue(PyJson.loads(deep) is JsonArray)
+    /** Python's limit is its C stack's (about 50,000 deep); the phone's is MAX_DEPTH, a RecursionError past it,
+     * never a StackOverflowError: a text that loads dumps again, with an indent or none, and is digested, on half the
+     * stack ART gives a thread. */
+    @Test fun nestingPastMaxDepthIsARecursionErrorAndWhatLoadsDumpsAgain() {
+        val depth = PyJson.MAX_DEPTH
+        for ((open, close) in listOf("[" to "]", "{\"a\":" to "}")) {
+            val deepest = open.repeat(depth - 1) + (if (open == "[") "[]" else "{}") + close.repeat(depth - 1)
+            val value = PyJson.loads(deepest)
+            val written = onASmallStack {
+                listOf(PyJson.dumps(value), PyJson.dumps(value, indent = 2), PyJson.dumps(value, indent = null, ensureAscii = true),
+                       Canonical.digest(value))
+            }
+            assertEquals(PyJson.dumps(value), written[0])
+            assertTrue(written[1].startsWith(if (open == "[") "[\n  [\n" else "{\n  \"a\": {\n"))
+            val past = open + deepest + close
+            val e = assertFailsWith<PyJson.RecursionError> { PyJson.loads(past) }
+            val kind = if (open == "[") "array" else "object"
+            assertEquals("maximum nesting depth ($depth) exceeded while decoding a JSON $kind from a unicode string", e.message)
+            assertFailsWith<PyJson.RecursionError> { PyJson.loads(open.repeat(300_000)) }
+        }
+        val tooDeep = (1..depth).fold(JsonArray(emptyList())) { inner, _ -> JsonArray(listOf(inner)) }
+        for (write in listOf<() -> String>({ PyJson.dumps(tooDeep) }, { PyJson.dumps(tooDeep, indent = 2) })) {
+            val e = assertFailsWith<PyJson.RecursionError> { write() }
+            assertEquals("maximum nesting depth ($depth) exceeded while encoding a JSON object", e.message)
+        }
+        val caught: IllegalArgumentException = PyJson.RecursionError("x") // what a site parser catches
+        assertTrue(caught.message == "x")
+    }
+
+    /** [work]'s answer on a thread whose stack is [kib] KiB (ART's own for a lookup's thread is about 1 MiB). */
+    private fun <T> onASmallStack(kib: Long = 512, work: () -> T): T {
+        var answer: Result<T>? = null
+        val small = Thread(null, { answer = runCatching(work) }, "small stack", kib * 1024)
+        small.start()
+        small.join()
+        return answer!!.getOrThrow()
     }
 
     @Test fun bytesAreReadAsJsonLoadsReadsThem() {
