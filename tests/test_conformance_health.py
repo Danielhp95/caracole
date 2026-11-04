@@ -179,6 +179,16 @@ STATE_CASES: list[tuple[str, str, str | None, list[list[Any]]]] = [
     ("providers are apart", "harptabs", None, [
         ["block", T0, "403"], ["cooling", T0], ["state", None]]),
     ("no record", "gametabs", None, [["state", None], ["cooling", T0], ["ok", T0]]),
+    ("a last_error that isn't text is written back as it was", "ug",
+     ('{"strikes": 1, "last_error": {"status": 5, "why": [1, 2.50, true, null]}, '
+      '"last_error_at": "2026-10-18T03:30:00Z"}'),
+     [["state", None], ["ok", NOW], ["state", None], ["error", later(NOW, hours=1), "502"]]),
+    ("a last_error that is a number", "ug", '{"last_error": 5}', [["ok", NOW], ["block", later(NOW, hours=1), "403"]]),
+    ("strikes past a 32-bit int are read and written back", "ug",
+     '{"strikes": 1e10, "cooldown_until": "2026-11-04T00:00:00Z"}',
+     [["state", None], ["cooling", NOW], ["error", NOW, "502"], ["block", NOW, "403"], ["ok", later(NOW, days=1)]]),
+    ("strikes of twenty digits", "ug", '{"strikes": "12345678901234567890"}',
+     [["state", None], ["cooling", NOW], ["error", NOW, "502"], ["ok", NOW]]),
 ]
 
 SEEDED: list[tuple[str, str]] = [
@@ -199,6 +209,15 @@ SEEDED: list[tuple[str, str]] = [
     ("twenty-two strikes: the next cooldown ends after 9999", '{"strikes": 22}'),
     ("forty strikes: the next cooldown is past timedelta's days", '{"strikes": 40}'),
     ("strikes that aren't a number", '{"strikes": "x"}'),
+    ("strikes after a separator control, which int() keeps", '{"strikes": "\\u001c5"}'),
+    ("strikes after a unit separator", '{"strikes": "5\\u001f"}'),
+    ("strikes after an em space, which int() strips", '{"strikes": "\\u20035 "}'),
+    ("strikes in other scripts' digits", '{"strikes": "\\u0663"}'),
+    ("strikes as a text past int()'s 4,300 digits", '{"strikes": "' + "1" * 4301 + '"}'),
+    ("strikes NaN", '{"strikes": NaN}'),
+    ("strikes Infinity", '{"strikes": -Infinity}'),
+    ("strikes so far below zero the power is none", '{"strikes": -2000}'),
+    ("strikes too far below zero for a float", '{"strikes": -1' + "0" * 400 + '}'),
     ("strikes null", '{"strikes": null}'),
     ("a whole record", ('{"strikes": 1, "cooldown_until": "2026-10-19T05:30:00Z", "last_ok": "2026-10-01T03:30:00Z", '
                         '"last_error": "403", "last_error_at": "2026-10-18T03:30:00Z"}')),
@@ -248,6 +267,12 @@ def test_state_jsonl(conn):
     assert seeded["twenty-two strikes: the next cooldown ends after 9999"][3:] == [{"err": "OverflowError"}]
     assert seeded["strikes below zero"][3]["state"]["cooldown_until"] == "2026-11-04T02:00:00+00:00"  # 12 h + 2 h
     assert seeded["not JSON"] == [{"err": "JSONDecodeError"}]
+    assert seeded["strikes after a separator control, which int() keeps"] == [{"err": "ValueError"}]
+    assert seeded["strikes after an em space, which int() strips"][0]["state"]["strikes"] == 5
+    assert seeded["strikes NaN"] == [{"err": "ValueError"}]
+    assert seeded["strikes too far below zero for a float"][3:] == [{"err": "OverflowError"}]
+    kept = next(r["out"] for r in records if r["case"] == "a last_error that isn't text is written back as it was")
+    assert '"last_error": {"status": 5, "why": [1, 2.5, true, null]}' in kept[1]["kv"]
     check(VECTORS / "health" / "state.jsonl", jsonl(records, corpus="health/state", made_by=MADE_BY))
 
 

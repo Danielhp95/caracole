@@ -78,13 +78,15 @@ class PaceTest {
         assertEquals("lookup:2026-11-03T12:00:00Z", Pace.lookupRunId(Instant.parse("2026-11-03T12:00:00.999Z")))
     }
 
-    @Test fun floatReadsATextAsPythonsFloatDoes() {
-        assertEquals(1762171199.25, PyFloatText.parse("1762171199.250"))
-        assertEquals(1000.5, PyFloatText.parse(" 1_000.5\n"))
-        assertEquals(123.0, PyFloatText.parse("١٢٣"))
-        assertEquals(Double.NEGATIVE_INFINITY, PyFloatText.parse("-iNfInItY"))
-        assertTrue(PyFloatText.parse("nan")!!.isNaN())
-        for (bad in listOf("", ".", "1__0", "_1", "1_", "0x10", "1.5f", "1d", "1e", "infinityx", "7\u200b", "1\u0000"))
-            assertNull(PyFloatText.parse(bad), bad)
+    @Test fun theLastRequestsTextIsReadAsPythonsFloatReadsIt() = db { db ->
+        fun read(text: String): Double? = db.kvSet(Pace.LAST_SENT + "ug", text).let { Pace.lastRequest(db, "ug") }
+        assertEquals(1762171199.25, read("1762171199.250"))
+        assertEquals(1000.5, read(" 1_000.5\n"))
+        assertEquals(123.0, read("١٢٣"))
+        assertEquals(Double.NEGATIVE_INFINITY, read("-iNfInItY"))
+        assertTrue(read("nan")!!.isNaN())
+        for (bad in listOf("", ".", "1__0", "_1", "1_", "0x10", "1.5f", "1d", "1e", "infinityx", "7\u200b", "1\u0000",
+                           "\u001c1"))
+            assertNull(read(bad), bad)  // no events either: none
     }
 }

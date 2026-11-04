@@ -5,10 +5,10 @@ import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.http.Draws
 import io.github.danielhp95.caracole.core.http.Event
 import io.github.danielhp95.caracole.core.http.Transport
+import io.github.danielhp95.caracole.core.py.PyFormat
 import io.github.danielhp95.caracole.core.testing.FakeTransport
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.TestDb
-import org.junit.Assume
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -91,27 +91,52 @@ class ClientsTest {
         assertNull(db.kvGet(Pace.LAST_SENT + "ug"))
     }
 
-    @Test fun pythonsThreeDecimals() {
-        assertEquals("1.000", Clients.seconds(1.0005))
-        assertEquals("2.062", Clients.seconds(2.0625))
-        assertEquals("2.063", Clients.seconds(2.0635))  // 2.06350000000000011…
-        assertEquals("1762171199.250", Clients.seconds(1762171199.25))
-        assertEquals("-0.000", Clients.seconds(-0.0))
-        assertEquals("-0.000", Clients.seconds(-0.0001))
-        assertEquals("0.000", Clients.seconds(0.0))
+    @Test fun theLastRequestsTextIsPythonsThreeDecimals() = db { db ->
+        val logged = clients().interactive(db, "lrclib", "x").onEvent!!
+        for ((at, text) in listOf(2.0625 to "2.062", 2.0635 to "2.063", -0.0001 to "-0.000", 1e17 to "100000000000000000.000")) {
+            wall = at
+            logged(Event("lrclib", "u", 200, "ok", null))
+            assertEquals(text, db.kvGet(Pace.LAST_SENT + "lrclib"), "f'{$at:.3f}'")
+        }
     }
 
     @Test fun aRequestTheClientSendsIsLoggedAndMarked() = db { db ->
         val url = "https://lrclib.net/api/get?artist_name=Soda+Stereo"
         transports["lrclib"] = FakeTransport(mapOf("GET $url" to FakeTransport.answer(200, "{}")))
         val client = clients().interactive(db, "lrclib", "x")
-        try {
-            client.get(url)
-        } catch (e: NotImplementedError) {
-            Assume.assumeTrue("waiting on lane http-client: PoliteClient.get (${e.message})", false)
-        }
-        assertEquals(listOf("lookup:x lrclib ok"),
-                     db.query("SELECT run, provider, decision FROM events") { "${it.text(0)} ${it.text(1)} ${it.text(2)}" })
-        assertEquals(Clients.seconds(wall), db.kvGet(Pace.LAST_SENT + "lrclib"))
+        wall = 1793707200.0625
+        client.get(url)
+        assertEquals(listOf("lookup:x|2026-11-03T12:00:00Z|lrclib|$url|200|ok"),
+                     db.query("SELECT run, at, provider, url, status, decision FROM events") { r ->
+                         (0..5).joinToString("|") { r.text(it) ?: "null" }
+                     })
+        assertEquals("1793707200.062", db.kvGet(Pace.LAST_SENT + "lrclib"))
+        assertEquals(PyFormat.fixed(wall, 3), db.kvGet(Pace.LAST_SENT + "lrclib"))
+        assertEquals(java.io.File(java.io.File(cache, "http"), "lrclib"), client.cacheRoot)
+        assertEquals(emptyList(), slept)  // no request before it: no pause, the client's first goes at once
+    }
+
+    /** _pause_after_last_request draws first, as make_client calls it before the client exists; the client draws
+     * only before its second request (http.py's _pause), the time since its first by its own clock. */
+    @Test fun thePauseAfterTheLastRequestDrawsBeforeTheClientsOwn() = db { db ->
+        val us = ArrayDeque(listOf(0.0, 1.0))
+        val drawn = ArrayList<Pair<Double, Double>>()
+        val ordered = pacing.copy(draws = Draws { a, b -> drawn += a to b; a + (b - a) * us.removeFirst() })
+        val first = "https://lrclib.net/api/get?q=1"
+        val second = "https://lrclib.net/api/get?q=2"
+        transports["lrclib"] = FakeTransport(mapOf("GET $first" to FakeTransport.answer(200, "{}"),
+                                                   "GET $second" to FakeTransport.answer(200, "{}")))
+        db.kvSet(Pace.LAST_SENT + "lrclib", "1793707199.950")  // 0.05 s ago
+        val client = Clients(PhoneConfig.DEFAULTS, cache, { transports.getValue(it) }, ordered)
+            .interactive(db, "lrclib", "x")
+        assertEquals(1, drawn.size)
+        client.get(first)
+        assertEquals(1, drawn.size)
+        client.get(second)
+        assertEquals(listOf(0.125 to 0.375, 0.125 to 0.375), drawn)
+        // 0.125 less the 0.05 s since this side's last; then 0.375, its monotonic clock standing still.
+        assertEquals(2, slept.size)
+        assertEquals(0.125 - (wall - 1793707199.95), slept[0])
+        assertEquals(0.375, slept[1])
     }
 }

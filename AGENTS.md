@@ -1174,15 +1174,20 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
   answers; the result or what it raised, the requests, the rows, kv, files, events and pauses compared), and
   `RealTransportChecks` the transport against a ServerSocket on loopback (RealTransportTest on the JVM,
   RealTransportOnDeviceTest on the device).
-- core.health, health.py's: `Health` (kv `provider:<name>`, read as `get_state` reads it and written as
+- core.health, health.py's: `Health` (kv `provider:<name>`, read as `get_state` reads it, `PyJson.loads`, strikes
+  Python's int of any size by `PyInt`'s rule, a `last_error` that isn't text written back as it was, and written as
   `kv_set_json` writes it; 24 h × 2^(k−1) + 2 h after the k-th block in a row, a running cooldown kept, its strikes
-  too), `EventLog` (each request's `events` row, nothing else) and `Strptime` (the `%Y-%m-%dT%H:%M:%SZ` times
-  health.py and _common write and read: CPython 3.14's `_strptime` regex, by hand).
+  too; Python's exceptions as the KDoc maps them, which `HealthReplay` checks by class), `EventLog` (each request's
+  `events` row, nothing else) and `Strptime` (`strptime("%Y-%m-%dT%H:%M:%SZ")`, CPython 3.14's `_strptime` regex by
+  hand; the text written `Stamps.stamp`'s).
 - core.lookup's `Pace`, _common.py's lookup pace (`lookup_requests_used`, `lookup_policy`, `requests_today`,
-  `within_the_day`, `_last_request`, its kv read as `float()` reads a text, `PyFloatText`, and
-  `_pause_after_last_request`), and `Clients`, `make_client(..., interactive=True)`: kv `http:last_request:<provider>`
-  after each request sent, as `f"{time.time():.3f}"` writes it. No lock, ticket or handoff on the phone.
-- core.config: `PhoneConfig.read`, kv `phone:settings` over config.json's defaults (`take` is crossing-phone's).
+  `within_the_day`, `_last_request`, its kv read as `float()` reads a text, `PyFloat`, and
+  `_pause_after_last_request`), and `Clients`, `make_client(..., interactive=True)` over `PoliteClient`: the pause
+  after this side's last request drawn before the client's own, kv `http:last_request:<provider>` after each request
+  sent, as `f"{time.time():.3f}"` writes it (`PyFormat.fixed`). No lock, ticket or handoff on the phone.
+- core.config: `PhoneConfig.read`, kv `phone:settings` over config.json's defaults, each value as config.py would
+  hold it or the default (`_delay`, `_count`, the `[match]` and `[rank]` ranges), a provider the phone doesn't know
+  passed over, `per_day` the stricter of the two, never lifted (`take` is crossing-phone's).
 - Every count, cooldown and record is this side's own. tests/test_conformance_health.py writes vectors/health/ and
   vectors/pace/ (`HealthReplay`, `PaceReplay`).
 

@@ -5,6 +5,7 @@ import io.github.danielhp95.caracole.core.health.EventLog
 import io.github.danielhp95.caracole.core.health.Health
 import io.github.danielhp95.caracole.core.health.ProviderState
 import io.github.danielhp95.caracole.core.http.Event
+import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
@@ -62,14 +63,37 @@ object HealthReplay : AreaReplay {
                 } catch (e: AssertionError) {
                     throw e
                 } catch (e: Exception) {
-                    misses.check(expected["err"] != null) { "$case: step $i ($op) threw $e, Python answered $expected" }
+                    val raised = expected["err"]?.jsonPrimitive?.content
+                    val stands = RAISES[raised]
+                    misses.check(stands != null && stands.isInstance(e)) {
+                        "$case: step $i ($op) threw $e, Python answered $expected"
+                    }
                     break
                 }
                 val got = JsonObject(answer + ("kv" to (db.kvGet("provider:$provider")?.let { JsonPrimitive(it) } ?: JsonNull)))
-                misses.check(got == expected) { "$case: step $i ($op at $now) = $got, Python's $expected" }
+                misses.check(got == shownAsKotlin(expected)) { "$case: step $i ($op at $now) = $got, Python's $expected" }
                 if (expected["err"] != null) break
             }
         }
+    }
+
+    /** What stands on the phone for each exception Python raised (Health's KDoc): a Kotlin exception of another class
+     * where Python raised is a miss, as is one where it raised nothing. */
+    private val RAISES: Map<String, Class<out Exception>> = mapOf(
+        "OverflowError" to ArithmeticException::class.java,
+        "ValueError" to IllegalArgumentException::class.java,
+        "TypeError" to IllegalArgumentException::class.java,
+        "JSONDecodeError" to PyJson.DecodeError::class.java,
+        "AttributeError" to IllegalStateException::class.java,
+    )
+
+    /** Python's answer as ProviderState holds it: a `last_error` that isn't text its JSON text (the kv keeps it as it
+     * was, and is compared byte for byte). */
+    private fun shownAsKotlin(expected: JsonObject): JsonObject {
+        val state = expected["state"] as? JsonObject ?: return expected
+        val error = state["last_error"] ?: return expected
+        if (error is JsonNull || (error is JsonPrimitive && error.isString)) return expected
+        return JsonObject(expected + ("state" to JsonObject(state + ("last_error" to JsonPrimitive(PyJson.dumps(error))))))
     }
 
     private fun stateJson(s: ProviderState): Map<String, JsonElement> = mapOf("state" to JsonObject(mapOf(
