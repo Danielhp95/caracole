@@ -33,6 +33,9 @@ object Passes {
      * the caller takes them. [songs] is read lazily, a song just before its turn, so a filter in it sees what the
      * turns before did; and the caller's work on an answer runs outside the ladder, as Python's loop body does, so
      * an error of its own is never one of the pass's.
+     *
+     * Read once, as Python's generator is: a second iteration (a `count()` then a `toList()`, say) throws
+     * IllegalStateException, never asking a site about a song again nor counting it twice in [stats].
      */
     fun <T> eachSong(songs: Sequence<SongRow>, stats: PassStats, @Suppress("UNUSED_PARAMETER") site: String,
                      stopOn: Set<KClass<out ProviderError>> = emptySet(),
@@ -63,7 +66,7 @@ object Passes {
             stats.tried++
             yield(song to outcome)
         }
-    }
+    }.constrainOnce()
 
     /** [eachSong] over a list, read whole first, every turn's work done inside [turn] (so a provider's error of that
      * work is the turn's, on the ladder): the [stats] once the pass is over. A pass whose filter must see what the

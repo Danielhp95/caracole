@@ -86,7 +86,8 @@ class VersionsTest {
             val creep = Songs.byKey(db, "radiohead/creep")!!
             assertEquals(3, Versions.markStale(db, creep.id, "ug"))
             val stale = Versions.songVersions(db, creep.id, includeGone = true).filter { it.stale }
-            assertEquals(listOf("101", "202", "303"), stale.map { it.tabId })
+            // UG's three, by id, and the LaCuerda version the fixture made stale already.
+            assertEquals(listOf("101", "202", "radiohead/creep-2", "303"), stale.map { it.tabId })
             assertTrue(stale.all { it.gone.not() && it.pickRank == null })
             assertEquals(listOf("55"), Versions.songVersions(db, creep.id).map { it.tabId })
             val again = Versions.upsert(db, "ug", "101", creep.id, "sheet", "chords", 4.5, 10, 1, null, "https://ug/101",

@@ -98,6 +98,22 @@ class PassesTest {
         assertFalse(stats.failures.isNotEmpty())
     }
 
+    @Test fun thePassIsReadOnceAsPythonsGeneratorIsNeverAskingASongAgain() {
+        val turned = mutableListOf<String>()
+        val stats = PassStats()
+        val got = Passes.eachSong(songs("a", "b").asSequence(), stats, "site") { turned += it.key; it.key }
+        assertEquals(listOf("a", "b"), got.map { it.second }.toList())
+        assertFailsWith<IllegalStateException> { got.toList() }
+        assertEquals(listOf("a", "b"), turned)
+        assertEquals(2, stats.tried)
+        // Begun and left, then read again: no turn runs twice either.
+        val left = mutableListOf<String>()
+        val again = Passes.eachSong(songs("a", "b").asSequence(), PassStats(), "site") { left += it.key; it.key }
+        assertTrue(again.any())
+        assertFailsWith<IllegalStateException> { again.forEach { _ -> } }
+        assertEquals(listOf("a"), left)
+    }
+
     @Test fun aSubclassOfPassStatsComesBackAsItself() {
         class Counted(var kept: Int = 0) : PassStats()
         val stats: Counted = Passes.eachSong(songs("a", "b"), Counted(), "site") { }

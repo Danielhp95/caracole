@@ -1,19 +1,19 @@
 package io.github.danielhp95.caracole.core.library.internal.writes
 
+import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.JsonText
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongRow
+import io.github.danielhp95.caracole.core.library.internal.LibraryFiles
 import java.io.IOException
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.file.LinkOption
-import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
-import java.nio.file.attribute.BasicFileAttributes
 import java.security.MessageDigest
 import java.security.SecureRandom
 
@@ -37,23 +37,13 @@ internal object Place {
     /** A path relative to the library, as `files.path` holds one, under [lib]'s folder. */
     fun under(lib: LibraryStore, rel: String): Path = lib.libraryDir.toPath().resolve(rel)
 
-    fun sha256(data: ByteArray): String = JsonText.hex(MessageDigest.getInstance("SHA-256").digest(data))
-
-    /** What [path] is, itself (no link followed); null when nothing is there. */
-    fun entry(path: Path): BasicFileAttributes? = try {
-        Files.readAttributes(path, BasicFileAttributes::class.java, LinkOption.NOFOLLOW_LINKS)
-    } catch (_: NoSuchFileException) {
-        null
-    } catch (_: IOException) {
-        null
-    }
-
     /** library.holds: whether the regular file at [path] (never a link, a folder or anything else in its place)
-     * holds the bytes whose SHA-256 is [sha256]; with [size], a file of another length fails unread. */
+     * holds the bytes whose SHA-256 is [sha256]; with [size], a file of another length fails unread. Any failure to
+     * look or read is false, as open_regular's OSError is. */
     fun holds(path: Path, sha256: String, size: Long?): Boolean {
-        val attrs = entry(path) ?: return false
-        if (!attrs.isRegularFile) return false
         return try {
+            val attrs = LibraryFiles.entry(path) ?: return false
+            if (!attrs.isRegularFile) return false
             FileChannel.open(path, StandardOpenOption.READ, LinkOption.NOFOLLOW_LINKS).use { ch ->
                 if (size != null && ch.size() != size) return false
                 val digest = MessageDigest.getInstance("SHA-256")
@@ -104,15 +94,18 @@ internal object Place {
             throw e
         }
         syncFolder(dir)
-        return sha256(data)
+        return Canonical.sha256Hex(data)
     }
 
-    /** The folder's entries to the disk, as os.fsync of its descriptor; a platform that can't open a folder to sync
-     * it (none caracole runs on) leaves it to the file system. */
+    /** The folder's entries to the disk, as os.fsync of its descriptor: a sync that fails raises, as Python's does,
+     * so no caller records a file the rename may not have put on the disk. Only a platform that can't open a folder
+     * as a channel at all (none caracole runs on: Linux and Android can) leaves it to the file system. */
     private fun syncFolder(dir: Path) {
-        try {
-            FileChannel.open(dir, StandardOpenOption.READ).use { it.force(true) }
+        val folder = try {
+            FileChannel.open(dir, StandardOpenOption.READ)
         } catch (_: IOException) {
+            return
         }
+        folder.use { it.force(true) }
     }
 }

@@ -7,9 +7,9 @@ SHA-256, a version's raw and a song's columns are in its sync unit, so they must
 caracole's own writers (wanted.txt lines synced into songs, ``versions.upsert_version``, ``library.keep_file``,
 ``versions.mark_gone`` and ``set_picks``), every stamp caracole writes as now made ``NOW``, then dumped
 (``dump_fixture``) with its files, wanted.txt left out. Files put in a song's folder by hand are in it too, as files no
-row names. ``library``: a song with a sheet, a text tab, a Guitar Pro file and versions live, gone and picked; a song
-of other scripts with nothing kept; two songs whose names make one folder; a song with harmonica, game-music and score
-files, kept and put there by hand; a song with no folder.
+row names. ``library``: a song with a sheet, a text tab, a Guitar Pro file and versions live, gone, stale, picked and
+with a coverage; a song of other scripts with nothing kept; two songs whose names make one folder; a song with
+harmonica, game-music and score files, kept and put there by hand; a song with no folder.
 
 **Vectors**: library/writes.jsonl, a header, then a record a line, ``{fn, case, fixture, kw, changes, out | err,
 message, after}``:
@@ -19,7 +19,8 @@ message, after}``:
   deletes the file, ``{path: {"base64"}}`` writes one), or null;
 - ``kw`` the call's arguments: ``song`` a song's identity key (its record is found by it), ``data`` a file's bytes
   (``{"base64"}``), ``raw`` a version's raw as the JSON text it is given in (``json.loads``'s, so its members keep
-  their order), ``path`` a path under the library; the rest by Python's names;
+  their order), ``fields`` update_song's keyword arguments as the JSON text they are given in (so a JSON column's
+  dict keeps its members' order), ``path`` a path under the library; the rest by Python's names;
 - ``out`` what the function returned (a song a key, a version or a kept file a row, an exception a record's ``err``
   instead: its class's name, and ``message`` its words);
 - ``after``, what the call changed: ``rows``, by table (``songs``, ``versions``, ``files``), each row it wrote (new,
@@ -129,7 +130,7 @@ def _by_hand(lib: Library, song: str, name: str, data: bytes) -> None:
 def build_library(lib: Library) -> None:
     from caracole.library import song_dir
     from caracole.songs import find_song
-    from caracole.versions import mark_gone, set_picks
+    from caracole.versions import mark_gone, mark_stale, set_coverage, set_picks
 
     for artist, title in SONGS.values():
         lib.song(artist, title, sheet=None, lyrics=None)
@@ -144,7 +145,10 @@ def build_library(lib: Library) -> None:
     _keep(lib, "creep", gp, "guitar-1.gp5", b"FICHIER GUITAR PRO v5.00")
     gone = _version(lib, "creep", "lacuerda", "radiohead/creep", "sheet", "acordes", rating=0, votes=0)
     mark_gone(lib.conn, gone)
+    _version(lib, "creep", "lacuerda", "radiohead/creep-2", "sheet", "acordes", rating=0, votes=0)
+    assert mark_stale(lib.conn, find_song(lib.conn, key("creep")).id, "lacuerda") == 1  # the gone one stays gone
     other = _version(lib, "creep", "ug", "303", "sheet", "chords", rating=4.9, votes=99, label="Acoustic")
+    set_coverage(lib.conn, other, 0.9)
     set_picks(lib.conn, find_song(lib.conn, key("creep")).id, ("chords",), [other, sheet])
     _by_hand(lib, "creep", "guitar-3.GP5", b"by hand")
     _by_hand(lib, "creep", "notes.txt", b"mine")
@@ -165,7 +169,7 @@ def build_library(lib: Library) -> None:
     _keep(lib, "song2", score, "score-1.pdf", b"%PDF-1.4 score")
     for name in ("harmonica-2.html", "harmonica-4.txt", "Harmonica-3.txt", "gametab-3.txt", "gametab-2.TXT",
                  "score-2.PDF", "score-3.mscz", "score-x.pdf", "guitar-\u0661.gp5", "GUITAR-02.gp5", "guitar-4",
-                 "guitar-5.tar.gz"):
+                 "guitar-5.tar.gz", "gu\u0131tar-3.gp5", "GU\u0130TAR-4.x"):
         _by_hand(lib, "song2", name, name.encode("utf-8"))
 
 
@@ -356,7 +360,7 @@ def _update_song(lib, kw):
     from caracole import songs
 
     with mock.patch.object(songs, "utc_now_iso", lambda: kw["now"]):
-        return songs.update_song(lib.conn, _song(lib.conn, kw["song"]).id, **kw["fields"])
+        return songs.update_song(lib.conn, _song(lib.conn, kw["song"]).id, **json.loads(kw["fields"]))
 
 
 @calls("caracole.songs.refresh_status")
@@ -540,15 +544,18 @@ def cases(v: dict[str, int]) -> list[dict[str, Any]]:
         rec(k + "upsert_version", "a version gone, recorded again: live",
             {**upsert, "provider": "lacuerda", "tab_id": "radiohead/creep", "kind": "acordes", "rating": 0,
              "votes": 0, "version": 0, "raw": "{}"}),
+        rec(k + "upsert_version", "a version stale, recorded again: live",
+            {**upsert, "provider": "lacuerda", "tab_id": "radiohead/creep-2", "kind": "acordes", "rating": 0,
+             "votes": 0, "version": 3, "raw": '{"b": 1, "a": 2}'}),
         rec(k + "upsert_version", "a number 0 for its version is 1; a rating of 0 is 0.0",
             {**upsert, "tab_id": "405", "rating": 0, "votes": 0, "version": 0, "label": "Ver 0"}),
         rec(k + "upsert_version", "the same tab for another song is another version",
             {**upsert, "song": zebra, "tab_id": "101", "slot": "guitar", "kind": "tabs"}),
         rec(k + "upsert_version", "a raw of other scripts and escapes",
             {**upsert, "tab_id": "406", "raw": '{"名": "斑马\\u0000\\n\\"", "😀": [true, false, {}], "": []}'}),
-        rec(k + "song_versions", "a song's live versions, by id",
+        rec(k + "song_versions", "a song's live versions, by id: none gone or stale",
             {"song": creep, "slot": None, "kinds": None, "include_gone": False}),
-        rec(k + "song_versions", "every version, gone ones too",
+        rec(k + "song_versions", "every version, gone and stale ones too",
             {"song": creep, "slot": None, "kinds": None, "include_gone": True}),
         rec(k + "song_versions", "a slot", {"song": creep, "slot": "guitar", "kinds": None, "include_gone": False}),
         rec(k + "song_versions", "kinds", {"song": creep, "slot": None, "kinds": ["chords", "acordes"],
@@ -565,7 +572,7 @@ def cases(v: dict[str, int]) -> list[dict[str, Any]]:
         rec(k + "set_coverage", "none", {"version_id": sheet, "value": None}),
         rec(k + "mark_gone", "a picked version gone: no pick", {"version_id": other}),
         rec(k + "mark_stale", "a provider's live versions stale", {"song": creep, "provider": "ug"}),
-        rec(k + "mark_stale", "a gone version stays gone", {"song": creep, "provider": "lacuerda"}),
+        rec(k + "mark_stale", "a gone version stays gone, a stale one stale", {"song": creep, "provider": "lacuerda"}),
         rec(k + "mark_stale", "a provider with none", {"song": creep, "provider": "harptabs"}),
         rec(k + "set_picks", "picks ranked in order, the older cleared",
             {"song": creep, "kinds": ["chords"], "version_ids": [sheet, other]}),
@@ -608,10 +615,14 @@ def cases(v: dict[str, int]) -> list[dict[str, Any]]:
         rec(k + "refresh_status", "ignored, whatever it keeps", {"song": creep, "ignored": True, "now": LATER}),
         rec(k + "refresh_status", "nothing kept: wanted", {"song": wall, "ignored": False, "now": LATER}),
     ]
+    for r in out:  # update_song's fields as JSON text: the record's sorted members would sort a dict given a column
+        if r["fn"] == k + "update_song":
+            r["kw"]["fields"] = json.dumps(r["kw"]["fields"], ensure_ascii=False)
     k = "caracole.inbox."
     out += [
         rec(k + "guitar_number", "kept 1, 3 put there by hand in capitals: 2", {"song": creep}),
-        rec(k + "guitar_number", "digits of other scripts, leading zeros, any case and extension; no dot, none",
+        rec(k + "guitar_number", "digits of other scripts, leading zeros, any case (a dotless ı, a dotted İ) and "
+            "extension; no dot, none",
             {"song": song2}),
         rec(k + "guitar_number", "another song keeps 1 in the folder they share, the song 3: 2", {"song": two}),
         rec(k + "guitar_number", "a song with no folder", {"song": wall}),

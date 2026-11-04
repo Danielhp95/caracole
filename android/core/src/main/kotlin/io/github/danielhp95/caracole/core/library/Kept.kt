@@ -1,6 +1,8 @@
 package io.github.danielhp95.caracole.core.library
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.json.Canonical
+import io.github.danielhp95.caracole.core.library.internal.LibraryFiles
 import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.writes.Place
 import java.io.IOException
@@ -31,7 +33,7 @@ object Kept {
      * more sync on every device.
      */
     fun keptAlready(db: Db, lib: LibraryStore, song: SongRow, versionId: Long, name: String, data: ByteArray): Boolean {
-        val sha = Place.sha256(data)
+        val sha = Canonical.sha256Hex(data)
         return keptFiles(db, song.id).any {
             it.name == name && it.versionId == versionId && it.sha256 == sha &&
                 holds(Place.under(lib, it.path), sha, data.size.toLong())
@@ -69,7 +71,7 @@ object Kept {
     fun keepFile(db: Db, lib: LibraryStore, song: SongRow, versionId: Long, name: String, data: ByteArray,
                  rank: Int, now: String): Boolean {
         val stamp = Stamps.stampOf(now)
-        val sha = Place.sha256(data)
+        val sha = Canonical.sha256Hex(data)
         val dup = db.one("SELECT 1 FROM files WHERE song_id = ? AND sha256 = ? AND name != ?", song.id, sha, name) {
             true
         }
@@ -92,7 +94,7 @@ object Kept {
     fun dropFile(db: Db, lib: LibraryStore, song: SongRow, name: String) {
         val rel = db.one("SELECT path FROM files WHERE song_id = ? AND name = ?", song.id, name) { it.text(0) } ?: return
         val path = Place.under(lib, rel)
-        if (Place.entry(path)?.isDirectory == true) throw IOException("$rel: is a folder") // Path.unlink's refusal
+        if (LibraryFiles.entry(path)?.isDirectory == true) throw IOException("$rel: is a folder") // Path.unlink's refusal
         Files.deleteIfExists(path)
         db.execute("DELETE FROM files WHERE song_id = ? AND name = ?", song.id, name)
     }

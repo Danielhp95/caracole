@@ -46,9 +46,14 @@ object Numbering {
     private val GAMETAB_FILE = PyRegex.compile("""gametab-(\d+)\.txt""")
     private val SCORE_FILE = PyRegex.compile("""score-(\d+)(\.[A-Za-z0-9]+)""")
 
-    /** int(group 1): its digits of any script; ValueError past Python's 4300 digits, an IllegalArgumentException. */
-    private fun number(m: MatchResult): BigInteger = PyInt.parse(m.groupValues[1])
-        ?: throw IllegalArgumentException("Exceeds the limit (${PyInt.MAX_DIGITS} digits) for integer string conversion")
+    /** int(group 1): its digits of any script (`\d+`'s, each one a digit int() reads); past Python's 4300 digits,
+     * its ValueError, an IllegalArgumentException in Python's words, the digits counted as Python counts them. */
+    private fun number(m: MatchResult): BigInteger {
+        val digits = m.groupValues[1]
+        return PyInt.parse(digits) ?: throw IllegalArgumentException(
+            "Exceeds the limit (${PyInt.MAX_DIGITS} digits) for integer string conversion: value has " +
+                "${digits.codePointCount(0, digits.length)} digits; use sys.set_int_max_str_digits() to increase the limit")
+    }
 
     /** `next(n for n in itertools.count(1) if n not in taken)`. */
     private fun lowestFree(taken: List<BigInteger>): Int {

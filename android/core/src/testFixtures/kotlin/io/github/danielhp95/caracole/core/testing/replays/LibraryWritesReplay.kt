@@ -193,8 +193,9 @@ object LibraryWritesReplay : AreaReplay {
             }
             "versions.picks" -> JsonArray(Versions.picks(db, song().id, kinds("kinds")!!).map(::versionJson))
             "songs.update_song" -> JsonNull.also {
-                Versions.updateSong(db, song().id, kw.getValue("fields").jsonObject.mapValues { value(it.value) },
-                                    str("now"))
+                // The fields as JSON text, json.loads's: a dict given a JSON column keeps its members' order.
+                val fields = PyJson.loads(str("fields")).jsonObject.mapValues { value(it.value) }
+                Versions.updateSong(db, song().id, fields, str("now"))
             }
             "songs.refresh_status" -> JsonPrimitive(Versions.refreshStatus(
                 db, song().id, kw.getValue("ignored").jsonPrimitive.content == "true", str("now"),
