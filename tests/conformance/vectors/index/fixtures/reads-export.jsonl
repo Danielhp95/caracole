@@ -1,0 +1,25 @@
+{"corpus":"index/fixtures/reads-export","header":true,"made_by":"tests/test_conformance_index.py","versions":{"caracole":"0.1.0","pypinyin":"0.55.0","python":"3.14.7","rapidfuzz":"3.14.5","sqlite":"3.53.3","unicodedata":"16.0.0"}}
+{"sql":"CREATE TABLE ug_index (\n  tab_id INTEGER PRIMARY KEY,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  type TEXT NOT NULL,\n  sitemap TEXT NOT NULL,\n  first_seen TEXT NOT NULL,\n  path TEXT NOT NULL DEFAULT ''\n)"}
+{"sql":"CREATE TABLE ug_artist_tabs (\n  page TEXT NOT NULL,\n  tab_id INTEGER NOT NULL,\n  type TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  title TEXT NOT NULL,\n  label TEXT,\n  rating REAL NOT NULL DEFAULT 0,\n  votes INTEGER NOT NULL DEFAULT 0,\n  url TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  artist_forms TEXT NOT NULL,\n  title_forms TEXT NOT NULL,\n  forms TEXT NOT NULL,\n  read_at TEXT NOT NULL,\n  PRIMARY KEY (page, tab_id)\n)"}
+{"sql":"CREATE TABLE lacuerda_index (\n  path TEXT PRIMARY KEY,\n  artist_slug TEXT NOT NULL,\n  artist TEXT NOT NULL,\n  artist_key TEXT NOT NULL,\n  title TEXT NOT NULL DEFAULT '',\n  title_key TEXT NOT NULL DEFAULT '',\n  songs INTEGER NOT NULL DEFAULT 0,\n  versions TEXT NOT NULL DEFAULT '',\n  acordes INTEGER NOT NULL DEFAULT 0,\n  popular INTEGER,\n  page TEXT NOT NULL\n)"}
+{"sql":"CREATE TABLE harptabs_index (\n  path TEXT PRIMARY KEY,\n  kind TEXT NOT NULL,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  sitemap TEXT NOT NULL\n)"}
+{"sql":"CREATE TABLE harptabs_artists (\n  path TEXT PRIMARY KEY,\n  page_id INTEGER NOT NULL,\n  key TEXT NOT NULL,\n  name TEXT NOT NULL,\n  tabs INTEGER NOT NULL DEFAULT 0,\n  read_at TEXT NOT NULL\n)"}
+{"sql":"CREATE TABLE harptabs_artist_tabs (\n  artist TEXT NOT NULL,\n  tab_id INTEGER NOT NULL,\n  path TEXT NOT NULL,\n  title TEXT NOT NULL,\n  song_key TEXT NOT NULL,\n  harp_key TEXT,\n  difficulty TEXT,\n  views INTEGER NOT NULL DEFAULT 0,\n  rating REAL,\n  place INTEGER NOT NULL,\n  PRIMARY KEY (artist, tab_id)\n)"}
+{"sql":"CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"sql":"CREATE TABLE caracole_export (key TEXT PRIMARY KEY, value TEXT NOT NULL)"}
+{"row":{"artist":"Song Dongye","artist_forms":"song-dongye","artist_key":"song-dongye","forms":"song-dongye 斑马斑马 ban-ma-ban-ma songdongye banmabanma","label":null,"page":"https://www.ultimate-guitar.com/artist/634073","rating":4.5,"read_at":"2026-10-23T03:30:00Z","song_key":"斑马斑马","tab_id":2001,"title":"斑马 斑马","title_forms":"斑马斑马 ban-ma-ban-ma","type":"chords","url":"https://tabs.ultimate-guitar.com/tab/2001","votes":10},"table":"ug_artist_tabs"}
+{"row":{"artist":"Song Dongye","artist_forms":"song-dongye","artist_key":"song-dongye","forms":"song-dongye 安和桥 an-he-qiao songdongye anheqiao","label":null,"page":"https://www.ultimate-guitar.com/artist/634073","rating":4.5,"read_at":"2026-10-28T03:30:00Z","song_key":"安和桥","tab_id":2002,"title":"安和桥 (live)","title_forms":"安和桥 an-he-qiao","type":"chords","url":"https://tabs.ultimate-guitar.com/tab/2002","votes":10},"table":"ug_artist_tabs"}
+{"row":{"acordes":1,"artist":"Estopa","artist_key":"estopa","artist_slug":"estopa","page":"estopa/","path":"estopa/como_camaron","popular":null,"songs":0,"title":"Como Camarón","title_key":"como-camaron","versions":"RA"},"table":"lacuerda_index"}
+{"row":{"acordes":1,"artist":"Enrique Bunbury","artist_key":"enrique-bunbury","artist_slug":"bunbury","page":"busca.php","path":"bunbury/lady_blue","popular":null,"songs":0,"title":"Lady Blue","title_key":"lady-blue","versions":"RA"},"table":"lacuerda_index"}
+{"row":{"key":"billy-joel","name":"Billy-Joel","page_id":1178,"path":"artist/1178/billy-joel","read_at":"2026-10-23T03:30:00Z","tabs":1},"table":"harptabs_artists"}
+{"row":{"artist":"artist/1178/billy-joel","difficulty":null,"harp_key":null,"path":"tab/100/piano-man","place":0,"rating":null,"song_key":"piano-man","tab_id":100,"title":"Piano Man","views":0},"table":"harptabs_artist_tabs"}
+{"row":{"key":"harptabs:artists:keys","value":"2"},"table":"kv"}
+{"row":{"key":"lacuerda:index:keys","value":"2"},"table":"kv"}
+{"row":{"key":"ug:artist_tabs:keys","value":"2"},"table":"kv"}
+{"row":{"key":"format","value":"1"},"table":"caracole_export"}
+{"row":{"key":"schema","value":"15"},"table":"caracole_export"}
+{"row":{"key":"keys","value":"2"},"table":"caracole_export"}
+{"row":{"key":"caracole","value":"0.1.0"},"table":"caracole_export"}
+{"row":{"key":"exported_at","value":"2026-11-03T12:00:00Z"},"table":"caracole_export"}
+{"row":{"key":"sites","value":"[\"ug\", \"lacuerda\", \"harptabs\"]"},"table":"caracole_export"}
+{"row":{"key":"source","value":"/data/user/0/io.github.danielhp95.caracole/files/state/caracole.sqlite"},"table":"caracole_export"}

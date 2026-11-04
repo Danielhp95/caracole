@@ -2051,9 +2051,14 @@ picks one).
     then `INTERRUPTED`, as is one the server ends as it stops (`JobQueue.stop`): over, Try again queues it
     (test_web_history.py).
 - It also writes, for the phone's sync alone, and nothing else: a push's staging folder (`state_dir/peer/push-<id>/`,
-  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after), and a
+  0700, its files checked by their SHA-256, deleted once `caracole peer take` is over or an hour after); a
   temporary index export for `GET /api/peer/index` (`cache_dir/peer/`, one read transaction, no lock, deleted once
-  sent). Everything else stays a queued command's.
+  sent); and the index pages a phone's lookups read, `POST /peer/index`'s export of them
+  (`state_dir/peer/index-<16 hex>.sqlite`, 0600, at most `peer_push.INDEX_OPEN` waiting, read before its 202 as an
+  export of pages alone of this caracole's version, `index_transfer.check_pages`, deleted when it isn't, then
+  `caracole index merge --delete --progress` queued, which deletes it once merged or refused, and `--delete` deletes
+  a refused file of that staging alone, never one named by hand; one an hour old no waiting request names is swept,
+  `peer_push.sweep_indexes`). Everything else stays a queued command's.
 
 ### wanted.txt is the one source of songs
 
