@@ -1310,8 +1310,9 @@ Not built yet. (lookup.)
     for `isinstance` and `repr`), a length `round()`ed half to even, Megalobiz's stamps as
     `f'{ms % 60000 / 1000:05.2f}'` writes them (PyFormat), AZLyrics' pages by Python's regexes over the text and
     `html.unescape` (PyHtml).
-  - LRC's stamps are read in one place, library/internal/LyricsFiles.kt (any decimal digits, a minute of any length,
-    as Python's `\d`, `int()` and `float()`), for `Lyrics.fromRecord` and the files written: `lyrics.txt`,
+  - LRC's stamps are read in one place, library/internal/LyricsFiles.kt (any decimal digits, a minute as long as
+    `int()` reads, as Python's `\d`, `int()` and `float()`, their errors past 4300 digits or a float's range too), for
+    `Lyrics.fromRecord` and the files written: `lyrics.txt`,
     `lyrics.lrc` and `lyrics_json` byte for byte.
   - kv `lyrics:failed:`, `megalobiz:checked:` and `azlyrics:checked:` as Python's: an error never a miss, a song
     LRCLIB missed back to pending; Megalobiz's per-day limit is the lookup's client's (`Pace.withinTheDay`); info.json,
