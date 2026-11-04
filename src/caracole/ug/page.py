@@ -11,6 +11,9 @@ Every page keeps its data in ``div.js-store[data-content]``, under
 - ``data.tab_view.meta`` is what UG says of the tab beside it (a sheet's capo, say).
   UG writes an empty one as ``[]``.
 
+Half of a surrogate pair its JSON escapes alone (``\\udc00``) is no character, which no text caracole writes
+could hold in UTF-8: every string of the data, keys too, has U+FFFD in its place (``read_page_data``).
+
 A page that can't be read raises ``PageParseError``, which is a provider
 error: callers must never take it to mean "this song has no versions".
 """
@@ -39,6 +42,8 @@ TAB_BASE_URL = "https://tabs.ultimate-guitar.com/tab/"
 _KINDS = {"chords": "chords", "tabs": "tabs", "ukulele chords": "ukulele"}
 KINDS = tuple(_KINDS.values())  # caracole's kinds of UG's tabs: chords, tabs, ukulele
 _MARKUP = re.compile(r"\[/?(?:ch|tab)\]")
+_LONE_SURROGATE = re.compile("[\ud800-\udfff]")  # json.loads keeps a whole pair one character, a half alone
+_SURROGATE_ESCAPE = re.compile(r"\\u[dD][89a-fA-F]")  # a JSON escape of half a pair: how one gets in
 
 
 class PageParseError(ProviderError):
@@ -182,8 +187,20 @@ def parse_version(d: Any) -> UGVersion | None:
     )
 
 
+def _whole(value: Any) -> Any:
+    """A value json.loads gave, each lone surrogate of its strings (its keys too) U+FFFD."""
+    if isinstance(value, str):
+        return _LONE_SURROGATE.sub("\ufffd", value) if _LONE_SURROGATE.search(value) else value
+    if isinstance(value, list):
+        return [_whole(v) for v in value]
+    if isinstance(value, dict):
+        return {_whole(k): _whole(v) for k, v in value.items()}
+    return value
+
+
 def read_page_data(html: str | bytes, *, url: str | None = None) -> dict[str, Any]:
-    """The ``store.page.data`` object of any UG page, or ``PageParseError``."""
+    """The ``store.page.data`` object of any UG page, or ``PageParseError``. Each lone surrogate of its strings
+    is U+FFFD (``_whole``), walked for only where the JSON escapes half a pair."""
     if isinstance(html, bytes):
         html = html.decode("utf-8", errors="replace")
     node = LexborHTMLParser(html).css_first("div.js-store")
@@ -192,6 +209,8 @@ def read_page_data(html: str | bytes, *, url: str | None = None) -> dict[str, An
         raise PageParseError("ug", url, None, "no div.js-store data on the page")
     try:
         store = json.loads(payload)
+        if _SURROGATE_ESCAPE.search(payload):
+            store = _whole(store)
     except (ValueError, RecursionError) as e:  # or nested deeper than the parser goes
         raise PageParseError("ug", url, None, f"js-store is not valid JSON: {e}") from e
     data = store
