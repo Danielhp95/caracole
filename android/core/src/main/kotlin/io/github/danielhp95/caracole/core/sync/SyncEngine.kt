@@ -510,11 +510,8 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
     /** The songs songbooks list (Scope.listedOn), of this side's songbooks and of the other's [theirs] (those the
      * two hold differently: of the others, the two hold the same). */
     private fun listed(mine: Map<String, kotlinx.serialization.json.JsonElement?>, theirs: Map<String, JsonObject?>,
-                       units: Set<String>): Map<String, List<String>> = try {
+                       units: Set<String>): Map<String, List<String>> =
         Scope.listedOn(listOf(mine, theirs.filterValues { it != null }), units)
-    } catch (e: NotImplementedError) {
-        emptyMap()  // waiting on songbook-writers: Songbooks.entryKeys
-    }
 
     /** Each site whose newest read differs on the two sides, in caracole's order (IndexTransfer's sites), with which
      * is newer. */

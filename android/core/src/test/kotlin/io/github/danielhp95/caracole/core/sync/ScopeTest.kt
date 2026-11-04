@@ -2,7 +2,6 @@ package io.github.danielhp95.caracole.core.sync
 
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
-import org.junit.Assume
 import org.junit.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -15,10 +14,8 @@ import kotlin.test.assertNull
 class ScopeTest {
     @Test fun everyRecordOfScopeJsonlReplays() = Misses(SyncReplay.SCOPE).also(SyncReplay::scope).assertNone()
 
-    @Test fun theSongsSongbooksListAreThoseOfAnyCutOfAnEntry() {
-        Assume.assumeTrue("waiting on songbook-writers: Songbooks.entryKeys", SyncReplay.listing())
+    @Test fun theSongsSongbooksListAreThoseOfAnyCutOfAnEntry() =
         Misses("${SyncReplay.SCOPE} listed_songs").also(SyncReplay::listedSongs).assertNone()
-    }
 
     @Test fun aFileThatHoldsNoLibraryNeverReadsASongItLacksAsRemoved() {
         fun d(id: String, mine: String?, theirs: String?, proposal: String) =

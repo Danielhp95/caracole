@@ -234,11 +234,7 @@ object SyncFiles {
         val chosen = every.keys.filter { Scope.partOf(it) in parts }.toMutableSet()
         if (Scope.SONGBOOKS in parts) {
             val values = every.keys.filter { it.startsWith("songbook/") }.associateWith { Units.value(db, it) }
-            try {
-                chosen.addAll(Scope.listedSongs(values, every.keys).keys)
-            } catch (e: NotImplementedError) {
-                Unit  // waiting on songbook-writers: Songbooks.entryKeys
-            }
+            chosen.addAll(Scope.listedSongs(values, every.keys).keys)
         }
         val state = every.filterKeys { it in chosen }
         val documents = ArrayList<JsonObject>()
@@ -801,11 +797,7 @@ object SyncFiles {
         val found = Compare.compare(mine, state.units, base, kept)
         val hereBooks = mine.keys.filter { it.startsWith("songbook/") }.associateWith { Units.value(db, it) }
         val fileBooks = source.documents().filterKeys { it.startsWith("songbook/") }.mapValues { it.value["unit"] }
-        val listed = try {
-            Scope.listedOn(listOf(hereBooks, fileBooks), mine.keys + state.units.keys)
-        } catch (e: NotImplementedError) {
-            emptyMap()  // waiting on songbook-writers: Songbooks.entryKeys
-        }
+        val listed = Scope.listedOn(listOf(hereBooks, fileBooks), mine.keys + state.units.keys)
         val agreed = listOfNotNull(hereBase, fileBase).flatMap { b -> b.values.map { it.second } }
         return FileCompared(Scope.inScope(found, file.holds, listed, file.holds), mine, base, kept, listed,
                             agreed.maxWithOrNull(Py.CODE_POINT_ORDER))

@@ -22,7 +22,6 @@ import io.github.danielhp95.caracole.core.sync.SyncFailed
 import io.github.danielhp95.caracole.core.sync.SyncOutcome
 import io.github.danielhp95.caracole.core.sync.Units
 import io.github.danielhp95.caracole.core.testing.TestDb
-import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
 import io.github.danielhp95.caracole.core.testing.sync.FakeComputer
 import io.github.danielhp95.caracole.mirror.ServerAddress
 import kotlinx.coroutines.runBlocking
@@ -30,7 +29,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import org.junit.After
-import org.junit.Assume
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -753,7 +751,6 @@ class SyncEngineTest {
     // --- a sync's parts, the comparison's new members, the unattended sync (the sync redesign's Task 12) -------------
 
     @Test fun `songbooks alone take the songbook and the songs it lists and nothing else`() {
-        Assume.assumeTrue("waiting on songbook-writers: Songbooks.entryKeys", SyncReplay.listing())
         computer.load(RICH)
         val c = engine.compare(computer.address.toString())
         assertEquals(listOf("song/radiohead/creep", "song/radiohead/karma-police"),
@@ -824,10 +821,8 @@ class SyncEngineTest {
         assertNull(onPhone)
         assertEquals(JsonPrimitive("Campfire"), onComputer!!["name"])
         assertEquals(listOf(IndexWaiting("ug", "Ultimate Guitar", null, "2026-11-03T10:00:00Z", "there")), c.indexes)
-        if (SyncReplay.listing()) {
-            assertEquals(mapOf("song/radiohead/creep" to listOf("songbook/campfire"),
-                               "song/radiohead/karma-police" to listOf("songbook/campfire")), c.listed)
-        }
+        assertEquals(mapOf("song/radiohead/creep" to listOf("songbook/campfire"),
+                           "song/radiohead/karma-police" to listOf("songbook/campfire")), c.listed)
     }
 
     @Test fun `library unticked skips the mirror, and indexes unticked skips the index stage`() {

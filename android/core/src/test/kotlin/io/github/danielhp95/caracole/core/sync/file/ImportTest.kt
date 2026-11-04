@@ -90,7 +90,7 @@ class ImportTest {
     @Test fun everyImportRecordOfFileJsonlGivesTheSameDifferencesTakesAndBasesAsPythons() {
         Assume.assumeTrue("waiting on sync-file: vectors/sync/file.jsonl", SyncReplay.fileVectors())
         val misses = Misses("${SyncReplay.FILE} import")
-        SyncReplay.file(misses)
+        SyncReplay.file(misses, only = "import")
         misses.assertNone()
     }
 

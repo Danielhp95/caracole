@@ -8,7 +8,6 @@ import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.library.SongbookStore
 import io.github.danielhp95.caracole.core.sync.Base
 import io.github.danielhp95.caracole.core.sync.Compare
-import io.github.danielhp95.caracole.core.songbooks.Songbooks
 import io.github.danielhp95.caracole.core.sync.Difference
 import io.github.danielhp95.caracole.core.sync.KeptEntry
 import io.github.danielhp95.caracole.core.sync.KeptPair
@@ -479,18 +478,13 @@ object SyncReplay : AreaReplay {
         }
     }
 
-    /** Whether Songbooks.entryKeys answers, which listed_songs reads every entry's keys with (waiting on
-     * songbook-writers). */
-    fun listing(): Boolean = runCatching { Songbooks.entryKeys("Eagles - Hotel California") }.isSuccess
-
-    /** Every record of scope.jsonl: in_scope, change_of, names_of and, once Songbooks.entryKeys answers,
-     * [listedSongs]. */
+    /** Every record of scope.jsonl: in_scope, change_of, names_of and [listedSongs]. */
     fun scope(misses: Misses) {
         val records = Corpus.records(SCOPE)
         misses.check(records.map { it.fn }.toSet() == setOf("in_scope", "listed_songs", "change_of", "names_of")) {
             "$SCOPE's functions"
         }
-        if (listing()) listedSongs(misses)  // waiting on songbook-writers
+        listedSongs(misses)
         each(records.filter { it.fn != "listed_songs" }, misses) { r ->
             val given = r.extra.getValue("in").jsonObject
             when (r.fn) {
@@ -536,13 +530,13 @@ object SyncReplay : AreaReplay {
     fun fileVectors(): Boolean = Corpus.open(FILE)?.use { true } ?: false
 
     /** Every record of file.jsonl, once it is there: export, file_name, read, unit, check_whole, check_importable and
-     * import. */
-    fun file(misses: Misses) {
+     * import; those of [only] alone when given. */
+    fun file(misses: Misses, only: String? = null) {
         if (!fileVectors()) return  // waiting on sync-file
         val records = Corpus.records(FILE)
         val fns = setOf("export", "file_name", "read", "unit", "check_whole", "check_importable", "import")
         misses.check(records.map { it.fn }.toSet() == fns) { "$FILE's functions: ${records.map { it.fn }.toSet()}" }
-        each(records, misses) { r ->
+        each(records.filter { only == null || it.fn == only }, misses) { r ->
             when (r.fn) {
                 "export" -> fileExport(r)
                 "file_name" -> {
@@ -829,7 +823,7 @@ object SyncReplay : AreaReplay {
         if (expected == actual) null else "${record.extra["case"] ?: record.args}:\n  Python $expected\n  Kotlin $actual"
 
     private fun differs(record: Record, what: String, expected: Any?, actual: Any?): String? =
-        if (expected == actual) null else "${record.args} ($what): Python $expected, Kotlin $actual"
+        if (expected == actual) null else "${record.extra["case"] ?: record.args} ($what): Python $expected, Kotlin $actual"
 
     /** This side's units, as take.jsonl's `after` writes them: `{id: {label, digest, value}}`. */
     private fun after(db: Db): JsonObject = JsonObject(Units.libraryState(db).values.associate { unit ->
