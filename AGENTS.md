@@ -436,6 +436,20 @@ Below the table, a section for each step whose modules have more to say.
     (`merged_base`).
   - A unit changed on one side is that side's; on both, differently, a `CONFLICT` (`decide`: as chosen, else
     `--prefer`, else left).
+- **The remembered answer**: an import's "keep mine", kept beside the base (`record_kept`, `kept_of`: its `"kept"`,
+  `{unit: [digest here, digest there, when]}`, at the file's `made`), since a file can't take this side's version.
+  - The state document gives the asker those kept for it (`"kept"`, `PeerState.kept`), and `merged_kept` takes, a
+    unit at a time, the latest of each side's agreement and kept answer, an agreement on a tie, the other's swapped.
+  - `compare(..., kept=)`: a unit changed on neither side since is the chooser's (`KEPT_HERE`, `KEPT_THERE`), never
+    a conflict asked again; a change after it is compared as usual.
+  - An agreement drops the answer of each unit it agrees on, and a base with none is written as before.
+- **Parts** (`PARTS`: library, songbooks, indexes; `part_of`, by a unit's kind; no unit is of the indexes):
+  - `in_scope` keeps a unit of a part asked for, or a song a songbook lists while the songbooks are (`listed_songs`:
+    by any cut of an entry's "Artist - Title", `songbook.entry_keys`);
+  - with a file's `holds`, a unit the file lacks of a part it doesn't hold is never read as removed;
+  - `change_of`: what each side did since the base (new, changed, gone); `names_of`: a song's names from its label.
+- Both are the phone's as the computer's: `vectors/sync/kept.jsonl` and `scope.jsonl`
+  (tests/test_conformance_sync_kept.py).
 - **Ids**: each side's id is kv `sync:id`, made by schema 15 for every database, so caracole serve answers one
   without writing; `new_id` gives a copied database another.
 - `Peer` is the other's caracole serve over HTTP, never a site.

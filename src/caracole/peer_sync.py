@@ -458,7 +458,7 @@ class PeerState:
     token: str | None = None  # its form token, which a pull's form posts (``Peer.ask_to_pull``)
     now: str | None = None  # its clock when it answered
     indexes: dict[str, str] = field(default_factory=dict)  # the newest read of each of its site indexes
-    kept: Kept = field(default_factory=dict)  # the answers its imports of the asker's files remembered, as it keeps them
+    kept: Kept = field(default_factory=dict)  # the answers its imports of the asker's files remembered, as kept
 
 
 class StateError(ValueError):
