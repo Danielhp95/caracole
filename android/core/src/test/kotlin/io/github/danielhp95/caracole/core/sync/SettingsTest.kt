@@ -37,13 +37,13 @@ class SettingsTest {
 
     private val settings = FakeComputer.SETTINGS
 
-    @Test fun `every record of vectors sync settings is answered as Python answered it`() {
-        assumeTrue("waiting on crossing-computer: ${SettingsReplay.VECTOR}", SettingsReplay.present())
+    @Test fun `every record of vectors sync settings and settings_take is answered as Python answered it`() {
+        assumeTrue("waiting on crossing-computer: ${SettingsReplay.VECTOR}, ${SettingsReplay.TAKES}", SettingsReplay.present())
         assumeTrue("waiting on health-pace: PhoneConfig.read", SettingsReplay.reads())
         val misses = Misses("settings")
         SettingsReplay.replay(misses)
         misses.assertNone()
-        assertTrue(misses.checked >= 12, "answers checked: ${misses.checked}")
+        assertTrue(misses.checked >= 24, "answers checked: ${misses.checked}")
     }
 
     /** A state document as GET /api/peer/state answers it, with [members] laid over it. */

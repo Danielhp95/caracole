@@ -16,42 +16,78 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.nio.file.Files
 
 /**
- * The computer's settings taken (vectors/sync/settings.jsonl, tests/test_conformance_sync.py; the spec
- * docs/superpowers/specs/2026-11-03-politeness-crossing.md, "Settings"): for each caracole.toml of Python's
- * (`args[0]`), its settings document (`out`, politeness.settings_document) taken by PhoneConfig.take into a database
- * of its own, kept as kv `phone:settings` as db.kv_set_json writes a value, and PhoneConfig.read then answering what
- * config.py holds for that caracole.toml (`phone`: config.json's shape, its `switchable` aside, with `name`), value
- * for value: a number by its value, since Python writes `accept` 90 where the phone holds 90.0.
+ * The computer's settings taken (tests/test_conformance_sync.py; the spec
+ * docs/superpowers/specs/2026-11-03-politeness-crossing.md, "Settings"), each record on a database of its own:
+ *
+ * - vectors/sync/settings.jsonl: for each caracole.toml of Python's (`args[0]`), its settings document (`out`,
+ *   politeness.settings_document) taken by PhoneConfig.take, kept as kv `phone:settings` as db.kv_set_json writes a
+ *   value, and PhoneConfig.read then answering what config.py holds for that caracole.toml (`phone`: config.json's
+ *   shape, its `switchable` aside, with `name`);
+ * - vectors/sync/settings_take.jsonl: the take rule by rule, `args` `[kept, settings]` (kv `phone:settings` before, a
+ *   document or null; the state's `settings`, null when it gives none, which the agree stage then takes nothing of),
+ *   `out` `{kept, read}` (the record after, and what PhoneConfig.read answers then, in `phone`'s shape).
+ *
+ * Value for value: a number by its value, since Python writes `accept` 90 where the phone holds 90.0.
  */
 object SettingsReplay : AreaReplay {
     override val area = "settings"
 
     const val VECTOR = "sync/settings.jsonl"
+    const val TAKES = "sync/settings_take.jsonl"
 
     override fun replay(misses: Misses) {
-        // waiting on crossing-computer (the vector) and health-pace (PhoneConfig.read): Phase A's guard.
-        if (!present() || !reads()) return
+        // waiting on crossing-computer (the vectors) and health-pace (PhoneConfig.read): Phase A's guard.
+        if (!reads()) return
         withDb { db ->
-            for (r in Corpus.records(VECTOR)) {
-                val case = r.extra["case"]?.let(::text) ?: r.args.toString().take(80)
-                val doc = r.out as? JsonObject
-                if (doc == null) {
-                    misses.check(false) { "$case: no settings document (${r.out})" }
-                    continue
-                }
-                db.kvDelete(PhoneConfig.SETTINGS_KV)
-                PhoneConfig.take(db, doc)
-                val kept = db.kvGet(PhoneConfig.SETTINGS_KV)
-                misses.check(kept == PyJson.dumps(doc)) { "$case: phone:settings = $kept, kv_set_json's ${PyJson.dumps(doc)}" }
-                val got = shape(PhoneConfig.read(db))
-                val want = r.extra["phone"]
-                misses.check(want != null && same(got, want)) { "$case: PhoneConfig.read = $got, Python's $want" }
-            }
+            if (present(VECTOR)) documents(db, misses)
+            if (present(TAKES)) takes(db, misses)
         }
     }
 
-    /** Whether the vector is there (lane crossing-computer writes it). */
-    fun present(): Boolean = Corpus.open(VECTOR)?.use { true } ?: false
+    private fun documents(db: Db, misses: Misses) {
+        for (r in Corpus.records(VECTOR)) {
+            val case = r.extra["case"]?.let(::text) ?: r.args.toString().take(80)
+            val doc = r.out as? JsonObject
+            if (doc == null) {
+                misses.check(false) { "$case: no settings document (${r.out})" }
+                continue
+            }
+            db.kvDelete(PhoneConfig.SETTINGS_KV)
+            PhoneConfig.take(db, doc)
+            val kept = db.kvGet(PhoneConfig.SETTINGS_KV)
+            misses.check(kept == PyJson.dumps(doc)) { "$case: phone:settings = $kept, kv_set_json's ${PyJson.dumps(doc)}" }
+            val got = shape(PhoneConfig.read(db))
+            val want = r.extra["phone"]
+            misses.check(want != null && same(got, want)) { "$case: PhoneConfig.read = $got, Python's $want" }
+        }
+    }
+
+    private fun takes(db: Db, misses: Misses) {
+        for (r in Corpus.records(TAKES)) {
+            val case = r.extra["case"]?.let(::text) ?: r.args.toString().take(80)
+            val before = r.args.getOrNull(0)
+            val settings = r.args.getOrNull(1)
+            val out = r.out as? JsonObject
+            if (out == null || (before !is JsonObject && before !is JsonNull) ||
+                (settings !is JsonObject && settings !is JsonNull)) {
+                misses.check(false) { "$case: a record that can't be read (${r.args}, ${r.out})" }
+                continue
+            }
+            db.kvDelete(PhoneConfig.SETTINGS_KV)
+            if (before is JsonObject) db.kvSetJson(PhoneConfig.SETTINGS_KV, before)
+            if (settings is JsonObject) PhoneConfig.take(db, settings)  // the agree stage: none given, none taken
+            val kept = db.kvGetJson(PhoneConfig.SETTINGS_KV) ?: JsonNull
+            val wantKept = out["kept"] ?: JsonNull
+            misses.check(same(kept, wantKept)) { "$case: phone:settings = $kept, Python's $wantKept" }
+            val got = shape(PhoneConfig.read(db))
+            val want = out["read"]
+            misses.check(want != null && same(got, want)) { "$case: PhoneConfig.read = $got, Python's $want" }
+        }
+    }
+
+    /** Whether the vectors are there (lane crossing-computer writes them), each or [name]. */
+    fun present(name: String? = null): Boolean =
+        (name?.let(::listOf) ?: listOf(VECTOR, TAKES)).all { Corpus.open(it)?.use { true } ?: false }
 
     /** Whether PhoneConfig.read lays kv `phone:settings` over the defaults (lane health-pace's; the defaults alone
      * before it). */
