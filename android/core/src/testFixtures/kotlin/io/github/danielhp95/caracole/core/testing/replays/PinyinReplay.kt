@@ -31,8 +31,8 @@ import java.security.MessageDigest
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Misses
 
-/** The pinyin: lazy_pinyin and each character's heteronyms (vectors/pinyin/), every record answered by :core as Python answered it: the JVM's
- * tests' record loops, run on the device by CorpusOnDeviceTest. */
+/** The pinyin: lazy_pinyin in Style.NORMAL and TONE and each character's heteronyms (vectors/pinyin/), every record
+ * answered by :core as Python answered it: the JVM's tests' record loops, run on the device by CorpusOnDeviceTest. */
 object PinyinReplay : AreaReplay {
     override val area = "pinyin"
 
@@ -56,6 +56,22 @@ object PinyinReplay : AreaReplay {
             lazy.check(got == want) { "lazy_pinyin(${JsonPrimitive(s)}, $errors): $got, pypinyin $want" }
         }
         lazy.assertNone()
+
+        val tone = Misses("pinyin/tone.jsonl")
+        val toneRecords = Corpus.records("pinyin/tone.jsonl")
+        assertTrue(toneRecords.size > 2000)
+        for (record in toneRecords) {
+            val s = text(record.args[0])
+            val errors = when (val e = text(record.args[1])) {
+                "default" -> Pinyin.Errors.DEFAULT
+                "empty_each" -> Pinyin.Errors.EMPTY_EACH
+                else -> throw AssertionError("errors=$e")
+            }
+            val got = Pinyin.lazyPinyin(s, errors, Pinyin.Style.TONE)
+            val want = record.out!!.jsonArray.map(::text)
+            tone.check(got == want) { "lazy_tone(${JsonPrimitive(s)}, $errors): $got, pypinyin $want" }
+        }
+        tone.assertNone()
 
         val heteronyms = Misses("pinyin/heteronyms.jsonl")
         var chars = 0
