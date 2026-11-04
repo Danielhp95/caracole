@@ -5929,7 +5929,35 @@ two agree on, and the other side's address and name, which `GET /api/sync` lists
 
 ### Each caracole's own politeness, and the computer's settings on the phone
 
-Not built yet.
+Each caracole is polite on its own: the phone's and the computer's each count their own requests to a site, pause
+after their own last one, keep their own cooldown after a site blocks them and their own record of what they asked
+(LaCuerda's searches and their failures, Megalobiz's day, the 30-day checks), and a sync carries none of it, either
+way. A site that blocks the phone cools the phone down alone. So two caracoles at one address may together send a
+site more than either one's limits (each its own `lookup_per_hour`, Megalobiz's 900 a day, LaCuerda's 20 searches an
+hour); the phone looks songs up at a lookup's pace alone, so it adds little.
+
+What a sync does carry is the computer's settings, for the phone's caracole to look songs up with: `GET
+/api/peer/state` gives them beside the units, as `settings`:
+
+```json
+{"name": "Canciones", "user_agent": "caracole/0.1 (personal tab library)",
+ "providers": {"ug": {"enabled": true, "lookup_delay": [0.125, 0.375], "lookup_requests": 6, "lookup_per_hour": 60,
+                      "per_day": null}, "…": {}},
+ "match": {"accept": 90, "margin": 8, "review": 75, "artist_gate": 90},
+ "rank": {"coverage_threshold": 0.8, "line_match": 85, "prior_votes": 10, "scored_sheets": 3,
+          "label_penalty": 0.5, "variant_bonus": 0.25}}
+```
+
+They are caracole.toml's (see [Configure](#configure)): its `name` (null when it names none: the phone's library
+folder is its own), its `user_agent`, every provider's `enabled` and a lookup's settings, `lookup_delay`,
+`lookup_requests` and `lookup_per_hour`, and `[match]` and `[rank]`, so that the phone matches and ranks with your
+thresholds; and each provider's `per_day`, which caracole.toml can't set (Megalobiz's 900 a day, config.py's own;
+null for every other site). Never a run's `budget` or `delay` (the phone does no nightly work), a folder, a program or
+your ntfy topic. The phone sends no settings back, and another computer syncing with this one passes over them.
+
+The phone doesn't take them yet: until it does, it looks songs up with config.py's defaults, whatever the computer's
+caracole.toml says. Once it does, a provider you turn off on the computer (`[providers.megalobiz] enabled = false`)
+is off on the phone too after the next sync.
 
 ### The phone's reads go to the computer (POST /peer/index)
 
