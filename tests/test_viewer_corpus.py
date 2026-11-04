@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 from caracole.render import _chordpro_text
-from caracole.viewer import harmony, page, theory
+from caracole.viewer import harmony, theory
 from caracole.viewer.sheet import parse_sheet
 from caracole.viewer.theory import MODES, QUALITIES, Key, parse_chord
 from conftest import subprocess_pythonpath
@@ -75,7 +75,7 @@ def test_the_sheets_hold_every_kind_of_line_the_viewer_reads():
     for s in sheets:
         parsed = parse_sheet(s.cho)
         assert parsed.title == s.title or s.markup is None, s.name
-        assert s.played == tuple(parsed.chords[i] for i in page._played(parsed)), s.name
+        assert all(f"[{name}]" in s.cho for name in s.played), s.name
         if "define" in s.tags:
             assert parsed.defines, s.name
         if "capo" in s.tags:
@@ -88,6 +88,25 @@ def test_the_sheets_hold_every_kind_of_line_the_viewer_reads():
             assert s.cho == _chordpro_text(s.markup, title=s.title, artist=s.artist, key=s.key, capo=s.capo,
                                            auto=s.auto), s.name
     assert viewer_corpus.sheet("fixture:ug/tab_ukulele.html").capo == 1
+
+
+# Read by hand from each sheet's text: its chords as written, section after section, the notes' before the song
+# among them; an annotation ([*x2], [*N.C.], [*| ]) and a tab's lines are none, and a repeat mark repeats nothing.
+PLAYED_BY_HAND = {
+    "fixture:chordpro/ug_sheet.cho": ("G", "D", "Em", "C", "G", "D", "Em", "C", "C", "G/B", "Am", "F", "C", "G", "D",
+                                      "C"),
+    "fixture:chordpro/legend_sheet.cho": ("Em7", "G", "A7sus4", "Cadd9", "Em7", "G", "Dsus4", "A7sus4", "Em7", "G",
+                                          "Dsus4", "A7sus4", "Cadd9", "Dsus4/F#", "Cadd9", "Em7", "G", "Em7",
+                                          "Cadd9", "G"),
+    "edge-0": ("Em", "C", "G", "D", "Am", "D", "Em"),
+    "edge-1": ("G", "D", "C", "G", "Am"),
+    "edge-8": ("A", "D", "E7", "A", "D", "A", "D", "E7"),
+}
+
+
+def test_a_sheets_played_chords_are_those_it_plays_in_order():
+    for name, played in PLAYED_BY_HAND.items():
+        assert viewer_corpus.sheet(name).played == played, name
 
 
 def test_a_sheets_defines_follow_its_header():

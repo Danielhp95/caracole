@@ -16,12 +16,15 @@ object ViewerData {
 
     /**
      * The data of viewer/[module].py ("theory"), read once. A module with no data, or data that isn't one JSON
-     * object in UTF-8, is an [IllegalStateException]; a name that is no module's, an [IllegalArgumentException].
+     * object in UTF-8, is an [IllegalStateException]; a name that is no module's, or whose `<module>.json` is a file
+     * of viewer/ that copyViewerAssets puts in the same classpath folder ([ViewerAssets.isAsset]: voicings.py's data
+     * is the asset voicings.json, never a generator's), an [IllegalArgumentException].
      */
     fun table(module: String): JsonObject {
         require(module.isNotEmpty() && module.all { it in 'a'..'z' || it in '0'..'9' || it == '_' }) {
             "$module names no viewer module"
         }
+        require(!ViewerAssets.isAsset("$module.json")) { "$module.json is an asset of viewer/, no module's data" }
         return tables.getOrPut(module) {
             val path = "caracole/viewer/$module.json"
             val stream = ViewerData::class.java.classLoader?.getResourceAsStream(path)

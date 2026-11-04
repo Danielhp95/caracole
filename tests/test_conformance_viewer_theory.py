@@ -15,9 +15,10 @@ its own name, a dict's members in its order, a set as a sorted array:
   [tonic, …]}``; ``_OPEN_NOTES``: an array; ``MAX_CAPO``: a number;
 - ``_RARE``: ``[[letter, accidental, spelled], …]`` in its order;
 - ``_REWRITES``: ``[[pattern, replacement], …]`` in order, each replacement a template whose only escapes are
-  ``\\<digit>`` (a group); ``patterns``: ``_ROOT``, ``_BASS``, ``_EXTENSION``, ``_SUS``, ``_ALTERATION``, ``_KEY``, as
-  Python writes them (``.pattern``). None has a flag: their inline ones (``(?i:…)``) are Python's syntax, which
-  core.py.PyRegex reads as Python does.
+  ``\\1`` to ``\\9`` (a group), never followed by another digit (``_template``: ``\\0``, ``\\10`` or ``\\g<…>``
+  fails generation, as Kotlin's ``Theory.expand`` would read them otherwise); ``patterns``: ``_ROOT``,
+  ``_BASS``, ``_EXTENSION``, ``_SUS``, ``_ALTERATION``, ``_KEY``, as Python writes them (``.pattern``). None has
+  a flag: their inline ones (``(?i:…)``) are Python's syntax, which core.py.PyRegex reads as Python does.
 
 The vectors (``helpers.corpus.jsonl``), ``vectors/viewer/theory.jsonl``. A chord is ``[root, quality, bass, shown,
 tones]`` with its trailing nulls left out (``tones`` its intervals sorted, for a chord outside QUALITIES); a key
@@ -35,6 +36,12 @@ tones]`` with its trailing nulls left out (``tones`` its intervals sorted, for a
 - ``key_of(tonic, mode)``: ``spelling``, ``key_name``, ``scale`` (sorted), ``capo_hints`` as ``[[capo, limit,
   hints], …]`` (capos 0 to 7 at the default limit, then 0 at limits 0, 1 and 9), ``sounding`` on capos 0, 2, 5, 7,
   11 and 12, for every key of ``viewer_corpus.keys()``; ``caracole.viewer.theory.spelling`` of None.
+- ``edge_of(tonic, mode)``: what Python's negative indexes, slices and modulo answer, for each key of
+  ``EDGE_KEYS`` (a tonic below 0): ``{"key_of": key_of(key), "hints": [[capo, limit, hints], …] (capo_hints on
+  capos 0 and ``EDGE_CAPOS``, at limits 2 and ``EDGE_LIMITS``), "sounding": [[capo, key], …], "shapes": [[capo,
+  shapes_key(key, capo, played), bare_key(Key(tonic, "ionian"), capo, played)], …]}`` on ``EDGE_CAPOS``, where
+  ``played`` is the one triad on the tonic of the key a capo lowers (``_diatonic_quality``), so a tab that names the
+  sound is read so.
 - ``parsed_keys(texts)``: ``parse_key`` of each of a batch of texts: every text of ``viewer_corpus.key_texts()``
   and each literal above, and 42 and None (no text).
 - ``played_of(names, capos, texts)``: the chords a sheet plays (``names``, read as page.py reads them,
@@ -82,6 +89,9 @@ CAPOS = (1, 2, 3, 4, 5, 7, 9, 12, 14)
 SOUNDING = (0, 2, 5, 7, 11, 12)
 BATCH = 50
 SHAPE_NAMES = 2
+EDGE_KEYS = (Key(-1, "ionian"), Key(-5, "aeolian"), Key(-12, "lydian"), Key(-7, "dorian"))
+EDGE_LIMITS = (-1, -2, -13)
+EDGE_CAPOS = (-1, -2, -12, -14)
 
 
 # --- the data ------------------------------------------------------------------------------------------------------
@@ -93,7 +103,8 @@ def _pattern(p: re.Pattern[str]) -> str:
 
 
 def _template(replacement: str) -> str:
-    assert re.fullmatch(r"(?:[^\\]|\\\d)*", replacement), f"{replacement!r}: an escape the phone doesn't expand"
+    escapes = r"(?:[^\\]|\\[1-9](?!\d))*"  # a group's \1 to \9, no other escape
+    assert re.fullmatch(escapes, replacement), f"{replacement!r}: an escape the phone doesn't expand"
     return replacement
 
 
@@ -213,6 +224,25 @@ def key_of(key: Key) -> dict:
     }
 
 
+def edge_of(key: Key) -> dict:
+    """``key_of`` a key whose tonic is below 0, and capo_hints, sounding, shapes_key and bare_key where a limit or a
+    capo is below 0."""
+    hints = [[capo, limit, theory.capo_hints(key, limit, capo=capo)] for capo in (0, *EDGE_CAPOS)
+             for limit in (2, *EDGE_LIMITS)]
+    shapes = []
+    for capo in EDGE_CAPOS:
+        lowered = Key((key.tonic - capo) % 12, key.mode)
+        played = [Chord(lowered.tonic, theory._diatonic_quality(lowered.tonic, lowered, 3))]
+        shapes.append([capo, key_row(theory.shapes_key(key, capo, played)),
+                       key_row(theory.bare_key(Key(key.tonic, "ionian"), capo, played))])
+    return {
+        "key_of": key_of(key),
+        "hints": [[capo, limit, [[fret, key_row(k)] for fret, k in found]] for capo, limit, found in hints],
+        "sounding": [[capo, key_row(theory.sounding(key, capo))] for capo in EDGE_CAPOS],
+        "shapes": shapes,
+    }
+
+
 def played_of(names: list[str], capos: list[int], texts: list[str]) -> dict:
     played = [c for c in (theory.parse_chord(n, strict=False) for n in names) if c is not None]
     named = []
@@ -260,6 +290,7 @@ def chord_records() -> list[dict]:
 def key_records() -> list[dict]:
     out = [{"fn": HELPER + "key_of", "args": key_row(key), "out": key_of(key)} for key in viewer_corpus.keys()]
     out.append({"fn": T + "spelling", "args": [None], "out": theory.spelling(None)})
+    out += [{"fn": HELPER + "edge_of", "args": key_row(key), "out": edge_of(key)} for key in EDGE_KEYS]
     texts = list(dict.fromkeys(viewer_corpus.key_texts() + list(literals()))) + [42, None]
     out += [{"fn": HELPER + "parsed_keys", "args": [batch], "out": [key_row(theory.parse_key(t)) for t in batch]}
             for batch in _batches(texts)]

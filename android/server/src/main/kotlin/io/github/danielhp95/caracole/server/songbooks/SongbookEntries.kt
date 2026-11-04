@@ -15,7 +15,8 @@ data class Entry(val text: String, val title: String, val artist: String, val so
                  val version: Version = Version(), val key: String? = null, val keySource: String? = null,
                  val setting: Setting? = null, val keepsKey: Boolean = false)
 
-/** songbook.py's entries and where each plays (lane songbook-entries). */
+/** songbook.py's entries and where each plays (lane songbook-entries); the songbooks that list a song are
+ * :core's Songbooks.listing, which the lookup calls too. */
 object SongbookEntries {
     /** songbook.songbook_entries. */
     fun entries(db: Db, libraryDir: File, overrides: Overrides, book: Songbook): List<Entry> =
@@ -25,5 +26,4 @@ object SongbookEntries {
     fun onInstrument(entry: Entry, setting: Setting, keyGiven: Boolean = false, capoGiven: Boolean = false): Setting =
         TODO("lane songbook-entries")
     fun playsIn(entry: Entry): String? = TODO("lane songbook-entries")
-    fun songbooksListing(db: Db, books: List<Songbook>, song: SongRow): List<Songbook> = TODO("lane songbook-entries")
 }

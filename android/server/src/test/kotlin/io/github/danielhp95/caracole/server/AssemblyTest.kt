@@ -1,5 +1,8 @@
 package io.github.danielhp95.caracole.server
 
+import io.github.danielhp95.caracole.core.lookup.RenderStats
+import io.github.danielhp95.caracole.core.lookup.SongPages
+import io.github.danielhp95.caracole.core.lookup.SongbookPages
 import io.github.danielhp95.caracole.core.testing.RefusingTransport
 import io.github.danielhp95.caracole.core.testing.TestDb
 import io.github.danielhp95.caracole.server.jobs.Command
@@ -9,7 +12,7 @@ import io.github.danielhp95.caracole.server.jobs.JobsRoutes
 import io.github.danielhp95.caracole.server.page.PhonePageData
 import io.github.danielhp95.caracole.server.routes.Stubs
 import io.github.danielhp95.caracole.server.routes.SyncSettings
-import io.github.danielhp95.caracole.server.songbooks.SongbookPagesImpl
+import io.github.danielhp95.caracole.viewer.render.PhoneRender
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
@@ -18,6 +21,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -34,16 +39,33 @@ class AssemblyTest {
         override fun remember(address: String) = Unit
     }
 
-    private fun <T> phone(block: (Phone) -> T): T {
+    private fun <T> phone(render: ((PhoneDeps) -> PhoneRender)? = null, block: (Phone) -> T): T {
         val scope = CoroutineScope(SupervisorJob())
         try {
             return TestDb.fresh(tmp.root).use { database ->
-                block(Phone(PhoneDeps(database, tmp.newFolder("library"), tmp.newFolder("state"), null, scope,
-                                      NoAddress, secret = "s".repeat(64), csrf = "tok",
-                                      transport = { RefusingTransport })))
+                val deps = PhoneDeps(database, tmp.newFolder("library"), tmp.newFolder("state"), null, scope,
+                                     NoAddress, secret = "s".repeat(64), csrf = "tok", transport = { RefusingTransport })
+                block(Phone(deps, render?.invoke(deps)))
             }
         } finally {
             scope.cancel()
+        }
+    }
+
+    /** A render that owes pages, as phone-render's does once its build changed ([stale]) or a take forgot some
+     * ([owesAfterSync]): its job makes one song's. */
+    private class Owing(deps: PhoneDeps, val stale: Boolean = false, val owesAfterSync: Boolean = false) :
+        PhoneRender(deps.database, deps.libraryDir, deps.mirror, deps.version) {
+        val betweens = AtomicInteger()
+
+        override fun stale(): Boolean = stale
+        override fun build(): String = "build-1"
+        override fun afterSync(): Boolean = owesAfterSync
+        override fun renderStale(between: () -> Unit, progress: (done: Int, total: Int) -> Unit): RenderStats {
+            between()
+            betweens.incrementAndGet()
+            progress(1, 1)
+            return RenderStats(written = 1)
         }
     }
 
@@ -85,13 +107,45 @@ class AssemblyTest {
     }
 
     @Test fun thePagesAPhoneMakesAreItsOwnSeams() = phone<Unit> { phone ->
-        // The lookup's pdf stage is the phone's render, its songbooks stage the songbooks' pages.
-        assertSame(phone.render, phone.parts.pages)
-        assertTrue(phone.parts.songbooks is SongbookPagesImpl)
+        // The lookup's pdf stage is the phone's render, its songbooks stage the songbooks' pages, each through its
+        // seam: NONE while its lane hasn't landed, so a lookup calls none of a later milestone's code.
+        assertSame(phone.render.seam, phone.parts.pages)
+        assertSame(phone.songbookPages.seam, phone.parts.songbooks)
+        assertSame(SongPages.NONE, phone.parts.pages)
+        assertSame(SongbookPages.NONE, phone.parts.songbooks)
         assertTrue(phone.parts.cards is PhonePageData)
-        // Nothing is stale while the phone's render is neutral, so no render job is queued at start.
+        // Nothing is stale while the phone's render is neutral, so its start queues no render job, nor does a take.
+        phone.start()
+        phone.afterSync()
         assertEquals(emptyList(), phone.queue.snapshot().map { it.spec.kind })
         assertNotNull(phone.modules.filterIsInstance<JobsRoutes>().single().songbooks)
+    }
+
+    @Test fun theRenderJobIsQueuedByStartOnceTheAppHearsTheQueueAndItYieldsBetweenSongs() {
+        phone(render = { Owing(it, stale = true) }) { phone ->
+            // Building the phone queues nothing: the app wires the queue's onBusy first, then calls start.
+            assertEquals(emptyList(), phone.queue.snapshot())
+            val heard = CopyOnWriteArrayList<Boolean>()
+            phone.queue.onBusy = { heard += it }
+            phone.start()
+            val job = phone.queue.snapshot().single()
+            assertEquals(listOf("render", "render:build-1", "Make the pages again", "The phone's pages"),
+                         listOf(job.spec.kind, job.spec.key, job.spec.title, job.display))
+            val over = runBlocking { phone.queue.await(job.id) }
+            assertEquals(Job.DONE, over.state)
+            assertEquals("Pages made again for 1 songs", over.stages.single().detail)
+            assertEquals(1, (phone.render as Owing).betweens.get())
+            assertEquals(true, heard.first(), "the foreground service hears the start-time render")
+        }
+    }
+
+    @Test fun aTakeThatOwesPagesQueuesTheRenderJobAfterTheSyncNeverInsideIt() {
+        phone(render = { Owing(it, owesAfterSync = true) }) { phone ->
+            phone.afterSync()
+            val job = phone.queue.snapshot().single()
+            assertEquals("render:build-1", job.spec.key)
+            assertEquals(Job.DONE, runBlocking { phone.queue.await(job.id) }.state)
+        }
     }
 
     @Test fun theQueueRunsACommandByItsRunnerAndTellsEachJobsEnd() = phone { phone ->
