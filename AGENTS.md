@@ -1164,7 +1164,8 @@ helpers/corpus.py.
 - `:core`, `:viewer` and `:server` never call a JDK or ICU text API (case, normalization, `Character` classes,
   `java.util.regex`'s own `\w` or `\s`, `Collator`): their Unicode is not Python's, and on Android it varies by
   device. They use `core.py` and its tables, held by the shared check `core.testing.ForbiddenApis` (each module's
-  `ForbiddenApiTest`; :server's allow list names the M1–3 files a later lane ports, each with its lane).
+  `ForbiddenApiTest`; an M1–3 file a later lane ports may be allowed by name, with that lane, until it does: none
+  is today).
 - What the JVM can't show, the device does: `CorpusOnDeviceTest` answers every record of the `unicode`, `keys`,
   `pinyin`, `fuzz` and `canonical` vectors under Android's runtime and ICU-backed regex (it found ICU reading a `\G`
   inside a lookaround otherwise than the JDK: py/PyRe.kt's guard after an empty match uses no `\G`).
