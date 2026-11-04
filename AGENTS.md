@@ -1247,7 +1247,15 @@ Not built yet. (crossing-phone.)
   and `goesTo` (`_goes_to`), each read as `_read` reads the chord with the one it goes to (`HarmonyChords`, function for
   function, its words harmony.py's own), its tables harmony.py's exported to data/caracole/viewer/harmony.json
   (tests/test_conformance_viewer_harmony.py, `vectors/viewer/harmony_chords.jsonl`, HarmonyReplay); its progressions
-  and tables (harmony-progressions): not built yet.
+  and tables (harmony-progressions):
+  - `progressions`, `progressionKey`, `nameOf`, `readTyped` (each of a list or of a string typed) and `catalogue`
+    (`catalogue_keys`), `HarmonyProgressions` function for function (`_fold`, `_passes`, `_varies`, `_whole`, `_rows`,
+    `_contained`, `_ending`, public for the replay), CATALOGUE, `_LOOPS` and its other tables and patterns exported to
+    harmony.json too, a key's turn chosen by code point as Python compares str;
+  - `HarmonyTables.tables`, harmony_tables.py's, each object in Python's insertion order (a chord's reading the one most
+    of its places have, the first seen in a tie), so that `PyJson.dumps` writes `json.dumps`' bytes;
+  - `vectors/viewer/harmony_progressions.jsonl` and `harmony_tables.jsonl` (a table's members by their SHA-256, a few
+    kept whole).
 - A sheet's versions and progressions (version-progressions): not built yet.
 - A harmonica tab read (harptab-read) and laid out (harptab-layout): not built yet.
 - The sheet page (pages): not built yet.
