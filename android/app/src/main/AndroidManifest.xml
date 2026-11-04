@@ -9,7 +9,7 @@
     <!-- WorkManager brings WAKE_LOCK and RECEIVE_BOOT_COMPLETED, which the sync on Wi-Fi needs (to run, and to
          be scheduled again after a restart). An index import runs in the foreground, a data sync, its notification
          saying how far it is (IndexImports); so does the phone's job queue while it works, a sync from the Sync tab
-         among its jobs (SyncService). -->
+         among its jobs (SyncService). The alerts (AndroidAlerts) are notifications on their own channel, "alerts". -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -51,6 +51,36 @@
             android:exported="false"
             android:label="@string/settings"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- The phone's backups, from Settings' Backups row (lane alerts-backups). -->
+        <activity
+            android:name=".BackupsActivity"
+            android:exported="false"
+            android:label="@string/backups_label" />
+
+        <!-- Files shared to caracole, filed as _inbox/ files them (lane inbox-share): SEND and SEND_MULTIPLE of these
+             stream types alone. Never VIEW, which would offer caracole for every PDF and binary on the phone, nor
+             text/plain or any type at all (a music app's link, another design's). -->
+        <activity
+            android:name=".ShareActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/x-guitar-pro" />
+                <data android:mimeType="application/vnd.recordare.musicxml" />
+                <data android:mimeType="application/vnd.recordare.musicxml+xml" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="audio/midi" />
+                <data android:mimeType="application/x-musescore" />
+            </intent-filter>
+        </activity>
 
         <!-- The phone's job queue at work (a sync from the Sync tab, an add, a removal), in the foreground: a data
              sync, its notification naming the job. -->
