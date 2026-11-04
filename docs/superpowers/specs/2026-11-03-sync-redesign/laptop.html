@@ -1,0 +1,240 @@
+<style>
+  .dw { width: 100%; overflow: hidden; margin: 10px 0 24px; }
+  .desk { width: 880px; background: #141414; color: #e6e6e6; border: 1px solid #333; border-radius: 12px; overflow: hidden;
+          font-size: 14px; line-height: 1.4; text-align: left; transform-origin: top left; }
+  .desk .top { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border-bottom: 1px solid #2a2a2a; }
+  .desk .logo { color: #e8906a; font-size: 26px; font-weight: 800; }
+  .desk .lib { font-size: 18px; font-weight: 700; }
+  .desk .sp { flex: 1; }
+  .desk .ic svg { width: 22px; height: 22px; }
+  .desk .hot { outline: 2px solid #e8906a; outline-offset: 5px; border-radius: 50%; }
+  .desk .tabs { display: flex; gap: 22px; padding: 10px 18px 0; color: #9a9a9a; font-weight: 600; border-bottom: 1px solid #2a2a2a; }
+  .desk .tabs span { padding-bottom: 8px; }
+  .desk .tabs .on { color: #fff; border-bottom: 2px solid #e8906a; }
+  .desk .body { padding: 16px 18px 20px; position: relative; }
+  .desk .search { border: 1px solid #555; border-radius: 10px; padding: 9px 12px; color: #9a9a9a; margin-bottom: 10px; }
+  .desk .row { padding: 8px 0; border-bottom: 1px solid #262626; }
+  .desk .muted { color: #9a9a9a; font-size: 12.5px; }
+  .desk .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; padding: 8px 14px; font-weight: 600; border: 1px solid #555; }
+  .desk .btn.pri { background: #e8906a; color: #1a1a1a; border-color: #e8906a; }
+  .desk .btn svg { width: 16px; height: 16px; }
+  .desk .menu { position: absolute; right: 18px; top: 4px; background: #1f1f1f; border: 1px solid #444; border-radius: 10px;
+                width: 300px; box-shadow: 0 8px 24px #0008; }
+  .desk .menu div { padding: 10px 14px; border-bottom: 1px solid #2c2c2c; display: flex; gap: 10px; align-items: flex-start; }
+  .desk .menu div:last-child { border-bottom: none; }
+  .desk .menu svg { width: 18px; height: 18px; flex: none; margin-top: 1px; }
+  .desk .cards3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .desk .panel { background: #1c1c1c; border: 1px solid #333; border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .desk .panel h4 { margin: 0; display: flex; gap: 8px; align-items: center; font-size: 15px; }
+  .desk .panel h4 svg { width: 20px; height: 20px; color: #e8906a; }
+  .desk .field { border: 1px solid #555; border-radius: 8px; padding: 7px 10px; color: #ccc; font-size: 13px; }
+  .desk .modal { width: 460px; margin: 6px auto; background: #1e1e1e; border: 1px solid #444; border-radius: 14px; padding: 16px 18px; }
+  .desk .chk { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px solid #2a2a2a; }
+  .desk .box { width: 20px; height: 20px; border-radius: 4px; background: #e8906a; color: #1a1a1a; font-weight: 800;
+               display: flex; align-items: center; justify-content: center; flex: none; margin-top: 2px; }
+  .desk .box.off { background: #333; color: #333; }
+  .desk .ends { display: flex; justify-content: space-between; }
+  .desk .steps { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+  .desk .chip { border-radius: 999px; padding: 3px 10px; font-size: 12px; border: 1px solid #555; color: #bbb; }
+  .desk .chip.done { background: #2e3d2e; border-color: #4c704c; color: #cfe8cf; }
+  .desk .chip.now { border-color: #e8906a; color: #e8906a; }
+  .desk .stat { display: flex; gap: 8px; margin: 0 0 12px; }
+  .desk .st { display: flex; align-items: center; gap: 5px; border-radius: 8px; padding: 5px 9px; font-weight: 700; border: 1px solid; }
+  .desk .st small { font-weight: 500; color: #bbb; }
+  .desk .st svg { width: 15px; height: 15px; }
+  .desk .st.in { color: #8fd18f; border-color: #3f6b3f; background: #1d2a1d; }
+  .desk .st.out { color: #8fb8ef; border-color: #3d5778; background: #1a2230; }
+  .desk .st.both { color: #f0b061; border-color: #7a5a2c; background: #2a2113; }
+  .desk .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0; }
+  .desk .side { border: 1px solid #444; border-radius: 10px; padding: 10px; }
+  .desk .side b { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+  .desk .side svg { width: 16px; height: 16px; }
+  .desk .ask { text-align: center; font-weight: 700; margin: 6px 0 8px; }
+  .desk .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .desk .pair .btn { justify-content: center; }
+  .desk .devs { display: flex; justify-content: space-between; padding: 0 4px 4px; }
+  .desk .dev { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12px; color: #ccc; width: 110px; text-align: center; }
+  .desk .dev svg { width: 44px; height: 44px; }
+  .desk details.lane { border-top: 1px solid #262626; }
+  .desk details.lane summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 1fr 22px; align-items: center; gap: 6px; padding: 8px 0; }
+  .desk details.lane summary::-webkit-details-marker { display: none; }
+  .desk .arrowrow { display: flex; flex-direction: column; align-items: center; }
+  .desk .arrowrow .lbl { font-weight: 700; font-size: 13px; }
+  .desk .arrowrow svg { width: 100%; height: 14px; }
+  .desk .chev { width: 18px; height: 18px; color: #bbb; transition: transform .15s; }
+  .desk details[open] .chev { transform: rotate(180deg); }
+  .desk .list { padding: 0 0 10px 6px; font-size: 13px; }
+  .desk .list div { padding: 4px 0 4px 10px; border-left: 2px solid currentColor; margin: 2px 0; }
+  .desk .list span { color: #e6e6e6; }
+  .desk .list .muted { display: block; }
+  .desk .name { color: #e8906a; font-weight: 700; }
+  .desk .plus { color: #8fd18f; } .desk .minus { color: #ef8f8f; }
+  .changed { border-left: 3px solid #e8906a; padding-left: 8px; }
+  .stepno { display: inline-block; background: #e8906a; color: #1a1a1a; border-radius: 999px; width: 24px; height: 24px;
+            text-align: center; line-height: 24px; font-weight: 800; margin-right: 6px; }
+  .split2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .split2 .desk { width: 430px; }
+</style>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="d-tower" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><line x1="9.5" y1="6" x2="14.5" y2="6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="9.5" y1="9" x2="14.5" y2="9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><circle cx="12" cy="16.5" r="1.4" fill="currentColor"/></symbol>
+    <symbol id="d-server" viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><rect x="3" y="13.5" width="18" height="7" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="7" cy="7" r="1.2" fill="currentColor"/><circle cx="7" cy="17" r="1.2" fill="currentColor"/><line x1="11" y1="7" x2="17.5" y2="7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="11" y1="17" x2="17.5" y2="17" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="d-file" viewBox="0 0 24 24"><path d="M6 2.5h8l4.5 4.5v14.5H6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M14 2.5V7h4.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><line x1="9" y1="12" x2="15.5" y2="12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><line x1="9" y1="15.5" x2="15.5" y2="15.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
+    <symbol id="d-sync" viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6L20 8.7M20 4v4.7h-4.7M20 12a8 8 0 0 1-13.7 5.6L4 15.3M4 20v-4.7h4.7" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="d-export" viewBox="0 0 24 24"><path d="M12 15V3M7 8l5-5 5 5M4 14v6h16v-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="d-import" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 14v6h16v-6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="d-down" viewBox="0 0 24 24"><path d="M12 4v15M6 13l6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="d-up" viewBox="0 0 24 24"><path d="M12 20V5M6 11l6-6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="d-both" viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><line x1="12" y1="9.5" x2="12" y2="14" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="12" cy="17" r="1.2" fill="currentColor"/></symbol>
+    <symbol id="d-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2"/><path d="m7.5 12.5 3 3 6-6.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="d-chev" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="d-left" viewBox="0 0 100 14" preserveAspectRatio="none"><line x1="98" y1="7" x2="6" y2="7" stroke="currentColor" stroke-width="2.5"/><path d="M10 1 2 7l8 6" fill="none" stroke="currentColor" stroke-width="2.5"/></symbol>
+    <symbol id="d-right" viewBox="0 0 100 14" preserveAspectRatio="none"><line x1="2" y1="7" x2="94" y2="7" stroke="currentColor" stroke-width="2.5"/><path d="M90 1l8 6-8 6" fill="none" stroke="currentColor" stroke-width="2.5"/></symbol>
+  </defs>
+</svg>
+
+<h2>The laptop's side, version 3</h2>
+<p class="subtitle">Your pick, B, with the tabs split: Library and Songbooks on the left; Sites, Requests and Sync on the
+right (option B's tab bar, marked in orange). Step 2 has the Test button. The same three things the phone has: sync with another server, export a file, import a file. Step 1
+has two places to put them: tap the one you like. The rest reuses the phone's flow at desktop width, with the
+laptop's own tower on the left. On a phone this page is shrunk to fit: zoom in to read it.</p>
+
+<h3><span class="stepno">1</span>Where the three live</h3>
+<div class="options">
+  <div class="option" data-choice="header-menu" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>The phone's sync button, in the page's header, with a menu</h3>
+      <p>Same place as on the phone. Its menu: Sync with a server, Export, Import a file.</p>
+      <div class="dw"><div class="desk">
+        <div class="top"><span class="logo">¿</span><span class="lib">caracole · horde_logbook</span><span class="sp"></span>
+          <span class="ic hot"><svg><use href="#d-sync"/></svg></span></div>
+        <div class="tabs"><span class="on">Library</span><span>Songbooks</span><span>Sites</span><span>Requests</span></div>
+        <div class="body" style="min-height:190px">
+          <div class="search">Search your songs and the sites</div>
+          <div class="row">Eagles <span class="muted">· Hotel California</span></div>
+          <div class="row">Pomme <span class="muted">· Mononoke</span></div>
+          <div class="row">Radiohead <span class="muted">· Creep</span></div>
+          <div class="menu">
+            <div><svg><use href="#d-server"/></svg><span><b>Sync with a server</b><br><span class="muted">studio · last synced 03/11/26</span></span></div>
+            <div><svg><use href="#d-export"/></svg><span><b>Export</b><br><span class="muted">A file for a server or a phone</span></span></div>
+            <div><svg><use href="#d-import"/></svg><span><b>Import a file</b><br><span class="muted">Synced as if its caracole were here</span></span></div>
+          </div>
+        </div></div></div>
+    </div>
+  </div>
+  <div class="option" data-choice="sync-tab" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>The Sync tab, three panels side by side</h3>
+      <p>More room to say what each does, and the last sync with each server, at a glance.</p>
+      <div class="dw"><div class="desk">
+        <div class="top"><span class="logo">¿</span><span class="lib">caracole · horde_logbook</span><span class="sp"></span></div>
+        <div class="tabs changed" style="border-left-width:0;padding-left:18px"><span>Library</span><span>Songbooks</span><span style="flex:1;border:none"></span><span>Sites</span><span>Requests</span><span class="on">Sync</span></div>
+        <div class="body">
+          <div class="cards3">
+            <div class="panel"><h4><svg><use href="#d-server"/></svg>Sync with a server</h4>
+              <div class="field">http://studio.tail1234.ts.net:8737</div>
+              <div class="muted">Last synced with studio 03/11/26, 19:42</div>
+              <div><span class="btn pri">Sync</span></div></div>
+            <div class="panel"><h4><svg><use href="#d-export"/></svg>Export</h4>
+              <div class="muted">This library in one file, for another server or a phone: to share, or to keep.</div>
+              <div><span class="btn pri">Export</span></div></div>
+            <div class="panel"><h4><svg><use href="#d-import"/></svg>Import a file</h4>
+              <div class="muted">A file a phone or a server exported, synced as if its caracole were here.</div>
+              <div><span class="btn pri">Choose a file</span></div></div>
+          </div>
+        </div></div></div>
+    </div>
+  </div>
+</div>
+
+<h3><span class="stepno">2</span>Sync with a server: it asks what to sync</h3>
+<div class="dw"><div class="desk"><div class="body">
+  <div class="modal">
+    <div style="font-size:16px;font-weight:700">Sync with a server</div>
+    <div class="changed" style="display:flex;gap:8px;align-items:center;margin:8px 0 2px">
+      <div class="field" style="flex:1">http://studio.tail1234.ts.net:8737</div><span class="btn">Test</span></div>
+    <div class="changed" style="font-size:13px;color:#9fd29f;margin:2px 0 4px">✓ studio answered: 96 songs, 3 songbooks, its indexes read 02/11/26</div>
+    <div class="muted">last synced 03/11/26, 19:42 · its address remembered</div>
+    <div class="chk"><div class="box">✓</div><div><b>Library</b><div class="muted">Your songs, their sheets and pages, both ways</div></div></div>
+    <div class="chk"><div class="box">✓</div><div><b>Songbooks</b><div class="muted">Your songbooks and their set lists, both ways, with the songs they list</div></div></div>
+    <div class="chk"><div class="box">✓</div><div><b>Site indexes</b><div class="muted">Whichever side read a site more recently gives it to the other</div></div></div>
+    <div class="ends" style="padding-top:12px"><span class="btn">Cancel</span><span class="btn pri">Sync</span></div>
+  </div>
+</div></div></div>
+
+<h3><span class="stepno">3</span>A conflict stops it to ask</h3>
+<div class="dw"><div class="desk"><div class="body">
+  <div class="steps"><span class="chip done">Compared</span><span class="chip now">Your choice</span><span class="chip">Library</span><span class="chip">Songbooks</span><span class="chip">Indexes</span></div>
+  <div class="stat"><span class="st in"><svg><use href="#d-down"/></svg>4 <small>to take</small></span><span class="st out"><svg><use href="#d-up"/></svg>2 <small>to give</small></span><span class="st both"><svg><use href="#d-both"/></svg>1 <small>changed on both</small></span></div>
+  <div class="modal" style="width:620px">
+    <div style="font-weight:700">Eagles · Hotel California</div><div class="muted">1 of 1</div>
+    <div class="two">
+      <div class="side"><b><svg><use href="#d-tower"/></svg>On this computer</b>Its own key: A minor, capo 2<div class="muted">changed today, 18:40</div></div>
+      <div class="side"><b><svg><use href="#d-server"/></svg>On studio</b>Its sheet: another UG version<div class="muted">changed last night</div></div>
+    </div>
+    <div class="ask">Which version to keep</div>
+    <div class="pair"><span class="btn pri"><svg><use href="#d-tower"/></svg>This computer</span><span class="btn pri"><svg><use href="#d-server"/></svg>studio</span></div>
+  </div>
+  <p class="muted" style="text-align:center">With a file, the right side is the file: "In the file", and the buttons This computer / File.</p>
+</div></div></div>
+
+<h3><span class="stepno">4</span>It shows what it did</h3>
+<div class="dw"><div class="desk"><div class="body">
+  <div class="modal" style="width:620px">
+    <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:10px"><svg style="width:20px;height:20px;color:#8fd18f;flex:none"><use href="#d-check"/></svg>
+      <div>Synced with: <span class="name">studio</span><div class="muted">03/11/26, 19:42</div></div></div>
+    <div class="devs"><div class="dev"><svg><use href="#d-tower"/></svg>This computer</div><div class="dev"><svg><use href="#d-server"/></svg>studio</div></div>
+    <details class="lane" style="color:#8fd18f"><summary><div class="arrowrow"><span class="lbl">4 songs taken</span><svg><use href="#d-left"/></svg></div><svg class="chev"><use href="#d-chev"/></svg></summary>
+      <div class="list"><div><span>Let It Be – The Beatles</span></div><div><span>Mononoke – Pomme</span></div><div><span>Creep – Radiohead</span></div><div><span>Megalovania – Toby Fox</span></div></div></details>
+    <details class="lane" style="color:#8fb8ef"><summary><div class="arrowrow"><span class="lbl">2 songs given</span><svg><use href="#d-right"/></svg></div><svg class="chev"><use href="#d-chev"/></svg></summary>
+      <div class="list"><div><span>Barbara Allen – Traditional</span></div><div><span>Spokey Dokey – Wallace &amp; Gromit</span></div></div></details>
+    <details class="lane" style="color:#f0b061"><summary><div class="arrowrow"><span class="lbl">1 conflict · this computer's kept</span><svg><use href="#d-right"/></svg></div><svg class="chev"><use href="#d-chev"/></svg></summary>
+      <div class="list"><div><span>Hotel California – Eagles</span><span class="muted">this computer's version kept: its own key, A minor, capo 2</span></div></div></details>
+    <details class="lane" style="color:#c9a7ef"><summary><div class="arrowrow"><span class="lbl">1 index given · <span class="plus">+12,340 tabs</span> for studio</span><svg><use href="#d-right"/></svg></div><svg class="chev"><use href="#d-chev"/></svg></summary>
+      <div class="list"><div><span>Ultimate Guitar · <span class="plus">+12,340 tabs</span></span><span class="muted">this computer read it more recently, 03/11/26</span></div></div></details>
+    <div style="text-align:right;padding-top:10px"><span class="btn pri">Done</span></div>
+  </div>
+</div></div></div>
+
+<h3><span class="stepno">5</span>Export and import</h3>
+<div class="split2">
+  <div class="dw"><div class="desk"><div class="body">
+    <div class="modal" style="width:390px">
+      <div style="font-size:16px;font-weight:700">Export this library</div>
+      <div class="muted">horde_logbook · 111 songs · 03/11/26</div>
+      <div class="chk"><div class="box">✓</div><div><b>Library</b><div class="muted">Songs, sheets and pages · 34 MB</div></div></div>
+      <div class="chk"><div class="box">✓</div><div><b>Songbooks</b><div class="muted">2 songbooks</div></div></div>
+      <div class="chk"><div class="box off">✓</div><div><b>Site indexes</b><div class="muted">For searching offline · 207 MB</div></div></div>
+      <div class="ends" style="padding-top:12px"><span class="btn">Cancel</span><span class="btn pri"><svg><use href="#d-export"/></svg>Download</span></div>
+      <div class="muted" style="padding-top:6px">The browser saves horde_logbook-03-11-26.caracole.</div>
+    </div></div></div></div>
+  <div class="dw"><div class="desk"><div class="body">
+    <div class="modal" style="width:390px">
+      <div style="font-size:16px;font-weight:700">Sync with a file from <span class="name">Phone</span></div>
+      <div class="muted">Phone-03-11-26.caracole · exported 03/11/26, 21:10</div>
+      <div class="chk"><div class="box">✓</div><div><b>Library</b><div class="muted">Its songs, sheets and pages · it takes nothing back</div></div></div>
+      <div class="chk"><div class="box">✓</div><div><b>Songbooks</b><div class="muted">1 songbook</div></div></div>
+      <div class="chk"><div class="box" style="background:#222;color:#555;border:1px dashed #555">–</div><div><b style="color:#888">Site indexes</b><div class="muted">Not in this file</div></div></div>
+      <div class="ends" style="padding-top:12px"><span class="btn">Cancel</span><span class="btn pri">Sync</span></div>
+      <div class="muted" style="padding-top:6px">Then steps 3 and 4, with the file on the right.</div>
+    </div></div></div></div>
+</div>
+
+<script>
+  (function () {
+    function fit() {
+      document.querySelectorAll('.dw').forEach(function (w) {
+        var d = w.querySelector('.desk'); if (!d) return;
+        var natural = parseFloat(getComputedStyle(d).width) || d.offsetWidth;
+        var s = Math.min(1, w.clientWidth / natural);
+        d.style.transform = 'scale(' + s + ')';
+        w.style.height = (d.offsetHeight * s) + 'px';
+      });
+    }
+    window.addEventListener('resize', fit); window.addEventListener('load', fit); setTimeout(fit, 50); setTimeout(fit, 400);
+    document.addEventListener('toggle', function () { setTimeout(fit, 0); }, true);
+  })();
+</script>
