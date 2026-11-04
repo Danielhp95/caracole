@@ -11,7 +11,6 @@ import io.github.danielhp95.caracole.viewer.pages.internal.PageConstants
 import io.github.danielhp95.caracole.viewer.pages.internal.PageData
 import io.github.danielhp95.caracole.viewer.pages.internal.PageFrame
 import io.github.danielhp95.caracole.viewer.pages.internal.PageHtml
-import io.github.danielhp95.caracole.viewer.pages.internal.SheetReads
 import io.github.danielhp95.caracole.viewer.sheet.Section
 import io.github.danielhp95.caracole.viewer.sheet.Sheet
 import io.github.danielhp95.caracole.viewer.sheet.SheetView
@@ -125,8 +124,8 @@ object SheetPage {
     /** _read_song: the sheet read, its key and where that came from, and its data. */
     fun readSong(cho: String, key: String?, keySource: String?, transpose: Int): ReadSong {
         val sheet = Sheets.parse(cho)
-        val chords = SheetReads.chords(sheet)
-        val (songKey, origin) = SheetReads.songKey(sheet, chords, key, keySource)
+        val chords = SheetView.chords(sheet)
+        val (songKey, origin) = SheetView.songKey(sheet, chords, key, keySource)
         return ReadSong(sheet, songKey, origin, PageData.data(sheet, chords, songKey, origin, transpose))
     }
 

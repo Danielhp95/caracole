@@ -12,6 +12,7 @@ import io.github.danielhp95.caracole.viewer.sheet.Lyrics
 import io.github.danielhp95.caracole.viewer.sheet.Section
 import io.github.danielhp95.caracole.viewer.sheet.Sheet
 import io.github.danielhp95.caracole.viewer.sheet.SheetView
+import io.github.danielhp95.caracole.viewer.sheet.Sheets
 import io.github.danielhp95.caracole.viewer.sheet.Tab
 import io.github.danielhp95.caracole.viewer.sheet.Text
 import io.github.danielhp95.caracole.viewer.theory.Key
@@ -112,7 +113,7 @@ internal object PageHtml {
      * are two lines or fewer. */
     fun preambleHtml(section: Section, names: List<String>): String {
         val body = section.lines.joinToString("\n") { lineHtml(it, names) }
-        val lines = SheetReads.peek(section, names)
+        val lines = SheetView.peek(section, names)
         if (lines.isEmpty()) return "<div class=\"pre\">\n$body\n</div>\n"
         val peek = lines.joinToString("<br>") { escape(it) }
         return "<details class=\"pre\">\n<summary><span class=\"peek\">$peek</span><span class=\"named\">Notes</span>" +
@@ -142,7 +143,7 @@ internal object PageHtml {
 
     /** _line_html: a line of the sheet; a chord legend's line (sheet.is_legend) is a `legend`. */
     fun lineHtml(line: Line, names: List<String>): String {
-        val legend = if (SheetReads.isLegend(line, names)) " legend" else ""
+        val legend = if (Sheets.isLegend(line, names)) " legend" else ""
         return when (line) {
             is Lyrics -> {
                 val out = StringBuilder()

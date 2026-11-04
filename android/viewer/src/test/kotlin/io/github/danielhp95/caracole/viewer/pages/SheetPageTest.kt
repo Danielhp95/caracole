@@ -1,5 +1,6 @@
 package io.github.danielhp95.caracole.viewer.pages
 
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.viewer.sheet.Blank
 import io.github.danielhp95.caracole.viewer.sheet.ChordRow
 import io.github.danielhp95.caracole.viewer.sheet.Item
@@ -15,11 +16,17 @@ import kotlin.test.assertTrue
 /** viewer.pages.SheetPage is viewer/page.py: every record of vectors/viewer/pages_parts.jsonl, pages-*.jsonl and
  * page_whole.json (PagesReplay), and a few cases by hand. */
 class SheetPageTest {
-    @Test fun everyPartOfThePagesFrameIsPagePys() = PagesReplay.everyPartIsPagePys()
+    @Test fun everyPartOfThePagesFrameIsPagePys() = each("viewer/pages_parts.jsonl", PagesReplay::everyPartIsPagePys)
 
-    @Test fun everyPageIsPagePys() = PagesReplay.everyPageIsPagePys()
+    @Test fun everyPageIsPagePys() = each("viewer/pages-*.jsonl", PagesReplay::everyPageIsPagePys)
 
-    @Test fun theSmallPageIsPagePysWhole() = PagesReplay.theWholePageIsPagePys()
+    @Test fun theSmallPageIsPagePysWhole() = each("viewer/page_whole.json", PagesReplay::theWholePageIsPagePys)
+
+    private fun each(name: String, replay: (Misses) -> Unit) {
+        val misses = Misses(name)
+        replay(misses)
+        misses.assertNone()
+    }
 
     @Test fun theControlsHoldTheHarmonyRowOnceForTheGuitarProRowToFollow() {
         val harmony = "<div id=\"harmony-row\" hidden>"

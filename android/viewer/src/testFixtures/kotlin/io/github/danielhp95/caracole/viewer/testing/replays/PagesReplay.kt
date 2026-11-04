@@ -4,7 +4,6 @@ import io.github.danielhp95.caracole.core.json.PyJson
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
-import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.viewer.ViewerAssets
 import io.github.danielhp95.caracole.viewer.pages.SheetPage
 import io.github.danielhp95.caracole.viewer.pages.ViewerInputs
@@ -28,9 +27,6 @@ import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
-import org.junit.AssumptionViolatedException
 import java.security.MessageDigest
 import java.util.Base64
 
@@ -39,11 +35,8 @@ import java.util.Base64
  * function), pages-1.jsonl to pages-N.jsonl (each page's digests: whole, its body's, each data member's, its names')
  * and page_whole.json (a small page whole) answered by :viewer's viewer.pages.SheetPage as page.py answered it:
  * SheetPageTest's record loops, run on the device by CorpusOnDeviceTest. tests/test_conformance_viewer_pages.py's
- * docstring says each record's shape.
- *
- * Phase A, waiting on sheet-keys and harmony-progressions: until a sheet is read (Sheets.parse) and harmony's tables
- * are made (HarmonyTables.tables), a whole page can't be built, and [everyPageIsPagePys] and [theWholePageIsPagePys]
- * stop as an assumption that names them; the frame's parts are checked now.
+ * docstring says each record's shape. Each check gathers what differs into the [Misses] it is given, never throwing,
+ * so that the area's report on the device names every file at fault.
  */
 object PagesReplay : AreaReplay {
     override val area = "pages"
@@ -54,13 +47,13 @@ object PagesReplay : AreaReplay {
     private const val NAMES = "<script type=\"application/json\" id=\"song-names\">"
 
     override fun replay(misses: Misses) {
-        everyPartIsPagePys()
-        everyPageIsPagePys()
-        theWholePageIsPagePys()
+        everyPartIsPagePys(misses)
+        everyPageIsPagePys(misses)
+        theWholePageIsPagePys(misses)
     }
 
-    fun everyPartIsPagePys() {
-        val misses = Misses("viewer/pages_parts.jsonl")
+    /** vectors/viewer/pages_parts.jsonl: the page's frame, function by function. */
+    fun everyPartIsPagePys(misses: Misses) {
         val counts = HashMap<String, Int>()
         for (record in Corpus.records("viewer/pages_parts.jsonl")) {
             counts.merge(record.fn.substringAfterLast('.'), 1, Int::plus)
@@ -100,11 +93,10 @@ object PagesReplay : AreaReplay {
                         "sections" to JsonArray(a[2].jsonArray.map { JsonPrimitive(SheetPage.sectionHtml(section(it.jsonObject), chords)) }),
                     ))
                 }
-                else -> fail("an unknown record: ${record.fn}")
+                else -> misses.check(false) { "an unknown record: ${record.fn}" }
             }
         }
-        assertTrue("records of every kind: $counts", counts.size == 10 && counts.getValue("shown_html") >= 20)
-        misses.assertNone()
+        misses.check(counts.size == 10 && (counts["shown_html"] ?: 0) >= 20) { "records of every kind: $counts" }
     }
 
     /** The page files, pages-1.jsonl on, as many as there are. */
@@ -113,13 +105,12 @@ object PagesReplay : AreaReplay {
         .takeWhile { name -> Corpus.open(name)?.also { it.close() } != null }
         .toList()
 
-    fun everyPageIsPagePys() {
+    /** vectors/viewer/pages-1.jsonl on: every corpus sheet's page, with every option, by its digests. */
+    fun everyPageIsPagePys(misses: Misses) {
         val files = pageFiles()
-        assertTrue("the page files: $files", files.size >= 2)
+        misses.check(files.size >= 2) { "the page files: $files" }
         val records = files.flatMap(Corpus::records)
-        assertTrue("every sheet's page: ${records.size}", records.size >= 180)
-        buildable(records.first())
-        val misses = Misses("viewer/pages-*.jsonl")
+        misses.check(records.size >= 180) { "every sheet's page: ${records.size} in $files" }
         for (record in records) {
             val sheet = record.extra["sheet"]?.jsonPrimitive?.content
             val want = record.out!!.jsonObject
@@ -132,13 +123,12 @@ object PagesReplay : AreaReplay {
             }
             misses.check(got == want) { "$sheet ${record.kw.keys}: ${differences(got, want)}" }
         }
-        misses.assertNone()
     }
 
-    fun theWholePageIsPagePys() {
+    /** vectors/viewer/page_whole.json: a small page whole, the files it inlines by name. */
+    fun theWholePageIsPagePys(misses: Misses) {
         val pages = Corpus.json("viewer/page_whole.json").getValue("pages").jsonArray
-        assertTrue("a page", pages.isNotEmpty())
-        val misses = Misses("viewer/page_whole.json")
+        misses.check(pages.isNotEmpty()) { "viewer/page_whole.json: no page" }
         for (entry in pages) {
             val page = entry.jsonObject
             val cho = text(page.getValue("args").jsonArray[0])
@@ -149,20 +139,11 @@ object PagesReplay : AreaReplay {
             }
             val built = try {
                 SheetPage.build(inputs(cho, kw))
-            } catch (e: NotImplementedError) {
-                throw AssumptionViolatedException("waiting on sheet-keys and harmony-progressions: ${e.message}")
+            } catch (e: Exception) {
+                misses.check(false) { "viewer/page_whole.json ${kw.keys}: threw $e" }
+                continue
             }
             misses.check(built == want) { "the whole page differs from line ${firstLine(built, want)} on" }
-        }
-        misses.assertNone()
-    }
-
-    /** Phase A's guard: a page can be built once sheet-keys and harmony-progressions have merged. */
-    private fun buildable(record: Record) {
-        try {
-            SheetPage.build(inputs(text(record.args[0]), record.kw))
-        } catch (e: NotImplementedError) {
-            throw AssumptionViolatedException("waiting on sheet-keys and harmony-progressions: ${e.message}")
         }
     }
 
