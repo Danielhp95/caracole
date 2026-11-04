@@ -15,8 +15,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** The phone's library page is caracole serve's for the same data and controls, less its Requests tab, byte for byte
- * (tests/conformance/vectors/web/library_page.json). */
+/** The phone's library page is caracole serve's for the same data and controls, its Requests tab counted, byte for
+ * byte (tests/conformance/vectors/web/library_page.json, vectors/web/requests.jsonl's tabs). */
 class LibraryPageTest {
     private val vector = Corpus.json("web/library_page.json")
     private val page = LibraryPage(LibraryAssets.load())
@@ -26,6 +26,7 @@ class LibraryPageTest {
         csrf = of.getValue("csrf").jsonPrimitive.content,
         badge = of.getValue("badge").let { if (it is JsonNull) null else it.jsonPrimitive.content },
         sync = of.getValue("sync").jsonPrimitive.boolean,
+        active = of.getValue("active").jsonPrimitive.int,
     )
 
     private fun sha256(text: String) =
@@ -116,7 +117,7 @@ class LibraryPageTest {
     }
 
     @Test
-    fun `the Sync tab is the templates as they are, where the controls have it, and there is no Requests tab`() {
+    fun `the Sync tab is the templates as they are, where the controls have it, and the Requests tab always`() {
         val assets = page.assets
         val data = cases.first().getValue("data").jsonObject
         val on = page.served(data, ServerControls("tok", sync = true), name)
@@ -124,7 +125,23 @@ class LibraryPageTest {
         assertTrue(assets.template("sync-tab.html") in on && assets.template("sync-panel.html") in on)
         assertFalse(assets.template("sync-tab.html") in off || assets.template("sync-panel.html") in off)
         val markup = { text: String -> text.substringBefore("<script type=\"application/json\"") }
-        assertFalse("id=\"tab-requests\"" in markup(on) || "id=\"requests\"" in markup(on))
+        for (made in listOf(on, off)) {
+            assertEquals(1, markup(made).split("id=\"tab-requests\"").size - 1)
+            assertEquals(1, markup(made).split(page.requests.panel).size - 1)
+        }
         assertFalse("__" + "SYNC__" in markup(off) || "__" + "REQUESTS__" in markup(on), "no blank left")
+    }
+
+    @Test
+    fun `the Requests tab counts the requests that wait or run as library_page's tab does, none for none`() {
+        val tabs = Corpus.records("web/requests.jsonl").filter { it.fn == "caracole.library_page._requests_tab" }
+        assertTrue(tabs.size >= 5)
+        for (r in tabs) {
+            val active = r.extra.getValue("active").jsonPrimitive.int
+            assertEquals(r.out!!.jsonPrimitive.content, page.requests.tab(active), "$active")
+            val made = page.served(cases.first().getValue("data").jsonObject, ServerControls("tok", active = active), name)
+            assertTrue(r.out!!.jsonPrimitive.content in made, "$active")
+        }
+        assertTrue("Requests <span class=\"n\"></span>" in page.requests.tab(0))
     }
 }

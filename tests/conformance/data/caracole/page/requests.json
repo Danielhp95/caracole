@@ -1,0 +1,3533 @@
+{
+ "count": "__N__",
+ "panel": "<section class=\"view reqs\" id=\"requests\" role=\"tabpanel\" aria-labelledby=\"tab-requests\" hidden></section>\n",
+ "tab": "<button type=\"button\" class=\"tab\" role=\"tab\" id=\"tab-requests\" aria-controls=\"requests\" aria-selected=\"false\" tabindex=\"-1\">Requests <span class=\"n\">__N__</span></button>",
+ "zones": {
+  "Africa/Abidjan": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Accra": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Addis_Ababa": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Algiers": [
+   [
+    3600,
+    "CET",
+    null
+   ]
+  ],
+  "Africa/Asmara": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Asmera": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Bamako": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Bangui": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Banjul": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Bissau": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Blantyre": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Brazzaville": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Bujumbura": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Cairo": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Africa/Ceuta": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Africa/Conakry": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Dakar": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Dar_es_Salaam": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Djibouti": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Douala": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Freetown": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Gaborone": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Harare": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Johannesburg": [
+   [
+    7200,
+    "SAST",
+    null
+   ]
+  ],
+  "Africa/Juba": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Kampala": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Khartoum": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Kigali": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Kinshasa": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Lagos": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Libreville": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Lome": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Luanda": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Lubumbashi": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Lusaka": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Malabo": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Maputo": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "Africa/Maseru": [
+   [
+    7200,
+    "SAST",
+    null
+   ]
+  ],
+  "Africa/Mbabane": [
+   [
+    7200,
+    "SAST",
+    null
+   ]
+  ],
+  "Africa/Mogadishu": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Monrovia": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Nairobi": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Africa/Ndjamena": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Niamey": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Nouakchott": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Ouagadougou": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Porto-Novo": [
+   [
+    3600,
+    "WAT",
+    null
+   ]
+  ],
+  "Africa/Sao_Tome": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Timbuktu": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Africa/Tripoli": [
+   [
+    7200,
+    "EET",
+    null
+   ]
+  ],
+  "Africa/Tunis": [
+   [
+    3600,
+    "CET",
+    null
+   ]
+  ],
+  "Africa/Windhoek": [
+   [
+    7200,
+    "CAT",
+    null
+   ]
+  ],
+  "America/Adak": [
+   [
+    -36000,
+    "HST",
+    null
+   ],
+   [
+    -32400,
+    "HDT",
+    null
+   ]
+  ],
+  "America/Anchorage": [
+   [
+    -32400,
+    "AKST",
+    null
+   ],
+   [
+    -28800,
+    "AKDT",
+    null
+   ]
+  ],
+  "America/Anguilla": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Antigua": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Aruba": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Atikokan": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "America/Atka": [
+   [
+    -36000,
+    "HST",
+    null
+   ],
+   [
+    -32400,
+    "HDT",
+    null
+   ]
+  ],
+  "America/Bahia_Banderas": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Barbados": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Belize": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Blanc-Sablon": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Boise": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "America/Cambridge_Bay": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "America/Cancun": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "America/Cayman": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "America/Chicago": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Chihuahua": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Ciudad_Juarez": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "America/Coral_Harbour": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "America/Costa_Rica": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Creston": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Curacao": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Danmarkshavn": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "America/Dawson": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Dawson_Creek": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Denver": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "America/Detroit": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Dominica": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Edmonton": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ],
+   [
+    -21600,
+    "CST",
+    1793520000
+   ]
+  ],
+  "America/El_Salvador": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Ensenada": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ]
+  ],
+  "America/Fort_Nelson": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Fort_Wayne": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Glace_Bay": [
+   [
+    -14400,
+    "AST",
+    null
+   ],
+   [
+    -10800,
+    "ADT",
+    null
+   ]
+  ],
+  "America/Goose_Bay": [
+   [
+    -14400,
+    "AST",
+    null
+   ],
+   [
+    -10800,
+    "ADT",
+    null
+   ]
+  ],
+  "America/Grand_Turk": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Grenada": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Guadeloupe": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Guatemala": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Halifax": [
+   [
+    -14400,
+    "AST",
+    null
+   ],
+   [
+    -10800,
+    "ADT",
+    null
+   ]
+  ],
+  "America/Havana": [
+   [
+    -18000,
+    "CST",
+    null
+   ],
+   [
+    -14400,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Hermosillo": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Indiana/Indianapolis": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Indiana/Knox": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Indiana/Marengo": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Indiana/Petersburg": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Indiana/Tell_City": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Indiana/Vevay": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Indiana/Vincennes": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Indiana/Winamac": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Indianapolis": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Inuvik": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ],
+   [
+    -21600,
+    "CST",
+    1793520000
+   ]
+  ],
+  "America/Iqaluit": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Jamaica": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "America/Juneau": [
+   [
+    -32400,
+    "AKST",
+    null
+   ],
+   [
+    -28800,
+    "AKDT",
+    null
+   ]
+  ],
+  "America/Kentucky/Louisville": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Kentucky/Monticello": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Knox_IN": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Kralendijk": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Los_Angeles": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ]
+  ],
+  "America/Louisville": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Lower_Princes": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Managua": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Marigot": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Martinique": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Matamoros": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Mazatlan": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Menominee": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Merida": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Metlakatla": [
+   [
+    -32400,
+    "AKST",
+    null
+   ],
+   [
+    -28800,
+    "AKDT",
+    null
+   ]
+  ],
+  "America/Mexico_City": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Moncton": [
+   [
+    -14400,
+    "AST",
+    null
+   ],
+   [
+    -10800,
+    "ADT",
+    null
+   ]
+  ],
+  "America/Monterrey": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Montreal": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Montserrat": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Nassau": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/New_York": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Nipigon": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Nome": [
+   [
+    -32400,
+    "AKST",
+    null
+   ],
+   [
+    -28800,
+    "AKDT",
+    null
+   ]
+  ],
+  "America/North_Dakota/Beulah": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/North_Dakota/Center": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/North_Dakota/New_Salem": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Ojinaga": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Panama": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "America/Pangnirtung": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Phoenix": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Port-au-Prince": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Port_of_Spain": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Puerto_Rico": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Rainy_River": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Rankin_Inlet": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Regina": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Resolute": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Santa_Isabel": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ]
+  ],
+  "America/Santo_Domingo": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Shiprock": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "America/Sitka": [
+   [
+    -32400,
+    "AKST",
+    null
+   ],
+   [
+    -28800,
+    "AKDT",
+    null
+   ]
+  ],
+  "America/St_Barthelemy": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/St_Johns": [
+   [
+    -12600,
+    "NST",
+    null
+   ],
+   [
+    -9000,
+    "NDT",
+    null
+   ]
+  ],
+  "America/St_Kitts": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/St_Lucia": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/St_Thomas": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/St_Vincent": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Swift_Current": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Tegucigalpa": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "America/Thule": [
+   [
+    -14400,
+    "AST",
+    null
+   ],
+   [
+    -10800,
+    "ADT",
+    null
+   ]
+  ],
+  "America/Thunder_Bay": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Tijuana": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ]
+  ],
+  "America/Toronto": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "America/Tortola": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Vancouver": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ],
+   [
+    -25200,
+    "MST",
+    1793523600
+   ]
+  ],
+  "America/Virgin": [
+   [
+    -14400,
+    "AST",
+    null
+   ]
+  ],
+  "America/Whitehorse": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "America/Winnipeg": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "America/Yakutat": [
+   [
+    -32400,
+    "AKST",
+    null
+   ],
+   [
+    -28800,
+    "AKDT",
+    null
+   ]
+  ],
+  "America/Yellowknife": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ],
+   [
+    -21600,
+    "CST",
+    1793520000
+   ]
+  ],
+  "Antarctica/Macquarie": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Antarctica/McMurdo": [
+   [
+    43200,
+    "NZST",
+    null
+   ],
+   [
+    46800,
+    "NZDT",
+    null
+   ]
+  ],
+  "Antarctica/South_Pole": [
+   [
+    43200,
+    "NZST",
+    null
+   ],
+   [
+    46800,
+    "NZDT",
+    null
+   ]
+  ],
+  "Arctic/Longyearbyen": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Asia/Beirut": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Asia/Calcutta": [
+   [
+    19800,
+    "IST",
+    null
+   ]
+  ],
+  "Asia/Chongqing": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "Asia/Chungking": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "Asia/Famagusta": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Asia/Gaza": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Asia/Harbin": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "Asia/Hebron": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Asia/Hong_Kong": [
+   [
+    28800,
+    "HKT",
+    null
+   ]
+  ],
+  "Asia/Jakarta": [
+   [
+    25200,
+    "WIB",
+    null
+   ]
+  ],
+  "Asia/Jayapura": [
+   [
+    32400,
+    "WIT",
+    null
+   ]
+  ],
+  "Asia/Jerusalem": [
+   [
+    7200,
+    "IST",
+    null
+   ],
+   [
+    10800,
+    "IDT",
+    null
+   ]
+  ],
+  "Asia/Karachi": [
+   [
+    18000,
+    "PKT",
+    null
+   ]
+  ],
+  "Asia/Kolkata": [
+   [
+    19800,
+    "IST",
+    null
+   ]
+  ],
+  "Asia/Macao": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "Asia/Macau": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "Asia/Makassar": [
+   [
+    28800,
+    "WITA",
+    null
+   ]
+  ],
+  "Asia/Manila": [
+   [
+    28800,
+    "PST",
+    null
+   ]
+  ],
+  "Asia/Nicosia": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Asia/Pontianak": [
+   [
+    25200,
+    "WIB",
+    null
+   ]
+  ],
+  "Asia/Pyongyang": [
+   [
+    32400,
+    "KST",
+    null
+   ]
+  ],
+  "Asia/Seoul": [
+   [
+    32400,
+    "KST",
+    null
+   ]
+  ],
+  "Asia/Shanghai": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "Asia/Taipei": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "Asia/Tel_Aviv": [
+   [
+    7200,
+    "IST",
+    null
+   ],
+   [
+    10800,
+    "IDT",
+    null
+   ]
+  ],
+  "Asia/Tokyo": [
+   [
+    32400,
+    "JST",
+    null
+   ]
+  ],
+  "Asia/Ujung_Pandang": [
+   [
+    28800,
+    "WITA",
+    null
+   ]
+  ],
+  "Atlantic/Bermuda": [
+   [
+    -14400,
+    "AST",
+    null
+   ],
+   [
+    -10800,
+    "ADT",
+    null
+   ]
+  ],
+  "Atlantic/Canary": [
+   [
+    0,
+    "WET",
+    null
+   ],
+   [
+    3600,
+    "WEST",
+    null
+   ]
+  ],
+  "Atlantic/Faeroe": [
+   [
+    0,
+    "WET",
+    null
+   ],
+   [
+    3600,
+    "WEST",
+    null
+   ]
+  ],
+  "Atlantic/Faroe": [
+   [
+    0,
+    "WET",
+    null
+   ],
+   [
+    3600,
+    "WEST",
+    null
+   ]
+  ],
+  "Atlantic/Jan_Mayen": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Atlantic/Madeira": [
+   [
+    0,
+    "WET",
+    null
+   ],
+   [
+    3600,
+    "WEST",
+    null
+   ]
+  ],
+  "Atlantic/Reykjavik": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Atlantic/St_Helena": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Australia/ACT": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/Adelaide": [
+   [
+    34200,
+    "ACST",
+    null
+   ],
+   [
+    37800,
+    "ACDT",
+    null
+   ]
+  ],
+  "Australia/Brisbane": [
+   [
+    36000,
+    "AEST",
+    null
+   ]
+  ],
+  "Australia/Broken_Hill": [
+   [
+    34200,
+    "ACST",
+    null
+   ],
+   [
+    37800,
+    "ACDT",
+    null
+   ]
+  ],
+  "Australia/Canberra": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/Currie": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/Darwin": [
+   [
+    34200,
+    "ACST",
+    null
+   ]
+  ],
+  "Australia/Hobart": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/Lindeman": [
+   [
+    36000,
+    "AEST",
+    null
+   ]
+  ],
+  "Australia/Melbourne": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/NSW": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/North": [
+   [
+    34200,
+    "ACST",
+    null
+   ]
+  ],
+  "Australia/Perth": [
+   [
+    28800,
+    "AWST",
+    null
+   ]
+  ],
+  "Australia/Queensland": [
+   [
+    36000,
+    "AEST",
+    null
+   ]
+  ],
+  "Australia/South": [
+   [
+    34200,
+    "ACST",
+    null
+   ],
+   [
+    37800,
+    "ACDT",
+    null
+   ]
+  ],
+  "Australia/Sydney": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/Tasmania": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/Victoria": [
+   [
+    36000,
+    "AEST",
+    null
+   ],
+   [
+    39600,
+    "AEDT",
+    null
+   ]
+  ],
+  "Australia/West": [
+   [
+    28800,
+    "AWST",
+    null
+   ]
+  ],
+  "Australia/Yancowinna": [
+   [
+    34200,
+    "ACST",
+    null
+   ],
+   [
+    37800,
+    "ACDT",
+    null
+   ]
+  ],
+  "CET": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "CST6CDT": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "Canada/Atlantic": [
+   [
+    -14400,
+    "AST",
+    null
+   ],
+   [
+    -10800,
+    "ADT",
+    null
+   ]
+  ],
+  "Canada/Central": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "Canada/Eastern": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "Canada/Mountain": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ],
+   [
+    -21600,
+    "CST",
+    1793520000
+   ]
+  ],
+  "Canada/Newfoundland": [
+   [
+    -12600,
+    "NST",
+    null
+   ],
+   [
+    -9000,
+    "NDT",
+    null
+   ]
+  ],
+  "Canada/Pacific": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ],
+   [
+    -25200,
+    "MST",
+    1793523600
+   ]
+  ],
+  "Canada/Saskatchewan": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "Canada/Yukon": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "Cuba": [
+   [
+    -18000,
+    "CST",
+    null
+   ],
+   [
+    -14400,
+    "CDT",
+    null
+   ]
+  ],
+  "EET": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "EST": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "EST5EDT": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "Egypt": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Eire": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "IST",
+    null
+   ]
+  ],
+  "Etc/GMT": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Etc/GMT+0": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Etc/GMT-0": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Etc/GMT0": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Etc/Greenwich": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Etc/UCT": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ],
+  "Etc/UTC": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ],
+  "Etc/Universal": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ],
+  "Etc/Zulu": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ],
+  "Europe/Amsterdam": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Andorra": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Athens": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Belfast": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "BST",
+    null
+   ]
+  ],
+  "Europe/Belgrade": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Berlin": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Bratislava": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Brussels": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Bucharest": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Budapest": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Busingen": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Chisinau": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Copenhagen": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Dublin": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "IST",
+    null
+   ]
+  ],
+  "Europe/Gibraltar": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Guernsey": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "BST",
+    null
+   ]
+  ],
+  "Europe/Helsinki": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Isle_of_Man": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "BST",
+    null
+   ]
+  ],
+  "Europe/Jersey": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "BST",
+    null
+   ]
+  ],
+  "Europe/Kaliningrad": [
+   [
+    7200,
+    "EET",
+    null
+   ]
+  ],
+  "Europe/Kiev": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Kirov": [
+   [
+    10800,
+    "MSK",
+    null
+   ]
+  ],
+  "Europe/Kyiv": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Lisbon": [
+   [
+    0,
+    "WET",
+    null
+   ],
+   [
+    3600,
+    "WEST",
+    null
+   ]
+  ],
+  "Europe/Ljubljana": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/London": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "BST",
+    null
+   ]
+  ],
+  "Europe/Luxembourg": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Madrid": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Malta": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Mariehamn": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Monaco": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Moscow": [
+   [
+    10800,
+    "MSK",
+    null
+   ]
+  ],
+  "Europe/Nicosia": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Oslo": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Paris": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Podgorica": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Prague": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Riga": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Rome": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/San_Marino": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Sarajevo": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Simferopol": [
+   [
+    10800,
+    "MSK",
+    null
+   ]
+  ],
+  "Europe/Skopje": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Sofia": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Stockholm": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Tallinn": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Tirane": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Tiraspol": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Uzhgorod": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Vaduz": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Vatican": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Vienna": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Vilnius": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Volgograd": [
+   [
+    10800,
+    "MSK",
+    null
+   ]
+  ],
+  "Europe/Warsaw": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Zagreb": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Europe/Zaporozhye": [
+   [
+    7200,
+    "EET",
+    null
+   ],
+   [
+    10800,
+    "EEST",
+    null
+   ]
+  ],
+  "Europe/Zurich": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Factory": [
+   [
+    0,
+    "-00",
+    null
+   ]
+  ],
+  "GB": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "BST",
+    null
+   ]
+  ],
+  "GB-Eire": [
+   [
+    0,
+    "GMT",
+    null
+   ],
+   [
+    3600,
+    "BST",
+    null
+   ]
+  ],
+  "GMT": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "GMT+0": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "GMT-0": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "GMT0": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Greenwich": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "HST": [
+   [
+    -36000,
+    "HST",
+    null
+   ]
+  ],
+  "Hongkong": [
+   [
+    28800,
+    "HKT",
+    null
+   ]
+  ],
+  "Iceland": [
+   [
+    0,
+    "GMT",
+    null
+   ]
+  ],
+  "Indian/Antananarivo": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Indian/Comoro": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Indian/Mayotte": [
+   [
+    10800,
+    "EAT",
+    null
+   ]
+  ],
+  "Israel": [
+   [
+    7200,
+    "IST",
+    null
+   ],
+   [
+    10800,
+    "IDT",
+    null
+   ]
+  ],
+  "Jamaica": [
+   [
+    -18000,
+    "EST",
+    null
+   ]
+  ],
+  "Japan": [
+   [
+    32400,
+    "JST",
+    null
+   ]
+  ],
+  "Libya": [
+   [
+    7200,
+    "EET",
+    null
+   ]
+  ],
+  "MET": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "MST": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "MST7MDT": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "Mexico/BajaNorte": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ]
+  ],
+  "Mexico/BajaSur": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "Mexico/General": [
+   [
+    -21600,
+    "CST",
+    null
+   ]
+  ],
+  "NZ": [
+   [
+    43200,
+    "NZST",
+    null
+   ],
+   [
+    46800,
+    "NZDT",
+    null
+   ]
+  ],
+  "Navajo": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "PRC": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "PST8PDT": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ]
+  ],
+  "Pacific/Auckland": [
+   [
+    43200,
+    "NZST",
+    null
+   ],
+   [
+    46800,
+    "NZDT",
+    null
+   ]
+  ],
+  "Pacific/Guam": [
+   [
+    36000,
+    "ChST",
+    null
+   ]
+  ],
+  "Pacific/Honolulu": [
+   [
+    -36000,
+    "HST",
+    null
+   ]
+  ],
+  "Pacific/Johnston": [
+   [
+    -36000,
+    "HST",
+    null
+   ]
+  ],
+  "Pacific/Midway": [
+   [
+    -39600,
+    "SST",
+    null
+   ]
+  ],
+  "Pacific/Pago_Pago": [
+   [
+    -39600,
+    "SST",
+    null
+   ]
+  ],
+  "Pacific/Saipan": [
+   [
+    36000,
+    "ChST",
+    null
+   ]
+  ],
+  "Pacific/Samoa": [
+   [
+    -39600,
+    "SST",
+    null
+   ]
+  ],
+  "Poland": [
+   [
+    3600,
+    "CET",
+    null
+   ],
+   [
+    7200,
+    "CEST",
+    null
+   ]
+  ],
+  "Portugal": [
+   [
+    0,
+    "WET",
+    null
+   ],
+   [
+    3600,
+    "WEST",
+    null
+   ]
+  ],
+  "ROC": [
+   [
+    28800,
+    "CST",
+    null
+   ]
+  ],
+  "ROK": [
+   [
+    32400,
+    "KST",
+    null
+   ]
+  ],
+  "UCT": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ],
+  "US/Alaska": [
+   [
+    -32400,
+    "AKST",
+    null
+   ],
+   [
+    -28800,
+    "AKDT",
+    null
+   ]
+  ],
+  "US/Aleutian": [
+   [
+    -36000,
+    "HST",
+    null
+   ],
+   [
+    -32400,
+    "HDT",
+    null
+   ]
+  ],
+  "US/Arizona": [
+   [
+    -25200,
+    "MST",
+    null
+   ]
+  ],
+  "US/Central": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "US/East-Indiana": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "US/Eastern": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "US/Hawaii": [
+   [
+    -36000,
+    "HST",
+    null
+   ]
+  ],
+  "US/Indiana-Starke": [
+   [
+    -21600,
+    "CST",
+    null
+   ],
+   [
+    -18000,
+    "CDT",
+    null
+   ]
+  ],
+  "US/Michigan": [
+   [
+    -18000,
+    "EST",
+    null
+   ],
+   [
+    -14400,
+    "EDT",
+    null
+   ]
+  ],
+  "US/Mountain": [
+   [
+    -25200,
+    "MST",
+    null
+   ],
+   [
+    -21600,
+    "MDT",
+    null
+   ]
+  ],
+  "US/Pacific": [
+   [
+    -28800,
+    "PST",
+    null
+   ],
+   [
+    -25200,
+    "PDT",
+    null
+   ]
+  ],
+  "US/Samoa": [
+   [
+    -39600,
+    "SST",
+    null
+   ]
+  ],
+  "UTC": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ],
+  "Universal": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ],
+  "W-SU": [
+   [
+    10800,
+    "MSK",
+    null
+   ]
+  ],
+  "WET": [
+   [
+    0,
+    "WET",
+    null
+   ],
+   [
+    3600,
+    "WEST",
+    null
+   ]
+  ],
+  "Zulu": [
+   [
+    0,
+    "UTC",
+    null
+   ]
+  ]
+ }
+}
