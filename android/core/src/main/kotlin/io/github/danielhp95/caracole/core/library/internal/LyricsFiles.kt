@@ -18,7 +18,8 @@ import java.nio.charset.CodingErrorAction
  * newline, or null for one the lyrics have no text for, which goes; both null for no lyrics, or lyrics that can't be
  * read. lyrics.lyrics_from_json's reading of the JSON, LRCLIB's bare records included (Lyrics.from_record: LRC's ID
  * tags dropped, the plain text made from the timed one where it has none), with Python's `\s`, `\d`, `str.strip()` and
- * IGNORECASE. vectors/library/lyrics_files.jsonl holds Python's answers.
+ * IGNORECASE. vectors/library/lyrics_files.jsonl holds Python's answers. [files] is what the lyrics passes write
+ * (core.lyrics: LRCLIB's, Megalobiz's and AZLyrics'), and [plainFromSynced] Megalobiz's plain text of its timed one.
  */
 internal object LyricsFiles {
     const val TXT = "lyrics.txt"
@@ -26,6 +27,13 @@ internal object LyricsFiles {
 
     fun of(lyricsJson: String?): LinkedHashMap<String, ByteArray?> {
         val (plain, synced) = read(lyricsJson) ?: ("" to null)
+        return files(plain, synced)
+    }
+
+    /** lyrics.write_lyrics' files of lyrics whose plain text is [plain] and timed one [synced]: `lyrics.txt` when
+     * the plain text has any (Lyrics.has_lyrics), `lyrics.lrc` when there is timed text, each ending in a newline;
+     * null for one that goes. */
+    fun files(plain: String, synced: String?): LinkedHashMap<String, ByteArray?> {
         val texts = linkedMapOf(TXT to plain.takeIf { Py.strip(it).isNotEmpty() }, LRC to synced)
         val out = LinkedHashMap<String, ByteArray?>()
         for ((name, text) in texts) out[name] = if (text.isNullOrEmpty()) null else utf8(text.trimEnd('\n') + "\n")
@@ -86,7 +94,7 @@ internal object LyricsFiles {
     }
 
     /** lyrics.plain_from_synced: an empty timed line a break between stanzas. */
-    private fun plainFromSynced(synced: String): String {
+    fun plainFromSynced(synced: String): String {
         val out = mutableListOf<String>()
         for ((_, text) in syncedLines(synced)) if (text.isNotEmpty() || (out.isNotEmpty() && out.last().isNotEmpty())) out += text
         while (out.isNotEmpty() && out.last().isEmpty()) out.removeAt(out.size - 1)
@@ -95,22 +103,40 @@ internal object LyricsFiles {
 
     /** lyrics.synced_lines: each line's stamps' times with its text, word stamps out and spaces collapsed, by time
      * (a stable sort). */
-    private fun syncedLines(synced: String): List<Pair<Double, String>> {
+    fun syncedLines(synced: String): List<Pair<Double, String>> {
         val timed = mutableListOf<Pair<Double, String>>()
-        for (line in synced.split("\n")) {
+        for (line in synced.replace("\r\n", "\n").replace("\r", "\n").split("\n")) {  // lyrics._text's line ends
             val cps = line.codePoints().toArray()
             val (stamps, end) = leadingStamps(cps)
             if (stamps.isEmpty()) continue
             val text = Py.split(withoutWordStamps(cps, end)).joinToString(" ")
-            for ((minutes, seconds) in stamps) timed += (minutes.toDouble() + seconds) to text
+            for ((minutes, seconds) in stamps) timed += (minuteSeconds(minutes) + seconds) to text
         }
         return timed.sortedBy { it.first }
     }
 
-    /** `(?:\s*\[\d+:\d{2}(?:\.\d+)?\])+` matched at the start: each stamp's minutes (times 60) and seconds, and where
-     * the match ends; no stamps when it doesn't match. */
-    private fun leadingStamps(cps: IntArray): Pair<List<Pair<BigInteger, Double>>, Int> {
-        val stamps = mutableListOf<Pair<BigInteger, Double>>()
+    /** `int(minutes) * 60` as a float, as Python adds it to the seconds: past [INT_MAX_STR_DIGITS] digits `int()`'s
+     * ValueError (an IllegalArgumentException), a product too big for a float its OverflowError (an
+     * ArithmeticException). */
+    private fun minuteSeconds(digits: String): Double {
+        require(digits.length <= INT_MAX_STR_DIGITS) {
+            "Exceeds the limit ($INT_MAX_STR_DIGITS digits) for integer string conversion: value has ${digits.length} " +
+                "digits; use sys.set_int_max_str_digits() to increase the limit"
+        }
+        val seconds = BigInteger(digits).multiply(SIXTY).toDouble()
+        if (seconds.isInfinite()) throw ArithmeticException("int too large to convert to float")
+        return seconds
+    }
+
+    /** Python's sys.int_info.default_max_str_digits: the longest decimal text `int()` reads. */
+    private const val INT_MAX_STR_DIGITS = 4300
+
+    private val SIXTY = BigInteger.valueOf(60)
+
+    /** `(?:\s*\[\d+:\d{2}(?:\.\d+)?\])+` matched at the start: each stamp's minutes (their digits, in ASCII) and
+     * seconds, and where the match ends; no stamps when it doesn't match. */
+    private fun leadingStamps(cps: IntArray): Pair<List<Pair<String, Double>>, Int> {
+        val stamps = mutableListOf<Pair<String, Double>>()
         var end = 0
         while (true) {
             var p = end
@@ -122,8 +148,8 @@ internal object LyricsFiles {
         return stamps to end
     }
 
-    /** One `<open>\d+:\d{2}(?:\.\d+)?<close>` at [from]: (minutes × 60, seconds) and where it ends. */
-    private fun stamp(cps: IntArray, from: Int, open: Int, close: Int): Pair<Pair<BigInteger, Double>, Int>? {
+    /** One `<open>\d+:\d{2}(?:\.\d+)?<close>` at [from]: (the minutes' digits, seconds) and where it ends. */
+    private fun stamp(cps: IntArray, from: Int, open: Int, close: Int): Pair<Pair<String, Double>, Int>? {
         if (from >= cps.size || cps[from] != open) return null
         var p = from + 1
         val minutes = StringBuilder()
@@ -141,7 +167,7 @@ internal object LyricsFiles {
             while (p < cps.size && PyUnicode.isDecimal(cps[p])) seconds.append(digit(cps[p++]))
         }
         if (p >= cps.size || cps[p] != close) return null
-        return (BigInteger(minutes.toString()).multiply(BigInteger.valueOf(60)) to seconds.toString().toDouble()) to p + 1
+        return (minutes.toString() to seconds.toString().toDouble()) to p + 1
     }
 
     /** lyrics._WORD_STAMP (`<\d+:\d{2}(?:\.\d+)?>`) taken out of the line from [from] on. */

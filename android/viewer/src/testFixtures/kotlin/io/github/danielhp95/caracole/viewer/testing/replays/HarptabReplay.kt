@@ -2,23 +2,30 @@ package io.github.danielhp95.caracole.viewer.testing.replays
 
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
 import io.github.danielhp95.caracole.viewer.ViewerData
+import io.github.danielhp95.caracole.viewer.harptab.Gap
 import io.github.danielhp95.caracole.viewer.harptab.Group
 import io.github.danielhp95.caracole.viewer.harptab.HarpTabText
 import io.github.danielhp95.caracole.viewer.harptab.HarpTabs
 import io.github.danielhp95.caracole.viewer.harptab.Hole
 import io.github.danielhp95.caracole.viewer.harptab.Legend
 import io.github.danielhp95.caracole.viewer.harptab.Notation
+import io.github.danielhp95.caracole.viewer.harptab.Prose
 import io.github.danielhp95.caracole.viewer.harptab.Reading
+import io.github.danielhp95.caracole.viewer.harptab.Row
 import io.github.danielhp95.caracole.viewer.harptab.Scan
 import io.github.danielhp95.caracole.viewer.harptab.Symbol
+import io.github.danielhp95.caracole.viewer.harptab.Tab
+import io.github.danielhp95.caracole.viewer.harptab.TabItem
 import io.github.danielhp95.caracole.viewer.harptab.Tokens
 import io.github.danielhp95.caracole.viewer.harptab.Used
+import io.github.danielhp95.caracole.viewer.harptab.Words
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -32,9 +39,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 
 /**
- * viewer/harptab.py's reading half (vectors/viewer/harptab_read.jsonl), every record answered by :viewer's
- * viewer.harptab as Python answered it: ReadingTest's record loop on the JVM, CorpusOnDeviceTest's on the device. Lane
- * harptab-layout adds the layout's records (vectors/viewer/harptab_layout.jsonl) here.
+ * viewer/harptab.py's reading half (vectors/viewer/harptab_read.jsonl) and its layout (vectors/viewer/
+ * harptab_layout.jsonl), every record answered by :viewer's viewer.harptab as Python answered it: ReadingTest's and
+ * LayoutTest's record loops on the JVM, CorpusOnDeviceTest's on the device.
  *
  * tests/test_conformance_viewer_harptab.py's docstring says each record's shape. A value is compared as the text
  * `json.dumps` writes of it, its members sorted (so a float is Python's repr, to the bit, and an int is no float); a
@@ -49,6 +56,7 @@ object HarptabReplay : AreaReplay {
     override fun replay(misses: Misses) {
         dataIsTheModules(misses)
         read()
+        layout()
     }
 
     /** What the data says that Kotlin also states: STAR_BENDS is signs changed by `*` a bend after the hole. */
@@ -190,6 +198,171 @@ object HarptabReplay : AreaReplay {
      * as Kotlin reads it. */
     private fun firstScanOff(lines: List<String>, notation: Notation): String =
         lines.firstOrNull { it.isNotBlank() }?.let { "; its first line ${PyJsonText(it)} scans ${scanRow(HarpTabs.scan(it, notation))}" } ?: ""
+
+    // --- the layout (vectors/viewer/harptab_layout.jsonl) ---------------------------------------------------------
+
+    fun layout() = replay("viewer/harptab_layout.jsonl", 7) { record, misses ->
+        when (record.fn) {
+            H + "parse_of" -> parseOf(record, misses)
+            H + "lines_of" -> each(misses, record) { item ->
+                val (ref, numbers) = item.jsonArray
+                answer {
+                    val lines = HarpTabs.prepared(body(ref.jsonObject), null).lines
+                    JsonPrimitive(short(JsonArray(numbers.jsonArray.map { lineRow(lines[it.jsonPrimitive.int]) })))
+                }
+            }
+            H + "line_of" -> each(misses, record) { line -> answer { lineRow(line.jsonPrimitive.content) } }
+            H + "named_key_of" -> each(misses, record) { block ->
+                answer { HarpTabs.namedKey(block.jsonArray.map { it.jsonPrimitive.content })?.let(::JsonPrimitive) ?: JsonNull }
+            }
+            H + "syllable_starts_of" -> each(misses, record) { lyric ->
+                answer { JsonArray(HarpTabs.syllableStarts(lyric.jsonPrimitive.content).map(::JsonPrimitive)) }
+            }
+            H + "align_of" -> each(misses, record) { item -> answer { aligned(item.jsonArray) } }
+            H + "cuts_of" -> each(misses, record) { item ->
+                val (lyric, word, anchors, fixed) = item.jsonArray
+                answer {
+                    val (a, b) = word.jsonArray.map { it.jsonPrimitive.int }
+                    JsonArray(HarpTabs.cuts(lyric.jsonPrimitive.content, a, b, anchors.jsonArray.map { it.jsonPrimitive.int },
+                                            fixed.jsonArray.map { it.jsonPrimitive.int }).map { it?.let(::JsonPrimitive) ?: JsonNull })
+                }
+            }
+            else -> misses.check(false) { "an unknown record: ${record.fn}" }
+        }
+    }
+
+    /** The bodies of harptab_read.jsonl's `tab_of` records, in their order: a layout record's `{"read": n}`. */
+    private val readBodies: List<String> by lazy {
+        Corpus.records("viewer/harptab_read.jsonl").filter { it.fn == H + "tab_of" }.map { body(it.args[0].jsonObject) }
+    }
+
+    private fun body(ref: JsonObject): String = ref["fixture"]?.let { PyText.utf8(Corpus.fixture(it.jsonPrimitive.content))!! }
+        ?: ref["read"]?.let { readBodies[it.jsonPrimitive.int] } ?: ref.getValue("text").jsonPrimitive.content
+
+    /** A batch of tabs, each read as it reads and as each of its pins says: its layout whole, or by its digest. */
+    private fun parseOf(record: Record, misses: Misses) {
+        val items = record.args[0].jsonArray
+        val outs = record.out!!.jsonArray
+        misses.check(items.size == outs.size) { "parse_of: ${items.size} tabs, ${outs.size} answers" }
+        for ((item, out) in items.zip(outs)) {
+            val (ref, chip, specs) = item.jsonArray
+            for ((spec, want) in specs.jsonArray.zip(out.jsonArray)) parsed(misses, ref.jsonObject, chip, spec, want)
+        }
+    }
+
+    private fun parsed(misses: Misses, ref: JsonObject, chipValue: JsonElement, spec: JsonElement, want: JsonElement) {
+        val body = body(ref)
+        val chip = if (chipValue is JsonNull) null else chipValue.jsonPrimitive.content
+        val what = (ref["fixture"] ?: ref["read"]?.let { JsonPrimitive("read tab $it") } ?: JsonPrimitive(body.take(50))).toString() +
+            (if (chip == null) "" else " under $chip") + (if (spec is JsonNull) "" else " pinned $spec")
+        val got = try {
+            val notation = if (spec is JsonNull) null else HarpTabs.pinned(spec, body)
+            tabLayout(HarpTabs.parse(body, chip, notation), body, chip, notation)
+        } catch (e: Exception) {
+            misses.check(false) { "$what: parse threw $e" }
+            return
+        }
+        if (want is JsonPrimitive) {
+            misses.check(want.content == short(got)) {
+                "$what: its layout (lines ${got["kinds"]}, words above ${got["above"]}) ${text(got).take(1200)}, " +
+                    "whose digest isn't Python's"
+            }
+            return
+        }
+        val whole = want.jsonObject
+        misses.check(whole.keys == got.keys) { "$what: the members ${got.keys}, Python's ${whole.keys}" }
+        for (key in whole.keys - "sections") same(misses, "$what: $key", whole.getValue(key), got[key] ?: JsonNull)
+        val wantSections = whole.getValue("sections").jsonArray
+        val gotSections = got.getValue("sections").jsonArray
+        misses.check(wantSections.size == gotSections.size) { "$what: ${gotSections.size} sections, Python's ${wantSections.size}" }
+        for ((n, section) in wantSections.withIndex()) {
+            val mine = gotSections.getOrNull(n)?.jsonArray ?: break
+            same(misses, "$what: section $n's name", JsonArray(section.jsonArray.take(2)), JsonArray(mine.take(2)))
+            val items = section.jsonArray[2].jsonArray
+            val gotItems = mine[2].jsonArray
+            misses.check(items.size == gotItems.size) { "$what: section $n, ${gotItems.size} items, Python's ${items.size}" }
+            for ((k, item) in items.withIndex()) {
+                same(misses, "$what: section $n, item $k", item, gotItems.getOrNull(k) ?: JsonNull)
+            }
+        }
+    }
+
+    /** layout_of's whole answer: Python's `tab_layout`, with the lines' kinds and whether the words are above. */
+    private fun tabLayout(t: Tab, body: String, chip: String?, notation: Notation?): JsonObject {
+        val prepared = HarpTabs.prepared(body, chip)
+        val (_, scans) = HarpTabs.read(prepared.read, prepared.chip, notation, prepared.legends)
+        val kinds = HarpTabs.lineKinds(prepared.lines, scans, prepared.inLegend)
+        val above = HarpTabs.above(prepared.lines, kinds, scans)
+        for (r in t.rows()) check(r.text == prepared.lines[r.line] && r.groups == scans[r.line].groups) { "row ${r.line}" }
+        return JsonObject(linkedMapOf(
+            "notes" to JsonArray(t.notes.map(::JsonPrimitive)),
+            "sections" to JsonArray(t.sections.map { s ->
+                JsonArray(listOf(s.label?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(s.chorus), JsonArray(s.items.map(::itemRow))))
+            }),
+            "reading" to JsonPrimitive(readingDigest(t.reading)),
+            "key" to (t.key?.let(::JsonPrimitive) ?: JsonNull),
+            "missed" to JsonArray(t.missed.map(::JsonPrimitive)),
+            "chromatic" to JsonPrimitive(t.chromatic),
+            "legend" to (t.legend?.let(::legendRow) ?: JsonNull),
+            "harp" to (t.harp?.let(::JsonPrimitive) ?: JsonNull),
+            "convention" to JsonPrimitive(t.convention),
+            "readable" to JsonPrimitive(t.readable),
+            "kinds" to JsonPrimitive(kinds.joinToString("") { KINDS.getValue(it) }),
+            "above" to JsonPrimitive(above),
+        ))
+    }
+
+    private val KINDS = mapOf("legend" to "l", "blank" to "b", "holes" to "h", "missed" to "m", "text" to "t")
+
+    private fun itemRow(item: TabItem): JsonElement = when (item) {
+        is Row -> JsonArray(listOf(JsonPrimitive("row"), JsonPrimitive(item.line), item.lyric?.let(::JsonPrimitive) ?: JsonNull,
+            item.label?.let(::JsonPrimitive) ?: JsonNull, partsRow(item), placementRow(item.placement),
+            PyJson.float(item.confidence), JsonPrimitive(item.trusted), JsonPrimitive(item.above),
+            JsonPrimitive(short(JsonArray(listOf(JsonPrimitive(item.text), JsonArray(item.groups.map(::groupRow)),
+                                                 JsonArray(item.unknown.map(::JsonPrimitive)))))))).also { checkParts(item) }
+        is Words -> JsonArray(listOf(JsonPrimitive("words"), JsonArray(item.lines.map(::JsonPrimitive))))
+        is Prose -> JsonArray(listOf(JsonPrimitive("prose"), JsonPrimitive(item.text)))
+        is Gap -> JsonArray(listOf(JsonPrimitive("gap")))
+        is Legend -> JsonArray(listOf(JsonPrimitive("legend"), legendRow(item)))
+    }
+
+    /** Python's invariant, which the records' part lengths stand on: the parts' words together end the row's words. */
+    private fun checkParts(row: Row) {
+        val joined = row.parts.joinToString("") { it.second }
+        check(row.lyric == null || HarpTabText.rstrip(row.lyric!!).endsWith(joined)) { "row ${row.line}'s parts: ${row.parts}" }
+    }
+
+    /** parts_row: each place's groups by their places in the row's groups, and the length of its words. */
+    private fun partsRow(row: Row): JsonElement = JsonArray(row.parts.map { (groups, words) ->
+        JsonArray(listOf(JsonArray(groups.map { g -> JsonPrimitive(row.groups.indexOfFirst { it === g }) }),
+                         JsonPrimitive(Py.len(words))))
+    })
+
+    private fun placementRow(placement: Map<String, Int>): JsonElement =
+        JsonObject(placement.mapValues { JsonPrimitive(it.value) })
+
+    private fun readingDigest(r: Reading): String = short(JsonArray(listOf(notationRow(r.notation), JsonPrimitive(r.source),
+        PyJson.float(r.explained), PyJson.float(r.playable), PyJson.float(r.score), PyJson.float(r.margin),
+        r.runner?.let(::JsonPrimitive) ?: JsonNull, JsonPrimitive(r.confident), usedRows(r.used), JsonPrimitive(r.standard),
+        JsonPrimitive(r.said()))))
+
+    private fun lineRow(line: String): JsonElement {
+        val label = HarpTabs.isLabel(line)
+        val beside = HarpTabs.isLabel(line, besideRow = true)
+        return JsonArray(listOf(JsonPrimitive(label), JsonPrimitive(beside),
+                                if (label || beside) JsonPrimitive(HarpTabs.labelText(line)) else JsonNull,
+                                JsonPrimitive(HarpTabs.isProse(listOf(line, "la la"))), JsonPrimitive(HarpTabs.syllables(line)),
+                                HarpTabs.namedKey(listOf(line))?.let(::JsonPrimitive) ?: JsonNull))
+    }
+
+    /** align_of: the row [item]'s line scans to, with its words, trusted or not, aligned at its reach. */
+    private fun aligned(item: JsonArray): JsonElement {
+        val (line, lyric, notation, reach, trusted) = item
+        val groups = HarpTabs.scan(line.jsonPrimitive.content, notation(notation)).groups
+        val row = HarpTabs.align(Row(groups, if (lyric is JsonNull) null else lyric.jsonPrimitive.content,
+                                     trusted = trusted.jsonPrimitive.boolean), reach.jsonPrimitive.int)
+        return JsonArray(listOf(partsRow(row), placementRow(row.placement)))
+    }
 
     // --- the shapes of the records ---------------------------------------------------------------------------------
 
