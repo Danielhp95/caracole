@@ -7,6 +7,7 @@ import io.github.danielhp95.caracole.viewer.theory.Key
 import io.github.danielhp95.caracole.viewer.theory.Theory
 import org.junit.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -198,5 +199,28 @@ class HarmonyTest {
         chords.add(ch("Bb"))  // the list asked with, changed after, changes nothing kept
         assertEquals(before, Harmony.glossary(listOf(ch("C"), ch("G")), c))
         assertEquals(Harmony.explain(ch("D"), c, ch("G")), Harmony.explain(ch("D"), c, ch("G")))
+    }
+
+    @Test fun whatTheChordHalfKeepsNoCallerCanChange() {
+        // harmony-progressions' tables call HarmonyChords itself, past Harmony's copies: what it keeps is as frozen
+        // as Python's tuples.
+        val kept = listOf(
+            HarmonyChords.glossary(listOf(ch("C"), ch("G7")), c),
+            HarmonyChords.chordTones(ch("G7"), c),
+            HarmonyChords.soloScale(ch("G7"), c).second,
+        )
+        for (list in kept) {
+            assertFailsWith<UnsupportedOperationException> { (list as MutableList<*>).clear() }
+        }
+        assertFailsWith<UnsupportedOperationException> {
+            @Suppress("UNCHECKED_CAST")
+            (HarmonyChords.toneNames(ch("G7")) as MutableMap<Int, String>).clear()
+        }
+    }
+
+    @Test fun aModeHarmonyHasNoWordForIsCapitalizedAsPythonDoes() {
+        assertEquals("Dorian", HarmonyChords.modeWord("dorian"))
+        // str.capitalize's title case (U+01C5, Python's "ǆorian".capitalize()), never the upper case U+01C4
+        assertEquals("\u01C5orian", HarmonyChords.modeWord("\u01C6orian"))
     }
 }

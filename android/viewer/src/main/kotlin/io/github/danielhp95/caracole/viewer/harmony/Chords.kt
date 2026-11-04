@@ -1,6 +1,7 @@
 package io.github.danielhp95.caracole.viewer.harmony
 
 import io.github.danielhp95.caracole.core.py.Py
+import io.github.danielhp95.caracole.core.py.PyInt
 import io.github.danielhp95.caracole.core.py.PyRe
 import io.github.danielhp95.caracole.core.py.PyUnicode
 import io.github.danielhp95.caracole.viewer.theory.Chord
@@ -15,10 +16,9 @@ import io.github.danielhp95.caracole.viewer.theory.Theory
  * C is V/V only going to G; C7 in C is V7/IV only going to an F that is no dominant seventh), and each function here
  * is the one of the same name there.
  *
- * Its tables are harmony.py's ([HarmonyData]) and theory.py's ([Theory]). An extension's digits are ASCII (theory's
- * patterns spell every suffix it reads so, and `_SHAPES` writes them so): a token's number is read as Python's `int`
- * reads those. The answers asked most are kept as Python's `functools` caches keep them; a list kept is handed out
- * only by [Harmony], as a copy.
+ * Its tables are harmony.py's ([HarmonyData]) and theory.py's ([Theory]); a token's number is read as Python's `int`
+ * reads it ([PyInt]), a mode capitalized as `str.capitalize` does ([PyUnicode]). The answers asked most are kept as
+ * Python's `functools` caches keep them, each one nothing can change; [Harmony] hands out copies.
  */
 internal object HarmonyChords {
     private val ionian: List<Int> get() = Theory.SCALES.getValue("ionian")
@@ -33,16 +33,7 @@ internal object HarmonyChords {
     }
 
     /** _mode_word: "major", "minor", else the mode capitalized ("Dorian"). */
-    fun modeWord(mode: String): String = HarmonyData.modeWords[mode] ?: capitalized(mode)
-
-    /** str.capitalize of a mode, which is ASCII: every mode harmony.py words is one of theory's MODES (another raised
-     * before it is worded, as Python's KeyError on SCALES does). */
-    private fun capitalized(s: String): String {
-        require(s.all { it.code < 0x80 }) { "no mode $s" }
-        if (s.isEmpty()) return s
-        val first = s[0].let { if (it in 'a'..'z') (it.code - 32).toChar() else it }
-        return first + Py.asciiLower(s.substring(1))
-    }
+    fun modeWord(mode: String): String = HarmonyData.modeWords[mode] ?: PyUnicode.capitalize(mode)
 
     /** _key_words: "C major", "A minor", "C Mixolydian"; a key on [home]'s tonic spells it as [home] does. */
     fun keyWords(key: Key, home: Key? = null): String = Theory.spelling(home ?: key)[key.tonic] + " " + modeWord(key.mode)
@@ -127,7 +118,7 @@ internal object HarmonyChords {
         if (quality != "" && quality != "m") return null
         val (degree, accidental) = degree(pc, key)
         if (key.mode == "aeolian" && degree == 4) quality = ""
-        val roman = if (quality == "m") Py.asciiLower(HarmonyData.romans[degree]) else HarmonyData.romans[degree]
+        val roman = if (quality == "m") PyUnicode.lower(HarmonyData.romans[degree]) else HarmonyData.romans[degree]
         return (accidental + roman) to (Theory.spelling(key)[pc] + quality)
     }
 
@@ -199,7 +190,7 @@ internal object HarmonyChords {
             Numeral("", if (reading.kind == "secondary") "V" else "vii", shape.sign, shape.extension, bass, of)
         } else {
             val (degree, accidental) = degree(chord.root, key)
-            val roman = if (shape.lower) Py.asciiLower(HarmonyData.romans[degree]) else HarmonyData.romans[degree]
+            val roman = if (shape.lower) PyUnicode.lower(HarmonyData.romans[degree]) else HarmonyData.romans[degree]
             Numeral(accidental, roman, shape.sign, shape.extension, bass, null)
         }
     }
@@ -375,10 +366,12 @@ internal object HarmonyChords {
                 note(11, "vii°/x", "the leading-tone chord of x, a half step below the chord x of the key", example)
             }
         }
-        return found.entries.sortedBy { it.key.first }.map { it.value }  // stable: first seen first
+        // stable: first seen first; kept as Python's _glossary keeps its tuple, so nothing changes what is kept
+        return java.util.Collections.unmodifiableList(found.entries.sortedBy { it.key.first }.map { it.value })
     }
 
-    /** str.islower of a numeral's roman (ASCII): a cased letter, none upper case. */
+    /** str.islower of a numeral's roman, whose letters are ROMANS' ASCII ones (the generator checks they are): a cased
+     * letter, none upper case. */
     private fun isLower(s: String): Boolean = s.any { it in 'a'..'z' } && s.none { it in 'A'..'Z' }
 
     // --- notes and scales ----------------------------------------------------------------------------------------
@@ -464,11 +457,9 @@ internal object HarmonyChords {
 
     fun number(label: String): Int = if (label == "R") 1 else int(label.trimStart('♭', '♯'))
 
-    /** int() of a token's or a label's digits: ASCII (the class's docstring); anything else is Python's ValueError. */
-    private fun int(digits: String): Int {
-        if (digits.isEmpty() || digits.any { it !in '0'..'9' }) throw NumberFormatException("invalid literal for int(): $digits")
-        return digits.toInt()
-    }
+    /** int() of a token's or a label's digits, as Python reads them; where Python raises ValueError, so does this. */
+    private fun int(digits: String): Int =
+        (PyInt.parse(digits) ?: throw NumberFormatException("invalid literal for int(): '$digits'")).intValueExact()
 
     private val tones = Kept<Pair<Chord, Key?>, List<Pair<String, String>>>(4096)
 

@@ -34,8 +34,9 @@ first); a relation ``[kind, source, target]``; a chord's notes ``[[note, interva
   seeded tonic of each other mode (so every degree of the two, and one of each other, in their spellings); then,
   among ``viewer_corpus.chord_names()`` (read loosely, as page.py reads a sheet's), a slash chord of each bass above
   its root, a note of it or not, its quality one of QUALITIES or not, and ``OUTSIDE`` seeded chords of a quality
-  outside QUALITIES (a suffix theory.py reads into tones, or one it can't read at all), each in ``SHAPE_KEYS`` seeded
-  keys. The chords it may go to are those a reading turns on (``_read``): none; for a dominant the triad a fifth
+  outside QUALITIES (a suffix theory.py reads into tones, or one it can't read at all); then ``FIXED_OUTSIDE``, a chord
+  for each way ``_shape`` reads a quality outside QUALITIES (dim, aug or ``+``, m, another, and a suffix it can't
+  read), whatever the corpus holds; each in ``SHAPE_KEYS`` seeded keys. The chords it may go to are those a reading turns on (``_read``): none; for a dominant the triad a fifth
   below, and for a dominant seventh the dominant seventh there too; for a leading-tone chord the minor triad a half
   step above; and for one chord in ``OTHER_EVERY`` a seeded chord of another root.
 - ``in_sequence(names, key)``: the chords a sheet plays (``names``, read as page.py reads them,
@@ -78,6 +79,9 @@ OUTSIDE = 40
 OTHER_EVERY = 4
 SHEETS_OF_MODES = 14
 TOOLTIPS_EACH = 2
+# A chord for each branch of _shape outside QUALITIES (test_every_way_shape_reads_a_quality_is_in_the_vectors).
+FIXED_OUTSIDE = ("Caug9", "C+maj7", "Caug7#9", "Cdim9", "Cdim7b9", "Cm7b9", "Cmmaj9", "Cmaj7#11", "C7#9b13", "Cfoo",
+                 "Cmfoo")
 
 
 # --- the data ------------------------------------------------------------------------------------------------------
@@ -123,6 +127,7 @@ def test_the_data_reads_back_as_harmony_holds_it():
     assert tuple(data["_FAMILIES"]) == harmony._FAMILIES
     assert tuple(data["_BASS_DEGREES"]) == harmony._BASS_DEGREES
     assert {n: tuple(v) for n, v in data["_OTHER_SCALES"].items()} == harmony._OTHER_SCALES
+    assert all(r.isascii() for r in data["ROMANS"]), "Chords.kt's isLower reads a roman's ASCII letters"
     for name, pattern in data["patterns"].items():
         assert re.compile(pattern) == getattr(harmony, name)
 
@@ -212,10 +217,36 @@ def _chords() -> tuple[tuple[Chord, tuple[Key, ...], tuple[Chord | None, ...]], 
         seen.add(_shape(chord))
         (outside if chord.bass is None else slashed).append(chord)
     chosen = slashed + [outside[i] for i in sorted(rng.sample(range(len(outside)), min(OUTSIDE, len(outside))))]
+    fixed = [theory.parse_chord(name, strict=False) for name in FIXED_OUTSIDE]
+    chosen += [chord for chord in fixed if chord not in chosen]
     all_keys = viewer_corpus.keys()
     found += [(chord, tuple(rng.sample(all_keys, SHAPE_KEYS))) for chord in chosen]
     rng = random.Random(SEED + 1)
     return tuple((chord, keys, tuple(nexts_for(chord, rng, n))) for n, (chord, keys) in enumerate(found))
+
+
+def shape_branch(chord: Chord) -> str:
+    """Which way harmony._shape reads the chord's quality, as its code goes."""
+    q = chord.quality
+    if q in harmony._SHAPES:
+        return "table"
+    if chord.tones is None or harmony._intervals(q) != chord.tones:
+        return "unread"
+    if q.startswith("dim"):
+        return "dim"
+    if q.startswith("aug"):
+        return "aug"
+    if q.startswith("m") and not q.startswith("maj"):
+        return "m"
+    return "other"
+
+
+def test_every_way_shape_reads_a_quality_is_in_the_vectors():
+    found = {shape_branch(chord) for chord, _, _ in _chords()}
+    assert found == {"table", "unread", "dim", "aug", "m", "other"}
+    for name in FIXED_OUTSIDE:
+        chord = theory.parse_chord(name, strict=False)
+        assert chord is not None and chord.quality not in QUALITIES, name
 
 
 # --- the vectors ---------------------------------------------------------------------------------------------------
