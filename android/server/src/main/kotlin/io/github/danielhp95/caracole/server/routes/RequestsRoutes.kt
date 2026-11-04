@@ -1,21 +1,20 @@
 package io.github.danielhp95.caracole.server.routes
 
+import io.github.danielhp95.caracole.core.db.DatabaseTooNew
 import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.json.PyJson
+import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.library.OverridesStore
 import io.github.danielhp95.caracole.core.library.SongRow
 import io.github.danielhp95.caracole.core.library.Songs
 import io.github.danielhp95.caracole.core.py.PyText
 import io.github.danielhp95.caracole.core.py.PyUrl
 import io.github.danielhp95.caracole.server.PhoneParts
-import io.github.danielhp95.caracole.server.http.Body
 import io.github.danielhp95.caracole.server.http.GetAnswer
 import io.github.danielhp95.caracole.server.http.PostAnswer
 import io.github.danielhp95.caracole.server.http.Refused
 import io.github.danielhp95.caracole.server.http.Response
 import io.github.danielhp95.caracole.server.http.Route
 import io.github.danielhp95.caracole.server.http.RouteModule
-import io.github.danielhp95.caracole.server.jobs.Chip
 import io.github.danielhp95.caracole.server.jobs.Feed
 import io.github.danielhp95.caracole.server.jobs.Job
 import io.github.danielhp95.caracole.server.jobs.JobNotOver
@@ -27,9 +26,8 @@ import io.github.danielhp95.caracole.server.jobs.Outcomes
 import io.github.danielhp95.caracole.server.jobs.QueueFull
 import io.github.danielhp95.caracole.server.jobs.SongFacts
 import io.github.danielhp95.caracole.server.routes.library.Answers
-import kotlinx.coroutines.CancellationException
-import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import java.io.IOException
 import java.time.Instant
 import java.time.ZoneId
 
@@ -68,7 +66,7 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
      * the tab has opened ([open]: `?open=N,M`). Each job's line is the one /jobs.json gives it (JobViews.line: its
      * song's facts, a songbook's page), the running one's chips and each finished one's outcome are Outcomes', and a
      * song a finished request waits for a pick of is [picksWaiting]'s. The database unreadable, the lines say only how
-     * the jobs went.
+     * the jobs went; a bug is the request's error, as caracole serve's.
      */
     private fun requestsJson(open: String?): Response {
         val opened = JobsRoutes.jobIds(open) ?: emptySet()
@@ -76,46 +74,49 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
         val now = clock()
         var songs: Map<Int, Pair<Long?, SongFacts?>> = emptyMap()
         var books: Map<Int, String?> = emptyMap()
-        var picks: Map<String, Feed.Pick> = emptyMap()
         try {
             parts.database.read { db ->
                 ended.forget(jobs)
                 songs = jobs.associate { it.id to ended.songOf(db, it, parts.cards, now) }
                 books = jobs.associate { it.id to JobsRoutes.songbookPage(db, it) }
-                picks = picksWaiting(db, jobs)
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {  // the lines say only how the jobs went, then
-            songs = emptyMap()
-            books = emptyMap()
-            picks = emptyMap()
+        } catch (e: Exception) {  // the lines say only how the jobs went, then (what was read before it, as Python's)
+            if (!unreadable(e)) throw e
         }
         val facts = songs.mapValues { it.value.second }
         val lines = jobs.associate { job ->
             job.id to JobViews.line(job, ahead(jobs, job), facts[job.id], songbookPage = books[job.id])
         }
         val outcomes = jobs.filter { !it.active }.associate { job ->
-            job.id to Outcomes.outcome(job, lines.getValue(job.id), facts[job.id], songs[job.id]?.first).asJson()
+            job.id to Outcomes.outcome(job, lines.getValue(job.id), facts[job.id], songs[job.id]?.first)
         }
-        val steps = jobs.filter { it.state == Job.RUNNING }.associate { job ->
-            job.id to Outcomes.steps(job, facts[job.id]).map(Chip::asJson)
-        }
-        return json(Feed.feed(jobs, lines, outcomes, steps, picks, opened, now, zone()))
+        val steps = jobs.filter { it.state == Job.RUNNING }.associate { job -> job.id to Outcomes.steps(job, facts[job.id]) }
+        return Answers.json(Feed.feed(jobs, lines, outcomes, steps, picksWaiting(jobs), opened, now, zone()))
     }
 
     /**
      * review_routes.picks_waiting on the phone: the songs of finished requests that wait for a pick now, by the
      * request's key, as review_routes._offer offers them: a song in review with candidates to pick from (not one
-     * ignored); a song the offline index didn't match, whose pick is what `caracole search` finds (`search`).
+     * ignored); a song the offline index didn't match, whose pick is what `caracole search` finds (`search`). Read on
+     * its own, as caracole serve reads it: none when the database can't be read, the Requests tab showing the requests
+     * all the same.
      */
-    private fun picksWaiting(db: Db, jobs: List<Job>): Map<String, Feed.Pick> {
-        val picks = LinkedHashMap<String, Feed.Pick>()
-        for (key in jobs.filter { !it.active }.map { it.key }.toSortedSet()) {
-            val song = Songs.byKey(db, key) ?: continue
-            offer(db, song)?.let { picks[key] = it }
+    private fun picksWaiting(jobs: List<Job>): Map<String, Feed.Pick> {
+        val keys = jobs.filter { !it.active }.map { it.key }.toSortedSet()
+        if (keys.isEmpty()) return emptyMap()
+        return try {
+            parts.database.read { db ->
+                val picks = LinkedHashMap<String, Feed.Pick>()
+                for (key in keys) {
+                    val song = Songs.byKey(db, key) ?: continue
+                    offer(db, song)?.let { picks[key] = it }
+                }
+                picks
+            }
+        } catch (e: Exception) {
+            if (!unreadable(e)) throw e
+            emptyMap()
         }
-        return picks
     }
 
     private fun offer(db: Db, song: SongRow): Feed.Pick? {
@@ -141,21 +142,21 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
         } catch (e: QueueFull) {
             throw Refused(503, "The queue is full", JobQueue.QUEUE_FULL)
         }
-        return Answers.queued(view(queued), "/${JobViews.REQUESTS}")
+        return Answers.queued(view(queue.job(queued.id) ?: queued), "/${JobViews.REQUESTS}")
     }
 
-    /** A job just queued, as /jobs.json gives it to the library page's script (WebApp.job_view): its song as the
-     * library has it now; the job alone when the database can't be read. */
+    /** A job just queued, as /jobs.json gives it to the library page's script (WebApp.job_view, the queue's copy of
+     * it now: one the worker has started already runs): its song as the library has it now; the job alone when the
+     * database can't be read. */
     private fun view(job: Job): JsonObject = try {
         parts.database.read { db ->
             val (songId, facts) = ended.songOf(db, job, parts.cards, clock())
             JobViews.view(job, if (job.state == Job.QUEUED) queue.ahead(job) else 0, songId, facts = facts,
                           songbookPage = JobsRoutes.songbookPage(db, job))
         }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {  // the job is queued all the same
-        JobViews.view(job, queue)
+    } catch (e: Exception) {
+        if (!unreadable(e)) throw e
+        JobViews.view(job, queue)  // the job is queued all the same
     }
 
     /** The request a form names (`job`): plain digits, twelve at most; Refused (400) when it names none; null for a
@@ -176,12 +177,12 @@ class RequestsRoutes(val parts: PhoneParts, val clock: () -> Instant = { Instant
     /** How many jobs wait or run before a queued one (jobs_routes._ahead). */
     private fun ahead(jobs: List<Job>, job: Job): Int = jobs.count { it.active && it.id < job.id }
 
-    private fun json(data: JsonElement) = Response(
-        200, Body.Bytes(PyJson.dumps(data, compact = true).toByteArray()),
-        mutableListOf("Content-Type" to "application/json; charset=utf-8"),
-    )
-
     companion object {
+        /** Python's `(sqlite3.Error, OSError)`, which caracole serve's routes catch reading the library: the bundled
+         * SQLite's own error (isSqliteError), a database too new, or a file that can't be read. Anything else is a
+         * bug, the request's error. */
+        internal fun unreadable(e: Throwable): Boolean = e.isSqliteError() || e is IOException || e is DatabaseTooNew
+
         /** Why a request of the phone's own read back from the history can't be tried again (the phone's words:
          * caracole serve's requests are all commands, which it always can). */
         const val NOT_REPEATABLE = "The phone ran that request itself, and there's nothing of it left to run again: " +

@@ -1238,11 +1238,17 @@ Not built yet. (lookup.)
     line `JobViews.line` (its song's facts through `SongFacts.ended`, the cache /jobs.json shares, its songbook's page
     `JobsRoutes.songbookPage`), each one over `Outcomes.outcome`, the running one's `Outcomes.steps`, and the songs
     that wait for a pick (review_routes.picks_waiting: a review with candidates, `SongFacts.hasCandidates`, or a song
-    the index didn't match, `search`);
+    the index didn't match, `search`), read apart from the lines as caracole serve reads them;
+  - a database that can't be read (`RequestsRoutes.unreadable`, Python's `(sqlite3.Error, OSError)`: SQLite's own
+    error, a file's, a database too new) leaves the lines saying only how the jobs went, or no picks; anything else is
+    a bug, the request's error;
+  - `Feed.feed` takes the outcomes and chips as `Outcome` and `Chip`, and works out one not given from the job, as
+    feed.py does (an outcome from its line, the running one's chips with no facts);
   - the times are the phone's zone's, named as Python's `%Z` names them, tzdata's abbreviations (CET and CEST), from
     requests.json's `zones` (`ZoneNames`: every zone's labels of letters by offset and since when, else the offset's
     number, `-03`, `+0545`), never java.time's or ICU's "GMT+01:00"; month names the C locale's;
-  - `POST /jobs/again` is jobs_routes.again over `JobQueue.again`, its refusals caracole serve's words, but a request
+  - `POST /jobs/again` is jobs_routes.again over `JobQueue.again`, its view the job as the queue has it now (one the
+    worker started already runs, WebApp.job_view), its refusals caracole serve's words, but a request
     of the phone's own read back from the history, with nothing left to run (`JobNotRepeatable`): 409, the phone's
     words (`RequestsRoutes.NOT_REPEATABLE`);
   - vectors/web/requests.jsonl (feed.py's answer byte for byte under UTC and Europe/Madrid, `_ordinal`, `_ago`,

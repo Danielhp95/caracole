@@ -91,6 +91,24 @@ class FeedTest {
     }
 
     @Test
+    fun `an outcome or chips not given are worked out of the job, as feed py works them out`() {
+        val r = Corpus.records(RequestsReplay.VECTOR).first {
+            it.fn == "caracole.web.feed.feed" && it.extra.getValue("note").jsonPrimitive.content.startsWith("a queue at work")
+        }
+        val jobs = r.extra.getValue("jobs").jsonArray.map { JobHistory.jobOf(it.jsonObject) }
+        val lines = r.extra.getValue("lines").jsonObject.entries.associate { (id, line) ->
+            id.toInt() to RequestsReplay.line(line.jsonObject)
+        }
+        val now = RequestsReplay.time(r.extra.getValue("now").jsonPrimitive.content)
+        val zone = ZoneId.of(RequestsReplay.zone(r))
+        assertTrue(jobs.any { it.state == Job.RUNNING } && jobs.any { !it.active && it.id in lines })
+        val given = Feed.feed(jobs, lines, jobs.filter { !it.active && it.id in lines }.associate {
+            it.id to Outcomes.outcome(it, lines.getValue(it.id))
+        }, jobs.filter { it.state == Job.RUNNING }.associate { it.id to Outcomes.steps(it) }, now = now, zone = zone)
+        assertEquals(given, Feed.feed(jobs, lines, now = now, zone = zone))
+    }
+
+    @Test
     fun `the tables are feed py's`() {
         val tables = Corpus.records(RequestsReplay.VECTOR).single { it.fn == "tables" }.out!!.jsonObject
         assertEquals(tables.getValue("SEARCH").jsonPrimitive.content, Feed.SEARCH)

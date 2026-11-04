@@ -37,9 +37,11 @@ import java.time.ZonedDateTime
  * offline index gets what `caracole search` finds for it as a next step when its outcome has none that leads there.
  *
  * What feed.py works out of the job and its song (its line, its chips, its outcome) the caller gives, as
- * jobs_routes.requests_json does: [feed]'s `lines` (Status), `steps` (Outcomes.steps of the running request, as
- * Chip.asJson writes each) and `outcomes` (Outcomes.outcome of each over, as Outcome.asJson writes it, its fields
- * pairs). A request over with no outcome given says its state, as feed.py says one with neither line nor outcome.
+ * jobs_routes.requests_json does: [feed]'s `lines` (Status), `steps` (Outcomes.steps of the running request, with
+ * its song's facts) and `outcomes` (Outcomes.outcome of each over, with its song's facts and id). Where one isn't
+ * given, Feed works it out of the job alone, as feed.py does: a request over with a line and no outcome, Outcomes'
+ * outcome of that line; the running one with no steps, Outcomes.steps with no facts; a request over with neither line
+ * nor outcome says its state.
  */
 object Feed {
     val STATE_TEXT: Map<String, String> = linkedMapOf(
@@ -69,13 +71,14 @@ object Feed {
      * Every request remembered ([jobs], newest first), as the tab draws it: `active`, how many wait or run (the tab's
      * count), and `groups`, Now, Today and Earlier, each that has a request, with its `requests`.
      *
-     * [lines] are Status's, by job id; [outcomes] each finished one's (Outcome.asJson); [steps] the running one's chips
-     * (Chip.asJson, each); [picks] the songs of finished requests that wait for a pick now, by song key; [opened], the
-     * requests whose output comes with what each command printed; [now], the answer's time; [zone], the phone's,
-     * whose days Today and Earlier are and whose clock the times are shown on.
+     * [lines] are Status's, by job id; [outcomes] each finished one's (Outcomes.outcome; else read from its line);
+     * [steps] the running one's chips (Outcomes.steps; else the job's alone); [picks] the songs of finished requests
+     * that wait for a pick now, by song key; [opened], the requests whose output comes with what each command printed;
+     * [now], the answer's time; [zone], the phone's, whose days Today and Earlier are and whose clock the times are
+     * shown on.
      */
-    fun feed(jobs: List<Job>, lines: Map<Int, Line>, outcomes: Map<Int, JsonObject> = emptyMap(),
-             steps: Map<Int, List<JsonObject>> = emptyMap(), picks: Map<String, Pick> = emptyMap(),
+    fun feed(jobs: List<Job>, lines: Map<Int, Line>, outcomes: Map<Int, Outcome> = emptyMap(),
+             steps: Map<Int, List<Chip>> = emptyMap(), picks: Map<String, Pick> = emptyMap(),
              opened: Set<Int> = emptySet(), now: Instant = Instant.now(),
              zone: ZoneId = ZoneId.systemDefault(), names: ZoneNames = ZoneNames.load()): JsonObject {
         val pending = waitingPicks(jobs, picks)
@@ -83,7 +86,7 @@ object Feed {
         val queued = active.filter { it.state == Job.QUEUED }
         val groups = GROUPS.associateWith { ArrayList<JsonObject>() }
         for (job in active) {
-            val shown = if (job.state == Job.RUNNING) running(job, lines[job.id], steps[job.id].orEmpty(), now)
+            val shown = if (job.state == Job.RUNNING) running(job, lines[job.id], steps[job.id] ?: Outcomes.steps(job), now)
                         else queued(job, queued.indexOf(job) + 1)
             groups.getValue("Now") += plus(shown, "output" to output(job, opened = job.id in opened, zone, names))
         }
@@ -95,8 +98,9 @@ object Feed {
             val day = ended.toLocalDate() != today
             val pick = pending[job.id]
             val picking = pick != null && waitsForPick(job, pick)
+            val said = outcomes[job.id] ?: lines[job.id]?.let { Outcomes.outcome(job, it) }
             groups.getValue(if (day) "Earlier" else "Today") += plus(
-                finished(job, outcomes[job.id], ended, pick, day),
+                finished(job, said, ended, pick, day),
                 "output" to output(job, opened = job.id in opened, zone, names, picking = picking))
         }
         return JsonObject(linkedMapOf(
@@ -108,10 +112,10 @@ object Feed {
     }
 
     /** The request that runs: its song, how long ago it started, its line, and its steps. */
-    private fun running(job: Job, line: Line?, chips: List<JsonObject>, now: Instant): JsonObject {
+    private fun running(job: Job, line: Line?, chips: List<Chip>, now: Instant): JsonObject {
         val shown = head(job, Job.RUNNING, line?.text ?: STATE_TEXT.getValue(Job.RUNNING))
         job.startedAt?.let { shown["ago"] = JsonPrimitive("started ${ago(it, now)}") }
-        shown["steps"] = JsonArray(chips)
+        shown["steps"] = JsonArray(chips.map(Chip::asJson))
         return JsonObject(shown)
     }
 
@@ -128,17 +132,16 @@ object Feed {
 
     /** A finished request: its outcome in a word, the reason, its next steps and when it ended (with its day for one
      * before today). */
-    private fun finished(job: Job, said: JsonObject?, ended: ZonedDateTime, pick: Pick?, day: Boolean): JsonObject {
+    private fun finished(job: Job, said: Outcome?, ended: ZonedDateTime, pick: Pick?, day: Boolean): JsonObject {
         val shown: LinkedHashMap<String, JsonElement>
         val actions = ArrayList<JsonObject>()
         if (said == null) {
             shown = head(job, job.state, STATE_TEXT[job.state] ?: job.state)
         } else {
-            shown = head(job, text(said, "tone"), text(said, "word"))
-            val reason = text(said, "reason")
-            if (reason.isNotEmpty()) shown["reason"] = JsonPrimitive(reason)
-            action(said["action"])?.let(actions::add)
-            action(said["also"], primary = false)?.let(actions::add)
+            shown = head(job, said.tone, said.word)
+            if (said.reason.isNotEmpty()) shown["reason"] = JsonPrimitive(said.reason)
+            action(said.action)?.let(actions::add)
+            action(said.also, primary = false)?.let(actions::add)
         }
         if (pick != null && pick.search) {  // a song the index didn't match: what caracole search finds, if not there
             val href = "/review?song=${pick.songId}"
@@ -161,23 +164,19 @@ object Feed {
         "says" to JsonObject(linkedMapOf("tone" to JsonPrimitive(tone), "text" to JsonPrimitive(text))),
     )
 
-    /** A next step as the tab draws it (an Outcome's action, as Outcome.asJson writes it): a link, or a form it posts
-     * with the form token; null for none. [primary]: drawn as the request's way on when it is one ([PRIMARY]). Its
-     * fields are a dict: a name given twice keeps its first place and its last value. */
-    private fun action(value: JsonElement?, primary: Boolean = true): JsonObject? {
-        val a = value as? JsonObject ?: return null
-        val post = (a["post"] as? JsonPrimitive)?.contentOrNull
-        val href = (a["href"] as? JsonPrimitive)?.contentOrNull
+    /** A next step as the tab draws it: a link, or a form it posts with the form token; null for none. [primary]:
+     * drawn as the request's way on when it is one ([PRIMARY]). Its fields are a dict: a name given twice keeps its
+     * first place and its last value. */
+    private fun action(a: Action?, primary: Boolean = true): JsonObject? {
+        if (a == null) return null
+        val post = a.post
+        val href = a.href
         if (post == null && href == null) return null
-        val label = text(a, "label")
-        val shown = linkedMapOf<String, JsonElement>("label" to JsonPrimitive(label),
-                                                     "primary" to JsonPrimitive(primary && label in PRIMARY))
+        val shown = linkedMapOf<String, JsonElement>("label" to JsonPrimitive(a.label),
+                                                     "primary" to JsonPrimitive(primary && a.label in PRIMARY))
         if (post != null) {
             val fields = LinkedHashMap<String, JsonElement>()
-            for (pair in (a["fields"] as? JsonArray).orEmpty()) {
-                val (name, field) = pair.jsonArray.map { it.jsonPrimitive.content }
-                fields[name] = JsonPrimitive(field)
-            }
+            for ((name, field) in a.fields) fields[name] = JsonPrimitive(field)
             shown["post"] = JsonPrimitive(post)
             shown["fields"] = JsonObject(fields)
         } else {
@@ -281,8 +280,6 @@ object Feed {
 
     private fun plus(shown: JsonObject, member: Pair<String, JsonElement>): JsonObject =
         JsonObject(LinkedHashMap(shown).apply { put(member.first, member.second) })
-
-    private fun text(of: JsonObject, name: String): String = (of[name] as? JsonPrimitive)?.contentOrNull ?: ""
 
     private fun two(n: Int): String = n.toString().padStart(2, '0')
 

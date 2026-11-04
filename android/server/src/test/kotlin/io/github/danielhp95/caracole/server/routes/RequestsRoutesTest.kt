@@ -190,6 +190,142 @@ class RequestsRoutesTest {
         }
     }
 
+    /** A lookup's queue whose `get` matches the song and skips its sheet as needing review first, as get.py does for a
+     * song in review: a request that waits for a pick, when its song has one. One of a title "Held" waits for the
+     * gate. */
+    private fun reviewing(): JobQueue = JobQueue(scope, clock = { now }, commands = Commands(mapOf(
+        "get" to CommandRunner { args, context ->
+            if (args.last() == "Held") gate.await()
+            for (stage in listOf("song", "match")) context.stage(stage, Job.DONE)
+            context.stage("sheet", Job.SKIPPED, "needs review first")
+        },
+    )))
+
+    /** A song of key `a/<title>`, its other columns [columns]; its id. */
+    private fun song(test: TestApp, title: String, columns: Map<String, Any> = emptyMap()): Long =
+        test.database.writeBlocking { db ->
+            val all = linkedMapOf<String, Any>("key" to "a/${title.lowercase()}", "artist" to "A", "title" to title,
+                                               "artists" to "[\"A\"]", "added_at" to "2026-11-01T00:00:00Z",
+                                               "created_at" to "2026-11-01T00:00:00Z",
+                                               "updated_at" to "2026-11-01T00:00:00Z") + columns
+            db.execute("INSERT INTO songs (${all.keys.joinToString()}) VALUES (${all.keys.joinToString { "?" }})",
+                       *all.values.toTypedArray())
+            db.lastRowid()
+        }
+
+    /** The one finished request the feed shows of [job]. */
+    private fun shownOver(test: TestApp, job: Job): kotlinx.serialization.json.JsonObject =
+        test.script("/requests.json").json.jsonObject.getValue("groups").jsonArray
+            .flatMap { it.jsonObject.getValue("requests").jsonArray }.map { it.jsonObject }
+            .single { it.getValue("id").jsonPrimitive.content.toInt() == job.id }
+
+    private fun actions(shown: kotlinx.serialization.json.JsonObject): List<kotlinx.serialization.json.JsonObject> =
+        shown["actions"]?.jsonArray.orEmpty().map { it.jsonObject }
+
+    /** The lookup's Sheet stage, as its output shows it. */
+    private fun sheetStage(shown: kotlinx.serialization.json.JsonObject): kotlinx.serialization.json.JsonObject =
+        shown.getValue("output").jsonObject.getValue("stages").jsonArray.map { it.jsonObject }
+            .single { it.getValue("label").jsonPrimitive.content == "The sheet" }
+
+    /** Each action as (label, its link or form, primary). */
+    private fun said(shown: kotlinx.serialization.json.JsonObject): List<Triple<String, String, Boolean>> =
+        actions(shown).map { a ->
+            Triple(a.getValue("label").jsonPrimitive.content,
+                   (a["href"] ?: a.getValue("post")).jsonPrimitive.content, a.getValue("primary").jsonPrimitive.content == "true")
+        }
+
+    @Test fun aSongTheIndexDidntMatchOffersWhatCaracoleSearchFindsOnceAndNeverWaitsForAPick() {
+        val queue = reviewing()
+        val (test, _) = app(queue = queue, zone = ZoneId.of("UTC"))
+        test.use {
+            val missed = song(test, "Missed", mapOf("match_decision" to "not_found"))
+            val lost = song(test, "Lost", mapOf("match_decision" to "not_found"))
+            // Not found's own way on is the search's (outcome._not_found): the pick adds it no second time
+            val notFound = shownOver(test, ended(queue, queue.submit(lookup("Missed")).first))
+            assertEquals(listOf(Triple(Feed.SEARCH, "/review?song=$missed", true)), said(notFound), "$notFound")
+            // a request you cancelled has no way on of its own: the pick offers the search, a plain button
+            val held = queue.submit(lookup("Held")).first
+            running(queue, held)
+            val cancelled = queue.submit(lookup("Lost")).first
+            queue.cancel(cancelled.id)
+            release(queue, held)
+            val taken = shownOver(test, cancelled)
+            assertEquals("Cancelled", says(taken))
+            assertEquals(listOf(Triple(Feed.SEARCH, "/review?song=$lost", false)), said(taken), "$taken")
+            for (shown in listOf(notFound, taken)) {
+                val output = shown.getValue("output").jsonObject.toString()
+                assertTrue("Waits for a pick" !in output, "a search's pick never waits: $output")
+            }
+        }
+    }
+
+    @Test fun noSongIgnoredNorAReviewWithNoCandidateOffersAPick() {
+        val queue = reviewing()
+        val (test, _) = app(queue = queue, zone = ZoneId.of("UTC"))
+        test.use {
+            val candidates = "[{\"artist_key\": \"a\", \"song_key\": \"x\", \"score\": 80}]"
+            song(test, "Ignored", mapOf("status" to "ignored", "review" to 1, "match_candidates" to candidates))
+            song(test, "Overridden", mapOf("review" to 1, "match_candidates" to candidates))
+            song(test, "Bare", mapOf("review" to 1, "match_candidates" to "[]"))
+            song(test, "Nameless", mapOf("review" to 1, "match_candidates" to "[{\"artist_key\": \"\", \"score\": 80}]"))
+            song(test, "Unasked", mapOf("match_decision" to "not_found"))
+            test.database.writeBlocking { db ->
+                for (title in listOf("Overridden", "Unasked")) {
+                    db.execute("INSERT INTO phone_overrides (tbl, key, written, value) VALUES ('ignore', ?, ?, 'true')",
+                               "a/${title.lowercase()}", "A - $title")
+                }
+            }
+            for (title in listOf("Ignored", "Overridden", "Bare", "Nameless", "Unasked")) {
+                val shown = shownOver(test, ended(queue, queue.submit(lookup(title)).first))
+                assertTrue(actions(shown).none { it.getValue("label").jsonPrimitive.content == Feed.SEARCH }, "$title: $shown")
+                val sheet = sheetStage(shown)
+                assertEquals("Skipped", sheet.getValue("badge").jsonObject.getValue("text").jsonPrimitive.content, "$title: $sheet")
+                assertTrue("note" !in sheet, "$title: $sheet")
+            }
+        }
+    }
+
+    @Test fun aDatabaseThatCantBeReadLeavesTheLinesSayingHowTheJobsWentAndNoPicks() {
+        val queue = reviewing()
+        val (test, _) = app(queue = queue, zone = ZoneId.of("UTC"))
+        test.use {
+            song(test, "Missed", mapOf("match_decision" to "not_found"))
+            val over = ended(queue, queue.submit(lookup("Missed")).first)
+            test.database.writeBlocking { db -> db.execute("ALTER TABLE songs RENAME TO songs_gone") }  // SQLite's error
+            val answer = test.script("/requests.json")
+            assertEquals(200, answer.status, answer.text)
+            val shown = shownOver(test, over)
+            assertEquals("Added", says(shown))  // its stages' line, not its song's Not found: no song to read
+            assertTrue(actions(shown).none { it.getValue("label").jsonPrimitive.content == Feed.SEARCH }, "$shown")
+        }
+    }
+
+    @Test fun tryAgainAnswersTheRequestAsTheQueueHasItNowStartedAlready() {
+        // A worker on Dispatchers.Unconfined starts the job queued again inside the queue's submit, before the route
+        // makes its answer: the answer is the queue's copy now (WebApp.job_view), running, never the one submit gave.
+        val runs = java.util.concurrent.atomic.AtomicInteger()
+        val unconfined = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val queue = JobQueue(unconfined, clock = { now }, commands = Commands(mapOf(
+            "get" to CommandRunner { _, _ -> if (runs.incrementAndGet() > 1) gate.await() },
+        )))
+        val (test, _) = app(queue = queue)
+        try {
+            test.use {
+                val first = queue.submit(lookup("Again")).first
+                ended(queue, first)
+                val script = test.postScript("/jobs/again", listOf("job" to "${first.id}"))
+                assertEquals(200, script.status, script.text)
+                val view = script.json.jsonObject.getValue("job").jsonObject
+                val again = queue.job(view.getValue("id").jsonPrimitive.content.toInt())!!
+                assertEquals(Job.RUNNING, again.state)
+                assertEquals(JsonPrimitive(Job.RUNNING), view["state"], "$view")
+                release(queue, again)
+            }
+        } finally {
+            unconfined.cancel()
+        }
+    }
+
     @Test fun tryAgainQueuesARequestOverAgainWithItsCommandsAsJobsRoutesDoes() {
         val (test, queue) = app()
         test.use {

@@ -6,10 +6,14 @@ import io.github.danielhp95.caracole.core.testing.AreaReplay
 import io.github.danielhp95.caracole.core.testing.Corpus
 import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.Record
+import io.github.danielhp95.caracole.server.jobs.Action
+import io.github.danielhp95.caracole.server.jobs.Chip
 import io.github.danielhp95.caracole.server.jobs.Feed
 import io.github.danielhp95.caracole.server.jobs.JobHistory
 import io.github.danielhp95.caracole.server.jobs.Line
+import io.github.danielhp95.caracole.server.jobs.Outcome
 import io.github.danielhp95.caracole.server.page.RequestsTab
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -74,9 +78,9 @@ object RequestsReplay : AreaReplay {
         val jobs = x.getValue("jobs").jsonArray.map { JobHistory.jobOf(it.jsonObject) }
         val lines = x.getValue("lines").jsonObject.entries.associate { (id, line) -> id.toInt() to line(line.jsonObject) }
         val outcomes = x.getValue("outcomes").jsonObject.entries
-            .filter { it.value !is JsonNull }.associate { (id, said) -> id.toInt() to said.jsonObject }
+            .filter { it.value !is JsonNull }.associate { (id, said) -> id.toInt() to outcome(said.jsonObject) }
         val steps = x.getValue("steps").jsonObject.entries
-            .associate { (id, chips) -> id.toInt() to chips.jsonArray.map { it.jsonObject } }
+            .associate { (id, chips) -> id.toInt() to chips.jsonArray.map { chip(it.jsonObject) } }
         val picks = x.getValue("picks").jsonObject.mapValues { (_, pick) ->
             Feed.Pick(pick.jsonObject.getValue("song_id").jsonPrimitive.long, pick.jsonObject.getValue("search").jsonPrimitive.boolean)
         }
@@ -100,6 +104,28 @@ object RequestsReplay : AreaReplay {
                 " Python's …${want.substring(maxOf(0, at - 60), minOf(want.length, at + 80))}…"
         }
     }
+
+    /** outcome.Outcome from the record's (tone, word, reason, action, also), as Outcome.asJson writes it. */
+    fun outcome(o: JsonObject): Outcome = Outcome(
+        o.getValue("tone").jsonPrimitive.content, o.getValue("word").jsonPrimitive.content,
+        o.getValue("reason").jsonPrimitive.content, action(o["action"]), action(o["also"]),
+    )
+
+    /** outcome.Action from the record's (label, href, post, fields as pairs); null for none. */
+    private fun action(a: JsonElement?): Action? {
+        if (a == null || a is JsonNull) return null
+        val o = a.jsonObject
+        return Action(o.getValue("label").jsonPrimitive.content, o["href"]?.jsonPrimitive?.contentOrNull,
+                      o["post"]?.jsonPrimitive?.contentOrNull,
+                      o.getValue("fields").jsonArray.map { pair ->
+                          val (name, value) = pair.jsonArray.map { it.jsonPrimitive.content }
+                          name to value
+                      })
+    }
+
+    /** outcome.Chip from its as_json. */
+    fun chip(o: JsonObject): Chip = Chip(o.getValue("name").jsonPrimitive.content, o.getValue("state").jsonPrimitive.content,
+                                         o.getValue("source").jsonPrimitive.content)
 
     /** status.Line from its as_json. */
     fun line(o: JsonObject): Line {
