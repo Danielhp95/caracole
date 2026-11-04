@@ -1,8 +1,9 @@
 package io.github.danielhp95.caracole.core.index
 
-import androidx.sqlite.SQLiteException
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.db.Warmup
+import io.github.danielhp95.caracole.core.db.isSqliteError
 import io.github.danielhp95.caracole.core.json.Canonical
 import io.github.danielhp95.caracole.core.json.CanonicalError
 import kotlinx.serialization.json.Json
@@ -37,8 +38,10 @@ import java.io.File
  *   the file's was, the listing of UG's sitemaps the later refresh's.
  *
  * When nothing changes, nothing is written and [merge]'s `backup` is never called; else it is called once, before
- * the first change. Each site is one savepoint: its actions, its kv records, then its keys made current
- * (ensure_current_keys, whole where the file's keys record differs from the database's, which is let go first). A
+ * the first change; once UG's sitemaps' rows changed by many (an import: Warmup.optimizes), UG's full-text indexes
+ * are made one segment each as the merge ends (Warmup.optimize), for the searches after it. Each site is one savepoint: its actions, its kv records, then its
+ * keys made current (ensure_current_keys, whole where the file's keys record differs from the database's, which is let
+ * go first). A
  * record rewritten whole is written as Python's `json.dumps` of `json.loads`'s reading writes it (Merge.pyLoaded).
  *
  * Runs on the writer, inside Database.write, in no transaction (ATTACH and DETACH run in none).
@@ -53,9 +56,12 @@ object IndexTransfer {
      * The export's sites into [db] (every one it holds, with none asked for; else those of [sites], in caracole's
      * order), [now] (a stamp) the time a song marked to fetch again is updated at, [backup] called once before the
      * first change. Called inside Database.write, in no transaction or savepoint of the caller's: else an
-     * IllegalStateException, nothing written (a [TransferError] is the file's alone).
+     * IllegalStateException, nothing written (a [TransferError] is the file's alone). UG's full-text indexes are made
+     * one segment each once its sitemaps' rows changed by [optimizeAfter] rows or more, the triggers' included
+     * (Warmup.optimizes: an import, never a sync's nightly few); Long.MAX_VALUE never.
      */
-    fun merge(db: Db, export: File, now: String, sites: List<String>? = null, backup: (() -> Unit)? = null): Merged {
+    fun merge(db: Db, export: File, now: String, sites: List<String>? = null,
+              optimizeAfter: Long = Warmup.OPTIMIZE_AFTER, backup: (() -> Unit)? = null): Merged {
         // A caller's mistake, never the file's: SQLite attaches no database within a transaction.
         check(!db.raw.inTransaction()) { "an index merge runs in no transaction (ATTACH runs in none)" }
         check(Merge.THEIRS !in attached(db)) { "a database is attached as ${Merge.THEIRS} already" }
@@ -63,7 +69,8 @@ object IndexTransfer {
         if (sameFile(export, mainFile(db))) throw TransferError("$export is the database itself")
         try {
             db.attach(export, Merge.THEIRS)
-        } catch (e: SQLiteException) {
+        } catch (e: Exception) {
+            if (!e.isSqliteError()) throw e
             throw noExport(export, e)
         }
         try {
@@ -76,7 +83,13 @@ object IndexTransfer {
             }
             backup?.invoke()
             val taken = LinkedHashMap<String, Map<String, Int>>()
-            for (plan in plans) taken[plan.site] = Merge.apply(db, plan)
+            var ugChanges = 0L
+            for (plan in plans) {
+                val before = Warmup.changes(db)
+                taken[plan.site] = Merge.apply(db, plan)
+                if (plan.site == "ug") ugChanges = Warmup.changes(db) - before
+            }
+            if (Warmup.optimizes(taken["ug"], ugChanges, optimizeAfter)) Warmup.optimize(db)  // one segment each (prep-db)
             return Merged(taken, true)
         } finally {
             db.detach(Merge.THEIRS)
@@ -154,7 +167,8 @@ object IndexTransfer {
             db.query("SELECT key, value, typeof(value) FROM ${Merge.THEIRS}.$META") {
                 it.text(0)!! to (if (it.text(2) == "text") it.text(1) else null)
             }.toMap()
-        } catch (e: SQLiteException) {
+        } catch (e: Exception) {
+            if (!e.isSqliteError()) throw e
             throw noExport(export, e)
         }
         if (meta["format"] != FORMAT) {
@@ -172,7 +186,7 @@ object IndexTransfer {
 
     private fun repr(value: String?): String = if (value == null) "None" else "'$value'"
 
-    private fun noExport(export: File, e: SQLiteException) =
+    private fun noExport(export: File, e: Exception) =
         TransferError("$export is no index export of caracole's (${e.message}): `caracole index export` makes one")
 
     /** _merged_sites: the sites the file holds (META's `sites`), and of them those asked for. */

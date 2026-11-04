@@ -21,6 +21,11 @@ and this library's site indexes.
     GET  /api/peer/index[?sites=]   this library's site indexes (``sites``: those named, by commas; every one with
                                  none), as ``caracole index export`` writes them, a SQLite file streamed, one at a
                                  time
+    POST /peer/index             The index pages another caracole's lookups read (the phone's: an index export of
+                                 pages, its bytes, ``peer_push.stage_index``), staged and read as the merge takes it
+                                 (``index_transfer.check_pages``: 400, 409 for another version), then ``caracole
+                                 index merge --delete --progress -- FILE`` queued (``jobs.index_merge_job``): 202
+                                 ``{"job": N}``
 
 Another caracole reads the first three to compare the two and to take what the owner chose (``caracole peer``). They
 are reads, as a search is: no lock, no site asked, nothing written. Under ``/api/``, another site's page can't read
@@ -32,8 +37,9 @@ request a write with the form token in its header (a ``json`` or ``bytes`` route
 in ``state_dir/peer/``, never in the library, and checked by their SHA-256; its take is a command, queued under
 ``peer-push:<its id>`` as a job of its own, and one from the same caracole while another is waiting or running is
 refused (409), that push left open. The index is read in one transaction into a file of ``cache_dir/peer/``, taking
-no lock, and that file is gone once it is open to be sent: caracole serve writes nothing else for a sync
-(AGENTS.md).
+no lock, and that file is gone once it is open to be sent. The index pages another caracole posts are staged in
+``state_dir/peer/`` (at most two waiting) until their merge, a command under caracole's lock, deletes them: caracole
+serve writes nothing else for a sync (AGENTS.md).
 """
 
 from __future__ import annotations
@@ -68,6 +74,8 @@ ROUTES = (
     Route("POST", "/peer/push", lambda app, asked, doc: push(app, _params(asked.target), doc), body="json",
           limit=peer_push.DOCUMENT_MAX),
     Route("GET", "/api/peer/index", lambda app, asked: index(app, asked, _params(asked.target))),
+    Route("POST", "/peer/index", lambda app, asked, data: push_index(app, data), body="bytes",
+          limit=peer_push.INDEX_MAX),
 )
 # One copy of the indexes out at a time, from its making until it is sent (or dropped): each is as large as they are
 _streaming = threading.Lock()
@@ -299,3 +307,47 @@ def index(app: WebApp, asked, params: dict[str, str]) -> Response:
     return Response(200, headers=[("Content-Type", SQLITE),
                                   ("Content-Disposition", 'attachment; filename="caracole-index.sqlite"')],
                     stream=stream)
+
+
+def push_index(app: WebApp, data: bytes) -> Response:
+    """``POST /peer/index``: the index pages another caracole's lookups read, staged (``peer_push.stage_index``), and
+    their merge queued, ``caracole index merge --delete --progress -- FILE``, a job of no song's; 202 with its id.
+    Index exports left an hour that no waiting request names go first (``peer_push.sweep_indexes``).
+
+    Before the 202, which the phone forgets its reads on, the file is read as the merge will take it
+    (``index_transfer.check_pages``): an export of pages alone, of this caracole's layout, schema and columns. One
+    that isn't is refused and deleted, 409 for another version (the phone keeps its reads until the two agree), 400
+    for anything else, so that a file this side would refuse never costs the phone its reads, and nothing but pages
+    reaches the merge from the network."""
+    from caracole import index_transfer
+    from caracole.web import jobs
+
+    state_dir = app.cfg.state_dir
+    try:
+        named = {arg for job in app.queue.snapshot() if job.active for step in job.steps for arg in step.args}
+        peer_push.sweep_indexes(state_dir, named)
+        path = peer_push.stage_index(state_dir, data)
+    except peer_push.PushError as e:
+        raise _refused(e) from None
+    except OSError as e:
+        raise Refused(503, "Not kept", f"The index pages couldn't be kept: {e}.") from e
+    try:
+        with app.db() as conn:
+            index_transfer.check_pages(conn, path)
+        job, _ = app.submit(**jobs.index_merge_job(path))
+    except index_transfer.OtherVersion as e:
+        path.unlink(missing_ok=True)
+        raise Refused(409, "Not merged", f"{_unstaged(e, path)} Bring both caracoles to one version first.") from None
+    except index_transfer.TransferError as e:
+        path.unlink(missing_ok=True)
+        raise Refused(400, "Not merged", _unstaged(e, path)) from None
+    except Refused:
+        path.unlink(missing_ok=True)
+        raise
+    return json_response(202, {"job": job.id})
+
+
+def _unstaged(e: Exception, path) -> str:
+    """A refusal of a staged export in words of the file posted, never of the path it was staged at."""
+    said = str(e).replace(str(path), "The index export")
+    return said[:1].upper() + said[1:] + ("" if said.endswith(".") else ".")

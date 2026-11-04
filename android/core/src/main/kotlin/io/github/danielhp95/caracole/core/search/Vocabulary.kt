@@ -8,7 +8,9 @@ import io.github.danielhp95.caracole.core.py.Py
  * length, as a process keeps them. A letter's words are read the first time a word of a query begins with it, and
  * then only the words the table gained since (it only grows), so that a search reads no word twice; [last] is the
  * newest word's id read. A length's words are kept in code point order, whenever they came (bisect.insort), so a
- * close spelling's ties come in that order.
+ * close spelling's ties come in that order. More than [REREAD] words gained since (an index imported) forget the
+ * letters read, each read again, whole and in that order already, when a query next asks it: one query for a letter,
+ * where a word at a time would be one insort each into lists of tens of thousands (the plan's prep-db).
  *
  * A letter is a word's first code point, and its words' range ends at the next code point, as Python's
  * `chr(ord(start) + 1)` builds it: where that is a lone surrogate (a word beginning with U+D7FF) Python can't bind
@@ -27,14 +29,14 @@ internal class Vocabulary {
             last = 0
         }
         if (top > last) {
-            val new = if (letters.isNotEmpty()) {
-                db.query("SELECT term FROM ug_key_words WHERE id > ? AND id <= ?", last, top) { it.text(0)!! }
-            } else {
-                emptyList()
-            }
-            for (term in new) {
-                val byLength = letters[first(term)] ?: continue
-                insort(byLength.getOrPut(Py.len(term)) { ArrayList() }, term)
+            if (top - last > REREAD) {
+                letters = HashMap()
+            } else if (letters.isNotEmpty()) {
+                val new = db.query("SELECT term FROM ug_key_words WHERE id > ? AND id <= ?", last, top) { it.text(0)!! }
+                for (term in new) {
+                    val byLength = letters[first(term)] ?: continue
+                    insort(byLength.getOrPut(Py.len(term)) { ArrayList() }, term)
+                }
             }
             last = top
         }
@@ -74,6 +76,9 @@ internal class Vocabulary {
     companion object {
         /** VOCABULARIES: the databases whose words a process keeps. */
         const val VOCABULARIES = 4
+
+        /** The words gained since past which the letters read are read again rather than added to. */
+        const val REREAD = 1_000
 
         private val kept = LinkedHashMap<String, Vocabulary>()
 
