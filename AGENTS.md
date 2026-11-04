@@ -1195,7 +1195,21 @@ Not built yet. (lookup.)
 
 ##### The Requests tab on the phone
 
-Not built yet. (job-views, requests-feed.)
+- **Its lines** (server/jobs: `Status`, `Outcomes`, `SongFacts`, `JobViews`, `JobsRoutes`): every job's line, chips
+  and outcome as status.py, outcome.py and jobs_routes.view say them, for every kind caracole serve queues and the
+  phone's own:
+  - a job of commands is read as caracole serve's; one of the phone's own (a run, no command) as caracole serve's of
+    the same request (`Shape`): an add's or a removal's stage its one command, a staged one's stages under its title;
+  - with no to-do page: status.job_line's `todo=None`, the same words with no link;
+  - its song as the library has it now (`SongFacts.songOf`, jobs_routes.song_of: the sheet its card opens, review,
+    the picker, ignored and a LaCuerda pick by the phone's overrides, `checked_now` by `ug_checked_at` and the
+    artist page's check, `elsewhere` from the local indexes), worked out once for a job over;
+  - PhoneKinds' kinds (render, inbox, backup, restore) say §5.3's table's words, the ones their run filled in as
+    their stage's detail, and the phone's index import "Merging the computer's index…";
+  - vectors/web/job_views.jsonl (the phone's own jobs), job_views_kinds.jsonl (every kind of commands) and
+    outcome.jsonl, written by tests/test_conformance_sync_routes.py and test_conformance_web.py
+    (`JobViewsReplay`, area `job-views`).
+- The tab itself: not built yet (requests-feed).
 
 ##### The computer's settings on the phone
 
