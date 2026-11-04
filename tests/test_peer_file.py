@@ -235,3 +235,339 @@ def test_a_file_there_already_is_never_written_over(desk, tmp_path):
 def test_the_same_library_exported_twice_is_the_same_file(desk, tmp_path):
     a, b = export(desk, tmp_path / "a.caracole"), export(desk, tmp_path / "b.caracole")
     assert a.path.read_bytes() == b.path.read_bytes()
+
+
+# --- a file read back, refused, and taken from -----------------------------------------------------------------------
+
+
+@pytest.fixture
+def exported(desk, tmp_path):
+    return export(desk, tmp_path / "desk.caracole")
+
+
+@pytest.fixture
+def studio(tmp_path):
+    """Another library, Studio, whose file desk imports."""
+    lib = Library(tmp_path / "studio", sync_id=OTHER_ID)
+    lib.song("Radiohead", "Creep", sheet=b"[G]Creep, as Studio plays it")
+    yield lib
+    lib.close()
+
+
+@pytest.fixture
+def in_utc(monkeypatch):
+    """The server's zone UTC, as the vectors' (a day is said in it)."""
+    import time
+
+    monkeypatch.setenv("TZ", "UTC")
+    time.tzset()
+    yield
+    monkeypatch.undo()
+    time.tzset()
+
+
+def by_studio(studio: Library, path: Path) -> Path:
+    return peer_file.export_file(studio.conn, studio.cfg, studio.overrides(), studio.books(), path,
+                                 ["library", "songbooks"], now=NOW, version="0.1.0", name="Studio").path
+
+
+def zip_with(folder: Path, members: dict[str, bytes], name: str = "made.caracole") -> Path:
+    path = folder / name
+    with zipfile.ZipFile(path, "w") as z:
+        for member, data in members.items():
+            z.writestr(member, data)
+    return path
+
+
+def rewritten(source: Path, target: Path, change: dict[str, bytes | None]) -> Path:
+    """``source``'s members, in order, each ``change`` names replaced (None: left out), those it adds at the end."""
+    with zipfile.ZipFile(source) as z, zipfile.ZipFile(target, "w") as out:
+        for info in z.infolist():
+            if info.filename in change:
+                if change[info.filename] is not None:
+                    out.writestr(info, change[info.filename])
+            else:
+                out.writestr(info, z.read(info))
+        for name, data in change.items():
+            if name not in z.namelist() and data is not None:
+                out.writestr(name, data)
+    return target
+
+
+def declaring(path: Path, sizes: dict[str, int]) -> Path:
+    """The zip at ``path`` with its central directory declaring each member of ``sizes`` that size."""
+    data = bytearray(path.read_bytes())
+    at = data.rfind(b"PK\x05\x06")
+    count, start = int.from_bytes(data[at + 10:at + 12], "little"), int.from_bytes(data[at + 16:at + 20], "little")
+    for _ in range(count):
+        assert data[start:start + 4] == b"PK\x01\x02"
+        n, m, k = (int.from_bytes(data[start + o:start + o + 2], "little") for o in (28, 30, 32))
+        name = data[start + 46:start + 46 + n].decode()
+        if name in sizes:
+            data[start + 24:start + 28] = sizes[name].to_bytes(4, "little")
+        start += 46 + n + m + k
+    path.write_bytes(bytes(data))
+    return path
+
+
+MANIFEST_OK = json.dumps({"format": 1, "caracole": "0.1.0", "schema": db.SCHEMA_VERSION, "sync": sync.FORMAT,
+                          "id": OWN_ID, "name": "Desk", "made": MADE, "parts": ["library"], "songs": 0,
+                          "songbooks": 0, "units": 0, "files": 0, "pages": 0, "indexes": []}).encode()
+STATE_OK = json.dumps(sync.state_document(OWN_ID, "0.1.0", "Desk", {}, None, now=MADE, kept={})).encode()
+SMALL = {"caracole.json": MANIFEST_OK, "state.json": STATE_OK, "bases.json": b"{}", "units.jsonl": b""}
+
+
+def test_a_file_read_back_is_what_was_exported_unit_for_unit(exported, desk, tmp_path):
+    f = peer_file.read_file(exported.path)
+    with peer_file.FileSource(f, None, tmp_path) as src:
+        for unit_id, unit in f.state.units.items():
+            assert sync.digest_of(sync.value_of_document(unit_id, src.unit(unit_id))) == unit.digest
+    assert (f.id, f.name, f.made, f.holds, f.index_only) == (OWN_ID, "Desk", MADE, ("library", "songbooks"), False)
+    assert f.state.units == desk.units() and f.manifest["songs"] == 2 and f.path == exported.path
+    peer_file.check_whole(f)
+
+
+def test_reading_a_file_leaves_no_file_open(exported):
+    import os
+
+    before = len(os.listdir("/proc/self/fd"))
+    f = peer_file.read_file(exported.path)
+    assert len(os.listdir("/proc/self/fd")) == before
+    peer_file.check_whole(f)
+    assert len(os.listdir("/proc/self/fd")) == before
+
+
+def test_its_kept_files_are_read_by_their_sha256_and_checked(desk, exported, tmp_path):
+    f = peer_file.read_file(exported.path)
+    sha = kept_shas(desk, "radiohead/creep")[0]
+    with peer_file.FileSource(f, None, tmp_path) as src:
+        assert hashlib.sha256(src.file("radiohead/creep", "sheet.txt", sha)).hexdigest() == sha
+        with pytest.raises(sync.PeerError):
+            src.file("radiohead/creep", "sheet.txt", "0" * 64)  # neither in the file nor kept here
+    # a file it lacks, kept here already, comes from here
+    with peer_file.FileSource(f, desk.conn, desk.cfg.library_dir) as src:
+        missing = rewritten(exported.path, tmp_path / "lacks.caracole", {f"files/{sha}": None})
+        with peer_file.FileSource(peer_file.read_file(missing), desk.conn, desk.cfg.library_dir) as lacking:
+            assert lacking.file("radiohead/creep", "sheet.txt", sha) == src.file("radiohead/creep", "sheet.txt", sha)
+
+
+def test_a_blob_whose_bytes_arent_its_name_is_refused_when_read(exported, desk, tmp_path):
+    sha = kept_shas(desk, "radiohead/creep")[0]
+    bad = rewritten(exported.path, tmp_path / "bad.caracole", {f"files/{sha}": b"other bytes"})
+    f = peer_file.read_file(bad)
+    with peer_file.FileSource(f, None, tmp_path) as src, pytest.raises(sync.PeerError):
+        src.file("radiohead/creep", "sheet.txt", sha)
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.check_whole(f)
+
+
+def test_a_unit_of_a_part_the_file_holds_that_its_state_lacks_is_one_its_caracole_hasnt_got(exported, tmp_path):
+    with peer_file.FileSource(peer_file.read_file(exported.path), None, tmp_path) as src:
+        assert src.unit("song/not/here") is None and src.unit("songbook/nothing") is None
+
+
+def test_a_unit_the_file_doesnt_speak_for_is_an_error_never_a_removal(desk, tmp_path):
+    songbooks = peer_file.read_file(export(desk, tmp_path / "s.caracole", ["songbooks"]).path)
+    with peer_file.FileSource(songbooks, None, tmp_path) as src:
+        with pytest.raises(sync.PeerError):
+            src.unit(WONDERWALL)  # a song of the library, which the file doesn't hold
+        with pytest.raises(sync.PeerError):
+            src.unit("alias/radiohead")
+        assert src.unit(CREEP) is not None  # the song its songbook lists, which it carries
+    wonderwall = desk.conn.execute("SELECT id FROM songs WHERE key = 'oasis/wonderwall'").fetchone()[0]
+    from caracole.songs import get_song
+
+    (song_dir(desk.cfg.library_dir, get_song(desk.conn, wonderwall)) / "sheet.txt").write_bytes(b"edited elsewhere")
+    left = peer_file.read_file(export(desk, tmp_path / "left.caracole").path)
+    with peer_file.FileSource(left, None, tmp_path) as src, pytest.raises(sync.PeerError, match="left out"):
+        src.unit(WONDERWALL)  # named by its state, its document left out
+
+
+@pytest.mark.parametrize("bad", ["../evil", "files/notahash", "extra.txt", "files/" + "A" * 64, "/etc/passwd",
+                                 "pages/" + "a" * 63, "files/" + "a" * 64 + "/x", "files/"])
+def test_a_member_outside_the_layout_is_refused_whole(tmp_path, bad):
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.read_file(zip_with(tmp_path, {**SMALL, bad: b"x"}))
+
+
+def test_a_member_named_twice_is_refused_whole(tmp_path):
+    import warnings
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # zipfile warns of the duplicate it writes
+        path = tmp_path / "twice.caracole"
+        with zipfile.ZipFile(path, "w") as z:
+            for name, data in SMALL.items():
+                z.writestr(name, data)
+            z.writestr("state.json", STATE_OK)
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.read_file(path)
+
+
+def test_a_file_cut_short_or_declaring_more_than_it_may_is_refused(tmp_path, exported):
+    cut = tmp_path / "cut.caracole"
+    cut.write_bytes(exported.path.read_bytes()[:-500])
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.read_file(cut)
+    blob = "files/" + "a" * 64
+    big = declaring(zip_with(tmp_path, {**SMALL, blob: b"x"}, "big.caracole"), {blob: peer_file.FILE_MAX + 1})
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.read_file(big)
+    blobs = {f"files/{c * 64}": b"x" for c in "abc"}
+    many = declaring(zip_with(tmp_path, {**SMALL, **blobs}, "many.caracole"), dict.fromkeys(blobs, 3 * 1024 ** 3))
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.read_file(many)
+    state = declaring(zip_with(tmp_path, SMALL, "state.caracole"), {"state.json": peer_file.JSON_MAX + 1})
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.read_file(state)
+
+
+def test_a_crc_error_is_found_before_anything_is_taken(desk, exported, tmp_path):
+    data = bytearray(exported.path.read_bytes())
+    sheet = b"[Em]Today is gonna be the day"
+    at = data.find(sheet)
+    data[at] ^= 0xFF
+    broken = tmp_path / "crc.caracole"
+    broken.write_bytes(bytes(data))
+    f = peer_file.read_file(broken)  # its directory and JSON whole: the blob is read when asked for
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.check_whole(f)
+
+
+def test_a_document_or_a_file_that_isnt_as_its_state_says_is_refused_whole(desk, exported, tmp_path):
+    lines = lines_of(members(exported.path)["units.jsonl"])
+    lines[0]["unit"]["names"]["album"] = "another album"
+    other = rewritten(exported.path, tmp_path / "doc.caracole",
+                      {"units.jsonl": b"".join(json.dumps(line).encode() + b"\n" for line in lines)})
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.check_whole(peer_file.read_file(other))
+    sha = kept_shas(desk, "radiohead/creep")[0]
+    lacking = rewritten(exported.path, tmp_path / "lacks.caracole", {f"files/{sha}": None})
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.check_whole(peer_file.read_file(lacking))
+    extra = rewritten(exported.path, tmp_path / "extra.caracole",
+                      {"units.jsonl": members(exported.path)["units.jsonl"] + json.dumps(
+                          {"format": sync.FORMAT, "id": "song/not/named", "digest": "0" * 64, "unit": {}}).encode()})
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.check_whole(peer_file.read_file(extra))
+
+
+@pytest.mark.parametrize("content", [b"hello", b"", b"PK\x05\x06" + bytes(18)])
+def test_something_else_is_not_a_file_caracole_exported(tmp_path, content):
+    (tmp_path / "x").write_bytes(content)
+    with pytest.raises(peer_file.FileError, match="isn't a file caracole exported"):
+        peer_file.read_file(tmp_path / "x")
+
+
+def test_a_zip_of_something_else_or_a_folder_is_not_a_file_caracole_exported(tmp_path):
+    with pytest.raises(peer_file.FileError, match="isn't a file caracole exported"):
+        peer_file.read_file(zip_with(tmp_path, {"photo.jpg": b"\xff\xd8", "caracole.json": MANIFEST_OK}))
+    with pytest.raises(peer_file.FileError, match="isn't a file caracole exported"):
+        peer_file.read_file(tmp_path)
+    plain = tmp_path / "plain.sqlite"
+    sqlite3.connect(plain).execute("CREATE TABLE t (x)").connection.close()
+    with pytest.raises(peer_file.FileError, match="isn't a file caracole exported"):
+        peer_file.read_file(plain)
+
+
+def test_another_format_is_said_by_its_number(tmp_path):
+    other = json.loads(MANIFEST_OK) | {"format": 2}
+    with pytest.raises(peer_file.FileError, match=r"another version of caracole \(format 2\)"):
+        peer_file.read_file(zip_with(tmp_path, {**SMALL, "caracole.json": json.dumps(other).encode()}, "f2"))
+    later = json.loads(MANIFEST_OK) | {"sync": sync.FORMAT + 1}
+    with pytest.raises(peer_file.FileError, match="another version of caracole"):
+        peer_file.read_file(zip_with(tmp_path, {**SMALL, "caracole.json": json.dumps(later).encode()}, "s3"))
+
+
+@pytest.mark.parametrize("change", [{"id": None}, {"id": "nothex"}, {"made": "yesterday"}, {"parts": "library"}])
+def test_a_manifest_that_cant_be_read_is_refused(tmp_path, change):
+    manifest = json.loads(MANIFEST_OK) | change
+    with pytest.raises(peer_file.FileError, match="can't be read whole"):
+        peer_file.read_file(zip_with(tmp_path, {**SMALL, "caracole.json": json.dumps(manifest).encode()}))
+
+
+def test_the_indexes_are_held_only_at_this_databases_schema(desk, tmp_path):
+    made = export(desk, tmp_path / "i.caracole", ["library", "songbooks", "indexes"])
+    assert peer_file.read_file(made.path).holds == ("library", "songbooks", "indexes")
+    manifest = json.loads(members(made.path)["caracole.json"]) | {"schema": db.SCHEMA_VERSION - 1}
+    older = rewritten(made.path, tmp_path / "older.caracole", {"caracole.json": json.dumps(manifest).encode()})
+    assert peer_file.read_file(older).holds == ("library", "songbooks")
+
+
+def test_an_index_export_is_an_import_of_indexes_alone(conn, tmp_path):
+    index_transfer.export(conn, tmp_path / "i.sqlite", now=NOW)
+    f = peer_file.read_file(tmp_path / "i.sqlite")
+    assert (f.index_only, f.holds, f.id, f.state, f.bases) == (True, ("indexes",), None, None, {})
+    assert (f.name, f.made) == ("i.sqlite", MADE)
+    assert peer_file.read_file(tmp_path / "i.sqlite", name="phone-indexes.sqlite").name == "phone-indexes.sqlite"
+    peer_file.check_importable(f, conn, own=OWN_ID)
+    peer_file.check_whole(f)
+    with peer_file.FileSource(f, None, tmp_path) as src:
+        assert src.indexes(tmp_path / "copy.sqlite") and (tmp_path / "copy.sqlite").read_bytes() == (
+            tmp_path / "i.sqlite").read_bytes()
+        assert src.pages() is None
+
+
+def test_an_index_export_of_another_schema_holds_nothing_and_is_refused(conn, tmp_path):
+    index_transfer.export(conn, tmp_path / "i.sqlite", now=NOW)
+    file = sqlite3.connect(tmp_path / "i.sqlite")
+    file.execute(f"UPDATE {index_transfer.META} SET value = '3' WHERE key = 'schema'")
+    file.commit()
+    file.close()
+    f = peer_file.read_file(tmp_path / "i.sqlite")
+    assert f.holds == ()
+    with pytest.raises(peer_file.FileError, match="another version of caracole"):
+        peer_file.check_importable(f, conn, own=OWN_ID)
+
+
+def test_its_indexes_are_copied_out_once_it_holds_them(desk, tmp_path):
+    made = export(desk, tmp_path / "i.caracole", ["library", "songbooks", "indexes"])
+    with peer_file.FileSource(peer_file.read_file(made.path), None, tmp_path) as src:
+        assert src.indexes(tmp_path / "out.sqlite")
+        assert (tmp_path / "out.sqlite").read_bytes() == members(made.path)["indexes.sqlite"]
+    with peer_file.FileSource(peer_file.read_file(export(desk, tmp_path / "n.caracole").path), None,
+                              tmp_path) as src:
+        assert not src.indexes(tmp_path / "none.sqlite") and not (tmp_path / "none.sqlite").exists()
+
+
+def test_its_pages_are_read_by_their_sha256(desk, tmp_path):
+    page = b"<html>the library</html>"
+    sha = hashlib.sha256(page).hexdigest()
+    manifest = {"format": 1, "start": "index.html", "files": [
+        {"path": "index.html", "url": "/offline/index.html", "size": len(page), "sha256": sha, "type": "text/html",
+         "headers": {}}]}
+    f = peer_file.read_file(export(desk, tmp_path / "p.caracole", pages=(manifest, lambda path: page)).path)
+    with peer_file.FileSource(f, None, tmp_path) as src:
+        assert src.pages() == manifest and src.page(sha) == page
+        with pytest.raises(sync.PeerError):
+            src.page("0" * 64)
+
+
+def test_its_bases_are_each_peers_units_and_kept_answers(desk, tmp_path):
+    sync.record_agreement(desk.conn, OTHER_ID, desk.units(), desk.units(), "2026-11-01T10:00:00Z")
+    sync.record_kept(desk.conn, OTHER_ID, {"song/x/y": ("h", "t")}, "2026-11-02T10:00:00Z")
+    f = peer_file.read_file(export(desk, tmp_path / "b.caracole").path)
+    base, kept = f.base_for(OTHER_ID)
+    assert base == sync.base_of(desk.conn, OTHER_ID) and kept == {"song/x/y": ("h", "t", "2026-11-02T10:00:00Z")}
+    assert f.base_for("1122334455667788") == (None, {}) and f.base_for(None) == (None, {})
+
+
+def test_own_export_and_one_no_newer_than_the_last_sync_are_refused(desk, studio, exported, tmp_path, in_utc):
+    with pytest.raises(peer_file.FileError, match="this library's own export"):
+        peer_file.check_importable(peer_file.read_file(exported.path), desk.conn, own=OWN_ID)
+    theirs = peer_file.read_file(by_studio(studio, tmp_path / "studio.caracole"))
+    peer_file.check_importable(theirs, desk.conn, own=OWN_ID)  # never synced: newer than nothing
+    agreed = {"song/x/y": sync.Unit("song/x/y", "X - Y", "1" * 64)}
+    sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, "2026-11-02T08:00:00Z")
+    peer_file.check_importable(theirs, desk.conn, own=OWN_ID)  # synced before the file was made
+    sync.record_agreement(desk.conn, OTHER_ID, agreed, agreed, MADE)  # the file's made, or later
+    with pytest.raises(peer_file.FileError,
+                       match=r"^Nothing in this file is newer than your sync with Studio on 03/11/26\.$"):
+        peer_file.check_importable(theirs, desk.conn, own=OWN_ID)
+
+
+def test_a_kept_answer_later_than_the_file_makes_it_older_too(desk, studio, tmp_path, in_utc):
+    theirs = peer_file.read_file(by_studio(studio, tmp_path / "studio.caracole"))
+    sync.record_kept(desk.conn, OTHER_ID, {CREEP: ("h", "t")}, "2026-11-04T09:00:00Z")
+    with pytest.raises(peer_file.FileError, match="your sync with Studio on 04/11/26"):
+        peer_file.check_importable(theirs, desk.conn, own=OWN_ID)

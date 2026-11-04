@@ -66,6 +66,7 @@ import re
 import secrets
 import sqlite3
 import zipfile
+import zlib
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
@@ -389,3 +390,429 @@ class _Out:
                 out.write(chunk)
         if sha256 is not None and digest.hexdigest() != sha256:
             raise FileError(f"{name} changed while the file was made: export again")
+
+
+# --- a file read back ----------------------------------------------------------------------------------------------
+
+_JSON_MEMBERS = (MANIFEST, STATE, BASES, UNITS, PAGES)
+_NAMED = (*_JSON_MEMBERS, INDEXES)
+_ID = re.compile(r"[0-9a-f]{16}")
+
+
+def _unreadable(why: str) -> FileError:
+    return FileError(UNREADABLE.format(why=why))
+
+
+@dataclass(frozen=True)
+class SyncFile:
+    """A file read back (``read_file``): its path, its manifest, its state (None for an index export), the bases it
+    keeps (``{peer id: {"units", "kept"}}``), the parts it holds, and whether it is an index export alone. It holds
+    no open file."""
+
+    path: Path
+    manifest: dict[str, Any]
+    state: sync.PeerState | None
+    bases: dict[str, dict]
+    holds: tuple[str, ...]
+    index_only: bool
+
+    @property
+    def id(self) -> str | None:
+        """The id of the caracole that made it (kv ``sync:id``); None for an index export."""
+        found = self.manifest.get("id")
+        return found if isinstance(found, str) and _ID.fullmatch(found) else None
+
+    @property
+    def name(self) -> str:
+        """The name of the library it is of; an index export's own file name."""
+        found = self.manifest.get("name")
+        return found if isinstance(found, str) else ""
+
+    @property
+    def made(self) -> str | None:
+        """When it was made, a stamp."""
+        found = self.manifest.get("made")
+        return found if isinstance(found, str) else None
+
+    def base_for(self, peer: str | None) -> tuple[sync.Base | None, sync.Kept]:
+        """What the file's caracole last agreed on with ``peer`` (None: never) and the answers it kept for it, as
+        ``peer_sync.base_of`` and ``kept_of`` read them there; here the file's, there ``peer``'s."""
+        entry = self.bases.get(peer) if peer is not None else None
+        if not isinstance(entry, Mapping):
+            return None, {}
+        return sync._read_units(entry.get("units")), sync._read_kept(entry.get("kept"))
+
+
+def read_file(path: Path, *, name: str | None = None) -> SyncFile:
+    """The file at ``path`` read back (see the module's docstring): its central directory and its manifest, state
+    and bases, each checked; FileError, in the owner's words, for a file that isn't one, of another format, or that
+    can't be read whole. ``name``: an index export's own name, when ``path`` isn't it (an upload staged)."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(len(_SQLITE))
+    except OSError:
+        raise FileError(NOT_A_FILE) from None
+    if head.startswith(_SQLITE):
+        return _index_file(path, name or Path(path).name)
+    if not head.startswith(_ZIP):
+        raise FileError(NOT_A_FILE)
+    try:
+        z = zipfile.ZipFile(path)
+    except (zipfile.BadZipFile, OSError, EOFError, ValueError):
+        raise _unreadable("it is cut short, or no whole zip") from None
+    with z:
+        infos = z.infolist()
+        if not infos or infos[0].filename != MANIFEST:
+            raise FileError(NOT_A_FILE)
+        manifest = _json_member(z, infos[0])
+        if not isinstance(manifest, dict):
+            raise _unreadable("its manifest is no object")
+        if manifest.get("format") != FORMAT:
+            raise FileError(OTHER_FORMAT.format(format=manifest.get("format")))
+        if manifest.get("sync") != sync.FORMAT:
+            raise FileError(OTHER_FORMAT.format(format=f"{FORMAT}, its sync's {manifest.get('sync')}"))
+        _check_layout(infos)
+        _check_manifest(manifest)
+        names = {info.filename: info for info in infos}
+        for needed in (STATE, UNITS):
+            if needed not in names:
+                raise _unreadable(f"it has no {needed}")
+        try:
+            state = sync.read_state_document(_json_member(z, names[STATE]))
+        except sync.StateError as e:
+            raise _unreadable(f"its state: {e}") from None
+        if state.server != manifest["id"]:
+            raise _unreadable("its state is another caracole's than its manifest names")
+        bases = _json_member(z, names[BASES]) if BASES in names else {}
+        if not isinstance(bases, dict):
+            raise _unreadable("its bases are no object")
+    asked = set(manifest["parts"])
+    holds = tuple(p for p in sync.PARTS if p in asked and (
+        p != "indexes" or (INDEXES in names and manifest.get("schema") == _schema())))
+    return SyncFile(Path(path), manifest, state, bases, holds, False)
+
+
+def _check_layout(infos: Sequence[zipfile.ZipInfo]) -> None:
+    """Every member a name of the layout, once, of a size it may be, stored or deflated, nothing encrypted, the
+    whole within ``IMPORT_MAX``."""
+    seen: set[str] = set()
+    total = 0
+    for info in infos:
+        name = info.filename
+        blob = name.startswith((FILES, PAGE_BLOBS)) and _SHA256.fullmatch(name.partition("/")[2]) is not None
+        if name not in _NAMED and not blob:
+            raise _unreadable(f"a member outside its layout, {name[:80]!r}")
+        if name in seen:
+            raise _unreadable(f"{name[:80]} twice")
+        seen.add(name)
+        if info.flag_bits & 0x1 or info.compress_type not in (zipfile.ZIP_STORED, zipfile.ZIP_DEFLATED):
+            raise _unreadable(f"{name[:80]} is encrypted, or compressed as caracole doesn't")
+        most = FILE_MAX if blob else JSON_MAX if name in _JSON_MEMBERS else IMPORT_MAX
+        if info.file_size > most:
+            raise _unreadable(f"{name[:80]} is bigger than it may be")
+        total += info.file_size
+    if total > IMPORT_MAX:
+        raise _unreadable("it holds more than 8 GiB")
+
+
+def _check_manifest(manifest: Mapping[str, Any]) -> None:
+    """A manifest's fields as an import reads them: its caracole's id, when it was made, and its parts."""
+    if not (isinstance(manifest.get("id"), str) and _ID.fullmatch(manifest["id"])):
+        raise _unreadable("its manifest names no caracole")
+    if not isinstance(manifest.get("made"), str) or stamps.parse(manifest["made"]) is None:
+        raise _unreadable("its manifest says no time it was made")
+    parts = manifest.get("parts")
+    if not (isinstance(parts, list) and all(isinstance(p, str) for p in parts)):
+        raise _unreadable("its manifest names no parts")
+    if not isinstance(manifest.get("name"), str):
+        raise _unreadable("its manifest names no library")
+
+
+def _json_member(z: zipfile.ZipFile, info: zipfile.ZipInfo) -> Any:
+    if info.file_size > JSON_MAX:
+        raise _unreadable(f"{info.filename} is bigger than it may be")
+    try:
+        with z.open(info) as f:
+            data = f.read(JSON_MAX + 1)
+    except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error) as e:
+        raise _unreadable(f"{info.filename}: {e}") from None
+    if len(data) > JSON_MAX:
+        raise _unreadable(f"{info.filename} is bigger than it may be")
+    try:
+        return json.loads(data)
+    except (ValueError, RecursionError):
+        raise _unreadable(f"{info.filename} is no JSON") from None
+
+
+def _index_file(path: Path, name: str) -> SyncFile:
+    """An index export (``caracole index export``'s), as a file of the indexes alone."""
+    from caracole import index_transfer
+
+    try:
+        file = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            meta = dict(file.execute(f"SELECT key, value FROM {index_transfer.META}").fetchall())
+        finally:
+            file.close()
+    except sqlite3.OperationalError:
+        raise FileError(NOT_A_FILE) from None
+    except sqlite3.Error as e:
+        raise _unreadable(str(e)) from None
+    if meta.get("format") != str(index_transfer.FORMAT):
+        raise FileError(OTHER_FORMAT.format(format=meta.get("format")))
+    try:
+        sites = [s for s in json.loads(meta.get("sites", "[]")) if isinstance(s, str)]
+    except ValueError:
+        sites = []
+    schema = int(meta["schema"]) if str(meta.get("schema", "")).isdigit() else meta.get("schema")
+    manifest = {"format": FORMAT, "caracole": meta.get("caracole"), "schema": schema, "name": name,
+                "made": meta.get("exported_at"), "parts": ["indexes"], "indexes": sites}
+    holds = ("indexes",) if schema == _schema() else ()
+    return SyncFile(Path(path), manifest, None, {}, holds, True)
+
+
+# --- refused, and read whole -----------------------------------------------------------------------------------------
+
+
+def check_importable(file: SyncFile, conn: sqlite3.Connection, *, own: str | None) -> None:
+    """FileError, in the owner's words, for a file this library takes nothing from: its own export (``own``, this
+    caracole's id), one no newer than this side's last sync with its caracole (its ``made`` no later than the
+    latest time this side's base for it records, a kept answer's included), and an index export of another
+    schema."""
+    if file.index_only:
+        if not file.holds:
+            raise FileError(OTHER_FORMAT.format(format=f"{FORMAT}, schema {file.manifest.get('schema')}"))
+        return
+    if own is not None and file.id == own:
+        raise FileError(OWN_EXPORT)
+    if file.id is None:
+        return
+    whens = [when for _, when in (sync.base_of(conn, file.id) or {}).values()]
+    whens += [when for _, _, when in sync.kept_of(conn, file.id).values()]
+    times = [t for t in map(stamps.parse, whens) if t is not None]
+    made = stamps.parse(file.made)
+    if times and made is not None and made <= max(times):
+        day = max(times).astimezone().strftime("%d/%m/%y")
+        raise FileError(OLDER.format(name=file.name or "its caracole", day=day))
+
+
+def check_whole(file: SyncFile) -> None:
+    """Every member of ``file`` read through (its CRC and its size as the zip declares them), each blob what its
+    name says, each unit document what the state says of it, and each kept file a song names held; FileError
+    (``UNREADABLE``) else. An index export: SQLite's ``quick_check``."""
+    if file.index_only:
+        _check_sqlite(file.path)
+        return
+    assert file.state is not None
+    try:
+        with zipfile.ZipFile(file.path) as z:
+            names = set(z.namelist())
+            for info in z.infolist():
+                digest = hashlib.sha256()
+                with z.open(info) as f:
+                    while chunk := f.read(CHUNK):
+                        digest.update(chunk)
+                blob = info.filename.partition("/")[2]
+                if info.filename.startswith((FILES, PAGE_BLOBS)) and digest.hexdigest() != blob:
+                    raise _unreadable(f"{info.filename} isn't the file its name says")
+            named = _documents(z, file.state)
+    except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error) as e:
+        if isinstance(e, FileError):
+            raise
+        raise _unreadable(str(e)) from None
+    for unit_id, doc in named.items():
+        if unit_id.partition("/")[0] != "song":
+            continue
+        for version in doc["unit"]["versions"]:
+            for f in version["files"]:
+                if f"{FILES}{f['sha256']}" not in names:
+                    raise _unreadable(f"{unit_id} keeps a file it doesn't hold")
+
+
+def _check_sqlite(path: Path) -> None:
+    try:
+        file = sqlite3.connect(f"{Path(path).resolve().as_uri()}?mode=ro", uri=True)
+        try:
+            (answer,) = file.execute("PRAGMA quick_check").fetchone()
+        finally:
+            file.close()
+    except sqlite3.Error as e:
+        raise _unreadable(str(e)) from None
+    if answer != "ok":
+        raise _unreadable(str(answer))
+
+
+def _documents(z: zipfile.ZipFile, state: sync.PeerState) -> dict[str, dict[str, Any]]:
+    """``units.jsonl``'s documents by unit id, each of a unit the state names, once, with the digest the state gives
+    it, its value read from it alone (``peer_sync.value_of_document``) of that digest; FileError else."""
+    found: dict[str, dict[str, Any]] = {}
+    info = z.getinfo(UNITS)
+    if info.file_size > JSON_MAX:
+        raise _unreadable(f"{UNITS} is bigger than it may be")
+    with z.open(info) as f:
+        data = f.read(JSON_MAX + 1)
+    for number, line in enumerate(data.splitlines(), 1):
+        try:
+            doc = json.loads(line)
+        except (ValueError, RecursionError):
+            raise _unreadable(f"{UNITS}'s line {number} is no JSON") from None
+        unit_id = doc.get("id") if isinstance(doc, dict) else None
+        if not (isinstance(unit_id, str) and unit_id in state.units and unit_id not in found
+                and doc.get("format") == sync.FORMAT and isinstance(doc.get("unit"), dict)):
+            raise _unreadable(f"{UNITS}'s line {number} is no document of a unit its state names")
+        try:
+            digest = sync.digest_of(sync.value_of_document(unit_id, doc["unit"]))
+        except (sync.UnitError, ValueError) as e:
+            raise _unreadable(f"{unit_id[:80]}: {e}") from None
+        if digest != state.units[unit_id].digest or doc.get("digest") != digest:
+            raise _unreadable(f"{unit_id[:80]} isn't what its state says")
+        found[unit_id] = doc
+    return found
+
+
+# --- taken from ------------------------------------------------------------------------------------------------------
+
+
+class FileSource:
+    """A file's units as ``peer_sync.apply_units`` takes them, as it takes a peer's (its ``UnitSource``, as
+    ``peer_sync.Peer`` and ``peer_push.StagedSource`` are): each unit's document from ``units.jsonl``, each kept file
+    from ``files/``, else a copy kept here (``peer_push.kept_copy``), checked by its SHA-256; and its indexes and
+    pages. Holds the file open until closed."""
+
+    def __init__(self, file: SyncFile, conn: sqlite3.Connection | None, library_dir: Path):
+        self.sync_file = file  # ``file`` is the UnitSource's method
+        self._conn = conn
+        self._library_dir = library_dir
+        self._zip: zipfile.ZipFile | None = None
+        self._documents: dict[str, dict[str, Any]] | None = None
+
+    def __enter__(self) -> FileSource:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
+
+    def close(self) -> None:
+        if self._zip is not None:
+            self._zip.close()
+            self._zip = None
+
+    def _opened(self) -> zipfile.ZipFile:
+        if self._zip is None:
+            try:
+                self._zip = zipfile.ZipFile(self.sync_file.path)
+            except (zipfile.BadZipFile, OSError) as e:
+                raise sync.PeerError(UNREADABLE.format(why=str(e))) from None
+        return self._zip
+
+    def _read(self, name: str, most: int) -> bytes:
+        try:
+            info = self._opened().getinfo(name)
+            if info.file_size > most:
+                raise sync.PeerError(UNREADABLE.format(why=f"{name} is bigger than it may be"))
+            with self._opened().open(info) as f:
+                data = f.read(most + 1)
+        except KeyError:
+            raise
+        except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error) as e:
+            raise sync.PeerError(UNREADABLE.format(why=f"{name}: {e}")) from None
+        if len(data) > most:
+            raise sync.PeerError(UNREADABLE.format(why=f"{name} is bigger than it may be"))
+        return data
+
+    def documents(self) -> dict[str, dict[str, Any]]:
+        """The unit documents it holds, by unit id (``units.jsonl``'s, checked as ``check_whole`` checks them)."""
+        if self.sync_file.index_only:
+            return {}
+        if self._documents is None:
+            assert self.sync_file.state is not None
+            try:
+                self._documents = _documents(self._opened(), self.sync_file.state)
+            except FileError as e:
+                raise sync.PeerError(str(e)) from None
+            except (zipfile.BadZipFile, EOFError, OSError, ValueError, RuntimeError, zlib.error) as e:
+                raise sync.PeerError(UNREADABLE.format(why=str(e))) from None
+        return self._documents
+
+    def unit(self, unit_id: str) -> dict[str, Any] | None:
+        """The unit's document, as ``GET /api/peer/unit``'s ``"unit"``; None for a unit of a part the file holds
+        that its state doesn't name (its caracole hasn't got it: a song it removed); PeerError for a unit its state
+        names that it holds no document of (left out as it was exported) and for one of a part it doesn't hold,
+        which a take must leave as it is, never take as gone."""
+        doc = self.documents().get(unit_id)
+        if doc is not None:
+            return dict(doc["unit"])
+        state = self.sync_file.state
+        if state is not None and unit_id in state.units:
+            raise sync.PeerError("the file names it but doesn't hold it: it was left out as it was exported (a file "
+                                 "it keeps had changed there)")
+        if sync.part_of(unit_id) in self.sync_file.holds and "/" in unit_id:
+            return None
+        raise sync.PeerError("the file doesn't hold that part of its library, so it says nothing of it")
+
+    def file(self, key: str, name: str, sha256: str) -> bytes:
+        """A kept file of the song of ``key``, by its SHA-256: from the file, or kept here; PeerError else."""
+        from caracole import peer_push
+
+        data: bytes | None
+        if not _SHA256.fullmatch(sha256):
+            raise sync.PeerError(f"{name}: no SHA-256 to find it by")
+        try:
+            data = self._read(FILES + sha256, FILE_MAX)
+        except KeyError:
+            data = peer_push.kept_copy(self._conn, self._library_dir, sha256)
+        if data is None or hashlib.sha256(data).hexdigest() != sha256:
+            raise sync.PeerError(f"{name} isn't in the file as its song says, nor kept here: the song is left as it "
+                                 "was here.")
+        return data
+
+    def indexes(self, to: Path) -> bool:
+        """Its indexes copied to ``to`` (a new file), in chunks; False, nothing written, when it holds none this
+        database can merge (``SyncFile.holds``)."""
+        if "indexes" not in self.sync_file.holds:
+            return False
+        if self.sync_file.index_only:
+            source: Any = open(self.sync_file.path, "rb")
+        else:
+            try:
+                source = self._opened().open(INDEXES)
+            except KeyError:
+                return False
+        fd = os.open(to, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            with source, open(fd, "wb") as out:
+                while chunk := source.read(CHUNK):
+                    out.write(chunk)
+        except (zipfile.BadZipFile, EOFError, ValueError, RuntimeError, zlib.error) as e:
+            Path(to).unlink(missing_ok=True)
+            raise sync.PeerError(UNREADABLE.format(why=f"{INDEXES}: {e}")) from None
+        except BaseException:
+            Path(to).unlink(missing_ok=True)
+            raise
+        return True
+
+    def pages(self) -> dict[str, Any] | None:
+        """Its ``pages.json``, the pages its caracole made of its units; None when it holds none."""
+        if self.sync_file.index_only:
+            return None
+        try:
+            data = self._read(PAGES, JSON_MAX)
+        except KeyError:
+            return None
+        try:
+            found = json.loads(data)
+        except (ValueError, RecursionError):
+            raise sync.PeerError(UNREADABLE.format(why=f"{PAGES} is no JSON")) from None
+        return found if isinstance(found, dict) else None
+
+    def page(self, sha256: str) -> bytes:
+        """A page's bytes, by its SHA-256; PeerError when the file holds none of it."""
+        if not _SHA256.fullmatch(sha256):
+            raise sync.PeerError("no SHA-256 to find that page by")
+        try:
+            data = self._read(PAGE_BLOBS + sha256, FILE_MAX)
+        except KeyError:
+            raise sync.PeerError("the file holds no such page") from None
+        if hashlib.sha256(data).hexdigest() != sha256:
+            raise sync.PeerError(UNREADABLE.format(why=f"{PAGE_BLOBS}{sha256} isn't the page its name says"))
+        return data
