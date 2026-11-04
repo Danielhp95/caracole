@@ -5955,9 +5955,10 @@ thresholds; and each provider's `per_day`, which caracole.toml can't set (Megalo
 null for every other site). Never a run's `budget` or `delay` (the phone does no nightly work), a folder, a program or
 your ntfy topic. The phone sends no settings back, and another computer syncing with this one passes over them.
 
-The phone doesn't take them yet: until it does, it looks songs up with config.py's defaults, whatever the computer's
-caracole.toml says. Once it does, a provider you turn off on the computer (`[providers.megalobiz] enabled = false`)
-is off on the phone too after the next sync.
+The phone takes them at each sync, as it records what the two agree on, replacing the last ones it took: a computer
+that gives none leaves the phone's as they were, and a sync that fails before then takes none. It lays them over its
+own defaults, value by value as caracole.toml's would be read, and passes over a provider it doesn't know. Its own
+lookups, which read them as each one begins, aren't on the phone yet, and its pages still call the library "Phone".
 
 ### The phone's reads go to the computer (POST /peer/index)
 
