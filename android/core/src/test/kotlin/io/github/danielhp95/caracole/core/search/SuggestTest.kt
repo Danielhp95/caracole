@@ -1,24 +1,11 @@
 package io.github.danielhp95.caracole.core.search
 
-import io.github.danielhp95.caracole.core.db.Db
-import io.github.danielhp95.caracole.core.lacuerda.LaCuerda
 import io.github.danielhp95.caracole.core.search.internal.suggest.Close
 import io.github.danielhp95.caracole.core.search.internal.suggest.Titles
-import io.github.danielhp95.caracole.core.sites.SiteSearch
 import io.github.danielhp95.caracole.core.testing.Corpus
-import io.github.danielhp95.caracole.core.testing.Record
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.boolean
-import kotlinx.serialization.json.double
-import kotlinx.serialization.json.int
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
+import io.github.danielhp95.caracole.core.testing.replays.SearchReplay
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -28,39 +15,27 @@ import kotlin.test.assertTrue
 /**
  * search.py's "Did you mean" against vectors/search/suggest.jsonl: `suggest_artists`, `suggest_titles` and
  * `suggestions` of `find_index(conn, q)` over each record's fixture replayed into a fresh database, answers compared
- * whole (SearchVectors).
+ * whole (SearchReplay.vector).
  *
  * A record with `kw.sites` "api" hands `suggestions` the other sites' answers /api/search hands it: LaCuerda's,
- * gtptabs.com's, MuseScore's and harptabs.com's searches of the query (tests/test_conformance_search.py `_sites`).
- * Those searches are other lanes' (search-sites, search-lacuerda), so this test reads them where the corpus recorded
- * them for that fixture and query (vectors/search/lacuerda.jsonl and sites.jsonl, the same calls), and asks
- * SiteSearch and LaCuerda for the rest. A record whose answer still needs one of those ports fails, named "waits":
- * a record that waits is never a record that matches, so this test passes only once every one of them does.
+ * gtptabs.com's, MuseScore's and harptabs.com's searches of the query (tests/test_conformance_search.py `_sites`),
+ * read where the corpus recorded them for that fixture and query (vectors/search/lacuerda.jsonl and sites.jsonl, the
+ * same calls), else asked of SiteSearch and LaCuerda. The records are SearchReplay's, which the device runs too.
  */
 class SuggestTest {
     @get:Rule val tmp = TemporaryFolder()
 
     @Test fun everyArtistSuggestionIsWhatSearchPySuggests() =
-        SearchVectors.replay(tmp, VECTOR, setOf(SUGGEST_ARTISTS)) { db, r ->
-            val q = r.args[0].jsonPrimitive.content
-            JsonArray(Suggest.suggestArtists(db!!, q, r.int("limit") ?: 3, r.bool("lacuerda") ?: true, r.bool("harptabs") ?: true)
-                          .map { it.toJson() })
-        }
+        Misses("$VECTOR $SUGGEST_ARTISTS").also { SearchReplay.suggestArtists(it) }.assertNone()
 
     @Test fun everyTitleSuggestionIsWhatSearchPySuggests() =
-        SearchVectors.replay(tmp, VECTOR, setOf(SUGGEST_TITLES)) { db, r ->
-            val q = r.args[0].jsonPrimitive.content
-            JsonArray(Suggest.suggestTitles(db!!, q, r.int("limit") ?: 3, r.bool("lacuerda") ?: true, r.bool("harptabs") ?: true,
-                                            r.bool("gtptabs") ?: true).map { it.toJson() })
-        }
+        Misses("$VECTOR $SUGGEST_TITLES").also { SearchReplay.suggestTitles(it) }.assertNone()
 
-    @Test fun everySuggestionBesideTheIndexsAnswerIsWhatSearchPySuggests() = SearchVectors.replay(
-        tmp, VECTOR, setOf(SUGGESTIONS), only = { it.string("sites") == null },
-    ) { db, r -> suggestions(db!!, r, emptyList()) }
+    @Test fun everySuggestionBesideTheIndexsAnswerIsWhatSearchPySuggests() =
+        Misses("$VECTOR $SUGGESTIONS").also { SearchReplay.suggestions(api = false, misses = it) }.assertNone()
 
-    @Test fun everySuggestionBesideTheOtherSitesAnswersIsWhatSearchPySuggests() = SearchVectors.replay(
-        tmp, VECTOR, setOf(SUGGESTIONS), only = { it.string("sites") == "api" },
-    ) { db, r -> suggestions(db!!, r, sites(db, r)) }
+    @Test fun everySuggestionBesideTheOtherSitesAnswersIsWhatSearchPySuggests() =
+        Misses("$VECTOR $SUGGESTIONS, sites").also { SearchReplay.suggestions(api = true, misses = it) }.assertNone()
 
     @Test fun theVectorHoldsTheThreeFunctions() {
         assertEquals(setOf(SUGGEST_ARTISTS, SUGGEST_TITLES, SUGGESTIONS), Corpus.records(VECTOR).map { it.fn }.toSet())
@@ -128,66 +103,10 @@ class SuggestTest {
         }
     }
 
-    private fun suggestions(db: Db, r: Record, sites: List<Any>): JsonElement {
-        val q = r.args[0].jsonPrimitive.content
-        return JsonArray(Suggest.suggestions(db, q, Search.findIndex(db, q), sites, r.bool("lacuerda") ?: true,
-                                             r.bool("harptabs") ?: true, r.bool("gtptabs") ?: true).map { it.toJson() })
-    }
-
-    /** search_routes' `_suggested` sites for the record's query: recorded, else asked of the other lanes' ports. */
-    private fun sites(db: Db, r: Record): List<Any> {
-        val fixture = r.extra.getValue("fixture").jsonPrimitive.content
-        val q = r.args[0].jsonPrimitive.content
-        val recorded = RECORDED[fixture to q]
-        if (recorded != null) return recorded
-        return try {
-            val (lcArtists, lcSongs) = LaCuerda.searchLacuerda(db, q, songs = 5)
-            val (harpArtists, harpSongs) = SiteSearch.searchHarptabs(db, q, songs = 5)
-            lcArtists + lcSongs + SiteSearch.searchGtptabs(db, q, 5) + SiteSearch.searchMusescore(db, q, 5) + harpArtists + harpSongs
-        } catch (e: NotImplementedError) {
-            throw SearchVectors.Waiting("$fixture '$q': ${e.message}")
-        }
-    }
-
     companion object {
-        const val VECTOR = "search/suggest.jsonl"
-        const val SUGGEST_ARTISTS = "caracole.search.suggest_artists"
-        const val SUGGEST_TITLES = "caracole.search.suggest_titles"
-        const val SUGGESTIONS = "caracole.search.suggestions"
-
-        /** The other sites' searches the corpus recorded, by fixture and query, in `_sites`' order. */
-        private val RECORDED: Map<Pair<String, String>, List<Any>> by lazy {
-            fun calls(vector: String, fn: String): Map<Pair<String, String>, JsonElement> =
-                Corpus.records(vector).filter { it.fn == fn && it.kw.isEmpty() && it.err == null }
-                    .associate { (it.extra.getValue("fixture").jsonPrimitive.content to it.args[0].jsonPrimitive.content) to it.out!! }
-            val lacuerda = calls("search/lacuerda.jsonl", "caracole.search.search_lacuerda")
-            val gtptabs = calls("search/sites.jsonl", "caracole.search.search_gtptabs")
-            val musescore = calls("search/sites.jsonl", "caracole.search.search_musescore")
-            val harptabs = calls("search/sites.jsonl", "caracole.search.search_harptabs")
-            lacuerda.keys.filter { it in gtptabs && it in musescore && it in harptabs }.associateWith { key ->
-                val (lcArtists, lcSongs) = lacuerda.getValue(key).jsonArray
-                val (harpArtists, harpSongs) = harptabs.getValue(key).jsonArray
-                lcArtists.jsonArray.map { siteArtist(it) } + lcSongs.jsonArray.map { siteHit(it) } +
-                    gtptabs.getValue(key).jsonArray.map { siteHit(it) } + musescore.getValue(key).jsonArray.map { siteHit(it) } +
-                    harpArtists.jsonArray.map { siteArtist(it) } + harpSongs.jsonArray.map { siteHit(it) }
-            }
-        }
-
-        private fun JsonObject.text(name: String): String = getValue(name).jsonPrimitive.content
-        private fun JsonObject.textOrNull(name: String): String? = (get(name) as? JsonPrimitive)?.takeIf { it.isString }?.content
-
-        /** A SiteHit as helpers.corpus.plain wrote it (its tabs, which a suggestion never reads, left out). */
-        fun siteHit(e: JsonElement): SiteHit = e.jsonObject.let {
-            SiteHit(it.text("source"), it.text("title"), it.text("url"), it.getValue("score").jsonPrimitive.double,
-                    it.text("artist"), it.text("artist_key"), it.text("title_key"), it.getValue("uploads").jsonPrimitive.int,
-                    it.text("via"), it.textOrNull("sheet"), emptyList(), it.text("page"))
-        }
-
-        fun siteArtist(e: JsonElement): SiteArtist = e.jsonObject.let {
-            SiteArtist(it.text("source"), it.text("artist"), it.text("slug"), it.text("url"),
-                       it.getValue("score").jsonPrimitive.double, it.getValue("songs").jsonPrimitive.int,
-                       it.getValue("known").jsonPrimitive.int, it.text("via"), it.getValue("top").jsonArray.map { t -> siteHit(t) },
-                       it.getValue("part").jsonPrimitive.boolean, it.getValue("read").jsonPrimitive.boolean)
-        }
+        const val VECTOR = SearchReplay.SUGGEST
+        const val SUGGEST_ARTISTS = SearchReplay.SUGGEST_ARTISTS
+        const val SUGGEST_TITLES = SearchReplay.SUGGEST_TITLES
+        const val SUGGESTIONS = SearchReplay.SUGGESTIONS
     }
 }

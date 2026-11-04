@@ -3,14 +3,17 @@ package io.github.danielhp95.caracole.core.sync
 import io.github.danielhp95.caracole.core.config.PhoneConfig
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.IndexExport
 import io.github.danielhp95.caracole.core.index.IndexTransfer
+import io.github.danielhp95.caracole.core.index.Reads
 import io.github.danielhp95.caracole.core.index.Sites
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.library.LibraryStore
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.internal.client.Address
 import io.github.danielhp95.caracole.core.sync.internal.client.Give
 import io.github.danielhp95.caracole.core.sync.internal.client.Kept
-import io.github.danielhp95.caracole.core.sync.internal.client.Stamps
+import io.github.danielhp95.caracole.core.sync.internal.client.IndexStamps
 import io.github.danielhp95.caracole.mirror.SyncError
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -70,10 +73,20 @@ class SameCaracole(message: String) : Exception(message)
  *    Nothing of either side's politeness crosses (docs/superpowers/specs/2026-11-03-politeness-crossing.md): the
  *    phone's cooldowns, request counts, pace and the records that gate its requests stay its own, and so do the
  *    computer's.
- * 6. **index**: the computer's site indexes the phone knows (IndexTransfer's sites) whose stamp is newer than kv
- *    `sync:index:<computer id>` records, fetched into `stateDir/cache/` and merged (IndexTransfer.merge) inside
- *    Database.write, the kv brought up to date; skipped when none is newer. A failure there leaves the agreement as
- *    it is.
+ * 6. **index**, both ways:
+ *    - the computer's site indexes the phone knows (IndexTransfer's sites) whose stamp is newer than kv
+ *      `sync:index:<computer id>` records, fetched into `stateDir/cache/` and merged (IndexTransfer.merge) inside
+ *      Database.write, the kv brought up to date, then the WAL checkpointed;
+ *    - then, merged or not (whatever came of that, a failure too), the pages the phone's lookups stored since the
+ *      last push to that computer (Reads.since: what they read, never a time window, since UG's stamp moves with the
+ *      computer's nightly refresh and LaCuerda's rows hold no time) exported (IndexExport.export) into
+ *      `stateDir/cache/` within the same write, so that the notes are those of the file, and pushed
+ *      (PeerClient.pushIndex, `POST /peer/index`); once the computer answers 202 (its `caracole index merge`
+ *      queued), those notes are forgotten (Reads.forget, up to the newest of them), which the stage's detail says.
+ *      A push refused or lost keeps them for the next sync. Nothing is sent when none is noted.
+ *    Skipped when no index is newer there and no page was read here. Either part's failure is said on the stage
+ *    and stops nothing: the agreement stays as it is. The reads go to the computer the phone syncs with next: a
+ *    second computer gets those read after (Reads keeps one record of what was pushed, its notes forgotten once).
  *
  * Any stage that stops the sync is a [SyncFailed], with the outcome so far; a refusal before any change has none.
  * The push names the phone's library [name] and its caracole's [version] (the app's own, which it may pass).
@@ -204,7 +217,7 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
         stage(AGREE, DONE, "${plural(done.agreed, "unit")} the two agree on")
 
         // 6. index
-        index(client, stage, done, computer, after.indexes)
+        index(client, stage, done, computer, after.indexes, after.token)
         return done.outcome()
     }
 
@@ -313,40 +326,98 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
                         "Requests tab, goes on.")
     }
 
-    /** The computer's newer indexes, merged; a failure is said on the stage and leaves the rest as it is. */
+    /** The computer's newer indexes merged, then the pages the phone's lookups read pushed, merged or not; each
+     * part's failure said on the stage, leaving the rest as it is. */
     private suspend fun index(client: PeerClient, stage: (String, String, String) -> Unit, done: Done, computer: String,
-                              indexes: Map<String, String>) {
-        val had = database.read { db -> Stamps.sites(db.kvGetJson(INDEX_KEY + computer)) }
+                              indexes: Map<String, String>, token: String) {
+        val (had, noted) = database.read { db ->
+            IndexStamps.sites(db.kvGetJson(INDEX_KEY + computer)) to sendable(Reads.since(db, computer))
+        }
         val newer = indexes.filter { (site, stamp) ->
-            Sites.named(site) != null && (had[site]?.let { Stamps.newer(stamp, it) } ?: true)
+            Sites.named(site) != null && (had[site]?.let { IndexStamps.newer(stamp, it) } ?: true)
         }.keys.sortedBy { site -> Sites.ALL.indexOfFirst { it.name == site } }
-        if (newer.isEmpty()) {
-            stage(INDEX, SKIPPED_STATE, "no index is newer there")
+        if (newer.isEmpty() && noted.isEmpty()) {
+            stage(INDEX, SKIPPED_STATE, NOTHING_TO_INDEX)
             return
         }
-        stage(INDEX, RUNNING, newer.joinToString(", "))
-        val cache = File(stateDir, "cache")
-        val file = File(cache, "index-${Kept.newId()}.sqlite")
-        try {
-            io {
-                if (!cache.isDirectory && !cache.mkdirs()) throw PeerError("The phone's storage failed: $cache can't be made.")
-                client.index(file, newer)
+        stage(INDEX, RUNNING, if (newer.isEmpty()) sending(noted) else newer.joinToString(", "))
+        val parts = ArrayList<String>()
+        var failed = false
+        if (newer.isNotEmpty()) {
+            try {
+                merge(client, computer, had, newer, indexes)
+                done.indexed.addAll(newer)
+                parts.add("merged ${newer.joinToString(", ")}")
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                failed = true
+                parts.add(said(e))
             }
+        }
+        if (noted.isNotEmpty()) {
+            if (newer.isNotEmpty()) stage(INDEX, RUNNING, sending(noted))
+            try {
+                pushReads(client, computer, token)?.let(parts::add)
+            } catch (e: Exception) {
+                if (e is CancellationException) throw e
+                failed = true
+                parts.add("${pagesRead(noted)} kept for the next sync: ${said(e)}")
+            }
+        }
+        stage(INDEX, if (failed) FAILED else DONE, parts.joinToString("; "))
+    }
+
+    /** The computer's indexes of [newer] fetched into `stateDir/cache/` and merged, the kv's stamps brought up to
+     * date, the WAL checkpointed; the file gone after, whatever came of it. */
+    private suspend fun merge(client: PeerClient, computer: String, had: Map<String, String>, newer: List<String>,
+                              indexes: Map<String, String>) {
+        val file = File(cache(), "index-${Kept.newId()}.sqlite")
+        try {
+            io { client.index(file, newer) }
             io {
                 database.write { db ->
                     IndexTransfer.merge(db, file, Stamps.of(clock()), newer)
-                    db.kvSetJson(INDEX_KEY + computer, Stamps.json(had + newer.associateWith { indexes.getValue(it) }))
+                    db.kvSetJson(INDEX_KEY + computer, IndexStamps.json(had + newer.associateWith { indexes.getValue(it) }))
                 }
                 database.checkpoint()  // the WAL a big merge grew, given back (lane prep-db)
             }
-            done.indexed.addAll(newer)
-            stage(INDEX, DONE, "merged ${newer.joinToString(", ")}")
-        } catch (e: Exception) {
-            if (e is CancellationException) throw e
-            stage(INDEX, FAILED, said(e))
         } finally {
             file.delete()
         }
+    }
+
+    /**
+     * The pages Reads noted since the last push to [computer], exported (IndexExport) in the write that reads them, so
+     * that the file holds every page noted and those alone, and pushed (`POST /peer/index`); once the computer answers
+     * 202, the notes forgotten up to the newest of them. What it did, in the stage's words; null when nothing is noted
+     * by then. A PeerError (or mirror's SyncError) when the push fails, the notes kept; the file gone after either way.
+     */
+    private suspend fun pushReads(client: PeerClient, computer: String, token: String): String? {
+        val file = File(cache(), "reads-${Kept.newId()}.sqlite")
+        try {
+            val (pages, upTo) = io {
+                database.write { db ->
+                    val pages = sendable(Reads.since(db, computer))
+                    if (pages.isEmpty()) return@write null
+                    val newest = pages.flatMap { (site, named) -> named.mapNotNull { db.kvGet("${Reads.READ}$site:$it") } }
+                        .maxWithOrNull(Py.CODE_POINT_ORDER) ?: return@write null
+                    IndexExport.export(db, file, pages, Stamps.of(clock()), version)
+                    pages to newest
+                }
+            } ?: return null
+            val job = io { client.pushIndex(token, file) }
+            io { database.write { db -> Reads.forget(db, computer, upTo) } }
+            return "sent ${pagesRead(pages)}, none left to send: its request $job merges them"
+        } finally {
+            file.delete()
+        }
+    }
+
+    /** `stateDir/cache/`, made when missing; a PeerError in the phone's words when it can't be. */
+    private fun cache(): File {
+        val cache = File(stateDir, "cache")
+        if (!cache.isDirectory && !cache.mkdirs()) throw PeerError("The phone's storage failed: $cache can't be made.")
+        return cache
     }
 
     /** [block], a stage's work; any failure said on [name] and a SyncFailed with what [done] holds. */
@@ -391,6 +462,18 @@ class SyncEngine(val database: Database, val store: LibraryStore, val stateDir: 
 
         /** kv: the stamps of the computer's indexes the phone merged last, by its id: {site: stamp}. */
         const val INDEX_KEY = "sync:index:"
+
+        /** The index stage's words with no index newer there and no page read here. */
+        const val NOTHING_TO_INDEX = "no index is newer there, and no page read here to send"
+
+        /** "3 pages read here", of Reads.since's pages. */
+        fun pagesRead(pages: Map<String, List<String>>): String = plural(pages.values.sumOf { it.size }, "page") + " read here"
+
+        private fun sending(pages: Map<String, List<String>>) = "sending the ${pagesRead(pages)}"
+
+        /** Those of Reads' [pages] an export holds (IndexExport.PAGES' sites): a note of another site's, which no
+         * site lane makes, never stops the rest from going. */
+        private fun sendable(pages: Map<String, List<String>>) = pages.filterKeys { it in IndexExport.PAGES }
 
         /** The phone's library's name, and its caracole's version, as its push names them unless it is given others. */
         const val PHONE_NAME = "Phone"

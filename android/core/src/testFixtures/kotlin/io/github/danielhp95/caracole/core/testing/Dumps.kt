@@ -1,8 +1,7 @@
-package io.github.danielhp95.caracole.core.index
+package io.github.danielhp95.caracole.core.testing
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.testing.Corpus
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -11,9 +10,9 @@ import kotlinx.serialization.json.JsonPrimitive
 /**
  * helpers.corpus.dump_fixture on the phone: a database's fixture records, each line as the corpus writes it
  * (`json.dumps(record, ensure_ascii=False, sort_keys=True, separators=(",", ":"))`), so that a database after a
- * merge compares with Python's dump line by line, its kv text byte for byte.
+ * merge compares with Python's dump line by line, its kv text byte for byte (IndexReplay, on the JVM and the device).
  */
-internal object Dumps {
+object Dumps {
     /** helpers.corpus.FIXTURE_TABLES, then PHONE_TABLES, which every phone database has. */
     private val TABLES = listOf(
         "songs", "versions", "files", "removed", "events", "ug_index", "ug_artist_tabs", "lacuerda_index",

@@ -3,8 +3,9 @@ package io.github.danielhp95.caracole.core.library
 import io.github.danielhp95.caracole.core.db.Database
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.json.Canonical
-import io.github.danielhp95.caracole.core.testing.Corpus
+import io.github.danielhp95.caracole.core.testing.Misses
 import io.github.danielhp95.caracole.core.testing.TestDb
+import io.github.danielhp95.caracole.core.testing.replays.SyncReplay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -12,7 +13,6 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.After
 import org.junit.Rule
@@ -22,7 +22,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlin.test.fail
 
 /**
  * overrides.toml and songbooks.toml on the phone (phone.sql's phone_overrides and phone_songbooks): what each store
@@ -44,17 +43,8 @@ class StoresTest {
         }
     }
 
-    @Test fun aSongbooksNameKeyIsPythons() {
-        val records = Corpus.records("sync/name_key.jsonl")
-        assertEquals(setOf("caracole.songbook.name_key"), records.map { it.fn }.toSet())
-        val wrong = records.mapNotNull { r ->
-            val name = r.args[0].jsonPrimitive.content
-            val expected = r.out!!.jsonPrimitive.content
-            val got = runCatching { SongbookStore.nameKey(name) }.getOrElse { "${it::class.simpleName}: ${it.message}" }
-            if (got == expected) null else "${r.args}: Python ${JsonPrimitive(expected)}, Kotlin ${JsonPrimitive(got)}"
-        }
-        if (wrong.isNotEmpty()) fail("${wrong.size} of ${records.size} name keys differ:\n" + wrong.joinToString("\n"))
-    }
+    /** SyncReplay.nameKey's, which the device runs too. */
+    @Test fun aSongbooksNameKeyIsPythons() = Misses("sync/name_key.jsonl").also { SyncReplay.nameKey(it) }.assertNone()
 
     @Test fun aSongsEntriesAreWrittenAsCanonicalTextAndReadBackInTheTablesOrder() {
         val entries = buildJsonObject {

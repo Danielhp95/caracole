@@ -1,13 +1,13 @@
 package io.github.danielhp95.caracole.core.library
 
 import io.github.danielhp95.caracole.core.db.Db
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.keys.Normalize
 import io.github.danielhp95.caracole.core.keys.SafeName
 import io.github.danielhp95.caracole.core.library.internal.LibraryFiles
 import io.github.danielhp95.caracole.core.library.internal.Rekey
 import io.github.danielhp95.caracole.core.library.internal.Removal
 import io.github.danielhp95.caracole.core.library.internal.SongKv
-import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.Upsert
 import io.github.danielhp95.caracole.core.py.Py
 import io.github.danielhp95.caracole.core.sync.Take

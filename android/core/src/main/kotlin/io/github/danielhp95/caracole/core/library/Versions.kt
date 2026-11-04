@@ -2,8 +2,8 @@ package io.github.danielhp95.caracole.core.library
 
 import io.github.danielhp95.caracole.core.db.Db
 import io.github.danielhp95.caracole.core.db.Row
+import io.github.danielhp95.caracole.core.index.Stamps
 import io.github.danielhp95.caracole.core.json.PyJson
-import io.github.danielhp95.caracole.core.library.internal.Stamps
 import io.github.danielhp95.caracole.core.library.internal.writes.SongColumns
 import kotlinx.serialization.json.JsonObject
 
