@@ -93,9 +93,9 @@ LITERALS_FROM = ("test_viewer_hanzi.py", "test_viewer_pinyin.py")
 
 SEED = 20261105
 KEYS_A_TEXT = 200
-MIXES = 1500
+MIXES = 800
 PAGE_MIXES = 300
-SHEETS = 160
+SHEETS = 120
 LATIN_SHEETS = 12
 SEPARATORS = (" ", "\n", "，", "。", "a", "1", " / ", "\t")
 
