@@ -1117,7 +1117,18 @@ The Android app and caracole's rules in Kotlin (android/README.md; the plan abov
 
 ##### core.http, core.health, core.config
 
-Not built yet. (http-client: core.http; health-pace: core.health, core.config, `Pace`, `Clients`.)
+- core.http (http-client): not built yet.
+- core.health, health.py's: `Health` (kv `provider:<name>`, read as `get_state` reads it and written as
+  `kv_set_json` writes it; 24 h × 2^(k−1) + 2 h after the k-th block in a row, a running cooldown kept, its strikes
+  too), `EventLog` (each request's `events` row, nothing else) and `Strptime` (the `%Y-%m-%dT%H:%M:%SZ` times
+  health.py and _common write and read: CPython 3.14's `_strptime` regex, by hand).
+- core.lookup's `Pace`, _common.py's lookup pace (`lookup_requests_used`, `lookup_policy`, `requests_today`,
+  `within_the_day`, `_last_request`, its kv read as `float()` reads a text, `PyFloatText`, and
+  `_pause_after_last_request`), and `Clients`, `make_client(..., interactive=True)`: kv `http:last_request:<provider>`
+  after each request sent, as `f"{time.time():.3f}"` writes it. No lock, ticket or handoff on the phone.
+- core.config: `PhoneConfig.read`, kv `phone:settings` over config.json's defaults (`take` is crossing-phone's).
+- Every count, cooldown and record is this side's own. tests/test_conformance_health.py writes vectors/health/ and
+  vectors/pace/ (`HealthReplay`, `PaceReplay`).
 
 ##### core.html
 
