@@ -1,0 +1,312 @@
+{
+ "ROMANS": [
+  "I",
+  "II",
+  "III",
+  "IV",
+  "V",
+  "VI",
+  "VII"
+ ],
+ "_SHAPES": {
+  "": [
+   false,
+   "",
+   ""
+  ],
+  "m": [
+   true,
+   "",
+   ""
+  ],
+  "5": [
+   false,
+   "",
+   "5"
+  ],
+  "dim": [
+   true,
+   "°",
+   ""
+  ],
+  "aug": [
+   false,
+   "+",
+   ""
+  ],
+  "sus2": [
+   false,
+   "",
+   "sus2"
+  ],
+  "sus4": [
+   false,
+   "",
+   "sus4"
+  ],
+  "b5": [
+   false,
+   "",
+   "♭5"
+  ],
+  "6": [
+   false,
+   "",
+   "6"
+  ],
+  "m6": [
+   true,
+   "",
+   "6"
+  ],
+  "69": [
+   false,
+   "",
+   "69"
+  ],
+  "m69": [
+   true,
+   "",
+   "69"
+  ],
+  "7": [
+   false,
+   "",
+   "7"
+  ],
+  "maj7": [
+   false,
+   "",
+   "maj7"
+  ],
+  "m7": [
+   true,
+   "",
+   "7"
+  ],
+  "mmaj7": [
+   true,
+   "",
+   "maj7"
+  ],
+  "m7b5": [
+   true,
+   "ø",
+   "7"
+  ],
+  "dim7": [
+   true,
+   "°",
+   "7"
+  ],
+  "7sus4": [
+   false,
+   "",
+   "7sus4"
+  ],
+  "7sus2": [
+   false,
+   "",
+   "7sus2"
+  ],
+  "add9": [
+   false,
+   "",
+   "add9"
+  ],
+  "madd9": [
+   true,
+   "",
+   "add9"
+  ],
+  "add11": [
+   false,
+   "",
+   "add11"
+  ],
+  "9": [
+   false,
+   "",
+   "9"
+  ],
+  "maj9": [
+   false,
+   "",
+   "maj9"
+  ],
+  "m9": [
+   true,
+   "",
+   "9"
+  ],
+  "9sus4": [
+   false,
+   "",
+   "9sus4"
+  ],
+  "11": [
+   false,
+   "",
+   "11"
+  ],
+  "m11": [
+   true,
+   "",
+   "11"
+  ],
+  "13": [
+   false,
+   "",
+   "13"
+  ],
+  "7b5": [
+   false,
+   "",
+   "7♭5"
+  ],
+  "aug7": [
+   false,
+   "+",
+   "7"
+  ],
+  "7b9": [
+   false,
+   "",
+   "7♭9"
+  ],
+  "7#9": [
+   false,
+   "",
+   "7♯9"
+  ]
+ },
+ "_BORROWS": {
+  "ionian": [
+   "aeolian",
+   "mixolydian",
+   "lydian",
+   "dorian",
+   "phrygian"
+  ],
+  "aeolian": [
+   "dorian",
+   "phrygian",
+   "ionian",
+   "mixolydian",
+   "lydian"
+  ]
+ },
+ "_MODE_WORDS": {
+  "ionian": "major",
+  "aeolian": "minor"
+ },
+ "_FAMILIES": [
+  "home",
+  "away",
+  "home",
+  "away",
+  "pull",
+  "home",
+  "pull"
+ ],
+ "_BASS_DEGREES": [
+  "1",
+  "♭2",
+  "2",
+  "♭3",
+  "3",
+  "4",
+  "♭5",
+  "5",
+  "♭6",
+  "6",
+  "♭7",
+  "7"
+ ],
+ "_IN_OCTAVE": {
+  "9": "2",
+  "♭9": "♭2",
+  "♯9": "♯2",
+  "11": "4",
+  "♯11": "♯4",
+  "13": "6",
+  "♭13": "♭6"
+ },
+ "_EXTENSION_WORDS": {
+  "5": "only its root and 5th",
+  "6": "an added 6th",
+  "69": "an added 6th and 9th",
+  "7": "a 7th",
+  "maj7": "a major 7th",
+  "9": "a 7th and 9th",
+  "maj9": "a major 7th and 9th",
+  "11": "a 7th, 9th and 11th",
+  "13": "a 7th, 9th and 13th",
+  "add9": "an added 9th",
+  "add11": "an added 11th",
+  "sus2": "the 2nd in place of the 3rd",
+  "sus4": "the 4th in place of the 3rd",
+  "no3": "no 3rd",
+  "no5": "no 5th"
+ },
+ "_SYMBOL_MEANINGS": {
+  "5": "a power chord: only the root and 5th, no 3rd",
+  "7": "a 7th added, a minor 7th above the root (on a major chord, the dominant 7th)",
+  "maj7": "a major 7th added, a half step below the root",
+  "add9": "a 9th added, without the 7th",
+  "add11": "an 11th added, without the 7th",
+  "sus2": "suspended: the 2nd in place of the 3rd",
+  "sus4": "suspended: the 4th in place of the 3rd"
+ },
+ "_OTHER_SCALES": {
+  "Phrygian dominant": [
+   0,
+   1,
+   4,
+   5,
+   7,
+   8,
+   10
+  ],
+  "melodic minor": [
+   0,
+   2,
+   3,
+   5,
+   7,
+   9,
+   11
+  ],
+  "diminished (whole-half)": [
+   0,
+   2,
+   3,
+   5,
+   6,
+   8,
+   9,
+   11
+  ],
+  "diminished (half-whole)": [
+   0,
+   1,
+   3,
+   4,
+   6,
+   7,
+   9,
+   10
+  ],
+  "whole-tone": [
+   0,
+   2,
+   4,
+   6,
+   8,
+   10
+  ]
+ },
+ "patterns": {
+  "_TOKENS": "maj\\d+|add\\d+|sus\\d|69|[♭♯]\\d+|no\\d|\\d+|."
+ }
+}
