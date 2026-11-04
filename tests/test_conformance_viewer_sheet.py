@@ -546,9 +546,15 @@ def _correlations() -> list[dict]:
     return out
 
 
+_STATES_G = "Key: G\n\n[ch]G[/ch] [ch]C[/ch] [ch]D[/ch]\nwords\n"
+# Past json's RecursionError on the computer (its C stack's, about 50,000 deep) and the phone's MAX_DEPTH alike.
+_TOO_DEEP = 100_000
+
 # The songs of the library song_keys reads: (artist, title, the human sheet's (provider, raw, content, meta) or
-# None, the auto sheet's raw or None, and what is done to its files after: "no json", "a list", "other version",
-# "no sheet.json", "no auto file").
+# None, the auto sheet's raw or None, and what is done to its files after: "no json", "a list", "bom" (sheet.json
+# after a UTF-8 BOM, which json.loads of its text refuses), "too deep" (nested past json's RecursionError), "other
+# version", "no sheet.json", "no auto file"). A "bom" or "too deep" sheet states a key no other source gives, so a
+# read that took its markup would answer it.
 LIBRARY = (
     ("Placeholders", "Tonality", ("ug", {"tonality_name": "Bm"}, _AM_F_C_G, None), None, None),
     ("Placeholders", "Stated", ("ug", {}, "Key: G\n\n" + _AM_F_C_G, None), None, None),
@@ -570,6 +576,8 @@ LIBRARY = (
     ("Placeholders", "Human Wins", ("ug", {}, _AM_F_C_G, None), {"key": "C"}, None),
     ("Placeholders", "No Json", ("ug", {"tonality_name": "F"}, _AM_F_C_G, None), None, "no json"),
     ("Placeholders", "A List", ("ug", {}, _AM_F_C_G, None), None, "a list"),
+    ("Placeholders", "Bom", ("ug", {}, _STATES_G, None), None, "bom"),
+    ("Placeholders", "Too Deep", ("ug", {}, _STATES_G, None), None, "too deep"),
     ("Placeholders", "Other Version", ("ug", {}, _AM_F_C_G, None), None, "other version"),
     ("Placeholders", "No Sheet Json", ("ug", {"tonality_name": "Gb"}, _AM_F_C_G, None), None, "no sheet.json"),
     ("Placeholders", "No Auto File", None, {"model": "btc_large_voca"}, "no auto file"),
@@ -615,6 +623,11 @@ def _library(conn, library_dir: Path) -> list:
                 (folder / keys.SHEET_DOC).write_text("{not json")
             elif then == "a list":
                 (folder / keys.SHEET_DOC).write_text("[1, 2]")
+            elif then == "bom":
+                (folder / keys.SHEET_DOC).write_bytes(b"\xef\xbb\xbf" + json.dumps(doc).encode())
+            elif then == "too deep":
+                deep = "[" * _TOO_DEEP + "]" * _TOO_DEEP
+                (folder / keys.SHEET_DOC).write_text(json.dumps(doc)[:-1] + f', "x": {deep}}}')
         if auto is not None:
             vid = upsert_version(conn, provider="auto", tab_id=str(song.id), song_id=song.id, slot="sheet",
                                  kind="auto", rating=0, votes=0, version=1, label=None, url="file:///x.flac",
@@ -689,3 +702,9 @@ def test_the_sheets_reach_every_kind_of_line_and_every_way_to_a_key():
 def test_the_capos_reach_every_answer():
     found = {keys.sheet_capo(meta) for meta in METAS}
     assert {None, 2, 3, 10, 4, 12} <= found
+
+
+def test_a_sheet_json_json_can_t_read_gives_no_key_though_its_markup_states_one(conn, cfg):
+    assert keys.sheet_key({}, _STATES_G) == keys.SongKey("G", "tab")
+    rows = {title: row for (_, title, *_), row in zip(LIBRARY, _library(conn, cfg.library_dir), strict=True)}
+    assert rows["Bom"][1:] == rows["Too Deep"][1:] == [None, None, None, None]

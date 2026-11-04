@@ -1256,6 +1256,9 @@ Not built yet. (job-views, requests-feed.)
     lines.
   - Every answer held by vectors/viewer/sheet, chordpro and musickeys (`SheetReplay`, the `sheet` area), a sheet's
     derived lists by their digest; estimate_key's sums Python's (`Py.fsum`), its correlation compared to the bit.
+  - Their inputs include every string literal of tests/test_viewer_sheet.py, test_viewer_preamble.py,
+    test_chordpro.py and test_keys.py (`SHEET_LITERALS`, `CHORDPRO_LITERALS`, `KEYS_LITERALS`): an edit to one
+    regenerates the corpus.
   - Where Kotlin holds less than Python: a `{capo}` or a sheet.json capo past an Int is none; and as in Python, a
     solfège name sre's IGNORECASE reads but no table holds (`[ch]ſol[/ch]`) raises.
 - Voicings, instruments, the harmonica and the winds (shapes-harp-winds): `viewer.shapes`' `Voicings` (chords-db's

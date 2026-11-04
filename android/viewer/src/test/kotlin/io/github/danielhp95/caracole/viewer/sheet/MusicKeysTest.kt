@@ -159,9 +159,20 @@ class MusicKeysTest {
         assertEquals(SongKey("F", "tab"), MusicKeys.songKey(db, lib, song))
         File(lib, "A/T/sheet.json").writeText("{not json")
         assertEquals(SongKey("F", "tab"), MusicKeys.songKey(db, lib, song))
-        File(lib, "A/T/sheet.json").writeBytes(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + "{}".toByteArray())
-        assertEquals(SongKey("F", "tab"), MusicKeys.songKey(db, lib, song)) // a BOM is json.loads' error
         assertEquals("F", MusicKeys.letterAlone(db, lib, song))
+    }
+
+    /** A sheet.json whose markup states G, which only a read Python's json refuses keeps from the answer. */
+    @Test fun aSheetJsonAfterABomOrNestedTooDeepGivesNoMarkupThoughItStatesAKey() = library { db, lib ->
+        val states = "{\"content\": \"Key: G\\n\\n[ch]G[/ch] [ch]C[/ch]\\n\""
+        val song = keepSheet(db, lib, "{}", "$states}")
+        assertEquals(SongKey("G", "tab"), MusicKeys.songKey(db, lib, song)) // read whole, its markup counts
+        val sheetJson = File(lib, "A/T/sheet.json")
+        sheetJson.writeBytes(byteArrayOf(0xEF.toByte(), 0xBB.toByte(), 0xBF.toByte()) + "$states}".toByteArray())
+        assertNull(MusicKeys.songKey(db, lib, song)) // a BOM is json.loads' error, as library.read_json reads it
+        assertNull(MusicKeys.letterAlone(db, lib, song))
+        sheetJson.writeText("$states, \"x\": ${"[".repeat(100_000)}${"]".repeat(100_000)}}")
+        assertNull(MusicKeys.songKey(db, lib, song)) // RecursionError, a ValueError there
     }
 
     @Test fun theDataIsOneNothingCanChange() {
